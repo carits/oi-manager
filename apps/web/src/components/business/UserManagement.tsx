@@ -5,7 +5,7 @@ import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Pagination } from '@/components/ui/Pagination'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface UserManagementProps {
   // API 配置
@@ -79,22 +79,19 @@ export function UserManagement({
         ? `${fetchUrl}&${params.toString()}`
         : `${fetchUrl}?${params.toString()}`
 
-      const res = await fetch(url, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
+      const result = await apiClient.get<{ users?: any[]; page?: number; pageSize?: number; total?: number; totalPages?: number } | any[]>(url)
 
-      if (data.success) {
+      if (result.success) {
         // 兼容不同的响应格式
-        const userData = data.data.users || data.data || []
-        setUsers(userData)
+        const userData = result.data?.users || result.data || []
+        setUsers(Array.isArray(userData) ? userData : [])
 
-        if (data.data.page !== undefined) {
+        if (result.data && !Array.isArray(result.data) && result.data.page !== undefined) {
           setPagination({
-            page: data.data.page,
-            pageSize: data.data.pageSize,
-            total: data.data.total,
-            totalPages: data.data.totalPages
+            page: result.data.page,
+            pageSize: result.data.pageSize,
+            total: result.data.total,
+            totalPages: result.data.totalPages
           })
         }
       }
@@ -114,19 +111,14 @@ export function UserManagement({
     }
 
     try {
-      const res = await fetch(`http://localhost:3001/api/users/${user.id}/reset-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ newPassword, resetMethod: 'manual_set' })
+      const result = await apiClient.post(`/api/users/${user.id}/reset-password`, {
+        newPassword,
+        resetMethod: 'manual_set'
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         alert('密码重置成功')
       } else {
-        alert(data.message || '重置失败')
+        alert(result.message || '重置失败')
       }
     } catch {
       alert('操作失败')
@@ -141,19 +133,11 @@ export function UserManagement({
     if (!confirm(`确定要${newStatus === 'disabled' ? '禁用' : '启用'}用户 ${username} 吗？`)) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/users/${user.id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ status: newStatus })
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.put(`/api/users/${user.id}/status`, { status: newStatus })
+      if (result.success) {
         fetchUsers()
       } else {
-        alert(data.message || '操作失败')
+        alert(result.message || '操作失败')
       }
     } catch {
       alert('操作失败')

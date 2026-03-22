@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
+import { getAssetUrl } from '@/lib/assets'
 
 interface AppShellProps {
   children: ReactNode
@@ -156,7 +157,7 @@ export function AppShell({ children }: AppShellProps) {
             {/* 头像 */}
             {user.avatar ? (
               <img
-                src={`http://localhost:3001${user.avatar}`}
+                src={getAssetUrl(user.avatar)}
                 alt="头像"
                 style={{
                   width: '36px',

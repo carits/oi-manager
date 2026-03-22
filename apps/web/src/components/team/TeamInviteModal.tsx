@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface AvailableMember {
   id: string
@@ -45,13 +45,10 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
     try {
       const params = new URLSearchParams()
       if (keyword) params.set('keyword', keyword)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/available-members?${params}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        const teachers = (data.data.teachers || []).map((t: any) => ({ ...t, memberType: 'teacher' as const }))
-        const students = (data.data.students || []).map((s: any) => ({ ...s, memberType: 'student' as const }))
+      const result = await apiClient.get<{ teachers: any[]; students: any[] }>(`/api/teams/${teamId}/available-members?${params}`)
+      if (result.success && result.data) {
+        const teachers = (result.data.teachers || []).map((t: any) => ({ ...t, memberType: 'teacher' as const }))
+        const students = (result.data.students || []).map((s: any) => ({ ...s, memberType: 'student' as const }))
         setAvailableMembers([...teachers, ...students])
       }
     } catch (error) {
@@ -66,25 +63,17 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
       setInviting(true)
       const members = selectedMembers.map(m => ({ id: m.id, type: m.memberType }))
 
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/members`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          members,
-          usernames: usernameInput.trim() ? usernameInput.split(',').map(s => s.trim()).filter(Boolean) : []
-        })
+      const result = await apiClient.post(`/api/teams/${teamId}/members`, {
+        members,
+        usernames: usernameInput.trim() ? usernameInput.split(',').map(s => s.trim()).filter(Boolean) : []
       })
-      const data = await res.json()
-      if (data.success) {
-        const successCount = data.data?.invited?.length || members.length
+      if (result.success) {
+        const successCount = result.data?.invited?.length || members.length
         alert(`成功发送 ${successCount} 个邀请`)
         onClose()
         onSuccess()
       } else {
-        alert(data.message || '邀请失败')
+        alert(result.message || '邀请失败')
       }
     } catch (error) {
       console.error('Invite members error:', error)

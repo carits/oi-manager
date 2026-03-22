@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { Badge } from '@/components/ui/Badge'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface Contest {
   id: string
@@ -39,15 +39,10 @@ export default function ContestsPage() {
   const fetchContests = async () => {
     setLoading(true)
     try {
-      const url = typeFilter
-        ? `http://localhost:3001/api/contests?type=${typeFilter}`
-        : 'http://localhost:3001/api/contests'
-      const res = await fetch(url, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setContests(data.data || [])
+      const endpoint = typeFilter ? `/api/contests?type=${typeFilter}` : '/api/contests'
+      const result = await apiClient.get<Contest[]>(endpoint)
+      if (result.success) {
+        setContests(result.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch contests:', error)
@@ -60,15 +55,11 @@ export default function ContestsPage() {
     if (!confirm('确定要删除该比赛吗？')) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/contests/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.delete(`/api/contests/${id}`)
+      if (result.success) {
         fetchContests()
       } else {
-        alert(data.message || '删除失败')
+        alert(result.message || '删除失败')
       }
     } catch {
       alert('删除失败')

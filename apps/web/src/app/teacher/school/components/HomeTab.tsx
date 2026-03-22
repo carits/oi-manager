@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Modal } from '@/components/ui/Modal'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
-import { getAuthHeaders } from '@/lib/auth'
 import { formStyles } from '@/lib/styles'
 import { calculateStudentGrade, getAllGrades } from '@/lib/grade'
 import { RegionSelector } from '@/components/business/RegionSelector'
+import apiClient from '@/lib/apiClient'
 
 interface School {
   id: string
@@ -87,12 +87,9 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
 
   const fetchStats = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${school.id}/stats`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setStats(data.data)
+      const result = await apiClient.get<any>(`/api/schools/${school.id}/stats`)
+      if (result.success) {
+        setStats(result.data)
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error)
@@ -101,12 +98,9 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
 
   const fetchTopStudents = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${school.id}/student-rankings`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setTopStudents(data.data)
+      const result = await apiClient.get<any[]>(`/api/schools/${school.id}/student-rankings`)
+      if (result.success) {
+        setTopStudents(result.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch top students:', error)
@@ -122,29 +116,21 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
         .filter(Boolean)
         .join('/')
 
-      const res = await fetch(`http://localhost:3001/api/schools/${school.id}`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: schoolForm.name,
-          region: region || null,
-          schoolType: schoolForm.schoolType || null,
-          educationSystem: schoolForm.educationSystem,
-          contactPerson: schoolForm.contactPerson || null,
-          contactPhone: schoolForm.contactPhone || null,
-          contactEmail: schoolForm.contactEmail || null
-        })
+      const result = await apiClient.put(`/api/schools/${school.id}`, {
+        name: schoolForm.name,
+        region: region || null,
+        schoolType: schoolForm.schoolType || null,
+        educationSystem: schoolForm.educationSystem,
+        contactPerson: schoolForm.contactPerson || null,
+        contactPhone: schoolForm.contactPhone || null,
+        contactEmail: schoolForm.contactEmail || null
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         setIsEditingSchool(false)
         onAnnouncementUpdate() // 刷新学校数据
         alert('学校信息保存成功')
       } else {
-        alert(data.message || '保存失败')
+        alert(result.message || '保存失败')
       }
     } catch (error) {
       console.error('Failed to save school:', error)
@@ -157,21 +143,15 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
   const handleSaveAnnouncement = async () => {
     setSaving(true)
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${school.id}/announcement`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ announcement: announcementText })
+      const result = await apiClient.put(`/api/schools/${school.id}/announcement`, {
+        announcement: announcementText
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         setIsEditingAnnouncement(false)
         onAnnouncementUpdate()
         alert('公告保存成功')
       } else {
-        alert(data.message || '保存失败')
+        alert(result.message || '保存失败')
       }
     } catch (error) {
       console.error('Failed to save announcement:', error)

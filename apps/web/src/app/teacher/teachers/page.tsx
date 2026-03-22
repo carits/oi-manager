@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import TeachersTab from '../school/components/TeachersTab'
 
 interface School {
@@ -30,12 +29,9 @@ export default function TeachersPage() {
 
   const fetchSchool = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${user?.schoolId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setSchool(data.data)
+      const result = await apiClient.get<School>(`/api/schools/${user?.schoolId}`)
+      if (result.success) {
+        setSchool(result.data ?? null)
       }
     } catch (error) {
       console.error('Failed to fetch school:', error)
@@ -46,17 +42,11 @@ export default function TeachersPage() {
 
   const checkPrincipal = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/teachers/me', {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success && user?.schoolId) {
-        const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.schoolId}`, {
-          headers: getAuthHeaders()
-        })
-        const schoolData = await schoolRes.json()
-        if (schoolData.success) {
-          setIsPrincipal(data.data.id === schoolData.data.currentPrincipalTeacherId)
+      const teacherResult = await apiClient.get<{ id: string }>('/api/teachers/me')
+      if (teacherResult.success && user?.schoolId) {
+        const schoolResult = await apiClient.get<School>(`/api/schools/${user.schoolId}`)
+        if (schoolResult.success && schoolResult.data) {
+          setIsPrincipal((teacherResult.data as any).id === schoolResult.data.currentPrincipalTeacherId)
         }
       }
     } catch (error) {

@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { getAuthHeaders } from '@/lib/auth'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export interface UseToggleStatusResult {
   toggleStatus: (id: string, newStatus: 'active' | 'disabled') => Promise<boolean>
@@ -16,7 +15,7 @@ export function useToggleStatus(endpoint: string, onSuccess?: () => void): UseTo
   const toggleStatus = async (id: string, newStatus: 'active' | 'disabled'): Promise<boolean> => {
     setToggling(true)
     try {
-      const res = await fetch(`${API_BASE}${endpoint}/${id}/status`, {
+      const res = await fetch(`${ENV.API_URL}${endpoint}/${id}/status`, {
         method: 'PUT',
         headers: {
           ...getAuthHeaders(),

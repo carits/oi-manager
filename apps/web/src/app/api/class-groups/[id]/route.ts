@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export async function GET(
   request: NextRequest,
@@ -9,7 +8,7 @@ export async function GET(
   try {
     const authHeader = request.headers.get('authorization')
 
-    const res = await fetch(`${API_BASE}/api/class-groups/${params.id}`, {
+    const res = await fetch(`${ENV.API_URL}/api/class-groups/${params.id}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -35,7 +34,7 @@ export async function PUT(
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
 
-    const res = await fetch(`${API_BASE}/api/class-groups/${params.id}`, {
+    const res = await fetch(`${ENV.API_URL}/api/class-groups/${params.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -61,7 +60,7 @@ export async function DELETE(
   try {
     const authHeader = request.headers.get('authorization')
 
-    const res = await fetch(`${API_BASE}/api/class-groups/${params.id}`, {
+    const res = await fetch(`${ENV.API_URL}/api/class-groups/${params.id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

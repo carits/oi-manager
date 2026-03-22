@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Pagination } from '@/components/ui/Pagination'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface School {
   id: string
@@ -79,12 +79,9 @@ export default function AdminSchoolDetailPage() {
 
   const fetchSchool = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setSchool(data.data)
+      const result = await apiClient.get<School>(`/api/schools/${schoolId}`)
+      if (result.success) {
+        setSchool(result.data || null)
       }
     } catch (error) {
       console.error('Failed to fetch school:', error)
@@ -95,13 +92,10 @@ export default function AdminSchoolDetailPage() {
 
   const fetchStudents = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/students?schoolId=${schoolId}&page=${studentPage}&pageSize=${pageSize}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setStudents(data.data.list || [])
-        setStudentTotal(data.data.total || 0)
+      const result = await apiClient.get<{ list: Student[]; total: number }>(`/api/students?schoolId=${schoolId}&page=${studentPage}&pageSize=${pageSize}`)
+      if (result.success) {
+        setStudents(result.data?.list || [])
+        setStudentTotal(result.data?.total || 0)
       }
     } catch (error) {
       console.error('Failed to fetch students:', error)
@@ -110,13 +104,10 @@ export default function AdminSchoolDetailPage() {
 
   const fetchTeachers = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setTeachers(data.data.list || [])
-        setTeacherTotal(data.data.total || 0)
+      const result = await apiClient.get<{ list: Teacher[]; total: number }>(`/api/schools/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`)
+      if (result.success) {
+        setTeachers(result.data?.list || [])
+        setTeacherTotal(result.data?.total || 0)
       }
     } catch (error) {
       console.error('Failed to fetch teachers:', error)

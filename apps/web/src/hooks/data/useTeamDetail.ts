@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { getAuthHeaders } from '@/lib/auth'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import apiClient from '@/lib/apiClient'
 
 /**
  * 团队成员
@@ -96,62 +96,72 @@ export interface UseTeamDetailResult {
  *
  * @param teamId 团队ID
  * @param autoFetch 是否自动获取，默认true
+ * @param sessionKey 会话标识，用于数据隔离
  */
 export function useTeamDetail(
   teamId: string | null,
-  autoFetch: boolean = true
+  autoFetch: boolean = true,
+  sessionKey?: string | null
 ): UseTeamDetailResult {
   const [team, setTeam] = useState<TeamDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const fetchTeam = useCallback(async () => {
-    if (!teamId) {
+    // 取消之前的请求
+    abortControllerRef.current?.abort()
+
+    if (!teamId || !sessionKey) {
       setLoading(false)
+      setTeam(null)  // sessionKey 变化时清空数据
       return
     }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
 
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}`, {
-        headers: getAuthHeaders()
+      const result = await apiClient.get<TeamDetail>(`/api/teams/${teamId}`, {
+        signal: controller.signal
       })
-      const data = await res.json()
-      if (data.success) {
-        setTeam(data.data)
+
+      if (result.success) {
+        setTeam(result.data ?? null)
       } else {
-        setError(data.message || '获取团队信息失败')
+        setError(result.message || '获取团队信息失败')
       }
-    } catch (err) {
+    } catch (err: unknown) {
+      // 忽略取消的请求
+      if (err instanceof Error && err.name === 'AbortError') return
       console.error('Failed to fetch team:', err)
       setError('获取团队信息失败')
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, sessionKey])
 
   const fetchJoinRequests = useCallback(async () => {
-    if (!teamId) return
+    if (!teamId || !sessionKey) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/join-requests`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setJoinRequests(data.data || [])
+      const result = await apiClient.get<JoinRequest[]>(`/api/teams/${teamId}/join-requests`)
+      if (result.success) {
+        setJoinRequests(result.data || [])
       }
     } catch (err) {
       console.error('Failed to fetch join requests:', err)
     }
-  }, [teamId])
+  }, [teamId, sessionKey])
 
   useEffect(() => {
     if (autoFetch && teamId) {
       fetchTeam()
     }
+    return () => abortControllerRef.current?.abort()
   }, [teamId, autoFetch, fetchTeam])
 
   return {

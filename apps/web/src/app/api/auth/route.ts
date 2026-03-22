@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    const res = await fetch(`${ENV.API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
 
-    const res = await fetch(`${API_BASE}/api/auth/me`, {
+    const res = await fetch(`${ENV.API_URL}/api/auth/me`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -48,7 +47,7 @@ export async function PUT(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
 
-    const res = await fetch(`${API_BASE}/api/auth/profile`, {
+    const res = await fetch(`${ENV.API_URL}/api/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

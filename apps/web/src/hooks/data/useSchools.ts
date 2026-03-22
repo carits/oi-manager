@@ -20,6 +20,6 @@ export interface School {
   } | null
 }
 
-export function useSchools(filters?: Record<string, any>): UseFetchResult<ListResponse<School>> {
-  return useList<School>('/api/schools', filters)
+export function useSchools(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<ListResponse<School>> {
+  return useList<School>('/api/schools', filters, sessionKey)
 }

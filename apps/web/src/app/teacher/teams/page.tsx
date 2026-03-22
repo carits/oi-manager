@@ -5,10 +5,10 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { TeamListPage, TeamItem, Invitation } from '@/components/team'
 import { useTeams, Team } from '@/hooks/data/useTeams'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 export default function TeamsPage() {
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function TeamsPage() {
     view: activeTab === 'mine' ? 'mine' : 'all'
   } : null
 
-  const { data, loading, refetch } = useTeams(queryParams)
+  const { data, loading, refetch } = useTeams(queryParams, sessionKey)
 
   // 邀请相关状态
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -56,14 +56,12 @@ export default function TeamsPage() {
     const fetchData = async () => {
       try {
         setLoadingInvitations(true)
-        const [adminRes, memberRes] = await Promise.all([
-          fetch('http://localhost:3001/api/teams/admin-invitations', { headers: getAuthHeaders() }),
-          fetch('http://localhost:3001/api/teams/member-invitations', { headers: getAuthHeaders() })
+        const [adminResult, memberResult] = await Promise.all([
+          apiClient.get<any[]>('/api/teams/admin-invitations'),
+          apiClient.get<any[]>('/api/teams/member-invitations')
         ])
-        const adminResult = await adminRes.json()
-        const memberResult = await memberRes.json()
-        const adminInvitations = (adminResult.success ? adminResult.data : []).map((i: any) => ({ ...i, type: 'admin' as const }))
-        const memberInvitations = (memberResult.success ? memberResult.data : []).map((i: any) => ({ ...i, type: 'member' as const }))
+        const adminInvitations = (adminResult.success ? (adminResult.data || []) : []).map((i: any) => ({ ...i, type: 'admin' as const }))
+        const memberInvitations = (memberResult.success ? (memberResult.data || []) : []).map((i: any) => ({ ...i, type: 'member' as const }))
         setInvitations([...adminInvitations, ...memberInvitations])
       } catch (error) {
         console.error('Failed to fetch invitations:', error)
@@ -79,10 +77,9 @@ export default function TeamsPage() {
     try {
       setProcessingInvitation(invitationId)
       const endpoint = type === 'admin'
-        ? `http://localhost:3001/api/teams/admin-invitations/${invitationId}/accept`
-        : `http://localhost:3001/api/teams/member-invitations/${invitationId}/accept`
-      const res = await fetch(endpoint, { method: 'POST', headers: getAuthHeaders() })
-      const result = await res.json()
+        ? `/api/teams/admin-invitations/${invitationId}/accept`
+        : `/api/teams/member-invitations/${invitationId}/accept`
+      const result = await apiClient.post(endpoint)
       if (result.success) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
@@ -101,10 +98,9 @@ export default function TeamsPage() {
     try {
       setProcessingInvitation(invitationId)
       const endpoint = type === 'admin'
-        ? `http://localhost:3001/api/teams/admin-invitations/${invitationId}/reject`
-        : `http://localhost:3001/api/teams/member-invitations/${invitationId}/reject`
-      const res = await fetch(endpoint, { method: 'POST', headers: getAuthHeaders() })
-      const result = await res.json()
+        ? `/api/teams/admin-invitations/${invitationId}/reject`
+        : `/api/teams/member-invitations/${invitationId}/reject`
+      const result = await apiClient.post(endpoint)
       if (result.success) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
@@ -121,12 +117,11 @@ export default function TeamsPage() {
   const handleCreateTeam = async (data: { name: string; description: string; isPublic: boolean }) => {
     try {
       setCreating(true)
-      const res = await fetch('http://localhost:3001/api/teams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ name: data.name, description: data.description || null, isPublic: data.isPublic })
+      const result = await apiClient.post('/api/teams', {
+        name: data.name,
+        description: data.description || null,
+        isPublic: data.isPublic
       })
-      const result = await res.json()
       if (result.success) {
         setCreateModalOpen(false)
         refetch()

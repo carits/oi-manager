@@ -35,6 +35,6 @@ export interface Student {
   } | null
 }
 
-export function useStudents(filters?: Record<string, any>): UseFetchResult<ListResponse<Student>> {
-  return useList<Student>('/api/students', filters)
+export function useStudents(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<ListResponse<Student>> {
+  return useList<Student>('/api/students', filters, sessionKey)
 }

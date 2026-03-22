@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface TaskList {
   id: string
@@ -43,10 +43,9 @@ export default function TaskListsPage() {
 
   const fetchTaskLists = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/task-lists', { headers: getAuthHeaders() })
-      const data = await res.json()
-      if (data.success) {
-        setTaskLists(data.data.list)
+      const result = await apiClient.get<{ list: TaskList[] }>('/api/task-lists')
+      if (result.success) {
+        setTaskLists(result.data?.list || [])
       }
     } catch (error) {
       console.error('Failed to fetch task lists:', error)
@@ -57,10 +56,9 @@ export default function TaskListsPage() {
 
   const fetchClassGroups = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/class-groups', { headers: getAuthHeaders() })
-      const data = await res.json()
-      if (data.success) {
-        setClassGroups(data.data)
+      const result = await apiClient.get<unknown[]>('/api/class-groups')
+      if (result.success) {
+        // Note: setClassGroups is not defined, this function appears unused
       }
     } catch (error) {
       console.error('Failed to fetch class groups:', error)
@@ -70,10 +68,9 @@ export default function TaskListsPage() {
   const handleViewDetails = async (taskList: TaskList) => {
     setSelectedTaskList(taskList)
     try {
-      const res = await fetch(`http://localhost:3001/api/task-lists/${taskList.id}`, { headers: getAuthHeaders() })
-      const data = await res.json()
-      if (data.success) {
-        setTasks(data.data.tasks || [])
+      const result = await apiClient.get<{ tasks: Task[] }>(`/api/task-lists/${taskList.id}`)
+      if (result.success) {
+        setTasks(result.data?.tasks || [])
       }
     } catch (error) {
       console.error('Failed to fetch task list:', error)
@@ -84,15 +81,11 @@ export default function TaskListsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('确定要删除该题单吗？')) return
     try {
-      const res = await fetch(`http://localhost:3001/api/task-lists/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.delete(`/api/task-lists/${id}`)
+      if (result.success) {
         fetchTaskLists()
       } else {
-        alert(data.message || '删除失败')
+        alert(result.message || '删除失败')
       }
     } catch {
       alert('删除失败')
@@ -104,25 +97,17 @@ export default function TaskListsPage() {
     const formData = new FormData(e.currentTarget)
 
     try {
-      const res = await fetch('http://localhost:3001/api/task-lists', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          title: formData.get('title'),
-          description: formData.get('description') || null,
-          publishAt: formData.get('publishAt') || null,
-          deadline: formData.get('deadline') || null
-        })
+      const result = await apiClient.post('/api/task-lists', {
+        title: formData.get('title'),
+        description: formData.get('description') || null,
+        publishAt: formData.get('publishAt') || null,
+        deadline: formData.get('deadline') || null
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         setShowModal(false)
         fetchTaskLists()
       } else {
-        alert(data.message || '创建失败')
+        alert(result.message || '创建失败')
       }
     } catch {
       alert('创建失败')

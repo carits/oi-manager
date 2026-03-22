@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface ClassGroup {
   id: string
@@ -35,12 +35,9 @@ export default function ClassesPage() {
 
   const fetchClassGroups = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/class-groups', {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setClassGroups(data.data)
+      const result = await apiClient.get<ClassGroup[]>('/api/class-groups')
+      if (result.success) {
+        setClassGroups(result.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch class groups:', error)
@@ -53,15 +50,11 @@ export default function ClassesPage() {
     if (!confirm('确定要删除该班级吗？')) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/class-groups/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.delete(`/api/class-groups/${id}`)
+      if (result.success) {
         fetchClassGroups()
       } else {
-        alert(data.message || '删除失败')
+        alert(result.message || '删除失败')
       }
     } catch {
       alert('删除失败')

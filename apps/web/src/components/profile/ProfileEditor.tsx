@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
+import { getAssetUrl } from '@/lib/assets'
 
 interface ProfileEditorProps {
   userType: 'teacher' | 'student' | 'admin'
@@ -44,20 +45,12 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
     e.preventDefault()
     setSaving(true)
     try {
-      const res = await fetch('http://localhost:3001/api/auth/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(form)
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.put('/api/auth/profile', form)
+      if (result.success) {
         alert('保存成功')
         refreshUser?.()
       } else {
-        alert(data.message || '保存失败')
+        alert(result.message || '保存失败')
       }
     } catch (error) {
       alert('保存失败')
@@ -79,16 +72,11 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
       const formData = new FormData()
       formData.append('avatar', file)
 
-      const res = await fetch('http://localhost:3001/api/auth/avatar', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: formData
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.postFile('/api/auth/avatar', formData)
+      if (result.success) {
         refreshUser?.()
       } else {
-        alert(data.message || '上传失败')
+        alert(result.message || '上传失败')
       }
     } catch (error) {
       alert('上传失败')
@@ -120,7 +108,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
               width: '80px',
               height: '80px',
               borderRadius: '50%',
-              background: `url(http://localhost:3001${user.avatar}) center/cover`,
+              background: `url(${getAssetUrl(user.avatar)}) center/cover`,
               border: '3px solid var(--border)'
             }}
           />

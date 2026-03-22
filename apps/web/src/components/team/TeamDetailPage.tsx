@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { useTeamPermission, type UserType } from '@/hooks/useTeamPermission'
 import { useTeamDetail } from '@/hooks/data/useTeamDetail'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -34,7 +34,7 @@ export interface TeamDetailPageProps {
 export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailPageProps) {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const teamId = params.id as string
   const [activeTab, setActiveTab] = useState<TabType>('members')
   const [mounted, setMounted] = useState(false)
@@ -43,7 +43,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   const userId = userType === 'teacher' ? user?.teacherId : user?.studentId
 
   // 使用公共 hook 获取团队数据
-  const { team, loading, error, refetch, joinRequests: apiJoinRequests, fetchJoinRequests } = useTeamDetail(mounted ? teamId : null)
+  const { team, loading, error, refetch, joinRequests: apiJoinRequests, fetchJoinRequests } = useTeamDetail(mounted ? teamId : null, true, sessionKey)
 
   // 使用公共 hook 计算权限
   const permission = useTeamPermission(team, userId, userType)
@@ -104,12 +104,9 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
   const fetchPendingInviteCount = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/pending-invites`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setPendingInviteCount(data.data?.length || 0)
+      const result = await apiClient.get<{ length: number }[]>(`/api/teams/${teamId}/pending-invites`)
+      if (result.success && result.data) {
+        setPendingInviteCount(result.data.length || 0)
       }
     } catch (error) {
       console.error('Failed to fetch pending invites:', error)
@@ -131,20 +128,14 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
     if (!team) return
     try {
       setSavingAnnouncement(true)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/announcement`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ announcement: announcementText })
+      const result = await apiClient.put(`/api/teams/${teamId}/announcement`, {
+        announcement: announcementText
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         setEditingAnnouncement(false)
         refetch()
       } else {
-        alert(data.message || '保存失败')
+        alert(result.message || '保存失败')
       }
     } catch (error) {
       alert('保存失败')
@@ -169,17 +160,13 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
     try {
       setLeaving(true)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/leave`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.post(`/api/teams/${teamId}/leave`)
+      if (result.success) {
         router.push(basePath)
       } else {
         setShowLeaveConfirm(false)
         // 显示错误提示
-        setTimeout(() => alert(data.message || '退出失败'), 100)
+        setTimeout(() => alert(result.message || '退出失败'), 100)
       }
     } catch (error) {
       console.error('Leave team error:', error)
@@ -195,15 +182,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
     if (!confirm(`确定要移除${memberName}吗？`)) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/members/${memberId}?memberType=${userType}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.delete(`/api/teams/${teamId}/members/${memberId}?memberType=${userType}`)
+      if (result.success) {
         refetch()
       } else {
-        alert(data.message || '移除失败')
+        alert(result.message || '移除失败')
       }
     } catch (error) {
       console.error('Remove member error:', error)
@@ -222,25 +205,17 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
     if (!setAdminTarget) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/admins`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          memberId: setAdminTarget.id,
-          memberType: setAdminTarget.userType
-        })
+      const result = await apiClient.post(`/api/teams/${teamId}/admins`, {
+        memberId: setAdminTarget.id,
+        memberType: setAdminTarget.userType
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         alert('已设置为管理员')
         refetch()
         setShowSetAdminConfirm(false)
         setSetAdminTarget(null)
       } else {
-        alert(data.message || '设置失败')
+        alert(result.message || '设置失败')
       }
     } catch (error) {
       console.error('Set admin error:', error)
@@ -284,16 +259,12 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   // 申请处理
   const handleApproveRequest = useCallback(async (requestId: string) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/join-requests/${requestId}/approve`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.post(`/api/teams/join-requests/${requestId}/approve`)
+      if (result.success) {
         fetchJoinRequests()
         refetch()
       } else {
-        alert(data.message || '操作失败')
+        alert(result.message || '操作失败')
       }
     } catch (error) {
       console.error('Approve request error:', error)
@@ -303,15 +274,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
   const handleRejectRequest = useCallback(async (requestId: string) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/join-requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.post(`/api/teams/join-requests/${requestId}/reject`)
+      if (result.success) {
         fetchJoinRequests()
       } else {
-        alert(data.message || '操作失败')
+        alert(result.message || '操作失败')
       }
     } catch (error) {
       console.error('Reject request error:', error)
@@ -324,20 +291,14 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
     if (!team) return
     try {
       setApplying(true)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/join-request`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message: '我想加入这个团队' })
+      const result = await apiClient.post(`/api/teams/${teamId}/join-request`, {
+        message: '我想加入这个团队'
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         alert('申请已提交')
         refetch()
       } else {
-        alert(data.message || '申请失败')
+        alert(result.message || '申请失败')
       }
     } catch (error) {
       alert('申请失败')

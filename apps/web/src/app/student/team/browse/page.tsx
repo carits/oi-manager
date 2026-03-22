@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getAssetUrl } from '@/lib/assets'
 
 interface Team {
   id: string
@@ -40,12 +41,9 @@ export default function StudentTeamBrowsePage() {
   const fetchTeams = async () => {
     try {
       setLoading(true)
-      const res = await fetch(`http://localhost:3001/api/teams/school/${user?.schoolId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setTeams(data.data || [])
+      const result = await apiClient.get<Team[]>(`/api/teams/school/${user?.schoolId}`)
+      if (result.success) {
+        setTeams(result.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch teams:', error)
@@ -56,20 +54,14 @@ export default function StudentTeamBrowsePage() {
 
   const handleApplyJoin = async (teamId: string) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/join-request`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message: '我想加入这个团队' })
+      const result = await apiClient.post(`/api/teams/${teamId}/join-request`, {
+        message: '我想加入这个团队'
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         alert('申请已提交')
         fetchTeams()
       } else {
-        alert(data.message || '申请失败')
+        alert(result.message || '申请失败')
       }
     } catch (error) {
       console.error('Apply join error:', error)
@@ -158,7 +150,7 @@ export default function StudentTeamBrowsePage() {
                         height: '48px',
                         borderRadius: '8px',
                         background: team.avatar
-                          ? `url(http://localhost:3001${team.avatar}) center/cover`
+                          ? `url(${getAssetUrl(team.avatar)}) center/cover`
                           : 'var(--primary)',
                         display: 'flex',
                         alignItems: 'center',
@@ -227,7 +219,7 @@ export default function StudentTeamBrowsePage() {
                         height: '48px',
                         borderRadius: '8px',
                         background: team.avatar
-                          ? `url(http://localhost:3001${team.avatar}) center/cover`
+                          ? `url(${getAssetUrl(team.avatar)}) center/cover`
                           : 'var(--gray-200)',
                         display: 'flex',
                         alignItems: 'center',
@@ -295,7 +287,7 @@ export default function StudentTeamBrowsePage() {
                         height: '48px',
                         borderRadius: '8px',
                         background: team.avatar
-                          ? `url(http://localhost:3001${team.avatar}) center/cover`
+                          ? `url(${getAssetUrl(team.avatar)}) center/cover`
                           : 'var(--gray-200)',
                         display: 'flex',
                         alignItems: 'center',

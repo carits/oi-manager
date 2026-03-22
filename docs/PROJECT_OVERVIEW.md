@@ -266,8 +266,17 @@ pnpm prisma:push      # 推送 schema 到数据库
 pnpm prisma:seed      # 执行种子数据
 ```
 
+## 相关文档
+
+- [系统全景图](./SYSTEM_MAP.md) - 系统结构和路由
+- [运维手册](./RUNBOOK.md) - 本地开发指南
+- [认证与权限](./AUTH_AND_PERMISSION.md) - 权限体系详解
+- [业务模块索引](./MODULE_INDEX.md) - 模块代码定位
+- [已知问题](./KNOWN_ISSUES.md) - 技术债务清单
+- [交接指南](./HANDOVER.md) - 新人上手指南
+
 ## 联系方式
 
 - 项目仓库: [GitHub]
 - 问题反馈: [Issues]
-- 文档更新: 2026-03-18
+- 文档更新: 2026-03-23

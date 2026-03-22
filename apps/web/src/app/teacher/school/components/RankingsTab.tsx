@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
-import { getAuthHeaders } from '@/lib/auth'
 import { calculateStudentGrade, isStudentGraduated, type StudentForGrade } from '@/lib/grade'
+import apiClient from '@/lib/apiClient'
 
 interface RankingsTabProps {
   schoolId: string
@@ -41,12 +41,9 @@ export default function RankingsTab({ schoolId, educationSystem }: RankingsTabPr
   const fetchRankings = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}/student-rankings`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setAllStudents(data.data)
+      const result = await apiClient.get<RankingStudent[]>(`/api/schools/${schoolId}/student-rankings`)
+      if (result.success) {
+        setAllStudents(result.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch rankings:', error)

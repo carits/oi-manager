@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 
 export function PasswordEditor() {
@@ -48,19 +48,11 @@ export function PasswordEditor() {
 
     setSaving(true)
     try {
-      const res = await fetch('http://localhost:3001/api/auth/password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          currentPassword: form.currentPassword,
-          newPassword: form.newPassword
-        })
+      const result = await apiClient.put('/api/auth/password', {
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         setSuccess(true)
         setForm({
           currentPassword: '',
@@ -68,7 +60,7 @@ export function PasswordEditor() {
           confirmPassword: ''
         })
       } else {
-        setError(data.message || '修改失败')
+        setError(result.message || '修改失败')
       }
     } catch (error) {
       setError('修改失败')

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders, getUserId } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getUserId } from '@/lib/auth'
 
 interface ExamScore {
   id: string
@@ -53,15 +54,12 @@ export default function StudentScoresPage() {
     if (!userId) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${userId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success && data.data) {
+      const result = await apiClient.get<StudentProfile>(`/api/students/${userId}`)
+      if (result.success && result.data) {
         setProfile({
-          rating: data.data.rating || 1200,
-          examScores: data.data.examScores || [],
-          contestResults: data.data.contestResults || []
+          rating: result.data.rating || 1200,
+          examScores: result.data.examScores || [],
+          contestResults: result.data.contestResults || []
         })
       }
     } catch (error) {

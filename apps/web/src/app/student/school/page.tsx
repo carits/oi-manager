@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 // 复用教师端的组件
 import HomeTab from '@/app/teacher/school/components/HomeTab'
@@ -35,7 +35,7 @@ interface School {
 }
 
 export default function StudentSchoolPage() {
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabType>((searchParams.get('tab') as TabType) || 'home')
@@ -64,12 +64,9 @@ export default function StudentSchoolPage() {
 
   const fetchSchool = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${user?.schoolId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setSchool(data.data)
+      const result = await apiClient.get<School>(`/api/schools/${user?.schoolId}`)
+      if (result.success) {
+        setSchool(result.data || null)
       }
     } catch (error) {
       console.error('Failed to fetch school:', error)
@@ -151,7 +148,7 @@ export default function StudentSchoolPage() {
             {activeTab === 'teachers' && <TeachersTab school={school} isPrincipal={false} showActions={false} />}
             {activeTab === 'students' && <StudentsTab schoolId={school.id} showHeader={true} />}
             {activeTab === 'rankings' && <RankingsTab schoolId={school.id} educationSystem={school.educationSystem} />}
-            {activeTab === 'teams' && <TeamsTab schoolId={school.id} />}
+            {activeTab === 'teams' && <TeamsTab schoolId={school.id} sessionKey={sessionKey} />}
           </div>
         </div>
       </div>

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${API_BASE}/api/contests/${params.id}`, {
+    const res = await fetch(`${ENV.API_URL}/api/contests/${params.id}`, {
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })
     const data = await res.json()
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${API_BASE}/api/contests/${params.id}`, {
+    const res = await fetch(`${ENV.API_URL}/api/contests/${params.id}`, {
       method: 'DELETE',
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })

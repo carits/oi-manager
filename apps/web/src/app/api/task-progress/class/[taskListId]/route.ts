@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +10,7 @@ export async function GET(
     const { searchParams } = new URL(request.url)
 
     const res = await fetch(
-      `${API_BASE}/api/task-progress/class/${params.taskListId}?${searchParams.toString()}`,
+      `${ENV.API_URL}/api/task-progress/class/${params.taskListId}?${searchParams.toString()}`,
       {
         headers: { ...(authHeader && { Authorization: authHeader }) }
       }

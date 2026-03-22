@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 // DELETE /api/contests/[id]/resources/[resourceId] - 删除资料
 export async function DELETE(request: NextRequest, { params }: { params: { id: string; resourceId: string } }) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${API_BASE}/api/contests/${params.id}/resources/${params.resourceId}`, {
+    const res = await fetch(`${ENV.API_URL}/api/contests/${params.id}/resources/${params.resourceId}`, {
       method: 'DELETE',
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })

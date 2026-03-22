@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData()
     backendFormData.append('avatar', blob, file.name)
 
-    const res = await fetch(`${API_BASE}/api/auth/avatar`, {
+    const res = await fetch(`${ENV.API_URL}/api/auth/avatar`, {
       method: 'POST',
       headers: {
         ...(authHeader ? { Authorization: authHeader } : {})

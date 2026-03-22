@@ -22,6 +22,6 @@ export interface Teacher {
   } | null
 }
 
-export function useTeachers(filters?: Record<string, any>): UseFetchResult<ListResponse<Teacher>> {
-  return useList<Teacher>('/api/teachers', filters)
+export function useTeachers(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<ListResponse<Teacher>> {
+  return useList<Teacher>('/api/teachers', filters, sessionKey)
 }

@@ -5,11 +5,11 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { TeamListPage, TeamItem, Invitation } from '@/components/team'
 import { useTeams, Team } from '@/hooks/data/useTeams'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 // 学生端 - 团队管理页面
 export default function StudentTeamPage() {
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function StudentTeamPage() {
     view: activeTab === 'mine' ? 'mine' : 'all'
   } : null
 
-  const { data, loading, refetch } = useTeams(queryParams)
+  const { data, loading, refetch } = useTeams(queryParams, sessionKey)
 
   // 邀请相关状态
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -58,12 +58,9 @@ export default function StudentTeamPage() {
       if (!mounted || !user?.studentId) return
       try {
         setLoadingInvitations(true)
-        const res = await fetch(`http://localhost:3001/api/teams/student/${user.studentId}`, {
-          headers: getAuthHeaders()
-        })
-        const data = await res.json()
+        const data = await apiClient.get<any>(`/api/teams/student/${user.studentId}`)
         if (data.success) {
-          const pending = (data.data.pending || []).map((inv: any) => ({
+          const pending = (data.data?.pending || []).map((inv: any) => ({
             id: inv.invitationId,
             teamId: inv.id,
             teamName: inv.name,
@@ -88,16 +85,12 @@ export default function StudentTeamPage() {
   const handleAcceptInvitation = async (invitationId: string) => {
     try {
       setProcessingInvitation(invitationId)
-      const res = await fetch(`http://localhost:3001/api/teams/invitations/${invitationId}/accept`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.post(`/api/teams/invitations/${invitationId}/accept`)
+      if (result.success) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
       } else {
-        alert(data.message || '操作失败')
+        alert(result.message || '操作失败')
       }
     } catch (error) {
       alert('操作失败')
@@ -110,15 +103,11 @@ export default function StudentTeamPage() {
   const handleRejectInvitation = async (invitationId: string) => {
     try {
       setProcessingInvitation(invitationId)
-      const res = await fetch(`http://localhost:3001/api/teams/invitations/${invitationId}/reject`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.post(`/api/teams/invitations/${invitationId}/reject`)
+      if (result.success) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
-        alert(data.message || '操作失败')
+        alert(result.message || '操作失败')
       }
     } catch (error) {
       alert('操作失败')
@@ -136,26 +125,18 @@ export default function StudentTeamPage() {
 
     try {
       setCreating(true)
-      const res = await fetch('http://localhost:3001/api/teams', {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description || null,
-          isPublic: formData.isPublic
-        })
+      const result = await apiClient.post('/api/teams', {
+        name: formData.name,
+        description: formData.description || null,
+        isPublic: formData.isPublic
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         setCreateModalOpen(false)
         refetch()
         alert('团队创建成功')
         return true
       } else {
-        alert(data.message || '创建失败')
+        alert(result.message || '创建失败')
         return false
       }
     } catch (error) {

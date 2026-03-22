@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders, getUserId } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getUserId } from '@/lib/auth'
 
 interface ContestResult {
   id: string
@@ -34,14 +35,11 @@ export default function StudentRatingPage() {
     if (!userId) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${userId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success && data.data) {
-        setCurrentRating(data.data.rating || 1200)
+      const result = await apiClient.get<{ rating: number; contestResults: ContestResult[] }>(`/api/students/${userId}`)
+      if (result.success && result.data) {
+        setCurrentRating(result.data.rating || 1200)
         // 只保留计rating的比赛
-        const ratingContests = (data.data.contestResults || []).filter(
+        const ratingContests = (result.data.contestResults || []).filter(
           (r: ContestResult) => r.contest.countRating
         )
         setContestResults(ratingContests)

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
 
 interface School {
@@ -72,31 +72,23 @@ export default function EditSchoolPage() {
 
     setPrincipalSaving(true)
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}/principal`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          username: principalData.username,
-          password: principalData.password || principalData.username,
-          teacherName: principalData.teacherName,
-          teacherTitle: principalData.teacherTitle,
-          email: principalData.email,
-          phone: principalData.phone
-        })
+      const result = await apiClient.post(`/api/schools/${schoolId}/principal`, {
+        username: principalData.username,
+        password: principalData.password || principalData.username,
+        teacherName: principalData.teacherName,
+        teacherTitle: principalData.teacherTitle,
+        email: principalData.email,
+        phone: principalData.phone
       })
-      const data = await res.json()
-      if (data.success) {
-        setPrincipal(data.data.teacher)
-        setSelectedTeacherId(data.data.teacher.id)
+      if (result.success) {
+        setPrincipal(result.data?.teacher || null)
+        setSelectedTeacherId(result.data?.teacher?.id || '')
         setShowPrincipalForm(false)
         setPrincipalData({ username: '', password: '', teacherName: '', teacherTitle: '', email: '', phone: '' })
         // 重新获取教师列表
         fetchTeachers()
       } else {
-        setPrincipalError(data.message || '创建失败')
+        setPrincipalError(result.message || '创建失败')
       }
     } catch {
       setPrincipalError('网络错误')
@@ -127,12 +119,9 @@ export default function EditSchoolPage() {
 
   const fetchTeachers = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}/teachers`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setTeachers(data.data.list || [])
+      const result = await apiClient.get<{ list: Teacher[] }>(`/api/schools/${schoolId}/teachers`)
+      if (result.success) {
+        setTeachers(result.data?.list || [])
       }
     } catch (error) {
       console.error('Failed to fetch teachers:', error)
@@ -141,30 +130,29 @@ export default function EditSchoolPage() {
 
   const fetchSchool = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        const school = data.data
-        setFormData({
-          name: school.name || '',
-          region: school.region || '',
-          schoolType: school.schoolType || '',
-          educationSystem: school.educationSystem || '6-3-3',
-          contactPerson: school.contactPerson || '',
-          contactPhone: school.contactPhone || '',
-          contactEmail: school.contactEmail || ''
-        })
-        setPrincipal(school.principal || null)
-        setSelectedTeacherId(school.principal?.id || '')
+      const result = await apiClient.get<School>(`/api/schools/${schoolId}`)
+      if (result.success) {
+        const schoolData = result.data
+        if (schoolData) {
+          setFormData({
+            name: schoolData.name || '',
+            region: schoolData.region || '',
+            schoolType: schoolData.schoolType || '',
+            educationSystem: schoolData.educationSystem || '6-3-3',
+            contactPerson: schoolData.contactPerson || '',
+            contactPhone: schoolData.contactPhone || '',
+            contactEmail: schoolData.contactEmail || ''
+          })
+          setPrincipal(schoolData.principal || null)
+          setSelectedTeacherId(schoolData.principal?.id || '')
 
-        // 解析区域信息
-        if (school.region) {
-          const parts = school.region.split('/')
-          if (parts.length >= 1) setSelectedProvince(parts[0])
-          if (parts.length >= 2) setSelectedCity(parts[1])
-          if (parts.length >= 3) setSelectedDistrict(parts[2])
+          // 解析区域信息
+          if (schoolData.region) {
+            const parts = schoolData.region.split('/')
+            if (parts.length >= 1) setSelectedProvince(parts[0])
+            if (parts.length >= 2) setSelectedCity(parts[1])
+            if (parts.length >= 3) setSelectedDistrict(parts[2])
+          }
         }
       }
     } catch (error) {
@@ -184,45 +172,29 @@ export default function EditSchoolPage() {
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
       // 更新学校基本信息
-      const res = await fetch(`http://localhost:3001/api/schools/${schoolId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          ...formData,
-          region
-        })
+      const result = await apiClient.put(`/api/schools/${schoolId}`, {
+        ...formData,
+        region
       })
-      const data = await res.json()
-      if (!data.success) {
-        alert(data.message || '保存失败')
+      if (!result.success) {
+        alert(result.message || '保存失败')
         setSaving(false)
         return
       }
 
       // 如果选择了负责人且与当前不同，更新负责人
       if (selectedTeacherId && selectedTeacherId !== principal?.id) {
-        const principalRes = await fetch(`http://localhost:3001/api/schools/${schoolId}/principal`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          },
-          body: JSON.stringify({ teacherId: selectedTeacherId })
-        })
-        const principalData = await principalRes.json()
-        if (!principalData.success) {
-          alert(principalData.message || '负责人更新失败')
+        const principalResult = await apiClient.put(`/api/schools/${schoolId}/principal`, { teacherId: selectedTeacherId })
+        if (!principalResult.success) {
+          alert(principalResult.message || '负责人更新失败')
           setSaving(false)
           return
         }
 
         // 更新本地状态
-        if (principalData.data?.principal) {
-          setPrincipal(principalData.data.principal)
-          setSelectedTeacherId(principalData.data.principal.id)
+        if (principalResult.data?.principal) {
+          setPrincipal(principalResult.data.principal)
+          setSelectedTeacherId(principalResult.data.principal.id)
         }
       }
 

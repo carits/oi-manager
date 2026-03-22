@@ -1,6 +1,345 @@
 # 变更日志
 
+## 2026-03-23
+
+### 文档一致性修复
+
+**目标**：检查并修复过时的项目文档，确保文档与代码一致。
+
+**修复内容**：
+
+1. **DATABASE_MODELS.md**：
+   - 添加缺失的 `Admin` 模型文档
+   - 删除不存在的 `StudentTeam`、`TeamAdmin` 模型描述
+   - 添加 `TeamMember` 模型文档（实际使用的团队成员表）
+   - 修正 `Team` 模型（移除不存在的 `ownerId` 字段）
+   - 修正 `Contest` 模型（移除不存在的 `createdBy` 字段）
+   - 更新 ER 图
+
+2. **COMPONENTS.md**：
+   - 添加缺失的 17 个组件文档
+   - 添加 `team/` 目录组件（10个）
+   - 添加 `profile/` 目录组件（2个）
+   - 添加 `ui/` 目录组件（Empty, ConfirmModal）
+   - 添加根目录组件（Providers, Loading, ContestDetail）
+   - 移除 UserManagement "未使用"的错误标注
+
+3. **API_REFERENCE.md**：
+   - 移除不存在的子文档引用（auth.md, users.md 等）
+   - 添加"文档待完善"警告
+   - 补充缺失的 API：
+     - 认证接口（/me, /profile, /avatar, /password）
+     - 用户管理接口（/:id/logs, /platform-admin）
+     - 学校管理接口（principal-logs 等）
+     - 团队管理接口（约 25 个端点）
+     - 比赛管理接口（题目、资源、成绩导入）
+     - 任务进度接口（3 个端点）
+     - 里程碑接口（5 个端点）
+     - 统计接口（3 个端点）
+
+4. **README.md**：
+   - 移除不存在的文档引用
+   - 添加文档状态表
+   - 更新快速导航
+
+**涉及文件**：
+- `docs/database/DATABASE_MODELS.md`
+- `docs/components/COMPONENTS.md`
+- `docs/api/API_REFERENCE.md`
+- `docs/README.md`
+
+---
+
+### CLAUDE.md 文档路径修正
+
+**问题**：CLAUDE.md 中引用的文档路径与实际文件位置不一致，部分引用的文档不存在。
+
+**修复内容**：
+1. 修正文档路径：
+   - `@docs/DATABASE_MODELS.md` → `@docs/database/DATABASE_MODELS.md`
+   - `@docs/API_REFERENCE.md` → `@docs/api/API_REFERENCE.md`
+   - `@docs/COMPONENTS.md` → `@docs/components/COMPONENTS.md`
+2. 移除不存在的文档引用：
+   - `@docs/ENVIRONMENT.md`
+   - `@docs/DATA_FLOW.md`
+   - `@docs/DECISIONS.md`
+3. 调整同步更新文档的指引，使用实际存在的文档
+
+**涉及文件**：
+- `CLAUDE.md`
+
+---
+
+### 头像上传功能修复
+
+**问题**：`ProfileEditor.tsx` 调用了 `apiClient.postFile()` 方法，但 `apiClient` 类未定义该方法，导致头像上传静默失败。
+
+**修复**：在 `apiClient` 类中添加 `postFile` 方法，复用现有 FormData 处理逻辑。
+
+**涉及文件**：
+- `apps/web/src/lib/apiClient.ts`
+
+---
+
+### 后端安全与并发止损重构（第三轮）
+
+**目标**：针对团队模块进行权限边界检查和写操作原子性修复。
+
+**修复的权限边界问题**：
+1. `/api/teams?view=mine` 移除未使用的 `teacherId`/`studentId` query 参数，明确只信任 JWT 身份
+
+**修复的并发风险**：
+1. **创建团队**：count 检查移入事务，防止并发创建超限
+2. **团队转移**：所有检查和更新在一个事务中完成，防止并发转移导致双所有者
+3. **批准申请**：使用 `updateMany` 条件更新 + `upsert` 保证幂等性，防止双击重复审批
+4. **邀请成员**：添加 P2002 唯一约束异常处理，友好的错误提示
+
+**关键改动**：
+- 导入 `PrismaClientKnownRequestError` 用于捕获唯一约束冲突
+- 创建团队：count 检查从事务外移入事务内
+- 团队转移：重构为单一事务，包含所有权限验证和更新
+- 批准申请：使用 `updateMany({ where: { status: 'pending' } })` 实现幂等
+- 邀请成员：catch P2002 返回 409 Conflict
+
+**涉及文件**：
+- `apps/server/src/routes/teams.ts`
+
+**风险评估**：
+| 风险项 | 修复前 | 修复后 |
+|--------|--------|--------|
+| view=mine 越权 | 低（代码已正确） | 无 |
+| 创建团队超限 | 高 | 低 |
+| 团队转移竞态 | 高 | 低 |
+| 批准申请重复 | 中 | 低 |
+| 异常信息泄露 | 中 | 低 |
+
+---
+
+### 遗留直连 API 调用迁移（第二批 - 完成）
+
+**目标**：将所有页面和组件中的硬编码 `http://localhost:3001` 迁移到 `apiClient`。
+
+**修改范围**：
+
+1. **教师端页面**（3个文件）：
+   - `app/teacher/contests/page.tsx` - 比赛管理
+   - `app/teacher/classes/page.tsx` - 班级管理（已废弃，重定向到团队）
+   - `app/teacher/task-lists/page.tsx` - 题单管理（5处硬编码）
+
+2. **教师端学校组件**（5个文件）：
+   - `app/teacher/school/components/HomeTab.tsx` - 4处
+   - `app/teacher/school/components/TeachersTab.tsx` - 6处
+   - `app/teacher/school/components/StudentsTab.tsx` - 多处
+   - `app/teacher/school/components/RankingsTab.tsx` - 1处
+   - `app/teacher/school/components/EditSchoolModal.tsx` - 1处
+   - `app/teacher/school/page.tsx` - 2处
+
+3. **学生端页面**（5个文件）：
+   - `app/student/school/page.tsx` - 学校信息
+   - `app/student/rating/page.tsx` - Rating 历史
+   - `app/student/scores/page.tsx` - 成绩记录
+   - `app/student/task-lists/page.tsx` - 题单进度（5处）
+   - `app/student/team/browse/page.tsx` - 浏览团队（2处）
+
+4. **公共组件**（3个文件）：
+   - `components/profile/ProfileEditor.tsx` - 个人信息编辑（2处）
+   - `components/profile/PasswordEditor.tsx` - 密码修改（1处）
+   - `components/business/UserManagement.tsx` - 用户管理组件（3处）
+
+5. **个人主页**（2个文件）：
+   - `app/profile/student/[id]/page.tsx` - 学生个人主页
+   - `app/profile/teacher/[id]/page.tsx` - 教师个人主页
+
+6. **超管端页面**（6个文件）：
+   - `app/admin/schools/[id]/page.tsx` - 学校详情（3处）
+   - `app/admin/schools/[id]/edit/page.tsx` - 编辑学校（5处）
+   - `app/admin/schools/new/page.tsx` - 创建学校（1处）
+   - `app/admin/users/page.tsx` - 账号管理（3处）
+   - `app/admin/users/[id]/page.tsx` - 用户详情（1处）
+   - `app/admin/users/new-platform-admin/page.tsx` - 创建平台管理员（1处）
+
+7. **平台管理员页面**（2个文件）：
+   - `app/platform-admin/users/page.tsx` - 账号管理（3处）
+   - `app/platform-admin/page.tsx` - 控制台首页（1处）
+
+**修改统计**：
+- 共修改 **26 个文件**
+- 替换 **约 50 处** 硬编码 URL
+- 统一使用 `apiClient` 进行 API 调用
+
+**验证结果**：
+- 运行 `grep -r "http://localhost:3001" apps/web/src` 仅剩 2 个文件：
+  - `config/env.ts` - 配置文件中的默认值（正确）
+  - `lib/apiClient.ts` - 使用 ENV.API_URL（正确）
+
+---
+
+### 遗留直连 API 调用迁移（第一批）
+
+**目标**：将核心文件的硬编码 `http://localhost:3001` 迁移到统一配置。
+
+**修改文件**：
+
+1. `apps/web/src/components/AuthProvider.tsx`
+   - `/api/auth/me` 改用 `ENV.API_URL`
+   - `/api/auth/login` 改用 `ENV.API_URL`
+
+2. `apps/web/src/hooks/data/useTeamDetail.ts`
+   - `/api/teams/:id` 改用 `apiClient`
+   - `/api/teams/:id/join-requests` 改用 `apiClient`
+
+3. `apps/web/src/app/student/team/page.tsx`
+   - `/api/teams/student/:id` 改用 `apiClient`
+   - `/api/teams/invitations/:id/accept` 改用 `apiClient`
+   - `/api/teams/invitations/:id/reject` 改用 `apiClient`
+   - `/api/teams` (POST) 改用 `apiClient`
+
+**sessionKey 机制验证**：
+- ✅ AuthProvider.tsx - 正确计算并导出 sessionKey
+- ✅ ProtectedRoute.tsx - 使用 sessionKey 作为 key 强制重新挂载
+- ✅ useFetch.ts - 支持 sessionKey 依赖和 AbortController
+- ✅ useList.ts - 正确传递 sessionKey
+- ✅ useTeams.ts - 正确传递 sessionKey
+- ✅ useStudents.ts - 正确传递 sessionKey
+- ✅ useTeamDetail.ts - 支持 sessionKey 和请求取消
+- ✅ teacher/teams/page.tsx - 传递 sessionKey 给 useTeams
+- ✅ teacher/students/page.tsx - 传递 sessionKey 给 useStudents
+- ✅ student/team/page.tsx - 传递 sessionKey 给 useTeams
+
+---
+
+### 文档体系"接管视角"增强
+
+**目标**：建立完善的文档体系，使任何人都能快速理解并接手项目。
+
+**新增文档**：
+1. `docs/SYSTEM_MAP.md` - 系统全景图
+   - 项目结构、角色与入口
+   - 前端页面路由完整列表
+   - 后端 API 路由完整列表
+   - 数据库模型关系
+   - 前端组件架构
+   - 快速定位指南
+
+2. `docs/RUNBOOK.md` - 本地开发运维手册
+   - 环境要求和首次启动
+   - 测试账号列表
+   - 常用命令速查
+   - 数据库操作指南
+   - 环境变量配置
+   - 常见问题排查
+
+3. `docs/AUTH_AND_PERMISSION.md` - 认证与权限系统
+   - 角色体系详解
+   - 认证流程（JWT）
+   - 权限控制机制
+   - 各角色权限详解
+   - 数据隔离机制
+   - 权限检查速查表
+
+4. `docs/MODULE_INDEX.md` - 业务模块索引
+   - 模块总览与状态
+   - 各模块功能说明
+   - 前后端代码位置
+   - API 列表
+   - 模块依赖关系
+   - 新增模块开发指南
+
+5. `docs/KNOWN_ISSUES.md` - 已知问题与技术债务
+   - 架构层面问题
+   - 功能层面问题
+   - 安全层面问题
+   - 性能层面问题
+   - 代码质量问题
+   - 优先级说明
+
+6. `docs/HANDOVER.md` - 项目交接指南
+   - 30 分钟快速上手
+   - 核心概念速记
+   - 关键文件定位
+   - 常见任务示例
+   - 开发规范
+   - 项目状态
+
+**更新文档**：
+- `docs/README.md` - 更新文档目录结构
+- `docs/PROJECT_OVERVIEW.md` - 添加相关文档链接
+
+---
+
+### 统一配置层建立
+
+**目标**：移除业务代码中的硬编码地址，建立统一配置层。
+
+**新增文件**：
+1. `apps/web/src/config/env.ts` - 编译时环境配置
+2. `apps/web/src/config/runtime.ts` - 运行时配置
+3. `apps/web/src/lib/assets.ts` - 资源 URL 辅助函数
+
+**修改内容**：
+- 所有 Next.js API Routes（24个）改用 `ENV.API_URL`
+- 所有资源 URL（9个组件）改用 `getAssetUrl()`
+- 配置文件（5个）改用 `ENV.API_URL`
+
+**遗留问题**：
+- 部分页面仍直接使用 `fetch('http://localhost:3001/api/...')`
+- 需后续迁移到 `apiClient` 统一调用
+
+---
+
 ## 2026-03-22
+
+### 账号切换后的私有数据隔离重构（sessionKey 机制）
+
+**问题描述**：之前虽然修复了团队列表显示错误账号数据的问题，但根本原因在于**前端数据获取没有与登录身份强绑定**。切换账号后，页面可能显示上一个账号的数据，或者旧请求可能覆盖新数据。
+
+**解决方案**：引入 `sessionKey` 机制，基于当前登录身份生成唯一标识符，用于：
+- 标识私有数据的归属
+- 触发数据重新获取
+- 清理旧数据
+- 取消旧请求
+
+**sessionKey 生成逻辑**：
+```typescript
+const sessionKey = `${role}:${userId}:${teacherId || studentId || adminId}`
+// 例如: "teacher:xxx-xxx:e914dff8..." 或 "student:xxx-xxx:e2976392..."
+```
+
+**修改内容**：
+
+1. **AuthProvider.tsx** - 新增 sessionKey 计算，导出给组件使用
+2. **useFetch.ts** - 支持 sessionKey 依赖，添加 AbortController 请求取消机制
+3. **useList.ts** - 传递 sessionKey 到 useFetch
+4. **useTeams.ts** - 接收并传递 sessionKey
+5. **useStudents.ts** - 接收并传递 sessionKey
+6. **useTeamDetail.ts** - 支持 sessionKey 和请求取消
+7. **teacher/teams/page.tsx** - 使用 sessionKey 调用 useTeams
+8. **student/team/page.tsx** - 使用 sessionKey 调用 useTeams
+9. **teacher/students/page.tsx** - 使用 sessionKey 调用 useStudents
+10. **TeamDetailPage.tsx** - 使用 sessionKey 调用 useTeamDetail
+11. **teams.ts (后端)** - 禁止 query 参数覆盖 JWT token 中的身份
+12. **ProtectedRoute.tsx** - 使用 sessionKey 作为 key，强制组件重新挂载
+
+**核心改动**：
+- `useFetch` 在 sessionKey 变化时清空数据并取消旧请求
+- `ProtectedRoute` 使用 `key={sessionKey}` 确保账号切换时组件完全重新挂载
+- 后端只信任 JWT token 中的身份，忽略 query 参数
+
+**涉及文件**：
+- `apps/web/src/components/AuthProvider.tsx`
+- `apps/web/src/components/ProtectedRoute.tsx`
+- `apps/web/src/components/team/TeamDetailPage.tsx`
+- `apps/web/src/hooks/data/useFetch.ts`
+- `apps/web/src/hooks/data/useList.ts`
+- `apps/web/src/hooks/data/useTeams.ts`
+- `apps/web/src/hooks/data/useStudents.ts`
+- `apps/web/src/hooks/data/useTeamDetail.ts`
+- `apps/web/src/app/teacher/teams/page.tsx`
+- `apps/web/src/app/teacher/students/page.tsx`
+- `apps/web/src/app/student/team/page.tsx`
+- `apps/server/src/routes/teams.ts`
+
+---
 
 ### 严重 Bug 修复：团队列表显示错误账号数据
 

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { TeamDetail } from '@/hooks/data/useTeamDetail'
 import type { TeamPermission, UserType } from '@/hooks/useTeamPermission'
 import { Button } from '@/components/ui/Button'
+import { getAssetUrl } from '@/lib/assets'
 
 export interface JoinRequestItem {
   id: string
@@ -146,7 +147,7 @@ export function TeamMemberList({
             height: '40px',
             borderRadius: '50%',
             background: member.avatar
-              ? `url(http://localhost:3001${member.avatar}) center/cover`
+              ? `url(${getAssetUrl(member.avatar)}) center/cover`
               : 'var(--primary)',
             display: 'flex',
             alignItems: 'center',

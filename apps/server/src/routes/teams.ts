@@ -5,6 +5,7 @@ import fs from 'fs'
 import { prisma } from '../prisma'
 import { authenticate } from '../middleware/auth'
 import { JwtPayload } from '../../../../packages/shared/src'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 
 export const teamRouter = Router()
 
@@ -765,17 +766,17 @@ teamRouter.get('/', authenticate, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
 
   try {
-    const { teacherId, studentId, schoolId, page = 1, pageSize = 12, view } = req.query
+    // 注意：view=mine 时只信任 JWT token 中的身份，禁止 query 参数覆盖
+    // teacherId/studentId 参数已移除，防止越权风险
+    const { schoolId, page = 1, pageSize = 12, view } = req.query
     const user = (req as any).user!
 
-    console.log('[GET /teams] Query:', { teacherId, studentId, schoolId, view })
+    console.log('[GET /teams] Query:', { schoolId, view })
     console.log('[GET /teams] User from token:', { userId: user.userId, teacherId: user.teacherId, studentId: user.studentId })
 
-    // 确定 userId 和 userType - 优先使用 query 参数，其次使用 JWT token 中的值
-    const effectiveStudentId = (studentId as string) || user.studentId
-    const effectiveTeacherId = (teacherId as string) || user.teacherId
-    const userId = effectiveStudentId || effectiveTeacherId
-    const userType = effectiveStudentId ? 'student' : 'teacher'
+    // 确定 userId 和 userType - 只使用 JWT token 中的身份
+    const userId = user.studentId || user.teacherId
+    const userType = user.studentId ? 'student' : 'teacher'
 
     const where: Record<string, unknown> = {}
     if (schoolId) where.schoolId = schoolId as string
@@ -808,6 +809,9 @@ teamRouter.get('/', authenticate, async (req, res) => {
 
       const myTeamIds = myMemberships.map(m => m.teamId)
       where.id = { in: myTeamIds }
+    } else if (schoolId && !view) {
+      // 学校团队页面：显示该学校的所有团队（不管公有私有）
+      // 不添加额外的过滤条件，只按 schoolId 过滤
     } else {
       // 全部团队：只显示公有，且排除自己已加入的
       where.isPublic = true
@@ -1019,16 +1023,16 @@ teamRouter.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: '您尚未归属任何学校' })
     }
 
-    // 检查团队数量限制
-    const existingTeams = await prisma.teamMember.count({
-      where: { userId: ownerId, userType: ownerType, role: 'owner' }
-    })
-    if (existingTeams >= maxTeams) {
-      return res.status(400).json({ success: false, message: `您创建的团队数量已达上限（${maxTeams}个）` })
-    }
-
-    // 使用事务创建团队和所有者成员记录
+    // 使用事务创建团队和所有者成员记录（count 检查在事务内，防止并发超限）
     const team = await prisma.$transaction(async (tx) => {
+      // 在事务内检查数量限制，防止并发创建超限
+      const existingTeams = await tx.teamMember.count({
+        where: { userId: ownerId, userType: ownerType, role: 'owner' }
+      })
+      if (existingTeams >= maxTeams) {
+        throw new Error('TEAM_LIMIT_EXCEEDED')
+      }
+
       const newTeam = await tx.team.create({
         data: {
           name,
@@ -1058,6 +1062,10 @@ teamRouter.post('/', authenticate, async (req, res) => {
 
     res.json({ success: true, data: team })
   } catch (error) {
+    // 处理业务错误
+    if (error instanceof Error && error.message === 'TEAM_LIMIT_EXCEEDED') {
+      return res.status(400).json({ success: false, message: `您创建的团队数量已达上限（${user.teacher ? 50 : 5}个）` })
+    }
     console.error('Create team error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -1374,6 +1382,10 @@ teamRouter.post('/:id/members', authenticate, async (req, res) => {
 
     res.json({ success: true, data: result })
   } catch (error) {
+    // 处理唯一约束冲突（并发邀请同一成员）
+    if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ success: false, message: '该成员已被邀请，请勿重复操作' })
+    }
     console.error('Invite members error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -1926,69 +1938,83 @@ teamRouter.post('/requests/:requestId/approve', authenticate, async (req, res) =
     const { requestId } = req.params
     const { type } = req.query  // 'student' | 'teacher'
     const user = (req as any).user!
-
-    const processedBy = user.teacherId || user.studentId || ''
+    const callerId = user.teacherId || user.studentId || ''
 
     if (type === 'teacher') {
-      // 处理教师申请（TeamMember 表）
-      const member = await prisma.teamMember.findUnique({
-        where: { id: requestId }
-      })
+      // 处理教师申请（TeamMember 表）- 使用事务保证原子性和幂等性
+      await prisma.$transaction(async (tx) => {
+        // 1. 获取申请信息
+        const member = await tx.teamMember.findUnique({
+          where: { id: requestId }
+        })
+        if (!member || member.userType !== 'teacher') {
+          throw new Error('REQUEST_NOT_FOUND')
+        }
 
-      if (!member || member.status !== 'pending' || member.userType !== 'teacher') {
-        return res.status(404).json({ success: false, message: '申请不存在' })
-      }
+        // 2. 检查权限
+        const { isAdmin } = await isTeamAdmin(member.teamId, user)
+        if (!isAdmin) {
+          throw new Error('NO_PERMISSION')
+        }
 
-      // 检查权限
-      const { isAdmin } = await isTeamAdmin(member.teamId, user)
-      if (!isAdmin) {
-        return res.status(403).json({ success: false, message: '无权操作' })
-      }
-
-      // 更新状态为 active
-      await prisma.teamMember.update({
-        where: { id: requestId },
-        data: { status: 'active', joinedAt: new Date() }
+        // 3. 幂等更新：只有 pending 状态才能更新
+        const result = await tx.teamMember.updateMany({
+          where: { id: requestId, status: 'pending' },
+          data: { status: 'active', joinedAt: new Date() }
+        })
+        if (result.count === 0) {
+          throw new Error('ALREADY_PROCESSED')
+        }
       })
 
       res.json({ success: true, message: '已同意加入请求' })
     } else {
-      // 处理学生申请（TeamJoinRequest 表）
-      const request = await prisma.teamJoinRequest.findUnique({
-        where: { id: requestId }
-      })
-
-      if (!request) {
-        return res.status(404).json({ success: false, message: '申请不存在' })
-      }
-
-      // 检查权限
-      const { isAdmin } = await isTeamAdmin(request.teamId, user)
-      if (!isAdmin) {
-        return res.status(403).json({ success: false, message: '无权操作' })
-      }
-
-      // 使用事务处理
+      // 处理学生申请（TeamJoinRequest 表）- 使用事务 + upsert 保证幂等性
       await prisma.$transaction(async (tx) => {
-        // 更新申请状态
-        await tx.teamJoinRequest.update({
-          where: { id: requestId },
+        // 1. 获取申请信息
+        const request = await tx.teamJoinRequest.findUnique({
+          where: { id: requestId }
+        })
+        if (!request) {
+          throw new Error('REQUEST_NOT_FOUND')
+        }
+
+        // 2. 检查权限
+        const { isAdmin } = await isTeamAdmin(request.teamId, user)
+        if (!isAdmin) {
+          throw new Error('NO_PERMISSION')
+        }
+
+        // 3. 幂等更新申请状态：只有 pending 状态才能更新
+        const result = await tx.teamJoinRequest.updateMany({
+          where: { id: requestId, status: 'pending' },
           data: {
             status: 'approved',
             processedAt: new Date(),
-            processedBy
+            processedBy: callerId
           }
         })
+        if (result.count === 0) {
+          throw new Error('ALREADY_PROCESSED')
+        }
 
-        // 添加到团队
-        await tx.teamMember.create({
-          data: {
+        // 4. 幂等添加到团队：使用 upsert 防止重复加入
+        await tx.teamMember.upsert({
+          where: {
+            teamId_userId_userType: {
+              teamId: request.teamId,
+              userId: request.studentId,
+              userType: 'student'
+            }
+          },
+          update: { status: 'active', invitedBy: callerId },
+          create: {
             teamId: request.teamId,
             userId: request.studentId,
             userType: 'student',
             role: 'member',
             status: 'active',
-            invitedBy: processedBy,
+            invitedBy: callerId,
             joinedAt: new Date()
           }
         })
@@ -1997,6 +2023,18 @@ teamRouter.post('/requests/:requestId/approve', authenticate, async (req, res) =
       res.json({ success: true, message: '已同意申请' })
     }
   } catch (error) {
+    // 处理业务错误
+    if (error instanceof Error) {
+      const errorMessages: Record<string, { status: number; message: string }> = {
+        'REQUEST_NOT_FOUND': { status: 404, message: '申请不存在' },
+        'NO_PERMISSION': { status: 403, message: '无权操作' },
+        'ALREADY_PROCESSED': { status: 400, message: '该申请已处理' }
+      }
+      const errorInfo = errorMessages[error.message]
+      if (errorInfo) {
+        return res.status(errorInfo.status).json({ success: false, message: errorInfo.message })
+      }
+    }
     console.error('Approve request error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -2175,77 +2213,71 @@ teamRouter.post('/:id/transfer', authenticate, async (req, res) => {
     const { id } = req.params
     const { newOwnerId, newOwnerType } = req.body
     const user = (req as any).user!
-
-    // 检查权限
-    const { isOwner } = await isTeamAdmin(id, user)
-    if (!isOwner) {
-      return res.status(403).json({ success: false, message: '只有团队所有者可以转移所有权' })
-    }
-
-    // 获取当前团队信息
-    const currentTeam = await prisma.team.findUnique({
-      where: { id },
-      select: { schoolId: true }
-    })
-    if (!currentTeam) {
-      return res.status(404).json({ success: false, message: '团队不存在' })
-    }
-
-    // 获取当前所有者信息
-    const currentOwner = await prisma.teamMember.findFirst({
-      where: { teamId: id, role: 'owner' }
-    })
-    if (!currentOwner) {
-      return res.status(400).json({ success: false, message: '团队所有者不存在' })
-    }
-
-    // 验证新所有者
-    const newOwnerUser = newOwnerType === 'teacher'
-      ? await prisma.teacher.findUnique({ where: { id: newOwnerId }, select: { id: true, name: true, schoolId: true } })
-      : await prisma.student.findUnique({ where: { id: newOwnerId }, select: { id: true, name: true, schoolId: true } })
-
-    if (!newOwnerUser) {
-      return res.status(404).json({ success: false, message: `${newOwnerType === 'teacher' ? '教师' : '学生'}不存在` })
-    }
-
-    if (newOwnerUser.schoolId !== currentTeam.schoolId) {
-      return res.status(400).json({ success: false, message: `新所有者必须是本校${newOwnerType === 'teacher' ? '教师' : '学生'}` })
-    }
-
-    // 检查团队数量限制
-    const existingTeams = await prisma.teamMember.count({
-      where: { userId: newOwnerId, userType: newOwnerType, role: 'owner' }
-    })
+    const callerId = user.teacherId || user.studentId
+    const callerType = user.teacherId ? 'teacher' : 'student'
     const maxTeams = newOwnerType === 'teacher' ? 50 : 5
 
-    if (existingTeams >= maxTeams) {
-      return res.status(400).json({ success: false, message: `该${newOwnerType === 'teacher' ? '教师' : '学生'}创建的团队数量已达上限（${maxTeams}个），无法转移` })
-    }
-
-    // 检查新所有者是否是团队成员
-    const newOwnerMember = await prisma.teamMember.findUnique({
-      where: {
-        teamId_userId_userType: {
-          teamId: id,
-          userId: newOwnerId,
-          userType: newOwnerType
-        }
-      }
-    })
-
-    if (!newOwnerMember || newOwnerMember.status !== 'active') {
-      return res.status(400).json({ success: false, message: '新所有者必须是团队成员' })
-    }
-
-    // 使用事务更新
+    // 所有检查和更新在事务中完成，防止并发问题
     await prisma.$transaction(async (tx) => {
-      // 将原所有者改为管理员
+      // 1. 获取团队信息
+      const currentTeam = await tx.team.findUnique({
+        where: { id },
+        select: { schoolId: true }
+      })
+      if (!currentTeam) {
+        throw new Error('TEAM_NOT_FOUND')
+      }
+
+      // 2. 获取当前所有者并验证调用者身份（原子检查）
+      const currentOwner = await tx.teamMember.findFirst({
+        where: { teamId: id, role: 'owner' }
+      })
+      if (!currentOwner) {
+        throw new Error('OWNER_NOT_FOUND')
+      }
+      // 验证调用者是否是当前所有者
+      if (currentOwner.userId !== callerId || currentOwner.userType !== callerType) {
+        throw new Error('NOT_OWNER')
+      }
+
+      // 3. 验证新所有者是否存在且属于本校
+      const newOwnerUser = newOwnerType === 'teacher'
+        ? await tx.teacher.findUnique({ where: { id: newOwnerId }, select: { id: true, schoolId: true } })
+        : await tx.student.findUnique({ where: { id: newOwnerId }, select: { id: true, schoolId: true } })
+      if (!newOwnerUser) {
+        throw new Error('NEW_OWNER_NOT_FOUND')
+      }
+      if (newOwnerUser.schoolId !== currentTeam.schoolId) {
+        throw new Error('NEW_OWNER_NOT_SAME_SCHOOL')
+      }
+
+      // 4. 检查新所有者团队数量限制（在事务内）
+      const existingTeams = await tx.teamMember.count({
+        where: { userId: newOwnerId, userType: newOwnerType, role: 'owner' }
+      })
+      if (existingTeams >= maxTeams) {
+        throw new Error('NEW_OWNER_LIMIT_EXCEEDED')
+      }
+
+      // 5. 检查新所有者是否是团队成员
+      const newOwnerMember = await tx.teamMember.findUnique({
+        where: {
+          teamId_userId_userType: {
+            teamId: id,
+            userId: newOwnerId,
+            userType: newOwnerType
+          }
+        }
+      })
+      if (!newOwnerMember || newOwnerMember.status !== 'active') {
+        throw new Error('NEW_OWNER_NOT_MEMBER')
+      }
+
+      // 6. 原子更新：将原所有者改为管理员，新所有者改为 owner
       await tx.teamMember.update({
         where: { id: currentOwner.id },
         data: { role: 'admin' }
       })
-
-      // 将新所有者设为 owner
       await tx.teamMember.update({
         where: { id: newOwnerMember.id },
         data: { role: 'owner' }
@@ -2254,6 +2286,22 @@ teamRouter.post('/:id/transfer', authenticate, async (req, res) => {
 
     res.json({ success: true, message: '所有权转移成功' })
   } catch (error) {
+    // 处理业务错误
+    if (error instanceof Error) {
+      const errorMessages: Record<string, { status: number; message: string }> = {
+        'TEAM_NOT_FOUND': { status: 404, message: '团队不存在' },
+        'OWNER_NOT_FOUND': { status: 400, message: '团队所有者不存在' },
+        'NOT_OWNER': { status: 403, message: '只有团队所有者可以转移所有权' },
+        'NEW_OWNER_NOT_FOUND': { status: 404, message: `${req.body.newOwnerType === 'teacher' ? '教师' : '学生'}不存在` },
+        'NEW_OWNER_NOT_SAME_SCHOOL': { status: 400, message: `新所有者必须是本校${req.body.newOwnerType === 'teacher' ? '教师' : '学生'}` },
+        'NEW_OWNER_LIMIT_EXCEEDED': { status: 400, message: `该${req.body.newOwnerType === 'teacher' ? '教师' : '学生'}创建的团队数量已达上限（${req.body.newOwnerType === 'teacher' ? 50 : 5}个），无法转移` },
+        'NEW_OWNER_NOT_MEMBER': { status: 400, message: '新所有者必须是团队成员' }
+      }
+      const errorInfo = errorMessages[error.message]
+      if (errorInfo) {
+        return res.status(errorInfo.status).json({ success: false, message: errorInfo.message })
+      }
+    }
     console.error('Transfer team error:', error)
     res.status(500).json({ success: false, message: '服务器错误: ' + (error instanceof Error ? error.message : String(error)) })
   }

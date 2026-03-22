@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
 
 export default function NewSchoolPage() {
@@ -110,23 +110,15 @@ export default function NewSchoolPage() {
       // 组合省市区
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
-      const res = await fetch('http://localhost:3001/api/schools', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          ...formData,
-          region: region || null,
-          password: formData.password || formData.username
-        })
+      const result = await apiClient.post('/api/schools', {
+        ...formData,
+        region: region || null,
+        password: formData.password || formData.username
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         router.push('/admin/schools')
       } else {
-        alert(data.message || '创建失败')
+        alert(result.message || '创建失败')
       }
     } catch {
       alert('创建失败')

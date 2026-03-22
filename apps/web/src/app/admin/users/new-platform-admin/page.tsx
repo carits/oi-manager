@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import apiClient from '@/lib/apiClient'
 
 export default function NewPlatformAdminPage() {
   const router = useRouter()
@@ -34,23 +35,13 @@ export default function NewPlatformAdminPage() {
     setLoading(true)
 
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch('http://localhost:3001/api/users/platform-admin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      })
+      const result = await apiClient.post('/api/users/platform-admin', formData)
 
-      const data = await res.json()
-
-      if (data.success) {
+      if (result.success) {
         alert('平台管理员创建成功')
         router.push('/admin/users')
       } else {
-        setError(data.message || '创建失败')
+        setError(result.message || '创建失败')
       }
     } catch (e) {
       setError('网络错误')

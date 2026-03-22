@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { getAuthHeaders } from '@/lib/auth'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export interface UseDeleteResult {
   deleteItem: (id: string, confirmMessage?: string) => Promise<boolean>
@@ -20,7 +19,7 @@ export function useDelete(endpoint: string, onSuccess?: () => void): UseDeleteRe
 
     setDeleting(true)
     try {
-      const res = await fetch(`${API_BASE}${endpoint}/${id}`, {
+      const res = await fetch(`${ENV.API_URL}${endpoint}/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       })

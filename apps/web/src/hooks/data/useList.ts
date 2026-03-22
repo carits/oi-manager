@@ -13,7 +13,8 @@ export interface ListResponse<T> {
 
 export function useList<T>(
   endpoint: string,
-  filters?: Record<string, any> | null
+  filters?: Record<string, any> | null,
+  sessionKey?: string | null
 ): UseFetchResult<ListResponse<T>> {
   const url = useMemo(() => {
     // 当 filters 为 null 或 undefined 时，不发起请求
@@ -33,5 +34,5 @@ export function useList<T>(
     return queryString ? `${endpoint}?${queryString}` : null
   }, [endpoint, filters])
 
-  return useFetch<ListResponse<T>>(url)
+  return useFetch<ListResponse<T>>(url, sessionKey)
 }

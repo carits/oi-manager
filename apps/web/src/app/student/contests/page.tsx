@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { getAuthHeaders } from '@/lib/auth'
+import { ENV } from '@/config/env'
 
 interface Contest {
   id: string
@@ -85,8 +86,6 @@ export default function StudentContestsPage() {
   const [loadingMarkdown, setLoadingMarkdown] = useState(false)
   const [statementContent, setStatementContent] = useState('')
   const [solutionContent, setSolutionContent] = useState('')
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
   useEffect(() => {
     fetchContests()
@@ -374,7 +373,7 @@ export default function StudentContestsPage() {
                               if (resource.fileFormat === 'markdown') {
                                 // 打开 markdown 查看
                               } else {
-                                window.open(`${API_BASE}${resource.fileUrl}`, '_blank')
+                                window.open(`${ENV.API_URL}${resource.fileUrl}`, '_blank')
                               }
                             }}
                             style={{
@@ -528,7 +527,7 @@ export default function StudentContestsPage() {
                     getProblemStatementResource(selectedProblem.id) ? (
                       <div style={{ minHeight: '500px' }}>
                         <iframe
-                          src={`${API_BASE}${getProblemStatementResource(selectedProblem.id)?.fileUrl}`}
+                          src={`${ENV.API_URL}${getProblemStatementResource(selectedProblem.id)?.fileUrl}`}
                           style={{ width: '100%', height: '500px', border: 'none', borderRadius: '8px' }}
                           title="题面 PDF"
                         />
@@ -557,7 +556,7 @@ export default function StudentContestsPage() {
                     getProblemSolutionResource(selectedProblem.id) ? (
                       <div style={{ minHeight: '500px' }}>
                         <iframe
-                          src={`${API_BASE}${getProblemSolutionResource(selectedProblem.id)?.fileUrl}`}
+                          src={`${ENV.API_URL}${getProblemSolutionResource(selectedProblem.id)?.fileUrl}`}
                           style={{ width: '100%', height: '500px', border: 'none', borderRadius: '8px' }}
                           title="题解 PDF"
                         />

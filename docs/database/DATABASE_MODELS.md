@@ -171,75 +171,49 @@
 | description | String | ❌ | 团队描述 |
 | announcement | String | ❌ | 团队公告（支持 Markdown） |
 | schoolId | String | ✅ | 学校 ID（必填） |
-| ownerId | String | ✅ | 团队所有者（教师 ID） |
 | isPublic | Boolean | ✅ | 是否公开，默认 true |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
 - `school`: 多对一关联 School
-- `owner`: 多对一关联 Teacher（作为所有者）
-- `admins`: 一对多关联 TeamAdmin
-- `members`: 多对多关联 Student（通过 StudentTeam）
+- `members`: 一对多关联 TeamMember
 - `joinRequests`: 一对多关联 TeamJoinRequest
 - `contests`: 一对多关联 Contest
 
 **业务规则**:
 - 团队必须归属学校
-- 团队必须有所有者（教师）
+- 团队成员通过 TeamMember 表管理，支持教师和学生
 - 公有团队可被学生浏览并申请加入
 - 私有团队只能通过邀请加入
 
 ---
 
-### 6. StudentTeam (学生-团队关系)
+### 6. TeamMember (团队成员)
 
-学生和团队的多对多关系表，包含邀请状态。
-
-**字段说明**:
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| id | String | ✅ | UUID 主键 |
-| studentId | String | ✅ | 学生 ID |
-| teamId | String | ✅ | 团队 ID |
-| status | String | ✅ | 状态：pending（待确认）/ active（已加入） |
-| invitedAt | DateTime | ✅ | 邀请时间 |
-| joinedAt | DateTime | ❌ | 加入时间（同意后填充） |
-| invitedBy | String | ✅ | 邀请人（教师 ID） |
-
-**关联关系**:
-- `student`: 多对一关联 Student
-- `team`: 多对一关联 Team
-
-**索引**:
-- `(studentId, teamId)`: 唯一索引
-
----
-
-### 7. TeamAdmin (团队管理员)
-
-团队管理员表，记录被任命的管理员教师。
+团队成员表，统一管理教师和学生成员。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | id | String | ✅ | UUID 主键 |
 | teamId | String | ✅ | 团队 ID |
-| teacherId | String | ✅ | 教师 ID |
-| status | String | ✅ | 状态：pending / active |
-| addedAt | DateTime | ✅ | 添加时间 |
-| addedBy | String | ✅ | 添加人（所有者教师 ID） |
+| userId | String | ✅ | 用户 ID（学生ID或教师ID） |
+| userType | String | ✅ | 用户类型：teacher / student |
+| role | String | ✅ | 角色：owner / admin / member |
+| status | String | ✅ | 状态：pending / active，默认 active |
+| joinedAt | DateTime | ✅ | 加入时间 |
+| invitedBy | String | ❌ | 邀请人 ID |
 
 **关联关系**:
 - `team`: 多对一关联 Team
-- `teacher`: 多对一关联 Teacher
 
 **索引**:
-- `(teamId, teacherId)`: 唯一索引
+- `(teamId, userId, userType)`: 唯一索引
 
 ---
 
-### 8. TeamJoinRequest (加入申请)
+### 7. TeamJoinRequest (加入申请)
 
 学生申请加入公有团队的请求记录。
 
@@ -264,7 +238,7 @@
 
 ---
 
-### 9. Contest (比赛)
+### 8. Contest (比赛)
 
 比赛表。
 
@@ -280,12 +254,10 @@
 | teamId | String | ❌ | 团队 ID（训练赛/模拟赛必填） |
 | countRating | Boolean | ✅ | 是否计入 rating，默认 false |
 | scope | String | ✅ | 范围：team / public，默认 public |
-| createdBy | String | ❌ | 创建者用户 ID |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
-- `creator`: 多对一关联 User
 - `team`: 多对一关联 Team
 - `resources`: 一对多关联 ContestResource
 - `results`: 一对多关联 ContestResult
@@ -299,7 +271,7 @@
 
 ---
 
-### 8. ContestResult (比赛结果)
+### 9. ContestResult (比赛结果)
 
 比赛参赛结果表。
 
@@ -327,7 +299,7 @@
 
 ---
 
-### 9. ContestProblem (比赛题目)
+### 10. ContestProblem (比赛题目)
 
 比赛题目表。
 
@@ -362,7 +334,7 @@
 
 ---
 
-### 10. ContestProblemScore (比赛单题成绩)
+### 11. ContestProblemScore (比赛单题成绩)
 
 比赛单题成绩表。
 
@@ -388,7 +360,7 @@
 
 ---
 
-### 11. ContestResource (比赛资源)
+### 12. ContestResource (比赛资源)
 
 比赛资源文件表。
 
@@ -412,7 +384,7 @@
 
 ---
 
-### 12. TaskList (题单)
+### 13. TaskList (题单)
 
 题单表。
 
@@ -434,7 +406,7 @@
 
 ---
 
-### 13. Task (题目)
+### 14. Task (题目)
 
 题单中的题目。
 
@@ -458,7 +430,7 @@
 
 ---
 
-### 14. TaskProgress (题目进度)
+### 15. TaskProgress (题目进度)
 
 学生题目完成进度表。
 
@@ -485,7 +457,7 @@
 
 ---
 
-### 15. Milestone (里程碑)
+### 16. Milestone (里程碑)
 
 学生成长里程碑表。
 
@@ -510,7 +482,28 @@
 
 ## 日志表
 
-### 16. PrincipalTransferLog (负责人转移日志)
+### 17. Admin (管理员)
+
+管理员信息表，存储超级管理员和平台管理员的扩展信息。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | String | ✅ | UUID 主键 |
+| userId | String | ✅ | 关联 User.id，唯一 |
+| name | String | ✅ | 姓名 |
+| createdAt | DateTime | ✅ | 创建时间 |
+| updatedAt | DateTime | ✅ | 更新时间 |
+
+**关联关系**:
+- `user`: 多对一关联 User
+
+**索引**:
+- `userId`: 唯一索引
+
+---
+
+### 18. PrincipalTransferLog (负责人转移日志)
 
 学校负责人转移日志表。
 
@@ -531,7 +524,7 @@
 
 ---
 
-### 17. PasswordResetLog (密码重置日志)
+### 19. PasswordResetLog (密码重置日志)
 
 密码重置日志表。
 
@@ -549,7 +542,7 @@
 
 ---
 
-### 18. UserStatusLog (用户状态变更日志)
+### 20. UserStatusLog (用户状态变更日志)
 
 用户状态变更日志表。
 
@@ -573,7 +566,7 @@
 User (用户)
   ├─1:1─ Student (学生)
   ├─1:1─ Teacher (教师)
-  └─1:N─ Contest (比赛)
+  └─1:1─ Admin (管理员)
 
 School (学校)
   ├─1:N─ Team (团队)
@@ -583,7 +576,6 @@ School (学校)
 
 Teacher (教师)
   ├─N:1─ School (学校)
-  ├─1:N─ Team (团队) [作为负责人]
   ├─1:N─ Student (学生) [作为主教练]
   ├─1:N─ TaskList (题单)
   └─1:N─ Milestone (里程碑)
@@ -591,20 +583,22 @@ Teacher (教师)
 Student (学生)
   ├─N:1─ School (学校)
   ├─N:1─ Teacher (教师) [主教练]
-  ├─N:M─ Team (团队) [通过 StudentTeam]
+  ├─1:N─ TeamMember (团队成员)
   ├─1:N─ ContestResult (比赛结果)
   ├─1:N─ TaskProgress (题目进度)
   └─1:N─ Milestone (里程碑)
 
 Team (团队)
   ├─N:1─ School (学校)
-  ├─N:1─ Teacher (教师) [负责人]
-  ├─N:M─ Student (学生) [通过 StudentTeam]
+  ├─1:N─ TeamMember (团队成员)
+  ├─1:N─ TeamJoinRequest (加入申请)
   └─1:N─ Contest (比赛)
+
+TeamMember (团队成员)
+  └─N:1─ Team (团队)
 
 Contest (比赛)
   ├─N:1─ Team (团队)
-  ├─N:1─ User (创建者)
   ├─1:N─ ContestResult (比赛结果)
   ├─1:N─ ContestProblem (比赛题目)
   └─1:N─ ContestResource (比赛资源)
@@ -649,13 +643,12 @@ npx prisma studio
 
 1. **学生年级字段变更**:
    - `grade` 字段已删除
-   - `enrollmentStage` 字段已删除（入学阶段由学校类型自动推断）
    - `joinDate` 字段已删除
    - 年级通过 `enrollmentYear` + 学校 `schoolType` + 学校 `educationSystem` 动态计算
 
 2. **学生团队关系变更**:
-   - 从一对多改为多对多关系
-   - 使用 `StudentTeam` 中间表
+   - 使用 `TeamMember` 模型统一管理团队成员
+   - 支持学生和教师两种成员类型（userType: 'teacher' | 'student'）
 
 3. **教师联系方式**:
    - `email` 和 `phone` 至少必填一个（应用层验证）
@@ -664,17 +657,21 @@ npx prisma studio
    - `currentPrincipalTeacherId` 必填
    - 负责人转移记录在 `PrincipalTransferLog` 表
 
+5. **管理员扩展信息**:
+   - 新增 `Admin` 模型存储超级管理员和平台管理员信息
+
 ---
 
 ## 更新日志
 
-### 2026-03-19
-- ✅ **重要变更**：删除学生表 `enrollmentStage`、`grade`、`joinDate` 字段
-- ✅ 入学阶段改为由学校类型自动推断（小学→小学入学，初中→初中入学，高中→高中入学）
+### 2026-03-23
+- ✅ 添加 `Admin` 模型（管理员信息表）
+- ✅ **重要变更**：团队模型重构
+  - 移除 `StudentTeam`、`TeamAdmin` 模型
+  - 新增 `TeamMember` 统一管理团队成员（学生和教师）
+  - `Team` 模型移除 `ownerId` 字段
+- ✅ **重要变更**：`Contest` 模型移除 `createdBy` 字段
 
-### 2026-03-18
-- ✅ **重要变更**：学生表 schoolId 字段改为必填
-- ✅ 添加教师联系方式必填验证
-- ✅ 学生团队关系改为多对多
-- ✅ 学校增加学制字段（educationSystem）
-- ✅ 学生增加入学阶段字段（enrollmentStage）
+### 2026-03-19
+- ✅ 删除学生表 `enrollmentStage`、`grade`、`joinDate` 字段
+- ✅ 入学阶段改为由学校类型自动推断

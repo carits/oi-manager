@@ -2,51 +2,77 @@
 
 ## 状态: 已完成
 
-## 已完成任务：个人卡片功能（页面导航版）
+## 已完成任务：头像上传功能修复
 
-### 需求
-设计个人卡片功能，展示用户信息给其他人查看
+### 问题
+`ProfileEditor.tsx` 调用 `apiClient.postFile()` 方法上传头像，但 `apiClient` 类未定义该方法，导致上传静默失败。
 
-### 完成内容
-
-1. **后端 API**（之前已完成）
-   - `GET /api/users/:userId/profile?userType=teacher|student` 获取用户公开信息
-   - 返回：头像、姓名、用户名、角色、学校、个人简介
-
-2. **前端页面**（新实现）
-   - `/profile/student/[id]/page.tsx` - 学生个人主页
-   - `/profile/teacher/[id]/page.tsx` - 教师个人主页
-   - 使用独立页面导航，而非弹窗
-
-3. **入口添加**
-   - 团队成员列表：点击成员头像或姓名跳转到个人主页
-   - 学校学生列表：点击学生姓名跳转到个人主页
-   - 学校教师列表：点击教师姓名跳转到个人主页
-
-4. **代码清理**
-   - 删除了 `ProfileCard.tsx` 弹窗组件
-   - 删除了 `ProfileCardProvider.tsx` 上下文
-   - 删除了 `profile/index.ts`
-   - 移除了 `AppShell.tsx` 中的 Provider 包裹
+### 修复
+在 `apiClient` 类中添加 `postFile` 方法：
+```typescript
+postFile<T>(endpoint: string, formData: FormData, options?: ApiClientOptions): Promise<ApiResponse<T>> {
+  return this.request<T>(endpoint, { ...options, method: 'POST', body: formData })
+}
+```
 
 ### 涉及文件
-- `apps/web/src/app/profile/student/[id]/page.tsx` - 新建
-- `apps/web/src/app/profile/teacher/[id]/page.tsx` - 新建
-- `apps/web/src/components/profile/` - 删除整个目录
-- `apps/web/src/components/AppShell.tsx` - 移除 Provider
-- `apps/web/src/components/team/TeamMemberList.tsx` - 使用 Link 导航
-- `apps/web/src/components/team/TeamDetailPage.tsx` - 移除 useProfileCard
-- `apps/web/src/app/teacher/school/components/StudentsTab.tsx` - 使用 router.push
-- `apps/web/src/app/teacher/school/components/TeachersTab.tsx` - 使用 router.push
+- `apps/web/src/lib/apiClient.ts`
+
+---
+
+## 已完成任务：后端安全与并发止损重构（第三轮）
+
+### 目标
+针对团队模块进行权限边界检查和写操作原子性修复，解决并发安全问题。
+
+### 修复内容
+
+#### 1. 权限边界清理
+- **问题**: `/api/teams?view=mine` 接口解构了未使用的 `teacherId`/`studentId` query 参数
+- **修复**: 移除未使用的参数，明确注释只信任 JWT token 身份
+- **位置**: `apps/server/src/routes/teams.ts:768`
+
+#### 2. 创建团队并发修复
+- **问题**: count 检查在事务外，并发请求可绕过数量限制
+- **修复**: 将 count 检查移入事务，使用数据库原子性保证
+- **位置**: `apps/server/src/routes/teams.ts:985-1067`
+
+#### 3. 团队转移并发修复
+- **问题**: 多重检查（所有者、数量限制、成员检查）都在事务外
+- **修复**: 所有检查和更新在一个事务中完成，防止并发转移
+- **位置**: `apps/server/src/routes/teams.ts:2179-2272`
+
+#### 4. 批准申请幂等保护
+- **问题**: 先查后更新模式，双击可重复审批
+- **修复**: 使用 `updateMany` 条件更新 + `upsert` 保证幂等性
+- **位置**: `apps/server/src/routes/teams.ts:1930-2013`
+
+#### 5. 统一异常处理
+- **问题**: 没有捕获 Prisma P2002 唯一约束异常
+- **修复**: 添加 `PrismaClientKnownRequestError` 导入和 P2002 处理
+- **位置**: `apps/server/src/routes/teams.ts` 顶部和邀请成员错误处理
+
+### 涉及文件
+
+**修改文件**：
+- `apps/server/src/routes/teams.ts` - 权限清理、并发修复、异常处理
+
+---
 
 ## 待处理事项
 
-- [ ] 数据迁移：将旧表数据迁移到 TeamMember 表
-- [ ] 清理旧表：迁移完成后删除 StudentTeam, TeacherTeam, TeamAdmin 表
-- [ ] 清理 Team 表的 ownerId, ownerType 字段
-- [ ] 比赛管理功能完善
-- [ ] Rating 系统完善
-- [ ] 题单管理
-- [ ] 成绩中心
-- [ ] 资源管理
-- [ ] 学生成长报告
+### 高优先级（P0）
+- [x] ~~遗留直连 API 调用迁移到 apiClient~~ ✅ 已完成 (2026-03-23)
+- [x] ~~后端安全与并发止损重构~~ ✅ 已完成 (2026-03-23)
+
+### 中优先级（P1）
+- [ ] Rating 计算功能实现
+- [ ] 榜单导入匹配功能
+- [ ] 题单执行闭环功能
+- [ ] 测试用例编写
+
+### 低优先级（P2）
+- [ ] 家长端功能实现
+- [ ] 成绩中心功能
+- [ ] 资源管理功能
+- [ ] 学生成长报告功能

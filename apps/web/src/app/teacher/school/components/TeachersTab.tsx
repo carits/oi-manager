@@ -8,8 +8,8 @@ import { Modal } from '@/components/ui/Modal'
 import { Pagination } from '@/components/ui/Pagination'
 import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
-import { getAuthHeaders } from '@/lib/auth'
 import { formStyles } from '@/lib/styles'
+import apiClient from '@/lib/apiClient'
 
 interface School {
   id: string
@@ -57,13 +57,12 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   const fetchTeachers = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${school.id}/teachers?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setTeachers(data.data.list || [])
-        setTotal(data.data.total || 0)
+      const result = await apiClient.get<{ list: Teacher[]; total: number }>(
+        `/api/schools/${school.id}/teachers?page=${pagination.page}&pageSize=${pagination.pageSize}`
+      )
+      if (result.success) {
+        setTeachers(result.data?.list || [])
+        setTotal(result.data?.total || 0)
       }
     } catch (error) {
       console.error('Failed to fetch teachers:', error)
@@ -76,15 +75,11 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
     if (!confirm('确定要删除该教师吗？')) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/teachers/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.delete(`/api/teachers/${id}`)
+      if (result.success) {
         fetchTeachers()
       } else {
-        alert(data.message || '删除失败')
+        alert(result.message || '删除失败')
       }
     } catch {
       alert('删除失败')
@@ -98,15 +93,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
     if (!confirm(`确定要${action}该教师吗？`)) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/teachers/${teacher.id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ status: newStatus })
-      })
-      const result = await res.json()
+      const result = await apiClient.put(`/api/teachers/${teacher.id}/status`, { status: newStatus })
       if (result.success) {
         fetchTeachers()
       } else {
@@ -127,15 +114,9 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
     setTransferring(true)
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/current/principal-transfer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ newTeacherId: selectedNewPrincipal })
+      const result = await apiClient.post('/api/schools/current/principal-transfer', {
+        newTeacherId: selectedNewPrincipal
       })
-      const result = await res.json()
       if (result.success) {
         alert('转移成功')
         transferModal.close()
@@ -332,11 +313,6 @@ function TeacherFormModal({
 
       setSubmitting(true)
       try {
-        const url = teacher
-          ? `http://localhost:3001/api/schools/current/teachers/${teacher.id}`
-          : 'http://localhost:3001/api/schools/current/teachers'
-        const method = teacher ? 'PUT' : 'POST'
-
         const body: any = {
           name: values.name,
           title: values.title || null,
@@ -351,16 +327,10 @@ function TeacherFormModal({
           body.password = values.password
         }
 
-        const res = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          },
-          body: JSON.stringify(body)
-        })
+        const result = teacher
+          ? await apiClient.put(`/api/schools/current/teachers/${teacher.id}`, body)
+          : await apiClient.post('/api/schools/current/teachers', body)
 
-        const result = await res.json()
         if (result.success) {
           onSuccess()
         } else {

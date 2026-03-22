@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getAssetUrl } from '@/lib/assets'
 
 interface PendingInvite {
   id: string
@@ -39,12 +40,9 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
   const fetchInviteList = async () => {
     try {
       setLoading(true)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/pending-invites`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setPendingInvites(data.data || [])
+      const result = await apiClient.get<PendingInvite[]>(`/api/teams/${teamId}/pending-invites`)
+      if (result.success && result.data) {
+        setPendingInvites(result.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch invite list:', error)
@@ -60,22 +58,18 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
     try {
       let endpoint = ''
       if (invite.type === 'student') {
-        endpoint = `http://localhost:3001/api/teams/${teamId}/invites/${invite.id}`
+        endpoint = `/api/teams/${teamId}/invites/${invite.id}`
       } else if (invite.type === 'teacher-member') {
-        endpoint = `http://localhost:3001/api/teams/${teamId}/teacher-invites/${invite.id}`
+        endpoint = `/api/teams/${teamId}/teacher-invites/${invite.id}`
       } else {
-        endpoint = `http://localhost:3001/api/teams/${teamId}/admin-invites/${invite.id}`
+        endpoint = `/api/teams/${teamId}/admin-invites/${invite.id}`
       }
 
-      const res = await fetch(endpoint, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.delete(endpoint)
+      if (result.success) {
         fetchInviteList()
       } else {
-        alert(data.message || '取消失败')
+        alert(result.message || '取消失败')
       }
     } catch (error) {
       console.error('Cancel invite error:', error)
@@ -111,7 +105,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
                     height: '40px',
                     borderRadius: '50%',
                     background: invite.user.avatar
-                      ? `url(http://localhost:3001${invite.user.avatar}) center/cover`
+                      ? `url(${getAssetUrl(invite.user.avatar)}) center/cover`
                       : 'var(--primary)',
                     display: 'flex',
                     alignItems: 'center',

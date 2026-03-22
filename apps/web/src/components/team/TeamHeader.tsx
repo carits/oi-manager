@@ -9,7 +9,8 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { TeamDetail } from '@/hooks/data/useTeamDetail'
 import { TeamPermission } from '@/hooks/useTeamPermission'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getAssetUrl } from '@/lib/assets'
 
 export interface TeamHeaderProps {
   team: TeamDetail
@@ -62,17 +63,12 @@ export function TeamHeader({
       const formData = new FormData()
       formData.append('avatar', file)
 
-      const res = await fetch(`http://localhost:3001/api/teams/${team.id}/avatar`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: formData
-      })
+      const result = await apiClient.post<{ avatar: string }>(`/api/teams/${team.id}/avatar`, formData)
 
-      const data = await res.json()
-      if (data.success) {
-        onAvatarUpdate?.(data.data.avatar)
+      if (result.success && result.data) {
+        onAvatarUpdate?.(result.data.avatar)
       } else {
-        alert(data.message || '上传失败')
+        alert(result.message || '上传失败')
       }
     } catch (error) {
       console.error('Upload avatar error:', error)
@@ -116,7 +112,7 @@ export function TeamHeader({
                 height: '80px',
                 borderRadius: '12px',
                 background: team.avatar
-                  ? `url(http://localhost:3001${team.avatar}) center/cover`
+                  ? `url(${getAssetUrl(team.avatar)}) center/cover`
                   : 'linear-gradient(135deg, var(--primary), #6366f1)',
                 display: 'flex',
                 alignItems: 'center',

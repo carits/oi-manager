@@ -5,8 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { getAuthHeaders } from '@/lib/auth'
 import { useAuth } from '@/components/AuthProvider'
+import apiClient from '@/lib/apiClient'
 import HomeTab from './components/HomeTab'
 import TeachersTab from './components/TeachersTab'
 import StudentsTab from './components/StudentsTab'
@@ -37,7 +37,7 @@ interface School {
 }
 
 export default function SchoolPage() {
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabType>((searchParams.get('tab') as TabType) || 'home')
@@ -69,12 +69,9 @@ export default function SchoolPage() {
 
   const fetchSchool = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/schools/${user?.schoolId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setSchool(data.data)
+      const result = await apiClient.get<School>(`/api/schools/${user?.schoolId}`)
+      if (result.success) {
+        setSchool(result.data || null)
       }
     } catch (error) {
       console.error('Failed to fetch school:', error)
@@ -85,17 +82,11 @@ export default function SchoolPage() {
 
   const checkPrincipal = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/teachers/me', {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success && user?.schoolId) {
-        const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.schoolId}`, {
-          headers: getAuthHeaders()
-        })
-        const schoolData = await schoolRes.json()
-        if (schoolData.success) {
-          setIsPrincipal(data.data.id === schoolData.data.currentPrincipalTeacherId)
+      const teacherResult = await apiClient.get<{ id: string }>('/api/teachers/me')
+      if (teacherResult.success && user?.schoolId) {
+        const schoolResult = await apiClient.get<School>(`/api/schools/${user.schoolId}`)
+        if (schoolResult.success && schoolResult.data) {
+          setIsPrincipal(teacherResult.data?.id === schoolResult.data.currentPrincipalTeacherId)
         }
       }
     } catch (error) {
@@ -181,7 +172,7 @@ export default function SchoolPage() {
             {activeTab === 'teachers' && <TeachersTab school={school} isPrincipal={isPrincipal} showActions={false} />}
             {activeTab === 'students' && <StudentsTab schoolId={school.id} showHeader={true} />}
             {activeTab === 'rankings' && <RankingsTab schoolId={school.id} educationSystem={school.educationSystem} />}
-            {activeTab === 'teams' && <TeamsTab schoolId={school.id} />}
+            {activeTab === 'teams' && <TeamsTab schoolId={school.id} sessionKey={sessionKey} />}
             {activeTab === 'contests' && <ContestsTab />}
           </div>
         </div>

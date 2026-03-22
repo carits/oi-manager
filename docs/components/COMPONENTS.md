@@ -16,12 +16,32 @@ apps/web/src/components/
 │   ├── Badge.tsx          # 徽章组件
 │   ├── Pagination.tsx     # 分页组件
 │   ├── PageHeader.tsx     # 页面头部组件
-│   └── MarkdownRenderer.tsx # Markdown 渲染组件
+│   ├── MarkdownRenderer.tsx # Markdown 渲染组件
+│   ├── Empty.tsx          # 空状态组件
+│   └── ConfirmModal.tsx   # 确认对话框组件
 ├── business/              # 业务组件
 │   ├── RegionSelector.tsx # 区域选择器
-│   └── UserManagement.tsx # 用户管理组件（未使用）
+│   └── UserManagement.tsx # 用户管理组件
+├── team/                  # 团队相关组件
+│   ├── TeamCard.tsx       # 团队卡片
+│   ├── TeamHeader.tsx     # 团队头部
+│   ├── TeamMemberList.tsx # 成员列表
+│   ├── TeamInviteListModal.tsx # 邀请列表弹窗
+│   ├── TeamInviteModal.tsx # 邀请弹窗
+│   ├── TeamEditModal.tsx  # 编辑弹窗
+│   ├── TeamTransferModal.tsx # 转移弹窗
+│   ├── TeamListPage.tsx   # 团队列表页面组件
+│   ├── TeamDetailPage.tsx # 团队详情页面组件
+│   └── InvitationCard.tsx # 邀请卡片
+├── profile/               # 个人资料组件
+│   ├── ProfileEditor.tsx  # 资料编辑组件
+│   └── PasswordEditor.tsx # 密码修改组件
+├── AppShell.tsx           # 应用外壳，导航布局
 ├── AuthProvider.tsx       # 认证上下文
-└── ProtectedRoute.tsx     # 路由保护组件
+├── ProtectedRoute.tsx     # 路由保护组件
+├── Providers.tsx          # 全局 Provider 封装
+├── Loading.tsx            # 加载状态组件
+├── ContestDetail.tsx      # 比赛详情共用组件
 ```
 
 ## UI 组件
@@ -406,6 +426,181 @@ interface ProtectedRouteProps {
 
 ---
 
+## 团队组件
+
+### 1. TeamCard (团队卡片)
+
+**文件**: `apps/web/src/components/team/TeamCard.tsx`
+
+**用途**: 展示团队基本信息卡片，用于团队列表页
+
+**特性**:
+- 显示团队名称、头像、描述
+- 显示成员数量
+- 支持点击进入详情
+
+---
+
+### 2. TeamHeader (团队头部)
+
+**文件**: `apps/web/src/components/team/TeamHeader.tsx`
+
+**用途**: 团队详情页头部组件
+
+**特性**:
+- 显示团队完整信息
+- 编辑/删除操作（权限控制）
+- 转移团队功能
+
+---
+
+### 3. TeamMemberList (成员列表)
+
+**文件**: `apps/web/src/components/team/TeamMemberList.tsx`
+
+**用途**: 团队成员列表展示
+
+**特性**:
+- 分角色显示成员（负责人/管理员/成员）
+- 支持邀请/移除成员
+- 支持设置管理员
+
+---
+
+### 4. TeamInviteModal (邀请弹窗)
+
+**文件**: `apps/web/src/components/team/TeamInviteModal.tsx`
+
+**用途**: 邀请学生/教师加入团队的弹窗
+
+**特性**:
+- 搜索可邀请的用户
+- 批量邀请
+- 权限检查
+
+---
+
+### 5. TeamListPage (团队列表页)
+
+**文件**: `apps/web/src/components/team/TeamListPage.tsx`
+
+**用途**: 团队列表页面组件，被教师端和学生端共用
+
+**特性**:
+- 展示团队卡片列表
+- 支持创建团队（教师）
+- 支持申请加入（学生）
+
+---
+
+### 6. TeamDetailPage (团队详情页)
+
+**文件**: `apps/web/src/components/team/TeamDetailPage.tsx`
+
+**用途**: 团队详情页面组件
+
+**特性**:
+- 展示团队完整信息
+- 成员管理
+- 团队设置
+
+---
+
+## 个人资料组件
+
+### 1. ProfileEditor (资料编辑)
+
+**文件**: `apps/web/src/components/profile/ProfileEditor.tsx`
+
+**用途**: 编辑用户个人资料
+
+**特性**:
+- 修改姓名、简介
+- 上传头像
+- 表单验证
+
+---
+
+### 2. PasswordEditor (密码修改)
+
+**文件**: `apps/web/src/components/profile/PasswordEditor.tsx`
+
+**用途**: 修改用户密码
+
+**特性**:
+- 验证当前密码
+- 设置新密码
+- 密码强度要求
+
+---
+
+## 其他组件
+
+### 1. AppShell (应用外壳)
+
+**文件**: `apps/web/src/components/AppShell.tsx`
+
+**用途**: 应用主布局，包含导航栏和侧边栏
+
+**特性**:
+- 响应式导航
+- 角色菜单切换
+- 用户信息展示
+
+---
+
+### 2. ContestDetail (比赛详情)
+
+**文件**: `apps/web/src/components/ContestDetail.tsx`
+
+**用途**: 比赛详情页面共用组件
+
+**特性**:
+- 展示比赛信息
+- 题目列表
+- 成绩榜单（教师）
+- 资源下载
+
+---
+
+### 3. Loading (加载组件)
+
+**文件**: `apps/web/src/components/Loading.tsx`
+
+**用途**: 全局加载状态组件
+
+---
+
+### 4. Empty (空状态)
+
+**文件**: `apps/web/src/components/ui/Empty.tsx`
+
+**用途**: 空数据状态展示
+
+---
+
+### 5. ConfirmModal (确认弹窗)
+
+**文件**: `apps/web/src/components/ui/ConfirmModal.tsx`
+
+**用途**: 确认操作弹窗
+
+**Props**:
+```typescript
+interface ConfirmModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  title: string
+  message: string
+  confirmText?: string
+  cancelText?: string
+  variant?: 'danger' | 'warning' | 'info'
+}
+```
+
+---
+
 ## Hooks
 
 ### 1. useModal
@@ -595,6 +790,13 @@ export const formStyles = {
 ---
 
 ## 更新日志
+
+### 2026-03-23
+- ✅ 添加团队组件文档（TeamCard, TeamHeader, TeamMemberList 等）
+- ✅ 添加个人资料组件文档（ProfileEditor, PasswordEditor）
+- ✅ 添加其他组件文档（AppShell, ContestDetail, Loading, Empty, ConfirmModal）
+- ✅ 更新组件目录结构
+- ✅ 移除 UserManagement "未使用"的错误标注
 
 ### 2026-03-18
 - ✅ 添加 Pagination 组件

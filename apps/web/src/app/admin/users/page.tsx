@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { getRole } from '@/lib/auth'
 import { Pagination } from '@/components/ui/Pagination'
+import apiClient from '@/lib/apiClient'
 
 interface User {
   id: string
@@ -50,7 +51,6 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('token')
       const params = new URLSearchParams()
       if (filters.role) params.append('role', filters.role)
       if (filters.status) params.append('status', filters.status)
@@ -58,20 +58,19 @@ export default function AdminUsersPage() {
       params.append('page', pagination.page.toString())
       params.append('pageSize', pagination.pageSize.toString())
 
-      const res = await fetch(`http://localhost:3001/api/users?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (data.success) {
-        setUsers(data.data.users || [])
-        setPagination({
-          page: data.data.page,
-          pageSize: data.data.pageSize,
-          total: data.data.total,
-          totalPages: data.data.totalPages
-        })
+      const result = await apiClient.get<{ users: User[]; page: number; pageSize: number; total: number; totalPages: number }>(`/api/users?${params.toString()}`)
+      if (result.success) {
+        setUsers(result.data?.users || [])
+        if (result.data) {
+          setPagination({
+            page: result.data.page,
+            pageSize: result.data.pageSize,
+            total: result.data.total,
+            totalPages: result.data.totalPages
+          })
+        }
       } else {
-        setError(data.message || '加载失败')
+        setError(result.message || '加载失败')
       }
     } catch (e) {
       setError('网络错误')
@@ -90,20 +89,14 @@ export default function AdminUsersPage() {
     }
 
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:3001/api/users/${userId}/reset-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ newPassword, resetMethod: 'manual_set' })
+      const result = await apiClient.post(`/api/users/${userId}/reset-password`, {
+        newPassword,
+        resetMethod: 'manual_set'
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         alert('密码重置成功')
       } else {
-        alert(data.message || '重置失败')
+        alert(result.message || '重置失败')
       }
     } catch (e) {
       alert('网络错误')
@@ -117,21 +110,12 @@ export default function AdminUsersPage() {
     if (!confirmed) return
 
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:3001/api/users/${userId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus, reason: '' })
-      })
-      const data = await res.json()
-      if (data.success) {
+      const result = await apiClient.put(`/api/users/${userId}/status`, { status: newStatus, reason: '' })
+      if (result.success) {
         alert('状态更新成功')
         fetchUsers()
       } else {
-        alert(data.message || '更新失败')
+        alert(result.message || '更新失败')
       }
     } catch (e) {
       alert('网络错误')

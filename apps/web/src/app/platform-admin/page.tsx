@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppShell } from '@/components/AppShell'
+import apiClient from '@/lib/apiClient'
 
 interface GlobalStats {
   totalSchools: number
@@ -28,13 +29,9 @@ export default function PlatformAdminPage() {
 
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch('http://localhost:3001/api/stats/global', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (data.success) {
-        setStats(data.data)
+      const result = await apiClient.get<GlobalStats>('/api/stats/global')
+      if (result.success) {
+        setStats(result.data || null)
       }
     } catch (e) {
       console.error('Fetch stats error:', e)

@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getAuthHeaders } from '@/lib/auth'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import apiClient from '@/lib/apiClient'
 
 export interface UseFetchResult<T> {
   data: T | null
@@ -12,46 +10,57 @@ export interface UseFetchResult<T> {
   refetch: () => Promise<void>
 }
 
-export function useFetch<T>(url: string | null, options?: RequestInit): UseFetchResult<T> {
+export function useFetch<T>(
+  url: string | null,
+  sessionKey?: string | null,
+  options?: RequestInit
+): UseFetchResult<T> {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const hasFetched = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const refetch = useCallback(async () => {
-    if (!url) {
+    // 取消之前的请求
+    abortControllerRef.current?.abort()
+
+    if (!url || !sessionKey) {
       setLoading(false)
+      setData(null)  // sessionKey 变化时清空数据
       return
     }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setLoading(true)
     setError(null)
-    hasFetched.current = true
     try {
-      const res = await fetch(`${API_BASE}${url}`, {
+      const result = await apiClient.get<T>(url, {
+        signal: controller.signal,
         ...options,
-        headers: { ...getAuthHeaders(), ...options?.headers }
+        headers: options?.headers
       })
-      const json = await res.json()
-      if (json.success) {
-        setData(json.data)
+
+      if (result.success) {
+        setData(result.data ?? null)
       } else {
-        setError(json.message || '请求失败')
+        setError(result.message || '请求失败')
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      // 忽略取消的请求
+      if (e instanceof Error && e.name === 'AbortError') return
       setError('网络错误')
       console.error('Fetch error:', e)
     } finally {
       setLoading(false)
     }
-  }, [url, options])
+  }, [url, sessionKey, options])
 
   useEffect(() => {
-    if (url) {
-      refetch()
-    } else {
-      setLoading(false)
-    }
-  }, [refetch, url])
+    refetch()
+    return () => abortControllerRef.current?.abort()
+  }, [refetch])
 
   return { data, loading, error, refetch }
 }

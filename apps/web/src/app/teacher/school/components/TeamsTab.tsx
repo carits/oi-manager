@@ -8,16 +8,17 @@ import { useTeams } from '@/hooks/data/useTeams'
 
 interface TeamsTabProps {
   schoolId: string
+  sessionKey?: string | null
 }
 
-export default function TeamsTab({ schoolId }: TeamsTabProps) {
+export default function TeamsTab({ schoolId, sessionKey }: TeamsTabProps) {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 })
 
   const { data, loading } = useTeams({
     schoolId,
     page: pagination.page,
     pageSize: pagination.pageSize
-  })
+  }, sessionKey)
 
   const teams = data?.list || []
   const total = data?.total || 0

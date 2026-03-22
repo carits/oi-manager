@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { useModal } from '@/hooks/form/useModal'
 import { useDelete } from '@/hooks/actions/useDelete'
 import { calculateStudentGrade } from '@/lib/grade'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface StudentsTabProps {
   schoolId: string
@@ -59,12 +59,9 @@ export default function StudentsTab({ schoolId, showHeader = false }: StudentsTa
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`http://localhost:3001/api/students?schoolId=${schoolId}&pageSize=1000`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setAllStudents(data.data?.list || data.data || [])
+      const result = await apiClient.get<{ list: Student[] }>(`/api/students?schoolId=${schoolId}&pageSize=1000`)
+      if (result.success) {
+        setAllStudents(result.data?.list || [])
         setPage(1)
       }
     } catch (error) {

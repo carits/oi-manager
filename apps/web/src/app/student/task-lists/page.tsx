@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getAuthHeaders, getUserId } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getUserId } from '@/lib/auth'
 
 interface TaskList {
   id: string
@@ -56,10 +57,9 @@ export default function StudentTaskListsPage() {
 
   const fetchTaskLists = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/task-lists', { headers: getAuthHeaders() })
-      const data = await res.json()
-      if (data.success) {
-        const published = data.data.list.filter((tl: TaskList) => tl.publishAt === null || new Date(tl.publishAt) <= new Date())
+      const result = await apiClient.get<{ list: TaskList[] }>('/api/task-lists')
+      if (result.success) {
+        const published = (result.data?.list || []).filter((tl: TaskList) => tl.publishAt === null || new Date(tl.publishAt) <= new Date())
         setTaskLists(published)
       }
     } catch (error) {
@@ -75,12 +75,9 @@ export default function StudentTaskListsPage() {
     if (!userId) return
 
     try {
-      const res = await fetch(`http://localhost:3001/api/task-progress?taskListId=${taskList.id}&studentId=${userId}`, {
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
-        setProgressData(data.data)
+      const result = await apiClient.get<ProgressData>(`/api/task-progress?taskListId=${taskList.id}&studentId=${userId}`)
+      if (result.success) {
+        setProgressData(result.data || null)
       }
     } catch (error) {
       console.error('Failed to fetch progress:', error)
@@ -94,20 +91,12 @@ export default function StudentTaskListsPage() {
 
     setUpdating(taskId)
     try {
-      const res = await fetch('http://localhost:3001/api/task-progress', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          taskId,
-          studentId: userId,
-          status
-        })
+      const result = await apiClient.put('/api/task-progress', {
+        taskId,
+        studentId: userId,
+        status
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         // 刷新进度
         if (selectedTaskList) {
           handleViewDetails(selectedTaskList)
@@ -124,20 +113,12 @@ export default function StudentTaskListsPage() {
     if (!userId) return
 
     try {
-      const res = await fetch('http://localhost:3001/api/task-progress', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          taskId,
-          studentId: userId,
-          seenEditorial: !currentValue
-        })
+      const result = await apiClient.put('/api/task-progress', {
+        taskId,
+        studentId: userId,
+        seenEditorial: !currentValue
       })
-      const data = await res.json()
-      if (data.success && selectedTaskList) {
+      if (result.success && selectedTaskList) {
         handleViewDetails(selectedTaskList)
       }
     } catch (error) {
@@ -150,20 +131,12 @@ export default function StudentTaskListsPage() {
     if (!userId) return
 
     try {
-      const res = await fetch('http://localhost:3001/api/task-progress', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          taskId,
-          studentId: userId,
-          needHelp: !currentValue
-        })
+      const result = await apiClient.put('/api/task-progress', {
+        taskId,
+        studentId: userId,
+        needHelp: !currentValue
       })
-      const data = await res.json()
-      if (data.success && selectedTaskList) {
+      if (result.success && selectedTaskList) {
         handleViewDetails(selectedTaskList)
       }
     } catch (error) {

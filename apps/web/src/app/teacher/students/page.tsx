@@ -12,7 +12,7 @@ import { useModal } from '@/hooks/form/useModal'
 import { useDelete } from '@/hooks/actions/useDelete'
 import { useForm } from '@/hooks/form/useForm'
 import { useAuth } from '@/components/AuthProvider'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { calculateStudentGrade } from '@/lib/grade'
 import { formStyles } from '@/lib/styles'
 
@@ -22,7 +22,7 @@ interface Teacher {
 }
 
 export default function StudentsPage() {
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [transferringStudent, setTransferringStudent] = useState<Student | null>(null)
@@ -48,7 +48,7 @@ export default function StudentsPage() {
     return { ...baseParams, headTeacherId: currentTeacherId, ...pagination }
   }, [user?.schoolId, isPrincipal, currentTeacherId, pagination])
 
-  const { data, loading, refetch } = useStudents(filterParams)
+  const { data, loading, refetch } = useStudents(filterParams, sessionKey)
   const modal = useModal<Student>()
   const { deleteItem } = useDelete('/api/students', refetch)
 
@@ -56,11 +56,8 @@ export default function StudentsPage() {
   useEffect(() => {
     const fetchCurrentTeacher = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/teachers/me', {
-          headers: getAuthHeaders()
-        })
-        const result = await res.json()
-        if (result.success) {
+        const result = await apiClient.get<{ id: string }>('/api/teachers/me')
+        if (result.success && result.data) {
           setCurrentTeacherId(result.data.id)
         }
       } catch (error) {
@@ -75,12 +72,9 @@ export default function StudentsPage() {
     const fetchTeachers = async () => {
       if (!user?.schoolId) return
       try {
-        const res = await fetch(`http://localhost:3001/api/schools/${user.schoolId}/teachers`, {
-          headers: getAuthHeaders()
-        })
-        const result = await res.json()
-        if (result.success) {
-          setTeachers(result.data.list || result.data || [])
+        const result = await apiClient.get<Teacher[]>(`/api/schools/${user.schoolId}/teachers`)
+        if (result.success && result.data) {
+          setTeachers(result.data)
         }
       } catch (error) {
         console.error('Failed to fetch teachers:', error)
@@ -113,20 +107,12 @@ export default function StudentsPage() {
     }
 
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${transferringStudent.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          name: transferringStudent.name,
-          gender: transferringStudent.gender,
-          enrollmentYear: transferringStudent.enrollmentYear,
-          headTeacherId: selectedTeacherId
-        })
+      const result = await apiClient.put(`/api/students/${transferringStudent.id}`, {
+        name: transferringStudent.name,
+        gender: transferringStudent.gender,
+        enrollmentYear: transferringStudent.enrollmentYear,
+        headTeacherId: selectedTeacherId
       })
-      const result = await res.json()
       if (result.success) {
         alert('转移成功')
         setTransferringStudent(null)
@@ -308,29 +294,20 @@ function StudentFormModal({
     async (values) => {
       setSubmitting(true)
       try {
-        const url = student
-          ? `http://localhost:3001/api/students/${student.id}`
-          : 'http://localhost:3001/api/students'
-        const method = student ? 'PUT' : 'POST'
+        const body = {
+          name: values.name,
+          gender: values.gender || null,
+          enrollmentYear: values.enrollmentYear ? parseInt(values.enrollmentYear) : null,
+          username: values.username,
+          password: values.password || undefined,
+          schoolId: student?.schoolId || undefined,
+          headTeacherId: student?.headTeacherId || undefined
+        }
 
-        const res = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          },
-          body: JSON.stringify({
-            name: values.name,
-            gender: values.gender || null,
-            enrollmentYear: values.enrollmentYear ? parseInt(values.enrollmentYear) : null,
-            username: values.username,
-            password: values.password || undefined,
-            schoolId: student?.schoolId || undefined,
-            headTeacherId: student?.headTeacherId || undefined
-          })
-        })
+        const result = student
+          ? await apiClient.put(`/api/students/${student.id}`, body)
+          : await apiClient.post('/api/students', body)
 
-        const result = await res.json()
         if (result.success) {
           onSuccess()
         } else {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import apiClient from '@/lib/apiClient'
 
 interface UserDetail {
   id: string
@@ -35,15 +36,11 @@ export default function UserDetailPage() {
 
   const fetchUser = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:3001/api/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (data.success) {
-        setUser(data.data)
+      const result = await apiClient.get<UserDetail>(`/api/users/${userId}`)
+      if (result.success) {
+        setUser(result.data || null)
       } else {
-        setError(data.message || '加载失败')
+        setError(result.message || '加载失败')
       }
     } catch (e) {
       setError('网络错误')

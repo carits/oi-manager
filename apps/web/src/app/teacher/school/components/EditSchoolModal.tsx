@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useForm } from '@/hooks/form/useForm'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 import { RegionSelector } from '@/components/business/RegionSelector'
 
@@ -67,24 +67,16 @@ export default function EditSchoolModal({ school, onClose, onSuccess }: EditScho
       try {
         const region = [province, city, district].filter(Boolean).join('/')
 
-        const res = await fetch(`http://localhost:3001/api/schools/${school.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          },
-          body: JSON.stringify({
-            name: values.name,
-            region: region || null,
-            schoolType: values.schoolType || null,
-            educationSystem: values.educationSystem || '6-3-3',
-            contactPerson: values.contactPerson || null,
-            contactPhone: values.contactPhone || null,
-            contactEmail: values.contactEmail || null
-          })
+        const result = await apiClient.put(`/api/schools/${school.id}`, {
+          name: values.name,
+          region: region || null,
+          schoolType: values.schoolType || null,
+          educationSystem: values.educationSystem || '6-3-3',
+          contactPerson: values.contactPerson || null,
+          contactPhone: values.contactPhone || null,
+          contactEmail: values.contactEmail || null
         })
 
-        const result = await res.json()
         if (result.success) {
           onSuccess()
           onClose()

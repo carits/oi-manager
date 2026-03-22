@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${API_BASE}/api/contests`, {
+    const res = await fetch(`${ENV.API_URL}/api/contests`, {
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })
     const data = await res.json()
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
-    const res = await fetch(`${API_BASE}/api/contests`, {
+    const res = await fetch(`${ENV.API_URL}/api/contests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(authHeader && { Authorization: authHeader }) },
       body: JSON.stringify(body)

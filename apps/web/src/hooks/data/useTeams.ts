@@ -39,7 +39,7 @@ export interface TeamsQueryParams {
   view?: 'mine' | 'all'
 }
 
-export function useTeams(filters?: Record<string, any> | null): UseFetchResult<ListResponse<Team>> {
-  return useList<Team>('/api/teams', filters)
+export function useTeams(filters?: Record<string, any> | null, sessionKey?: string | null): UseFetchResult<ListResponse<Team>> {
+  return useList<Team>('/api/teams', filters, sessionKey)
 }
 

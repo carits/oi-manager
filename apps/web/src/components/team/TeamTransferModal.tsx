@@ -2,7 +2,7 @@
 
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 
 interface TransferCandidate {
   id: string
@@ -34,24 +34,16 @@ export function TeamTransferModal({
     }
 
     try {
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}/transfer`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          newOwnerId: selectedTarget.id,
-          newOwnerType: selectedTarget.memberType
-        })
+      const result = await apiClient.post(`/api/teams/${teamId}/transfer`, {
+        newOwnerId: selectedTarget.id,
+        newOwnerType: selectedTarget.memberType
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         alert('所有权转移成功')
         onClose()
         onSuccess()
       } else {
-        alert(data.message || '转移失败')
+        alert(result.message || '转移失败')
       }
     } catch (error) {
       console.error('Transfer error:', error)

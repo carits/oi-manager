@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 
 interface TeamEditFormData {
@@ -44,24 +44,16 @@ export function TeamEditModal({
 
     try {
       setSaving(true)
-      const res = await fetch(`http://localhost:3001/api/teams/${teamId}`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          description: formData.description.trim() || null,
-          isPublic: formData.isPublic
-        })
+      const result = await apiClient.put(`/api/teams/${teamId}`, {
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
+        isPublic: formData.isPublic
       })
-      const data = await res.json()
-      if (data.success) {
+      if (result.success) {
         onClose()
         onSuccess()
       } else {
-        alert(data.message || '编辑失败')
+        alert(result.message || '编辑失败')
       }
     } catch (error) {
       console.error('Edit team error:', error)

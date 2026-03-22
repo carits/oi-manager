@@ -2,8 +2,7 @@
 // 封装 fetch 调用，统一处理认证、错误等
 
 import { getAuthHeaders } from './auth'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export interface ApiResponse<T = any> {
   success: boolean
@@ -14,7 +13,7 @@ export interface ApiResponse<T = any> {
 export class ApiClient {
   private baseUrl: string
 
-  constructor(baseUrl: string = API_BASE) {
+  constructor(baseUrl: string = ENV.API_URL) {
     this.baseUrl = baseUrl
   }
 

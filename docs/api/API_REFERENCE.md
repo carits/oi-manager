@@ -1,5 +1,7 @@
 # API 接口文档
 
+> ⚠️ **文档状态**: 本文档为概要版，详细接口文档待完善。以下列出的是主要接口，部分接口可能未完整记录。
+
 ## API 概述
 
 - **Base URL**: `http://localhost:3001/api`
@@ -29,70 +31,123 @@ Token 通过登录接口获取，包含用户信息：
 
 ## 接口分类
 
-### 1. [认证接口](./auth.md)
+### 1. 认证接口
 - POST `/auth/login` - 用户登录
 - POST `/auth/register` - 用户注册
 - GET `/auth/me` - 获取当前用户信息
+- PUT `/auth/profile` - 更新个人资料
+- POST `/auth/avatar` - 上传头像
+- PUT `/auth/password` - 修改密码
 
-### 2. [用户管理接口](./users.md)
+### 2. 用户管理接口
 - GET `/users` - 获取用户列表（分页）
 - GET `/users/:id` - 获取用户详情
-- POST `/users/:id/reset-password` - 重置用户密码
+- GET `/users/:userId/profile` - 获取用户公开资料
+- POST `/users/platform-admin` - 创建平台管理员
 - PUT `/users/:id/status` - 更新用户状态
+- POST `/users/:id/reset-password` - 重置用户密码
+- GET `/users/:id/logs` - 获取用户操作日志
 
-### 3. [学校管理接口](./schools.md)
+### 3. 学校管理接口
 - GET `/schools` - 获取学校列表
 - GET `/schools/:id` - 获取学校详情
 - POST `/schools` - 创建学校
 - PUT `/schools/:id` - 更新学校信息
+- DELETE `/schools/:id` - 删除学校
 - PUT `/schools/:id/status` - 更新学校状态
+- PUT `/schools/:id/principal` - 转移学校负责人
+- POST `/schools/:id/principal` - 创建并指定负责人
+- GET `/schools/:id/principal-logs` - 获取负责人转移日志
 - GET `/schools/:id/stats` - 获取学校统计数据
 - GET `/schools/:id/student-rankings` - 获取学校学生 Rating 排名
 - PUT `/schools/:id/announcement` - 更新学校公告
 - GET `/schools/:id/teachers` - 获取学校教师列表
+- GET `/schools/:id/students-by-grade` - 获取按年级分组的学生
+- PUT `/schools/:id/teachers/:teacherId/status` - 更新教师状态
+- GET `/schools/current/teachers` - 获取本校教师（学校负责人）
 - POST `/schools/current/teachers` - 创建本校教师
 - PUT `/schools/current/teachers/:teacherId` - 更新本校教师
-- PUT `/schools/:id/teachers/:teacherId/status` - 更新教师状态
-- POST `/schools/current/principal-transfer` - 转移学校负责人
+- POST `/schools/current/principal-transfer` - 转移负责人
 
-### 4. [教师管理接口](./teachers.md)
-- GET `/teachers` - 获取教师列表
-- GET `/teachers/:id` - 获取教师详情
+### 4. 教师管理接口
 - GET `/teachers/me` - 获取当前教师信息
-- POST `/teachers` - 创建教师
-- PUT `/teachers/:id` - 更新教师信息
-- DELETE `/teachers/:id` - 删除教师
 - PUT `/teachers/:id/status` - 更新教师状态
+- DELETE `/teachers/:id` - 删除教师
 
-### 5. [学生管理接口](./students.md)
+### 5. 学生管理接口
 - GET `/students` - 获取学生列表
 - GET `/students/:id` - 获取学生详情
 - POST `/students` - 创建学生
 - PUT `/students/:id` - 更新学生信息
 - DELETE `/students/:id` - 删除学生
+- GET `/students/rankings` - 获取学生排名
 
-### 6. [团队管理接口](./teams.md)
+### 6. 团队管理接口
 - GET `/teams` - 获取团队列表
 - GET `/teams/:id` - 获取团队详情
 - POST `/teams` - 创建团队
 - PUT `/teams/:id` - 更新团队信息
 - DELETE `/teams/:id` - 删除团队
+- PUT `/teams/:id/announcement` - 更新团队公告
+- POST `/teams/:id/avatar` - 上传团队头像
+- GET `/teams/:id/available-members` - 获取可添加的成员
 - POST `/teams/:id/members` - 添加团队成员
-- DELETE `/teams/:id/members/:studentId` - 移除团队成员
+- DELETE `/teams/:id/members/:memberId` - 移除团队成员
+- GET `/teams/:id/pending-invites` - 获取待处理邀请
+- GET `/teams/:id/admins` - 获取团队管理员
+- POST `/teams/:id/admins` - 添加管理员
+- DELETE `/teams/:id/admins/:adminId` - 移除管理员
+- POST `/teams/:id/join-request` - 学生申请加入
+- GET `/teams/:id/join-requests` - 获取加入申请列表
+- POST `/teams/requests/:requestId/approve` - 批准申请
+- POST `/teams/requests/:requestId/reject` - 拒绝申请
+- POST `/teams/:id/transfer` - 转移团队
+- POST `/teams/:id/leave` - 退出团队
+- GET `/teams/school/:schoolId` - 获取学校团队
+- GET `/teams/student/:studentId` - 获取学生所在团队
+- GET `/teams/invitations` - 获取学生邀请列表
+- GET `/teams/my-admin-teams` - 获取管理的团队
+- GET `/teams/my-member-teams` - 获取加入的团队
 
-### 7. [比赛管理接口](./contests.md)
+### 7. 比赛管理接口
 - GET `/contests` - 获取比赛列表
 - GET `/contests/:id` - 获取比赛详情
 - POST `/contests` - 创建比赛
 - PUT `/contests/:id` - 更新比赛信息
 - DELETE `/contests/:id` - 删除比赛
+- GET `/contests/:id/problems` - 获取比赛题目
+- POST `/contests/:id/problems` - 添加题目
+- PUT `/contests/:id/problems/:problemId` - 更新题目
+- DELETE `/contests/:id/problems/:problemId` - 删除题目
+- GET `/contests/:id/results` - 获取比赛成绩
+- POST `/contests/:id/results` - 录入成绩
+- POST `/contests/:id/results/import` - 导入成绩
+- POST `/contests/:id/resources` - 上传资源
+- DELETE `/contests/:id/resources/:resourceId` - 删除资源
 
-### 8. [题单管理接口](./task-lists.md)
+### 8. 题单管理接口
 - GET `/task-lists` - 获取题单列表
 - GET `/task-lists/:id` - 获取题单详情
 - POST `/task-lists` - 创建题单
-- PUT `/task-lists/:id` - 更新题单信息
+- PUT `/task-lists/:id` - 更新题单
 - DELETE `/task-lists/:id` - 删除题单
+
+### 9. 任务进度接口
+- GET `/task-progress` - 获取个人进度
+- PUT `/task-progress` - 更新进度
+- GET `/task-progress/class/:taskListId` - 获取班级进度
+
+### 10. 里程碑接口
+- GET `/milestones` - 获取里程碑列表
+- GET `/milestones/:id` - 获取里程碑详情
+- POST `/milestones` - 创建里程碑
+- PUT `/milestones/:id` - 更新里程碑
+- DELETE `/milestones/:id` - 删除里程碑
+
+### 11. 统计接口
+- GET `/stats/global` - 获取全局统计
+- GET `/stats/schools` - 获取学校统计
+- GET `/stats/contests` - 获取比赛统计
 
 ## 权限说明
 
@@ -268,6 +323,17 @@ curl -X GET http://localhost:3001/api/users \
 3. 在请求头中添加 `Authorization: Bearer {{token}}`
 
 ## 更新日志
+
+### 2026-03-23
+- ✅ 移除不存在的子文档引用（auth.md, users.md 等）
+- ✅ 补充认证接口（/me, /profile, /avatar, /password）
+- ✅ 补充用户管理接口（/:id/logs, /platform-admin）
+- ✅ 补充学校管理接口（principal-logs, students-by-grade 等）
+- ✅ 大幅扩充团队管理接口（约 25 个端点）
+- ✅ 补充比赛管理接口（题目管理、资源管理、成绩导入）
+- ✅ 新增任务进度接口文档
+- ✅ 新增里程碑接口文档
+- ✅ 新增统计接口文档
 
 ### 2026-03-18
 - ✅ 添加用户管理分页接口

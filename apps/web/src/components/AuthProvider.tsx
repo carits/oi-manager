@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react'
 import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName, setTeacherId, setStudentId, setAdminId } from '@/lib/auth'
+import { ENV } from '@/config/env'
 
 interface AuthUser {
   userId: string
@@ -31,6 +32,7 @@ interface AuthContextType {
   logout: () => void
   refreshUser: () => Promise<void>
   isAuthenticated: boolean
+  sessionKey: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -39,12 +41,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // 基于登录身份生成 sessionKey，用于数据隔离
+  const sessionKey = useMemo(() => {
+    if (!user) return null
+    return `${user.role}:${user.userId}:${user.teacherId || user.studentId || user.adminId || ''}`
+  }, [user])
+
   const fetchUserData = async () => {
     const token = getToken()
     if (!token) return null
 
     try {
-      const res = await fetch('http://localhost:3001/api/auth/me', {
+      const res = await fetch(`${ENV.API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       const data = await res.json()
@@ -96,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string, role: string): Promise<LoginResult> => {
     try {
-      const res = await fetch('http://localhost:3001/api/auth/login', {
+      const res = await fetch(`${ENV.API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role })
@@ -140,7 +148,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         refreshUser,
-        isAuthenticated: !!user
+        isAuthenticated: !!user,
+        sessionKey
       }}
     >
       {children}

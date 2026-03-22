@@ -7,8 +7,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import 'katex/dist/katex.min.css'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 export interface Resource {
   id: string
@@ -72,7 +71,7 @@ export function useContestDetail({ contestId }: { contestId: string }) {
 
   const fetchContestDetail = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/contests/${contestId}`, { headers: getAuthHeaders() })
+      const res = await fetch(`${ENV.API_URL}/api/contests/${contestId}`, { headers: getAuthHeaders() })
       const data = await res.json()
       if (data.success) {
         setContest(data.data)
@@ -293,7 +292,7 @@ export function ResourceTable({
             {resources.map(resource => (
               <tr key={resource.id} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
-                  <a href={`${API_BASE}${resource.fileUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
+                  <a href={`${ENV.API_URL}${resource.fileUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
                     {resource.fileName}
                   </a>
                 </td>

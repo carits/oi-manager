@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getAuthHeaders } from '@/lib/auth'
+import apiClient from '@/lib/apiClient'
+import { getAssetUrl } from '@/lib/assets'
 
 interface UserProfile {
   id: string
@@ -36,15 +37,11 @@ export default function StudentProfilePage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(
-        `http://localhost:3001/api/users/${id}/profile?userType=student`,
-        { headers: getAuthHeaders() }
-      )
-      const data = await res.json()
-      if (data.success) {
-        setProfile(data.data)
+      const result = await apiClient.get<UserProfile>(`/api/users/${id}/profile?userType=student`)
+      if (result.success) {
+        setProfile(result.data || null)
       } else {
-        setError(data.message || '获取用户信息失败')
+        setError(result.message || '获取用户信息失败')
       }
     } catch (err) {
       console.error('Fetch profile error:', err)
@@ -154,7 +151,7 @@ export default function StudentProfilePage() {
                 width: '120px',
                 height: '120px',
                 borderRadius: '50%',
-                background: `url(http://localhost:3001${profile.avatar}) center/cover`,
+                background: `url(${getAssetUrl(profile.avatar)}) center/cover`,
                 border: '4px solid white',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
               }}

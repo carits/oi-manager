@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+import { ENV } from '@/config/env'
 
 // POST /api/contests/[id]/resources - 上传资料
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -8,7 +7,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const authHeader = request.headers.get('authorization')
     const formData = await request.formData()
 
-    const res = await fetch(`${API_BASE}/api/contests/${params.id}/resources`, {
+    const res = await fetch(`${ENV.API_URL}/api/contests/${params.id}/resources`, {
       method: 'POST',
       headers: {
         ...(authHeader && { Authorization: authHeader })

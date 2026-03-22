@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { getAssetUrl } from '@/lib/assets'
 
 export interface TeamCardProps {
   id: string
@@ -34,7 +35,7 @@ export function TeamCard({
             width: '48px',
             height: '48px',
             borderRadius: '50%',
-            background: avatar ? `url(http://localhost:3001${avatar}) center/cover` : 'var(--primary)',
+            background: avatar ? `url(${getAssetUrl(avatar)}) center/cover` : 'var(--primary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
