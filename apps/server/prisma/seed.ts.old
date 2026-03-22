@@ -1,0 +1,428 @@
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
+
+const prisma = new PrismaClient()
+
+// 学生数据 - 使用入学年份代替年级（小学入学年份）
+const studentsData = [
+  // 小学生
+  { username: 'student1', name: '李同学', gender: '男', enrollmentYear: 2026, rating: 1203, phone: '13800001001', email: 'student1@example.com' }, // 小四
+  { username: 'student2', name: '王同学', gender: '男', enrollmentYear: 2025, rating: 1201, phone: '13800001002', email: 'student2@example.com' }, // ���五
+  { username: 'student3', name: '赵同学', gender: '女', enrollmentYear: 2024, rating: 1221, phone: '13800001003', email: 'student3@example.com' }, // 小六
+  { username: 'student4', name: '刘同学', gender: '男', enrollmentYear: 2026, rating: 1206, phone: '13800001004', email: 'student4@example.com' }, // 小四
+  { username: 'student5', name: '陈同学', gender: '女', enrollmentYear: 2025, rating: 1213, phone: '13800001005', email: 'student5@example.com' }, // 小五
+
+  // 初中生
+  { username: 'student6', name: '周同学', gender: '男', enrollmentYear: 2023, rating: 1201, phone: '13800001006', email: 'student6@example.com' }, // 初一
+  { username: 'student7', name: '吴同学', gender: '男', enrollmentYear: 2022, rating: 1211, phone: '13800001007', email: 'student7@example.com' }, // 初二
+  { username: 'student8', name: '郑同学', gender: '女', enrollmentYear: 2021, rating: 1208, phone: '13800001008', email: 'student8@example.com' }, // 初三
+  { username: 'student9', name: '孙同学', gender: '男', enrollmentYear: 2023, rating: 1198, phone: '13800001009', email: 'student9@example.com' }, // 初一
+  { username: 'student10', name: '钱同学', gender: '女', enrollmentYear: 2022, rating: 1202, phone: '13800001010', email: 'student10@example.com' }, // 初二
+  { username: 'student11', name: '冯同学', gender: '男', enrollmentYear: 2021, rating: 1217, phone: '13800001011', email: 'student11@example.com' }, // 初三
+  { username: 'student12', name: '褚同学', gender: '女', enrollmentYear: 2023, rating: 1227, phone: '13800001012', email: 'student12@example.com' }, // 初一
+
+  // 高中生
+  { username: 'student13', name: '卫同学', gender: '男', enrollmentYear: 2020, rating: 1207, phone: '13800001013', email: 'student13@example.com' }, // 高一
+  { username: 'student14', name: '蒋同学', gender: '女', enrollmentYear: 2019, rating: 1205, phone: '13800001014', email: 'student14@example.com' }, // 高二
+  { username: 'student15', name: '沈同学', gender: '男', enrollmentYear: 2018, rating: 1202, phone: '13800001015', email: 'student15@example.com' }, // 高三
+  { username: 'student16', name: '杨同学', gender: '男', enrollmentYear: 2020, rating: 1195, phone: '13800001016', email: 'student16@example.com' }, // 高一
+  { username: 'student17', name: '朱同学', gender: '女', enrollmentYear: 2019, rating: 1210, phone: '13800001017', email: 'student17@example.com' }, // 高二
+  { username: 'student18', name: '秦同学', gender: '男', enrollmentYear: 2018, rating: 1215, phone: '13800001018', email: 'student18@example.com' }, // 高三
+  { username: 'student19', name: '许同学', gender: '女', enrollmentYear: 2020, rating: 1198, phone: '13800001019', email: 'student19@example.com' }, // 高一
+  { username: 'student20', name: '何同学', gender: '男', enrollmentYear: 2019, rating: 1205, phone: '13800001020', email: 'student20@example.com' }, // 高二
+
+  // 高中毕业的学生
+  { username: 'student21', name: '张毕业', gender: '男', enrollmentYear: 2015, rating: 1450, phone: '13800001021', email: 'student21@example.com' }, // 高中毕业 3 年
+  { username: 'student22', name: '李毕业', gender: '女', enrollmentYear: 2016, rating: 1420, phone: '13800001022', email: 'student22@example.com' }, // 高中毕业 2 年
+  { username: 'student23', name: '王毕业', gender: '男', enrollmentYear: 2017, rating: 1380, phone: '13800001023', email: 'student23@example.com' }, // 高中毕业 1 年
+  { username: 'student24', name: '赵毕业', gender: '女', enrollmentYear: 2014, rating: 1500, phone: '13800001024', email: 'student24@example.com' }, // 高中毕业 4 年
+  { username: 'student25', name: '刘毕业', gender: '男', enrollmentYear: 2016, rating: 1410, phone: '13800001025', email: 'student25@example.com' }, // 高中毕业 2 年
+]
+
+// 比赛数据 - 包含三种类型
+const contestsData = [
+  // 训练赛
+  { title: '2024寒假训练赛第一场', date: '2024-01-15', status: 'finished', type: 'training', countRating: false },
+  { title: '2024寒假训练赛第二场', date: '2024-01-22', status: 'finished', type: 'training', countRating: false },
+  // 模拟赛
+  { title: '2024春季模拟赛第一场', date: '2024-02-15', status: 'finished', type: 'mock', countRating: true },
+  { title: '2024春季模拟赛第二场', date: '2024-03-01', status: 'finished', type: 'mock', countRating: true },
+  { title: '2024春季模拟赛第三场', date: '2024-03-15', status: 'finished', type: 'mock', countRating: true },
+  // 正赛
+  { title: '2024省选模拟赛', date: '2024-04-01', status: 'finished', type: 'official', countRating: true },
+]
+
+async function main() {
+  console.log('Seeding database...')
+
+  // 创建超级管理员账号 (admin)
+  const adminPassword = await bcrypt.hash('123456', 10)
+  const adminUser = await prisma.user.upsert({
+    where: { username: 'admin' },
+    update: {},
+    create: {
+      username: 'admin',
+      passwordHash: adminPassword,
+      role: 'super_admin',
+      phone: '13800000000',
+      email: 'admin@example.com',
+      teacher: {
+        create: {
+          name: '系统管理员',
+          email: 'admin@example.com',
+          phone: '13800000000',
+          title: '超级管理员'
+        }
+      }
+    }
+  })
+
+  // 创建默认学校
+  const school = await prisma.school.upsert({
+    where: { id: 'school-default' },
+    update: {},
+    create: {
+      id: 'school-default',
+      name: '第一中学',
+      description: '信息学竞赛重点学校'
+    }
+  })
+
+  // 创建老师用户 1
+  const teacherPassword = await bcrypt.hash('123456', 10)
+  const teacherUser = await prisma.user.upsert({
+    where: { username: 'teacher' },
+    update: {},
+    create: {
+      username: 'teacher',
+      passwordHash: teacherPassword,
+      role: 'teacher',
+      phone: '13900000000',
+      email: 'teacher@example.com',
+      teacher: {
+        create: {
+          name: '张老师',
+          email: 'teacher@example.com',
+          phone: '13900000000',
+          title: '主教练',
+          schoolId: school.id
+        }
+      }
+    }
+  })
+
+  // 创建老师用户 2
+  const teacher2User = await prisma.user.upsert({
+    where: { username: 'teacher2' },
+    update: {},
+    create: {
+      username: 'teacher2',
+      passwordHash: teacherPassword,
+      role: 'teacher',
+      phone: '13900000001',
+      email: 'teacher2@example.com',
+      teacher: {
+        create: {
+          name: '李老师',
+          email: 'teacher2@example.com',
+          phone: '13900000001',
+          title: '副教练',
+          schoolId: school.id
+        }
+      }
+    }
+  })
+
+  // 创建老师用户 3
+  const teacher3User = await prisma.user.upsert({
+    where: { username: 'teacher3' },
+    update: {},
+    create: {
+      username: 'teacher3',
+      passwordHash: teacherPassword,
+      role: 'teacher',
+      phone: '13900000002',
+      email: 'teacher3@example.com',
+      teacher: {
+        create: {
+          name: '王老师',
+          email: 'teacher3@example.com',
+          phone: '13900000002',
+          title: '教练',
+          schoolId: school.id
+        }
+      }
+    }
+  })
+
+  // 获取老师记录
+  const teacher = await prisma.teacher.findUnique({ where: { userId: teacherUser.id } })
+  const teacher2 = await prisma.teacher.findUnique({ where: { userId: teacher2User.id } })
+  const teacher3 = await prisma.teacher.findUnique({ where: { userId: teacher3User.id } })
+
+  if (!teacher || !teacher2 || !teacher3) {
+    throw new Error('Failed to create teachers')
+  }
+
+  // 设置张老师为学校负责人
+  await prisma.school.update({
+    where: { id: school.id },
+    data: { currentPrincipalTeacherId: teacher.id }
+  })
+
+  // 更新张老师的用户角色为 school_principal
+  await prisma.user.update({
+    where: { id: teacherUser.id },
+    data: { role: 'school_principal' }
+  })
+
+  console.log('设置张老师为学校负责人')
+
+  // 创建团队 1 - 提高班
+  const team1 = await prisma.team.upsert({
+    where: { id: 'team-advanced' },
+    update: {},
+    create: {
+      id: 'team-advanced',
+      name: '提高班',
+      description: '信息学竞赛提高班',
+      schoolId: school.id,
+      leaderId: teacher.id
+    }
+  })
+
+  // 创建团队 2 - 基础班
+  const team2 = await prisma.team.upsert({
+    where: { id: 'team-basic' },
+    update: {},
+    create: {
+      id: 'team-basic',
+      name: '基础班',
+      description: '信息学竞赛基础班',
+      schoolId: school.id,
+      leaderId: teacher2.id
+    }
+  })
+
+  // 创建多个学生
+  const students = []
+  for (const s of studentsData) {
+    const studentPassword = await bcrypt.hash('123456', 10)
+    // 将学生分配到两个团队
+    const studentNum = parseInt(s.username.replace('student', ''))
+    const teamId = studentNum % 2 === 0 ? team2.id : team1.id
+    // 将学生分配给3个教师
+    const headTeacherId = studentNum % 3 === 0 ? teacher3.id : (studentNum % 3 === 1 ? teacher.id : teacher2.id)
+
+    const user = await prisma.user.upsert({
+      where: { username: s.username },
+      update: {},
+      create: {
+        username: s.username,
+        passwordHash: studentPassword,
+        role: 'student',
+        phone: s.phone,
+        email: s.email,
+        student: {
+          create: {
+            name: s.name,
+            gender: s.gender,
+            schoolId: school.id,
+            teamId: teamId,
+            headTeacherId: headTeacherId,
+            enrollmentYear: s.enrollmentYear,
+            joinDate: new Date('2024-01-01'),
+            targetContest: 'NOIP',
+            rating: s.rating
+          }
+        }
+      }
+    })
+
+    const student = await prisma.student.findUnique({ where: { userId: user.id } })
+    if (student) students.push(student)
+  }
+
+  // 创建题单
+  const taskList = await prisma.taskList.upsert({
+    where: { id: 'tasklist-1' },
+    update: {},
+    create: {
+      id: 'tasklist-1',
+      title: '图论基础练习',
+      description: '本周图论基础题单，包含最短路和最小生成树',
+      publishAt: new Date('2024-03-01'),
+      deadline: new Date('2024-03-08'),
+      createdBy: teacherUser.id,
+      tasks: {
+        create: [
+          { title: 'P3371 单源最短路径', ojName: '洛谷', problemId: 'P3371', difficulty: '入门', points: 10 },
+          { title: 'P3366 最小生成树', ojName: '洛谷', problemId: 'P3366', difficulty: '中等', points: 15 },
+          { title: 'P1346 观光之旅', ojName: '洛谷', problemId: 'P1346', difficulty: '困难', points: 20 },
+          { title: 'P1339 热浪问题', ojName: '洛谷', problemId: 'P1339', difficulty: '入门', points: 10 },
+          { title: 'P1126 机器人搬重物', ojName: '洛谷', problemId: 'P1126', difficulty: '中等', points: 15 }
+        ]
+      }
+    }
+  })
+
+  // 获取题单中的任务
+  const tasks = await prisma.task.findMany({ where: { taskListId: taskList.id } })
+
+  // 为每个学生创建任务进度
+  for (const student of students) {
+    // 随机决定已完成和进行中的任务
+    for (const task of tasks) {
+      const rand = Math.random()
+      let status = 'pending'
+      if (rand > 0.6) {
+        status = 'completed'
+      } else if (rand > 0.3) {
+        status = 'in_progress'
+      }
+
+      await prisma.taskProgress.upsert({
+        where: {
+          taskId_studentId: {
+            taskId: task.id,
+            studentId: student.id
+          }
+        },
+        update: {},
+        create: {
+          taskId: task.id,
+          studentId: student.id,
+          status,
+          seenEditorial: status === 'completed' ? Math.random() > 0.5 : false,
+          needHelp: status === 'in_progress' ? Math.random() > 0.7 : false,
+          notes: status === 'completed' ? '已完成' : null
+        }
+      })
+    }
+  }
+
+  // 创建比赛和参赛结果
+  let baseRating = 1200
+  for (let c = 0; c < contestsData.length; c++) {
+    const contestData = contestsData[c]
+
+    const contest = await prisma.contest.upsert({
+      where: { id: `contest-${c + 1}` },
+      update: {},
+      create: {
+        id: `contest-${c + 1}`,
+        title: contestData.title,
+        description: `${contestData.title}`,
+        contestDate: new Date(contestData.date),
+        status: contestData.status,
+        type: contestData.type || 'mock',
+        countRating: contestData.countRating || false,
+        scope: 'public',
+        teamId: team1.id,
+        createdBy: teacherUser.id
+      }
+    })
+
+    // 为每个学生生成参赛结果
+    const sortedStudents = [...students].sort((a, b) => b.rating - a.rating)
+
+    for (let i = 0; i < sortedStudents.length; i++) {
+      const student = sortedStudents[i]
+      const rank = i + 1
+      const baseChange = Math.round((sortedStudents.length - rank) * 20 / sortedStudents.length)
+      const randomChange = Math.floor(Math.random() * 20) - 10
+      const ratingChange = baseChange + randomChange
+
+      const ratingBefore = baseRating + (c === 0 ? student.rating - 1200 : 0)
+      const ratingAfter = ratingBefore + ratingChange
+
+      await prisma.contestResult.upsert({
+        where: {
+          contestId_studentId: {
+            contestId: contest.id,
+            studentId: student.id
+          }
+        },
+        update: {},
+        create: {
+          contestId: contest.id,
+          studentId: student.id,
+          rank: rank,
+          score: 100 - (rank - 1) * 10 + Math.floor(Math.random() * 10),
+          ratingBefore,
+          ratingAfter,
+          ratingChange
+        }
+      })
+    }
+
+    // 更新学生的当前rating
+    for (const student of sortedStudents) {
+      const result = await prisma.contestResult.findFirst({
+        where: { contestId: contest.id, studentId: student.id },
+        orderBy: { createdAt: 'desc' }
+      })
+      if (result) {
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { rating: result.ratingAfter }
+        })
+      }
+    }
+  }
+
+  // 创建里程碑 - 只给部分学生
+  for (const student of students.slice(0, 5)) {
+    await prisma.milestone.upsert({
+      where: { id: `milestone-${student.id}` },
+      update: {},
+      create: {
+        id: `milestone-${student.id}`,
+        studentId: student.id,
+        teacherId: teacher.id,
+        title: '入班',
+        description: '正式加入信息学竞赛提高班',
+        milestoneDate: new Date('2024-01-01'),
+        type: 'entry'
+      }
+    })
+  }
+
+  // 保留原来的student账号用于演示
+  const originalStudentPassword = await bcrypt.hash('123456', 10)
+  await prisma.user.upsert({
+    where: { username: 'student' },
+    update: {},
+    create: {
+      username: 'student',
+      passwordHash: originalStudentPassword,
+      role: 'student',
+      phone: '13800138000',
+      email: 'student@test.com',
+      student: {
+        create: {
+          name: '测试同学',
+          gender: '男',
+          schoolId: school.id,
+          teamId: team1.id,
+          headTeacherId: teacher.id,
+          grade: 10,
+          joinDate: new Date('2024-01-01'),
+          targetContest: 'NOIP',
+          rating: 1200
+        }
+      }
+    }
+  })
+
+  console.log('Seeding completed!')
+}
+
+main()
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })

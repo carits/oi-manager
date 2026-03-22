@@ -1,0 +1,15 @@
+{
+  "name": "oi-manager-v2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "信息学竞赛三端成长管理平台",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "install:all": "pnpm install"
+  },
+  "keywords": ["oi", "education", "contest"],
+  "author": "",
+  "license": "MIT"
+}
