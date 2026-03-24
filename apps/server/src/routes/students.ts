@@ -1,10 +1,14 @@
 import { Router, Response } from 'express'
+import bcrypt from 'bcryptjs'
 import { prisma } from '../prisma'
 import { authenticate, authorize } from '../middleware/auth'
+import { canViewStudent, canManageStudent, getUserSchoolId } from '../middleware/permissions'
+import { generateTempPassword, hashPassword } from '../utils/password'
 
 export const studentRouter = Router()
 
 // 获取学生列表 (老师、学校负责人和管理员)
+// 性能优化：使用数据库级分页和排序，避免全量查询后在内存中处理
 studentRouter.get('/', authenticate, async (req, res) => {
   try {
     const { headTeacherId, teamId, schoolId, username, page = '1', pageSize = '20' } = req.query
@@ -43,13 +47,23 @@ studentRouter.get('/', authenticate, async (req, res) => {
       }
     }
 
+    const pageNum = Number(page)
+    const pageSizeNum = Number(pageSize)
+
     // 获取总数
     const total = await prisma.student.count({ where })
 
-    // 获取所有符合条件的学生，然后在内存中排序
-    // 排序规则：1. 主教练优先显示自己的学生 2. 按入学年份降序（年级低的在前）
-    const allStudents = await prisma.student.findMany({
+    // 性能优化：使用数据库级分页和排序
+    // 排序规则：按入学年份降序（年级低的在前）
+    // 注意："主教练优先"的特殊排序已移除，改为统一的数据库级排序
+    // 如果需要保持"主教练优先"语义，可考虑在前端处理或使用更复杂的查询
+    const students = await prisma.student.findMany({
       where,
+      skip: (pageNum - 1) * pageSizeNum,
+      take: pageSizeNum,
+      orderBy: [
+        { enrollmentYear: 'desc' }
+      ],
       include: {
         school: {
           select: {
@@ -63,27 +77,6 @@ studentRouter.get('/', authenticate, async (req, res) => {
         user: { select: { username: true, phone: true, email: true, avatar: true } }
       }
     })
-
-    // 在内存中排序
-    const sortedStudents = allStudents.sort((a, b) => {
-      // 1. 主教练优先显示自己的学生
-      const aIsMyStudent = a.headTeacherId === currentTeacherId
-      const bIsMyStudent = b.headTeacherId === currentTeacherId
-
-      if (aIsMyStudent && !bIsMyStudent) return -1
-      if (!aIsMyStudent && bIsMyStudent) return 1
-
-      // 2. 按入学年份降序（入学年份大的在前，即年级低的在前）
-      const aYear = a.enrollmentYear || 0
-      const bYear = b.enrollmentYear || 0
-      return bYear - aYear
-    })
-
-    // 手动分页
-    const pageNum = Number(page)
-    const pageSizeNum = Number(pageSize)
-    const startIndex = (pageNum - 1) * pageSizeNum
-    const students = sortedStudents.slice(startIndex, startIndex + pageSizeNum)
 
     res.json({
       success: true,
@@ -101,35 +94,77 @@ studentRouter.get('/', authenticate, async (req, res) => {
 })
 
 // 获取学生 rating 排名 (老师)
+// 性能优化：使用数据库级排序，优化最近成绩变化的获取方式
 studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
   try {
-    // 获取所有学生的最新 rating 和用户信息
+    // 获取当前用户的学校 ID，限制只返回本校学生
+    const schoolId = await getUserSchoolId(req.user!.userId)
+
+    // 构建查询条件：超管和平台管理员可看所有，其他角色限本校
+    const role = req.user!.role
+    const whereClause = (role === 'super_admin' || role === 'platform_admin')
+      ? {}
+      : { schoolId }
+
+    // 性能优化：使用数据库级排序按 rating 降序
     const students = await prisma.student.findMany({
-      include: {
-        user: { select: { username: true, avatar: true } },
-        contestResults: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
+      where: whereClause,
+      orderBy: { rating: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        rating: true,
+        user: { select: { username: true, avatar: true } }
       }
     })
 
-    // 按 rating 排序
-    const rankings = students
-      .map(s => ({
-        id: s.id,
-        name: s.name,
-        rating: s.rating || 1200,
-        avatar: s.user?.avatar,
-        username: s.user?.username,
-        lastRatingChange: s.contestResults[0]?.ratingChange || 0
-      }))
-      .sort((a, b) => b.rating - a.rating)
-      .map((s, i) => ({ ...s, rank: i + 1 }))
+    // 批量获取所有学生的最近成绩变化（一次查询代替 N 次查询）
+    const studentIds = students.map(s => s.id)
+    const latestResults = await prisma.contestResult.groupBy({
+      by: ['studentId'],
+      where: { studentId: { in: studentIds } },
+      _max: { createdAt: true }
+    })
+
+    // 获取最近成绩的 ratingChange
+    const latestResultWithChange = await prisma.contestResult.findMany({
+      where: {
+        OR: latestResults.map(r => ({
+          studentId: r.studentId,
+          createdAt: r._max.createdAt
+        }))
+      },
+      select: {
+        studentId: true,
+        ratingChange: true
+      }
+    })
+
+    // 创建学生 ID 到最近成绩变化的映射
+    const ratingChangeMap = new Map(
+      latestResultWithChange.map(r => [r.studentId, r.ratingChange || 0])
+    )
+
+    // 组装排名结果（已在数据库排序，无需内存排序）
+    const rankings = students.map((s, i) => ({
+      id: s.id,
+      name: s.name,
+      rating: s.rating || 1200,
+      avatar: s.user?.avatar,
+      username: s.user?.username,
+      lastRatingChange: ratingChangeMap.get(s.id) || 0,
+      rank: i + 1
+    }))
 
     // 计算涨分榜和掉分榜
-    const gainers = [...rankings].filter(s => s.lastRatingChange > 0).sort((a, b) => b.lastRatingChange - a.lastRatingChange).slice(0, 5)
-    const losers = [...rankings].filter(s => s.lastRatingChange < 0).sort((a, b) => a.lastRatingChange - b.lastRatingChange).slice(0, 5)
+    const gainers = rankings
+      .filter(s => s.lastRatingChange > 0)
+      .sort((a, b) => b.lastRatingChange - a.lastRatingChange)
+      .slice(0, 5)
+    const losers = rankings
+      .filter(s => s.lastRatingChange < 0)
+      .sort((a, b) => a.lastRatingChange - b.lastRatingChange)
+      .slice(0, 5)
 
     res.json({
       success: true,
@@ -151,14 +186,29 @@ studentRouter.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params
 
-    // 判断是通过 userId 查询还是通过 student id 查询
-    const student = await prisma.student.findFirst({
+    // 先查询学生基本信息（用于权限检查）
+    const studentBasic = await prisma.student.findFirst({
       where: {
         OR: [
           { id },
           { userId: id }
         ]
       },
+      select: { id: true, userId: true }
+    })
+
+    if (!studentBasic) {
+      return res.status(404).json({ success: false, message: '学生不存在' })
+    }
+
+    // 资源级权限检查
+    if (!await canViewStudent(req, studentBasic.id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学生的信息' })
+    }
+
+    // 获取完整学生信息
+    const student = await prisma.student.findUnique({
+      where: { id: studentBasic.id },
       include: {
         school: { select: { id: true, name: true } },
         headTeacher: { select: { id: true, name: true, title: true } },
@@ -195,47 +245,59 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
       return res.status(400).json({ success: false, message: '学生必须关联学校，请确保您已归属学校' })
     }
 
-    // 如果提供了用户名，创建关联的User
-    let userIdLink = null
-    if (username) {
-      // 检查用户名是否已存在
-      const existingUser = await prisma.user.findUnique({ where: { username } })
-      if (existingUser) {
-        return res.status(400).json({ success: false, message: '用户名已存在' })
-      }
-
-      const newUser = await prisma.user.create({
-        data: {
-          username,
-          passwordHash: 'default', // 临时密码
-          role: 'student',
-          phone,
-          email,
-          avatar
-        }
-      })
-      userIdLink = newUser.id
-    }
-
     // 如果没有指定主教练，使用当前登录的老师
     const finalHeadTeacherId = headTeacherId || teacher?.id
 
-    const student = await prisma.student.create({
-      data: {
-        name,
-        gender,
-        schoolId: finalSchoolId,
-        enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null,
-        targetContest,
-        headTeacherId: finalHeadTeacherId,
-        tags: tags ? JSON.stringify(tags) : null,
-        notes,
-        userId: userIdLink
+    // 使用事务创建学生及相关数据，确保原子性
+    const student = await prisma.$transaction(async (tx) => {
+      let userIdLink = null
+
+      // 如果提供了用户名，创建关联的 User
+      if (username) {
+        // 检查用户名是否已存在
+        const existingUser = await tx.user.findUnique({ where: { username } })
+        if (existingUser) {
+          throw new Error('USERNAME_EXISTS')
+        }
+
+        // 生成安全的临时密码
+        const tempPassword = generateTempPassword()
+        const hashedPassword = await hashPassword(tempPassword)
+
+        const newUser = await tx.user.create({
+          data: {
+            username,
+            passwordHash: hashedPassword,
+            role: 'student',
+            phone,
+            email,
+            avatar
+          }
+        })
+        userIdLink = newUser.id
       }
+
+      // 创建学生
+      return await tx.student.create({
+        data: {
+          name,
+          gender,
+          schoolId: finalSchoolId,
+          enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null,
+          targetContest,
+          headTeacherId: finalHeadTeacherId,
+          tags: tags ? JSON.stringify(tags) : null,
+          notes,
+          userId: userIdLink
+        }
+      })
     })
 
     res.json({ success: true, data: student })
   } catch (error) {
+    if (error instanceof Error && error.message === 'USERNAME_EXISTS') {
+      return res.status(400).json({ success: false, message: '用户名已存在' })
+    }
     console.error('Create student error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -269,18 +331,6 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
       return res.status(403).json({ success: false, message: '只有主教练可以修改该学生的信息' })
     }
 
-    // 更新学生的User关联信息（如果存在）
-    if (existingStudent.userId) {
-      await prisma.user.update({
-        where: { id: existingStudent.userId },
-        data: {
-          avatar,
-          phone: req.body.phone,
-          email: req.body.email
-        }
-      })
-    }
-
     // 确保 schoolId 不为空（学生必须关联学校）
     // 如果传了 schoolId，使用传入的；否则保留原值
     let finalSchoolId = existingStudent.schoolId
@@ -292,20 +342,36 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
       return res.status(400).json({ success: false, message: '学生必须关联学校' })
     }
 
-    const student = await prisma.student.update({
-      where: { id },
-      data: {
-        name,
-        gender,
-        schoolId: finalSchoolId,
-        enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null,
-        targetContest,
-        headTeacherId,
-        tags: tags ? JSON.stringify(tags) : null,
-        notes,
-        avatar,
-        rating: rating ? Number(rating) : undefined
+    // 使用事务更新学生及相关数据，确保原子性
+    const student = await prisma.$transaction(async (tx) => {
+      // 更新学生的 User 关联信息（如果存在）
+      if (existingStudent.userId) {
+        await tx.user.update({
+          where: { id: existingStudent.userId },
+          data: {
+            avatar,
+            phone: req.body.phone,
+            email: req.body.email
+          }
+        })
       }
+
+      // 更新学生
+      return await tx.student.update({
+        where: { id },
+        data: {
+          name,
+          gender,
+          schoolId: finalSchoolId,
+          enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null,
+          targetContest,
+          headTeacherId,
+          tags: tags ? JSON.stringify(tags) : null,
+          notes,
+          avatar,
+          rating: rating ? Number(rating) : undefined
+        }
+      })
     })
 
     res.json({ success: true, data: student })
@@ -319,6 +385,11 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
 studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
   try {
     const { id } = req.params
+
+    // 资源级权限检查
+    if (!await canManageStudent(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限删除该学生' })
+    }
 
     // 在删除学生前，处理其作为团队所有者的情况
     await handleStudentOwnerDeletion(id)

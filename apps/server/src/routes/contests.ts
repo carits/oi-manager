@@ -6,6 +6,7 @@ import path from 'path'
 import fs from 'fs'
 
 // 配置上传
+// 目的：限制文件大小和类型，防止滥用存储或拖垮服务器
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(__dirname, '../../uploads')
@@ -20,7 +21,29 @@ const storage = multer.diskStorage({
   }
 })
 
-const upload = multer({ storage })
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20MB - 防止大文件滥用
+    files: 1 // 单文件上传
+  },
+  fileFilter: (req, file, cb) => {
+    // 限制文件类型：PDF、ZIP、TXT、Markdown
+    const allowedMimes = [
+      'application/pdf',
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/x-rar-compressed',
+      'text/plain',
+      'text/markdown'
+    ]
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error('不支持的文件类型'))
+    }
+  }
+})
 
 export const contestRouter = Router()
 

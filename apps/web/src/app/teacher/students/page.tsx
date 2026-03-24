@@ -72,9 +72,9 @@ export default function StudentsPage() {
     const fetchTeachers = async () => {
       if (!user?.schoolId) return
       try {
-        const result = await apiClient.get<Teacher[]>(`/api/schools/${user.schoolId}/teachers`)
+        const result = await apiClient.get<{ list: Teacher[]; total: number }>(`/api/schools/${user.schoolId}/teachers`)
         if (result.success && result.data) {
-          setTeachers(result.data)
+          setTeachers(result.data.list)
         }
       } catch (error) {
         console.error('Failed to fetch teachers:', error)

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { prisma } from '../prisma.js'
+import { canAccessSchool, canManageSchool } from '../middleware/permissions.js'
 import bcrypt from 'bcryptjs'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation.js'
 import { calculateGrade } from '../../../../packages/shared/src/utils/grade.js'
@@ -8,6 +9,7 @@ import { calculateGrade } from '../../../../packages/shared/src/utils/grade.js'
 export const schoolRouter = Router()
 
 // 获取学校列表
+// 性能优化：批量加载负责人信息，避免 N+1 查询
 schoolRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     // 获取当前用户信息
@@ -36,26 +38,31 @@ schoolRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' }
     })
 
-    // 获取每个学校的负责人信息
-    const schoolsWithPrincipal = await Promise.all(
-      schools.map(async (school) => {
-        let principal = null
-        if (school.currentPrincipalTeacherId) {
-          principal = await prisma.teacher.findUnique({
-            where: { id: school.currentPrincipalTeacherId },
-            select: {
-              id: true,
-              name: true,
-              user: { select: { username: true } }
-            }
-          })
-        }
-        return {
-          ...school,
-          principal
-        }
-      })
-    )
+    // 收集所有负责人 ID
+    const principalIds = schools
+      .map(s => s.currentPrincipalTeacherId)
+      .filter(Boolean) as string[]
+
+    // 批量查询所有负责人信息（1 次查询代替 N 次）
+    const principals = await prisma.teacher.findMany({
+      where: { id: { in: principalIds } },
+      select: {
+        id: true,
+        name: true,
+        user: { select: { username: true } }
+      }
+    })
+
+    // 创建 ID -> principal 的映射
+    const principalMap = new Map(principals.map(p => [p.id, p]))
+
+    // 组装结果
+    const schoolsWithPrincipal = schools.map(school => ({
+      ...school,
+      principal: school.currentPrincipalTeacherId
+        ? principalMap.get(school.currentPrincipalTeacherId) || null
+        : null
+    }))
 
     res.json({
       success: true,
@@ -76,6 +83,11 @@ schoolRouter.get('/:id/teachers', authenticate, async (req: AuthRequest, res: Re
     const { id } = req.params
     const page = parseInt(req.query.page as string) || 1
     const pageSize = parseInt(req.query.pageSize as string) || 20
+
+    // 资源级权限检查：只有本校用户可以查看
+    if (!await canAccessSchool(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学校的教师列表' })
+    }
 
     const [teachers, total] = await Promise.all([
       prisma.teacher.findMany({
@@ -124,6 +136,11 @@ schoolRouter.get('/:id/student-rankings', authenticate, async (req: AuthRequest,
   try {
     const { id } = req.params
 
+    // 资源级权限检查：只有本校用户可以查看
+    if (!await canAccessSchool(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生排名' })
+    }
+
     // 获取学校信息（用于年级计算）
     const school = await prisma.school.findUnique({
       where: { id },
@@ -158,6 +175,12 @@ schoolRouter.get('/:id/student-rankings', authenticate, async (req: AuthRequest,
 schoolRouter.get('/:id/students-by-grade', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
+
+    // 资源级权限检查：只有本校用户可以查看
+    if (!await canAccessSchool(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生列表' })
+    }
+
     const students = await prisma.student.findMany({
       where: { schoolId: id },
       include: {
@@ -257,6 +280,27 @@ schoolRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) =
       return res.status(404).json({ success: false, message: '学校不存在' })
     }
 
+    // 资源级权限检查：超管可查看所有，其他角色限本校
+    const role = req.user!.role
+    if (role !== 'super_admin' && role !== 'platform_admin') {
+      const userSchoolId = await (await import('../middleware/permissions.js')).getUserSchoolId(req.user!.userId)
+      if (userSchoolId !== id) {
+        // 非本校用户只能看到基本信息，不返回教师列表
+        return res.json({
+          success: true,
+          data: {
+            id: school.id,
+            name: school.name,
+            shortName: school.shortName,
+            region: school.region,
+            schoolType: school.schoolType,
+            educationSystem: school.educationSystem,
+            _count: school._count
+          }
+        })
+      }
+    }
+
     // 获取负责人信息
     let principal = null
     if (school.currentPrincipalTeacherId) {
@@ -344,29 +388,6 @@ schoolRouter.post('/', authenticate, async (req: AuthRequest, res: Response) => 
       return res.status(400).json({ success: false, message: '用户名已存在' })
     }
 
-    // 创建用户和教师
-    const hashedPassword = await bcrypt.hash(password || username, 10)
-    const user = await prisma.user.create({
-      data: {
-        username,
-        passwordHash: hashedPassword,
-        role: 'school_principal',
-        email: contactEmail || null,
-        phone: contactPhone || null
-      }
-    })
-
-    const teacher = await prisma.teacher.create({
-      data: {
-        userId: user.id,
-        name: teacherName,
-        email: contactEmail || null,
-        phone: contactPhone || null,
-        title: teacherTitle || '校长',
-        status: 'active'
-      }
-    })
-
     // 验证和规范化学制
     let normalizedEducationSystem = educationSystem
     if (educationSystem && educationSystem !== '') {
@@ -383,29 +404,61 @@ schoolRouter.post('/', authenticate, async (req: AuthRequest, res: Response) => 
       }
     }
 
-    const school = await prisma.school.create({
-      data: {
-        name,
-        region: region || null,
-        schoolType: schoolType || null,
-        educationSystem: normalizedEducationSystem || '6-3-3',
-        contactPerson: contactPerson || null,
-        contactPhone: contactPhone || null,
-        contactEmail: contactEmail || null,
-        status: 'active',
-        currentPrincipalTeacherId: teacher.id
-      }
-    })
+    // 使用事务创建学校及相关数据，确保原子性
+    const hashedPassword = await bcrypt.hash(password || username, 10)
 
-    // 关联学校
-    await prisma.teacher.update({
-      where: { id: teacher.id },
-      data: { schoolId: school.id }
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. 创建用户
+      const user = await tx.user.create({
+        data: {
+          username,
+          passwordHash: hashedPassword,
+          role: 'school_principal',
+          email: contactEmail || null,
+          phone: contactPhone || null
+        }
+      })
+
+      // 2. 创建学校（先创建，后续更新负责人）
+      const school = await tx.school.create({
+        data: {
+          name,
+          region: region || null,
+          schoolType: schoolType || null,
+          educationSystem: normalizedEducationSystem || '6-3-3',
+          contactPerson: contactPerson || null,
+          contactPhone: contactPhone || null,
+          contactEmail: contactEmail || null,
+          status: 'active',
+          currentPrincipalTeacherId: 'temp' // 临时占位，下面立即更新
+        }
+      })
+
+      // 3. 创建教师并关联学校
+      const teacher = await tx.teacher.create({
+        data: {
+          userId: user.id,
+          name: teacherName,
+          email: contactEmail || null,
+          phone: contactPhone || null,
+          title: teacherTitle || '校长',
+          status: 'active',
+          schoolId: school.id
+        }
+      })
+
+      // 4. 更新学校的负责人
+      await tx.school.update({
+        where: { id: school.id },
+        data: { currentPrincipalTeacherId: teacher.id }
+      })
+
+      return { school, teacher, user }
     })
 
     res.json({
       success: true,
-      data: school
+      data: result.school
     })
   } catch (error) {
     console.error('Create school error:', error)
@@ -778,45 +831,51 @@ schoolRouter.post('/:id/principal', authenticate, async (req: AuthRequest, res: 
       return res.status(400).json({ success: false, message: '账号至少3个字符' })
     }
 
-    // 创建用户
+    // 使用事务创建负责人及相关数据，确保原子性
     const hashedPassword = await bcrypt.hash(password || username, 10)
-    const user = await prisma.user.create({
-      data: {
-        username,
-        passwordHash: hashedPassword,
-        role: 'school_principal',
-        email: email || null,
-        phone: phone || null
-      }
-    })
 
-    // 创建教师并设置为负责人
-    const teacher = await prisma.teacher.create({
-      data: {
-        userId: user.id,
-        name: teacherName,
-        email: email || null,
-        phone: phone || null,
-        title: teacherTitle || '校长',
-        status: 'active',
-        schoolId: id
-      }
-    })
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. 创建用户
+      const user = await tx.user.create({
+        data: {
+          username,
+          passwordHash: hashedPassword,
+          role: 'school_principal',
+          email: email || null,
+          phone: phone || null
+        }
+      })
 
-    // 更新学校的负责人
-    await prisma.school.update({
-      where: { id },
-      data: { currentPrincipalTeacherId: teacher.id }
+      // 2. 创建教师并关联学校
+      const teacher = await tx.teacher.create({
+        data: {
+          userId: user.id,
+          name: teacherName,
+          email: email || null,
+          phone: phone || null,
+          title: teacherTitle || '校长',
+          status: 'active',
+          schoolId: id
+        }
+      })
+
+      // 3. 更新学校的负责人
+      await tx.school.update({
+        where: { id },
+        data: { currentPrincipalTeacherId: teacher.id }
+      })
+
+      return { teacher, user }
     })
 
     res.json({
       success: true,
       data: {
         teacher: {
-          id: teacher.id,
-          name: teacher.name,
-          title: teacher.title,
-          user: { username: user.username }
+          id: result.teacher.id,
+          name: result.teacher.name,
+          title: result.teacher.title,
+          user: { username: result.user.username }
         }
       }
     })
@@ -829,8 +888,12 @@ schoolRouter.post('/:id/principal', authenticate, async (req: AuthRequest, res: 
 // 获取学校负责人变更日志
 schoolRouter.get('/:id/principal-logs', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    // 任何人登录后都可查看
     const { id } = req.params
+
+    // 资源级权限检查：只有本校用户和超管可查看
+    if (!await canAccessSchool(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学校的日志' })
+    }
 
     const logs = await prisma.principalTransferLog.findMany({
       where: { schoolId: id },
@@ -1195,6 +1258,11 @@ schoolRouter.get('/:id/stats', authenticate, async (req: AuthRequest, res: Respo
   const { id } = req.params
 
   try {
+    // 资源级权限检查：只有本校用户可以查看
+    if (!await canAccessSchool(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学校的统计数据' })
+    }
+
     // 获取学校信息（包含学制和学校类型）
     const school = await prisma.school.findUnique({
       where: { id },

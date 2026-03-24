@@ -1,6 +1,999 @@
 # 变更日志
 
+## 2026-03-25
+
+### 题库界面优化
+
+**功能描述**：优化题库列表和详情页的显示与交互。
+
+**修改内容**：
+
+1. **题目名称点击跳转**：
+   - 修复题目名称点击跳转问题，改为使用客户端导航 `router.push()`，与"查看"按钮行为一致
+   - 位置：`apps/web/src/app/platform-admin/problems/page.tsx`
+
+2. **时间/空间限制显示单位调整**：
+   - 时间限制显示单位改为毫秒（ms）
+   - 标签名称从"时限"改为"时间限制"，"内存"改为"空间限制"
+   - 修改位置：
+     - `apps/web/src/components/problem/ProblemDetail.tsx` - 详情页显示
+     - `apps/web/src/components/problem/ProblemForm.tsx` - 表单输入
+
+3. **OJ 拉取时间限制修复**：
+   - 修复从洛谷拉取题目时时间限制被错误除以1000的问题
+   - 洛谷 API 返回的时间限制已经是毫秒，无需转换
+   - 位置：`apps/web/src/components/problem/ProblemForm.tsx`
+
+**涉及文件**：
+- `apps/web/src/app/platform-admin/problems/page.tsx`
+- `apps/web/src/components/problem/ProblemDetail.tsx`
+- `apps/web/src/components/problem/ProblemForm.tsx`
+
+---
+
+## 2026-03-24
+
+### OJ 拉取队列管理功能
+
+**功能描述**：为平台管理员设计批量从OJ平台拉取题目的队列管理功能。
+
+**核心功能**：
+- 批量拉取：输入多个题号，队列式自动拉取
+- 平台Cookie配置：每个平台可配置不同Cookie（洛谷需要 __client_id, _uid）
+- 状态返回：拉取成功、拉取失败、附件下载失败等
+- 去重：已拉取的题目不重复创建
+- 重新拉取：对失败的题目可手动重试
+- 无Cookie也能拉取：但附件可能下载失败
+
+**数据库模型**：
+- `OjFetchJob` - 拉取任务记录（platform, problemId, status, message, hasAttachment, attachmentStatus, createdProblemId）
+- `OjPlatformConfig` - 平台Cookie配置（platform, cookies）
+
+**API 端点**：
+- `GET /api/oj-fetcher/platforms/:platform/config` - 获取平台Cookie配置
+- `PUT /api/oj-fetcher/platforms/:platform/config` - 更新平台Cookie配置
+- `GET /api/oj-fetcher/jobs` - 获取拉取任务列表
+- `POST /api/oj-fetcher/jobs/batch` - 批量创建拉取任务
+- `POST /api/oj-fetcher/jobs/:id/retry` - 重试任务
+- `DELETE /api/oj-fetcher/jobs/:id` - 删除任务
+
+**前端页面**：
+- `apps/web/src/app/platform-admin/problems/page.tsx` - 重写为Tab布局（拉取队列 + 公共题库）
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 添加 OjFetchJob, OjPlatformConfig 模型
+- `apps/server/src/routes/oj-fetcher.ts` - 添加队列管理API和异步处理逻辑
+- `apps/web/src/app/platform-admin/problems/page.tsx` - 重写为Tab布局
+
+**技术要点**：
+- 异步队列处理：批量任务提交后，后台自动处理队列
+- 唯一题号生成：自动生成 P000001 格式的题号，避免冲突
+- 管理员所有者：拉取的题目以管理员用户作为所有者
+
+---
+
+### 附件下载功能（洛谷附件）
+
+**功能描述**：支持从洛谷题目页面下载附件到本地系统。
+
+**核心功能**：
+- 拉取洛谷题目时自动获取附件信息
+- 在编辑页面的"附件"标签页显示远程附件列表
+- 支持一键下载远程附件到本地
+- 支持配置洛谷 Cookie（通过环境变量 `LUOGU_COOKIE`）
+
+**技术实现**：
+- 洛谷附件下载链接会重定向（302）到阿里云 OSS
+- 后端手动处理重定向，获取最终文件内容
+- 部分附件需要登录才能下载，返回 403 时提示配置 Cookie
+
+**修改文件**：
+- `apps/server/src/oj-adapters/types.ts` - 添加 `OjAttachment` 类型和 `attachments` 字段
+- `apps/server/src/oj-adapters/luogu.ts` - 返回附件信息，添加调试日志
+- `apps/server/src/routes/oj-fetcher.ts` - 添加下载附件 API（含重定向处理）
+- `apps/web/src/components/problem/ProblemForm.tsx` - 添加远程附件显示和下载功能
+- `apps/server/.env.example` - 添加 LUOGU_COOKIE 配置说明
+
+**使用方法**：
+1. 在编辑页面的"发布设置"中，添加洛谷题目绑定
+2. 点击"拉取"按钮，系统会自动获取题目信息和附件列表
+3. 切换到"附件"标签页，查看"远程附件"部分
+4. 点击"下载"按钮下载附件
+
+**配置洛谷 Cookie（如果下载失败）**：
+1. 登录洛谷 https://www.luogu.com.cn
+2. 打开浏览器开发者工具 (F12) -> Application -> Cookies
+3. 复制所有 cookie 字符串（格式如 `key1=value1; key2=value2`）
+4. 在后端 `.env` 文件中添加：`LUOGU_COOKIE="你的Cookie"`
+
+---
+
+### 题目附件功能修复与优化
+
+**功能描述**：
+1. 修复附件上传权限检查问题
+2. 题目列表显示创建者（所有角色可见）
+3. 思路记录按钮移到更显眼的位置
+
+**修改文件**：
+- `apps/server/src/routes/problems.ts` - 修复 `canModifyProblem` 权限检查函数，从 JWT payload 正确获取 ownerId
+- `apps/web/src/components/problem/ProblemList.tsx` - 所有角色都能看到创建者列
+- `apps/web/src/components/problem/ProblemDetail.tsx` - 思路记录按钮移到 Tab 区域右侧
+- `apps/web/src/components/problem/ProblemForm.tsx` - 修复 FormData 上传问题（移除手动设置的 Content-Type）
+
+---
+
+### 题目附件功能
+
+**功能描述**：为每个题目添加附件功能，支持在详情页查看下载，在编辑页上传删除。
+
+**核心功能**：
+- 详情页显示附件 Tab，展示附件列表和下载链接
+- 编辑页显示附件 Tab，支持上传和删除附件
+- 支持多种文件格式：PDF、ZIP、RAR、7Z、TXT、CPP、C、PY、JAVA、PAS、IN、OUT、MD
+- 最大文件大小：50MB
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 添加 ProblemAttachment 模型
+- `apps/server/src/routes/problems.ts` - 添加附件 API 端点（GET/POST/DELETE）
+- `apps/web/src/components/problem/ProblemDetail.tsx` - 添加附件 Tab 和下载功能
+- `apps/web/src/components/problem/ProblemForm.tsx` - 添加附件 Tab（仅编辑模式）和上传/删除功能
+
+**新增 API 端点**：
+- `GET /api/problems/:id/attachments` - 获取附件列表
+- `POST /api/problems/:id/attachments` - 上传附件
+- `DELETE /api/problems/:id/attachments/:attachmentId` - 删除附件
+
+---
+
+### 洛谷适配器题面解析修复
+
+**问题描述**：洛谷适配器无法正确拉取题目内容，只获取了样例和附件，缺失题目背景、描述、输入输出格式、提示等主要内容。
+
+**根因**：洛谷 API 返回的数据结构中，题目内容在 `content` 子对象中，原代码错误地在根层级查找这些字段。
+
+**修复内容**：
+- 修正 `LuoguProblemData` 接口，添加 `content` 子对象结构
+- 修改 `buildMarkdown` 方法，从 `content` 子对象读取各字段
+- 样例支持数组和对象两种格式
+
+**修改文件**：
+- `apps/server/src/oj-adapters/luogu.ts` - 修复数据结构解析
+
+**验证**：
+- 成功拉取 P14839 完整题面
+- 创建题目 P000006（[THUPC 2026 初赛] 集合）
+
+---
+
+### 题库搜索与平台筛选功能
+
+**功能描述**：为题库列表页面添加搜索和平台筛选功能。
+
+**核心功能**：
+- 公有题库：添加 OJ 平台下拉选择 + 搜索题号和名字
+- 私有题库：添加搜索题号和名字功能
+- 支持回车键快速搜索
+- 重置按钮清空筛选条件
+
+**修改文件**：
+- `apps/server/src/routes/problems.ts` - 添加 keyword 和 platform 查询参数
+- `apps/web/src/components/problem/ProblemList.tsx` - 添加搜索框和平台下拉
+
+**新增 API 参数**：
+- `keyword`: 搜索关键词（匹配 problemCode 和 title）
+- `platform`: OJ 平台筛选（仅对公有题库有效）
+
+**技术要点**：
+- 关键词搜索使用 Prisma 的 `contains` 匹配
+- 平台筛选在应用层实现（ojBindings 是 JSON 字符串）
+
+---
+
+### OJ 远程题目拉取功能
+
+**功能描述**：实现从洛谷平台拉取题目信息，自动填充题目表单。
+
+**核心功能**：
+- 在题目编辑页的 OJ 绑定区域添加"拉取"按钮
+- 输入题号后点击拉取，自动填充表单（标题、题面、时间/内存限制、难度）
+- 支持限流控制（2 请求/秒 + 0.10-0.35秒随机抖动）
+- 错误处理和重试机制（最多3次，指数退避）
+
+**新建文件**：
+- `apps/server/src/oj-adapters/types.ts` - 类型定义
+- `apps/server/src/oj-adapters/luogu.ts` - 洛谷适配器
+- `apps/server/src/oj-adapters/index.ts` - 统一导出
+- `apps/server/src/routes/oj-fetcher.ts` - API 路由
+
+**修改文件**：
+- `apps/server/src/index.ts` - 注册路由
+- `apps/web/src/components/problem/ProblemForm.tsx` - 添加拉取按钮
+- `apps/server/package.json` - 添加 cheerio 依赖
+
+**技术要点**：
+- 使用 cheerio 解析 HTML 中的 lentille-context JSON
+- 手动处理洛谷的 302 重定向 + Cookie 反爬虫机制
+- 统一的错误码和 HTTP 状态映射
+
+---
+
+### 题库模块重构
+
+**功能描述**：重构题库模块，实现三端（学生、教师、管理端）的题库功能，支持私有题库和公共题库。
+
+**核心功能**：
+- 私有题库：学生和教师都可以创建私有题目，只有自己能看到和编辑
+- 公共题库：管理端可以创建公共题目，所有人可见
+- 代码复用：三端使用共享组件，只是权限不同
+
+**数据库修改**：
+- `Problem` 模型添加 `visibility` 字段（private/public）
+- `Problem` 模型添加 `ownerType` 字段（teacher/student/admin）
+- 移除 `owner` 外键关联（因为 owner 可能是 Teacher、Student 或 Admin）
+
+**后端修改**：
+- `apps/server/src/routes/problems.ts` - 统一权限逻辑，支持学生和管理员
+
+**前端共享组件**（新建）：
+- `apps/web/src/components/problem/ProblemList.tsx` - 列表组件
+- `apps/web/src/components/problem/ProblemDetail.tsx` - 详情组件
+- `apps/web/src/components/problem/ProblemForm.tsx` - 表单组件
+- `apps/web/src/components/problem/ProblemNote.tsx` - 思路记录组件
+
+**前端页面修改**：
+- 教师端：使用共享组件
+- 学生端：新建完整的题库页面（列表、详情、创建、编辑、思路记录）
+- 管理端：新建完整的题库页面，支持创建公共题目
+
+**权限逻辑**：
+| 角色 | 可见范围 | 可创建 | 可编辑/删除 |
+|------|----------|--------|-------------|
+| teacher | 私有(自己) + 公共 | 私有题目 | 自己的私有题目 |
+| student | 私有(自己) + 公共 | 私有题目 | 自己的私有题目 |
+| admin | 全部 | 私有/公共题目 | 全部题目 |
+
+### 题目绑定功能
+
+**功能描述**：在题目编辑和创建页面的"发布设置" Tab 中添加 OJ 题目绑定功能。
+
+**核心功能**：
+- 支持绑定外部 OJ 平台题目（最多3个，可选）
+- 平台选择：洛谷、CodeForces、AtCoder、LOJ、POJ、HDU、SPOJ、UVa、Vijos、BZOJ、Gym、其他
+- 详情页显示 OJ 绑定链接，点击可跳转到对应题目
+
+**数据格式**：
+```json
+[
+  { "platform": "luogu", "problemId": "P1001" },
+  { "platform": "codeforces", "problemId": "1234A" }
+]
+```
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 添加 ojBindings 字段
+- `apps/server/src/routes/problems.ts` - 处理 ojBindings 字段
+- `apps/web/src/app/teacher/problems/new/page.tsx` - 创建页面添加绑定 UI
+- `apps/web/src/app/teacher/problems/[id]/edit/page.tsx` - 编辑页面添加绑定 UI
+- `apps/web/src/app/teacher/problems/[id]/page.tsx` - 详情页显示绑定链接
+
+### 私有题库发布按钮移除
+
+**功能描述**：移除题目详情页的发布按钮，改为通过编辑页面的"发布设置" Tab 修改状态。
+
+**修改内容**：
+- 移除详情页的"发布"按钮
+- 移除 `handlePublish` 函数
+- 保留编辑页面的状态选择功能（草稿/已发布）
+
+**修改文件**：
+- `apps/web/src/app/teacher/problems/[id]/page.tsx` - 移除发布按钮和相关函数
+
+**用户体验**：
+- 用户点击"编辑"按钮进入编辑页
+- 在"发布设置" Tab 中可以修改题目状态（草稿/已发布）
+
+### 私有题库编辑页面 Tab 布局与内容保留
+
+**功能描述**：优化私有题库的创建和编辑页面，使用 Tab 布局，并解决切换题面/题解类型时内容丢失的问题。
+
+**核心功能**：
+- 编辑/创建页面使用 Tab 布局：题面、题解、发布设置
+- 基本信息栏始终显示在顶部
+- 题面/题解支持编辑/预览切换
+- 切换题面/题解类型时保留之前的内容
+
+**修改文件**：
+- `apps/server/src/routes/problems.ts` - 创建时始终保存内容，更新时只保存匹配类型的内容
+- `apps/web/src/app/teacher/problems/[id]/edit/page.tsx` - 编辑页面 Tab 布局
+- `apps/web/src/app/teacher/problems/new/page.tsx` - 创建页面 Tab 布局
+- `apps/web/src/app/teacher/problems/[id]/page.tsx` - 详情页面保存逻辑修复
+
+**技术要点**：
+- **编辑场景**：后端只在类型匹配时才更新对应字段，前端只在类型匹配时才发送对应内容
+- **创建场景**：前端始终发送内容（如果有），后端始终保存内容（如果有）
+- 详情页面、编辑页面、创建页面全部修复
+- 避免切换类型时清空其他类型的内容
+
+### 私有题库思路记录功能
+
+**功能描述**：为私有题库实现思路记录功能，教师可以在查看题目时记录解题思路。
+
+**核心功能**：
+- 全屏分栏布局：左侧题目，右侧编辑器
+- 支持 Markdown 编辑/预览/分栏三种模式
+- 自动保存（2秒 debounce）+ 手动保存
+- 显示保存状态和时间
+
+**修改文件**：
+- `apps/server/src/routes/problems.ts` - 添加思路记录 API
+- `apps/web/src/app/teacher/problems/[id]/note/page.tsx` - 思路记录全屏页面
+- `apps/web/src/app/teacher/problems/[id]/page.tsx` - 添加入口按钮
+
+---
+
 ## 2026-03-23
+
+### 思路记录模式实现
+
+**功能描述**：实现学生在比赛做题时能够一边看题一边记录思路过程的功能。
+
+**核心功能**：
+- 分栏布局：左侧题目描述，右侧 Markdown 编辑器
+- 支持 Markdown 和 LaTeX 数学公式
+- 自动保存（debounce 1秒）
+- 编辑/预览/分栏三种显示模式
+- 按题目存储思路记录
+
+**新建文件**：
+- `apps/server/src/routes/contest-notes.ts` - 思路记录 API
+- `apps/web/src/app/student/contests/[id]/practice/[problemId]/page.tsx` - 思路记录页面
+- `apps/web/src/components/ui/MarkdownEditor.tsx` - Markdown 编辑器组件
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 添加 ContestProblemNote 模型
+- `apps/server/src/index.ts` - 注册 contest-notes 路由
+- `apps/web/src/app/student/contests/[id]/page.tsx` - 添加「开启思路记录模式」按钮
+
+**技术要点**：
+- 使用 `upsert` 实现创建或更新笔记
+- 使用 `useEffect` + `debounce` 实现自动保存
+- MarkdownEditor 组件支持编辑/预览/分栏三种模式
+
+**API 端点**：
+- `GET /api/contests/:contestId/problems/:problemId/note` - 获取思路记录
+- `PUT /api/contests/:contestId/problems/:problemId/note` - 保存思路记录
+
+**影响范围**：
+- 新增模块，不影响现有功能
+
+---
+
+### PDF 跨域显示问题修复
+
+**问题描述**：私有题库的 PDF 文件无法在页面上嵌入显示，因为前端在 3000 端口，PDF 在 3001 端口，浏览器阻止跨域资源嵌入。
+
+**解决方案**：创建 Next.js API 代理路由，让 PDF 从 3000 端口提供。
+
+**新建文件**：
+- `apps/web/src/app/api/problems/pdf/[...path]/route.ts` - PDF 代理 API
+
+**修改文件**：
+- `apps/web/src/app/teacher/problems/[id]/page.tsx` - 将 `getStaticUrl` 改为 `getPdfUrl`，使用代理路径
+- `apps/web/src/app/teacher/problems/[id]/edit/page.tsx` - 同上
+
+**技术要点**：
+- 代理路由接收文件名，转发到后端 `/uploads/problems/` 目录
+- 响应设置 `Content-Disposition: inline` 确保嵌入显示
+- PDF 使用 `<object>` 标签嵌入，支持 fallback 链接
+
+**影响范围**：
+- 私有题库 PDF 显示功能
+
+---
+
+### 私有题库功能实现
+
+**功能描述**：实现教师私有题库功能，支持创建、编辑、管理私有题目。
+
+**核心功能**：
+- 题目自动编号（P000001 格式）
+- 题面/题解支持 Markdown 或 PDF
+- 时间限制（秒）、内存限制（MB）
+- 难度等级（简单/中等/困难）
+- 草稿/发布状态管理
+- 显示题目所有者姓名
+
+**新建文件**：
+- `apps/server/src/routes/problems.ts` - 题目 CRUD API、PDF 上传
+- `apps/web/src/app/teacher/problems/page.tsx` - 题库列表页（私有/公有 Tab）
+- `apps/web/src/app/teacher/problems/new/page.tsx` - 新建题目页
+- `apps/web/src/app/teacher/problems/[id]/page.tsx` - 题目详情页
+- `apps/web/src/app/teacher/problems/[id]/edit/page.tsx` - 题目编辑页
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 添加 Problem 模型
+- `apps/server/src/index.ts` - 注册 problems 路由
+
+**技术要点**：
+- 题号生成：查询数据库最大编号 + 1，格式 `P${String(nextNum).padStart(6, '0')}`
+- 权限控制：只有所有者可编辑/删除
+- PDF 上传：使用 Multer，存储到 `uploads/problems/` 目录
+- Markdown 渲染：复用现有 MarkdownRenderer 组件
+
+**API 端点**：
+- `GET /api/problems` - 题目列表
+- `POST /api/problems` - 创建题目
+- `GET /api/problems/:id` - 题目详情
+- `PUT /api/problems/:id` - 更新题目
+- `DELETE /api/problems/:id` - 删除题目
+- `POST /api/problems/:id/statement-pdf` - 上传题面 PDF
+- `POST /api/problems/:id/solution-pdf` - 上传题解 PDF
+- `POST /api/problems/:id/publish` - 发布题目
+
+**影响范围**：
+- 新增模块，不影响现有功能
+
+---
+
+### 团队邀请功能 Bug 修复
+
+**问题描述**：教师通过用户名邀请学生后，邀请在教师端的"待处理邀请"列表显示，但学生端看不到邀请。
+
+**根因分析**：
+
+`team.service.ts` 中 `getStudentTeams` 和 `getSchoolTeams` 方法错误调用 `findMembers(studentId)`：
+
+```typescript
+// 错误：findMembers 第一个参数是 teamId，不是 userId
+const memberRecords = await this.repo.findMembers(studentId)
+```
+
+这导致查询条件变成 `WHERE teamId = studentId`，永远查不到正确结果。
+
+**修复方案**：
+
+1. 在 `team.repository.ts` 新增 `findMembersByUser()` 方法：
+   ```typescript
+   async findMembersByUser(userId: string, userType?: MemberType, status?: MemberStatus)
+   ```
+
+2. 修改 `team.service.ts` 调用：
+   ```typescript
+   // 修复后：正确使用 userId 查询
+   const memberRecords = await this.repo.findMembersByUser(studentId, 'student')
+   ```
+
+**验证结果**：
+- 教师邀请学生 → ✅ 成功
+- 学生查看邀请列表 → ✅ 能看到 pending 邀请
+
+**修改文件**：
+- `apps/server/src/modules/team/team.repository.ts` - 新增 `findMembersByUser` 方法
+- `apps/server/src/modules/team/team.service.ts` - 修复调用
+
+**影响范围**：
+- 学生端邀请列表功能
+- 学校团队列表成员查询
+
+---
+
+### 团队模块代码结构重构
+
+**目标**：将过大的 `routes/teams.ts`（2707 行）拆分为分层架构，提高代码可维护性。
+
+**现状分析**：
+- 单文件 2707 行，职责混杂
+- 路由、业务逻辑、数据访问混杂
+- 辅助函数重复、内联逻辑多
+- 难以单独测试业务逻辑
+
+**新增内容**：
+
+1. **模块化结构**（`src/modules/team/`）：
+   - `team.types.ts`：类型定义（~300 行）
+   - `team.utils.ts`：工具函数（~100 行）
+   - `team.repository.ts`：数据访问层（~600 行）
+   - `team.service.ts`：业务逻辑层（~500 行）
+   - `team.routes.ts`：路由层（~300 行）
+
+2. **向后兼容**：
+   - `routes/teams.ts` 改为重导出入口
+   - 导出类型、服务、仓库保持 API 兼容
+
+3. **测试辅助修复**：
+   - `tests/helpers/testRequest.ts` 改用 ESM 导入
+
+**新建文件**：
+- `apps/server/src/modules/team/team.types.ts`
+- `apps/server/src/modules/team/team.utils.ts`
+- `apps/server/src/modules/team/team.repository.ts`
+- `apps/server/src/modules/team/team.service.ts`
+- `apps/server/src/modules/team/team.routes.ts`
+
+**修改文件**：
+- `apps/server/src/routes/teams.ts` - 改为重导出入口
+- `apps/server/tests/helpers/testRequest.ts` - ESM 导入修复
+
+**影响范围**：
+- 团队模块所有 API（30+ 端点）
+- 测试框架导入方式
+
+**风险与缓解**：
+- 风险：拆分可能引入回归 bug
+- 缓解：保持原有 API 签名不变，运行测试验证
+
+---
+
+### 测试体系补齐
+
+**目标**：建立基础的测试基础设施并编写关键测试用例，为项目提供回归测试保障。
+
+**现状分析**：
+- 无测试框架配置
+- 无测试文件
+- 无测试脚本
+
+**新增内容**：
+
+1. **Vitest 测试框架配置**：
+   - 新建 `vitest.config.ts`
+   - 配置覆盖率报告（v8 provider）
+   - 配置测试环境为 Node.js
+
+2. **测试辅助工具**（`tests/helpers/`）：
+   - `testUser.ts`：创建测试用户、学校、团队
+   - `testToken.ts`：生成测试 JWT Token
+   - `testRequest.ts`：创建测试 Express 应用
+
+3. **测试脚本**（`package.json`）：
+   - `pnpm test`：运行所有测试
+   - `pnpm test:watch`：监视模式
+   - `pnpm test:coverage`：覆盖率报告
+
+4. **测试用例**：
+   - `auth.test.ts`：登录、注册、密码修改（14 个用例）
+   - `permissions.test.ts`：资源级权限检查（20+ 个用例）
+   - `transactions.test.ts`：事务完整性测试（5 个用例）
+   - `teams.test.ts`：团队操作测试（12 个用例）
+   - `regression.test.ts`：基础回归测试（10 个用例）
+
+**新建文件**：
+- `apps/server/vitest.config.ts`
+- `apps/server/tests/setup.ts`
+- `apps/server/tests/helpers/index.ts`
+- `apps/server/tests/helpers/testUser.ts`
+- `apps/server/tests/helpers/testToken.ts`
+- `apps/server/tests/helpers/testRequest.ts`
+- `apps/server/tests/auth.test.ts`
+- `apps/server/tests/permissions.test.ts`
+- `apps/server/tests/transactions.test.ts`
+- `apps/server/tests/teams.test.ts`
+- `apps/server/tests/regression.test.ts`
+
+**修改文件**：
+- `apps/server/package.json`：添加 vitest、supertest、coverage 依赖
+
+**验证方式**：
+```bash
+cd apps/server
+pnpm test
+```
+
+---
+
+### 安全中间件、运行环境校验与基础防护
+
+**目标**：将项目从"开发环境能跑"提升到"更接近生产可用"，补齐基础安全防护。
+
+**发现的问题**：
+
+| 检查项 | 现状 | 风险 |
+|--------|------|------|
+| helmet | ❌ 未使用 | 缺少 X-Frame-Options、X-Content-Type-Options 等安全头 |
+| CORS | 硬编码 localhost:3000 | 生产环境无法使用 |
+| JSON body | ❌ 无大小限制 | 可被大请求拖垮 |
+| 比赛资料上传 | ❌ 无限制 | 可被滥用存储或拖垮服务器 |
+| 全局限流 | ❌ 无 | 可被 DDoS 攻击 |
+| 启动校验 | ⚠️ 仅 JWT_SECRET | 缺少关键配置也能启动 |
+
+**修复内容**：
+
+1. **安装 helmet 安全中间件**：
+   - 添加 `X-Frame-Options: DENY`（防止点击劫持）
+   - 添加 `X-Content-Type-Options: nosniff`（防止 MIME 嗅探）
+   - 添加其他安全响应头
+
+2. **动态 CORS 配置**（新建 `config/cors.ts`）：
+   - 开发环境：允许 `localhost:3000`、`127.0.0.1:3000`
+   - 生产环境：从环境变量 `CORS_ORIGINS` 读取白名单
+   - 拒绝未授权来源时记录日志
+
+3. **请求体大小限制**：
+   - JSON body 限制为 1MB
+   - 比赛资料上传限制为 20MB + 文件类型白名单（PDF/ZIP/TXT/MD）
+
+4. **全局 API 限流**（修改 `rateLimiter.ts`）：
+   - 限制：每分钟最多 100 次请求
+   - 目的：防止 DDoS 和恶意滥用
+
+5. **环境变量启动校验**（新建 `config/env.ts`）：
+   - 必须：`DATABASE_URL`
+   - 生产必须：`JWT_SECRET`、`CORS_ORIGINS`
+   - 缺少配置时拒绝启动并输出错误
+
+6. **错误信息优化**：
+   - 生产环境隐藏详细错误信息
+   - 统一处理 Multer 上传错误（文件大小、数量、类型）
+   - 统一处理 CORS 错误
+
+**新建文件**：
+- `apps/server/src/config/env.ts` - 环境变量校验和工具函数
+- `apps/server/src/config/cors.ts` - CORS 动态配置
+
+**修改文件**：
+- `apps/server/package.json` - 添加 helmet 依赖
+- `apps/server/src/index.ts` - 注册安全中间件、启动校验、错误处理优化
+- `apps/server/src/middleware/rateLimiter.ts` - 添加 globalLimiter
+- `apps/server/src/routes/contests.ts` - 添加上传大小和类型限制
+- `apps/server/.env.example` - 添加 CORS_ORIGINS、NODE_ENV
+
+**环境区分**：
+
+| 配置项 | 开发环境 | 生产环境 |
+|--------|----------|----------|
+| CORS | 允许 localhost | 白名单（CORS_ORIGINS） |
+| JWT_SECRET | 可省略（有警告） | **必须配置** |
+| CORS_ORIGINS | 不需要 | **必须配置** |
+| 错误信息 | 显示详细 | 隐藏详情 |
+
+---
+
+### 日志、审计与问题定位能力建设
+
+**目标**：建立基础的结构化日志和关键操作追踪能力，解决日志方式原始、缺少请求级定位能力、审计日志覆盖不全的问题。
+
+**新增基础设施**：
+
+1. **统一 Logger 模块**（`lib/logger.ts`）：
+   - 结构化 JSON 格式日志输出
+   - 支持 info、warn、error、audit、security 五个日志级别
+   - 统一字段：timestamp、level、requestId、userId、role、action、target、metadata、error
+   - 开发环境友好输出，便于调试
+
+2. **请求追踪中间件**（`middleware/requestLogger.ts`）：
+   - 为每个请求生成唯一 requestId
+   - 记录请求入口（method、path、query、userId、ip）
+   - 记录请求出口（status、duration）
+   - 提供 `updateRequestContext` 供登录后更新用户信息
+
+3. **审计日志表**（schema.prisma）：
+   - `LoginLog`：登录审计（成功/失败原因、IP、User-Agent）
+   - `TeamOperationLog`：团队操作审计（成员变更、角色变更、所有权转移）
+
+**登录审计埋点**（auth.ts）：
+- 登录成功 → LoginLog (result=success)
+- 用户不存在 → LoginLog (result=failed_user_not_found)
+- 密码错误 → LoginLog (result=failed_wrong_password)
+- 账号禁用 → LoginLog (result=failed_account_disabled)
+- 角色不匹配 → LoginLog (result=failed_role_mismatch)
+- 密码修改成功 → 结构化审计日志
+
+**团队操作审计埋点**（teams.ts）：
+- 成员添加 → TeamOperationLog (action=member_add)
+- 成员移除 → TeamOperationLog (action=member_remove)
+- 角色变更 → TeamOperationLog (action=role_change)
+- 所有权转移 → TeamOperationLog (action=ownership_transfer)
+- 团队删除 → TeamOperationLog (action=team_delete)
+- 邀请发送/接受/拒绝 → TeamOperationLog
+- 加入申请批准/拒绝 → TeamOperationLog
+
+**权限拒绝记录**（permissions.ts）：
+- 所有权限检查函数（canAccessSchool、canManageSchool、canViewStudent 等）
+- 权限拒绝时记录 security 级别日志
+- 包含：userId、role、resourceType、resourceId、reason
+
+**全局错误处理**（index.ts）：
+- 捕获未处理异常
+- 记录 requestId、path、method、userId
+- 返回统一错误响应
+
+**console.log 迁移**：
+- auth.ts：移除敏感日志，替换为 logger
+- teams.ts：39 处 console.error 替换为 logger.error
+
+**新建文件**：
+- `apps/server/src/lib/logger.ts` - 统一日志模块
+- `apps/server/src/middleware/requestLogger.ts` - 请求追踪中间件
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 添加 LoginLog、TeamOperationLog
+- `apps/server/src/index.ts` - 注册中间件、全局错误处理
+- `apps/server/src/routes/auth.ts` - 登录审计埋点
+- `apps/server/src/routes/teams.ts` - 团队操作审计埋点
+- `apps/server/src/middleware/permissions.ts` - 权限拒绝日志
+
+**日志字段规范**：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| timestamp | string | ISO 8601 时间戳 |
+| level | string | info / warn / error / audit / security |
+| requestId | string | 请求唯一标识 |
+| userId | string? | 当前用户 ID |
+| role | string? | 当前用户角色 |
+| action | string | 操作类型 |
+| target | string? | 操作目标 |
+| message | string | 日志消息 |
+| metadata | object? | 附加信息 |
+| error | object? | 错误详情 |
+
+**验证方案**：
+1. 发起请求，观察日志中的 requestId 贯穿整个请求生命周期
+2. 使用错误密码登录，检查 LoginLog 表记录
+3. 添加/移除团队成员，检查 TeamOperationLog 表记录
+4. 尝试越权操作，检查安全日志输出
+
+---
+
+### 数据库索引优化
+
+**目标**：为高频查询路径补充数据库索引，提升查询性能。
+
+**新增索引**：
+
+| 模型 | 索引字段 | 用途 |
+|------|----------|------|
+| User | `role`, `status`, `createdAt` | 用户列表筛选、角色/状态查询 |
+| Teacher | `schoolId`, `status`, `createdAt` | 学校教师列表、状态筛选 |
+| Student | `schoolId`, `headTeacherId`, `rating`, `enrollmentYear` | 学生列表、排名、"我的学生"筛选 |
+| Student | `schoolId, headTeacherId` (复合) | 按学校+主教练联合查询 |
+| Team | `schoolId`, `isPublic`, `createdAt` | 学校团队列表、公有团队筛选 |
+| Team | `schoolId, isPublic` (复合) | 学生浏览可加入团队 |
+| TeamMember | `teamId, status, role` (复合) | 成员列表查询、权限检查 |
+| TeamMember | `userId, userType, status` (复合) | "我的团队"查询 |
+| TeamMember | `teamId, role` (复合) | 查找团队所有者/管理员 |
+| TeamMember | `status` | 待处理邀请查询 |
+| Contest | `teamId`, `status`, `scope`, `contestDate` | 比赛列表筛选、日期排序 |
+| Contest | `teamId, status` (复合) | 团队比赛状态筛选 |
+| ContestResult | `studentId`, `createdAt` | 学生成绩历史、成绩统计 |
+| Milestone | `studentId`, `teacherId`, `milestoneDate` | 学生里程碑、教师创建记录 |
+| TaskList | `createdBy`, `createdAt` | 教师题单列表 |
+| TaskProgress | `studentId`, `status` | 学生进度查询、状态筛选 |
+
+**影响评估**：
+- 索引数量增加，写入性能略有下降（可忽略）
+- 查询性能显著提升，尤其是大数据量场景
+- SQLite 索引已自动创建，无需手动维护
+
+**SQLite 适用边界评估**：
+- 当前 MVP 阶段完全够用
+- 预期支撑：单校 1000 学生、50 教师以内
+- 瓶颈预测：10-20 并发写入、单表 10万-100万条数据
+- 建议迁移时机：跨校推广或商业化前
+
+**涉及文件**：
+- `apps/server/prisma/schema.prisma` - 添加索引声明
+
+**注意事项**：
+- 需要停止开发服务器后运行 `pnpm prisma:generate`
+- 索引已通过 `prisma db push` 应用到数据库
+
+---
+
+### 查询性能优化
+
+**目标**：系统性优化现有模块的查询性能，重点解决全量查询+内存分页、内存排序、N+1 查询等问题。
+
+**发现的问题**：
+
+1. **students.ts GET /**：全量查询 + 内存排序 + 手动分页
+   - 查询所有符合条件的学生（可能数千条）
+   - 在内存中完成全部排序
+   - 手动 slice 分页，只使用了其中 20 条数据
+
+2. **students.ts GET /rankings**：全量查询 + 内存排序 + N+1 查询
+   - 全量查询后在内存中按 rating 排序
+   - `include { contestResults: { take: 1 } }` 对每个学生产生额外查询
+
+3. **teams.ts GET /**：严重 N+1 查询
+   - 10 个团队 = 40 次数据库查询（1 + 10×3 + 10×1）
+   - 每个团队额外查询 owner、adminCount、teacherMembersCount
+
+4. **teams.ts GET /school/:schoolId**：N+1 查询
+   - 每个团队额外 2 次查询（owner + getUserName）
+
+5. **teams.ts GET /student/:studentId**：N+1 查询
+   - 循环中查询 owner 和 getUserName
+
+6. **schools.ts GET /**：N+1 查询
+   - 每个学校额外查询一次负责人信息
+
+**修复内容**：
+
+1. **students.ts GET /**：
+   - 使用 Prisma 的 `skip`/`take` 实现数据库级分页
+   - 使用 `orderBy` 实现数据库级排序
+   - 移除"主教练优先"的特殊排序（简化为统一的入学年份排序）
+
+2. **students.ts GET /rankings**：
+   - 使用 `orderBy: { rating: 'desc' }` 数据库级排序
+   - 使用 `groupBy` 批量获取最近成绩时间点
+   - 批量查询最近成绩的 ratingChange
+
+3. **teams.ts GET /、GET /school/:schoolId、GET /student/:studentId**：
+   - 在初始查询中 `include` 成员信息
+   - 批量收集所有 owner ID
+   - 批量查询教师和学生姓名（2 次查询）
+   - 在内存中组装结果
+
+4. **schools.ts GET /**：
+   - 收集所有 principalTeacherId
+   - 批量查询所有负责人（1 次查询）
+   - 创建 ID -> principal 的映射，在内存中组装结果
+
+**性能提升**：
+
+| 端点 | 优化前 | 优化后 | 提升 |
+|------|--------|--------|------|
+| GET /students | 全量查询+内存排序 | 数据库分页 | 内存占用 ↓ 95% |
+| GET /teams (10条) | ~40 次查询 | ~3 次查询 | 查询数 ↓ 92% |
+| GET /schools (20条) | ~21 次查询 | ~2 次查询 | 查询数 ↓ 90% |
+| GET /students/rankings | N+1 查询+内存排序 | 3 次查询+数据库排序 | 查询数 ↓ 97% |
+
+**修改文件**：
+- `apps/server/src/routes/students.ts` - GET / 和 GET /rankings 性能优化
+- `apps/server/src/routes/teams.ts` - GET /、GET /school/:schoolId、GET /student/:studentId 性能优化
+- `apps/server/src/routes/schools.ts` - GET / 性能优化
+
+---
+
+### 数据一致性与事务安全修复
+
+**目标**：系统性修复关键创建/修改流程的数据一致性问题，确保多步写入操作的原子性。
+
+**发现的问题**：
+
+1. **学校创建**（schools.ts）：4 步操作无事务保护
+   - 创建 User → Teacher → School → 更新 Teacher.schoolId
+   - 风险：部分失败导致孤儿数据
+
+2. **学校负责人创建**（schools.ts）：3 步操作无事务保护
+   - 创建 User → Teacher → 更新 School.currentPrincipalTeacherId
+   - 风险：部分失败导致孤儿数据
+
+3. **学生创建**（students.ts）：2 步操作无事务保护 + 密码安全隐患
+   - 创建 User → Student
+   - 密码使用 `'default'` 字符串（非有效 bcrypt 哈希）
+   - 风险：部分失败 + 学生无法登录
+
+4. **学生更新**（students.ts）：2 步操作无事务保护
+   - 更新 User → 更新 Student
+   - 风险：数据不一致
+
+**修复内容**：
+
+1. **学校创建**：使用 `prisma.$transaction` 包裹所有操作
+
+2. **学校负责人创建**：使用 `prisma.$transaction` 包裹所有操作
+
+3. **学生创建**：
+   - 使用 `prisma.$transaction` 包裹所有操作
+   - 新建密码工具函数 `utils/password.ts`
+   - 使用 `generateTempPassword()` 生成安全随机临时密码
+   - 使用 `hashPassword()` 生成正确的 bcrypt 哈希
+
+4. **学生更新**：使用 `prisma.$transaction` 包裹所有操作
+
+**新建文件**：
+- `apps/server/src/utils/password.ts` - 密码工具函数
+
+**修改文件**：
+- `apps/server/src/routes/schools.ts` - 学校创建、负责人创建添加事务
+- `apps/server/src/routes/students.ts` - 学生创建、更新添加事务 + 密码修复
+
+---
+
+### 认证链路与账号安全修复
+
+**目标**：系统性修复认证模块的安全隐患。
+
+**发现的问题**：
+
+1. **敏感日志泄露**：登录接口输出完整 `req.body`，包含密码明文
+2. **JWT Secret 硬编码**：6 处使用不安全的默认值
+3. **认证逻辑重复**：多个接口手动解析 token，未使用统一中间件
+4. **开放注册风险**：注册接口允许前端传入任意角色
+5. **缺少速率限制**：登录、注册、密码修改无防暴力破解机制
+
+**修复内容**：
+
+1. **删除敏感日志**：移除 `auth.ts` 中的密码明文输出
+
+2. **统一 JWT Secret 获取**（新建 `lib/jwtSecret.ts`）：
+   - 生产环境：强制要求配置 `JWT_SECRET`
+   - 开发环境：使用默认值但输出警告
+
+3. **统一认证逻辑**：
+   - `GET /me`、`PUT /profile`、`POST /avatar`、`PUT /password` 统一使用 `authenticate` 中间件
+   - 删除冗余的手动 token 解析代码
+
+4. **收紧注册接口**：
+   - 限制只能注册学生角色
+   - 其他角色返回 400 错误
+
+5. **添加速率限制**（新建 `middleware/rateLimiter.ts`）：
+   - 登录：5 次/分钟
+   - 注册：3 次/小时
+   - 密码修改：3 次/小时
+   - 密码重置：3 次/小时
+
+**涉及文件**：
+- 新建：`apps/server/src/lib/jwtSecret.ts`
+- 新建：`apps/server/src/middleware/rateLimiter.ts`
+- 修改：`apps/server/src/middleware/auth.ts`
+- 修改：`apps/server/src/routes/auth.ts`
+- 修改：`apps/server/src/routes/users.ts`
+- 修改：`docs/KNOWN_ISSUES.md`（更新 JWT Secret 问题状态）
+
+---
+
+### 资源级权限控制修复
+
+**目标**：系统性排查并修复所有只做了登录校验、但没有做资源级鉴权的接口。
+
+**发现的问题**：
+
+1. **学校模块**（6 个接口）：任何登录用户可查看任意学校数据
+2. **学生模块**（3 个接口）：任何登录用户可查看/删除任意学生数据
+3. **团队模块**（2 个接口）：任何登录用户可查看任意学校/学生的团队列表
+4. **静态文件**：`/uploads/*` 完全公开（记录为已知问题）
+
+**修复内容**：
+
+1. **新建权限中间件**：`apps/server/src/middleware/permissions.ts`
+   - `canAccessSchool` - 判断用户是否可访问学校数据
+   - `canManageSchool` - 判断用户是否可管理学校
+   - `canViewStudent` - 判断用户是否可查看学生详情
+   - `canManageStudent` - 判断用户是否可管理学生
+   - `canViewTeacher` - 判断用户是否可查看教师详情
+   - `canManageTeacher` - 判断用户是否可管理教师
+   - `canViewTeam` - 判断用户是否可查看团队
+   - `canManageTeam` - 判断用户是否可管理团队
+
+2. **学校模块修复**（schools.ts）：
+   - `GET /:id/teachers` - 添加本校用户检查
+   - `GET /:id/student-rankings` - 添加本校用户检查
+   - `GET /:id/students-by-grade` - 添加本校用户检查
+   - `GET /:id` - 非本校用户只返回基本信息
+   - `GET /:id/stats` - 添加本校用户检查
+   - `GET /:id/principal-logs` - 添加本校用户检查
+
+3. **学生模块修复**（students.ts）：
+   - `GET /:id` - 学生只能查看自己，教师可查看本校学生
+   - `GET /rankings` - 限制只返回本校学生
+   - `DELETE /:id` - 添加资源归属检查
+
+4. **团队模块修复**（teams.ts）：
+   - `GET /school/:schoolId` - 添加本校用户检查
+   - `GET /student/:studentId` - 使用统一权限判断
+
+**权限规则**：
+| 角色 | 学校数据 | 学生数据 | 团队数据 |
+|------|----------|----------|----------|
+| super_admin | 全部 | 全部 | 全部 |
+| school_principal | 本校 | 本校全部 | 本校 |
+| teacher | 本校 | 本校/自己的 | 本校/所属 |
+| student | 本校 | 自己 | 所属团队 |
+
+**涉及文件**：
+- `apps/server/src/middleware/permissions.ts`（新建）
+- `apps/server/src/routes/schools.ts`
+- `apps/server/src/routes/students.ts`
+- `apps/server/src/routes/teams.ts`
+- `docs/KNOWN_ISSUES.md`（添加静态文件权限问题）
+- `docs/current-task.md`
+
+---
 
 ### 文档一致性修复
 

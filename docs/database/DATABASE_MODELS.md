@@ -34,6 +34,9 @@
 
 **索引**:
 - `username`: 唯一索引
+- `role`: 普通索引（用户列表按角色筛选）
+- `status`: 普通索引（用户状态筛选）
+- `createdAt`: 普通索引（按创建时间排序）
 
 ---
 
@@ -107,6 +110,9 @@
 
 **索引**:
 - `userId`: 唯一索引
+- `schoolId`: 普通索引（学校教师列表）
+- `status`: 普通索引（教师状态筛选）
+- `createdAt`: 普通索引（按创建时间排序）
 
 ---
 
@@ -155,6 +161,11 @@
 
 **索引**:
 - `userId`: 唯一索引
+- `schoolId`: 普通索引（学生列表按学校筛选）
+- `headTeacherId`: 普通索引（"我的学生"筛选）
+- `rating`: 普通索引（排名排序）
+- `enrollmentYear`: 普通索引（年级排序）
+- `schoolId, headTeacherId`: 复合索引（学校+主教练联合查询）
 
 ---
 
@@ -187,6 +198,12 @@
 - 公有团队可被学生浏览并申请加入
 - 私有团队只能通过邀请加入
 
+**索引**:
+- `schoolId`: 普通索引（学校团队列表）
+- `isPublic`: 普通索引（公有/私有筛选）
+- `schoolId, isPublic`: 复合索引（学生浏览可加入团队）
+- `createdAt`: 普通索引（按创建时间排序）
+
 ---
 
 ### 6. TeamMember (团队成员)
@@ -210,6 +227,10 @@
 
 **索引**:
 - `(teamId, userId, userType)`: 唯一索引
+- `(teamId, status, role)`: 复合索引（成员列表查询、权限检查）
+- `(userId, userType, status)`: 复合索引（"我的团队"查询）
+- `(teamId, role)`: 复合索引（查找团队所有者/管理员）
+- `status`: 普通索引（待处理邀请查询）
 
 ---
 
@@ -269,6 +290,13 @@
 - 正赛可以不关联团队
 - countRating 为 true 时，比赛结果会影响学生 rating
 
+**索引**:
+- `teamId`: 普通索引（团队比赛列表）
+- `status`: 普通索引（比赛状态筛选）
+- `scope`: 普通索引（比赛范围筛选）
+- `contestDate`: 普通索引（比赛日期排序）
+- `(teamId, status)`: 复合索引（团队比赛状态筛选）
+
 ---
 
 ### 9. ContestResult (比赛结果)
@@ -296,6 +324,8 @@
 
 **索引**:
 - `(contestId, studentId)`: 唯一索引
+- `studentId`: 普通索引（学生成绩历史）
+- `createdAt`: 普通索引（成绩统计时间排序）
 
 ---
 
@@ -404,6 +434,10 @@
 - `creator`: 多对一关联 Teacher
 - `tasks`: 一对多关联 Task
 
+**索引**:
+- `createdBy`: 普通索引（教师题单列表）
+- `createdAt`: 普通索引（题单创建时间排序）
+
 ---
 
 ### 14. Task (题目)
@@ -454,6 +488,8 @@
 
 **索引**:
 - `(taskId, studentId)`: 唯一索引
+- `studentId`: 普通索引（学生进度查询）
+- `status`: 普通索引（进度状态筛选）
 
 ---
 
@@ -477,6 +513,11 @@
 **关联关系**:
 - `student`: 多对一关联 Student
 - `teacher`: 多对一关联 Teacher
+
+**索引**:
+- `studentId`: 普通索引（学生里程碑列表）
+- `teacherId`: 普通索引（教师创建的里程碑）
+- `milestoneDate`: 普通索引（里程碑日期排序）
 
 ---
 

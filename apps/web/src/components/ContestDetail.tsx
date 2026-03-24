@@ -135,7 +135,8 @@ export function ProblemTable({
   onSelect,
   isCreator,
   onEdit,
-  onDelete
+  onDelete,
+  onPractice
 }: {
   problems: ContestProblem[]
   selectedProblem: ContestProblem | null
@@ -143,6 +144,7 @@ export function ProblemTable({
   isCreator?: boolean
   onEdit?: (problem: ContestProblem) => void
   onDelete?: (problemId: string) => void
+  onPractice?: (problem: ContestProblem) => void
 }) {
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -154,7 +156,7 @@ export function ProblemTable({
             <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>题目</th>
             <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>OJ</th>
             <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>分值</th>
-            {isCreator && (
+            {(isCreator || onPractice) && (
               <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>操作</th>
             )}
           </tr>
@@ -162,7 +164,7 @@ export function ProblemTable({
         <tbody>
           {problems.length === 0 ? (
             <tr>
-              <td colSpan={isCreator ? 6 : 5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>暂无题目</td>
+              <td colSpan={(isCreator || onPractice) ? 6 : 5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>暂无题目</td>
             </tr>
           ) : (
             problems.map((problem, idx) => (
@@ -190,10 +192,31 @@ export function ProblemTable({
                 </td>
                 <td style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>{problem.ojName || '-'}</td>
                 <td style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>{problem.points || '-'}</td>
-                {isCreator && (
+                {(isCreator || onPractice) && (
                   <td style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
-                    <button onClick={(e) => { e.stopPropagation(); onEdit?.(problem) }} style={{ color: 'var(--primary)', marginRight: '0.5rem' }}>编辑</button>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete?.(problem.id) }} style={{ color: 'var(--error)' }}>删除</button>
+                    {onPractice && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onPractice(problem) }}
+                        style={{
+                          padding: '0.25rem 0.75rem',
+                          background: 'var(--primary)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: 500
+                        }}
+                      >
+                        ✏️ 思路记录
+                      </button>
+                    )}
+                    {isCreator && (
+                      <>
+                        <button onClick={(e) => { e.stopPropagation(); onEdit?.(problem) }} style={{ color: 'var(--primary)', marginRight: '0.5rem', marginLeft: onPractice ? '0.5rem' : 0 }}>编辑</button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete?.(problem.id) }} style={{ color: 'var(--error)' }}>删除</button>
+                      </>
+                    )}
                   </td>
                 )}
               </tr>

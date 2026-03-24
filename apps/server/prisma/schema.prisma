@@ -7,25 +7,280 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-model User {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  passwordHash String
-  role         String
-  status       String    @default("active")
-  avatar       String?
-  phone        String?
-  email        String?
-  bio          String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  student      Student?
-  teacher      Teacher?
-  admin        Admin?
+model Admin {
+  id        String   @id
+  userId    String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model Contest {
+  id                  String                @id
+  title               String
+  description         String?
+  contestDate         DateTime
+  status              String                @default("upcoming")
+  type                String                @default("mock")
+  teamId              String?
+  countRating         Boolean               @default(false)
+  scope               String                @default("public")
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  Team                Team?                 @relation(fields: [teamId], references: [id])
+  ContestProblem      ContestProblem[]
+  ContestProblemNote  ContestProblemNote[]
+  ContestProblemScore ContestProblemScore[]
+  ContestResource     ContestResource[]
+  ContestResult       ContestResult[]
+
+  @@index([teamId, status])
+  @@index([contestDate])
+  @@index([scope])
+  @@index([status])
+  @@index([teamId])
+}
+
+model ContestProblem {
+  id                  String                @id
+  contestId           String
+  orderIndex          Int
+  title               String?
+  description         String?
+  ojName              String?
+  problemId           String?
+  isCustom            Boolean               @default(false)
+  difficulty          String?
+  points              Int?
+  statementType       String                @default("none")
+  statementMarkdown   String?
+  solutionType        String                @default("none")
+  solutionMarkdown    String?
+  solutionVisible     Boolean               @default(false)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  Contest             Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  ContestProblemNote  ContestProblemNote[]
+  ContestProblemScore ContestProblemScore[]
+  ContestResource     ContestResource[]
+
+  @@unique([contestId, orderIndex])
+}
+
+model ContestProblemNote {
+  id             String         @id
+  contestId      String
+  problemId      String
+  studentId      String
+  content        String         @default("")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime
+  Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, problemId, studentId])
+  @@index([updatedAt])
+  @@index([studentId])
+}
+
+model ContestProblemScore {
+  id             String         @id
+  contestId      String
+  problemId      String
+  studentId      String
+  score          Float?
+  note           String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime
+  Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, problemId, studentId])
+}
+
+model ContestResource {
+  id               String          @id
+  contestId        String
+  contestProblemId String?
+  fileName         String
+  fileType         String
+  fileFormat       String          @default("pdf")
+  fileUrl          String
+  visibleRoles     String          @default("all")
+  uploadedBy       String
+  uploadedAt       DateTime        @default(now())
+  ContestProblem   ContestProblem? @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
+  Contest          Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
+}
+
+model ContestResult {
+  id           String   @id
+  contestId    String
+  studentId    String
+  rank         Int?
+  score        Float?
+  ratingBefore Int
+  ratingAfter  Int
+  ratingChange Int
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+  Student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, studentId])
+  @@index([createdAt])
+  @@index([studentId])
+}
+
+model LoginLog {
+  id            String   @id @default(uuid())
+  userId        String?
+  username      String
+  loginRole     String
+  userRole      String?
+  result        String
+  failureReason String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([result])
+  @@index([username])
+}
+
+model Milestone {
+  id            String   @id
+  studentId     String
+  teacherId     String
+  title         String
+  description   String?
+  milestoneDate DateTime
+  type          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime
+  Teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([milestoneDate])
+  @@index([teacherId])
+  @@index([studentId])
+}
+
+model OjFetchJob {
+  id               String   @id
+  platform         String
+  problemId        String
+  status           String   @default("pending")
+  message          String?
+  hasAttachment    Boolean  @default(false)
+  attachmentStatus String?
+  createdProblemId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime
+
+  @@unique([platform, problemId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model OjPlatformConfig {
+  id         String    @id
+  platform   String    @unique
+  cookies    String?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime
+}
+
+model PasswordResetLog {
+  id             String   @id
+  targetUserId   String
+  operatorUserId String
+  operatorRole   String
+  resetMethod    String
+  result         String
+  message        String?
+  createdAt      DateTime @default(now())
+}
+
+model PrincipalTransferLog {
+  id                    String   @id
+  schoolId              String
+  oldPrincipalTeacherId String?
+  newPrincipalTeacherId String
+  operatorUserId        String
+  result                String
+  message               String?
+  createdAt             DateTime @default(now())
+  School                School   @relation(fields: [schoolId], references: [id])
+}
+
+model Problem {
+  id                String              @id
+  problemCode       String              @unique
+  title             String
+  description       String?
+  statementType     String              @default("none")
+  statementPdfUrl   String?
+  solutionType      String              @default("none")
+  solutionMarkdown  String?
+  solutionPdfUrl    String?
+  solutionVisible   Boolean             @default(false)
+  difficulty        String?
+  timeLimit         Int?
+  memoryLimit       Int?
+  judgeConfig       String?
+  visibility        String              @default("private")
+  ownerType         String              @default("teacher")
+  ownerId           String
+  status            String              @default("draft")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  ojBindings        String?
+  ProblemAttachment ProblemAttachment[]
+  ProblemNote       ProblemNote[]
+
+  @@index([createdAt])
+  @@index([visibility, status])
+  @@index([ownerId, ownerType])
+  @@index([visibility])
+}
+
+model ProblemAttachment {
+  id          String   @id
+  problemId   String
+  fileName    String
+  fileSize    Int
+  fileUrl     String
+  description String?
+  uploadedAt  DateTime @default(now())
+  Problem     Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([problemId])
+}
+
+model ProblemNote {
+  id        String   @id
+  problemId String
+  userId    String
+  userType  String
+  content   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, userId, userType])
+  @@index([updatedAt])
+  @@index([userId])
 }
 
 model School {
-  id                        String                 @id @default(uuid())
+  id                        String                 @id
   name                      String
   announcement              String?
   region                    String?
@@ -37,88 +292,78 @@ model School {
   status                    String                 @default("active")
   currentPrincipalTeacherId String
   createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime               @updatedAt
-  principalTransferLogs     PrincipalTransferLog[]
-  students                  Student[]
-  teachers                  Teacher[]
-  teams                     Team[]
-}
-
-model Teacher {
-  id         String        @id @default(uuid())
-  userId     String        @unique
-  name       String
-  email      String?
-  phone      String?
-  avatar     String?
-  bio        String?
-  title      String?
-  status     String        @default("active")
-  schoolId   String?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  milestones Milestone[]
-  students   Student[]
-  taskLists  TaskList[]
-  user       User          @relation(fields: [userId], references: [id])
-  school     School?       @relation(fields: [schoolId], references: [id])
+  updatedAt                 DateTime
+  PrincipalTransferLog      PrincipalTransferLog[]
+  Student                   Student[]
+  Teacher                   Teacher[]
+  Team                      Team[]
 }
 
 model Student {
-  id             String                @id @default(uuid())
-  userId         String?               @unique
-  name           String
-  gender         String?
-  schoolId       String
-  enrollmentYear Int?
-  targetContest  String?
-  headTeacherId  String?
-  tags           String?
-  notes          String?
-  avatar         String?
-  rating         Int                   @default(1200)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  problemScores  ContestProblemScore[]
-  contestResults ContestResult[]
-  milestones     Milestone[]
-  user           User?                 @relation(fields: [userId], references: [id])
-  school         School                @relation(fields: [schoolId], references: [id])
-  headTeacher    Teacher?              @relation(fields: [headTeacherId], references: [id])
-  taskProgresses TaskProgress[]
-  joinRequests   TeamJoinRequest[]
+  id                  String                @id
+  userId              String?               @unique
+  name                String
+  gender              String?
+  schoolId            String
+  enrollmentYear      Int?
+  targetContest       String?
+  headTeacherId       String?
+  tags                String?
+  notes               String?
+  avatar              String?
+  rating              Int                   @default(1200)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  ContestProblemNote  ContestProblemNote[]
+  ContestProblemScore ContestProblemScore[]
+  ContestResult       ContestResult[]
+  Milestone           Milestone[]
+  Teacher             Teacher?              @relation(fields: [headTeacherId], references: [id])
+  School              School                @relation(fields: [schoolId], references: [id])
+  User                User?                 @relation(fields: [userId], references: [id])
+  TaskProgress        TaskProgress[]
+  TeamJoinRequest     TeamJoinRequest[]
+
+  @@index([enrollmentYear])
+  @@index([schoolId, headTeacherId])
+  @@index([rating])
+  @@index([headTeacherId])
+  @@index([schoolId])
+}
+
+model Task {
+  id           String         @id
+  taskListId   String
+  title        String
+  ojName       String?
+  problemId    String?
+  difficulty   String?
+  points       Int?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  TaskList     TaskList       @relation(fields: [taskListId], references: [id], onDelete: Cascade)
+  TaskProgress TaskProgress[]
 }
 
 model TaskList {
-  id          String    @id @default(uuid())
+  id          String    @id
   title       String
   description String?
   publishAt   DateTime?
   deadline    DateTime?
   createdBy   String
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  tasks       Task[]
-  creator     Teacher   @relation(fields: [createdBy], references: [id])
-}
+  updatedAt   DateTime
+  Task        Task[]
+  Teacher     Teacher   @relation(fields: [createdBy], references: [id])
 
-model Task {
-  id         String         @id @default(uuid())
-  taskListId String
-  title      String
-  ojName     String?
-  problemId  String?
-  difficulty String?
-  points     Int?
-  notes      String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  taskList   TaskList       @relation(fields: [taskListId], references: [id], onDelete: Cascade)
-  progresses TaskProgress[]
+  @@index([createdAt])
+  @@index([createdBy])
 }
 
 model TaskProgress {
-  id            String    @id @default(uuid())
+  id            String    @id
   taskId        String
   studentId     String
   status        String    @default("pending")
@@ -127,152 +372,62 @@ model TaskProgress {
   notes         String?
   completedAt   DateTime?
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime
+  Student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, studentId])
+  @@index([status])
+  @@index([studentId])
 }
 
-model Contest {
-  id            String                @id @default(uuid())
-  title         String
-  description   String?
-  contestDate   DateTime
-  status        String                @default("upcoming")
-  type          String                @default("mock")
-  teamId        String?
-  countRating   Boolean               @default(false)
-  scope         String                @default("public")
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  team          Team?                 @relation(fields: [teamId], references: [id])
-  problems      ContestProblem[]
-  problemScores ContestProblemScore[]
-  resources     ContestResource[]
-  results       ContestResult[]
-}
+model Teacher {
+  id        String      @id
+  userId    String      @unique
+  name      String
+  email     String?
+  phone     String?
+  avatar    String?
+  bio       String?
+  title     String?
+  status    String      @default("active")
+  schoolId  String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime
+  Milestone Milestone[]
+  Student   Student[]
+  TaskList  TaskList[]
+  School    School?     @relation(fields: [schoolId], references: [id])
+  User      User        @relation(fields: [userId], references: [id])
 
-model ContestResult {
-  id           String   @id @default(uuid())
-  contestId    String
-  studentId    String
-  rank         Int?
-  score        Float?
-  ratingBefore Int
-  ratingAfter  Int
-  ratingChange Int
-  note         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([contestId, studentId])
-}
-
-model ContestProblem {
-  id                String                @id @default(uuid())
-  contestId         String
-  orderIndex        Int
-  title             String?
-  description       String?
-  ojName            String?
-  problemId         String?
-  isCustom          Boolean               @default(false)
-  difficulty        String?
-  points            Int?
-  statementType     String                @default("none")
-  statementMarkdown String?
-  solutionType      String                @default("none")
-  solutionMarkdown  String?
-  solutionVisible   Boolean               @default(false)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  contest           Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  scores            ContestProblemScore[]
-  resources         ContestResource[]
-
-  @@unique([contestId, orderIndex])
-}
-
-model ContestProblemScore {
-  id        String         @id @default(uuid())
-  contestId String
-  problemId String
-  studentId String
-  score     Float?
-  note      String?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  contest   Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  problem   ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  student   Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([contestId, problemId, studentId])
-}
-
-model ContestResource {
-  id               String          @id @default(uuid())
-  contestId        String
-  contestProblemId String?
-  fileName         String
-  fileType         String
-  fileFormat       String          @default("pdf")
-  fileUrl          String
-  visibleRoles     String          @default("all")
-  uploadedBy       String
-  uploadedAt       DateTime        @default(now())
-  contest          Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  problem          ContestProblem? @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
-}
-
-model Milestone {
-  id            String   @id @default(uuid())
-  studentId     String
-  teacherId     String
-  title         String
-  description   String?
-  milestoneDate DateTime
-  type          String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  @@index([createdAt])
+  @@index([status])
+  @@index([schoolId])
 }
 
 model Team {
-  id             String            @id @default(uuid())
-  name           String
-  avatar         String?
-  description    String?
-  announcement   String?
-  schoolId       String
-  isPublic       Boolean           @default(true)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  contests       Contest[]
-  school         School            @relation(fields: [schoolId], references: [id])
-  members        TeamMember[]
-  joinRequests   TeamJoinRequest[]
-}
+  id              String            @id
+  name            String
+  avatar          String?
+  description     String?
+  announcement    String?
+  schoolId        String
+  isPublic        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  Contest         Contest[]
+  School          School            @relation(fields: [schoolId], references: [id])
+  TeamJoinRequest TeamJoinRequest[]
+  TeamMember      TeamMember[]
 
-model TeamMember {
-  id        String    @id @default(uuid())
-  teamId    String
-  userId    String    // 学生ID或教师ID
-  userType  String    // 'teacher' | 'student'
-  role      String    // 'owner' | 'admin' | 'member'
-  status    String    @default("active")  // 'pending' | 'active'
-  joinedAt  DateTime  @default(now())
-  invitedBy String?   // 邀请人ID
-  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@unique([teamId, userId, userType])
+  @@index([createdAt])
+  @@index([schoolId, isPublic])
+  @@index([isPublic])
+  @@index([schoolId])
 }
 
 model TeamJoinRequest {
-  id          String    @id @default(uuid())
+  id          String    @id
   teamId      String
   studentId   String
   status      String    @default("pending")
@@ -280,37 +435,72 @@ model TeamJoinRequest {
   createdAt   DateTime  @default(now())
   processedAt DateTime?
   processedBy String?
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  team        Team      @relation(fields: [teamId], references: [id])
+  Team        Team      @relation(fields: [teamId], references: [id])
+  Student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, studentId])
 }
 
-model PrincipalTransferLog {
-  id                    String   @id @default(uuid())
-  schoolId              String
-  oldPrincipalTeacherId String?
-  newPrincipalTeacherId String
-  operatorUserId        String
-  result                String
-  message               String?
-  createdAt             DateTime @default(now())
-  school                School   @relation(fields: [schoolId], references: [id])
+model TeamMember {
+  id        String   @id
+  teamId    String
+  userId    String
+  userType  String
+  role      String
+  status    String   @default("active")
+  joinedAt  DateTime @default(now())
+  invitedBy String?
+  Team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId, userType])
+  @@index([status])
+  @@index([teamId, role])
+  @@index([userId, userType, status])
+  @@index([teamId, status, role])
 }
 
-model PasswordResetLog {
-  id             String   @id @default(uuid())
-  targetUserId   String
-  operatorUserId String
-  operatorRole   String
-  resetMethod    String
-  result         String
-  message        String?
-  createdAt      DateTime @default(now())
+model TeamOperationLog {
+  id           String   @id
+  teamId       String
+  operatorId   String
+  operatorType String
+  action       String
+  targetId     String?
+  targetType   String?
+  oldValue     String?
+  newValue     String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([operatorId])
+  @@index([teamId])
+}
+
+model User {
+  id           String   @id
+  username     String   @unique
+  passwordHash String
+  role         String
+  status       String   @default("active")
+  avatar       String?
+  phone        String?
+  email        String?
+  bio          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+  Admin        Admin?
+  Student      Student?
+  Teacher      Teacher?
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([role])
 }
 
 model UserStatusLog {
-  id             String   @id @default(uuid())
+  id             String   @id
   targetUserId   String
   operatorUserId String
   operatorRole   String
@@ -318,13 +508,4 @@ model UserStatusLog {
   newStatus      String
   reason         String?
   createdAt      DateTime @default(now())
-}
-
-model Admin {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
 }

@@ -216,10 +216,8 @@ export default function StudentContestsPage() {
                     borderRadius: '8px',
                     border: '1px solid var(--border)',
                     padding: '1.5rem',
-                    cursor: 'pointer',
                     transition: 'box-shadow 0.2s'
                   }}
-                  onClick={() => handleViewContest(contest)}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>{contest.title}</h3>
@@ -230,7 +228,7 @@ export default function StudentContestsPage() {
                   <p style={{ fontSize: '0.875rem', color: 'var(--gray-500)', marginBottom: '0.5rem' }}>
                     比赛日期：{new Date(contest.contestDate).toLocaleDateString()}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                     <span style={{ padding: '0.125rem 0.375rem', borderRadius: '4px', fontSize: '0.75rem', background: contest.status === 'finished' ? 'var(--gray-100)' : 'var(--primary)', color: contest.status === 'finished' ? 'var(--gray-600)' : 'white' }}>
                       {getStatusLabel(contest.status)}
                     </span>
@@ -239,8 +237,25 @@ export default function StudentContestsPage() {
                     )}
                   </div>
                   {contest.description && (
-                    <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginTop: '0.5rem' }}>{contest.description}</p>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.75rem' }}>{contest.description}</p>
                   )}
+                  {/* 思路记录入口按钮 */}
+                  <button
+                    onClick={() => router.push(`/student/contests/${contest.id}`)}
+                    style={{
+                      width: '100%',
+                      padding: '0.625rem',
+                      background: 'var(--primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: 500
+                    }}
+                  >
+                    ✏️ 进入做题 / 思路记录
+                  </button>
                 </div>
               ))}
             </div>

@@ -8,6 +8,28 @@ import { prisma } from '../prisma'
 import { authenticate } from '../middleware/auth'
 import { LoginRequest, JwtPayload, UserRole } from '../../../../packages/shared/src'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
+import { getJwtSecret } from '../lib/jwtSecret'
+import { loginLimiter, registerLimiter, passwordLimiter } from '../middleware/rateLimiter'
+import logger from '../lib/logger'
+import { updateRequestContext } from '../middleware/requestLogger'
+
+/**
+ * 获取客户端 IP 地址
+ */
+function getClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for']
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim()
+  }
+  return req.socket?.remoteAddress || 'unknown'
+}
+
+/**
+ * 获取 User-Agent
+ */
+function getUserAgent(req: Request): string {
+  return req.headers['user-agent'] || 'unknown'
+}
 
 // 配置头像上传
 const avatarStorage = multer.diskStorage({
@@ -42,34 +64,86 @@ const avatarUpload = multer({
 export const authRouter = Router()
 
 // 登录
-authRouter.post('/login', async (req: Request, res: Response) => {
+authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password, role } = req.body as LoginRequest
-
-    console.log('Login attempt:', username, 'role:', role, 'req.body:', req.body)
+    const clientIp = getClientIp(req)
+    const userAgent = getUserAgent(req)
 
     // 查找用户
     const user = await prisma.user.findUnique({
       where: { username },
       include: {
-        student: true,
-        teacher: true,
-        admin: true
+        Student: true,
+        Teacher: true,
+        Admin: true
       }
     })
 
     if (!user) {
+      // 记录登录失败 - 用户不存在
+      await prisma.loginLog.create({
+        data: {
+          username,
+          loginRole: role || 'unknown',
+          result: 'failed_user_not_found',
+          failureReason: '用户名不存在',
+          ipAddress: clientIp,
+          userAgent
+        }
+      })
+      logger.security('login_failed_user_not_found', {
+        action: 'login',
+        target: username,
+        metadata: { loginRole: role, ip: clientIp }
+      })
       return res.status(401).json({ success: false, message: '用户名或密码错误' })
     }
 
     // 验证密码
     const validPassword = await bcrypt.compare(password, user.passwordHash)
     if (!validPassword) {
+      // 记录登录失败 - 密码错误
+      await prisma.loginLog.create({
+        data: {
+          username,
+          loginRole: role || 'unknown',
+          userRole: user.role,
+          result: 'failed_wrong_password',
+          failureReason: '密码错误',
+          ipAddress: clientIp,
+          userAgent
+        }
+      })
+      logger.security('login_failed_wrong_password', {
+        action: 'login',
+        target: username,
+        metadata: { loginRole: role, userRole: user.role, ip: clientIp }
+      })
       return res.status(401).json({ success: false, message: '用户名或密码错误' })
     }
 
     // 检查用户状态
     if (user.status === 'disabled') {
+      // 记录登录失败 - 账号禁用
+      await prisma.loginLog.create({
+        data: {
+          userId: user.id,
+          username,
+          loginRole: role || 'unknown',
+          userRole: user.role,
+          result: 'failed_account_disabled',
+          failureReason: '账号已被禁用',
+          ipAddress: clientIp,
+          userAgent
+        }
+      })
+      logger.security('login_failed_account_disabled', {
+        action: 'login',
+        userId: user.id,
+        target: username,
+        metadata: { userRole: user.role, ip: clientIp }
+      })
       return res.status(401).json({ success: false, message: '该账号已被禁用，请联系管理员' })
     }
 
@@ -91,12 +165,32 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     }
 
     if (!roleMatched) {
+      // 记录登录失败 - 角色不匹配
+      await prisma.loginLog.create({
+        data: {
+          userId: user.id,
+          username,
+          loginRole: role || 'unknown',
+          userRole: user.role,
+          result: 'failed_role_mismatch',
+          failureReason: `用户角色 ${user.role} 与登录端 ${role} 不匹配`,
+          ipAddress: clientIp,
+          userAgent
+        }
+      })
+      logger.security('login_failed_role_mismatch', {
+        action: 'login',
+        userId: user.id,
+        target: username,
+        metadata: { userRole: user.role, loginRole: role, ip: clientIp }
+      })
+
       if (adminRoles.includes(user.role)) {
         return res.status(401).json({ success: false, message: '请选择管理员端登录' })
       } else if (teacherRoles.includes(user.role)) {
         return res.status(401).json({ success: false, message: '请选择教师端登录' })
       } else if (user.role === 'student') {
-        return res.status(401).json({ success: false, message: '请选择学生端���录' })
+        return res.status(401).json({ success: false, message: '请选择学生端登录' })
       } else {
         return res.status(401).json({ success: false, message: '角色选择错误' })
       }
@@ -110,29 +204,50 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     }
 
     // 如果是管理员，添加 adminId
-    if (user.admin) {
-      payload.adminId = user.admin.id
+    if (user.Admin) {
+      payload.adminId = user.Admin.id
     }
 
     // 如果是教师或学校负责人，添加 teacherId
-    if (user.teacher) {
-      payload.teacherId = user.teacher.id
+    if (user.Teacher) {
+      payload.teacherId = user.Teacher.id
       // 所有教师都添加 schoolId（如果有的话）
-      if (user.teacher.schoolId) {
-        payload.schoolId = user.teacher.schoolId
+      if (user.Teacher.schoolId) {
+        payload.schoolId = user.Teacher.schoolId
       }
     }
 
     // 如果是学生，添加 studentId 和 schoolId
-    if (user.student) {
-      payload.studentId = user.student.id
-      if (user.student.schoolId) {
-        payload.schoolId = user.student.schoolId
+    if (user.Student) {
+      payload.studentId = user.Student.id
+      if (user.Student.schoolId) {
+        payload.schoolId = user.Student.schoolId
       }
     }
 
-    const secret = process.env.JWT_SECRET || 'dev-secret-key-12345'
-    const token = jwt.sign(payload, secret, { expiresIn: '7d' })
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
+
+    // 记录登录成功
+    await prisma.loginLog.create({
+      data: {
+        userId: user.id,
+        username,
+        loginRole: role || 'unknown',
+        userRole: user.role,
+        result: 'success',
+        ipAddress: clientIp,
+        userAgent
+      }
+    })
+
+    // 更新请求日志上下文（用于后续日志）
+    updateRequestContext(req, user.id, user.role)
+
+    logger.audit('login_success', {
+      userId: user.id,
+      target: username,
+      metadata: { userRole: user.role, loginRole: role, ip: clientIp }
+    })
 
     res.json({
       success: true,
@@ -141,22 +256,28 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         userId: user.id,
         role: user.role,
         username: user.username,
-        adminId: user.admin?.id,
-        teacherId: user.teacher?.id,
-        studentId: user.student?.id,
-        schoolId: user.teacher?.schoolId || user.student?.schoolId || undefined
+        avatar: user.avatar,
+        adminId: user.Admin?.id,
+        teacherId: user.Teacher?.id,
+        studentId: user.Student?.id,
+        schoolId: user.Teacher?.schoolId || user.Student?.schoolId || undefined
       }
     })
   } catch (error) {
-    console.error('Login error:', error)
+    logger.error('login_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
 
-// 注册 (仅老师)
-authRouter.post('/register', async (req: Request, res: Response) => {
+// 注册 (仅限学生角色)
+authRouter.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password, role, name } = req.body
+
+    // 限制只能注册学生角色
+    if (role && role !== 'student') {
+      return res.status(400).json({ success: false, message: '开放注册仅限学生角色，其他角色请联系管理员创建' })
+    }
 
     // 验证用户名
     const usernameValidation = validateUsername(username)
@@ -179,13 +300,13 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     // 密码加密
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // 创建用户
+    // 创建用户（强制为学生角色）
     const user = await prisma.user.create({
       data: {
         username,
         passwordHash,
-        role,
-        [role === 'teacher' ? 'teacher' : 'student']: {
+        role: 'student',
+        student: {
           create: { name }
         }
       }
@@ -193,25 +314,18 @@ authRouter.post('/register', async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { userId: user.id } })
   } catch (error) {
-    console.error('Register error:', error)
+    logger.error('register_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
 
 // 获取当前用户信息
-authRouter.get('/me', async (req: Request, res: Response) => {
+authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization
-    if (!authHeader) {
-      return res.status(401).json({ success: false, message: '未授权' })
-    }
-
-    const token = authHeader.substring(7)
-    const secret = process.env.JWT_SECRET || 'dev-secret-key-12345'
-    const decoded = jwt.verify(token, secret) as JwtPayload
+    const userId = (req as any).user.userId
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: userId },
       include: {
         student: true,
         teacher: true,
@@ -230,7 +344,7 @@ authRouter.get('/me', async (req: Request, res: Response) => {
 
     // 如果是教师，获取学校信息
     let schoolInfo = null
-    const userSchoolId = user.teacher?.schoolId || user.student?.schoolId
+    const userSchoolId = user.Teacher?.schoolId || user.Student?.schoolId
     if (userSchoolId) {
       const school = await prisma.school.findUnique({
         where: { id: userSchoolId },
@@ -251,10 +365,10 @@ authRouter.get('/me', async (req: Request, res: Response) => {
         phone: user.phone,
         email: user.email,
         bio: user.bio,
-        profile: user.student || user.teacher || user.admin,
-        adminId: user.admin?.id,
-        teacherId: user.teacher?.id,
-        studentId: user.student?.id,
+        profile: user.Student || user.Teacher || user.Admin,
+        adminId: user.Admin?.id,
+        teacherId: user.Teacher?.id,
+        studentId: user.Student?.id,
         schoolId: userSchoolId,
         schoolName: schoolInfo?.name
       }
@@ -265,17 +379,9 @@ authRouter.get('/me', async (req: Request, res: Response) => {
 })
 
 // 更新当前用户资料
-authRouter.put('/profile', async (req: Request, res: Response) => {
+authRouter.put('/profile', authenticate, async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization
-    if (!authHeader) {
-      return res.status(401).json({ success: false, message: '未授权' })
-    }
-
-    const token = authHeader.substring(7)
-    const secret = process.env.JWT_SECRET || 'dev-secret-key-12345'
-    const decoded = jwt.verify(token, secret) as JwtPayload
-
+    const decoded = (req as any).user as JwtPayload
     const { avatar, phone, email, bio, name } = req.body
 
     // 验证手机号
@@ -306,12 +412,12 @@ authRouter.put('/profile', async (req: Request, res: Response) => {
     })
 
     // 根据角色更新对应的profile表
-    if (decoded.role === 'student' && user.student) {
+    if (decoded.role === 'student' && user.Student) {
       await prisma.student.update({
         where: { userId: decoded.userId },
         data: { name }
       })
-    } else if (decoded.role === 'teacher' && user.teacher) {
+    } else if (decoded.role === 'teacher' && user.Teacher) {
       await prisma.teacher.update({
         where: { userId: decoded.userId },
         data: { name, bio }
@@ -331,7 +437,7 @@ authRouter.put('/profile', async (req: Request, res: Response) => {
       }
     })
   } catch (error) {
-    console.error('Update profile error:', error)
+    logger.error('update_profile_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
@@ -339,14 +445,7 @@ authRouter.put('/profile', async (req: Request, res: Response) => {
 // 上传头像
 authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization
-    if (!authHeader) {
-      return res.status(401).json({ success: false, message: '未授权' })
-    }
-
-    const token = authHeader.substring(7)
-    const secret = process.env.JWT_SECRET || 'dev-secret-key-12345'
-    const decoded = jwt.verify(token, secret) as JwtPayload
+    const decoded = (req as any).user as JwtPayload
 
     if (!req.file) {
       return res.status(400).json({ success: false, message: '请上传图片文件' })
@@ -379,23 +478,15 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
       }
     })
   } catch (error) {
-    console.error('Upload avatar error:', error)
+    logger.error('upload_avatar_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
 
 // 修改密码
-authRouter.put('/password', async (req: Request, res: Response) => {
+authRouter.put('/password', passwordLimiter, authenticate, async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization
-    if (!authHeader) {
-      return res.status(401).json({ success: false, message: '未授权' })
-    }
-
-    const token = authHeader.substring(7)
-    const secret = process.env.JWT_SECRET || 'dev-secret-key-12345'
-    const decoded = jwt.verify(token, secret) as JwtPayload
-
+    const decoded = (req as any).user as JwtPayload
     const { currentPassword, newPassword } = req.body
 
     // 验证参数
@@ -436,12 +527,19 @@ authRouter.put('/password', async (req: Request, res: Response) => {
       data: { passwordHash }
     })
 
+    // 记录密码修改审计日志
+    logger.audit('password_change_success', {
+      userId: decoded.userId,
+      action: 'password_change',
+      metadata: { userRole: decoded.role }
+    })
+
     res.json({
       success: true,
       message: '密码修改成功'
     })
   } catch (error) {
-    console.error('Change password error:', error)
+    logger.error('change_password_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })

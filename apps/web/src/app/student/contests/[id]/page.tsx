@@ -85,6 +85,7 @@ export default function StudentContestDetailPage() {
               problems={problems}
               selectedProblem={selectedProblem}
               onSelect={setSelectedProblem}
+              onPractice={(problem) => router.push(`/student/contests/${contestId}/practice/${problem.id}`)}
             />
 
             {selectedProblem && (

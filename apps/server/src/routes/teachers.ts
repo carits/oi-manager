@@ -17,6 +17,7 @@ teacherRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) =
         email: true,
         phone: true,
         title: true,
+        avatar: true,
         schoolId: true,
         school: {
           select: {

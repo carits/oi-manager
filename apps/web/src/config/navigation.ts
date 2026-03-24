@@ -30,6 +30,7 @@ export const platformAdminNav: NavConfig = {
     { label: '首页', href: '/platform-admin' },
     { label: '账号管理', href: '/platform-admin/users' },
     { label: '公共比赛', href: '/platform-admin/contests' },
+    { label: '题库管理', href: '/platform-admin/problems' },
     { label: '统计数据', href: '/platform-admin/stats' },
   ]
 }

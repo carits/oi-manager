@@ -201,8 +201,6 @@ async function main() {
       description: '信息学竞赛提高班，面向有一定基础的学生',
       announcement: '# 提高班公告\n\n欢迎来到提高班！\n\n## 训练计划\n\n- **周一**：图论专题\n- **周三**：动态规划\n- **周五**：模拟赛\n\n请按时完成作业！',
       schoolId: school.id,
-      ownerId: teacher.id,
-      ownerType: 'teacher',
       isPublic: true
     }
   })
@@ -217,8 +215,6 @@ async function main() {
       description: '信息学竞赛基础班，适合初学者',
       announcement: '# 基础班公告\n\n欢迎加入基础班！\n\n## 本周任务\n\n1. 完成循环结构练习\n2. 学习数组基础\n3. 尝试简单排序',
       schoolId: school.id,
-      ownerId: teacher2.id,
-      ownerType: 'teacher',
       isPublic: true
     }
   })
@@ -233,8 +229,6 @@ async function main() {
       description: '信息学竞赛主力队，仅限选拔学生',
       announcement: '# 竞赛队公告\n\n## 目标\n\n- NOIP 提高组一等奖\n- 省选冲刺\n\n加油！',
       schoolId: school.id,
-      ownerId: teacher.id,
-      ownerType: 'teacher',
       isPublic: false
     }
   })
@@ -556,8 +550,7 @@ async function main() {
         type: contestData.type || 'mock',
         countRating: contestData.countRating || false,
         scope: 'public',
-        teamId: team1.id,
-        createdBy: teacherUser.id
+        teamId: team1.id
       }
     })
 
@@ -672,15 +665,13 @@ async function main() {
       ownerId = students[i % students.length].id
     }
 
-    // 创建团队
+    // 创建团队（不再包含 ownerId/ownerType）
     const team = await prisma.team.create({
       data: {
         id: `test-team-${i + 1}`,
         name: `${typeConfig.prefix}${i + 1}号`,
         description: `这是一个测试团队，所有者类型: ${typeConfig.ownerType}`,
         schoolId: school.id,
-        ownerId,
-        ownerType: typeConfig.ownerType,
         isPublic: (i + Math.floor(i / 6)) % 5 !== 0, // 约 80% 公开，20% 私有，均匀分布
       }
     })

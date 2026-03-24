@@ -4,6 +4,7 @@ import { authenticate, AuthRequest, isAdmin, isSuperAdmin } from '../middleware/
 import { prisma } from '../prisma.js'
 import { CreatePlatformAdminRequest, ResetUserPasswordRequest, GetUsersQueryParams } from '../../../../packages/shared/src/index.js'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation.js'
+import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 
 export const userRouter = Router()
 
@@ -443,7 +444,7 @@ userRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Respon
 })
 
 // 重置用户密码（super_admin, platform_admin）
-userRouter.post('/:id/reset-password', authenticate, async (req: AuthRequest, res: Response) => {
+userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!isAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '权限不足' })

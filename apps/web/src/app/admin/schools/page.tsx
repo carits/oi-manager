@@ -9,16 +9,18 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Pagination } from '@/components/ui/Pagination'
 import { useSchools, School } from '@/hooks/data/useSchools'
+import { useAuth } from '@/components/AuthProvider'
 import Link from 'next/link'
 
 export default function AdminSchoolsPage() {
+  const { sessionKey } = useAuth()
   const router = useRouter()
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: 20
   })
 
-  const { data, loading, error } = useSchools(pagination)
+  const { data, loading, error } = useSchools(pagination, sessionKey)
 
   const schools = data?.list || []
   const total = data?.total || 0

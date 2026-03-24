@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json()
 
       if (data.success) {
-        const { token, userId, role: userRole, username: userName, teacherId, studentId, adminId, schoolId } = data.data
+        const { token, userId, role: userRole, username: userName, avatar, teacherId, studentId, adminId, schoolId } = data.data
         setToken(token)
         setRole(userRole)
         setUserId(userId)
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStudentId(studentId || null)
         setAdminId(adminId || null)
         setSchoolId(schoolId || null)
-        setUser({ userId, username: userName, role: userRole, teacherId, studentId, adminId, schoolId })
+        setUser({ userId, username: userName, role: userRole, avatar, teacherId, studentId, adminId, schoolId })
         return { success: true }
       }
       return { success: false, message: data.message }
