@@ -201,7 +201,7 @@ export default function PlatformAdminProblemsPage() {
   // 批量拉取
   const handleSubmit = async () => {
     const ids = problemIdsInput
-      .split(/[\n,]/)
+      .split(/[\n,\s]+/)
       .map(s => s.trim())
       .filter(Boolean)
 
