@@ -1,6 +1,3 @@
 {
-  "/login/page": "app/login/page.js",
-  "/student/team/page": "app/student/team/page.js",
-  "/student/page": "app/student/page.js",
-  "/teacher/teams/page": "app/teacher/teams/page.js"
+  "/_not-found/page": "app/_not-found/page.js"
 }
