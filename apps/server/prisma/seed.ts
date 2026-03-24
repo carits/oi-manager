@@ -67,7 +67,7 @@ async function main() {
       role: 'super_admin',
       phone: '13800000000',
       email: 'admin@example.com',
-      teacher: {
+      Teacher: {
         create: {
           name: '系统管理员',
           email: 'admin@example.com',
@@ -89,7 +89,7 @@ async function main() {
       role: 'teacher',
       phone: '13900000000',
       email: 'teacher@example.com',
-      teacher: {
+      Teacher: {
         create: {
           name: '张老师',
           email: 'teacher@example.com',
@@ -135,7 +135,7 @@ async function main() {
       role: 'teacher',
       phone: '13900000001',
       email: 'teacher2@example.com',
-      teacher: {
+      Teacher: {
         create: {
           name: '李老师',
           email: 'teacher2@example.com',
@@ -157,7 +157,7 @@ async function main() {
       role: 'teacher',
       phone: '13900000002',
       email: 'teacher3@example.com',
-      teacher: {
+      Teacher: {
         create: {
           name: '王老师',
           email: 'teacher3@example.com',
@@ -336,7 +336,7 @@ async function main() {
         role: 'student',
         phone: s.phone,
         email: s.email,
-        student: {
+        Student: {
           create: {
             name: s.name,
             gender: s.gender,
@@ -486,7 +486,7 @@ async function main() {
       publishAt: new Date('2024-03-01'),
       deadline: new Date('2024-03-08'),
       createdBy: teacher.id,
-      tasks: {
+      Task: {
         create: [
           { title: 'P3371 单源最短路径', ojName: '洛谷', problemId: 'P3371', difficulty: '入门', points: 10 },
           { title: 'P3366 最小生成树', ojName: '洛谷', problemId: 'P3366', difficulty: '中等', points: 15 },
@@ -630,7 +630,7 @@ async function main() {
       role: 'student',
       phone: '13800138000',
       email: 'student@test.com',
-      student: {
+      Student: {
         create: {
           name: '测试同学',
           gender: '男',
