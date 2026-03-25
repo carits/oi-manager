@@ -78,6 +78,25 @@ async function main() {
     }
   })
 
+  // 创建平台管理员账号 (platform_admin)
+  const platformAdminPassword = await bcrypt.hash('123456', 10)
+  await prisma.user.upsert({
+    where: { username: 'platform_admin' },
+    update: {},
+    create: {
+      username: 'platform_admin',
+      passwordHash: platformAdminPassword,
+      role: 'platform_admin',
+      phone: '13800000001',
+      email: 'platform_admin@example.com',
+      Admin: {
+        create: {
+          name: '平台管理员'
+        }
+      }
+    }
+  })
+
   // 创建老师用户 1
   const teacherPassword = await bcrypt.hash('123456', 10)
   const teacherUser = await prisma.user.upsert({
