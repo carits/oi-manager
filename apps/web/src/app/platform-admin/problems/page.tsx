@@ -730,22 +730,20 @@ export default function PlatformAdminProblemsPage() {
                                 查看
                               </button>
                             )}
-                            {(job.status === 'failed' || job.status === 'duplicate') && (
-                              <button
-                                onClick={() => handleRetry(job.id)}
-                                style={{
-                                  padding: '0.25rem 0.5rem',
-                                  background: 'var(--primary)',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.75rem',
-                                }}
-                              >
-                                重试
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleRetry(job.id)}
+                              style={{
+                                padding: '0.25rem 0.5rem',
+                                background: (job.status === 'failed' || job.status === 'duplicate') ? 'var(--primary)' : 'var(--gray-100)',
+                                color: (job.status === 'failed' || job.status === 'duplicate') ? 'white' : 'inherit',
+                                border: (job.status === 'failed' || job.status === 'duplicate') ? 'none' : '1px solid var(--border)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              {job.status === 'failed' || job.status === 'duplicate' ? '重试' : '重新拉取'}
+                            </button>
                             <button
                               onClick={() => handleDelete(job.id)}
                               style={{

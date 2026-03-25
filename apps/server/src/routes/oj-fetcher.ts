@@ -167,11 +167,20 @@ ojFetcherRouter.post('/jobs/batch', async (req: Request, res: Response) => {
     const results = []
     for (const problemId of uniqueIds) {
       if (existingMap.has(problemId)) {
-        // 已存在，返回状态
+        // 已存在，重置状态为 pending 以便重新拉取
+        await prisma.ojFetchJob.update({
+          where: { platform_problemId: { platform, problemId } },
+          data: {
+            status: 'pending',
+            message: null,
+            attachmentStatus: null,
+          },
+        })
         results.push({
           problemId,
-          status: existingMap.get(problemId),
+          status: 'pending',
           isNew: false,
+          reset: true,
         })
       } else {
         // 创建新任务
@@ -352,60 +361,73 @@ async function processFetchQueue(platform: string) {
           },
         })
 
+        // 确定题目的目标 ID（更新或新建）
+        let targetProblemId: string
+        let isNewProblem = false
+
         if (existingProblem) {
-          await prisma.ojFetchJob.update({
-            where: { id: job.id },
-            data: {
-              status: 'duplicate',
-              message: '题目已存在',
-              createdProblemId: existingProblem.id,
+          // 更新已存在的题目
+          targetProblemId = existingProblem.id
+        } else {
+          // 获取管理员用户作为所有者
+          const adminUser = await prisma.user.findFirst({
+            where: {
+              role: { in: ['super_admin', 'platform_admin'] },
+              status: 'active',
             },
           })
-          continue
-        }
 
-        // 获取管理员用户作为所有者
-        const adminUser = await prisma.user.findFirst({
-          where: {
-            role: { in: ['super_admin', 'platform_admin'] },
-            status: 'active',
-          },
-        })
+          if (!adminUser) {
+            await prisma.ojFetchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'failed',
+                message: '没有可用的管理员用户作为题目所有者',
+              },
+            })
+            continue
+          }
 
-        if (!adminUser) {
-          await prisma.ojFetchJob.update({
-            where: { id: job.id },
+          // 创建新题目（基本信息）
+          const newProblem = await prisma.problem.create({
             data: {
-              status: 'failed',
-              message: '没有可用的管理员用户作为题目所有者',
+              problemCode,
+              title: problemData.title,
+              description: problemData.description,
+              statementType: 'markdown',
+              timeLimit: problemData.timeLimit,
+              memoryLimit: problemData.memoryLimit,
+              difficulty: problemData.difficulty,
+              ojBindings: JSON.stringify([{
+                platform,
+                problemId: job.problemId,
+                url: problemData.source.url,
+              }]),
+              visibility: 'public',
+              ownerType: 'admin',
+              ownerId: adminUser.id,
+              status: 'published',
             },
           })
-          continue
+          targetProblemId = newProblem.id
+          isNewProblem = true
         }
 
-        // 适配器已返回正确单位：timeLimit(ms), memoryLimit(MB)
-        // 直接使用适配器返回的值
-
-        // 创建题目
-        const newProblem = await prisma.problem.create({
-          data: {
-            problemCode,
-            title: problemData.title,
-            description: problemData.description,
-            timeLimit: problemData.timeLimit,
-            memoryLimit: problemData.memoryLimit,
-            difficulty: problemData.difficulty,
-            ojBindings: JSON.stringify([{
-              platform,
-              problemId: job.problemId,
-              url: problemData.source.url,
-            }]),
-            visibility: 'public',
-            ownerType: 'admin',
-            ownerId: adminUser.id,
-            status: 'published',
-          },
-        })
+        // 更新或创建题目
+        if (!isNewProblem && existingProblem) {
+          // 更新已存在的题目
+          await prisma.problem.update({
+            where: { id: existingProblem.id },
+            data: {
+              title: problemData.title,
+              description: problemData.description,
+              statementType: 'markdown',
+              timeLimit: problemData.timeLimit,
+              memoryLimit: problemData.memoryLimit,
+              difficulty: problemData.difficulty,
+            },
+          })
+        }
 
         // 更新任务状态
         const hasAttachment = problemData.attachments && problemData.attachments.length > 0
@@ -418,14 +440,16 @@ async function processFetchQueue(platform: string) {
               status: 'success',
               hasAttachment: true,
               attachmentStatus: 'pending',
-              createdProblemId: newProblem.id,
+              createdProblemId: targetProblemId,
             },
           })
 
-          // 下载附件
+          // 下载附件，收集链接映射
+          const linkMappings: Array<{ original: string; new: string }> = []
           for (const att of problemData.attachments!) {
             try {
-              await downloadAttachmentInternal(newProblem.id, att.downloadLink, att.filename, cookies, platform)
+              const newUrl = await downloadAttachmentInternal(targetProblemId, att.downloadLink, att.filename, cookies, platform)
+              linkMappings.push({ original: att.downloadLink, new: newUrl })
               await prisma.ojFetchJob.update({
                 where: { id: job.id },
                 data: { attachmentStatus: 'success' },
@@ -438,6 +462,19 @@ async function processFetchQueue(platform: string) {
               })
             }
           }
+
+          // 更新题面中的附件链接
+          if (linkMappings.length > 0) {
+            let updatedDescription = problemData.description || ''
+            for (const mapping of linkMappings) {
+              updatedDescription = updatedDescription.split(mapping.original).join(mapping.new)
+            }
+            await prisma.problem.update({
+              where: { id: targetProblemId },
+              data: { description: updatedDescription },
+            })
+            console.log(`[OJ Fetcher] Updated ${linkMappings.length} attachment links in description`)
+          }
         } else {
           // 无附件或无 Cookie
           await prisma.ojFetchJob.update({
@@ -447,7 +484,7 @@ async function processFetchQueue(platform: string) {
               hasAttachment: hasAttachment,
               attachmentStatus: hasAttachment ? 'skipped' : null,
               message: hasAttachment ? '无 Cookie，附件未下载' : null,
-              createdProblemId: newProblem.id,
+              createdProblemId: targetProblemId,
             },
           })
         }
@@ -472,13 +509,14 @@ async function processFetchQueue(platform: string) {
 }
 
 // 内部下载附件函数
+// 返回新的本地文件 URL，用于替换题面中的链接
 async function downloadAttachmentInternal(
   problemId: string,
   url: string,
   filename: string,
   cookies: Record<string, string>,
   platform: string
-) {
+): Promise<string> {
   // 构建请求头
   const headers: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -544,6 +582,9 @@ async function downloadAttachmentInternal(
       description: `从 ${platform} 下载的附件`,
     },
   })
+
+  // 返回新的本地文件 URL，用于替换题面中的链接
+  return fileUrl
 }
 
 /**

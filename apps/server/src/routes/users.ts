@@ -144,8 +144,8 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     // 如果指定了学校ID，需要通过 teacher 或 student 关联查询
     if (schoolId) {
       where.OR = [
-        { teacher: { schoolId } },
-        { student: { schoolId } }
+        { Teacher: { schoolId } },
+        { Student: { schoolId } }
       ]
     }
 
@@ -158,23 +158,23 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         skip,
         take,
         include: {
-          teacher: {
+          Teacher: {
             select: {
               id: true,
               name: true,
               schoolId: true,
-              school: { select: { id: true, name: true } }
+              School: { select: { id: true, name: true } }
             }
           },
-          student: {
+          Student: {
             select: {
               id: true,
               name: true,
               schoolId: true,
-              school: { select: { id: true, name: true } }
+              School: { select: { id: true, name: true } }
             }
           },
-          admin: {
+          Admin: {
             select: {
               id: true,
               name: true
@@ -198,19 +198,19 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       bio: user.bio,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
-      profile: user.teacher ? {
-        id: user.teacher.id,
-        name: user.teacher.name,
-        schoolId: user.teacher.schoolId || undefined,
-        schoolName: user.teacher.school?.name
-      } : user.student ? {
-        id: user.student.id,
-        name: user.student.name,
-        schoolId: user.student.schoolId || undefined,
-        schoolName: user.student.school?.name
-      } : user.admin ? {
-        id: user.admin.id,
-        name: user.admin.name
+      profile: user.Teacher ? {
+        id: user.Teacher.id,
+        name: user.Teacher.name,
+        schoolId: user.Teacher.schoolId || undefined,
+        schoolName: user.Teacher.School?.name
+      } : user.Student ? {
+        id: user.Student.id,
+        name: user.Student.name,
+        schoolId: user.Student.schoolId || undefined,
+        schoolName: user.Student.School?.name
+      } : user.Admin ? {
+        id: user.Admin.id,
+        name: user.Admin.name
       } : undefined
     }))
 
@@ -242,17 +242,17 @@ userRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) => 
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
-        teacher: {
+        Teacher: {
           include: {
-            school: { select: { id: true, name: true } }
+            School: { select: { id: true, name: true } }
           }
         },
-        student: {
+        Student: {
           include: {
-            school: { select: { id: true, name: true } }
+            School: { select: { id: true, name: true } }
           }
         },
-        admin: true
+        Admin: true
       }
     })
 
@@ -278,19 +278,19 @@ userRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) => 
       bio: user.bio,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
-      profile: user.teacher ? {
-        id: user.teacher.id,
-        name: user.teacher.name,
-        schoolId: user.teacher.schoolId || undefined,
-        schoolName: user.teacher.school?.name
-      } : user.student ? {
-        id: user.student.id,
-        name: user.student.name,
-        schoolId: user.student.schoolId || undefined,
-        schoolName: user.student.school?.name
-      } : user.admin ? {
-        id: user.admin.id,
-        name: user.admin.name
+      profile: user.Teacher ? {
+        id: user.Teacher.id,
+        name: user.Teacher.name,
+        schoolId: user.Teacher.schoolId || undefined,
+        schoolName: user.Teacher.School?.name
+      } : user.Student ? {
+        id: user.Student.id,
+        name: user.Student.name,
+        schoolId: user.Student.schoolId || undefined,
+        schoolName: user.Student.School?.name
+      } : user.Admin ? {
+        id: user.Admin.id,
+        name: user.Admin.name
       } : undefined
     }
 
