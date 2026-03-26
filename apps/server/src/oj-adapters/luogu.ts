@@ -8,7 +8,7 @@
  * - MAX_RETRIES: 3（最大重试次数）
  */
 
-import { OjAdapter, OjProblem, OjFetchError, OjErrorCode } from './types'
+import { OjAdapter, OjProblem, OjFetchError, OjErrorCode, OjStatement } from './types'
 import * as cheerio from 'cheerio'
 
 /**
@@ -22,6 +22,14 @@ interface LuoguProblemData {
     description?: string
     formatI?: string  // 输入格式
     formatO?: string  // 输出格式
+    hint?: string
+  }
+  // 英文题面（可能存在）
+  contentEn?: {
+    background?: string
+    description?: string
+    formatI?: string
+    formatO?: string
     hint?: string
   }
   samples?: Array<{ input: string; output: string } | string[]>
@@ -298,7 +306,11 @@ export class LuoguAdapter implements OjAdapter {
    * 构建 OjProblem 对象
    */
   private buildOjProblem(data: LuoguProblemData, problemId: string): OjProblem {
-    const markdown = this.buildMarkdown(data)
+    // 构建中文题面
+    const markdownZh = this.buildMarkdown(data, data.content)
+
+    // 构建英文题面（如果存在）
+    const markdownEn = data.contentEn ? this.buildMarkdown(data, data.contentEn) : null
 
     // 获取时间和内存限制（取第一个值）
     // Luogu timeLimit 单位是毫秒(ms)，保持不变
@@ -318,9 +330,34 @@ export class LuoguAdapter implements OjAdapter {
         : `https://www.luogu.com.cn${att.downloadLink}`
     }))
 
+    // 构建多语言 statements 数组
+    const statements: import('./types').OjStatement[] = []
+
+    // 中文题面（默认可见）
+    if (markdownZh.trim()) {
+      statements.push({
+        type: 'statement',
+        format: 'markdown',
+        language: 'zh',
+        content: markdownZh,
+        isVisible: true
+      })
+    }
+
+    // 英文题面（默认隐藏）
+    if (markdownEn?.trim()) {
+      statements.push({
+        type: 'statement',
+        format: 'markdown',
+        language: 'en',
+        content: markdownEn,
+        isVisible: false
+      })
+    }
+
     return {
       title: data.title || `${problemId} 题目`,
-      description: markdown,
+      description: markdownZh, // 保持向后兼容，默认返回中文
       timeLimit: timeLimit,
       memoryLimit: memoryLimit,
       difficulty,
@@ -330,49 +367,52 @@ export class LuoguAdapter implements OjAdapter {
         url: this.getProblemUrl(problemId),
       },
       attachments,
+      statements, // 新增多语言题面数组
     }
   }
 
   /**
    * 构建 Markdown 格式的题目描述
+   * @param data - 题目数据（用于获取样例和附件）
+   * @param content - 题面内容（可以是中文或英文）
    */
-  private buildMarkdown(data: LuoguProblemData): string {
+  private buildMarkdown(data: LuoguProblemData, content?: LuoguProblemData['content']): string {
     const parts: string[] = []
-    const content = data.content || {}
+    const contentData = content || data.content || {}
 
     // 题目背景
-    if (content.background?.trim()) {
+    if (contentData.background?.trim()) {
       parts.push('## 题目背景')
       parts.push('')
-      parts.push(content.background.trim())
+      parts.push(contentData.background.trim())
       parts.push('')
     }
 
     // 题目描述
-    if (content.description?.trim()) {
+    if (contentData.description?.trim()) {
       parts.push('## 题目描述')
       parts.push('')
-      parts.push(content.description.trim())
+      parts.push(contentData.description.trim())
       parts.push('')
     }
 
     // 输入格式
-    if (content.formatI?.trim()) {
+    if (contentData.formatI?.trim()) {
       parts.push('## 输入格式')
       parts.push('')
-      parts.push(content.formatI.trim())
+      parts.push(contentData.formatI.trim())
       parts.push('')
     }
 
     // 输出格式
-    if (content.formatO?.trim()) {
+    if (contentData.formatO?.trim()) {
       parts.push('## 输出格式')
       parts.push('')
-      parts.push(content.formatO.trim())
+      parts.push(contentData.formatO.trim())
       parts.push('')
     }
 
-    // 样例
+    // 样例（只在中文版本显示，英文版本也显示相同的样例）
     if (data.samples && data.samples.length > 0) {
       parts.push('## 样例')
       parts.push('')
@@ -406,15 +446,15 @@ export class LuoguAdapter implements OjAdapter {
     }
 
     // 提示
-    if (content.hint?.trim()) {
+    if (contentData.hint?.trim()) {
       parts.push('## 提示')
       parts.push('')
-      parts.push(content.hint.trim())
+      parts.push(contentData.hint.trim())
       parts.push('')
     }
 
-    // 附件
-    if (data.attachments && data.attachments.length > 0) {
+    // 附件（只在中文版本显示）
+    if (!content && data.attachments && data.attachments.length > 0) {
       parts.push('## 附件')
       parts.push('')
       data.attachments.forEach((attachment) => {

@@ -6,7 +6,7 @@
 import logger from '../../lib/logger'
 import type { JwtPayload } from '../../../../packages/shared/src/index.js'
 import { teamRepository, TeamRepository } from './team.repository'
-import { getUserName, getMemberDetails, getMemberDetailsBatch, formatTeamLimitMessage, formatNewOwnerLimitMessage } from './team.utils'
+import { getUserName, getMemberDetails, getMemberDetailsBatch, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
 import type {
   MemberType,
   MemberRole,
@@ -104,7 +104,7 @@ export class TeamService {
 
     // 批量加载所有者信息
     const ownerInfos = teams.map(team => {
-      const owner = team.members[0]
+      const owner = team.TeamMember[0]
       return owner ? { teamId: team.id, userId: owner.userId, userType: owner.userType } : null
     }).filter(Boolean) as Array<{ teamId: string; userId: string; userType: string }>
 
@@ -121,7 +121,7 @@ export class TeamService {
 
     // 组装结果
     let teamsWithStatus = teams.map(team => {
-      const owner = team.members[0]
+      const owner = team.TeamMember[0]
       const ownerName = owner
         ? (owner.userType === 'teacher'
             ? teacherNameMap.get(owner.userId)
@@ -152,7 +152,7 @@ export class TeamService {
       }))
     }
 
-    return teamsWithStatus
+    return teamsWithStatus.map(transformTeamForFrontend)
   }
 
   /**
@@ -170,7 +170,7 @@ export class TeamService {
     // 批量加载所有者信息
     const ownerInfos: Array<{ teamId: string; userId: string; userType: string }> = []
     for (const team of teams.filter(Boolean)) {
-      const owner = team!.members.find(m => m.role === 'owner')
+      const owner = team!.TeamMember.find(m => m.role === 'owner')
       if (owner) {
         ownerInfos.push({ teamId: team!.id, userId: owner.userId, userType: owner.userType })
       }
@@ -187,15 +187,16 @@ export class TeamService {
     const teacherNameMap = new Map(teachers.map(t => [t.id, t.name]))
     const studentNameMap = new Map(students.map(s => [s.id, s.name]))
 
-    // 分类：已加入和待处理
+    // 分类：已加入、邀请（invitedBy != null）、申请（invitedBy == null）
     const joinedTeams: unknown[] = []
-    const pendingTeams: unknown[] = []
+    const pendingInvitations: unknown[] = []
+    const pendingRequests: unknown[] = []
 
     for (const record of memberRecords) {
       const team = teamMap.get(record.teamId)
       if (!team) continue
 
-      const owner = team.members.find(m => m.role === 'owner')
+      const owner = team.TeamMember.find(m => m.role === 'owner')
       const ownerName = owner
         ? (owner.userType === 'teacher'
             ? teacherNameMap.get(owner.userId)
@@ -212,15 +213,30 @@ export class TeamService {
       if (record.status === 'active') {
         joinedTeams.push(teamWithInfo)
       } else if (record.status === 'pending') {
-        pendingTeams.push({
-          ...teamWithInfo,
-          invitationId: record.id,
-          invitationType: record.role === 'admin' ? 'admin' : 'member'
-        })
+        // 区分邀请和申请：invitedBy != null 为邀请，invitedBy == null 为申请
+        if (record.invitedBy !== null) {
+          // 实际邀请：管理员邀请学生加入
+          pendingInvitations.push({
+            ...teamWithInfo,
+            invitationId: record.id,
+            invitationType: record.role === 'admin' ? 'admin' : 'member'
+          })
+        } else {
+          // 申请记录：学生主动申请加入，需要管理员审批
+          pendingRequests.push({
+            ...teamWithInfo,
+            requestId: record.id,
+            requestType: record.role === 'admin' ? 'admin' : 'member'
+          })
+        }
       }
     }
 
-    return { joined: joinedTeams, pending: pendingTeams }
+    return {
+      joined: joinedTeams.map(transformTeamForFrontend),
+      pending: pendingInvitations.map(transformTeamForFrontend),
+      requests: pendingRequests.map(transformTeamForFrontend)
+    }
   }
 
   /**
@@ -278,7 +294,7 @@ export class TeamService {
 
     // 批量加载所有者信息
     const ownerInfos = allTeams.map(team => {
-      const owner = team.members.find(m => m.role === 'owner')
+      const owner = team.TeamMember.find(m => m.role === 'owner')
       return owner ? { teamId: team.id, userId: owner.userId, userType: owner.userType } : null
     }).filter(Boolean) as Array<{ teamId: string; userId: string; userType: string }>
 
@@ -295,15 +311,15 @@ export class TeamService {
 
     // 组装结果
     const teamsWithOwner = allTeams.map(team => {
-      const owner = team.members.find(m => m.role === 'owner')
+      const owner = team.TeamMember.find(m => m.role === 'owner')
       const ownerName = owner
         ? (owner.userType === 'teacher'
             ? teacherNameMap.get(owner.userId)
             : studentNameMap.get(owner.userId)) || '未知'
         : '未知'
 
-      const adminsCount = team.members.filter(m => m.role === 'admin').length
-      const teacherMembersCount = team.members.filter(
+      const adminsCount = team.TeamMember.filter(m => m.role === 'admin').length
+      const teacherMembersCount = team.TeamMember.filter(
         m => m.userType === 'teacher' && m.role === 'member'
       ).length
 
@@ -311,7 +327,7 @@ export class TeamService {
         ...team,
         owner: { id: owner?.userId || '', name: ownerName },
         _count: {
-          members: team.members.length,
+          members: team.TeamMember.length,
           admins: adminsCount,
           teacherMembers: teacherMembersCount
         }
@@ -319,7 +335,7 @@ export class TeamService {
     })
 
     return {
-      list: teamsWithOwner,
+      list: teamsWithOwner.map(transformTeamForFrontend),
       total,
       page,
       pageSize,
@@ -348,9 +364,9 @@ export class TeamService {
     }
 
     // 整理成员信息
-    const owner = team.members.find(m => m.role === 'owner')
-    const admins = team.members.filter(m => m.role === 'admin')
-    const members = team.members.filter(m => m.role === 'member')
+    const owner = team.TeamMember.find(m => m.role === 'owner')
+    const admins = team.TeamMember.filter(m => m.role === 'admin')
+    const members = team.TeamMember.filter(m => m.role === 'member')
 
     const ownerInfo = owner ? await getMemberDetails(owner.userId, owner.userType as MemberType) : null
     const adminsInfo = await Promise.all(admins.map(a => getMemberDetails(a.userId, a.userType as MemberType)))
@@ -384,14 +400,14 @@ export class TeamService {
       })
     )
 
-    return {
+    return transformTeamForFrontend({
       ...team,
       owner: ownerInfo,
       admins: adminsInfo.filter(Boolean),
       teachers: teachersInfo.filter(Boolean),
       students: studentsInfo.filter(Boolean),
       pendingTeachers: pendingTeachersInfo.filter(Boolean)
-    }
+    })
   }
 
   // ==================== 团队创建/更新/删除 ====================
@@ -412,17 +428,17 @@ export class TeamService {
     let ownerId: string
     let ownerType: MemberType
     let schoolId: string | null = null
-    const maxTeams = fullUser.teacher ? 50 : 5
+    const maxTeams = fullUser.Teacher ? 50 : 5
 
     // 检查用户类型并获取学校
-    if (fullUser.teacher) {
-      ownerId = fullUser.teacher.id
+    if (fullUser.Teacher) {
+      ownerId = fullUser.Teacher.id
       ownerType = 'teacher'
-      schoolId = fullUser.teacher.schoolId
-    } else if (fullUser.student) {
-      ownerId = fullUser.student.id
+      schoolId = fullUser.Teacher.schoolId
+    } else if (fullUser.Student) {
+      ownerId = fullUser.Student.id
       ownerType = 'student'
-      schoolId = fullUser.student.schoolId
+      schoolId = fullUser.Student.schoolId
     } else {
       throw new Error('NOT_TEACHER_OR_STUDENT')
     }
@@ -449,7 +465,7 @@ export class TeamService {
           isPublic: dto.isPublic !== undefined ? dto.isPublic : true
         },
         include: {
-          school: { select: { id: true, name: true } }
+          School: { select: { id: true, name: true } }
         }
       })
 
@@ -467,7 +483,7 @@ export class TeamService {
       return newTeam
     })
 
-    return team
+    return transformTeamForFrontend(team)
   }
 
   /**
@@ -494,7 +510,7 @@ export class TeamService {
     const ownerMember = await this.repo.findOwner(teamId)
     const ownerName = ownerMember ? await getUserName(ownerMember.userId, ownerMember.userType as MemberType) : '未知'
 
-    return { ...updatedTeam, owner: { id: ownerMember?.userId || '', name: ownerName } }
+    return transformTeamForFrontend({ ...updatedTeam, owner: { id: ownerMember?.userId || '', name: ownerName } })
   }
 
   /**
@@ -582,18 +598,18 @@ export class TeamService {
           continue
         }
 
-        if (foundUser.student) {
-          if (foundUser.student.schoolId !== team.schoolId) {
+        if (foundUser.Student) {
+          if (foundUser.Student.schoolId !== team.schoolId) {
             result.notSameSchool.push(trimmedUsername)
             continue
           }
-          targetMembers.push({ id: foundUser.student.id, type: 'student' })
-        } else if (foundUser.teacher) {
-          if (foundUser.teacher.schoolId !== team.schoolId) {
+          targetMembers.push({ id: foundUser.Student.id, type: 'student' })
+        } else if (foundUser.Teacher) {
+          if (foundUser.Teacher.schoolId !== team.schoolId) {
             result.notSameSchool.push(trimmedUsername)
             continue
           }
-          targetMembers.push({ id: foundUser.teacher.id, type: 'teacher' })
+          targetMembers.push({ id: foundUser.Teacher.id, type: 'teacher' })
         } else {
           result.notFound.push(trimmedUsername)
         }

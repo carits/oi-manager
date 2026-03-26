@@ -155,3 +155,24 @@ input, textarea, select {
   font-weight: 600;
 }
 
+/* remark-directive 样式 */
+.markdown-content .align {
+  margin: 1rem 0;
+}
+
+.markdown-content .center {
+  text-align: center;
+}
+
+.markdown-content .align.center {
+  text-align: center;
+}
+
+/* Markdown 图片样式 */
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1rem auto;
+}
+

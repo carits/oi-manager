@@ -29,7 +29,7 @@ userRouter.get('/:userId/profile', authenticate, async (req: AuthRequest, res: R
           avatar: true,
           bio: true,
           schoolId: true,
-          school: { select: { id: true, name: true } },
+          School: { select: { id: true, name: true } },
           userId: true
         }
       })
@@ -51,7 +51,7 @@ userRouter.get('/:userId/profile', authenticate, async (req: AuthRequest, res: R
         avatar: user?.avatar || teacher.avatar,
         bio: user?.bio || teacher.bio,
         userType: 'teacher',
-        school: teacher.school
+        school: teacher.School
       }
     } else {
       const student = await prisma.student.findUnique({
@@ -61,7 +61,7 @@ userRouter.get('/:userId/profile', authenticate, async (req: AuthRequest, res: R
           name: true,
           avatar: true,
           schoolId: true,
-          school: { select: { id: true, name: true } },
+          School: { select: { id: true, name: true } },
           userId: true
         }
       })
@@ -83,7 +83,7 @@ userRouter.get('/:userId/profile', authenticate, async (req: AuthRequest, res: R
         avatar: user?.avatar || student.avatar,
         bio: user?.bio || '',
         userType: 'student',
-        school: student.school
+        school: student.School
       }
     }
 
@@ -361,14 +361,14 @@ userRouter.post('/platform-admin', authenticate, async (req: AuthRequest, res: R
         phone,
         email,
         bio,
-        admin: {
+        Admin: {
           create: {
             name
           }
         }
       },
       include: {
-        admin: true
+        Admin: true
       }
     })
 
@@ -378,7 +378,7 @@ userRouter.post('/platform-admin', authenticate, async (req: AuthRequest, res: R
         userId: user.id,
         username: user.username,
         role: user.role,
-        adminId: user.admin?.id
+        adminId: user.Admin?.id
       }
     })
   } catch (error) {

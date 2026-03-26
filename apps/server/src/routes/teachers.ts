@@ -19,7 +19,7 @@ teacherRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) =
         title: true,
         avatar: true,
         schoolId: true,
-        school: {
+        School: {
           select: {
             id: true,
             name: true
@@ -54,7 +54,7 @@ teacherRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Res
     // 获取教师信息
     const teacher = await prisma.teacher.findUnique({
       where: { id },
-      include: { school: true }
+      include: { School: true }
     })
 
     if (!teacher) {
@@ -63,7 +63,7 @@ teacherRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Res
 
     // 权限检查：只有学校负责人可以操作
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
-      if (user.teacherId !== teacher.school?.currentPrincipalTeacherId) {
+      if (user.teacherId !== teacher.School?.currentPrincipalTeacherId) {
         return res.status(403).json({ success: false, message: '只有学校负责人可以操作' })
       }
     }
@@ -95,7 +95,7 @@ teacherRouter.delete('/:id', authenticate, async (req: AuthRequest, res: Respons
     // 获取教师信息
     const teacher = await prisma.teacher.findUnique({
       where: { id },
-      include: { school: true }
+      include: { School: true }
     })
 
     if (!teacher) {
@@ -104,7 +104,7 @@ teacherRouter.delete('/:id', authenticate, async (req: AuthRequest, res: Respons
 
     // 权限检查：只有学校负责人和超管可以操作
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
-      if (user.teacherId !== teacher.school?.currentPrincipalTeacherId) {
+      if (user.teacherId !== teacher.School?.currentPrincipalTeacherId) {
         return res.status(403).json({ success: false, message: '只有学校负责人可以删除教师' })
       }
     }
@@ -132,7 +132,7 @@ async function handleTeacherOwnerDeletion(teacherId: string, schoolId: string | 
   // 查找该教师作为所有者的所有团队
   const ownedTeams = await prisma.teamMember.findMany({
     where: { userId: teacherId, userType: 'teacher', role: 'owner' },
-    include: { team: true }
+    include: { Team: true }
   })
 
   for (const ownerMember of ownedTeams) {
@@ -187,7 +187,7 @@ async function handleTeacherOwnerDeletion(teacherId: string, schoolId: string | 
           // 更新团队表（owner 信息现在通过 TeamMember 查询，无需更新 Team 表）
         })
 
-        console.log(`团队 ${ownerMember.team.name} 所有权已转移给学校负责人`)
+        console.log(`团队 ${ownerMember.Team.name} 所有权已转移给学校负责人`)
         continue
       }
     }
@@ -223,11 +223,11 @@ async function handleTeacherOwnerDeletion(teacherId: string, schoolId: string | 
           data: { role: 'owner' }
         })
       ])
-      console.log(`团队 ${ownerMember.team.name} 所有权已转移给${newOwner.userType === 'teacher' ? '教师' : '学生'}`)
+      console.log(`团队 ${ownerMember.Team.name} 所有权已转移给${newOwner.userType === 'teacher' ? '教师' : '学生'}`)
     } else {
       // 团队无其他成员，解散团队
       await prisma.team.delete({ where: { id: teamId } })
-      console.log(`团队 ${ownerMember.team.name} 已解散（无其他成员）`)
+      console.log(`团队 ${ownerMember.Team.name} 已解散（无其他成员）`)
     }
   }
 }

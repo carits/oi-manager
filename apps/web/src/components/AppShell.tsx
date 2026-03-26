@@ -79,6 +79,12 @@ export function AppShell({ children }: AppShellProps) {
     return '/teacher/security'
   }
 
+  const getPlatformBindingPath = () => {
+    if (role === 'super_admin' || role === 'platform_admin') return '/admin/platform-bindings'
+    if (role === 'student') return '/student/platform-bindings'
+    return '/teacher/platform-bindings'
+  }
+
   const handleLogout = async () => {
     await logout()
     router.push('/login')
@@ -250,6 +256,23 @@ export function AppShell({ children }: AppShellProps) {
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 账号安全
+              </Link>
+              <Link
+                href={getPlatformBindingPath()}
+                onClick={() => setShowUserMenu(false)}
+                style={{
+                  display: 'block',
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.875rem',
+                  color: 'var(--gray-700)',
+                  textDecoration: 'none',
+                  borderBottom: '1px solid var(--border)',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                平台绑定
               </Link>
               <button
                 onClick={() => {

@@ -15,6 +15,15 @@ interface OjAttachment {
   downloadLink: string
 }
 
+interface Statement {
+  id?: string
+  format: 'markdown' | 'pdf'
+  language: 'zh' | 'en' | null
+  content: string | null
+  fileUrl: string | null
+  isVisible: boolean
+}
+
 const OJ_PLATFORMS = [
   { value: 'luogu', label: '洛谷' },
   { value: 'codeforces', label: 'CodeForces' },
@@ -29,6 +38,11 @@ const OJ_PLATFORMS = [
   { value: 'gym', label: 'Gym' },
   { value: 'other', label: '其他' }
 ]
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  zh: '中文',
+  en: 'English'
+}
 
 interface ProblemFormProps {
   mode: 'create' | 'edit'
@@ -62,18 +76,14 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     difficulty: '',
     timeLimit: '',
     memoryLimit: '',
-    statementType: 'none',
-    description: '',
-    solutionType: 'none',
-    solutionMarkdown: '',
-    solutionVisible: false,
     visibility: 'private',
     status: 'draft'
   })
 
-  // PDF 文件状态
-  const [statementPdf, setStatementPdf] = useState<File | null>(null)
-  const [solutionPdf, setSolutionPdf] = useState<File | null>(null)
+  // 多版本题面/题解状态
+  const [statements, setStatements] = useState<Statement[]>([])
+  const [solutions, setSolutions] = useState<Statement[]>([])
+
   // OJ 绑定状态
   const [ojBindings, setOjBindings] = useState<OjBinding[]>([])
   // OJ 拉取状态
@@ -100,17 +110,15 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           difficulty: p.difficulty || '',
           timeLimit: p.timeLimit?.toString() || '',
           memoryLimit: p.memoryLimit?.toString() || '',
-          statementType: p.statementType,
-          description: p.description || '',
-          solutionType: p.solutionType,
-          solutionMarkdown: p.solutionMarkdown || '',
-          solutionVisible: p.solutionVisible,
           visibility: p.visibility || 'private',
           status: p.status
         })
         if (p.ojBindings) {
           setOjBindings(JSON.parse(p.ojBindings))
         }
+        // 加载多版本数据
+        setStatements(p.statements || [])
+        setSolutions(p.solutions || [])
       }
     } catch (error) {
       console.error('Failed to fetch problem:', error)
@@ -138,13 +146,103 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleFileChange = (field: 'statement' | 'solution', file: File | null) => {
-    if (field === 'statement') {
-      setStatementPdf(file)
-      if (file) handleChange('statementType', 'pdf')
-    } else {
-      setSolutionPdf(file)
-      if (file) handleChange('solutionType', 'pdf')
+  // 检查版本是否存在
+  const hasStatement = (format: 'markdown' | 'pdf', language: 'zh' | 'en' | null) => {
+    return statements.some(s => s.format === format && s.language === language)
+  }
+  const hasSolution = (format: 'markdown' | 'pdf', language: 'zh' | 'en' | null) => {
+    return solutions.some(s => s.format === format && s.language === language)
+  }
+
+  // 添加题面版本
+  const addStatement = (format: 'markdown' | 'pdf', language: 'zh' | 'en' | null) => {
+    if (hasStatement(format, language)) return
+    setStatements(prev => [...prev, {
+      format,
+      language,
+      content: null,
+      fileUrl: null,
+      isVisible: true
+    }])
+  }
+
+  // 添加题解版本
+  const addSolution = (format: 'markdown' | 'pdf', language: 'zh' | 'en' | null) => {
+    if (hasSolution(format, language)) return
+    setSolutions(prev => [...prev, {
+      format,
+      language,
+      content: null,
+      fileUrl: null,
+      isVisible: true
+    }])
+  }
+
+  // 更新题面版本
+  const updateStatement = (index: number, updates: Partial<Statement>) => {
+    setStatements(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], ...updates }
+      return updated
+    })
+  }
+
+  // 更新题解版本
+  const updateSolution = (index: number, updates: Partial<Statement>) => {
+    setSolutions(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], ...updates }
+      return updated
+    })
+  }
+
+  // 删除题面版本
+  const removeStatement = async (index: number) => {
+    const stmt = statements[index]
+    if (stmt.id && mode === 'edit' && problemId) {
+      // 如果是已保存的版本，调用 API 删除
+      try {
+        await apiClient.delete(`/api/problems/${problemId}/statements/${stmt.id}`)
+      } catch (error) {
+        console.error('Failed to delete statement:', error)
+      }
+    }
+    setStatements(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // 删除题解版本
+  const removeSolution = async (index: number) => {
+    const sol = solutions[index]
+    if (sol.id && mode === 'edit' && problemId) {
+      try {
+        await apiClient.delete(`/api/problems/${problemId}/statements/${sol.id}`)
+      } catch (error) {
+        console.error('Failed to delete solution:', error)
+      }
+    }
+    setSolutions(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // 上传 PDF
+  const uploadPdf = async (type: 'statement' | 'solution', index: number, file: File) => {
+    if (!problemId) return
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', type)
+
+      const result = await apiClient.post(`/api/problems/${problemId}/statements/pdf`, formData)
+      if (result.success && result.data) {
+        if (type === 'statement') {
+          updateStatement(index, { fileUrl: result.data.fileUrl, id: result.data.id })
+        } else {
+          updateSolution(index, { fileUrl: result.data.fileUrl, id: result.data.id })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to upload PDF:', error)
+      alert('上传失败')
     }
   }
 
@@ -182,12 +280,25 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         setForm(prev => ({
           ...prev,
           title: problem.title || prev.title,
-          description: problem.description || prev.description,
           timeLimit: problem.timeLimit ? String(problem.timeLimit) : prev.timeLimit,
           memoryLimit: problem.memoryLimit ? String(problem.memoryLimit) : prev.memoryLimit,
-          difficulty: problem.difficulty || prev.difficulty,
-          statementType: problem.description ? 'markdown' : prev.statementType
+          difficulty: problem.difficulty || prev.difficulty
         }))
+
+        // 如果没有题面，自动添加中文 Markdown 版本
+        if (problem.description && !hasStatement('markdown', 'zh')) {
+          addStatement('markdown', 'zh')
+          setTimeout(() => {
+            setStatements(prev => {
+              const updated = [...prev]
+              const idx = updated.findIndex(s => s.format === 'markdown' && s.language === 'zh')
+              if (idx !== -1) {
+                updated[idx] = { ...updated[idx], content: problem.description }
+              }
+              return updated
+            })
+          }, 100)
+        }
 
         // 处理附件
         if (problem.attachments && problem.attachments.length > 0) {
@@ -222,9 +333,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       })
 
       if (result.success) {
-        // 从远程附件列表中移除已下载的
         setRemoteAttachments(prev => prev.filter(a => a.filename !== attachment.filename))
-        // 刷新附件列表
         fetchAttachments()
         alert(`附件 "${attachment.filename}" 下载成功`)
       } else {
@@ -249,7 +358,6 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       formData.append('file', file)
       formData.append('description', '')
 
-      // 注意：不要手动设置 Content-Type，让浏览器自动设置 boundary
       const result = await apiClient.post(`/api/problems/${problemId}/attachments`, formData)
 
       if (result.success) {
@@ -263,7 +371,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       alert('上传失败')
     } finally {
       setUploadingAttachment(false)
-      e.target.value = '' // 重置input
+      e.target.value = ''
     }
   }
 
@@ -305,14 +413,24 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         difficulty: form.difficulty || null,
         timeLimit: form.timeLimit ? parseInt(form.timeLimit) : null,
         memoryLimit: form.memoryLimit ? parseInt(form.memoryLimit) : null,
-        statementType: form.statementType,
-        solutionType: form.solutionType,
-        solutionVisible: form.solutionVisible,
-        status: form.status
+        status: form.status,
+        statements: statements.map(s => ({
+          id: s.id,
+          format: s.format,
+          language: s.language,
+          content: s.content,
+          fileUrl: s.fileUrl,
+          isVisible: s.isVisible
+        })),
+        solutions: solutions.map(s => ({
+          id: s.id,
+          format: s.format,
+          language: s.language,
+          content: s.content,
+          fileUrl: s.fileUrl,
+          isVisible: s.isVisible
+        }))
       }
-
-      if (form.description) data.description = form.description
-      if (form.solutionMarkdown) data.solutionMarkdown = form.solutionMarkdown
 
       // 只有管理员可以设置 visibility
       if (role === 'admin') {
@@ -333,23 +451,6 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
       if (result.success && result.data) {
         const createdId = result.data.id || problemId
-
-        // 上传 PDF 文件
-        if (statementPdf && createdId) {
-          const formData = new FormData()
-          formData.append('file', statementPdf)
-          await apiClient.post(`/api/problems/${createdId}/statement-pdf`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          })
-        }
-        if (solutionPdf && createdId) {
-          const formData = new FormData()
-          formData.append('file', solutionPdf)
-          await apiClient.post(`/api/problems/${createdId}/solution-pdf`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          })
-        }
-
         router.push(`${pathPrefix}/problems/${createdId}`)
       }
     } catch (error) {
@@ -551,11 +652,150 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           }}>
             {activeTab === 'statement' && (
               <div>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>题面类型</label>
+                {/* 已添加的版本 */}
+                {statements.map((stmt, index) => (
+                  <div key={index} style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    marginBottom: '1rem',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      background: 'var(--gray-50)',
+                      padding: '0.75rem 1rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span style={{ fontWeight: 500 }}>
+                        {stmt.format === 'pdf' ? 'PDF' : `${stmt.language ? LANGUAGE_LABELS[stmt.language] : '未知'}`}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={stmt.isVisible}
+                            onChange={(e) => updateStatement(index, { isVisible: e.target.checked })}
+                          />
+                          可见
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removeStatement(index)}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            border: '1px solid #ef4444',
+                            borderRadius: '4px',
+                            background: 'white',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ padding: '1rem' }}>
+                      {stmt.format === 'markdown' ? (
+                        <div>
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <button type="button" onClick={() => setEditMode('edit')}
+                              style={{
+                                padding: '0.25rem 0.75rem',
+                                border: '1px solid var(--border)',
+                                borderRadius: '4px',
+                                background: editMode === 'edit' ? 'var(--primary)' : 'white',
+                                color: editMode === 'edit' ? 'white' : 'var(--gray-600)',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem'
+                              }}>
+                              编辑
+                            </button>
+                            <button type="button" onClick={() => setEditMode('preview')}
+                              style={{
+                                padding: '0.25rem 0.75rem',
+                                border: '1px solid var(--border)',
+                                borderRadius: '4px',
+                                background: editMode === 'preview' ? 'var(--primary)' : 'white',
+                                color: editMode === 'preview' ? 'white' : 'var(--gray-600)',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem'
+                              }}>
+                              预览
+                            </button>
+                          </div>
+                          {editMode === 'edit' ? (
+                            <textarea
+                              value={stmt.content || ''}
+                              onChange={(e) => updateStatement(index, { content: e.target.value })}
+                              style={{
+                                width: '100%',
+                                minHeight: '400px',
+                                padding: '0.75rem',
+                                border: '1px solid var(--border)',
+                                borderRadius: '6px',
+                                fontSize: '0.875rem',
+                                fontFamily: 'monospace'
+                              }}
+                              placeholder="请输入题面内容（支持 Markdown 和 LaTeX）"
+                            />
+                          ) : (
+                            <div style={{
+                              minHeight: '400px',
+                              padding: '1rem',
+                              border: '1px solid var(--border)',
+                              borderRadius: '6px',
+                              overflow: 'auto'
+                            }}>
+                              {stmt.content ? (
+                                <MarkdownRenderer content={stmt.content} />
+                              ) : (
+                                <span style={{ color: 'var(--gray-400)' }}>暂无内容</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          {mode === 'edit' && problemId ? (
+                            <div>
+                              <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) uploadPdf('statement', index, file)
+                                }}
+                                style={{ fontSize: '0.875rem' }}
+                              />
+                              {stmt.fileUrl && (
+                                <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
+                                  已上传 PDF
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>
+                              请先保存题目后再上传 PDF
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* 添加版本下拉 */}
+                <div style={{ marginTop: '1rem' }}>
                   <select
-                    value={form.statementType}
-                    onChange={(e) => handleChange('statementType', e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === 'markdown-zh') addStatement('markdown', 'zh')
+                      else if (value === 'markdown-en') addStatement('markdown', 'en')
+                      else if (value === 'pdf') addStatement('pdf', null)
+                      e.target.value = ''
+                    }}
                     style={{
                       padding: '0.5rem',
                       border: '1px solid var(--border)',
@@ -563,98 +803,123 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                       fontSize: '0.875rem'
                     }}
                   >
-                    <option value="none">无</option>
-                    <option value="markdown">Markdown</option>
-                    <option value="pdf">PDF</option>
+                    <option value="">+ 添加题面版本</option>
+                    <option value="markdown-zh" disabled={hasStatement('markdown', 'zh')}>
+                      Markdown 中文 {hasStatement('markdown', 'zh') ? '(已添加)' : ''}
+                    </option>
+                    <option value="markdown-en" disabled={hasStatement('markdown', 'en')}>
+                      Markdown 英文 {hasStatement('markdown', 'en') ? '(已添加)' : ''}
+                    </option>
+                    <option value="pdf" disabled={hasStatement('pdf', null)}>
+                      上传 PDF {hasStatement('pdf', null) ? '(已添加)' : ''}
+                    </option>
                   </select>
                 </div>
-
-                {form.statementType === 'markdown' && (
-                  <div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                      <button type="button" onClick={() => setEditMode('edit')}
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          border: '1px solid var(--border)',
-                          borderRadius: '4px',
-                          background: editMode === 'edit' ? 'var(--primary)' : 'white',
-                          color: editMode === 'edit' ? 'white' : 'var(--gray-600)',
-                          cursor: 'pointer',
-                          fontSize: '0.75rem'
-                        }}>
-                        编辑
-                      </button>
-                      <button type="button" onClick={() => setEditMode('preview')}
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          border: '1px solid var(--border)',
-                          borderRadius: '4px',
-                          background: editMode === 'preview' ? 'var(--primary)' : 'white',
-                          color: editMode === 'preview' ? 'white' : 'var(--gray-600)',
-                          cursor: 'pointer',
-                          fontSize: '0.75rem'
-                        }}>
-                        预览
-                      </button>
-                    </div>
-                    {editMode === 'edit' ? (
-                      <textarea
-                        value={form.description}
-                        onChange={(e) => handleChange('description', e.target.value)}
-                        style={{
-                          width: '100%',
-                          minHeight: '400px',
-                          padding: '0.75rem',
-                          border: '1px solid var(--border)',
-                          borderRadius: '6px',
-                          fontSize: '0.875rem',
-                          fontFamily: 'monospace'
-                        }}
-                        placeholder="请输入题面内容（支持 Markdown 和 LaTeX）"
-                      />
-                    ) : (
-                      <div style={{
-                        minHeight: '400px',
-                        padding: '1rem',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        overflow: 'auto'
-                      }}>
-                        {form.description ? (
-                          <MarkdownRenderer content={form.description} />
-                        ) : (
-                          <span style={{ color: 'var(--gray-400)' }}>暂无内容</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {form.statementType === 'pdf' && (
-                  <div>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => handleFileChange('statement', e.target.files?.[0] || null)}
-                      style={{ fontSize: '0.875rem' }}
-                    />
-                    {statementPdf && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
-                        已选择: {statementPdf.name}
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
             {activeTab === 'solution' && (
               <div>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>题解类型</label>
+                {/* 已添加的版本 */}
+                {solutions.map((sol, index) => (
+                  <div key={index} style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    marginBottom: '1rem',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      background: 'var(--gray-50)',
+                      padding: '0.75rem 1rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span style={{ fontWeight: 500 }}>
+                        题解 - {sol.format === 'pdf' ? 'PDF' : `${sol.language ? LANGUAGE_LABELS[sol.language] : '未知'}`}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={sol.isVisible}
+                            onChange={(e) => updateSolution(index, { isVisible: e.target.checked })}
+                          />
+                          可见
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removeSolution(index)}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            border: '1px solid #ef4444',
+                            borderRadius: '4px',
+                            background: 'white',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ padding: '1rem' }}>
+                      {sol.format === 'markdown' ? (
+                        <textarea
+                          value={sol.content || ''}
+                          onChange={(e) => updateSolution(index, { content: e.target.value })}
+                          style={{
+                            width: '100%',
+                            minHeight: '300px',
+                            padding: '0.75rem',
+                            border: '1px solid var(--border)',
+                            borderRadius: '6px',
+                            fontSize: '0.875rem',
+                            fontFamily: 'monospace'
+                          }}
+                          placeholder="请输入题解内容（支持 Markdown 和 LaTeX）"
+                        />
+                      ) : (
+                        <div>
+                          {mode === 'edit' && problemId ? (
+                            <div>
+                              <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) uploadPdf('solution', index, file)
+                                }}
+                                style={{ fontSize: '0.875rem' }}
+                              />
+                              {sol.fileUrl && (
+                                <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
+                                  已上传 PDF
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>
+                              请先保存题目后再上传 PDF
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* 添加版本下拉 */}
+                <div style={{ marginTop: '1rem' }}>
                   <select
-                    value={form.solutionType}
-                    onChange={(e) => handleChange('solutionType', e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === 'markdown-zh') addSolution('markdown', 'zh')
+                      else if (value === 'markdown-en') addSolution('markdown', 'en')
+                      else if (value === 'pdf') addSolution('pdf', null)
+                      e.target.value = ''
+                    }}
                     style={{
                       padding: '0.5rem',
                       border: '1px solid var(--border)',
@@ -662,54 +927,17 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                       fontSize: '0.875rem'
                     }}
                   >
-                    <option value="none">无</option>
-                    <option value="markdown">Markdown</option>
-                    <option value="pdf">PDF</option>
+                    <option value="">+ 添加题解版本</option>
+                    <option value="markdown-zh" disabled={hasSolution('markdown', 'zh')}>
+                      Markdown 中文 {hasSolution('markdown', 'zh') ? '(已添加)' : ''}
+                    </option>
+                    <option value="markdown-en" disabled={hasSolution('markdown', 'en')}>
+                      Markdown 英文 {hasSolution('markdown', 'en') ? '(已添加)' : ''}
+                    </option>
+                    <option value="pdf" disabled={hasSolution('pdf', null)}>
+                      上传 PDF {hasSolution('pdf', null) ? '(已添加)' : ''}
+                    </option>
                   </select>
-                </div>
-
-                {form.solutionType === 'markdown' && (
-                  <textarea
-                    value={form.solutionMarkdown}
-                    onChange={(e) => handleChange('solutionMarkdown', e.target.value)}
-                    style={{
-                      width: '100%',
-                      minHeight: '300px',
-                      padding: '0.75rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem',
-                      fontFamily: 'monospace'
-                    }}
-                    placeholder="请输入题解内容（支持 Markdown 和 LaTeX）"
-                  />
-                )}
-
-                {form.solutionType === 'pdf' && (
-                  <div>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => handleFileChange('solution', e.target.files?.[0] || null)}
-                      style={{ fontSize: '0.875rem' }}
-                    />
-                    {solutionPdf && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
-                        已选择: {solutionPdf.name}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ marginTop: '1rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={form.solutionVisible}
-                      onChange={(e) => handleChange('solutionVisible', e.target.checked)}
-                    />
-                    <span style={{ fontSize: '0.875rem' }}>题解对学生可见</span>
-                  </label>
                 </div>
               </div>
             )}

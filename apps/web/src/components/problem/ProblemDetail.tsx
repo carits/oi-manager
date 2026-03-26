@@ -6,17 +6,19 @@ import { useAuth } from '@/components/AuthProvider'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import apiClient from '@/lib/apiClient'
 
+interface Statement {
+  id: string
+  format: 'markdown' | 'pdf'
+  language: 'zh' | 'en' | null
+  content: string | null
+  fileUrl: string | null
+  isVisible: boolean
+}
+
 interface Problem {
   id: string
   problemCode: string
   title: string
-  description: string | null
-  statementType: string
-  statementPdfUrl: string | null
-  solutionType: string
-  solutionMarkdown: string | null
-  solutionPdfUrl: string | null
-  solutionVisible: boolean
   difficulty: string | null
   timeLimit: number | null
   memoryLimit: number | null
@@ -26,6 +28,9 @@ interface Problem {
   ownerName: string
   ojBindings: string | null
   createdAt: string
+  // 多版本字段
+  statements: Statement[]
+  solutions: Statement[]
 }
 
 interface OjBinding {
@@ -76,8 +81,21 @@ const getOjProblemUrl = (platform: string, problemId: string): string => {
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
-  const filename = path.split('/').pop()
-  return `/api/problems/pdf/${filename}`
+  // 题面/题解 PDF 都使用公开访问（无需 token）
+  if (path.startsWith('/api/files/')) {
+    // 提取文件 ID
+    const match = path.match(/\/api\/files\/([^/]+)/)
+    if (match) {
+      return `/api/files/download/${match[1]}?public=true`
+    }
+  }
+  // 其他格式直接使用
+  return path
+}
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  zh: '中文',
+  en: 'English'
 }
 
 interface ProblemDetailProps {
@@ -93,6 +111,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [activeTab, setActiveTab] = useState<'statement' | 'solution' | 'attachments'>('statement')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
+  const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
+  const [selectedSolutionId, setSelectedSolutionId] = useState<string | null>(null)
+  const [hasVisitedAttachments, setHasVisitedAttachments] = useState(false)
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -104,13 +125,26 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   useEffect(() => {
     fetchProblem()
+    fetchAttachments()  // 同时获取附件数据，用于气泡显示
   }, [problemId])
 
+  // 当 problem 数据更新后，设置默认选中的版本
   useEffect(() => {
-    if (activeTab === 'attachments') {
-      fetchAttachments()
+    if (problem) {
+      // 优先选择中文版本，然后是英文版本
+      const visibleStatements = problem.statements.filter(s => s.isVisible || canModify())
+      if (visibleStatements.length > 0 && !selectedStatementId) {
+        const zhStatement = visibleStatements.find(s => s.language === 'zh')
+        setSelectedStatementId(zhStatement?.id || visibleStatements[0].id)
+      }
+
+      const visibleSolutions = problem.solutions.filter(s => s.isVisible || canModify())
+      if (visibleSolutions.length > 0 && !selectedSolutionId) {
+        const zhSolution = visibleSolutions.find(s => s.language === 'zh')
+        setSelectedSolutionId(zhSolution?.id || visibleSolutions[0].id)
+      }
     }
-  }, [activeTab, problemId])
+  }, [problem])
 
   const fetchProblem = async () => {
     try {
@@ -144,6 +178,36 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     if (bytes < 1024) return bytes + ' B'
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  }
+
+  // 处理附件下载（需要认证）
+  const handleDownload = async (attachment: Attachment) => {
+    try {
+      // 如果是新格式的 File API URL
+      if (attachment.fileUrl.startsWith('/api/files/')) {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${attachment.fileUrl}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+        if (!response.ok) throw new Error('下载失败')
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = attachment.fileName
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        // 旧格式直接打开
+        window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${attachment.fileUrl}`, '_blank')
+      }
+    } catch (error) {
+      console.error('Download failed:', error)
+      alert('下载失败，请重试')
+    }
   }
 
   const handleDelete = async () => {
@@ -183,6 +247,37 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     }
   }
 
+  // 获取选中的题面
+  const getSelectedStatement = (): Statement | null => {
+    if (!problem) return null
+    return problem.statements.find(s => s.id === selectedStatementId) || problem.statements[0] || null
+  }
+
+  // 获取选中的题解
+  const getSelectedSolution = (): Statement | null => {
+    if (!problem) return null
+    return problem.solutions.find(s => s.id === selectedSolutionId) || problem.solutions[0] || null
+  }
+
+  // 获取可显示的题面列表
+  const getVisibleStatements = (): Statement[] => {
+    if (!problem) return []
+    // 编辑者可以看到所有版本，查看者只能看到可见版本
+    if (canModify()) return problem.statements
+    return problem.statements.filter(s => s.isVisible)
+  }
+
+  // 获取可显示的题解列表
+  const getVisibleSolutions = (): Statement[] => {
+    if (!problem) return []
+    // 学生在公共题目上只能看到可见的题解
+    if (role === 'student' && problem.visibility === 'public' && !canModify()) {
+      return problem.solutions.filter(s => s.isVisible)
+    }
+    if (canModify()) return problem.solutions
+    return problem.solutions.filter(s => s.isVisible)
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -200,6 +295,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   }
 
   const ojBindings: OjBinding[] = problem.ojBindings ? JSON.parse(problem.ojBindings) : []
+
+  const visibleStatements = getVisibleStatements()
+  const visibleSolutions = getVisibleSolutions()
+  const currentStatement = getSelectedStatement()
+  const currentSolution = getSelectedSolution()
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
@@ -338,7 +438,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               题解
             </button>
             <button
-              onClick={() => setActiveTab('attachments')}
+              onClick={() => {
+                setActiveTab('attachments')
+                setHasVisitedAttachments(true)
+              }}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -353,7 +456,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               }}
             >
               附件
-              {attachments.length > 0 && (
+              {attachments.length > 0 && !hasVisitedAttachments && (
                 <span style={{
                   background: 'var(--primary)',
                   color: 'white',
@@ -396,48 +499,126 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           background: 'white',
           borderRadius: '8px',
           border: '1px solid var(--border)',
-          padding: '1.5rem'
+          overflow: 'hidden'
         }}>
+          {/* 题面 Tab */}
           {activeTab === 'statement' && (
             <>
-              {problem.statementType === 'pdf' && problem.statementPdfUrl ? (
-                <iframe
-                  src={getPdfUrl(problem.statementPdfUrl) || ''}
-                  style={{ width: '100%', height: '600px', border: 'none' }}
-                />
-              ) : problem.statementType === 'markdown' && problem.description ? (
-                <MarkdownRenderer content={problem.description} />
-              ) : (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
-                  暂无题面内容
+              {/* 左上角版本选择 */}
+              {visibleStatements.length > 1 && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderBottom: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <select
+                    value={selectedStatementId || ''}
+                    onChange={(e) => setSelectedStatementId(e.target.value)}
+                    style={{
+                      padding: '0.375rem 0.75rem',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      background: 'white'
+                    }}
+                  >
+                    {visibleStatements.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.format === 'pdf' ? 'PDF' : `${s.language ? LANGUAGE_LABELS[s.language] : '未知'}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
+
+              <div style={{ padding: '1.5rem' }}>
+                {currentStatement ? (
+                  currentStatement.format === 'pdf' && currentStatement.fileUrl ? (
+                    <iframe
+                      src={getPdfUrl(currentStatement.fileUrl) || ''}
+                      style={{ width: '100%', height: '600px', border: 'none' }}
+                    />
+                  ) : currentStatement.content ? (
+                    <MarkdownRenderer content={currentStatement.content} />
+                  ) : (
+                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                      暂无题面内容
+                    </div>
+                  )
+                ) : (
+                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                    暂无题面内容
+                  </div>
+                )}
+              </div>
             </>
           )}
 
+          {/* 题解 Tab */}
           {activeTab === 'solution' && (
             <>
-              {!problem.solutionVisible && problem.visibility === 'public' && role === 'student' ? (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
-                  题解暂未公开
-                </div>
-              ) : problem.solutionType === 'pdf' && problem.solutionPdfUrl ? (
-                <iframe
-                  src={getPdfUrl(problem.solutionPdfUrl) || ''}
-                  style={{ width: '100%', height: '600px', border: 'none' }}
-                />
-              ) : problem.solutionType === 'markdown' && problem.solutionMarkdown ? (
-                <MarkdownRenderer content={problem.solutionMarkdown} />
-              ) : (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
-                  暂无题解内容
+              {/* 左上角版本选择 */}
+              {visibleSolutions.length > 1 && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderBottom: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <select
+                    value={selectedSolutionId || ''}
+                    onChange={(e) => setSelectedSolutionId(e.target.value)}
+                    style={{
+                      padding: '0.375rem 0.75rem',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      background: 'white'
+                    }}
+                  >
+                    {visibleSolutions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.format === 'pdf' ? 'PDF' : `${s.language ? LANGUAGE_LABELS[s.language] : '未知'}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
+
+              <div style={{ padding: '1.5rem' }}>
+                {/* 学生在公共题目上检查题解是否可见 */}
+                {!canModify() && problem.visibility === 'public' && currentSolution && !currentSolution.isVisible ? (
+                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                    题解暂未公开
+                  </div>
+                ) : currentSolution ? (
+                  currentSolution.format === 'pdf' && currentSolution.fileUrl ? (
+                    <iframe
+                      src={getPdfUrl(currentSolution.fileUrl) || ''}
+                      style={{ width: '100%', height: '600px', border: 'none' }}
+                    />
+                  ) : currentSolution.content ? (
+                    <MarkdownRenderer content={currentSolution.content} />
+                  ) : (
+                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                      暂无题解内容
+                    </div>
+                  )
+                ) : (
+                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                    暂无题解内容
+                  </div>
+                )}
+              </div>
             </>
           )}
 
+          {/* 附件 Tab */}
           {activeTab === 'attachments' && (
-            <>
+            <div style={{ padding: '1.5rem' }}>
               {attachmentsLoading ? (
                 <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
                   加载中...
@@ -456,8 +637,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '0.75rem 1rem',
-                        borderBottom: '1px solid var(--border)',
-                        '&:last-child': { borderBottom: 'none' }
+                        borderBottom: '1px solid var(--border)'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -466,30 +646,28 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                           <div style={{ fontWeight: 500 }}>{attachment.fileName}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
                             {formatFileSize(attachment.fileSize)}
-                            {attachment.description && ` · ${attachment.description}`}
                           </div>
                         </div>
                       </div>
-                      <a
-                        href={`${process.env.NEXT_PUBLIC_API_URL}${attachment.fileUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => handleDownload(attachment)}
                         style={{
                           padding: '0.375rem 0.75rem',
                           background: 'var(--primary)',
                           color: 'white',
+                          border: 'none',
                           borderRadius: '4px',
-                          textDecoration: 'none',
+                          cursor: 'pointer',
                           fontSize: '0.875rem'
                         }}
                       >
                         下载
-                      </a>
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

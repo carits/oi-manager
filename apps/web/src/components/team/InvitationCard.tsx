@@ -41,9 +41,17 @@ export function InvitationCard({ invitation, onAccept, onReject, processing }: I
             {isMember ? '邀请您成为成员' : '邀请您成为管理员'}
           </span>
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
-          {invitation.schoolName}
-          {invitation.ownerName && <span style={{ marginLeft: '0.5rem' }}>· 所有者: {invitation.ownerName}</span>}
+        <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginTop: '0.25rem' }}>
+          {invitation.ownerName && (
+            <span style={{ fontWeight: 500 }}>
+              邀请人: <span style={{ color: 'var(--gray-800)' }}>{invitation.ownerName}</span>
+            </span>
+          )}
+          {invitation.schoolName && (
+            <span style={{ marginLeft: '0.75rem', color: 'var(--gray-500)' }}>
+              · {invitation.schoolName}
+            </span>
+          )}
         </div>
       </div>
       <div style={{ display: 'flex', gap: '0.5rem' }}>

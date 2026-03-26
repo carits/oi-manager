@@ -17,6 +17,7 @@
 
 - 涉及接口开发、接口联调、权限边界时：
   @docs/api/API_REFERENCE.md
+  @docs/api/FIELD_CONTRACT.md
   @docs/api/
   @docs/AUTH_AND_PERMISSION.md
 
@@ -66,6 +67,7 @@
 - 数据库结构、Prisma schema、迁移脚本
 - 请求层统一、代理层、资源 URL 拼接
 - 目录职责边界不清的区域（尤其存在历史遗留代码时）
+- **Prisma 查询**：关联字段名必须大写（见 `docs/api/FIELD_CONTRACT.md`）
 
 ### 5. 默认排查顺序
 遇到功能异常时，优先按以下顺序排查：
@@ -181,3 +183,156 @@
 - 不要默认 `mine`、`me`、`current user` 这类逻辑天然安全，先确认身份来源
 - 不要默认前端看到的状态就是当前真实状态，注意旧请求、旧缓存、旧会话污染
 - 不要默认文档与代码总是同步，发现偏差要明确指出
+
+### Prisma 查询规范（必须遵守）
+
+**关联字段名必须大写**，否则会报 500 错误：
+
+```typescript
+// 错误 ❌ - 导致 500
+include: { teacher: true, student: true }
+select: { school: true }
+_count: { select: { teams: true } }
+
+// 正确 ✅
+include: { Teacher: true, Student: true }
+select: { School: true }
+_count: { select: { Team: true } }
+```
+
+**访问关联对象也要大写**：
+
+```typescript
+// 错误 ❌ - 返回 undefined
+const name = user.teacher?.name
+
+// 正确 ✅
+const name = user.Teacher?.name
+```
+
+**不直接返回原始 Prisma 对象**：
+
+```typescript
+// 错误 ❌ - 暴露大写关联字段，前端期望小写
+res.json({ success: true, data: { profile: user.Teacher } })
+
+// 正确 ✅ - 转换后返回
+const profileData = { id: user.Teacher.id, name: user.Teacher.name }
+res.json({ success: true, data: { profile: profileData } })
+```
+
+详细规范见：`docs/api/FIELD_CONTRACT.md`
+
+---
+
+## 八、后端代码目录结构
+
+```
+apps/server/src/
+├── index.ts           # 后端入口文件（Express 应用配置、路由注册）
+├── prisma.ts          # Prisma 客户端导出
+│
+├── config/            # 配置文件
+│   ├── env.ts         # 环境变量校验
+│   └── cors.ts        # CORS 动态配置
+│
+├── lib/               # 工具函数
+│   ├── logger.ts      # 统一日志模块（结构化日志）
+│   ├── jwtSecret.ts   # JWT Secret 统一获取
+│   ├── auth.ts        # 认证工具函数（密码哈希等）
+│   ├── grade.ts       # 年级计算工具
+│   ├── regionData.ts  # 区域数据
+│   └── api.ts         # API 辅助函数
+│
+├── middleware/        # Express 中间件
+│   ├── auth.ts        # 认证中间件（authenticate, authorize）
+│   ├── permissions.ts # 权限检查函数（canManageStudent 等）
+│   ├── rateLimiter.ts # 速率限制中间件
+│   └── requestLogger.ts # 请求追踪中间件（requestId）
+│
+├── modules/           # 业务模块（分层架构）
+│   └── team/          # 团队模块
+│       ├── team.types.ts      # 类型定义
+│       ├── team.utils.ts      # 工具函数
+│       ├── team.repository.ts # 数据访问层
+│       ├── team.service.ts    # 业务逻辑层
+│       └── team.routes.ts     # 路由层
+│
+├── oj-adapters/       # OJ 平台适配器
+│   ├── index.ts       # 适配器注册和导出
+│   ├── types.ts       # 类型定义（OjPlatform, OjProblem 等）
+│   └── luogu.ts       # 洛谷适配器
+│
+└── routes/            # API 路由
+    ├── auth.ts        # 认证相关（登录、注册、/me）
+    ├── users.ts       # 用户管理
+    ├── schools.ts     # 学校管理
+    ├── teachers.ts    # 教师管理
+    ├── students.ts    # 学生管理
+    ├── teams.ts       # 团队管理（重导出到 modules/team）
+    ├── problems.ts    # 题目管理
+    ├── oj-fetcher.ts  # OJ 拉取队列
+    ├── milestones.ts  # 里程碑
+    └── stats.ts       # 统计数据
+```
+
+### 模块分层规范
+
+新模块建议采用分层架构（参考 `modules/team/`）：
+
+1. **types.ts** - 类型定义（DTO、响应类型、错误类型）
+2. **utils.ts** - 工具函数（数据转换、校验）
+3. **repository.ts** - 数据访问层（Prisma 查询封装）
+4. **service.ts** - 业务逻辑层（权限检查、业务规则）
+5. **routes.ts** - 路由层（请求解析、响应格式化）
+
+---
+
+## 九、前端代码目录结构
+
+```
+apps/web/src/
+├── app/               # 页面路由（Next.js App Router）
+│   ├── admin/         # 超级管理员页面
+│   ├── platform-admin/ # 平台管理员页面
+│   ├── teacher/       # 教师端页面
+│   ├── student/       # 学生端页面
+│   ├── profile/       # 公开资料页面
+│   └── login/         # 登录页面
+│
+├── components/        # React 组件
+│   ├── ui/            # 通用 UI 组件（Button, Modal, Table 等）
+│   ├── business/      # 业务组件（RegionSelector 等）
+│   ├── team/          # 团队相关组件
+│   ├── profile/       # 个人资料组件
+│   ├── problem/       # 题目相关组件
+│   ├── AppShell.tsx   # 应用外壳（导航布局）
+│   ├── AuthProvider.tsx # 认证状态管理
+│   └── Providers.tsx  # 全局 Provider 封装
+│
+├── hooks/             # 自定义 Hooks
+│   ├── data/          # 数据获取 Hooks（useList, useTeams 等）
+│   ├── form/          # 表单 Hooks（useForm, useModal）
+│   └── actions/       # 操作 Hooks（useDelete, useToggleStatus）
+│
+├── lib/               # 工具函数
+│   ├── apiClient.ts   # 统一 API 客户端（所有 API 调用必须使用）
+│   ├── api.ts         # API 类定义
+│   ├── auth.ts        # 认证工具函数
+│   ├── assets.ts      # 资源 URL 辅助
+│   ├── grade.ts       # 年级计算
+│   ├── regionData.ts  # 区域数据
+│   └── styles.ts      # 表单样式定义
+│
+└── config/            # 配置文件
+    ├── navigation.ts  # 导航配置
+    ├── env.ts         # 编译时环境变量
+    └── runtime.ts     # 运行时配置
+```
+
+### 前端开发规范
+
+1. **API 调用**：必须使用 `lib/apiClient.ts`，禁止直接使用 `fetch`
+2. **状态管理**：使用 `AuthProvider` 管理全局登录状态
+3. **样式**：使用内联样式 + CSS 变量
+4. **路由**：使用 Next.js App Router（`app/` 目录）

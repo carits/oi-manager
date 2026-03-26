@@ -11,8 +11,6 @@ interface GlobalStats {
   totalSchools: number
   totalTeachers: number
   totalStudents: number
-  totalContests: number
-  totalPublicContests: number
   activeUsers: number
   disabledUsers: number
   recentRegistrations: number
@@ -66,14 +64,6 @@ export default function PlatformAdminPage() {
                 <p style={{ fontSize: '2rem', fontWeight: 600 }}>{stats.totalStudents}</p>
               </div>
               <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>比赛总数</p>
-                <p style={{ fontSize: '2rem', fontWeight: 600 }}>{stats.totalContests}</p>
-              </div>
-              <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>公共比赛</p>
-                <p style={{ fontSize: '2rem', fontWeight: 600 }}>{stats.totalPublicContests}</p>
-              </div>
-              <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>活跃用户</p>
                 <p style={{ fontSize: '2rem', fontWeight: 600, color: '#16a34a' }}>{stats.activeUsers}</p>
               </div>
@@ -108,7 +98,7 @@ export default function PlatformAdminPage() {
                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>管理所有用户账号</p>
               </Link>
               <Link
-                href="/platform-admin/contests"
+                href="/platform-admin/problems"
                 style={{
                   display: 'block',
                   padding: '1.5rem',
@@ -119,8 +109,8 @@ export default function PlatformAdminPage() {
                   border: '1px solid var(--border)'
                 }}
               >
-                <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.25rem' }}>公共比赛</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>管理公共比赛</p>
+                <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.25rem' }}>题库管理</p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>管理公共题库</p>
               </Link>
               <Link
                 href="/platform-admin/stats"

@@ -29,7 +29,6 @@ export const platformAdminNav: NavConfig = {
   items: [
     { label: '首页', href: '/platform-admin' },
     { label: '账号管理', href: '/platform-admin/users' },
-    { label: '公共比赛', href: '/platform-admin/contests' },
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '统计数据', href: '/platform-admin/stats' },
   ]
@@ -44,9 +43,7 @@ export const schoolManagerNav: NavConfig = {
     { label: '我的学校', href: '/teacher/school' },
     { label: '学生管理', href: '/teacher/students' },
     { label: '教师管理', href: '/teacher/teachers' },
-    { label: '题单管理', href: '/teacher/task-lists' },
-    { label: '比赛中心', href: '/teacher/contests' },
-    { label: '题库', href: '/teacher/problems' }, // 占位
+    { label: '题库', href: '/teacher/problems' },
   ]
 }
 
@@ -59,9 +56,7 @@ export const teacherNav: NavConfig = {
     { label: '我的学校', href: '/teacher/school' },
     { label: '学生管理', href: '/teacher/students' },
     { label: '教师管理', href: '/teacher/teachers' },
-    { label: '题单管理', href: '/teacher/task-lists' },
-    { label: '比赛中心', href: '/teacher/contests' },
-    { label: '题库', href: '/teacher/problems' }, // 占位
+    { label: '题库', href: '/teacher/problems' },
   ]
 }
 
@@ -72,9 +67,7 @@ export const studentNav: NavConfig = {
     { label: '首页', href: '/student' },
     { label: '我的团队', href: '/student/team' },
     { label: '我的学校', href: '/student/school' },
-    { label: '题库', href: '/student/problems' }, // 占位
-    { label: '我的题单', href: '/student/task-lists' },
-    { label: '我的比赛', href: '/student/contests' },
+    { label: '题库', href: '/student/problems' },
     { label: '我的成长', href: '/student/rating' },
   ]
 }

@@ -18,8 +18,8 @@ milestoneRouter.get('/', authenticate, async (req, res) => {
         skip: (Number(page) - 1) * Number(pageSize),
         take: Number(pageSize),
         include: {
-          student: true,
-          teacher: { include: { user: true } }
+          Student: true,
+          Teacher: { include: { User: true } }
         },
         orderBy: { milestoneDate: 'desc' }
       }),
@@ -43,8 +43,8 @@ milestoneRouter.get('/:id', authenticate, async (req, res) => {
     const milestone = await prisma.milestone.findUnique({
       where: { id },
       include: {
-        student: true,
-        teacher: { include: { user: true } }
+        Student: true,
+        Teacher: { include: { User: true } }
       }
     })
 

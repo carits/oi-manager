@@ -5,9 +5,6 @@ import helmet from 'helmet'
 import { MulterError } from 'multer'
 import { authRouter } from './routes/auth'
 import { studentRouter } from './routes/students'
-import { taskListRouter } from './routes/task-lists'
-import { taskProgressRouter } from './routes/task-progress'
-import { contestRouter } from './routes/contests'
 import { milestoneRouter } from './routes/milestones'
 import { teamRouter } from './routes/teams'
 import { schoolRouter } from './routes/schools'
@@ -15,8 +12,9 @@ import { userRouter } from './routes/users'
 import { statsRouter } from './routes/stats'
 import { teacherRouter } from './routes/teachers'
 import { problemsRouter } from './routes/problems'
-import { contestNotesRouter } from './routes/contest-notes'
 import { ojFetcherRouter } from './routes/oj-fetcher'
+import { filesRouter } from './routes/files'
+import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -70,9 +68,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
 app.use('/api/auth', authRouter)
 app.use('/api/students', studentRouter)
-app.use('/api/task-lists', taskListRouter)
-app.use('/api/task-progress', taskProgressRouter)
-app.use('/api/contests', contestRouter)
 app.use('/api/milestones', milestoneRouter)
 app.use('/api/teams', teamRouter)
 app.use('/api/schools', schoolRouter)
@@ -80,8 +75,9 @@ app.use('/api/users', userRouter)
 app.use('/api/stats', statsRouter)
 app.use('/api/teachers', teacherRouter)
 app.use('/api/problems', problemsRouter)
-app.use('/api/contests', contestNotesRouter)
 app.use('/api/oj-fetcher', ojFetcherRouter)
+app.use('/api/files', filesRouter)
+app.use('/api/platform-bindings', platformBindingRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

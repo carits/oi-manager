@@ -4,10 +4,10 @@
  */
 
 import { Router, Request, Response } from 'express'
-import fs from 'fs'
 import path from 'path'
 import { prisma } from '../prisma'
 import { getAdapter, isPlatformSupported, getSupportedPlatforms, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS } from '../oj-adapters'
+import { fileService } from '../lib/storage'
 
 export const ojFetcherRouter = Router()
 
@@ -411,11 +411,37 @@ async function processFetchQueue(platform: string) {
           })
           targetProblemId = newProblem.id
           isNewProblem = true
+
+          // 创建多语言题面记录
+          if (problemData.statements && problemData.statements.length > 0) {
+            for (const stmt of problemData.statements) {
+              await prisma.problemStatement.create({
+                data: {
+                  problemId: targetProblemId,
+                  type: stmt.type,
+                  format: stmt.format,
+                  language: stmt.language || null,
+                  content: stmt.content || null,
+                  fileUrl: stmt.fileUrl || null,
+                  isVisible: stmt.isVisible,
+                },
+              })
+            }
+            console.log(`[OJ Fetcher] Created ${problemData.statements.length} statement records for problem ${targetProblemId}`)
+          }
         }
 
         // 更新或创建题目
         if (!isNewProblem && existingProblem) {
-          // 更新已存在的题目
+          // 更新已存在的题目 - 先清理旧的图片文件
+          const oldImages = await prisma.file.findMany({
+            where: { ownerType: 'problem', ownerId: existingProblem.id, category: 'image' }
+          })
+          for (const img of oldImages) {
+            await fileService.hardDelete(img.id).catch(() => {})
+          }
+          console.log(`[OJ Fetcher] Cleaned ${oldImages.length} old images for problem ${existingProblem.id}`)
+
           await prisma.problem.update({
             where: { id: existingProblem.id },
             data: {
@@ -431,6 +457,12 @@ async function processFetchQueue(platform: string) {
 
         // 更新任务状态
         const hasAttachment = problemData.attachments && problemData.attachments.length > 0
+
+        // 先处理 Markdown 中的图片（公开 CDN 图片不需要 Cookie）
+        let processedDescription = problemData.description || ''
+        if (processedDescription) {
+          processedDescription = await processMarkdownImages(targetProblemId, processedDescription, cookies)
+        }
 
         if (hasAttachment && Object.keys(cookies).length > 0) {
           // 尝试下载附件
@@ -465,14 +497,9 @@ async function processFetchQueue(platform: string) {
 
           // 更新题面中的附件链接
           if (linkMappings.length > 0) {
-            let updatedDescription = problemData.description || ''
             for (const mapping of linkMappings) {
-              updatedDescription = updatedDescription.split(mapping.original).join(mapping.new)
+              processedDescription = processedDescription.split(mapping.original).join(mapping.new)
             }
-            await prisma.problem.update({
-              where: { id: targetProblemId },
-              data: { description: updatedDescription },
-            })
             console.log(`[OJ Fetcher] Updated ${linkMappings.length} attachment links in description`)
           }
         } else {
@@ -487,6 +514,15 @@ async function processFetchQueue(platform: string) {
               createdProblemId: targetProblemId,
             },
           })
+        }
+
+        // 如果处理后的内容有变化，更新数据库
+        if (processedDescription !== problemData.description) {
+          await prisma.problem.update({
+            where: { id: targetProblemId },
+            data: { description: processedDescription },
+          })
+          console.log(`[OJ Fetcher] Updated problem description with processed images/attachments`)
         }
 
       } catch (error: any) {
@@ -509,7 +545,7 @@ async function processFetchQueue(platform: string) {
 }
 
 // 内部下载附件函数
-// 返回新的本地文件 URL，用于替换题面中的链接
+// 返回新的文件 URL（/api/files/:id/download 格式），用于替换题面中的链接
 async function downloadAttachmentInternal(
   problemId: string,
   url: string,
@@ -556,35 +592,243 @@ async function downloadAttachmentInternal(
     throw new Error(`下载失败: HTTP ${response.status}`)
   }
 
-  // 保存文件
+  // 获取文件内容
   const arrayBuffer = await response.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  const uploadDir = path.join(__dirname, '../../uploads/problems')
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true })
-  }
+  // 判断文件类型
+  const ext = path.extname(filename).toLowerCase()
+  const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)
 
-  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-  const ext = path.extname(filename) || '.dat'
-  const savedFilename = uniqueSuffix + ext
-  const filePath = path.join(uploadDir, savedFilename)
+  // 根据文件类型确定 MIME 类型
+  const mimeType = getMimeType(ext)
 
-  fs.writeFileSync(filePath, buffer)
-
-  const fileUrl = `/uploads/problems/${savedFilename}`
-  await prisma.problemAttachment.create({
-    data: {
-      problemId,
-      fileName: filename,
-      fileSize: buffer.length,
-      fileUrl,
-      description: `从 ${platform} 下载的附件`,
-    },
+  // 检查是否已存在同名附件（重新拉取时覆盖）
+  const existingAttachment = await prisma.problemAttachment.findFirst({
+    where: { problemId, fileName: filename }
   })
 
-  // 返回新的本地文件 URL，用于替换题面中的链接
-  return fileUrl
+  if (existingAttachment) {
+    // 删除旧的文件记录和物理文件
+    if (existingAttachment.fileUrl.startsWith('/api/files/')) {
+      const fileId = existingAttachment.fileUrl.split('/')[3]
+      await fileService.hardDelete(fileId).catch(() => {})
+    }
+    // 删除旧的附件记录
+    await prisma.problemAttachment.delete({ where: { id: existingAttachment.id } })
+    console.log(`[OJ Fetcher] Deleted existing attachment: ${filename}`)
+  }
+
+  // 检查是否已存在同名图片（重新拉取时覆盖）
+  if (isImage) {
+    const existingFile = await prisma.file.findFirst({
+      where: {
+        ownerType: 'problem',
+        ownerId: problemId,
+        category: 'image',
+        originalName: filename
+      }
+    })
+    if (existingFile) {
+      await fileService.hardDelete(existingFile.id).catch(() => {})
+      console.log(`[OJ Fetcher] Deleted existing image: ${filename}`)
+    }
+  }
+
+  // 使用 FileService 上传文件
+  const result = await fileService.upload(buffer, {
+    category: isImage ? 'image' : 'attachment',
+    ownerType: 'problem',
+    ownerId: problemId,
+    originalName: filename,
+    mimeType: mimeType,
+    isPublic: isImage // 图片公开访问，附件私有访问
+  })
+
+  // 如果是附件（非图片），创建 ProblemAttachment 记录
+  if (!isImage) {
+    await prisma.problemAttachment.create({
+      data: {
+        problemId,
+        fileName: filename,
+        fileSize: buffer.length,
+        fileUrl: result.fileUrl,
+        description: `从 ${platform} 下载的附件`,
+      },
+    })
+  }
+
+  // 返回新的文件 URL
+  return result.fileUrl
+}
+
+// 根据扩展名获取 MIME 类型
+function getMimeType(ext: string): string {
+  const mimeTypes: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
+    '.rar': 'application/x-rar-compressed',
+    '.7z': 'application/x-7z-compressed',
+    '.txt': 'text/plain',
+    '.cpp': 'text/x-c++src',
+    '.c': 'text/x-csrc',
+    '.py': 'text/x-python',
+    '.java': 'text/x-java-source',
+    '.pas': 'text/x-pascal',
+    '.in': 'text/plain',
+    '.out': 'text/plain',
+    '.ans': 'text/plain',
+    '.md': 'text/markdown',
+  }
+  return mimeTypes[ext] || 'application/octet-stream'
+}
+
+/**
+ * 解析 Markdown 中的图片链接
+ * @returns 匹配到的图片链接数组，包含完整匹配和 URL
+ */
+function extractImageLinks(markdown: string): Array<{ fullMatch: string; url: string }> {
+  const images: Array<{ fullMatch: string; url: string }> = []
+  // 匹配 Markdown 图片语法：![alt](url)
+  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+  let match
+  while ((match = imageRegex.exec(markdown)) !== null) {
+    const url = match[2]
+    // 只处理洛谷相关的图片链接
+    if (url.includes('luogu.com.cn') || url.includes('luogu') || url.startsWith('/fileApi/') || url.startsWith('https://cdn.luogu.com.cn')) {
+      images.push({
+        fullMatch: match[0],
+        url: url
+      })
+    }
+  }
+  return images
+}
+
+/**
+ * 下载图片并上传到 FileService
+ * @returns 新的图片 URL
+ */
+async function downloadAndUploadImage(
+  problemId: string,
+  imageUrl: string,
+  cookies: Record<string, string>
+): Promise<string | null> {
+  try {
+    // 构建完整 URL
+    let fullUrl = imageUrl
+    if (imageUrl.startsWith('/fileApi/')) {
+      fullUrl = `https://www.luogu.com.cn${imageUrl}`
+    }
+
+    // 构建请求头
+    const headers: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Referer': 'https://www.luogu.com.cn/',
+    }
+
+    if (Object.keys(cookies).length > 0) {
+      headers['Cookie'] = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ')
+    }
+
+    // 下载图片
+    let response = await fetch(fullUrl, { headers, redirect: 'manual' })
+
+    // 处理重定向
+    let redirectCount = 0
+    while ((response.status === 301 || response.status === 302) && redirectCount < 5) {
+      const location = response.headers.get('location')
+      if (location) {
+        fullUrl = location
+        response = await fetch(fullUrl, {
+          headers: location.includes('luogu') ? headers : undefined,
+          redirect: 'manual',
+        })
+        redirectCount++
+      } else {
+        break
+      }
+    }
+
+    if (!response.ok) {
+      console.error(`[OJ Fetcher] Image download failed: ${imageUrl}, status: ${response.status}`)
+      return null
+    }
+
+    // 获取图片内容
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // 从 URL 或 Content-Type 推断扩展名
+    let ext = path.extname(new URL(fullUrl).pathname).toLowerCase()
+    if (!ext || !['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+      // 从 Content-Type 推断
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('png')) ext = '.png'
+      else if (contentType.includes('gif')) ext = '.gif'
+      else if (contentType.includes('webp')) ext = '.webp'
+      else ext = '.jpg' // 默认 jpg
+    }
+
+    // 生成文件名
+    const filename = `image-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`
+    const mimeType = getMimeType(ext)
+
+    // 使用 FileService 上传图片
+    const result = await fileService.upload(buffer, {
+      category: 'image',
+      ownerType: 'problem',
+      ownerId: problemId,
+      originalName: filename,
+      mimeType: mimeType,
+      isPublic: true // 图片公开访问
+    })
+
+    console.log(`[OJ Fetcher] Image uploaded: ${imageUrl} -> ${result.fileUrl}`)
+    return result.fileUrl
+  } catch (error) {
+    console.error(`[OJ Fetcher] Image upload failed: ${imageUrl}`, error)
+    return null
+  }
+}
+
+/**
+ * 处理 Markdown 内容中的图片链接
+ * 下载图片并替换为本地 URL
+ */
+async function processMarkdownImages(
+  problemId: string,
+  markdown: string,
+  cookies: Record<string, string>
+): Promise<string> {
+  const images = extractImageLinks(markdown)
+
+  if (images.length === 0) {
+    return markdown
+  }
+
+  console.log(`[OJ Fetcher] Found ${images.length} images in markdown`)
+
+  let updatedMarkdown = markdown
+  for (const image of images) {
+    const newUrl = await downloadAndUploadImage(problemId, image.url, cookies)
+    if (newUrl) {
+      // 替换图片 URL
+      updatedMarkdown = updatedMarkdown.replace(
+        image.fullMatch,
+        image.fullMatch.replace(image.url, newUrl)
+      )
+    }
+  }
+
+  return updatedMarkdown
 }
 
 /**
@@ -771,40 +1015,47 @@ ojFetcherRouter.post('/download-attachment', async (req: Request, res: Response)
     // 获取文件内容
     const arrayBuffer = await response.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    const fileSize = buffer.length
 
-    // 确保上传目录存在
-    const uploadDir = path.join(__dirname, '../../uploads/problems')
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
+    // 判断文件类型
+    const ext = path.extname(filename).toLowerCase()
+    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)
+    const mimeType = getMimeType(ext)
 
-    // 生成唯一文件名
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    const ext = path.extname(filename) || '.dat'
-    const savedFilename = uniqueSuffix + ext
-    const filePath = path.join(uploadDir, savedFilename)
-
-    // 保存文件
-    fs.writeFileSync(filePath, buffer)
-
-    // 创建附件记录
-    const fileUrl = `/uploads/problems/${savedFilename}`
-    const attachment = await prisma.problemAttachment.create({
-      data: {
-        problemId,
-        fileName: filename,
-        fileSize,
-        fileUrl,
-        description: '从洛谷下载的附件',
-      },
+    // 使用 FileService 上传文件
+    const result = await fileService.upload(buffer, {
+      category: isImage ? 'image' : 'attachment',
+      ownerType: 'problem',
+      ownerId: problemId,
+      originalName: filename,
+      mimeType: mimeType,
+      isPublic: isImage // 图片公开访问，附件私有访问
     })
 
-    console.log(`[OJ Fetcher] Attachment saved: ${filename} (${fileSize} bytes)`)
+    // 如果是附件（非图片），创建 ProblemAttachment 记录
+    let attachment = null
+    if (!isImage) {
+      attachment = await prisma.problemAttachment.create({
+        data: {
+          problemId,
+          fileName: filename,
+          fileSize: buffer.length,
+          fileUrl: result.fileUrl,
+          description: '从洛谷下载的附件',
+        },
+      })
+    }
+
+    console.log(`[OJ Fetcher] File saved: ${filename} (${buffer.length} bytes, ${isImage ? 'image' : 'attachment'})`)
 
     res.json({
       success: true,
-      data: attachment,
+      data: attachment || {
+        id: result.id,
+        fileName: filename,
+        fileSize: buffer.length,
+        fileUrl: result.fileUrl,
+        isImage: true,
+      },
     })
   } catch (error) {
     console.error('[OJ Fetcher] Download attachment error:', error)

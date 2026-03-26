@@ -12,6 +12,8 @@ import { getJwtSecret } from '../lib/jwtSecret'
 import { loginLimiter, registerLimiter, passwordLimiter } from '../middleware/rateLimiter'
 import logger from '../lib/logger'
 import { updateRequestContext } from '../middleware/requestLogger'
+import { fileService } from '../lib/storage'
+import { STORAGE_ROOT } from '../config/storage'
 
 /**
  * 获取客户端 IP 地址
@@ -31,14 +33,15 @@ function getUserAgent(req: Request): string {
   return req.headers['user-agent'] || 'unknown'
 }
 
-// 配置头像上传
+// 配置头像上传（临时目录）
+const tempAvatarDir = path.join(STORAGE_ROOT, 'temp/uploads')
+if (!fs.existsSync(tempAvatarDir)) {
+  fs.mkdirSync(tempAvatarDir, { recursive: true })
+}
+
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/avatars')
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
-    cb(null, uploadDir)
+    cb(null, tempAvatarDir)
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
@@ -306,7 +309,7 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
         username,
         passwordHash,
         role: 'student',
-        student: {
+        Student: {
           create: { name }
         }
       }
@@ -327,9 +330,9 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        student: true,
-        teacher: true,
-        admin: true
+        Student: true,
+        Teacher: true,
+        Admin: true
       }
     })
 
@@ -355,6 +358,32 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       }
     }
 
+    // 构建 profile 对象（只返回基本字段，不含关联对象）
+    let profileData = null
+    if (user.Student) {
+      profileData = {
+        id: user.Student.id,
+        name: user.Student.name,
+        gender: user.Student.gender,
+        avatar: user.Student.avatar,
+        rating: user.Student.rating,
+        enrollmentYear: user.Student.enrollmentYear
+      }
+    } else if (user.Teacher) {
+      profileData = {
+        id: user.Teacher.id,
+        name: user.Teacher.name,
+        avatar: user.Teacher.avatar,
+        bio: user.Teacher.bio,
+        title: user.Teacher.title
+      }
+    } else if (user.Admin) {
+      profileData = {
+        id: user.Admin.id,
+        name: user.Admin.name
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -365,7 +394,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         phone: user.phone,
         email: user.email,
         bio: user.bio,
-        profile: user.Student || user.Teacher || user.Admin,
+        profile: profileData,
         adminId: user.Admin?.id,
         teacherId: user.Teacher?.id,
         studentId: user.Student?.id,
@@ -451,9 +480,19 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
       return res.status(400).json({ success: false, message: '请上传图片文件' })
     }
 
+    // 使用 FileService 上传文件
+    const result = await fileService.uploadFromMulter(req.file, {
+      category: 'avatar',
+      ownerType: 'user',
+      ownerId: decoded.userId,
+      isPublic: true
+    })
+
+    // 生成公开访问 URL
+    const avatarUrl = `/api/files/${result.id}/public`
+
     // 更新用户头像
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`
-    const user = await prisma.user.update({
+    await prisma.user.update({
       where: { id: decoded.userId },
       data: { avatar: avatarUrl }
     })
@@ -471,13 +510,24 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
       })
     }
 
+    logger.audit('avatar_uploaded', {
+      userId: decoded.userId,
+      action: 'upload_avatar',
+      metadata: { fileId: result.id, originalName: result.originalName }
+    })
+
     res.json({
       success: true,
       data: {
-        avatar: avatarUrl
+        avatar: avatarUrl,
+        fileId: result.id
       }
     })
   } catch (error) {
+    // 清理临时文件
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
     logger.error('upload_avatar_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }

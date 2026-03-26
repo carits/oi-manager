@@ -2,12 +2,14 @@
  * 环境变量配置和校验
  *
  * 在应用启动时校验关键配置，确保：
- * - 必须的配置存在
- * - 生产环境有额外的安全要求
+ * - 生产环境有必须的安全配置
+ * - 开发环境允许更宽松的配置
  */
 
 export const envConfig = {
-  required: ['DATABASE_URL'],
+  // 开发环境不需要强制校验的配置
+  // SQLite 默认使用 file:./dev.db，不需要 DATABASE_URL
+  required: [] as string[],
   productionOnly: ['JWT_SECRET', 'CORS_ORIGINS']
 }
 

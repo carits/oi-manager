@@ -19,6 +19,7 @@ export interface ApiResponse<T> {
   success: boolean
   data?: T
   message?: string
+  status?: number  // 保留 HTTP 状态码
 }
 
 class ApiClient {
@@ -73,14 +74,16 @@ class ApiClient {
       })
 
       const json = await res.json()
-      return json
+      // 保留 HTTP 状态码，方便调用方区分错误类型
+      return { ...json, status: res.status }
     } catch (error) {
       // AbortError 需要抛出让调用方处理
       if (error instanceof Error && error.name === 'AbortError') {
         throw error
       }
       console.error('API request error:', error)
-      return { success: false, message: '网络错误' }
+      // 网络错误：无法连接到服务器
+      return { success: false, message: '网络错误：无法连接到服务器', status: 0 }
     }
   }
 

@@ -42,7 +42,7 @@ studentRouter.get('/', authenticate, async (req, res) => {
 
     // 如果有用户名查询，模糊匹配用户名
     if (username) {
-      where.user = {
+      where.User = {
         username: { contains: username as string }
       }
     }
@@ -65,7 +65,7 @@ studentRouter.get('/', authenticate, async (req, res) => {
         { enrollmentYear: 'desc' }
       ],
       include: {
-        school: {
+        School: {
           select: {
             id: true,
             name: true,
@@ -73,15 +73,39 @@ studentRouter.get('/', authenticate, async (req, res) => {
             schoolType: true
           }
         },
-        headTeacher: { select: { id: true, name: true } },
-        user: { select: { username: true, phone: true, email: true, avatar: true } }
+        Teacher: { select: { id: true, name: true } },
+        User: { select: { username: true, phone: true, email: true, avatar: true } }
+      }
+    })
+
+    // 转换字段名为前端期望的格式，移除 Prisma 大写关联字段
+    const formattedStudents = students.map(student => {
+      const { User, Teacher, School, ...rest } = student
+      return {
+        ...rest,
+        user: User ? {
+          username: User.username,
+          phone: User.phone,
+          email: User.email,
+          avatar: User.avatar
+        } : null,
+        school: School ? {
+          id: School.id,
+          name: School.name,
+          educationSystem: School.educationSystem,
+          schoolType: School.schoolType
+        } : null,
+        headTeacher: Teacher ? {
+          id: Teacher.id,
+          name: Teacher.name
+        } : null
       }
     })
 
     res.json({
       success: true,
       data: {
-        list: students,
+        list: formattedStudents,
         total,
         page: pageNum,
         pageSize: pageSizeNum
@@ -114,7 +138,7 @@ studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_princi
         id: true,
         name: true,
         rating: true,
-        user: { select: { username: true, avatar: true } }
+        User: { select: { username: true, avatar: true } }
       }
     })
 
@@ -150,8 +174,8 @@ studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_princi
       id: s.id,
       name: s.name,
       rating: s.rating || 1200,
-      avatar: s.user?.avatar,
-      username: s.user?.username,
+      avatar: s.User?.avatar,
+      username: s.User?.username,
       lastRatingChange: ratingChangeMap.get(s.id) || 0,
       rank: i + 1
     }))
@@ -210,12 +234,12 @@ studentRouter.get('/:id', authenticate, async (req, res) => {
     const student = await prisma.student.findUnique({
       where: { id: studentBasic.id },
       include: {
-        school: { select: { id: true, name: true } },
-        headTeacher: { select: { id: true, name: true, title: true } },
-        team: { select: { id: true, name: true, leader: { select: { name: true } } } },
-        user: { select: { username: true, phone: true, email: true, avatar: true, bio: true } },
-        milestones: { orderBy: { milestoneDate: 'desc' } },
-        contestResults: { include: { contest: true }, orderBy: { contest: { contestDate: 'desc' } } }
+        School: { select: { id: true, name: true } },
+        Teacher: { select: { id: true, name: true, title: true } },
+        Team: { select: { id: true, name: true } },
+        User: { select: { username: true, phone: true, email: true, avatar: true, bio: true } },
+        Milestone: { orderBy: { milestoneDate: 'desc' } },
+        ContestResult: { include: { Contest: true }, orderBy: { Contest: { contestDate: 'desc' } } }
       }
     })
 
@@ -235,6 +259,11 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
   try {
     const { name, gender, schoolId, enrollmentYear, targetContest, headTeacherId, tags, notes, username, phone, email, avatar } = req.body
 
+    // 验证必填字段：用户名
+    if (!username) {
+      return res.status(400).json({ success: false, message: '用户名为必填项' })
+    }
+
     // 获取当前登录老师的信息
     const userId = req.user!.userId
     const teacher = await prisma.teacher.findUnique({ where: { userId } })
@@ -245,37 +274,34 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
       return res.status(400).json({ success: false, message: '学生必须关联学校，请确保您已归属学校' })
     }
 
-    // 如果没有指定主教练，使用当前登录的老师
+    // 确定主教练：优先使用传入的，否则使用当前登录的老师
     const finalHeadTeacherId = headTeacherId || teacher?.id
+    if (!finalHeadTeacherId) {
+      return res.status(400).json({ success: false, message: '主教练为必填项，请指定主教练' })
+    }
 
     // 使用事务创建学生及相关数据，确保原子性
     const student = await prisma.$transaction(async (tx) => {
-      let userIdLink = null
-
-      // 如果提供了用户名，创建关联的 User
-      if (username) {
-        // 检查用户名是否已存在
-        const existingUser = await tx.user.findUnique({ where: { username } })
-        if (existingUser) {
-          throw new Error('USERNAME_EXISTS')
-        }
-
-        // 生成安全的临时密码
-        const tempPassword = generateTempPassword()
-        const hashedPassword = await hashPassword(tempPassword)
-
-        const newUser = await tx.user.create({
-          data: {
-            username,
-            passwordHash: hashedPassword,
-            role: 'student',
-            phone,
-            email,
-            avatar
-          }
-        })
-        userIdLink = newUser.id
+      // 检查用户名是否已存在
+      const existingUser = await tx.user.findUnique({ where: { username } })
+      if (existingUser) {
+        throw new Error('USERNAME_EXISTS')
       }
+
+      // 生成安全的临时密码
+      const tempPassword = generateTempPassword()
+      const hashedPassword = await hashPassword(tempPassword)
+
+      const newUser = await tx.user.create({
+        data: {
+          username,
+          passwordHash: hashedPassword,
+          role: 'student',
+          phone,
+          email,
+          avatar
+        }
+      })
 
       // 创建学生
       return await tx.student.create({
@@ -288,7 +314,7 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
           headTeacherId: finalHeadTeacherId,
           tags: tags ? JSON.stringify(tags) : null,
           notes,
-          userId: userIdLink
+          userId: newUser.id
         }
       })
     })
@@ -316,7 +342,7 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
     // 先获取学生信息
     const existingStudent = await prisma.student.findUnique({
       where: { id },
-      include: { user: true }
+      include: { User: true }
     })
 
     if (!existingStudent) {
@@ -407,7 +433,7 @@ async function handleStudentOwnerDeletion(studentId: string) {
   // 查找该学生作为所有者的所有团队
   const ownedTeams = await prisma.teamMember.findMany({
     where: { userId: studentId, userType: 'student', role: 'owner' },
-    include: { team: true }
+    include: { Team: true }
   })
 
   for (const ownerMember of ownedTeams) {
@@ -448,11 +474,11 @@ async function handleStudentOwnerDeletion(studentId: string) {
           data: { role: 'owner' }
         })
       ])
-      console.log(`团队 ${ownerMember.team.name} 所有权已从学生转移到 ${newOwner.userType === 'teacher' ? '教师' : '学生'}`)
+      console.log(`团队 ${ownerMember.Team.name} 所有权已从学生转移到 ${newOwner.userType === 'teacher' ? '教师' : '学生'}`)
     } else {
       // 团队无其他成员，解散团队
       await prisma.team.delete({ where: { id: teamId } })
-      console.log(`团队 ${ownerMember.team.name} 已解散（无其他成员）`)
+      console.log(`团队 ${ownerMember.Team.name} 已解散（无其他成员）`)
     }
   }
 }

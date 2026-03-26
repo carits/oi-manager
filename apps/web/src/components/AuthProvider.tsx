@@ -80,11 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAdminId(data.data.adminId || null)
         return userData
       } else {
-        clearAuth()
+        // 只有在 401/403 等认证失败时才清除认证状态
+        // 其他错误（如服务器错误）保留认证状态，让用户可以重试
+        if (res.status === 401 || res.status === 403) {
+          clearAuth()
+        }
         return null
       }
     } catch {
-      clearAuth()
+      // 网络错误时不清除认证状态，保留 localStorage 中的 token
+      // 用户可能是网络波动，刷新后可以恢复
       return null
     }
   }

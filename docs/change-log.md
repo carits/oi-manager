@@ -1,6 +1,692 @@
 # 变更日志
 
+## 2026-03-26
+
+### 平台绑定功能基础框架
+
+**变更说明**：为每个用户添加平台绑定功能，支持绑定 Vjudge、洛谷、Codeforces、AtCoder 等 OJ 账号。
+
+**新建文件**：
+- `apps/server/prisma/schema.prisma` - 添加 UserPlatformBinding 模型
+- `apps/server/src/modules/platform-binding/platform-binding.types.ts` - 类型定义
+- `apps/server/src/modules/platform-binding/platform-binding.repository.ts` - 数据访问层
+- `apps/server/src/modules/platform-binding/platform-binding.service.ts` - 业务逻辑层
+- `apps/server/src/modules/platform-binding/platform-binding.routes.ts` - 路由层
+- `apps/server/src/modules/platform-binding/binders/` - 各平台绑定器（预留）
+- `apps/web/src/app/teacher/platform-bindings/page.tsx` - 教师端页面
+- `apps/web/src/app/student/platform-bindings/page.tsx` - 学生端页面
+- `apps/web/src/app/admin/platform-bindings/page.tsx` - 管理端页面
+
+**修改文件**：
+- `apps/server/src/index.ts` - 注册路由
+- `apps/web/src/components/AppShell.tsx` - 添加菜单入口
+
+**功能说明**：
+1. 入口位置：点击头像后，在"账号安全"下方显示"平台绑定"
+2. 支持平台：Vjudge、洛谷、Codeforces、AtCoder（可扩展）
+3. 初始状态：所有平台显示为"未绑定"
+4. 点击平台后弹出绑定弹窗（本次只做弹窗框架）
+5. 每个用户的绑定独立，不同用户之间无关联
+
+**API 端点**：
+- `GET /api/platform-bindings` - 获取当前用户绑定状态
+- `GET /api/platform-bindings/platforms` - 获取支持的平台列表
+- `POST /api/platform-bindings/:platform/bind` - 发起绑定
+- `DELETE /api/platform-bindings/:platform` - 解除绑定
+- `POST /api/platform-bindings/:platform/refresh` - 刷新绑定
+
+**后续事项**：
+- 各平台绑定器实现（需要研究各平台 API）
+- 绑定弹窗完善（表单、验证、错误提示）
+- 绑定数据加密存储
+
+---
+
+### 旧题目保存修复
+
+**变更说明**：修复旧题目（没有 ProblemStatement 记录）保存时失败的问题。
+
+**修改文件**：
+- `apps/server/src/routes/problems.ts` - 修复更新逻辑，处理 `legacy-` 假 ID
+
+**问题原因**：
+编辑旧题目时，前端为兼容旧数据生成了 `legacy-md-zh`、`legacy-pdf` 等假 ID。后端尝试用这些 ID 更新记录时，因记录不存在而报错：`Record to update not found`。
+
+**解决方案**：
+1. 检查 ID 是否以 `legacy-` 开头（前端生成的假 ID）
+2. 如果是假 ID，跳过更新，改为查找是否存在相同唯一键的记录
+3. 如果存在则更新，否则创建新记录
+
+**版本唯一性约束**：
+前端已实现版本唯一性检查，每种版本类型（Markdown 中文、Markdown 英文、PDF）只能添加一次。
+
+---
+
+### 题面/题解多语言多格式支持
+
+**变更说明**：实现题面和题解的多语言（中文/英文）、多格式（Markdown/PDF）支持。
+
+**修改文件**：
+- `apps/server/prisma/schema.prisma` - 新增 ProblemStatement 模型
+- `apps/server/src/routes/problems.ts` - 修改 CRUD API 支持多版本
+- `apps/web/src/components/problem/ProblemDetail.tsx` - 查看界面语言切换
+- `apps/web/src/components/problem/ProblemForm.tsx` - 编辑界面多版本管理
+
+**功能说明**：
+1. 每个题面/题解可同时存在 Markdown 中文、Markdown 英文、PDF 版本
+2. 编辑者可控制每个版本的可见性
+3. 查看者通过下拉选择查看不同语言版本
+4. PDF 通过上传接口管理
+
+**API 变更**：
+- `GET /api/problems/:id` 返回 `statements` 和 `solutions` 数组
+- `POST /api/problems` 支持创建时传入 `statements`/`solutions` 数组
+- `PUT /api/problems/:id` 支持更新 `statements`/`solutions` 数组
+- `POST /api/problems/:id/statements/pdf` 统一 PDF 上传接口
+- `PUT /api/problems/:id/statements/:id/visibility` 更新可见性
+- `DELETE /api/problems/:id/statements/:id` 删除版本
+
+---
+
+### Markdown 中文件链接下载修复
+
+**变更说明**：修复 Markdown 中的文件链接点击后返回 404 的问题。
+
+**修改文件**：
+- `apps/web/src/components/ui/MarkdownRenderer.tsx` - 添加链接点击处理，文件下载携带认证 Token
+
+**问题原因**：
+Markdown 中的附件链接（如 `[3.in](/api/files/xxx/download)`）点击后浏览器直接访问 URL，没有携带认证 Token，导致返回 401。
+
+**解决方案**：
+在 MarkdownRenderer 中拦截 `/api/files/` 开头的链接点击，使用 JavaScript fetch 携带 Token 下载文件。
+
+---
+
+### Markdown 指令语法支持
+
+**变更说明**：修复 Markdown 中 `:::align{center}` 等指令语法不被解析，导致图片无法显示的问题。
+
+**修改文件**：
+- `apps/web/src/components/ui/MarkdownRenderer.tsx` - 添加 remark-directive 和 remark-directive-rehype 插件
+- `apps/web/src/styles/globals.css` - 添加 .align 和图片居中样式
+
+**问题原因**：
+洛谷 Markdown 使用 `:::align{center}` 语法包裹图片，ReactMarkdown 默认不支持该指令语法，导致整个块被渲染为纯文本，图片不显示。
+
+**解决方案**：
+1. 安装 `remark-directive` 和 `remark-directive-rehype` 插件
+2. 添加 CSS 支持 `.align` 和 `.center` 类
+
+---
+
+### 图片显示修复
+
+**变更说明**：修复 Markdown 中的图片无法显示的问题。
+
+**修改文件**：
+- `apps/server/src/routes/oj-fetcher.ts` - 移除图片处理的 Cookie 要求
+- `apps/web/src/components/ui/MarkdownRenderer.tsx` - 添加图片 URL 后端前缀
+
+**问题原因**：
+1. 图片处理需要 Cookie 才会执行，但 CDN 图片不需要 Cookie
+2. 前端渲染图片时 URL `/uploads/...` 没有添加后端 API 前缀
+
+---
+
+### OJ 拉取重复附件修复
+
+**变更说明**：修复重新拉取题目时附件重复创建的问题。
+
+**修改文件**：
+- `apps/server/src/routes/oj-fetcher.ts`
+
+**修复内容**：
+1. `downloadAttachmentInternal` 函数：下载前先查询同名附件，存在则删除旧记录
+2. 主拉取流程：更新已存在题目时，先清理所有旧图片文件
+
+---
+
+### 附件下载行为修复
+
+**变更说明**：修复附件点击下载时被查看而不是下载的问题。
+
+**修改文件**：
+- `apps/server/src/lib/storage.ts` - 修改 `getUrl()` 方法，私有文件返回 API 路径
+
+**根因**：`LocalStorageProvider.getUrl()` 总是返回 `/uploads/...` 静态路径，静态文件服务不设置 `Content-Disposition: attachment` 响应头。
+
+**修复**：公开文件返回静态路径，私有文件返回 `/api/files/:id/download` API 路径。
+
+---
+
+### 文件存储系统实现
+
+**变更说明**：实现本地文件存储系统，支持权限控制和 OSS 迁移。
+
+**新增内容**：
+
+1. **数据库模型** (`apps/server/prisma/schema.prisma`):
+   - 新增 `File` 模型，包含存储抽象层字段
+
+2. **存储配置** (`apps/server/src/config/storage.ts`):
+   - 目录结构定义
+   - 文件大小限制
+   - 允许的 MIME 类型和扩展名
+
+3. **存储服务** (`apps/server/src/lib/storage.ts`):
+   - `LocalStorageProvider` 类实现
+   - `FileService` 类提供统一接口
+   - 路径穿越防护
+   - 安全文件命名
+
+4. **API 路由** (`apps/server/src/routes/files.ts`):
+   - POST `/api/files/upload` - 文件上传
+   - GET `/api/files/:id/download` - 下载私有文件
+   - GET `/api/files/:id/public` - 访问公开文件
+   - GET `/api/files/:id` - 获取文件信息
+   - DELETE `/api/files/:id` - 软删除文件
+   - GET `/api/files/by-owner/:ownerType/:ownerId` - 按业务对象获取文件列表
+
+5. **迁移脚本** (`apps/server/prisma/migrate-files.ts`):
+   - 迁移现有文件到新目录结构
+   - 创建 File 数据库记录
+
+6. **文档** (`docs/FILE_STORAGE_DESIGN.md`):
+   - 完整的存储系统设计文档
+
+**修改的上传代码**：
+
+1. `apps/server/src/routes/auth.ts`:
+   - 头像上传改用 FileService
+   - 新 URL 格式：`/api/files/:id/public`
+
+2. `apps/server/src/routes/problems.ts`:
+   - 题面 PDF 上传改用 FileService
+   - 题解 PDF 上传改用 FileService
+   - 附件上传改用 FileService
+   - 新 URL 格式：`/api/files/:id/download`
+
+3. `apps/server/src/modules/team/team.routes.ts`:
+   - 团队头像上传改用 FileService
+   - 新 URL 格式：`/api/files/:id/public`
+
+**前端修改**：
+
+1. `apps/web/src/lib/assets.ts`:
+   - 新增 `getFileDownloadUrl` 和 `getPublicFileUrl` 函数
+   - 支持新的 File API URL 格式
+
+2. `apps/web/src/components/problem/ProblemDetail.tsx`:
+   - PDF 显示支持新旧两种 URL 格式
+   - 附件下载使用认证请求
+
+3. `apps/web/src/components/problem/ProblemNote.tsx`:
+   - PDF 显示支持新旧两种 URL 格式
+
+**涉及文件**：
+- `apps/server/prisma/schema.prisma`
+- `apps/server/src/config/storage.ts`（新建）
+- `apps/server/src/lib/storage.ts`（新建）
+- `apps/server/src/routes/files.ts`（新建）
+- `apps/server/prisma/migrate-files.ts`（新建）
+- `apps/server/src/index.ts`
+- `apps/server/src/routes/auth.ts`
+- `apps/server/src/routes/problems.ts`
+- `apps/server/src/modules/team/team.routes.ts`
+- `apps/web/src/lib/assets.ts`
+- `apps/web/src/components/problem/ProblemDetail.tsx`
+- `apps/web/src/components/problem/ProblemNote.tsx`
+- `docs/FILE_STORAGE_DESIGN.md`（新建）
+- `docs/database/DATABASE_MODELS.md`
+- `docs/api/API_REFERENCE.md`
+- `docs/KNOWN_ISSUES.md`
+
+**迁移状态**：已完成
+- 迁移脚本已运行
+- 现有上传代码已更新
+- 前端代码已更新
+
+---
+
 ## 2026-03-25
+
+### 学校教师列表字段契约修复
+
+**问题描述**：前端访问 `teacher.user.status` 报错 undefined。
+
+**根因分析**：
+- 前端期望：`teacher.user.status`（小写）
+- 后端返回：`teacher.User.status`（Prisma 大写关联字段）
+
+**修复内容** (`apps/server/src/routes/schools.ts`):
+- 教师列表 API 添加字段转换：`User` → `user`
+- 使用解构移除原始大写字段
+
+```typescript
+const teachersWithUser = teachers.map(t => {
+  const { User, ...rest } = t
+  return { ...rest, user: User }
+})
+```
+
+**符合字段契约**：按 `docs/api/FIELD_CONTRACT.md` 规范。
+
+---
+
+### 学生邀请列表过滤与 UI 优化
+
+**问题描述**：学生端邀请列表显示无法处理的"邀请"，点击接受/拒绝提示"邀请不存在"。
+
+**根因分析**：
+- `getStudentTeams` 返回所有 `status='pending'` 记录
+- 没有区分邀请（`invitedBy !== null`）和申请（`invitedBy === null`）
+- 学生看到自己的申请记录，尝试"接受"失败
+
+**修复内容**:
+
+1. **后端过滤** (`apps/server/src/modules/team/team.service.ts`):
+   - 邀请列表只返回 `invitedBy !== null` 的记录
+   - 新增 `requests` 数组返回学生申请记录
+
+2. **UI 优化** (`apps/web/src/components/team/InvitationCard.tsx`):
+   - 邀请人信息更突出显示
+   - 格式改为：`邀请人: XXX · 学校名称`
+
+**符合规范**：
+- `docs/team/TEAM_STATE_MACHINE.md` - INVITED vs REQUESTED 区分
+
+---
+
+### 学校模块 `_count` 字段大小写修复
+
+**问题描述**：学校列表和详情页的学生/教师/团队数量显示不正确。
+
+**根因分析**：
+- Prisma `_count` 返回大写字段名：`Team`, `Teacher`, `Student`
+- 前端期望小写字段名：`teams`, `teachers`, `students`
+
+**修复内容** (`apps/server/src/routes/schools.ts`):
+1. **学校列表端点** (line 68-70): 转换 `_count.Team/Teacher/Student` → `_count.teams/teachers/students`
+2. **学校详情端点 - 非本校用户** (line 314-316): 同样的转换
+3. **学校详情端点 - 本校用户** (line 346-348): 同样的转换
+
+**符合规范**：按 `docs/api/FIELD_CONTRACT.md` 规范
+
+---
+
+### 团队模块 P1 危险问题修复
+
+**问题描述**：团队模块存在多个安全漏洞和数据一致性问题。
+
+**修复内容** (`apps/server/src/modules/team/team.routes.ts`):
+
+#### 1. 跨团队操作漏洞
+- `DELETE /:id/invites/:inviteId`: 添加 `invitation.teamId !== id` 检查
+- `DELETE /:id/members/:memberId`: 添加 `member.teamId !== id` 检查
+- `POST /:id/admins`: 添加 `existingMember.teamId !== id` 检查
+
+#### 2. ID 维度混用修复
+- `POST /:id/admins`: 使用 `findMemberById(memberId)` 获取 TeamMember 记录，而非用 userId 查询
+- `DELETE /:id/members/:memberId`: 统一使用 TeamMember.id 作为 memberId 语义
+
+#### 3. 查询语义验证
+- 教师申请审批端点: 添加 `invitedBy !== null` 检查，拒绝邀请记录
+- 邀请接受/拒绝端点: 添加 `invitedBy === null` 检查，拒绝申请记录
+
+#### 4. 并发安全增强
+- `POST /invitations/:invitationId/accept`: 使用 `updateMemberStatusIfPending` 条件更新
+- `POST /invitations/:invitationId/reject`: 使用 `deleteMemberIfPending` 条件删除
+
+**符合规范**：
+- `docs/team/TEAM_STATE_MACHINE.md` - INVITED vs REQUESTED 区分
+- `docs/team/TEAM_API_CONTRACT.md` - API 请求/响应格式
+- `docs/team/TEAM_CONFLICT_RULES.md` - 并发安全模式
+
+---
+
+### 学生列表字段命名修复
+
+**问题描述**：学生管理页面没有显示用户名和主教练。
+
+**根因分析**：
+- 前端期望：`user.username`、`headTeacher.name`（小写/camelCase）
+- 后端返回：`User.username`、`Teacher.name`（Prisma 大写关联字段）
+
+**修复内容** (`apps/server/src/routes/students.ts`):
+- 转换 `User` → `user`
+- 转换 `Teacher` → `headTeacher`
+- 转换 `School` → `school`
+
+**符合字段契约**：按 `docs/api/FIELD_CONTRACT.md` 规范，嵌套对象使用小写字段名。
+
+---
+
+### 团队审批并发安全问题修复
+
+**问题描述**：多个管理员同时审批同一个申请时存在竞态条件，可能导致数据不一致。
+
+**问题场景**：
+```
+时间线：
+1. 管理员A 读取 member (status='pending')
+2. 管理员B 读取 member (status='pending')
+3. 管理员A 调用 approve → 更新为 'active'
+4. 管理员B 调用 reject → 删除成员 ⚠️ 删除了已批准的成员！
+```
+
+**修复内容** (`apps/server/src/modules/team/team.repository.ts`):
+- 新增 `updateMemberStatusIfPending`: 条件更新，只有 status='pending' 时才更新
+- 新增 `deleteMemberIfPending`: 条件删除，只有 status='pending' 时才删除
+- 新增 `updateJoinRequestIfPending`: 条件更新加入申请
+
+**修复路由** (`apps/server/src/modules/team/team.routes.ts`):
+- `/teacher-join-requests/:memberId/approve` - 使用条件更新
+- `/teacher-join-requests/:memberId/reject` - 使用条件删除
+- `/requests/:requestId/reject` - 使用条件更新/删除
+- `/join-requests/:requestId/approve` - 使用条件更新
+- `/join-requests/:requestId/reject` - 使用条件更新
+
+**并发安全保证**：
+- 使用乐观锁（Optimistic Locking）模式
+- `updateMany`/`deleteMany` 返回受影响行数
+- count=0 时返回 "该申请已被处理" 错误
+- 后请求的操作会被拒绝，保证幂等性
+
+---
+
+### 团队加入申请显示为邀请的 Bug 修复
+
+**问题描述**：教师申请加入团队后，申请记录错误地显示在自己的"待处理邀请"界面，而不是团队管理员的审批界面。
+
+**根因分析**：
+1. 教师申请加入时，`joinRequest` 方法创建 `TeamMember` 记录：`role: 'member', status: 'pending', invitedBy: null`
+2. 前端获取邀请时，`findUserAdminInvites` 和 `findUserMemberInvites` 返回所有 pending 记录
+3. 没有区分"邀请"（invitedBy 有值）和"申请"（invitedBy 为空）
+
+**修复内容** (`apps/server/src/modules/team/team.repository.ts`):
+- `findUserPendingInvites`: 添加 `invitedBy: { not: null }` 条件
+- `findUserAdminInvites`: 添加 `invitedBy: { not: null }` 条件
+- `findUserMemberInvites`: 添加 `invitedBy: { not: null }` 条件
+
+**预期行为**：
+- 邀请（invitedBy 有值）：显示在被邀请人的"待处理邀请"界面
+- 申请（invitedBy 为空）：显示在团队管理员/所有者的审批界面
+
+**影响范围**：
+- 教师端团队邀请列表
+- 学生端团队邀请列表
+
+---
+
+### 学生数据模型必填字段修改
+
+**功能描述**：修改学生数据模型，确保学生必须有用户账号和主教练。
+
+**修改内容**：
+
+1. **Schema 修改** (`apps/server/prisma/schema.prisma`):
+   - `userId` 从可选改为必填（`String?` → `String`）
+   - `headTeacherId` 从可选改为必填（`String?` → `String`）
+   - 关联关系从可选改为必填
+
+2. **创建逻辑修改** (`apps/server/src/routes/students.ts`):
+   - 强制要求 `username` 参数
+   - 强制要求 `headTeacherId` 参数（如未指定，默认使用当前登录教师）
+   - 创建学生时自动创建关联的用户账号
+
+**影响范围**：
+- 学生创建 API 强制要求用户名和主教练
+- 现有数据已验证无空值
+- 数据完整性得到保障
+
+---
+
+### 前后端字段契约规范文档
+
+**功能描述**：创建前后端字段契约规范文档，统一 Prisma 查询和 API 响应规范。
+
+**新增文档**：
+- `docs/api/FIELD_CONTRACT.md` - 前后端字段契约规范
+
+**修复内容**：
+1. **/auth/me 的 profile 字段优化**：
+   - 问题：`profile` 字段返回原始 Prisma 对象，包含大写关联字段（School, Teacher 等）
+   - 修复：只返回简化的基本字段，避免暴露 Prisma 内部结构
+   - 文件：`apps/server/src/routes/auth.ts`
+
+**规范要点**：
+- Prisma `include`/`select` 必须使用大写关联字段名（Teacher, School, Student 等）
+- 访问关联对象使用大写字段名（`user.Teacher?.name`）
+- API 返回优先使用扁平字段（teacherId, schoolId 等）
+- 避免直接返回原始 Prisma 对象
+
+**影响范围**：
+- 后端 API 响应更规范
+- 前端字段访问更一致
+- 减少潜在的 500 错误
+
+---
+
+### Prisma 关联字段大小写全面修复
+
+**功能描述**：修复所有 Prisma 查询中使用小写关联字段名导致的 500 错误。
+
+**修复的文件和内容**：
+
+| 文件 | 错误代码 | 修复后 |
+|------|----------|--------|
+| routes/students.ts:218 | `contestResults`, `contest` | `ContestResult`, `Contest` |
+| routes/students.ts:76,214 | `headTeacher` | `Teacher` |
+| routes/students.ts:215 | `Team.leader` | 移除（Team 无 leader 字段） |
+| routes/students.ts:217 | `milestones` | `Milestone` |
+| routes/schools.ts:188 | `headTeacher` | `Teacher` |
+| routes/schools.ts:271-273 | `teams`, `teachers`, `students` | `Team`, `Teacher`, `Student` |
+
+**影响范围**：
+- `/api/schools/:id` - 修复 500 错误
+- `/api/students` - 修复 500 错误
+- `/api/students/:id` - 修复 500 错误
+- 所有涉及这些查询的页面恢复正常
+
+---
+
+### 认证链路稳定性修复
+
+**功能描述**：修复认证链路的稳定性问题，解决登录态刷新后丢失、错误信息不明确等问题。
+
+**修复内容**：
+
+1. **/auth/me Prisma 关联字段名不一致**：
+   - 问题：`/me` 端点在 Prisma include 中使用小写 `student/teacher/admin`，但访问时使用大写 `Student/Teacher/Admin`
+   - 结果：`teacherId`、`studentId`、`schoolId` 等字段返回 `undefined`
+   - 修复：将 include 改为使用大写 `Student/Teacher/Admin`
+
+2. **AuthProvider 过于激进清除认证状态**：
+   - 问题：`fetchUserData` 在任何错误（包括网络错误）时都调用 `clearAuth()`
+   - 结果：网络波动就会导致用户被登出
+   - 修复：只在 HTTP 状态码 401/403 时才清除认证状态
+
+3. **apiClient 吞掉所有错误**：
+   - 问题：所有错误都返回 "网络错误"，不保留 HTTP 状态码
+   - 修复：在 ApiResponse 中添加 `status` 字段，网络错误使用 status=0
+
+4. **env.ts 要求 DATABASE_URL**：
+   - 问题：SQLite 使用文件路径 `file:./dev.db`，不需要 DATABASE_URL 环境变量
+   - 修复：将 `required` 数组改为空，不再强制要求 DATABASE_URL
+
+**涉及文件**：
+- `apps/server/src/routes/auth.ts` - Prisma 关联字段名修复
+- `apps/web/src/components/AuthProvider.tsx` - 错误处理逻辑优化
+- `apps/web/src/lib/apiClient.ts` - 保留 HTTP 状态码
+- `apps/server/src/config/env.ts` - 移除 DATABASE_URL 强制要求
+
+**影响范围**：
+- 登录态在刷新页面后不再丢失
+- 网络波动不会导致用户被登出
+- API 错误信息更明确
+
+---
+
+### 代码仓库清理
+
+**功能描述**：清理仓库中的无用、重复、历史残留代码，减少磁盘占用。
+
+**清理内容**：
+
+1. **删除 test 目录（约 114MB）**：
+   - 包含旧项目完整副本和 `apps.zip` 打包文件
+   - .gitignore 已配置忽略，但物理文件仍在磁盘上
+
+2. **删除数据库备份文件**：
+   - `apps/server/prisma/dev.db.backup`
+
+3. **删除临时/旧版脚本**：
+   - `apps/server/prisma/check-data.ts` - 临时检查脚本
+   - `apps/server/prisma/seed-test-data.ts` - 无引用的测试数据脚本
+   - `apps/server/prisma/seed-v1.ts` - 旧版本种子数据
+
+4. **清理 webpack 缓存旧文件**：
+   - `apps/web/.next/cache/**/*.old`
+
+5. **更新 package.json**：
+   - 删除 `prisma:seed-v1` 脚本
+
+**涉及文件**：
+- 删除：test 目录、4 个 prisma 脚本、多个 .old 缓存文件
+- 修改：apps/server/package.json
+
+**清理后 apps/server/src 职责边界**：
+- 纯后端职责：Express API 服务
+- 无前端代码残留
+- 目录结构清晰：config/、lib/、middleware/、modules/、routes/
+
+---
+
+### 比赛和题单模块清理
+
+**功能描述**：彻底清理比赛和题单模块代码，仅保留导航占位入口。
+
+**清理原因**：
+- 比赛模块和题单模块为"摆烂半成品"，功能未完成
+- 清理目的是减少干扰，保持代码整洁
+- 暂不删除数据库模型，保留数据结构
+
+**删除内容**：
+
+1. **前端API代理**（共9个文件）：
+   - `apps/web/src/app/api/contests/**` (5个文件)
+   - `apps/web/src/app/api/task-lists/**` (2个文件)
+   - `apps/web/src/app/api/task-progress/**` (2个文件)
+
+2. **前端组件**：
+   - `apps/web/src/app/teacher/school/components/ContestsTab.tsx`
+
+**修改内容**：
+
+1. **学生端占位页**：
+   - `/student/contests` - 改为"功能暂未开放"占位页
+   - `/student/task-lists` - 改为"功能暂未开放"占位页
+
+2. **导航配置**（navigation.ts）：
+   - 平台管理员：移除"公共比赛"
+   - 学校负责人/教师：移除"题单管理"和"比赛中心"
+   - 学生：移除"我的题单"和"我的比赛"
+
+3. **首页**：
+   - 教师端：移除比赛相关卡片和快捷入口
+   - 学生端：移除比赛相关卡片和快捷入口
+   - 平台管理端：移除比赛统计卡片和入口
+
+4. **学校详情页**：
+   - 移除"联考比赛"tab
+
+5. **成绩页面**：
+   - `/teacher/scores` - 改为占位页
+   - `/student/scores` - 改为占位页
+
+6. **后端统计接口**（stats.ts）：
+   - 删除 `/contests` 端点
+   - `/global` 端点移除比赛相关字段
+
+**涉及文件**：
+- 删除：10个文件
+- 修改：8个文件
+
+**影响范围**：
+- 比赛和题单功能不可用
+- 相关路由返回占位页
+- 数据库 Contest/TaskList 等表保留但暂不使用
+
+---
+
+### 权限验证与注释修正
+
+**功能描述**：验证并修正权限相关代码的注释，确保注释与实际逻辑一致。
+
+**发现与修正**：
+经代码审查发现，`canManageStudent` 和团队管理员删除的权限逻辑**已经正确实现**（可能在前次会话中修复），但注释与代码不一致，可能误导后续开发者。
+
+**修改内容**：
+
+1. **permissions.ts 注释修正**：
+   - 第 16-17 行：角色权限说明
+     - 原注释：`- teacher: 本校数据 + 自己的团队 + 自己的学生`
+     - 修正为：`- teacher: 本校数据 + 自己的团队 + 自己作为主教练的学生`
+   - canManageStudent 函数 JSDoc：
+     - 原注释：`- teacher: 可管理自己的学生（主教练）或本校学生`
+     - 修正为：`- teacher: 只能管理自己作为主教练的学生`
+
+2. **验证结果**：
+   - `canManageStudent` 逻辑正确：普通教师只能管理 headTeacherId === teacherId 的学生
+   - `students.ts` 删除接口正确使用 canManageStudent
+   - `team.routes.ts` 已有跨团队操作验证（adminMember.teamId !== id）
+
+**涉及文件**：
+- `apps/server/src/middleware/permissions.ts` - 注释修正
+
+---
+
+### 代码清理与权限修复
+
+**功能描述**：系统性清理项目代码，解决权限漏洞、目录污染、历史残留等问题。
+
+**清理内容**：
+
+1. **删除历史残留文件**：
+   - `apps/server/prisma/seed.ts.bak`
+   - `apps/server/prisma/seed.ts.old`
+   - `docs/docs.zip`
+   - `.next/cache/**/*.old`
+
+2. **清理目录污染**（删除server下错误放置的前端代码）：
+   - `apps/server/src/app/` - 前端页面结构
+   - `apps/server/src/components/` - React组件
+   - `apps/server/src/hooks/` - React Hooks
+   - `apps/server/src/styles/` - CSS样式
+   - `apps/server/src/config/navigation.ts` - 前端导航配置
+
+3. **删除题单模块**（功能未完成，保留Tab导航UI）：
+   - 后端：`task-lists.ts`, `task-progress.ts`
+   - 前端：教师端页面，学生端简化为只保留Tab
+
+4. **删除比赛模块**（功能未完成，保留Tab导航UI）：
+   - 后端：`contests.ts`, `contest-notes.ts`
+   - 前端：教师端页面，学生端详情页，简化列表页只保留Tab
+
+5. **权限漏洞修复**：
+   - `canManageStudent`：普通教师只能管理自己作为主教练的学生
+   - 团队跨团队漏洞：删除管理员时验证是否属于当前团队
+
+**涉及文件**：
+- 删除：多个后端路由、前端页面
+- 修改：`apps/server/src/index.ts`, `apps/server/src/middleware/permissions.ts`, `apps/server/src/modules/team/team.routes.ts`
+
+**影响范围**：
+- 题单和比赛功能暂时不可用
+- 权限控制更加严格
+
+---
 
 ### 题库界面优化
 

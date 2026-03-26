@@ -59,13 +59,32 @@ export interface OjAttachment {
 }
 
 /**
+ * OJ 题面/题解版本
+ * @description 从 OJ 平台拉取的多语言题面/题解
+ */
+export interface OjStatement {
+  /** 类型：题面或题解 */
+  type: 'statement' | 'solution'
+  /** 格式：markdown 或 pdf */
+  format: 'markdown' | 'pdf'
+  /** 语言：zh, en 或 null（PDF 无语言） */
+  language?: 'zh' | 'en' | null
+  /** Markdown 内容 */
+  content?: string
+  /** PDF 文件 URL */
+  fileUrl?: string
+  /** 是否可见 */
+  isVisible: boolean
+}
+
+/**
  * OJ 题目数据结构
  * @description 从外部 OJ 平台拉取的标准化题目信息
  */
 export interface OjProblem {
   /** 题目标题 */
   title: string
-  /** 题目描述（Markdown 格式） */
+  /** 题目描述（Markdown 格式）- 单语言时使用 */
   description: string
   /** 时间限制（毫秒） */
   timeLimit?: number
@@ -84,6 +103,8 @@ export interface OjProblem {
   }
   /** 附件列表 */
   attachments?: OjAttachment[]
+  /** 多语言题面/题解版本（可选，用于支持多语言） */
+  statements?: OjStatement[]
 }
 
 /**

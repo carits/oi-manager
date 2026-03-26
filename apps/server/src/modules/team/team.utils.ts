@@ -190,3 +190,59 @@ export function formatNewOwnerLimitMessage(isTeacher: boolean): string {
   const type = isTeacher ? '教师' : '学生'
   return `该${type}创建的团队数量已达上限（${maxTeams}个），无法转移`
 }
+
+// ==================== Prisma 结果转换 ====================
+
+/**
+ * Prisma 关联字段名称映射（大写 → 小写）
+ * 用于将 Prisma 返回的大写字段名转换为前端期望的小写字段名
+ */
+const FIELD_MAPPINGS: Record<string, string> = {
+  School: 'school',
+  TeamMember: 'members',
+  Student: 'student',
+  Teacher: 'teacher',
+  Admin: 'admin',
+  User: 'user'
+}
+
+/**
+ * 转换团队数据中的 Prisma 关联字段名
+ * 将大写字段名（如 School, TeamMember）转换为小写（如 school, members）
+ */
+export function transformTeamForFrontend(team: Record<string, unknown>): Record<string, unknown> {
+  if (!team) return team
+
+  const result: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(team)) {
+    // 检查是否是需要转换的字段
+    const lowerKey = FIELD_MAPPINGS[key] || key
+
+    // 如果是 TeamMember，特殊处理为 members
+    if (key === 'TeamMember' && Array.isArray(value)) {
+      result.members = value
+    } else if (key === 'School' && value && typeof value === 'object') {
+      result.school = value
+    } else if (key === 'Student' && value && typeof value === 'object') {
+      result.student = value
+    } else if (key === 'Teacher' && value && typeof value === 'object') {
+      result.teacher = value
+    } else if (key === 'Admin' && value && typeof value === 'object') {
+      result.admin = value
+    } else if (key === 'User' && value && typeof value === 'object') {
+      result.user = value
+    } else {
+      result[lowerKey] = value
+    }
+  }
+
+  return result
+}
+
+/**
+ * 批量转换团队数据
+ */
+export function transformTeamsForFrontend(teams: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return teams.map(transformTeamForFrontend)
+}

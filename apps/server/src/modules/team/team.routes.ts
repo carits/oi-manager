@@ -12,22 +12,26 @@ import { authenticate } from '../../middleware/auth'
 import { canAccessSchool, canViewStudent } from '../../middleware/permissions'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
-import { getUserName, getMemberDetails } from './team.utils'
+import { getUserName, getMemberDetails, transformTeamForFrontend } from './team.utils'
 import logger from '../../lib/logger'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import type { MemberType } from './team.types'
+import { fileService } from '../../lib/storage'
+import { STORAGE_ROOT } from '../../config/storage'
 
 export const teamRouter = Router()
 
 // ==================== Multer 配置 ====================
 
+// 临时上传目录
+const tempAvatarDir = path.join(STORAGE_ROOT, 'temp/uploads')
+if (!fs.existsSync(tempAvatarDir)) {
+  fs.mkdirSync(tempAvatarDir, { recursive: true })
+}
+
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../../uploads/teams')
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
-    cb(null, uploadDir)
+    cb(null, tempAvatarDir)
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
@@ -153,8 +157,8 @@ teamRouter.get('/invitations', authenticate, async (req, res) => {
           teamId: invite.teamId,
           teamName: team?.name || '',
           teamAvatar: team?.avatar,
-          schoolName: team?.school?.name || '',
-          memberCount: team?.members?.length || 0,
+          schoolName: team?.School?.name || '',
+          memberCount: team?.TeamMember?.length || 0,
           ownerName,
           invitedBy: invitedByName,
           invitedAt: invite.joinedAt,
@@ -194,7 +198,7 @@ teamRouter.get('/my-admin-teams', authenticate, async (req, res) => {
           avatar: team.avatar,
           description: team.description,
           isPublic: team.isPublic,
-          school: team.school
+          school: team.School
         } : null
       })
     )
@@ -226,7 +230,7 @@ teamRouter.get('/my-member-teams', authenticate, async (req, res) => {
           avatar: team.avatar,
           description: team.description,
           isPublic: team.isPublic,
-          school: team.school
+          school: team.School
         } : null
       })
     )
@@ -262,8 +266,8 @@ teamRouter.get('/admin-invitations', authenticate, async (req, res) => {
           id: invite.id,
           teamId: invite.teamId,
           teamName: team?.name || '',
-          schoolName: team?.school?.name || '',
-          memberCount: team?.members?.length || 0,
+          schoolName: team?.School?.name || '',
+          memberCount: team?.TeamMember?.length || 0,
           ownerName,
           invitedAt: invite.joinedAt
         }
@@ -354,8 +358,8 @@ teamRouter.get('/member-invitations', authenticate, async (req, res) => {
           id: invite.id,
           teamId: invite.teamId,
           teamName: team?.name || '',
-          schoolName: team?.school?.name || '',
-          memberCount: team?.members?.length || 0,
+          schoolName: team?.School?.name || '',
+          memberCount: team?.TeamMember?.length || 0,
           ownerName,
           invitedAt: invite.joinedAt,
           type: 'member'
@@ -441,11 +445,31 @@ teamRouter.post('/invitations/:invitationId/accept', authenticate, async (req, r
       return res.status(404).json({ success: false, message: '邀请不存在' })
     }
 
-    if (invitation.status !== 'pending') {
+    // 验证是被邀请而非主动申请
+    // 参考: TEAM_STATE_MACHINE.md - INVITED vs REQUESTED 区分
+    // invitedBy != null 表示是被邀请，invitedBy == null 表示是主动申请
+    if (invitation.invitedBy === null) {
+      return res.status(400).json({ success: false, message: '这是申请记录，应使用申请审批接口' })
+    }
+
+    // 使用条件更新，确保并发安全
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #3.1
+    const count = await teamRepository.updateMemberStatusIfPending(invitationId, 'active')
+    if (count === 0) {
       return res.status(400).json({ success: false, message: '邀请已处理' })
     }
 
-    await teamRepository.updateMemberStatus(invitationId, 'active')
+    // 记录审计日志
+    const callerType = user.teacherId ? 'teacher' : 'student'
+    await teamRepository.logOperation({
+      teamId: invitation.teamId,
+      operatorId: userId,
+      operatorType: callerType as MemberType,
+      action: 'invite_accept',
+      targetId: invitation.userId,
+      targetType: invitation.userType as MemberType
+    })
+
     res.json({ success: true, message: '已加入团队' })
   } catch (error) {
     handleError(res, error)
@@ -470,11 +494,30 @@ teamRouter.post('/invitations/:invitationId/reject', authenticate, async (req, r
       return res.status(404).json({ success: false, message: '邀请不存在' })
     }
 
-    if (invitation.status !== 'pending') {
+    // 验证是被邀请而非主动申请
+    // 参考: TEAM_STATE_MACHINE.md - INVITED vs REQUESTED 区分
+    if (invitation.invitedBy === null) {
+      return res.status(400).json({ success: false, message: '这是申请记录，应使用申请审批接口' })
+    }
+
+    // 使用条件删除，确保并发安全
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #3.1
+    const count = await teamRepository.deleteMemberIfPending(invitationId)
+    if (count === 0) {
       return res.status(400).json({ success: false, message: '邀请已处理' })
     }
 
-    await teamRepository.deleteMember(invitationId)
+    // 记录审计日志
+    const callerType = user.teacherId ? 'teacher' : 'student'
+    await teamRepository.logOperation({
+      teamId: invitation.teamId,
+      operatorId: userId,
+      operatorType: callerType as MemberType,
+      action: 'invite_reject',
+      targetId: invitation.userId,
+      targetType: invitation.userType as MemberType
+    })
+
     res.json({ success: true, message: '已拒绝邀请' })
   } catch (error) {
     handleError(res, error)
@@ -583,14 +626,33 @@ teamRouter.post('/:id/avatar', authenticate, avatarUpload.single('avatar'), asyn
 
     const { isOwner } = await teamService.isTeamAdmin(id, user)
     if (!isOwner) {
+      fs.unlinkSync(req.file.path)
       return res.status(403).json({ success: false, message: '只有团队所有者可以上传头像' })
     }
 
-    const avatarUrl = `/uploads/teams/${req.file.filename}`
+    // 使用 FileService 上传文件
+    const result = await fileService.uploadFromMulter(req.file, {
+      category: 'avatar',
+      ownerType: 'team',
+      ownerId: id,
+      isPublic: true
+    })
+
+    const avatarUrl = `/api/files/${result.id}/public`
     await teamRepository.update(id, { avatar: avatarUrl })
 
-    res.json({ success: true, data: { avatar: avatarUrl } })
+    logger.audit('team_avatar_uploaded', {
+      userId: user.userId,
+      action: 'upload_team_avatar',
+      target: id,
+      metadata: { fileId: result.id, originalName: result.originalName }
+    })
+
+    res.json({ success: true, data: { avatar: avatarUrl, fileId: result.id } })
   } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
     handleError(res, error)
   }
 })
@@ -650,14 +712,68 @@ teamRouter.post('/:id/members', authenticate, async (req, res) => {
 })
 
 // ==================== 移除成员 ====================
-
+// memberId 是 TeamMember 记录的 id
+// 参考: TEAM_API_CONTRACT.md 3.2 节
 teamRouter.delete('/:id/members/:memberId', authenticate, async (req, res) => {
   try {
     const { id, memberId } = req.params
-    const { memberType } = req.query
     const user = (req as any).user!
 
-    await teamService.removeMember(id, memberId, memberType as MemberType, user)
+    // 权限检查
+    const { isAdmin } = await teamService.isTeamAdmin(id, user)
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: '无权操作' })
+    }
+
+    // 通过 TeamMember 记录 id 查找成员
+    // 参考: TEAM_CONFLICT_RULES.md ID 维度规范
+    const member = await teamRepository.findMemberById(memberId)
+
+    if (!member) {
+      return res.status(404).json({ success: false, message: '成员不存在' })
+    }
+
+    // 验证成员属于当前团队（防止跨团队操作）
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #3
+    if (member.teamId !== id) {
+      return res.status(400).json({ success: false, message: '该成员不属于当前团队' })
+    }
+
+    // 不能移除 owner
+    if (member.role === 'owner') {
+      return res.status(403).json({ success: false, message: '不能移除团队所有者' })
+    }
+
+    // admin 只能移除 member，owner 可以移除 admin
+    // 参考: TEAM_PERMISSION_RULES.md 3.2 节
+    const { isOwner } = await teamService.isTeamAdmin(id, user)
+    if (!isOwner && member.role === 'admin') {
+      return res.status(403).json({ success: false, message: '只有所有者可以移除管理员' })
+    }
+
+    // 不能移除自己（应使用退出功能）
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #5.9
+    const callerId = user.teacherId || user.studentId
+    if (member.userId === callerId) {
+      return res.status(400).json({ success: false, message: '如需退出团队，请使用退出功能' })
+    }
+
+    // 删除成员
+    await teamRepository.deleteMember(memberId)
+
+    // 记录审计日志
+    const callerType = user.teacherId ? 'teacher' : 'student'
+    await teamRepository.logOperation({
+      teamId: id,
+      operatorId: callerId || '',
+      operatorType: callerType as MemberType,
+      action: 'member_remove',
+      targetId: member.userId,
+      targetType: member.userType as MemberType,
+      oldValue: member.role,
+      newValue: 'removed'
+    })
+
     res.json({ success: true, message: '移除成功' })
   } catch (error) {
     handleError(res, error)
@@ -728,7 +844,9 @@ teamRouter.get('/:id/admins', authenticate, async (req, res) => {
 teamRouter.post('/:id/admins', authenticate, async (req, res) => {
   try {
     const { id } = req.params
-    const { memberId, memberType } = req.body
+    // memberId 应该是 TeamMember 记录的 id，而非 userId
+    // 参考: TEAM_API_CONTRACT.md 6.1 节
+    const { memberId } = req.body
     const user = (req as any).user!
 
     const { isOwner } = await teamService.isTeamAdmin(id, user)
@@ -736,14 +854,22 @@ teamRouter.post('/:id/admins', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: '只有团队所有者可以添加管理员' })
     }
 
-    if (!memberId || !memberType) {
-      return res.status(400).json({ success: false, message: '请指定成员ID和类型' })
+    if (!memberId) {
+      return res.status(400).json({ success: false, message: '请指定成员ID' })
     }
 
-    const existingMember = await teamRepository.findMember({ teamId: id, userId: memberId, userType: memberType })
+    // 通过 TeamMember 记录 id 查找成员
+    // 参考: TEAM_CONFLICT_RULES.md ID 维度规范
+    const existingMember = await teamRepository.findMemberById(memberId)
 
     if (!existingMember) {
       return res.status(404).json({ success: false, message: '该成员不存在' })
+    }
+
+    // 验证成员属于当前团队（防止跨团队操作）
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #5.6
+    if (existingMember.teamId !== id) {
+      return res.status(400).json({ success: false, message: '该成员不属于当前团队' })
     }
 
     if (existingMember.role === 'admin') {
@@ -757,7 +883,7 @@ teamRouter.post('/:id/admins', authenticate, async (req, res) => {
     const oldRole = existingMember.role
 
     const admin = await teamRepository.updateMemberRole(existingMember.id, 'admin')
-    const memberName = await getUserName(memberId, memberType)
+    const memberName = await getUserName(existingMember.userId, existingMember.userType as MemberType)
 
     const callerId = user.teacherId || user.studentId
     const callerType = user.teacherId ? 'teacher' : 'student'
@@ -766,8 +892,8 @@ teamRouter.post('/:id/admins', authenticate, async (req, res) => {
       operatorId: callerId || '',
       operatorType: callerType as MemberType,
       action: 'role_change',
-      targetId: memberId,
-      targetType: memberType,
+      targetId: existingMember.userId,
+      targetType: existingMember.userType as MemberType,
       oldValue: oldRole,
       newValue: 'admin'
     })
@@ -798,8 +924,14 @@ teamRouter.delete('/:id/admins/:adminId', authenticate, async (req, res) => {
 
     const adminMember = await teamRepository.findMemberById(adminId)
 
+    // 验证管理员存在且属于当前团队
     if (!adminMember || adminMember.role !== 'admin') {
       return res.status(404).json({ success: false, message: '管理员不存在' })
+    }
+
+    // 验证管理员属于当前团队（防止跨团队操作）
+    if (adminMember.teamId !== id) {
+      return res.status(400).json({ success: false, message: '该管理员不属于当前团队' })
     }
 
     const oldRole = adminMember.role
@@ -871,8 +1003,20 @@ teamRouter.post('/teacher-join-requests/:memberId/approve', authenticate, async 
 
     const member = await teamRepository.findMemberById(memberId)
 
-    if (!member || member.status !== 'pending' || member.userType !== 'teacher') {
+    if (!member || member.userType !== 'teacher') {
       return res.status(404).json({ success: false, message: '请求不存在' })
+    }
+
+    // 验证是主动申请而非被邀请
+    // 参考: TEAM_STATE_MACHINE.md - INVITED vs REQUESTED 区分
+    // invitedBy != null 表示是被邀请，invitedBy == null 表示是主动申请
+    if (member.invitedBy !== null) {
+      return res.status(400).json({ success: false, message: '这是邀请记录，应使用邀请接受/拒绝接口' })
+    }
+
+    // 验证状态是 pending
+    if (member.status !== 'pending') {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
     }
 
     const { isAdmin } = await teamService.isTeamAdmin(member.teamId, user)
@@ -880,7 +1024,25 @@ teamRouter.post('/teacher-join-requests/:memberId/approve', authenticate, async 
       return res.status(403).json({ success: false, message: '无权操作' })
     }
 
-    await teamRepository.updateMemberStatus(memberId, 'active')
+    // 使用条件更新，确保并发安全
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #2.1
+    const count = await teamRepository.updateMemberStatusIfPending(memberId, 'active')
+    if (count === 0) {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
+
+    // 记录审计日志
+    const callerId = user.teacherId || user.studentId || ''
+    const callerType = user.teacherId ? 'teacher' : 'student'
+    await teamRepository.logOperation({
+      teamId: member.teamId,
+      operatorId: callerId,
+      operatorType: callerType as MemberType,
+      action: 'join_approve',
+      targetId: member.userId,
+      targetType: 'teacher'
+    })
+
     res.json({ success: true, message: '已同意加入请求' })
   } catch (error) {
     handleError(res, error)
@@ -894,8 +1056,19 @@ teamRouter.post('/teacher-join-requests/:memberId/reject', authenticate, async (
 
     const member = await teamRepository.findMemberById(memberId)
 
-    if (!member || member.status !== 'pending' || member.userType !== 'teacher') {
+    if (!member || member.userType !== 'teacher') {
       return res.status(404).json({ success: false, message: '请求不存在' })
+    }
+
+    // 验证是主动申请而非被邀请
+    // 参考: TEAM_STATE_MACHINE.md - INVITED vs REQUESTED 区分
+    if (member.invitedBy !== null) {
+      return res.status(400).json({ success: false, message: '这是邀请记录，应使用邀请接受/拒绝接口' })
+    }
+
+    // 验证状态是 pending
+    if (member.status !== 'pending') {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
     }
 
     const { isAdmin } = await teamService.isTeamAdmin(member.teamId, user)
@@ -903,7 +1076,25 @@ teamRouter.post('/teacher-join-requests/:memberId/reject', authenticate, async (
       return res.status(403).json({ success: false, message: '无权操作' })
     }
 
-    await teamRepository.deleteMember(memberId)
+    // 使用条件删除，确保并发安全
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #2.1
+    const count = await teamRepository.deleteMemberIfPending(memberId)
+    if (count === 0) {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
+
+    // 记录审计日志
+    const callerId = user.teacherId || user.studentId || ''
+    const callerType = user.teacherId ? 'teacher' : 'student'
+    await teamRepository.logOperation({
+      teamId: member.teamId,
+      operatorId: callerId,
+      operatorType: callerType as MemberType,
+      action: 'join_reject',
+      targetId: member.userId,
+      targetType: 'teacher'
+    })
+
     res.json({ success: true, message: '已拒绝加入请求' })
   } catch (error) {
     handleError(res, error)
@@ -927,8 +1118,8 @@ teamRouter.get('/:id/join-requests', authenticate, async (req, res) => {
 
     const studentUserAvatars = await Promise.all(
       studentRequests.map(r =>
-        r.student.userId
-          ? teamRepository.findUserAvatar(r.student.userId)
+        r.Student?.userId
+          ? teamRepository.findUserAvatar(r.Student.userId)
           : Promise.resolve(null)
       )
     )
@@ -958,8 +1149,8 @@ teamRouter.get('/:id/join-requests', authenticate, async (req, res) => {
       message: r.message,
       createdAt: r.createdAt,
       user: {
-        ...r.student,
-        avatar: studentUserAvatars[i]?.avatar || r.student.avatar,
+        ...r.Student,
+        avatar: studentUserAvatars[i]?.avatar || r.Student?.avatar,
         userType: 'student'
       }
     }))
@@ -1121,7 +1312,7 @@ teamRouter.post('/requests/:requestId/reject', authenticate, async (req, res) =>
     if (type === 'teacher') {
       const member = await teamRepository.findMemberById(requestId)
 
-      if (!member || member.status !== 'pending' || member.userType !== 'teacher') {
+      if (!member || member.userType !== 'teacher') {
         return res.status(404).json({ success: false, message: '申请不存在' })
       }
 
@@ -1130,7 +1321,11 @@ teamRouter.post('/requests/:requestId/reject', authenticate, async (req, res) =>
         return res.status(403).json({ success: false, message: '无权操作' })
       }
 
-      await teamRepository.deleteMember(requestId)
+      // 使用条件删除，确保并发安全
+      const count = await teamRepository.deleteMemberIfPending(requestId)
+      if (count === 0) {
+        return res.status(400).json({ success: false, message: '该申请已被处理' })
+      }
 
       const callerId = user.teacherId || user.studentId || ''
       const callerType = user.teacherId ? 'teacher' : 'student'
@@ -1165,11 +1360,15 @@ teamRouter.post('/requests/:requestId/reject', authenticate, async (req, res) =>
 
       const processedBy = user.teacherId || user.studentId || ''
 
-      await teamRepository.updateJoinRequest(requestId, {
+      // 使用条件更新，确保并发安全
+      const count = await teamRepository.updateJoinRequestIfPending(requestId, {
         status: 'rejected',
         processedAt: new Date(),
         processedBy
       })
+      if (count === 0) {
+        return res.status(400).json({ success: false, message: '该申请已被处理' })
+      }
 
       const callerType = user.teacherId ? 'teacher' : 'student'
       await teamRepository.logOperation({
@@ -1216,10 +1415,14 @@ teamRouter.post('/join-requests/:requestId/approve', authenticate, async (req, r
     const processedBy = user.teacherId || user.studentId || ''
 
     await teamRepository.transaction(async (tx) => {
-      await tx.teamJoinRequest.update({
-        where: { id: requestId },
+      // 使用条件更新，确保并发安全
+      const result = await tx.teamJoinRequest.updateMany({
+        where: { id: requestId, status: 'pending' },
         data: { status: 'approved', processedAt: new Date(), processedBy }
       })
+      if (result.count === 0) {
+        throw new Error('ALREADY_PROCESSED')
+      }
 
       await tx.teamMember.create({
         data: {
@@ -1236,6 +1439,9 @@ teamRouter.post('/join-requests/:requestId/approve', authenticate, async (req, r
 
     res.json({ success: true, message: '已同意申请' })
   } catch (error) {
+    if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
     handleError(res, error)
   }
 })
@@ -1258,11 +1464,15 @@ teamRouter.post('/join-requests/:requestId/reject', authenticate, async (req, re
 
     const processedBy = user.teacherId || user.studentId || ''
 
-    await teamRepository.updateJoinRequest(requestId, {
+    // 使用条件更新，确保并发安全
+    const count = await teamRepository.updateJoinRequestIfPending(requestId, {
       status: 'rejected',
       processedAt: new Date(),
       processedBy
     })
+    if (count === 0) {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
 
     res.json({ success: true, message: '已拒绝申请' })
   } catch (error) {
@@ -1282,7 +1492,31 @@ teamRouter.delete('/:id/invites/:inviteId', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: '无权操作' })
     }
 
-    await teamRepository.deleteMember(inviteId)
+    // 获取邀请记录
+    const invite = await teamRepository.findMemberById(inviteId)
+
+    if (!invite) {
+      return res.status(404).json({ success: false, message: '邀请不存在' })
+    }
+
+    // 验证邀请属于当前团队（防止跨团队操作）
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #5.6
+    if (invite.teamId !== id) {
+      return res.status(400).json({ success: false, message: '该邀请不属于当前团队' })
+    }
+
+    // 验证邀请状态必须是 pending
+    if (invite.status !== 'pending') {
+      return res.status(400).json({ success: false, message: '邀请已被处理' })
+    }
+
+    // 使用条件删除确保并发安全
+    // 参考: TEAM_CONFLICT_RULES.md 场景 #5.6
+    const count = await teamRepository.deleteMemberIfPending(inviteId)
+    if (count === 0) {
+      return res.status(400).json({ success: false, message: '邀请已被处理' })
+    }
+
     res.json({ success: true, message: '已取消邀请' })
   } catch (error) {
     handleError(res, error)

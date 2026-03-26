@@ -601,6 +601,51 @@
 
 ---
 
+## 文件存储模型
+
+### 21. File (文件)
+
+文件存储表，统一管理所有上传的文件。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | String | ✅ | UUID 主键 |
+| storageType | String | ✅ | 存储类型：local / oss / s3，默认 local |
+| disk | String | ✅ | 存储盘标识，默认 default |
+| relativePath | String | ✅ | 相对路径（不含文件名） |
+| fileName | String | ✅ | 落盘文件名（时间戳-随机数格式） |
+| originalName | String | ✅ | 用户原始文件名 |
+| mimeType | String | ✅ | MIME 类型 |
+| fileSize | Int | ✅ | 文件大小（字节） |
+| md5Hash | String | ❌ | MD5 哈希（去重用） |
+| sha256Hash | String | ❌ | SHA256 哈希（安全校验） |
+| accessLevel | String | ✅ | 访问级别：public / private / protected，默认 private |
+| isPublic | Boolean | ✅ | 是否公开访问，默认 false |
+| ownerType | String | ✅ | 业务归属类型：problem / contest / user / team / attachment |
+| ownerId | String | ✅ | 业务对象 ID |
+| category | String | ✅ | 文件类别：pdf / attachment / avatar / image / testdata |
+| status | String | ✅ | 状态：active / deleted / archived，默认 active |
+| deletedAt | DateTime | ❌ | 删除时间 |
+| expiresAt | DateTime | ❌ | 过期时间（临时文件） |
+| createdAt | DateTime | ✅ | 创建时间 |
+| updatedAt | DateTime | ✅ | 更新时间 |
+
+**索引**:
+- `storageType, disk`: 复合索引（存储类型查询）
+- `ownerType, ownerId`: 复合索引（业务对象查询）
+- `md5Hash`: 普通索引（文件去重）
+- `status, deletedAt`: 复合索引（状态筛选）
+- `category`: 普通索引（类别筛选）
+
+**设计说明**:
+- `storageType`、`disk`、`relativePath` 字段设计用于未来 OSS 迁移
+- `ownerType` + `ownerId` 实现多态关联，支持不同业务对象
+- 文件命名使用 `{timestamp}-{random}{ext}` 格式，避免冲突和路径穿越
+- 软删除后文件移动到 trash 目录，7 天后自动清理
+
+---
+
 ## ER 图
 
 ```
@@ -704,6 +749,10 @@ npx prisma studio
 ---
 
 ## 更新日志
+
+### 2026-03-26
+- ✅ 新增 `File` 模型（文件存储表）
+- ✅ 新增文件存储系统，支持本地存储和 OSS 迁移
 
 ### 2026-03-23
 - ✅ 添加 `Admin` 模型（管理员信息表）

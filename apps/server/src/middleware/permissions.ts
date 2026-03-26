@@ -13,7 +13,7 @@ import logger from '../lib/logger'
  * - super_admin: 所有数据
  * - platform_admin: 所有用户（不含超管/平台管理员）
  * - school_principal: 本校数据
- * - teacher: 本校数据 + 自己的团队 + 自己的学生
+ * - teacher: 本校数据 + 自己的团队 + 自己作为主教练的学生
  * - student: 自己的数据 + 所属团队
  */
 
@@ -48,9 +48,9 @@ function logPermissionDenied(
 export async function getUserSchoolId(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { teacher: true, student: true }
+    include: { Teacher: true, Student: true }
   })
-  return user?.teacher?.schoolId || user?.student?.schoolId || null
+  return user?.Teacher?.schoolId || user?.Student?.schoolId || null
 }
 
 /**
@@ -176,7 +176,7 @@ export async function canViewStudent(req: AuthRequest, studentId: string): Promi
  * 规则：
  * - super_admin, platform_admin: 可管理所有学生
  * - school_principal: 可管理本校所有学生
- * - teacher: 可管理自己的学生（主教练）或本校学生
+ * - teacher: 只能管理自己作为主教练的学生
  */
 export async function canManageStudent(req: AuthRequest, studentId: string): Promise<boolean> {
   const role = req.user!.role
@@ -210,11 +210,11 @@ export async function canManageStudent(req: AuthRequest, studentId: string): Pro
   // 学校负责人可以管理本校所有学生
   if (role === 'school_principal') return true
 
-  // 普通教师检查是否为主教练或同校
+  // 普通教师只能管理自己作为主教练的学生
   const teacherId = await getUserTeacherId(req.user!.userId)
-  const hasAccess = student.headTeacherId === teacherId || student.schoolId === userSchoolId
+  const hasAccess = student.headTeacherId === teacherId
   if (!hasAccess) {
-    logPermissionDenied(req, 'manage_student', 'student', studentId, '教师无权管理该学生')
+    logPermissionDenied(req, 'manage_student', 'student', studentId, '教师只能管理自己作为主教练的学生')
   }
   return hasAccess
 }

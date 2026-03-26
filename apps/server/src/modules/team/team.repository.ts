@@ -28,7 +28,7 @@ export class TeamRepository {
     return prisma.team.findUnique({
       where: { id },
       include: {
-        school: {
+        School: {
           select: {
             id: true,
             name: true,
@@ -36,7 +36,7 @@ export class TeamRepository {
             schoolType: true
           }
         },
-        members: {
+        TeamMember: {
           where: { status: 'active' }
         }
       }
@@ -54,8 +54,8 @@ export class TeamRepository {
     return prisma.team.findMany({
       where: params.where,
       include: {
-        school: { select: { id: true, name: true } },
-        members: {
+        School: { select: { id: true, name: true } },
+        TeamMember: {
           where: { status: 'active' },
           select: {
             id: true,
@@ -88,8 +88,8 @@ export class TeamRepository {
         isPublic: true
       },
       include: {
-        school: { select: { id: true, name: true } },
-        members: {
+        School: { select: { id: true, name: true } },
+        TeamMember: {
           where: { status: 'active', role: 'owner' },
           select: { userId: true, userType: true, role: true }
         }
@@ -117,7 +117,7 @@ export class TeamRepository {
         isPublic: data.isPublic
       },
       include: {
-        school: { select: { id: true, name: true } }
+        School: { select: { id: true, name: true } }
       }
     })
   }
@@ -136,7 +136,7 @@ export class TeamRepository {
       where: { id },
       data,
       include: {
-        school: { select: { id: true, name: true } }
+        School: { select: { id: true, name: true } }
       }
     })
   }
@@ -265,10 +265,16 @@ export class TeamRepository {
 
   /**
    * 查找用户收到的待处理邀请
+   * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
   async findUserPendingInvites(userId: string, userType: MemberType) {
     return prisma.teamMember.findMany({
-      where: { userId, userType, status: 'pending' },
+      where: {
+        userId,
+        userType,
+        status: 'pending',
+        invitedBy: { not: null }  // 只返回真正的邀请，排除申请记录
+      },
       orderBy: { joinedAt: 'desc' }
     })
   }
@@ -294,21 +300,35 @@ export class TeamRepository {
   }
 
   /**
-   * 查找用户收到的管理员邀请（role=admin, status=pending）
+   * 查找用户收到的管理员邀请（role=admin, status=pending, invitedBy不为空）
+   * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
   async findUserAdminInvites(userId: string, userType: MemberType) {
     return prisma.teamMember.findMany({
-      where: { userId, userType, role: 'admin', status: 'pending' },
+      where: {
+        userId,
+        userType,
+        role: 'admin',
+        status: 'pending',
+        invitedBy: { not: null }  // 只返回真正的邀请，排除申请记录
+      },
       orderBy: { joinedAt: 'desc' }
     })
   }
 
   /**
-   * 查找用户收到的普通成员邀请（role=member, status=pending）
+   * 查找用户收到的普通成员邀请（role=member, status=pending, invitedBy不为空）
+   * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
   async findUserMemberInvites(userId: string, userType: MemberType) {
     return prisma.teamMember.findMany({
-      where: { userId, userType, role: 'member', status: 'pending' },
+      where: {
+        userId,
+        userType,
+        role: 'member',
+        status: 'pending',
+        invitedBy: { not: null }  // 只返回真正的邀请，排除申请记录
+      },
       orderBy: { joinedAt: 'desc' }
     })
   }
@@ -363,6 +383,19 @@ export class TeamRepository {
   }
 
   /**
+   * 条件更新成员状态（并发安全）
+   * 只有当前状态为 pending 时才更新，返回受影响的行数
+   * 用于处理审批时的竞态条件
+   */
+  async updateMemberStatusIfPending(id: string, status: MemberStatus): Promise<number> {
+    const result = await prisma.teamMember.updateMany({
+      where: { id, status: 'pending' },
+      data: { status, joinedAt: new Date() }
+    })
+    return result.count
+  }
+
+  /**
    * 更新成员角色
    */
   async updateMemberRole(id: string, role: MemberRole) {
@@ -379,6 +412,18 @@ export class TeamRepository {
     return prisma.teamMember.delete({
       where: { id }
     })
+  }
+
+  /**
+   * 条件删除成员记录（并发安全）
+   * 只有当前状态为 pending 时才删除，返回受影响的行数
+   * 用于处理拒绝申请时的竞态条件
+   */
+  async deleteMemberIfPending(id: string): Promise<number> {
+    const result = await prisma.teamMember.deleteMany({
+      where: { id, status: 'pending' }
+    })
+    return result.count
   }
 
   /**
@@ -480,13 +525,30 @@ export class TeamRepository {
   }
 
   /**
+   * 条件更新加入申请状态（并发安全）
+   * 只有当前状态为 pending 时才更新，返回受影响的行数
+   * 用于处理审批时的竞态条件
+   */
+  async updateJoinRequestIfPending(id: string, data: {
+    status: 'approved' | 'rejected'
+    processedAt: Date
+    processedBy: string
+  }): Promise<number> {
+    const result = await prisma.teamJoinRequest.updateMany({
+      where: { id, status: 'pending' },
+      data
+    })
+    return result.count
+  }
+
+  /**
    * 查找团队的加入申请列表
    */
   async findJoinRequests(teamId: string) {
     return prisma.teamJoinRequest.findMany({
       where: { teamId, status: 'pending' },
       include: {
-        student: {
+        Student: {
           select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true, userId: true }
         }
       },
@@ -560,7 +622,7 @@ export class TeamRepository {
   async findUser(id: string) {
     return prisma.user.findUnique({
       where: { id },
-      include: { teacher: true, student: true }
+      include: { Teacher: true, Student: true }
     })
   }
 
@@ -670,7 +732,7 @@ export class TeamRepository {
   async findUserByUsername(username: string) {
     return prisma.user.findUnique({
       where: { username },
-      include: { student: true, teacher: true }
+      include: { Student: true, Teacher: true }
     })
   }
 }

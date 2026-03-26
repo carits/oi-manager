@@ -7,6 +7,11 @@ import apiClient from '@/lib/apiClient'
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
+  // 新的 File API URL 格式（/api/files/:id/download）直接使用
+  if (path.startsWith('/api/files/')) {
+    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${path}`
+  }
+  // 旧格式（/uploads/problems/xxx.pdf）使用代理
   const filename = path.split('/').pop()
   return `/api/problems/pdf/${filename}`
 }

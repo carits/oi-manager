@@ -5,17 +5,21 @@ import fs from 'fs'
 import { prisma } from '../prisma'
 import { authenticate, authorize } from '../middleware/auth'
 import logger from '../lib/logger'
+import { fileService } from '../lib/storage'
+import { STORAGE_ROOT } from '../config/storage'
 
 export const problemsRouter = Router()
 
-// 配置题目文件上传
+// 临时上传目录
+const tempUploadDir = path.join(STORAGE_ROOT, 'temp/uploads')
+if (!fs.existsSync(tempUploadDir)) {
+  fs.mkdirSync(tempUploadDir, { recursive: true })
+}
+
+// 配置题目文件上传（临时目录）
 const problemStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/problems')
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
-    cb(null, uploadDir)
+    cb(null, tempUploadDir)
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
@@ -269,7 +273,9 @@ problemsRouter.post('/', authenticate, async (req, res) => {
       memoryLimit,
       status = 'draft',
       visibility,
-      ojBindings
+      ojBindings,
+      statements = [],
+      solutions = []
     } = req.body
 
     if (!title || !title.trim()) {
@@ -311,11 +317,62 @@ problemsRouter.post('/', authenticate, async (req, res) => {
       status
     }
 
+    // 兼容旧字段：始终保存 description 和 solutionMarkdown（如果有内容）
     if (description) createData.description = description
     if (solutionMarkdown) createData.solutionMarkdown = solutionMarkdown
     if (ojBindings) createData.ojBindings = JSON.stringify(ojBindings)
 
     const problem = await prisma.problem.create({ data: createData })
+
+    // 创建多版本题面/题解
+    const allStatements = [
+      ...statements.map((s: any) => ({ ...s, type: 'statement' as const })),
+      ...solutions.map((s: any) => ({ ...s, type: 'solution' as const }))
+    ]
+
+    for (const stmt of allStatements) {
+      if (stmt.content || stmt.fileUrl) {
+        await prisma.problemStatement.create({
+          data: {
+            problemId: problem.id,
+            type: stmt.type,
+            format: stmt.format,
+            language: stmt.language || null,
+            content: stmt.content || null,
+            fileUrl: stmt.fileUrl || null,
+            isVisible: stmt.isVisible ?? true
+          }
+        })
+      }
+    }
+
+    // 如果有旧的 description 但没有新的 statements，自动创建一条
+    if (description && !statements.some((s: any) => s.format === 'markdown' && s.language === 'zh')) {
+      await prisma.problemStatement.create({
+        data: {
+          problemId: problem.id,
+          type: 'statement',
+          format: 'markdown',
+          language: 'zh',
+          content: description,
+          isVisible: true
+        }
+      })
+    }
+
+    // 如果有旧的 solutionMarkdown 但没有新的 solutions，自动创建一条
+    if (solutionMarkdown && !solutions.some((s: any) => s.format === 'markdown' && s.language === 'zh')) {
+      await prisma.problemStatement.create({
+        data: {
+          problemId: problem.id,
+          type: 'solution',
+          format: 'markdown',
+          language: 'zh',
+          content: solutionMarkdown,
+          isVisible: solutionVisible
+        }
+      })
+    }
 
     logger.audit('problem_created', {
       userId,
@@ -337,7 +394,14 @@ problemsRouter.get('/:id', authenticate, async (req, res) => {
     const { id } = req.params
     const role = (req as any).user.role
 
-    const problem = await prisma.problem.findUnique({ where: { id } })
+    const problem = await prisma.problem.findUnique({
+      where: { id },
+      include: {
+        ProblemStatement: {
+          orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }]
+        }
+      }
+    })
 
     if (!problem) {
       return res.status(404).json({ success: false, message: '题目不存在' })
@@ -356,7 +420,41 @@ problemsRouter.get('/:id', authenticate, async (req, res) => {
       ownerName = admin?.name || '管理员'
     }
 
-    res.json({ success: true, data: { ...problem, ownerName } })
+    // 将 ProblemStatement 分组为 statements 和 solutions
+    const statements = problem.ProblemStatement
+      .filter(s => s.type === 'statement')
+      .map(s => ({
+        id: s.id,
+        format: s.format,
+        language: s.language,
+        content: s.content,
+        fileUrl: s.fileUrl,
+        isVisible: s.isVisible
+      }))
+
+    const solutions = problem.ProblemStatement
+      .filter(s => s.type === 'solution')
+      .map(s => ({
+        id: s.id,
+        format: s.format,
+        language: s.language,
+        content: s.content,
+        fileUrl: s.fileUrl,
+        isVisible: s.isVisible
+      }))
+
+    // 移除原始 ProblemStatement 字段
+    const { ProblemStatement: _, ...problemData } = problem
+
+    res.json({
+      success: true,
+      data: {
+        ...problemData,
+        ownerName,
+        statements,
+        solutions
+      }
+    })
   } catch (error) {
     logger.error('get_problem_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -380,7 +478,9 @@ problemsRouter.put('/:id', authenticate, async (req, res) => {
       memoryLimit,
       status,
       visibility,
-      ojBindings
+      ojBindings,
+      statements,
+      solutions
     } = req.body
 
     const existingProblem = await prisma.problem.findUnique({ where: { id } })
@@ -424,6 +524,89 @@ problemsRouter.put('/:id', authenticate, async (req, res) => {
       data: updateData
     })
 
+    // 处理多版本题面/题解更新
+    if (statements !== undefined || solutions !== undefined) {
+      // 获取现有的 statements
+      const existingStatements = await prisma.problemStatement.findMany({
+        where: { problemId: id }
+      })
+
+      // 构建 ID 集合
+      const newStatementIds = new Set<string>()
+      const allStatements = [
+        ...(statements || []).map((s: any) => ({ ...s, type: 'statement' as const })),
+        ...(solutions || []).map((s: any) => ({ ...s, type: 'solution' as const }))
+      ]
+
+      // 更新或创建
+      for (const stmt of allStatements) {
+        // 检查是否是有效的 UUID（legacy- 开头的是前端生成的假 ID）
+        const isValidId = stmt.id && !stmt.id.startsWith('legacy-')
+
+        if (isValidId) {
+          // 检查该 ID 是否存在于数据库中
+          const existsInDb = existingStatements.some(e => e.id === stmt.id)
+          if (existsInDb) {
+            // 更新现有记录（通过 ID）
+            newStatementIds.add(stmt.id)
+            await prisma.problemStatement.update({
+              where: { id: stmt.id },
+              data: {
+                content: stmt.content,
+                fileUrl: stmt.fileUrl,
+                isVisible: stmt.isVisible
+              }
+            })
+            continue
+          }
+          // ID 无效（不存在于数据库），继续执行创建逻辑
+        }
+
+        if (stmt.content || stmt.fileUrl) {
+          // 查找是否存在相同唯一键的记录
+          const existingStmt = existingStatements.find(
+            e => e.type === stmt.type && e.format === stmt.format && e.language === (stmt.language || null)
+          )
+
+          if (existingStmt) {
+            // 更新现有记录
+            newStatementIds.add(existingStmt.id)
+            await prisma.problemStatement.update({
+              where: { id: existingStmt.id },
+              data: {
+                content: stmt.content,
+                fileUrl: stmt.fileUrl,
+                isVisible: stmt.isVisible
+              }
+            })
+          } else {
+            // 创建新记录
+            const newStmt = await prisma.problemStatement.create({
+              data: {
+                problemId: id,
+                type: stmt.type,
+                format: stmt.format,
+                language: stmt.language || null,
+                content: stmt.content || null,
+                fileUrl: stmt.fileUrl || null,
+                isVisible: stmt.isVisible ?? true
+              }
+            })
+            newStatementIds.add(newStmt.id)
+          }
+        }
+      }
+
+      // 删除不再需要的记录
+      for (const existing of existingStatements) {
+        if (!newStatementIds.has(existing.id)) {
+          await prisma.problemStatement.delete({
+            where: { id: existing.id }
+          })
+        }
+      }
+    }
+
     logger.audit('problem_updated', {
       userId: user.userId,
       action: 'update_problem',
@@ -454,16 +637,42 @@ problemsRouter.delete('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: '没有权限删除此题目' })
     }
 
-    // 删除关联的 PDF 文件
-    if (existingProblem.statementPdfUrl) {
+    // 删除关联的 PDF 文件（旧格式）
+    if (existingProblem.statementPdfUrl && existingProblem.statementPdfUrl.startsWith('/uploads/')) {
       const filePath = path.join(__dirname, '../../', existingProblem.statementPdfUrl)
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     }
-    if (existingProblem.solutionPdfUrl) {
+    if (existingProblem.solutionPdfUrl && existingProblem.solutionPdfUrl.startsWith('/uploads/')) {
       const filePath = path.join(__dirname, '../../', existingProblem.solutionPdfUrl)
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     }
 
+    // 删除关联的 File 记录（新格式）
+    const relatedFiles = await prisma.file.findMany({
+      where: { ownerType: 'problem', ownerId: id }
+    })
+    for (const file of relatedFiles) {
+      await fileService.hardDelete(file.id)
+    }
+
+    // 删除关联的附件记录
+    const attachments = await prisma.problemAttachment.findMany({
+      where: { problemId: id }
+    })
+    for (const att of attachments) {
+      // 如果是新格式的 File API URL
+      if (att.fileUrl.startsWith('/api/files/')) {
+        const fileId = att.fileUrl.split('/')[3]
+        await fileService.hardDelete(fileId).catch(() => {}) // 忽略错误
+      }
+      // 旧格式的物理文件
+      if (att.fileUrl.startsWith('/uploads/')) {
+        const filePath = path.join(__dirname, '../../', att.fileUrl)
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+      }
+    }
+
+    // 真删除题目
     await prisma.problem.delete({ where: { id } })
 
     logger.audit('problem_deleted', {
@@ -502,19 +711,32 @@ problemsRouter.post('/:id/statement-pdf', authenticate, problemUpload.single('fi
       return res.status(403).json({ success: false, message: '没有权限' })
     }
 
-    if (existingProblem.statementPdfUrl) {
-      const oldFilePath = path.join(__dirname, '../../', existingProblem.statementPdfUrl)
-      if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath)
-    }
+    // 使用 FileService 上传文件（题面 PDF 公开访问）
+    const result = await fileService.uploadFromMulter(req.file, {
+      category: 'pdf',
+      ownerType: 'problem',
+      ownerId: id,
+      isPublic: true
+    })
 
-    const pdfUrl = `/uploads/problems/${req.file.filename}`
+    const pdfUrl = `/api/files/${result.id}/public`
     await prisma.problem.update({
       where: { id },
       data: { statementPdfUrl: pdfUrl, statementType: 'pdf' }
     })
 
-    res.json({ success: true, data: { pdfUrl } })
+    logger.audit('statement_pdf_uploaded', {
+      userId: user.userId,
+      action: 'upload_statement_pdf',
+      target: id,
+      metadata: { fileId: result.id, originalName: result.originalName }
+    })
+
+    res.json({ success: true, data: { pdfUrl, fileId: result.id } })
   } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
     logger.error('upload_statement_pdf_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -542,19 +764,32 @@ problemsRouter.post('/:id/solution-pdf', authenticate, problemUpload.single('fil
       return res.status(403).json({ success: false, message: '没有权限' })
     }
 
-    if (existingProblem.solutionPdfUrl) {
-      const oldFilePath = path.join(__dirname, '../../', existingProblem.solutionPdfUrl)
-      if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath)
-    }
+    // 使用 FileService 上传文件
+    const result = await fileService.uploadFromMulter(req.file, {
+      category: 'pdf',
+      ownerType: 'problem',
+      ownerId: id,
+      isPublic: false
+    })
 
-    const pdfUrl = `/uploads/problems/${req.file.filename}`
+    const pdfUrl = `/api/files/${result.id}/download`
     await prisma.problem.update({
       where: { id },
       data: { solutionPdfUrl: pdfUrl, solutionType: 'pdf' }
     })
 
-    res.json({ success: true, data: { pdfUrl } })
+    logger.audit('solution_pdf_uploaded', {
+      userId: user.userId,
+      action: 'upload_solution_pdf',
+      target: id,
+      metadata: { fileId: result.id, originalName: result.originalName }
+    })
+
+    res.json({ success: true, data: { pdfUrl, fileId: result.id } })
   } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
     logger.error('upload_solution_pdf_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -681,19 +916,37 @@ problemsRouter.post('/:id/attachments', authenticate, attachmentUpload.single('f
       return res.status(403).json({ success: false, message: '没有权限' })
     }
 
-    const fileUrl = `/uploads/problems/${req.file.filename}`
+    // 使用 FileService 上传文件
+    const result = await fileService.uploadFromMulter(req.file, {
+      category: 'attachment',
+      ownerType: 'problem',
+      ownerId: id,
+      isPublic: false
+    })
+
+    const fileUrl = `/api/files/${result.id}/download`
     const attachment = await prisma.problemAttachment.create({
       data: {
         problemId: id,
-        fileName: req.file.originalname,
-        fileSize: req.file.size,
+        fileName: result.originalName,
+        fileSize: result.fileSize,
         fileUrl,
         description: description || null
       }
     })
 
-    res.json({ success: true, data: attachment })
+    logger.audit('attachment_uploaded', {
+      userId: user.userId,
+      action: 'upload_attachment',
+      target: id,
+      metadata: { fileId: result.id, attachmentId: attachment.id, originalName: result.originalName }
+    })
+
+    res.json({ success: true, data: { ...attachment, fileId: result.id } })
   } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
     logger.error('upload_attachment_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
@@ -733,6 +986,181 @@ problemsRouter.delete('/:id/attachments/:attachmentId', authenticate, async (req
     res.json({ success: true, message: '删除成功' })
   } catch (error) {
     logger.error('delete_attachment_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+// ==================== 上传题面/题解 PDF（新统一接口） ====================
+problemsRouter.post('/:id/statements/pdf', authenticate, problemUpload.single('file'), async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = (req as any).user
+    const { type = 'statement' } = req.body // type: 'statement' | 'solution'
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: '请上传 PDF 文件' })
+    }
+
+    const existingProblem = await prisma.problem.findUnique({ where: { id } })
+
+    if (!existingProblem) {
+      fs.unlinkSync(req.file.path)
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    if (!canModifyProblem(user, existingProblem)) {
+      fs.unlinkSync(req.file.path)
+      return res.status(403).json({ success: false, message: '没有权限' })
+    }
+
+    // 检查是否已存在该类型的 PDF
+    const existingPdf = await prisma.problemStatement.findFirst({
+      where: { problemId: id, type, format: 'pdf' }
+    })
+
+    // 使用 FileService 上传文件（题面/题解 PDF 公开访问）
+    const result = await fileService.uploadFromMulter(req.file, {
+      category: 'pdf',
+      ownerType: 'problem',
+      ownerId: id,
+      isPublic: true
+    })
+
+    const fileUrl = `/api/files/${result.id}/public`
+
+    let statement: any
+    if (existingPdf) {
+      // 更新现有 PDF
+      statement = await prisma.problemStatement.update({
+        where: { id: existingPdf.id },
+        data: { fileUrl }
+      })
+    } else {
+      // 创建新的 PDF 记录
+      statement = await prisma.problemStatement.create({
+        data: {
+          problemId: id,
+          type,
+          format: 'pdf',
+          language: null,
+          fileUrl,
+          isVisible: true
+        }
+      })
+    }
+
+    // 同时更新旧字段以保持兼容
+    if (type === 'statement') {
+      await prisma.problem.update({
+        where: { id },
+        data: { statementPdfUrl: fileUrl, statementType: 'pdf' }
+      })
+    } else {
+      await prisma.problem.update({
+        where: { id },
+        data: { solutionPdfUrl: fileUrl, solutionType: 'pdf' }
+      })
+    }
+
+    logger.audit('statement_pdf_uploaded', {
+      userId: user.userId,
+      action: 'upload_statement_pdf',
+      target: id,
+      metadata: { type, fileId: result.id, originalName: result.originalName }
+    })
+
+    res.json({ success: true, data: { id: statement.id, fileUrl, fileId: result.id } })
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
+    logger.error('upload_statement_pdf_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+// ==================== 更新题面/题解可见性 ====================
+problemsRouter.put('/:id/statements/:statementId/visibility', authenticate, async (req, res) => {
+  try {
+    const { id, statementId } = req.params
+    const user = (req as any).user
+    const { isVisible } = req.body
+
+    const existingProblem = await prisma.problem.findUnique({ where: { id } })
+
+    if (!existingProblem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    if (!canModifyProblem(user, existingProblem)) {
+      return res.status(403).json({ success: false, message: '没有权限' })
+    }
+
+    const statement = await prisma.problemStatement.findFirst({
+      where: { id: statementId, problemId: id }
+    })
+
+    if (!statement) {
+      return res.status(404).json({ success: false, message: '记录不存在' })
+    }
+
+    const updated = await prisma.problemStatement.update({
+      where: { id: statementId },
+      data: { isVisible }
+    })
+
+    logger.audit('statement_visibility_updated', {
+      userId: user.userId,
+      action: 'update_statement_visibility',
+      target: id,
+      metadata: { statementId, isVisible }
+    })
+
+    res.json({ success: true, data: updated })
+  } catch (error) {
+    logger.error('update_statement_visibility_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+// ==================== 删除题面/题解版本 ====================
+problemsRouter.delete('/:id/statements/:statementId', authenticate, async (req, res) => {
+  try {
+    const { id, statementId } = req.params
+    const user = (req as any).user
+
+    const existingProblem = await prisma.problem.findUnique({ where: { id } })
+
+    if (!existingProblem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    if (!canModifyProblem(user, existingProblem)) {
+      return res.status(403).json({ success: false, message: '没有权限' })
+    }
+
+    const statement = await prisma.problemStatement.findFirst({
+      where: { id: statementId, problemId: id }
+    })
+
+    if (!statement) {
+      return res.status(404).json({ success: false, message: '记录不存在' })
+    }
+
+    await prisma.problemStatement.delete({
+      where: { id: statementId }
+    })
+
+    logger.audit('statement_deleted', {
+      userId: user.userId,
+      action: 'delete_statement',
+      target: id,
+      metadata: { statementId, type: statement.type, format: statement.format }
+    })
+
+    res.json({ success: true, message: '删除成功' })
+  } catch (error) {
+    logger.error('delete_statement_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
