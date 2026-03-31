@@ -199,8 +199,8 @@ export default function PlatformAdminProblemsPage() {
       if (jobsStatusFilter) params.append('status', jobsStatusFilter)
       const result = await apiClient.get<{ list: FetchJob[]; page: number; totalPages: number; total: number }>(`/api/oj-fetcher/jobs?${params}`)
       if (result.success && result.data) {
-        setJobs(result.data.list)
-        setJobsTotalPages(result.data.totalPages)
+        setJobs(result.data.list ?? [])
+        setJobsTotalPages(result.data.totalPages ?? 1)
       }
     } catch (error) {
       console.error('Failed to fetch jobs:', error)
@@ -237,7 +237,7 @@ export default function PlatformAdminProblemsPage() {
       if (searchKeyword) params.append('keyword', searchKeyword)
       const result = await apiClient.get<{ list: Problem[]; totalPages: number }>(`/api/problems?${params}`)
       if (result.success && result.data) {
-        setPublicProblems(result.data.list)
+        setPublicProblems(result.data.list ?? [])
         setPublicTotalPages(result.data.totalPages)
       }
     } catch (error) {
@@ -259,7 +259,7 @@ export default function PlatformAdminProblemsPage() {
       if (searchKeyword) params.append('keyword', searchKeyword)
       const result = await apiClient.get<{ list: Problem[]; totalPages: number }>(`/api/problems?${params}`)
       if (result.success && result.data) {
-        setPrivateProblems(result.data.list)
+        setPrivateProblems(result.data.list ?? [])
         setPrivateTotalPages(result.data.totalPages)
       }
     } catch (error) {
@@ -583,7 +583,7 @@ export default function PlatformAdminProblemsPage() {
 
               {jobsLoading ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
-              ) : jobs.length === 0 ? (
+              ) : !jobs || jobs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无任务</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
