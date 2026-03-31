@@ -18,8 +18,22 @@ interface PlatformBinding {
   id: string
   platform: string
   platformUsername: string | null
-  bindingStatus: 'unbound' | 'pending' | 'bound' | 'failed'
+  bindingStatus: 'unbound' | 'pending' | 'bound' | 'failed' | 'expired'
+  statusMessage?: string | null
   verifiedAt: string | null
+}
+
+interface ConfigField {
+  key: string
+  label: string
+  type: 'text' | 'password'
+  required: boolean
+  placeholder?: string
+}
+
+interface ConfigSchema {
+  fields: ConfigField[]
+  helpText?: string
 }
 
 export default function StudentPlatformBindingsPage() {
@@ -27,6 +41,10 @@ export default function StudentPlatformBindingsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [configSchema, setConfigSchema] = useState<ConfigSchema | null>(null)
+  const [configValues, setConfigValues] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // 获取绑定状态
   useEffect(() => {
@@ -49,8 +67,28 @@ export default function StudentPlatformBindingsPage() {
     setLoading(false)
   }
 
-  const handlePlatformClick = (platformId: string) => {
+  const handlePlatformClick = async (platformId: string) => {
     setSelectedPlatform(platformId)
+    setError(null)
+    setConfigValues({})
+    setConfigSchema(null)
+
+    // 获取平台配置 Schema
+    try {
+      const result = await apiClient.get<ConfigSchema>(`/api/platform-bindings/${platformId}/config-schema`)
+      if (result.success && result.data) {
+        setConfigSchema(result.data)
+        // 初始化表单值
+        const initial: Record<string, string> = {}
+        result.data.fields.forEach((f) => {
+          initial[f.key] = ''
+        })
+        setConfigValues(initial)
+      }
+    } catch (err) {
+      console.error('Failed to fetch config schema:', err)
+    }
+
     setModalOpen(true)
   }
 
@@ -62,13 +100,90 @@ export default function StudentPlatformBindingsPage() {
     if (binding.bindingStatus === 'bound') {
       return { text: `已绑定: ${binding.platformUsername}`, color: 'var(--success)' }
     }
+    if (binding.bindingStatus === 'expired') {
+      return { text: `已失效: ${binding.statusMessage || '请重新绑定'}`, color: 'var(--error)' }
+    }
     if (binding.bindingStatus === 'pending') {
       return { text: '绑定中...', color: 'var(--warning)' }
     }
     return { text: '绑定失败', color: 'var(--error)' }
   }
 
+  const handleBind = async () => {
+    if (!selectedPlatform) return
+
+    // 验证必填字段
+    if (configSchema) {
+      for (const field of configSchema.fields) {
+        if (field.required && !configValues[field.key]) {
+          setError(`请填写 ${field.label}`)
+          return
+        }
+      }
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      // 构建请求体：从 configValues 中提取 username 和 password
+      const requestBody: any = {}
+
+      // VJudge 等平台需要 platformUsername 和 password
+      if (configValues.username) {
+        requestBody.platformUsername = configValues.username
+      }
+      if (configValues.password) {
+        requestBody.password = configValues.password
+      }
+      // 其他字段放入 extra
+      const extraFields = { ...configValues }
+      delete extraFields.username
+      delete extraFields.password
+      if (Object.keys(extraFields).length > 0) {
+        requestBody.extra = extraFields
+      }
+
+      const result = await apiClient.post(`/api/platform-bindings/${selectedPlatform}/bind`, requestBody)
+
+      if (result.success) {
+        // 刷新绑定状态
+        await fetchBindings()
+        setModalOpen(false)
+      } else {
+        setError(result.message || '绑定失败')
+      }
+    } catch (err) {
+      setError('网络错误，请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleUnbind = async () => {
+    if (!selectedPlatform) return
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const result = await apiClient.delete(`/api/platform-bindings/${selectedPlatform}`)
+
+      if (result.success) {
+        await fetchBindings()
+        setModalOpen(false)
+      } else {
+        setError(result.message || '解绑失败')
+      }
+    } catch (err) {
+      setError('网络错误，请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const selectedPlatformInfo = PLATFORMS.find((p) => p.id === selectedPlatform)
+  const currentBinding = selectedPlatform ? bindings[selectedPlatform] : null
 
   return (
     <ProtectedRoute requiredRole="student">
@@ -142,15 +257,16 @@ export default function StudentPlatformBindingsPage() {
         )}
       </div>
 
-      {/* 绑定弹窗（框架） */}
+      {/* 绑定弹窗 */}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={`绑定 ${selectedPlatformInfo?.name || ''} 账号`}
         width="450px"
       >
-        <div style={{ padding: '1.5rem 0', textAlign: 'center', color: 'var(--gray-500)' }}>
-          <div style={{ marginBottom: '1rem' }}>
+        <div style={{ padding: '0.5rem 0' }}>
+          {/* 平台图标 */}
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <div
               style={{
                 width: '60px',
@@ -163,21 +279,132 @@ export default function StudentPlatformBindingsPage() {
                 justifyContent: 'center',
                 fontWeight: 600,
                 fontSize: '1.5rem',
-                margin: '0 auto 1rem'
+                margin: '0 auto'
               }}
             >
               {selectedPlatformInfo?.name.charAt(0)}
             </div>
-            <p style={{ margin: 0 }}>绑定功能开发中...</p>
-            <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem' }}>
-              敬请期待
-            </p>
           </div>
+
+          {/* 当前绑定状态 */}
+          {currentBinding && currentBinding.bindingStatus === 'bound' && (
+            <div style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--success-bg, #dcfce7)',
+              borderRadius: '6px',
+              marginBottom: '1rem',
+              color: 'var(--success, #16a34a)',
+              fontSize: '0.875rem'
+            }}>
+              已绑定: {currentBinding.platformUsername}
+            </div>
+          )}
+
+          {currentBinding && currentBinding.bindingStatus === 'expired' && (
+            <div style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--error-bg, #fee2e2)',
+              borderRadius: '6px',
+              marginBottom: '1rem',
+              color: 'var(--error, #dc2626)',
+              fontSize: '0.875rem'
+            }}>
+              已失效: {currentBinding.statusMessage || '请重新绑定'}
+            </div>
+          )}
+
+          {/* 配置表单 */}
+          {configSchema ? (
+            <div>
+              {configSchema.fields.map((field) => (
+                <div key={field.key} style={{ marginBottom: '1rem' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    marginBottom: '0.5rem',
+                    color: 'var(--gray-700)'
+                  }}>
+                    {field.label}
+                    {field.required && <span style={{ color: 'var(--error)', marginLeft: '0.25rem' }}>*</span>}
+                  </label>
+                  <input
+                    type={field.type}
+                    value={configValues[field.key] || ''}
+                    onChange={(e) => setConfigValues({ ...configValues, [field.key]: e.target.value })}
+                    placeholder={field.placeholder}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 0.75rem',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              ))}
+
+              {/* 帮助文本 */}
+              {configSchema.helpText && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  background: 'var(--gray-50)',
+                  borderRadius: '6px',
+                  marginBottom: '1rem',
+                  fontSize: '0.75rem',
+                  color: 'var(--gray-600)',
+                  lineHeight: 1.5
+                }}>
+                    {configSchema.helpText}
+                  </div>
+                )}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--gray-500)' }}>
+              <p>该平台绑定功能暂未开放，敬请期待</p>
+            </div>
+          )}
+
+          {/* 错误提示 */}
+          {error && (
+            <div style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--error-bg, #fee2e2)',
+              borderRadius: '6px',
+              marginBottom: '1rem',
+              color: 'var(--error, #dc2626)',
+              fontSize: '0.875rem'
+            }}>
+              {error}
+            </div>
+          )}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>
-            关闭
-          </Button>
+
+        {/* 操作按钮 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginTop: '1rem' }}>
+          <div>
+            {currentBinding && currentBinding.bindingStatus !== 'unbound' && (
+              <Button
+                variant="secondary"
+                onClick={handleUnbind}
+                disabled={submitting}
+                style={{ color: 'var(--error)' }}
+              >
+                解除绑定
+              </Button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+              取消
+            </Button>
+            {configSchema && (
+              <Button onClick={handleBind} disabled={submitting}>
+                {submitting ? '验证中...' : '验证绑定'}
+              </Button>
+            )}
+          </div>
         </div>
       </Modal>
     </ProtectedRoute>

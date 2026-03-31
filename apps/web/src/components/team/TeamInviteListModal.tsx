@@ -85,7 +85,9 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
         </div>
       ) : pendingInvites.length > 0 ? (
         <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {pendingInvites.map(invite => (
+          {pendingInvites.map(invite => {
+            const user = invite.user || { name: '未知用户', type: invite.type, username: '' }
+            return (
             <div
               key={invite.id}
               style={{
@@ -104,8 +106,8 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
                     width: '40px',
                     height: '40px',
                     borderRadius: '50%',
-                    background: invite.user.avatar
-                      ? `url(${getAssetUrl(invite.user.avatar)}) center/cover`
+                    background: user.avatar
+                      ? `url(${getAssetUrl(user.avatar)}) center/cover`
                       : 'var(--primary)',
                     display: 'flex',
                     alignItems: 'center',
@@ -114,22 +116,22 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
                     fontWeight: 500
                   }}
                 >
-                  {!invite.user.avatar && invite.user.name.charAt(0)}
+                  {!user.avatar && (user.name || '?').charAt(0)}
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontWeight: 500 }}>{invite.user.name}</span>
-                    {invite.user.username && (
-                      <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({invite.user.username})</span>
+                    <span style={{ fontWeight: 500 }}>{user.name}</span>
+                    {user.username && (
+                      <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({user.username})</span>
                     )}
                     <span style={{
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.375rem',
                       borderRadius: '4px',
-                      background: invite.user.type === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
-                      color: invite.user.type === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
+                      background: user.type === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
+                      color: user.type === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
                     }}>
-                      {invite.user.type === 'teacher' ? '教师' : '学生'}
+                      {user.type === 'teacher' ? '教师' : '学生'}
                     </span>
                     <span style={{
                       fontSize: '0.75rem',
@@ -155,7 +157,8 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
                 取消邀请
               </Button>
             </div>
-          ))}
+            )
+            })}
         </div>
       ) : (
         <p style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>

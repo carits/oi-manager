@@ -11,7 +11,7 @@ import type { UserRole, JwtPayload } from '../../../../packages/shared/src/index
 export type BindingPlatform = 'vjudge' | 'luogu' | 'codeforces' | 'atcoder'
 
 /** 绑定状态 */
-export type BindingStatus = 'unbound' | 'pending' | 'bound' | 'failed'
+export type BindingStatus = 'unbound' | 'pending' | 'bound' | 'failed' | 'expired'
 
 // ==================== 数据库模型类型 ====================
 
@@ -19,10 +19,13 @@ export type BindingStatus = 'unbound' | 'pending' | 'bound' | 'failed'
 export interface PlatformBindingRecord {
   id: string
   userId: string
-  platform: BindingPlatform
+  platform: string  // Prisma returns string, not the union type
   platformUsername: string | null
-  bindingStatus: BindingStatus
+  platformUid: string | null
+  bindingStatus: string  // Prisma returns string, not the union type
   bindingData: string | null
+  platformConfig: string | null
+  statusMessage: string | null
   verifiedAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -51,7 +54,7 @@ export interface PlatformConfig {
 /** 所有支持的平台的配置 */
 export const PLATFORM_CONFIGS: PlatformConfig[] = [
   { id: 'vjudge', name: 'Vjudge', color: '#4A90A4', supported: false },
-  { id: 'luogu', name: '洛谷', color: '#3498db', supported: false },
+  { id: 'luogu', name: '洛谷', color: '#3498db', supported: true },
   { id: 'codeforces', name: 'Codeforces', color: '#1f8dd6', supported: false },
   { id: 'atcoder', name: 'AtCoder', color: '#000', supported: false },
 ]
@@ -65,11 +68,27 @@ export interface BindRequest {
   extra?: Record<string, any>
 }
 
+/** 平台配置字段定义 */
+export interface PlatformConfigField {
+  key: string
+  label: string
+  type: 'text' | 'password' | 'textarea'
+  required: boolean
+  placeholder?: string
+}
+
+/** 平台配置 Schema */
+export interface PlatformConfigSchema {
+  fields: PlatformConfigField[]
+  helpText: string
+}
+
 /** 绑定结果 */
 export interface BindResult {
   success: boolean
   message?: string
   platformUsername?: string
+  bindingData?: string  // 序列化的绑定数据（如 Cookie Jar）
 }
 
 /** 解绑结果 */

@@ -54,8 +54,11 @@ export class PlatformBindingRepository {
     userId: string
     platform: BindingPlatform
     platformUsername?: string
+    platformUid?: string
     bindingStatus?: BindingStatus
     bindingData?: string
+    platformConfig?: string
+    statusMessage?: string
   }): Promise<PlatformBindingRecord> {
     return prisma.userPlatformBinding.create({
       data: {
@@ -63,8 +66,11 @@ export class PlatformBindingRepository {
         userId: params.userId,
         platform: params.platform,
         platformUsername: params.platformUsername || null,
+        platformUid: params.platformUid || null,
         bindingStatus: params.bindingStatus || 'pending',
         bindingData: params.bindingData || null,
+        platformConfig: params.platformConfig || null,
+        statusMessage: params.statusMessage || null,
         updatedAt: new Date()
       }
     })
@@ -80,8 +86,11 @@ export class PlatformBindingRepository {
     platform: BindingPlatform,
     params: {
       platformUsername?: string
+      platformUid?: string
       bindingStatus?: BindingStatus
       bindingData?: string
+      platformConfig?: string
+      statusMessage?: string
       verifiedAt?: Date | null
     }
   ): Promise<PlatformBindingRecord> {
@@ -119,8 +128,11 @@ export class PlatformBindingRepository {
       },
       data: {
         platformUsername: null,
+        platformUid: null,
         bindingStatus: 'unbound',
         bindingData: null,
+        platformConfig: null,
+        statusMessage: null,
         verifiedAt: null,
         updatedAt: new Date()
       }
@@ -136,8 +148,11 @@ export class PlatformBindingRepository {
     userId: string
     platform: BindingPlatform
     platformUsername?: string
+    platformUid?: string
     bindingStatus?: BindingStatus
     bindingData?: string
+    platformConfig?: string
+    statusMessage?: string
     verifiedAt?: Date | null
   }): Promise<PlatformBindingRecord> {
     return prisma.userPlatformBinding.upsert({
@@ -146,8 +161,11 @@ export class PlatformBindingRepository {
       },
       update: {
         platformUsername: params.platformUsername || null,
+        platformUid: params.platformUid || null,
         bindingStatus: params.bindingStatus || 'pending',
         bindingData: params.bindingData || null,
+        platformConfig: params.platformConfig || null,
+        statusMessage: params.statusMessage || null,
         verifiedAt: params.verifiedAt || null,
         updatedAt: new Date()
       },
@@ -156,8 +174,11 @@ export class PlatformBindingRepository {
         userId: params.userId,
         platform: params.platform,
         platformUsername: params.platformUsername || null,
+        platformUid: params.platformUid || null,
         bindingStatus: params.bindingStatus || 'pending',
         bindingData: params.bindingData || null,
+        platformConfig: params.platformConfig || null,
+        statusMessage: params.statusMessage || null,
         verifiedAt: params.verifiedAt || null,
         updatedAt: new Date()
       }

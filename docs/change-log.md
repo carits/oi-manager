@@ -1,5 +1,202 @@
 # 变更日志
 
+## 2026-03-30
+
+### 拉取队列 UI 改造
+
+**改了什么**：
+1. OJ 平台下拉从 5-12 项扩展为 55+ 项全平台列表，统一使用 `KNOWN_OJ_PLATFORMS`
+2. 批量拉取区域新增平台选择器（不再硬编码 luogu）
+3. 任务列表增加平台筛选 + 状态筛选 + 分页（每页 20 条）
+4. 后端 GET /jobs 支持分页筛选，POST /jobs/batch 改用 `isKnownPlatform()` 白名单
+
+**为什么改**：平台下拉只有几项不够用，任务列表无筛选无分页难以管理
+
+**影响模块**：
+- 拉取队列页面（platform-admin/problems）
+- 公共题库筛选（ProblemList）
+- OJ 绑定下拉（ProblemForm）
+- OJ 平台显示（ProblemDetail）
+- 后端拉取路由（oj-fetcher）
+- OJ 适配器索引（oj-adapters/index.ts）
+
+**兼容性风险**：无，洛谷实际拉取逻辑完全不变
+
+### 洛谷团队导入功能实现
+- **新建**: `binders/luogu-session.ts` — 洛谷会话服务（核心数据拉取），  - 内置 RateLimiter QPS 限速器（最小间隔 1.5s + 随机抖动 0.5-1.5s），  - 所有 HTTP 请求都经过 `throttledFetch` 或 `fetchWithC3VK`（含限速）
+  - 支持获取团队列表和团队详情（公告 + 成员）
+- **新建**: `team-import/luogu-import.service.ts` — 洛谷导入薄层服务
+- **新建**: `web/teacher/team-import/luogu/page.tsx` — 前端洛谷导入页面
+- **修改**: `binders/luogu.ts` — bindingData 增加 clientId/uidCookie 存储
+- **修改**: `team-import/team-import.types.ts` — 添加洛谷类型定义
+- **修改**: `team-import/team-import.routes.ts` — 添加 4 个洛谷 API 路由
+- **修改**: `web/teacher/students/import/page.tsx` — 添加洛谷跳转
+
+### 夶盖范围
+- 团队导入模块
+- 平台绑定模块（洛谷绑定器）
+- 前端导入入口页
+
+## 2026-03-28
+
+### VJudge Cloudflare 拦截检测修复
+- **修复**: Cookie 绑定验证阶段优先检测 Cloudflare 拦截页，不再误报"Cookie 已失效"
+- **修复**: `getMyGroups()` 被 Cloudflare 拦截时抛出异常而非静默返回空数组
+- **修复**: `getGroupDetails()` 新增 Cloudflare 拦截检测
+- **修复**: 登录方法增加 "Human verification failed" 专门识别
+- **修复**: 导入路由层识别 Cloudflare 错误，返回 400 + `errorType: 'CLOUDFLARE_BLOCKED'`
+- **修复**: 前端导入页获取空团队列表时不再标记为 cookieValid=true
+- **优化**: 绑定页错误提示支持多行显示（`whiteSpace: pre-line`）
+- **影响文件**: vjudge.ts, vjudge-session.ts, team-import.routes.ts, vjudge/page.tsx, platform-bindings/page.tsx
+
+### VJudge 导入共享组件提取 & 重构
+- **新建**: `apps/web/src/components/team-import/types.ts` — 共享类型（ImportMember, ConflictInfo, ValidateResultItem, ImportResult 等）
+- **新建**: `apps/web/src/components/team-import/ImportPreview.tsx` — 共享预览/校验/导入组件（~500 行）
+- **重构**: VJudge 导入页面从 934 行精简到 ~230 行，仅保留平台鉴权和数据获取逻辑
+- **架构**: 平台页面只负责 Cookie/Token 验证 + 获取原始成员，`ImportPreview` 统一处理预览→校验→问题解决→导入→结果展示
+- **好处**: 后续洛谷等平台只需实现自己的鉴权+数据获取，复用 `ImportPreview` 组件
+
+### VJudge 导入预览冲突检测 & 解决功能
+- **新增**: `member-match.service.ts` — 通用成员冲突检测服务（所有平台导入共用)
+- **修改**: 类型定义增加 ConflictType, ConflictInfo MemberInput 等
+- **修改**: `vjudge-import.service.ts` — 预览只返回原始数据，校验调用通用服务,导入支持 invite/skip
+- **修改**: `team-import.routes.ts` — 新增 `POST /vjudge/validate` 校验端点
+- **重写**: 前端预览页 — 冲突卡片UI、校验流程、性别选择(默认男)
+- **三类冲突**: 本校用户名冲突 / 本校姓名冲突 / 外校用户名冲突
+- **交互流程**: 校验→解决冲突→再校验→直到全部通过才能导入
+
+### 学生删除真删除 & 禁用账号功能
+
+- **问题**: 教师删除学生后超管列表仍显示（只删 Student 不删 User）
+- **修复**:
+  - `apps/server/src/routes/students.ts` DELETE 端点改为事务级联删除 Student + User
+  - 新增 `PUT /api/students/:id/account-status` 接口支持禁用/启用
+  - `apps/web/src/app/teacher/students/page.tsx` 新增禁用/启用按钮
+  - 学生列表返回 `user.status` 字段
+- **验证**: 删除后 User 级联删除；禁用后无法登录；启用后恢复
+
+### 学校详情页 Prisma 字段名修复
+
+- **问题**: 教师编辑学生时密码修改不生效
+- **根因**: `PUT /api/students/:id` 未从 req.body 解构 password 字段
+- **修复**:
+  - `apps/server/src/routes/students.ts`: 解构 password 字段，在事务中添加密码哈希更新
+  - `apps/web/src/app/teacher/students/page.tsx`: 添加白色 Toast 成功通知
+- **验证**: carits 账号密码更新测试通过，登录验证成功
+
+### VJudge 团队导入 Bug 修复
+
+**问题**：
+1. 导入创建的学生使用随机用户名（如 `stu_timestamp_random`），而非预览中显示的 VJudge 用户名
+2. 导入时选择"创建新团队"，但团队未被创建（导航到 VJudge 页面时未传递 createTeam 参数）
+
+**修改文件**：
+- `apps/server/src/modules/team-import/vjudge-import.service.ts` - 使用 VJudge 用户名作为系统登录名（含冲突检测）
+- `apps/server/src/modules/team-import/team-import.types.ts` - 添加 systemUsername/tempPassword 字段
+- `apps/web/src/app/teacher/students/import/page.tsx` - 导航时传递 createTeam 和 visibility 参数
+- `apps/web/src/app/teacher/team-import/vjudge/page.tsx` - 导入结果页显示账号信息表
+
+**修复内容**：
+1. **Bug 1 - 用户名修复**：新创建学生的系统登录名使用 VJudge 用户名（用户可在预览时编辑），若用户名冲突则追加 `_vj_timestamp` 后缀
+2. **Bug 2 - 团队创建修复**：从导入入口页导航到 VJudge 导入页时，传递 `createTeam` 和 `visibility` URL 参数
+3. **结果页增强**：导入结果页新增账号信息表，显示学生姓名、登录用户名、初始密码和 VJudge 用户名
+
+---
+
+### VJudge 团队导入功能优化（早期变更）
+
+**变更说明**：优化 VJudge 团队导入流程，支持编辑用户名和学生姓名。
+
+**修改文件**：
+- `apps/server/src/modules/team-import/team-import.routes.ts` - 移除冗余的团队验证
+- `apps/server/src/modules/team-import/vjudge-import.service.ts` - 使用编辑后的用户名进行平台绑定
+- `apps/web/src/app/teacher/team-import/vjudge/page.tsx` - 预览页用户名和学生姓名可编辑
+
+**功能变更**：
+1. 移除后端"请选择团队或创建新团队"验证（前端已传入 createTeam 参数）
+2. 预览页用户名（VJudge 用户名）现在可编辑
+3. 预览页学生姓名（仅新成员）可编辑
+4. 后端使用前端传来的编辑后用户名进行平台绑定
+
+---
+
+## 2026-03-27
+
+### VJudge 团队导入功能
+
+**变更说明**：添加从 VJudge 平台导入团队成员的功能，支持获取 VJudge 团队列表、预览成员、批量导入。
+
+**新建文件**：
+- `apps/server/src/modules/team-import/vjudge-import.service.ts` - VJudge 导入服务
+- `apps/web/src/app/teacher/team-import/vjudge/page.tsx` - VJudge 导入页面
+
+**修改文件**：
+- `apps/server/src/modules/platform-binding/binders/vjudge-session.ts` - 添加团队获取方法
+- `apps/server/src/modules/team-import/team-import.types.ts` - 添加 VJudge 类型定义
+- `apps/server/src/modules/team-import/team-import.routes.ts` - 添加 VJudge API 路由
+
+**功能说明**：
+1. 入口位置：`/teacher/team-import/vjudge`
+2. 导入流程：选择 VJudge 团队 → 选择拉取选项 → 预览成员 → 确认导入
+3. 成员处理：
+   - 新成员：创建学生账号，设置入学年份
+   - 已存在成员：发送团队邀请，信息不可更改
+4. 支持批量设置入学年份
+5. 验证 VJudge Cookie 有效性
+
+**API 端点**：
+- `GET /api/team-import/vjudge/groups` - 获取 VJudge 团队列表
+- `POST /api/team-import/vjudge/preview` - 预览团队成员
+- `POST /api/team-import/vjudge/import` - 执行导入
+
+---
+
+### 团队导入功能
+
+**变更说明**：为团队管理模块添加"团队导入"功能，支持从外部 OJ 平台（VJudge、洛谷）批量导入学生到团队。
+
+**新建文件**：
+- `apps/server/prisma/schema.prisma` - 添加 TeamMemberExternalAccount, TeamMemberImportBatch, TeamMemberImportItem 模型
+- `apps/server/src/modules/team-import/team-import.types.ts` - 类型定义
+- `apps/server/src/modules/team-import/team-import.repository.ts` - 数据访问层
+- `apps/server/src/modules/team-import/team-import.service.ts` - 业务逻辑层
+- `apps/server/src/modules/team-import/team-import.routes.ts` - 路由层
+- `apps/web/src/app/teacher/students/import/page.tsx` - 导入入口页（选择团队+平台）
+- `apps/web/src/app/teacher/students/import/bind/page.tsx` - 平台绑定页
+- `apps/web/src/app/teacher/students/import/input/page.tsx` - 数据输入页
+- `apps/web/src/app/teacher/students/import/preview/page.tsx` - 预览页
+- `apps/web/src/app/teacher/students/import/result/page.tsx` - 结果页
+
+**修改文件**：
+- `apps/server/src/index.ts` - 注册 team-import 路由
+- `apps/web/src/app/teacher/students/page.tsx` - 添加"导入团队"按钮（在"添加学生"左侧）
+
+**功能说明**：
+1. 入口位置：学生管理页面，"添加学生"按钮左侧的"导入团队"按钮
+2. 支持平台：VJudge、洛谷（可扩展）
+3. 导入流程：选择团队 → 选择平台 → 检查绑定 → 输入数据 → 预览匹配 → 确认导入 → 查看结果
+4. 数据格式：每行一个用户名，或"用户名 姓名"（空格/逗号分隔）
+5. 匹配逻辑：优先用学生姓名匹配，其次用平台绑定匹配
+6. 邀请机制：匹配到的学生发送邀请，需确认后加入
+
+**API 端点**：
+- `GET /api/team-import/teams` - 获取用户管理的团队
+- `GET /api/team-import/platforms` - 获取可用平台及绑定状态
+- `POST /api/team-import/start` - 开始导入批次
+- `GET /api/team-import/:batchId/preview` - 获取预览数据
+- `POST /api/team-import/:batchId/confirm` - 确认导入
+- `GET /api/team-import/:batchId/result` - 获取导入结果
+- `GET /api/team-import/history/:teamId` - 获取导入历史
+
+**匹配类型**：
+- `new_member` - 新成员，可选择创建学生
+- `existing_member` - 已绑定该平台的账号
+- `same_name` - 姓名匹配但未绑定平台
+- `conflict` - 账号已被其他学生绑定
+- `invalid` - 无效数据
+
+---
+
 ## 2026-03-26
 
 ### 平台绑定功能基础框架

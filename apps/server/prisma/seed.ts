@@ -58,10 +58,13 @@ async function main() {
 
   // 创建超级管理员账号 (admin)
   const adminPassword = await bcrypt.hash('123456', 10)
-  const adminUser = await prisma.user.upsert({
+  const adminUserId = crypto.randomUUID()
+  const adminTeacherId = crypto.randomUUID()
+  await prisma.user.upsert({
     where: { username: 'admin' },
     update: {},
     create: {
+      id: adminUserId,
       username: 'admin',
       passwordHash: adminPassword,
       role: 'super_admin',
@@ -69,6 +72,7 @@ async function main() {
       email: 'admin@example.com',
       Teacher: {
         create: {
+          id: adminTeacherId,
           name: '系统管理员',
           email: 'admin@example.com',
           phone: '13800000000',
@@ -80,10 +84,13 @@ async function main() {
 
   // 创建平台管理员账号 (platform_admin)
   const platformAdminPassword = await bcrypt.hash('123456', 10)
+  const platformAdminUserId = crypto.randomUUID()
+  const platformAdminAdminId = crypto.randomUUID()
   await prisma.user.upsert({
     where: { username: 'platform_admin' },
     update: {},
     create: {
+      id: platformAdminUserId,
       username: 'platform_admin',
       passwordHash: platformAdminPassword,
       role: 'platform_admin',
@@ -91,6 +98,7 @@ async function main() {
       email: 'platform_admin@example.com',
       Admin: {
         create: {
+          id: platformAdminAdminId,
           name: '平台管理员'
         }
       }
@@ -99,10 +107,13 @@ async function main() {
 
   // 创建老师用户 1
   const teacherPassword = await bcrypt.hash('123456', 10)
+  const teacherUserId = crypto.randomUUID()
+  const teacherId = crypto.randomUUID()
   const teacherUser = await prisma.user.upsert({
     where: { username: 'teacher' },
     update: {},
     create: {
+      id: teacherUserId,
       username: 'teacher',
       passwordHash: teacherPassword,
       role: 'teacher',
@@ -110,6 +121,7 @@ async function main() {
       email: 'teacher@example.com',
       Teacher: {
         create: {
+          id: teacherId,
           name: '张老师',
           email: 'teacher@example.com',
           phone: '13900000000',
@@ -145,10 +157,13 @@ async function main() {
   })
 
   // 创建老师用户 2
+  const teacher2UserId = crypto.randomUUID()
+  const teacher2Id = crypto.randomUUID()
   const teacher2User = await prisma.user.upsert({
     where: { username: 'teacher2' },
     update: {},
     create: {
+      id: teacher2UserId,
       username: 'teacher2',
       passwordHash: teacherPassword,
       role: 'teacher',
@@ -156,6 +171,7 @@ async function main() {
       email: 'teacher2@example.com',
       Teacher: {
         create: {
+          id: teacher2Id,
           name: '李老师',
           email: 'teacher2@example.com',
           phone: '13900000001',
@@ -167,10 +183,13 @@ async function main() {
   })
 
   // 创建老师用户 3
+  const teacher3UserId = crypto.randomUUID()
+  const teacher3Id = crypto.randomUUID()
   const teacher3User = await prisma.user.upsert({
     where: { username: 'teacher3' },
     update: {},
     create: {
+      id: teacher3UserId,
       username: 'teacher3',
       passwordHash: teacherPassword,
       role: 'teacher',
@@ -178,6 +197,7 @@ async function main() {
       email: 'teacher3@example.com',
       Teacher: {
         create: {
+          id: teacher3Id,
           name: '王老师',
           email: 'teacher3@example.com',
           phone: '13900000002',
@@ -266,6 +286,7 @@ async function main() {
     },
     update: {},
     create: {
+      id: crypto.randomUUID(),
       teamId: team1.id,
       userId: teacher.id,
       userType: 'teacher',
@@ -286,6 +307,7 @@ async function main() {
     },
     update: {},
     create: {
+      id: crypto.randomUUID(),
       teamId: team2.id,
       userId: teacher2.id,
       userType: 'teacher',
@@ -306,6 +328,7 @@ async function main() {
     },
     update: {},
     create: {
+      id: crypto.randomUUID(),
       teamId: team3.id,
       userId: teacher.id,
       userType: 'teacher',
@@ -326,6 +349,7 @@ async function main() {
     },
     update: {},
     create: {
+      id: crypto.randomUUID(),
       teamId: team3.id,
       userId: teacher3.id,
       userType: 'teacher',
@@ -346,10 +370,13 @@ async function main() {
     // 将学生分配给3个教师
     const headTeacherId = studentNum % 3 === 0 ? teacher3.id : (studentNum % 3 === 1 ? teacher.id : teacher2.id)
 
+    const studentUserId = crypto.randomUUID()
+    const studentId = crypto.randomUUID()
     const user = await prisma.user.upsert({
       where: { username: s.username },
       update: {},
       create: {
+        id: studentUserId,
         username: s.username,
         passwordHash: studentPassword,
         role: 'student',
@@ -357,6 +384,7 @@ async function main() {
         email: s.email,
         Student: {
           create: {
+            id: studentId,
             name: s.name,
             gender: s.gender,
             schoolId: school.id,
@@ -390,6 +418,7 @@ async function main() {
           },
           update: {},
           create: {
+            id: crypto.randomUUID(),
             teamId: team1.id,
             userId: student.id,
             userType: 'student',
@@ -411,6 +440,7 @@ async function main() {
           },
           update: {},
           create: {
+            id: crypto.randomUUID(),
             teamId: team2.id,
             userId: student.id,
             userType: 'student',
@@ -432,6 +462,7 @@ async function main() {
           },
           update: {},
           create: {
+            id: crypto.randomUUID(),
             teamId: team1.id,
             userId: student.id,
             userType: 'student',
@@ -451,6 +482,7 @@ async function main() {
           },
           update: {},
           create: {
+            id: crypto.randomUUID(),
             teamId: team2.id,
             studentId: student.id,
             status: 'pending',
@@ -475,6 +507,7 @@ async function main() {
         },
         update: {},
         create: {
+          id: crypto.randomUUID(),
           teamId: team3.id,
           userId: student.id,
           userType: 'student',
@@ -507,11 +540,11 @@ async function main() {
       createdBy: teacher.id,
       Task: {
         create: [
-          { title: 'P3371 单源最短路径', ojName: '洛谷', problemId: 'P3371', difficulty: '入门', points: 10 },
-          { title: 'P3366 最小生成树', ojName: '洛谷', problemId: 'P3366', difficulty: '中等', points: 15 },
-          { title: 'P1346 观光之旅', ojName: '洛谷', problemId: 'P1346', difficulty: '困难', points: 20 },
-          { title: 'P1339 热浪问题', ojName: '洛谷', problemId: 'P1339', difficulty: '入门', points: 10 },
-          { title: 'P1126 机器人搬重物', ojName: '洛谷', problemId: 'P1126', difficulty: '中等', points: 15 }
+          { id: crypto.randomUUID(), title: 'P3371 单源最短路径', ojName: '洛谷', problemId: 'P3371', difficulty: '入门', points: 10 },
+          { id: crypto.randomUUID(), title: 'P3366 最小生成树', ojName: '洛谷', problemId: 'P3366', difficulty: '中等', points: 15 },
+          { id: crypto.randomUUID(), title: 'P1346 观光之旅', ojName: '洛谷', problemId: 'P1346', difficulty: '困难', points: 20 },
+          { id: crypto.randomUUID(), title: 'P1339 热浪问题', ojName: '洛谷', problemId: 'P1339', difficulty: '入门', points: 10 },
+          { id: crypto.randomUUID(), title: 'P1126 机器人搬重物', ojName: '洛谷', problemId: 'P1126', difficulty: '中等', points: 15 }
         ]
       }
     }
@@ -541,6 +574,7 @@ async function main() {
         },
         update: {},
         create: {
+          id: crypto.randomUUID(),
           taskId: task.id,
           studentId: student.id,
           status,
@@ -595,6 +629,7 @@ async function main() {
         },
         update: {},
         create: {
+          id: crypto.randomUUID(),
           contestId: contest.id,
           studentId: student.id,
           rank: rank,
@@ -640,10 +675,13 @@ async function main() {
 
   // 保留原来的student账号用于演示
   const originalStudentPassword = await bcrypt.hash('123456', 10)
+  const originalStudentUserId = crypto.randomUUID()
+  const originalStudentId = crypto.randomUUID()
   await prisma.user.upsert({
     where: { username: 'student' },
     update: {},
     create: {
+      id: originalStudentUserId,
       username: 'student',
       passwordHash: originalStudentPassword,
       role: 'student',
@@ -651,6 +689,7 @@ async function main() {
       email: 'student@test.com',
       Student: {
         create: {
+          id: originalStudentId,
           name: '测试同学',
           gender: '男',
           schoolId: school.id,
@@ -698,6 +737,7 @@ async function main() {
     // 创建所有者的 TeamMember 记录
     await prisma.teamMember.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: team.id,
         userId: ownerId,
         userType: typeConfig.ownerType,
@@ -719,6 +759,7 @@ async function main() {
 
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: adminId,
           userType: typeConfig.adminType,
@@ -742,6 +783,7 @@ async function main() {
       if (!existing) {
         await prisma.teamMember.create({
           data: {
+            id: crypto.randomUUID(),
             teamId: team.id,
             userId: memberId,
             userType: 'student',

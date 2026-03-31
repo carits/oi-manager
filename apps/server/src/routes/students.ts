@@ -74,11 +74,11 @@ studentRouter.get('/', authenticate, async (req, res) => {
           }
         },
         Teacher: { select: { id: true, name: true } },
-        User: { select: { username: true, phone: true, email: true, avatar: true } }
+        User: { select: { username: true, phone: true, email: true, avatar: true, status: true } }
       }
     })
 
-    // 转换字段名为前端期望的格式，移除 Prisma 大写关联字段
+    // 转换字段名为前端期望的格式
     const formattedStudents = students.map(student => {
       const { User, Teacher, School, ...rest } = student
       return {
@@ -87,7 +87,8 @@ studentRouter.get('/', authenticate, async (req, res) => {
           username: User.username,
           phone: User.phone,
           email: User.email,
-          avatar: User.avatar
+          avatar: User.avatar,
+          status: User.status
         } : null,
         school: School ? {
           id: School.id,
@@ -333,7 +334,7 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
 studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
   try {
     const { id } = req.params
-    const { name, gender, schoolId, enrollmentYear, targetContest, headTeacherId, tags, notes, avatar, rating } = req.body
+    const { name, gender, schoolId, enrollmentYear, targetContest, headTeacherId, tags, notes, avatar, rating, password } = req.body
 
     // 获取当前登录老师的信息
     const userId = req.user!.userId
@@ -369,16 +370,25 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
     }
 
     // 使用事务更新学生及相关数据，确保原子性
+    console.log('[StudentUpdate] password field received:', password ? `"${password}" (${password.length} chars)` : '(empty)')
     const student = await prisma.$transaction(async (tx) => {
       // 更新学生的 User 关联信息（如果存在）
       if (existingStudent.userId) {
+        const userUpdateData: any = {
+          avatar,
+          phone: req.body.phone,
+          email: req.body.email
+        }
+
+        // 如果提供了新密码，则更新密码
+        if (password && password.length >= 6) {
+          console.log('[StudentUpdate] Hashing new password for user:', existingStudent.userId)
+          userUpdateData.passwordHash = await bcrypt.hash(password, 10)
+        }
+
         await tx.user.update({
           where: { id: existingStudent.userId },
-          data: {
-            avatar,
-            phone: req.body.phone,
-            email: req.body.email
-          }
+          data: userUpdateData
         })
       }
 
@@ -407,7 +417,7 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
   }
 })
 
-// 删除学生 (老师)
+// 删除学生 (老师) - 同时删除关联的 User 记录
 studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
   try {
     const { id } = req.params
@@ -417,13 +427,63 @@ studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principa
       return res.status(403).json({ success: false, message: '您没有权限删除该学生' })
     }
 
+    // 获取学生信息，找到关联的 userId
+    const student = await prisma.student.findUnique({ where: { id }, select: { userId: true } })
+    if (!student) {
+      return res.status(404).json({ success: false, message: '学生不存在' })
+    }
+
     // 在删除学生前，处理其作为团队所有者的情况
     await handleStudentOwnerDeletion(id)
 
-    await prisma.student.delete({ where: { id } })
+    // 使用事务：先删 Student，再删关联的 User
+    await prisma.$transaction(async (tx) => {
+      await tx.student.delete({ where: { id } })
+      if (student.userId) {
+        await tx.user.delete({ where: { id: student.userId } })
+      }
+    })
     res.json({ success: true, message: '删除成功' })
   } catch (error) {
     console.error('Delete student error:', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+// 禁用/启用学生账号 (老师)
+studentRouter.put('/:id/account-status', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body // 'disabled' | 'active'
+
+    if (!['active', 'disabled'].includes(status)) {
+      return res.status(400).json({ success: false, message: '无效的状态值' })
+    }
+
+    // 资源级权限检查
+    if (!await canManageStudent(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限操作该学生' })
+    }
+
+    const student = await prisma.student.findUnique({
+      where: { id },
+      select: { userId: true }
+    })
+    if (!student) {
+      return res.status(404).json({ success: false, message: '学生不存在' })
+    }
+    if (!student.userId) {
+      return res.status(400).json({ success: false, message: '该学生没有关联账号' })
+    }
+
+    await prisma.user.update({
+      where: { id: student.userId },
+      data: { status }
+    })
+
+    res.json({ success: true, message: status === 'disabled' ? '账号已禁用' : '账号已启用' })
+  } catch (error) {
+    console.error('Toggle student account status error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })

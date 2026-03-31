@@ -2,6 +2,464 @@
 
 ## 状态: 已完成
 
+## 当前任务：拉取队列 UI 改造（2026-03-30）
+
+### 目标
+将 OJ 平台下拉从 5-12 项扩展为 55+ 项全平台列表，增加任务列表筛选与分页功能，批量拉取支持选择平台。
+
+### 完成内容
+
+#### 1. 平台列表扩展（55+ 项）
+所有页面的 OJ 平台下拉统一使用 `KNOWN_OJ_PLATFORMS` 列表（55 项）：
+- `apps/server/src/oj-adapters/types.ts` — 主列表定义（已有）
+- `apps/server/src/oj-adapters/index.ts` — 导出 `isKnownPlatform()` 函数
+- `apps/web/src/app/platform-admin/problems/page.tsx` — 拉取队列页面（完全重写）
+- `apps/web/src/components/problem/ProblemList.tsx` — 公共题库筛选（已完成）
+- `apps/web/src/components/problem/ProblemForm.tsx` — OJ 绑定下拉（已完成）
+- `apps/web/src/components/problem/ProblemDetail.tsx` — OJ 平台显示名（已完成）
+
+#### 2. 批量拉取平台选择
+- textarea 上方新增平台下拉选择器（默认"洛谷"）
+- `handleSubmit` 中 `platform` 取自选中的值，不再硬编码 `'luogu'`
+
+#### 3. 任务列表筛选 + 分页
+- 筛选栏：平台下拉（全部 + 55 平台）+ 状态下拉（全部/等待中/拉取中/成功/失败/已存在）
+- 分页：每页 20 条，后端返回 `total`/`totalPages`
+- `fetchJobs()` 传 `platform`、`status`、`page`、`pageSize` 参数
+
+#### 4. 后端修改
+- `apps/server/src/routes/oj-fetcher.ts` — GET /jobs 增加分页筛选参数
+- `apps/server/src/routes/oj-fetcher.ts` — POST /jobs/batch 改用 `isKnownPlatform()` 白名单验证
+
+### 核心原则
+- 洛谷实际拉取逻辑完全不变
+- 没有 adapter 的平台，job 创建后执行时 `getAdapter` 抛异常，标记为 failed
+
+### 修改文件
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 重写 | `apps/web/src/app/platform-admin/problems/page.tsx` | 拉取队列页面全面改造 |
+| 修改 | `apps/web/src/components/problem/ProblemList.tsx` | 公共题库平台筛选扩展 |
+| 修改 | `apps/web/src/components/problem/ProblemForm.tsx` | OJ 绑定下拉扩展 |
+| 修改 | `apps/web/src/components/problem/ProblemDetail.tsx` | OJ 平台显示名扩展 |
+| 修改 | `apps/server/src/routes/oj-fetcher.ts` | 后端分页筛选 + 白名单验证 |
+| 修改 | `apps/server/src/oj-adapters/index.ts` | 导出 isKnownPlatform |
+
+### 验证
+- [x] TS 编译无新增错误
+- [ ] 拉取队列页面平台下拉有 55+ 选项
+- [ ] 选"洛谷"输入 P1001 → 开始拉取 → 成功
+- [ ] 选"CodeForces"输入 1234A → 创建 job 后变为 failed（暂不支持）
+- [ ] 任务列表：按平台/状态筛选、分页正常
+- [ ] 公共题库 Tab：平台筛选下拉有 55+ 选项
+- [ ] ProblemForm 编辑页：OJ 绑定下拉有 55+ 选项
+
+### 目标
+实现从洛谷平台导入团队的功能，复用 VJudge 导入的共享组件架构。
+
+### 实现内容
+
+#### 已完成步骤
+
+1. **修改 LuoguBinder 存储 Cookie** - `binders/luogu.ts` 的 bindingData 增加 `clientId` 和 `uidCookie`
+2. **新建 LuoguSession 洛谷会话服务** - `binders/luogu-session.ts`（核心：数据拉取）
+   - 内置 RateLimiter 限速器：最小间隔 1.5s + 随机抖动 0.5-1.5s
+   - 所有对洛谷的 HTTP 请求都经过 `throttledFetch()` 或 `fetchWithC3VK()` 限速
+   - C3VK 挑战页处理（复用 luogu-fetcher.ts）
+   - 团队列表获取（JSON + HTML 双策略）
+   - 团队详情获取（公告 + 成员）
+3. **新建洛谷导入服务** - `team-import/luogu-import.service.ts`（薄层，调用 LuoguSession）
+4. **添加洛谷类型定义** - `team-import/team-import.types.ts`（LuoguGroupPreview, LuoguImportRequest 等）
+5. **添加 4 个洛谷后端路由** - `team-import/team-import.routes.ts`
+   - `GET /api/team-import/luogu/groups` → 获取团队列表
+   - `POST /api/team-import/luogu/preview` → 预览团队
+   - `POST /api/team-import/luogu/validate` → 校验冲突（复用 memberMatchService）
+   - `POST /api/team-import/luogu/import` → 执行导入
+6. **新建前端洛谷导入页面** - `web/teacher/team-import/luogu/page.tsx`（3步流程，复用 ImportPreview）
+7. **修改导入入口页** - `web/teacher/students/import/page.tsx` 添加洛谷跳转
+8. **TypeScript 编译验证通过** - 新文件无 TS 错误
+
+### 修改文件
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 新建 | `binders/luogu-session.ts` | 洛谷会话服务（含 QPS 限速） |
+| 新建 | `team-import/luogu-import.service.ts` | 洛谷导入薄层服务 |
+| 新建 | `web/teacher/team-import/luogu/page.tsx` | 前端导入页面 |
+| 修改 | `binders/luogu.ts` | bindingData 存储 Cookie |
+| 修改 | `team-import/team-import.types.ts` | 添加洛谷类型 |
+| 修改 | `team-import/team-import.routes.ts` | 添加 4 个洛谷路由 |
+| 修改 | `web/teacher/students/import/page.tsx` | 添加洛谷跳转 |
+
+### 验证
+- [ ] 重启后端服务
+- [ ] 绑定洛谷账号后访问 `/teacher/students/import`
+- [ ] 选择洛谷平台 → 验证绑定 → 获取团队列表 → 选择团队 → 预览 → 导入
+
+### 问题
+VJudge 绑定和团队导入时，Cloudflare 拦截没有被正确检测和提示：
+1. Cookie 模式绑定时，只检查 `/user/logout` 存在，没有优先检测 Cloudflare 拦截页
+2. `getMyGroups()` 被 Cloudflare 拦截时静默返回空数组 `[]`，导致前端误以为"无团队"
+3. `getGroupDetails()` 完全没有 Cloudflare 检测
+4. 密码模式登录时 "Human verification failed" 没有被专门识别
+5. 前端导入页获取空团队列表时标记为 cookieValid=true，不区分拦截原因
+
+### 修复内容
+
+#### 1. Cookie 绑定验证阶段增加 Cloudflare 优先检测
+**文件**: `apps/server/src/modules/platform-binding/binders/vjudge.ts`
+- 在检查 `/user/logout` 之前，先检测页面是否为 Cloudflare 拦截页
+- 检测关键词：`just a moment`、`cf-browser-verification`、`challenge-platform`、`human verification`、`cloudflare`
+- 拦截时返回详细操作指引（含步骤）
+
+#### 2. getMyGroups() 被拦截时抛出异常
+**文件**: `apps/server/src/modules/platform-binding/binders/vjudge-session.ts`
+- `getMyGroups()`: Cloudflare 拦截时 `throw new Error('CLOUDFLARE_BLOCKED: ...')` 而非返回 `[]`
+- 新增检测关键词：`challenge-platform`、`Human verification`
+
+#### 3. getGroupDetails() 增加 Cloudflare 检测
+**文件**: `apps/server/src/modules/platform-binding/binders/vjudge-session.ts`
+- 在解析 dataJson 之前先检测 Cloudflare 拦截
+- 拦截时抛出异常
+
+#### 4. 登录方法增强 Cloudflare 识别
+**文件**: `apps/server/src/modules/platform-binding/binders/vjudge-session.ts`
+- `login()`: 在错误信息检测中增加 `Human verification` 关键词
+- `isLoggedIn()`: 增加 `Just a Moment`（大写M）、`human verification` 检测，返回 `CLOUDFLARE_BLOCKED` 前缀
+- `vjudge.ts` binder: 密码模式检测改为 case-insensitive，增加 `人机验证` 关键词
+
+#### 5. 导入路由层识别 Cloudflare 错误
+**文件**: `apps/server/src/modules/team-import/team-import.routes.ts`
+- groups 路由：catch 中识别 `CLOUDFLARE_BLOCKED` 错误，返回 400 + `errorType: 'CLOUDFLARE_BLOCKED'`
+- preview 路由：同上
+
+#### 6. 前端导入页修复
+**文件**: `apps/web/src/app/teacher/team-import/vjudge/page.tsx`
+- 获取团队成功但为空时，不再自动跳到选择团队步骤，停在当前页显示空列表
+- 错误信息直接展示后端返回的 Cloudflare 提示
+
+#### 7. 绑定页错误展示优化
+**文件**: `apps/web/src/app/teacher/platform-bindings/page.tsx`
+- 错误提示增加 `whiteSpace: 'pre-line'` 支持 `\n` 换行的多行指引
+- 增加 `lineHeight: 1.6` 提升可读性
+
+### 修改文件
+- `apps/server/src/modules/platform-binding/binders/vjudge.ts` — Cookie/密码模式 Cloudflare 检测增强
+- `apps/server/src/modules/platform-binding/binders/vjudge-session.ts` — getMyGroups/getGroupDetails/login/isLoggedIn 检测
+- `apps/server/src/modules/team-import/team-import.routes.ts` — Cloudflare 错误识别
+- `apps/web/src/app/teacher/team-import/vjudge/page.tsx` — 空团队不跳转
+- `apps/web/src/app/teacher/platform-bindings/page.tsx` — 错误展示优化
+
+### 验证
+- [ ] Cookie 模式绑定：粘贴被 Cloudflare 拦截的 Cookie → 应显示详细操作指引
+- [ ] 密码模式绑定：被拦截 → 应显示"请使用 Cookie 方式绑定"
+- [ ] 团队导入：Cookie 过期被拦截 → 应显示 Cloudflare 错误而非空团队列表
+
+
+## 已完成任务：VJudge 导入共享组件提取 & 重构（2026-03-28）
+
+### 已完成
+- ✅ 提取共享组件 `ImportPreview` 到 `components/team-import/`
+- ✅ 提取共享类型到 `components/team-import/types.ts`
+- ✅ 重构 VJudge 页面使用 `ImportPreview` 组件（从 934 行精简到 ~230 行）
+
+### 设计要点
+- 平台页面只负责：平台鉴权（Cookie/Token）+ 获取原始成员数据
+- `ImportPreview` 组件统一处理：成员列表编辑 → 校验 → 问题解决 → 导入 → 结果展示
+- 后续洛谷等平台只需实现自己的平台鉴权+数据获取，复用 `ImportPreview`
+
+### 共享文件
+- `apps/web/src/components/team-import/types.ts` — ImportMember, ConflictInfo, ValidateResultItem, ImportResult 等
+- `apps/web/src/components/team-import/ImportPreview.tsx` — 共享预览/校验/导入组件
+
+### 重构后 VJudge 页面
+- Step 1: 验证 Cookie → 获取团队列表
+- Step 2: 选择团队 → 拉取成员
+- Step 3: `<ImportPreview>` 处理一切
+
+### 待做
+- [ ] 洛谷导入页面（复用 ImportPreview）
+- [ ] 其他平台导入页面
+
+### 修改文件
+- `apps/web/src/components/team-import/types.ts` — 新建共享类型
+- `apps/web/src/components/team-import/ImportPreview.tsx` — 新建共享组件
+- `apps/web/src/app/teacher/team-import/vjudge/page.tsx` — 重构使用共享组件
+
+
+## 已完成任务：学生删除真删除 & 禁用账号功能（2026-03-28）
+
+### 问题
+1. 教师端删除学生后，超管列表仍能看到（Student 记录被删但 User 记录残留）
+2. 教师缺少禁用学生账号的功能
+
+### 根因
+- `DELETE /api/students/:id` 只删 Student 记录，没有级联删除关联的 User 记录
+- User 表中残留的记录导致超管端仍能看到这些用户
+
+### 修复内容
+
+#### 1. 学生删除改为真删除（级联删除 User）
+**文件**: `apps/server/src/routes/students.ts`
+- 删除 Student 前先查 userId
+- 使用事务：先删 Student，再删关联 User
+- 确保数据库不留残留记录
+
+#### 2. 新增禁用/启用学生账号功能
+**后端**:
+- `PUT /api/students/:id/account-status` - 切换账号状态（active/disabled）
+- 权限检查：教师只能操作自己的学生
+
+**前端**:
+- 教师端学生列表新增"禁用/启用"按钮
+- 已禁用显示绿色"启用"按钮，正常显示黄色"禁用"按钮
+- 操作带确认弹窗和 loading 状态
+
+#### 3. 学生列表 API 返回 user.status
+**文件**: `apps/server/src/routes/students.ts`
+- User select 中添加 `status: true`
+- 前端可根据 status 显示账号状态
+
+### 验证
+- ✅ 删除学生后 User 记录一同被删除
+- ✅ 禁用后学生无法登录（提示"该账号已被禁用"）
+- ✅ 启用后恢复正常登录
+- ✅ 超管列表不再显示已删除的学生
+
+---
+
+## 已完成任务：学生编辑密码修复 & Toast 通知（2026-03-28）
+
+### 问题
+1. 教师编辑学生信息时，修改密码不生效
+2. 编辑保存后无成功反馈
+
+### 根因
+- **问题1**: `students.ts` 中 `PUT /:id` 端点未从 `req.body` 解构 `password` 字段，导致密码更新逻辑未执行。代码已在本地修改但 tsx watch 未自动重载，需要重启服务器。
+- **修复**: 添加 `password` 到解构列表，在事务中添加密码哈希更新逻辑。
+
+### 修复内容
+
+#### 1. 密码更新修复
+**文件**: `apps/server/src/routes/students.ts`
+- 从 `req.body` 解构 `password` 字段
+- 在事务中判断 `password && password.length >= 6` 时更新密码哈希
+- 使用 `bcrypt.hash(password, 10)` 生成哈希
+
+#### 2. 成功 Toast 通知
+**文件**: `apps/web/src/app/teacher/students/page.tsx`
+- 添加 `toast` 状态和自动关闭逻辑（2.5秒）
+- 保存成功后显示白色背景 Toast "保存成功"
+- 样式：固定定位、居中、白色背景、阴影
+
+---
+
+## 已完成任务：VJudge 导入 Bug 修复（2026-03-28）
+
+### 问题
+1. 导入创建的学生使用随机用户名（如 `stu_timestamp_random`），而非预览中显示的 VJudge 用户名
+2. 导入时选择"创建新团队"，但团队未被创建
+
+### 根因
+- **Bug 1**: `vjudge-import.service.ts` 中 `importMembers` 方法使用 `stu_${Date.now()}_${random}` 生成用户名，而非 VJudge 用户名
+- **Bug 2**: 导入入口页 `import/page.tsx` 导航到 VJudge 页面时未传递 `createTeam` 和 `visibility` URL 参数
+
+### 修复内容
+
+#### 1. 用户名修复
+**文件**: `apps/server/src/modules/team-import/vjudge-import.service.ts`
+- 使用 VJudge 用户名（可在预览时编辑）作为系统登录名
+- 添加用户名冲突检测，冲突时追加 `_vj_timestamp` 后缀
+- 导入结果中返回 `systemUsername` 和 `tempPassword` 字段
+
+#### 2. 团队创建修复
+**文件**: `apps/web/src/app/teacher/students/import/page.tsx`
+- 导航到 VJudge 页面时传递 `createTeam` 和 `visibility` 参数
+
+#### 3. 结果页增强
+**文件**: `apps/web/src/app/teacher/team-import/vjudge/page.tsx`
+- 导入结果页新增账号信息表格
+- 显示：学生姓名、登录用户名、初始密码、VJudge 用户名
+
+#### 4. 类型更新
+**文件**: `apps/server/src/modules/team-import/team-import.types.ts`
+- `VjudgeImportDetail` 添加 `systemUsername` 和 `tempPassword` 字段
+- `VjudgeMemberInput` 添加 `matchedStudentName` 字段
+
+---
+
+## 已完成任务：VJudge 团队导入功能（2026-03-27）
+
+### 目标
+实现从 VJudge 平台导入团队的功能，支持：
+1. 通过 Cookie 鉴权获取用户管理的 VJudge 团队列表
+2. 下拉选择团队（显示格式：团队名(short_name)）
+3. 选择拉取内容（公告、描述、成员）
+4. 成员导入时支持：
+   - 新成员：创建学生，设置入学年份
+   - 已存在成员：发送团队邀请，信息不可更改
+   - 支持批量设置入学年份
+
+### 实现内容
+
+#### 1. 后端 - VJudge Session 扩展
+**文件**: `apps/server/src/modules/platform-binding/binders/vjudge-session.ts`
+- 添加 `extractDataJson()` 方法从 HTML 提取数据
+- 添加 `getMyGroups()` 方法获取团队列表
+- 添加 `getGroupDetails()` 方法获取团队详情（包含成员）
+
+#### 2. 后端 - VJudge 导入服务
+**新建文件**: `apps/server/src/modules/team-import/vjudge-import.service.ts`
+- `getGroups()` - 获取团队列表
+- `previewGroup()` - 预览团队成员（含匹配逻辑）
+- `importMembers()` - 执行导入（创建学生或发送邀请）
+
+#### 3. 后端 - API 路由
+**修改文件**: `apps/server/src/modules/team-import/team-import.routes.ts`
+- `GET /api/team-import/vjudge/groups` - 获取 VJudge 团队列表
+- `POST /api/team-import/vjudge/preview` - 预览团队内容
+- `POST /api/team-import/vjudge/import` - 执行导入
+
+#### 4. 前端 - 导入页面
+**新建文件**: `apps/web/src/app/teacher/team-import/vjudge/page.tsx`
+- Step 1: 选择 VJudge 团队
+- Step 2: 选择拉取选项（验证 Cookie 有效性）
+- Step 3: 预览成员，支持编辑和删除
+- Step 4: 显示导入结果
+
+### 成员匹配逻辑
+- **新成员**: 系统中不存在匹配学生，可编辑入学年份和学生姓名
+- **已存在**: 系统中已匹配到学生（按 VJudge 绑定或姓名匹配），信息不可更改
+
+### 验证结果
+- ✅ 后端 API 正常响应
+- ✅ 前端页面可访问
+- ✅ Cookie 验证逻辑正常
+- ✅ 未绑定 VJudge 时提示正确
+
+### 涉及文件
+- `apps/server/src/modules/platform-binding/binders/vjudge-session.ts` - 添加团队获取方法
+- `apps/server/src/modules/team-import/team-import.types.ts` - 添加 VJudge 类型
+- `apps/server/src/modules/team-import/vjudge-import.service.ts` - 新建导入服务
+- `apps/server/src/modules/team-import/team-import.routes.ts` - 添加 VJudge API
+- `apps/web/src/app/teacher/team-import/vjudge/page.tsx` - 新建前端页面
+
+---
+
+## 已完成任务：团队导入功能修复（2026-03-27）
+
+### 问题
+团队导入功能存在多个技术问题导致无法正常运行：
+1. `bcrypt` 和 `bcryptjs` 包冲突 - 两者同时安装导致模块加载失败
+2. SQLite 不支持 Prisma 的 `mode: 'insensitive'` 参数
+3. SQLite 不支持 Prisma 的 `skipDuplicates` 参数
+4. 多个 Prisma 模型缺少显式 `id` 字段生成
+
+### 修复内容
+
+#### 1. 移除 bcrypt 包冲突
+- **问题**: 同时安装了 `bcrypt`（原生模块，Windows 上编译失败）和 `bcryptjs`（纯 JS 实现）
+- **修复**: 移除 `bcrypt` 和 `@types/bcrypt`，只保留 `bcryptjs`
+- **文件**: `apps/server/package.json`
+
+#### 2. 修复 SQLite 兼容性问题
+- **问题**: `findStudentByName` 使用 `mode: 'insensitive'`，SQLite 不支持
+- **修复**: 移除 `mode` 参数，使用精确匹配
+- **文件**: `team-import.repository.ts`
+
+#### 3. 修复 skipDuplicates 问题
+- **问题**: `createMany` 使用 `skipDuplicates: true`，SQLite 不支持
+- **修复**: 移除 `skipDuplicates` 参数
+- **文件**: `team-import.repository.ts`
+
+#### 4. 添加显式 ID 生成
+- **问题**: Team、TeamMember、User、Student 模型创建时缺少 `id` 字段
+- **修复**: 为所有 `create` 调用添加 `id: uuidv4()`
+- **文件**: `team-import.repository.ts`
+
+### 验证结果
+- ✅ POST /api/team-import/start - 创建批次和团队成功
+- ✅ GET /api/team-import/:batchId/preview - 获取预览数据成功
+- ✅ POST /api/team-import/:batchId/confirm - 确认导入成功（bcrypt 正常工作）
+- ✅ 创建学生、发送邀请、关联外部账号全部正常
+
+### 涉及文件
+- `apps/server/package.json` - 移除 bcrypt 包
+- `apps/server/src/modules/team-import/team-import.repository.ts` - 修复 SQLite 兼容性和 ID 生成
+
+---
+
+## 已完成任务：团队导入功能（2026-03-27）
+
+### 目标
+为团队管理模块添加"团队导入"功能，支持从外部 OJ 平台（VJudge、洛谷）批量导入学生到团队。
+
+### 需求要点
+1. **独立页面流程**：入口在学生管理页，"添加学生"按钮左侧
+2. **平台绑定检查**：导入前检查当前用户是否已绑定目标平台
+3. **团队选择**：导入流程开始时选择目标团队
+4. **手工粘贴导入**：支持多种数据格式
+5. **预览页**：展示解析结果、匹配状态、冲突识别
+6. **结果页**：导入完成后显示统计结果
+
+### 数据格式
+- 每行一个平台用户名
+- 或每行"用户名 姓名"（空格/逗号分隔）
+
+### 匹配逻辑
+1. 优先用学生姓名匹配系统中已有学生
+2. 也可用平台用户名匹配（如果学生已绑定该平台）
+3. 匹配到 → 发送邀请待确认
+4. 未匹配到 → 用户在预览页选择是否创建新学生
+
+### 数据库模型
+- `TeamMemberExternalAccount` - 团队成员外部账号关联
+- `TeamMemberImportBatch` - 导入批次记录
+- `TeamMemberImportItem` - 导入明细记录
+
+### 后端模块
+新建 `modules/team-import/` 模块：
+- `team-import.types.ts` - 类型定义
+- `team-import.repository.ts` - 数据访问层
+- `team-import.service.ts` - 业务逻辑层
+- `team-import.routes.ts` - 路由层
+
+### API 端点
+- `GET /api/team-import/teams` - 获取用户管理的团队
+- `GET /api/team-import/platforms` - 获取可用平台及绑定状态
+- `POST /api/team-import/start` - 开始导入批次
+- `GET /api/team-import/:batchId/preview` - 获取预览数据
+- `POST /api/team-import/:batchId/confirm` - 确认导入
+- `GET /api/team-import/:batchId/result` - 获取导入结果
+
+### 前端页面
+- `apps/web/src/app/teacher/students/import/page.tsx` - 入口页
+- `apps/web/src/app/teacher/students/import/bind/page.tsx` - 平台绑定页
+- `apps/web/src/app/teacher/students/import/input/page.tsx` - 数据输入页
+- `apps/web/src/app/teacher/students/import/preview/page.tsx` - 预览页
+- `apps/web/src/app/teacher/students/import/result/page.tsx` - 结果页
+
+### 涉及文件
+**新建文件**：
+- `apps/server/prisma/schema.prisma` - 添加 3 个导入相关模型
+- `apps/server/src/modules/team-import/` - 整个模块目录
+- `apps/web/src/app/teacher/students/import/` - 所有导入页面
+
+**修改文件**：
+- `apps/server/src/index.ts` - 注册路由
+- `apps/web/src/app/teacher/students/page.tsx` - 添加"导入团队"按钮
+
+### 验证结果
+- ✅ 数据库模型已同步
+- ✅ 后端 API 已实现
+- ✅ 前端页面已创建
+- ✅ 入口按钮已添加
+
+### 后续事项
+- 测试完整导入流程
+- 处理邀请发送逻辑
+
+---
+
 ## 已完成任务：平台绑定功能基础框架（2026-03-26）
 
 ### 目标

@@ -21,6 +21,24 @@ platformBindingRouter.get('/platforms', (req: Request, res: Response) => {
 })
 
 /**
+ * 获取平台的配置 Schema
+ * GET /api/platform-bindings/:platform/config-schema
+ */
+platformBindingRouter.get('/:platform/config-schema', (req: Request, res: Response) => {
+  const platform = req.params.platform as BindingPlatform
+  const schema = service.getConfigSchema(platform)
+
+  if (!schema) {
+    return res.status(404).json({
+      success: false,
+      message: '该平台暂无配置项或平台不存在'
+    })
+  }
+
+  res.json({ success: true, data: schema })
+})
+
+/**
  * 获取当前用户的所有平台绑定状态
  * GET /api/platform-bindings
  */
@@ -31,6 +49,23 @@ platformBindingRouter.get('/', authenticate, async (req: Request, res: Response)
     res.json({ success: true, data: bindings })
   } catch (error) {
     console.error('Get platform bindings error:', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+/**
+ * 获取当前用户的指定平台绑定状态
+ * GET /api/platform-bindings/:platform
+ */
+platformBindingRouter.get('/:platform', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const platform = req.params.platform as BindingPlatform
+
+    const result = await service.getUserPlatformBinding(userId, platform)
+    res.json({ success: true, data: result })
+  } catch (error) {
+    console.error('Get platform binding error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
@@ -52,14 +87,25 @@ platformBindingRouter.post('/:platform/bind', authenticate, async (req: Request,
       return res.status(400).json({ success: false, message: '不支持的平台' })
     }
 
-    // 验证必填参数
-    if (!platformUsername) {
+    // 从 extra 中获取用户名和密码（前端发送格式）
+    const actualUsername = platformUsername || extra?.username
+    const actualPassword = password || extra?.password
+
+    // 洛谷平台不需要 platformUsername（从 Cookie 自动获取）
+    // 其他平台需要 platformUsername
+    if (platform !== 'luogu' && !actualUsername) {
       return res.status(400).json({ success: false, message: '请输入平台用户名' })
     }
 
+    // Cookie 模式可以替代密码（绕过 Cloudflare）
+    const hasCookie = extra?.cookieString || extra?.cookies
+    if (platform !== 'luogu' && !actualPassword && !hasCookie) {
+      return res.status(400).json({ success: false, message: '请输入密码或提供 Cookie' })
+    }
+
     const result = await service.bindPlatform(userId, platform, {
-      platformUsername,
-      password,
+      platformUsername: actualUsername || '',
+      password: actualPassword,
       extra
     })
 

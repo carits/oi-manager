@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
@@ -22,6 +23,7 @@ interface Teacher {
 }
 
 export default function StudentsPage() {
+  const router = useRouter()
   const { user, sessionKey } = useAuth()
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -31,6 +33,7 @@ export default function StudentsPage() {
     page: 1,
     pageSize: 20
   })
+  const [toast, setToast] = useState<string | null>(null)
 
   const isPrincipal = user?.role === 'school_principal'
 
@@ -51,6 +54,36 @@ export default function StudentsPage() {
   const { data, loading, refetch } = useStudents(filterParams, sessionKey)
   const modal = useModal<Student>()
   const { deleteItem } = useDelete('/api/students', refetch)
+
+  // 禁用/启用账号
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const toggleAccountStatus = async (studentId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'disabled' ? 'active' : 'disabled'
+    const action = newStatus === 'disabled' ? '禁用' : '启用'
+    if (!confirm(`确定要${action}该学生账号吗？`)) return
+    setTogglingId(studentId)
+    try {
+      const res = await apiClient.put(`/api/students/${studentId}/account-status`, { status: newStatus })
+      if (res.success) {
+        setToast(`${action}成功`)
+        refetch()
+      } else {
+        alert(res.message || `${action}失败`)
+      }
+    } catch {
+      alert(`${action}失败`)
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  // Toast 自动关闭
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 2500)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
 
   // 获取当前教师ID
   useEffect(() => {
@@ -130,7 +163,12 @@ export default function StudentsPage() {
     <ProtectedRoute requiredRole="teacher">
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <PageHeader title="学生管理">
-          <Button onClick={() => modal.open()}>+ 添加学生</Button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Button variant="secondary" onClick={() => router.push('/teacher/students/import')}>
+              导入团队
+            </Button>
+            <Button onClick={() => modal.open()}>+ 添加学生</Button>
+          </div>
         </PageHeader>
 
         <Table
@@ -220,6 +258,14 @@ export default function StudentsPage() {
               <Button variant="text" onClick={() => modal.open(student)}>
                 编辑
               </Button>
+              <Button
+                variant="text"
+                style={{ color: student.user?.status === 'disabled' ? 'var(--success)' : 'var(--warning)' }}
+                disabled={togglingId === student.id}
+                onClick={() => toggleAccountStatus(student.id, student.user?.status || 'active')}
+              >
+                {togglingId === student.id ? '处理中...' : student.user?.status === 'disabled' ? '启用' : '禁用'}
+              </Button>
               {(isPrincipal || student.headTeacherId === currentTeacherId) && (
                 <Button
                   variant="text"
@@ -262,9 +308,31 @@ export default function StudentsPage() {
             onClose={modal.close}
             onSuccess={() => {
               modal.close()
+              setToast('保存成功')
               refetch()
             }}
           />
+        )}
+
+        {/* Toast 通知 */}
+        {toast && (
+          <div style={{
+            position: 'fixed',
+            top: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#fff',
+            color: '#333',
+            padding: '12px 28px',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            fontSize: 14,
+            fontWeight: 500,
+            zIndex: 9999,
+            animation: 'toastIn 0.25s ease'
+          }}>
+            {toast}
+          </div>
         )}
       </div>
     </ProtectedRoute>

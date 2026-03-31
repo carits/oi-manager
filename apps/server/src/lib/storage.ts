@@ -88,6 +88,7 @@ export class LocalStorageProvider implements StorageProvider {
     // 创建数据库记录
     const file = await prisma.file.create({
       data: {
+        id: crypto.randomUUID(),
         storageType: 'local',
         disk: 'default',
         relativePath,

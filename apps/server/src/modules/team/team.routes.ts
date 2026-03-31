@@ -803,6 +803,9 @@ teamRouter.get('/:id/pending-invites', authenticate, async (req, res) => {
 
         const userDetails = await getMemberDetails(member.userId, member.userType as MemberType)
 
+        // 如果用户信息查不到（已被删除），跳过该邀请
+        if (!userDetails) return null
+
         return {
           id: member.id,
           type: member.userType,
@@ -814,7 +817,7 @@ teamRouter.get('/:id/pending-invites', authenticate, async (req, res) => {
       })
     )
 
-    res.json({ success: true, data: invites })
+    res.json({ success: true, data: invites.filter(Boolean) })
   } catch (error) {
     handleError(res, error)
   }

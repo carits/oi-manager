@@ -15,6 +15,7 @@ import { problemsRouter } from './routes/problems'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { filesRouter } from './routes/files'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
+import { teamImportRouter } from './modules/team-import/team-import.routes'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -24,6 +25,10 @@ import { getCorsOptions } from './config/cors'
 
 // 加载环境变量
 dotenv.config()
+
+// 增加 undici 全局连接超时（默认 10s 不够，VJudge 等海外站点从国内连接需要更久）
+import { setGlobalDispatcher, Agent } from 'undici'
+setGlobalDispatcher(new Agent({ connect: { timeout: 30_000 } }))
 
 // 启动时校验环境变量
 validateEnv()
@@ -78,6 +83,7 @@ app.use('/api/problems', problemsRouter)
 app.use('/api/oj-fetcher', ojFetcherRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/platform-bindings', platformBindingRouter)
+app.use('/api/team-import', teamImportRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

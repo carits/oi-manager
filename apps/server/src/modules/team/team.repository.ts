@@ -111,6 +111,7 @@ export class TeamRepository {
   }) {
     return prisma.team.create({
       data: {
+        id: crypto.randomUUID(),
         name: data.name,
         description: data.description,
         schoolId: data.schoolId,
@@ -194,6 +195,33 @@ export class TeamRepository {
         ...filters
       },
       orderBy: { joinedAt: 'desc' }
+    })
+  }
+
+  /**
+   * 查找团队成员列表（别名，用于批量操作）
+   */
+  async findMembersByTeam(teamId: string) {
+    return prisma.teamMember.findMany({
+      where: { teamId }
+    })
+  }
+
+  /**
+   * 批量查询学生
+   */
+  async findStudentsByIds(ids: string[]) {
+    return prisma.student.findMany({
+      where: { id: { in: ids } }
+    })
+  }
+
+  /**
+   * 批量查询教师
+   */
+  async findTeachersByIds(ids: string[]) {
+    return prisma.teacher.findMany({
+      where: { id: { in: ids } }
     })
   }
 
@@ -357,6 +385,30 @@ export class TeamRepository {
         joinedAt: new Date()
       }
     })
+  }
+
+  /**
+   * 批量创建成员
+   */
+  async createMembers(members: Array<{
+    teamId: string
+    userId: string
+    userType: MemberType
+    role: MemberRole
+    status: MemberStatus
+    invitedBy?: string
+  }>) {
+    const data = members.map(m => ({
+      id: crypto.randomUUID(),
+      teamId: m.teamId,
+      userId: m.userId,
+      userType: m.userType,
+      role: m.role,
+      status: m.status,
+      invitedBy: m.invitedBy || null,
+      joinedAt: new Date()
+    }))
+    return prisma.teamMember.createMany({ data })
   }
 
   /**

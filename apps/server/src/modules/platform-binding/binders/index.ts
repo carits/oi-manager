@@ -5,7 +5,7 @@
 
 import type { PlatformBinder, BinderPlatformConfig } from './types'
 import type { BindingPlatform } from '../platform-binding.types'
-import { VjudgeBinder } from './vjudge'
+import { VJudgeBinder } from './vjudge'
 import { LuoguBinder } from './luogu'
 import { CodeforcesBinder } from './codeforces'
 import { AtcoderBinder } from './atcoder'
@@ -14,7 +14,7 @@ import { AtcoderBinder } from './atcoder'
 export * from './types'
 
 // 导出各平台绑定器
-export { VjudgeBinder } from './vjudge'
+export { VJudgeBinder } from './vjudge'
 export { LuoguBinder } from './luogu'
 export { CodeforcesBinder } from './codeforces'
 export { AtcoderBinder } from './atcoder'
@@ -25,9 +25,9 @@ export { AtcoderBinder } from './atcoder'
  */
 const binders = new Map<BindingPlatform, PlatformBinder>()
 
-// 注册绑定器（当前都是预留实现，暂不启用）
-// binders.set('vjudge', new VjudgeBinder())
-// binders.set('luogu', new LuoguBinder())
+// 注册绑定器
+binders.set('vjudge', new VJudgeBinder())
+binders.set('luogu', new LuoguBinder())
 // binders.set('codeforces', new CodeforcesBinder())
 // binders.set('atcoder', new AtcoderBinder())
 

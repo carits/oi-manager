@@ -336,7 +336,7 @@ schoolRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) =
       })
     }
 
-    // 转换字段名以符合前端契约
+        // 转换字段名以符合前端契约
     const { _count, Teacher, ...schoolRest } = school
     res.json({
       success: true,
@@ -347,7 +347,14 @@ schoolRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) =
           teachers: _count.Teacher,
           students: _count.Student
         },
-        principal
+        principal: principal ? {
+          id: principal.id,
+          name: principal.name,
+          title: principal.title,
+          email: principal.email,
+          phone: principal.phone,
+          user: principal.User ? { username: principal.User.username } : null
+        } : null
       }
     })
   } catch (error) {

@@ -6,7 +6,7 @@
 import { Router, Request, Response } from 'express'
 import path from 'path'
 import { prisma } from '../prisma'
-import { getAdapter, isPlatformSupported, getSupportedPlatforms, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS } from '../oj-adapters'
+import { getAdapter, isPlatformSupported, getSupportedPlatforms, isKnownPlatform, KNOWN_OJ_PLATFORMS, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS } from '../oj-adapters'
 import { fileService } from '../lib/storage'
 
 export const ojFetcherRouter = Router()
@@ -97,25 +97,46 @@ ojFetcherRouter.put('/platforms/:platform/config', async (req: Request, res: Res
 
 /**
  * GET /api/oj-fetcher/jobs
- * @description 获取拉取任务列表
+ * @description 获取拉取任务列表（支持筛选和分页）
+ * @query status - 按状态筛选
+ * @query platform - 按平台筛选
+ * @query problemId - 按题号搜索（模糊匹配）
+ * @query page - 页码（默认1）
+ * @query pageSize - 每页条数（默认20）
  */
 ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
   try {
-    const { status, platform } = req.query
+    const { status, platform, problemId, page = '1', pageSize = '20' } = req.query
 
     const where: any = {}
     if (status) where.status = status
     if (platform) where.platform = platform
+    if (problemId && typeof problemId === 'string') {
+      where.problemId = { contains: problemId }
+    }
 
-    const jobs = await prisma.ojFetchJob.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    })
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1)
+    const pageSizeNum = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 20))
+
+    const [jobs, total] = await Promise.all([
+      prisma.ojFetchJob.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (pageNum - 1) * pageSizeNum,
+        take: pageSizeNum,
+      }),
+      prisma.ojFetchJob.count({ where }),
+    ])
 
     res.json({
       success: true,
-      data: jobs,
+      data: {
+        list: jobs,
+        page: pageNum,
+        pageSize: pageSizeNum,
+        total,
+        totalPages: Math.ceil(total / pageSizeNum),
+      },
     })
   } catch (error) {
     console.error('[OJ Fetcher] Get jobs error:', error)
@@ -141,8 +162,8 @@ ojFetcherRouter.post('/jobs/batch', async (req: Request, res: Response) => {
       })
     }
 
-    // 检查平台是否支持
-    if (!isPlatformSupported(platform as any)) {
+    // 检查平台是否在已知白名单中
+    if (!isKnownPlatform(platform)) {
       return res.status(400).json({
         success: false,
         message: `不支持的 OJ 平台: ${platform}`,

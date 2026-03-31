@@ -87,6 +87,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       // 记录登录失败 - 用户不存在
       await prisma.loginLog.create({
         data: {
+          id: crypto.randomUUID(),
           username,
           loginRole: role || 'unknown',
           result: 'failed_user_not_found',
@@ -109,6 +110,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       // 记录登录失败 - 密码错误
       await prisma.loginLog.create({
         data: {
+          id: crypto.randomUUID(),
           username,
           loginRole: role || 'unknown',
           userRole: user.role,
@@ -131,6 +133,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       // 记录登录失败 - 账号禁用
       await prisma.loginLog.create({
         data: {
+          id: crypto.randomUUID(),
           userId: user.id,
           username,
           loginRole: role || 'unknown',
@@ -171,6 +174,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       // 记录登录失败 - 角色不匹配
       await prisma.loginLog.create({
         data: {
+          id: crypto.randomUUID(),
           userId: user.id,
           username,
           loginRole: role || 'unknown',
@@ -233,6 +237,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     // 记录登录成功
     await prisma.loginLog.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.id,
         username,
         loginRole: role || 'unknown',

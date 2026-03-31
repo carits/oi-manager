@@ -4,6 +4,68 @@
  */
 
 /**
+ * 所有已知的 OJ 平台标识列表（供白名单验证和前端下拉使用）
+ * 注意：有 adapter 实现的只是其中一小部分（目前仅 luogu）
+ */
+export const KNOWN_OJ_PLATFORMS = [
+  { value: 'poj', label: 'POJ' },
+  { value: 'zoj', label: 'ZOJ' },
+  { value: 'uva', label: 'UVA' },
+  { value: 'livearchive', label: 'Live Archive' },
+  { value: 'sgu', label: 'SGU' },
+  { value: 'ural', label: 'URAL' },
+  { value: 'hust', label: 'HUST' },
+  { value: 'spoj', label: 'SPOJ' },
+  { value: 'hdu', label: 'HDU' },
+  { value: 'hysbz', label: 'HYSBZ' },
+  { value: 'codeforces', label: 'CodeForces' },
+  { value: 'z-trening', label: 'Z-Trening' },
+  { value: 'aizu', label: 'Aizu' },
+  { value: 'lightoj', label: 'LightOJ' },
+  { value: 'uestc', label: 'UESTC' },
+  { value: 'nbut', label: 'NBUT' },
+  { value: 'fzu', label: 'FZU' },
+  { value: 'csu', label: 'CSU' },
+  { value: 'scu', label: 'SCU' },
+  { value: 'acdream', label: 'ACdream' },
+  { value: 'codechef', label: 'CodeChef' },
+  { value: 'openjudge', label: 'OpenJudge' },
+  { value: 'kattis', label: 'Kattis' },
+  { value: 'hihocoder', label: 'HihoCoder' },
+  { value: 'hit', label: 'HIT' },
+  { value: 'hrbust', label: 'HRBUST' },
+  { value: 'eijudge', label: 'EIJudge' },
+  { value: 'atcoder', label: 'AtCoder' },
+  { value: 'hackerrank', label: 'HackerRank' },
+  { value: '51nod', label: '51Nod' },
+  { value: 'topcoder', label: 'TopCoder' },
+  { value: 'eolymp', label: 'EOlymp' },
+  { value: 'jisuanke', label: '计蒜客' },
+  { value: 'libreoj', label: 'LibreOJ' },
+  { value: 'universaloj', label: 'UniversalOJ' },
+  { value: 'darkbzoj', label: '黑暗爆炸' },
+  { value: 'csgdmoj', label: 'CSGDMOJ' },
+  { value: 'toph', label: 'Toph' },
+  { value: 'luogu', label: '洛谷' },
+  { value: 'baekjoon', label: 'Baekjoon' },
+  { value: 'qoj', label: 'QOJ' },
+  { value: 'cses', label: 'CSES' },
+  { value: 'usaco', label: 'USACO' },
+  { value: 'oj.uz', label: 'oj.uz' },
+  { value: 'yosupo', label: 'Yosupo' },
+  { value: 'yukicoder', label: 'yukicoder' },
+  { value: 'vnoj', label: 'VNOJ' },
+  { value: 'tlx', label: 'TLX' },
+  { value: 'bzoj', label: 'BZOJ' },
+  { value: 'kilonova', label: 'Kilonova' },
+  { value: 'szkopul', label: 'Szkopuł' },
+  { value: 'csacademy', label: 'CSAcademy' },
+  { value: 'nowcoder', label: '牛客' },
+  { value: 'krsu', label: 'KRSU' },
+  { value: 'codefun', label: '代码源OJ' },
+] as const
+
+/**
  * OJ 平台标识符
  * @description 支持的 OJ 平台列表
  */

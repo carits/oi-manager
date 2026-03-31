@@ -15,7 +15,7 @@ interface School {
   contactPhone: string | null
   contactEmail: string | null
   createdAt: string
-  principal: { id: string; name: string; title: string | null; email: string | null; user: { username: string } } | null
+  principal: { id: string; name: string; title: string | null; email: string | null; User: { username: string } } | null
   _count: {
     students: number
   }

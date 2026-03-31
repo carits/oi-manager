@@ -3,7 +3,7 @@
  * @description 统一管理和导出所有 OJ 平台适配器
  */
 
-import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode } from './types'
+import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode, KNOWN_OJ_PLATFORMS } from './types'
 import { LuoguAdapter } from './luogu'
 
 // 导出类型
@@ -66,10 +66,19 @@ export function getSupportedPlatforms(): Array<{
 }
 
 /**
- * 检查平台是否支持
+ * 检查平台是否支持（有 adapter）
  * @param platform - OJ 平台标识
  * @returns 是否支持
  */
 export function isPlatformSupported(platform: OjPlatform): boolean {
   return adapters.has(platform)
+}
+
+/**
+ * 检查平台是否为已知 OJ 平台（白名单验证）
+ * @param platform - 平台标识字符串
+ * @returns 是否为已知的 OJ 平台
+ */
+export function isKnownPlatform(platform: string): boolean {
+  return KNOWN_OJ_PLATFORMS.some(p => p.value === platform)
 }

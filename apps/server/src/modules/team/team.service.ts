@@ -457,8 +457,10 @@ export class TeamService {
         throw new Error('TEAM_LIMIT_EXCEEDED')
       }
 
+      const teamId = crypto.randomUUID()
       const newTeam = await tx.team.create({
         data: {
+          id: teamId,
           name: dto.name,
           description: dto.description,
           schoolId,
@@ -471,6 +473,7 @@ export class TeamService {
 
       await tx.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: newTeam.id,
           userId: ownerId,
           userType: ownerType,
@@ -660,6 +663,113 @@ export class TeamService {
         operatorType: callerType as MemberType,
         action: 'invite_send',
         metadata: { invitedCount: result.invited.length, role: dto.role }
+      })
+    }
+
+    return result
+  }
+
+  /**
+   * 直接添加成员（不需要学生确认）
+   * 用于团队导入等场景，支持批量操作
+   */
+  async addMembersDirectly(
+    teamId: string,
+    members: Array<{ id: string; type: MemberType }>,
+    role: MemberRole = 'member',
+    user: JwtPayload
+  ): Promise<{ added: string[]; alreadyMember: string[]; notSameSchool: string[] }> {
+    await this.assertTeamAdmin(teamId, user)
+
+    const team = await this.repo.findById(teamId)
+    if (!team) {
+      throw new Error('TEAM_NOT_FOUND')
+    }
+
+    const result = {
+      added: [] as string[],
+      alreadyMember: [] as string[],
+      notSameSchool: [] as string[]
+    }
+
+    // 分离学生和教师
+    const studentIds = members.filter(m => m.type === 'student').map(m => m.id)
+    const teacherIds = members.filter(m => m.type === 'teacher').map(m => m.id)
+
+    // 批量检查已有成员
+    const existingMembers = await this.repo.findMembersByTeam(teamId)
+    const existingUserIds = new Set(
+      existingMembers.map(m => `${m.userId}-${m.userType}`)
+    )
+
+    // 批量获取学生和教师信息
+    const students = studentIds.length > 0
+      ? await this.repo.findStudentsByIds(studentIds)
+      : []
+    const teachers = teacherIds.length > 0
+      ? await this.repo.findTeachersByIds(teacherIds)
+      : []
+
+    const studentMap = new Map(students.map(s => [s.id, s]))
+    const teacherMap = new Map(teachers.map(t => [t.id, t]))
+
+    // 收集要创建的成员
+    const membersToCreate: Array<{
+      teamId: string
+      userId: string
+      userType: MemberType
+      role: MemberRole
+      status: MemberStatus
+      invitedBy?: string
+    }> = []
+
+    for (const member of members) {
+      const { id: memberId, type: memberType } = member
+      const key = `${memberId}-${memberType}`
+
+      // 检查是否已是成员
+      if (existingUserIds.has(key)) {
+        result.alreadyMember.push(memberId)
+        continue
+      }
+
+      // 检查成员是否属于本校
+      const memberUser = memberType === 'student'
+        ? studentMap.get(memberId)
+        : teacherMap.get(memberId)
+
+      if (!memberUser || memberUser.schoolId !== team.schoolId) {
+        result.notSameSchool.push(memberId)
+        continue
+      }
+
+      // 收集要创建的成员
+      membersToCreate.push({
+        teamId,
+        userId: memberId,
+        userType: memberType,
+        role,
+        status: 'active',
+        invitedBy: user.teacherId || user.studentId
+      })
+      result.added.push(memberId)
+    }
+
+    // 批量创建成员
+    if (membersToCreate.length > 0) {
+      await this.repo.createMembers(membersToCreate)
+    }
+
+    // 记录审计日志
+    if (result.added.length > 0) {
+      const callerId = user.teacherId || user.studentId
+      const callerType = user.teacherId ? 'teacher' : 'student'
+      await this.repo.logOperation({
+        teamId,
+        operatorId: callerId || '',
+        operatorType: callerType as MemberType,
+        action: 'member_add',
+        metadata: { addedCount: result.added.length, role, directAdd: true }
       })
     }
 

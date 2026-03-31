@@ -6,10 +6,13 @@
 import logger from '../../lib/logger'
 import { PlatformBindingRepository } from './platform-binding.repository'
 import { getBinder, getSupportedPlatforms } from './binders'
+import { getLuoguConfigSchema } from './binders/luogu'
+import { getVJudgeConfigSchema } from './binders/vjudge'
 import type {
   BindingPlatform,
   PlatformBindingResponse,
   PlatformConfig,
+  PlatformConfigSchema,
   UserIdentity,
   BindRequest,
   BindResult,
@@ -39,10 +42,39 @@ export class PlatformBindingService {
   }
 
   /**
-   * 获取支持的平台列表
+   * 获取用户的单个平台绑定状态（快速检查）
+   */
+  async getUserPlatformBinding(userId: string, platform: BindingPlatform): Promise<{ bound: boolean; username?: string }> {
+    const binding = await this.repo.findByUserAndPlatform(userId, platform)
+    if (!binding || binding.bindingStatus !== 'bound') {
+      return { bound: false }
+    }
+    return {
+      bound: true,
+      username: binding.platformUsername || undefined
+    }
+  }
+
+  /**
+   * 获取用户的所有平台绑定状态
    */
   getSupportedPlatforms(): PlatformConfig[] {
     return getSupportedPlatforms()
+  }
+
+  /**
+   * 获取平台的配置 Schema
+   * 前端根据 Schema 动态生成表单
+   */
+  getConfigSchema(platform: BindingPlatform): PlatformConfigSchema | null {
+    switch (platform) {
+      case 'luogu':
+        return getLuoguConfigSchema()
+      case 'vjudge':
+        return getVJudgeConfigSchema()
+      default:
+        return null
+    }
   }
 
   // ==================== 绑定服务 ====================
@@ -86,6 +118,7 @@ export class PlatformBindingService {
           platformUsername: result.platformUsername || params.platformUsername,
           bindingStatus: 'bound',
           bindingData: result.bindingData,
+          platformConfig: params.extra ? JSON.stringify(params.extra) : undefined,
           verifiedAt: new Date()
         })
 
