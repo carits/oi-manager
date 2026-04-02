@@ -474,6 +474,29 @@ async function processFetchQueue(platform: string) {
               difficulty: problemData.difficulty,
             },
           })
+
+          // 重建 ProblemStatement 记录（先删旧的再创建）
+          if (problemData.statements && problemData.statements.length > 0) {
+            const deleted = await prisma.problemStatement.deleteMany({
+              where: { problemId: existingProblem.id },
+            })
+            console.log(`[OJ Fetcher] Deleted ${deleted.count} old statements for problem ${existingProblem.id}`)
+
+            for (const stmt of problemData.statements) {
+              await prisma.problemStatement.create({
+                data: {
+                  problemId: existingProblem.id,
+                  type: stmt.type,
+                  format: stmt.format,
+                  language: stmt.language || null,
+                  content: stmt.content || null,
+                  fileUrl: stmt.fileUrl || null,
+                  isVisible: stmt.isVisible,
+                },
+              })
+            }
+            console.log(`[OJ Fetcher] Recreated ${problemData.statements.length} statement records for problem ${existingProblem.id}`)
+          }
         }
 
         // 更新任务状态
@@ -544,6 +567,23 @@ async function processFetchQueue(platform: string) {
             data: { description: processedDescription },
           })
           console.log(`[OJ Fetcher] Updated problem description with processed images/attachments`)
+        }
+
+        // 同时处理 ProblemStatement 中的图片
+        const statements = await prisma.problemStatement.findMany({
+          where: { problemId: targetProblemId },
+        })
+        for (const stmt of statements) {
+          if (stmt.content && extractImageLinks(stmt.content).length > 0) {
+            const processedContent = await processMarkdownImages(targetProblemId, stmt.content, cookies)
+            if (processedContent !== stmt.content) {
+              await prisma.problemStatement.update({
+                where: { id: stmt.id },
+                data: { content: processedContent },
+              })
+              console.log(`[OJ Fetcher] Updated statement ${stmt.id} with processed images`)
+            }
+          }
         }
 
       } catch (error: any) {
@@ -720,8 +760,18 @@ function extractImageLinks(markdown: string): Array<{ fullMatch: string; url: st
   let match
   while ((match = imageRegex.exec(markdown)) !== null) {
     const url = match[2]
-    // 只处理洛谷相关的图片链接
-    if (url.includes('luogu.com.cn') || url.includes('luogu') || url.startsWith('/fileApi/') || url.startsWith('https://cdn.luogu.com.cn')) {
+    // 只处理已知 OJ 平台的图片链接（洛谷、AtCoder、Codeforces 等）
+    if (
+      url.includes('luogu.com.cn') ||
+      url.includes('luogu') ||
+      url.startsWith('/fileApi/') ||
+      url.startsWith('https://cdn.luogu.com.cn') ||
+      url.includes('img.atcoder.jp') ||
+      url.includes('atcoder.jp') ||
+      url.includes('codeforces.com') ||
+      url.includes('pic.codeforces.com') ||
+      url.includes('espresso.codeforces.com')
+    ) {
       images.push({
         fullMatch: match[0],
         url: url
@@ -748,11 +798,14 @@ async function downloadAndUploadImage(
     }
 
     // 构建请求头
+    const isLuogu = fullUrl.includes('luogu')
+    const isAtCoder = fullUrl.includes('atcoder.jp') || fullUrl.includes('img.atcoder.jp')
+    const isCodeforces = fullUrl.includes('codeforces.com') || fullUrl.includes('pic.codeforces.com') || fullUrl.includes('espresso.codeforces.com')
     const headers: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
       'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      'Referer': 'https://www.luogu.com.cn/',
+      'Referer': isAtCoder ? 'https://atcoder.jp/' : isCodeforces ? 'https://codeforces.com/' : 'https://www.luogu.com.cn/',
     }
 
     if (Object.keys(cookies).length > 0) {
@@ -769,7 +822,7 @@ async function downloadAndUploadImage(
       if (location) {
         fullUrl = location
         response = await fetch(fullUrl, {
-          headers: location.includes('luogu') ? headers : undefined,
+          headers: (location.includes('luogu') || location.includes('atcoder') || location.includes('codeforces')) ? headers : undefined,
           redirect: 'manual',
         })
         redirectCount++
@@ -911,6 +964,31 @@ ojFetcherRouter.get('/:platform/:problemId', async (req: Request, res: Response)
 
     // 拉取题目
     const problem = await adapter.fetch(problemId)
+
+    // 处理图片：下载远程图片到本地
+    try {
+      if (problem.description) {
+        problem.description = await processMarkdownImages(
+          `pre-fetch-${platform}-${problemId}`,
+          problem.description,
+          {}
+        )
+      }
+      if (problem.statements) {
+        for (const stmt of problem.statements) {
+          if (stmt.content) {
+            stmt.content = await processMarkdownImages(
+              `pre-fetch-${platform}-${problemId}`,
+              stmt.content,
+              {}
+            )
+          }
+        }
+      }
+    } catch (imgError) {
+      console.error('[OJ Fetcher] Image processing failed (non-fatal):', imgError)
+      // 图片下载失败不影响题目拉取结果
+    }
 
     res.json({
       success: true,

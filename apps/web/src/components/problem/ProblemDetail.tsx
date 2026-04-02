@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import apiClient from '@/lib/apiClient'
+import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
+import { TranslateModal } from './TranslateModal'
 
 interface Statement {
   id: string
@@ -48,76 +51,32 @@ interface Attachment {
   uploadedAt: string
 }
 
-const OJ_PLATFORMS: Record<string, string> = {
-  poj: 'POJ',
-  zoj: 'ZOJ',
-  uva: 'UVA',
-  livearchive: 'Live Archive',
-  sgu: 'SGU',
-  ural: 'URAL',
-  hust: 'HUST',
-  spoj: 'SPOJ',
-  hdu: 'HDU',
-  hysbz: 'HYSBZ',
-  codeforces: 'CodeForces',
-  'z-trening': 'Z-Trening',
-  aizu: 'Aizu',
-  lightoj: 'LightOJ',
-  uestc: 'UESTC',
-  nbut: 'NBUT',
-  fzu: 'FZU',
-  csu: 'CSU',
-  scu: 'SCU',
-  acdream: 'ACdream',
-  codechef: 'CodeChef',
-  openjudge: 'OpenJudge',
-  kattis: 'Kattis',
-  hihocoder: 'HihoCoder',
-  hit: 'HIT',
-  hrbust: 'HRBUST',
-  eijudge: 'EIJudge',
-  atcoder: 'AtCoder',
-  hackerrank: 'HackerRank',
-  '51nod': '51Nod',
-  topcoder: 'TopCoder',
-  eolymp: 'EOlymp',
-  jisuanke: '计蒜客',
-  libreoj: 'LibreOJ',
-  universaloj: 'UniversalOJ',
-  darkbzoj: '黑暗爆炸',
-  csgdmoj: 'CSGDMOJ',
-  toph: 'Toph',
-  luogu: '洛谷',
-  baekjoon: 'Baekjoon',
-  qoj: 'QOJ',
-  cses: 'CSES',
-  usaco: 'USACO',
-  'oj.uz': 'oj.uz',
-  yosupo: 'Yosupo',
-  yukicoder: 'yukicoder',
-  vnoj: 'VNOJ',
-  tlx: 'TLX',
-  bzoj: 'BZOJ',
-  kilonova: 'Kilonova',
-  szkopul: 'Szkopuł',
-  csacademy: 'CSAcademy',
-  nowcoder: '牛客',
-  krsu: 'KRSU',
-  codefun: '代码源OJ',
-}
-
 const getOjProblemUrl = (platform: string, problemId: string): string => {
   switch (platform) {
     case 'luogu': return `https://www.luogu.com.cn/problem/${problemId}`
-    case 'codeforces': return `https://codeforces.com/problemset/problem/${problemId.replace(/([A-Za-z])/, '/$1')}`
-    case 'atcoder': return `https://atcoder.jp/contests/${problemId.toLowerCase().replace(/([a-z]+)(\d+)/, '$1$2/tasks/$1_$2')}`
+    case 'codeforces': {
+      const cfMatch = problemId.match(/^(\d+)([A-Za-z]\d*)$/)
+      if (cfMatch) return `https://codeforces.com/problemset/problem/${cfMatch[1]}/${cfMatch[2]}`
+      return `https://codeforces.com/problemset/problem/${problemId}`
+    }
+    case 'atcoder': {
+      const lastUnderscore = problemId.lastIndexOf('_')
+      const contestId = lastUnderscore >= 0 ? problemId.substring(0, lastUnderscore) : problemId
+      return `https://atcoder.jp/contests/${contestId}/tasks/${problemId}?lang=en`
+    }
     case 'loj': return `https://loj.ac/p/${problemId}`
     case 'poj': return `http://poj.org/problem?id=${problemId}`
-    case 'hdu': return `http://acm.hdu.edu.cn/showproblem.php?pid=${problemId}`
+    case 'hdu': return `https://acm.hdu.edu.cn/showproblem.php?pid=${problemId}`
     case 'spoj': return `https://www.spoj.com/problems/${problemId}`
     case 'uva': return `https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&page=show_problem&problem=${problemId}`
     case 'vijos': return `https://vijos.org/p/${problemId}`
     case 'bzoj': return `https://www.lydsy.com/JudgeOnline/problem.php?id=${problemId}`
+    case 'qoj': return `https://qoj.ac/problem/${problemId}`
+    case 'gym': {
+      const gymMatch = problemId.match(/^(\d+)([A-Za-z]\d*)$/)
+      if (gymMatch) return `https://codeforces.com/gym/${gymMatch[1]}/problem/${gymMatch[2]}`
+      return `https://codeforces.com/gym/${problemId}`
+    }
     default: return '#'
   }
 }
@@ -151,12 +110,16 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const { user } = useAuth()
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'statement' | 'solution' | 'attachments'>('statement')
+  const [activeTab, setActiveTab] = useState<'statement' | 'solution' | 'attachments' | 'submit' | 'records'>('statement')
+  const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
   const [selectedSolutionId, setSelectedSolutionId] = useState<string | null>(null)
   const [hasVisitedAttachments, setHasVisitedAttachments] = useState(false)
+  const [showTranslateModal, setShowTranslateModal] = useState(false)
+  const [aiLoading, setAiLoading] = useState<'translate' | 'format' | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -174,17 +137,42 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   // 当 problem 数据更新后，设置默认选中的版本
   useEffect(() => {
     if (problem) {
-      // 优先选择中文版本，然后是英文版本
+      // 题面版本选择
       const visibleStatements = problem.statements.filter(s => s.isVisible || canModify())
       if (visibleStatements.length > 0 && !selectedStatementId) {
-        const zhStatement = visibleStatements.find(s => s.language === 'zh')
-        setSelectedStatementId(zhStatement?.id || visibleStatements[0].id)
+        // 1. 优先恢复用户上次的选择（localStorage）
+        const savedStatementKey = localStorage.getItem(`problem-stmt-pref-${problem.id}`)
+        const savedStatement = savedStatementKey
+          ? visibleStatements.find(s =>
+              `${s.format}-${s.language || 'unknown'}` === savedStatementKey
+            )
+          : null
+
+        if (savedStatement) {
+          setSelectedStatementId(savedStatement.id)
+        } else {
+          // 2. 默认选中文版本
+          const zhStatement = visibleStatements.find(s => s.language === 'zh')
+          setSelectedStatementId(zhStatement?.id || visibleStatements[0].id)
+        }
       }
 
+      // 题解版本选择
       const visibleSolutions = problem.solutions.filter(s => s.isVisible || canModify())
       if (visibleSolutions.length > 0 && !selectedSolutionId) {
-        const zhSolution = visibleSolutions.find(s => s.language === 'zh')
-        setSelectedSolutionId(zhSolution?.id || visibleSolutions[0].id)
+        const savedSolutionKey = localStorage.getItem(`problem-sol-pref-${problem.id}`)
+        const savedSolution = savedSolutionKey
+          ? visibleSolutions.find(s =>
+              `${s.format}-${s.language || 'unknown'}` === savedSolutionKey
+            )
+          : null
+
+        if (savedSolution) {
+          setSelectedSolutionId(savedSolution.id)
+        } else {
+          const zhSolution = visibleSolutions.find(s => s.language === 'zh')
+          setSelectedSolutionId(zhSolution?.id || visibleSolutions[0].id)
+        }
       }
     }
   }, [problem])
@@ -321,6 +309,53 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     return problem.solutions.filter(s => s.isVisible)
   }
 
+  // AI 翻译处理
+  const handleTranslate = async (targetLang: string) => {
+    if (!problem) return
+    setAiLoading('translate')
+    setAiError(null)
+    try {
+      const result = await apiClient.post(`/api/problems/${problemId}/ai/translate`, {
+        targetLang,
+        statementId: selectedStatementId,
+      })
+      if (result.success) {
+        // 重新获取题目数据以包含新翻译的版本
+        await fetchProblem()
+        setShowTranslateModal(false)
+      } else {
+        setAiError(result.message || '翻译失败')
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || '翻译失败'
+      setAiError(msg)
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
+  // AI 格式化处理
+  const handleFormat = async () => {
+    if (!problem) return
+    setAiLoading('format')
+    setAiError(null)
+    try {
+      const result = await apiClient.post(`/api/problems/${problemId}/ai/format`, {
+        statementId: selectedStatementId,
+      })
+      if (result.success) {
+        await fetchProblem()
+      } else {
+        setAiError(result.message || '格式化失败')
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || '格式化失败'
+      setAiError(msg)
+    } finally {
+      setAiLoading(null)
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -345,8 +380,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const currentSolution = getSelectedSolution()
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '2rem' }}>
         {/* 返回按钮 */}
         <button
           onClick={() => router.push(`${pathPrefix}/problems`)}
@@ -367,13 +402,14 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           background: 'white',
           borderRadius: '8px',
           border: '1px solid var(--border)',
-          padding: '1.5rem',
-          marginBottom: '1.5rem'
+          padding: '2rem',
+          marginBottom: '1.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{problem.problemCode}</span>
+                <span style={{ color: 'var(--gray-500)', fontWeight: 500 }}>{problem.problemCode}</span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 600 }}>{problem.title}</span>
               </div>
               <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>
@@ -386,7 +422,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   padding: '0.125rem 0.5rem',
                   borderRadius: '4px',
                   background: problem.visibility === 'public' ? '#dbeafe' : 'var(--gray-100)',
-                  color: problem.visibility === 'public' ? '#3b82f6' : 'var(--gray-600)'
+                  color: problem.visibility === 'public' ? '#1d4ed8' : 'var(--gray-600)'
                 }}>
                   {problem.visibility === 'public' ? '公共' : '私有'}
                 </span>
@@ -442,7 +478,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     fontSize: '0.875rem'
                   }}
                 >
-                  [{OJ_PLATFORMS[binding.platform] || binding.platform} {binding.problemId}]
+                  [{OJ_PLATFORM_LABEL_MAP[binding.platform] || binding.platform} {binding.problemId}]
                 </a>
               ))}
             </div>
@@ -461,7 +497,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 borderBottom: activeTab === 'statement' ? '2px solid var(--primary)' : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: '0.875rem',
-                color: activeTab === 'statement' ? 'var(--primary)' : 'var(--gray-500)'
+                color: activeTab === 'statement' ? 'var(--primary)' : 'var(--gray-500)',
+                fontWeight: activeTab === 'statement' ? 600 : 400
               }}
             >
               题面
@@ -475,7 +512,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 borderBottom: activeTab === 'solution' ? '2px solid var(--primary)' : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: '0.875rem',
-                color: activeTab === 'solution' ? 'var(--primary)' : 'var(--gray-500)'
+                color: activeTab === 'solution' ? 'var(--primary)' : 'var(--gray-500)',
+                fontWeight: activeTab === 'solution' ? 600 : 400
               }}
             >
               题解
@@ -493,6 +531,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 cursor: 'pointer',
                 fontSize: '0.875rem',
                 color: activeTab === 'attachments' ? 'var(--primary)' : 'var(--gray-500)',
+                fontWeight: activeTab === 'attachments' ? 600 : 400,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.25rem'
@@ -512,6 +551,36 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   {attachments.length}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('submit')}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'submit' ? '2px solid var(--primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                color: activeTab === 'submit' ? 'var(--primary)' : 'var(--gray-500)',
+                fontWeight: activeTab === 'submit' ? 600 : 400
+              }}
+            >
+              提交
+            </button>
+            <button
+              onClick={() => setActiveTab('records')}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'records' ? '2px solid var(--primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                color: activeTab === 'records' ? 'var(--primary)' : 'var(--gray-500)',
+                fontWeight: activeTab === 'records' ? 600 : 400
+              }}
+            >
+              提交记录
             </button>
           </div>
 
@@ -537,13 +606,17 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           </button>
         </div>
 
-        {/* 内容区域 */}
-        <div style={{
-          background: 'white',
-          borderRadius: '8px',
-          border: '1px solid var(--border)',
-          overflow: 'hidden'
-        }}>
+        {/* 内容区域 + AI侧边栏 */}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+          {/* 主内容 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              background: 'white',
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+            }}>
           {/* 题面 Tab */}
           {activeTab === 'statement' && (
             <>
@@ -558,7 +631,17 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 }}>
                   <select
                     value={selectedStatementId || ''}
-                    onChange={(e) => setSelectedStatementId(e.target.value)}
+                    onChange={(e) => {
+                      const id = e.target.value
+                      setSelectedStatementId(id)
+                      // 持久化用户选择（format-language key）
+                      if (problem) {
+                        const stmt = problem.statements.find(s => s.id === id)
+                        if (stmt) {
+                          localStorage.setItem(`problem-stmt-pref-${problem.id}`, `${stmt.format}-${stmt.language || 'unknown'}`)
+                        }
+                      }
+                    }}
                     style={{
                       padding: '0.375rem 0.75rem',
                       border: '1px solid var(--border)',
@@ -576,22 +659,46 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 </div>
               )}
 
-              <div style={{ padding: '1.5rem' }}>
+              <div style={{ padding: '2rem' }}>
                 {currentStatement ? (
                   currentStatement.format === 'pdf' && currentStatement.fileUrl ? (
-                    <iframe
-                      src={getPdfUrl(currentStatement.fileUrl) || ''}
-                      style={{ width: '100%', height: '600px', border: 'none' }}
-                    />
+                    currentStatement.fileUrl.startsWith('/') ? (
+                      <iframe
+                        src={getPdfUrl(currentStatement.fileUrl) || ''}
+                        style={{ width: '100%', height: '600px', border: 'none' }}
+                      />
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+                        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem' }}>
+                          题面为外部 PDF 文件，请在新窗口中查看
+                        </p>
+                        <a
+                          href={currentStatement.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-block',
+                            padding: '0.5rem 1.5rem',
+                            backgroundColor: 'var(--primary)',
+                            color: '#fff',
+                            borderRadius: 'var(--radius)',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                          }}
+                        >
+                          打开 PDF 题面
+                        </a>
+                      </div>
+                    )
                   ) : currentStatement.content ? (
                     <MarkdownRenderer content={currentStatement.content} />
                   ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                       暂无题面内容
                     </div>
                   )
                 ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                     暂无题面内容
                   </div>
                 )}
@@ -613,7 +720,17 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 }}>
                   <select
                     value={selectedSolutionId || ''}
-                    onChange={(e) => setSelectedSolutionId(e.target.value)}
+                    onChange={(e) => {
+                      const id = e.target.value
+                      setSelectedSolutionId(id)
+                      // 持久化用户选择（format-language key）
+                      if (problem) {
+                        const sol = problem.solutions.find(s => s.id === id)
+                        if (sol) {
+                          localStorage.setItem(`problem-sol-pref-${problem.id}`, `${sol.format}-${sol.language || 'unknown'}`)
+                        }
+                      }
+                    }}
                     style={{
                       padding: '0.375rem 0.75rem',
                       border: '1px solid var(--border)',
@@ -631,27 +748,51 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 </div>
               )}
 
-              <div style={{ padding: '1.5rem' }}>
+              <div style={{ padding: '2rem' }}>
                 {/* 学生在公共题目上检查题解是否可见 */}
                 {!canModify() && problem.visibility === 'public' && currentSolution && !currentSolution.isVisible ? (
-                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                     题解暂未公开
                   </div>
                 ) : currentSolution ? (
                   currentSolution.format === 'pdf' && currentSolution.fileUrl ? (
-                    <iframe
-                      src={getPdfUrl(currentSolution.fileUrl) || ''}
-                      style={{ width: '100%', height: '600px', border: 'none' }}
-                    />
+                    currentSolution.fileUrl.startsWith('/') ? (
+                      <iframe
+                        src={getPdfUrl(currentSolution.fileUrl) || ''}
+                        style={{ width: '100%', height: '600px', border: 'none' }}
+                      />
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+                        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem' }}>
+                          题解为外部 PDF 文件，请在新窗口中查看
+                        </p>
+                        <a
+                          href={currentSolution.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-block',
+                            padding: '0.5rem 1.5rem',
+                            backgroundColor: 'var(--primary)',
+                            color: '#fff',
+                            borderRadius: 'var(--radius)',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                          }}
+                        >
+                          打开 PDF 题解
+                        </a>
+                      </div>
+                    )
                   ) : currentSolution.content ? (
                     <MarkdownRenderer content={currentSolution.content} />
                   ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                       暂无题解内容
                     </div>
                   )
                 ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                     暂无题解内容
                   </div>
                 )}
@@ -661,13 +802,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* 附件 Tab */}
           {activeTab === 'attachments' && (
-            <div style={{ padding: '1.5rem' }}>
+            <div style={{ padding: '2rem' }}>
               {attachmentsLoading ? (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                   加载中...
                 </div>
               ) : attachments.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
+                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                   暂无附件
                 </div>
               ) : (
@@ -712,8 +853,184 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               )}
             </div>
           )}
+
+          {/* 提交 Tab */}
+          {activeTab === 'submit' && (
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--gray-700)' }}>提交语言</label>
+                <select
+                  value={submitLanguage}
+                  onChange={e => setSubmitLanguage(e.target.value)}
+                  style={{
+                    padding: '0.5rem',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    minWidth: '150px',
+                    background: 'white',
+                  }}
+                >
+                  {LANGUAGE_OPTIONS.filter(o => o.value).map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <textarea
+                placeholder="在此输入代码..."
+                style={{
+                  width: '100%',
+                  minHeight: '400px',
+                  padding: '1rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
+                  lineHeight: 1.5,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  background: '#f8fafc',
+                  color: '#1e293b',
+                }}
+                disabled
+              />
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  disabled
+                  style={{
+                    padding: '0.625rem 2rem',
+                    background: 'var(--gray-300)',
+                    color: 'var(--gray-500)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    cursor: 'not-allowed',
+                  }}
+                >
+                  提交
+                </button>
+              </div>
+              <div style={{
+                marginTop: '0.75rem',
+                textAlign: 'center',
+                fontSize: '0.8rem',
+                color: 'var(--gray-400)',
+              }}>
+                提交功能暂未开放
+              </div>
+            </div>
+          )}
+
+          {/* 提交记录 Tab */}
+          {activeTab === 'records' && (
+            <div style={{ padding: '1rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(ms)</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                      暂无提交记录
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+        </div>{/* /主内容 */}
+
+        {/* AI 工具侧边栏 - 仅 Markdown 题面时显示 */}
+        {activeTab === 'statement' && currentStatement?.format === 'markdown' && (
+          <div style={{
+            width: '180px',
+            flexShrink: 0,
+            position: 'sticky',
+            top: '2rem',
+          }}>
+            <div style={{
+              background: 'white',
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem'
+            }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--gray-700)', marginBottom: '0.25rem' }}>
+                AI 工具
+              </div>
+              <button
+                onClick={() => setShowTranslateModal(true)}
+                disabled={aiLoading === 'translate'}
+                style={{
+                  padding: '0.5rem',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: aiLoading === 'translate' ? 'not-allowed' : 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  opacity: aiLoading === 'translate' ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.25rem'
+                }}
+              >
+                {aiLoading === 'translate' ? '翻译中...' : '🌐 翻译'}
+              </button>
+              <button
+                onClick={handleFormat}
+                disabled={aiLoading === 'format'}
+                style={{
+                  padding: '0.5rem',
+                  background: 'var(--gray-100)',
+                  color: 'var(--gray-700)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  cursor: aiLoading === 'format' ? 'not-allowed' : 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  opacity: aiLoading === 'format' ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.25rem'
+                }}
+              >
+                {aiLoading === 'format' ? '格式化中...' : '✨ 格式化'}
+              </button>
+              {aiError && (
+                <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>
+                  {aiError}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>{/* /flex container */}
+
+      {/* 翻译弹窗 */}
+      {showTranslateModal && (
+        <TranslateModal
+          currentLang={currentStatement?.language || 'zh'}
+          onConfirm={handleTranslate}
+          onCancel={() => setShowTranslateModal(false)}
+          loading={aiLoading === 'translate'}
+        />
+      )}
+    </div>
     </div>
   )
 }

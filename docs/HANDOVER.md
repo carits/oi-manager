@@ -35,9 +35,9 @@ pnpm dev
 
 | 角色 | 用户名 | 密码 | 体验重点 |
 |------|--------|------|----------|
-| 超管 | `admin` | `admin123` | 学校管理、用户管理 |
-| 教师 | `teacher1` | `admin123` | 团队管理、学生管理 |
-| 学生 | `student1` | `admin123` | 查看个人数据 |
+| 超管 | `admin` | `123456` | 学校管理、用户管理 |
+| 教师 | `teacher1` | `123456` | 团队管理、学生管理 |
+| 学生 | `student1` | `123456` | 查看个人数据 |
 
 ### 第三步：阅读核心文档 (20分钟)
 
@@ -326,9 +326,9 @@ pnpm prisma:seed      # 种子数据
 npx prisma studio     # 可视化管理
 
 # 测试账号
-admin / admin123      # 超管
-teacher1 / admin123   # 教师
-student1 / admin123   # 学生
+admin / 123456      # 超管
+teacher1 / 123456   # 教师
+student1 / 123456   # 学生
 
 # 关键目录
 apps/web/src/app/     # 前端页面

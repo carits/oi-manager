@@ -19,6 +19,7 @@ export const KNOWN_OJ_PLATFORMS = [
   { value: 'hdu', label: 'HDU' },
   { value: 'hysbz', label: 'HYSBZ' },
   { value: 'codeforces', label: 'CodeForces' },
+  { value: 'gym', label: 'Gym' },
   { value: 'z-trening', label: 'Z-Trening' },
   { value: 'aizu', label: 'Aizu' },
   { value: 'lightoj', label: 'LightOJ' },
@@ -69,7 +70,7 @@ export const KNOWN_OJ_PLATFORMS = [
  * OJ 平台标识符
  * @description 支持的 OJ 平台列表
  */
-export type OjPlatform = 'luogu' | 'codeforces' | 'atcoder' | 'loj' | 'poj' | 'hdu' | 'spoj' | 'uva' | 'vijos' | 'bzoj' | 'gym' | 'other'
+export type OjPlatform = 'luogu' | 'codeforces' | 'atcoder' | 'loj' | 'poj' | 'hdu' | 'spoj' | 'uva' | 'vijos' | 'bzoj' | 'gym' | 'qoj' | 'other'
 
 /**
  * OJ 拉取错误码

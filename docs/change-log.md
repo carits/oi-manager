@@ -1,8 +1,259 @@
 # 变更日志
 
+## 2026-04-03
+
+### QOJ PDF 下载方案实现（headed 模式 + 独立浏览器）
+
+**背景**: QOJ `download.php` 端点受 Cloudflare JS Challenge 严格保护，headless 模式四级策略全部失败。发现 headed 模式下 CF challenge 约 3 秒自动通过。
+
+**关键发现**:
+- `download.php?type=statement&id={题目编号}` — id 直接就是题目编号，不需要额外映射
+- CF 对 headless 浏览器严格检测，headed 模式 3 秒自动通过
+- browserManager 的 stealth/UA 注入反而干扰 CF 通过，需要独立裸浏览器实例
+- 需要 `QOJ_SESSION`（UOJSESSID cookie），类似洛谷的 `LUOGU_COOKIE`
+
+**修改文件**:
+- `apps/server/src/oj-adapters/qoj.ts` — 核心改动：
+  - `fetch()` 使用 headed 模式（`headless: false`）
+  - `downloadPdf()` 启动独立浏览器实例，不经过 browserManager
+  - 新增 `waitForCloudflare()` 方法，检测 PDF contentType 或页面 title 判断 CF 通过
+  - 新增 `getSessionCookie()` 读取 `QOJ_SESSION` 环境变量
+  - 删除旧的四级下载策略，替换为单一可靠的独立浏览器方案
+- `apps/server/src/lib/browser/manager.ts` — 支持 headed/headless 双浏览器实例：
+  - `init(headless)` 和 `ensureBrowser(headless)` 参数化
+  - 两个独立浏览器实例：`headlessBrowser` 和 `browser`（headed）
+  - `close()` 同时关闭两个实例
+- `apps/server/.env` — 新增 `QOJ_SESSION` 环境变量
+
+**测试结果**:
+- QOJ 76 (PDF): ✅ 98818 bytes 本地存储
+- QOJ 60 (HTML): ✅ Markdown 题面正常
+- QOJ 9741 (PDF): ✅ 97363 bytes 本地存储
+
+**影响范围**: QOJ 所有题目拉取，PDF 题面现在可下载到本地
+
+---
+
+## 2026-04-02（续四）
+
+### QOJ PDF 下载策略优化（四级策略）
+
+**背景**: QOJ `download.php` 端点受 Cloudflare JS Challenge 严格保护，所有服务器端 PDF 下载均失败。
+
+**修改文件**:
+- `apps/server/src/oj-adapters/qoj.ts` — 实现四级 PDF 下载策略：
+  1. `page.request.get()`（Playwright API Request，共享 context cookies）
+  2. Node.js `fetch` + 手动 cookie 注入
+  3. 浏览器内 `fetch()`（通过 `page.evaluate`，Chrome TLS 指纹）
+  4. `newPage().goto()` fallback
+  - 新增 cookies 诊断日志（`cf_clearance` 状态）
+  - 新增 `savePdfToLocal` 辅助方法
+
+**测试结果**:
+- `cf_clearance` cookie 已确认存在于浏览器上下文
+- 四级策略全部失败：CF 检查 TLS 指纹和请求上下文，非住宅代理无法绕过
+- PDF 题面保留外部 URL，前端显示"打开 PDF 题面"按钮
+
+**影响范围**: QOJ PDF 题面（如 76、35），无回归风险
+
+---
+
+## 2026-04-02（续三）
+
+### QOJ PDF 处理 + 题面页 UI 优化
+
+**问题**: QOJ PDF 题面由于 CF 防护无法 iframe 嵌入、无法服务器端下载。
+
+**修改文件**:
+- `apps/server/src/oj-adapters/qoj.ts` — PDF 下载改用 browser context newPage goto，CF 拦截时 fallback 外部 URL
+- `apps/web/src/components/problem/ProblemDetail.tsx` — PDF 展示：本地路径用 iframe，外部 URL 用"在新窗口打开"按钮
+- `docs/OJ_ADAPTERS.md` — 更新 QOJ 已知限制说明
+
+**影响范围**: QOJ PDF 题面（如 76、35）展示方式变更
+
+**兼容性**: 无回归风险，本地 PDF 仍用 iframe 嵌入
+
+---
+
+## 2026-04-02（续二）
+
+### 评测记录页面骨架
+
+**目标**: 为教师、学生、平台管理员添加评测记录列表页面（UI 骨架，暂无实际数据）。
+
+**新增文件**:
+- `apps/web/src/lib/judge-constants.ts` — 评测结果（14选项）和编程语言（20选项）全局常量
+- `apps/web/src/components/submission/SubmissionList.tsx` — 共用评测记录列表组件（筛选 + 表格 + 分页）
+- `apps/web/src/app/teacher/submissions/page.tsx` — 教师端评测记录页
+- `apps/web/src/app/student/submissions/page.tsx` — 学生端评测记录页
+- `apps/web/src/app/platform-admin/submissions/page.tsx` — 平台管理员评测记录页
+- `apps/server/src/routes/submissions.ts` — 后端 API 骨架（返回空数组）
+
+**修改文件**:
+- `apps/web/src/lib/oj-platforms.ts` — 新增 `SUBMISSION_OJ_OPTIONS`（含"本OJ"选项）
+- `apps/web/src/config/navigation.ts` — 教师、学生、平台管理员导航添加"评测记录"入口
+- `apps/server/src/index.ts` — 注册 `/api/submissions` 路由
+
+**筛选功能**: 用户名（输入）、OJ（下拉，含本OJ）、题号（输入）、评测结果（下拉14选项）、语言（下拉20选项）
+
+### 密码文档修正
+
+**目标**: 将所有文档中 `admin123` 密码引用改为 `123456`。
+
+**修改文件**: README.md, HANDOVER.md, RUNBOOK.md, API_REFERENCE.md, KNOWN_ISSUES.md
+
+## 2026-04-02（续）
+
+### HDU 适配器实现
+
+**目标**: 新增 HDU (acm.hdu.edu.cn) 题目拉取支持。
+
+**修改文件**:
+- `apps/server/src/oj-adapters/hdu.ts` — 新增 HDU 适配器（纯 HTTP，GB2312 解码，panel_title/content 解析）
+- `apps/server/src/oj-adapters/index.ts` — 注册 HduAdapter，标记 `supported: true`
+
+**技术决策**:
+- 不使用 Playwright，HDU 是服务端渲染，纯 HTTP + GB2312 解码即可
+- 数学公式保留原始 `$...$` 格式，不转换
+- 语言检测：中文字符占比 > 5% 判定为中文
+
+**验证**: 1000, 7000, 6460, 5545, 7241 共 5 题全部拉取成功
+
+### 题面页 UI 细节修复
+
+**修改文件**:
+- `apps/web/src/styles/globals.css` — inline code 去掉 border、文字加深；pre code 补 border:none；正文色加深
+- `apps/web/src/components/problem/ProblemDetail.tsx` — visibility badge 蓝色加深
+- `apps/web/src/app/platform-admin/problems/page.tsx` — 附件状态列：无附件时显示"无附件"而非"-"
+
+## 2026-04-02
+
+### 题面详情页 UI 设计重构
+
+**目标**: 走"专业文档页 + 轻比赛平台感"路线，建立统一的 slate 色系视觉系统。
+
+**修改文件**:
+- `apps/web/src/styles/globals.css` — `.markdown-content` 全面重构
+- `apps/web/src/components/ui/MarkdownRenderer.tsx` — CopyButton 适配浅色代码块
+- `apps/web/src/components/problem/ProblemDetail.tsx` — 头部去蓝、卡片微阴影、Tab 加粗
+
+**核心改动**:
+1. **行内 code**：蓝紫色（`#eef2ff`/`#4338ca`）→ 中性灰（`#f1f5f9`/`#1e293b`/`#e2e8f0` 边框）
+2. **代码块**：深蓝黑（`#1e293b`）→ 浅灰文档风（`#f8fafc`/`#1e293b`），融入正文流
+3. **blockquote**：蓝色边线 → 中性灰（`#94a3b8`）+ 浅灰底色
+4. **正文/标题色**：统一到 slate 色系（`#334155`/`#0f172a`/`#1e293b`），h2 去底边线
+5. **h4**：新增小标签风格（大写、小号、灰色）
+6. **表格**：边框/底色统一到 slate
+7. **题号颜色**：蓝色 → 灰色，蓝色只保留给交互元素
+8. **CopyButton**：深色半透明 → 浅灰底深灰字
+
+**设计原则**: 蓝色只用于交互语义（链接/tab/按钮），非交互元素用中性灰
+
+---
+
+## 2026-04-02
+
+### Playwright 浏览器基础设施 + QOJ 适配器
+
+**新增**: 建立 Playwright + Stealth + rebrowser-patches 浏览器基础设施，供所有需要 JS 渲染的 OJ 适配器复用。实现 QOJ 题目拉取适配器。
+
+**新增文件**:
+- `apps/server/src/lib/browser/types.ts` — 浏览器会话类型（ProxyConfig, BrowserSessionOptions 等）
+- `apps/server/src/lib/browser/proxy.ts` — 代理管理器（环境变量加载、轮询/随机/健康检查）
+- `apps/server/src/lib/browser/stealth.ts` — 7 项 Stealth 反检测（navigator.webdriver、chrome.runtime、Plugins、WebGL、Permissions 等）
+- `apps/server/src/lib/browser/manager.ts` — 浏览器单例管理器（懒加载 Chromium、withPage 自动创建/清理）
+- `apps/server/src/lib/browser/session.ts` — Cookie/登录态文件持久化
+- `apps/server/src/lib/browser/README.md` — 使用文档
+- `apps/server/src/oj-adapters/qoj.ts` — QOJ 适配器
+
+**QOJ 适配器功能**:
+1. 标题提取：`<h1 class="page-header">` 去掉 "#N. " 前缀；fallback `<title>` 标签
+2. 时限/内存限制：从 badge span 提取，支持 s/ms/MB/GB/KB
+3. MathJax 处理：移除 SVG 渲染结果，从 `<script type="math/tex">` 提取 LaTeX → `$...$`
+4. HTML→Markdown：标题、段落、代码块、表格、列表、加粗/斜体完整转换
+5. PDF 检测：检查 iframe/embed 指向 download.php
+6. Cloudflare：403 时等待 8 秒
+
+**依赖变更**: 新增 `rebrowser-playwright-core`（需要 `npx rebrowser-playwright-core install chromium`）
+
+**验证**:
+- QOJ 60: 标题/时限/内存/LaTeX 公式/代码块/子任务 — 全部正确
+- QOJ 1: 复杂 LaTeX/行内代码/表格 — 正确
+- QOJ 49: PDF 题面检测/时限/内存 — 正确
+
+---
+
+## 2026-04-01
+
+### CF/Gym 适配器：内存限制提取 + 字体样式转换 + Math 定界符全面修复
+
+**问题**: Gym 106384A 拉取失败（内存限制未提取），CF 特殊字体样式未转换，display math 与文字同行，相邻 inline math `$$` 冲突。
+
+**修复内容**:
+1. **内存限制正则**：`extractLimits()` 中 `/(\d+)\s*(?:MB|MiB)/i` → `/(\d+)\s*(?:MB|MiB|megabytes?)/i`
+   - CF/Gym 部分题目使用 "256 megabytes" 而非 "256 MB" 格式
+2. **tex-font-style 处理**：`renderInline()` 的 span 分支新增：
+   - `tex-font-style-bf` → `**粗体**`
+   - `tex-font-style-it` → `*斜体*`
+   - `tex-font-style-underline` → `<u>下划线</u>`
+3. **fixCfMath display math 行分离**：6-dollar 转换时用 `\n\n` 包裹 `$$...$$`
+   - 确保 `$$` 单独成行，remark-math 才能正确识别 display math
+4. **相邻 inline math 修复**：`fixCfMath()` 末尾新增 `$$` → `$ $` 后处理
+   - 修复 `$s$$^{\text{∗}}$`（相邻 inline math `$$` 被误解为 display math）
+   - 使用 lookbehind/lookahead 排除 display math（`$$\n` 不受影响）
+
+**影响文件**: `apps/server/src/oj-adapters/codeforces.ts`
+
+**影响范围**: CF/Gym 题目拉取，需重新拉取已拉取的题目才能生效
+
+---
+
+## 2026-03-31
+
+### 拉取队列统一平台切换 + 共享平台常量
+
+**问题**: 拉取队列页面的平台选择和 Cookie 配置是分离的，且前端多处重复定义 OJ 平台列表。
+
+**修复内容**:
+1. **新建共享平台常量** `apps/web/src/lib/oj-platforms.ts`
+   - `OJ_PLATFORMS`（含"全部平台"）、`OJ_PLATFORMS_NO_ALL`、`OJ_PLATFORM_LABEL_MAP`
+   - `FETCHABLE_PLATFORMS`、`PLATFORM_COOKIE_FIELDS`
+   - `isFetchablePlatform()`、`hasCookieConfig()` 工具函数
+2. **拉取队列页面统一平台切换**
+   - 一个下拉控制 Cookie 配置和批量拉取
+   - 切换平台时动态加载对应 Cookie 配置
+   - 无 Cookie 需求的平台自动隐藏配置区域
+3. **消除重复平台列表**
+   - `ProblemDetail.tsx` 删除本地 Record，改用 `OJ_PLATFORM_LABEL_MAP`
+   - 所有平台相关页面统一使用共享常量
+
+**修改文件**:
+- `apps/web/src/lib/oj-platforms.ts` — 新建共享常量
+- `apps/web/src/app/platform-admin/problems/page.tsx` — 统一平台切换 UI
+- `apps/web/src/components/problem/ProblemDetail.tsx` — 改用共享常量
+
+**回归风险**: 低。后端 API 无变更，仅前端 UI 和常量组织调整。
+
+---
+
 ## 2026-03-30
 
-### 拉取队列 UI 改造
+### 拉取队列 UI 修复 + CF/Gym 适配器修复（2026-04-01)
+
+### 目标
+修复拉取队列页面的 UI 问题，以及 Codeforces/Gym 适配器的时间/内存限制和数学公式处理。
+
+### 修改文件
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `apps/web/src/app/platform-admin/problems/page.tsx` | 自动刷新使用 silent 模式避免滚动条跳动; 平台选择持久化到 localStorage |
+| 修改 | `apps/server/src/oj-adapters/codeforces.ts` | tex-span 数学定界符保留 display/inline 类型; 安全网去除 time/memory limit |
+
+### 验证
+- [ ] 自动刷新时任务列表滚动条不跳动
+- [ ] 切换页面再返回时平台选择保持
+- [ ] 重新拉取 CF/Gym 题目， time/memory limit 不再出现在 Markdown 鴶面中
+- [ ] 数学公式 display math 不会被错误识别为 inline math
 
 **改了什么**：
 1. OJ 平台下拉从 5-12 项扩展为 55+ 项全平台列表，统一使用 `KNOWN_OJ_PLATFORMS`

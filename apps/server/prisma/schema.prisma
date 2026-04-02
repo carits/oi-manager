@@ -650,3 +650,20 @@ model TeamMemberImportItem {
   @@index([batchId])
   @@index([matchType])
 }
+
+model AiUsageLog {
+  id          String   @id @default(uuid())
+  userId      String
+  problemId   String
+  action      String   // translate | format
+  sourceLang  String?  // zh | en
+  targetLang  String?  // zh | en
+  model       String?  // deepseek-chat
+  tokensUsed  Int      @default(0)
+  status      String   @default("success") // success | failed | rate_limited
+  message     String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, problemId, action, createdAt])
+  @@index([userId, createdAt])
+}

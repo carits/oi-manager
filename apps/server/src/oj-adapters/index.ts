@@ -5,23 +5,34 @@
 
 import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode, KNOWN_OJ_PLATFORMS } from './types'
 import { LuoguAdapter } from './luogu'
+import { AtcoderAdapter } from './atcoder'
+import { CodeforcesAdapter } from './codeforces'
+import { GymAdapter } from './gym'
+import { QojAdapter } from './qoj'
+import { HduAdapter } from './hdu'
 
 // 导出类型
 export * from './types'
 
 // 导出适配器
 export { LuoguAdapter } from './luogu'
+export { AtcoderAdapter } from './atcoder'
+export { CodeforcesAdapter } from './codeforces'
+export { GymAdapter } from './gym'
+export { QojAdapter } from './qoj'
+export { HduAdapter } from './hdu'
 
 /**
  * 已注册的适配器列表
  * @description 新增 OJ 平台时，在此处注册适配器实例
  */
-const adapters: Map<OjPlatform, OjAdapter> = new Map([
-  ['luogu', new LuoguAdapter()],
-  // 预留其他平台
-  // ['codeforces', new CodeforcesAdapter()],
-  // ['atcoder', new AtcoderAdapter()],
-  // ['loj', new LojAdapter()],
+const adapters = new Map<OjPlatform, OjAdapter>([
+  ['luogu', new LuoguAdapter() as OjAdapter],
+  ['atcoder', new AtcoderAdapter() as OjAdapter],
+  ['codeforces', new CodeforcesAdapter() as OjAdapter],
+  ['gym', new GymAdapter() as OjAdapter],
+  ['qoj', new QojAdapter() as OjAdapter],
+  ['hdu', new HduAdapter() as OjAdapter],
 ])
 
 /**
@@ -52,16 +63,17 @@ export function getSupportedPlatforms(): Array<{
 }> {
   return [
     { platform: 'luogu', name: '洛谷', supported: true },
-    { platform: 'codeforces', name: 'CodeForces', supported: false },
-    { platform: 'atcoder', name: 'AtCoder', supported: false },
+    { platform: 'codeforces', name: 'CodeForces', supported: true },
+    { platform: 'atcoder', name: 'AtCoder', supported: true },
     { platform: 'loj', name: 'LOJ', supported: false },
     { platform: 'poj', name: 'POJ', supported: false },
-    { platform: 'hdu', name: 'HDU', supported: false },
+    { platform: 'hdu', name: 'HDU', supported: true },
     { platform: 'spoj', name: 'SPOJ', supported: false },
     { platform: 'uva', name: 'UVa', supported: false },
     { platform: 'vijos', name: 'Vijos', supported: false },
     { platform: 'bzoj', name: 'BZOJ', supported: false },
-    { platform: 'gym', name: 'Gym', supported: false },
+    { platform: 'gym', name: 'Gym', supported: true },
+    { platform: 'qoj', name: 'QOJ', supported: true },
   ]
 }
 

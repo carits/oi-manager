@@ -320,7 +320,7 @@ Content-Type: application/json
 # 登录获取 token
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"123456"}'
 
 # 使用 token 访问接口
 curl -X GET http://localhost:3001/api/users \

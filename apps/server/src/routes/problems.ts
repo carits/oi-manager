@@ -1164,3 +1164,294 @@ problemsRouter.delete('/:id/statements/:statementId', authenticate, async (req, 
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
+
+// ========== AI 翻译/格式化接口 ==========
+
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || ''
+
+/**
+ * 检查用户 24h 内的 AI 使用次数
+ */
+async function checkRateLimit(userId: string, problemId: string, action: string, isAdmin: boolean): Promise<{ allowed: boolean; count: number }> {
+  if (isAdmin) return { allowed: true, count: 0 }
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const count = await prisma.aiUsageLog.count({
+    where: {
+      userId,
+      problemId,
+      action,
+      status: { not: 'rate_limited' },
+      createdAt: { gte: since },
+    },
+  })
+
+  return { allowed: count < 1, count }
+}
+
+/**
+ * POST /:id/ai/translate — 翻译题面
+ */
+problemsRouter.post('/:id/ai/translate', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const { targetLang = 'en', statementId } = req.body
+    const user = (req as any).user
+
+    if (!DEEPSEEK_API_KEY) {
+      res.status(400).json({ success: false, message: '未配置 DEEPSEEK_API_KEY' })
+      return
+    }
+
+    // 检查限流
+    const isAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+    const { allowed } = await checkRateLimit(user.userId, id, 'translate', isAdmin)
+    if (!allowed) {
+      await prisma.aiUsageLog.create({
+        data: {
+          userId: user.userId,
+          problemId: id,
+          action: 'translate',
+          status: 'rate_limited',
+          message: '每题每24小时仅可翻译1次',
+        },
+      })
+      res.status(429).json({ success: false, message: '每题每24小时仅可翻译1次' })
+      return
+    }
+
+    // 获取题面内容
+    let content = ''
+    let sourceLang = 'zh'
+
+    if (statementId) {
+      const statement = await prisma.problemStatement.findFirst({
+        where: { id: statementId, problemId: id },
+      })
+      if (!statement) {
+        res.status(404).json({ success: false, message: '题面记录不存在' })
+        return
+      }
+      content = statement.content || ''
+      sourceLang = statement.language || 'zh'
+    } else {
+      const problem = await prisma.problem.findUnique({ where: { id } })
+      if (!problem) {
+        res.status(404).json({ success: false, message: '题目不存在' })
+        return
+      }
+      // 找到第一个 markdown 题面
+      const statement = await prisma.problemStatement.findFirst({
+        where: { problemId: id, type: 'statement', format: 'markdown' },
+      })
+      if (!statement || !statement.content) {
+        res.status(400).json({ success: false, message: '没有可翻译的 Markdown 题面' })
+        return
+      }
+      content = statement.content
+      sourceLang = statement.language || 'zh'
+    }
+
+    if (!content || content.trim().length === 0) {
+      res.status(400).json({ success: false, message: '题面内容为空' })
+      return
+    }
+
+    // 调用翻译模块
+    const { translateDocument } = await import('../lib/ai-translate')
+    const result = await translateDocument({
+      text: content,
+      sourceLang: sourceLang as any,
+      targetLang: targetLang as any,
+      temperature: 0.1,
+    })
+
+    // 创建新的题面记录
+    const newStatement = await prisma.problemStatement.create({
+      data: {
+        problemId: id,
+        type: 'statement',
+        format: 'markdown',
+        language: targetLang,
+        content: result.translated,
+        isVisible: false,
+      },
+    })
+
+    // 记录使用日志
+    await prisma.aiUsageLog.create({
+      data: {
+        userId: user.userId,
+        problemId: id,
+        action: 'translate',
+        sourceLang,
+        targetLang,
+        model: result.metadata.model,
+        tokensUsed: result.metadata.chunksProcessed || 0,
+        status: 'success',
+      },
+    })
+
+    res.json({
+      success: true,
+      data: {
+        statementId: newStatement.id,
+        content: result.translated,
+        sourceLang,
+        targetLang,
+        diagnostics: result.diagnostics,
+      },
+    })
+  } catch (error) {
+    logger.error('ai_translate_error', error)
+    res.status(500).json({ success: false, message: '翻译失败: ' + (error as Error).message })
+  }
+})
+
+/**
+ * POST /:id/ai/format — 格式化题面
+ */
+problemsRouter.post('/:id/ai/format', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const { statementId } = req.body
+    const user = (req as any).user
+
+    if (!DEEPSEEK_API_KEY) {
+      res.status(400).json({ success: false, message: '未配置 DEEPSEEK_API_KEY' })
+      return
+    }
+
+    // 检查限流
+    const isAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+    const { allowed } = await checkRateLimit(user.userId, id, 'format', isAdmin)
+    if (!allowed) {
+      await prisma.aiUsageLog.create({
+        data: {
+          userId: user.userId,
+          problemId: id,
+          action: 'format',
+          status: 'rate_limited',
+          message: '每题每24小时仅可格式化1次',
+        },
+      })
+      res.status(429).json({ success: false, message: '每题每24小时仅可格式化1次' })
+      return
+    }
+
+    // 获取题面内容
+    let content = ''
+
+    if (statementId) {
+      const statement = await prisma.problemStatement.findFirst({
+        where: { id: statementId, problemId: id, format: 'markdown' },
+      })
+      if (!statement) {
+        res.status(404).json({ success: false, message: '题面记录不存在' })
+        return
+      }
+      content = statement.content || ''
+    } else {
+      const statement = await prisma.problemStatement.findFirst({
+        where: { problemId: id, type: 'statement', format: 'markdown' },
+      })
+      if (!statement || !statement.content) {
+        res.status(400).json({ success: false, message: '没有可格式化的 Markdown 题面' })
+        return
+      }
+      content = statement.content
+    }
+
+    if (!content || content.trim().length === 0) {
+      res.status(400).json({ success: false, message: '题面内容为空' })
+      return
+    }
+
+    // 调用格式化
+    const { formatDocument } = await import('../lib/ai-translate')
+    const result = await formatDocument(content)
+
+    // 更新题面内容
+    if (statementId) {
+      await prisma.problemStatement.update({
+        where: { id: statementId },
+        data: { content: result.translated },
+      })
+    } else {
+      const statement = await prisma.problemStatement.findFirst({
+        where: { problemId: id, type: 'statement', format: 'markdown' },
+      })
+      if (statement) {
+        await prisma.problemStatement.update({
+          where: { id: statement.id },
+          data: { content: result.translated },
+        })
+      }
+    }
+
+    // 记录使用日志
+    await prisma.aiUsageLog.create({
+      data: {
+        userId: user.userId,
+        problemId: id,
+        action: 'format',
+        model: result.metadata.model,
+        status: 'success',
+      },
+    })
+
+    res.json({
+      success: true,
+      data: {
+        content: result.translated,
+        diagnostics: result.diagnostics,
+      },
+    })
+  } catch (error) {
+    logger.error('ai_format_error', error)
+    res.status(500).json({ success: false, message: '格式化失败: ' + (error as Error).message })
+  }
+})
+
+/**
+ * GET /:id/ai/usage — 获取当前用户对此题目的 AI 使用情况
+ */
+problemsRouter.get('/:id/ai/usage', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const user = (req as any).user
+    const isAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const logs = await prisma.aiUsageLog.findMany({
+      where: {
+        userId: user.userId,
+        problemId: id,
+        status: { not: 'rate_limited' },
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const translateCount = logs.filter(l => l.action === 'translate').length
+    const formatCount = logs.filter(l => l.action === 'format').length
+
+    res.json({
+      success: true,
+      data: {
+        translate: { used: translateCount, limit: isAdmin ? -1 : 1 },
+        format: { used: formatCount, limit: isAdmin ? -1 : 1 },
+        logs: logs.map(l => ({
+          action: l.action,
+          sourceLang: l.sourceLang,
+          targetLang: l.targetLang,
+          status: l.status,
+          createdAt: l.createdAt,
+        })),
+      },
+    })
+  } catch (error) {
+    logger.error('ai_usage_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})

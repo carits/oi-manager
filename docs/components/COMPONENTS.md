@@ -36,6 +36,8 @@ apps/web/src/components/
 ├── profile/               # 个人资料组件
 │   ├── ProfileEditor.tsx  # 资料编辑组件
 │   └── PasswordEditor.tsx # 密码修改组件
+├── submission/            # 评测记录组件
+│   └── SubmissionList.tsx # 评测记录列表（共用组件）
 ├── AppShell.tsx           # 应用外壳，导航布局
 ├── AuthProvider.tsx       # 认证上下文
 ├── ProtectedRoute.tsx     # 路由保护组件
@@ -503,6 +505,34 @@ interface ProtectedRouteProps {
 - 展示团队完整信息
 - 成员管理
 - 团队设置
+
+---
+
+## 评测记录组件
+
+### 1. SubmissionList (评测记录列表)
+
+**文件**: `apps/web/src/components/submission/SubmissionList.tsx`
+
+**用途**: 评测记录列表页面，被教师端、学生端、平台管理员端共用
+
+**Props**:
+```typescript
+interface SubmissionListProps {
+  viewRole: 'teacher' | 'student' | 'admin'
+}
+```
+
+**特性**:
+- 筛选栏：用户名（输入）、OJ（下拉含"本OJ"）、题号（输入）、评测结果（14选项下拉）、语言（20选项下拉）
+- 表格列：用户名、OJ、题号、评测结果、耗时(ms)、内存(MB)、代码长度(B)、语言、提交时间
+- 评测结果彩色 Badge（Accepted 绿色、WA/TLE/RE 红色/黄色等）
+- 分页控件
+- 过滤/重置按钮
+
+**依赖常量**:
+- `lib/judge-constants.ts` — 评测结果和语言选项
+- `lib/oj-platforms.ts` — OJ 平台选项
 
 ---
 

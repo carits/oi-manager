@@ -18,6 +18,7 @@
 | 团队管理 | ✅ 完成 | 团队 CRUD、成员管理 |
 | 比赛管理 | 🔄 进行中 | 比赛 CRUD、成绩导入 |
 | 题单管理 | 🔄 进行中 | 题单 CRUD、任务进度 |
+| 评测记录 | 🔄 进行中 | 评测记录列表、筛选（UI 骨架已完成） |
 | Rating 系统 | 🔄 进行中 | Rating 计算、历史记录 |
 | 成绩中心 | 📋 计划中 | 成绩统计、报告生成 |
 | 资源管理 | 📋 计划中 | 文件上传、下载 |
@@ -336,7 +337,40 @@
 
 ---
 
-## 11. 个人中心模块 (Profile)
+## 12. 评测记录模块 (Submissions)
+
+### 功能
+- 评测记录列表（UI 骨架已完成，暂无实际数据）
+- 筛选：用户名、OJ平台（含本OJ）、题号、评测结果（14选项）、编程语言（20选项）
+
+### 前端代码
+| 文件 | 说明 |
+|------|------|
+| `app/teacher/submissions/page.tsx` | 评测记录（教师端） |
+| `app/student/submissions/page.tsx` | 评测记录（学生端） |
+| `app/platform-admin/submissions/page.tsx` | 评测记录（平台管理员端） |
+| `components/submission/SubmissionList.tsx` | 共用评测记录列表组件 |
+| `lib/judge-constants.ts` | 评测结果 + 编程语言全局常量 |
+| `lib/oj-platforms.ts` | OJ 平台选项（含 SUBMISSION_OJ_OPTIONS） |
+
+### 后端代码
+| 文件 | 说明 |
+|------|------|
+| `routes/submissions.ts` | 评测记录 API 骨架（返回空数组） |
+
+### API
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/submissions` | 评测记录列表（骨架） |
+
+### 常量定义
+- **评测结果**（14选项）: `lib/judge-constants.ts` → `JUDGE_RESULT_OPTIONS`
+- **编程语言**（20选项）: `lib/judge-constants.ts` → `LANGUAGE_OPTIONS`
+- **OJ 选项**（含本OJ）: `lib/oj-platforms.ts` → `SUBMISSION_OJ_OPTIONS`
+
+---
+
+## 13. 个人中心模块 (Profile)
 
 ### 功能
 - 个人资料查看/编辑
@@ -360,7 +394,7 @@
 
 ---
 
-## 12. 模块依赖关系
+## 14. 模块依赖关系
 
 ```
 认证模块 (Auth)
@@ -386,7 +420,7 @@
 
 ---
 
-## 13. 新增模块开发指南
+## 15. 新增模块开发指南
 
 ### 13.1 开发步骤
 

@@ -54,6 +54,22 @@ export class LuoguAdapter implements OjAdapter {
   name = '洛谷'
   platform: OjPlatform = 'luogu'
 
+  /**
+   * 检测文本语言（中文 vs 英文）
+   * 通过统计 CJK 统一汉字字符占比判断
+   */
+  private static detectLanguage(text: string): 'zh' | 'en' {
+    if (!text || text.trim().length === 0) return 'zh'
+    // 去掉空白和常见 ASCII 标点/数字后的有效字符
+    const cleanText = text.replace(/[\s\r\n\d!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g, '')
+    if (cleanText.length === 0) return 'zh'
+    // 统计 CJK 字符数量（中日韩统一表意文字）
+    const cjkChars = cleanText.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g)
+    const cjkCount = cjkChars ? cjkChars.length : 0
+    const ratio = cjkCount / cleanText.length
+    return ratio > 0.05 ? 'zh' : 'en'
+  }
+
   // 限流配置
   private static REQS_PER_SEC = 2.0
   private static JITTER_SEC: [number, number] = [0.10, 0.35]
@@ -141,13 +157,16 @@ export class LuoguAdapter implements OjAdapter {
 
   /**
    * 验证题号格式是否正确
-   * @description 洛谷题号格式：P开头+数字、B开头+数字、U开头+数字、AT开头+数字
+   * @description 洛谷题号格式：P开头+数字、B开头+数字、U开头+数字、
+   *              CF开头+竞赛号+字母（Codeforces 汇总题）、AT_开头（AtCoder 汇总题）
    */
   isValidProblemId(problemId: string): boolean {
     return /^P\d+$/.test(problemId) ||
            /^B\d+$/.test(problemId) ||
            /^U\d+$/.test(problemId) ||
-           /^AT\d+$/.test(problemId)
+           /^AT\d+$/.test(problemId) ||
+           /^CF\d+[A-Za-z]\d*$/.test(problemId) ||
+           /^AT_[a-z0-9_]+$/.test(problemId)
   }
 
   /**
@@ -306,11 +325,15 @@ export class LuoguAdapter implements OjAdapter {
    * 构建 OjProblem 对象
    */
   private buildOjProblem(data: LuoguProblemData, problemId: string): OjProblem {
-    // 构建中文题面
-    const markdownZh = this.buildMarkdown(data, data.content)
+    // 检测 content 字段的实际语言
+    const contentText = [data.content?.background, data.content?.description, data.content?.formatI, data.content?.formatO, data.content?.hint].filter(Boolean).join(' ')
+    const contentLang = LuoguAdapter.detectLanguage(contentText)
 
-    // 构建英文题面（如果存在）
-    const markdownEn = data.contentEn ? this.buildMarkdown(data, data.contentEn) : null
+    // 构建 content 题面（语言由检测结果决定）
+    const markdownContent = this.buildMarkdown(data, data.content, contentLang)
+
+    // 构建 contentEn 题面（如果存在）
+    const markdownEn = data.contentEn ? this.buildMarkdown(data, data.contentEn, 'en') : null
 
     // 获取时间和内存限制（取第一个值）
     // Luogu timeLimit 单位是毫秒(ms)，保持不变
@@ -333,18 +356,18 @@ export class LuoguAdapter implements OjAdapter {
     // 构建多语言 statements 数组
     const statements: import('./types').OjStatement[] = []
 
-    // 中文题面（默认可见）
-    if (markdownZh.trim()) {
+    // content 题面（语言由检测结果决定）
+    if (markdownContent.trim()) {
       statements.push({
         type: 'statement',
         format: 'markdown',
-        language: 'zh',
-        content: markdownZh,
+        language: contentLang,
+        content: markdownContent,
         isVisible: true
       })
     }
 
-    // 英文题面（默认隐藏）
+    // contentEn 题面（默认隐藏，仅在 content 为中文时添加）
     if (markdownEn?.trim()) {
       statements.push({
         type: 'statement',
@@ -357,7 +380,7 @@ export class LuoguAdapter implements OjAdapter {
 
     return {
       title: data.title || `${problemId} 题目`,
-      description: markdownZh, // 保持向后兼容，默认返回中文
+      description: markdownContent, // 保持向后兼容
       timeLimit: timeLimit,
       memoryLimit: memoryLimit,
       difficulty,
@@ -367,7 +390,7 @@ export class LuoguAdapter implements OjAdapter {
         url: this.getProblemUrl(problemId),
       },
       attachments,
-      statements, // 新增多语言题面数组
+      statements,
     }
   }
 
@@ -375,14 +398,20 @@ export class LuoguAdapter implements OjAdapter {
    * 构建 Markdown 格式的题目描述
    * @param data - 题目数据（用于获取样例和附件）
    * @param content - 题面内容（可以是中文或英文）
+   * @param lang - 内容语言，影响章节标题
    */
-  private buildMarkdown(data: LuoguProblemData, content?: LuoguProblemData['content']): string {
+  private buildMarkdown(data: LuoguProblemData, content?: LuoguProblemData['content'], lang: 'zh' | 'en' = 'zh'): string {
     const parts: string[] = []
     const contentData = content || data.content || {}
 
+    // 章节标题根据语言选择
+    const headers = lang === 'en'
+      ? { background: 'Background', description: 'Description', inputFormat: 'Input Format', outputFormat: 'Output Format', samples: 'Samples', sample: 'Sample', hint: 'Hint', input: 'Input', output: 'Output', attachments: 'Attachments' }
+      : { background: '题目背景', description: '题目描述', inputFormat: '输入格式', outputFormat: '输出格式', samples: '样例', sample: '样例', hint: '提示', input: '输入', output: '输出', attachments: '附件' }
+
     // 题目背景
     if (contentData.background?.trim()) {
-      parts.push('## 题目背景')
+      parts.push(`## ${headers.background}`)
       parts.push('')
       parts.push(contentData.background.trim())
       parts.push('')
@@ -390,7 +419,7 @@ export class LuoguAdapter implements OjAdapter {
 
     // 题目描述
     if (contentData.description?.trim()) {
-      parts.push('## 题目描述')
+      parts.push(`## ${headers.description}`)
       parts.push('')
       parts.push(contentData.description.trim())
       parts.push('')
@@ -398,7 +427,7 @@ export class LuoguAdapter implements OjAdapter {
 
     // 输入格式
     if (contentData.formatI?.trim()) {
-      parts.push('## 输入格式')
+      parts.push(`## ${headers.inputFormat}`)
       parts.push('')
       parts.push(contentData.formatI.trim())
       parts.push('')
@@ -406,15 +435,15 @@ export class LuoguAdapter implements OjAdapter {
 
     // 输出格式
     if (contentData.formatO?.trim()) {
-      parts.push('## 输出格式')
+      parts.push(`## ${headers.outputFormat}`)
       parts.push('')
       parts.push(contentData.formatO.trim())
       parts.push('')
     }
 
-    // 样例（只在中文版本显示，英文版本也显示相同的样例）
+    // 样例（中英文版本都显示相同的样例）
     if (data.samples && data.samples.length > 0) {
-      parts.push('## 样例')
+      parts.push(`## ${headers.samples}`)
       parts.push('')
       data.samples.forEach((sample, index) => {
         // 支持数组和对象两种格式
@@ -428,15 +457,15 @@ export class LuoguAdapter implements OjAdapter {
           sampleOutput = sample.output || ''
         }
 
-        parts.push(`### 样例 ${index + 1}`)
+        parts.push(`### ${headers.sample} ${index + 1}`)
         parts.push('')
-        parts.push('**输入**')
+        parts.push(`**${headers.input}**`)
         parts.push('')
         parts.push('```')
         parts.push(sampleInput)
         parts.push('```')
         parts.push('')
-        parts.push('**输出**')
+        parts.push(`**${headers.output}**`)
         parts.push('')
         parts.push('```')
         parts.push(sampleOutput)
@@ -447,15 +476,15 @@ export class LuoguAdapter implements OjAdapter {
 
     // 提示
     if (contentData.hint?.trim()) {
-      parts.push('## 提示')
+      parts.push(`## ${headers.hint}`)
       parts.push('')
       parts.push(contentData.hint.trim())
       parts.push('')
     }
 
-    // 附件（只在中文版本显示）
+    // 附件（只在主语言版本显示）
     if (!content && data.attachments && data.attachments.length > 0) {
-      parts.push('## 附件')
+      parts.push(`## ${headers.attachments}`)
       parts.push('')
       data.attachments.forEach((attachment) => {
         const url = attachment.downloadLink.startsWith('http')

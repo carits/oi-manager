@@ -85,8 +85,8 @@ cd apps/server && pnpm dev   # 后端: http://localhost:3001
 
 | 角色 | 用户名 | 密码 | 说明 |
 |------|--------|------|------|
-| 超级管理员 | admin | admin123 | 系统管理员 |
-| 平台管理员 | platform_admin | admin123 | 平台管理 |
+| 超级管理员 | admin | 123456 | 系统管理员 |
+| 平台管理员 | platform_admin | 123456 | 平台管理 |
 | 学校负责人 | teacher | teacher123 | 雅礼中学负责人 |
 
 ## 项目结构

@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
+import {
+  OJ_PLATFORMS,
+  OJ_PLATFORMS_NO_ALL,
+  FETCHABLE_PLATFORMS,
+  PLATFORM_COOKIE_FIELDS,
+} from '@/lib/oj-platforms'
 
 // 拉取任务类型
 interface FetchJob {
@@ -37,75 +43,7 @@ interface Problem {
   createdAt: string
 }
 
-// OJ 平台列表（与后端 KNOWN_OJ_PLATFORMS 保持同步）
-const OJ_PLATFORMS = [
-  { value: '', label: '全部平台' },
-  { value: 'poj', label: 'POJ' },
-  { value: 'zoj', label: 'ZOJ' },
-  { value: 'uva', label: 'UVA' },
-  { value: 'livearchive', label: 'Live Archive' },
-  { value: 'sgu', label: 'SGU' },
-  { value: 'ural', label: 'URAL' },
-  { value: 'hust', label: 'HUST' },
-  { value: 'spoj', label: 'SPOJ' },
-  { value: 'hdu', label: 'HDU' },
-  { value: 'hysbz', label: 'HYSBZ' },
-  { value: 'codeforces', label: 'CodeForces' },
-  { value: 'z-trening', label: 'Z-Trening' },
-  { value: 'aizu', label: 'Aizu' },
-  { value: 'lightoj', label: 'LightOJ' },
-  { value: 'uestc', label: 'UESTC' },
-  { value: 'nbut', label: 'NBUT' },
-  { value: 'fzu', label: 'FZU' },
-  { value: 'csu', label: 'CSU' },
-  { value: 'scu', label: 'SCU' },
-  { value: 'acdream', label: 'ACdream' },
-  { value: 'codechef', label: 'CodeChef' },
-  { value: 'openjudge', label: 'OpenJudge' },
-  { value: 'kattis', label: 'Kattis' },
-  { value: 'hihocoder', label: 'HihoCoder' },
-  { value: 'hit', label: 'HIT' },
-  { value: 'hrbust', label: 'HRBUST' },
-  { value: 'eijudge', label: 'EIJudge' },
-  { value: 'atcoder', label: 'AtCoder' },
-  { value: 'hackerrank', label: 'HackerRank' },
-  { value: '51nod', label: '51Nod' },
-  { value: 'topcoder', label: 'TopCoder' },
-  { value: 'eolymp', label: 'EOlymp' },
-  { value: 'jisuanke', label: '计蒜客' },
-  { value: 'libreoj', label: 'LibreOJ' },
-  { value: 'universaloj', label: 'UniversalOJ' },
-  { value: 'darkbzoj', label: '黑暗爆炸' },
-  { value: 'csgdmoj', label: 'CSGDMOJ' },
-  { value: 'toph', label: 'Toph' },
-  { value: 'luogu', label: '洛谷' },
-  { value: 'baekjoon', label: 'Baekjoon' },
-  { value: 'qoj', label: 'QOJ' },
-  { value: 'cses', label: 'CSES' },
-  { value: 'usaco', label: 'USACO' },
-  { value: 'oj.uz', label: 'oj.uz' },
-  { value: 'yosupo', label: 'Yosupo' },
-  { value: 'yukicoder', label: 'yukicoder' },
-  { value: 'vnoj', label: 'VNOJ' },
-  { value: 'tlx', label: 'TLX' },
-  { value: 'bzoj', label: 'BZOJ' },
-  { value: 'kilonova', label: 'Kilonova' },
-  { value: 'szkopul', label: 'Szkopuł' },
-  { value: 'csacademy', label: 'CSAcademy' },
-  { value: 'nowcoder', label: '牛客' },
-  { value: 'krsu', label: 'KRSU' },
-  { value: 'codefun', label: '代码源OJ' },
-  { value: 'other', label: '其他' },
-]
-
-// 有实际 adapter 的平台（批量拉取只允许这些）
-const FETCHABLE_PLATFORMS = [
-  { value: 'luogu', label: '洛谷' },
-]
-
-// 不含"全部平台"的纯平台列表
-const OJ_PLATFORMS_NO_ALL = OJ_PLATFORMS.filter(p => p.value !== '')
-
+// 拉取任务状态选项
 const JOB_STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
   { value: 'pending', label: '等待中' },
@@ -151,11 +89,8 @@ export default function PlatformAdminProblemsPage() {
   const [jobsPlatformFilter, setJobsPlatformFilter] = useState('')
   const [jobsStatusFilter, setJobsStatusFilter] = useState('')
 
-  // Cookie 配置
-  const [luoguCookies, setLuoguCookies] = useState<{ __client_id: string; _uid: string }>({
-    __client_id: '',
-    _uid: '',
-  })
+  // Cookie 配置（通用，按平台动态）
+  const [platformCookies, setPlatformCookies] = useState<Record<string, string>>({})
   const [savingCookies, setSavingCookies] = useState(false)
 
   // 批量拉取
@@ -188,9 +123,10 @@ export default function PlatformAdminProblemsPage() {
   // ==================== 数据加载 ====================
 
   // 加载任务列表（支持分页和筛选）
-  const fetchJobs = async () => {
+  // silent=true 时不切换 loading 状态（用于自动刷新，避免滚动条跳动）
+  const fetchJobs = async (silent = false) => {
     try {
-      setJobsLoading(true)
+      if (!silent) setJobsLoading(true)
       const params = new URLSearchParams({
         page: jobsPage.toString(),
         pageSize: '20',
@@ -205,19 +141,16 @@ export default function PlatformAdminProblemsPage() {
     } catch (error) {
       console.error('Failed to fetch jobs:', error)
     } finally {
-      setJobsLoading(false)
+      if (!silent) setJobsLoading(false)
     }
   }
 
-  // 加载平台配置
+  // 加载当前平台的 Cookie 配置
   const fetchConfig = async () => {
     try {
-      const result = await apiClient.get<PlatformConfig>('/api/oj-fetcher/platforms/luogu/config')
+      const result = await apiClient.get<PlatformConfig>(`/api/oj-fetcher/platforms/${fetchPlatform}/config`)
       if (result.success && result.data) {
-        setLuoguCookies({
-          __client_id: result.data.cookies?.__client_id || '',
-          _uid: result.data.cookies?._uid || '',
-        })
+        setPlatformCookies(result.data.cookies || {})
       }
     } catch (error) {
       console.error('Failed to fetch config:', error)
@@ -276,9 +209,11 @@ export default function PlatformAdminProblemsPage() {
     try {
       setSavingCookies(true)
       const cookies: Record<string, string> = {}
-      if (luoguCookies.__client_id) cookies.__client_id = luoguCookies.__client_id
-      if (luoguCookies._uid) cookies._uid = luoguCookies._uid
-      await apiClient.put('/api/oj-fetcher/platforms/luogu/config', { cookies })
+      // 只保存非空值
+      for (const [key, value] of Object.entries(platformCookies)) {
+        if (value) cookies[key] = value
+      }
+      await apiClient.put(`/api/oj-fetcher/platforms/${fetchPlatform}/config`, { cookies })
       alert('配置已保存')
     } catch (error) {
       console.error('Failed to save config:', error)
@@ -359,6 +294,15 @@ export default function PlatformAdminProblemsPage() {
   // ==================== Effects ====================
 
   useEffect(() => { fetchConfig(); fetchJobs() }, [])
+  // 从 localStorage 恢复平台选择（SSR 安全）
+  useEffect(() => {
+    const saved = localStorage.getItem('oj-fetch-platform')
+    if (saved && saved !== fetchPlatform) setFetchPlatform(saved)
+  }, [])
+  useEffect(() => {
+    fetchConfig()
+    localStorage.setItem('oj-fetch-platform', fetchPlatform)
+  }, [fetchPlatform])
   useEffect(() => { if (activeTab === 'public') fetchPublicProblems() }, [activeTab, publicPage, selectedPlatform, searchKeyword])
   useEffect(() => { if (activeTab === 'private') fetchPrivateProblems() }, [activeTab, privatePage, searchKeyword])
   useEffect(() => { if (activeTab === 'fetch') fetchJobs() }, [jobsPage, jobsPlatformFilter, jobsStatusFilter])
@@ -368,7 +312,7 @@ export default function PlatformAdminProblemsPage() {
     if (activeTab !== 'fetch') return
     const hasPending = jobs.some(j => j.status === 'pending' || j.status === 'fetching')
     if (hasPending) {
-      const timer = setTimeout(fetchJobs, 2000)
+      const timer = setTimeout(() => fetchJobs(true), 2000)
       return () => clearTimeout(timer)
     }
   }, [activeTab, jobs])
@@ -397,6 +341,14 @@ export default function PlatformAdminProblemsPage() {
     }
     const s = map[status] || { text: status, color: '#6b7280' }
     return <span style={{ color: s.color }}>{s.text}</span>
+  }
+
+  // 渲染附件列：区分"无附件"和"有附件但xxx"
+  const renderAttachmentColumn = (job: FetchJob) => {
+    if (!job.hasAttachment) {
+      return <span style={{ color: '#9ca3af' }}>无附件</span>
+    }
+    return renderAttachmentStatus(job.attachmentStatus)
   }
 
   // 分页组件
@@ -504,57 +456,65 @@ export default function PlatformAdminProblemsPage() {
         {/* ==================== 拉取队列 Tab ==================== */}
         {activeTab === 'fetch' && (
           <div>
-            {/* Cookie 配置 */}
+            {/* 拉取配置（统一平台选择 + Cookie + 批量拉取） */}
             <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>洛谷 Cookie 配置</h2>
-              <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '1rem' }}>
-                配置后可下载需要登录的附件。在浏览器登录洛谷后，从开发者工具获取 __client_id 和 _uid。
-              </p>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>__client_id</label>
-                  <input type="text" value={luoguCookies.__client_id} onChange={(e) => setLuoguCookies({ ...luoguCookies, __client_id: e.target.value })} placeholder="例如: 7d78f829..."
-                    style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', width: '300px' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>_uid</label>
-                  <input type="text" value={luoguCookies._uid} onChange={(e) => setLuoguCookies({ ...luoguCookies, _uid: e.target.value })} placeholder="例如: 401467"
-                    style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', width: '150px' }} />
-                </div>
-                <button onClick={handleSaveCookies} disabled={savingCookies}
-                  style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
-                  {savingCookies ? '保存中...' : '保存配置'}
-                </button>
-              </div>
-            </div>
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>拉取配置</h2>
 
-            {/* 批量拉取 */}
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>批量拉取</h2>
-              {/* 平台选择 */}
+              {/* 统一平台选择 */}
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>选择平台</label>
-                <select value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
-                  {FETCHABLE_PLATFORMS.map(p => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
-                <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)', marginLeft: '0.5rem' }}>
-                  目前仅支持洛谷平台拉取，其他平台敬请期待
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <select value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
+                    {OJ_PLATFORMS_NO_ALL.map(p => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                  {!FETCHABLE_PLATFORMS.find(p => p.value === fetchPlatform) && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>
+                      该平台暂未支持拉取，敬请期待
+                    </span>
+                  )}
+                </div>
               </div>
-              <textarea value={problemIdsInput} onChange={(e) => setProblemIdsInput(e.target.value)}
-                placeholder="输入题号，每行一个或逗号分隔，例如：&#10;P1001&#10;P1002&#10;B2001"
-                style={{ width: '100%', height: '120px', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', resize: 'vertical', marginBottom: '1rem' }} />
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button onClick={handleSubmit} disabled={submitting}
-                  style={{ padding: '0.5rem 1.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
-                  {submitting ? '提交中...' : '开始拉取'}
-                </button>
-                <button onClick={() => setProblemIdsInput('')}
-                  style={{ padding: '0.5rem 1rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
-                  清空
-                </button>
+
+              {/* Cookie 配置（仅对该平台有字段定义时显示） */}
+              {PLATFORM_COOKIE_FIELDS[fetchPlatform] && (
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
+                    配置后可下载需要登录的附件。在浏览器登录对应平台后，从开发者工具获取所需 Cookie 值。
+                  </p>
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    {PLATFORM_COOKIE_FIELDS[fetchPlatform].map(field => (
+                      <div key={field.key}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>{field.label}</label>
+                        <input type="text" value={platformCookies[field.key] || ''} onChange={(e) => setPlatformCookies({ ...platformCookies, [field.key]: e.target.value })} placeholder={field.placeholder}
+                          style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', width: '300px' }} />
+                      </div>
+                    ))}
+                    <button onClick={handleSaveCookies} disabled={savingCookies}
+                      style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      {savingCookies ? '保存中...' : '保存配置'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 批量拉取 */}
+              <div style={{ borderTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] ? '1px solid var(--border)' : 'none', paddingTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] ? '1rem' : 0 }}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>批量拉取</h3>
+                <textarea value={problemIdsInput} onChange={(e) => setProblemIdsInput(e.target.value)}
+                  placeholder="输入题号，每行一个或逗号分隔，例如：&#10;P1001&#10;P1002&#10;B2001"
+                  style={{ width: '100%', height: '120px', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', resize: 'vertical', marginBottom: '1rem' }} />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={handleSubmit} disabled={submitting}
+                    style={{ padding: '0.5rem 1.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    {submitting ? '提交中...' : '开始拉取'}
+                  </button>
+                  <button onClick={() => setProblemIdsInput('')}
+                    style={{ padding: '0.5rem 1rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    清空
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -603,7 +563,7 @@ export default function PlatformAdminProblemsPage() {
                         <td style={{ padding: '0.75rem' }}>{job.platform}</td>
                         <td style={{ padding: '0.75rem' }}>{job.problemId}</td>
                         <td style={{ padding: '0.75rem' }}>{renderStatus(job.status)}</td>
-                        <td style={{ padding: '0.75rem' }}>{job.hasAttachment ? renderAttachmentStatus(job.attachmentStatus) : '-'}</td>
+                        <td style={{ padding: '0.75rem' }}>{renderAttachmentColumn(job)}</td>
                         <td style={{ padding: '0.75rem', color: 'var(--gray-500)', maxWidth: '200px' }}>{job.message || '-'}</td>
                         <td style={{ padding: '0.75rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem' }}>

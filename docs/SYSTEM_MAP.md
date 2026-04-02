@@ -80,6 +80,7 @@ oi-manager-v2/
 |------|------|
 | `/platform-admin` | 管理首页 |
 | `/platform-admin/users` | 用户管理 |
+| `/platform-admin/submissions` | 评测记录 |
 | `/admin/profile` | 个人资料 (共用) |
 | `/admin/security` | 安全设置 (共用) |
 
@@ -97,6 +98,7 @@ oi-manager-v2/
 | `/teacher/contests` | 比赛管理 |
 | `/teacher/contests/[id]` | 比赛详情 |
 | `/teacher/problems` | 题目管理 |
+| `/teacher/submissions` | 评测记录 |
 | `/teacher/task-lists` | 题单管理 |
 | `/teacher/scores` | 成绩管理 |
 | `/teacher/rankings` | 排名查看 |
@@ -114,6 +116,7 @@ oi-manager-v2/
 | `/student/contests` | 比赛列表 |
 | `/student/contests/[id]` | 比赛详情 |
 | `/student/problems` | 题目列表 |
+| `/student/submissions` | 评测记录 |
 | `/student/task-lists` | 题单任务 |
 | `/student/scores` | 成绩查看 |
 | `/student/rating` | Rating 查看 |
@@ -229,6 +232,11 @@ oi-manager-v2/
 |------|------|------|
 | GET | `/api/stats/overview` | 总览统计 |
 | GET | `/api/stats/school/:id` | 学校统计 |
+
+### 4.12 评测记录 (`/api/submissions/*`)
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/submissions` | 评测记录列表（骨架，暂返回空数组） |
 
 ---
 

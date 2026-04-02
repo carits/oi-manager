@@ -16,6 +16,7 @@ import { ojFetcherRouter } from './routes/oj-fetcher'
 import { filesRouter } from './routes/files'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
 import { teamImportRouter } from './modules/team-import/team-import.routes'
+import { submissionsRouter } from './routes/submissions'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -84,6 +85,7 @@ app.use('/api/oj-fetcher', ojFetcherRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/platform-bindings', platformBindingRouter)
 app.use('/api/team-import', teamImportRouter)
+app.use('/api/submissions', submissionsRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {
@@ -158,6 +160,20 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 })
 
 // ==================== 启动服务 ====================
+
+// 加载代理配置
+import { proxyManager } from './lib/browser/proxy'
+proxyManager.loadFromEnv()
+
+// 浏览器管理器关闭钩子
+import { browserManager } from './lib/browser/manager'
+const gracefulShutdown = async (signal: string) => {
+  logger.info('server_shutting_down', { action: 'server_shutdown', metadata: { signal } })
+  await browserManager.close()
+  process.exit(0)
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
 app.listen(PORT, () => {
   logger.info('server_started', {
