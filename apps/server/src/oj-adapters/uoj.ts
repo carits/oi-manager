@@ -141,17 +141,11 @@ export class UojAdapter implements OjAdapter {
     // Clean up LaTeX \texttt{...} — convert to plain text
     content = content.replace(/\\texttt\{([^}]*)\}/g, '$1')
 
-    // UOJ-specific: clean Bootstrap list-group structure before HTML→MD conversion
-    // <ul class="list-group"><li class="list-group-item">...</li></ul>
-    // Convert to simple <div> blocks so they don't become nested Markdown lists
-    content = content.replace(/<ul\s+class="list-group"[^>]*>/gi, '\n')
-    content = content.replace(/<\/ul>\s*?(?=<\/li>|<li\s|<\/ul>)/gi, '\n')
-    content = content.replace(/<li\s+class="list-group-item"[^>]*>/gi, '\n')
-    content = content.replace(/<\/li>/gi, '\n')
-    content = content.replace(/<h5\s+class="list-group-item-heading"[^>]*>/gi, '<p><strong>')
-    content = content.replace(/<\/h5>/gi, '</strong></p>')
-    // <ul class="list-inline"><li>A. ...</li><li>B. ...</li></ul>
-    // Convert inline option lists to plain text with line breaks
+    // UOJ-specific: clean Bootstrap list structures before HTML→MD conversion
+    // Processing order matters: inner (list-inline) first, then outer (list-group)
+
+    // 1. <ul class="list-inline"><li>A. ...</li><li>B. ...</li></ul>
+    // Convert inline option lists to plain text lines (must process BEFORE list-group)
     content = content.replace(/<ul\s+class="list-inline"[^>]*>([\s\S]*?)<\/ul>/gi, (_match, inner) => {
       const items = inner.match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || []
       const lines = items.map((li: string) => {
@@ -160,6 +154,24 @@ export class UojAdapter implements OjAdapter {
       })
       return lines.join('\n')
     })
+
+    // 2. <h5 class="list-group-item-heading">...</h5> → <p><strong>...</strong></p>
+    content = content.replace(/<h5\s+class="list-group-item-heading"[^>]*>/gi, '<p><strong>')
+    content = content.replace(/<\/h5>/gi, '</strong></p>')
+
+    // 3. Strip list-group/list-group-item wrappers (ul/li tags)
+    content = content.replace(/<ul\s+class="list-group"[^>]*>/gi, '\n')
+    content = content.replace(/<\/ul>\s*?(?=<\/li>|<li\s|<\/ul>)/gi, '\n')
+    content = content.replace(/<li\s+class="list-group-item"[^>]*>/gi, '\n')
+    content = content.replace(/<\/li>/gi, '\n')
+
+    // 4. Clean whitespace inside <p><strong>...</strong></p> blocks
+    // UOJ h5 tags often have leading/trailing whitespace + newlines inside them
+    content = content.replace(/<p><strong>\s+/gi, '<p><strong>')
+    content = content.replace(/\s+<\/strong><\/p>/gi, '</strong></p>')
+
+    // 5. Trim excessive leading whitespace on lines left by HTML source indentation
+    content = content.replace(/\n[ \t]+/g, '\n')
 
     return convertHtmlToMarkdown(resolveRelativeUrls(content, BASE_URL)).trim()
   }
