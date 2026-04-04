@@ -521,8 +521,8 @@ async function processFetchQueue(platform: string) {
           processedDescription = await processMarkdownImages(targetProblemId, processedDescription, cookies)
         }
 
-        if (hasAttachment && Object.keys(cookies).length > 0) {
-          // 尝试下载附件
+        if (hasAttachment) {
+          // 尝试下载附件（部分平台如 UOJ 不需要 Cookie 即可下载）
           await prisma.ojFetchJob.update({
             where: { id: job.id },
             data: {
