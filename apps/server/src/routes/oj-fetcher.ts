@@ -670,6 +670,15 @@ async function downloadAttachmentInternal(
   const arrayBuffer = await response.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
+  // 如果传入的 filename 没有扩展名，尝试从 Content-Disposition 获取真实文件名
+  if (!path.extname(filename)) {
+    const disposition = response.headers.get('content-disposition')
+    if (disposition) {
+      const match = disposition.match(/filename="?([^"\s]+)/i)
+      if (match) filename = match[1]
+    }
+  }
+
   // 判断文件类型
   const ext = path.extname(filename).toLowerCase()
   const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)
