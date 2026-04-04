@@ -193,7 +193,7 @@ export class UojAdapter implements OjAdapter {
     while ((match = downloadRegex.exec(html)) !== null) {
       const href = match[1]
       const label = match[2].replace(/<[^>]*>/g, '').trim()
-      const fullUrl = href.startsWith('http') ? href : `${BASE_URL}${href}`
+      const fullUrl = (href.startsWith('http') ? href : `${BASE_URL}${href}`).replace(/&amp;/g, '&')
       // Derive a meaningful filename from label or URL
       const filename = label || `attachment_${problemId}`
       attachments.push({ filename, downloadLink: fullUrl })
