@@ -141,6 +141,26 @@ export class UojAdapter implements OjAdapter {
     // Clean up LaTeX \texttt{...} — convert to plain text
     content = content.replace(/\\texttt\{([^}]*)\}/g, '$1')
 
+    // UOJ-specific: clean Bootstrap list-group structure before HTML→MD conversion
+    // <ul class="list-group"><li class="list-group-item">...</li></ul>
+    // Convert to simple <div> blocks so they don't become nested Markdown lists
+    content = content.replace(/<ul\s+class="list-group"[^>]*>/gi, '\n')
+    content = content.replace(/<\/ul>\s*?(?=<\/li>|<li\s|<\/ul>)/gi, '\n')
+    content = content.replace(/<li\s+class="list-group-item"[^>]*>/gi, '\n')
+    content = content.replace(/<\/li>/gi, '\n')
+    content = content.replace(/<h5\s+class="list-group-item-heading"[^>]*>/gi, '<p><strong>')
+    content = content.replace(/<\/h5>/gi, '</strong></p>')
+    // <ul class="list-inline"><li>A. ...</li><li>B. ...</li></ul>
+    // Convert inline option lists to plain text with line breaks
+    content = content.replace(/<ul\s+class="list-inline"[^>]*>([\s\S]*?)<\/ul>/gi, (_match, inner) => {
+      const items = inner.match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || []
+      const lines = items.map((li: string) => {
+        const text = li.replace(/<\/?li[^>]*>/gi, '').trim()
+        return text
+      })
+      return lines.join('\n')
+    })
+
     return convertHtmlToMarkdown(resolveRelativeUrls(content, BASE_URL)).trim()
   }
 
