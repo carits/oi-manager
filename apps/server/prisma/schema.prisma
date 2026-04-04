@@ -251,7 +251,7 @@ model PrincipalTransferLog {
 
 model Problem {
   id                String              @id @default(uuid())
-  problemCode       String              @unique
+  problemCode       String
   title             String
   description       String?
   statementType     String              @default("none")
