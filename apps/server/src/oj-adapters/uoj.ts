@@ -132,9 +132,6 @@ export class UojAdapter implements OjAdapter {
 
     let content = m[1]
 
-    // Remove "下载" section only (limit table in 限制与约定 is kept)
-    content = content.replace(/<h3>\s*下载[\s\S]*?(?=<h3|<\/article|$)/gi, '')
-
     // Clean up LaTeX \texttt{...} — convert to plain text
     content = content.replace(/\\texttt\{([^}]*)\}/g, '$1')
 
