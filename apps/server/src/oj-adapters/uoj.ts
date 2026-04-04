@@ -13,7 +13,7 @@
  * - 题号格式: 纯数字（如 1, 2, 3）
  */
 
-import { OjAdapter, OjProblem, OjFetchError, OjErrorCode, OjPlatform } from './types'
+import { OjAdapter, OjProblem, OjFetchError, OjErrorCode, OjPlatform, OjAttachment } from './types'
 import { convertHtmlToMarkdown, resolveRelativeUrls, stripTags, unescapeHtml, detectLanguage } from './html-utils'
 import { logger } from '../lib/logger'
 
@@ -73,11 +73,12 @@ export class UojAdapter implements OjAdapter {
     const title = this.extractTitle(html, problemId)
     const { timeLimit, memoryLimit } = this.extractLimits(html)
     const description = this.extractDescription(html, problemId)
+    const attachments = this.extractAttachments(html, problemId)
     const language = detectLanguage(description)
 
     logger.info('uoj_fetch_success', {
       action: 'uoj_fetch',
-      metadata: { problemId, title, contentLength: description.length, timeLimit, memoryLimit, language }
+      metadata: { problemId, title, contentLength: description.length, timeLimit, memoryLimit, language, attachmentCount: attachments.length }
     })
 
     return {
@@ -86,6 +87,7 @@ export class UojAdapter implements OjAdapter {
       timeLimit,
       memoryLimit,
       source: { platform: 'uoj', problemId, url },
+      ...(attachments.length > 0 ? { attachments } : {}),
       statements: [{
         type: 'statement',
         format: 'markdown',
@@ -176,5 +178,27 @@ export class UojAdapter implements OjAdapter {
 
   getProblemUrl(problemId: string): string {
     return `${BASE_URL}/problem/${problemId}`
+  }
+
+  /**
+   * Extract downloadable attachments from UOJ HTML
+   * UOJ puts attachments in <h3>下载</h3> section with <a href="/download.php?type=problem&id=XX"> links
+   */
+  private extractAttachments(html: string, problemId: string): OjAttachment[] {
+    const attachments: OjAttachment[] = []
+
+    // Find download links in the article: <a href="/download.php?type=problem&id=60">样例数据下载</a>
+    const downloadRegex = /<a\s+href="(\/download\.php[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
+    let match: RegExpExecArray | null
+    while ((match = downloadRegex.exec(html)) !== null) {
+      const href = match[1]
+      const label = match[2].replace(/<[^>]*>/g, '').trim()
+      const fullUrl = href.startsWith('http') ? href : `${BASE_URL}${href}`
+      // Derive a meaningful filename from label or URL
+      const filename = label || `attachment_${problemId}`
+      attachments.push({ filename, downloadLink: fullUrl })
+    }
+
+    return attachments
   }
 }
