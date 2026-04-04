@@ -86,7 +86,7 @@ export default function LoginPage() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
         <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-          <img src="/logo.png" alt="Carits" style={{ height: '36px' }} />
+          <img src="/logo.png" alt="Carits" style={{ height: '48px' }} />
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>

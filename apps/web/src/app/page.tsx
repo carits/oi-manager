@@ -3,9 +3,7 @@ import Link from 'next/link'
 export default function Home() {
   return (
     <main style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <h1 style={{ marginBottom: '2rem', fontSize: '2rem', fontWeight: 600 }}>
-        <img src="/logo.png" alt="Carits" style={{ height: '36px', marginBottom: '2rem'}} />
-      </h1>
+      <img src="/logo.png" alt="Carits" style={{ height: '48px', marginBottom: '2rem' }} />
 
       <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <Link

@@ -116,7 +116,7 @@ export function AppShell({ children }: AppShellProps) {
           <img
             src="/logo.png"
             alt="Carits"
-            style={{ height: '28px', cursor: 'pointer' }}
+            style={{ height: '48px', cursor: 'pointer' }}
             onClick={() => router.push(`/${role === 'super_admin' ? 'admin/schools' : role === 'platform_admin' ? 'platform-admin' : role === 'student' ? 'student' : 'teacher'}`)}
           />
           <nav style={{ display: 'flex', gap: '1.5rem', fontSize: '0.875rem' }}>
