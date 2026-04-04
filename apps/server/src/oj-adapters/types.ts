@@ -45,7 +45,7 @@ export const KNOWN_OJ_PLATFORMS = [
   { value: 'eolymp', label: 'EOlymp' },
   { value: 'jisuanke', label: '计蒜客' },
   { value: 'libreoj', label: 'LibreOJ' },
-  { value: 'uoj', label: 'UOJ' },
+  { value: 'universaloj', label: 'UniversalOJ' },
   { value: 'darkbzoj', label: '黑暗爆炸' },
   { value: 'csgdmoj', label: 'CSGDMOJ' },
   { value: 'toph', label: 'Toph' },
@@ -72,7 +72,7 @@ export const KNOWN_OJ_PLATFORMS = [
  * OJ 平台标识符
  * @description 支持的 OJ 平台列表
  */
-export type OjPlatform = 'luogu' | 'codeforces' | 'atcoder' | 'poj' | 'hdu' | 'spoj' | 'uva' | 'vijos' | 'bzoj' | 'gym' | 'qoj' | 'ural' | 'usaco' | 'tlx' | 'libreoj' | 'yosupo' | '51nod' | 'csacademy' | 'kattis' | 'yukicoder' | 'vnoj' | 'kilonova' | 'ojuz' | 'aizu' | 'openj_bailian' | 'openj_noi' | 'openj_poj' | 'uoj' | 'csg' | 'nowcoder' | 'szkopul' | 'darkbzoj' | 'dmoj' | 'cses' | 'baekjoon' | 'eolymp' | 'other'
+export type OjPlatform = 'luogu' | 'codeforces' | 'atcoder' | 'poj' | 'hdu' | 'spoj' | 'uva' | 'vijos' | 'bzoj' | 'gym' | 'qoj' | 'ural' | 'usaco' | 'tlx' | 'libreoj' | 'yosupo' | '51nod' | 'csacademy' | 'kattis' | 'yukicoder' | 'vnoj' | 'kilonova' | 'ojuz' | 'aizu' | 'openj_bailian' | 'openj_noi' | 'openj_poj' | 'uoj' | 'universaloj' | 'csg' | 'nowcoder' | 'szkopul' | 'darkbzoj' | 'dmoj' | 'cses' | 'baekjoon' | 'eolymp' | 'other'
 
 /**
  * OJ 拉取错误码
