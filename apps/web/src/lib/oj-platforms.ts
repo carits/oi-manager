@@ -49,7 +49,7 @@ export const OJ_PLATFORMS: OjPlatformOption[] = [
   { value: 'eolymp', label: 'EOlymp' },
   { value: 'jisuanke', label: '计蒜客' },
   { value: 'libreoj', label: 'LibreOJ' },
-  { value: 'universaloj', label: 'UniversalOJ' },
+  { value: 'uoj', label: 'UOJ' },
   { value: 'darkbzoj', label: '黑暗爆炸' },
   { value: 'csgdmoj', label: 'CSGDMOJ' },
   { value: 'toph', label: 'Toph' },
