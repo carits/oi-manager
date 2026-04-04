@@ -113,17 +113,12 @@ export function AppShell({ children }: AppShellProps) {
       }}>
         {/* 左侧：Logo + 导航 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <h1
-            style={{
-              fontSize: '1.125rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              color: 'var(--primary)'
-            }}
+          <img
+            src="/logo.png"
+            alt="Carits"
+            style={{ height: '28px', cursor: 'pointer' }}
             onClick={() => router.push(`/${role === 'super_admin' ? 'admin/schools' : role === 'platform_admin' ? 'platform-admin' : role === 'student' ? 'student' : 'teacher'}`)}
-          >
-            OI 管理平台
-          </h1>
+          />
           <nav style={{ display: 'flex', gap: '1.5rem', fontSize: '0.875rem' }}>
             {navConfig.items.map((item) => (
               <Link

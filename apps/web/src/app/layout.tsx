@@ -3,8 +3,8 @@ import type { Metadata } from 'next'
 import { Providers } from '@/components/Providers'
 
 export const metadata: Metadata = {
-  title: 'OI 管理平台',
-  description: '信息学竞赛三端成长管理平台',
+  title: 'Carits',
+  description: 'Carits - 信息学竞赛三端成长管理平台',
 }
 
 export default function RootLayout({

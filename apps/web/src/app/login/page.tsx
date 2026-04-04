@@ -85,9 +85,9 @@ export default function LoginPage() {
         borderRadius: '12px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
-        <h1 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', textAlign: 'center' }}>
-          OI 管理平台登录
-        </h1>
+        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+          <img src="/logo.png" alt="Carits" style={{ height: '36px' }} />
+        </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
           {allowedRoles.map((r) => (
