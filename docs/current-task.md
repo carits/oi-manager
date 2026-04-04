@@ -2,36 +2,44 @@
 
 ## 状态: 已完成
 
-## 当前任务：QOJ PDF 下载方案实现（2026-04-03）
+## 当前任务：UOJ + CSES 适配器修复（2026-04-04）
 
-### 问题
-QOJ `download.php` 端点受 Cloudflare JS Challenge 保护，之前四级下载策略全部失败。
+### 目标
+修复 UOJ 适配器 timeLimit/memoryLimit 提取失败问题，排查 CSES 适配器拉取失败原因。
 
-### 解决方案
-使用 **headed 模式** 浏览器 + 独立浏览器实例 + `download.php?type=statement&id={题目编号}` 直接下载 PDF。
+### 已完成 ✅
 
-### 关键发现
-- `download.php?type=statement&id={题目编号}` 中的 id 就是题目编号，不需要额外映射
-- CF challenge 在 headed 模式下约 3 秒自动通过
-- headless 模式被 CF 严格检测，无法通过 challenge
-- 不能经过 browserManager 的 stealth 注入（会被 CF 检测），需要独立裸浏览器实例
-- 需要配置 `QOJ_SESSION`（UOJSESSID cookie 值）
+1. **UOJ `extractLimits()` 修复** — `uoj.ts`
+   - 原因：UOJ HTML 中时限格式为 `$1\texttt{s}$`，`\texttt{...}` LaTeX 包裹在数字和单位之间
+   - 旧正则：`/(?:时间限制)[^\d]*(\d+)\s*(?:s|ms)/i` — `\s*` 无法跳过 `\texttt{` 部分
+   - 新正则：`/(?:时间限制)[^\d]*(\d+(?:\.\d+)?)/i` — 只提取数字，假设单位为秒
+   - 同理修复 `空间限制` 的内存限制提取
 
-### 修改文件
-| 文件 | 说明 |
-|------|------|
-| `apps/server/src/oj-adapters/qoj.ts` | headed 模式 + 独立浏览器实例下载 PDF + CF 等待 + `QOJ_SESSION` 配置 |
-| `apps/server/src/lib/browser/manager.ts` | 支持 headed/headless 双浏览器实例管理 |
-| `apps/server/.env` | 新增 `QOJ_SESSION` 环境变量 |
+2. **UOJ `\texttt{}` 清理** — `extractDescription()`
+   - 在 Markdown 转换前将 `\texttt{xxx}` 替换为 `xxx` 纯文本
 
-### 测试结果
-| 题目 | 类型 | 结果 |
-|------|------|------|
-| QOJ 76 | PDF | ✅ 98818 bytes → 本地存储 |
-| QOJ 60 | HTML | ✅ Markdown 题面正常 |
-| QOJ 9741 | PDF | ✅ 97363 bytes → 本地存储 |
+3. **CSES 排查结论** — 网络层面问题
+   - `cses.fi` (IP: 162.125.32.10 / 108.160.161.83) 从当前网络环境连接超时
+   - HTTP 和 HTTPS 均无法访问，IPv4/IPv6 均超时
+   - 适配器代码逻辑正确，非代码问题
 
-### 已知限制
-- 需要 headed 模式（服务器需有显示器或 Xvfb 虚拟显示器）
-- 需要配置 `QOJ_SESSION` 环境变量
-- 每次 PDF 下载启动独立浏览器实例（资源消耗稍大）
+### 涉及文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/uoj.ts` | extractLimits 正则简化，extractDescription 添加 \texttt 清理 |
+| `docs/change-log.md` | 追加记录 |
+| `docs/current-task.md` | 更新为当前任务 |
+
+### 验证方式
+```bash
+# UOJ 验证
+curl -s http://localhost:3002/api/oj-fetcher/uoj/1 | python3 -c "
+import sys, json
+d = json.load(sys.stdin)['data']
+print('timeLimit:', d.get('timeLimit'))    # 应为 1000
+print('memoryLimit:', d.get('memoryLimit')) # 应为 256
+"
+
+# CSES 因网络问题暂不可测试
+```

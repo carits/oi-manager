@@ -9,6 +9,7 @@ import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
 interface OjBinding {
   platform: string
   problemId: string
+  url?: string
 }
 
 interface OjAttachment {

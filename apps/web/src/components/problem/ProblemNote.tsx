@@ -7,13 +7,23 @@ import apiClient from '@/lib/apiClient'
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
-  // 新的 File API URL 格式（/api/files/:id/download）直接使用
-  if (path.startsWith('/api/files/')) {
-    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${path}`
+  // 绝对外部 URL 直接返回
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  // /api/files/:id/public → 通过 Next.js 同域代理加载（避免跨域 iframe 被拒）
+  const fileMatch = path.match(/\/api\/files\/([^/]+)\/public/)
+  if (fileMatch) {
+    return `/api/files/download/${fileMatch[1]}?public=true`
   }
-  // 旧格式（/uploads/problems/xxx.pdf）使用代理
-  const filename = path.split('/').pop()
-  return `/api/problems/pdf/${filename}`
+  // /api/files/:id/download → 通过 Next.js 同域代理加载
+  const dlMatch = path.match(/\/api\/files\/([^/]+)\/download/)
+  if (dlMatch) {
+    return `/api/files/download/${dlMatch[1]}`
+  }
+  // /uploads/ 路径 → 通过 Next.js 同域代理加载
+  if (path.startsWith('/uploads/')) {
+    return `/api/problems/pdf-proxy?path=${encodeURIComponent(path)}`
+  }
+  return path
 }
 
 interface Problem {

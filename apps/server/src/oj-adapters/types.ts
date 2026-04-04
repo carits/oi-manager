@@ -30,7 +30,9 @@ export const KNOWN_OJ_PLATFORMS = [
   { value: 'scu', label: 'SCU' },
   { value: 'acdream', label: 'ACdream' },
   { value: 'codechef', label: 'CodeChef' },
-  { value: 'openjudge', label: 'OpenJudge' },
+  { value: 'openj_bailian', label: 'OpenJudge 百炼' },
+  { value: 'openj_noi', label: 'OpenJudge NOI' },
+  { value: 'openj_poj', label: 'OpenJudge POJ' },
   { value: 'kattis', label: 'Kattis' },
   { value: 'hihocoder', label: 'HihoCoder' },
   { value: 'hit', label: 'HIT' },
@@ -70,7 +72,7 @@ export const KNOWN_OJ_PLATFORMS = [
  * OJ 平台标识符
  * @description 支持的 OJ 平台列表
  */
-export type OjPlatform = 'luogu' | 'codeforces' | 'atcoder' | 'loj' | 'poj' | 'hdu' | 'spoj' | 'uva' | 'vijos' | 'bzoj' | 'gym' | 'qoj' | 'other'
+export type OjPlatform = 'luogu' | 'codeforces' | 'atcoder' | 'poj' | 'hdu' | 'spoj' | 'uva' | 'vijos' | 'bzoj' | 'gym' | 'qoj' | 'ural' | 'usaco' | 'tlx' | 'libreoj' | 'yosupo' | '51nod' | 'csacademy' | 'kattis' | 'yukicoder' | 'vnoj' | 'kilonova' | 'ojuz' | 'aizu' | 'openj_bailian' | 'openj_noi' | 'openj_poj' | 'uoj' | 'csg' | 'nowcoder' | 'szkopul' | 'darkbzoj' | 'dmoj' | 'cses' | 'baekjoon' | 'eolymp' | 'other'
 
 /**
  * OJ 拉取错误码

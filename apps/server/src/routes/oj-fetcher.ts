@@ -409,13 +409,19 @@ async function processFetchQueue(platform: string) {
             continue
           }
 
+          // 判断题面类型：如果有 PDF 格式的 statement，则设为 pdf
+          const pdfStatement = problemData.statements?.find(s => s.format === 'pdf' && s.fileUrl)
+          const statementType = pdfStatement ? 'pdf' : 'markdown'
+          const statementPdfUrl = pdfStatement?.fileUrl || null
+
           // 创建新题目（基本信息）
           const newProblem = await prisma.problem.create({
             data: {
               problemCode,
               title: problemData.title,
               description: problemData.description,
-              statementType: 'markdown',
+              statementType,
+              statementPdfUrl,
               timeLimit: problemData.timeLimit,
               memoryLimit: problemData.memoryLimit,
               difficulty: problemData.difficulty,
@@ -463,12 +469,18 @@ async function processFetchQueue(platform: string) {
           }
           console.log(`[OJ Fetcher] Cleaned ${oldImages.length} old images for problem ${existingProblem.id}`)
 
+          // 更新时也检测 PDF 题面
+          const pdfStatementUpdate = problemData.statements?.find(s => s.format === 'pdf' && s.fileUrl)
+          const updateStatementType = pdfStatementUpdate ? 'pdf' : 'markdown'
+          const updateStatementPdfUrl = pdfStatementUpdate?.fileUrl || null
+
           await prisma.problem.update({
             where: { id: existingProblem.id },
             data: {
               title: problemData.title,
               description: problemData.description,
-              statementType: 'markdown',
+              statementType: updateStatementType,
+              statementPdfUrl: updateStatementPdfUrl,
               timeLimit: problemData.timeLimit,
               memoryLimit: problemData.memoryLimit,
               difficulty: problemData.difficulty,
@@ -760,17 +772,11 @@ function extractImageLinks(markdown: string): Array<{ fullMatch: string; url: st
   let match
   while ((match = imageRegex.exec(markdown)) !== null) {
     const url = match[2]
-    // 只处理已知 OJ 平台的图片链接（洛谷、AtCoder、Codeforces 等）
+    // 下载所有 http/https 图片，不再限制域名白名单
+    // 排除已上传到本地的图片（/api/files/ 路径）和 data: 协议
     if (
-      url.includes('luogu.com.cn') ||
-      url.includes('luogu') ||
-      url.startsWith('/fileApi/') ||
-      url.startsWith('https://cdn.luogu.com.cn') ||
-      url.includes('img.atcoder.jp') ||
-      url.includes('atcoder.jp') ||
-      url.includes('codeforces.com') ||
-      url.includes('pic.codeforces.com') ||
-      url.includes('espresso.codeforces.com')
+      (url.startsWith('http://') || url.startsWith('https://')) &&
+      !url.includes('/api/files/')
     ) {
       images.push({
         fullMatch: match[0],
@@ -797,15 +803,15 @@ async function downloadAndUploadImage(
       fullUrl = `https://www.luogu.com.cn${imageUrl}`
     }
 
-    // 构建请求头
-    const isLuogu = fullUrl.includes('luogu')
-    const isAtCoder = fullUrl.includes('atcoder.jp') || fullUrl.includes('img.atcoder.jp')
-    const isCodeforces = fullUrl.includes('codeforces.com') || fullUrl.includes('pic.codeforces.com') || fullUrl.includes('espresso.codeforces.com')
+    // 根据图片域名自动推断 Referer
+    const parsedUrl = new URL(fullUrl)
+    const referer = `${parsedUrl.protocol}//${parsedUrl.host}/`
+
     const headers: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
       'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      'Referer': isAtCoder ? 'https://atcoder.jp/' : isCodeforces ? 'https://codeforces.com/' : 'https://www.luogu.com.cn/',
+      'Referer': referer,
     }
 
     if (Object.keys(cookies).length > 0) {
@@ -821,8 +827,13 @@ async function downloadAndUploadImage(
       const location = response.headers.get('location')
       if (location) {
         fullUrl = location
+        // 重定向时使用目标域名的 Referer
+        try {
+          const redirectParsed = new URL(location)
+          headers['Referer'] = `${redirectParsed.protocol}//${redirectParsed.host}/`
+        } catch { /* keep existing referer */ }
         response = await fetch(fullUrl, {
-          headers: (location.includes('luogu') || location.includes('atcoder') || location.includes('codeforces')) ? headers : undefined,
+          headers,
           redirect: 'manual',
         })
         redirectCount++

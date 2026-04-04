@@ -1,6 +1,304 @@
 # 变更日志
 
+## 2026-04-04 (Phase 12)
+
+### UOJ 适配器 timeLimit/memoryLimit 提取修复
+
+**背景**: UOJ 题目拉取时 timeLimit 和 memoryLimit 始终返回 `null`。原因是 UOJ HTML 中时限格式为 `$1\texttt{s}$`（LaTeX 包裹单位），旧正则 `/(?:时间限制)[^\d]*(\d+)\s*(?:s|ms)/` 在数字 `1` 之后期望直接匹配 `s` 或 `ms`，但中间有 `\texttt{` LaTeX 命令阻隔。
+
+**修复**:
+1. `extractLimits()` — 简化正则只提取数字：`/(?:时间限制)[^\d]*(\d+(?:\.\d+)?)/`，不再要求匹配单位后缀（默认秒）
+2. `extractLimits()` — 内存同理简化：`/(?:空间限制)[^\d]*(\d+)/`
+3. `extractDescription()` — 添加 `\texttt{xxx}` 清理，转为纯文本 `xxx`
+
+**涉及文件**: `apps/server/src/oj-adapters/uoj.ts`
+
+**CSES 排查**: `cses.fi` 从当前网络环境连接超时（IPv4/IPv6 均不通），适配器代码无问题，属于网络层限制。
+
+**验证**: UOJ #1 输出 `timeLimit=1000, memoryLimit=256`；UOJ #2 输出 `timeLimit=1000, memoryLimit=512`。
+
+## 2026-04-04 (Phase 11)
+
+### Szkopuł 适配器 Markdown 质量修复
+
+**背景**: Szkopuł 题目 `mzrTn1kzVBOAwVYn55LUeAai` 拉取输出格式完全错误：
+1. 所有数学公式图片（48 个 `<span class="texmath"><img src="images/OI18/xxx.png"/>`）被当作普通图片下载，变成 `![](/uploads/...)` 无意义引用
+2. `extractLimits` 正则表达式 `(?:Memory|Pamięć|Limit)` 过于宽泛，"Limit" 单独匹配到 HTML 中其他文本，导致 memoryLimit 值错误（返回 4 而非 64）
+3. HTML wrapper `<div>` 导致 Markdown 输出有 4 空格缩进，被 Markdown 解析为代码块
+4. `<h3>Memory limit: 64 MB</h3>` 残留在内容中未移除
+
+**修复**:
+1. `replaceEquationImages()` — 将 `<span class="texmath"><img src="..."/></span>` 转为 `![tex](full_url)`，URL 使用 problem-specific 路径前缀解决 404 问题
+2. `extractLimits()` — 移除 "Limit" 独立关键词，改为 `Memory\s+limit` 精确匹配，避免误匹配 HTML 中其他文本
+3. `extractDescription()` — 添加 wrapper div 剥离逻辑，先去掉 `<div width="100%"...><div>` 外层包裹
+4. `cleanMarkdown()` — 剥离所有前导空格（保护围栏代码块），消除 wrapper div 导致的缩进
+
+**涉及文件**: `apps/server/src/oj-adapters/szkopul.ts`
+
+**验证**: `mzrTn1kzVBOAwVYn55LUeAai` 输出格式正确：0 HTML 残留，48 个公式图片转为 `![tex](url)`，memoryLimit=64，无 4 空格缩进。
+
+## 2026-04-04 (Phase 10)
+
+### HTML blockquote 转 Markdown 引用块
+
+**背景**: NowCoder 题目 HTML 中使用 `<blockquote>` 标签包裹引用内容（如脑筋急转弯背景故事），但 `convertHtmlToMarkdown` 没有处理该标签，`stripTags` 直接去掉了标签，导致引用内容变成普通段落，丢失了 `>` 引用标记。
+
+**修复**: 在 `convertHtmlToMarkdown` 中新增 `<blockquote>` → Markdown 引用块转换规则，在 `stripTags` 之前将 `<blockquote>` 内的每一行加上 `> ` 前缀。
+
+**涉及文件**: `apps/server/src/oj-adapters/html-utils.ts`
+
+**验证**: 286222 题目描述中的脑筋急转弯引用块已正确显示 `>` 前缀。
+
+## 2026-04-04 (Phase 9)
+
+### NowCoder 数学公式修复
+
+**背景**: NowCoder 平台用 `<img src="https://(www|hr).nowcoder.com/equation?tex=..." alt="...">` 表示行内 LaTeX 公式。原适配器将这些图片交给 `convertHtmlToMarkdown` 处理，导致公式变成 `![alt](url)`，再被 `processMarkdownImages` 下载保存为本地图片，最终变成无意义的 `![](/uploads/public/problem-images/...)` 引用——数学内容全部丢失。
+
+**根因**: 缺少对 NowCoder equation 图片的特殊处理，将其当作普通图片下载而非 LaTeX 转换。
+
+**修复方案**: 在 HTML 传给 `convertHtmlToMarkdown` 之前，新增 `replaceEquationImages()` 函数将 equation `<img>` 替换为 `$...$` LaTeX 行内公式。支持两种情况：
+- `alt` 属性非空：直接用 `alt` 内容
+- `alt` 为空或缺失：从 URL `tex=` 参数 URL-decode 提取 LaTeX
+
+**验证**: 三道题全部修复
+- 286222（金条切割）：`$t$`、`$len_i$`、`$1 \le t \le 10^5$` 等公式正确显示
+- 209910（Easy）：`$\sum_{i=1}^{K} a_i = N$`、`$P = \prod_{i=1}^{K} min(a_i, b_i)$` 等复杂公式正确显示
+- 234425（小红的食尸鬼）：`$op=1$`、`$1\leq n,q\leq 10^5$` 等公式正确显示
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/nowcoder.ts` | 新增 `replaceEquationImages()` 函数，在所有 HTML→Markdown 转换前预处理 equation 图片 |
+
+**影响范围**: NowCoder 适配器输出格式
+**回归风险**: 无。仅影响 NowCoder 平台题目的数学公式显示
+
+## 2026-04-04 (Phase 7-8)
+
+### 二十轮随机压力测试 + Markdown 质量修复
+
+**背景**: 对 22 个平台进行 20 轮随机题号压力测试（共 440 次），发现并修复 Markdown 转换质量问题。
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/__tests__/adapter-e2e-test.ts` | 新增 `--random` 模式：22 平台随机 ID 生成器、自动分类（fetched/not_found/parse_error/network_error/other_error）、成功率可视化 |
+| `apps/server/src/oj-adapters/__tests__/adapter-e2e-test.ts` | 质量检查器改进：排除 `$...$` LaTeX 内容的反斜杠转义检查，消除 LaTeX 误报 |
+| `apps/server/src/oj-adapters/atcoder.ts` | 新增 `normalizeHeadings()` 方法，将内容标题层级归一化到 `##` 起，修复 `# → ###` 跳级 |
+
+**测试结果**:
+- 20 轮随机测试（440 次）：198 成功拉取 / 134 题目不存在(预期) / 25 解析错误 / 65 网络错误 / 18 其他
+- 解析错误主因：gym 随机 ID 格式问题（18次）、qoj 部分题目格式异常（4次）
+- 预设 E2E 测试：43/57 通过，质量警告从 11 降至 3
+
+**影响范围**: E2E 测试框架（新增随机模式）、AtCoder 适配器（标题层级修复）、质量检查器（减少误报）
+**回归风险**: 无。仅影响测试工具和 AtCoder 输出格式
+
+## 2026-04-04 (Phase 6)
+
+### Szkopuł PDF 支持 + E2E 测试修正
+
+**背景**: Szkopuł 平台部分题目使用 PDF 格式嵌入题面（`<object type="application/pdf">`），原适配器仅支持 HTML/Markdown 提取。同时修正 E2E 测试中多个无效的测试题号。
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/szkopul.ts` | **重写**：新增 PDF 检测（`isPdfPage`）、PDF URL 提取（`extractPdfUrl`）、`downloadAndSavePdf()` 下载保存到本地 |
+| `apps/server/src/oj-adapters/__tests__/adapter-e2e-test.ts` | 修正测试题号：`usaco` → `1300/1305`、`openj_noi` → `ch0101/01`、`openj_poj` → `1000`、`nowcoder` → `166`、`szkopul` → `sum`+`9p6vgNb4lWTsrtHVnHNBR_0U` |
+
+**影响范围**: Szkopuł 适配器（新增 PDF 支持），E2E 测试（修正无效 ID）
+**回归风险**: 无。非 PDF 页面仍走原有 HTML 提取逻辑
+
+### E2E 全量测试结果
+
+57 题测试：**41 通过 / 16 失败**
+
+失败分类：
+- 网络超时/不可达（9）：libreoj, yosupo, yukicoder, cses, ural, csg(csgoj.com), darkbzoj, dmoj(403)
+- Cloudflare/封锁（2）：spoj, baekjoon(IP封锁)
+- 代码 bug（5）：aizu(SPA 需 Playwright), tlx(PARSE_ERROR), qoj/1538(PARSE_ERROR), vnoj/kilonova(测试ID可能有误), csacademy(页面结构变化)
+
+## 2026-04-03 (续)
+
+### Vijos + EOlymp 新增适配器
+
+**背景**: 补齐两个 OJ 平台适配器。Vijos（HTTP + Cheerio）和 EOlymp（Playwright SPA）。
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/vijos.ts` | **新增** Vijos 适配器（HTTP + Cheerio，服务端渲染） |
+| `apps/server/src/oj-adapters/eolymp.ts` | **新增** EOlymp 适配器（Playwright SPA） |
+| `apps/server/src/oj-adapters/types.ts` | OjPlatform 增加 vijos/eolymp |
+| `apps/server/src/oj-adapters/index.ts` | 注册 Vijos/EOlymp 到适配器 Map + getSupportedPlatforms() |
+| `apps/web/src/lib/oj-platforms.ts` | FETCHABLE_PLATFORMS 增加 Vijos/EOlymp（共 35 个） |
+
+**影响范围**: OJ 拉取模块，新增两个平台
+**回归风险**: 无
+
+仅新增适配器，不影响已有功能
+
+### SPOJ + Baekjoon 新增适配器
+
+**背景**: 补齐两个国际 OJ 平台适配器，SPOJ 需要绕过 Cloudflare，Baekjoon 需要绕过 AWS ELB IP 封锁。
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/spoj.ts` | **新增** SPOJ 适配器，Playwright + Stealth 绕过 Cloudflare，`#problem-name`/`#problem-body` 提取 |
+| `apps/server/src/oj-adapters/baekjoon.ts` | **新增** Baekjoon 适配器，Playwright + Stealth 绕过 IP 封锁，韩语/英语双语提取 |
+| `apps/server/src/oj-adapters/index.ts` | 注册 SPOJ/Baekjoon 到适配器 Map + getSupportedPlatforms() |
+| `apps/web/src/lib/oj-platforms.ts` | FETCHABLE_PLATFORMS 增加 SPOJ/Baekjoon（共 33 个） |
+
+**影响范围**: OJ 拉取模块，新增两个平台的远程题目拉取能力
+**回归风险**: 无，仅新增适配器，不影响已有功能
+
+---
+
 ## 2026-04-03
+
+### P2 可选优化实施（表格支持 + AtCoder 公式增强）
+
+**背景**: P0/P1/P2 核心修复和新增适配器完成后，继续实施 P2 可选优化项。
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/oj-adapters/html-utils.ts` | `convertHtmlToMarkdown()` 增加 `<table>` → Markdown 表格支持；修复行内数学公式 `$...$` 保护逻辑；增加 `<pre>` 代码块保护 |
+| `apps/server/src/oj-adapters/atcoder.ts` | `<var>` 标签处理增强：新增 `varToLatex()` 递归方法，支持嵌套 `<sup>`/`<sub>` → LaTeX 上标 `^{}`/下标 `_{}` |
+
+**影响范围**:
+- HTML 表格支持影响所有使用 `convertHtmlToMarkdown()` 的适配器（~20 个）
+- AtCoder 数学公式增强提升复杂公式（如 $x_i^{2}$）的转换质量
+
+---
+
+## 2026-04-03
+
+### OJ 适配器 P0/P1 缺陷修复实施
+
+**背景**: 完成设计文档后，按优先级实施适配器缺陷修复。
+
+**修改文件**:
+| 文件 | 修改内容 |
+|------|----------|
+| `apps/server/src/routes/oj-fetcher.ts` | `extractImageLinks()` 移除域名白名单，下载所有 http/https 图片；`downloadAndUploadImage()` 自动根据图片域名设置 Referer |
+| `apps/web/src/components/problem/ProblemDetail.tsx` | `OjBinding` 增加 `url?` 字段；`getOjProblemUrl()` 从 12 个平台扩展到 60+；链接渲染优先使用 `binding.url` |
+| `apps/web/src/components/problem/ProblemForm.tsx` | `OjBinding` 增加 `url?` 字段 |
+| `apps/server/src/oj-adapters/nowcoder.ts` | 从正则表达式改为 cheerio DOM 解析：按 h2 + 兄弟遍历提取内容，同时支持 OI 题 textarea 和普通题 pre 两种样例格式 |
+| `apps/server/src/oj-adapters/html-utils.ts` | `convertHtmlToMarkdown()` 末尾增加二次 `unescapeHtml()` 调用，修复双重编码实体 |
+
+**影响范围**:
+- 所有 24 个已有适配器的图片下载能力（不再限于 luogu/atcoder/codeforces）
+- 前端所有平台的原题链接显示
+
+### P1.3 OpenJudge 拆分为 3 个子平台
+
+**背景**: OpenJudge 有百炼/NOI/POJ 三个独立子站，HTML 结构相同但 URL 和域名不同，需要分开管理。
+
+**新增/修改文件**:
+| 文件 | 说明 |
+|------|------|
+| `apps/server/src/oj-adapters/openjudge.ts` | 重构为 `OpenjudgeBaseAdapter` 基类 + 保留 `OpenjudgeAdapter` 向后兼容 |
+| `apps/server/src/oj-adapters/openj_bailian.ts` | **新增** 百炼子站适配器（`bailian.openjudge.cn`） |
+| `apps/server/src/oj-adapters/openj_noi.ts` | **新增** NOI 子站适配器（`noi.openjudge.cn`，题号含分组路径） |
+| `apps/server/src/oj-adapters/openj_poj.ts` | **新增** POJ 子站适配器（`poj.openjudge.cn`） |
+| `apps/server/src/oj-adapters/types.ts` | `OjPlatform` 增加 `openj_bailian`、`openj_noi`、`openj_poj`；`KNOWN_OJ_PLATFORMS` 增加 3 条 |
+| `apps/server/src/oj-adapters/index.ts` | 注册 3 个新适配器；`getSupportedPlatforms()` 增加 3 条 |
+| `apps/web/src/lib/oj-platforms.ts` | `OJ_PLATFORMS` 增加 3 个子平台选项 |
+
+**向后兼容**: 保留 `openjudge` 标识（映射到百炼），,已有数据不受影响。
+
+### P2 新增 4 个 OJ 适配器（Szkopuł / DarkBZOJ / DMOJ / CSES）
+
+**背景**: 完成已有适配器 P0/P1 修复后，按设计文档 P2 优先级新增 4 个可纯 HTTP 实现的平台。
+
+**新增文件**:
+| 文件 | 平台 | 特点 |
+|------|------|------|
+| `apps/server/src/oj-adapters/szkopul.ts` | Szkopuł（波兰 OI） | 天然 Markdown 输出，`<pre>`/HTML/article 三级提取策略 |
+| `apps/server/src/oj-adapters/darkbzoj.ts` | DarkBZOJ（黑暗爆炸） | UOJ 系统 HTML，`<article class="uoj-article">` 解析 |
+| `apps/server/src/oj-adapters/dmoj.ts` | DMOJ | API-first（`/api/v2/problem/{pid}`），JSON 含 `html` 字段；失败退化为 HTML 拉取 |
+| `apps/server/src/oj-adapters/cses.ts` | CSES Problem Set | 简洁 HTML，`<div class="md">` 提取 Markdown-like 内容 |
+
+**修改文件**:
+| 文件 | 说明 |
+|------|------|
+| `apps/server/src/oj-adapters/types.ts` | `OjPlatform` 联合类型增加 `'szkopul' \| 'darkbzoj' \| 'dmoj' \| 'cses'` |
+| `apps/server/src/oj-adapters/index.ts` | 适配器 Map 注册 4 个新适配器；`getSupportedPlatforms()` 增加 4 条 |
+| `apps/web/src/lib/oj-platforms.ts` | `FETCHABLE_PLATFORMS` 从 4 个扩展到 31 个（含所有已有适配器平台） |
+
+**向后兼容**: 纯新增，不影响已有平台。
+
+**风险**:
+- DarkBZOJ 网站可用性待验证（`darkbzoj.cc` 可能不稳定）
+- Szkopuł 波兰语页面，时/空限制提取正则可能需要调整
+- DMOJ API 可能变更
+
+### P1.4 PDF 统一下传上传
+
+**背景**: oj.uz 检测到 PDF 题面时只生成外部链接，未下载上传到本地。需要统一所有 PDF 题面的处理流程。
+
+**修改文件**:
+| 文件 | 说明 |
+|------|------|
+| `apps/server/src/oj-adapters/html-utils.ts` | 新增 `downloadAndSavePdf()` 通用函数：下载远程 PDF → 上传到 FileService → 返回本地 URL |
+| `apps/server/src/oj-adapters/ojuz.ts` | `extractDescription()` 改为 async；检测到 PDF 时调用 `downloadAndSavePdf()` 下载上传；失败时退化为外部链接 |
+
+**处理流程**: 检测 PDF → 下载 → fileService.upload() → `/api/files/:id/public` → Markdown 中引用本地 URL
+- 牛客题目拉取质量
+- HTML 实体解码正确性
+
+**风险**:
+- 图片下载量增加可能触发某些平台的频率限制（已有限流配置兜底）
+- 牛客 cheerio 解析可能对新版页面结构不兼容
+
+---
+
+## 2026-04-03
+
+### OJ 适配器设计文档编写
+
+**背景**: 适配器质量全面整改的前置工作。用户指出 LOJ 图片未下载、USACO 链接/实体解码错误、前端原题链接不完整、牛客 Markdown 转换严重出错、OpenJudge 需拆分为 3 个子平台等问题。
+
+**新增文件**:
+| 文件 | 说明 |
+|------|------|
+| `docs/oj-adapters/ADAPTER_DESIGN.md` | 全平台适配器设计文档（24 已有 + 15 待实现 + 10 不可实现），每个平台含标识、URL、题号格式、页面类型、HTML 选择器、图片域名、PDF 处理、难点、5+ 测试题号（含图片/PDF/复杂题标注） |
+| `docs/oj-adapters/ADAPTER_FIXES.md` | 已有适配器缺陷修复方案，按 P0/P1/P2 优先级排列 |
+| `docs/oj-adapters/PLATFORM_URL_MAP.md` | 全平台 URL 映射表 + 完整 `getOjProblemUrl()` 实现代码 + 新增平台同步清单 |
+
+**关键设计决策**:
+- LOJ = LibreOJ，统一标识为 `libreoj`
+- OpenJudge 拆分为 `openj_bailian`、`openj_noi`、`openj_poj`
+- 图片下载管线移除域名白名单，改为下载所有外部图片
+- 前端原题链接优先使用后端存储 URL，`getOjProblemUrl()` 仅作兜底
+- 每个平台测试题号至少 5 个，且必须覆盖含图片、含 PDF/附件、题面较长复杂的题目
+
+**影响范围**: 仅新增文档，未修改任何代码
+
+---
+
+## 2026-04-03（早前）
+
+### QOJ PDF 题面显示修复（端到端流程修复）
+
+**背景**: QOJ 拉取的 PDF 题面在前端 404，原因是三个环节都有 bug：
+1. `oj-fetcher.ts` 创建/更新题目时硬编码 `statementType: 'markdown'`，不管适配器是否返回 PDF
+2. `savePdfToLocal()` 返回的 URL 格式不对（`/uploads/...` 而非 `/api/files/:id/public`）
+3. `ProblemNote.tsx` 的 `getPdfUrl()` 指向跨域后端 URL，被 `X-Frame-Options: SAMEORIGIN` 拦截
+
+**修改文件**:
+| 文件 | 说明 |
+|------|------|
+| `apps/server/src/routes/oj-fetcher.ts` | 创建/更新题目时检测 PDF statement，正确设置 `statementType='pdf'` 和 `statementPdfUrl` |
+| `apps/server/src/oj-adapters/qoj.ts` | `savePdfToLocal()` 返回 `/api/files/:id/public` 格式 |
+| `apps/web/src/components/problem/ProblemNote.tsx` | `getPdfUrl()` 使用 Next.js 同域代理代替直接后端 URL |
+
+**数据修复**:
+- QOJ 76: 重新上传 PDF 文件到 File 表，更新 `ProblemStatement.fileUrl` 和 `Problem.statementPdfUrl`
+- QOJ 35: 修复 `Problem.statementType` 和 `Problem.statementPdfUrl`（URL 已正确但 Problem 字段未设）
 
 ### QOJ PDF 下载方案实现（headed 模式 + 独立浏览器）
 
