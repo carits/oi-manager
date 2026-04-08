@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Pagination } from '@/components/ui/Pagination'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { PasswordResetModal } from '@/components/ui/PasswordResetModal'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 
 interface UserManagementProps {
@@ -61,6 +64,11 @@ export function UserManagement({
     totalPages: 0
   })
 
+  // 弹窗状态
+  const toast = useToast()
+  const [resetUser, setResetUser] = useState<{ id: string; username: string } | null>(null)
+  const [toggleConfirm, setToggleConfirm] = useState<{ user: any; newStatus: string } | null>(null)
+
   useEffect(() => {
     fetchUsers()
   }, [pagination.page, pagination.pageSize])
@@ -102,45 +110,37 @@ export function UserManagement({
     }
   }
 
-  const handleResetPassword = async (user: any) => {
-    const newPassword = prompt(`为用户 ${user.username || user.user?.username} 设置新密码（至少6位）:`)
-    if (!newPassword) return
-    if (newPassword.length < 6) {
-      alert('密码长度至少为6位')
-      return
-    }
+  const handleResetPassword = (user: any) => {
+    setResetUser({ id: user.id, username: user.username || user.user?.username })
+  }
 
-    try {
-      const result = await apiClient.post(`/api/users/${user.id}/reset-password`, {
-        newPassword,
-        resetMethod: 'manual_set'
-      })
-      if (result.success) {
-        alert('密码重置成功')
-      } else {
-        alert(result.message || '重置失败')
-      }
-    } catch {
-      alert('操作失败')
-    }
+  const handleResetSuccess = (newPassword: string) => {
+    toast.success('密码重置成功')
+    setResetUser(null)
   }
 
   const handleToggleStatus = async (user: any) => {
     const currentStatus = user.status || user.user?.status
     const newStatus = currentStatus === 'active' ? 'disabled' : 'active'
-    const username = user.username || user.user?.username || user.name
+    setToggleConfirm({ user, newStatus })
+  }
 
-    if (!confirm(`确定要${newStatus === 'disabled' ? '禁用' : '启用'}用户 ${username} 吗？`)) return
+  const confirmToggleStatus = async () => {
+    if (!toggleConfirm) return
+    const { user, newStatus } = toggleConfirm
 
     try {
       const result = await apiClient.put(`/api/users/${user.id}/status`, { status: newStatus })
       if (result.success) {
+        toast.success(`用户已${newStatus === 'disabled' ? '禁用' : '启用'}`)
         fetchUsers()
       } else {
-        alert(result.message || '操作失败')
+        toast.error(result.message || '操作失败')
       }
     } catch {
-      alert('操作失败')
+      toast.error('操作失败')
+    } finally {
+      setToggleConfirm(null)
     }
   }
 
@@ -358,6 +358,30 @@ export function UserManagement({
           showQuickJumper={true}
         />
       )}
+      {/* 重置密码弹窗 */}
+      {resetUser && (
+        <PasswordResetModal
+          isOpen={true}
+          onClose={() => setResetUser(null)}
+          userId={resetUser.id}
+          username={resetUser.username}
+          onSuccess={() => {
+            toast.success('密码重置成功')
+            setResetUser(null)
+          }}
+        />
+      )}
+
+      {/* 禁用/启用确认弹窗 */}
+      <ConfirmModal
+        isOpen={!!toggleConfirm}
+        onClose={() => setToggleConfirm(null)}
+        onConfirm={confirmToggleStatus}
+        title={toggleConfirm?.newStatus === 'disabled' ? '禁用用户' : '启用用户'}
+        message={`确定要${toggleConfirm?.newStatus === 'disabled' ? '禁用' : '启用'}用户 ${toggleConfirm?.user?.username || toggleConfirm?.user?.user?.username || toggleConfirm?.user?.name} 吗？`}
+        confirmText="确认"
+        danger={toggleConfirm?.newStatus === 'disabled'}
+      />
     </div>
   )
 }

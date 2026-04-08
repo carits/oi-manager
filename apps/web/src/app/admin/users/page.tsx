@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { getRole } from '@/lib/auth'
 import { Pagination } from '@/components/ui/Pagination'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { PasswordResetModal } from '@/components/ui/PasswordResetModal'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 
 interface User {
@@ -37,6 +40,11 @@ export default function AdminUsersPage() {
     total: 0,
     totalPages: 0
   })
+
+  // 弹窗状态
+  const toast = useToast()
+  const [resetTarget, setResetTarget] = useState<{ id: string; username: string } | null>(null)
+  const [toggleConfirm, setToggleConfirm] = useState<{ userId: string; newStatus: string; username: string } | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -80,46 +88,32 @@ export default function AdminUsersPage() {
     }
   }
 
-  const handleResetPassword = async (userId: string, username: string) => {
-    const newPassword = prompt(`为用户 ${username} 设置新密码（至少6位）:`)
-    if (!newPassword) return
-    if (newPassword.length < 6) {
-      alert('密码长度至少为6位')
-      return
-    }
-
-    try {
-      const result = await apiClient.post(`/api/users/${userId}/reset-password`, {
-        newPassword,
-        resetMethod: 'manual_set'
-      })
-      if (result.success) {
-        alert('密码重置成功')
-      } else {
-        alert(result.message || '重置失败')
-      }
-    } catch (e) {
-      alert('网络错误')
-      console.error('Reset password error:', e)
-    }
+  const handleResetPassword = (userId: string, username: string) => {
+    setResetTarget({ id: userId, username })
   }
 
-  const handleToggleStatus = async (userId: string, currentStatus: string, username: string) => {
+  const handleToggleStatus = (userId: string, currentStatus: string, username: string) => {
     const newStatus = currentStatus === 'active' ? 'disabled' : 'active'
-    const confirmed = confirm(`确认${newStatus === 'disabled' ? '禁用' : '启用'}用户 ${username}？`)
-    if (!confirmed) return
+    setToggleConfirm({ userId, newStatus, username })
+  }
+
+  const confirmToggleStatus = async () => {
+    if (!toggleConfirm) return
+    const { userId, newStatus } = toggleConfirm
 
     try {
       const result = await apiClient.put(`/api/users/${userId}/status`, { status: newStatus, reason: '' })
       if (result.success) {
-        alert('状态更新成功')
+        toast.success('状态更新成功')
         fetchUsers()
       } else {
-        alert(result.message || '更新失败')
+        toast.error(result.message || '更新失败')
       }
     } catch (e) {
-      alert('网络错误')
+      toast.error('网络错误')
       console.error('Toggle status error:', e)
+    } finally {
+      setToggleConfirm(null)
     }
   }
 
@@ -328,6 +322,31 @@ export default function AdminUsersPage() {
             </div>
           )}
         </main>
+
+        {/* 重置密码弹窗 */}
+        {resetTarget && (
+          <PasswordResetModal
+            isOpen={true}
+            onClose={() => setResetTarget(null)}
+            userId={resetTarget.id}
+            username={resetTarget.username}
+            onSuccess={() => {
+              toast.success('密码重置成功')
+              setResetTarget(null)
+            }}
+          />
+        )}
+
+        {/* 禁用/启用确认弹窗 */}
+        <ConfirmModal
+          isOpen={!!toggleConfirm}
+          onClose={() => setToggleConfirm(null)}
+          onConfirm={confirmToggleStatus}
+          title={toggleConfirm?.newStatus === 'disabled' ? '禁用用户' : '启用用户'}
+          message={`确定要${toggleConfirm?.newStatus === 'disabled' ? '禁用' : '启用'}用户 ${toggleConfirm?.username || ''} 吗？`}
+          confirmText="确认"
+          danger={toggleConfirm?.newStatus === 'disabled'}
+        />
       </div>
     </ProtectedRoute>
   )

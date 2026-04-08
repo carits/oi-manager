@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * CSAcademy (csacademy.com) 题目拉取适配器
  *

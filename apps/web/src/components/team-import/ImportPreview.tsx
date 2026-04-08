@@ -10,6 +10,8 @@ import {
   CONFLICT_LABELS,
   isValidUsername
 } from './types'
+import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
 
 // ── 可编辑文本框：独立 state，打字时不触发父组件重渲染 ──
 
@@ -65,6 +67,8 @@ interface ImportPreviewProps {
   visibility: string
   /** 新团队名称（createTeam 时用） */
   teamName?: string
+  /** 默认团队ID（VJudge=shortName, 洛谷=teamId） */
+  defaultTeamId?: string
   /** 校验 API 调用 */
   onValidate: (members: ImportMember[]) => Promise<ValidateResultItem[]>
   /** 导入 API 调用 */
@@ -79,6 +83,7 @@ export interface ImportOptions {
   createTeam: boolean
   visibility: string
   teamName?: string
+  teamId?: string
   [key: string]: unknown
 }
 
@@ -91,14 +96,21 @@ export default function ImportPreview({
   createTeam,
   visibility,
   teamName,
+  defaultTeamId,
   onValidate,
   onImport,
   onBack,
   onComplete
 }: ImportPreviewProps) {
+  const toast = useToast()
   const [members, setMembers] = useState<ImportMember[]>(initialMembers)
   const [batchEnrollmentYear] = useState(new Date().getFullYear())
   const [showCleared, setShowCleared] = useState(false)
+
+  // 团队标识
+  const [teamId, setTeamId] = useState(defaultTeamId || '')
+  const [teamIdError, setTeamIdError] = useState('')
+  const [teamIdValidating, setTeamIdValidating] = useState(false)
 
   // 校验
   const [validatingMembers, setValidatingMembers] = useState(false)
@@ -113,11 +125,43 @@ export default function ImportPreview({
   const conflictMembers = selectedMembers.filter(m => m.conflictStatus === 'conflict')
   const clearedMembers = selectedMembers.filter(m => m.conflictStatus === 'clear')
   const allResolved = validated && conflictMembers.length === 0 && selectedMembers.every(m => isValidUsername(m.username))
+    && (!createTeam || (!!teamId && !teamIdError))
 
   // ── 校验 ──
   const handleValidate = async () => {
     const selected = members.filter(m => m.selected)
-    if (!selected.length) return alert('请至少选择一个成员')
+    if (!selected.length) { toast.warning('请至少选择一个成员'); return }
+
+    // 如果创建新团队，先校验团队标识
+    if (createTeam) {
+      if (!teamId.trim()) {
+        setTeamIdError('请输入团队ID')
+        return
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(teamId)) {
+        setTeamIdError('团队ID只能包含英文字母、数字和下划线')
+        return
+      }
+      if (teamId.length < 2) {
+        setTeamIdError('团队ID至少2个字符')
+        return
+      }
+      setTeamIdValidating(true)
+      try {
+        const res = await apiClient.get<{ valid: boolean; message?: string }>(`/api/teams/check-team-id?id=${encodeURIComponent(teamId)}`)
+        if (res.success && res.data) {
+          if (!res.data.valid) {
+            setTeamIdError(res.data.message || '团队ID不可用')
+            setTeamIdValidating(false)
+            return
+          }
+        }
+      } catch {
+        // 校验接口失败不阻塞，继续成员校验
+      }
+      setTeamIdError('')
+      setTeamIdValidating(false)
+    }
 
     setValidatingMembers(true)
     try {
@@ -183,7 +227,7 @@ export default function ImportPreview({
 
       setValidated(true)
     } catch {
-      alert('校验失败')
+      toast.error('校验失败')
     } finally {
       setValidatingMembers(false)
     }
@@ -234,20 +278,20 @@ export default function ImportPreview({
   // ── 导入 ──
   const handleImport = async () => {
     const selected = members.filter(m => m.selected)
-    if (!selected.length) return alert('请至少选择一个成员')
+    if (!selected.length) { toast.warning('请至少选择一个成员'); return }
     const hasConflicts = selected.some(m => m.conflictStatus === 'conflict')
-    if (hasConflicts) return alert('请先解决所有问题')
+    if (hasConflicts) { toast.warning('请先解决所有问题'); return }
 
     setImporting(true)
     try {
-      const result = await onImport(selected, { createTeam, visibility, teamName })
+      const result = await onImport(selected, { createTeam, visibility, teamName, teamId })
       if (result.success) {
         setImportResult(result)
       } else {
-        alert(result.message || '导入失败')
+        toast.error(result.message || '导入失败')
       }
     } catch {
-      alert('导入失败')
+      toast.error('导入失败')
     } finally {
       setImporting(false)
     }
@@ -344,6 +388,61 @@ export default function ImportPreview({
         </select>
         <button onClick={batchSetEnrollmentYear} style={smallBtnOutline}>应用</button>
       </div>
+
+      {/* 团队标识（仅创建新团队时显示） */}
+      {createTeam && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          marginBottom: '1rem',
+          borderRadius: '6px',
+          background: 'var(--gray-50)',
+          border: teamIdError ? '1px solid #ef4444' : '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>
+            团队ID *:
+          </span>
+          <input
+            type="text"
+            value={teamId}
+            onChange={(e) => {
+              const val = e.target.value
+              setTeamId(val)
+              // 实时格式校验
+              if (val && !/^[a-zA-Z0-9_]*$/.test(val)) {
+                setTeamIdError('只能包含英文字母、数字和下划线')
+              } else if (val && val.length < 2) {
+                setTeamIdError('至少2个字符')
+              } else {
+                setTeamIdError('')
+              }
+            }}
+            placeholder="请输入团队ID（如 team_2024）"
+            style={{
+              flex: 1,
+              padding: '0.375rem 0.625rem',
+              border: `1px solid ${teamIdError ? '#ef4444' : 'var(--border)'}`,
+              borderRadius: '4px',
+              fontSize: '0.875rem',
+              fontFamily: 'monospace'
+            }}
+          />
+          {teamIdValidating && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>校验中...</span>
+          )}
+          {!teamIdValidating && teamId && !teamIdError && (
+            <span style={{ fontSize: '0.75rem', color: '#10b981' }}>✓</span>
+          )}
+          {!teamIdValidating && teamIdError && (
+            <span style={{ fontSize: '0.75rem', color: '#ef4444', whiteSpace: 'nowrap' }}>{teamIdError}</span>
+          )}
+          {!teamId && !teamIdError && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>必填，创建后不可修改</span>
+          )}
+        </div>
+      )}
 
       {/* 校验状态汇总 */}
       {validated && (

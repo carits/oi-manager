@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Yosupo / Library Checker (judge.yosupo.jp) 题目拉取适配器
  *

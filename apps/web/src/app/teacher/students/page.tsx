@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -25,6 +27,8 @@ interface Teacher {
 export default function StudentsPage() {
   const router = useRouter()
   const { user, sessionKey } = useAuth()
+  const toast = useToast()
+  const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [transferringStudent, setTransferringStudent] = useState<Student | null>(null)
@@ -33,7 +37,7 @@ export default function StudentsPage() {
     page: 1,
     pageSize: 20
   })
-  const [toast, setToast] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
 
   const isPrincipal = user?.role === 'school_principal'
 
@@ -60,27 +64,32 @@ export default function StudentsPage() {
   const toggleAccountStatus = async (studentId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'disabled' ? 'active' : 'disabled'
     const action = newStatus === 'disabled' ? '禁用' : '启用'
-    if (!confirm(`确定要${action}该学生账号吗？`)) return
-    setTogglingId(studentId)
-    try {
-      const res = await apiClient.put(`/api/students/${studentId}/account-status`, { status: newStatus })
-      if (res.success) {
-        setToast(`${action}成功`)
-        refetch()
-      } else {
-        alert(res.message || `${action}失败`)
+    setConfirmState({
+      id: studentId,
+      message: `确定要${action}该学生账号吗？`,
+      action: async () => {
+        setTogglingId(studentId)
+        try {
+          const res = await apiClient.put(`/api/students/${studentId}/account-status`, { status: newStatus })
+          if (res.success) {
+            toast.success(`${action}成功`)
+            refetch()
+          } else {
+            toast.error(res.message || `${action}失败`)
+          }
+        } catch {
+          toast.error(`${action}失败`)
+        } finally {
+          setTogglingId(null)
+        }
       }
-    } catch {
-      alert(`${action}失败`)
-    } finally {
-      setTogglingId(null)
-    }
+    })
   }
 
   // Toast 自动关闭
   useEffect(() => {
     if (toast) {
-      const timer = setTimeout(() => setToast(null), 2500)
+      const timer = setTimeout(() => setToastMsg(null), 2500)
       return () => clearTimeout(timer)
     }
   }, [toast])
@@ -135,7 +144,7 @@ export default function StudentsPage() {
   // 转移主教练
   const handleConfirmTransfer = async () => {
     if (!transferringStudent || !selectedTeacherId) {
-      alert('请选择主教练')
+      toast.warning('请选择主教练')
       return
     }
 
@@ -147,15 +156,15 @@ export default function StudentsPage() {
         headTeacherId: selectedTeacherId
       })
       if (result.success) {
-        alert('转移成功')
+        toast.success('转移成功')
         setTransferringStudent(null)
         setSelectedTeacherId('')
         refetch()
       } else {
-        alert(result.message || '转移失败')
+        toast.error(result.message || '转移失败')
       }
     } catch (error) {
-      alert('转移失败')
+      toast.error('转移失败')
     }
   }
 
@@ -308,14 +317,14 @@ export default function StudentsPage() {
             onClose={modal.close}
             onSuccess={() => {
               modal.close()
-              setToast('保存成功')
+              setToastMsg('保存成功')
               refetch()
             }}
           />
         )}
 
         {/* Toast 通知 */}
-        {toast && (
+        {toastMsg && (
           <div style={{
             position: 'fixed',
             top: 24,
@@ -331,10 +340,19 @@ export default function StudentsPage() {
             zIndex: 9999,
             animation: 'toastIn 0.25s ease'
           }}>
-            {toast}
+            {toastMsg}
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={async () => { await confirmState?.action(); setConfirmState(null) }}
+        title="确认操作"
+        message={confirmState?.message || ''}
+        confirmText="确认"
+        danger
+      />
     </ProtectedRoute>
   )
 }
@@ -379,10 +397,10 @@ function StudentFormModal({
         if (result.success) {
           onSuccess()
         } else {
-          alert(result.message || '操作失败')
+          toast.error(result.message || '操作失败')
         }
       } catch {
-        alert('操作失败')
+        toast.error('操作失败')
       } finally {
         setSubmitting(false)
       }

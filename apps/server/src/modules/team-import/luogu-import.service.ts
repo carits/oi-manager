@@ -104,10 +104,10 @@ export class LuoguImportService {
     let teamName: string | undefined
 
     // 如果需要创建团队
-    if (request.createTeam && !request.teamId) {
+    if (request.createTeam) {
       const newTeam = await prisma.team.create({
         data: {
-          id: uuidv4(),
+          id: request.teamId || request.luoguTeamId || `luogu-${Date.now()}`,
           name: request.teamName || `洛谷导入团队-${Date.now()}`,
           schoolId,
           isPublic: request.visibility === 'public',

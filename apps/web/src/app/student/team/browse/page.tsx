@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { getAssetUrl } from '@/lib/assets'
+import { useToast } from '@/components/ui/Toast'
 
 interface Team {
   id: string
@@ -22,6 +23,7 @@ interface Team {
 // 学生端 - 浏览团队页面
 export default function StudentTeamBrowsePage() {
   const { user } = useAuth()
+  const toast = useToast()
   const router = useRouter()
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,14 +60,14 @@ export default function StudentTeamBrowsePage() {
         message: '我想加入这个团队'
       })
       if (result.success) {
-        alert('申请已提交')
+        toast.success('申请已提交')
         fetchTeams()
       } else {
-        alert(result.message || '申请失败')
+        toast.error(result.message || '申请失败')
       }
     } catch (error) {
       console.error('Apply join error:', error)
-      alert('申请失败')
+      toast.error('申请失败')
     }
   }
 

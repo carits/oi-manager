@@ -6,6 +6,7 @@ import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 
 const app = createTestApp()
+const shortId = () => Math.random().toString(36).slice(2, 8)
 
 describe('Transactions Module', () => {
   describe('School Creation Transaction', () => {
@@ -24,7 +25,7 @@ describe('Transactions Module', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           name: schoolName,
-          username: `principal_${Date.now()}`,
+          username: `p_${shortId()}`,
           password: 'password123',
           teacherName: '测试负责人',
           region: '湖南省/长沙市',
@@ -39,12 +40,12 @@ describe('Transactions Module', () => {
       const school = await prisma.school.findUnique({
         where: { id: res.body.data.id },
         include: {
-          teachers: true
+          Teacher: true
         }
       })
 
       expect(school).not.toBeNull()
-      expect(school!.teachers.length).toBeGreaterThan(0)
+      expect(school!.Teacher.length).toBeGreaterThan(0)
       expect(school!.currentPrincipalTeacherId).toBeDefined()
     })
 
@@ -64,7 +65,7 @@ describe('Transactions Module', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           name: existingSchool.name, // Duplicate name
-          username: `principal_${Date.now()}`,
+          username: `p_${shortId()}`,
           password: 'password123',
           teacherName: '测试负责人'
         })
@@ -114,7 +115,7 @@ describe('Transactions Module', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           // Missing name
-          username: `principal_${Date.now()}`,
+          username: `p_${shortId()}`,
           password: 'password123'
         })
 
@@ -136,7 +137,7 @@ describe('Transactions Module', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           name: `新学校_${Date.now()}`,
-          username: `principal_${Date.now()}`,
+          username: `p_${shortId()}`,
           password: 'password123',
           teacherName: '测试负责人'
         })
@@ -163,6 +164,8 @@ describe('Transactions Module', () => {
         .post('/api/students')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          username: `stu_${shortId()}`,
+          password: 'password123',
           name: '测试学生',
           gender: '男',
           enrollmentYear: 2023,
@@ -176,29 +179,32 @@ describe('Transactions Module', () => {
       // Verify both User and Student were created
       const student = await prisma.student.findUnique({
         where: { id: res.body.data.id },
-        include: { user: true }
+        include: { User: true }
       })
 
       expect(student).not.toBeNull()
-      expect(student!.user).toBeDefined()
+      expect(student!.User).toBeDefined()
       expect(student!.name).toBe('测试学生')
     })
 
     it('should not create student without school', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
+      // 创建一个没有学校的教师
+      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher' })
       const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
+        userId: teacher.id,
+        role: 'teacher',
+        username: teacher.username,
+        teacherId
       })
 
       const res = await request(app)
         .post('/api/students')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          username: `stu_${shortId()}`,
+          password: 'password123',
           name: '测试学生',
-          // Missing schoolId
+          // 不传 schoolId，教师也没有学校
         })
 
       expect(res.status).toBe(400)
@@ -226,7 +232,7 @@ describe('Transactions Module', () => {
         .put(`/api/schools/${school.id}/principal`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          newPrincipalTeacherId
+          teacherId: newPrincipalTeacherId
         })
 
       expect(res.status).toBe(200)
@@ -289,6 +295,7 @@ describe('Transactions Module', () => {
         .post('/api/teams')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          id: `team_${shortId()}`,
           name: `测试团队_${Date.now()}`,
           schoolId: school.id,
           isPublic: true

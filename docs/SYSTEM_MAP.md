@@ -1,6 +1,6 @@
 # 系统全景图 (System Map)
 
-> 最后更新: 2026-03-23
+> 最后更新: 2026-04-07
 
 本文档描述 OI Manager V2 的完整系统结构，帮助快速理解项目全貌。
 
@@ -99,7 +99,7 @@ oi-manager-v2/
 | `/teacher/contests/[id]` | 比赛详情 |
 | `/teacher/problems` | 题目管理 |
 | `/teacher/submissions` | 评测记录 |
-| `/teacher/task-lists` | 题单管理 |
+| `/teacher/problem-lists` | 题单管理 |
 | `/teacher/scores` | 成绩管理 |
 | `/teacher/rankings` | 排名查看 |
 | `/teacher/profile` | 个人资料 |
@@ -117,7 +117,7 @@ oi-manager-v2/
 | `/student/contests/[id]` | 比赛详情 |
 | `/student/problems` | 题目列表 |
 | `/student/submissions` | 评测记录 |
-| `/student/task-lists` | 题单任务 |
+| `/student/problem-lists` | 题单任务 |
 | `/student/scores` | 成绩查看 |
 | `/student/rating` | Rating 查看 |
 | `/student/profile` | 个人资料 |
@@ -203,23 +203,31 @@ oi-manager-v2/
 | POST | `/api/contests/:id/resources` | 上传资源 |
 | DELETE | `/api/contests/:id/resources/:resourceId` | 删除资源 |
 
-### 4.8 题单管理 (`/api/task-lists/*`)
+### 4.8 题单管理 (`/api/problem-lists/*`)
+
+> 飞书文档式权限题单系统，三级结构：题单 → 章节 → 题目条目
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/task-lists` | 题单列表 |
-| POST | `/api/task-lists` | 创建题单 |
-| GET | `/api/task-lists/:id` | 题单详情 |
-| PUT | `/api/task-lists/:id` | 更新题单 |
-| DELETE | `/api/task-lists/:id` | 删除题单 |
+| GET | `/api/problem-lists` | 题单列表（tab=mine/shared/all） |
+| POST | `/api/problem-lists` | 创建题单（含默认章节） |
+| GET | `/api/problem-lists/:id` | 题单详情（含章节→条目→Problem） |
+| PUT | `/api/problem-lists/:id` | 更新题单元信息 |
+| DELETE | `/api/problem-lists/:id` | 删除题单（硬删除） |
+| POST | `/api/problem-lists/:id/sections` | 添加章节 |
+| PUT | `/api/problem-lists/sections/:sectionId` | 更新章节 |
+| DELETE | `/api/problem-lists/sections/:sectionId` | 删除章节 |
+| PUT | `/api/problem-lists/:id/sections/reorder` | 重排章节 |
+| POST | `/api/problem-lists/sections/:sectionId/entries/single` | 添加题目 |
+| POST | `/api/problem-lists/:id/entries/resolve` | 批量解析题号 |
+| PUT | `/api/problem-lists/entries/:entryId` | 更新条目 |
+| DELETE | `/api/problem-lists/entries/:entryId` | 删除条目 |
+| PUT | `/api/problem-lists/sections/:sectionId/entries/reorder` | 重排条目 |
+| GET | `/api/problem-lists/:id/shares` | 获取分享列表 |
+| POST | `/api/problem-lists/:id/shares` | 添加/更新分享 |
+| DELETE | `/api/problem-lists/:id/shares/:shareId` | 移除分享 |
 
-### 4.9 任务进度 (`/api/task-progress/*`)
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/task-progress` | 个人进度 |
-| GET | `/api/task-progress/class/:taskListId` | 班级进度 |
-| PUT | `/api/task-progress` | 更新进度 |
-
-### 4.10 里程碑 (`/api/milestones/*`)
+### 4.9 里程碑 (`/api/milestones/*`)
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/milestones` | 里程碑列表 |
@@ -227,13 +235,27 @@ oi-manager-v2/
 | PUT | `/api/milestones/:id` | 更新里程碑 |
 | DELETE | `/api/milestones/:id` | 删除里程碑 |
 
-### 4.11 统计数据 (`/api/stats/*`)
+### 4.9.1 学校题单 (`/api/schools/:schoolId/problem-lists`)
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/schools/:schoolId/problem-lists` | 获取学校题单列表 |
+| POST | `/api/schools/:schoolId/problem-lists` | 添加题单到学校 |
+| DELETE | `/api/schools/:schoolId/problem-lists/:id` | 移除学校题单 |
+
+### 4.9.2 团队题单 (`/api/teams/:teamId/problem-lists`)
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/teams/:teamId/problem-lists` | 获取团队题单列表 |
+| POST | `/api/teams/:teamId/problem-lists` | 添加题单到团队 |
+| DELETE | `/api/teams/:teamId/problem-lists/:id` | 移除团队题单 |
+
+### 4.10 统计数据 (`/api/stats/*`)
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/stats/overview` | 总览统计 |
 | GET | `/api/stats/school/:id` | 学校统计 |
 
-### 4.12 评测记录 (`/api/submissions/*`)
+### 4.11 评测记录 (`/api/submissions/*`)
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/submissions` | 评测记录列表（骨架，暂返回空数组） |
@@ -257,12 +279,12 @@ School (学校)
   │     ├── Team (团队) via TeamMember N:M
   │     ├── ContestResult (比赛成绩) 1:N
   │     ├── RatingHistory (Rating历史) 1:N
-  │     └── TaskProgress (任务进度) 1:N
+  │     └── Milestone (里程碑) 1:N
   │
   └── Team (团队) 1:N
         ├── TeamMember (成员) N:M
         ├── Contest (比赛) 1:N
-        └── TaskList (题单) 1:N
+        └── ProblemList (题单) 1:N
 ```
 
 ### 5.2 模型清单
@@ -279,9 +301,12 @@ School (学校)
 | `ContestProblem` | 比赛题目 | contestId, orderIndex, title, points |
 | `ContestResult` | 比赛成绩 | contestId, studentId, score, ranks |
 | `Resource` | 资源文件 | fileName, fileType, fileUrl, contestProblemId |
-| `TaskList` | 题单 | title, teamId, deadline, status |
-| `TaskItem` | 题单项 | taskListId, ojName, problemId, points |
-| `TaskProgress` | 任务进度 | studentId, taskItemId, status, score |
+| `ProblemList` | 题单 | title, schoolId, ownerId, visibility, sortOrder |
+| `ProblemListSection` | 题单章节 | problemListId, title, sortOrder |
+| `ProblemListEntry` | 题单条目 | sectionId, problemId, ojName, alias, sortOrder |
+| `ProblemListShare` | 题单分享 | problemListId, targetType, targetId, permission |
+| `SchoolProblemList` | 学校题单 | schoolId, problemListId, addedBy, addedByRole |
+| `TeamProblemList` | 团队题单 | teamId, problemListId, addedBy, addedByRole |
 | `RatingHistory` | Rating 历史 | studentId, oldRating, newRating, contestId |
 | `Milestone` | 里程碑 | studentId, title, date, type |
 

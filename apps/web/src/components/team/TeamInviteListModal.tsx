@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { getAssetUrl } from '@/lib/assets'
 
@@ -28,8 +30,13 @@ interface TeamInviteListModalProps {
 }
 
 export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListModalProps) {
+  const toast = useToast()
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [loading, setLoading] = useState(false)
+
+  // 取消邀请确认弹框状态
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<PendingInvite | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -52,32 +59,41 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
     }
   }
 
-  const handleCancelInvite = async (invite: PendingInvite) => {
-    if (!confirm('确定要取消该邀请吗？')) return
+  const handleCancelInvite = (invite: PendingInvite) => {
+    setCancelTarget(invite)
+    setShowCancelConfirm(true)
+  }
+
+  const confirmCancelInvite = async () => {
+    if (!cancelTarget) return
 
     try {
       let endpoint = ''
-      if (invite.type === 'student') {
-        endpoint = `/api/teams/${teamId}/invites/${invite.id}`
-      } else if (invite.type === 'teacher-member') {
-        endpoint = `/api/teams/${teamId}/teacher-invites/${invite.id}`
+      if (cancelTarget.type === 'student') {
+        endpoint = `/api/teams/${teamId}/invites/${cancelTarget.id}`
+      } else if (cancelTarget.type === 'teacher-member') {
+        endpoint = `/api/teams/${teamId}/teacher-invites/${cancelTarget.id}`
       } else {
-        endpoint = `/api/teams/${teamId}/admin-invites/${invite.id}`
+        endpoint = `/api/teams/${teamId}/admin-invites/${cancelTarget.id}`
       }
 
       const result = await apiClient.delete(endpoint)
       if (result.success) {
         fetchInviteList()
       } else {
-        alert(result.message || '取消失败')
+        toast.error(result.message || '取消失败')
       }
     } catch (error) {
       console.error('Cancel invite error:', error)
-      alert('取消失败')
+      toast.error('取消失败')
+    } finally {
+      setShowCancelConfirm(false)
+      setCancelTarget(null)
     }
   }
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={onClose} title="邀请列表" width="500px">
       {loading ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
@@ -172,5 +188,20 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
         </Button>
       </div>
     </Modal>
+
+    {/* 取消邀请确认弹框 */}
+    <ConfirmModal
+      isOpen={showCancelConfirm}
+      onClose={() => {
+        setShowCancelConfirm(false)
+        setCancelTarget(null)
+      }}
+      onConfirm={confirmCancelInvite}
+      title="取消邀请"
+      message={`确定要取消对 ${cancelTarget?.user?.name || '该用户'} 的邀请吗？`}
+      confirmText="确认取消"
+      danger
+    />
+    </>
   )
 }

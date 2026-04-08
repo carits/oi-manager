@@ -328,7 +328,12 @@ Authorization: Bearer <token>
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | id | string | 团队 ID |
-| memberId | string | 成员记录 ID |
+| memberId | string | **用户 ID**（Teacher/Student ID，非 TeamMember 记录 ID） |
+
+**查询参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| memberType | string | 推荐 | 用户类型：`teacher` / `student`。不传时回退到 TeamMember 记录 ID 查找（兼容模式） |
 
 **前置条件**:
 - 目标成员存在且属于该团队
@@ -685,9 +690,12 @@ Authorization: Bearer <token>
 **请求体**:
 ```typescript
 {
-  memberId: string  // 成员记录 ID
+  memberId: string     // 用户 ID（Teacher/Student ID），非 TeamMember 记录 ID
+  memberType: string   // 必填。用户类型：'teacher' | 'student'
 }
 ```
+
+> **ID 语义说明**: `memberId` 是 Teacher 或 Student 表的主键 ID，后端通过 `teamId + userId + userType` 复合唯一键查找 TeamMember 记录。
 
 **前置条件**:
 - 目标成员是 active 成员
@@ -716,8 +724,18 @@ Authorization: Bearer <token>
 
 **权限要求**: owner
 
-**前置条件**:
-- 目标成员当前角色是 admin
+**路径参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| id | string | 团队 ID |
+| adminId | string | **用户 ID**（Teacher/Student ID），非 TeamMember 记录 ID |
+
+**查询参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| adminType | string | 推荐 | 用户类型：`teacher` / `student`。不传时回退到 TeamMember 记录 ID 查找（兼容模式） |
+
+> **ID 语义说明**: `adminId` 是 Teacher 或 Student 表的主键 ID，后端通过 `teamId + userId + userType` 复合唯一键查找 TeamMember 记录。
 
 **响应**:
 ```typescript
@@ -746,9 +764,12 @@ Authorization: Bearer <token>
 **请求体**:
 ```typescript
 {
-  newOwnerId: string  // 新 owner 的成员记录 ID
+  newOwnerId: string    // 新 owner 的用户 ID（Teacher/Student ID）
+  newOwnerType: string   // 必填。用户类型：'teacher' | 'student'
 }
 ```
+
+> **ID 语义说明**: `newOwnerId` 是 Teacher 或 Student 表的主键 ID，后端通过 `teamId + userId + userType` 复合唯一键查找 TeamMember 记录。
 
 **前置条件**:
 - 新 owner 是 active 成员

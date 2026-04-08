@@ -1,6 +1,6 @@
 # 业务模块索引 (Module Index)
 
-> 最后更新: 2026-03-23
+> 最后更新: 2026-04-07
 
 本文档列出 OI Manager V2 的所有业务模块及其对应的前后端代码位置。
 
@@ -17,7 +17,7 @@
 | 学生管理 | ✅ 完成 | 学生 CRUD、Rating 管理 |
 | 团队管理 | ✅ 完成 | 团队 CRUD、成员管理 |
 | 比赛管理 | 🔄 进行中 | 比赛 CRUD、成绩导入 |
-| 题单管理 | 🔄 进行中 | 题单 CRUD、任务进度 |
+| 题单管理 | ✅ 完成 | 飞书文档式权限题单（题单→章节→题目） |
 | 评测记录 | 🔄 进行中 | 评测记录列表、筛选（UI 骨架已完成） |
 | Rating 系统 | 🔄 进行中 | Rating 计算、历史记录 |
 | 成绩中心 | 📋 计划中 | 成绩统计、报告生成 |
@@ -275,36 +275,59 @@
 
 ---
 
-## 9. 题单管理模块 (Task Lists)
+## 9. 题单管理模块 (Problem Lists)
 
 ### 功能
-- 题单列表
-- 创建/编辑/删除题单
-- 任务项管理
-- 进度跟踪
+- 题单 CRUD
+- 三级结构：题单 → 章节 → 题目条目
+- 飞书文档式分享权限（school/team/teacher/student × view/edit/admin）
+- 自动题目解析（resolve API + 自动保存）
+- 教师和学生均可创建和管理
 
 ### 前端代码
 | 文件 | 说明 |
 |------|------|
-| `app/teacher/task-lists/page.tsx` | 题单管理（教师端） |
-| `app/student/task-lists/page.tsx` | 题单任务（学生端） |
+| `app/teacher/problem-lists/page.tsx` | 题单列表（教师端） |
+| `app/teacher/problem-lists/[id]/page.tsx` | 题单详情（教师端） |
+| `app/teacher/problem-lists/new/page.tsx` | 新建题单（教师端） |
+| `app/student/problem-lists/page.tsx` | 题单列表（学生端） |
+| `app/student/problem-lists/[id]/page.tsx` | 题单详情（学生端） |
+| `app/student/problem-lists/new/page.tsx` | 新建题单（学生端） |
+| `components/problem/ProblemListPage.tsx` | 题单列表页共享组件 |
+| `components/problem/ProblemListDetailPage.tsx` | 题单详情页共享组件（含章节管理、题目添加、分享面板） |
+| `components/problem/NewProblemListPage.tsx` | 新建题单共享组件 |
 
 ### 后端代码
 | 文件 | 说明 |
 |------|------|
-| `routes/task-lists.ts` | 题单 API 路由 |
-| `routes/task-progress.ts` | 任务进度 API |
+| `routes/problem-lists.ts` | 题单 API 路由（含章节、条目、分享管理） |
 
 ### API
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/task-lists` | 题单列表 |
-| POST | `/api/task-lists` | 创建题单 |
-| GET | `/api/task-lists/:id` | 题单详情 |
-| PUT | `/api/task-lists/:id` | 更新题单 |
-| DELETE | `/api/task-lists/:id` | 删除题单 |
-| GET | `/api/task-progress` | 个人进度 |
-| PUT | `/api/task-progress` | 更新进度 |
+| GET | `/api/problem-lists` | 题单列表（tab=mine/shared/all） |
+| POST | `/api/problem-lists` | 创建题单（含默认章节） |
+| GET | `/api/problem-lists/:id` | 题单详情（含章节→条目→Problem） |
+| PUT | `/api/problem-lists/:id` | 更新题单元信息 |
+| DELETE | `/api/problem-lists/:id` | 删除题单（硬删除） |
+| POST | `/api/problem-lists/:id/sections` | 添加章节 |
+| PUT | `/api/problem-lists/sections/:sectionId` | 更新章节 |
+| DELETE | `/api/problem-lists/sections/:sectionId` | 删除章节（至少保留一个） |
+| PUT | `/api/problem-lists/:id/sections/reorder` | 重排章节 |
+| POST | `/api/problem-lists/sections/:sectionId/entries/single` | 添加题目 |
+| POST | `/api/problem-lists/:id/entries/resolve` | 批量解析题号 |
+| PUT | `/api/problem-lists/entries/:entryId` | 更新条目 |
+| DELETE | `/api/problem-lists/entries/:entryId` | 删除条目 |
+| PUT | `/api/problem-lists/sections/:sectionId/entries/reorder` | 重排条目 |
+| GET | `/api/problem-lists/:id/shares` | 获取分享列表 |
+| POST | `/api/problem-lists/:id/shares` | 添加/更新分享 |
+| DELETE | `/api/problem-lists/:id/shares/:shareId` | 移除分享 |
+
+### 数据模型
+```
+ProblemList → ProblemListSection → ProblemListEntry → Problem
+                ↕ ProblemListShare (权限分享)
+```
 
 ---
 
@@ -411,7 +434,7 @@
     │       │               │
     │       │               ├──▶ 比赛管理 (Contests)
     │       │               │
-    │       │               └──▶ 题单管理 (Task Lists)
+    │       │               └──▶ 题单管理 (Problem Lists)
     │       │
     │       └──▶ 学生管理 (Students)
     │

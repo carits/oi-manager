@@ -115,7 +115,7 @@ export class SzkopulAdapter implements OjAdapter {
       type: 'statement',
       format: 'pdf',
       language: null,
-      fileUrl: localPdfUrl || pdfUrl,
+      fileUrl: localPdfUrl || pdfUrl || undefined,
       isVisible: true,
     }]
 

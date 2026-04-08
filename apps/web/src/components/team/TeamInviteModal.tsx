@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 
 interface AvailableMember {
@@ -26,6 +27,7 @@ interface TeamInviteModalProps {
 }
 
 export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInviteModalProps) {
+  const toast = useToast()
   const [availableMembers, setAvailableMembers] = useState<AvailableMember[]>([])
   const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>([])
   const [usernameInput, setUsernameInput] = useState('')
@@ -69,15 +71,15 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
       })
       if (result.success) {
         const successCount = result.data?.invited?.length || members.length
-        alert(`成功发送 ${successCount} 个邀请`)
+        toast.success(`成功发送 ${successCount} 个邀请`)
         onClose()
         onSuccess()
       } else {
-        alert(result.message || '邀请失败')
+        toast.error(result.message || '邀请失败')
       }
     } catch (error) {
       console.error('Invite members error:', error)
-      alert('邀请失败')
+      toast.error('邀请失败')
     } finally {
       setInviting(false)
     }

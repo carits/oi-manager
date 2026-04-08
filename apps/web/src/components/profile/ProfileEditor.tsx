@@ -5,6 +5,7 @@ import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 import { getAssetUrl } from '@/lib/assets'
+import { useToast } from '@/components/ui/Toast'
 
 interface ProfileEditorProps {
   userType: 'teacher' | 'student' | 'admin'
@@ -12,6 +13,7 @@ interface ProfileEditorProps {
 
 export function ProfileEditor({ userType }: ProfileEditorProps) {
   const { user, refreshUser } = useAuth()
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -47,13 +49,13 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
     try {
       const result = await apiClient.put('/api/auth/profile', form)
       if (result.success) {
-        alert('保存成功')
+        toast.success('保存成功')
         refreshUser?.()
       } else {
-        alert(result.message || '保存失败')
+        toast.error(result.message || '保存失败')
       }
     } catch (error) {
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSaving(false)
     }
@@ -76,10 +78,10 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
       if (result.success) {
         refreshUser?.()
       } else {
-        alert(result.message || '上传失败')
+        toast.error(result.message || '上传失败')
       }
     } catch (error) {
-      alert('上传失败')
+      toast.error('上传失败')
     } finally {
       setUploadingAvatar(false)
       if (fileInputRef.current) {

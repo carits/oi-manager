@@ -1,4 +1,9 @@
 import rateLimit from 'express-rate-limit'
+import type { RequestHandler } from 'express'
+
+// 测试环境跳过限流（避免测试被限流导致失败）
+const noop: RequestHandler = (_req, _res, next) => next()
+const shouldSkip = process.env.NODE_ENV === 'test'
 
 /**
  * 全局 API 限流
@@ -6,7 +11,7 @@ import rateLimit from 'express-rate-limit'
  * 目的：防止 DDoS 攻击和恶意滥用
  * 风险缓解：100次/分钟对正常用户足够宽松，同时能阻止自动化攻击
  */
-export const globalLimiter = rateLimit({
+export const globalLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 1000, // 1 分钟
   max: 100,
   standardHeaders: true,
@@ -19,7 +24,7 @@ export const globalLimiter = rateLimit({
  * 限制：每分钟最多 5 次尝试
  * 目的：防止暴力破解密码
  */
-export const loginLimiter = rateLimit({
+export const loginLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 1000, // 1 分钟
   max: 5,
   standardHeaders: true,
@@ -32,7 +37,7 @@ export const loginLimiter = rateLimit({
  * 限制：每小时最多 3 次注册
  * 防止批量注册攻击
  */
-export const registerLimiter = rateLimit({
+export const registerLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 60 * 1000, // 1 小时
   max: 3,
   standardHeaders: true,
@@ -45,7 +50,7 @@ export const registerLimiter = rateLimit({
  * 限制：每小时最多 3 次
  * 防止密码攻击
  */
-export const passwordLimiter = rateLimit({
+export const passwordLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 60 * 1000, // 1 小时
   max: 3,
   standardHeaders: true,
@@ -58,7 +63,7 @@ export const passwordLimiter = rateLimit({
  * 限制：每小时最多 3 次
  * 用于管理员重置用户密码
  */
-export const passwordResetLimiter = rateLimit({
+export const passwordResetLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 60 * 1000, // 1 小时
   max: 3,
   standardHeaders: true,

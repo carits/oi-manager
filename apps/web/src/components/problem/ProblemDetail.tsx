@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
@@ -20,7 +22,8 @@ interface Statement {
 
 interface Problem {
   id: string
-  problemCode: string
+  problemId: string
+  platform: string
   title: string
   difficulty: string | null
   timeLimit: number | null
@@ -152,10 +155,16 @@ interface ProblemDetailProps {
 
 export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
+  const toast = useToast()
+  type TabType = 'statement' | 'solution' | 'attachments' | 'submit' | 'records'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'submit', 'records']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'statement' | 'solution' | 'attachments' | 'submit' | 'records'>('statement')
+  const [activeTab, setActiveTab] = useState<TabType>(
+    VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
+  )
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
@@ -165,6 +174,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [showTranslateModal, setShowTranslateModal] = useState(false)
   const [aiLoading, setAiLoading] = useState<'translate' | 'format' | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -178,6 +188,16 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     fetchProblem()
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
   }, [problemId])
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType
+    if (VALID_TABS.includes(tab)) setActiveTab(tab)
+  }, [searchParams])
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
+    router.push(`${pathPrefix}/problems/${problemId}?tab=${tab}`, { scroll: false })
+  }
 
   // 当 problem 数据更新后，设置默认选中的版本
   useEffect(() => {
@@ -282,18 +302,21 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       }
     } catch (error) {
       console.error('Download failed:', error)
-      alert('下载失败，请重试')
+      toast.error('下载失败，请重试')
     }
   }
 
   const handleDelete = async () => {
     if (!problem) return
-    if (!confirm('确定要删除这道题目吗？')) return
+    setDeleteConfirmOpen(true)
+  }
 
+  const confirmDelete = async () => {
+    setDeleteConfirmOpen(false)
     try {
       const result = await apiClient.delete(`/api/problems/${problemId}`)
       if (result.success) {
-        router.push(`${pathPrefix}/problems`)
+        router.back()
       }
     } catch (error) {
       console.error('Failed to delete problem:', error)
@@ -429,7 +452,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '2rem' }}>
         {/* 返回按钮 */}
         <button
-          onClick={() => router.push(`${pathPrefix}/problems`)}
+          onClick={() => router.back()}
           style={{
             background: 'none',
             border: 'none',
@@ -454,7 +477,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--gray-500)', fontWeight: 500 }}>{problem.problemCode}</span>
+                <span style={{ color: 'var(--gray-500)', fontWeight: 500 }}>{problem.problemId}</span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 600 }}>{problem.title}</span>
               </div>
               <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>
@@ -534,7 +557,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
-              onClick={() => setActiveTab('statement')}
+              onClick={() => handleTabChange('statement')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -549,7 +572,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               题面
             </button>
             <button
-              onClick={() => setActiveTab('solution')}
+              onClick={() => handleTabChange('solution')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -565,7 +588,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             </button>
             <button
               onClick={() => {
-                setActiveTab('attachments')
+                handleTabChange('attachments')
                 setHasVisitedAttachments(true)
               }}
               style={{
@@ -598,7 +621,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('submit')}
+              onClick={() => handleTabChange('submit')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -613,7 +636,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               提交
             </button>
             <button
-              onClick={() => setActiveTab('records')}
+              onClick={() => handleTabChange('records')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',

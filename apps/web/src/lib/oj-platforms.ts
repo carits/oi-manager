@@ -9,9 +9,10 @@ export interface OjPlatformOption {
   label: string
 }
 
-/** 完整 OJ 平台列表（含"全部"选项，用于筛选下拉） */
+/** 宲整 OJ 平台列表（含"全部"选项，用于筛选下拉） */
 export const OJ_PLATFORMS: OjPlatformOption[] = [
   { value: '', label: '全部平台' },
+  { value: 'carits', label: 'Carits（本平台）' },
   { value: 'poj', label: 'POJ' },
   { value: 'zoj', label: 'ZOJ' },
   { value: 'uva', label: 'UVA' },

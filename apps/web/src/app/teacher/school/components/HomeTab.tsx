@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Modal } from '@/components/ui/Modal'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { useToast } from '@/components/ui/Toast'
 import { formStyles } from '@/lib/styles'
 import { calculateStudentGrade, getAllGrades } from '@/lib/grade'
 import { RegionSelector } from '@/components/business/RegionSelector'
@@ -36,6 +37,7 @@ interface HomeTabProps {
 }
 
 export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: HomeTabProps) {
+  const toast = useToast()
   const [stats, setStats] = useState<any>(null)
   const [topStudents, setTopStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,13 +130,13 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
       if (result.success) {
         setIsEditingSchool(false)
         onAnnouncementUpdate() // 刷新学校数据
-        alert('学校信息保存成功')
+        toast.success('学校信息保存成功')
       } else {
-        alert(result.message || '保存失败')
+        toast.error(result.message || '保存失败')
       }
     } catch (error) {
       console.error('Failed to save school:', error)
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSaving(false)
     }
@@ -149,13 +151,13 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
       if (result.success) {
         setIsEditingAnnouncement(false)
         onAnnouncementUpdate()
-        alert('公告保存成功')
+        toast.success('公告保存成功')
       } else {
-        alert(result.message || '保存失败')
+        toast.error(result.message || '保存失败')
       }
     } catch (error) {
       console.error('Failed to save announcement:', error)
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSaving(false)
     }

@@ -17,6 +17,9 @@ import { filesRouter } from './routes/files'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
 import { teamImportRouter } from './modules/team-import/team-import.routes'
 import { submissionsRouter } from './routes/submissions'
+import { problemListsRouter } from './routes/problem-lists'
+import { schoolProblemListsRouter } from './routes/school-problem-lists'
+import { teamProblemListsRouter } from './routes/team-problem-lists'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -86,6 +89,9 @@ app.use('/api/files', filesRouter)
 app.use('/api/platform-bindings', platformBindingRouter)
 app.use('/api/team-import', teamImportRouter)
 app.use('/api/submissions', submissionsRouter)
+app.use('/api/problem-lists', problemListsRouter)
+app.use('/api/schools', schoolProblemListsRouter)
+app.use('/api/teams', teamProblemListsRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

@@ -164,12 +164,16 @@ describe('Authentication Module', () => {
 
   describe('POST /api/auth/register', () => {
     it('should register a new student successfully', async () => {
+      const school = await prisma.school.create({
+        data: { name: '注册测试学校', currentPrincipalTeacherId: 'dummy', status: 'active' }
+      })
       const res = await request(app)
         .post('/api/auth/register')
         .send({
           username: 'newstudent',
           password: 'password123',
-          name: 'New Student'
+          name: 'New Student',
+          schoolId: school.id
         })
 
       expect(res.status).toBe(200)

@@ -8,6 +8,7 @@ import remarkDirective from 'remark-directive'
 import remarkDirectiveRehype from 'remark-directive-rehype'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { showToastNotification } from '@/components/ui/Toast'
 
 // 复制按钮组件
 function CopyButton({ text }: { text: string }) {
@@ -60,7 +61,7 @@ const handleFileDownload = async (e: React.MouseEvent<HTMLAnchorElement>, href: 
 
   const token = localStorage.getItem('token')
   if (!token) {
-    alert('请先登录')
+    showToastNotification('请先登录', 'warning')
     return
   }
 
@@ -102,7 +103,7 @@ const handleFileDownload = async (e: React.MouseEvent<HTMLAnchorElement>, href: 
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('Download failed:', error)
-    alert('下载失败，请重试')
+    showToastNotification('下载失败，请重试', 'error')
   }
 }
 

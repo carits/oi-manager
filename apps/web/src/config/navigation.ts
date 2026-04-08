@@ -45,6 +45,7 @@ export const schoolManagerNav: NavConfig = {
     { label: '学生管理', href: '/teacher/students' },
     { label: '教师管理', href: '/teacher/teachers' },
     { label: '题库', href: '/teacher/problems' },
+    { label: '题单', href: '/teacher/problem-lists' },
     { label: '评测记录', href: '/teacher/submissions' },
   ]
 }
@@ -59,6 +60,7 @@ export const teacherNav: NavConfig = {
     { label: '学生管理', href: '/teacher/students' },
     { label: '教师管理', href: '/teacher/teachers' },
     { label: '题库', href: '/teacher/problems' },
+    { label: '题单', href: '/teacher/problem-lists' },
     { label: '评测记录', href: '/teacher/submissions' },
   ]
 }
@@ -71,6 +73,7 @@ export const studentNav: NavConfig = {
     { label: '我的团队', href: '/student/team' },
     { label: '我的学校', href: '/student/school' },
     { label: '题库', href: '/student/problems' },
+    { label: '题单', href: '/student/problem-lists' },
     { label: '评测记录', href: '/student/submissions' },
     { label: '我的成长', href: '/student/rating' },
   ]

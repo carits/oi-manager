@@ -82,7 +82,11 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
       params.set('page', String(page))
       params.set('pageSize', String(pageSize))
 
-      const res = await apiClient.get(`/api/submissions?${params.toString()}`)
+      const res = await apiClient.get<{
+        submissions?: any[]
+        totalPages?: number
+        total?: number
+      }>(`/api/submissions?${params.toString()}`)
       if (res.success && res.data) {
         setSubmissions(res.data.submissions || [])
         setTotalPages(res.data.totalPages || 0)

@@ -230,7 +230,7 @@ describe('Permissions Module', () => {
     it('should allow teacher to manage student from same school', async () => {
       const { school } = await createTestSchoolWithPrincipal()
       const { user: teacherUser, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id })
+      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacherId })
 
       const req = createMockAuthRequest(teacherUser.id, 'teacher')
       const result = await canManageStudent(req, studentId!)

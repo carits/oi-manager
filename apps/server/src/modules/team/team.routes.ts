@@ -550,6 +550,35 @@ teamRouter.get('/', authenticate, async (req, res) => {
   }
 })
 
+// ==================== 校验团队ID唯一性（必须在 /:id 之前注册）====================
+
+teamRouter.get('/check-team-id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.query
+    if (!id || typeof id !== 'string') {
+      return res.json({ valid: false, message: '请输入团队ID' })
+    }
+    // 格式校验：只允许数字、英文字母、下划线
+    if (!/^[a-zA-Z0-9_]+$/.test(id as string)) {
+      return res.json({ valid: false, message: '团队ID只能包含英文字母、数字和下划线' })
+    }
+    if ((id as string).length < 2) {
+      return res.json({ valid: false, message: '团队ID至少2个字符' })
+    }
+    if ((id as string).length > 50) {
+      return res.json({ valid: false, message: '团队ID不能超过50个字符' })
+    }
+    // 唯一性校验
+    const existing = await prisma.team.findUnique({ where: { id: id as string } })
+    if (existing) {
+      return res.json({ valid: false, message: '该团队ID已被使用' })
+    }
+    res.json({ valid: true })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
 // ==================== 团队详情 ====================
 
 teamRouter.get('/:id', authenticate, async (req, res) => {
@@ -568,16 +597,31 @@ teamRouter.get('/:id', authenticate, async (req, res) => {
 
 teamRouter.post('/', authenticate, async (req, res) => {
   try {
-    const { name, description, isPublic } = req.body
+    const { name, description, isPublic, id } = req.body
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      return res.status(400).json({ success: false, message: '请输入团队ID' })
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(id)) {
+      return res.status(400).json({ success: false, message: '团队ID只能包含英文字母、数字和下划线' })
+    }
+    if (id.length < 2) {
+      return res.status(400).json({ success: false, message: '团队ID至少2个字符' })
+    }
     const user = (req as any).user!
 
-    const team = await teamService.createTeam({ name, description, isPublic }, user)
+    const team = await teamService.createTeam({ name, description, isPublic, id }, user)
     res.json({ success: true, data: team })
   } catch (error) {
     if (error instanceof Error && error.message === 'TEAM_LIMIT_EXCEEDED') {
       const user = (req as any).user!
       const maxTeams = user.teacherId ? 50 : 5
       return res.status(400).json({ success: false, message: `您创建的团队数量已达上限（${maxTeams}个）` })
+    }
+    if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = (error.meta as any)?.target as string[] | undefined
+      if (target?.includes('id')) {
+        return res.status(400).json({ success: false, message: '该团队ID已被使用' })
+      }
     }
     handleError(res, error)
   }
@@ -712,11 +756,12 @@ teamRouter.post('/:id/members', authenticate, async (req, res) => {
 })
 
 // ==================== 移除成员 ====================
-// memberId 是 TeamMember 记录的 id
+// memberId 是用户 ID（Teacher/Student ID），通过 memberType 查询参数区分类型
 // 参考: TEAM_API_CONTRACT.md 3.2 节
 teamRouter.delete('/:id/members/:memberId', authenticate, async (req, res) => {
   try {
     const { id, memberId } = req.params
+    const memberType = req.query.memberType as string | undefined
     const user = (req as any).user!
 
     // 权限检查
@@ -725,9 +770,19 @@ teamRouter.delete('/:id/members/:memberId', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: '无权操作' })
     }
 
-    // 通过 TeamMember 记录 id 查找成员
-    // 参考: TEAM_CONFLICT_RULES.md ID 维度规范
-    const member = await teamRepository.findMemberById(memberId)
+    // 通过 teamId + userId + userType 查找成员
+    // 前端传的 memberId 是 Teacher/Student ID，不是 TeamMember 记录 ID
+    let member
+    if (memberType && (memberType === 'teacher' || memberType === 'student')) {
+      member = await teamRepository.findMember({
+        teamId: id,
+        userId: memberId,
+        userType: memberType
+      })
+    } else {
+      // 兼容：如果没有 memberType，回退到 TeamMember 记录 ID 查找
+      member = await teamRepository.findMemberById(memberId)
+    }
 
     if (!member) {
       return res.status(404).json({ success: false, message: '成员不存在' })
@@ -758,8 +813,8 @@ teamRouter.delete('/:id/members/:memberId', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: '如需退出团队，请使用退出功能' })
     }
 
-    // 删除成员
-    await teamRepository.deleteMember(memberId)
+    // 删除成员（使用 TeamMember 记录 ID）
+    await teamRepository.deleteMember(member.id)
 
     // 记录审计日志
     const callerType = user.teacherId ? 'teacher' : 'student'
@@ -844,12 +899,13 @@ teamRouter.get('/:id/admins', authenticate, async (req, res) => {
   }
 })
 
+// ==================== 设置管理员 ====================
+// 请求体 memberId 是用户 ID（Teacher/Student ID），memberType 区分类型
+// 通过 teamId + userId + userType 复合唯一键查找 TeamMember 记录
 teamRouter.post('/:id/admins', authenticate, async (req, res) => {
   try {
     const { id } = req.params
-    // memberId 应该是 TeamMember 记录的 id，而非 userId
-    // 参考: TEAM_API_CONTRACT.md 6.1 节
-    const { memberId } = req.body
+    const { memberId, memberType } = req.body
     const user = (req as any).user!
 
     const { isOwner } = await teamService.isTeamAdmin(id, user)
@@ -861,16 +917,25 @@ teamRouter.post('/:id/admins', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: '请指定成员ID' })
     }
 
-    // 通过 TeamMember 记录 id 查找成员
-    // 参考: TEAM_CONFLICT_RULES.md ID 维度规范
-    const existingMember = await teamRepository.findMemberById(memberId)
+    // 前端传的 memberId 是 Teacher/Student ID，不是 TeamMember 记录 ID
+    // 通过 teamId + userId + userType 复合唯一键查找
+    let existingMember
+    if (memberType && (memberType === 'teacher' || memberType === 'student')) {
+      existingMember = await teamRepository.findMember({
+        teamId: id,
+        userId: memberId,
+        userType: memberType
+      })
+    } else {
+      // 兼容：如果没有 memberType，回退到 TeamMember 记录 ID 查找
+      existingMember = await teamRepository.findMemberById(memberId)
+    }
 
     if (!existingMember) {
       return res.status(404).json({ success: false, message: '该成员不存在' })
     }
 
     // 验证成员属于当前团队（防止跨团队操作）
-    // 参考: TEAM_CONFLICT_RULES.md 场景 #5.6
     if (existingMember.teamId !== id) {
       return res.status(400).json({ success: false, message: '该成员不属于当前团队' })
     }
@@ -907,10 +972,13 @@ teamRouter.post('/:id/admins', authenticate, async (req, res) => {
   }
 })
 
+// ==================== 取消管理员 ====================
+// URL 参数 adminId 是用户 ID（Teacher/Student ID），?adminType 区分类型
+// 通过 teamId + userId + userType 复合唯一键查找 TeamMember 记录
 teamRouter.delete('/:id/admins/:adminId', authenticate, async (req, res) => {
   try {
     const { id, adminId } = req.params
-    const { adminType } = req.query
+    const adminType = req.query.adminType as string | undefined
     const user = (req as any).user!
 
     const { isOwner } = await teamService.isTeamAdmin(id, user)
@@ -918,16 +986,21 @@ teamRouter.delete('/:id/admins/:adminId', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: '只有团队所有者可以移除管理员' })
     }
 
-    let whereClause: Record<string, unknown>
-    if (adminType) {
-      whereClause = { teamId: id, userId: adminId, userType: adminType, role: 'admin' }
+    // 前端传的 adminId 是 Teacher/Student ID，不是 TeamMember 记录 ID
+    // 通过 teamId + userId + userType 复合唯一键查找
+    let adminMember
+    if (adminType && (adminType === 'teacher' || adminType === 'student')) {
+      adminMember = await teamRepository.findMember({
+        teamId: id,
+        userId: adminId,
+        userType: adminType
+      })
     } else {
-      whereClause = { id: adminId, role: 'admin' }
+      // 兼容：如果没有 adminType，回退到 TeamMember 记录 ID 查找
+      adminMember = await teamRepository.findMemberById(adminId)
     }
 
-    const adminMember = await teamRepository.findMemberById(adminId)
-
-    // 验证管理员存在且属于当前团队
+    // 验证管理员存在且角色正确
     if (!adminMember || adminMember.role !== 'admin') {
       return res.status(404).json({ success: false, message: '管理员不存在' })
     }

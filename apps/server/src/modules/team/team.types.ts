@@ -55,6 +55,7 @@ export interface SchoolBase {
 
 /** 创建团队 DTO */
 export interface CreateTeamDTO {
+  id: string
   name: string
   description?: string
   isPublic?: boolean

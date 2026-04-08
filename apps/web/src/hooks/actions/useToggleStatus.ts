@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { getAuthHeaders } from '@/lib/auth'
 import { ENV } from '@/config/env'
+import { useToast } from '@/components/ui/Toast'
 
 export interface UseToggleStatusResult {
   toggleStatus: (id: string, newStatus: 'active' | 'disabled') => Promise<boolean>
@@ -11,6 +12,7 @@ export interface UseToggleStatusResult {
 
 export function useToggleStatus(endpoint: string, onSuccess?: () => void): UseToggleStatusResult {
   const [toggling, setToggling] = useState(false)
+  const toast = useToast()
 
   const toggleStatus = async (id: string, newStatus: 'active' | 'disabled'): Promise<boolean> => {
     setToggling(true)
@@ -28,12 +30,12 @@ export function useToggleStatus(endpoint: string, onSuccess?: () => void): UseTo
         onSuccess?.()
         return true
       } else {
-        alert(data.message || '操作失败')
+        toast.error(data.message || '操作失败')
         return false
       }
     } catch (error) {
       console.error('Toggle status error:', error)
-      alert('操作失败')
+      toast.error('操作失败')
       return false
     } finally {
       setToggling(false)

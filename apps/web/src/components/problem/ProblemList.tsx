@@ -1,10 +1,41 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
-import { OJ_PLATFORMS } from '@/lib/oj-platforms'
+import { OJ_PLATFORMS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { Pagination } from '@/components/ui/Pagination'
+
+interface Problem {
+  id: string
+  title: string
+  problemId: string
+  platform: string
+  difficulty?: string
+  platforms?: string[]
+  timeLimit?: number
+  memoryLimit?: number
+  ownerName?: string
+  status?: string
+  visibility?: string
+  createdAt: string
+}
+
+interface ProblemListResponse {
+  list: Problem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+interface ProblemListProps {
+  role: string
+}
+
+const thStyle: React.CSSProperties = { padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }
+const tdStyle: React.CSSProperties = { padding: '0.75rem 1rem', fontSize: '0.875rem' }
 
 export function ProblemList({ role }: ProblemListProps) {
   const router = useRouter()
@@ -12,23 +43,22 @@ export function ProblemList({ role }: ProblemListProps) {
   const searchParams = useSearchParams()
   const { sessionKey } = useAuth()
 
-  // 从 URL 读取 tab 参数，默认为 public
   const tabFromUrl = searchParams.get('tab')
   const initialTab: 'private' | 'public' = tabFromUrl === 'private' ? 'private' : 'public'
   const [activeTab, setActiveTab] = useState<'private' | 'public'>(initialTab)
   const [problems, setProblems] = useState<Problem[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-
-  // 搜索和筛选状态
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState('')
-  const [searchInput, setSearchInput] = useState('') // 输入框的值（防抖用）
+  const [searchInput, setSearchInput] = useState('')
 
   useEffect(() => {
     fetchProblems()
-  }, [activeTab, page, searchKeyword, selectedPlatform])
+  }, [activeTab, page, pageSize, searchKeyword, selectedPlatform])
 
   const fetchProblems = async () => {
     try {
@@ -36,18 +66,15 @@ export function ProblemList({ role }: ProblemListProps) {
       const params = new URLSearchParams({
         visibility: activeTab,
         page: String(page),
-        pageSize: '10'
+        pageSize: String(pageSize)
       })
-      if (searchKeyword) {
-        params.append('keyword', searchKeyword)
-      }
-      if (selectedPlatform && activeTab === 'public') {
-        params.append('platform', selectedPlatform)
-      }
+      if (searchKeyword) params.append('keyword', searchKeyword)
+      if (selectedPlatform) params.append('platform', selectedPlatform)
 
       const result = await apiClient.get<ProblemListResponse>(`/api/problems?${params}`)
       if (result.success && result.data) {
-        setProblems(result.data.list)
+        setProblems((result.data as ProblemListResponse)?.list || [])
+        setTotal(result.data.total)
         setTotalPages(result.data.totalPages)
       }
     } catch (error) {
@@ -57,20 +84,15 @@ export function ProblemList({ role }: ProblemListProps) {
     }
   }
 
-  // 搜索按钮点击
   const handleSearch = () => {
     setSearchKeyword(searchInput)
     setPage(1)
   }
 
-  // 回车搜索
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch()
-    }
+    if (e.key === 'Enter') handleSearch()
   }
 
-  // 重置筛选
   const handleReset = () => {
     setSearchInput('')
     setSearchKeyword('')
@@ -87,33 +109,16 @@ export function ProblemList({ role }: ProblemListProps) {
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    if (status === 'published') {
-      return { text: '已发布', color: '#10b981' }
-    }
-    return { text: '草稿', color: 'var(--gray-500)' }
-  }
-
-  const getVisibilityBadge = (visibility: string) => {
-    if (visibility === 'public') {
-      return { text: '公共', color: '#3b82f6' }
-    }
-    return { text: '私有', color: 'var(--gray-500)' }
-  }
-
   const canCreate = role === 'teacher' || role === 'student' || role === 'admin'
 
-  // 切换 Tab 时更新 URL
   const handleTabChange = (tab: 'private' | 'public') => {
     setActiveTab(tab)
     setPage(1)
-    // 更新 URL 参数
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', tab)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
-  // 获取路径前缀
   const getPathPrefix = () => {
     if (role === 'admin') return '/platform-admin'
     if (role === 'student') return '/student'
@@ -121,11 +126,8 @@ export function ProblemList({ role }: ProblemListProps) {
   }
   const pathPrefix = getPathPrefix()
 
-  // 管理端的Tab标签
   const getTabLabel = (tab: 'private' | 'public') => {
-    if (role === 'admin') {
-      return tab === 'private' ? '私有题库' : '公共题库'
-    }
+    if (role === 'admin') return tab === 'private' ? '私有题库' : '公共题库'
     return tab === 'private' ? '我的题库' : '公共题库'
   }
 
@@ -153,7 +155,7 @@ export function ProblemList({ role }: ProblemListProps) {
           )}
         </div>
 
-        {/* Tab 切换 - 公共题库在左 */}
+        {/* Tab 切换 */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
           <button
             onClick={() => handleTabChange('public')}
@@ -185,15 +187,8 @@ export function ProblemList({ role }: ProblemListProps) {
           </button>
         </div>
 
-        {/* 搜索和筛选区域 */}
-        <div style={{
-          display: 'flex',
-          gap: '0.75rem',
-          marginBottom: '1.5rem',
-          alignItems: 'center',
-          flexWrap: 'wrap'
-        }}>
-          {/* 平台下拉（仅在公有题库显示） */}
+        {/* 搜索和筛选 */}
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {activeTab === 'public' && (
             <select
               value={selectedPlatform}
@@ -212,7 +207,6 @@ export function ProblemList({ role }: ProblemListProps) {
             </select>
           )}
 
-          {/* 搜索输入框 */}
           <input
             type="text"
             value={searchInput}
@@ -228,7 +222,6 @@ export function ProblemList({ role }: ProblemListProps) {
             }}
           />
 
-          {/* 搜索按钮 */}
           <button
             onClick={handleSearch}
             style={{
@@ -244,7 +237,6 @@ export function ProblemList({ role }: ProblemListProps) {
             搜索
           </button>
 
-          {/* 重置按钮 */}
           {(searchKeyword || selectedPlatform) && (
             <button
               onClick={handleReset}
@@ -263,7 +255,7 @@ export function ProblemList({ role }: ProblemListProps) {
           )}
         </div>
 
-        {/* 内容区域 */}
+        {/* 内容 */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '3rem' }}>加载中...</div>
         ) : problems.length === 0 ? (
@@ -301,124 +293,57 @@ export function ProblemList({ role }: ProblemListProps) {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>题号</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>标题</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>难度</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>时限</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>内存</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>创建者</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>状态</th>
-                    {role === 'admin' && (
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 500 }}>可见性</th>
-                    )}
+                    <th style={thStyle}>平台</th>
+                    <th style={thStyle}>题号</th>
+                    <th style={thStyle}>标题</th>
+                    <th style={thStyle}>难度</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {problems.map((problem) => {
-                    const statusBadge = getStatusBadge(problem.status)
-                    const visibilityBadge = getVisibilityBadge(problem.visibility)
-                    return (
-                      <tr
-                        key={problem.id}
-                        onClick={() => router.push(`${pathPrefix}/problems/${problem.id}`)}
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          cursor: 'pointer'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--primary)', fontWeight: 500 }}>
-                          {problem.problemCode}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
-                          {problem.title}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
-                          {problem.difficulty ? (
-                            <span style={{ color: getDifficultyColor(problem.difficulty) }}>
-                              {problem.difficulty}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--gray-400)' }}>-</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--gray-600)' }}>
-                          {problem.timeLimit ? `${problem.timeLimit}s` : '-'}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--gray-600)' }}>
-                          {problem.memoryLimit ? `${problem.memoryLimit}M` : '-'}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--gray-600)' }}>
-                          {problem.ownerName || '-'}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span style={{
-                            fontSize: '0.75rem',
-                            padding: '0.125rem 0.5rem',
-                            borderRadius: '4px',
-                            background: statusBadge.color === '#10b981' ? '#d1fae5' : 'var(--gray-100)',
-                            color: statusBadge.color
-                          }}>
-                            {statusBadge.text}
+                  {problems.map((problem) => (
+                    <tr
+                      key={problem.id}
+                      onClick={() => router.push(`${pathPrefix}/problems/${problem.id}`)}
+                      style={{
+                        borderBottom: '1px solid var(--border)',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ ...tdStyle, color: 'var(--gray-600)' }}>
+                        {(problem.platforms || []).map((p: string) => OJ_PLATFORM_LABEL_MAP[p] || p).join(', ') || '-'}
+                      </td>
+                      <td style={{ ...tdStyle, color: 'var(--primary)', fontWeight: 500 }}>
+                        {problem.problemId}
+                      </td>
+                      <td style={tdStyle}>
+                        {problem.title}
+                      </td>
+                      <td style={tdStyle}>
+                        {problem.difficulty ? (
+                          <span style={{ color: getDifficultyColor(problem.difficulty) }}>
+                            {problem.difficulty}
                           </span>
-                        </td>
-                        {role === 'admin' && (
-                          <td style={{ padding: '0.75rem 1rem' }}>
-                            <span style={{
-                              fontSize: '0.75rem',
-                              padding: '0.125rem 0.5rem',
-                              borderRadius: '4px',
-                              background: visibilityBadge.color === '#3b82f6' ? '#dbeafe' : 'var(--gray-100)',
-                              color: visibilityBadge.color
-                            }}>
-                              {visibilityBadge.text}
-                            </span>
-                          </td>
+                        ) : (
+                          <span style={{ color: 'var(--gray-400)' }}>-</span>
                         )}
-                      </tr>
-                    )
-                  })}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
             {/* 分页 */}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    border: '1px solid var(--border)',
-                    background: 'white',
-                    borderRadius: '6px',
-                    cursor: page === 1 ? 'not-allowed' : 'pointer',
-                    opacity: page === 1 ? 0.5 : 1
-                  }}
-                >
-                  上一页
-                </button>
-                <span style={{ padding: '0.5rem 1rem', color: 'var(--gray-600)' }}>
-                  {page} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    border: '1px solid var(--border)',
-                    background: 'white',
-                    borderRadius: '6px',
-                    cursor: page === totalPages ? 'not-allowed' : 'pointer',
-                    opacity: page === totalPages ? 0.5 : 1
-                  }}
-                >
-                  下一页
-                </button>
-              </div>
-            )}
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+            />
           </>
         )}
       </div>

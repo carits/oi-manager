@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { useTeamPermission, type UserType } from '@/hooks/useTeamPermission'
 import { useTeamDetail } from '@/hooks/data/useTeamDetail'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { useToast } from '@/components/ui/Toast'
 import {
   TeamHeader,
   TeamMemberList,
@@ -16,6 +17,7 @@ import {
   TeamEditModal,
   type JoinRequestItem
 } from '@/components/team'
+import TeamProblemListsTab from './TeamProblemListsTab'
 
 type TabType = 'members' | 'mock' | 'training' | 'tasks'
 
@@ -34,9 +36,14 @@ export interface TeamDetailPageProps {
 export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailPageProps) {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
+  const toast = useToast()
   const teamId = params.id as string
-  const [activeTab, setActiveTab] = useState<TabType>('members')
+  const VALID_TABS = ['members', 'mock', 'training', 'tasks'] as const
+  const [activeTab, setActiveTab] = useState<TabType>(
+    VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'members'
+  )
   const [mounted, setMounted] = useState(false)
 
   // 获取用户ID
@@ -76,9 +83,18 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
+  // 移除成员确认弹框状态
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string; userType: UserType } | null>(null)
+
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType
+    if (VALID_TABS.includes(tab as any)) setActiveTab(tab)
+  }, [searchParams])
 
   // 同步公告文本
   useEffect(() => {
@@ -135,10 +151,10 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         setEditingAnnouncement(false)
         refetch()
       } else {
-        alert(result.message || '保存失败')
+        toast.error(result.message || '保存失败')
       }
     } catch (error) {
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSavingAnnouncement(false)
     }
@@ -166,33 +182,42 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
       } else {
         setShowLeaveConfirm(false)
         // 显示错误提示
-        setTimeout(() => alert(result.message || '退出失败'), 100)
+        setTimeout(() => toast.error(result.message || '退出失败'), 100)
       }
     } catch (error) {
       console.error('Leave team error:', error)
       setShowLeaveConfirm(false)
-      setTimeout(() => alert('退出失败'), 100)
+      setTimeout(() => toast.error('退出失败'), 100)
     } finally {
       setLeaving(false)
     }
   }, [team, teamId, router, basePath])
 
-  // 成员管理
+  // 成员管理 - 打开移除确认弹框
   const handleRemoveMember = useCallback(async (memberId: string, memberName: string, userType: UserType) => {
-    if (!confirm(`确定要移除${memberName}吗？`)) return
+    setRemoveTarget({ id: memberId, name: memberName, userType })
+    setShowRemoveConfirm(true)
+  }, [])
+
+  // 确认移除成员
+  const confirmRemoveMember = useCallback(async () => {
+    if (!removeTarget) return
 
     try {
-      const result = await apiClient.delete(`/api/teams/${teamId}/members/${memberId}?memberType=${userType}`)
+      const result = await apiClient.delete(`/api/teams/${teamId}/members/${removeTarget.id}?memberType=${removeTarget.userType}`)
       if (result.success) {
         refetch()
       } else {
-        alert(result.message || '移除失败')
+        toast.error(result.message || '移除失败')
       }
     } catch (error) {
       console.error('Remove member error:', error)
-      alert('移除失败')
+      toast.error('移除失败')
+    } finally {
+      setShowRemoveConfirm(false)
+      setRemoveTarget(null)
     }
-  }, [teamId, refetch])
+  }, [teamId, refetch, removeTarget])
 
   // 设置管理员 - 打开确认弹框
   const handleSetAdmin = useCallback((memberId: string, memberName: string, userType: UserType) => {
@@ -210,16 +235,16 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         memberType: setAdminTarget.userType
       })
       if (result.success) {
-        alert('已设置为管理员')
+        toast.success('已设置为管理员')
         refetch()
         setShowSetAdminConfirm(false)
         setSetAdminTarget(null)
       } else {
-        alert(result.message || '设置失败')
+        toast.error(result.message || '设置失败')
       }
     } catch (error) {
       console.error('Set admin error:', error)
-      alert('设置失败')
+      toast.error('设置失败')
     }
   }, [teamId, refetch, setAdminTarget])
 
@@ -264,11 +289,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         fetchJoinRequests()
         refetch()
       } else {
-        alert(result.message || '操作失败')
+        toast.error(result.message || '操作失败')
       }
     } catch (error) {
       console.error('Approve request error:', error)
-      alert('操作失败')
+      toast.error('操作失败')
     }
   }, [fetchJoinRequests, refetch])
 
@@ -278,11 +303,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
       if (result.success) {
         fetchJoinRequests()
       } else {
-        alert(result.message || '操作失败')
+        toast.error(result.message || '操作失败')
       }
     } catch (error) {
       console.error('Reject request error:', error)
-      alert('操作失败')
+      toast.error('操作失败')
     }
   }, [fetchJoinRequests])
 
@@ -295,13 +320,13 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         message: '我想加入这个团队'
       })
       if (result.success) {
-        alert('申请已提交')
+        toast.success('申请已提交')
         refetch()
       } else {
-        alert(result.message || '申请失败')
+        toast.error(result.message || '申请失败')
       }
     } catch (error) {
-      alert('申请失败')
+      toast.error('申请失败')
     } finally {
       setApplying(false)
     }
@@ -389,7 +414,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
           {tabs.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key as TabType)}
+              onClick={() => { setActiveTab(tab.key as TabType); router.push(`${basePath}/${teamId}?tab=${tab.key}`, { scroll: false }) }}
               style={{
                 padding: '0.5rem 1rem',
                 background: activeTab === tab.key ? 'var(--primary)' : 'transparent',
@@ -458,13 +483,13 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
           {/* 题单 Tab */}
           {activeTab === 'tasks' && (
-            <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>题单</h2>
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-                <p>暂无题单</p>
-                <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>(功能开发中)</p>
-              </div>
-            </div>
+            <TeamProblemListsTab
+              teamId={teamId}
+              basePath={basePath}
+              canManage={permission.isAdmin}
+              isOwner={permission.isOwner}
+              userId={user?.userId}
+            />
           )}
         </div>
       </div>
@@ -505,7 +530,8 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         initialData={{
           name: team.name,
           description: team.description || '',
-          isPublic: team.isPublic
+          isPublic: team.isPublic,
+          teamId: team.teamId || team.id || ''
         }}
         onSuccess={refetch}
       />
@@ -533,6 +559,20 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         confirmText="确认退出"
         danger
         loading={leaving}
+      />
+
+      {/* 移除成员确认弹框 */}
+      <ConfirmModal
+        isOpen={showRemoveConfirm}
+        onClose={() => {
+          setShowRemoveConfirm(false)
+          setRemoveTarget(null)
+        }}
+        onConfirm={confirmRemoveMember}
+        title="移除成员"
+        message={`确定要移除 ${removeTarget?.name || ''} 吗？`}
+        confirmText="确认移除"
+        danger
       />
     </div>
   )

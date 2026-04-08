@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * TLX / TOKI (tlx.toki.id) 题目拉取适配器
  *

@@ -193,7 +193,7 @@ router.get('/protected', authenticate, handler)
 - `GET/POST /api/teams`
 - `GET/POST /api/students`
 - `GET/POST /api/contests`
-- `GET/POST /api/task-lists`
+- `GET/POST /api/problem-lists`
 - `POST /api/contests/:id/results`
 
 ### 4.5 学生 (student)
@@ -208,8 +208,8 @@ router.get('/protected', authenticate, handler)
 
 **API 路由**:
 - `GET /api/contests`
-- `GET /api/task-lists`
-- `GET /api/task-progress`
+- `GET /api/problem-lists`
+- `GET /api/problem-lists` (可见的题单)
 - `GET /api/students/:id` (仅自己的数据)
 
 ---

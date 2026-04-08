@@ -369,17 +369,11 @@ async function processFetchQueue(platform: string) {
 
         const problemData = await adapter.fetch(job.problemId)
 
-        // 使用原始题号作为 problemCode（如 P1001，不加平台前缀）
-        // 不同平台可以有相同题号，通过 ojBindings 中的 platform 区分
-        const problemCode = job.problemId
-
         // 检查该平台+题号组合是否已存在
         const existingProblem = await prisma.problem.findFirst({
           where: {
-            problemCode,
-            ojBindings: {
-              contains: `"platform":"${platform}"`
-            }
+            platform,
+            problemId: job.problemId,
           },
         })
 
@@ -418,7 +412,8 @@ async function processFetchQueue(platform: string) {
           // 创建新题目（基本信息）
           const newProblem = await prisma.problem.create({
             data: {
-              problemCode,
+              platform,
+              problemId: job.problemId,
               title: problemData.title,
               description: problemData.description,
               statementType,

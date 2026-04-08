@@ -97,11 +97,9 @@
 **关联关系**:
 - `user`: 多对一关联 User
 - `school`: 多对一关联 School
-- `taskLists`: 一对多关联 TaskList
 - `milestones`: 一对多关联 Milestone
 - `students`: 一对多关联 Student（作为主教练）
 - `ownedTeams`: 一对多关联 Team（作为团队所有者）
-- `adminTeams`: 一对多关联 TeamAdmin（作为团队管理员）
 
 **业务规则**:
 - email 和 phone 至少必填一个（应用层验证）
@@ -145,7 +143,6 @@
 - `teams`: 多对多关联 Team（通过 StudentTeam）
 - `joinRequests`: 一对多关联 TeamJoinRequest
 - `milestones`: 一对多关联 Milestone
-- `taskProgresses`: 一对多关联 TaskProgress
 - `contestResults`: 一对多关联 ContestResult
 - `problemScores`: 一对多关联 ContestProblemScore
 
@@ -414,9 +411,9 @@
 
 ---
 
-### 13. TaskList (题单)
+### 13. ProblemList (题单)
 
-题单表。
+题单表，飞书文档式权限模型。教师和学生均可创建。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
@@ -424,72 +421,100 @@
 | id | String | ✅ | UUID 主键 |
 | title | String | ✅ | 题单标题 |
 | description | String | ❌ | 题单描述 |
-| publishAt | DateTime | ❌ | 发布时间 |
-| deadline | DateTime | ❌ | 截止时间 |
-| createdBy | String | ✅ | 创建者（教师 ID） |
+| coverUrl | String | ❌ | 封面图片 URL |
+| schoolId | String | ❌ | 学校 ID |
+| ownerId | String | ✅ | 创建者 userId |
+| ownerType | String | ✅ | 创建者类型：teacher / student，默认 teacher |
+| visibility | String | ✅ | 可见性：private / school，默认 private |
+| sortOrder | Int | ✅ | 排序权重，默认 0 |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
-- `creator`: 多对一关联 Teacher
-- `tasks`: 一对多关联 Task
+- `Sections`: 一对多关联 ProblemListSection
+- `Shares`: 一对多关联 ProblemListShare
 
 **索引**:
-- `createdBy`: 普通索引（教师题单列表）
-- `createdAt`: 普通索引（题单创建时间排序）
+- `ownerId, ownerType`: 复合索引（按创建者查询）
+- `schoolId`: 普通索引（按学校查询）
+- `visibility`: 普通索引（可见性筛选）
+- `createdAt`: 普通索引（创建时间排序）
 
 ---
 
-### 14. Task (题目)
+### 14. ProblemListSection (题单章节)
 
-题单中的题目。
+题单中的章节（二级标题，纯视觉分组）。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | id | String | ✅ | UUID 主键 |
-| taskListId | String | ✅ | 题单 ID |
-| title | String | ✅ | 题目标题 |
-| ojName | String | ❌ | OJ 名称（LOJ/洛谷/CF） |
-| problemId | String | ❌ | 题号 |
-| difficulty | String | ❌ | 难度：简单/中等/困难 |
-| points | Int | ❌ | 分值 |
-| notes | String | ❌ | 备注 |
+| problemListId | String | ✅ | 题单 ID |
+| title | String | ✅ | 章节标题 |
+| sortOrder | Int | ✅ | 排序权重，默认 0 |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
-- `taskList`: 多对一关联 TaskList
-- `progresses`: 一对多关联 TaskProgress
+- `ProblemList`: 多对一关联 ProblemList
+- `Entries`: 一对多关联 ProblemListEntry
+
+**索引**:
+- `problemListId`: 普通索引（按题单查询章节）
 
 ---
 
-### 15. TaskProgress (题目进度)
+### 15. ProblemListEntry (题单条目)
 
-学生题目完成进度表。
+题单中的题目条目，挂在章节下：题单 → 章节 → 题目。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | id | String | ✅ | UUID 主键 |
-| taskId | String | ✅ | 题目 ID |
-| studentId | String | ✅ | 学生 ID |
-| status | String | ✅ | 状态：pending / done / review，默认 pending |
-| seenEditorial | Boolean | ✅ | 是否看了题解，默认 false |
-| needHelp | Boolean | ✅ | 是否需要讲解，默认 false |
+| sectionId | String | ✅ | 章节 ID |
+| problemId | String | ✅ | 关联 Problem.id |
+| sortOrder | Int | ✅ | 排序权重，默认 0 |
+| alias | String | ❌ | 别名（如 A/B/C...，手动填写） |
 | notes | String | ❌ | 备注 |
-| completedAt | DateTime | ❌ | 完成时间 |
+| ojName | String | ❌ | OJ 平台标识（carits, luogu, codeforces 等） |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
-- `task`: 多对一关联 Task
-- `student`: 多对一关联 Student
+- `Section`: 多对一关联 ProblemListSection
+- `Problem`: 多对一关联 Problem
 
 **索引**:
-- `(taskId, studentId)`: 唯一索引
-- `studentId`: 普通索引（学生进度查询）
-- `status`: 普通索引（进度状态筛选）
+- `(sectionId, problemId)`: 唯一索引
+- `sectionId`: 普通索引（按章节查询）
+- `problemId`: 普通索引（按题目查询）
+
+---
+
+### 16. ProblemListShare (题单分享)
+
+题单级分享，支持飞书文档式权限控制。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | String | ✅ | UUID 主键 |
+| problemListId | String | ✅ | 题单 ID |
+| targetType | String | ✅ | 分享目标类型：school / team / teacher / student |
+| targetId | String | ✅ | 分享目标 ID |
+| permission | String | ✅ | 权限：view / edit / admin，默认 view |
+| sharedBy | String | ✅ | 分享人 userId |
+| createdAt | DateTime | ✅ | 创建时间 |
+
+**关联关系**:
+- `ProblemList`: 多对一关联 ProblemList
+
+**索引**:
+- `(problemListId, targetType, targetId)`: 唯一索引
+- `targetType, targetId`: 复合索引（按目标查询）
+- `sharedBy`: 普通索引（按分享人查询）
 
 ---
 
@@ -518,6 +543,60 @@
 - `studentId`: 普通索引（学生里程碑列表）
 - `teacherId`: 普通索引（教师创建的里程碑）
 - `milestoneDate`: 普通索引（里程碑日期排序）
+
+---
+
+### 16.5 SchoolProblemList (学校题单)
+
+学校收录的个人题单关联表。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | String | ✅ | UUID 主键 |
+| schoolId | String | ✅ | 学校 ID |
+| problemListId | String | ✅ | 关联的个人题单 ID |
+| addedBy | String | ✅ | 添加者 userId |
+| addedByRole | String | ✅ | 添加者角色：principal / teacher |
+| sortOrder | Int | ✅ | 排序权重，默认 0 |
+| createdAt | DateTime | ✅ | 创建时间 |
+
+**关联关系**:
+- `School`: 多对一关联 School（onDelete: Cascade）
+- `ProblemList`: 多对一关联 ProblemList（onDelete: Cascade）
+
+**索引**:
+- `(schoolId, problemListId)`: 唯一索引
+- `schoolId`: 普通索引
+- `problemListId`: 普通索引
+- `addedBy`: 普通索引
+
+---
+
+### 16.6 TeamProblemList (团队题单)
+
+团队收录的个人题单关联表。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | String | ✅ | UUID 主键 |
+| teamId | String | ✅ | 团队 ID |
+| problemListId | String | ✅ | 关联的个人题单 ID |
+| addedBy | String | ✅ | 添加者 userId |
+| addedByRole | String | ✅ | 添加者角色：owner / admin / teacher |
+| sortOrder | Int | ✅ | 排序权重，默认 0 |
+| createdAt | DateTime | ✅ | 创建时间 |
+
+**关联关系**:
+- `Team`: 多对一关联 Team（onDelete: Cascade）
+- `ProblemList`: 多对一关联 ProblemList（onDelete: Cascade）
+
+**索引**:
+- `(teamId, problemListId)`: 唯一索引
+- `teamId`: 普通索引
+- `problemListId`: 普通索引
+- `addedBy`: 普通索引
 
 ---
 
@@ -663,7 +742,6 @@ School (学校)
 Teacher (教师)
   ├─N:1─ School (学校)
   ├─1:N─ Student (学生) [作为主教练]
-  ├─1:N─ TaskList (题单)
   └─1:N─ Milestone (里程碑)
 
 Student (学生)
@@ -671,8 +749,19 @@ Student (学生)
   ├─N:1─ Teacher (教师) [主教练]
   ├─1:N─ TeamMember (团队成员)
   ├─1:N─ ContestResult (比赛结果)
-  ├─1:N─ TaskProgress (题目进度)
   └─1:N─ Milestone (里程碑)
+
+ProblemList (题单)
+  ├─1:N─ ProblemListSection (章节)
+  └─1:N─ ProblemListShare (分享)
+
+ProblemListSection (章节)
+  ├─N:1─ ProblemList (题单)
+  └─1:N─ ProblemListEntry (题目条目)
+
+ProblemListEntry (题目条目)
+  ├─N:1─ ProblemListSection (章节)
+  └─N:1─ Problem (题目)
 
 Team (团队)
   ├─N:1─ School (学校)
@@ -749,6 +838,12 @@ npx prisma studio
 ---
 
 ## 更新日志
+
+### 2026-04-07
+- ✅ **ProblemList 模型变更**：移除 `status` 字段（不再有 active/archived/deleted 状态），`visibility, status` 复合索引简化为 `visibility` 单字段索引
+- ✅ 删除操作改为硬删除，不再支持归档功能
+
+### 2026-04-07 (题单模型重构)
 
 ### 2026-03-26
 - ✅ 新增 `File` 模型（文件存储表）

@@ -29,8 +29,8 @@ class ApiClient {
     this.baseURL = baseURL
   }
 
-  private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {}
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {}
 
     // 从 localStorage 获取 token
     if (typeof window !== 'undefined') {
@@ -53,9 +53,9 @@ class ApiClient {
     // 判断是否为 FormData
     const isFormData = body instanceof FormData
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       ...this.getHeaders(),
-      ...fetchOptions.headers
+      ...(fetchOptions.headers as Record<string, string>)
     }
 
     // FormData 不需要设置 Content-Type，让浏览器自动设置

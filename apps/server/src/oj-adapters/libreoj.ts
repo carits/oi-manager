@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * LibreOJ (loj.ac) 题目拉取适配器
  *

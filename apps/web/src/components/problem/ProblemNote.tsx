@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
@@ -28,7 +29,8 @@ const getPdfUrl = (path: string | null) => {
 
 interface Problem {
   id: string
-  problemCode: string
+  problemId: string
+  platform: string
   title: string
   description: string | null
   statementType: string
@@ -45,6 +47,7 @@ interface ProblemNoteProps {
 
 export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   const router = useRouter()
+  const toast = useToast()
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -79,8 +82,8 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       if (problemRes.success && problemRes.data) {
         setProblem(problemRes.data)
       } else {
-        alert('题目不存在')
-        router.push(`${pathPrefix}/problems`)
+        toast.error('题目不存在')
+        router.back()
         return
       }
 
@@ -173,7 +176,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button
-            onClick={() => router.push(`${pathPrefix}/problems/${problemId}`)}
+            onClick={() => router.back()}
             style={{
               background: 'transparent',
               border: 'none',
@@ -187,7 +190,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             ← 返回
           </button>
           <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
-          <span style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.8rem' }}>{problem.problemCode}</span>
+          <span style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.8rem' }}>{problem.problemId}</span>
           <h1 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{problem.title}</h1>
           {problem.difficulty && (
             <span style={{

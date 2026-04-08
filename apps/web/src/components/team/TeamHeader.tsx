@@ -7,6 +7,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import { TeamDetail } from '@/hooks/data/useTeamDetail'
 import { TeamPermission } from '@/hooks/useTeamPermission'
 import apiClient from '@/lib/apiClient'
@@ -51,6 +52,7 @@ export function TeamHeader({
   applying,
   onAvatarUpdate
 }: TeamHeaderProps) {
+  const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
@@ -68,11 +70,11 @@ export function TeamHeader({
       if (result.success && result.data) {
         onAvatarUpdate?.(result.data.avatar)
       } else {
-        alert(result.message || '上传失败')
+        toast.error(result.message || '上传失败')
       }
     } catch (error) {
       console.error('Upload avatar error:', error)
-      alert('上传失败')
+      toast.error('上传失败')
     } finally {
       setUploadingAvatar(false)
       // 清空 input 以便可以重复选择同一文件

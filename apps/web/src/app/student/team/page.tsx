@@ -1,15 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { TeamListPage, TeamItem, Invitation } from '@/components/team'
 import { useTeams, Team } from '@/hooks/data/useTeams'
 import { useAuth } from '@/components/AuthProvider'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 
 // 学生端 - 团队管理页面
 export default function StudentTeamPage() {
   const { user, sessionKey } = useAuth()
+  const toast = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -19,7 +24,14 @@ export default function StudentTeamPage() {
   // 分页状态
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
-  const [activeTab, setActiveTab] = useState<'mine' | 'all'>('mine')
+  const [activeTab, setActiveTab] = useState<'mine' | 'all'>(
+    (searchParams.get('tab') as 'mine' | 'all') || 'mine'
+  )
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as 'mine' | 'all'
+    if (tab === 'mine' || tab === 'all') setActiveTab(tab)
+  }, [searchParams])
 
   // 构建查询参数 - 后端会从 JWT token 中获取 studentId
   const queryParams = mounted ? {
@@ -90,10 +102,10 @@ export default function StudentTeamPage() {
         setInvitations(invitations.filter(i => i.id !== invitationId))
         refetch()
       } else {
-        alert(result.message || '操作失败')
+        toast.error(result.message || '操作失败')
       }
     } catch (error) {
-      alert('操作失败')
+      toast.error('操作失败')
     } finally {
       setProcessingInvitation(null)
     }
@@ -107,19 +119,19 @@ export default function StudentTeamPage() {
       if (result.success) {
         setInvitations(invitations.filter(i => i.id !== invitationId))
       } else {
-        alert(result.message || '操作失败')
+        toast.error(result.message || '操作失败')
       }
     } catch (error) {
-      alert('操作失败')
+      toast.error('操作失败')
     } finally {
       setProcessingInvitation(null)
     }
   }
 
   // 创建团队
-  const handleCreateTeam = async (formData: { name: string; description: string; isPublic: boolean }) => {
+  const handleCreateTeam = async (formData: { name: string; description: string; isPublic: boolean; teamId: string }) => {
     if (!formData.name.trim()) {
-      alert('请输入团队名称')
+      toast.warning('请输入团队名称')
       return false
     }
 
@@ -128,19 +140,20 @@ export default function StudentTeamPage() {
       const result = await apiClient.post('/api/teams', {
         name: formData.name,
         description: formData.description || null,
-        isPublic: formData.isPublic
+        isPublic: formData.isPublic,
+        id: formData.teamId
       })
       if (result.success) {
         setCreateModalOpen(false)
         refetch()
-        alert('团队创建成功')
+        toast.success('团队创建成功')
         return true
       } else {
-        alert(result.message || '创建失败')
+        toast.error(result.message || '创建失败')
         return false
       }
     } catch (error) {
-      alert('创建失败')
+      toast.error('创建失败')
       return false
     } finally {
       setCreating(false)
@@ -170,7 +183,7 @@ export default function StudentTeamPage() {
         onPageChange={setPage}
         onPageSizeChange={(newSize) => { setPageSize(newSize); setPage(1) }}
         activeTab={activeTab}
-        onTabChange={(tab) => { setActiveTab(tab); setPage(1) }}
+        onTabChange={(tab) => { setActiveTab(tab); setPage(1); router.push('/student/team?tab=' + tab, { scroll: false }) }}
         invitations={invitations}
         loadingInvitations={loadingInvitations}
         processingInvitation={processingInvitation}

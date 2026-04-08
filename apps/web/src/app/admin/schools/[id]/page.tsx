@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Pagination } from '@/components/ui/Pagination'
 import apiClient from '@/lib/apiClient'
@@ -46,6 +46,8 @@ interface Teacher {
 
 export default function AdminSchoolDetailPage() {
   const params = useParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [school, setSchool] = useState<School | null>(null)
   const [students, setStudents] = useState<Student[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -55,9 +57,18 @@ export default function AdminSchoolDetailPage() {
   const [teacherPage, setTeacherPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'teachers' | 'students'>('info')
+  type TabType = 'info' | 'teachers' | 'students'
+  const VALID_TABS: TabType[] = ['info', 'teachers', 'students']
+  const [activeTab, setActiveTab] = useState<TabType>(
+    VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'info'
+  )
 
   const schoolId = params.id as string
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType
+    if (VALID_TABS.includes(tab)) setActiveTab(tab)
+  }, [searchParams])
 
   useEffect(() => {
     if (schoolId) {
@@ -136,7 +147,7 @@ export default function AdminSchoolDetailPage() {
         <main style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
           {/* 返回按钮 */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <a href="/admin/schools" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.875rem' }}>
+            <a href="#" onClick={(e) => { e.preventDefault(); router.back() }} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.875rem', cursor: 'pointer' }}>
               ← 返回学校列表
             </a>
           </div>
@@ -155,7 +166,7 @@ export default function AdminSchoolDetailPage() {
             <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', gap: '2rem' }}>
                 <button
-                  onClick={() => setActiveTab('info')}
+                  onClick={() => { setActiveTab('info'); router.push(`/admin/schools/${schoolId}?tab=info`, { scroll: false }) }}
                   style={{
                     padding: '0.75rem 0',
                     background: 'none',
@@ -170,7 +181,7 @@ export default function AdminSchoolDetailPage() {
                   主页
                 </button>
                 <button
-                  onClick={() => setActiveTab('teachers')}
+                  onClick={() => { setActiveTab('teachers'); router.push(`/admin/schools/${schoolId}?tab=teachers`, { scroll: false }) }}
                   style={{
                     padding: '0.75rem 0',
                     background: 'none',
@@ -185,7 +196,7 @@ export default function AdminSchoolDetailPage() {
                   教师
                 </button>
                 <button
-                  onClick={() => setActiveTab('students')}
+                  onClick={() => { setActiveTab('students'); router.push(`/admin/schools/${schoolId}?tab=students`, { scroll: false }) }}
                   style={{
                     padding: '0.75rem 0',
                     background: 'none',

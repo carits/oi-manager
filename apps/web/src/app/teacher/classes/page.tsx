@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
+import { getAuthHeaders } from '@/lib/auth'
 
 interface ClassGroup {
   id: string
@@ -16,10 +19,13 @@ interface ClassGroup {
 
 export default function ClassesPage() {
   const router = useRouter()
+  const toast = useToast()
   const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingClass, setEditingClass] = useState<ClassGroup | null>(null)
+  const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
+
 
   useEffect(() => {
     // 班级管理已废弃，重定向到团队管理
@@ -47,18 +53,22 @@ export default function ClassesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除该班级吗？')) return
-
-    try {
-      const result = await apiClient.delete(`/api/class-groups/${id}`)
-      if (result.success) {
-        fetchClassGroups()
-      } else {
-        alert(result.message || '删除失败')
+    setConfirmState({
+      id,
+      message: '确定要删除该班级吗？',
+      action: async () => {
+        try {
+          const result = await apiClient.delete(`/api/class-groups/${id}`)
+          if (result.success) {
+            fetchClassGroups()
+          } else {
+            toast.error(result.message || '删除失败')
+          }
+        } catch {
+          toast.error('删除失败')
+        }
       }
-    } catch {
-      alert('删除失败')
-    }
+    })
   }
 
   const handleEdit = (classGroup: ClassGroup) => {
@@ -152,6 +162,17 @@ export default function ClassesPage() {
         )}
       </div>
 
+      {/* 确认删除弹窗 */}
+      <ConfirmModal
+        isOpen={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={() => { confirmState?.action(); setConfirmState(null) }}
+        title="确认操作"
+        message={confirmState?.message || ''}
+        confirmText="确认"
+        variant="danger"
+      />
+
       {/* 添加/编辑弹窗 */}
       {showModal && (
         <ClassGroupModal
@@ -180,6 +201,7 @@ function ClassGroupModal({
     description: classGroup?.description || ''
   })
   const [loading, setLoading] = useState(false)
+  const toast = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -208,10 +230,10 @@ function ClassGroupModal({
       if (result.success) {
         onSuccess()
       } else {
-        alert(result.message || '操作失败')
+        toast.error(result.message || '操作失败')
       }
     } catch {
-      alert('操作失败')
+      toast.error('操作失败')
     } finally {
       setLoading(false)
     }

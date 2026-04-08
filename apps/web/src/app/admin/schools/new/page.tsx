@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
+import { useToast } from '@/components/ui/Toast'
 
 export default function NewSchoolPage() {
   const router = useRouter()
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -118,10 +120,10 @@ export default function NewSchoolPage() {
       if (result.success) {
         router.push('/admin/schools')
       } else {
-        alert(result.message || '创建失败')
+        toast.error(result.message || '创建失败')
       }
     } catch {
-      alert('创建失败')
+      toast.error('创建失败')
     } finally {
       setLoading(false)
     }

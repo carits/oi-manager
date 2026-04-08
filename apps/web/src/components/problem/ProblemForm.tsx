@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
 
@@ -39,15 +41,22 @@ interface ProblemFormProps {
 
 export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(mode === 'edit')
-  const [activeTab, setActiveTab] = useState<'statement' | 'solution' | 'settings' | 'attachments'>('statement')
+  type TabType = 'statement' | 'solution' | 'settings' | 'attachments'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'settings', 'attachments']
+  const [activeTab, setActiveTab] = useState<TabType>(
+    VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
+  )
   const [editMode, setEditMode] = useState<'edit' | 'preview'>('edit')
 
   // 附件状态
   const [attachments, setAttachments] = useState<any[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [deleteAttachmentConfirm, setDeleteAttachmentConfirm] = useState<{ isOpen: boolean; attachmentId: string | null }>({ isOpen: false, attachmentId: null })
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -56,6 +65,17 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     return '/teacher'
   }
   const pathPrefix = getPathPrefix()
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType
+    if (VALID_TABS.includes(tab)) setActiveTab(tab)
+  }, [searchParams])
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
+    const base = mode === 'edit' ? `${pathPrefix}/problems/${problemId}/edit` : `${pathPrefix}/problems/new`
+    router.push(`${base}?tab=${tab}`, { scroll: false })
+  }
 
   // 表单状态
   const [form, setForm] = useState({
@@ -229,7 +249,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       }
     } catch (error) {
       console.error('Failed to upload PDF:', error)
-      alert('上传失败')
+      toast.error('上传失败')
     }
   }
 
@@ -253,7 +273,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const handleFetchFromOj = async (index: number) => {
     const binding = ojBindings[index]
     if (!binding.platform || !binding.problemId.trim()) {
-      alert('请先选择平台并输入题号')
+      toast.warning('请先选择平台并输入题号')
       return
     }
 
@@ -290,15 +310,15 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         // 处理附件
         if (problem.attachments && problem.attachments.length > 0) {
           setRemoteAttachments(problem.attachments)
-          alert(`已拉取题目：${problem.title}\n发现 ${problem.attachments.length} 个附件，请在附件标签页下载`)
+          toast.success(`已拉取题目：${problem.title}\n发现 ${problem.attachments.length} 个附件，请在附件标签页下载`)
         } else {
-          alert(`已拉取题目：${problem.title}`)
+          toast.success(`已拉取题目：${problem.title}`)
         }
       }
     } catch (error: any) {
       console.error('Failed to fetch from OJ:', error)
       const message = error?.response?.data?.error?.message || error?.message || '拉取失败'
-      alert(message)
+      toast.error(message)
     } finally {
       setFetchingFromOj(false)
     }
@@ -307,7 +327,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   // 下载远程附件
   const handleDownloadRemoteAttachment = async (attachment: OjAttachment) => {
     if (!problemId) {
-      alert('请先保存题目后再下载附件')
+      toast.warning('请先保存题目后再下载附件')
       return
     }
 
@@ -322,13 +342,13 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       if (result.success) {
         setRemoteAttachments(prev => prev.filter(a => a.filename !== attachment.filename))
         fetchAttachments()
-        alert(`附件 "${attachment.filename}" 下载成功`)
+        toast.success(`附件 "${attachment.filename}" 下载成功`)
       } else {
-        alert(result.message || '下载失败')
+        toast.error(result.message || '下载失败')
       }
     } catch (error: any) {
       console.error('Failed to download attachment:', error)
-      alert(error?.response?.data?.message || '下载失败')
+      toast.error(error?.response?.data?.message || '下载失败')
     } finally {
       setDownloadingAttachment(null)
     }
@@ -351,11 +371,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         fetchAttachments()
       } else {
         console.error('Upload failed:', result.message)
-        alert(result.message || '上传失败')
+        toast.error(result.message || '上传失败')
       }
     } catch (error) {
       console.error('Failed to upload attachment:', error)
-      alert('上传失败')
+      toast.error('上传失败')
     } finally {
       setUploadingAttachment(false)
       e.target.value = ''
@@ -363,8 +383,14 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   }
 
   // 删除附件
-  const handleAttachmentDelete = async (attachmentId: string) => {
-    if (!confirm('确定要删除这个附件吗？')) return
+  const handleAttachmentDelete = (attachmentId: string) => {
+    setDeleteAttachmentConfirm({ isOpen: true, attachmentId })
+  }
+
+  const confirmDeleteAttachment = async () => {
+    const attachmentId = deleteAttachmentConfirm.attachmentId
+    if (!attachmentId) return
+    setDeleteAttachmentConfirm({ isOpen: false, attachmentId: null })
 
     try {
       const result = await apiClient.delete(`/api/problems/${problemId}/attachments/${attachmentId}`)
@@ -373,7 +399,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       }
     } catch (error) {
       console.error('Failed to delete attachment:', error)
-      alert('删除失败')
+      toast.error('删除失败')
     }
   }
 
@@ -388,7 +414,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     e.preventDefault()
 
     if (!form.title.trim()) {
-      alert('请输入题目标题')
+      toast.warning('请输入题目标题')
       return
     }
 
@@ -442,7 +468,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       }
     } catch (error) {
       console.error('Failed to save problem:', error)
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSaving(false)
     }
@@ -561,7 +587,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
           {/* Tab 切换 */}
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-            <button type="button" onClick={() => setActiveTab('statement')}
+            <button type="button" onClick={() => handleTabChange('statement')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -573,7 +599,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               }}>
               题面
             </button>
-            <button type="button" onClick={() => setActiveTab('solution')}
+            <button type="button" onClick={() => handleTabChange('solution')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -585,7 +611,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               }}>
               题解
             </button>
-            <button type="button" onClick={() => setActiveTab('settings')}
+            <button type="button" onClick={() => handleTabChange('settings')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -598,7 +624,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               发布设置
             </button>
             {mode === 'edit' && (
-              <button type="button" onClick={() => setActiveTab('attachments')}
+              <button type="button" onClick={() => handleTabChange('attachments')}
                 style={{
                   padding: '0.75rem 1rem',
                   background: 'transparent',
@@ -1217,6 +1243,16 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           </div>
         </form>
       </div>
+
+      <ConfirmModal
+        isOpen={deleteAttachmentConfirm.isOpen}
+        onClose={() => setDeleteAttachmentConfirm({ isOpen: false, attachmentId: null })}
+        onConfirm={confirmDeleteAttachment}
+        title="删除附件"
+        message="确定要删除这个附件吗？"
+        confirmText="删除"
+        danger
+      />
     </div>
   )
 }

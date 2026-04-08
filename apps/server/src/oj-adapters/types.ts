@@ -8,6 +8,7 @@
  * 注意：有 adapter 实现的只是其中一小部分（目前仅 luogu）
  */
 export const KNOWN_OJ_PLATFORMS = [
+  { value: 'carits', label: 'Carits（本平台）' },
   { value: 'poj', label: 'POJ' },
   { value: 'zoj', label: 'ZOJ' },
   { value: 'uva', label: 'UVA' },

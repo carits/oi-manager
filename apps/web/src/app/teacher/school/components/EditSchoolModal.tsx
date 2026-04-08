@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useForm } from '@/hooks/form/useForm'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 import { RegionSelector } from '@/components/business/RegionSelector'
@@ -29,6 +30,7 @@ interface EditSchoolModalProps {
 
 export default function EditSchoolModal({ school, onClose, onSuccess }: EditSchoolModalProps) {
   const [submitting, setSubmitting] = useState(false)
+  const toast = useToast()
   const [province, setProvince] = useState('')
   const [city, setCity] = useState('')
   const [district, setDistrict] = useState('')
@@ -81,10 +83,10 @@ export default function EditSchoolModal({ school, onClose, onSuccess }: EditScho
           onSuccess()
           onClose()
         } else {
-          alert(result.message || '保存失败')
+          toast.error(result.message || '保存失败')
         }
       } catch {
-        alert('保存失败')
+        toast.error('保存失败')
       } finally {
         setSubmitting(false)
       }

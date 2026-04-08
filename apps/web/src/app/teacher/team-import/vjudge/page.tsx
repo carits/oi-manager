@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import ImportPreview from '@/components/team-import/ImportPreview'
+import { useToast } from '@/components/ui/Toast'
 import type { ImportMember, ValidateResultItem, ImportResult } from '@/components/team-import/types'
 
 // ── VJudge 平台类型 ──
@@ -34,6 +35,7 @@ type Step = 'validate' | 'select-vjudge' | 'preview'
 
 export default function VjudgeImportPage() {
   const router = useRouter()
+  const toast = useToast()
   const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
 
@@ -110,7 +112,7 @@ export default function VjudgeImportPage() {
 
   // ── 预览团队 ──
   const handlePreview = async () => {
-    if (!selectedGroupId) return alert('请选择VJudge团队')
+    if (!selectedGroupId) { toast.warning('请选择VJudge团队'); return }
 
     setLoadingPreview(true)
     try {
@@ -143,10 +145,10 @@ export default function VjudgeImportPage() {
         }
         setStep('preview')
       } else {
-        alert(result.message || '预览失败')
+        toast.error(result.message || '预览失败')
       }
     } catch {
-      alert('预览失败')
+      toast.error('预览失败')
     } finally {
       setLoadingPreview(false)
     }
@@ -173,11 +175,12 @@ export default function VjudgeImportPage() {
     throw new Error(result.message || '校验失败')
   }
 
-  const handleImport = async (members: ImportMember[], options?: { createTeam?: boolean; visibility?: string; teamName?: string; [key: string]: unknown }): Promise<ImportResult> => {
+  const handleImport = async (members: ImportMember[], options?: { createTeam?: boolean; visibility?: string; teamName?: string; teamId?: string; [key: string]: unknown }): Promise<ImportResult> => {
     const result = await apiClient.post<{ success: boolean; data: ImportResult }>('/api/team-import/vjudge/import', {
       createTeam,
       visibility,
       teamName: createTeam ? previewGroupName : undefined,
+      teamId: options?.teamId,
       vjudgeGroupId: selectedGroupId,
       announcement: previewAnnouncement || undefined,
       description: previewDescription || undefined,
@@ -323,6 +326,7 @@ export default function VjudgeImportPage() {
             createTeam={createTeam}
             visibility={visibility}
             teamName={createTeam ? previewGroupName : undefined}
+            defaultTeamId={selectedGroupId.replace(/[^a-zA-Z0-9_]/g, '_')}
             onValidate={handleValidate}
             onImport={handleImport}
             onBack={() => setStep('select-vjudge')}

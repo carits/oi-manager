@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * 51Nod (www.51nod.com) 题目拉取适配器
  *

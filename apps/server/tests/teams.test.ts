@@ -6,6 +6,7 @@ import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 
 const app = createTestApp()
+const shortId = () => Math.random().toString(36).slice(2, 8)
 
 describe('Team Operations', () => {
   describe('Team Creation', () => {
@@ -25,6 +26,7 @@ describe('Team Operations', () => {
         .post('/api/teams')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          id: `team_${shortId()}`,
           name: `测试团队_${Date.now()}`,
           schoolId: school.id,
           isPublic: true
@@ -91,8 +93,7 @@ describe('Team Operations', () => {
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          userId: newMemberId,
-          userType: 'teacher',
+          members: [{ id: newMemberId, type: 'teacher' }],
           role: 'member'
         })
 
@@ -125,8 +126,7 @@ describe('Team Operations', () => {
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          userId: newMemberId,
-          userType: 'student',
+          members: [{ userId: newMemberId, userType: 'student' }],
           role: 'member'
         })
 
@@ -162,7 +162,7 @@ describe('Team Operations', () => {
       })
 
       const res = await request(app)
-        .delete(`/api/teams/${team.id}/members/${memberId}?userType=student`)
+        .delete(`/api/teams/${team.id}/members/${memberId}?memberType=student`)
         .set('Authorization', `Bearer ${token}`)
 
       expect(res.status).toBe(200)
@@ -207,8 +207,7 @@ describe('Team Operations', () => {
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          userId: newMemberId,
-          userType: 'teacher',
+          members: [{ id: newMemberId, type: 'teacher' }],
           role: 'member'
         })
 
@@ -220,16 +219,16 @@ describe('Team Operations', () => {
     it('should change member role to admin', async () => {
       const { school } = await createTestSchoolWithPrincipal()
       const { user: owner, teacherId: ownerId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { user: member, studentId: memberId } = await createTestUser({ role: 'student', schoolId: school.id })
+      const { user: member, teacherId: memberId } = await createTestUser({ role: 'teacher', schoolId: school.id })
 
       const team = await createTestTeam({ schoolId: school.id, ownerId })
 
       // Add member first
-      const teamMember = await prisma.teamMember.create({
+      await prisma.teamMember.create({
         data: {
           teamId: team.id,
           userId: memberId!,
-          userType: 'student',
+          userType: 'teacher',
           role: 'member',
           status: 'active',
           joinedAt: new Date()
@@ -245,18 +244,19 @@ describe('Team Operations', () => {
       })
 
       const res = await request(app)
-        .put(`/api/teams/${team.id}/members/${teamMember.id}/role`)
+        .post(`/api/teams/${team.id}/admins`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          role: 'admin'
+          memberId: memberId,
+          memberType: 'teacher'
         })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
 
       // Verify role was changed
-      const updatedMember = await prisma.teamMember.findUnique({
-        where: { id: teamMember.id }
+      const updatedMember = await prisma.teamMember.findFirst({
+        where: { teamId: team.id, userId: memberId, userType: 'teacher' }
       })
       expect(updatedMember!.role).toBe('admin')
     })
@@ -294,7 +294,8 @@ describe('Team Operations', () => {
         .post(`/api/teams/${team.id}/transfer`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          newOwnerId: newOwnerId
+          newOwnerId: newOwnerId,
+          newOwnerType: 'teacher'
         })
 
       expect(res.status).toBe(200)

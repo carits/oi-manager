@@ -127,24 +127,44 @@ Token 通过登录接口获取，包含用户信息：
 - POST `/contests/:id/resources` - 上传资源
 - DELETE `/contests/:id/resources/:resourceId` - 删除资源
 
-### 8. 题单管理接口
-- GET `/task-lists` - 获取题单列表
-- GET `/task-lists/:id` - 获取题单详情
-- POST `/task-lists` - 创建题单
-- PUT `/task-lists/:id` - 更新题单
-- DELETE `/task-lists/:id` - 删除题单
+### 8. 题单管理接口（飞书文档式权限）
 
-### 9. 任务进度接口
-- GET `/task-progress` - 获取个人进度
-- PUT `/task-progress` - 更新进度
-- GET `/task-progress/class/:taskListId` - 获取班级进度
+> 三级结构：题单 (ProblemList) → 章节 (Section) → 题目条目 (Entry)
+> 权限分享：school/team/teacher/student × view/edit/admin
 
-### 10. 里程碑接口
+- GET `/problem-lists` - 获取题单列表（tab=mine/shared/all）
+- GET `/problem-lists/:id` - 获取题单详情（含章节→条目→Problem）
+- POST `/problem-lists` - 创建题单（含默认章节）
+- PUT `/problem-lists/:id` - 更新题单元信息
+- DELETE `/problem-lists/:id` - 删除题单（硬删除）
+- POST `/problem-lists/:id/sections` - 添加章节
+- PUT `/problem-lists/sections/:sectionId` - 更新章节
+- DELETE `/problem-lists/sections/:sectionId` - 删除章节
+- PUT `/problem-lists/:id/sections/reorder` - 重排章节
+- POST `/problem-lists/sections/:sectionId/entries/single` - 添加题目
+- POST `/problem-lists/:id/entries/resolve` - 批量解析题号
+- PUT `/problem-lists/entries/:entryId` - 更新条目
+- DELETE `/problem-lists/entries/:entryId` - 删除条目
+- GET `/problem-lists/:id/shares` - 获取分享列表
+- POST `/problem-lists/:id/shares` - 添加/更新分享
+- DELETE `/problem-lists/:id/shares/:shareId` - 移除分享
+
+### 9. 里程碑接口
 - GET `/milestones` - 获取里程碑列表
 - GET `/milestones/:id` - 获取里程碑详情
 - POST `/milestones` - 创建里程碑
 - PUT `/milestones/:id` - 更新里程碑
 - DELETE `/milestones/:id` - 删除里程碑
+
+### 9.5 学校题单接口
+- GET `/schools/:schoolId/problem-lists` - 获取学校题单列表（本校成员可见）
+- POST `/schools/:schoolId/problem-lists` - 添加题单到学校（负责人/教师，仅 owner 的题单）
+- DELETE `/schools/:schoolId/problem-lists/:id` - 移除学校题单（负责人可删所有，教师仅自己添加的）
+
+### 9.6 团队题单接口
+- GET `/teams/:teamId/problem-lists` - 获取团队题单列表（团队成员可见）
+- POST `/teams/:teamId/problem-lists` - 添加题单到团队（owner/admin/教师成员，仅 owner 的题单）
+- DELETE `/teams/:teamId/problem-lists/:id` - 移除团队题单（owner 可删所有，非 owner 仅自己添加的）
 
 ### 11. 统计接口
 - GET `/stats/global` - 获取全局统计

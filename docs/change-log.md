@@ -1,5 +1,306 @@
 # 变更日志
 
+## 2026-04-08 (学校题单 & 团队题单)
+
+### 新增学校题单和团队题单收录功能
+
+**背景**: 学校和团队需要维护自己的题单推荐库，教师/负责人可以将自己创建的个人题单收录到学校或团队的题单库中。
+
+**变更内容**:
+- 新增 `SchoolProblemList` 和 `TeamProblemList` 数据模型（Prisma schema）
+- 后端新增 6 个 API 端点（GET/POST/DELETE 各 3 个）
+- 前端学校页面新增「题单库」tab
+- 前端团队详情页「题单」tab 从占位改为真实功能
+- 新增 20 个 API 测试（学校 10 + 团队 10）
+
+**权限规则**:
+- 学校：负责人+教师可添加自己是 owner 的题单，负责人可删所有，教师只能删自己添加的
+- 团队：owner/admin/教师成员可添加，owner 可删所有，非 owner 只能删自己添加的
+
+**影响范围**: 题单模块、学校页面、团队详情页
+**风险**: 低 — 纯新增功能，不影响现有个人题单逻辑
+
+## 2026-04-07 (题单模块移除归档功能)
+
+### 题单模块移除归档功能，删除改为硬删除
+
+**背景**: ProblemList 的归档（archive）功能实际使用场景有限，且 `status` 字段增加了查询复杂度。决定简化为直接硬删除。
+
+**变更内容**:
+
+1. **Prisma Schema**: `ProblemList` 模型移除 `status` 字段（不再有 active/archived/deleted 状态），`visibility, status` 复合索引简化为 `visibility` 单字段索引
+2. **后端 API**: 移除 `POST /api/problem-lists/:id/archive` 端点；`DELETE /api/problem-lists/:id` 改为硬删除
+3. **文档**: 6 个文件同步更新，移除所有归档相关描述
+
+**影响模块**: 题单管理模块（前端 + 后端）
+
+**涉及文件**:
+- `apps/server/prisma/schema.prisma` — 移除 status 字段
+- `docs/SYSTEM_MAP.md` — API 路由表、模型字段
+- `docs/MODULE_INDEX.md` — 题单模块 API 和功能描述
+- `docs/api/API_REFERENCE.md` — 题单管理接口
+- `docs/database/DATABASE_MODELS.md` — ProblemList 模型字段和索引
+- `docs/current-task.md` — 任务记录
+- `docs/change-log.md` — 变更日志
+
+## 2026-04-07 (题单模块旧代码清理)
+
+### 题单模块旧代码和文档全面清理
+
+**背景**: 项目已从旧的 `TaskList/Task/TaskProgress` 题单系统迁移到新的 `ProblemList` 飞书文档式权限题单系统（`problem-lists` 路由），但旧的模型、占位页、文档引用一直未清理。
+
+**清理内容**:
+
+1. **Prisma Schema**: 删除 `Task`、`TaskList`、`TaskProgress` 三个旧模型
+   - 移除 `Student` 模型中的 `TaskProgress` 关联引用
+   - 移除 `Teacher` 模型中的 `TaskList` 关联引用
+   - 执行 `prisma db push --accept-data-loss` 同步数据库
+
+2. **前端**: 删除旧占位页 `apps/web/src/app/student/task-lists/page.tsx`（"功能暂未开放"页面）
+
+3. **Seed 数据**: 移除 `seed.ts` 中对旧 TaskList/Task/TaskProgress 的种子数据创建
+
+4. **测试配置**: 清理 `tests/setup.ts` 中的旧表名引用
+
+5. **文档全面更新**（8 个文件）:
+   - `docs/MODULE_INDEX.md` — 题单模块改为 Problem Lists，完整 API 列表
+   - `docs/SYSTEM_MAP.md` — 路由、API、数据模型、ER 图全部更新
+   - `docs/api/API_REFERENCE.md` — 题单管理接口替换为新 API
+   - `docs/api/FIELD_CONTRACT.md` — 移除旧模型关联字段
+   - `docs/database/DATABASE_MODELS.md` — 旧模型文档替换为 ProblemList 四模型
+   - `docs/PROJECT_OVERVIEW.md` — 题单状态改为已完成
+   - `docs/HANDOVER.md` — 数据关系和状态更新
+   - `docs/KNOWN_ISSUES.md` — 移除 "题单执行闭环未完成" 条目
+   - `docs/AUTH_AND_PERMISSION.md` — API 路径更新
+
+**影响**: 纯清理操作，不影响现有 ProblemList 功能
+
+## 2026-04-06 (团队模块 ID 歧义修复 + 全面审计)
+
+### 团队模块 ID 歧义 bug 修复
+
+**Bug 描述**: `POST /:id/admins` 和 `DELETE /:id/admins/:adminId` 两个端点存在 ID 类型混淆。`request body` 中的 `memberId`/`adminId` 参数实际发送的是 Teacher/Student profile ID，但后端使用 `findMemberById()` 查找 TeamMember 记录 ID，导致查找失败返回"该成员不存在"。
+
+**修复方案**: 攣用 `findMember({ teamId, userId, userType })` 复合唯一键查找替代 `findMemberById()`
+并清理了 `DELETE /:id/admins/:adminId` 中构建了 `whereClause` 但从未使用的死代码。
+
+**手动测试**: 16 个场景全部通过（16 passed, 0 failed)
+
+ 0 failed)
+
+**涉及文件**:
+- `apps/server/src/modules/team/team.routes.ts` — 修复 2 个端点 + 添加 ID 语义注释 + 清理死代码
+- `docs/team/TEAM_API_CONTRACT.md` — 修正 4 处 ID 语义说明
+- `docs/team/TEAM_TEST_SCENARIOS.md` — 新建 46 个测试场景文档
+- `docs/current-task.md` — 更新当前任务
+- `docs/change-log.md` — 记录审计变更
+
+**影响模块**: 团队管理模块（设置管理员、取消管理员、成员管理）
+
+**回归风险**: 低（兼容模式保留了 `findMemberById` 回退路径）
+
+**不涉及**: 前端其他组件、数据库结构、权限体系、业务逻辑
+
+---
+
+## 2026-04-06 (全面替换浏览器原生弹窗)
+
+
+
+### 替换 prompt/alert/confirm 为自定义 UI 组件
+
+**背景**: 项目前端有约 169 处浏览器原生弹窗调用（`prompt()` 3 处、`alert()` 149 处、`confirm()` 17 处），体验差、不可定制。全面替换为自定义 UI 组件。
+
+**新增组件**:
+1. `components/ui/Toast.tsx` — Toast 通知系统（ToastProvider + useToast hook + showToastNotification 独立函数）
+2. `components/ui/PasswordResetModal.tsx` — 密码重置弹窗（替代 prompt）
+3. 已有 `ConfirmModal.tsx` — 确认弹窗（替代 confirm），补充 `danger`/`loading` props
+
+**替换统计**:
+- `prompt()` 3 处 → PasswordResetModal
+- `alert()` 149 处 → toast.success/error/warning
+- `confirm()` 17 处 → ConfirmModal + useState 模式
+
+**涉及文件**（约 30+ 个）:
+- 团队组件 6 个: TeamDetailPage, TeamEditModal, TeamTransferModal, TeamInviteModal, TeamInviteListModal, TeamHeader
+- 管理页面: admin/users, platform-admin/users, platform-admin/problems
+- 导入页面: ImportPreview, vjudge/page, luogu/page, students/import/page
+- 学校组件: TeachersTab, HomeTab, EditSchoolModal
+- 题目组件: ProblemForm, ProblemDetail, ProblemNote
+- 学生端: student/team, student/team/browse
+- 题单页面: problem-lists/[id], problem-lists/[id]/[pageId]
+- 其他: ProfileEditor, PasswordEditor, MarkdownRenderer, PasswordResetModal, hooks/useDelete, hooks/useToggleStatus
+- hooks: useDelete, useToggleStatus
+- 班级页面: teacher/classes, teacher/students
+- 按需挂载: Providers.tsx 包裹 ToastProvider
+
+**验证**: `grep -r '\b(alert|confirm|prompt)\(' apps/web/src --include='*.tsx'` → 0 匹配
+
+**影响模块**: 前端全部页面和组件的用户反馈
+
+**不涉及**: 后端代码、数据库、权限逻辑、业务逻辑
+
+**同步更新文档**: KNOWN_ISSUES.md（标记 8.2 为已解决）、current-task.md、COMPONENTS.md（新增 Toast/PasswordResetModal 文档）
+
+---
+
+## 2026-04-05 (导入功能修复 + teamCode彻底清除)
+
+### 修复导入 500 错误 + 清除所有 teamCode 残留
+
+**背景**: VJudge 导入接口在 `createTeam: true` + `teamId` 时返回 500 "团队不存在"。同时需彻底清除所有 `teamCode` 引用。
+
+**修复的 Bug**:
+1. **导入 createTeam 逻辑错误**: `if (request.createTeam && !request.teamId)` 导致 `createTeam: true` + `teamId` 时走入 else 分支查询不存在的团队。改为 `if (request.createTeam)`。
+2. **teamCode 彻底清除**: `team-import.types.ts`、`team-import.routes.ts`、`vjudge-import.service.ts`、`luogu-import.service.ts` 中所有 `teamCode` 改为 `teamId`。
+3. **前端导入页面 defaultTeamId**: VJudge 导入页面 `defaultTeamCode` → `defaultTeamId`（Luogu 页面同步修复），并用 `.replace(/[^a-zA-Z0-9_]/g, '_')` 确保格式合法。
+
+**测试结果**: 导入修复测试 3/4 通过（第4项为 createTeam=false+无teamId 不报错，行为合理）。
+
+**涉及文件**: `vjudge-import.service.ts`, `luogu-import.service.ts`, `team-import.types.ts`, `team-import.routes.ts`, `teacher/team-import/vjudge/page.tsx`, `teacher/team-import/luogu/page.tsx`
+
+---
+
+## 2026-04-05 (团队功能测试 + Bug修复)
+
+### 全面测试团队功能并修复 3 个 Bug
+
+**背景**: 合并 `id`/`teamCode` 后，对团队全功能进行自动化测试。
+
+**修复的 Bug**:
+1. **路由顺序 bug**: `GET /check-team-id` 在 `GET /:id` 之后注册，Express 参数路由优先匹配，导致 check-team-id 永远返回"团队不存在"。修复：将 check-team-id 移至 `/:id` 之前。
+2. **countMembers 过滤字段错误**: `countMembers(teamId, excludeMemberId)` 用 `{ id: { not: excludeMemberId } }` 排除，但 `id` 是 TeamMember 记录 UUID，调用者传的是 teacherId/studentId（即 `userId` 字段值），排除永远不生效→解散团队时总提示"还有其他成员"。修复：改为 `{ userId: { not: excludeUserId } }`。
+3. **leaveTeam 传参错误**: `leaveTeam` 传 `member.id`（TeamMember 记录 UUID）给 `countMembers`，应传 `member.userId`。
+
+**测试结果**: 基础团队功能 23/23 通过，导入相关 8/8 通过。
+
+**涉及文件**: `team.routes.ts`, `team.repository.ts`, `team.service.ts`
+
+---
+
+## 2026-04-05 (合并团队ID)
+
+### 合并 Team.id 和 teamCode，用 id 替代 teamCode
+
+**背景**: Team 模型有 `id`(UUID) 和 `teamCode`(用户自定义) 两个字段，功能重复。将其合并为一个 `id` 字段，由用户在创建时指定。
+
+**改动**:
+1. `schema.prisma`: 删除 `teamCode` 字段；`id` 从 `@default(uuid())` 改为用户提供的值
+2. `team.types.ts`: `CreateTeamDTO` 移除 `teamCode`，3. `team.service.ts`: `createTeam` 移除 UUID 生成，用 `dto.id`
+4. `team.routes.ts`: `check-team-code` → `check-team-id`；创建时用 `id` 替代 `teamCode`
+5. `vjudge-import.service.ts` / `luogu-import.service.ts`: `teamCode` → `teamId`（参数名保持 `teamCode` 用于传递）
+6. 前端组件: 所有 `teamCode` 引用改为 `teamId`/`id`
+7. 数据迁移: 53个团队的 id 从 UUID 格式迁移为 teamCode 值（下划线格式）
+
+**影响**: 创建团队时用户必须提供 ID（只允许 `[a-zA-Z0-9_]+`，2-50字符），创建后不可修改
+
+---
+
+## 2026-04-05 (团队标识必填)
+
+### 团队标识(teamCode)改为必填+唯一
+
+**背景**: 用户要求 teamCode 从数据库层面就是必填且唯一的标识，不可为空。
+
+**改动**:
+1. `schema.prisma`: `teamCode String? @unique` → `teamCode String @unique`（必填）
+2. `team.types.ts`: `CreateTeamDTO.teamCode` 从可选改为必填
+3. `team.service.ts`: 移除 `|| null` 兜底
+4. `team.routes.ts`: 创建团队路由增加 teamCode 格式校验
+5. `vjudge-import.service.ts` / `luogu-import.service.ts`: 移除 `|| null` 兜底
+6. `TeamListPage.tsx`: 创建表单 teamCode 改为必填标记 + disabled 条件
+7. `ImportPreview.tsx`: 团队标识标签改为必填，提示文案更新
+8. 教师/学生团队列表页: handleCreateTeam 参数类型增加 teamCode
+9. 数据迁移：为所有 53 个已有团队设置 teamCode（用 id 转下划线）
+
+**影响**: 创建团队必须输入 teamCode，导入团队默认带 teamCode
+
+---
+
+## 2026-04-05 (Phase 13 补充2)
+
+### 题单管理修复与改进
+
+**背景**: 用户反馈新建题单不应用弹窗、分享管理应叫权限管理、教师端详情页有报错。
+
+**改动**:
+1. **新建题单：弹窗 → 独立页面** — 新增 `problem-lists/new/page.tsx` 独立页面（教师端和学生端），参考 `schools/new` 模式
+2. **删除 Modal 代码** — 列表页删除 Modal 相关状态和 JSX，按钮改为 `router.push('.../new')`
+3. **"分享管理" → "权限管理"** — 详情页按钮和面板标题文案修改
+4. **修复教师端 SharePanel 丢失** — 教师端 `[id]/page.tsx` 添加 `SharePanel` 组件定义
+5. **修复 CSSProperties 类型错误** — `[pageId]/page.tsx` 给 `styles` 常量添加 `Record<string, React.CSSProperties>` 类型标注
+
+**涉及文件**:
+- `apps/web/src/app/teacher/problem-lists/new/page.tsx`（新建）
+- `apps/web/src/app/student/problem-lists/new/page.tsx`（新建）
+- `apps/web/src/app/teacher/problem-lists/page.tsx`（删除 Modal）
+- `apps/web/src/app/student/problem-lists/page.tsx`（删除 Modal）
+- `apps/web/src/app/teacher/problem-lists/[id]/page.tsx`（添加 SharePanel + 改文案）
+- `apps/web/src/app/student/problem-lists/[id]/page.tsx`（改文案）
+- `apps/web/src/app/teacher/problem-lists/[id]/[pageId]/page.tsx`（CSSProperties 类型）
+
+---
+
+## 2026-04-05 (Phase 13 补充)
+
+### 新建题单弹窗重新设计（已废弃，被上方补充2替代）
+
+---
+
+## 2026-04-05 (Phase 13)
+
+### 题单管理功能（飞书文档式权限）
+
+**背景**: 教师和学生需要一套完整的题单管理系统，支持题单 → 页面 → 节 → 题目的层级结构，以及飞书文档式的分享权限管理。
+
+**新增**:
+1. **数据库** — 6 个新 Prisma 模型（ProblemList, ProblemListPage, ProblemListSection, ProblemListEntry, ProblemListShare, ProblemListPageShare）
+2. **后端** — 完整 CRUD 路由（`routes/problem-lists.ts`），支持：
+   - 题单/页/节/条目的增删改查
+   - 批量添加题目
+   - 排序（页/节/条目）
+   - 飞书文档式分享权限（owner/admin/edit/view）
+   - 页级权限覆盖（inherit/custom）
+   - 校内分享限制
+3. **前端** — 教师和学生完全相同的题单管理页面：
+   - 列表页（全部/我的/共享 tab）
+   - 详情页（页面列表 + 分享管理面板）
+   - 页面编辑器（节管理 + 题目搜索弹窗 + 内联备注编辑 + 表格展示）
+4. **导航** — 教师和学生导航栏添加"题单"tab
+
+**涉及文件**:
+- `apps/server/prisma/schema.prisma`
+- `apps/server/src/routes/problem-lists.ts`（新建）
+- `apps/server/src/index.ts`
+- `apps/web/src/config/navigation.ts`
+- `apps/web/src/app/teacher/problem-lists/`（新建目录）
+- `apps/web/src/app/student/problem-lists/`（新建目录）
+
+**兼容性**: 旧的 TaskList/Task/TaskProgress 模型保留不动，不影响现有功能。
+
+**注意**: 需要重启开发服务器后执行 `npx prisma:generate`。
+
+---
+
+## 2026-04-05 (Phase 12.5)
+
+### 代码库审计与编译错误修复
+
+**背景**: 经过多次迭代（OJ适配器开发、平台改名、Logo替换等），项目积累了大量 TS 编译错误。执行全面审计并修复。
+
+**修复**:
+1. 6 个 OJ 适配器 DOM API 类型修复（`/// <reference lib="dom" />`）
+2. kattis/luogu/szkopul 适配器类型错误修复
+3. auth.ts 路由类型错误修复（login/register/profile）
+4. schools.ts 路由类型错误修复（shortName/findUnique/description）
+5. students.ts 类型错误修复
+6. Express Request.user 类型声明
+7. shared 包 exports 配置
+8. 前端 apiClient/useFetch/ProblemList/SubmissionList 类型修复
+9. 删除 18 个根目录孤立测试文件
+
+---
+
 ## 2026-04-04 (Phase 12)
 
 ### UOJ 适配器 timeLimit/memoryLimit 提取修复

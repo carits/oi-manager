@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { Pagination } from '@/components/ui/Pagination'
 import apiClient from '@/lib/apiClient'
 import {
   OJ_PLATFORMS,
@@ -34,7 +37,8 @@ interface PlatformConfig {
 // 题目类型
 interface Problem {
   id: string
-  problemCode: string
+  problemId: string
+  platform: string
   title: string
   difficulty: string | null
   status: string
@@ -75,6 +79,8 @@ export default function PlatformAdminProblemsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
+  const toast = useToast()
+  const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
 
   // 从URL参数获取当前tab，默认为 'fetch'
   const [activeTab, setActiveTab] = useState<'fetch' | 'public' | 'private'>(
@@ -86,6 +92,8 @@ export default function PlatformAdminProblemsPage() {
   const [jobsLoading, setJobsLoading] = useState(false)
   const [jobsPage, setJobsPage] = useState(1)
   const [jobsTotalPages, setJobsTotalPages] = useState(1)
+  const [jobsTotal, setJobsTotal] = useState(0)
+  const [jobsPageSize] = useState(20)
   const [jobsPlatformFilter, setJobsPlatformFilter] = useState('')
   const [jobsStatusFilter, setJobsStatusFilter] = useState('')
 
@@ -103,12 +111,16 @@ export default function PlatformAdminProblemsPage() {
   const [publicLoading, setPublicLoading] = useState(false)
   const [publicPage, setPublicPage] = useState(1)
   const [publicTotalPages, setPublicTotalPages] = useState(1)
+  const [publicTotal, setPublicTotal] = useState(0)
+  const [publicPageSize, setPublicPageSize] = useState(10)
 
   // 私有题库
   const [privateProblems, setPrivateProblems] = useState<Problem[]>([])
   const [privateLoading, setPrivateLoading] = useState(false)
   const [privatePage, setPrivatePage] = useState(1)
   const [privateTotalPages, setPrivateTotalPages] = useState(1)
+  const [privateTotal, setPrivateTotal] = useState(0)
+  const [privatePageSize, setPrivatePageSize] = useState(10)
 
   // 筛选
   const [selectedPlatform, setSelectedPlatform] = useState('')
@@ -129,7 +141,7 @@ export default function PlatformAdminProblemsPage() {
       if (!silent) setJobsLoading(true)
       const params = new URLSearchParams({
         page: jobsPage.toString(),
-        pageSize: '20',
+        pageSize: jobsPageSize.toString(),
       })
       if (jobsPlatformFilter) params.append('platform', jobsPlatformFilter)
       if (jobsStatusFilter) params.append('status', jobsStatusFilter)
@@ -137,6 +149,7 @@ export default function PlatformAdminProblemsPage() {
       if (result.success && result.data) {
         setJobs(result.data.list ?? [])
         setJobsTotalPages(result.data.totalPages ?? 1)
+        setJobsTotal(result.data.total ?? 0)
       }
     } catch (error) {
       console.error('Failed to fetch jobs:', error)
@@ -164,14 +177,15 @@ export default function PlatformAdminProblemsPage() {
       const params = new URLSearchParams({
         visibility: 'public',
         page: publicPage.toString(),
-        pageSize: '10',
+        pageSize: publicPageSize.toString(),
       })
       if (selectedPlatform) params.append('platform', selectedPlatform)
       if (searchKeyword) params.append('keyword', searchKeyword)
-      const result = await apiClient.get<{ list: Problem[]; totalPages: number }>(`/api/problems?${params}`)
+      const result = await apiClient.get<{ list: Problem[]; totalPages: number; total: number }>(`/api/problems?${params}`)
       if (result.success && result.data) {
         setPublicProblems(result.data.list ?? [])
         setPublicTotalPages(result.data.totalPages)
+        setPublicTotal(result.data.total ?? 0)
       }
     } catch (error) {
       console.error('Failed to fetch public problems:', error)
@@ -187,13 +201,14 @@ export default function PlatformAdminProblemsPage() {
       const params = new URLSearchParams({
         visibility: 'private',
         page: privatePage.toString(),
-        pageSize: '10',
+        pageSize: privatePageSize.toString(),
       })
       if (searchKeyword) params.append('keyword', searchKeyword)
-      const result = await apiClient.get<{ list: Problem[]; totalPages: number }>(`/api/problems?${params}`)
+      const result = await apiClient.get<{ list: Problem[]; totalPages: number; total: number }>(`/api/problems?${params}`)
       if (result.success && result.data) {
         setPrivateProblems(result.data.list ?? [])
         setPrivateTotalPages(result.data.totalPages)
+        setPrivateTotal(result.data.total ?? 0)
       }
     } catch (error) {
       console.error('Failed to fetch private problems:', error)
@@ -214,10 +229,10 @@ export default function PlatformAdminProblemsPage() {
         if (value) cookies[key] = value
       }
       await apiClient.put(`/api/oj-fetcher/platforms/${fetchPlatform}/config`, { cookies })
-      alert('配置已保存')
+      toast.success('配置已保存')
     } catch (error) {
       console.error('Failed to save config:', error)
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSavingCookies(false)
     }
@@ -226,7 +241,7 @@ export default function PlatformAdminProblemsPage() {
   // 批量拉取
   const handleSubmit = async () => {
     const ids = problemIdsInput.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean)
-    if (ids.length === 0) { alert('请输入题号'); return }
+    if (ids.length === 0) { toast.warning('请输入题号'); return }
     try {
       setSubmitting(true)
       const result = await apiClient.post<{ total: number; new: number; existing: number }>('/api/oj-fetcher/jobs/batch', {
@@ -234,13 +249,13 @@ export default function PlatformAdminProblemsPage() {
         problemIds: ids,
       })
       if (result.success && result.data) {
-        alert(`已创建 ${result.data.new} 个新任务，${result.data.existing} 个已存在`)
+        toast.success(`已创建 ${result.data.new} 个新任务，${result.data.existing} 个已存在`)
         setProblemIdsInput('')
         fetchJobs()
       }
     } catch (error) {
       console.error('Failed to submit:', error)
-      alert('提交失败')
+      toast.error('提交失败')
     } finally {
       setSubmitting(false)
     }
@@ -256,26 +271,36 @@ export default function PlatformAdminProblemsPage() {
 
   // 删除任务
   const handleDelete = async (jobId: string) => {
-    if (!confirm('确定删除此任务？')) return
-    try {
-      await apiClient.delete(`/api/oj-fetcher/jobs/${jobId}`)
-      fetchJobs()
-    } catch (error) { console.error('Failed to delete:', error) }
+    setConfirmState({
+      id: jobId,
+      message: '确定删除此任务？',
+      action: async () => {
+        try {
+          await apiClient.delete(`/api/oj-fetcher/jobs/${jobId}`)
+          fetchJobs()
+        } catch (error) { console.error('Failed to delete:', error) }
+      }
+    })
   }
 
   // 删除题目
   const handleDeleteProblem = async (problemId: string) => {
-    if (!confirm('确定删除此题目？此操作不可恢复。')) return
-    try {
-      const result = await apiClient.delete<{ success: boolean }>(`/api/problems/${problemId}`)
-      if (result.success) {
-        if (activeTab === 'public') fetchPublicProblems()
-        else if (activeTab === 'private') fetchPrivateProblems()
+    setConfirmState({
+      id: problemId,
+      message: '确定删除此题目？此操作不可恢复。',
+      action: async () => {
+        try {
+          const result = await apiClient.delete<{ success: boolean }>(`/api/problems/${problemId}`)
+          if (result.success) {
+            if (activeTab === 'public') fetchPublicProblems()
+            else if (activeTab === 'private') fetchPrivateProblems()
+          }
+        } catch (error) {
+          console.error('Failed to delete problem:', error)
+          toast.error('删除失败')
+        }
       }
-    } catch (error) {
-      console.error('Failed to delete problem:', error)
-      alert('删除失败')
-    }
+    })
   }
 
   // 重新拉取题目
@@ -303,9 +328,9 @@ export default function PlatformAdminProblemsPage() {
     fetchConfig()
     localStorage.setItem('oj-fetch-platform', fetchPlatform)
   }, [fetchPlatform])
-  useEffect(() => { if (activeTab === 'public') fetchPublicProblems() }, [activeTab, publicPage, selectedPlatform, searchKeyword])
-  useEffect(() => { if (activeTab === 'private') fetchPrivateProblems() }, [activeTab, privatePage, searchKeyword])
-  useEffect(() => { if (activeTab === 'fetch') fetchJobs() }, [jobsPage, jobsPlatformFilter, jobsStatusFilter])
+  useEffect(() => { if (activeTab === 'public') fetchPublicProblems() }, [activeTab, publicPage, publicPageSize, selectedPlatform, searchKeyword])
+  useEffect(() => { if (activeTab === 'private') fetchPrivateProblems() }, [activeTab, privatePage, privatePageSize, searchKeyword])
+  useEffect(() => { if (activeTab === 'fetch') fetchJobs() }, [jobsPage, jobsPageSize, jobsPlatformFilter, jobsStatusFilter])
 
   // 自动刷新任务列表
   useEffect(() => {
@@ -351,28 +376,12 @@ export default function PlatformAdminProblemsPage() {
     return renderAttachmentStatus(job.attachmentStatus)
   }
 
-  // 分页组件
-  const renderPagination = (page: number, totalPages: number, setPage: (p: number) => void) => {
-    if (totalPages <= 1) return null
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
-        <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-          style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>
-          上一页
-        </button>
-        <span style={{ padding: '0.5rem 1rem' }}>{page} / {totalPages}</span>
-        <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
-          style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1 }}>
-          下一页
-        </button>
-      </div>
-    )
-  }
 
   // 题目列表渲染
   const renderProblemTable = (
-    problems: Problem[], loading: boolean, page: number, totalPages: number,
-    setPage: (p: number) => void, showPlatform?: boolean, showRefetch?: boolean,
+    problems: Problem[], loading: boolean, page: number, totalPages: number, total: number,
+    pageSize: number, setPage: (p: number) => void, setPageSize?: (s: number) => void,
+    showPlatform?: boolean, showRefetch?: boolean,
   ) => (
     <>
       {loading ? (
@@ -392,16 +401,10 @@ export default function PlatformAdminProblemsPage() {
             </thead>
             <tbody>
               {problems.map((problem) => {
-                let source = '-'
-                if (problem.ojBindings) {
-                  try {
-                    const bindings = JSON.parse(problem.ojBindings)
-                    if (bindings.length > 0) source = `${bindings[0].platform} / ${bindings[0].problemId}`
-                  } catch {}
-                }
+                let source = problem.platform ? `${problem.platform} / ${problem.problemId}` : '-'
                 return (
                   <tr key={problem.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '0.75rem' }}>{problem.problemCode}</td>
+                    <td style={{ padding: '0.75rem' }}>{problem.problemId}</td>
                     <td style={{ padding: '0.75rem' }}>
                       <span onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={{ color: 'var(--primary)', cursor: 'pointer' }}>{problem.title}</span>
                     </td>
@@ -421,9 +424,16 @@ export default function PlatformAdminProblemsPage() {
               })}
             </tbody>
           </table>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            total={total}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
-      {renderPagination(page, totalPages, setPage)}
     </>
   )
 
@@ -582,7 +592,13 @@ export default function PlatformAdminProblemsPage() {
                   </tbody>
                 </table>
               )}
-              {renderPagination(jobsPage, jobsTotalPages, setJobsPage)}
+              <Pagination
+                currentPage={jobsPage}
+                totalPages={jobsTotalPages}
+                total={jobsTotal}
+                pageSize={jobsPageSize}
+                onPageChange={setJobsPage}
+              />
             </div>
           </div>
         )}
@@ -611,7 +627,7 @@ export default function PlatformAdminProblemsPage() {
                 + 新建题目
               </button>
             </div>
-            {renderProblemTable(publicProblems, publicLoading, publicPage, publicTotalPages, setPublicPage, true, true)}
+            {renderProblemTable(publicProblems, publicLoading, publicPage, publicTotalPages, publicTotal, publicPageSize, setPublicPage, setPublicPageSize, true, true)}
           </div>
         )}
 
@@ -633,10 +649,20 @@ export default function PlatformAdminProblemsPage() {
                 + 新建题目
               </button>
             </div>
-            {renderProblemTable(privateProblems, privateLoading, privatePage, privateTotalPages, setPrivatePage, false, false)}
+            {renderProblemTable(privateProblems, privateLoading, privatePage, privateTotalPages, privateTotal, privatePageSize, setPrivatePage, setPrivatePageSize, false, false)}
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={async () => { await confirmState?.action(); setConfirmState(null) }}
+        title="确认操作"
+        message={confirmState?.message || ''}
+        confirmText="确认"
+        danger
+      />
     </ProtectedRoute>
   )
 }

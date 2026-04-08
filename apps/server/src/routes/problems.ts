@@ -59,23 +59,26 @@ const attachmentUpload = multer({
 })
 
 /**
- * 生成全局唯一题号
+ * 生成 Carits 平台题号（P + 6位数字）
  */
-async function generateProblemCode(): Promise<string> {
-  const latestProblem = await prisma.problem.findFirst({
-    orderBy: { problemCode: 'desc' },
-    select: { problemCode: true }
+async function generateCaritsProblemId(): Promise<string> {
+  const problems = await prisma.problem.findMany({
+    where: {
+      platform: 'carits',
+      problemId: { startsWith: 'P' }
+    },
+    select: { problemId: true }
   })
 
-  let nextNum = 1
-  if (latestProblem?.problemCode) {
-    const numPart = parseInt(latestProblem.problemCode.slice(1), 10)
-    if (!isNaN(numPart)) {
-      nextNum = numPart + 1
+  let maxNum = 0
+  for (const p of problems) {
+    const numPart = parseInt(p.problemId.slice(1), 10)
+    if (!isNaN(numPart) && numPart > maxNum) {
+      maxNum = numPart
     }
   }
 
-  return `P${String(nextNum).padStart(6, '0')}`
+  return `P${String(maxNum + 1).padStart(6, '0')}`
 }
 
 /**
@@ -175,9 +178,14 @@ problemsRouter.get('/', authenticate, async (req, res) => {
     // 关键词搜索（匹配题号或标题）
     if (keyword && typeof keyword === 'string') {
       where.OR = [
-        { problemCode: { contains: keyword } },
+        { problemId: { contains: keyword } },
         { title: { contains: keyword } }
       ]
+    }
+
+    // 平台筛选（直接用 platform 字段，支持索引）
+    if (platform && typeof platform === 'string') {
+      where.platform = platform
     }
 
     let problems = await prisma.problem.findMany({
@@ -187,34 +195,8 @@ problemsRouter.get('/', authenticate, async (req, res) => {
       take: Number(pageSize)
     })
 
-    // 平台筛选（应用层过滤，因为 ojBindings 是 JSON 字符串）
-    if (platform && typeof platform === 'string') {
-      problems = problems.filter(p => {
-        if (!p.ojBindings) return false
-        try {
-          const bindings = JSON.parse(p.ojBindings)
-          return Array.isArray(bindings) && bindings.some((b: any) => b.platform === platform)
-        } catch {
-          return false
-        }
-      })
-    }
-
-    // 获取总数（如果有平台筛选，需要重新计算）
+    // 获取总数
     let total = await prisma.problem.count({ where })
-    if (platform) {
-      // 平台筛选后，需要重新计算 total
-      const allProblems = await prisma.problem.findMany({ where })
-      total = allProblems.filter(p => {
-        if (!p.ojBindings) return false
-        try {
-          const bindings = JSON.parse(p.ojBindings)
-          return Array.isArray(bindings) && bindings.some((b: any) => b.platform === platform)
-        } catch {
-          return false
-        }
-      }).length
-    }
 
     // 获取所有者名称
     const ownerIds = [...new Set(problems.map(p => p.ownerId))]
@@ -235,10 +217,27 @@ problemsRouter.get('/', authenticate, async (req, res) => {
     students.forEach(s => ownerMap.set(s.id, s.name))
     admins.forEach(a => ownerMap.set(a.id, a.name))
 
-    const problemsWithOwner = problems.map(p => ({
-      ...p,
-      ownerName: ownerMap.get(p.ownerId) || '未知'
-    }))
+    const problemsWithOwner = problems.map(p => {
+      // 从 ojBindings 中提取平台列表（兼容旧数据）
+      let platforms: string[] = []
+      if (p.ojBindings) {
+        try {
+          const bindings = JSON.parse(p.ojBindings)
+          if (Array.isArray(bindings)) {
+            platforms = bindings.map((b: any) => b.platform).filter(Boolean)
+          }
+        } catch {}
+      }
+      // 如果 ojBindings 为空但 platform 有值，用 platform 字段
+      if (platforms.length === 0 && p.platform) {
+        platforms = [p.platform]
+      }
+      return {
+        ...p,
+        ownerName: ownerMap.get(p.ownerId) || '未知',
+        platforms
+      }
+    })
 
     res.json({
       success: true,
@@ -293,17 +292,26 @@ problemsRouter.post('/', authenticate, async (req, res) => {
       problemVisibility = 'public'
     }
 
-    // 确定题号：公共题目使用原平台题号，私有题目使用系统生成题号
-    let problemCode: string
-    if (problemVisibility === 'public' && ojBindings && Array.isArray(ojBindings) && ojBindings.length > 0) {
-      // 公共题目使用第一个 OJ 绑定的题号
-      problemCode = ojBindings[0].problemId
+    // 确定平台和题号
+    let platform: string
+    let problemId: string
+    if (ojBindings && Array.isArray(ojBindings) && ojBindings.length > 0) {
+      const firstBinding = ojBindings[0]
+      platform = firstBinding.platform || 'carits'
+      problemId = String(firstBinding.problemId)
+      // 检查是否已存在
+      const existing = await prisma.problem.findUnique({ where: { platform_problemId: { platform, problemId } } })
+      if (existing) {
+        return res.status(409).json({ success: false, message: `题目 ${platform}-${problemId} 已存在` })
+      }
     } else {
-      problemCode = await generateProblemCode()
+      platform = 'carits'
+      problemId = await generateCaritsProblemId()
     }
 
     const createData: any = {
-      problemCode,
+      platform,
+      problemId,
       title: title.trim(),
       statementType,
       solutionType,
@@ -377,7 +385,7 @@ problemsRouter.post('/', authenticate, async (req, res) => {
     logger.audit('problem_created', {
       userId,
       action: 'create_problem',
-      target: problemCode,
+      target: `${platform}-${problemId}`,
       metadata: { title, visibility: problemVisibility }
     })
 
@@ -512,6 +520,11 @@ problemsRouter.put('/:id', authenticate, async (req, res) => {
     }
     if (ojBindings !== undefined) {
       updateData.ojBindings = ojBindings ? JSON.stringify(ojBindings) : null
+      // 如果 ojBindings 有内容，同时更新 platform 和 problemId
+      if (ojBindings && Array.isArray(ojBindings) && ojBindings.length > 0) {
+        updateData.platform = ojBindings[0].platform || existingProblem.platform
+        updateData.problemId = String(ojBindings[0].problemId) || existingProblem.problemId
+      }
     }
 
     // 只有管理员可以修改可见性
@@ -610,7 +623,7 @@ problemsRouter.put('/:id', authenticate, async (req, res) => {
     logger.audit('problem_updated', {
       userId: user.userId,
       action: 'update_problem',
-      target: existingProblem.problemCode,
+      target: `${existingProblem.platform}-${existingProblem.problemId}`,
       metadata: { title }
     })
 
@@ -678,7 +691,7 @@ problemsRouter.delete('/:id', authenticate, async (req, res) => {
     logger.audit('problem_deleted', {
       userId: user.userId,
       action: 'delete_problem',
-      target: existingProblem.problemCode,
+      target: `${existingProblem.platform}-${existingProblem.problemId}`,
       metadata: { title: existingProblem.title }
     })
 

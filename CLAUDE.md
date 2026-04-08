@@ -29,6 +29,9 @@
 - 涉及启动、环境变量、本地调试、部署排查时：
   @docs/RUNBOOK.md
 
+- 涉及测试、编写测试用例、测试数据库时：
+  @docs/TESTING.md
+
 - 涉及业务流程、调用链、数据流时：
   @docs/context.md
 
@@ -380,3 +383,97 @@ apps/web/src/
 ### 术语表
 
 三级合并：用户自定义 > 项目配置 > 平台默认。详见 `glossary.ts`
+
+---
+
+## 十一、测试规范（必须遵守）
+
+### 1. 测试数据库隔离（红线规则）
+
+**测试必须且只能使用 `test.db`，绝对禁止影响 `dev.db`。**
+
+- 测试数据库：`apps/server/prisma/test.db`
+- 开发数据库：`apps/server/prisma/dev.db`
+
+**实现机制**（已配置，无需修改）：
+
+1. `tests/setup-env.ts` — 在所有 import 之前设置 `DATABASE_URL`，由 vitest 作为第一个 setupFile 加载
+2. `vitest.config.ts` — `setupFiles: ['./tests/setup-env.ts', './tests/setup.ts']`，顺序不可颠倒
+3. `src/prisma.ts` — PrismaClient 单例在首次 import 时创建，setup-env.ts 确保在此之前 DATABASE_URL 已指向 test.db
+
+**禁止事项**：
+- 禁止在测试代码中直接修改 `process.env.DATABASE_URL`（由 setup-env.ts 统一管理）
+- 禁止在测试文件中单独 new PrismaClient（必须从 `src/prisma.ts` 导入单例）
+- 禁止在 `afterEach`/`afterAll` 中清理 `Problem` 表（题目是共享公共数据）
+
+### 2. 测试文件结构
+
+```
+apps/server/tests/
+├── setup-env.ts          # 环境变量设置（第一个加载）
+├── setup.ts              # 数据库连接、afterEach 清理
+├── vitest.config.ts      # vitest 配置
+├── helpers/
+│   ├── testRequest.ts    # Express 测试应用 + 认证请求
+│   ├── testUser.ts       # 测试用户/学校/团队创建
+│   ├── testToken.ts      # JWT Token 生成
+│   └── problemListHelpers.ts  # 题单测试辅助
+├── auth.test.ts
+├── permissions.test.ts
+├── teams.test.ts
+├── transactions.test.ts
+├── regression.test.ts
+├── problem-lists.test.ts
+└── ai-translate/         # 翻译模块测试
+```
+
+### 3. afterEach 数据清理规则
+
+`setup.ts` 的 `afterEach` 会在每个测试后清理 test.db 中的数据，清理范围：
+
+**会清理的表**（测试自己创建的数据）：
+- ProblemListEntry, ProblemListSection, ProblemListShare, ProblemList
+- TeamOperationLog, LoginLog, TaskItem
+- ContestProblemScore, ContestResult, ContestProblem, ContestResource, Contest
+- TeamMember, TeamJoinRequest, Team, Milestone
+- Student, Teacher, PrincipalTransferLog, Admin, School, User
+
+**不会清理的表**（共享公共数据）：
+- Problem — 题目数据是全局共享的，不在测试中删除
+
+### 4. 编写新测试的规范
+
+1. 所有测试文件放在 `apps/server/tests/` 目录下
+2. 使用 `createTestUser`、`createTestSchoolWithPrincipal` 等 helper 创建测试数据
+3. 使用 `generateTestToken` / `generateTokenFromUser` 生成认证 Token
+4. 使用 `createAuthenticatedRequest(app, token)` 发送带认证的 HTTP 请求
+5. 测试中需要创建 Problem 时使用 `createTestProblem`（helper 中自动生成唯一 ID）
+6. **禁止**在测试中 new PrismaClient，必须 `import { prisma } from '../src/prisma'`
+7. **禁止**在 afterEach 之外写批量 DELETE SQL
+
+### 5. 运行测试命令
+
+```bash
+cd apps/server
+
+# 运行所有测试
+npx vitest run
+
+# 运行指定测试文件
+npx vitest run tests/problem-lists.test.ts
+
+# 运行并监听
+npx vitest tests/problem-lists.test.ts
+```
+
+### 6. 测试数据库初始化
+
+如果 `test.db` 不存在或 schema 过期：
+
+```bash
+cd apps/server
+# 从 dev.db 复制（包含 schema 和种子数据）
+cp prisma/dev.db prisma/test.db
+```
+
+详细测试文档：`docs/TESTING.md`

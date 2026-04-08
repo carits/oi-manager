@@ -69,7 +69,7 @@ export const authRouter = Router()
 // 登录
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password, role } = req.body as LoginRequest
+    const { username, password, role } = req.body as { username: string; password: string; role: 'admin' | 'teacher' | 'student' }
     const clientIp = getClientIp(req)
     const userAgent = getUserAgent(req)
 
@@ -280,7 +280,14 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
 // 注册 (仅限学生角色)
 authRouter.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password, role, name } = req.body
+    const { username, password, role, name, schoolId, headTeacherId } = req.body as {
+      username: string
+      password: string
+      role?: string
+      name: string
+      schoolId?: string
+      headTeacherId?: string
+    }
 
     // 限制只能注册学生角色
     if (role && role !== 'student') {
@@ -305,6 +312,11 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
       return res.status(400).json({ success: false, message: '用户名已存在' })
     }
 
+    // 学生注册需要 schoolId
+    if (!schoolId) {
+      return res.status(400).json({ success: false, message: '请提供学校信息' })
+    }
+
     // 密码加密
     const passwordHash = await bcrypt.hash(password, 10)
 
@@ -315,7 +327,11 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
         passwordHash,
         role: 'student',
         Student: {
-          create: { name }
+          create: {
+            name,
+            schoolId,
+            ...(headTeacherId ? { headTeacherId } : {})
+          }
         }
       }
     })
@@ -446,12 +462,12 @@ authRouter.put('/profile', authenticate, async (req: Request, res: Response) => 
     })
 
     // 根据角色更新对应的profile表
-    if (decoded.role === 'student' && user.Student) {
+    if (decoded.role === 'student') {
       await prisma.student.update({
         where: { userId: decoded.userId },
         data: { name }
       })
-    } else if (decoded.role === 'teacher' && user.Teacher) {
+    } else if (decoded.role === 'teacher' || decoded.role === 'school_principal') {
       await prisma.teacher.update({
         where: { userId: decoded.userId },
         data: { name, bio }

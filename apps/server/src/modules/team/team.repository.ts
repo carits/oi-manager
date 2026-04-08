@@ -261,12 +261,12 @@ export class TeamRepository {
   /**
    * 统计成员数量
    */
-  async countMembers(teamId: string, excludeMemberId?: string): Promise<number> {
+  async countMembers(teamId: string, excludeUserId?: string): Promise<number> {
     return prisma.teamMember.count({
       where: {
         teamId,
         status: 'active',
-        ...(excludeMemberId && { id: { not: excludeMemberId } })
+        ...(excludeUserId && { userId: { not: excludeUserId } })
       }
     })
   }

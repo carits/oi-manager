@@ -52,7 +52,7 @@ interface TeamListPageProps {
 
   // 创建团队
   showCreateButton?: boolean
-  onCreateTeam?: (data: { name: string; description: string; isPublic: boolean }) => Promise<boolean>
+  onCreateTeam?: (data: { name: string; description: string; isPublic: boolean; teamId: string }) => Promise<boolean>
 
   // 创建团队弹窗
   createModalOpen?: boolean
@@ -89,6 +89,7 @@ export function TeamListPage({
   const [createName, setCreateName] = useState('')
   const [createDescription, setCreateDescription] = useState('')
   const [createIsPublic, setCreateIsPublic] = useState(true)
+  const [createTeamId, setCreateTeamId] = useState('')
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,12 +98,14 @@ export function TeamListPage({
     const success = await onCreateTeam({
       name: createName.trim(),
       description: createDescription.trim(),
-      isPublic: createIsPublic
+      isPublic: createIsPublic,
+      teamId: createTeamId.trim() || undefined
     })
     if (success) {
       setCreateName('')
       setCreateDescription('')
       setCreateIsPublic(true)
+      setCreateTeamId('')
     }
   }
 
@@ -266,6 +269,28 @@ export function TeamListPage({
             </div>
 
             <div style={formStyles.field}>
+              <label style={formStyles.label}>团队ID *</label>
+              <input
+                type="text"
+                value={createTeamId}
+                onChange={(e) => {
+                  const val = e.target.value
+                  // 只允许英文、数字、下划线
+                  if (/^[a-zA-Z0-9_]*$/.test(val)) {
+                    setCreateTeamId(val)
+                  }
+                }}
+                required
+                style={formStyles.input}
+                placeholder="如 team_2024（必填，创建后不可修改）"
+                maxLength={50}
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
+                只能包含英文字母、数字和下划线，用于外部平台统一标识
+              </p>
+            </div>
+
+            <div style={formStyles.field}>
               <label style={formStyles.label}>团队类型</label>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
@@ -294,7 +319,7 @@ export function TeamListPage({
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              <Button type="submit" disabled={creating || !createName.trim()} style={{ flex: 1 }}>
+              <Button type="submit" disabled={creating || !createName.trim() || !createTeamId.trim()} style={{ flex: 1 }}>
                 {creating ? '创建中...' : '创建'}
               </Button>
               <Button type="button" variant="secondary" onClick={() => {

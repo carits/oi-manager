@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * QOJ (qoj.ac) 题目拉取适配器
  *

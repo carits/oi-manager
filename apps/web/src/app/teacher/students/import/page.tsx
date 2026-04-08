@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
 
 interface Platform {
   id: string
@@ -15,6 +16,7 @@ interface Platform {
 }
 
 export default function TeamImportPage() {
+  const toast = useToast()
   const router = useRouter()
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [selectedPlatform, setSelectedPlatform] = useState<string>('')
@@ -40,11 +42,11 @@ export default function TeamImportPage() {
 
   const handleNext = () => {
     if (!createTeam) {
-      alert('请选择是否创建团队')
+      toast.warning('请选择是否创建团队')
       return
     }
     if (!selectedPlatform) {
-      alert('请选择导入平台')
+      toast.warning('请选择导入平台')
       return
     }
 

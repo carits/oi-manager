@@ -129,7 +129,7 @@ studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_princi
     const role = req.user!.role
     const whereClause = (role === 'super_admin' || role === 'platform_admin')
       ? {}
-      : { schoolId }
+      : { schoolId: schoolId! }
 
     // 性能优化：使用数据库级排序按 rating 降序
     const students = await prisma.student.findMany({
@@ -154,9 +154,9 @@ studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_princi
     // 获取最近成绩的 ratingChange
     const latestResultWithChange = await prisma.contestResult.findMany({
       where: {
-        OR: latestResults.map(r => ({
-          studentId: r.studentId,
-          createdAt: r._max.createdAt
+        OR: latestResults.filter(r => r._max.createdAt).map(r => ({
+          studentId: r.studentId as string,
+          createdAt: r._max.createdAt as Date
         }))
       },
       select: {

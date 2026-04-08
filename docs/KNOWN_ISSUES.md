@@ -58,17 +58,7 @@
 
 **状态**: 计划中
 
-### 2.3 题单执行闭环未完成 [P1]
-
-**问题**: 题单的学生端执行状态追踪未实现
-
-**影响**: 教师无法追踪学生题单完成情况
-
-**涉及里程碑**: M13
-
-**状态**: 计划中
-
-### 2.4 家长端未实现 [P2]
+### 2.3 家长端未实现 [P2]
 
 **问题**: 家长端页面和功能完全未实现
 
@@ -78,7 +68,7 @@
 
 **状态**: 计划中
 
-### 2.5 QOJ 部分 Cloudflare 拦截 [P2]
+### 2.4 QOJ 部分 Cloudflare 拦截 [P2]
 
 **问题**: QOJ 部分题目（如 1538、5341）触发 Cloudflare challenge，返回 403
 
@@ -88,7 +78,7 @@
 
 **状态**: headed 模式下大部分题目 CF challenge 约 3 秒自动通过，PDF 题面可通过 `download.php` 端点下载到本地。需配置 `QOJ_SESSION` 环境变量。
 
-### 2.6 洛谷附件下载需要登录 [P2]
+### 2.5 洛谷附件下载需要登录 [P2]
 
 **问题**: 部分洛谷附件需要登录才能下载，返回 403 Forbidden
 
@@ -270,13 +260,27 @@
 
 **解决方案**: 统一添加 loading 状态
 
-### 8.2 错误提示不友好 [P2]
+### 8.2 ~~错误提示不友好~~ ✅ 已解决
 
 **问题**: 部分错误直接使用 alert 弹窗
 
 **影响**: 用户体验差
 
 **解决方案**: 使用 Toast 或 Notification 组件
+
+**状态**: ✅ 已于 2026-04-06 解决
+
+**解决方案**:
+1. 创建 `Toast` 通知系统（`components/ui/Toast.tsx`），  - `ToastProvider` 上下文 + `useToast` hook
+  - 4 种类型：success / error / warning / info
+  - 右上角弹出，3.5 秒自动消失
+  - 独立函数 `showToastNotification` 供非 React 代码使用
+2. 创建 `PasswordResetModal`（`components/ui/PasswordResetModal.tsx`）替代浏览器原生 `prompt()`
+3. 将所有 `alert()` 替换为 `toast.success/error/warning()`
+4. 将所有 `confirm()` 替换为 `ConfirmModal` 组件 + useState 模式
+5. 将所有 `prompt()` 替换为 `PasswordResetModal` 组件
+
+**验证**: `grep -r '\b(alert|confirm|prompt)\(' apps/web/src --include='*.tsx'` → 0 匹配
 
 ### 8.3 缺少表单验证反馈 [P2]
 

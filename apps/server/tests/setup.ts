@@ -1,10 +1,7 @@
 import { beforeAll, afterAll, afterEach } from 'vitest'
 import { prisma } from '../src/prisma'
 
-// 使用测试数据库
-process.env.DATABASE_URL = 'file:./prisma/test.db'
-process.env.NODE_ENV = 'test'
-process.env.JWT_SECRET = 'test-secret-key-for-testing-only'
+// 注意：DATABASE_URL 已在 setup-env.ts 中设置（必须在 prisma import 之前）
 
 beforeAll(async () => {
   // 确保数据库连接
@@ -13,12 +10,17 @@ beforeAll(async () => {
 
 afterEach(async () => {
   // 每个测试后清理数据（按依赖顺序删除）
+  // 注意：不清理 Problem 表，因为题目数据是共享的公共数据
   const tablenames = [
+    'ProblemListEntry',
+    'ProblemListSection',
+    'ProblemListShare',
+    'SchoolProblemList',
+    'TeamProblemList',
+    'ProblemList',
     'TeamOperationLog',
     'LoginLog',
-    'TaskProgress',
     'TaskItem',
-    'TaskList',
     'ContestProblemScore',
     'ContestResult',
     'ContestProblem',

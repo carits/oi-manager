@@ -123,8 +123,8 @@ include: {
 |------|-------------------|
 | User | `Admin`, `Student`, `Teacher` |
 | School | `PrincipalTransferLog`, `Student`, `Teacher`, `Team` |
-| Teacher | `Milestone`, `Student`, `TaskList`, `School`, `User` |
-| Student | `ContestProblemNote`, `ContestProblemScore`, `ContestResult`, `Milestone`, `Teacher`, `School`, `User`, `TaskProgress`, `TeamJoinRequest` |
+| Teacher | `Milestone`, `Student`, `School`, `User` |
+| Student | `ContestProblemNote`, `ContestProblemScore`, `ContestResult`, `Milestone`, `Teacher`, `School`, `User`, `TeamJoinRequest` |
 | Team | `Contest`, `School`, `TeamJoinRequest`, `TeamMember` |
 | TeamMember | `Team` |
 

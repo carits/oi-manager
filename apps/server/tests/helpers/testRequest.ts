@@ -11,6 +11,9 @@ import { teamRouter } from '../../src/routes/teams'
 import { schoolRouter } from '../../src/routes/schools'
 import { userRouter } from '../../src/routes/users'
 import { teacherRouter } from '../../src/routes/teachers'
+import { problemListsRouter } from '../../src/routes/problem-lists'
+import { schoolProblemListsRouter } from '../../src/routes/school-problem-lists'
+import { teamProblemListsRouter } from '../../src/routes/team-problem-lists'
 
 /**
  * 创建测试用的 Express 应用
@@ -38,6 +41,9 @@ export function createTestApp() {
   app.use('/api/schools', schoolRouter)
   app.use('/api/users', userRouter)
   app.use('/api/teachers', teacherRouter)
+  app.use('/api/problem-lists', problemListsRouter)
+  app.use('/api/schools', schoolProblemListsRouter)
+  app.use('/api/teams', teamProblemListsRouter)
 
   // 健康检查
   app.get('/api/health', (req, res) => {

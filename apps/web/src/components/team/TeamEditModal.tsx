@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 
@@ -10,6 +11,7 @@ interface TeamEditFormData {
   name: string
   description: string
   isPublic: boolean
+  teamId?: string
 }
 
 interface TeamEditModalProps {
@@ -27,6 +29,7 @@ export function TeamEditModal({
   initialData,
   onSuccess
 }: TeamEditModalProps) {
+  const toast = useToast()
   const [formData, setFormData] = useState<TeamEditFormData>(initialData)
   const [saving, setSaving] = useState(false)
 
@@ -38,7 +41,7 @@ export function TeamEditModal({
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      alert('请输入团队名称')
+      toast.warning('请输入团队名称')
       return
     }
 
@@ -53,11 +56,11 @@ export function TeamEditModal({
         onClose()
         onSuccess()
       } else {
-        alert(result.message || '编辑失败')
+        toast.error(result.message || '编辑失败')
       }
     } catch (error) {
       console.error('Edit team error:', error)
-      alert('编辑失败')
+      toast.error('编辑失败')
     } finally {
       setSaving(false)
     }
@@ -76,6 +79,21 @@ export function TeamEditModal({
             placeholder="请输入团队名称"
           />
         </div>
+
+        {formData.teamId && (
+          <div style={formStyles.field}>
+            <label style={formStyles.label}>团队ID</label>
+            <input
+              type="text"
+              value={formData.teamId}
+              disabled
+              style={{ ...formStyles.input, background: 'var(--gray-50)', color: 'var(--gray-500)', cursor: 'not-allowed' }}
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: '0.25rem' }}>
+              团队ID创建后不可修改
+            </p>
+          </div>
+        )}
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>团队描述</label>

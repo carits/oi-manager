@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
 
 export default function NewPlatformAdminPage() {
   const router = useRouter()
+  const toast = useToast()
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -38,7 +40,7 @@ export default function NewPlatformAdminPage() {
       const result = await apiClient.post('/api/users/platform-admin', formData)
 
       if (result.success) {
-        alert('平台管理员创建成功')
+        toast.success('平台管理员创建成功')
         router.push('/admin/users')
       } else {
         setError(result.message || '创建失败')

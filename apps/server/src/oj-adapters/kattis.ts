@@ -19,7 +19,7 @@ import { logger } from '../lib/logger'
 const BASE_URL = 'https://open.kattis.com'
 
 export class KattisAdapter implements OjAdapter {
-  readonly name: 'Kattis'
+  readonly name = 'Kattis' as const
   platform: OjPlatform = 'kattis'
 
   rateLimitConfig = {

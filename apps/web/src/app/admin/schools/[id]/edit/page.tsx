@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
+import { useToast } from '@/components/ui/Toast'
 
 interface School {
   id: string
@@ -27,6 +28,7 @@ interface Teacher {
 export default function EditSchoolPage() {
   const params = useParams()
   const router = useRouter()
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [principal, setPrincipal] = useState<School['principal']>(null)
@@ -177,7 +179,7 @@ export default function EditSchoolPage() {
         region
       })
       if (!result.success) {
-        alert(result.message || '保存失败')
+        toast.error(result.message || '保存失败')
         setSaving(false)
         return
       }
@@ -186,7 +188,7 @@ export default function EditSchoolPage() {
       if (selectedTeacherId && selectedTeacherId !== principal?.id) {
         const principalResult = await apiClient.put(`/api/schools/${schoolId}/principal`, { teacherId: selectedTeacherId })
         if (!principalResult.success) {
-          alert(principalResult.message || '负责人更新失败')
+          toast.error(principalResult.message || '负责人更新失败')
           setSaving(false)
           return
         }
@@ -198,10 +200,10 @@ export default function EditSchoolPage() {
         }
       }
 
-      alert('保存成功')
+      toast.success('保存成功')
       router.push('/admin/schools')
     } catch {
-      alert('保存失败')
+      toast.error('保存失败')
     } finally {
       setSaving(false)
     }

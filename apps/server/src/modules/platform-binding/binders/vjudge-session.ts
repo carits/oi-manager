@@ -594,7 +594,9 @@ export class VJudgeSession {
       let avatarUrl = ''
       const logoMatch = html.match(/<img[^>]*id=["']group-logo["'][^>]*src=["']([^"']+)["']/i)
       if (logoMatch) {
-        avatarUrl = logoMatch[1].trim()
+        const rawSrc = logoMatch[1].trim()
+        // 相对路径需要拼接 VJudge 域名
+        avatarUrl = rawSrc.startsWith('http') ? rawSrc : new URL(rawSrc, 'https://vjudge.net/').toString()
       } else {
         const ogMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
         if (ogMatch) {

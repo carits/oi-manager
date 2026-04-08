@@ -2,6 +2,7 @@
 
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 
 interface TransferCandidate {
@@ -27,9 +28,11 @@ export function TeamTransferModal({
   candidates,
   onSuccess
 }: TeamTransferModalProps) {
+  const toast = useToast()
+
   const handleTransfer = async () => {
     if (!selectedTarget) {
-      alert('请选择新所有者')
+      toast.warning('请选择新所有者')
       return
     }
 
@@ -39,15 +42,15 @@ export function TeamTransferModal({
         newOwnerType: selectedTarget.memberType
       })
       if (result.success) {
-        alert('所有权转移成功')
+        toast.success('所有权转移成功')
         onClose()
         onSuccess()
       } else {
-        alert(result.message || '转移失败')
+        toast.error(result.message || '转移失败')
       }
     } catch (error) {
       console.error('Transfer error:', error)
-      alert('转移失败')
+      toast.error('转移失败')
     }
   }
 

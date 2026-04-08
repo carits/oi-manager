@@ -70,7 +70,7 @@ School (学校)
   ├── Student (学生)
   └── Team (团队)
         ├── Contest (比赛)
-        └── TaskList (题单)
+        └── ProblemList (题单)
 ```
 
 ### 2.3 技术栈
@@ -293,7 +293,7 @@ npx prisma studio
 
 - 🔄 比赛管理功能
 - 🔄 Rating 系统完善
-- 🔄 题单管理
+- ✅ 题单管理（飞书文档式权限）
 
 ### 8.3 计划中功能
 

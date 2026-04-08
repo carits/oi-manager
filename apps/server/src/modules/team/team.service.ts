@@ -457,10 +457,9 @@ export class TeamService {
         throw new Error('TEAM_LIMIT_EXCEEDED')
       }
 
-      const teamId = crypto.randomUUID()
       const newTeam = await tx.team.create({
         data: {
-          id: teamId,
+          id: dto.id,
           name: dto.name,
           description: dto.description,
           schoolId,
@@ -989,7 +988,7 @@ export class TeamService {
 
     if (member.role === 'owner') {
       // 所有者：检查团队是否有其他成员
-      const otherMemberCount = await this.repo.countMembers(teamId, member.id)
+      const otherMemberCount = await this.repo.countMembers(teamId, member.userId)
 
       if (otherMemberCount > 0) {
         throw new Error('HAS_OTHER_MEMBERS')

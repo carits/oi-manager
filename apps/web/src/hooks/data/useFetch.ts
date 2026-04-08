@@ -37,7 +37,7 @@ export function useFetch<T>(
     setError(null)
     try {
       const result = await apiClient.get<T>(url, {
-        signal: controller.signal,
+        signal: controller.signal as unknown as AbortSignal | undefined,
         ...options,
         headers: options?.headers
       })

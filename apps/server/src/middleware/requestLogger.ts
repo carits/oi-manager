@@ -14,6 +14,15 @@ declare global {
       requestId?: string
       requestLogger?: ReturnType<typeof createRequestLogger>
       startTime?: number
+      user?: {
+        userId: string
+        username: string
+        role: string
+        teacherId?: string
+        studentId?: string
+        adminId?: string
+        schoolId?: string
+      }
     }
   }
 }

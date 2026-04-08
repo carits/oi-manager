@@ -106,7 +106,7 @@ export class LuoguAdapter implements OjAdapter {
 
         // 4. 构建 Markdown 并返回
         return this.buildOjProblem(data, problemId)
-      } catch (error) {
+      } catch (error: unknown) {
         lastError = error as Error
 
         // 网络错误：重试
@@ -121,13 +121,13 @@ export class LuoguAdapter implements OjAdapter {
             throw new OjFetchError(
               OjErrorCode.PROBLEM_NOT_FOUND,
               `题目不存在: ${problemId}`,
-              error
+              error as Error
             )
           }
           throw new OjFetchError(
             OjErrorCode.CLIENT_ERROR,
             `请求失败: ${(error as any).message}`,
-            error
+            error as Error
           )
         }
 
@@ -136,7 +136,7 @@ export class LuoguAdapter implements OjAdapter {
           throw new OjFetchError(
             OjErrorCode.SERVER_ERROR,
             `洛谷服务器错误，请稍后重试`,
-            error
+            error as Error
           )
         }
 

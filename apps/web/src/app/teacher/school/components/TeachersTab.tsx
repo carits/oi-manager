@@ -6,6 +6,8 @@ import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Pagination } from '@/components/ui/Pagination'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { useToast } from '@/components/ui/Toast'
 import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
 import { formStyles } from '@/lib/styles'
@@ -38,6 +40,7 @@ interface TeachersTabProps {
 
 export default function TeachersTab({ school, isPrincipal, showHeader = false, showActions = true }: TeachersTabProps) {
   const router = useRouter()
+  const toast = useToast()
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
@@ -49,6 +52,15 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   const transferModal = useModal()
   const [selectedNewPrincipal, setSelectedNewPrincipal] = useState('')
   const [transferring, setTransferring] = useState(false)
+
+  // ConfirmModal 状态
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    danger?: boolean
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} })
 
   useEffect(() => {
     fetchTeachers()
@@ -72,63 +84,88 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除该教师吗？')) return
-
-    try {
-      const result = await apiClient.delete(`/api/teachers/${id}`)
-      if (result.success) {
-        fetchTeachers()
-      } else {
-        alert(result.message || '删除失败')
+    setConfirmState({
+      isOpen: true,
+      title: '删除教师',
+      message: '确定要删除该教师吗？',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const result = await apiClient.delete(`/api/teachers/${id}`)
+          if (result.success) {
+            toast.success('删除成功')
+            fetchTeachers()
+          } else {
+            toast.error(result.message || '删除失败')
+          }
+        } catch {
+          toast.error('删除失败')
+        } finally {
+          setConfirmState(prev => ({ ...prev, isOpen: false }))
+        }
       }
-    } catch {
-      alert('删除失败')
-    }
+    })
   }
 
   const handleToggleStatus = async (teacher: Teacher) => {
     const newStatus = teacher.user.status === 'active' ? 'disabled' : 'active'
     const action = newStatus === 'active' ? '启用' : '禁用'
 
-    if (!confirm(`确定要${action}该教师吗？`)) return
-
-    try {
-      const result = await apiClient.put(`/api/teachers/${teacher.id}/status`, { status: newStatus })
-      if (result.success) {
-        fetchTeachers()
-      } else {
-        alert(result.message || '操作失败')
+    setConfirmState({
+      isOpen: true,
+      title: `${action}教师`,
+      message: `确定要${action}该教师吗？`,
+      danger: newStatus === 'disabled',
+      onConfirm: async () => {
+        try {
+          const result = await apiClient.put(`/api/teachers/${teacher.id}/status`, { status: newStatus })
+          if (result.success) {
+            toast.success(`${action}成功`)
+            fetchTeachers()
+          } else {
+            toast.error(result.message || '操作失败')
+          }
+        } catch {
+          toast.error('操作失败')
+        } finally {
+          setConfirmState(prev => ({ ...prev, isOpen: false }))
+        }
       }
-    } catch {
-      alert('操作失败')
-    }
+    })
   }
 
   const handleTransferPrincipal = async () => {
     if (!selectedNewPrincipal) {
-      alert('请选择新的学校负责人')
+      toast.warning('请选择新的学校负责人')
       return
     }
 
-    if (!confirm('确定要转移学校负责人吗？转移后您将失去学校负责人权限。')) return
-
-    setTransferring(true)
-    try {
-      const result = await apiClient.post('/api/schools/current/principal-transfer', {
-        newTeacherId: selectedNewPrincipal
-      })
-      if (result.success) {
-        alert('转移成功')
-        transferModal.close()
-        window.location.reload()
-      } else {
-        alert(result.message || '转移失败')
+    setConfirmState({
+      isOpen: true,
+      title: '转移学校负责人',
+      message: '确定要转移学校负责人吗？转移后您将失去学校负责人权限。',
+      danger: true,
+      onConfirm: async () => {
+        setTransferring(true)
+        try {
+          const result = await apiClient.post('/api/schools/current/principal-transfer', {
+            newTeacherId: selectedNewPrincipal
+          })
+          if (result.success) {
+            toast.success('转移成功')
+            transferModal.close()
+            setConfirmState(prev => ({ ...prev, isOpen: false }))
+            window.location.reload()
+          } else {
+            toast.error(result.message || '转移失败')
+          }
+        } catch {
+          toast.error('转移失败')
+        } finally {
+          setTransferring(false)
+        }
       }
-    } catch {
-      alert('转移失败')
-    } finally {
-      setTransferring(false)
-    }
+    })
   }
 
   const transferableTeachers = teachers.filter(
@@ -278,6 +315,15 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
           </div>
         </Modal>
       )}
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        danger={confirmState.danger}
+      />
     </div>
   )
 }
@@ -294,6 +340,7 @@ function TeacherFormModal({
   onSuccess: () => void
 }) {
   const [submitting, setSubmitting] = useState(false)
+  const toast = useToast()
 
   const form = useForm(
     {
@@ -307,7 +354,7 @@ function TeacherFormModal({
     async (values) => {
       // 验证至少有一个联系方式
       if (!values.email && !values.phone) {
-        alert('至少需要填写邮箱或手机号其中一个')
+        toast.warning('至少需要填写邮箱或手机号其中一个')
         return
       }
 
@@ -334,10 +381,10 @@ function TeacherFormModal({
         if (result.success) {
           onSuccess()
         } else {
-          alert(result.message || '操作失败')
+          toast.error(result.message || '操作失败')
         }
       } catch {
-        alert('操作失败')
+        toast.error('操作失败')
       } finally {
         setSubmitting(false)
       }

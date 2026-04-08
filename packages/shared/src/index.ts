@@ -54,7 +54,7 @@ export interface PaginationParams {
 export interface LoginRequest {
   username: string
   password: string
-  role: UserRole
+  role: UserRole | 'admin' | 'teacher' // 'admin'/'teacher' 是登录入口类型，非数据库角色
 }
 
 // 用户登录响应

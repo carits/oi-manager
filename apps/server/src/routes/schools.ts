@@ -306,7 +306,6 @@ schoolRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) =
           data: {
             id: school.id,
             name: school.name,
-            shortName: school.shortName,
             region: school.region,
             schoolType: school.schoolType,
             educationSystem: school.educationSystem,
@@ -541,7 +540,7 @@ schoolRouter.put('/:id', authenticate, async (req: AuthRequest, res: Response) =
       // 超管可以编辑所有字段
       // 如果更新名称，检查是否重复
       if (name && name !== existing.name) {
-        const nameExists = await prisma.school.findUnique({ where: { name } })
+        const nameExists = await prisma.school.findFirst({ where: { name } })
         if (nameExists) {
           return res.status(400).json({ success: false, message: '学校名称已存在' })
         }
@@ -580,7 +579,7 @@ schoolRouter.put('/:id', authenticate, async (req: AuthRequest, res: Response) =
 
       // 如果更新名称，检查是否重复
       if (name && name !== existing.name) {
-        const nameExists = await prisma.school.findUnique({ where: { name } })
+        const nameExists = await prisma.school.findFirst({ where: { name } })
         if (nameExists) {
           return res.status(400).json({ success: false, message: '学校名称已存在' })
         }
@@ -665,18 +664,18 @@ schoolRouter.post('/init', authenticate, async (req: AuthRequest, res: Response)
       create: {
         id: 'default-school',
         name: '第一中学',
-        description: '默认学校'
+        announcement: '默认学校'
       }
     })
 
     // 2. 清理没有 schoolId 的团队（设置为默认学校）
     const teamsWithoutSchool = await prisma.team.findMany({
-      where: { schoolId: null }
+      where: { schoolId: { equals: undefined } }
     })
 
     if (teamsWithoutSchool.length > 0) {
       await prisma.team.updateMany({
-        where: { schoolId: null },
+        where: { schoolId: { equals: undefined } },
         data: { schoolId: defaultSchool.id }
       })
     }

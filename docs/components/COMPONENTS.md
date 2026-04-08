@@ -18,7 +18,9 @@ apps/web/src/components/
 │   ├── PageHeader.tsx     # 页面头部组件
 │   ├── MarkdownRenderer.tsx # Markdown 渲染组件
 │   ├── Empty.tsx          # 空状态组件
-│   └── ConfirmModal.tsx   # 确认对话框组件
+│   ├── ConfirmModal.tsx   # 确认对话框组件
+│   ├── Toast.tsx          # Toast 通知组件
+│   └── PasswordResetModal.tsx # 密码重置弹窗组件
 ├── business/              # 业务组件
 │   ├── RegionSelector.tsx # 区域选择器
 │   └── UserManagement.tsx # 用户管理组件
@@ -613,7 +615,7 @@ interface SubmissionListProps {
 
 **文件**: `apps/web/src/components/ui/ConfirmModal.tsx`
 
-**用途**: 确认操作弹窗
+**用途**: 替代浏览器原生 `confirm()`，用于需要用户确认的危险操作（如删除、解散等）。
 
 **Props**:
 ```typescript
@@ -623,11 +625,146 @@ interface ConfirmModalProps {
   onConfirm: () => void
   title: string
   message: string
-  confirmText?: string
-  cancelText?: string
-  variant?: 'danger' | 'warning' | 'info'
+  confirmText?: string   // 默认 '确认'
+  cancelText?: string    // 默认 '取消'
+  danger?: boolean       // 危险样式（红色按钮），默认 false
+  loading?: boolean      // 确认按钮 loading 状态，默认 false
 }
 ```
+
+**使用示例**:
+```tsx
+const [confirmState, setConfirmState] = useState<{
+  id: string
+  message: string
+  action: () => Promise<void>
+} | null>(null)
+
+// 触发确认
+<button onClick={() => setConfirmState({
+  id: item.id,
+  message: '确定要删除吗？',
+  action: async () => { await apiClient.delete(`/api/items/${item.id}`) }
+})}>
+  删除
+</button>
+
+// 确认弹窗
+<ConfirmModal
+  isOpen={!!confirmState}
+  onClose={() => setConfirmState(null)}
+  onConfirm={() => { confirmState?.action(); setConfirmState(null) }}
+  title="确认操作"
+  message={confirmState?.message || ''}
+  confirmText="确认"
+  danger
+/>
+```
+
+---
+
+### 6. Toast (通知提示)
+
+**文件**: `apps/web/src/components/ui/Toast.tsx`
+
+**用途**: 替代浏览器原生 `alert()`，用于操作成功/失败的轻量级反馈通知。在右上角弹出，3.5 秒自动消失。
+
+**导出**:
+- `ToastProvider` — 上下文 Provider，需在 `Providers.tsx` 中挂载
+- `useToast` — React 组件内使用的 Hook
+- `showToastNotification` — 非 React 上下文中使用的独立函数
+
+**Toast 类型**:
+| 类型 | 颜色 | 图标 | 用途 |
+|------|------|------|------|
+| `success` | 绿色 | ✓ | 操作成功反馈 |
+| `error` | 红色 | ✕ | 操作失败反馈 |
+| `warning` | 黄色 | ! | 输入验证警告 |
+| `info` | 蓝色 | i | 一般信息提示 |
+
+**Hook 使用示例** (React 组件内):
+```tsx
+import { useToast } from '@/components/ui/Toast'
+
+function MyComponent() {
+  const { toast } = useToast()
+
+  const handleSave = async () => {
+    try {
+      const result = await apiClient.post('/api/items', data)
+      if (result.success) {
+        toast.success('保存成功')
+      } else {
+        toast.error(result.message || '保存失败')
+      }
+    } catch {
+      toast.error('操作失败')
+    }
+  }
+}
+```
+
+**独立函数使用示例** (非 React 组件代码):
+```tsx
+import { showToastNotification } from '@/components/ui/Toast'
+
+// 在模块级函数中使用
+function handleFileDownload() {
+  if (!isLoggedIn) {
+    showToastNotification('请先登录', 'warning')
+    return
+  }
+}
+```
+
+**挂载方式**:
+在 `Providers.tsx` 中用 `<ToastProvider>` 包裹 children，页面需要有 `<div id="toast-root" />` 供独立函数使用。
+
+---
+
+### 7. PasswordResetModal (密码重置弹窗)
+
+**文件**: `apps/web/src/components/ui/PasswordResetModal.tsx`
+
+**用途**: 替代浏览器原生 `prompt()`，用于管理员重置用户密码的场景。
+
+**Props**:
+```typescript
+interface PasswordResetModalProps {
+  isOpen: boolean
+  onClose: () => void
+  userId: string           // 目标用户 ID
+  username: string         // 目标用户名（显示用）
+  onSuccess?: (newPassword: string) => void  // 重置成功回调
+}
+```
+
+**使用示例**:
+```tsx
+const [resetTarget, setResetTarget] = useState<{ userId: string; username: string } | null>(null)
+
+// 触发
+<button onClick={() => setResetTarget({ userId: user.id, username: user.username })}>
+  重置密码
+</button>
+
+// 弹窗
+<PasswordResetModal
+  isOpen={!!resetTarget}
+  onClose={() => setResetTarget(null)}
+  userId={resetTarget?.userId || ''}
+  username={resetTarget?.username || ''}
+  onSuccess={(newPassword) => {
+    toast.success(`密码已重置为: ${newPassword}`)
+    setResetTarget(null)
+  }}
+/>
+```
+
+**特性**:
+- 密码最少 6 位
+- 自动调用 `/api/users/:id/reset-password` 接口
+- 内置 loading 和错误提示状态
 
 ---
 

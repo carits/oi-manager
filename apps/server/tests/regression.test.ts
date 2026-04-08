@@ -134,22 +134,20 @@ describe('Regression Tests - Basic List and Detail', () => {
   })
 
   describe('Teacher List', () => {
-    it('should list teachers', async () => {
+    it('should get teacher info via /me', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-
-      await createTestUser({ role: 'teacher', schoolId: school.id })
-      await createTestUser({ role: 'teacher', schoolId: school.id })
+      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
 
       const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
+        userId: teacher.id,
+        role: 'teacher',
+        username: teacher.username,
+        teacherId,
+        schoolId: school.id
       })
 
       const res = await request(app)
-        .get('/api/teachers')
+        .get('/api/teachers/me')
         .set('Authorization', `Bearer ${token}`)
 
       expect(res.status).toBe(200)
@@ -201,7 +199,7 @@ describe('Regression Tests - Basic List and Detail', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      res.body.data.list.forEach((user: any) => {
+      res.body.data.users.forEach((user: any) => {
         expect(user.role).toBe('teacher')
       })
     })
@@ -224,7 +222,7 @@ describe('Regression Tests - Basic List and Detail', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      res.body.data.list.forEach((user: any) => {
+      res.body.data.users.forEach((user: any) => {
         expect(user.status).toBe('active')
       })
     })
@@ -254,10 +252,10 @@ describe('Regression Tests - Basic List and Detail', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      expect(res.body.data.length).toBeGreaterThan(0)
+      expect(res.body.data.rankings.length).toBeGreaterThan(0)
 
       // Verify descending order
-      const ratings = res.body.data.map((s: any) => s.rating)
+      const ratings = res.body.data.rankings.map((s: any) => s.rating)
       for (let i = 1; i < ratings.length; i++) {
         expect(ratings[i - 1]).toBeGreaterThanOrEqual(ratings[i])
       }

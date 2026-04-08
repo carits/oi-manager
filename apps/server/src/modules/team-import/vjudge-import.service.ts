@@ -281,7 +281,7 @@ export class VjudgeImportService {
     let teamName: string | undefined
 
     // 如果需要创建团队
-    if (request.createTeam && !request.teamId) {
+    if (request.createTeam) {
       // 下载 VJudge 团队头像到本地（需要 VJudge 会话来通过认证）
       let localAvatarPath: string | null = null
       if (request.avatarUrl) {
@@ -290,14 +290,15 @@ export class VjudgeImportService {
           localAvatarPath = await this.downloadAvatar(request.avatarUrl, session || undefined)
           console.log(`[VjudgeImport] Avatar downloaded: ${localAvatarPath}`)
         } catch (err) {
-          console.warn('[VjudgeImport] Failed to download avatar, using external URL:', err instanceof Error ? err.message : String(err))
-          localAvatarPath = request.avatarUrl // 回退到外部 URL
+          console.warn('[VjudgeImport] Failed to download avatar, skipping:', err instanceof Error ? err.message : String(err))
+          // 不回退到外部 URL（需要认证，前端无法直接加载）
+          localAvatarPath = null
         }
       }
 
       const newTeam = await prisma.team.create({
         data: {
-          id: uuidv4(),
+          id: request.teamId || request.vjudgeGroupId,
           name: request.teamName || `VJudge导入团队-${Date.now()}`,
           schoolId,
           isPublic: request.visibility === 'public',

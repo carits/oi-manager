@@ -36,7 +36,7 @@ interface CreatedTestUser {
  */
 export async function createTestUser(options: CreateTestUserOptions = {}): Promise<CreatedTestUser> {
   const { role = 'student', username, password = 'test123456', schoolId, status = 'active', headTeacherId, rating = 1200 } = options
-  const uniqueUsername = username || `test_${role}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const uniqueUsername = username || `t_${Math.random().toString(36).slice(2, 8)}`
 
   const passwordHash = await bcrypt.hash(password, 10)
 
@@ -66,11 +66,17 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
     })
     teacherId = teacher.id
   } else if (role === 'student') {
+    // Student 必须有有效的 schoolId（FK 约束），如果没有提供则自动创建学校
+    let effectiveSchoolId = schoolId
+    if (!effectiveSchoolId) {
+      const tempSchool = await createTestSchool()
+      effectiveSchoolId = tempSchool.id
+    }
     const student = await prisma.student.create({
       data: {
         userId: user.id,
         name: `Test ${role}`,
-        schoolId: schoolId || '',
+        schoolId: effectiveSchoolId,
         rating,
         headTeacherId: headTeacherId || null
       }
@@ -172,6 +178,7 @@ export async function createTestTeam(options: {
 
   const team = await prisma.team.create({
     data: {
+      id: `team_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: uniqueName,
       schoolId,
       isPublic

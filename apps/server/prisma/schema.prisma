@@ -251,7 +251,8 @@ model PrincipalTransferLog {
 
 model Problem {
   id                String              @id @default(uuid())
-  problemCode       String
+  platform          String              // 主平台标识（universaloj, qoj, luogu, carits 等）
+  problemId         String              // 原始题号（60, P1001, P000001 等，不拼接）
   title             String
   description       String?
   statementType     String              @default("none")
@@ -272,9 +273,11 @@ model Problem {
   updatedAt         DateTime  @updatedAt
   ojBindings        String?
   ProblemAttachment ProblemAttachment[]
+  ProblemListEntry  ProblemListEntry[]
   ProblemNote       ProblemNote[]
   ProblemStatement  ProblemStatement[]
 
+  @@unique([platform, problemId])
   @@index([visibility])
   @@index([ownerId, ownerType])
   @@index([visibility, status])
@@ -341,6 +344,7 @@ model School {
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime  @updatedAt
   PrincipalTransferLog      PrincipalTransferLog[]
+  SchoolProblemLists        SchoolProblemList[]
   Student                   Student[]
   Teacher                   Teacher[]
   Team                      Team[]
@@ -354,7 +358,7 @@ model Student {
   schoolId                  String
   enrollmentYear            Int?
   targetContest             String?
-  headTeacherId             String
+  headTeacherId             String?
   tags                      String?
   notes                     String?
   avatar                    String?
@@ -367,66 +371,15 @@ model Student {
   Milestone                 Milestone[]
   TeamJoinRequest           TeamJoinRequest[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
-  TaskProgress              TaskProgress[]
   User                      User                        @relation(fields: [userId], references: [id])
   School                    School                      @relation(fields: [schoolId], references: [id])
-  Teacher                   Teacher                     @relation(fields: [headTeacherId], references: [id])
+  Teacher                   Teacher?                    @relation(fields: [headTeacherId], references: [id])
 
   @@index([schoolId])
   @@index([headTeacherId])
   @@index([rating])
   @@index([schoolId, headTeacherId])
   @@index([enrollmentYear])
-}
-
-model Task {
-  id           String         @id @default(uuid())
-  taskListId   String
-  title        String
-  ojName       String?
-  problemId    String?
-  difficulty   String?
-  points       Int?
-  notes        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime  @updatedAt
-  TaskList     TaskList       @relation(fields: [taskListId], references: [id], onDelete: Cascade)
-  TaskProgress TaskProgress[]
-}
-
-model TaskList {
-  id          String    @id @default(uuid())
-  title       String
-  description String?
-  publishAt   DateTime?
-  deadline    DateTime?
-  createdBy   String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  Task        Task[]
-  Teacher     Teacher   @relation(fields: [createdBy], references: [id])
-
-  @@index([createdBy])
-  @@index([createdAt])
-}
-
-model TaskProgress {
-  id            String    @id @default(uuid())
-  taskId        String
-  studentId     String
-  status        String    @default("pending")
-  seenEditorial Boolean   @default(false)
-  needHelp      Boolean   @default(false)
-  notes         String?
-  completedAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  Task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  Student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([taskId, studentId])
-  @@index([studentId])
-  @@index([status])
 }
 
 model Teacher {
@@ -444,7 +397,6 @@ model Teacher {
   updatedAt DateTime  @updatedAt
   Milestone Milestone[]
   Student   Student[]
-  TaskList  TaskList[]
   User      User        @relation(fields: [userId], references: [id])
   School    School?     @relation(fields: [schoolId], references: [id])
 
@@ -454,7 +406,7 @@ model Teacher {
 }
 
 model Team {
-  id                       String                       @id @default(uuid())
+  id                       String                       @id
   name                     String
   avatar                   String?
   description              String?
@@ -469,6 +421,7 @@ model Team {
   TeamMember               TeamMember[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
   TeamMemberImportBatch    TeamMemberImportBatch[]
+  TeamProblemLists         TeamProblemList[]
 
   @@index([schoolId])
   @@index([isPublic])
@@ -666,4 +619,123 @@ model AiUsageLog {
 
   @@index([userId, problemId, action, createdAt])
   @@index([userId, createdAt])
+}
+
+// ========== 题单管理（飞书文档式权限） ==========
+
+/// 题单（文件夹/wiki 空间）
+model ProblemList {
+  id          String   @id
+  title       String
+  description String?
+  coverUrl    String?
+  schoolId    String?
+  ownerId     String   // 创建者 userId（教师和学生均可创建）
+  ownerType   String   @default("teacher") // teacher | student
+  visibility  String   @default("private") // private | school
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  Sections    ProblemListSection[]
+  Shares      ProblemListShare[]
+  SchoolProblemLists SchoolProblemList[]
+  TeamProblemLists   TeamProblemList[]
+
+  @@index([ownerId, ownerType])
+  @@index([schoolId])
+  @@index([visibility])
+  @@index([createdAt])
+}
+
+/// 题单中的章节（二级标题，纯视觉分组）
+model ProblemListSection {
+  id             String   @id @default(uuid())
+  problemListId  String
+  title          String
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ProblemList    ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+  Entries        ProblemListEntry[]
+
+  @@index([problemListId])
+}
+
+/// 题单中的题目条目（挂在章节下：题单 → 章节 → 题目）
+model ProblemListEntry {
+  id             String   @id @default(uuid())
+  sectionId      String
+  problemId      String   // 关联 Problem.id
+  sortOrder      Int      @default(0)
+  alias          String?  // 别名 A/B/C...（手动填写）
+  notes          String?  // 备注（可为空）
+  ojName         String?  // OJ 平台标识（carits, luogu, codeforces 等）
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  Section        ProblemListSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  Problem        Problem            @relation(fields: [problemId], references: [id])
+
+  @@unique([sectionId, problemId])
+  @@index([sectionId])
+  @@index([problemId])
+}
+
+/// 题单级分享
+model ProblemListShare {
+  id             String   @id @default(uuid())
+  problemListId  String
+  targetType     String   // school | team | teacher | student
+  targetId       String
+  permission     String   @default("view") // view | edit | admin
+  sharedBy       String   // 分享人 userId
+  createdAt      DateTime @default(now())
+
+  ProblemList    ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+
+  @@unique([problemListId, targetType, targetId])
+  @@index([targetType, targetId])
+  @@index([sharedBy])
+}
+
+// ========== 学校题单 & 团队题单（收录/推荐） ==========
+
+/// 学校题单（学校收录的题单）
+model SchoolProblemList {
+  id            String   @id @default(uuid())
+  schoolId      String
+  problemListId String   // 关联的个人题单
+  addedBy       String   // 添加者 userId
+  addedByRole   String   // 添加者角色: principal | teacher
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  School        School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, problemListId])
+  @@index([schoolId])
+  @@index([problemListId])
+  @@index([addedBy])
+}
+
+/// 团队题单（团队收录的题单）
+model TeamProblemList {
+  id            String   @id @default(uuid())
+  teamId        String
+  problemListId String   // 关联的个人题单
+  addedBy       String   // 添加者 userId
+  addedByRole   String   // 添加者角色: owner | admin | teacher
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  Team          Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, problemListId])
+  @@index([teamId])
+  @@index([problemListId])
+  @@index([addedBy])
 }
