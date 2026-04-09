@@ -14,6 +14,7 @@ import { teacherRouter } from '../../src/routes/teachers'
 import { problemListsRouter } from '../../src/routes/problem-lists'
 import { schoolProblemListsRouter } from '../../src/routes/school-problem-lists'
 import { teamProblemListsRouter } from '../../src/routes/team-problem-lists'
+import { ojAccountsRouter } from '../../src/routes/oj-accounts'
 
 /**
  * 创建测试用的 Express 应用
@@ -44,6 +45,7 @@ export function createTestApp() {
   app.use('/api/problem-lists', problemListsRouter)
   app.use('/api/schools', schoolProblemListsRouter)
   app.use('/api/teams', teamProblemListsRouter)
+  app.use('/api/oj-accounts', ojAccountsRouter)
 
   // 健康检查
   app.get('/api/health', (req, res) => {

@@ -175,6 +175,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [aiLoading, setAiLoading] = useState<'translate' | 'format' | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [aiUsage, setAiUsage] = useState<{
+    isAdmin: boolean
+    translations: { zh: boolean; en: boolean }
+    formattedStatementIds: string[]
+  } | null>(null)
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -187,6 +192,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   useEffect(() => {
     fetchProblem()
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
+    fetchAiUsage()
   }, [problemId])
 
   useEffect(() => {
@@ -241,6 +247,17 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       }
     }
   }, [problem])
+
+  const fetchAiUsage = async () => {
+    try {
+      const result = await apiClient.get(`/api/problems/${problemId}/ai/usage`)
+      if (result.success && result.data) {
+        setAiUsage(result.data)
+      }
+    } catch {
+      // 静默失败，不影响页面
+    }
+  }
 
   const fetchProblem = async () => {
     try {
@@ -390,6 +407,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       if (result.success) {
         // 重新获取题目数据以包含新翻译的版本
         await fetchProblem()
+        fetchAiUsage()
         setShowTranslateModal(false)
       } else {
         setAiError(result.message || '翻译失败')
@@ -413,6 +431,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       })
       if (result.success) {
         await fetchProblem()
+        fetchAiUsage()
       } else {
         setAiError(result.message || '格式化失败')
       }
@@ -1037,48 +1056,73 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--gray-700)', marginBottom: '0.25rem' }}>
                 AI 工具
               </div>
-              <button
-                onClick={() => setShowTranslateModal(true)}
-                disabled={aiLoading === 'translate'}
-                style={{
-                  padding: '0.5rem',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: aiLoading === 'translate' ? 'not-allowed' : 'pointer',
-                  fontSize: '0.8rem',
-                  fontWeight: 500,
-                  opacity: aiLoading === 'translate' ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.25rem'
-                }}
-              >
-                {aiLoading === 'translate' ? '翻译中...' : '🌐 翻译'}
-              </button>
-              <button
-                onClick={handleFormat}
-                disabled={aiLoading === 'format'}
-                style={{
-                  padding: '0.5rem',
-                  background: 'var(--gray-100)',
-                  color: 'var(--gray-700)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  cursor: aiLoading === 'format' ? 'not-allowed' : 'pointer',
-                  fontSize: '0.8rem',
-                  fontWeight: 500,
-                  opacity: aiLoading === 'format' ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.25rem'
-                }}
-              >
-                {aiLoading === 'format' ? '格式化中...' : '✨ 格式化'}
-              </button>
+              {(() => {
+                const isAdmin = aiUsage?.isAdmin || false
+                const currentLang = currentStatement?.language || 'zh'
+                const targetLang = currentLang === 'zh' ? 'en' : 'zh'
+                const targetLabel = targetLang === 'zh' ? '中文' : '英文'
+                // 翻译：检查目标语言是否已有 statement
+                const alreadyTranslated = !isAdmin && aiUsage && aiUsage.translations[targetLang as 'zh' | 'en']
+                // 格式化：检查当前 statement 是否已被格式化过
+                const alreadyFormatted = !isAdmin && aiUsage && selectedStatementId && aiUsage.formattedStatementIds.includes(selectedStatementId)
+
+                return (
+                  <>
+                    <button
+                      onClick={() => !alreadyTranslated && setShowTranslateModal(true)}
+                      disabled={aiLoading === 'translate' || !!alreadyTranslated}
+                      style={{
+                        padding: '0.5rem',
+                        background: alreadyTranslated ? 'var(--gray-100)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: alreadyTranslated ? 'var(--gray-400)' : 'white',
+                        border: alreadyTranslated ? '1px solid var(--border)' : 'none',
+                        borderRadius: '6px',
+                        cursor: (aiLoading === 'translate' || alreadyTranslated) ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: 500,
+                        opacity: aiLoading === 'translate' ? 0.7 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.25rem'
+                      }}
+                    >
+                      {aiLoading === 'translate' ? '翻译中...' : alreadyTranslated ? '🌐 已翻译' : '🌐 翻译'}
+                    </button>
+                    {alreadyTranslated && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', textAlign: 'center' }}>
+                        已有{targetLabel}版本
+                      </div>
+                    )}
+                    <button
+                      onClick={() => !alreadyFormatted && handleFormat()}
+                      disabled={aiLoading === 'format' || !!alreadyFormatted}
+                      style={{
+                        padding: '0.5rem',
+                        background: alreadyFormatted ? 'var(--gray-100)' : 'var(--gray-100)',
+                        color: alreadyFormatted ? 'var(--gray-400)' : 'var(--gray-700)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        cursor: (aiLoading === 'format' || alreadyFormatted) ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: 500,
+                        opacity: aiLoading === 'format' ? 0.7 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.25rem'
+                      }}
+                    >
+                      {aiLoading === 'format' ? '格式化中...' : alreadyFormatted ? '✨ 已格式化' : '✨ 格式化'}
+                    </button>
+                    {alreadyFormatted && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', textAlign: 'center' }}>
+                        该版本已格式化
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
               {aiError && (
                 <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>
                   {aiError}

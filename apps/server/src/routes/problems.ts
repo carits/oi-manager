@@ -1183,26 +1183,6 @@ problemsRouter.delete('/:id/statements/:statementId', authenticate, async (req, 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || ''
 
 /**
- * 检查用户 24h 内的 AI 使用次数
- */
-async function checkRateLimit(userId: string, problemId: string, action: string, isAdmin: boolean): Promise<{ allowed: boolean; count: number }> {
-  if (isAdmin) return { allowed: true, count: 0 }
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
-  const count = await prisma.aiUsageLog.count({
-    where: {
-      userId,
-      problemId,
-      action,
-      status: { not: 'rate_limited' },
-      createdAt: { gte: since },
-    },
-  })
-
-  return { allowed: count < 1, count }
-}
-
-/**
  * POST /:id/ai/translate — 翻译题面
  */
 problemsRouter.post('/:id/ai/translate', authenticate, async (req: Request, res: Response) => {
@@ -1216,21 +1196,16 @@ problemsRouter.post('/:id/ai/translate', authenticate, async (req: Request, res:
       return
     }
 
-    // 检查限流
+    // 检查限流：每题每种目标语言全局只能翻译一次，管理员无限制
     const isAdmin = ['super_admin', 'platform_admin'].includes(user.role)
-    const { allowed } = await checkRateLimit(user.userId, id, 'translate', isAdmin)
-    if (!allowed) {
-      await prisma.aiUsageLog.create({
-        data: {
-          userId: user.userId,
-          problemId: id,
-          action: 'translate',
-          status: 'rate_limited',
-          message: '每题每24小时仅可翻译1次',
-        },
+    if (!isAdmin) {
+      const existingTranslation = await prisma.problemStatement.findFirst({
+        where: { problemId: id, type: 'statement', format: 'markdown', language: targetLang },
       })
-      res.status(429).json({ success: false, message: '每题每24小时仅可翻译1次' })
-      return
+      if (existingTranslation) {
+        res.status(400).json({ success: false, message: `已存在${targetLang === 'zh' ? '中文' : '英文'}翻译版本，不能重复翻译` })
+        return
+      }
     }
 
     // 获取题面内容
@@ -1335,21 +1310,22 @@ problemsRouter.post('/:id/ai/format', authenticate, async (req: Request, res: Re
       return
     }
 
-    // 检查限流
+    // 检查限流：每题每条题面全局只能格式化一次，管理员无限制
     const isAdmin = ['super_admin', 'platform_admin'].includes(user.role)
-    const { allowed } = await checkRateLimit(user.userId, id, 'format', isAdmin)
-    if (!allowed) {
-      await prisma.aiUsageLog.create({
-        data: {
-          userId: user.userId,
+    if (!isAdmin) {
+      // 格式化使用 AiUsageLog 记录，检查该题面是否已被格式化过
+      const formattedLog = await prisma.aiUsageLog.findFirst({
+        where: {
           problemId: id,
           action: 'format',
-          status: 'rate_limited',
-          message: '每题每24小时仅可格式化1次',
+          status: 'success',
+          statementId: statementId || undefined,
         },
       })
-      res.status(429).json({ success: false, message: '每题每24小时仅可格式化1次' })
-      return
+      if (formattedLog) {
+        res.status(400).json({ success: false, message: '该题面已格式化过，不能重复格式化' })
+        return
+      }
     }
 
     // 获取题面内容
@@ -1410,6 +1386,7 @@ problemsRouter.post('/:id/ai/format', authenticate, async (req: Request, res: Re
         action: 'format',
         model: result.metadata.model,
         status: 'success',
+        statementId: statementId || undefined,
       },
     })
 
@@ -1435,32 +1412,27 @@ problemsRouter.get('/:id/ai/usage', authenticate, async (req: Request, res: Resp
     const user = (req as any).user
     const isAdmin = ['super_admin', 'platform_admin'].includes(user.role)
 
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const logs = await prisma.aiUsageLog.findMany({
-      where: {
-        userId: user.userId,
-        problemId: id,
-        status: { not: 'rate_limited' },
-        createdAt: { gte: since },
-      },
-      orderBy: { createdAt: 'desc' },
+    // 翻译：检查是否已有其他语言的 statement
+    const statements = await prisma.problemStatement.findMany({
+      where: { problemId: id, type: 'statement', format: 'markdown' },
+      select: { language: true },
     })
+    const hasZh = statements.some(s => s.language === 'zh')
+    const hasEn = statements.some(s => s.language === 'en')
 
-    const translateCount = logs.filter(l => l.action === 'translate').length
-    const formatCount = logs.filter(l => l.action === 'format').length
+    // 格式化：检查全局是否有成功的格式化记录
+    const formatLogs = await prisma.aiUsageLog.findMany({
+      where: { problemId: id, action: 'format', status: 'success' },
+      select: { statementId: true },
+    })
+    const formattedStatementIds = new Set(formatLogs.map(l => l.statementId).filter(Boolean) as string[])
 
     res.json({
       success: true,
       data: {
-        translate: { used: translateCount, limit: isAdmin ? -1 : 1 },
-        format: { used: formatCount, limit: isAdmin ? -1 : 1 },
-        logs: logs.map(l => ({
-          action: l.action,
-          sourceLang: l.sourceLang,
-          targetLang: l.targetLang,
-          status: l.status,
-          createdAt: l.createdAt,
-        })),
+        isAdmin,
+        translations: { zh: hasZh, en: hasEn },
+        formattedStatementIds: Array.from(formattedStatementIds),
       },
     })
   } catch (error) {

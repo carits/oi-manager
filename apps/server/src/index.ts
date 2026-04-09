@@ -20,6 +20,7 @@ import { submissionsRouter } from './routes/submissions'
 import { problemListsRouter } from './routes/problem-lists'
 import { schoolProblemListsRouter } from './routes/school-problem-lists'
 import { teamProblemListsRouter } from './routes/team-problem-lists'
+import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -92,6 +93,7 @@ app.use('/api/submissions', submissionsRouter)
 app.use('/api/problem-lists', problemListsRouter)
 app.use('/api/schools', schoolProblemListsRouter)
 app.use('/api/teams', teamProblemListsRouter)
+app.use('/api/oj-accounts', ojAccountsRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {
@@ -186,6 +188,7 @@ app.listen(PORT, () => {
     action: 'server_start',
     metadata: { port: PORT, env: process.env.NODE_ENV || 'development' }
   })
+  startAutoVerifyScheduler()
 })
 
 export default app

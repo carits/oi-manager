@@ -17,6 +17,7 @@ afterEach(async () => {
     'ProblemListShare',
     'SchoolProblemList',
     'TeamProblemList',
+    'OjAccount',
     'ProblemList',
     'TeamOperationLog',
     'LoginLog',

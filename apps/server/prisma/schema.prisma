@@ -271,6 +271,7 @@ model Problem {
   status            String              @default("draft")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime  @updatedAt
+  allowedLanguages   String?             // 可提交语言，JSON 数组如 ["C","C++","Java","Python3"]，null 表示不限制
   ojBindings        String?
   ProblemAttachment ProblemAttachment[]
   ProblemListEntry  ProblemListEntry[]
@@ -609,6 +610,7 @@ model AiUsageLog {
   userId      String
   problemId   String
   action      String   // translate | format
+  statementId String?  // 格式化时记录的题面 ID，用于去重
   sourceLang  String?  // zh | en
   targetLang  String?  // zh | en
   model       String?  // deepseek-chat
@@ -738,4 +740,49 @@ model TeamProblemList {
   @@index([teamId])
   @@index([problemListId])
   @@index([addedBy])
+}
+
+// ========== OJ 平台账号池（代理提交） ==========
+
+model OjAccount {
+  id              String    @id @default(uuid())
+  platform        String            // OJ 平台标识: hdu, codeforces, luogu, poj 等
+  username        String            // 平台用户名
+  password        String?           // 平台密码 (AES-256-CBC 加密, hex)
+  passwordIV      String?           // AES IV (hex)
+  cookie          String?           // 当前有效 Cookie (序列化字符串)
+  cookieRaw       String?           // 原始 Cookie 字符串 (用户手动粘贴的)
+  status          String    @default("unverified") // active | expired | error | unverified
+  lastVerifiedAt  DateTime?         // 最后验证时间
+  lastErrorMessage String?          // 最近一次错误信息
+  loginMethod     String    @default("cookie") // cookie | password
+  addedBy         String            // 添加者 userId
+
+  // 提交控制配置
+  enabled                         Boolean @default(true)
+  priority                        Int     @default(0)      // 优先级，越大越优先
+  maxConsecutiveFailures           Int     @default(3)      // 最大连续失败次数
+  freezeDurationMinutes            Int     @default(30)     // 异常后冻结时间（分钟）
+  submitMaxRetries                 Int     @default(1)      // 提交失败最大重试次数
+  retryIntervalSeconds             Int     @default(10)     // 重试间隔（秒）
+  loginFailureCooldownMinutes      Int     @default(15)     // 登录失败冷却时间（分钟）
+  reverifyIntervalMinutes          Int     @default(30)     // 重新验证时间间隔（分钟）
+  renewLoginThresholdMinutes       Int     @default(10)     // 提前续登阈值（分钟）
+  minSubmitIntervalSeconds         Int     @default(30)     // 最小提交间隔（秒）
+  minRequestIntervalSeconds        Int     @default(3)      // 最小请求间隔（秒）
+  maxConcurrentSubmissions         Int     @default(1)      // 单账号最大并发提交数
+  maxConcurrentRequests            Int     @default(2)      // 单账号最大并发请求数
+  firstPollDelaySeconds            Int     @default(5)      // 首次查询延迟（秒）
+  pollIntervalSeconds              Int     @default(5)      // 轮询间隔（秒）
+  maxWaitDurationMinutes           Int     @default(10)     // 最长等待时长（分钟）
+  rateLimitThreshold               Int     @default(2)      // 403/429 连续阈值
+  banSuspicionCooldownHours        Int     @default(6)      // 封禁怀疑冷却时间（小时）
+  autoVerifyIntervalMinutes        Int     @default(1440)   // 自动验证时间（分钟，默认 1 天）
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([platform, username])
+  @@index([platform])
+  @@index([status])
 }
