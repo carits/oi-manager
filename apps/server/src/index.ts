@@ -21,6 +21,8 @@ import { problemListsRouter } from './routes/problem-lists'
 import { schoolProblemListsRouter } from './routes/school-problem-lists'
 import { teamProblemListsRouter } from './routes/team-problem-lists'
 import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
+import { submitRouter } from './routes/submit'
+import { startSubmissionPoller } from './lib/submission-poller'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -94,6 +96,7 @@ app.use('/api/problem-lists', problemListsRouter)
 app.use('/api/schools', schoolProblemListsRouter)
 app.use('/api/teams', teamProblemListsRouter)
 app.use('/api/oj-accounts', ojAccountsRouter)
+app.use('/api/submit', submitRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {
@@ -189,6 +192,7 @@ app.listen(PORT, () => {
     metadata: { port: PORT, env: process.env.NODE_ENV || 'development' }
   })
   startAutoVerifyScheduler()
+  startSubmissionPoller(5000) // 每 5 秒轮询一次
 })
 
 export default app

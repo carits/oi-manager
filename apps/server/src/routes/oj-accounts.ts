@@ -57,7 +57,13 @@ ojAccountsRouter.get('/', async (req: any, res) => {
 ojAccountsRouter.get('/stats', async (_req, res) => {
   try {
     const accounts = await prisma.ojAccount.findMany({
-      select: { platform: true, status: true, lastVerifiedAt: true, updatedAt: true },
+      select: {
+        platform: true,
+        status: true,
+        updatedAt: true,
+        totalSubmissions: true,
+        totalSubmissionErrors: true
+      },
     })
 
     // 按平台分组统计
@@ -69,6 +75,8 @@ ojAccountsRouter.get('/stats', async (_req, res) => {
       error: number
       unverified: number
       lastExpiredAt: string | null
+      totalSubmissions: number
+      totalSubmissionErrors: number
     }> = {}
 
     for (const acc of accounts) {
@@ -77,10 +85,14 @@ ojAccountsRouter.get('/stats', async (_req, res) => {
           platform: acc.platform,
           total: 0, active: 0, expired: 0, error: 0, unverified: 0,
           lastExpiredAt: null,
+          totalSubmissions: 0,
+          totalSubmissionErrors: 0,
         }
       }
       const s = platformStats[acc.platform]
       s.total++
+      s.totalSubmissions += acc.totalSubmissions
+      s.totalSubmissionErrors += acc.totalSubmissionErrors
       if (acc.status === 'active') s.active++
       else if (acc.status === 'expired') {
         s.expired++

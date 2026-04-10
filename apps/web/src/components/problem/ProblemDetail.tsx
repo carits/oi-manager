@@ -6,10 +6,12 @@ import { useAuth } from '@/components/AuthProvider'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { Modal } from '@/components/ui/Modal'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
-import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
+import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
+import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
 
 interface Statement {
   id: string
@@ -18,6 +20,11 @@ interface Statement {
   content: string | null
   fileUrl: string | null
   isVisible: boolean
+}
+
+interface PlatformLanguage {
+  id: string
+  name: string
 }
 
 interface Problem {
@@ -33,6 +40,7 @@ interface Problem {
   ownerType: string
   ownerName: string
   ojBindings: string | null
+  allowedLanguages: string | null  // JSON string: PlatformLanguage[]
   createdAt: string
   // 多版本字段
   statements: Statement[]
@@ -158,14 +166,21 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const toast = useToast()
-  type TabType = 'statement' | 'solution' | 'attachments' | 'submit' | 'records'
-  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'submit', 'records']
+  type TabType = 'statement' | 'solution' | 'attachments' | 'records'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'records']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>(
     VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
   )
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
+  const [showSubmitPanel, setShowSubmitPanel] = useState(false)
+  const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
+  const [submitCode, setSubmitCode] = useState('')
+  const [submitLoading, setSubmitLoading] = useState(false)
+  const [detailSubmissionId, setDetailSubmissionId] = useState<number | null>(null)
+  const [problemSubmissions, setProblemSubmissions] = useState<any[]>([])
+  const [problemSubmissionsLoading, setProblemSubmissionsLoading] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
@@ -265,6 +280,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       const result = await apiClient.get<Problem>(`/api/problems/${problemId}`)
       if (result.success && result.data) {
         setProblem(result.data)
+        // 设置默认提交语言为平台语言列表的第一项
+        const langs: PlatformLanguage[] = result.data.allowedLanguages
+          ? JSON.parse(result.data.allowedLanguages)
+          : []
+        if (langs.length > 0) {
+          setSubmitLanguage(langs[0].id)
+        }
       }
     } catch (error) {
       console.error('Failed to fetch problem:', error)
@@ -286,6 +308,67 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       setAttachmentsLoading(false)
     }
   }
+
+  // 提交代码
+  const handleSubmitCode = async () => {
+    if (!problem || !submitCode.trim()) {
+      toast.error('请输入代码')
+      return
+    }
+
+    setSubmitLoading(true)
+    try {
+      const result = await apiClient.post('/api/submit', {
+        problemId: problem.problemId,
+        oj: problem.platform,
+        language: submitLanguage,
+        code: submitCode,
+        submitMethod,
+      })
+
+      if (result.success && result.data?.submissionId) {
+        toast.success('提交成功')
+        setShowSubmitPanel(false)
+        setSubmitCode('')
+        // 刷新提交记录
+        fetchProblemSubmissions()
+        // 打开状态弹窗
+        setDetailSubmissionId(result.data.submissionId)
+      } else {
+        toast.error(result.message || '提交失败')
+      }
+    } catch (error: any) {
+      toast.error(error.message || '提交失败')
+    } finally {
+      setSubmitLoading(false)
+    }
+  }
+
+  // 获取题目提交记录
+  const fetchProblemSubmissions = async () => {
+    if (!problemId) return
+    setProblemSubmissionsLoading(true)
+    try {
+      const result = await apiClient.get<{
+        submissions: any[]
+        total: number
+      }>(`/api/problems/${problemId}/submissions`)
+      if (result.success && result.data) {
+        setProblemSubmissions(result.data.submissions || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch submissions:', error)
+    } finally {
+      setProblemSubmissionsLoading(false)
+    }
+  }
+
+  // 当 activeTab 变为 records 时获取提交记录
+  useEffect(() => {
+    if (activeTab === 'records') {
+      fetchProblemSubmissions()
+    }
+  }, [activeTab])
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B'
@@ -640,21 +723,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               )}
             </button>
             <button
-              onClick={() => handleTabChange('submit')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'submit' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'submit' ? 'var(--primary)' : 'var(--gray-500)',
-                fontWeight: activeTab === 'submit' ? 600 : 400
-              }}
-            >
-              提交
-            </button>
-            <button
               onClick={() => handleTabChange('records')}
               style={{
                 padding: '0.75rem 1rem',
@@ -941,94 +1009,73 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             </div>
           )}
 
-          {/* 提交 Tab */}
-          {activeTab === 'submit' && (
-            <div style={{ padding: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--gray-700)' }}>提交语言</label>
-                <select
-                  value={submitLanguage}
-                  onChange={e => setSubmitLanguage(e.target.value)}
-                  style={{
-                    padding: '0.5rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                    minWidth: '150px',
-                    background: 'white',
-                  }}
-                >
-                  {LANGUAGE_OPTIONS.filter(o => o.value).map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <textarea
-                placeholder="在此输入代码..."
-                style={{
-                  width: '100%',
-                  minHeight: '400px',
-                  padding: '1rem',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  fontSize: '0.875rem',
-                  fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-                  lineHeight: 1.5,
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                  background: '#f8fafc',
-                  color: '#1e293b',
-                }}
-                disabled
-              />
-              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  disabled
-                  style={{
-                    padding: '0.625rem 2rem',
-                    background: 'var(--gray-300)',
-                    color: 'var(--gray-500)',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    cursor: 'not-allowed',
-                  }}
-                >
-                  提交
-                </button>
-              </div>
-              <div style={{
-                marginTop: '0.75rem',
-                textAlign: 'center',
-                fontSize: '0.8rem',
-                color: 'var(--gray-400)',
-              }}>
-                提交功能暂未开放
-              </div>
-            </div>
-          )}
-
           {/* 提交记录 Tab */}
           {activeTab === 'records' && (
             <div style={{ padding: '1rem' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
                   <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(ms)</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>提交时间</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
-                      暂无提交记录
-                    </td>
-                  </tr>
+                  {problemSubmissionsLoading ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                        加载中...
+                      </td>
+                    </tr>
+                  ) : problemSubmissions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                        暂无提交记录
+                      </td>
+                    </tr>
+                  ) : (
+                    problemSubmissions.map(s => (
+                      <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace' }}>#{s.id}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>{s.username}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            background: s.result === 'accepted' ? '#dcfce7' : s.result === 'queuing' ? '#dbeafe' : '#fee2e2',
+                            color: s.result === 'accepted' ? '#166534' : s.result === 'queuing' ? '#1e40af' : '#991b1b',
+                          }}>
+                            {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>{s.timeUsed ?? '-'}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>{s.memoryUsed ?? '-'}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>{s.codeLength ?? '-'}</td>
+                        <td
+                          onClick={() => setDetailSubmissionId(s.id)}
+                          style={{
+                            padding: '0.75rem 1rem',
+                            color: 'var(--primary)',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          {getLanguageLabel(s.language)}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                          {s.submittedAt ? new Date(s.submittedAt).toLocaleString('zh-CN') : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1036,14 +1083,18 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         </div>
         </div>{/* /主内容 */}
 
-        {/* AI 工具侧边栏 - 仅 Markdown 题面时显示 */}
-        {activeTab === 'statement' && currentStatement?.format === 'markdown' && (
-          <div style={{
-            width: '180px',
-            flexShrink: 0,
-            position: 'sticky',
-            top: '2rem',
-          }}>
+        {/* 右侧边栏 */}
+        <div style={{
+          width: '180px',
+          flexShrink: 0,
+          position: 'sticky',
+          top: '2rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+        }}>
+          {/* AI 工具 - 仅 Markdown 题面时显示 */}
+          {activeTab === 'statement' && currentStatement?.format === 'markdown' && (
             <div style={{
               background: 'white',
               borderRadius: '8px',
@@ -1061,9 +1112,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 const currentLang = currentStatement?.language || 'zh'
                 const targetLang = currentLang === 'zh' ? 'en' : 'zh'
                 const targetLabel = targetLang === 'zh' ? '中文' : '英文'
-                // 翻译：检查目标语言是否已有 statement
                 const alreadyTranslated = !isAdmin && aiUsage && aiUsage.translations[targetLang as 'zh' | 'en']
-                // 格式化：检查当前 statement 是否已被格式化过
                 const alreadyFormatted = !isAdmin && aiUsage && selectedStatementId && aiUsage.formattedStatementIds.includes(selectedStatementId)
 
                 return (
@@ -1129,9 +1178,171 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {/* 提交代码按钮 */}
+          <div style={{
+            background: 'white',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            padding: '1rem',
+          }}>
+            <button
+              onClick={() => setShowSubmitPanel(true)}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.25rem'
+              }}
+            >
+              ▶ 提交代码
+            </button>
           </div>
-        )}
+        </div>
       </div>{/* /flex container */}
+
+      {/* 提交代码弹窗 */}
+      {showSubmitPanel && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowSubmitPanel(false)}
+          title={`${OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} ${problem.problemId}`}
+          width="700px"
+        >
+          {/* 非 Carits 平台：提交方式选择 */}
+          {problem.platform !== 'carits' && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              {([
+                { key: 'robot', label: '机器人账号' },
+                { key: 'myAccount', label: '我的账号' },
+                { key: 'archive', label: '归档' },
+              ] as const).map(m => (
+                <button
+                  key={m.key}
+                  onClick={() => setSubmitMethod(m.key)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.875rem',
+                    border: '1px solid',
+                    borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
+                    borderRadius: '6px',
+                    background: submitMethod === m.key ? '#dbeafe' : 'white',
+                    color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
+                    cursor: 'pointer',
+                    fontWeight: submitMethod === m.key ? 600 : 400,
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 我的账号/归档时显示平台账号绑定 */}
+          {problem.platform !== 'carits' && (submitMethod === 'myAccount' || submitMethod === 'archive') && (
+            <div style={{
+              fontSize: '0.875rem',
+              color: 'var(--gray-500)',
+              padding: '0.5rem 0.75rem',
+              background: 'var(--gray-50)',
+              borderRadius: '6px',
+              marginBottom: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>平台账号</span>
+              <span style={{ color: '#f59e0b' }}>未绑定</span>
+            </div>
+          )}
+
+          {/* 语言选择 */}
+          <div style={{ marginBottom: '1rem' }}>
+            {(() => {
+              const platformLangs: PlatformLanguage[] = problem.allowedLanguages
+                ? JSON.parse(problem.allowedLanguages)
+                : []
+              const langs = platformLangs.length > 0
+                ? platformLangs
+                : LANGUAGE_OPTIONS.filter(o => o.value).map(o => ({ id: o.value, name: o.label }))
+              return (
+                <select
+                  value={submitLanguage}
+                  onChange={e => setSubmitLanguage(e.target.value)}
+                  style={{
+                    padding: '0.5rem',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    minWidth: '150px',
+                    background: 'white',
+                  }}
+                >
+                  {langs.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              )
+            })()}
+          </div>
+
+          {/* 代码输入框 */}
+          <textarea
+            placeholder="在此输入代码..."
+            value={submitCode}
+            onChange={e => setSubmitCode(e.target.value)}
+            style={{
+              width: '100%',
+              minHeight: '350px',
+              padding: '1rem',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              fontSize: '0.875rem',
+              fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
+              lineHeight: 1.5,
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              background: submitMethod === 'robot' ? 'white' : '#f8fafc',
+              color: submitMethod === 'robot' ? '#1e293b' : 'var(--gray-400)',
+            }}
+            disabled={submitMethod !== 'robot'}
+          />
+
+          {/* 提交按钮 */}
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
+              {submitMethod === 'robot' ? 'HDU 机器人提交已启用' : '暂未开放此提交方式'}
+            </span>
+            <button
+              onClick={handleSubmitCode}
+              disabled={submitLoading || submitMethod !== 'robot'}
+              style={{
+                padding: '0.625rem 2rem',
+                background: submitMethod === 'robot' ? 'var(--primary)' : 'var(--gray-300)',
+                color: submitMethod === 'robot' ? 'white' : 'var(--gray-500)',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                cursor: submitMethod === 'robot' ? 'pointer' : 'not-allowed',
+                opacity: submitLoading ? 0.7 : 1,
+              }}
+            >
+              {submitLoading ? '提交中...' : '提交'}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* 翻译弹窗 */}
       {showTranslateModal && (
@@ -1142,6 +1353,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           loading={aiLoading === 'translate'}
         />
       )}
+
+      {/* 提交详情弹窗 */}
+      <SubmissionDetailModal
+        isOpen={detailSubmissionId !== null}
+        onClose={() => setDetailSubmissionId(null)}
+        submissionId={detailSubmissionId}
+      />
     </div>
     </div>
   )

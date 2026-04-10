@@ -1,17 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
-import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
+import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { SUBMISSION_OJ_OPTIONS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { Pagination } from '@/components/ui/Pagination'
+import { SubmissionDetailModal } from './SubmissionDetailModal'
 
 interface Submission {
-  id: string
+  id: number
   username: string
   oj: string
   problemId: string
+  problemInternalId?: string
   result: string
   timeUsed: number | null
   memoryUsed: number | null
@@ -55,6 +58,8 @@ const inputStyle: React.CSSProperties = {
 }
 
 export function SubmissionList({ viewRole }: SubmissionListProps) {
+  const router = useRouter()
+
   // 筛选状态
   const [filterUsername, setFilterUsername] = useState('')
   const [filterOj, setFilterOj] = useState('')
@@ -69,6 +74,23 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const [totalPages, setTotalPages] = useState(0)
   const [total, setTotal] = useState(0)
   const pageSize = 20
+
+  // 详情弹窗状态
+  const [detailSubmissionId, setDetailSubmissionId] = useState<number | null>(null)
+
+  // 获取路径前缀
+  const getPathPrefix = () => {
+    if (viewRole === 'admin') return '/platform-admin'
+    if (viewRole === 'student') return '/student'
+    return '/teacher'
+  }
+
+  // 点击题号跳转到题目详情
+  const handleProblemClick = (submission: Submission) => {
+    if (submission.problemInternalId) {
+      router.push(`${getPathPrefix()}/problems/${submission.problemInternalId}`)
+    }
+  }
 
   const fetchSubmissions = async () => {
     setLoading(true)
@@ -123,9 +145,44 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     return OJ_PLATFORM_LABEL_MAP[oj] || oj
   }
 
+  // 转圈动画组件
+  const Spinner = () => (
+    <span style={{
+      display: 'inline-block',
+      width: '12px',
+      height: '12px',
+      border: '2px solid #e5e7eb',
+      borderTopColor: '#3b82f6',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite',
+      marginRight: '4px',
+      verticalAlign: 'middle',
+    }} />
+  )
+
   const getResultBadge = (result: string) => {
     const label = JUDGE_RESULT_LABEL_MAP[result] || result
     const colors = RESULT_COLORS[result] || { bg: '#f3f4f6', text: '#374151' }
+
+    // queuing 状态显示转圈动画
+    if (result === 'queuing') {
+      return (
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          background: colors.bg,
+          color: colors.text,
+        }}>
+          <Spinner />
+          {label}
+        </span>
+      )
+    }
+
     return (
       <span style={{
         display: 'inline-block',
@@ -143,6 +200,13 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
   return (
     <ProtectedRoute>
+      {/* 添加 spin 动画 */}
+      <style jsx global>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', color: '#1e293b' }}>
           评测记录
@@ -262,6 +326,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>OJ</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>题号</th>
@@ -276,29 +341,49 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                  <td colSpan={10} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
                     加载中...
                   </td>
                 </tr>
               ) : submissions.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                  <td colSpan={10} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
                     暂无评测记录
                   </td>
                 </tr>
               ) : (
                 submissions.map(s => (
                   <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontFamily: 'monospace' }}>#{s.id}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.username}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{getOjLabel(s.oj)}</td>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      <span style={{ color: '#1d4ed8', cursor: 'pointer' }}>{s.problemId}</span>
+                      <span
+                        onClick={() => handleProblemClick(s)}
+                        style={{
+                          color: s.problemInternalId ? 'var(--primary)' : '#1d4ed8',
+                          cursor: s.problemInternalId ? 'pointer' : 'default',
+                          textDecoration: s.problemInternalId ? 'underline' : 'none',
+                        }}
+                      >
+                        {s.problemId}
+                      </span>
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.timeUsed ?? '-'}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.memoryUsed ?? '-'}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.codeLength ?? '-'}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{LANGUAGE_LABEL_MAP[s.language] || s.language}</td>
+                    <td
+                      onClick={() => setDetailSubmissionId(s.id)}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {getLanguageLabel(s.language)}
+                    </td>
                     <td style={{ padding: '0.75rem 1rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
                       {new Date(s.submittedAt).toLocaleString('zh-CN')}
                     </td>
@@ -321,6 +406,13 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
             />
           </div>
         )}
+
+        {/* 提交详情弹窗 */}
+        <SubmissionDetailModal
+          isOpen={detailSubmissionId !== null}
+          onClose={() => setDetailSubmissionId(null)}
+          submissionId={detailSubmissionId}
+        />
       </div>
     </ProtectedRoute>
   )

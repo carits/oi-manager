@@ -16,7 +16,7 @@ interface OjAccount {
   username: string
   loginMethod: string
   status: string
-  lastVerifiedAt: string | null
+  lastLoginAt: string | null
   lastErrorMessage: string | null
   hasPassword: boolean
   hasCookie: boolean
@@ -28,6 +28,7 @@ interface OjAccount {
   submitMaxRetries: number
   retryIntervalSeconds: number
   loginFailureCooldownMinutes: number
+  cookieValidMinutes: number
   reverifyIntervalMinutes: number
   renewLoginThresholdMinutes: number
   minSubmitIntervalSeconds: number
@@ -50,6 +51,8 @@ interface PlatformStats {
   error: number
   unverified: number
   lastExpiredAt: string | null
+  totalSubmissions: number
+  totalSubmissionErrors: number
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -237,8 +240,8 @@ export default function OjAccountsPage() {
                   {[
                     { title: '平台有效账号数', key: 'active', color: '#16a34a' },
                     { title: '平台失效账号数', key: 'expired', color: '#dc2626' },
-                    { title: '平台提交数', key: 'submissions', color: '#3b82f6' },
-                    { title: '平台提交出错次数', key: 'submissionErrors', color: '#f59e0b' },
+                    { title: '平台提交数', key: 'totalSubmissions', color: '#3b82f6' },
+                    { title: '平台提交失败数', key: 'totalSubmissionErrors', color: '#f59e0b' },
                   ].map(({ title, key, color }) => (
                     <div key={key} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', overflow: 'hidden' }}>
                       <div style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.75rem', color: 'var(--gray-700)' }}>{title}</div>
@@ -249,7 +252,7 @@ export default function OjAccountsPage() {
                               const s = stats.find(st => st.platform === id)
                               return {
                                 name: label,
-                                value: key === 'submissions' || key === 'submissionErrors' ? 0 : (s as any)?.[key] || 0,
+                                value: (s as any)?.[key] || 0,
                               }
                             })} margin={{ left: -10 }}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -301,7 +304,7 @@ export default function OjAccountsPage() {
                     <th style={{ padding: '0.75rem', textAlign: 'center' }}>启用</th>
                     <th style={{ padding: '0.75rem', textAlign: 'center' }}>优先级</th>
                     <th style={{ padding: '0.75rem', textAlign: 'left' }}>状态</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>最后验证</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>最后登录</th>
                     <th style={{ padding: '0.75rem', textAlign: 'left' }}>操作</th>
                   </tr>
                 </thead>
@@ -337,7 +340,7 @@ export default function OjAccountsPage() {
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem', color: 'var(--gray-500)', fontSize: '0.8rem' }}>
-                          {acc.lastVerifiedAt ? new Date(acc.lastVerifiedAt).toLocaleString('zh-CN') : '-'}
+                          {acc.lastLoginAt ? new Date(acc.lastLoginAt).toLocaleString('zh-CN') : '-'}
                         </td>
                         <td style={{ padding: '0.75rem' }}>
                           <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
@@ -570,8 +573,9 @@ const CONFIG_FIELDS = [
   ]},
   { group: '登录控制', fields: [
     { key: 'loginFailureCooldownMinutes', label: '登录失败冷却时间', type: 'number' as const, unit: '分钟' },
-    { key: 'reverifyIntervalMinutes', label: '重新验证时间间隔', type: 'number' as const, unit: '分钟' },
+    { key: 'cookieValidMinutes', label: 'Cookie 预期有效期', type: 'number' as const, unit: '分钟' },
     { key: 'renewLoginThresholdMinutes', label: '提前续登阈值', type: 'number' as const, unit: '分钟' },
+    { key: 'reverifyIntervalMinutes', label: '重新验证时间间隔', type: 'number' as const, unit: '分钟' },
   ]},
   { group: '轮询控制', fields: [
     { key: 'firstPollDelaySeconds', label: '首次查询延迟', type: 'number' as const, unit: '秒' },

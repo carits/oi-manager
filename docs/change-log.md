@@ -1,5 +1,48 @@
 # 变更日志
 
+## 2026-04-10 (HDU 提交登录控制优化)
+
+### HDU 提交代理解登录控制、Cookie 复用、失败冷却机制
+
+**背景**: HDU 提交一直返回 403 错误，经排查发现登录成功后 Cookie 未保存到数据库。
+
+**问题根因**: `hdu-submit.ts` 中登录成功后只更新了 `lastLoginAt`，没有保存 `cookie` 和 `cookieRaw` 字段，导致下次提交时 `cookie` 为 null。
+
+**变更内容**:
+
+1. **Bug 修复**: 登录成功后保存 `cookie` 和 `cookieRaw` 到数据库
+2. **登录控制**: 实现 Cookie 复用逻辑，根据 `cookieValidMinutes` 和 `renewLoginThresholdMinutes` 判断是否需要续登
+3. **失败冷却**: 登录失败后进入 `loginFailureCooldownMinutes` 分钟冷却期
+4. **账号冻结**: 连续失败 `maxConsecutiveFailures` 次后账号状态变为 `error`
+5. **累计统计**: 添加 `totalSubmissions` 和 `totalSubmissionErrors` 字段（只增不减）
+6. **文档更新**: 更新 `docs/oj-submit/` 目录下的 README.md 和 hdu.md
+
+**OjAccount 模型新增字段**:
+- `lastLoginAt` — 最后成功登录时间
+- `lastLoginFailureAt` — 最后登录失败时间
+- `lastSubmitAt` — 最后提交时间
+- `consecutiveFailures` — 连续失败次数
+- `totalSubmissions` — 累计提交次数
+- `totalSubmissionErrors` — 累计提交失败次数
+- `cookieValidMinutes` — Cookie 预期有效期（默认 3600 分钟）
+- `renewLoginThresholdMinutes` — 提前续登阈值（默认 10 分钟）
+- `loginFailureCooldownMinutes` — 登录失败冷却时间（默认 15 分钟）
+
+**验证结果**: 使用账号 `carits` 成功提交 HDU 1000，Run ID 40832719，结果 Accepted
+
+**涉及文件**:
+- `apps/server/src/lib/hdu-submit.ts` — 登录控制逻辑、Cookie 保存
+- `apps/server/prisma/schema.prisma` — OjAccount 模型字段
+- `apps/server/src/routes/oj-accounts.ts` — 前端显示"最后登录"而非"最后验证"
+- `apps/web/src/app/platform-admin/oj-accounts/page.tsx` — 提交统计柱状图
+- `docs/oj-submit/README.md` — 通用登录控制设计
+- `docs/oj-submit/hdu.md` — HDU 具体实现
+
+**影响范围**: OJ 账号池管理、HDU 提交代理
+**风险**: 低 — 修复 Bug + 新增功能，不影响其他模块
+
+---
+
 ## 2026-04-08 (学校题单 & 团队题单)
 
 ### 新增学校题单和团队题单收录功能

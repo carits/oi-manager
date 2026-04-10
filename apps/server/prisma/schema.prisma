@@ -498,6 +498,7 @@ model User {
   Student          Student?
   Teacher          Teacher?
   PlatformBindings UserPlatformBinding[]
+  Submissions      Submission[]
 
   @@index([role])
   @@index([status])
@@ -758,6 +759,18 @@ model OjAccount {
   loginMethod     String    @default("cookie") // cookie | password
   addedBy         String            // 添加者 userId
 
+  // 状态跟踪字段（运行时状态）
+  lastLoginAt          DateTime?    // 最后成功登录时间
+  lastLoginFailureAt   DateTime?    // 最后登录失败时间
+  lastSubmitAt         DateTime?    // 最后提交时间
+  lastRateLimitAt      DateTime?    // 最后触发限流时间（403/429）
+  consecutiveFailures  Int      @default(0) // 连续失败次数
+  rateLimitCount       Int      @default(0) // 当前限流计数
+
+  // 累计统计（只增不减）
+  totalSubmissions      Int      @default(0) // 累计提交次数（含重试）
+  totalSubmissionErrors Int      @default(0) // 累计提交失败次数（含重试）
+
   // 提交控制配置
   enabled                         Boolean @default(true)
   priority                        Int     @default(0)      // 优先级，越大越优先
@@ -765,19 +778,28 @@ model OjAccount {
   freezeDurationMinutes            Int     @default(30)     // 异常后冻结时间（分钟）
   submitMaxRetries                 Int     @default(1)      // 提交失败最大重试次数
   retryIntervalSeconds             Int     @default(10)     // 重试间隔（秒）
-  loginFailureCooldownMinutes      Int     @default(15)     // 登录失败冷却时间（分钟）
-  reverifyIntervalMinutes          Int     @default(30)     // 重新验证时间间隔（分钟）
-  renewLoginThresholdMinutes       Int     @default(10)     // 提前续登阈值（分钟）
   minSubmitIntervalSeconds         Int     @default(30)     // 最小提交间隔（秒）
   minRequestIntervalSeconds        Int     @default(3)      // 最小请求间隔（秒）
   maxConcurrentSubmissions         Int     @default(1)      // 单账号最大并发提交数
   maxConcurrentRequests            Int     @default(2)      // 单账号最大并发请求数
+
+  // 登录控制配置
+  loginFailureCooldownMinutes      Int     @default(15)     // 登录失败冷却时间（分钟）
+  cookieValidMinutes               Int     @default(3600)   // Cookie 预期有效期（分钟，默认 60 小时）
+  renewLoginThresholdMinutes       Int     @default(10)     // 提前续登阈值（分钟，cookie过期前多久续登）
+  reverifyIntervalMinutes          Int     @default(30)     // 重新验证时间间隔（分钟）
+  autoVerifyIntervalMinutes        Int     @default(1440)   // 自动验证时间（分钟，默认 1 天）
+
+  // 轮询配置
   firstPollDelaySeconds            Int     @default(5)      // 首次查询延迟（秒）
   pollIntervalSeconds              Int     @default(5)      // 轮询间隔（秒）
   maxWaitDurationMinutes           Int     @default(10)     // 最长等待时长（分钟）
+
+  // 限流控制配置
   rateLimitThreshold               Int     @default(2)      // 403/429 连续阈值
   banSuspicionCooldownHours        Int     @default(6)      // 封禁怀疑冷却时间（小时）
-  autoVerifyIntervalMinutes        Int     @default(1440)   // 自动验证时间（分钟，默认 1 天）
+
+  Submissions     Submission[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -785,4 +807,35 @@ model OjAccount {
   @@unique([platform, username])
   @@index([platform])
   @@index([status])
+}
+
+/// 评测记录
+model Submission {
+  id                Int      @id @default(autoincrement())
+  userId            String                       // 提交者用户 ID
+  oj                String                        // OJ 平台标识（hdu, luogu, codeforces 等）
+  problemId         String                        // 原题号
+  problemInternalId String?                       // 题目内部 ID（用于跳转）
+  language          String                        // 编程语言（平台语言 ID）
+  code              String                        // 源代码
+  codeLength        Int                           // 代码长度（字节）
+  result            String    @default("queuing") // 评测结果
+  timeUsed          Int?                          // 耗时（ms）
+  memoryUsed        Int?                          // 内存（KB）
+  submitMethod      String                        // 提交方式：robot / myAccount / archive
+  ojAccountId       String?                       // 使用的 OJ 账号 ID
+  ojRemoteId        String?                       // OJ 远程评测 ID（用于轮询结果）
+  errorMessage      String?                       // 错误信息
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  User              User      @relation(fields: [userId], references: [id])
+  OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
+
+  @@index([userId])
+  @@index([oj])
+  @@index([problemId])
+  @@index([result])
+  @@index([language])
+  @@index([createdAt])
 }
