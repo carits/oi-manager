@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { JudgeSettingsTab } from '@/components/problem/JudgeSettingsTab'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
 
@@ -45,8 +46,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(mode === 'edit')
-  type TabType = 'statement' | 'solution' | 'settings' | 'attachments'
-  const VALID_TABS: TabType[] = ['statement', 'solution', 'settings', 'attachments']
+  type TabType = 'statement' | 'solution' | 'judge_settings' | 'settings' | 'attachments'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'judge_settings', 'settings', 'attachments']
   const [activeTab, setActiveTab] = useState<TabType>(
     VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
   )
@@ -80,6 +81,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   // 表单状态
   const [form, setForm] = useState({
     title: '',
+    platform: '',
     difficulty: '',
     timeLimit: '',
     memoryLimit: '',
@@ -114,6 +116,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         const p = result.data
         setForm({
           title: p.title,
+          platform: p.platform || '',
           difficulty: p.difficulty || '',
           timeLimit: p.timeLimit?.toString() || '',
           memoryLimit: p.memoryLimit?.toString() || '',
@@ -611,6 +614,20 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               }}>
               题解
             </button>
+            {form.platform === 'carits' && (
+              <button type="button" onClick={() => handleTabChange('judge_settings')}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === 'judge_settings' ? '2px solid var(--primary)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  color: activeTab === 'judge_settings' ? 'var(--primary)' : 'var(--gray-500)'
+                }}>
+                评测设置
+              </button>
+            )}
             <button type="button" onClick={() => handleTabChange('settings')}
               style={{
                 padding: '0.75rem 1rem',
@@ -953,6 +970,16 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                   </select>
                 </div>
               </div>
+            )}
+
+            {activeTab === 'judge_settings' && (
+              <JudgeSettingsTab
+                problemId={problemId || ''}
+                timeLimit={form.timeLimit}
+                memoryLimit={form.memoryLimit}
+                onTimeLimitChange={(v) => handleChange('timeLimit', v)}
+                onMemoryLimitChange={(v) => handleChange('memoryLimit', v)}
+              />
             )}
 
             {activeTab === 'settings' && (

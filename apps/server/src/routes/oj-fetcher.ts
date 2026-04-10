@@ -426,6 +426,7 @@ async function processFetchQueue(platform: string) {
                 problemId: job.problemId,
                 url: problemData.source.url,
               }]),
+              allowedLanguages: problemData.allowedLanguages ? JSON.stringify(problemData.allowedLanguages) : null,
               visibility: 'public',
               ownerType: 'admin',
               ownerId: adminUser.id,
@@ -480,6 +481,7 @@ async function processFetchQueue(platform: string) {
               timeLimit: problemData.timeLimit,
               memoryLimit: problemData.memoryLimit,
               difficulty: problemData.difficulty,
+              allowedLanguages: problemData.allowedLanguages ? JSON.stringify(problemData.allowedLanguages) : null,
             },
           })
 

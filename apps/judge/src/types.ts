@@ -1,0 +1,140 @@
+/**
+ * 评测系统类型定义
+ * 兼容 Hydro OJ 的 ProblemConfigFile
+ */
+
+// ==================== 评测配置 ====================
+
+export type ProblemType = 'default' | 'interactive' | 'objective' | 'submit_answer' | 'communication'
+export type SubtaskType = 'min' | 'max' | 'sum'
+export type JudgeResult =
+  | 'Accepted'
+  | 'Wrong Answer'
+  | 'Time Limit Exceeded'
+  | 'Memory Limit Exceeded'
+  | 'Runtime Error'
+  | 'Compilation Error'
+  | 'Presentation Error'
+  | 'Output Limit Exceeded'
+  | 'System Error'
+  | 'Judging'
+  | 'Waiting'
+
+export interface TestCaseConfig {
+  input: string
+  output: string
+  time?: string      // "1s", "1000ms"
+  memory?: string    // "256MB"
+  score?: number
+}
+
+export interface SubtaskConfig {
+  id?: number
+  time?: string
+  memory?: string
+  score?: number
+  type?: SubtaskType
+  cases?: TestCaseConfig[]
+}
+
+export interface CompilableSource {
+  language?: string
+  code?: string
+  file?: string
+}
+
+export interface ProblemConfig {
+  type?: ProblemType
+  time?: string          // "1s", "1000ms"
+  memory?: string        // "256MB"
+  filename?: string      // 文件 IO 题型的文件名
+  checker_type?: string  // 'default' | 'strict' | 'testlib' | 'lemon' | ...
+  checker?: CompilableSource
+  interactor?: CompilableSource
+  subtasks?: SubtaskConfig[]
+  cases?: TestCaseConfig[]
+}
+
+// ==================== 评测请求 ====================
+
+export interface JudgeRequest {
+  submissionId: string
+  problemId: string
+  code: string
+  language: string
+  config: ProblemConfig
+  testdataPath: string
+}
+
+export interface JudgeCaseResult {
+  caseId: number
+  result: JudgeResult
+  time: number      // ms
+  memory: number    // KB
+  score?: number
+  message?: string
+}
+
+export interface JudgeTaskResult {
+  submissionId: string
+  result: JudgeResult
+  time: number
+  memory: number
+  score: number
+  cases: JudgeCaseResult[]
+  message?: string
+}
+
+// ==================== 语言配置 ====================
+
+export interface LanguageConfig {
+  code_file: string       // 源代码文件名
+  execute_file?: string   // 可执行文件名
+  compile?: string        // 编译命令
+  execute: string         // 执行命令
+  compile_time_limit?: number   // 编译时间限制 (ms)
+  compile_memory_limit?: number // 编译内存限制 (KB)
+}
+
+// ==================== 沙箱配置 ====================
+
+export interface SandboxConfig {
+  timeLimit: number       // ms
+  memoryLimit: number     // KB
+  outputLimit: number     // bytes
+  processLimit: number
+}
+
+export interface SandboxResult {
+  status: 'Accepted' | 'Time Limit Exceeded' | 'Memory Limit Exceeded' | 'Runtime Error' | 'Output Limit Exceeded' | 'Compilation Error'
+  time: number    // ms
+  memory: number  // KB
+  exitCode: number
+  stdout?: string
+  stderr?: string
+}
+
+// ==================== WebSocket 消息 ====================
+
+export interface WSMessage {
+  type: 'register' | 'judge' | 'result' | 'ping' | 'pong'
+  payload: any
+}
+
+export interface RegisterMessage {
+  type: 'register'
+  payload: {
+    judgeId: string
+    languages: string[]
+  }
+}
+
+export interface JudgeMessage {
+  type: 'judge'
+  payload: JudgeRequest
+}
+
+export interface ResultMessage {
+  type: 'result'
+  payload: JudgeTaskResult
+}

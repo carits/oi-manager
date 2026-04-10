@@ -1,13 +1,10 @@
-/**
- * 代码提交 API
- * 支持机器人账号代理提交
- */
-
 import { Router } from 'express'
+import path from 'path'
 import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
+import { dispatchJudgeTask } from '../ws/judge'
 
 export const submitRouter = Router()
 
@@ -76,6 +73,64 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
       action: 'submit',
       metadata: { submissionId: submission.id, userId, oj, problemId, language },
     })
+
+    // Carits 平台本地评测
+    if (problem.platform === 'carits' && submitMethod === 'robot') {
+      try {
+        // 获取评测配置
+        const problemWithConfig = await prisma.problem.findUnique({
+          where: { id: problem.id },
+          select: { judgeConfig: true }
+        })
+
+        let problemConfig = {}
+        if (problemWithConfig?.judgeConfig) {
+          try {
+            const yaml = await import('js-yaml')
+            problemConfig = yaml.load(problemWithConfig.judgeConfig) || {}
+          } catch (e) {
+            logger.warn('parse_judge_config_error', { error: e })
+          }
+        }
+
+        // 测试数据路径（使用绝对路径）
+        const testdataPath = path.join(process.cwd(), 'testdata', problem.id)
+
+        // 分发评测任务
+        await dispatchJudgeTask({
+          submissionId: submission.id.toString(),
+          problemId: problem.id,
+          code,
+          language,
+          testdataPath,
+          problemConfig
+        })
+
+        logger.info('carits_judge_dispatched', {
+          action: 'submit',
+          metadata: { submissionId: submission.id }
+        })
+
+        return res.json({
+          success: true,
+          data: { submissionId: submission.id },
+          message: '已提交评测队列'
+        })
+      } catch (e: any) {
+        await prisma.submission.update({
+          where: { id: submission.id },
+          data: {
+            result: 'submit_failed',
+            errorMessage: e.message
+          }
+        })
+
+        return res.json({
+          success: false,
+          message: e.message || '评测服务不可用'
+        })
+      }
+    }
 
     // 机器人账号提交
     if (submitMethod === 'robot' && oj === 'hdu') {

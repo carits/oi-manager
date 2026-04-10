@@ -83,28 +83,17 @@ async function generateCaritsProblemId(): Promise<string> {
 
 /**
  * 获取当前用户的 ownerId 和 ownerType
+ * ownerId 统一使用 userId，不再区分角色
  */
 async function getOwnerInfo(userId: string, role: string): Promise<{ ownerId: string; ownerType: string } | null> {
+  // ownerType 仅用于统计，ownerId 统一使用 userId
+  let ownerType = 'teacher'
   if (role === 'student') {
-    const student = await prisma.student.findUnique({
-      where: { userId },
-      select: { id: true }
-    })
-    if (student) return { ownerId: student.id, ownerType: 'student' }
-  } else if (role === 'teacher' || role === 'school_principal') {
-    const teacher = await prisma.teacher.findUnique({
-      where: { userId },
-      select: { id: true }
-    })
-    if (teacher) return { ownerId: teacher.id, ownerType: 'teacher' }
+    ownerType = 'student'
   } else if (role === 'super_admin' || role === 'platform_admin') {
-    const admin = await prisma.admin.findUnique({
-      where: { userId },
-      select: { id: true }
-    })
-    if (admin) return { ownerId: admin.id, ownerType: 'admin' }
+    ownerType = 'admin'
   }
-  return null
+  return { ownerId: userId, ownerType }
 }
 
 /**
@@ -116,23 +105,8 @@ function canModifyProblem(user: any, problem: any): boolean {
     return true
   }
 
-  // 获取当前用户的 ownerId 和 ownerType
-  let ownerId: string | undefined
-  let ownerType: string | undefined
-
-  if (user.teacherId) {
-    ownerId = user.teacherId
-    ownerType = 'teacher'
-  } else if (user.studentId) {
-    ownerId = user.studentId
-    ownerType = 'student'
-  } else if (user.adminId) {
-    ownerId = user.adminId
-    ownerType = 'admin'
-  }
-
-  // 所有者可以修改自己的题目
-  return problem.ownerId === ownerId && problem.ownerType === ownerType
+  // 所有者可以修改自己的题目（ownerId 就是 userId）
+  return problem.ownerId === user.userId
 }
 
 // ==================== 获取题目列表 ====================
@@ -1437,6 +1411,213 @@ problemsRouter.get('/:id/ai/usage', authenticate, async (req: Request, res: Resp
     })
   } catch (error) {
     logger.error('ai_usage_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+/**
+ * GET /api/problems/:id/submissions
+ * 获取题目的提交记录
+ */
+problemsRouter.get('/:id/submissions', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const { page = '1', pageSize = '20' } = req.query as Record<string, string>
+
+    // 查找题目
+    const problem = await prisma.problem.findUnique({
+      where: { id },
+      select: { platform: true, problemId: true },
+    })
+
+    if (!problem) {
+      return res.status(404).json({
+        success: false,
+        message: '题目不存在',
+      })
+    }
+
+    const pageNum = parseInt(page) || 1
+    const pageSizeNum = Math.min(parseInt(pageSize) || 20, 100)
+    const skip = (pageNum - 1) * pageSizeNum
+
+    // 查询该题目的提交记录（只返回当前用户的）
+    const where = {
+      oj: problem.platform,
+      problemId: problem.problemId,
+      userId: (req as any).user?.userId,
+    }
+
+    // 调试日志
+    logger.info('problem_submissions_query', {
+      action: 'problems',
+      metadata: {
+        problemInternalId: id,
+        platform: problem.platform,
+        problemId: problem.problemId,
+        currentUser: (req as any).user?.username,
+        where
+      }
+    })
+
+    const total = await prisma.submission.count({ where })
+
+    const submissions = await prisma.submission.findMany({
+      where,
+      include: {
+        User: {
+          select: { username: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSizeNum,
+    })
+
+    const formattedSubmissions = submissions.map(s => ({
+      id: s.id,
+      username: s.User.username,
+      oj: s.oj,
+      problemId: s.problemId,
+      result: s.result,
+      timeUsed: s.timeUsed,
+      memoryUsed: s.memoryUsed,
+      codeLength: s.codeLength,
+      language: s.language,
+      submittedAt: s.createdAt.toISOString(),
+    }))
+
+    // 调试日志：返回结果
+    logger.info('problem_submissions_result', {
+      action: 'problems',
+      metadata: {
+        total,
+        returnedCount: formattedSubmissions.length,
+        usernames: formattedSubmissions.map(s => s.username)
+      }
+    })
+
+    res.json({
+      success: true,
+      data: {
+        submissions: formattedSubmissions,
+        page: pageNum,
+        totalPages: Math.ceil(total / pageSizeNum),
+        total,
+      },
+    })
+  } catch (e: any) {
+    logger.error('problem_submissions_error', {
+      action: 'problems',
+      metadata: { error: e.message },
+    })
+    res.status(500).json({
+      success: false,
+      message: '查询失败',
+    })
+  }
+})
+
+// ==================== 评测配置 ====================
+
+/**
+ * GET /api/problems/:id/judge-config
+ * 获取题目的评测配置
+ */
+problemsRouter.get('/:id/judge-config', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const problem = await prisma.problem.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        platform: true,
+        problemType: true,
+        judgeConfig: true,
+        timeLimit: true,
+        memoryLimit: true
+      }
+    })
+
+    if (!problem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    // 解析 YAML 配置
+    let config = null
+    if (problem.judgeConfig) {
+      try {
+        const yaml = await import('js-yaml')
+        config = yaml.load(problem.judgeConfig)
+      } catch (e) {
+        logger.warn('parse_judge_config_error', { error: e })
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        problemType: problem.problemType,
+        timeLimit: problem.timeLimit,
+        memoryLimit: problem.memoryLimit,
+        config
+      }
+    })
+  } catch (error) {
+    logger.error('get_judge_config_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+/**
+ * PUT /api/problems/:id/judge-config
+ * 保存题目的评测配置
+ */
+problemsRouter.put('/:id/judge-config', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = (req as any).user
+    const { problemType, timeLimit, memoryLimit, config } = req.body
+
+    const existingProblem = await prisma.problem.findUnique({ where: { id } })
+
+    if (!existingProblem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    if (!canModifyProblem(user, existingProblem)) {
+      return res.status(403).json({ success: false, message: '没有权限编辑此题目' })
+    }
+
+    // 将配置序列化为 YAML
+    let judgeConfigYaml = null
+    if (config) {
+      const yaml = await import('js-yaml')
+      judgeConfigYaml = yaml.dump(config, { lineWidth: -1 })
+    }
+
+    const updateData: any = {}
+    if (problemType) updateData.problemType = problemType
+    if (timeLimit !== undefined) updateData.timeLimit = timeLimit
+    if (memoryLimit !== undefined) updateData.memoryLimit = memoryLimit
+    updateData.judgeConfig = judgeConfigYaml
+
+    const problem = await prisma.problem.update({
+      where: { id },
+      data: updateData
+    })
+
+    logger.audit('judge_config_updated', {
+      userId: user.userId,
+      action: 'update_judge_config',
+      target: id,
+      metadata: { problemType, timeLimit, memoryLimit }
+    })
+
+    res.json({ success: true, data: problem })
+  } catch (error) {
+    logger.error('update_judge_config_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })

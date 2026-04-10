@@ -60,3 +60,19 @@ export const JUDGE_RESULT_LABEL_MAP: Record<string, string> = Object.fromEntries
 export const LANGUAGE_LABEL_MAP: Record<string, string> = Object.fromEntries(
   LANGUAGE_OPTIONS.map(o => [o.value, o.label]),
 )
+
+// HDU 平台语言 ID 映射
+export const HDU_LANGUAGE_MAP: Record<string, string> = {
+  '0': 'G++',
+  '1': 'GCC',
+  '2': 'C++',
+  '3': 'C',
+  '4': 'Pascal',
+  '5': 'Java',
+  '6': 'C#',
+}
+
+// 获取语言显示名称（支持 HDU 等平台语言 ID）
+export function getLanguageLabel(lang: string): string {
+  return LANGUAGE_LABEL_MAP[lang] || HDU_LANGUAGE_MAP[lang] || lang
+}

@@ -12,7 +12,7 @@ model Admin {
   userId    String   @unique
   name      String
   createdAt DateTime @default(now())
-  updatedAt DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
   User      User     @relation(fields: [userId], references: [id])
 }
 
@@ -27,7 +27,7 @@ model Contest {
   countRating         Boolean               @default(false)
   scope               String                @default("public")
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime  @updatedAt
+  updatedAt           DateTime              @updatedAt
   Team                Team?                 @relation(fields: [teamId], references: [id])
   ContestProblem      ContestProblem[]
   ContestProblemNote  ContestProblemNote[]
@@ -59,7 +59,7 @@ model ContestProblem {
   solutionMarkdown    String?
   solutionVisible     Boolean               @default(false)
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime  @updatedAt
+  updatedAt           DateTime              @updatedAt
   Contest             Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblemNote  ContestProblemNote[]
   ContestProblemScore ContestProblemScore[]
@@ -75,10 +75,10 @@ model ContestProblemNote {
   studentId      String
   content        String         @default("")
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime  @updatedAt
-  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime       @updatedAt
   Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, problemId, studentId])
   @@index([studentId])
@@ -93,10 +93,10 @@ model ContestProblemScore {
   score          Float?
   note           String?
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime  @updatedAt
-  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime       @updatedAt
   Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, problemId, studentId])
 }
@@ -112,8 +112,8 @@ model ContestResource {
   visibleRoles     String          @default("all")
   uploadedBy       String
   uploadedAt       DateTime        @default(now())
-  Contest          Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblem   ContestProblem? @relation(fields: [contestProblemId], references: [id], onDelete: Cascade)
+  Contest          Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
 }
 
 model ContestResult {
@@ -127,9 +127,9 @@ model ContestResult {
   ratingChange Int
   note         String?
   createdAt    DateTime @default(now())
-  updatedAt    DateTime  @updatedAt
-  Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime @updatedAt
   Student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, studentId])
   @@index([studentId])
@@ -191,9 +191,9 @@ model Milestone {
   milestoneDate DateTime
   type          String
   createdAt     DateTime @default(now())
-  updatedAt     DateTime  @updatedAt
-  Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime @updatedAt
   Teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([teacherId])
@@ -210,7 +210,7 @@ model OjFetchJob {
   attachmentStatus String?
   createdProblemId String?
   createdAt        DateTime @default(now())
-  updatedAt        DateTime  @updatedAt
+  updatedAt        DateTime @updatedAt
 
   @@unique([platform, problemId])
   @@index([status])
@@ -251,8 +251,8 @@ model PrincipalTransferLog {
 
 model Problem {
   id                String              @id @default(uuid())
-  platform          String              // 主平台标识（universaloj, qoj, luogu, carits 等）
-  problemId         String              // 原始题号（60, P1001, P000001 等，不拼接）
+  platform          String
+  problemId         String
   title             String
   description       String?
   statementType     String              @default("none")
@@ -265,18 +265,20 @@ model Problem {
   timeLimit         Int?
   memoryLimit       Int?
   judgeConfig       String?
+  problemType       String              @default("default")
   visibility        String              @default("private")
   ownerType         String              @default("teacher")
   ownerId           String
   status            String              @default("draft")
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime  @updatedAt
-  allowedLanguages   String?             // 可提交语言，JSON 数组如 ["C","C++","Java","Python3"]，null 表示不限制
+  updatedAt         DateTime            @updatedAt
+  allowedLanguages  String?
   ojBindings        String?
   ProblemAttachment ProblemAttachment[]
   ProblemListEntry  ProblemListEntry[]
   ProblemNote       ProblemNote[]
   ProblemStatement  ProblemStatement[]
+  TestdataFiles     TestdataFile[]
 
   @@unique([platform, problemId])
   @@index([visibility])
@@ -305,7 +307,7 @@ model ProblemNote {
   userType  String
   content   String   @default("")
   createdAt DateTime @default(now())
-  updatedAt DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
   Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([problemId, userId, userType])
@@ -323,7 +325,7 @@ model ProblemStatement {
   fileUrl   String?
   isVisible Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
   Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([problemId, type, format, language])
@@ -343,7 +345,7 @@ model School {
   status                    String                 @default("active")
   currentPrincipalTeacherId String
   createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime  @updatedAt
+  updatedAt                 DateTime               @updatedAt
   PrincipalTransferLog      PrincipalTransferLog[]
   SchoolProblemLists        SchoolProblemList[]
   Student                   Student[]
@@ -365,16 +367,16 @@ model Student {
   avatar                    String?
   rating                    Int                         @default(1200)
   createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime  @updatedAt
+  updatedAt                 DateTime                    @updatedAt
   ContestProblemNote        ContestProblemNote[]
   ContestProblemScore       ContestProblemScore[]
   ContestResult             ContestResult[]
   Milestone                 Milestone[]
+  Teacher                   Teacher?                    @relation(fields: [headTeacherId], references: [id])
+  School                    School                      @relation(fields: [schoolId], references: [id])
+  User                      User                        @relation(fields: [userId], references: [id])
   TeamJoinRequest           TeamJoinRequest[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
-  User                      User                        @relation(fields: [userId], references: [id])
-  School                    School                      @relation(fields: [schoolId], references: [id])
-  Teacher                   Teacher?                    @relation(fields: [headTeacherId], references: [id])
 
   @@index([schoolId])
   @@index([headTeacherId])
@@ -395,11 +397,11 @@ model Teacher {
   status    String      @default("active")
   schoolId  String?
   createdAt DateTime    @default(now())
-  updatedAt DateTime  @updatedAt
+  updatedAt DateTime    @updatedAt
   Milestone Milestone[]
   Student   Student[]
-  User      User        @relation(fields: [userId], references: [id])
   School    School?     @relation(fields: [schoolId], references: [id])
+  User      User        @relation(fields: [userId], references: [id])
 
   @@index([schoolId])
   @@index([status])
@@ -407,22 +409,22 @@ model Teacher {
 }
 
 model Team {
-  id                       String                       @id
-  name                     String
-  avatar                   String?
-  description              String?
-  announcement             String?
-  schoolId                 String
-  isPublic                 Boolean                      @default(true)
-  createdAt                DateTime                     @default(now())
-  updatedAt                DateTime  @updatedAt
-  Contest                  Contest[]
-  School                   School                       @relation(fields: [schoolId], references: [id])
-  TeamJoinRequest          TeamJoinRequest[]
-  TeamMember               TeamMember[]
+  id                        String                      @id
+  name                      String
+  avatar                    String?
+  description               String?
+  announcement              String?
+  schoolId                  String
+  isPublic                  Boolean                     @default(true)
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  Contest                   Contest[]
+  School                    School                      @relation(fields: [schoolId], references: [id])
+  TeamJoinRequest           TeamJoinRequest[]
+  TeamMember                TeamMember[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
-  TeamMemberImportBatch    TeamMemberImportBatch[]
-  TeamProblemLists         TeamProblemList[]
+  TeamMemberImportBatch     TeamMemberImportBatch[]
+  TeamProblemLists          TeamProblemList[]
 
   @@index([schoolId])
   @@index([isPublic])
@@ -439,8 +441,8 @@ model TeamJoinRequest {
   createdAt   DateTime  @default(now())
   processedAt DateTime?
   processedBy String?
-  Student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   Team        Team      @relation(fields: [teamId], references: [id])
+  Student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, studentId])
 }
@@ -493,12 +495,12 @@ model User {
   email            String?
   bio              String?
   createdAt        DateTime              @default(now())
-  updatedAt        DateTime  @updatedAt
+  updatedAt        DateTime              @updatedAt
   Admin            Admin?
   Student          Student?
+  Submissions      Submission[]
   Teacher          Teacher?
   PlatformBindings UserPlatformBinding[]
-  Submissions      Submission[]
 
   @@index([role])
   @@index([status])
@@ -536,71 +538,64 @@ model UserStatusLog {
   createdAt      DateTime @default(now())
 }
 
-// ========== 团队导入相关模型 ==========
-
 model TeamMemberExternalAccount {
   id               String   @id @default(uuid())
   teamId           String
-  studentId        String?  // 可为空，未匹配到学生时
-  platform         String   // vjudge | luogu | codeforces | atcoder
-  platformUsername String   // 平台用户名
-  displayName      String?  // 候选显示名（从姓名或用户名提取）
-  status           String   @default("pending") // pending | invited | active | conflict
-  inviteId         String?  // 关联的邀请ID（如果发送了邀请）
+  studentId        String?
+  platform         String
+  platformUsername String
+  displayName      String?
+  status           String   @default("pending")
+  inviteId         String?
   createdAt        DateTime @default(now())
-  updatedAt        DateTime  @updatedAt
+  updatedAt        DateTime @updatedAt
+  Student          Student? @relation(fields: [studentId], references: [id])
+  Team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  Team    Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  Student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
-
-  @@unique([teamId, platform, platformUsername]) // 同团队同平台同用户名唯一
+  @@unique([teamId, platform, platformUsername])
   @@index([studentId])
   @@index([platform, platformUsername])
 }
 
 model TeamMemberImportBatch {
-  id           String     @id @default(uuid())
-  teamId       String?    // 可为空，不创建团队时为 null
-  operatorId   String     // 操作人（教师ID）
-  platform     String     // vjudge | luogu
-  totalCount   Int        // 总条数
-  successCount Int        @default(0)
-  skipCount    Int        @default(0)
-  errorCount   Int        @default(0)
-  status       String     @default("pending") // pending | previewing | processing | completed | failed
-  rawInput     String?    // 原始输入数据（JSON）
-  createdAt    DateTime   @default(now())
+  id           String                 @id @default(uuid())
+  teamId       String?
+  operatorId   String
+  platform     String
+  totalCount   Int
+  successCount Int                    @default(0)
+  skipCount    Int                    @default(0)
+  errorCount   Int                    @default(0)
+  status       String                 @default("pending")
+  rawInput     String?
+  createdAt    DateTime               @default(now())
   completedAt  DateTime?
+  Team         Team?                  @relation(fields: [teamId], references: [id])
   Items        TeamMemberImportItem[]
-
-  Team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
 
   @@index([teamId])
   @@index([operatorId])
 }
 
 model TeamMemberImportItem {
-  id                   String    @id @default(uuid())
+  id                   String                @id @default(uuid())
   batchId              String
-  lineNumber           Int       // 原始行号
-  rawUsername          String    // 原始平台用户名
-  rawStudentName       String?   // 原始学生姓名
-  parsedUsername       String?   // 清洗后的用户名
-  candidateDisplayName String?   // 候选显示名
-
-  matchType            String    // new_member | existing_member | same_name | conflict | invalid
-  matchStatus          String    @default("pending") // pending | pending_confirm | invited | created | skipped | error
-  matchedStudentId     String?   // 匹配到的学生ID
-  matchedStudentName   String?   // 匹配到的学生姓名
-  createdStudentId     String?   // 新创建的学生ID
-  action               String?   // invite | create_and_invite | link_only | skip | manual_required
-  userChoice           String?   // 用户选择: confirm | skip
+  lineNumber           Int
+  rawUsername          String
+  rawStudentName       String?
+  parsedUsername       String?
+  candidateDisplayName String?
+  matchType            String
+  matchStatus          String                @default("pending")
+  matchedStudentId     String?
+  matchedStudentName   String?
+  createdStudentId     String?
+  action               String?
+  userChoice           String?
   errorMessage         String?
-
-  createdAt            DateTime  @default(now())
+  createdAt            DateTime              @default(now())
   processedAt          DateTime?
-
-  Batch TeamMemberImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  Batch                TeamMemberImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@index([batchId])
   @@index([matchType])
@@ -610,38 +605,35 @@ model AiUsageLog {
   id          String   @id @default(uuid())
   userId      String
   problemId   String
-  action      String   // translate | format
-  statementId String?  // 格式化时记录的题面 ID，用于去重
-  sourceLang  String?  // zh | en
-  targetLang  String?  // zh | en
-  model       String?  // deepseek-chat
+  action      String
+  sourceLang  String?
+  targetLang  String?
+  model       String?
   tokensUsed  Int      @default(0)
-  status      String   @default("success") // success | failed | rate_limited
+  status      String   @default("success")
   message     String?
   createdAt   DateTime @default(now())
+  statementId String?
 
   @@index([userId, problemId, action, createdAt])
   @@index([userId, createdAt])
 }
 
-// ========== 题单管理（飞书文档式权限） ==========
-
 /// 题单（文件夹/wiki 空间）
 model ProblemList {
-  id          String   @id
-  title       String
-  description String?
-  coverUrl    String?
-  schoolId    String?
-  ownerId     String   // 创建者 userId（教师和学生均可创建）
-  ownerType   String   @default("teacher") // teacher | student
-  visibility  String   @default("private") // private | school
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  Sections    ProblemListSection[]
-  Shares      ProblemListShare[]
+  id                 String               @id
+  title              String
+  description        String?
+  coverUrl           String?
+  schoolId           String?
+  ownerId            String
+  ownerType          String               @default("teacher")
+  visibility         String               @default("private")
+  sortOrder          Int                  @default(0)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  Sections           ProblemListSection[]
+  Shares             ProblemListShare[]
   SchoolProblemLists SchoolProblemList[]
   TeamProblemLists   TeamProblemList[]
 
@@ -653,33 +645,31 @@ model ProblemList {
 
 /// 题单中的章节（二级标题，纯视觉分组）
 model ProblemListSection {
-  id             String   @id @default(uuid())
-  problemListId  String
-  title          String
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  ProblemList    ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
-  Entries        ProblemListEntry[]
+  id            String             @id @default(uuid())
+  problemListId String
+  title         String
+  sortOrder     Int                @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  Entries       ProblemListEntry[]
+  ProblemList   ProblemList        @relation(fields: [problemListId], references: [id], onDelete: Cascade)
 
   @@index([problemListId])
 }
 
 /// 题单中的题目条目（挂在章节下：题单 → 章节 → 题目）
 model ProblemListEntry {
-  id             String   @id @default(uuid())
-  sectionId      String
-  problemId      String   // 关联 Problem.id
-  sortOrder      Int      @default(0)
-  alias          String?  // 别名 A/B/C...（手动填写）
-  notes          String?  // 备注（可为空）
-  ojName         String?  // OJ 平台标识（carits, luogu, codeforces 等）
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  Section        ProblemListSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  Problem        Problem            @relation(fields: [problemId], references: [id])
+  id        String             @id @default(uuid())
+  sectionId String
+  problemId String
+  sortOrder Int                @default(0)
+  alias     String?
+  notes     String?
+  ojName    String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  Problem   Problem            @relation(fields: [problemId], references: [id])
+  Section   ProblemListSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@unique([sectionId, problemId])
   @@index([sectionId])
@@ -688,35 +678,31 @@ model ProblemListEntry {
 
 /// 题单级分享
 model ProblemListShare {
-  id             String   @id @default(uuid())
-  problemListId  String
-  targetType     String   // school | team | teacher | student
-  targetId       String
-  permission     String   @default("view") // view | edit | admin
-  sharedBy       String   // 分享人 userId
-  createdAt      DateTime @default(now())
-
-  ProblemList    ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+  id            String      @id @default(uuid())
+  problemListId String
+  targetType    String
+  targetId      String
+  permission    String      @default("view")
+  sharedBy      String
+  createdAt     DateTime    @default(now())
+  ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
 
   @@unique([problemListId, targetType, targetId])
   @@index([targetType, targetId])
   @@index([sharedBy])
 }
 
-// ========== 学校题单 & 团队题单（收录/推荐） ==========
-
 /// 学校题单（学校收录的题单）
 model SchoolProblemList {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   schoolId      String
-  problemListId String   // 关联的个人题单
-  addedBy       String   // 添加者 userId
-  addedByRole   String   // 添加者角色: principal | teacher
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-
-  School        School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  problemListId String
+  addedBy       String
+  addedByRole   String
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
   ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+  School        School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@unique([schoolId, problemListId])
   @@index([schoolId])
@@ -726,16 +712,15 @@ model SchoolProblemList {
 
 /// 团队题单（团队收录的题单）
 model TeamProblemList {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   teamId        String
-  problemListId String   // 关联的个人题单
-  addedBy       String   // 添加者 userId
-  addedByRole   String   // 添加者角色: owner | admin | teacher
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-
-  Team          Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  problemListId String
+  addedBy       String
+  addedByRole   String
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
   ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
+  Team          Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, problemListId])
   @@index([teamId])
@@ -743,66 +728,50 @@ model TeamProblemList {
   @@index([addedBy])
 }
 
-// ========== OJ 平台账号池（代理提交） ==========
-
 model OjAccount {
-  id              String    @id @default(uuid())
-  platform        String            // OJ 平台标识: hdu, codeforces, luogu, poj 等
-  username        String            // 平台用户名
-  password        String?           // 平台密码 (AES-256-CBC 加密, hex)
-  passwordIV      String?           // AES IV (hex)
-  cookie          String?           // 当前有效 Cookie (序列化字符串)
-  cookieRaw       String?           // 原始 Cookie 字符串 (用户手动粘贴的)
-  status          String    @default("unverified") // active | expired | error | unverified
-  lastVerifiedAt  DateTime?         // 最后验证时间
-  lastErrorMessage String?          // 最近一次错误信息
-  loginMethod     String    @default("cookie") // cookie | password
-  addedBy         String            // 添加者 userId
-
-  // 状态跟踪字段（运行时状态）
-  lastLoginAt          DateTime?    // 最后成功登录时间
-  lastLoginFailureAt   DateTime?    // 最后登录失败时间
-  lastSubmitAt         DateTime?    // 最后提交时间
-  lastRateLimitAt      DateTime?    // 最后触发限流时间（403/429）
-  consecutiveFailures  Int      @default(0) // 连续失败次数
-  rateLimitCount       Int      @default(0) // 当前限流计数
-
-  // 累计统计（只增不减）
-  totalSubmissions      Int      @default(0) // 累计提交次数（含重试）
-  totalSubmissionErrors Int      @default(0) // 累计提交失败次数（含重试）
-
-  // 提交控制配置
-  enabled                         Boolean @default(true)
-  priority                        Int     @default(0)      // 优先级，越大越优先
-  maxConsecutiveFailures           Int     @default(3)      // 最大连续失败次数
-  freezeDurationMinutes            Int     @default(30)     // 异常后冻结时间（分钟）
-  submitMaxRetries                 Int     @default(1)      // 提交失败最大重试次数
-  retryIntervalSeconds             Int     @default(10)     // 重试间隔（秒）
-  minSubmitIntervalSeconds         Int     @default(30)     // 最小提交间隔（秒）
-  minRequestIntervalSeconds        Int     @default(3)      // 最小请求间隔（秒）
-  maxConcurrentSubmissions         Int     @default(1)      // 单账号最大并发提交数
-  maxConcurrentRequests            Int     @default(2)      // 单账号最大并发请求数
-
-  // 登录控制配置
-  loginFailureCooldownMinutes      Int     @default(15)     // 登录失败冷却时间（分钟）
-  cookieValidMinutes               Int     @default(3600)   // Cookie 预期有效期（分钟，默认 60 小时）
-  renewLoginThresholdMinutes       Int     @default(10)     // 提前续登阈值（分钟，cookie过期前多久续登）
-  reverifyIntervalMinutes          Int     @default(30)     // 重新验证时间间隔（分钟）
-  autoVerifyIntervalMinutes        Int     @default(1440)   // 自动验证时间（分钟，默认 1 天）
-
-  // 轮询配置
-  firstPollDelaySeconds            Int     @default(5)      // 首次查询延迟（秒）
-  pollIntervalSeconds              Int     @default(5)      // 轮询间隔（秒）
-  maxWaitDurationMinutes           Int     @default(10)     // 最长等待时长（分钟）
-
-  // 限流控制配置
-  rateLimitThreshold               Int     @default(2)      // 403/429 连续阈值
-  banSuspicionCooldownHours        Int     @default(6)      // 封禁怀疑冷却时间（小时）
-
-  Submissions     Submission[]
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                          String       @id @default(uuid())
+  platform                    String
+  username                    String
+  password                    String?
+  passwordIV                  String?
+  cookie                      String?
+  cookieRaw                   String?
+  status                      String       @default("unverified")
+  lastVerifiedAt              DateTime?
+  lastErrorMessage            String?
+  loginMethod                 String       @default("cookie")
+  addedBy                     String
+  lastLoginAt                 DateTime?
+  lastLoginFailureAt          DateTime?
+  lastSubmitAt                DateTime?
+  lastRateLimitAt             DateTime?
+  consecutiveFailures         Int          @default(0)
+  rateLimitCount              Int          @default(0)
+  totalSubmissions            Int          @default(0)
+  totalSubmissionErrors       Int          @default(0)
+  enabled                     Boolean      @default(true)
+  priority                    Int          @default(0)
+  maxConsecutiveFailures      Int          @default(3)
+  freezeDurationMinutes       Int          @default(30)
+  submitMaxRetries            Int          @default(1)
+  retryIntervalSeconds        Int          @default(10)
+  minSubmitIntervalSeconds    Int          @default(30)
+  minRequestIntervalSeconds   Int          @default(3)
+  maxConcurrentSubmissions    Int          @default(1)
+  maxConcurrentRequests       Int          @default(2)
+  loginFailureCooldownMinutes Int          @default(15)
+  cookieValidMinutes          Int          @default(3600)
+  renewLoginThresholdMinutes  Int          @default(10)
+  reverifyIntervalMinutes     Int          @default(30)
+  autoVerifyIntervalMinutes   Int          @default(1440)
+  firstPollDelaySeconds       Int          @default(5)
+  pollIntervalSeconds         Int          @default(5)
+  maxWaitDurationMinutes      Int          @default(10)
+  rateLimitThreshold          Int          @default(2)
+  banSuspicionCooldownHours   Int          @default(6)
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+  Submissions                 Submission[]
 
   @@unique([platform, username])
   @@index([platform])
@@ -811,26 +780,25 @@ model OjAccount {
 
 /// 评测记录
 model Submission {
-  id                Int      @id @default(autoincrement())
-  userId            String                       // 提交者用户 ID
-  oj                String                        // OJ 平台标识（hdu, luogu, codeforces 等）
-  problemId         String                        // 原题号
-  problemInternalId String?                       // 题目内部 ID（用于跳转）
-  language          String                        // 编程语言（平台语言 ID）
-  code              String                        // 源代码
-  codeLength        Int                           // 代码长度（字节）
-  result            String    @default("queuing") // 评测结果
-  timeUsed          Int?                          // 耗时（ms）
-  memoryUsed        Int?                          // 内存（KB）
-  submitMethod      String                        // 提交方式：robot / myAccount / archive
-  ojAccountId       String?                       // 使用的 OJ 账号 ID
-  ojRemoteId        String?                       // OJ 远程评测 ID（用于轮询结果）
-  errorMessage      String?                       // 错误信息
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  User              User      @relation(fields: [userId], references: [id])
+  id                Int        @id @default(autoincrement())
+  userId            String
+  oj                String
+  problemId         String
+  language          String
+  code              String
+  codeLength        Int
+  result            String     @default("queuing")
+  timeUsed          Int?
+  memoryUsed        Int?
+  submitMethod      String
+  ojAccountId       String?
+  ojRemoteId        String?
+  errorMessage      String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  problemInternalId String?
   OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
+  User              User       @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([oj])
@@ -838,4 +806,18 @@ model Submission {
   @@index([result])
   @@index([language])
   @@index([createdAt])
+}
+
+/// 测试数据文件
+model TestdataFile {
+  id         String   @id @default(uuid())
+  problemId  String
+  filename   String
+  size       Int
+  md5        String?
+  uploadedAt DateTime @default(now())
+  Problem    Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, filename])
+  @@index([problemId])
 }

@@ -1,5 +1,147 @@
 # 变更日志
 
+## 2026-04-10 (Carits 本地评测功能 - 全部完成)
+
+### 添加 Carits 平台自建题目的本地评测功能
+
+**背景**: OI Manager V2 的 carits 平台自建题目目前无法进行本地评测，只能通过 VJudge 代理提交到其他 OJ。需要为 carits 平台添加本地评测功能。
+
+**已完成内容**:
+
+1. **数据模型扩展**:
+   - Problem 模型添加 `problemType` 字段（default/interactive/objective/submit_answer/communication）
+   - 新增 `TestdataFile` 模型（测试数据文件管理）
+
+2. **后端 API**:
+   - 测试数据管理：上传、列表、删除、自动识别测试数据对
+   - 评测配置：获取和保存评测配置（YAML 格式）
+   - WebSocket 评测机服务端：接收评测机注册、分发任务、处理结果
+   - submit.ts 路由改造：carits 平台题目走本地评测
+
+3. **前端界面**:
+   - ProblemForm 添加「评测设置」Tab（仅 carits 平台题目显示）
+   - 支持题目类型、校验器、时间/内存限制设置
+   - 支持测试数据上传和管理
+
+4. **评测机服务** (apps/judge/):
+   - 独立 Node.js 项目
+   - WebSocket 客户端连接后端
+   - 支持 go-judge 沙箱模式和 Windows 本地执行模式
+   - 8 种 Checker 实现（default/strict/testlib/lemon/hustoj/qduoj/syzoj/kattis）
+   - 支持 C/C++（c, c11, cpp, cpp11, cpp14, cpp17, cpp20）
+
+5. **Windows 本地执行模式**:
+   - 自动检测 go-judge 可用性
+   - Windows 环境自动切换到本地执行模式
+   - 已验证：A+B 问题测试通过
+
+**涉及文件**:
+- `apps/server/prisma/schema.prisma` — Problem.problemType, TestdataFile 模型
+- `apps/server/src/routes/testdata.ts` — 新建测试数据 API
+- `apps/server/src/routes/problems.ts` — 添加 judge-config 端点
+- `apps/server/src/routes/submit.ts` — carits 平台本地评测路由
+- `apps/server/src/ws/judge.ts` — WebSocket 评测机服务端
+- `apps/server/src/index.ts` — 初始化 WebSocket 服务
+- `apps/web/src/components/problem/ProblemForm.tsx` — 添加评测设置 Tab
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx` — 新建评测设置组件
+- `apps/judge/` — 新建评测机项目（含沙箱客户端、Checker、评测核心）
+
+**影响范围**: carits 平台题目的评测设置、本地评测
+**风险**: 低 — 新增功能，不影响其他模块
+
+---
+
+## 2026-04-10 (Carits 本地评测功能 - Phase 1-4)
+
+### 添加 Carits 平台自建题目的本地评测功能
+
+**背景**: OI Manager V2 的 carits 平台自建题目目前无法进行本地评测，只能通过 VJudge 代理提交到其他 OJ。需要为 carits 平台添加本地评测功能。
+
+**已完成内容**:
+
+1. **数据模型扩展**:
+   - Problem 模型添加 `problemType` 字段（default/interactive/objective/submit_answer/communication）
+   - 新增 `TestdataFile` 模型（测试数据文件管理）
+
+2. **后端 API**:
+   - 测试数据管理：上传、列表、删除、自动识别测试数据对
+   - 评测配置：获取和保存评测配置（YAML 格式）
+   - WebSocket 评测机服务端：接收评测机注册、分发任务、处理结果
+   - submit.ts 路由改造：carits 平台题目走本地评测
+
+3. **前端界面**:
+   - ProblemForm 添加「评测设置」Tab（仅 carits 平台题目显示）
+   - 支持题目类型、校验器、时间/内存限制设置
+   - 支持测试数据上传和管理
+
+4. **评测机服务** (apps/judge/):
+   - 独立 Node.js 项目
+   - WebSocket 客户端连接后端
+   - go-judge 沙箱客户端
+   - 多种 Checker 实现（default/strict/testlib/lemon 等）
+   - 支持 14+ 种编程语言
+
+**待完成**: Phase 5（语言环境配置、go-judge 部署）
+
+**涉及文件**:
+- `apps/server/prisma/schema.prisma` — Problem.problemType, TestdataFile 模型
+- `apps/server/src/routes/testdata.ts` — 新建测试数据 API
+- `apps/server/src/routes/problems.ts` — 添加 judge-config 端点
+- `apps/server/src/routes/submit.ts` — carits 平台本地评测路由
+- `apps/server/src/ws/judge.ts` — WebSocket 评测机服务端
+- `apps/server/src/index.ts` — 初始化 WebSocket 服务
+- `apps/web/src/components/problem/ProblemForm.tsx` — 添加评测设置 Tab
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx` — 新建评测设置组件
+- `apps/judge/` — 新建评测机项目
+
+**影响范围**: carits 平台题目的评测设置、本地评测
+**风险**: 低 — 新增功能，不影响其他模块
+
+---
+
+## 2026-04-10 (Carits 本地评测功能 - Phase 1-2)
+
+### 添加 Carits 平台自建题目的本地评测设置功能
+
+**背景**: OI Manager V2 的 carits 平台自建题目目前无法进行本地评测，只能通过 VJudge 代理提交到其他 OJ。需要为 carits 平台添加本地评测功能。
+
+**已完成内容**:
+
+1. **数据模型扩展**:
+   - Problem 模型添加 `problemType` 字段（default/interactive/objective/submit_answer/communication）
+   - 新增 `TestdataFile` 模型（测试数据文件管理）
+   - `prisma db push` 已执行
+
+2. **后端 API**:
+   - `GET /api/problems/:id/testdata` — 获取测试数据列表
+   - `POST /api/problems/:id/testdata` — 上传测试数据（支持多文件）
+   - `DELETE /api/problems/:id/testdata/:fileId` — 删除测试数据
+   - `POST /api/problems/:id/testdata/auto` — 自动识别测试数据对
+   - `GET /api/problems/:id/judge-config` — 获取评测配置
+   - `PUT /api/problems/:id/judge-config` — 保存评测配置
+
+3. **前端界面**:
+   - ProblemForm.tsx 添加「评测设置」Tab（仅 carits 平台题目显示）
+   - 创建 `JudgeSettingsTab.tsx` 组件
+   - 支持题目类型、校验器类型、时间/内存限制设置
+   - 支持测试数据上传、列表、删除
+   - 自动识别 .in/.out 测试数据对
+
+**待完成**: Phase 3-5（评测机服务、后端调度、语言环境）
+
+**涉及文件**:
+- `apps/server/prisma/schema.prisma` — Problem.problemType, TestdataFile 模型
+- `apps/server/src/routes/testdata.ts` — 新建测试数据 API
+- `apps/server/src/routes/problems.ts` — 添加 judge-config 端点
+- `apps/server/src/index.ts` — 注册 testdata 路由
+- `apps/web/src/components/problem/ProblemForm.tsx` — 添加评测设置 Tab
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx` — 新建评测设置组件
+
+**影响范围**: carits 平台题目的评测设置
+**风险**: 低 — 新增功能，不影响其他模块
+
+---
+
 ## 2026-04-10 (HDU 提交登录控制优化)
 
 ### HDU 提交代理解登录控制、Cookie 复用、失败冷却机制

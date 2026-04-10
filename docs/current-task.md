@@ -1,5 +1,73 @@
 # 当前任务
 
+## 任务：Carits 平台本地评测功能（2026-04-10）
+
+状态: **已完成** ✅
+
+### 目标
+
+为 Carits 平台自建题目添加本地评测功能，参考 Hydro OJ 的评测设置界面。
+
+### 已完成内容
+
+#### Phase 1: 数据模型扩展 ✅
+- Problem 模型添加 `problemType` 字段
+- 新增 `TestdataFile` 模型
+- 后端测试数据 API（7 个端点）
+- 前端评测设置 Tab
+
+#### Phase 3: 评测机服务 ✅
+创建了完整的 `apps/judge/` 项目：
+- 类型定义（兼容 Hydro）
+- 语言配置（支持 C/C++）
+- 沙箱客户端（支持 go-judge 和 Windows 本地模式）
+- 8 种 Checker 实现
+- 评测核心逻辑
+- WebSocket 客户端
+
+#### Phase 4: 后端评测调度 ✅
+- WebSocket 服务端 `ws/judge.ts`
+- submit.ts 路由改造
+
+#### Phase 5: Windows 本地执行模式 ✅
+- 创建 `sandbox/local.ts` 实现 Windows 兼容执行
+- 自动检测沙箱可用性，切换到本地模式
+- 测试通过（A+B 问题）
+
+### 使用方法
+
+**启动评测机**:
+```bash
+cd apps/judge
+pnpm dev
+```
+
+评测机会自动检测环境：
+- Linux + go-judge 可用：使用沙箱模式
+- Windows 或 go-judge 不可用：使用本地执行模式
+
+### 涉及文件
+
+**后端**:
+- `apps/server/prisma/schema.prisma`
+- `apps/server/src/routes/testdata.ts`
+- `apps/server/src/routes/problems.ts`
+- `apps/server/src/routes/submit.ts`
+- `apps/server/src/ws/judge.ts`
+- `apps/server/src/index.ts`
+
+**前端**:
+- `apps/web/src/components/problem/ProblemForm.tsx`
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`
+
+**评测机** (apps/judge/):
+- `src/index.ts`, `src/types.ts`, `src/config.ts`
+- `src/judge.ts`, `src/client.ts`
+- `src/sandbox/client.ts`, `src/sandbox/local.ts`
+- `src/checker/index.ts`, `src/langs.yaml`
+
+---
+
 ## 任务：HDU 提交登录控制优化（2026-04-10）
 
 状态: 已完成

@@ -158,6 +158,8 @@ export interface OjProblem {
   memoryLimit?: number
   /** 难度等级 */
   difficulty?: string
+  /** 可提交语言列表，每项为平台语言 ID + 显示名，null 表示不限制 */
+  allowedLanguages?: Array<{ id: string; name: string }> | null
   /** 题目来源信息 */
   source: {
     /** OJ 平台标识 */

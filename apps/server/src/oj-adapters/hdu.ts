@@ -88,6 +88,15 @@ export class HduAdapter implements OjAdapter {
       description: markdown,
       timeLimit,
       memoryLimit,
+      allowedLanguages: [
+        { id: '0', name: 'G++' },
+        { id: '1', name: 'GCC' },
+        { id: '2', name: 'C++' },
+        { id: '3', name: 'C' },
+        { id: '4', name: 'Pascal' },
+        { id: '5', name: 'Java' },
+        { id: '6', name: 'C#' },
+      ],
       source: { platform: 'hdu', problemId, url },
       statements: [{
         type: 'statement',

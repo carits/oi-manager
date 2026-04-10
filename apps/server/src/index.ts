@@ -22,6 +22,7 @@ import { schoolProblemListsRouter } from './routes/school-problem-lists'
 import { teamProblemListsRouter } from './routes/team-problem-lists'
 import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
 import { submitRouter } from './routes/submit'
+import { testdataRouter } from './routes/testdata'
 import { startSubmissionPoller } from './lib/submission-poller'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
@@ -97,6 +98,7 @@ app.use('/api/schools', schoolProblemListsRouter)
 app.use('/api/teams', teamProblemListsRouter)
 app.use('/api/oj-accounts', ojAccountsRouter)
 app.use('/api/submit', submitRouter)
+app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
 
 // 健康检查
 app.get('/api/health', (req, res) => {
@@ -178,6 +180,7 @@ proxyManager.loadFromEnv()
 
 // 浏览器管理器关闭钩子
 import { browserManager } from './lib/browser/manager'
+import { initJudgeWebSocket } from './ws/judge'
 const gracefulShutdown = async (signal: string) => {
   logger.info('server_shutting_down', { action: 'server_shutdown', metadata: { signal } })
   await browserManager.close()
@@ -186,13 +189,17 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   logger.info('server_started', {
     action: 'server_start',
     metadata: { port: PORT, env: process.env.NODE_ENV || 'development' }
   })
   startAutoVerifyScheduler()
   startSubmissionPoller(5000) // 每 5 秒轮询一次
+
+  // 初始化评测机 WebSocket 服务器
+  ;(global as any).httpServer = httpServer
+  initJudgeWebSocket()
 })
 
 export default app
