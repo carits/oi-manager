@@ -106,6 +106,12 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
           problemConfig
         })
 
+        // Carits 平台：远程提交ID就是本地评测ID
+        await prisma.submission.update({
+          where: { id: submission.id },
+          data: { ojRemoteId: submission.id.toString() }
+        })
+
         logger.info('carits_judge_dispatched', {
           action: 'submit',
           metadata: { submissionId: submission.id }

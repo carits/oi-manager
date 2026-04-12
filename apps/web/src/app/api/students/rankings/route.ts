@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
 
-    const url = `${ENV.API_URL}/api/students/rankings`
+    const url = `${ENV.BACKEND_URL}/api/students/rankings`
 
     const res = await fetch(url, {
       method: 'GET',

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
+    "js-yaml": "^4.1.1",
     "katex": "^0.16.38",
     "next": "^14.2.0",
     "react": "^18.2.0",
@@ -24,6 +25,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",

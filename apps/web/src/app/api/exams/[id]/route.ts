@@ -4,7 +4,7 @@ import { ENV } from '@/config/env'
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${ENV.API_URL}/api/exams/${params.id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/exams/${params.id}`, {
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })
     const data = await res.json()
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${ENV.API_URL}/api/exams/${params.id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/exams/${params.id}`, {
       method: 'DELETE',
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })

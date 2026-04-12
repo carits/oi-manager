@@ -158,7 +158,6 @@ export default function VjudgeImportPage() {
 
   const handleValidate = async (members: ImportMember[]): Promise<ValidateResultItem[]> => {
     const result = await apiClient.post<{
-      success: boolean
       data: ValidateResultItem[]
     }>('/api/team-import/vjudge/validate', {
       members: members.map(m => ({
@@ -170,13 +169,13 @@ export default function VjudgeImportPage() {
     })
 
     if (result.success && result.data) {
-      return result.data
+      return result.data.data
     }
     throw new Error(result.message || '校验失败')
   }
 
   const handleImport = async (members: ImportMember[], options?: { createTeam?: boolean; visibility?: string; teamName?: string; teamId?: string; [key: string]: unknown }): Promise<ImportResult> => {
-    const result = await apiClient.post<{ success: boolean; data: ImportResult }>('/api/team-import/vjudge/import', {
+    const result = await apiClient.post<{ data: ImportResult }>('/api/team-import/vjudge/import', {
       createTeam,
       visibility,
       teamName: createTeam ? previewGroupName : undefined,
@@ -199,7 +198,7 @@ export default function VjudgeImportPage() {
     })
 
     if (result.success && result.data) {
-      return result.data
+      return result.data.data
     }
     throw new Error(result.message || '导入失败')
   }
@@ -294,14 +293,14 @@ export default function VjudgeImportPage() {
 
                 <h3 style={{ fontSize: '1rem', fontWeight: '500', margin: '1rem 0 0.75rem' }}>选择要拉取的内容</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {[
+                  {([
                     [includeAnnouncement, setIncludeAnnouncement, '团队公告'],
                     [includeDescription, setIncludeDescription, '团队描述'],
                     [includeMembers, setIncludeMembers, '团队成员'],
                     [includeAvatar, setIncludeAvatar, '团队头像']
-                  ].map(([checked, setter, label], i) => (
+                  ] as [boolean, (v: boolean) => void, string][]).map(([checked, setter, label], i) => (
                     <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={checked as boolean} onChange={e => (setter as Function)(e.target.checked)} />
+                      <input type="checkbox" checked={checked} onChange={e => setter(e.target.checked)} />
                       {label}
                     </label>
                   ))}

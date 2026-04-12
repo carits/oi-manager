@@ -170,7 +170,7 @@ export default function ClassesPage() {
         title="确认操作"
         message={confirmState?.message || ''}
         confirmText="确认"
-        variant="danger"
+        danger
       />
 
       {/* 添加/编辑弹窗 */}

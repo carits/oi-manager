@@ -790,6 +790,9 @@ model Submission {
   result            String     @default("queuing")
   timeUsed          Int?
   memoryUsed        Int?
+  score             Int?
+  cases             String?
+  subtasks          String?
   submitMethod      String
   ojAccountId       String?
   ojRemoteId        String?

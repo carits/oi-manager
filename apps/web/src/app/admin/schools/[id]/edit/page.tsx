@@ -12,17 +12,18 @@ interface School {
   name: string
   region: string | null
   schoolType: string | null
+  educationSystem: string | null
   contactPerson: string | null
   contactPhone: string | null
   contactEmail: string | null
-  principal: { id: string; name: string; title: string | null; email: string | null; user: { username: string } } | null
+  principal: { id: string; name: string; title: string | null; email: string | null; User: { username: string } } | null
 }
 
 interface Teacher {
   id: string
   name: string
   title: string | null
-  user: { username: string; role: string }
+  User: { username: string; role: string }
 }
 
 export default function EditSchoolPage() {
@@ -74,7 +75,7 @@ export default function EditSchoolPage() {
 
     setPrincipalSaving(true)
     try {
-      const result = await apiClient.post(`/api/schools/${schoolId}/principal`, {
+      const result = await apiClient.post<any>(`/api/schools/${schoolId}/principal`, {
         username: principalData.username,
         password: principalData.password || principalData.username,
         teacherName: principalData.teacherName,
@@ -174,7 +175,7 @@ export default function EditSchoolPage() {
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
       // 更新学校基本信息
-      const result = await apiClient.put(`/api/schools/${schoolId}`, {
+      const result = await apiClient.put<any>(`/api/schools/${schoolId}`, {
         ...formData,
         region
       })
@@ -186,7 +187,7 @@ export default function EditSchoolPage() {
 
       // 如果选择了负责人且与当前不同，更新负责人
       if (selectedTeacherId && selectedTeacherId !== principal?.id) {
-        const principalResult = await apiClient.put(`/api/schools/${schoolId}/principal`, { teacherId: selectedTeacherId })
+        const principalResult = await apiClient.put<any>(`/api/schools/${schoolId}/principal`, { teacherId: selectedTeacherId })
         if (!principalResult.success) {
           toast.error(principalResult.message || '负责人更新失败')
           setSaving(false)
@@ -447,13 +448,13 @@ export default function EditSchoolPage() {
                       <option value="">请选择负责人</option>
                       {teachers.map((teacher) => (
                         <option key={teacher.id} value={teacher.id}>
-                          {teacher.user.username} - {teacher.name}
+                          {teacher.User.username} - {teacher.name}
                         </option>
                       ))}
                     </select>
                     {principal && (
                       <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
-                        账号：{principal.user.username}
+                        账号：{principal.User?.username}
                       </p>
                     )}
                   </div>

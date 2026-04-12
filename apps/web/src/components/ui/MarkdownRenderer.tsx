@@ -51,7 +51,7 @@ interface MarkdownRendererProps {
   className?: string
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 // 处理需要认证的文件下载
 const handleFileDownload = async (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {

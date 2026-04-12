@@ -59,26 +59,25 @@ const attachmentUpload = multer({
 })
 
 /**
- * 生成 Carits 平台题号（P + 6位数字）
+ * 生成 Carits 平台题号（纯数字，从 1000 开始递增）
  */
 async function generateCaritsProblemId(): Promise<string> {
   const problems = await prisma.problem.findMany({
     where: {
       platform: 'carits',
-      problemId: { startsWith: 'P' }
     },
     select: { problemId: true }
   })
 
-  let maxNum = 0
+  let maxNum = 999
   for (const p of problems) {
-    const numPart = parseInt(p.problemId.slice(1), 10)
+    const numPart = parseInt(p.problemId, 10)
     if (!isNaN(numPart) && numPart > maxNum) {
       maxNum = numPart
     }
   }
 
-  return `P${String(maxNum + 1).padStart(6, '0')}`
+  return String(maxNum + 1)
 }
 
 /**
@@ -1550,6 +1549,7 @@ problemsRouter.get('/:id/judge-config', authenticate, async (req, res) => {
       try {
         const yaml = await import('js-yaml')
         config = yaml.load(problem.judgeConfig)
+        console.log('[JudgeConfig] Loaded config, subtasks count:', (config as any)?.subtasks?.length ?? 0)
       } catch (e) {
         logger.warn('parse_judge_config_error', { error: e })
       }
@@ -1595,6 +1595,7 @@ problemsRouter.put('/:id/judge-config', authenticate, async (req, res) => {
     if (config) {
       const yaml = await import('js-yaml')
       judgeConfigYaml = yaml.dump(config, { lineWidth: -1 })
+      console.log('[JudgeConfig] Saving config, subtasks count:', config.subtasks?.length ?? 0, 'YAML preview:', judgeConfigYaml.substring(0, 200))
     }
 
     const updateData: any = {}

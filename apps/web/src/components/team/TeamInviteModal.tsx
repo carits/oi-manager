@@ -65,7 +65,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
       setInviting(true)
       const members = selectedMembers.map(m => ({ id: m.id, type: m.memberType }))
 
-      const result = await apiClient.post(`/api/teams/${teamId}/members`, {
+      const result = await apiClient.post<any>(`/api/teams/${teamId}/members`, {
         members,
         usernames: usernameInput.trim() ? usernameInput.split(',').map(s => s.trim()).filter(Boolean) : []
       })

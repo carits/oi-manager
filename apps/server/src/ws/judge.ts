@@ -140,29 +140,38 @@ async function handleRegister(ws: WebSocket, payload: { judgeId: string; languag
  * 处理评测结果
  */
 async function handleResult(payload: any) {
-  const { submissionId, result, time, memory, score, cases, message } = payload
+  const { submissionId, result, time, memory, score, cases, subtasks, message } = payload
 
   logger.info('judge_ws_result', {
     action: 'judge_ws',
-    metadata: { submissionId, result, time, memory, score }
+    metadata: { submissionId, result, time, memory, score, casesCount: cases?.length, subtasksCount: subtasks?.length }
   })
+
+  console.log(`[JudgeWS] Result received: submission=${submissionId}, result=${result}, score=${score}, cases=${cases?.length || 0}, subtasks=${subtasks?.length || 0}`)
 
   // 更新数据库
   try {
+    const updateData = {
+      result: mapResult(result),
+      timeUsed: time,
+      memoryUsed: memory,
+      errorMessage: message,
+      score: score ?? null,
+      cases: cases ? JSON.stringify(cases) : null,
+      subtasks: subtasks ? JSON.stringify(subtasks) : null,
+    }
+    console.log(`[JudgeWS] Updating DB: score=${updateData.score}, cases_len=${updateData.cases?.length || 0}, subtasks=${!!updateData.subtasks}`)
     await prisma.submission.update({
       where: { id: parseInt(submissionId) },
-      data: {
-        result: mapResult(result),
-        timeUsed: time,
-        memoryUsed: memory,
-        errorMessage: message
-      }
+      data: updateData,
     })
+    console.log(`[JudgeWS] DB updated successfully for submission=${submissionId}`)
   } catch (e: any) {
     logger.error('judge_ws_update_error', {
       action: 'judge_ws',
       metadata: { submissionId, error: e.message }
     })
+    console.error(`[JudgeWS] DB update error: ${e.message}`)
   }
 
   // 解析等待中的任务

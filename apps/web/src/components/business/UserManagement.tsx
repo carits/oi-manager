@@ -87,19 +87,20 @@ export function UserManagement({
         ? `${fetchUrl}&${params.toString()}`
         : `${fetchUrl}?${params.toString()}`
 
-      const result = await apiClient.get<{ users?: any[]; page?: number; pageSize?: number; total?: number; totalPages?: number } | any[]>(url)
+      const result = await apiClient.get<any>(url)
 
       if (result.success) {
         // 兼容不同的响应格式
-        const userData = result.data?.users || result.data || []
+        const data = result.data
+        const userData = data?.users || data || []
         setUsers(Array.isArray(userData) ? userData : [])
 
-        if (result.data && !Array.isArray(result.data) && result.data.page !== undefined) {
+        if (data && !Array.isArray(data) && data.page !== undefined) {
           setPagination({
-            page: result.data.page,
-            pageSize: result.data.pageSize,
-            total: result.data.total,
-            totalPages: result.data.totalPages
+            page: data.page || 1,
+            pageSize: data.pageSize || 20,
+            total: data.total || 0,
+            totalPages: data.totalPages || 1
           })
         }
       }

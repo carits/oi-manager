@@ -36,9 +36,11 @@ export function useFetch<T>(
     setLoading(true)
     setError(null)
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { signal: _optsSignal, ...restOptions } = options || {}
       const result = await apiClient.get<T>(url, {
-        signal: controller.signal as unknown as AbortSignal | undefined,
-        ...options,
+        ...restOptions,
+        signal: controller.signal,
         headers: options?.headers
       })
 

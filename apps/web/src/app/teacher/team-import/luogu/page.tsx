@@ -141,7 +141,6 @@ export default function LuoguImportPage() {
 
   const handleValidate = async (members: ImportMember[]): Promise<ValidateResultItem[]> => {
     const result = await apiClient.post<{
-      success: boolean
       data: ValidateResultItem[]
     }>('/api/team-import/luogu/validate', {
       members: members.map(m => ({
@@ -153,13 +152,13 @@ export default function LuoguImportPage() {
     })
 
     if (result.success && result.data) {
-      return result.data
+      return result.data.data
     }
     throw new Error(result.message || '校验失败')
   }
 
   const handleImport = async (members: ImportMember[], options?: { createTeam?: boolean; visibility?: string; teamName?: string; teamId?: string; [key: string]: unknown }): Promise<ImportResult> => {
-    const result = await apiClient.post<{ success: boolean; data: ImportResult }>('/api/team-import/luogu/import', {
+    const result = await apiClient.post<{ data: ImportResult }>('/api/team-import/luogu/import', {
       createTeam,
       visibility,
       teamName: createTeam ? previewGroupName : undefined,
@@ -180,7 +179,7 @@ export default function LuoguImportPage() {
     })
 
     if (result.success && result.data) {
-      return result.data
+      return result.data.data
     }
     throw new Error(result.message || '导入失败')
   }

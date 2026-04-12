@@ -1,5 +1,159 @@
 # 变更日志
 
+## 2026-04-12 (评测配置持久化修复)
+
+### 主保存按钮集成评测配置保存
+
+**背景**: 用户反馈 FileIO、Checker 等评测配置保存后重新进入丢失。根因：ProblemForm 的主"保存"按钮只调用 `PUT /:id` 保存基础信息（标题、题面、时间/内存限制），不会保存 `judgeConfig`（YAML 格式的完整评测配置）。JudgeSettingsTab 有独立的"保存评测配置"按钮，但用户自然地点击主保存按钮后离开页面。
+
+**修改**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`:
+  - 使用 `forwardRef` + `useImperativeHandle` 暴露 `saveConfig()` 方法
+  - 导出 `JudgeSettingsTabHandle` 接口供 ProblemForm 使用
+- `apps/web/src/components/problem/ProblemForm.tsx`:
+  - 创建 ref 并传给 JudgeSettingsTab
+  - `handleSubmit` 中主 `PUT /:id` 成功后，编辑模式下自动调用 `judgeSettingsRef.current?.saveConfig()` 保存评测配置
+
+**影响范围**: 编辑题目页面（Carits 平台题目）。主保存按钮现在会同时保存基础信息和评测配置。
+
+**回归风险**: 低。仅影响保存流程，增加了评测配置保存调用。评测配置保存失败不影响基础信息的保存。
+
+**涉及文件**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`
+- `apps/web/src/components/problem/ProblemForm.tsx`
+
+---
+
+## 2026-04-12 (子任务配置自动保存)
+
+### 子任务编辑后自动保存到后端
+
+**背景**: 用户反馈子任务配置保存后再次进入丢失。根因：所有修改子任务的操作（自动配置、添加、删除、编辑、分配/移除测试点）仅更新本地 React 状态，不会自动保存到后端。用户需额外点击"保存配置"按钮，容易被忽略。
+
+**修改**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`:
+  - 提取 `buildConfig()` 函数，支持传入自定义 subtasks 参数构建配置对象
+  - 新增 `updateSubtasksAndSave()` 辅助函数：更新状态 + 自动保存
+  - **所有子任务修改操作均改为自动保存**：`autoConfigure`、`addSubtask`、`deleteSubtask`、`saveEditSubtask`、`assignCasesToSubtask`、`removeCaseFromSubtask`
+  - 替换所有 `confirm()` 为 `ConfirmModal` 组件（删除子任务、删除测试数据文件）
+  - 添加前后端 `console.log` 调试日志
+- `apps/server/src/routes/problems.ts`: GET/PUT judge-config 端点添加调试日志
+
+**涉及文件**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`
+- `apps/server/src/routes/problems.ts`
+
+---
+
+## 2026-04-12 (评测配置持久化 + 子任务分数显示)
+
+### 评测配置加载后子任务自动展开 + 子任务分数保存与展示
+
+**背景**: 评测配置了子任务并保存后，再进入页面子任务处于折叠状态，用户误以为配置丢失。同时评测机的 `subtasks` 结果数据未保存到数据库，导致提交详情页无法显示子任务级别分数。
+
+**修改**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`: 加载配置后自动展开所有已保存的子任务
+- `apps/server/prisma/schema.prisma`: Submission 模型新增 `subtasks String?` 字段
+- `apps/server/src/ws/judge.ts`: 保存评测结果时同时保存 `subtasks` JSON
+- `apps/server/src/routes/submissions.ts`: GET /:id 返回解析后的 `subtasks` 数据
+- `apps/web/src/components/submission/SubmissionDetailPage.tsx`: 测试点表格支持子任务分组显示，每个子任务显示标题行（ID + 测试点数 + 评分方式 + 得分）和对应的测试点行
+
+**涉及文件**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`
+- `apps/server/prisma/schema.prisma`
+- `apps/server/src/ws/judge.ts`
+- `apps/server/src/routes/submissions.ts`
+- `apps/web/src/components/submission/SubmissionDetailPage.tsx`
+
+---
+
+## 2026-04-11 (评测设置 Beta 完整实现)
+
+### 评测设置三栏配置编辑器 + 子任务依赖
+
+**背景**: 参考 Hydro OJ 的评测设置界面，将 Carits 的评测设置从基本骨架升级为完整配置编辑器。Judge 引擎已支持 subtask/评分方式等，但前端缺少 UI 来编辑这些字段。
+
+**修改**:
+- `apps/web/src/components/problem/JudgeSettingsTab.tsx`: **完整重写** — 三栏布局（YAML 预览 + 配置表单 + 测试数据管理）
+  - 基础 Tab：题目类型分段选择（传统题/交互题/通信题/提交答案题/客观题）、Checker（默认+忽略行末空格/testlib 预设+自定义/其他接口）、FileIO 前缀、Interactor/Manager 文件选择、通信题进程数、提交答案题 Multi-file 开关、额外文件、语言限制多选
+  - 子任务 Tab：全局时间/内存、自动配置（按文件名前缀分组）、添加/删除子任务、编辑子任务（分值/时间覆盖/依赖/评分方式 min/max/sum）、测试点分配/移除
+  - YAML 只读预览：实时从 config 对象生成 config.yaml 格式
+  - 右栏测试数据：上传/列表/删除（从底部迁移到右栏）
+- `apps/judge/src/types.ts`: SubtaskConfig 新增 `if?: number[]` 依赖字段
+- `apps/judge/src/judge.ts`: 子任务评测增加依赖检查 — 依赖未通过的子任务自动跳过，测试点标记为 System Error
+- `apps/web/package.json`: 新增 `js-yaml` + `@types/js-yaml` 依赖
+
+**影响范围**: 评测设置 UI、Judge 引学子任务处理、评测配置数据结构
+
+---
+
+## 2026-04-11 (提交详情页链接优化)
+
+### 评测ID 可点击 + 默认头像修复
+
+**问题**: 题目详情页评测记录 tab 的评测ID 是纯文本不可点击；提交详情页默认头像为灰色，与系统风格不一致。
+
+**修改**:
+- `apps/web/src/components/problem/ProblemDetail.tsx`: 评测ID 列改为可点击链接，根据角色跳转到对应提交详情页
+- `apps/web/src/components/submission/SubmissionDetailPage.tsx`: 默认头像改为蓝色圆+白色首字母，与系统其他位置一致
+
+**影响**: 题目页的评测记录可一键跳转到详情页；未上传头像的用户在详情页显示蓝色默认头像。
+
+---
+
+## 2026-04-11 (提交详情页 Hydro 风格改造)
+
+### 对齐 Hydro OJ 的提交详情页布局
+
+**问题**: 提交详情页布局与 Hydro 不一致，头像链接有 bug，没有可视化测试点摘要，分数不突出。
+
+**修改**:
+- `apps/server/src/routes/submissions.ts`: 修复错误的三元表达式（line 160 `user.avatar || user.Teacher?.name ? null : null` 始终返回 null）
+- `apps/web/src/components/submission/SubmissionDetailPage.tsx`: 完整重写
+  - 参考 Hydro `record_detail.html` 布局：左 9/12 + 右 3/12
+  - 状态栏：图标 + 分数（颜色渐变）+ 结果文字 + 测试点色条摘要
+  - 测试点表格：左侧彩色边框（绿/红），Hydro 风格
+  - 统计摘要栏：Score / Total Time / Peak Time / Peak Memory
+  - 代码区：默认展开，语法高亮
+  - 右侧信息栏：Submit By（含头像）、Problem、Language、Code Length、Submit At、Remote ID
+
+**影响**: 提交详情页现在与 Hydro OJ 风格一致，测试点通过/失败一目了然，分数醒目显示。
+
+---
+
+## 2026-04-11 (ProblemNote 题面显示修复)
+
+### 修复写思路页面看不到题面的问题
+
+**问题**: ProblemNote 使用旧的 `description`/`statementType` 字段显示题面，但多版本题面的题目这些字段为空。
+
+**修改**: `apps/web/src/components/problem/ProblemNote.tsx`
+- 添加 `Statement` 接口和 `statements` 字段
+- 优先使用 `statements[]` 选择题面（中文 markdown → 任意 markdown → 第一个可见）
+- 保留旧字段作为回退
+
+**影响**: 使用多版本题面（ProblemStatement 表）的题目现在能在写思路页面正常显示题面。
+
+---
+
+## 2026-04-11 (提交记录详情页)
+
+### 新增独立提交详情页
+
+**背景**: 评测记录列表中点击评测 ID 可跳转到独立详情页，显示逐测试点结果、分数、提交者信息、源码。
+
+**修改文件**:
+- `apps/server/prisma/schema.prisma` — Submission 添加 score、cases 字段
+- `apps/server/src/ws/judge.ts` — 保存 score + cases JSON
+- `apps/server/src/routes/submit.ts` — Carits 提交设置 ojRemoteId
+- `apps/server/src/routes/submissions.ts` — GET /:id 增强返回数据
+- `apps/web/src/components/submission/SubmissionDetailPage.tsx` — 新建详情页组件
+- 3 个路由页面 (teacher/student/platform-admin)
+- `apps/web/src/components/submission/SubmissionList.tsx` — 评测 ID 可点击
+- `apps/web/src/components/submission/SubmissionDetailModal.tsx` — Carits 远程链接
+
+---
+
 ## 2026-04-10 (Carits 本地评测功能 - 全部完成)
 
 ### 添加 Carits 平台自建题目的本地评测功能

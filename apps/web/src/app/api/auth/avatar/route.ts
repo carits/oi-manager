@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData()
     backendFormData.append('avatar', blob, file.name)
 
-    const res = await fetch(`${ENV.API_URL}/api/auth/avatar`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/auth/avatar`, {
       method: 'POST',
       headers: {
         ...(authHeader ? { Authorization: authHeader } : {})

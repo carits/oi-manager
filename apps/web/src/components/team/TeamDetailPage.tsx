@@ -531,7 +531,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
           name: team.name,
           description: team.description || '',
           isPublic: team.isPublic,
-          teamId: team.teamId || team.id || ''
+          teamId: team.id || ''
         }}
         onSuccess={refetch}
       />

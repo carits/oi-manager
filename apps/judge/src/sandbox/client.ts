@@ -2,18 +2,21 @@
  * go-judge 沙箱客户端
  *
  * 支持两种模式：
- * 1. go-judge 沙箱模式（Linux 生产环境）
- * 2. 本地执行模式（Windows 开发环境，无隔离）
+ * 1. go-judge 沙箱模式（Linux 生产环境）— 编译产物通过 fileId 传递
+ * 2. 本地执行模式（无 go-judge，无隔离）
  */
 
 import superagent from 'superagent'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as os from 'os'
 import { config } from '../config'
-import type { SandboxResult } from '../types'
+import { getLanguageConfig } from '../langs'
 import { localExecute, localCompile } from './local'
+import type { SandboxResult } from '../types'
 
 const SANDBOX_HOST = config.sandboxHost
 
-// 检测是否使用本地模式
 let useLocalMode = false
 
 /**
@@ -21,7 +24,7 @@ let useLocalMode = false
  */
 export async function detectSandboxMode(): Promise<boolean> {
   try {
-    const res = await superagent.get(`${SANDBOX_HOST}/`).timeout(3000)
+    const res = await superagent.get(`${SANDBOX_HOST}/version`).timeout(3000)
     if (res.status === 200) {
       console.log('[Sandbox] Using go-judge sandbox at', SANDBOX_HOST)
       useLocalMode = false
@@ -39,54 +42,32 @@ export async function detectSandboxMode(): Promise<boolean> {
 detectSandboxMode()
 
 /**
- * 编译代码（单独步骤）
+ * 编译结果 — go-judge 模式返回 fileId，本地模式返回 workDir
+ */
+export interface CompileResult {
+  success: boolean
+  error?: string
+  /** go-judge 模式：编译产物的 fileId */
+  fileId?: string
+  /** 本地模式：包含编译产物的工作目录 */
+  workDir?: string
+}
+
+/**
+ * 编译代码
+ *
+ * go-judge 模式：通过 sandbox 编译，使用 copyOutCached 获取编译产物 fileId
+ * 本地模式：直接在本地目录编译
  */
 export async function compile(params: {
   language: string
   code: string
   timeLimit: number   // ms
   memoryLimit: number // KB
-  workDir?: string    // 可选的工作目录，如果不提供则创建临时目录
-}): Promise<{ success: boolean; error?: string; workDir?: string }> {
+  workDir?: string    // 可选（仅本地模式使用）
+}): Promise<CompileResult> {
   const { language, code, timeLimit, memoryLimit, workDir: providedWorkDir } = params
 
-  // 本地模式
-  if (useLocalMode) {
-    const fs = require('fs')
-    const path = require('path')
-    const os = require('os')
-
-    // 使用提供的目录或创建临时目录
-    const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-
-    if (!providedWorkDir) {
-      fs.mkdirSync(uniqueDir, { recursive: true })
-    }
-
-    try {
-      const result = await localCompile({ language, code, workDir: uniqueDir })
-      // 如果提供了工作目录，不清理，让调用方管理
-      if (!providedWorkDir) {
-        try {
-          fs.rmSync(uniqueDir, { recursive: true, force: true })
-        } catch {
-          // ignore
-        }
-      }
-      return { ...result, workDir: uniqueDir }
-    } catch (e: any) {
-      if (!providedWorkDir) {
-        try {
-          fs.rmSync(uniqueDir, { recursive: true, force: true })
-        } catch {
-          // ignore
-        }
-      }
-      return { success: false, error: e.message }
-    }
-  }
-
-  // go-judge 沙箱模式
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
     return { success: false, error: `不支持的语言: ${language}` }
@@ -97,34 +78,54 @@ export async function compile(params: {
     return { success: true }
   }
 
+  // 本地模式
+  if (useLocalMode) {
+    const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+    if (!providedWorkDir) {
+      fs.mkdirSync(uniqueDir, { recursive: true })
+    }
+
+    const result = await localCompile({ language, code, workDir: uniqueDir })
+    return { ...result, workDir: uniqueDir }
+  }
+
+  // go-judge 沙箱模式
   try {
     const copyIn: Record<string, any> = {
       [langConfig.code_file]: { content: code }
     }
 
-    const compileResult = await runCommand({
-      args: ['sh', '-c', langConfig.compile],
+    // 编译并缓存编译产物，将 stderr 重定向到文件以获取编译错误信息
+    const compileCommand = `${langConfig.compile} 2>stderr`
+    const result = await runCommand({
+      args: ['sh', '-c', compileCommand],
       env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
       copyIn,
       copyOut: ['stderr'],
-      cpuLimit: timeLimit * 1000000,
-      memoryLimit: memoryLimit * 1024,
+      copyOutOptional: ['stderr'],
+      copyOutCached: [langConfig.execute_file || 'main'],
+      cpuLimit: (langConfig.compile_time_limit || timeLimit) * 1000000,
+      memoryLimit: (langConfig.compile_memory_limit || memoryLimit) * 1024,
       procLimit: 50
     })
 
-    if (compileResult.exitStatus !== 0) {
-      let error = compileResult.error || '编译失败'
-      if (compileResult.files?.stderr) {
-        try {
-          error = Buffer.from(compileResult.files.stderr, 'base64').toString('utf-8')
-        } catch {
-          // ignore
-        }
+    // 编译失败时 exitStatus != 0
+    if (result.exitStatus !== 0) {
+      let error = result.error || '编译失败'
+      if (result.files?.stderr) {
+        error = result.files.stderr || error
       }
       return { success: false, error }
     }
 
-    return { success: true }
+    // 获取编译产物的 fileId
+    const executeFile = langConfig.execute_file || 'main'
+    const fileId = result.fileIds?.[executeFile]
+    if (!fileId) {
+      return { success: false, error: '编译产物未找到' }
+    }
+
+    return { success: true, fileId }
   } catch (e: any) {
     return { success: false, error: e.message }
   }
@@ -132,71 +133,22 @@ export async function compile(params: {
 
 /**
  * 执行程序
+ *
+ * go-judge 模式：通过 fileId 传入编译产物执行
+ * 本地模式：在本地目录执行
  */
 export async function execute(params: {
   language: string
-  code: string
   stdin?: string
   timeLimit: number   // ms
   memoryLimit: number // KB
   outputLimit?: number // bytes
-  skipCompile?: boolean // 是否跳过编译（已编译过）
-  workDir?: string    // 可选的工作目录，如果不提供则创建临时目录
+  /** go-judge 模式：编译产物的 fileId */
+  compileFileId?: string
+  /** 本地模式：包含编译产物的工作目录 */
+  workDir?: string
 }): Promise<SandboxResult> {
-  const { language, code, stdin, timeLimit, memoryLimit, outputLimit = 65536, skipCompile = false, workDir: providedWorkDir } = params
-
-  // 本地模式
-  if (useLocalMode) {
-    const fs = require('fs')
-    const path = require('path')
-    const os = require('os')
-
-    // 使用提供的目录或创建临时目录
-    const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-
-    if (!providedWorkDir) {
-      fs.mkdirSync(uniqueDir, { recursive: true })
-    }
-
-    try {
-      return await localExecute({
-        language,
-        code,
-        stdin,
-        timeLimit,
-        memoryLimit,
-        workDir: uniqueDir,
-        skipCompile
-      })
-    } finally {
-      // 如果提供了工作目录，不清理，让调用方管理
-      if (!providedWorkDir) {
-        try {
-          fs.rmSync(uniqueDir, { recursive: true, force: true })
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }
-
-  // go-judge 沙箱模式
-  return sandboxExecute(params)
-}
-
-/**
- * go-judge 沙箱执行
- */
-async function sandboxExecute(params: {
-  language: string
-  code: string
-  stdin?: string
-  timeLimit: number
-  memoryLimit: number
-  outputLimit?: number
-  skipCompile?: boolean
-}): Promise<SandboxResult> {
-  const { language, code, stdin, timeLimit, memoryLimit, outputLimit = 65536, skipCompile = false } = params
+  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -209,62 +161,98 @@ async function sandboxExecute(params: {
     }
   }
 
-  try {
-    const copyIn: Record<string, any> = {
-      [langConfig.code_file]: { content: code }
+  // 本地模式
+  if (useLocalMode) {
+    const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_exec_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+    if (!providedWorkDir) {
+      fs.mkdirSync(uniqueDir, { recursive: true })
     }
 
-    // 编译型语言需要先编译（除非已编译过）
-    if (langConfig.compile && !skipCompile) {
-      const compileResult = await runCommand({
-        args: ['sh', '-c', langConfig.compile],
-        env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-        copyIn,
-        copyOut: ['stderr'],
-        cpuLimit: (langConfig.compile_time_limit || 15000) * 1000000,
-        memoryLimit: (langConfig.compile_memory_limit || 524288) * 1024,
-        procLimit: 50
-      })
+    // 本地模式下需要重新编译（因为工作目录不同）
+    // 写入源代码并编译
+    const codeFile = path.join(uniqueDir, langConfig.code_file)
+    if (!providedWorkDir && langConfig.compile) {
+      // 需要编译但新目录中没有源代码 — 这种情况下应该通过 workDir 传入
+      // 调用方应确保 workDir 中已有编译产物
+    }
 
-      if (compileResult.exitStatus !== 0) {
-        let error = compileResult.error || '编译失败'
-        if (compileResult.files?.stderr) {
-          try {
-            error = Buffer.from(compileResult.files.stderr, 'base64').toString('utf-8')
-          } catch {
-            // ignore
-          }
-        }
-        return {
-          status: 'Compilation Error',
-          time: 0,
-          memory: 0,
-          exitCode: 1,
-          stderr: error
+    try {
+      return await localExecute({
+        language,
+        code: '', // 本地模式下代码已在 workDir 中
+        stdin,
+        timeLimit,
+        memoryLimit,
+        workDir: uniqueDir,
+        skipCompile: !!providedWorkDir // 如果提供了 workDir（已编译过），跳过编译
+      })
+    } finally {
+      if (!providedWorkDir) {
+        try {
+          fs.rmSync(uniqueDir, { recursive: true, force: true })
+        } catch {
+          // ignore
         }
       }
     }
+  }
 
-    // 执行程序
+  // go-judge 沙箱模式
+  return sandboxExecute(langConfig, params)
+}
+
+/**
+ * go-judge 沙箱执行 — 使用 fileId 传入编译产物
+ */
+async function sandboxExecute(
+  langConfig: NonNullable<ReturnType<typeof getLanguageConfig>>,
+  params: {
+    stdin?: string
+    timeLimit: number
+    memoryLimit: number
+    outputLimit?: number
+    compileFileId?: string
+  }
+): Promise<SandboxResult> {
+  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId } = params
+
+  try {
+    // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
+    const copyIn: Record<string, any> = {}
+    if (compileFileId) {
+      const executeFile = langConfig.execute_file || 'main'
+      copyIn[executeFile] = { fileId: compileFileId }
+    }
+
+    // 使用文件重定向捕获 stdout/stderr，然后通过 copyOut 获取
+    // stdin 通过 copyIn 传入文件，而不是管道（避免和 shell 重定向冲突）
+    if (stdin) {
+      copyIn['stdin'] = { content: stdin }
+    }
+
+    const execCommand = `${langConfig.execute} <stdin >stdout 2>stderr`
+
     const result = await runCommand({
-      args: ['sh', '-c', langConfig.execute],
+      args: ['sh', '-c', execCommand],
       env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-      copyIn,
-      stdin: stdin ? { content: stdin } : undefined,
-      stdout: { max: outputLimit },
-      stderr: { max: 65536 },
+      copyIn: Object.keys(copyIn).length > 0 ? copyIn : undefined,
+      copyOut: ['stdout', 'stderr'],
+      copyOutOptional: ['stderr'],
       cpuLimit: timeLimit * 1000000,
       memoryLimit: memoryLimit * 1024,
       procLimit: 50
     })
 
     // 解析结果
+    // File Error 状态只表示 copyOutOptional 文件不存在，不代表执行失败
     let status: SandboxResult['status'] = 'Accepted'
-    if (result.status === 'Time Limit Exceeded' || result.time > timeLimit * 1000000) {
+    const realStatus = (result.status === 'File Error') ? 'Accepted' : result.status
+
+    if (realStatus === 'Time Limit Exceeded' || result.time > timeLimit * 1000000) {
       status = 'Time Limit Exceeded'
-    } else if (result.status === 'Memory Limit Exceeded') {
+    } else if (realStatus === 'Memory Limit Exceeded') {
       status = 'Memory Limit Exceeded'
-    } else if (result.status === 'Output Limit Exceeded') {
+    } else if (realStatus === 'Output Limit Exceeded') {
       status = 'Output Limit Exceeded'
     } else if (result.exitStatus !== 0) {
       status = 'Runtime Error'
@@ -273,20 +261,12 @@ async function sandboxExecute(params: {
     let stdout: string | undefined
     let stderr: string | undefined
 
+    // go-judge v1.8+ returns copyOut file contents as plain strings (not base64)
     if (result.files?.stdout) {
-      try {
-        stdout = Buffer.from(result.files.stdout, 'base64').toString('utf-8')
-      } catch {
-        // ignore
-      }
+      stdout = result.files.stdout
     }
-
     if (result.files?.stderr) {
-      try {
-        stderr = Buffer.from(result.files.stderr, 'base64').toString('utf-8')
-      } catch {
-        // ignore
-      }
+      stderr = result.files.stderr
     }
 
     return {
@@ -309,6 +289,32 @@ async function sandboxExecute(params: {
 }
 
 /**
+ * 获取沙箱中的文件内容（通过 fileId）
+ */
+export async function getFileContent(fileId: string): Promise<Buffer | null> {
+  try {
+    const res = await superagent
+      .get(`${SANDBOX_HOST}/file/${fileId}`)
+      .responseType('arraybuffer')
+      .timeout(30000)
+    return Buffer.from(res.body)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 删除沙箱中的文件（通过 fileId）
+ */
+export async function deleteFile(fileId: string): Promise<void> {
+  try {
+    await superagent.delete(`${SANDBOX_HOST}/file/${fileId}`).timeout(10000)
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * 执行单个命令（go-judge API）
  */
 async function runCommand(params: {
@@ -321,9 +327,10 @@ async function runCommand(params: {
   cpuLimit?: number
   memoryLimit?: number
   procLimit?: number
-  copyIn?: Record<string, { content: string } | { src: string }>
+  copyIn?: Record<string, { content: string } | { src: string } | { fileId: string }>
   copyOut?: string[]
   copyOutCached?: string[]
+  copyOutOptional?: string[]
 }): Promise<{
   status: string
   exitStatus: number
@@ -331,7 +338,8 @@ async function runCommand(params: {
   memory: number
   runTime: number
   files?: Record<string, string>
-  fileIDs?: Record<string, string>
+  fileIds?: Record<string, string>
+  fileError?: Array<{ name: string; type: string; message: string }>
   error?: string
 }> {
   const cmd: any = {
@@ -349,6 +357,7 @@ async function runCommand(params: {
   if (params.copyIn) cmd.copyIn = params.copyIn
   if (params.copyOut) cmd.copyOut = params.copyOut
   if (params.copyOutCached) cmd.copyOutCached = params.copyOutCached
+  if (params.copyOutOptional) cmd.copyOutOptional = params.copyOutOptional
 
   const res = await superagent
     .post(`${SANDBOX_HOST}/run`)
@@ -359,41 +368,24 @@ async function runCommand(params: {
 }
 
 /**
- * 获取语言配置
- */
-function getLanguageConfig(lang: string): {
-  code_file: string
-  execute_file?: string
-  compile?: string
-  execute: string
-  compile_time_limit?: number
-  compile_memory_limit?: number
-} | null {
-  const configs: Record<string, any> = {
-    'c': { code_file: 'main.c', execute: './main', compile: 'gcc main.c -o main -O2 -Wall' },
-    'c11': { code_file: 'main.c', execute: './main', compile: 'gcc main.c -o main -O2 -std=c11 -Wall' },
-    'cpp': { code_file: 'main.cpp', execute: './main', compile: 'g++ main.cpp -o main -O2 -std=c++17 -Wall' },
-    'cpp11': { code_file: 'main.cpp', execute: './main', compile: 'g++ main.cpp -o main -O2 -std=c++11 -Wall' },
-    'cpp14': { code_file: 'main.cpp', execute: './main', compile: 'g++ main.cpp -o main -O2 -std=c++14 -Wall' },
-    'cpp17': { code_file: 'main.cpp', execute: './main', compile: 'g++ main.cpp -o main -O2 -std=c++17 -Wall' },
-    'cpp20': { code_file: 'main.cpp', execute: './main', compile: 'g++ main.cpp -o main -O2 -std=c++20 -Wall' },
-  }
-
-  return configs[lang] || null
-}
-
-/**
  * 健康检查
  */
 export async function healthCheck(): Promise<boolean> {
   if (useLocalMode) {
-    return true // 本地模式总是可用
+    return true
   }
 
   try {
-    const res = await superagent.get(`${SANDBOX_HOST}/`).timeout(5000)
+    const res = await superagent.get(`${SANDBOX_HOST}/version`).timeout(5000)
     return res.status === 200
   } catch {
     return false
   }
+}
+
+/**
+ * 是否使用本地模式
+ */
+export function isLocalMode(): boolean {
+  return useLocalMode
 }

@@ -36,7 +36,7 @@ export default function TeamImportInputPage() {
         requestBody.visibility = visibility
       }
 
-      const result = await apiClient.post('/api/team-import/start', requestBody)
+      const result = await apiClient.post<any>('/api/team-import/start', requestBody)
 
       if (result.success && result.data) {
         // 跳转到预览页

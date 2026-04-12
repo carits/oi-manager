@@ -368,6 +368,7 @@ function StudentFormModal({
   onSuccess: () => void
 }) {
   const [submitting, setSubmitting] = useState(false)
+  const toast = useToast()
 
   const form = useForm(
     {

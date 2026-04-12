@@ -8,7 +8,7 @@ export async function GET(
   try {
     const { id } = await params
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${ENV.API_URL}/api/schools/${id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/schools/${id}`, {
       headers: {
         'Content-Type': 'application/json',
         ...(authHeader ? { Authorization: authHeader } : {})
@@ -33,7 +33,7 @@ export async function PUT(
     const { id } = await params
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
-    const res = await fetch(`${ENV.API_URL}/api/schools/${id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/schools/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ export async function POST(
     const { id } = await params
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
-    const res = await fetch(`${ENV.API_URL}/api/schools/${id}/principal`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/schools/${id}/principal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -4,14 +4,13 @@
  * 处理评测任务：
  * 1. 解析评测配置
  * 2. 编译代码（如果需要）
- * 3. 执行测试点
+ * 3. 执行测试点（按子任务分组）
  * 4. 校验输出
- * 5. 计算分数
+ * 5. 计算分数（支持子任务 min/max/sum）
  */
 
 import * as fs from 'fs'
 import * as path from 'path'
-import * as yaml from 'js-yaml'
 import { config } from './config'
 import * as sandbox from './sandbox/client'
 import { getChecker } from './checker'
@@ -22,7 +21,9 @@ import type {
   JudgeCaseResult,
   JudgeResult,
   TestCaseConfig,
-  SubtaskConfig
+  SubtaskConfig,
+  SubtaskResult,
+  SubtaskType
 } from './types'
 
 /**
@@ -46,109 +47,45 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   console.log(`[Judge] timeLimit: ${timeLimit}ms, memoryLimit: ${memoryLimit}KB`)
   console.log(`[Judge] checkerType: ${checkerType}`)
 
-  // 创建工作目录（编译和执行共用）
-  const os = require('os')
-  const path = require('path')
-  const workDir = path.join(os.tmpdir(), `judge_${submissionId}_${Date.now()}`)
-  require('fs').mkdirSync(workDir, { recursive: true })
-  console.log(`[Judge] Created work directory: ${workDir}`)
+  // 编译代码
+  console.log(`[Judge] Compiling code...`)
 
-  // 结果
-  const cases: JudgeCaseResult[] = []
-  let totalTime = 0
-  let maxMemory = 0
-  let totalScore = 0
+  // 本地模式需要 workDir
+  let workDir: string | undefined
+  if (sandbox.isLocalMode()) {
+    workDir = path.join(require('os').tmpdir(), `judge_${submissionId}_${Date.now()}`)
+    fs.mkdirSync(workDir, { recursive: true })
+  }
 
-  try {
-    // 获取测试用例
-    console.log(`[Judge] Calling loadTestCases with testdataPath: ${testdataPath}`)
-    const testCases = await loadTestCases(testdataPath, cfg)
-    console.log(`[Judge] loadTestCases returned ${testCases.length} test cases`)
+  const compileResult = await sandbox.compile({
+    language,
+    code,
+    timeLimit: 15000,
+    memoryLimit: 524288,
+    workDir
+  })
 
-    if (testCases.length === 0) {
-      return {
-        submissionId,
-        result: 'System Error',
-        time: 0,
-        memory: 0,
-        score: 0,
-        cases: [],
-        message: '没有找到测试数据'
-      }
-    }
-
-    // 先编译代码一次
-    console.log(`[Judge] Compiling code...`)
-    const compileResult = await sandbox.compile({
-      language,
-      code,
-      timeLimit: 15000, // 编译时间限制 15 秒
-      memoryLimit: 524288, // 512MB
-      workDir
-    })
-
-    if (!compileResult.success) {
-      console.log(`[Judge] Compilation failed: ${compileResult.error}`)
-      return {
-        submissionId,
-        result: 'Compilation Error',
-        time: 0,
-        memory: 0,
-        score: 0,
-        cases: [],
-        message: compileResult.error
-      }
-    }
-
-    console.log(`[Judge] Compilation successful`)
-
-    // 执行每个测试用例
-    for (let i = 0; i < testCases.length; i++) {
-      const testCase = testCases[i]
-      const caseTimeLimit = testCase.time ? parseTime(testCase.time) : timeLimit
-      const caseMemoryLimit = testCase.memory ? parseMemory(testCase.memory) : memoryLimit
-      const caseScore = testCase.score || 0
-
-      console.log(`[Judge] Running case ${i + 1}/${testCases.length}: ${testCase.input}`)
-
-      const caseResult = await runTestCase(
-        code,
-        language,
-        testCase,
-        caseTimeLimit,
-        caseMemoryLimit,
-        checkerType,
-        testdataPath,
-        workDir
-      )
-
-      console.log(`[Judge] Case ${i + 1} result: ${caseResult.result}, time=${caseResult.time}ms, mem=${caseResult.memory}KB`)
-
-      cases.push(caseResult)
-      totalTime += caseResult.time
-      maxMemory = Math.max(maxMemory, caseResult.memory)
-
-      if (caseResult.result === 'Accepted') {
-        totalScore += caseScore
-      }
-
-      // 如果不是 Accepted，后续可能需要特殊处理（如子任务）
-    }
-
-    console.log(`[Judge] Total: ${cases.length} cases, time=${totalTime}ms, result=${calculateFinalResult(cases)}`)
-
-    // 计算最终结果
-    const finalResult = calculateFinalResult(cases)
-
+  if (!compileResult.success) {
+    console.log(`[Judge] Compilation failed: ${compileResult.error}`)
+    cleanupWorkDir(workDir)
     return {
       submissionId,
-      result: finalResult,
-      time: totalTime,
-      memory: maxMemory,
-      score: totalScore,
-      cases
+      result: 'Compilation Error',
+      time: 0,
+      memory: 0,
+      score: 0,
+      cases: [],
+      message: compileResult.error
     }
-  } catch (e: any) {
+  }
+
+  console.log(`[Judge] Compilation successful, fileId: ${compileResult.fileId || 'local'}`)
+
+  // 加载测试用例
+  const { cases: allCases, subtasks } = loadTestCases(testdataPath, cfg)
+
+  if (allCases.length === 0) {
+    cleanupWorkDir(workDir)
     return {
       submissionId,
       result: 'System Error',
@@ -156,15 +93,183 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       memory: 0,
       score: 0,
       cases: [],
-      message: e.message
+      message: '没有找到测试数据'
     }
-  } finally {
-    // 清理工作目录
-    try {
-      require('fs').rmSync(workDir, { recursive: true, force: true })
-      console.log(`[Judge] Cleaned up work directory: ${workDir}`)
-    } catch {
-      // ignore
+  }
+
+  console.log(`[Judge] Loaded ${allCases.length} test cases, ${subtasks.length} subtasks`)
+
+  // 结果
+  const caseResults: JudgeCaseResult[] = []
+  let totalTime = 0
+  let maxMemory = 0
+
+  try {
+    if (subtasks.length > 0) {
+      // 有子任务：按子任务分组评测
+      const subtaskResults: SubtaskResult[] = []
+      const failedSubtasks: Record<number, boolean> = {}
+      let caseIndex = 0
+
+      for (const subtask of subtasks) {
+        // 检查子任务依赖：如果依赖的子任务失败，跳过当前子任务
+        const deps = subtask.if || []
+        const depsFailed = deps.some((depId: number) => failedSubtasks[depId])
+
+        if (depsFailed) {
+          // 依赖未通过，跳过此子任务（所有测试点标记为跳过）
+          console.log(`[Judge] Subtask ${subtask.id}: skipped (dependency failed)`)
+          const subtaskCases = subtask.cases || []
+          const skippedResults: JudgeCaseResult[] = subtaskCases.map((_, i) => ({
+            caseId: caseIndex + i,
+            subtaskId: subtask.id,
+            result: 'System Error' as JudgeResult,
+            time: 0,
+            memory: 0,
+            message: '跳过：依赖子任务未通过',
+          }))
+          caseResults.push(...skippedResults)
+          caseIndex += subtaskCases.length
+          failedSubtasks[subtask.id || 0] = true
+          subtaskResults.push({
+            id: subtask.id || 0,
+            type: subtask.type || 'min',
+            score: 0,
+            cases: skippedResults,
+          })
+          continue
+        }
+
+        const subtaskCases = subtask.cases || []
+        const subtaskCaseResults: JudgeCaseResult[] = []
+
+        for (let i = 0; i < subtaskCases.length; i++) {
+          const testCase = subtaskCases[i]
+          const caseTimeLimit = testCase.time ? parseTime(testCase.time) : timeLimit
+          const caseMemoryLimit = testCase.memory ? parseMemory(testCase.memory) : memoryLimit
+
+          const caseResult = await runTestCase(
+            language,
+            testCase,
+            caseTimeLimit,
+            caseMemoryLimit,
+            checkerType,
+            testdataPath,
+            compileResult.fileId,
+            workDir
+          )
+
+          caseResult.caseId = caseIndex
+          caseResult.subtaskId = subtask.id
+          subtaskCaseResults.push(caseResult)
+          caseResults.push(caseResult)
+
+          totalTime += caseResult.time
+          maxMemory = Math.max(maxMemory, caseResult.memory)
+
+          caseIndex++
+        }
+
+        // 计算子任务分数
+        const subtaskScore = calculateSubtaskScore(subtaskCaseResults, subtask.type || 'min', subtask.score || 0)
+        subtaskResults.push({
+          id: subtask.id || 0,
+          type: subtask.type || 'min',
+          score: subtaskScore,
+          cases: subtaskCaseResults
+        })
+
+        // 如果子任务未获得满分（对于 min 类型），标记为失败
+        if (subtaskScore < (subtask.score || 0)) {
+          failedSubtasks[subtask.id || 0] = true
+        }
+
+        console.log(`[Judge] Subtask ${subtask.id}: score=${subtaskScore}, type=${subtask.type || 'min'}`)
+      }
+
+      // 总分 = 各子任务分数之和
+      const totalScore = subtaskResults.reduce((sum, st) => sum + st.score, 0)
+      const finalResult = calculateFinalResult(caseResults)
+
+      console.log(`[Judge] Total: ${caseResults.length} cases, time=${totalTime}ms, score=${totalScore}, result=${finalResult}`)
+
+      cleanupWorkDir(workDir)
+      // 清理 go-judge 中的编译产物
+      if (compileResult.fileId) {
+        sandbox.deleteFile(compileResult.fileId).catch(() => {})
+      }
+
+      return {
+        submissionId,
+        result: finalResult,
+        time: totalTime,
+        memory: maxMemory,
+        score: totalScore,
+        cases: caseResults,
+        subtasks: subtaskResults
+      }
+    } else {
+      // 无子任务：直接逐个评测
+      for (let i = 0; i < allCases.length; i++) {
+        const testCase = allCases[i]
+        const caseTimeLimit = testCase.time ? parseTime(testCase.time) : timeLimit
+        const caseMemoryLimit = testCase.memory ? parseMemory(testCase.memory) : memoryLimit
+        const caseScore = testCase.score || 0
+
+        const caseResult = await runTestCase(
+          language,
+          testCase,
+          caseTimeLimit,
+          caseMemoryLimit,
+          checkerType,
+          testdataPath,
+          compileResult.fileId,
+          workDir
+        )
+
+        caseResult.caseId = i
+        if (caseResult.result === 'Accepted') {
+          caseResult.score = caseScore
+        }
+
+        caseResults.push(caseResult)
+        totalTime += caseResult.time
+        maxMemory = Math.max(maxMemory, caseResult.memory)
+      }
+
+      // 无子任务时：总分 = Accepted 用例的分数之和
+      const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
+      const finalResult = calculateFinalResult(caseResults)
+
+      console.log(`[Judge] Total: ${caseResults.length} cases, time=${totalTime}ms, score=${totalScore}, result=${finalResult}`)
+
+      cleanupWorkDir(workDir)
+      if (compileResult.fileId) {
+        sandbox.deleteFile(compileResult.fileId).catch(() => {})
+      }
+
+      return {
+        submissionId,
+        result: finalResult,
+        time: totalTime,
+        memory: maxMemory,
+        score: totalScore,
+        cases: caseResults
+      }
+    }
+  } catch (e: any) {
+    cleanupWorkDir(workDir)
+    if (compileResult.fileId) {
+      sandbox.deleteFile(compileResult.fileId).catch(() => {})
+    }
+    return {
+      submissionId,
+      result: 'System Error',
+      time: 0,
+      memory: 0,
+      score: 0,
+      cases: caseResults,
+      message: e.message
     }
   }
 }
@@ -173,23 +278,18 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
  * 执行单个测试用例
  */
 async function runTestCase(
-  code: string,
   language: string,
   testCase: TestCaseConfig,
   timeLimit: number,
   memoryLimit: number,
   checkerType: string,
   testdataPath: string,
-  workDir: string
+  compileFileId?: string,
+  workDir?: string
 ): Promise<JudgeCaseResult> {
-  console.log(`[Judge] runTestCase: input=${testCase.input}, output=${testCase.output}`)
-
   // 读取输入
   const inputPath = path.join(testdataPath, testCase.input)
   const outputPath = path.join(testdataPath, testCase.output)
-
-  console.log(`[Judge] Reading input from: ${inputPath}`)
-  console.log(`[Judge] Reading output from: ${outputPath}`)
 
   let input = ''
   let expectedOutput = ''
@@ -208,19 +308,15 @@ async function runTestCase(
   }
 
   // 执行程序
-  console.log(`[Judge] Calling sandbox.execute with timeLimit=${timeLimit}ms, memoryLimit=${memoryLimit}KB`)
   const execResult = await sandbox.execute({
     language,
-    code,
     stdin: input,
     timeLimit,
     memoryLimit,
     outputLimit: 65536,
-    skipCompile: true, // 已在外层编译
+    compileFileId,
     workDir
   })
-
-  console.log(`[Judge] sandbox.execute returned: status=${execResult.status}, time=${execResult.time}ms, memory=${execResult.memory}KB`)
 
   if (execResult.status !== 'Accepted') {
     return {
@@ -233,11 +329,8 @@ async function runTestCase(
   }
 
   // 校验输出
-  console.log(`[Judge] Checking output with checker: ${checkerType}`)
   const checker = getChecker(checkerType)
   const checkResult = checker(execResult.stdout || '', expectedOutput)
-
-  console.log(`[Judge] Checker result: accepted=${checkResult.accepted}, message=${checkResult.message}`)
 
   if (checkResult.accepted) {
     return {
@@ -259,59 +352,84 @@ async function runTestCase(
 }
 
 /**
- * 加载测试用例
+ * 加载测试用例（保留子任务分组结构）
  */
-async function loadTestCases(
+function loadTestCases(
   testdataPath: string,
   config: ProblemConfig
-): Promise<TestCaseConfig[]> {
-  const cases: TestCaseConfig[] = []
+): { cases: TestCaseConfig[]; subtasks: (SubtaskConfig & { id: number })[] } {
+  const allCases: TestCaseConfig[] = []
+  const subtasks: (SubtaskConfig & { id: number })[] = []
 
-  console.log(`[Judge] Loading test cases from: ${testdataPath}`)
-
-  // 如果配置中有 cases，直接使用
-  if (config.cases && config.cases.length > 0) {
-    console.log(`[Judge] Using config.cases: ${config.cases.length} cases`)
-    return config.cases
+  // 如果配置中有 subtasks
+  if (config.subtasks && config.subtasks.length > 0) {
+    config.subtasks.forEach((st, idx) => {
+      const cases = st.cases || []
+      const subtask = { ...st, id: st.id || idx + 1, cases }
+      subtasks.push(subtask)
+      allCases.push(...cases)
+    })
+    return { cases: allCases, subtasks }
   }
 
-  // 如果配置中有 subtasks，展开为 cases
-  if (config.subtasks && config.subtasks.length > 0) {
-    for (const subtask of config.subtasks) {
-      if (subtask.cases) {
-        cases.push(...subtask.cases)
-      }
-    }
-    console.log(`[Judge] Using config.subtasks: ${cases.length} cases`)
-    return cases
+  // 如果配置中有 cases（无子任务分组）
+  if (config.cases && config.cases.length > 0) {
+    return { cases: config.cases, subtasks: [] }
   }
 
   // 自动扫描测试数据目录
   try {
-    console.log(`[Judge] Scanning directory: ${testdataPath}`)
     const files = fs.readdirSync(testdataPath)
-    console.log(`[Judge] Found ${files.length} files in directory`)
     const inputFiles = files.filter(f => f.endsWith('.in')).sort()
-    console.log(`[Judge] Found ${inputFiles.length} .in files`)
 
     for (const inputFile of inputFiles) {
-      const baseName = inputFile.slice(0, -3) // 去掉 .in
+      const baseName = inputFile.slice(0, -3)
       const outputFile = `${baseName}.out`
       const altOutputFile = `${baseName}.ans`
 
-      // 检查是否存在对应的输出文件
       if (files.includes(outputFile)) {
-        cases.push({ input: inputFile, output: outputFile })
+        allCases.push({ input: inputFile, output: outputFile })
       } else if (files.includes(altOutputFile)) {
-        cases.push({ input: inputFile, output: altOutputFile })
+        allCases.push({ input: inputFile, output: altOutputFile })
       }
     }
-    console.log(`[Judge] Loaded ${cases.length} test cases`)
   } catch (e: any) {
     console.error(`[Judge] Error scanning directory: ${e.message}`)
   }
 
-  return cases
+  return { cases: allCases, subtasks: [] }
+}
+
+/**
+ * 计算子任务分数
+ */
+function calculateSubtaskScore(
+  caseResults: JudgeCaseResult[],
+  type: SubtaskType,
+  maxScore: number
+): number {
+  if (caseResults.length === 0) return 0
+
+  switch (type) {
+    case 'min': {
+      // 取子任务内最小分数（任一用例失败则整个子任务 0 分）
+      const allAccepted = caseResults.every(c => c.result === 'Accepted')
+      return allAccepted ? maxScore : 0
+    }
+    case 'max': {
+      // 取子任务内最大分数（任一用例通过即得分）
+      const anyAccepted = caseResults.some(c => c.result === 'Accepted')
+      return anyAccepted ? maxScore : 0
+    }
+    case 'sum': {
+      // 按比例求和
+      const totalPossible = caseResults.length
+      const acceptedCount = caseResults.filter(c => c.result === 'Accepted').length
+      return Math.round(maxScore * acceptedCount / totalPossible)
+    }
+    default:
+      return 0
+  }
 }
 
 /**
@@ -322,10 +440,8 @@ function calculateFinalResult(cases: JudgeCaseResult[]): JudgeResult {
     return 'System Error'
   }
 
-  // 检查是否有非 Accepted 的结果
   const results = cases.map(c => c.result)
 
-  // 优先级：Compilation Error > System Error > Runtime Error > Time Limit Exceeded > Memory Limit Exceeded > Wrong Answer > Accepted
   if (results.includes('Compilation Error')) return 'Compilation Error'
   if (results.includes('System Error')) return 'System Error'
   if (results.includes('Runtime Error')) return 'Runtime Error'
@@ -339,10 +455,23 @@ function calculateFinalResult(cases: JudgeCaseResult[]): JudgeResult {
 }
 
 /**
- * 解析时间限制
- * 支持 "1s", "1000ms", "1000000us"
+ * 清理工作目录
  */
-function parseTime(timeStr: string): number {
+function cleanupWorkDir(workDir?: string) {
+  if (!workDir) return
+  try {
+    fs.rmSync(workDir, { recursive: true, force: true })
+    console.log(`[Judge] Cleaned up work directory: ${workDir}`)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 解析时间限制
+ */
+function parseTime(timeStr: string | number): number {
+  if (typeof timeStr === 'number') return timeStr
   const match = timeStr.match(/^(\d+(?:\.\d+)?)(ms|s|us)?$/i)
   if (!match) return 1000
 
@@ -359,11 +488,11 @@ function parseTime(timeStr: string): number {
 
 /**
  * 解析内存限制
- * 支持 "256MB", "1GB", "262144KB"
  */
-function parseMemory(memStr: string): number {
+function parseMemory(memStr: string | number): number {
+  if (typeof memStr === 'number') return memStr
   const match = memStr.match(/^(\d+(?:\.\d+)?)(KB|MB|GB)?$/i)
-  if (!match) return 262144 // 256MB
+  if (!match) return 262144
 
   const value = parseFloat(match[1])
   const unit = (match[2] || 'KB').toUpperCase()

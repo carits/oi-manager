@@ -5,7 +5,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
-    const res = await fetch(`${ENV.API_URL}/api/exams/${params.id}/scores`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/exams/${params.id}/scores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(authHeader && { Authorization: authHeader }) },
       body: JSON.stringify(body)

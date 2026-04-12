@@ -8,7 +8,7 @@ export async function GET(
   try {
     const authHeader = request.headers.get('authorization')
 
-    const res = await fetch(`${ENV.API_URL}/api/students/${params.id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/students/${params.id}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -34,7 +34,7 @@ export async function PUT(
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
 
-    const res = await fetch(`${ENV.API_URL}/api/students/${params.id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/students/${params.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ export async function DELETE(
   try {
     const authHeader = request.headers.get('authorization')
 
-    const res = await fetch(`${ENV.API_URL}/api/students/${params.id}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/students/${params.id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

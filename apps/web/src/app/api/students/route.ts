@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const { searchParams } = new URL(request.url)
 
-    const res = await fetch(`${ENV.API_URL}/api/students?${searchParams.toString()}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/students?${searchParams.toString()}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
 
-    const res = await fetch(`${ENV.API_URL}/api/students`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/students`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -265,7 +265,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   const fetchAiUsage = async () => {
     try {
-      const result = await apiClient.get(`/api/problems/${problemId}/ai/usage`)
+      const result = await apiClient.get<any>(`/api/problems/${problemId}/ai/usage`)
       if (result.success && result.data) {
         setAiUsage(result.data)
       }
@@ -318,7 +318,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
     setSubmitLoading(true)
     try {
-      const result = await apiClient.post('/api/submit', {
+      const result = await apiClient.post<any>('/api/submit', {
         problemId: problem.problemId,
         oj: problem.platform,
         language: submitLanguage,
@@ -381,7 +381,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     try {
       // 如果是新格式的 File API URL
       if (attachment.fileUrl.startsWith('/api/files/')) {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${attachment.fileUrl}`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}${attachment.fileUrl}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -398,7 +398,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         document.body.removeChild(a)
       } else {
         // 旧格式直接打开
-        window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${attachment.fileUrl}`, '_blank')
+        window.open(`${process.env.NEXT_PUBLIC_API_URL || ''}${attachment.fileUrl}`, '_blank')
       }
     } catch (error) {
       console.error('Download failed:', error)
@@ -1041,7 +1041,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   ) : (
                     problemSubmissions.map(s => (
                       <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace' }}>#{s.id}</td>
+                        <td
+                          onClick={() => {
+                            const prefix = role === 'admin' ? '/platform-admin' : role === 'student' ? '/student' : '/teacher'
+                            router.push(`${prefix}/submissions/${s.id}`)
+                          }}
+                          style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
+                        >#{s.id}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>{s.username}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <span style={{
@@ -1359,6 +1365,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         isOpen={detailSubmissionId !== null}
         onClose={() => setDetailSubmissionId(null)}
         submissionId={detailSubmissionId}
+        viewRole={role}
       />
     </div>
     </div>

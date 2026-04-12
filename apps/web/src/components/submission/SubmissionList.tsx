@@ -354,7 +354,12 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
               ) : (
                 submissions.map(s => (
                   <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontFamily: 'monospace' }}>#{s.id}</td>
+                    <td
+                      onClick={() => router.push(`${getPathPrefix()}/submissions/${s.id}`)}
+                      style={{ padding: '0.75rem 1rem', color: 'var(--primary)', fontFamily: 'monospace', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      #{s.id}
+                    </td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.username}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{getOjLabel(s.oj)}</td>
                     <td style={{ padding: '0.75rem 1rem' }}>
@@ -412,6 +417,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           isOpen={detailSubmissionId !== null}
           onClose={() => setDetailSubmissionId(null)}
           submissionId={detailSubmissionId}
+          viewRole={viewRole}
         />
       </div>
     </ProtectedRoute>

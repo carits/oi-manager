@@ -4,7 +4,7 @@ import { ENV } from '@/config/env'
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
-    const res = await fetch(`${ENV.API_URL}/api/schools`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/schools`, {
       headers: {
         'Content-Type': 'application/json',
         ...(authHeader ? { Authorization: authHeader } : {})
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
-    const res = await fetch(`${ENV.API_URL}/api/schools`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/schools`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

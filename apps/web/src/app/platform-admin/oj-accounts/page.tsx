@@ -106,9 +106,9 @@ export default function OjAccountsPage() {
   const handleVerify = async (id: string) => {
     setVerifying(id)
     try {
-      const result = await apiClient.post(`/api/oj-accounts/${id}/verify`)
+      const result = await apiClient.post<any>(`/api/oj-accounts/${id}/verify`)
       if (result.success) {
-        toast.success(`验证结果: ${result.data.message}`)
+        toast.success(`验证结果: ${result.data?.message || '验证成功'}`)
         fetchAccounts()
         fetchStats()
       } else {
@@ -124,7 +124,7 @@ export default function OjAccountsPage() {
   const handleLogin = async (id: string) => {
     setLoggingIn(id)
     try {
-      const result = await apiClient.post(`/api/oj-accounts/${id}/login`)
+      const result = await apiClient.post<any>(`/api/oj-accounts/${id}/login`)
       if (result.success) {
         toast.success('登录成功，Cookie 已更新')
         fetchAccounts()
@@ -455,7 +455,7 @@ function AddAccountModal({ isOpen, onClose, onSuccess }: {
       if (loginMethod === 'cookie') body.cookie = cookie
       else body.password = password
 
-      const result = await apiClient.post('/api/oj-accounts', body)
+      const result = await apiClient.post<any>('/api/oj-accounts', body)
       if (result.success) {
         toast.success('添加成功')
         // 自动验证

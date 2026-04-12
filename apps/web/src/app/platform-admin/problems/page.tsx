@@ -532,7 +532,7 @@ export default function PlatformAdminProblemsPage() {
             <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>任务列表</h2>
-                <button onClick={fetchJobs} style={{ ...smallBtnStyle(), padding: '0.25rem 0.75rem' }}>刷新</button>
+                <button onClick={() => fetchJobs()} style={{ ...smallBtnStyle(), padding: '0.25rem 0.75rem' }}>刷新</button>
               </div>
 
               {/* 任务筛选栏 */}

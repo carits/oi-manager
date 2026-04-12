@@ -244,7 +244,7 @@ export default function AdminSchoolDetailPage() {
                   <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--gray-50)', borderRadius: '6px' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>学校负责人</p>
                     <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>{school.principal.name}</p>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{school.principal.title || '校长'} · {school.principal.user.username}</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{school.principal.title || '校长'} · {school.principal.User.username}</p>
                   </div>
                 )}
 

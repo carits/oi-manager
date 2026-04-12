@@ -99,7 +99,7 @@ export function TeamListPage({
       name: createName.trim(),
       description: createDescription.trim(),
       isPublic: createIsPublic,
-      teamId: createTeamId.trim() || undefined
+      teamId: createTeamId.trim() || ''
     })
     if (success) {
       setCreateName('')

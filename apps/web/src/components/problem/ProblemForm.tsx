@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
-import { JudgeSettingsTab } from '@/components/problem/JudgeSettingsTab'
+import { JudgeSettingsTab, JudgeSettingsTabHandle } from '@/components/problem/JudgeSettingsTab'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
 
@@ -45,6 +45,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const searchParams = useSearchParams()
   const toast = useToast()
   const [saving, setSaving] = useState(false)
+  const judgeSettingsRef = useRef<JudgeSettingsTabHandle>(null)
   const [loading, setLoading] = useState(mode === 'edit')
   type TabType = 'statement' | 'solution' | 'judge_settings' | 'settings' | 'attachments'
   const VALID_TABS: TabType[] = ['statement', 'solution', 'judge_settings', 'settings', 'attachments']
@@ -58,6 +59,10 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [deleteAttachmentConfirm, setDeleteAttachmentConfirm] = useState<{ isOpen: boolean; attachmentId: string | null }>({ isOpen: false, attachmentId: null })
+
+  // 评测配置保存确认弹窗状态
+  const [showJudgeConfigConfirm, setShowJudgeConfigConfirm] = useState(false)
+  const [pendingSaveData, setPendingSaveData] = useState<{ createdId: string } | null>(null)
 
   // 获取路径前缀
   const getPathPrefix = () => {
@@ -83,8 +88,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     title: '',
     platform: '',
     difficulty: '',
-    timeLimit: '',
-    memoryLimit: '',
+    timeLimit: '1000',
+    memoryLimit: '256',
     visibility: 'private',
     status: 'draft'
   })
@@ -118,8 +123,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           title: p.title,
           platform: p.platform || '',
           difficulty: p.difficulty || '',
-          timeLimit: p.timeLimit?.toString() || '',
-          memoryLimit: p.memoryLimit?.toString() || '',
+          timeLimit: p.timeLimit?.toString() || '1000',
+          memoryLimit: p.memoryLimit?.toString() || '256',
           visibility: p.visibility || 'private',
           status: p.status
         })
@@ -242,7 +247,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       formData.append('file', file)
       formData.append('type', type)
 
-      const result = await apiClient.post(`/api/problems/${problemId}/statements/pdf`, formData)
+      const result = await apiClient.post<any>(`/api/problems/${problemId}/statements/pdf`, formData)
       if (result.success && result.data) {
         if (type === 'statement') {
           updateStatement(index, { fileUrl: result.data.fileUrl, id: result.data.id })
@@ -460,14 +465,21 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
       let result
       if (mode === 'create') {
-        result = await apiClient.post('/api/problems', data)
+        result = await apiClient.post<any>('/api/problems', data)
       } else {
-        result = await apiClient.put(`/api/problems/${problemId}`, data)
+        result = await apiClient.put<any>(`/api/problems/${problemId}`, data)
       }
 
       if (result.success && result.data) {
         const createdId = result.data.id || problemId
-        router.push(`${pathPrefix}/problems/${createdId}`)
+
+        // 编辑模式下检查评测配置是否有修改，有则弹确认弹窗
+        if (mode === 'edit' && problemId && judgeSettingsRef.current?.isDirty()) {
+          setPendingSaveData({ createdId })
+          setShowJudgeConfigConfirm(true)
+        } else {
+          router.push(`${pathPrefix}/problems/${createdId}`)
+        }
       }
     } catch (error) {
       console.error('Failed to save problem:', error)
@@ -475,6 +487,28 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     } finally {
       setSaving(false)
     }
+  }
+
+  // 评测配置保存确认回调
+  const handleConfirmSaveJudgeConfig = async () => {
+    try {
+      await judgeSettingsRef.current?.saveConfig()
+    } catch (e) {
+      console.error('Failed to save judge config:', e)
+    }
+    setShowJudgeConfigConfirm(false)
+    if (pendingSaveData) {
+      router.push(`${pathPrefix}/problems/${pendingSaveData.createdId}`)
+    }
+    setPendingSaveData(null)
+  }
+
+  const handleCancelSaveJudgeConfig = () => {
+    setShowJudgeConfigConfirm(false)
+    if (pendingSaveData) {
+      router.push(`${pathPrefix}/problems/${pendingSaveData.createdId}`)
+    }
+    setPendingSaveData(null)
   }
 
   if (loading) {
@@ -974,6 +1008,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
             {activeTab === 'judge_settings' && (
               <JudgeSettingsTab
+                ref={judgeSettingsRef}
                 problemId={problemId || ''}
                 timeLimit={form.timeLimit}
                 memoryLimit={form.memoryLimit}
@@ -1279,6 +1314,16 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
         message="确定要删除这个附件吗？"
         confirmText="删除"
         danger
+      />
+
+      <ConfirmModal
+        isOpen={showJudgeConfigConfirm}
+        onClose={handleCancelSaveJudgeConfig}
+        onConfirm={handleConfirmSaveJudgeConfig}
+        title="保存评测配置"
+        message="检测到评测配置有修改，是否同时保存评测配置？"
+        confirmText="保存评测配置"
+        cancelText="跳过"
       />
     </div>
   )

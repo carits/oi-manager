@@ -23,7 +23,7 @@ if (fs.existsSync(envPath)) {
 
 export const config = {
   // 后端连接
-  backendUrl: process.env.BACKEND_URL || 'ws://localhost:3001',
+  backendUrl: process.env.BACKEND_URL || 'ws://localhost:3002',
 
   // 沙箱配置
   sandboxHost: process.env.SANDBOX_HOST || 'http://localhost:5050',

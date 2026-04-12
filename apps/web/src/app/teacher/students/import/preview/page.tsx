@@ -62,12 +62,13 @@ export default function TeamImportPreviewPage() {
     try {
       const result = await apiClient.get<PreviewData>(`/api/team-import/${batchId}/preview`)
       if (result.success && result.data) {
-        setPreview(result.data)
+        const data = result.data
+        setPreview(data)
         // 初始化用户选择（默认全部确认）
         const initial: Record<number, { action: 'confirm' | 'skip'; createStudent?: boolean; studentName?: string }> = {}
-        result.data.matchResults.forEach((m) => {
+        data.matchResults.forEach((m) => {
           if (m.matchType === 'new_member') {
-            initial[m.lineNumber] = { action: 'confirm', createStudent: true, studentName: result.data.parsedRows.find(p => p.lineNumber === m.lineNumber)?.candidateDisplayName }
+            initial[m.lineNumber] = { action: 'confirm', createStudent: true, studentName: data.parsedRows.find(p => p.lineNumber === m.lineNumber)?.candidateDisplayName }
           } else if (m.matchType === 'invalid' || m.matchType === 'conflict') {
             initial[m.lineNumber] = { action: 'skip' }
           } else {

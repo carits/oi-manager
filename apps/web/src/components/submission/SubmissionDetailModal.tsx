@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import apiClient from '@/lib/apiClient'
 import { JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
@@ -30,6 +31,7 @@ interface SubmissionDetailModalProps {
   isOpen: boolean
   onClose: () => void
   submissionId: number | null
+  viewRole?: 'teacher' | 'student' | 'admin'
 }
 
 // 转圈动画组件
@@ -91,14 +93,18 @@ const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
   submit_failed: { bg: '#fee2e2', text: '#991b1b' },
 }
 
-function getRemoteSubmitUrl(oj: string, ojRemoteId: string): string | null {
+function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string): string | null {
   if (oj === 'hdu') {
     return `https://acm.hdu.edu.cn/status.php?first=${ojRemoteId}`
+  }
+  if (oj === 'carits' && viewRole) {
+    const prefix = viewRole === 'admin' ? '/platform-admin' : viewRole === 'student' ? '/student' : '/teacher'
+    return `${prefix}/submissions/${ojRemoteId}`
   }
   return null
 }
 
-export function SubmissionDetailModal({ isOpen, onClose, submissionId }: SubmissionDetailModalProps) {
+export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole }: SubmissionDetailModalProps) {
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -109,7 +115,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId }: Submiss
       setLoading(true)
 
       const fetchDetail = async () => {
-        const res = await apiClient.get<{ success: boolean; data: SubmissionDetail }>(`/api/submissions/${submissionId}`)
+        const res = await apiClient.get<SubmissionDetail>(`/api/submissions/${submissionId}`)
         if (res.success && res.data) {
           setDetail(res.data)
           setLoading(false)
@@ -139,7 +145,19 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId }: Submiss
 
   const handleCopy = async () => {
     if (detail?.code) {
-      await navigator.clipboard.writeText(detail.code)
+      try {
+        await navigator.clipboard.writeText(detail.code)
+      } catch {
+        // Fallback for non-HTTPS contexts (e.g. IP address access)
+        const textarea = document.createElement('textarea')
+        textarea.value = detail.code
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
@@ -272,9 +290,9 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId }: Submiss
             <div>
               <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
-                getRemoteSubmitUrl(detail.oj, detail.ojRemoteId) ? (
+                getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole) ? (
                   <a
-                    href={getRemoteSubmitUrl(detail.oj, detail.ojRemoteId)!}
+                    href={getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: 'var(--primary)', textDecoration: 'none' }}

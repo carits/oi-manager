@@ -4,8 +4,10 @@
  */
 
 export const ENV = {
-  /** API 服务地址 */
-  API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  /** API 服务地址（浏览器端，空字符串表示使用相对路径通过 Next.js API Route 代理） */
+  API_URL: process.env.NEXT_PUBLIC_API_URL || '',
+  /** 后端地址（仅服务端 API Route 使用） */
+  BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:3002',
   /** 是否为开发环境 */
   IS_DEV: process.env.NODE_ENV === 'development',
   /** 是否为生产环境 */

@@ -34,6 +34,7 @@ export interface SubtaskConfig {
   memory?: string
   score?: number
   type?: SubtaskType
+  if?: number[]
   cases?: TestCaseConfig[]
 }
 
@@ -68,11 +69,19 @@ export interface JudgeRequest {
 
 export interface JudgeCaseResult {
   caseId: number
+  subtaskId?: number
   result: JudgeResult
   time: number      // ms
   memory: number    // KB
   score?: number
   message?: string
+}
+
+export interface SubtaskResult {
+  id: number
+  type: SubtaskType
+  score: number
+  cases: JudgeCaseResult[]
 }
 
 export interface JudgeTaskResult {
@@ -82,6 +91,7 @@ export interface JudgeTaskResult {
   memory: number
   score: number
   cases: JudgeCaseResult[]
+  subtasks?: SubtaskResult[]
   message?: string
 }
 
@@ -117,7 +127,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'judge' | 'result' | 'ping' | 'pong'
+  type: 'register' | 'registered' | 'judge' | 'result' | 'ping' | 'pong'
   payload: any
 }
 

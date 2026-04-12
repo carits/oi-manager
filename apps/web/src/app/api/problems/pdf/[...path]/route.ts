@@ -6,7 +6,7 @@ export async function GET(
 ) {
   const { path } = await params
   const filePath = path.join('/')
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  const apiUrl = process.env.BACKEND_URL || 'http://localhost:3002'
 
   const response = await fetch(`${apiUrl}/uploads/problems/${filePath}`)
 

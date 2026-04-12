@@ -123,7 +123,13 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       where: { id: parseInt(id) },
       include: {
         User: {
-          select: { username: true },
+          select: {
+            username: true,
+            avatar: true,
+            role: true,
+            Teacher: { select: { name: true } },
+            Student: { select: { name: true } },
+          },
         },
         OjAccount: {
           select: { username: true },
@@ -138,16 +144,56 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       })
     }
 
+    // 获取题目标题
+    let problemTitle: string | null = null
+    if (submission.problemInternalId) {
+      const problem = await prisma.problem.findUnique({
+        where: { id: submission.problemInternalId },
+        select: { title: true },
+      })
+      problemTitle = problem?.title || null
+    }
+
+    // 解析提交者显示名和头像
+    const user = submission.User
+    const submitterName = user.Teacher?.name || user.Student?.name || user.username
+
+    // 解析 cases JSON
+    let cases = null
+    if (submission.cases) {
+      try {
+        cases = JSON.parse(submission.cases)
+      } catch {
+        cases = null
+      }
+    }
+
+    // 解析 subtasks JSON
+    let subtasks = null
+    if (submission.subtasks) {
+      try {
+        subtasks = JSON.parse(submission.subtasks)
+      } catch {
+        subtasks = null
+      }
+    }
+
     res.json({
       success: true,
       data: {
         id: submission.id,
-        username: submission.User.username,
+        username: user.username,
+        submitterName,
+        submitterAvatar: user.avatar,
         oj: submission.oj,
         problemId: submission.problemId,
+        problemTitle,
         result: submission.result,
         timeUsed: submission.timeUsed,
         memoryUsed: submission.memoryUsed,
+        score: submission.score,
+        cases,
+        subtasks,
         codeLength: submission.codeLength,
         language: submission.language,
         code: submission.code,

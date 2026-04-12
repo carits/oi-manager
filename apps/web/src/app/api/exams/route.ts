@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
     const { searchParams } = new URL(request.url)
-    const res = await fetch(`${ENV.API_URL}/api/exams?${searchParams.toString()}`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/exams?${searchParams.toString()}`, {
       headers: { ...(authHeader && { Authorization: authHeader }) }
     })
     const data = await res.json()
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
     const body = await request.json()
-    const res = await fetch(`${ENV.API_URL}/api/exams`, {
+    const res = await fetch(`${ENV.BACKEND_URL}/api/exams`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(authHeader && { Authorization: authHeader }) },
       body: JSON.stringify(body)

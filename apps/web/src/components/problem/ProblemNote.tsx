@@ -27,6 +27,15 @@ const getPdfUrl = (path: string | null) => {
   return path
 }
 
+interface Statement {
+  id: string
+  format: 'markdown' | 'pdf'
+  language: 'zh' | 'en' | null
+  content: string | null
+  fileUrl: string | null
+  isVisible: boolean
+}
+
 interface Problem {
   id: string
   problemId: string
@@ -38,6 +47,7 @@ interface Problem {
   difficulty: string | null
   timeLimit: number | null
   memoryLimit: number | null
+  statements: Statement[]
 }
 
 interface ProblemNoteProps {
@@ -76,7 +86,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       setLoading(true)
       const [problemRes, noteRes] = await Promise.all([
         apiClient.get<Problem>(`/api/problems/${problemId}`),
-        apiClient.get(`/api/problems/${problemId}/note`)
+        apiClient.get<any>(`/api/problems/${problemId}/note`)
       ])
 
       if (problemRes.success && problemRes.data) {
@@ -270,20 +280,53 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             {problem.memoryLimit && <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>内存: {problem.memoryLimit}MB</span>}
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
-            {problem.statementType === 'markdown' && problem.description ? (
-              <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
-                <MarkdownRenderer content={problem.description} />
-              </div>
-            ) : problem.statementType === 'pdf' && problem.statementPdfUrl ? (
-              <object data={getPdfUrl(problem.statementPdfUrl) || ''} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }}>
-                <a href={getPdfUrl(problem.statementPdfUrl) || '#'} target="_blank">打开 PDF</a>
-              </object>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📄</div>
-                <p>暂无题目描述</p>
-              </div>
-            )}
+            {(() => {
+              // 优先使用新的多版本题面
+              const visibleStatements = (problem.statements || []).filter(s => s.isVisible)
+              const stmt = visibleStatements.find(s => s.format === 'markdown' && s.language === 'zh')
+                || visibleStatements.find(s => s.format === 'markdown')
+                || visibleStatements[0]
+
+              if (stmt) {
+                if (stmt.format === 'pdf' && stmt.fileUrl) {
+                  return (
+                    <object data={getPdfUrl(stmt.fileUrl) || ''} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }}>
+                      <a href={getPdfUrl(stmt.fileUrl) || '#'} target="_blank">打开 PDF</a>
+                    </object>
+                  )
+                }
+                if (stmt.content) {
+                  return (
+                    <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                      <MarkdownRenderer content={stmt.content} />
+                    </div>
+                  )
+                }
+              }
+
+              // 回退到旧字段
+              if (problem.statementType === 'markdown' && problem.description) {
+                return (
+                  <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                    <MarkdownRenderer content={problem.description} />
+                  </div>
+                )
+              }
+              if (problem.statementType === 'pdf' && problem.statementPdfUrl) {
+                return (
+                  <object data={getPdfUrl(problem.statementPdfUrl) || ''} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }}>
+                    <a href={getPdfUrl(problem.statementPdfUrl) || '#'} target="_blank">打开 PDF</a>
+                  </object>
+                )
+              }
+
+              return (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📄</div>
+                  <p>暂无题目描述</p>
+                </div>
+              )
+            })()}
           </div>
         </div>
 

@@ -4,8 +4,20 @@
  * 支持多种校验器：
  * - default: 默认校验器，忽略行末空格和末尾空行
  * - strict: 严格校验，完全匹配
- * - testlib: testlib 格式校验器
+ * - testlib: testlib 格式校验器（支持沙箱执行自定义 checker）
+ * - lemon/hustoj/qduoj/syzoj/kattis: 其他 OJ 格式校验器
  */
+
+import * as sandbox from '../sandbox/client'
+
+/**
+ * 校验结果
+ */
+export interface CheckerResult {
+  accepted: boolean
+  message?: string
+  score?: number
+}
 
 /**
  * 默认校验器
@@ -14,15 +26,14 @@
 export function defaultChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
-  // 标准化输出：去除行末空格、统一换行符、去除末尾空行
+): CheckerResult {
   const normalize = (s: string) => {
     return s
-      .replace(/\r\n/g, '\n')          // 统一换行符
-      .split('\n')                      // 按行分割
-      .map(line => line.trimEnd())      // 去除行末空格
-      .join('\n')                       // 重新组合
-      .trimEnd()                        // 去除末尾空行
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(line => line.trimEnd())
+      .join('\n')
+      .trimEnd()
   }
 
   const normalizedUser = normalize(userOutput)
@@ -32,7 +43,6 @@ export function defaultChecker(
     return { accepted: true }
   }
 
-  // 提供详细的差异信息
   const userLines = normalizedUser.split('\n')
   const expectedLines = normalizedExpected.split('\n')
 
@@ -62,12 +72,11 @@ export function defaultChecker(
 export function strictChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
+): CheckerResult {
   if (userOutput === expectedOutput) {
     return { accepted: true }
   }
 
-  // 找出第一个不同的位置
   let diffPos = 0
   const minLen = Math.min(userOutput.length, expectedOutput.length)
 
@@ -85,24 +94,105 @@ export function strictChecker(
 }
 
 /**
- * testlib 格式校验器（简化版）
+ * testlib 格式校验器
  *
- * testlib 是竞赛中常用的校验器格式，支持复杂输出检查。
- * 这里实现简化版本，完整版本需要编译用户自定义的 checker.cpp
+ * 如果有自定义 checker 源码，在沙箱中编译并执行。
+ * 否则回退到默认校验器。
+ *
+ * testlib checker 输出格式：
+ * - `ok <message>` → Accepted
+ * - `wrong answer <message>` → Wrong Answer
+ * - `points <score>\n<message>` → 部分分
+ * - 其他 → Runtime Error
  */
 export function testlibChecker(
   userOutput: string,
   expectedOutput: string,
   input?: string
-): { accepted: boolean; message?: string; score?: number } {
-  // testlib 校验器需要编译并执行 checker 程序
-  // 这里只是占位，实际实现需要：
-  // 1. 编译 checker.cpp
-  // 2. 执行 ./checker input.in user.out expected.out
-  // 3. 解析输出
-
-  // 简化实现：使用默认校验器
+): CheckerResult {
+  // 没有自定义 checker 时回退到默认校验器
   return defaultChecker(userOutput, expectedOutput)
+}
+
+/**
+ * 在沙箱中执行 testlib checker
+ *
+ * @param checkerCode checker.cpp 源代码
+ * @param input 输入数据
+ * @param expectedOutput 期望输出
+ * @param userOutput 用户输出
+ */
+export async function testlibCheckerSandbox(
+  checkerCode: string,
+  input: string,
+  expectedOutput: string,
+  userOutput: string
+): Promise<CheckerResult> {
+  // 如果不在沙箱模式，回退到默认校验器
+  if (sandbox.isLocalMode()) {
+    return defaultChecker(userOutput, expectedOutput)
+  }
+
+  // 编译 checker
+  const compileResult = await sandbox.compile({
+    language: 'cpp17',
+    code: checkerCode,
+    timeLimit: 15000,
+    memoryLimit: 524288
+  })
+
+  if (!compileResult.success) {
+    return { accepted: false, message: `Checker 编译失败: ${compileResult.error}` }
+  }
+
+  // 执行 checker
+  const execResult = await sandbox.execute({
+    language: 'cpp17',
+    timeLimit: 30000,
+    memoryLimit: 524288,
+    outputLimit: 65536,
+    compileFileId: compileResult.fileId
+  })
+
+  // 清理编译产物
+  if (compileResult.fileId) {
+    sandbox.deleteFile(compileResult.fileId).catch(() => {})
+  }
+
+  if (execResult.status !== 'Accepted') {
+    return { accepted: false, message: `Checker 运行失败: ${execResult.stderr}` }
+  }
+
+  const output = (execResult.stdout || '').trim()
+  return parseTestlibOutput(output)
+}
+
+/**
+ * 解析 testlib checker 输出
+ */
+function parseTestlibOutput(output: string): CheckerResult {
+  const lines = output.split('\n')
+  const firstLine = lines[0].trim().toLowerCase()
+
+  if (firstLine.startsWith('ok')) {
+    return { accepted: true, message: lines.slice(1).join('\n') || undefined }
+  }
+
+  if (firstLine.startsWith('wrong answer') || firstLine.startsWith('wrong')) {
+    return { accepted: false, message: lines.join('\n') }
+  }
+
+  if (firstLine.startsWith('points')) {
+    const scoreMatch = firstLine.match(/points\s+(\d+(?:\.\d+)?)/)
+    const score = scoreMatch ? parseFloat(scoreMatch[1]) : 0
+    return {
+      accepted: score > 0,
+      score,
+      message: lines.slice(1).join('\n') || undefined
+    }
+  }
+
+  return { accepted: false, message: output || 'Checker 输出无法解析' }
 }
 
 /**
@@ -111,8 +201,7 @@ export function testlibChecker(
 export function lemonChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
-  // Lemon 格式：忽略多个连续空格，只比较内容
+): CheckerResult {
   const normalize = (s: string) => {
     return s
       .replace(/\r\n/g, '\n')
@@ -138,16 +227,12 @@ export function lemonChecker(
 export function hustojChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
-  // HUSTOJ 格式：忽略所有空白字符差异
+): CheckerResult {
   const normalize = (s: string) => {
     return s.replace(/\s+/g, ' ').trim()
   }
 
-  const normalizedUser = normalize(userOutput)
-  const normalizedExpected = normalize(expectedOutput)
-
-  if (normalizedUser === normalizedExpected) {
+  if (normalize(userOutput) === normalize(expectedOutput)) {
     return { accepted: true }
   }
 
@@ -160,8 +245,7 @@ export function hustojChecker(
 export function qduojChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
-  // QDUOJ 格式：忽略空白差异，浮点数容忍
+): CheckerResult {
   const normalize = (s: string) => {
     return s
       .replace(/\r\n/g, '\n')
@@ -174,19 +258,17 @@ export function qduojChecker(
   const normalizedUser = normalize(userOutput)
   const normalizedExpected = normalize(expectedOutput)
 
-  // 简单比较
   if (normalizedUser === normalizedExpected) {
     return { accepted: true }
   }
 
-  // 尝试浮点数容忍比较
+  // 浮点数容忍比较
   const userNums = extractNumbers(normalizedUser)
   const expectedNums = extractNumbers(normalizedExpected)
 
   if (userNums.length === expectedNums.length && userNums.length > 0) {
     const allMatch = userNums.every((u, i) => {
       const e = expectedNums[i]
-      // 相对误差 1e-6
       return Math.abs(u - e) < 1e-6 || Math.abs(u - e) / Math.max(Math.abs(e), 1e-9) < 1e-6
     })
 
@@ -204,8 +286,7 @@ export function qduojChecker(
 export function syzojChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
-  // SYZOJ 格式：同默认校验器
+): CheckerResult {
   return defaultChecker(userOutput, expectedOutput)
 }
 
@@ -215,15 +296,13 @@ export function syzojChecker(
 export function kattisChecker(
   userOutput: string,
   expectedOutput: string
-): { accepted: boolean; message?: string } {
-  // Kattis 格式：浮点数容忍
+): CheckerResult {
   const userNums = extractNumbers(userOutput)
   const expectedNums = extractNumbers(expectedOutput)
 
   if (userNums.length === expectedNums.length && userNums.length > 0) {
     const allMatch = userNums.every((u, i) => {
       const e = expectedNums[i]
-      // 相对误差 1e-6
       return Math.abs(u - e) < 1e-6 || Math.abs(u - e) / Math.max(Math.abs(e), 1e-9) < 1e-6
     })
 
@@ -232,14 +311,13 @@ export function kattisChecker(
     }
   }
 
-  // 回退到默认校验
   return defaultChecker(userOutput, expectedOutput)
 }
 
 /**
  * 获取校验器
  */
-export function getChecker(type: string) {
+export function getChecker(type: string): (userOutput: string, expectedOutput: string) => CheckerResult {
   const checkers: Record<string, typeof defaultChecker> = {
     'default': defaultChecker,
     'strict': strictChecker,
