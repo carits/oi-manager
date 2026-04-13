@@ -33,6 +33,7 @@ interface TestdataFile {
 interface TestCasePair {
   input: string
   output: string
+  score?: number  // 单个测试点分数（用于 sum 类型）
 }
 
 interface SubtaskConfig {
@@ -247,6 +248,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         config.checker_type = 'default'
       }
       if (fileioPrefix) config.filename = fileioPrefix
+      if (!ignoreTrailingSpace) config.ignore_trailing_space = false
     }
 
     if (problemType === 'interactive' && interactorFile) {
@@ -276,7 +278,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         if (s.if && s.if.length > 0) obj.if = s.if
         if (s.time) obj.time = s.time
         if (s.memory) obj.memory = s.memory
-        obj.cases = s.cases.map(c => ({ input: c.input, output: c.output }))
+        // 包含每个测试点的分数（用于 sum 类型）
+        obj.cases = s.cases.map(c => ({ input: c.input, output: c.output, ...(c.score !== undefined && { score: c.score }) }))
         return obj
       })
     }
@@ -333,6 +336,12 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
         if (config) {
           const ct = config.checker_type || 'default'
+          // 加载 ignore_trailing_space 配置
+          if (config.ignore_trailing_space === false) {
+            setIgnoreTrailingSpace(false)
+          } else {
+            setIgnoreTrailingSpace(true)
+          }
           if (ct === 'default' || ct === 'strict') {
             setCheckerType(ct)
             setIgnoreTrailingSpace(ct === 'default')
@@ -562,6 +571,15 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (target?.cases.length) setUnassignedCases([...unassignedCases, ...target.cases])
     setExpandedSubtasks(new Set(Array.from(expandedSubtasks).filter(x => x !== id)))
     await updateSubtasksAndSave(newSubtasks)
+  }
+
+  const deleteAllSubtasks = async () => {
+    // 收集所有已分配的测试点
+    const allAssignedCases = subtasks.flatMap(s => s.cases)
+    if (allAssignedCases.length > 0) setUnassignedCases([...unassignedCases, ...allAssignedCases])
+    setExpandedSubtasks(new Set())
+    await updateSubtasksAndSave([])
+    toast.success('已删除所有子任务')
   }
 
   const startEditSubtask = (st: SubtaskConfig) => {
@@ -905,6 +923,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
             <button type="button" onClick={autoConfigure} style={btnOutline}>⚡ 自动配置</button>
             <button type="button" onClick={addSubtask} style={btnOutline}>＋ 添加子任务</button>
+            {subtasks.length > 0 && (
+              <button type="button" onClick={deleteAllSubtasks} style={btnDanger}>🗑️ 一键删除</button>
+            )}
             <span style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', alignSelf: 'center', marginLeft: 'auto' }}>
               全局 {globalTime} / {globalMemory} · {subtasks.reduce((sum, st) => sum + st.cases.length, 0)} 测试点 · {subtasks.length} 子任务
             </span>
@@ -954,7 +975,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                   {st.if && st.if.length > 0 && (
                     <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>依赖: {st.if.join(', ')}</span>
                   )}
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmState({ message: `确定删除子任务 ${st.id}？`, action: () => deleteSubtask(st.id) }) }}
+                  <button type="button" onClick={(e) => { e.stopPropagation(); deleteSubtask(st.id) }}
                     style={{ ...btnDanger, marginLeft: 'auto' }}>删除</button>
                 </div>
 
@@ -1002,6 +1023,26 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                       {st.cases.map((c, ci) => (
                         <span key={ci} style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '4px', color: 'var(--success)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                           {c.input} → {c.output}
+                          {st.type === 'sum' && (
+                            <input
+                              type="number"
+                              value={c.score || 0}
+                              onChange={(e) => {
+                                const newScore = parseInt(e.target.value) || 0
+                                const newSubtasks = subtasks.map(s => s.id === st.id ? {
+                                  ...s,
+                                  cases: s.cases.map((tc, ti) => ti === ci ? { ...tc, score: newScore } : tc)
+                                } : s)
+                                setSubtasks(newSubtasks)
+                              }}
+                              onBlur={() => updateSubtasksAndSave(subtasks)}
+                              style={{ width: '40px', fontSize: '0.7rem', padding: '0.125rem 0.25rem', border: '1px solid var(--border)', borderRadius: '3px' }}
+                              min={0}
+                            />
+                          )}
+                          {c.score !== undefined && st.type !== 'sum' && (
+                            <span style={{ fontSize: '0.625rem', color: 'var(--gray-500)', fontWeight: 600 }}>({c.score}分)</span>
+                          )}
                           <button type="button" onClick={() => removeCaseFromSubtask(st.id, ci)} style={{ fontSize: '0.625rem', color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.125rem' }}>✕</button>
                         </span>
                       ))}

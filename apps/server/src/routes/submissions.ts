@@ -12,6 +12,7 @@ export const submissionsRouter = Router()
 /**
  * GET /api/submissions
  * 获取评测记录列表
+ * 管理员可看所有记录，教师/学生只能看本学校的记录
  * @query username - 用户名筛选
  * @query oj - OJ 平台筛选
  * @query problemId - 题号筛选
@@ -32,12 +33,42 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       pageSize = '20',
     } = req.query as Record<string, string>
 
+    const user = (req as any).user
     const pageNum = parseInt(page) || 1
     const pageSizeNum = Math.min(parseInt(pageSize) || 20, 100)
     const skip = (pageNum - 1) * pageSizeNum
 
     // 构建查询条件
     const where: any = {}
+
+    // 按学校过滤：教师/学生只能看到本学校的评测记录
+    if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
+      const schoolId = user.schoolId
+      if (!schoolId) {
+        // 没有学校关联的教师/学生，返回空列表
+        return res.json({
+          success: true,
+          data: { submissions: [], page: pageNum, totalPages: 0, total: 0 },
+        })
+      }
+
+      // 查找本校所有教师和学生的 userId
+      const [teachers, students] = await Promise.all([
+        prisma.teacher.findMany({
+          where: { schoolId },
+          select: { userId: true },
+        }),
+        prisma.student.findMany({
+          where: { schoolId },
+          select: { userId: true },
+        }),
+      ])
+      const schoolUserIds = [
+        ...teachers.map(t => t.userId),
+        ...students.map(s => s.userId),
+      ]
+      where.userId = { in: schoolUserIds }
+    }
 
     if (username) {
       where.User = { username: { contains: username } }
@@ -75,6 +106,21 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       take: pageSizeNum,
     })
 
+    // 批量获取关联题目的可见性信息
+    const internalIds = submissions
+      .map(s => s.problemInternalId)
+      .filter((id): id is string => !!id)
+    const problemVisibilityMap = new Map<string, string>()
+    if (internalIds.length > 0) {
+      const problems = await prisma.problem.findMany({
+        where: { id: { in: internalIds } },
+        select: { id: true, visibility: true, ownerId: true, ownerType: true },
+      })
+      for (const p of problems) {
+        problemVisibilityMap.set(p.id, p.visibility)
+      }
+    }
+
     // 格式化响应
     const formattedSubmissions = submissions.map(s => ({
       id: s.id,
@@ -82,6 +128,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       oj: s.oj,
       problemId: s.problemId,
       problemInternalId: s.problemInternalId,
+      problemVisibility: s.problemInternalId ? (problemVisibilityMap.get(s.problemInternalId) || null) : null,
       result: s.result,
       timeUsed: s.timeUsed,
       memoryUsed: s.memoryUsed,
@@ -114,10 +161,12 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
 /**
  * GET /api/submissions/:id
  * 获取提交详情
+ * 管理员可查看所有，教师/学生只能查看本学校的提交
  */
 submissionsRouter.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params
+    const user = (req as any).user
 
     const submission = await prisma.submission.findUnique({
       where: { id: parseInt(id) },
@@ -127,8 +176,8 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
             username: true,
             avatar: true,
             role: true,
-            Teacher: { select: { name: true } },
-            Student: { select: { name: true } },
+            Teacher: { select: { name: true, schoolId: true } },
+            Student: { select: { name: true, schoolId: true } },
           },
         },
         OjAccount: {
@@ -144,6 +193,18 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       })
     }
 
+    // 权限检查：教师/学生只能查看本学校的提交
+    if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
+      const userSchoolId = user.schoolId
+      const submitterSchoolId = submission.User.Teacher?.schoolId || submission.User.Student?.schoolId
+      if (!userSchoolId || userSchoolId !== submitterSchoolId) {
+        return res.status(403).json({
+          success: false,
+          message: '无权查看该提交记录',
+        })
+      }
+    }
+
     // 获取题目标题
     let problemTitle: string | null = null
     if (submission.problemInternalId) {
@@ -155,8 +216,8 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
     }
 
     // 解析提交者显示名和头像
-    const user = submission.User
-    const submitterName = user.Teacher?.name || user.Student?.name || user.username
+    const submitter = submission.User
+    const submitterName = submitter.Teacher?.name || submitter.Student?.name || submitter.username
 
     // 解析 cases JSON
     let cases = null
@@ -182,9 +243,9 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       success: true,
       data: {
         id: submission.id,
-        username: user.username,
+        username: submitter.username,
         submitterName,
-        submitterAvatar: user.avatar,
+        submitterAvatar: submitter.avatar,
         oj: submission.oj,
         problemId: submission.problemId,
         problemTitle,

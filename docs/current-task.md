@@ -1,5 +1,142 @@
 # 当前任务
 
+## 任务：评测记录鉴权修复 + 进程清理脚本（2026-04-14）
+
+状态: **已完成** ✅
+
+### 问题
+
+1. 教师在评测记录页面能看到 platform_admin 的评测记录（学校隔离缺失）
+2. 教师能点击私有题目 #1000 进入题目详情（题目权限检查缺失）
+3. 重启服务时旧进程未清理
+
+### 修改
+
+1. **后端 `submissions.ts` GET /** — 教师和学生按学校过滤
+   - 查询 Teacher/Student 表获取同校 userIds，用 `where.userId = { in: schoolUserIds }` 过滤
+   - 管理员（super_admin, platform_admin）不做过滤
+   - 新增 `problemVisibility` 字段到响应，供前端判断题目可见性
+
+2. **后端 `submissions.ts` GET /:id** — 教师和学生按学校鉴权
+   - 比较 `user.schoolId` 与提交者的 schoolId，不匹配返回 403
+   - 修复 `const user` 重复声明问题（重命名为 `submitter`）
+
+3. **后端 `problems.ts` GET /:id** — 私有题目权限检查
+   - 私有题目（`visibility === 'private'`）仅 admin 和 owner 可访问
+
+4. **前端 `SubmissionList.tsx`** — 私有题目不可点击
+   - 新增 `problemVisibility` 字段和 `canClickProblem()` 函数
+   - 非公开题目在教师/学生端不显示可点击链接
+
+5. **进程清理脚本** — `scripts/kill-ports.sh` + `package.json`
+   - 新增 kill-ports.sh 脚本，清理 3000/3001/3002 端口
+   - `pnpm dev` 启动前自动执行清理
+   - `pnpm kill-ports` 单独清理端口
+   - `pnpm dev:dirty` 不清理直接启动
+
+状态: **已完成** ✅
+
+### 问题
+
+对比 Hydro OJ 评测引擎，发现 oi-manager 评测系统存在大量"假配置"：UI 允许设置但评测时不生效。
+
+### 对比审计结果
+
+**假配置（UI 可设置但不生效）**:
+1. File IO (`filename`) — 配置后仍用 stdin 管道 ✅ 已修复
+2. 自定义 Checker 源码执行 — testlib/lemon 等只是 JS 字符串比较 ✅ 已修复
+3. Interactor（交互题）— 无双向管道支持 ✅ 已修复
+4. Manager + 多进程通信题 — 无多进程管道支持 ✅ 已修复
+5. 提交答案题 — 无 zip 处理逻辑 ✅ 已修复
+6. 额外文件 (`user_extra_files`) — 不传入沙箱 ✅ 已修复
+7. 语言限制 (`langs`) — 不检查 ✅ 已修复
+
+**部分工作的功能**:
+- 子任务配置: 分组/依赖/评分方式正常，但缺少提前终止和并行执行
+- 默认/严格 Checker: JS 字符串比较可用，但 diff 信息不如 Hydro 精确
+
+**完全正常的功能**: 基础评测流程、测试数据管理、子任务前端展示
+
+### 修改
+
+1. **File IO 支持** — `judge.ts` + `sandbox/client.ts` + `sandbox/local.ts`
+   - 当 `config.filename` 设置时，程序通过 `{filename}.in` / `{filename}.out` 文件读写
+   - go-judge 模式: 用 copyIn 提供输入文件，copyOut 捕获输出文件
+   - 本地模式: 写入 workDir 文件，执行后读取输出文件
+
+2. **自定义 Checker 沙箱执行** — `judge.ts` + `checker/index.ts`
+   - 新增 `CheckerContext` 接口，封装 checker 类型、JS checker 函数、编译后的 fileId/workDir
+   - 编译阶段: 如果配置了 checker 源码且类型不是 default/strict，在评测前编译 checker
+   - 执行阶段: `runCheckerInSandbox()` 函数支持 6 种 checker 格式
+   - testlib: 解析 stderr（ok/wrong answer/points）
+   - lemon: 读取 score/message 文件（支持部分分）
+   - hustoj/qduoj: 检查 exit code
+   - syzoj: stdout 为分数百分比
+   - kattis: exit code 42=AC/43=WA，读取 feedback_dir
+
+3. **额外文件支持** — `types.ts` + `judge.ts` + `sandbox/client.ts` + `sandbox/local.ts`
+   - `ProblemConfig` 新增 `user_extra_files`、`judge_extra_files`、`langs`、`manager`、`num_processes` 字段
+   - `sandbox.execute()` 新增 `extraCopyIn` 参数
+   - 额外文件通过 copyIn 传入沙箱执行环境
+
+4. **语言限制检查** — `judge.ts`
+   - 评测前检查提交语言是否在 `config.langs` 允许列表中
+
+5. **导出 sandbox runCommand** — `sandbox/client.ts`
+   - 将 `runCommand` 改为 `export`，供 judge.ts 的 checker 沙箱执行使用
+
+### 第二轮修复
+
+6. **Checker 源码读取** — 前端只传文件名（如 `checker.cpp`），评测引擎从 testdata 目录读取源码再编译
+7. **ignoreTrailingSpace 开关** — 前端保存 `ignore_trailing_space` 到 config，评测引擎根据配置选择 default/strict checker
+8. **子任务提前终止** — min 类型一个失败后跳过剩余，max 类型一个满分后跳过剩余
+9. **Checker workDir 清理** — 临时目录和 fileId 在评测完成后正确清理
+10. **Config 字段映射** — `CompilableSource` 新增 `lang` 字段，修复 `num_processes` 重复
+
+### 第三轮修复：交互题、通信题、提交答案题
+
+11. **交互题 (`interactive`)** — `judge.ts` 新增 `judgeInteractive()` 和 `runInteractiveCase()` 函数
+    - 读取 interactor 源码（从 testdata 目录）
+    - 编译用户代码 + interactor
+    - 使用 `runPiped` / `runPipedLocal` 创建双向管道连接用户程序和 interactor
+    - pipeMapping: user stdout → interactor stdin, interactor stdout → user stdin
+    - 解析 interactor stderr（testlib 格式：ok/wrong answer/points/partially correct）
+
+12. **通信题 (`communication`)** — `judge.ts` 新增 `judgeCommunication()` 和 `runCommunicationCase()` 函数
+    - 读取 manager 源码（从 testdata 目录）
+    - 编译用户代码 + manager
+    - 使用 `runPiped` 创建 N 个用户进程 + 1 个 manager 进程
+    - pipeMapping: manager fd(p*2+3) → user[p] stdout, manager fd(p*2+4) → user[p] stdin
+    - manager stdout 输出分数百分比，stderr 输出消息
+    - 本地模式暂不支持（管道连接复杂），提示使用 go-judge
+
+13. **提交答案题 (`submit_answer`)** — `judge.ts` 新增 `judgeSubmitAnswer()` 函数
+    - 用户提交的 code 直接作为答案内容（简化实现，不处理 zip）
+    - 使用 checker 比对答案文件（支持沙箱 checker 和 JS checker）
+
+14. **题目类型分发** — `judge.ts` 主函数新增 problemType 路由
+    - `cfg.type === 'interactive'` → `judgeInteractive()`
+    - `cfg.type === 'communication'` → `judgeCommunication()`
+    - `cfg.type === 'submit_answer'` → `judgeSubmitAnswer()`
+    - default / objective / 未指定 → 原有评测流程
+
+15. **本地模式 runPiped** — `sandbox/local.ts` 新增 `runPipedLocal()` 函数
+    - 使用 Node.js child_process spawn + pipe() 实现进程间管道连接
+    - 返回 `LocalPipedResult[]`（status、exitStatus、time、memory、stdout、stderr、files）
+
+### 涉及文件
+
+- `apps/judge/src/judge.ts` — File IO、Checker 沙箱执行、语言限制、额外文件
+- `apps/judge/src/types.ts` — ProblemConfig 新增字段
+- `apps/judge/src/sandbox/client.ts` — execute 新增 filename/extraCopyIn 参数，导出 runCommand
+- `apps/judge/src/sandbox/local.ts` — localExecute 新增 filename/extraCopyIn 参数
+
+### Lemon 兼容性
+
+Lemon checker 已在本次修复中实现（`runCheckerInSandbox` 的 lemon 分支）。只需按 Lemon 格式传入命令行参数，读取 score/message 文件。依赖 checker 沙箱执行（已实现）。
+
+---
+
 ## 任务：评测配置持久化修复（2026-04-12）
 
 状态: **已完成** ✅

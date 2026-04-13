@@ -147,8 +147,12 @@ export async function execute(params: {
   compileFileId?: string
   /** 本地模式：包含编译产物的工作目录 */
   workDir?: string
+  /** File IO 模式：当设置时，程序通过 {filename}.in/{filename}.out 文件读写，而非 stdin/stdout */
+  filename?: string
+  /** 额外需要拷入执行环境的文件（如 user_extra_files） */
+  extraCopyIn?: Record<string, string>
 }): Promise<SandboxResult> {
-  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir } = params
+  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir, filename, extraCopyIn } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -184,7 +188,9 @@ export async function execute(params: {
         timeLimit,
         memoryLimit,
         workDir: uniqueDir,
-        skipCompile: !!providedWorkDir // 如果提供了 workDir（已编译过），跳过编译
+        skipCompile: !!providedWorkDir, // 如果提供了 workDir（已编译过），跳过编译
+        filename,
+        extraCopyIn
       })
     } finally {
       if (!providedWorkDir) {
@@ -212,9 +218,11 @@ async function sandboxExecute(
     memoryLimit: number
     outputLimit?: number
     compileFileId?: string
+    filename?: string
+    extraCopyIn?: Record<string, string>
   }
 ): Promise<SandboxResult> {
-  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId } = params
+  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn } = params
 
   try {
     // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
@@ -224,20 +232,36 @@ async function sandboxExecute(
       copyIn[executeFile] = { fileId: compileFileId }
     }
 
-    // 使用文件重定向捕获 stdout/stderr，然后通过 copyOut 获取
-    // stdin 通过 copyIn 传入文件，而不是管道（避免和 shell 重定向冲突）
-    if (stdin) {
-      copyIn['stdin'] = { content: stdin }
+    // 额外文件（user_extra_files 等）
+    if (extraCopyIn) {
+      for (const [name, content] of Object.entries(extraCopyIn)) {
+        copyIn[name] = { content }
+      }
     }
 
-    const execCommand = `${langConfig.execute} <stdin >stdout 2>stderr`
+    let execCommand: string
+    let copyOutFiles: string[]
+
+    if (filename) {
+      // File IO 模式：程序通过 {filename}.in / {filename}.out 读写
+      copyIn[`${filename}.in`] = { content: stdin || '' }
+      execCommand = `${langConfig.execute} 2>stderr`
+      copyOutFiles = [`${filename}.out`, 'stderr']
+    } else {
+      // 标准 stdin/stdout 模式
+      if (stdin) {
+        copyIn['stdin'] = { content: stdin }
+      }
+      execCommand = `${langConfig.execute} <stdin >stdout 2>stderr`
+      copyOutFiles = ['stdout', 'stderr']
+    }
 
     const result = await runCommand({
       args: ['sh', '-c', execCommand],
       env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
       copyIn: Object.keys(copyIn).length > 0 ? copyIn : undefined,
-      copyOut: ['stdout', 'stderr'],
-      copyOutOptional: ['stderr'],
+      copyOut: copyOutFiles,
+      copyOutOptional: copyOutFiles,
       cpuLimit: timeLimit * 1000000,
       memoryLimit: memoryLimit * 1024,
       procLimit: 50
@@ -261,13 +285,14 @@ async function sandboxExecute(
     let stdout: string | undefined
     let stderr: string | undefined
 
-    // go-judge v1.8+ returns copyOut file contents as plain strings (not base64)
-    if (result.files?.stdout) {
-      stdout = result.files.stdout
+    if (filename) {
+      // File IO 模式：从输出文件获取 stdout
+      stdout = result.files?.[`${filename}.out`]
+    } else {
+      // go-judge v1.8+ returns copyOut file contents as plain strings (not base64)
+      stdout = result.files?.stdout
     }
-    if (result.files?.stderr) {
-      stderr = result.files.stderr
-    }
+    stderr = result.files?.stderr
 
     return {
       status,
@@ -315,9 +340,9 @@ export async function deleteFile(fileId: string): Promise<void> {
 }
 
 /**
- * 执行单个命令（go-judge API）
+ * 执行单个命令（go-judge API）— 公开接口，供 judge.ts 调用
  */
-async function runCommand(params: {
+export async function runCommand(params: {
   args: string[]
   env?: string[]
   files?: Record<string, { content: string } | { fd: number }>
@@ -342,29 +367,136 @@ async function runCommand(params: {
   fileError?: Array<{ name: string; type: string; message: string }>
   error?: string
 }> {
-  const cmd: any = {
-    args: params.args,
+  const res = await runCommands([params])
+  return res[0]
+}
+
+/**
+ * 执行多个命令，支持管道映射（go-judge pipeMapping API）
+ * 用于交互题和通信题的多进程管道连接
+ */
+export async function runPiped(params: {
+  cmds: Array<{
+    args: string[]
+    env?: string[]
+    copyIn?: Record<string, { content: string } | { fileId: string }>
+    copyOut?: string[]
+    copyOutOptional?: string[]
+    cpuLimit?: number
+    memoryLimit?: number
+    procLimit?: number
+  }>
+  pipeMapping?: Array<{
+    in: { index: number; fd: number }
+    out: { index: number; fd: number }
+  }>
+}): Promise<Array<{
+  status: string
+  exitStatus: number
+  time: number
+  memory: number
+  files?: Record<string, string>
+  fileIds?: Record<string, string>
+  error?: string
+}>> {
+  const { cmds, pipeMapping } = params
+
+  const body: any = {
+    cmd: cmds.map(cmd => {
+      const c: any = { args: cmd.args }
+      if (cmd.env) c.env = cmd.env
+      if (cmd.copyIn) c.copyIn = cmd.copyIn
+      if (cmd.copyOut) c.copyOut = cmd.copyOut
+      if (cmd.copyOutOptional) c.copyOutOptional = cmd.copyOutOptional
+      if (cmd.cpuLimit) c.cpuLimit = cmd.cpuLimit
+      if (cmd.memoryLimit) c.memoryLimit = cmd.memoryLimit
+      if (cmd.procLimit) c.procLimit = cmd.procLimit
+      // pipeMapping 模式下 stdin/stdout 需要 null
+      if (pipeMapping) {
+        const idx = cmds.indexOf(cmd)
+        if (pipeMapping.find((p: any) => p.out.index === idx && p.out.fd === 0)) {
+          c.files = [{ fd: 0 }, { fd: 1 }, { fd: 2 }]
+          c.files[0] = null
+        }
+        if (pipeMapping.find((p: any) => p.in.index === idx && p.in.fd === 1)) {
+          if (!c.files) c.files = [{ fd: 0 }, { fd: 1 }, { fd: 2 }]
+          c.files[1] = null
+        }
+        if (!c.files) c.files = [{ fd: 0 }, { fd: 1 }, { fd: 2 }]
+      } else {
+        c.files = [{ fd: 0 }, { fd: 1 }, { fd: 2 }]
+      }
+      return c
+    }),
   }
 
-  if (params.env) cmd.env = params.env
-  if (params.files) cmd.files = params.files
-  if (params.stdin) cmd.stdin = params.stdin
-  if (params.stdout) cmd.stdout = params.stdout
-  if (params.stderr) cmd.stderr = params.stderr
-  if (params.cpuLimit) cmd.cpuLimit = params.cpuLimit
-  if (params.memoryLimit) cmd.memoryLimit = params.memoryLimit
-  if (params.procLimit) cmd.procLimit = params.procLimit
-  if (params.copyIn) cmd.copyIn = params.copyIn
-  if (params.copyOut) cmd.copyOut = params.copyOut
-  if (params.copyOutCached) cmd.copyOutCached = params.copyOutCached
-  if (params.copyOutOptional) cmd.copyOutOptional = params.copyOutOptional
+  if (pipeMapping && pipeMapping.length > 0) {
+    body.pipeMapping = pipeMapping.map((p: any) => ({
+      ...p,
+      proxy: true,
+      max: 16 * 1024 * 1024, // 16MB buffer
+    }))
+  }
 
   const res = await superagent
     .post(`${SANDBOX_HOST}/run`)
-    .send({ cmd: [cmd] })
+    .send(body)
+    .timeout(120000)
+
+  return res.body
+}
+
+/**
+ * 执行多个命令（内部辅助）
+ */
+async function runCommands(cmds: Array<{
+  args: string[]
+  env?: string[]
+  files?: Record<string, { content: string } | { fd: number }>
+  stdin?: { fd: number } | { content: string }
+  stdout?: { fd: number } | { max: number }
+  stderr?: { fd: number } | { max: number }
+  cpuLimit?: number
+  memoryLimit?: number
+  procLimit?: number
+  copyIn?: Record<string, { content: string } | { src: string } | { fileId: string }>
+  copyOut?: string[]
+  copyOutCached?: string[]
+  copyOutOptional?: string[]
+}>): Promise<Array<{
+  status: string
+  exitStatus: number
+  time: number
+  memory: number
+  runTime: number
+  files?: Record<string, string>
+  fileIds?: Record<string, string>
+  fileError?: Array<{ name: string; type: string; message: string }>
+  error?: string
+}>> {
+  const formattedCmds = cmds.map(params => {
+    const cmd: any = { args: params.args }
+    if (params.env) cmd.env = params.env
+    if (params.files) cmd.files = params.files
+    if (params.stdin) cmd.stdin = params.stdin
+    if (params.stdout) cmd.stdout = params.stdout
+    if (params.stderr) cmd.stderr = params.stderr
+    if (params.cpuLimit) cmd.cpuLimit = params.cpuLimit
+    if (params.memoryLimit) cmd.memoryLimit = params.memoryLimit
+    if (params.procLimit) cmd.procLimit = params.procLimit
+    if (params.copyIn) cmd.copyIn = params.copyIn
+    if (params.copyOut) cmd.copyOut = params.copyOut
+    if (params.copyOutCached) cmd.copyOutCached = params.copyOutCached
+    if (params.copyOutOptional) cmd.copyOutOptional = params.copyOutOptional
+    return cmd
+  })
+
+  const res = await superagent
+    .post(`${SANDBOX_HOST}/run`)
+    .send({ cmd: formattedCmds })
     .timeout(60000)
 
-  return res.body[0]
+  return res.body
 }
 
 /**

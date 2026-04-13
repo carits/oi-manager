@@ -5,11 +5,240 @@
  * 警告：无进程隔离和资源限制，仅用于开发测试，不可用于生产环境！
  */
 
-import { spawn } from 'child_process'
+import { spawn, ChildProcess } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
 import { getLanguageConfig } from '../langs'
 import type { SandboxResult } from '../types'
+
+/**
+ * 本地模式下的管道执行结果
+ */
+export interface LocalPipedResult {
+  status: string
+  exitStatus: number
+  time: number      // ms
+  memory: number    // KB
+  stdout?: string
+  stderr?: string
+  files?: Record<string, string>
+  fileIds?: Record<string, string>
+  error?: string
+}
+
+/**
+ * 本地模式下的管道执行（用于交互题和通信题）
+ *
+ * 使用 Node.js child_process 创建多个进程并通过 stdin/stdout 管道连接
+ * 注意：本地模式下无法真正实现进程隔离，仅用于开发测试
+ *
+ * @param cmds 多个进程的执行配置
+ * @param pipeMapping 管道映射关系
+ * @param workDirBase 工作目录基础路径
+ */
+export async function runPipedLocal(params: {
+  cmds: Array<{
+    args: string[]
+    env?: string[]
+    copyIn?: Record<string, string | { content: string }>
+    copyOut?: string[]
+    cpuLimit?: number
+    memoryLimit?: number
+    procLimit?: number
+    /** 进程标识（用于日志） */
+    name?: string
+  }>
+  pipeMapping?: Array<{
+    in: { index: number; fd: number }
+    out: { index: number; fd: number }
+  }>
+  /** 基础工作目录 */
+  workDirBase?: string
+}): Promise<LocalPipedResult[]> {
+  const { cmds, pipeMapping = [], workDirBase } = params
+
+  // 为每个进程创建独立工作目录
+  const workDirs: string[] = []
+  for (let i = 0; i < cmds.length; i++) {
+    const dir = workDirBase
+      ? path.join(workDirBase, `proc_${i}`)
+      : path.join(require('os').tmpdir(), `piped_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`)
+    fs.mkdirSync(dir, { recursive: true })
+    workDirs.push(dir)
+  }
+
+  // 写入 copyIn 文件
+  for (let i = 0; i < cmds.length; i++) {
+    const cmd = cmds[i]
+    if (cmd.copyIn) {
+      for (const [name, value] of Object.entries(cmd.copyIn)) {
+        const filePath = path.join(workDirs[i], name)
+        const dir = path.dirname(filePath)
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        // 支持 string 或 { content: string } 格式
+        const content = typeof value === 'string' ? value : value.content
+        fs.writeFileSync(filePath, content, 'utf-8')
+      }
+    }
+  }
+
+  // 创建进程
+  const processes: ChildProcess[] = []
+  const results: LocalPipedResult[] = cmds.map(() => ({
+    status: 'Accepted',
+    exitStatus: 0,
+    time: 0,
+    memory: 0,
+    stdout: '',
+    stderr: '',
+    files: {},
+  }))
+
+  // 建立 pipe 映射
+  // fd 0 = stdin, fd 1 = stdout, fd 2 = stderr
+  // pipeMapping: { in: { index, fd }, out: { index, fd } }
+  // 表示将 out 进程的 fd 输出连接到 in 进程的 fd 输入
+
+  const pipeStreams: Map<string, { readable?: NodeJS.ReadableStream; writable?: NodeJS.WritableStream }> = new Map()
+
+  try {
+    // 启动所有进程
+    for (let i = 0; i < cmds.length; i++) {
+      const cmd = cmds[i]
+      const workDir = workDirs[i]
+      const envObj: Record<string, string> = {}
+      if (cmd.env) {
+        for (const e of cmd.env) {
+          const [k, v] = e.split('=')
+          if (k) envObj[k] = v || ''
+        }
+      }
+
+      const proc = spawn('sh', ['-c', cmd.args.join(' ')], {
+        cwd: workDir,
+        env: { ...process.env, ...envObj },
+      })
+
+      processes.push(proc)
+      const startTime = Date.now()
+
+      // 收集 stdout/stderr
+      let stdout = ''
+      let stderr = ''
+
+      proc.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString()
+      })
+
+      proc.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString()
+      })
+
+      // 处理管道连接
+      // 查找当前进程是否是某个 pipe 的输出端
+      for (const pipe of pipeMapping) {
+        if (pipe.out.index === i) {
+          // 当前进程的 fd 是输出端，需要将其流导向另一个进程的输入端
+          const key = `pipe_${pipe.in.index}_${pipe.in.fd}`
+          if (!pipeStreams.has(key)) pipeStreams.set(key, {})
+          const streamInfo = pipeStreams.get(key)!
+          if (pipe.out.fd === 1) {
+            // stdout 作为输出
+            streamInfo.readable = proc.stdout
+          } else if (pipe.out.fd === 2) {
+            // stderr 作为输出
+            streamInfo.readable = proc.stderr
+          }
+        }
+        if (pipe.in.index === i) {
+          // 当前进程的 fd 是输入端，需要接收另一个进程的输出
+          const key = `pipe_${i}_${pipe.in.fd}`
+          if (!pipeStreams.has(key)) pipeStreams.set(key, {})
+          const streamInfo = pipeStreams.get(key)!
+          if (pipe.in.fd === 0) {
+            // stdin 作为输入
+            streamInfo.writable = proc.stdin
+          }
+        }
+      }
+
+      // 监听进程结束
+      proc.on('close', (code) => {
+        const elapsed = Date.now() - startTime
+        results[i].exitStatus = code || 0
+        results[i].time = elapsed
+        results[i].stdout = stdout
+        results[i].stderr = stderr
+
+        if (code !== 0 && code !== 13) { // 13 = SIGPIPE (Broken Pipe)
+          results[i].status = 'Runtime Error'
+        }
+      })
+
+      proc.on('error', (err) => {
+        results[i].status = 'Runtime Error'
+        results[i].error = err.message
+      })
+    }
+
+    // 连接管道流
+    for (const [key, streamInfo] of pipeStreams) {
+      if (streamInfo.readable && streamInfo.writable) {
+        streamInfo.readable.pipe(streamInfo.writable)
+      }
+    }
+
+    // 等待所有进程结束（带超时）
+    const maxWaitTime = Math.max(...cmds.map(c => c.cpuLimit || 30000)) // 默认 30s
+    await new Promise<void>((resolve) => {
+      const checkComplete = () => {
+        const allClosed = processes.every(p => p.killed || p.exitCode !== null)
+        if (allClosed) {
+          resolve()
+          return
+        }
+      }
+
+      // 定期检查
+      const interval = setInterval(checkComplete, 100)
+
+      // 超时处理
+      setTimeout(() => {
+        clearInterval(interval)
+        for (const p of processes) {
+          if (p.exitCode === null) {
+            p.kill()
+          }
+        }
+        resolve()
+      }, maxWaitTime)
+    })
+
+    // 收集 copyOut 文件
+    for (let i = 0; i < cmds.length; i++) {
+      const cmd = cmds[i]
+      if (cmd.copyOut) {
+        for (const name of cmd.copyOut) {
+          const filePath = path.join(workDirs[i], name)
+          if (fs.existsSync(filePath)) {
+            results[i].files![name] = fs.readFileSync(filePath, 'utf-8')
+          }
+        }
+      }
+    }
+
+    return results
+  } finally {
+    // 清理工作目录
+    for (const dir of workDirs) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true })
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
 
 /**
  * 本地编译代码
@@ -77,8 +306,12 @@ export async function localExecute(params: {
   memoryLimit: number // KB
   workDir: string
   skipCompile?: boolean // 是否跳过编译（已编译过）
+  /** File IO 模式：程序通过 {filename}.in / {filename}.out 读写 */
+  filename?: string
+  /** 额外需要拷入执行环境的文件 */
+  extraCopyIn?: Record<string, string>
 }): Promise<SandboxResult> {
-  const { language, code, stdin, timeLimit, workDir, skipCompile = false } = params
+  const { language, code, stdin, timeLimit, workDir, skipCompile = false, filename, extraCopyIn } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -109,6 +342,23 @@ export async function localExecute(params: {
     }
   }
 
+  // 写入额外文件（user_extra_files 等）
+  if (extraCopyIn) {
+    for (const [name, content] of Object.entries(extraCopyIn)) {
+      const filePath = path.join(workDir, name)
+      const dir = path.dirname(filePath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+      fs.writeFileSync(filePath, content, 'utf-8')
+    }
+  }
+
+  // File IO 模式：写入输入文件（即使 stdin 为空也要写入，与 go-judge 模式保持一致）
+  if (filename) {
+    fs.writeFileSync(path.join(workDir, `${filename}.in`), stdin || '', 'utf-8')
+  }
+
   // 执行程序
   const startTime = Date.now()
 
@@ -129,8 +379,11 @@ export async function localExecute(params: {
       stderr += data.toString()
     })
 
-    if (stdin) {
+    // File IO 模式不通过 stdin 管道传入输入
+    if (!filename && stdin) {
       execProcess.stdin.write(stdin)
+      execProcess.stdin.end()
+    } else {
       execProcess.stdin.end()
     }
 
@@ -153,7 +406,10 @@ export async function localExecute(params: {
           stdout,
           stderr
         })
-      } else if (code !== 0) {
+        return
+      }
+
+      if (code !== 0) {
         resolve({
           status: 'Runtime Error',
           time: elapsed,
@@ -162,16 +418,27 @@ export async function localExecute(params: {
           stdout,
           stderr
         })
-      } else {
-        resolve({
-          status: 'Accepted',
-          time: elapsed,
-          memory: 0,
-          exitCode: 0,
-          stdout,
-          stderr
-        })
+        return
       }
+
+      // File IO 模式：从输出文件读取 stdout
+      if (filename) {
+        const outPath = path.join(workDir, `${filename}.out`)
+        if (fs.existsSync(outPath)) {
+          stdout = fs.readFileSync(outPath, 'utf-8')
+        } else {
+          stdout = ''
+        }
+      }
+
+      resolve({
+        status: 'Accepted',
+        time: elapsed,
+        memory: 0,
+        exitCode: 0,
+        stdout,
+        stderr
+      })
     })
 
     execProcess.on('error', (err) => {

@@ -93,11 +93,14 @@ const RESULT_LABELS: Record<string, string> = {
   ole: 'Output Exceeded',
   submit_failed: 'Submit Failed',
   se: 'System Error',
+  skipped: 'Skipped',
 }
 
 // Case result status class
-function getCaseStatusClass(result: string): 'pass' | 'fail' {
-  return result === 'Accepted' ? 'pass' : 'fail'
+function getCaseStatusClass(result: string): 'pass' | 'fail' | 'skip' {
+  if (result === 'Accepted') return 'pass'
+  if (result === 'Skipped') return 'skip'
+  return 'fail'
 }
 
 // Language to highlight.js mapping
@@ -336,7 +339,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                             width: '8px',
                             height: '18px',
                             borderRadius: '2px',
-                            background: cClass === 'pass' ? '#25ad40' : '#fb5555',
+                            background: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555',
                             opacity: cClass === 'pass' ? 0.8 : 1,
                             cursor: 'pointer',
                           }}
@@ -413,7 +416,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                             // 子任务的测试点行
                             for (const c of st.cases) {
                               const cClass = getCaseStatusClass(c.result)
-                              const borderColor = cClass === 'pass' ? '#25ad40' : '#fb5555'
+                              const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555'
                               rows.push(
                                 <tr key={`case-${caseIdx}`}>
                                   <td style={{
@@ -425,8 +428,8 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                     {caseIdx + 1}
                                   </td>
                                   <td style={{ padding: '0.5rem 0.625rem' }}>
-                                    <span style={{ color: cClass === 'pass' ? '#25ad40' : '#fb5555', fontWeight: 500 }}>
-                                      {cClass === 'pass' ? '✓' : '✕'}
+                                    <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555', fontWeight: 500 }}>
+                                      {cClass === 'pass' ? '✓' : cClass === 'skip' ? '-' : '✕'}
                                     </span>
                                     <span style={{ marginLeft: '0.375rem', color: '#374151' }}>{c.result}</span>
                                     {c.message && (
@@ -459,7 +462,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                         // 无子任务：直接显示测试点
                         return cases.map((c, idx) => {
                           const cClass = getCaseStatusClass(c.result)
-                          const borderColor = cClass === 'pass' ? '#25ad40' : '#fb5555'
+                          const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555'
                           return (
                             <tr key={idx}>
                               <td style={{
@@ -471,8 +474,8 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                 {idx + 1}
                               </td>
                               <td style={{ padding: '0.5rem 0.625rem' }}>
-                                <span style={{ color: cClass === 'pass' ? '#25ad40' : '#fb5555', fontWeight: 500 }}>
-                                  {cClass === 'pass' ? '✓' : '✕'}
+                                <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555', fontWeight: 500 }}>
+                                  {cClass === 'pass' ? '✓' : cClass === 'skip' ? '-' : '✕'}
                                 </span>
                                 <span style={{ marginLeft: '0.375rem', color: '#374151' }}>{c.result}</span>
                                 {c.message && (

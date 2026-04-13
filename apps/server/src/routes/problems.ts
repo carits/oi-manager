@@ -373,7 +373,9 @@ problemsRouter.post('/', authenticate, async (req, res) => {
 problemsRouter.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params
-    const role = (req as any).user.role
+    const user = (req as any).user
+    const role = user.role
+    const userId = user.userId
 
     const problem = await prisma.problem.findUnique({
       where: { id },
@@ -386,6 +388,14 @@ problemsRouter.get('/:id', authenticate, async (req, res) => {
 
     if (!problem) {
       return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    // 可见性检查：私有题目只有管理员和题目所有者可以查看
+    if (problem.visibility === 'private' && role !== 'super_admin' && role !== 'platform_admin') {
+      const ownerInfo = await getOwnerInfo(userId, role)
+      if (!ownerInfo || ownerInfo.ownerId !== problem.ownerId || ownerInfo.ownerType !== problem.ownerType) {
+        return res.status(403).json({ success: false, message: '无权查看该题目' })
+      }
     }
 
     // 获取所有者名称

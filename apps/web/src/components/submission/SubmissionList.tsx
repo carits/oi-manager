@@ -15,6 +15,7 @@ interface Submission {
   oj: string
   problemId: string
   problemInternalId?: string
+  problemVisibility?: string | null
   result: string
   timeUsed: number | null
   memoryUsed: number | null
@@ -85,9 +86,16 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     return '/teacher'
   }
 
+  // 判断题目是否可点击（公开题目 或 管理员可点击所有）
+  const canClickProblem = (submission: Submission) => {
+    if (!submission.problemInternalId) return false
+    if (viewRole === 'admin') return true
+    return submission.problemVisibility === 'public'
+  }
+
   // 点击题号跳转到题目详情
   const handleProblemClick = (submission: Submission) => {
-    if (submission.problemInternalId) {
+    if (canClickProblem(submission)) {
       router.push(`${getPathPrefix()}/problems/${submission.problemInternalId}`)
     }
   }
@@ -366,9 +374,9 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                       <span
                         onClick={() => handleProblemClick(s)}
                         style={{
-                          color: s.problemInternalId ? 'var(--primary)' : '#1d4ed8',
-                          cursor: s.problemInternalId ? 'pointer' : 'default',
-                          textDecoration: s.problemInternalId ? 'underline' : 'none',
+                          color: canClickProblem(s) ? 'var(--primary)' : (s.problemInternalId ? '#1d4ed8' : '#1d4ed8'),
+                          cursor: canClickProblem(s) ? 'pointer' : 'default',
+                          textDecoration: canClickProblem(s) ? 'underline' : 'none',
                         }}
                       >
                         {s.problemId}

@@ -17,6 +17,7 @@ export type JudgeResult =
   | 'Presentation Error'
   | 'Output Limit Exceeded'
   | 'System Error'
+  | 'Skipped'          // 跳过的测试点（依赖失败或提前终止）
   | 'Judging'
   | 'Waiting'
 
@@ -40,6 +41,7 @@ export interface SubtaskConfig {
 
 export interface CompilableSource {
   language?: string
+  lang?: string  // 前端传的简写形式，与 language 等价
   code?: string
   file?: string
 }
@@ -52,8 +54,19 @@ export interface ProblemConfig {
   checker_type?: string  // 'default' | 'strict' | 'testlib' | 'lemon' | ...
   checker?: CompilableSource
   interactor?: CompilableSource
+  manager?: CompilableSource
   subtasks?: SubtaskConfig[]
   cases?: TestCaseConfig[]
+  /** 允许的编程语言列表 */
+  langs?: string[]
+  /** 通信题进程数 */
+  num_processes?: number
+  /** 忽略行末空格（默认 true） */
+  ignore_trailing_space?: boolean
+  /** 用户提供给用户程序的额外文件（如辅助数据文件） */
+  user_extra_files?: Record<string, string>
+  /** 评测过程中可用但不对用户可见的额外文件 */
+  judge_extra_files?: Record<string, string>
 }
 
 // ==================== 评测请求 ====================

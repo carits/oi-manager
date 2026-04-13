@@ -4,7 +4,9 @@
   "private": true,
   "description": "信息学竞赛三端成长管理平台",
   "scripts": {
-    "dev": "pnpm --parallel -r dev",
+    "dev": "bash scripts/kill-ports.sh && pnpm --parallel -r dev",
+    "dev:dirty": "pnpm --parallel -r dev",
+    "kill-ports": "bash scripts/kill-ports.sh",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "install:all": "pnpm install"

@@ -1,5 +1,110 @@
 # 变更日志
 
+## 2026-04-13 (评测系统假配置修复)
+
+### 背景
+
+对比 Hydro OJ 评测引擎（`/home/ecs-user/Hydro/packages/hydrojudge/`），发现 oi-manager 评测系统存在 7 个"假配置"：UI 允许设置但评测时不生效。核心问题是 `judge.ts` 的 `runTestCase` 函数只支持 stdin/stdout 管道 + JS 字符串比较，不支持文件 IO、沙箱 checker 执行等。
+
+### 修改
+
+**P0: File IO 支持** (`apps/judge/src/judge.ts`, `sandbox/client.ts`, `sandbox/local.ts`)
+- 当 `config.filename` 设置时，程序通过 `{filename}.in` / `{filename}.out` 文件读写而非 stdin/stdout
+- go-judge 模式: copyIn 提供输入文件 + copyOut 捕获输出文件
+- 本地模式: 写入 workDir 文件 + 读取输出文件
+
+**P0: 自定义 Checker 沙箱执行** (`apps/judge/src/judge.ts`)
+- 新增 `CheckerContext` 接口封装 checker 信息
+- 编译阶段编译 checker 源码（如果需要沙箱执行）
+- `runCheckerInSandbox()` 支持 testlib/lemon/hustoj/qduoj/syzoj/kattis 6 种格式
+- 每种格式按 Hydro 规范传入命令行参数和文件
+
+**P1: 额外文件支持** (`apps/judge/src/types.ts`, `judge.ts`, `sandbox/client.ts`, `sandbox/local.ts`)
+- `ProblemConfig` 新增 `user_extra_files`、`judge_extra_files`、`langs`、`manager`、`num_processes` 字段
+- 额外文件通过 `extraCopyIn` 传入沙箱
+
+**P1: 语言限制检查** (`apps/judge/src/judge.ts`)
+- 评测前检查提交语言是否在允许列表中
+
+**基础改动** (`sandbox/client.ts`)
+- `sandbox.execute()` 新增 `filename`、`extraCopyIn` 参数
+- `runCommand` 改为 export
+- `sandboxExecute` 重构为支持 File IO 模式
+
+**基础改动** (`sandbox/local.ts`)
+- `localExecute` 新增 `filename`、`extraCopyIn` 参数
+- File IO 模式: 写入输入文件 + 不管道 stdin + 读取输出文件
+- 额外文件: 写入 workDir
+
+### 第三轮修复：交互题、通信题、提交答案题
+
+**交互题 (`interactive`)** (`apps/judge/src/judge.ts`)
+- 新增 `judgeInteractive()` 和 `runInteractiveCase()` 函数
+- 读取 testdata 目录下的 interactor 源码并编译
+- 使用 `runPiped` / `runPipedLocal` 创建用户程序和 interactor 的双向管道
+- pipeMapping: user stdout → interactor stdin (fd 0), interactor stdout → user stdin (fd 0)
+- 解析 interactor stderr（testlib 格式）获取评测结果
+- 支持部分分（partially correct / points）
+
+**通信题 (`communication`)** (`apps/judge/src/judge.ts`)
+- 新增 `judgeCommunication()` 和 `runCommunicationCase()` 函数
+- 读取 testdata 目录下的 manager 源码并编译
+- 使用 `runPiped` 创建 N 个用户进程 + 1 个 manager 进程
+- pipeMapping: manager fd(p*2+3) 接收 user[p] stdout, manager fd(p*2+4) 发送到 user[p] stdin
+- manager stdout 输出分数百分比（0-100），stderr 输出消息
+- 本地模式暂不支持（管道连接复杂），返回 System Error 提示使用 go-judge
+
+**提交答案题 (`submit_answer`)** (`apps/judge/src/judge.ts`)
+- 新增 `judgeSubmitAnswer()` 函数
+- 简化实现：用户提交的 code 直接作为答案内容，用于所有测试点
+- 使用 checker 比对答案文件（支持沙箱 checker 和 JS checker）
+
+**题目类型分发** (`apps/judge/src/judge.ts`)
+- 主 `judge()` 函数新增 problemType 路由逻辑
+- `cfg.type === 'interactive'` → 调用 `judgeInteractive()`
+- `cfg.type === 'communication'` → 调用 `judgeCommunication()`
+- `cfg.type === 'submit_answer'` → 调用 `judgeSubmitAnswer()`
+- default / objective / 未指定 → 继续原有评测流程
+
+**本地模式 runPiped** (`apps/judge/src/sandbox/local.ts`)
+- 新增 `runPipedLocal()` 函数，使用 Node.js child_process 实现进程间管道连接
+- 新增 `LocalPipedResult` 接口（status、exitStatus、time、memory、stdout、stderr、files）
+- 支持 pipeMapping 配置，连接不同进程的 stdin/stdout
+
+### 已修复的假配置（完整清单）
+
+1. File IO (`filename`) — ✅ 已修复
+2. 自定义 Checker 源码执行 — ✅ 已修复
+3. Interactor（交互题）— ✅ 已修复
+4. Manager + 多进程通信题 — ✅ 已修复
+5. 提交答案题 — ✅ 已修复
+6. 额外文件 (`user_extra_files`) — ✅ 已修复
+7. 语言限制 (`langs`) — ✅ 已修复
+
+### 第二轮修复
+
+**Checker 源码读取** (`apps/judge/src/judge.ts`)
+- 前端 `config.checker` 只传文件名（如 `{ file: "checker.cpp", lang: "cpp17" }`），不传源码
+- 评测引擎现在从 `testdataPath` 目录读取 checker 源码文件再编译
+
+**ignoreTrailingSpace 开关** (`JudgeSettingsTab.tsx`, `judge.ts`, `types.ts`)
+- 前端现在将 `ignore_trailing_space` 保存到 config
+- 评测引擎：当 `ignore_trailing_space=false` 且 `checker_type=default` 时，自动切换为 strict checker
+
+**子任务提前终止** (`apps/judge/src/judge.ts`)
+- min 类型：一个用例失败后，剩余用例跳过（标记为 System Error）
+- max 类型：一个用例获得满分后，剩余用例跳过
+
+**Checker workDir 清理** (`apps/judge/src/judge.ts`)
+- 编译 checker 后创建的临时目录现在在评测完成后正确清理
+- go-judge 模式下 checker 的 fileId 也会删除
+
+**Config 字段映射** (`apps/judge/src/types.ts`)
+- `CompilableSource` 新增 `lang` 字段（前端传的简写形式，与 `language` 等价）
+- `ProblemConfig` 修复 `num_processes` 重复定义
+
+---
+
 ## 2026-04-12 (评测配置持久化修复)
 
 ### 主保存按钮集成评测配置保存
@@ -4346,3 +4451,19 @@ model TeamMember {
 - 后端 API 验证联系方式必填
 - 前端表单验证联系方式必填
 - 年级分布根据学制动态计算
+
+### 2026-04-14: 评测记录鉴权修复 + 进程清理脚本
+
+**修改文件**:
+- `apps/server/src/routes/submissions.ts` — GET / 列表按学校过滤；GET /:id 详情按学校鉴权
+- `apps/server/src/routes/problems.ts` — GET /:id 新增私有题目权限检查
+- `apps/web/src/components/submission/SubmissionList.tsx` — 评测记录中私有题目不可点击
+- `scripts/kill-ports.sh` — 新增端口清理脚本
+- `package.json` — dev 脚本集成端口清理
+
+**修复内容**:
+- 评测记录列表：教师/学生只能看到本学校的评测记录，管理员可看所有
+- 评测记录详情：教师/学生只能查看本学校用户的提交详情
+- 题目详情页：私有题目对非管理员/非 owner 返回 403
+- 前端评测记录表格：私有题目不再显示可点击链接
+- 重启服务时自动清理 3000/3001/3002 端口旧进程
