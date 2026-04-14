@@ -186,14 +186,23 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
     if (new Date(endTime) <= new Date(startTime)) { toast.error('结束时间必须晚于开始时间'); return }
 
     // Check start time modification
-    if (originalStartTime && originalStartTimeStr) {
-      const now = new Date()
-      const isStarted = now >= originalStartTime
-      // Use string comparison to avoid timezone issues
-      if (isStarted && startTime !== originalStartTimeStr) {
-        toast.error('训练已经开始，不能修改开始时间')
-        return
-      }
+    const now = new Date()
+    const isStarted = originalStartTime ? now >= originalStartTime : false
+    if (isStarted && startTime !== originalStartTimeStr) {
+      toast.error('训练已经开始，不能修改开始时间')
+      return
+    }
+
+    // 未开始的训练，新的开始时间不能在过去
+    if (!isStarted && new Date(startTime) <= now) {
+      toast.error('开始时间不能早于当前时间')
+      return
+    }
+
+    // 结束时间不能早于当前时间
+    if (new Date(endTime) <= now) {
+      toast.error('结束时间不能早于当前时间')
+      return
     }
 
     // Check that all new resolved problems are found

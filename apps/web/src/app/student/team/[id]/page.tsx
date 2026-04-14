@@ -1,7 +1,7 @@
 'use client'
 
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { TeamDetailPage } from '@/components/team'
+import { TeamDetailPage } from '@/components/team/TeamDetailPage'
 
 // 学生端 - 团队详情页
 export default function StudentTeamDetailPage() {

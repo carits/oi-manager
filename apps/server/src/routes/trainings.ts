@@ -13,6 +13,8 @@ import { authenticate } from '../middleware/auth'
 import { getUserTeacherId } from '../middleware/permissions'
 import { logger } from '../lib/logger'
 import type { AuthRequest } from '../middleware/auth'
+import { getAdapter } from '../oj-adapters'
+import { getSupportedPlatforms } from '../oj-adapters'
 
 export const trainingsRouter = Router()
 
@@ -58,6 +60,13 @@ async function getUserTypeForTeam(userId: string): Promise<string> {
   if (user?.role === 'super_admin' || user?.role === 'platform_admin') return 'teacher'
   if (user?.role === 'teacher' || user?.role === 'school_principal') return 'teacher'
   return 'student'
+}
+
+/** 解析训练 ID（数字） */
+function parseTrainingId(raw: string): number {
+  const n = parseInt(raw, 10)
+  if (isNaN(n)) throw new Error('无效的训练 ID')
+  return n
 }
 
 // ========== 训练 CRUD ==========
@@ -128,6 +137,10 @@ trainingsRouter.post('/teams/:teamId/trainings', authenticate, async (req: AuthR
       return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
     }
 
+    if (new Date(startTime) <= new Date()) {
+      return res.status(400).json({ success: false, message: '开始时间不能早于当前时间' })
+    }
+
     const training = await prisma.training.create({
       data: {
         teamId,
@@ -155,7 +168,7 @@ trainingsRouter.post('/teams/:teamId/trainings', authenticate, async (req: AuthR
  */
 trainingsRouter.get('/trainings/:id', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({
@@ -219,7 +232,7 @@ trainingsRouter.get('/trainings/:id', authenticate, async (req: AuthRequest, res
  */
 trainingsRouter.put('/trainings/:id', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
     const { title, description, format, startTime, endTime } = req.body
 
@@ -245,6 +258,11 @@ trainingsRouter.put('/trainings/:id', authenticate, async (req: AuthRequest, res
       return res.status(400).json({ success: false, message: '训练已经开始，不能修改开始时间' })
     }
 
+    // 未开始训练修改开始时间，新时间不能在过去
+    if (!isStarted && startTime && new Date(startTime) <= now) {
+      return res.status(400).json({ success: false, message: '开始时间不能早于当前时间' })
+    }
+
     const newStartTime = startTime ? new Date(startTime) : training.startTime
     const newEndTime = endTime ? new Date(endTime) : training.endTime
 
@@ -252,8 +270,8 @@ trainingsRouter.put('/trainings/:id', authenticate, async (req: AuthRequest, res
       return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
     }
 
-    // ongoing 状态下结束时间不能早于当前时间
-    if (isStarted && newEndTime < now) {
+    // 结束时间不能早于当前时间
+    if (newEndTime <= now) {
       return res.status(400).json({ success: false, message: '结束时间不能早于当前时间' })
     }
 
@@ -282,7 +300,7 @@ trainingsRouter.put('/trainings/:id', authenticate, async (req: AuthRequest, res
  */
 trainingsRouter.put('/trainings/:id/end-time', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
     const { endTime } = req.body
 
@@ -326,7 +344,7 @@ trainingsRouter.put('/trainings/:id/end-time', authenticate, async (req: AuthReq
  */
 trainingsRouter.delete('/trainings/:id', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -364,7 +382,7 @@ trainingsRouter.delete('/trainings/:id', authenticate, async (req: AuthRequest, 
  */
 trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -439,12 +457,115 @@ trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthReq
 })
 
 /**
+ * GET /api/trainings/:id/problem-status
+ * 获取题目列表（含当前用户提交状态和原题链接）
+ * 所有团队成员可见来源信息（与题面tab隐藏来源策略不同）
+ */
+trainingsRouter.get('/trainings/:id/problem-status', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const id = parseTrainingId(req.params.id)
+    const userId = req.user!.userId
+
+    const training = await prisma.training.findUnique({ where: { id } })
+    if (!training) {
+      return res.status(404).json({ success: false, message: '训练不存在' })
+    }
+
+    if (!await isTeamMember(userId, training.teamId)) {
+      return res.status(403).json({ success: false, message: '无权限查看' })
+    }
+
+    // 获取所有训练题目
+    const problems = await prisma.trainingProblem.findMany({
+      where: { trainingId: id },
+      include: {
+        Problem: {
+          select: {
+            id: true,
+            title: true,
+            platform: true,
+            problemId: true,
+          },
+        },
+      },
+      orderBy: { orderIndex: 'asc' },
+    })
+
+    // 获取当前用户的所有提交
+    const submissions = await prisma.trainingSubmission.findMany({
+      where: { trainingId: id, userId },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    // 按题目聚合最佳成绩
+    const bestByProblem = new Map<string, { score: number; result: string }>()
+    for (const sub of submissions) {
+      const existing = bestByProblem.get(sub.trainingProblemId)
+      const score = sub.score ?? 0
+      if (!existing || score > existing.score) {
+        bestByProblem.set(sub.trainingProblemId, { score, result: sub.result })
+      }
+      // 如果分数相同但结果是 accepted，优先取 accepted
+      if (existing && score === existing.score && sub.result === 'accepted' && existing.result !== 'accepted') {
+        bestByProblem.set(sub.trainingProblemId, { score, result: sub.result })
+      }
+    }
+
+    // 平台名称映射（含 Carits 内部平台）
+    const platformLabelMap = new Map([
+      ...getSupportedPlatforms().map(p => [p.platform, p.name]),
+      ['carits', 'Carits'],
+    ])
+
+    // 构建结果
+    const result = problems.map(p => {
+      const platform = p.Problem.platform
+      const platformProblemId = p.Problem.problemId
+      const best = bestByProblem.get(p.id)
+
+      // 生成原题链接
+      let problemUrl: string | null = null
+      try {
+        if (platform === 'carits') {
+          // Carits 平台：标记为内部平台，前端构造本地链接
+          problemUrl = '__carits__'
+        } else if (platform) {
+          const adapter = getAdapter(platform as any)
+          problemUrl = adapter.getProblemUrl(platformProblemId)
+        }
+      } catch {
+        // 平台不支持生成链接，忽略
+      }
+
+      return {
+        id: p.id,
+        alias: p.alias,
+        orderIndex: p.orderIndex,
+        points: p.points,
+        platform: platform || null,
+        platformProblemId: platformProblemId || null,
+        problemTableId: p.Problem.id,
+        platformLabel: platformLabelMap.get(platform as any) || platform || '',
+        problemUrl,
+        bestScore: best?.score ?? null,
+        bestResult: best?.result ?? null,
+      }
+    })
+
+    res.json({ success: true, data: { problems: result } })
+  } catch (e: any) {
+    logger.error('training_problem_status_error', { action: 'trainings', metadata: { error: e.message } })
+    res.status(500).json({ success: false, message: '查询失败' })
+  }
+})
+
+/**
  * POST /api/trainings/:id/problems
  * 添加训练题目
  */
 trainingsRouter.post('/trainings/:id/problems', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
     const { problemId, alias, points } = req.body
 
@@ -501,7 +622,7 @@ trainingsRouter.post('/trainings/:id/problems', authenticate, async (req: AuthRe
  */
 trainingsRouter.put('/trainings/:id/problems/:problemId', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
     const { alias, points } = req.body
 
@@ -535,7 +656,7 @@ trainingsRouter.put('/trainings/:id/problems/:problemId', authenticate, async (r
  */
 trainingsRouter.delete('/trainings/:id/problems/:problemId', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -562,7 +683,7 @@ trainingsRouter.delete('/trainings/:id/problems/:problemId', authenticate, async
  */
 trainingsRouter.put('/trainings/:id/problems/reorder', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
     const { orders } = req.body as { orders: Array<{ id: string; orderIndex: number }> }
 
@@ -599,7 +720,7 @@ trainingsRouter.put('/trainings/:id/problems/reorder', authenticate, async (req:
  */
 trainingsRouter.get('/trainings/:id/problems/:problemId/detail', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -673,7 +794,7 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/detail', authenticate, a
  */
 trainingsRouter.get('/trainings/:id/problems/:problemId/note', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -715,7 +836,7 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/note', authenticate, asy
  */
 trainingsRouter.put('/trainings/:id/problems/:problemId/note', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
     const { content } = req.body
 
@@ -769,7 +890,7 @@ trainingsRouter.put('/trainings/:id/problems/:problemId/note', authenticate, asy
  */
 trainingsRouter.post('/trainings/:id/submit', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
     const { trainingProblemId, language, code } = req.body
 
@@ -873,7 +994,7 @@ trainingsRouter.post('/trainings/:id/submit', authenticate, async (req: AuthRequ
  */
 trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
     const { page = '1', pageSize = '50', userId: filterUserId, problemId: filterProblemId, username: filterUsername, result: filterResult, language: filterLanguage } = req.query as Record<string, string>
 
@@ -972,7 +1093,7 @@ trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: Auth
  */
 trainingsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, submissionId } = req.params
+    const id = parseTrainingId(req.params.id), submissionId = req.params.submissionId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -1041,7 +1162,7 @@ trainingsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, as
  */
 trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params
+    const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({
@@ -1195,7 +1316,7 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
  */
 trainingsRouter.get('/trainings/:id/problems/:problemId/solution', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -1231,7 +1352,7 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/solution', authenticate,
  */
 trainingsRouter.put('/trainings/:id/problems/:problemId/solution', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
     const { content, visible } = req.body
 
@@ -1272,7 +1393,7 @@ trainingsRouter.put('/trainings/:id/problems/:problemId/solution', authenticate,
  */
 trainingsRouter.get('/trainings/:id/problems/:problemId/attachments', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })
@@ -1311,7 +1432,7 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/attachments', authentica
  */
 trainingsRouter.post('/trainings/:id/problems/:problemId/attachments', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, problemId } = req.params
+    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
     const { fileName, fileUrl, fileSize } = req.body
 
@@ -1350,7 +1471,7 @@ trainingsRouter.post('/trainings/:id/problems/:problemId/attachments', authentic
  */
 trainingsRouter.delete('/trainings/:id/attachments/:attachmentId', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { id, attachmentId } = req.params
+    const id = parseTrainingId(req.params.id), attachmentId = req.params.attachmentId
     const userId = req.user!.userId
 
     const training = await prisma.training.findUnique({ where: { id } })

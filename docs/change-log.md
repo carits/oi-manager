@@ -1,5 +1,42 @@
 # 变更日志
 
+## 2026-04-14 (训练详情页 — 新增"题目列表" Tab)
+
+### 背景
+
+训练详情页需要一个类似 Hydro OJ 比赛页面的"题目列表"视图，展示每道题的状态、序号、来源和标题。用户可快速查看题目来源（如 HDU 4000、Carits 1000）并跳转原题链接。
+
+### 修改
+
+**后端新增 API** (`trainings.ts`)
+- `GET /trainings/:id/problem-status` — 返回题目列表（含来源、原题链接、当前用户提交状态）
+- 查询 TrainingProblem + Problem 获取来源信息
+- 查询 TrainingSubmission 聚合当前用户每题最佳成绩
+- 使用 OJ adapter 的 getProblemUrl() 生成原题链接
+- Carits 内部平台：`platformLabel = "Carits"`，`problemUrl = "__carits__"`，前端构造本地链接
+- 所有团队成员可见来源信息（与题面 tab 隐藏来源策略不同）
+
+**前端新增 Tab** (`TrainingDetailPage.tsx`)
+- TabType 新增 `problemList`，位于"题面"左侧
+- 默认选中"题目列表" tab（进入训练详情页默认看到题目列表）
+- 表格 4 列：状态、序号、来源、标题
+  - 状态：AC 绿色 `✓ score/max`、非满分红色、未提交灰色 `-/max`
+  - 序号：A/B/C...（使用 toExcelColumnName）
+  - 来源：Carits 题目链接到题库详情页（`/teacher/problems/{UUID}`），外部 OJ 链接到原题
+  - 标题：点击切换到"题面" tab 并选中该题
+
+### 涉及文件
+
+- `apps/server/src/routes/trainings.ts` — 新增 problem-status 端点 + Carits platformLabel 修复
+- `apps/web/src/components/training/TrainingDetailPage.tsx` — 新增 problemList tab + 表格 UI
+
+### 回归风险
+
+- 新增 Tab 不影响其他 Tab 功能
+- 默认 Tab 从 `problems` 改为 `problemList`，用户进入页面后看到的是题目列表而不是题面
+
+---
+
 ## 2026-04-14 (团队训练模块 - UI 对齐 + 编辑功能)
 
 ### 背景

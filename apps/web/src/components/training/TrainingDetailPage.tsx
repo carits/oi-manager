@@ -9,6 +9,22 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
 
+// ========== Helper Functions ==========
+
+/**
+ * 将数字转换为 Excel 风格的列名（A, B, ..., Z, AA, AB, ..., AZ, BA, ...）
+ * @param index 从0开始的索引
+ */
+function toExcelColumnName(index: number): string {
+  let result = ''
+  let i = index
+  while (i >= 0) {
+    result = String.fromCharCode(65 + (i % 26)) + result
+    i = Math.floor(i / 26) - 1
+  }
+  return result
+}
+
 // ========== Types ==========
 
 interface TrainingInfo {
@@ -104,7 +120,21 @@ interface Attachment {
   uploadedAt: string
 }
 
-type TabType = 'problems' | 'submissions' | 'solutions' | 'attachments' | 'ranking'
+interface ProblemListEntry {
+  id: string
+  alias: string
+  orderIndex: number
+  points: number | null
+  platform: string | null
+  platformProblemId: string | null
+  problemTableId: string
+  platformLabel: string
+  problemUrl: string | null
+  bestScore: number | null
+  bestResult: string | null
+}
+
+type TabType = 'problems' | 'problemList' | 'submissions' | 'solutions' | 'attachments' | 'ranking'
 
 interface TrainingDetailPageProps {
   basePath: string
@@ -155,7 +185,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const [problems, setProblems] = useState<TrainingProblem[]>([])
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null)
   const [problemDetail, setProblemDetail] = useState<ProblemDetail | null>(null)
-  const [activeTab, setActiveTab] = useState<TabType>('problems')
+  const [activeTab, setActiveTab] = useState<TabType>('problemList')
   const [loading, setLoading] = useState(true)
 
   // Note
@@ -192,6 +222,9 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
   // Ranking tab
   const [rankingData, setRankingData] = useState<any>(null)
+
+  // Problem list tab
+  const [problemListData, setProblemListData] = useState<ProblemListEntry[]>([])
 
   // Countdown
   const [timeDisplay, setTimeDisplay] = useState('')
@@ -365,6 +398,22 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       }
     }
     loadRanking()
+  }, [activeTab, trainingId])
+
+  // Load problem list when tab changes
+  useEffect(() => {
+    if (activeTab !== 'problemList') return
+    const loadProblemList = async () => {
+      try {
+        const res = await apiClient.get<{ problems: ProblemListEntry[] }>(`/api/trainings/${trainingId}/problem-status`)
+        if (res.success && res.data) {
+          setProblemListData(res.data.problems)
+        }
+      } catch (error) {
+        console.error('Failed to load problem list:', error)
+      }
+    }
+    loadProblemList()
   }, [activeTab, trainingId])
 
   // Countdown timer
@@ -541,8 +590,9 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       {/* Tab Bar */}
       <div style={{ background: 'white', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', gap: 0 }}>
-          {(['problems', 'submissions', 'solutions', 'attachments', 'ranking'] as TabType[]).map(tab => {
+          {(['problemList', 'problems', 'submissions', 'solutions', 'attachments', 'ranking'] as TabType[]).map(tab => {
             const labels: Record<TabType, string> = {
+              problemList: '题目列表',
               problems: '题面',
               submissions: '评测记录',
               solutions: '题解',
@@ -574,31 +624,122 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
       {/* Main Content */}
       <div style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '1rem', boxSizing: 'border-box' }}>
+        {/* ====== Problem List Tab ====== */}
+        {activeTab === 'problemList' && (
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '80px' }}>状态</th>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '60px' }}>序号</th>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '180px' }}>来源</th>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)' }}>标题</th>
+                </tr>
+              </thead>
+              <tbody>
+                {problemListData.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>暂无题目</td>
+                  </tr>
+                )}
+                {problemListData.map(p => {
+                  const isAccepted = p.bestResult === 'accepted'
+                  const hasSubmission = p.bestResult != null
+                  const scoreColor = !hasSubmission ? 'var(--gray-400)' : isAccepted ? '#16a34a' : '#dc2626'
+                  const maxPoints = p.points ?? 100
+
+                  return (
+                    <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      {/* 状态列 */}
+                      <td style={{ padding: '0.6rem 1rem' }}>
+                        {hasSubmission ? (
+                          <span style={{ fontWeight: 600, color: scoreColor }}>
+                            {isAccepted && '✓ '}
+                            {p.bestScore}/{maxPoints}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--gray-400)' }}>-/{maxPoints}</span>
+                        )}
+                      </td>
+
+                      {/* 序号列 */}
+                      <td style={{ padding: '0.6rem 1rem', fontFamily: 'monospace', fontWeight: 500 }}>
+                        {toExcelColumnName(p.orderIndex)}
+                      </td>
+
+                      {/* 来源列 */}
+                      <td style={{ padding: '0.6rem 1rem' }}>
+                        {p.platform === 'carits' ? (
+                          <a
+                            href={`${basePath.split('/teams')[0]}/problems/${p.problemTableId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                          >
+                            Carits {p.platformProblemId}
+                          </a>
+                        ) : p.platform && p.problemUrl ? (
+                          <a
+                            href={p.problemUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                          >
+                            {p.platformLabel} {p.platformProblemId}
+                          </a>
+                        ) : p.platform ? (
+                          <span style={{ color: 'var(--gray-600)' }}>{p.platformLabel} {p.platformProblemId}</span>
+                        ) : (
+                          <span style={{ color: 'var(--gray-400)' }}>-</span>
+                        )}
+                      </td>
+
+                      {/* 标题列 */}
+                      <td style={{ padding: '0.6rem 1rem' }}>
+                        <span
+                          onClick={() => {
+                            setSelectedProblemId(p.id)
+                            setActiveTab('problems')
+                          }}
+                          style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'none' }}
+                        >
+                          {p.alias}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* ====== Problems Tab ====== */}
         {activeTab === 'problems' && (
           <div style={{ display: 'flex', gap: '1rem' }}>
             {/* 左侧：题目按钮 */}
-            <div style={{ width: '140px', flexShrink: 0 }}>
-              <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '0.75rem' }}>
-                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <div style={{ width: '200px', flexShrink: 0 }}>
+              <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                   {problems.map(p => (
                     <button
                       key={p.id}
                       onClick={() => setSelectedProblemId(p.id)}
                       style={{
-                        padding: '0.4rem 0.75rem',
+                        padding: '0.3rem 0.5rem',
                         border: '1px solid',
                         borderColor: selectedProblemId === p.id ? 'var(--primary)' : 'var(--border)',
                         background: selectedProblemId === p.id ? 'var(--primary)' : 'white',
                         color: selectedProblemId === p.id ? 'white' : 'var(--gray-700)',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        fontSize: '0.85rem',
+                        fontSize: '0.8rem',
                         fontWeight: 500,
-                        minWidth: '40px',
+                        minWidth: '28px',
                       }}
                     >
-                      {p.alias}
+                      {/* 显示自动生成的字母序号（A, B, ..., Z, AA, AB, ...） */}
+                      {toExcelColumnName(p.orderIndex)}
                     </button>
                   ))}
                   {problems.length === 0 && (

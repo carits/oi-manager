@@ -58,12 +58,24 @@ export function TrainingCreateModal({ isOpen, onClose, teamId, onCreated }: Trai
       setCreating(false)
 
       const now = new Date()
-      now.setMinutes(now.getMinutes() + 30)
-      setStartTime(now.toISOString().slice(0, 16))
+      let hours = now.getHours()
+      const minutes = now.getMinutes()
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-      const later = new Date()
-      later.setHours(later.getHours() + 5)
-      setEndTime(later.toISOString().slice(0, 16))
+      if (minutes > 0) hours += 1  // 非整点，向上取整到下一整点
+      if (hours >= 22) {
+        // 太晚了，默认明天上午 8 点
+        date.setDate(date.getDate() + 1)
+        hours = 8
+      }
+      date.setHours(hours, 0, 0, 0)
+
+      setStartTime(date.toISOString().slice(0, 16))
+
+      // 结束时间 = 开始时间 + 3h
+      const end = new Date(date)
+      end.setHours(end.getHours() + 3)
+      setEndTime(end.toISOString().slice(0, 16))
     }
   }, [isOpen])
 
@@ -137,6 +149,7 @@ export function TrainingCreateModal({ isOpen, onClose, teamId, onCreated }: Trai
     if (!title.trim()) { toast.error('请输入标题'); return }
     if (!startTime || !endTime) { toast.error('请设置开始和结束时间'); return }
     if (new Date(endTime) <= new Date(startTime)) { toast.error('结束时间必须晚于开始时间'); return }
+    if (new Date(startTime) <= new Date()) { toast.error('开始时间不能早于当前时间'); return }
 
     // Check that all resolved problems are found
     const unresolvedRows = problemRows.filter(r => r.problemCode.trim() && (!r.resolved || !r.resolved.found))

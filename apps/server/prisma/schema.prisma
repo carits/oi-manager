@@ -829,7 +829,7 @@ model TestdataFile {
 
 /// 训练
 model Training {
-  id          String   @id @default(uuid())
+  id          Int      @id @default(autoincrement())
   teamId      String
   title       String
   description String?
@@ -855,7 +855,7 @@ model Training {
 /// 训练题目
 model TrainingProblem {
   id         String   @id @default(uuid())
-  trainingId String
+  trainingId Int
   problemId  String
   alias      String
   orderIndex Int
@@ -877,7 +877,7 @@ model TrainingProblem {
 /// 训练参与者
 model TrainingParticipant {
   id         String   @id @default(uuid())
-  trainingId String
+  trainingId Int
   userId     String
   userType   String
   joinedAt   DateTime @default(now())
@@ -891,7 +891,7 @@ model TrainingParticipant {
 /// 训练提交
 model TrainingSubmission {
   id                Int      @id @default(autoincrement())
-  trainingId        String
+  trainingId        Int
   trainingProblemId String
   userId            String
   userType          String

@@ -8,17 +8,18 @@ import { useTeamPermission, type UserType } from '@/hooks/useTeamPermission'
 import { useTeamDetail } from '@/hooks/data/useTeamDetail'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
-import {
-  TeamHeader,
-  TeamMemberList,
-  TeamInviteModal,
-  TeamInviteListModal,
-  TeamTransferModal,
-  TeamEditModal,
-  type JoinRequestItem
-} from '@/components/team'
-import TeamProblemListsTab from './TeamProblemListsTab'
-import TeamTrainingList from '../training/TeamTrainingList'
+import TeamMemberList from './TeamMemberList'
+import TeamInviteModal from './TeamInviteModal'
+import TeamInviteListModal from './TeamInviteListModal'
+import TeamTransferModal from './TeamTransferModal'
+import TeamEditModal from './TeamEditModal'
+import type { JoinRequestItem } from './TeamMemberList'
+import dynamic from 'next/dynamic'
+
+// TeamHeader 包含 react-markdown + katex (~3MB)，延迟加载
+const TeamHeader = dynamic(() => import('./TeamHeader'))
+const TeamProblemListsTab = dynamic(() => import('./TeamProblemListsTab'))
+const TeamTrainingList = dynamic(() => import('../training/TeamTrainingList'))
 
 type TabType = 'members' | 'mock' | 'training' | 'tasks'
 

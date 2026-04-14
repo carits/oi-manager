@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  compress: true,
   transpilePackages: ['shared', '@oi-manager/shared'],
   webpack: (config) => {
     config.resolve.alias = {
