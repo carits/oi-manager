@@ -23,6 +23,7 @@ import { teamProblemListsRouter } from './routes/team-problem-lists'
 import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
 import { submitRouter } from './routes/submit'
 import { testdataRouter } from './routes/testdata'
+import { trainingsRouter } from './routes/trainings'
 import { startSubmissionPoller } from './lib/submission-poller'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
@@ -42,7 +43,7 @@ setGlobalDispatcher(new Agent({ connect: { timeout: 30_000 } }))
 validateEnv()
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3002
 
 // ==================== 安全中间件 ====================
 
@@ -99,6 +100,7 @@ app.use('/api/teams', teamProblemListsRouter)
 app.use('/api/oj-accounts', ojAccountsRouter)
 app.use('/api/submit', submitRouter)
 app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
+app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
 
 // 健康检查
 app.get('/api/health', (req, res) => {

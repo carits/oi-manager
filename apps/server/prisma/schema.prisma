@@ -279,6 +279,7 @@ model Problem {
   ProblemNote       ProblemNote[]
   ProblemStatement  ProblemStatement[]
   TestdataFiles     TestdataFile[]
+  TrainingProblems  TrainingProblem[]
 
   @@unique([platform, problemId])
   @@index([visibility])
@@ -425,6 +426,7 @@ model Team {
   TeamMemberExternalAccount TeamMemberExternalAccount[]
   TeamMemberImportBatch     TeamMemberImportBatch[]
   TeamProblemLists          TeamProblemList[]
+  Training                  Training[]
 
   @@index([schoolId])
   @@index([isPublic])
@@ -823,4 +825,121 @@ model TestdataFile {
 
   @@unique([problemId, filename])
   @@index([problemId])
+}
+
+/// 训练
+model Training {
+  id          String   @id @default(uuid())
+  teamId      String
+  title       String
+  description String?
+  format      String   @default("ioi")
+  startTime   DateTime
+  endTime     DateTime
+  status      String   @default("upcoming")
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  TrainingProblems     TrainingProblem[]
+  TrainingParticipants TrainingParticipant[]
+  TrainingSubmissions  TrainingSubmission[]
+
+  @@index([teamId])
+  @@index([status])
+  @@index([startTime])
+  @@index([teamId, status])
+}
+
+/// 训练题目
+model TrainingProblem {
+  id         String   @id @default(uuid())
+  trainingId String
+  problemId  String
+  alias      String
+  orderIndex Int
+  points     Int?
+  createdAt  DateTime @default(now())
+  Training   Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  Problem    Problem  @relation(fields: [problemId], references: [id])
+
+  Submissions TrainingSubmission[]
+  Attachments TrainingAttachment[]
+  Solution    TrainingSolution?
+
+  @@unique([trainingId, orderIndex])
+  @@unique([trainingId, alias])
+  @@index([trainingId])
+  @@index([problemId])
+}
+
+/// 训练参与者
+model TrainingParticipant {
+  id         String   @id @default(uuid())
+  trainingId String
+  userId     String
+  userType   String
+  joinedAt   DateTime @default(now())
+  Training   Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, userId, userType])
+  @@index([trainingId])
+  @@index([userId])
+}
+
+/// 训练提交
+model TrainingSubmission {
+  id                Int      @id @default(autoincrement())
+  trainingId        String
+  trainingProblemId String
+  userId            String
+  userType          String
+  language          String
+  code              String
+  codeLength        Int
+  result            String   @default("queuing")
+  score             Int?
+  timeUsed          Int?
+  memoryUsed        Int?
+  cases             String?
+  subtasks          String?
+  submitMethod      String   @default("code")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  Training          Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  TrainingProblem   TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
+
+  @@index([trainingId])
+  @@index([trainingProblemId])
+  @@index([userId])
+  @@index([result])
+  @@index([createdAt])
+}
+
+/// 训练附件
+model TrainingAttachment {
+  id                String   @id @default(uuid())
+  trainingProblemId String
+  fileName          String
+  fileUrl           String
+  fileSize          Int
+  uploadedBy        String
+  uploadedAt        DateTime @default(now())
+  TrainingProblem   TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
+
+  @@index([trainingProblemId])
+}
+
+/// 训练题解
+model TrainingSolution {
+  id                String   @id @default(uuid())
+  trainingProblemId String   @unique
+  content           String
+  visible           Boolean  @default(false)
+  createdBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  TrainingProblem   TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
 }

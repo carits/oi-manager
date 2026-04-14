@@ -1,5 +1,100 @@
 # 当前任务
 
+## 任务：团队训练模块（2026-04-14）
+
+状态: **开发中** 🔄（前端核心功能已完成，待测试和文档）
+
+### 目标
+
+在团队模块内新增"训练"功能，支持 IOI/ICPC 赛制。训练归属团队，团队成员可参与。
+
+### 设计决策
+
+1. 训练详情页作为独立页面（有自己的路由）
+2. 评测系统：混合模式（Carits 本地评测 + 外部 OJ 手动评分）
+3. 权限：团队管理员可提交但不参与排名，排名只统计学生成员
+
+### 已完成
+
+#### Phase 1: 数据模型 + 基础 CRUD ✅
+
+1. **Prisma Schema** — 新增 Training, TrainingProblem, TrainingParticipant, TrainingSubmission, TrainingAttachment, TrainingSolution 模型
+2. **数据库同步** — `prisma db push` 已执行
+3. **后端 API** — `routes/trainings.ts` 基础 CRUD（创建、查看、编辑、删除训练）
+4. **路由注册** — `index.ts` 注册 `/api` 下训练路由
+5. **训练列表组件** — `TeamTrainingList.tsx` 替换 TeamDetailPage 训练 tab 占位
+6. **前端路由** — 教师端 + 学生端训练详情页路由
+
+#### Phase 2: 训练创建 + 题目管理 + 编辑功能 ✅
+
+1. **创建训练弹窗** — `TrainingCreateModal.tsx`（标题、公告、赛制、时间、题目添加）
+2. **题目添加方式** — OJ 平台下拉 + 题号输入 + 500ms debounce 自动解析（与题单模块一致）
+   - 调用 `/api/resolve-problems` API 批量解析题号
+   - 显示解析结果：题名（绿色 ✓）或"题目不存在"（红色 ✕）
+   - localStorage 记忆上次使用的 OJ 平台
+3. **编辑训练功能** — `TrainingEditPage.tsx`（标题、公告、赛制、时间、题目管理）
+   - 管理员可在训练详情页点击"编辑"按钮进入编辑页
+   - 支持修改题目别名、分值，添加/移除题目
+   - 已开始的训练不能修改开始时间
+4. **训练详情页 UI 重构** — 风格对齐题库题目详情页
+   - 三栏布局：左侧题目按钮（140px）+ 中间题面 + 右侧操作按钮（150px）
+   - 左侧题目按钮横向排列（flex-wrap），约 5 个一行
+   - 右侧操作按钮：写思路、提交代码（紫色渐变）
+   - 提交代码按钮始终显示，训练未开始时灰显禁用
+   - Tab 名称"题目列表"改为"题面"
+   - 5 个 Tab：题面 | 评测记录 | 题解 | 附件 | 排名
+   - 提交代码使用 Modal 弹窗
+   - 思路面板内嵌显示（带自动保存）
+   - 头部添加"编辑"按钮（管理员可见）
+5. **评测记录筛选功能** — 前端筛选栏 + 后端筛选参数支持
+   - 题号下拉、用户名输入、评测结果下拉、语言下拉
+   - 后端支持 username/result/language 筛选
+6. **排名用户名列** — 排名表格新增"用户名"列
+
+#### Phase 3: 训练详情页 ✅
+
+1. **训练详情页** — `TrainingDetailPage.tsx`（左侧题号列表、中间题面、右侧思路面板）
+2. **ProblemNote 集成** — 训练中写思路复用 ProblemNote 表，自动同步
+3. **倒计时** — 开始前/进行中/已结束状态显示
+4. **评测记录 tab** — 列表显示（题号、提交者、结果、分数、耗时、内存、语言、时间），点击查看详情弹窗
+5. **排名 tab** — IOI 赛制（总分+每题分数）和 ICPC 赛制（通过数+罚时+每题状态）
+6. **代码提交** — 训练进行中可提交代码（选择语言+粘贴代码），Carits 题目自动评测
+7. **题解 UI** — 查看/编辑题解面板，管理员可设置对学生可见性
+
+#### Phase 4: 排名 + 提交 + 题解 + 附件 ✅
+
+1. **训练提交 API** — 创建 TrainingSubmission，Carits 题目自动评测，外部 OJ 手动评分
+2. **评测记录 API** — 列表查询（含分页）+ 详情查询
+3. **排名 API** — IOI（总分排序）和 ICPC（解题数+罚时排序）
+4. **题解 API** — 获取/保存题解，管理员可设置可见性
+5. **附件 API** — 列表/上传/删除
+
+#### Phase 5: 评测回调集成 ✅
+
+1. **judge.ts handleResult** — 支持 `T-` 前缀的 submissionId，自动路由到 TrainingSubmission 表更新
+2. **trainings.ts submit** — 修复 dispatchJudgeTask 调用，传入正确的 testdataPath + problemConfig，使用 `T-{id}` 前缀
+
+### 涉及文件
+
+- `apps/server/prisma/schema.prisma` — 新增 6 个模型
+- `apps/server/src/routes/trainings.ts` — 新建（~1000 行）
+- `apps/server/src/ws/judge.ts` — handleResult 支持 TrainingSubmission
+- `apps/server/src/index.ts` — 注册路由
+- `apps/web/src/components/training/TeamTrainingList.tsx` — 训练列表+创建弹窗
+- `apps/web/src/components/training/TrainingDetailPage.tsx` — 训练详情页（三tab+提交+排名+题解）
+- `apps/web/src/components/training/TrainingCreateModal.tsx` — 创建训练弹窗
+- `apps/web/src/components/team/TeamDetailPage.tsx` — 训练 tab 替换
+- `apps/web/src/app/teacher/teams/[id]/trainings/[tid]/page.tsx` — 教师端训练详情路由
+- `apps/web/src/app/student/teams/[id]/trainings/[tid]/page.tsx` — 学生端训练详情路由
+
+### 待完成
+
+- 附件前端 UI（下载/上传）
+- 测试
+- 文档更新（change-log.md 等）
+
+---
+
 ## 任务：评测记录鉴权修复 + 进程清理脚本（2026-04-14）
 
 状态: **已完成** ✅

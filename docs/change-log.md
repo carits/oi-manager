@@ -1,5 +1,133 @@
 # 变更日志
 
+## 2026-04-14 (团队训练模块 - UI 对齐 + 编辑功能)
+
+### 背景
+
+训练详情页的题目界面风格与普通题目详情页不一致，按钮样式和布局需要统一。同时缺少编辑训练的入口。
+
+### 修改
+
+**题目选择横向按钮布局** (`TrainingDetailPage.tsx` 重构)
+- 三栏布局：左侧题目按钮（140px）+ 中间题面内容 + 右侧操作按钮（150px）
+- 左侧题目按钮横向排列（flex-wrap），约 5 个一行
+- 右侧操作按钮：写思路（紫色渐变）、提交代码（紫色渐变）、附件
+- 提交代码按钮始终显示，训练未开始时灰显并禁用
+- Tab 名称"题目列表"改为"题面"
+
+**评测记录筛选功能** (`TrainingDetailPage.tsx` + `trainings.ts`)
+- 前端添加筛选栏：题号（下拉）、用户名（输入）、评测结果（下拉）、语言（下拉）
+- 后端 submissions API 支持新增筛选参数：username、result、language
+- 用户名筛选支持模糊匹配
+
+**排名用户名列** (`trainings.ts` ranking endpoint)
+- 排名表格新增"用户名"列（在姓名列之后）
+- 后端 ranking API 返回 username 字段
+
+**新增编辑训练功能** (`TrainingEditPage.tsx` 新建)
+- 管理员可在训练详情页头部点击"编辑"按钮进入编辑页
+- 路由：`/teacher/teams/[id]/trainings/[tid]/edit`
+- 支持修改标题、公告、赛制、开始/结束时间
+- 支持管理题目（修改别名/分值、添加/移除题目）
+- 已开始的训练禁止修改开始时间（后端校验）
+
+**TypeScript 修复**
+- `selectedProblem?.attachmentCount ?? 0` 条件表达式修复
+
+### 涉及文件
+
+- `apps/web/src/components/training/TrainingDetailPage.tsx` — 重构题目 tab 布局、添加编辑按钮、提交改为 Modal
+- `apps/web/src/components/training/TrainingEditPage.tsx` — 新建编辑页面组件
+- `apps/web/src/app/teacher/teams/[id]/trainings/[tid]/edit/page.tsx` — 新建编辑路由
+
+### 回归风险
+
+- TrainingDetailPage 重构布局，需测试三个 tab 的交互
+- 新增编辑页面，需测试编辑流程
+
+---
+
+## 2026-04-14 (团队训练模块 - 题目添加方式修复)
+
+### 背景
+
+训练创建弹窗的题目添加方式使用关键词搜索（调用 `/api/problems?keyword=`），与题单模块的交互不一致。题单模块使用 OJ 平台下拉 + 题号输入 + 自动解析的模式，用户体验更好。
+
+### 修改
+
+**题目添加改为 OJ+题号解析** (`TrainingCreateModal.tsx` 完整重写)
+- 移除关键词搜索，改为 OJ 平台下拉选择 + 题号输入框
+- 500ms debounce 后自动调用 `/api/resolve-problems` 解析题号
+- 解析结果显示：题名（绿色 ✓）或"题目不存在"（红色 ✕）
+- localStorage 记忆上次使用的 OJ 平台
+- 表格显示：OJ、题号、题目名称、别名、分值（IOI）、删除按钮
+- 默认别名按 A/B/C... 自动生成
+
+**新增题目解析 API** (`apps/server/src/routes/trainings.ts`)
+- 新增 `POST /api/resolve-problems` 端点
+- 只需认证，不要求题单 ownership 权限
+- 查询逻辑：Carits 平台用 ID/problemId，外部 OJ 用 platform+problemId
+- 可见性检查：仅返回公开或用户拥有的题目
+
+**TypeScript 类型修复**
+- `TrainingCreateModal.tsx` line 165: `(res.data as any).id` cast
+- `TrainingCreatePage.tsx` line 108: `(res.data as any).id` cast
+
+### 涉及文件
+
+- `apps/web/src/components/training/TrainingCreateModal.tsx` — 完整重写（~330行）
+- `apps/web/src/components/training/TrainingCreatePage.tsx` — TypeScript fix
+- `apps/server/src/routes/trainings.ts` — 新增 `/resolve-problems` 端点
+
+### 回归风险
+
+- TrainingCreateModal 完整重写，需测试创建流程和题目解析
+- `/resolve-problems` 新增端点，不影响其他功能
+
+---
+
+## 2026-04-14 (团队训练模块 - 前端核心功能 + 评测回调集成)
+
+### 背景
+
+训练模块前端详情页之前只有题目 tab（题面+思路面板），缺少评测记录、排名、代码提交、题解等核心功能。同时后端评测回调只更新 Submission 表，不支持 TrainingSubmission。
+
+### 修改
+
+**创建训练改为弹窗** (`TrainingCreateModal.tsx` 新建, `TeamTrainingList.tsx` 修改)
+- 创建训练按钮改为打开 Modal 弹窗而非跳转页面
+- 删除独立的 `apps/web/src/app/teacher/teams/[id]/trainings/new/page.tsx` 路由页面
+
+**训练详情页完整重构** (`TrainingDetailPage.tsx` 重写)
+- Tab 导航：题目 | 评测记录 | 排名
+- 评测记录 tab：表格列出所有提交，点击行打开详情弹窗（含测试点结果、源代码）
+- 排名 tab：IOI（总分+每题分数）、ICPC（通过数+罚时+每题 AC/尝试状态）
+- 代码提交面板：训练进行中显示"提交代码"按钮，选择语言+粘贴代码
+- 题解面板：查看/编辑题解，管理员可设置可见性
+- 提交详情弹窗：测试点表格（状态、分数、耗时、内存）+ 源代码显示
+
+**评测回调支持 TrainingSubmission** (`apps/server/src/ws/judge.ts`)
+- handleResult 根据 submissionId 的 `T-` 前缀区分 TrainingSubmission vs Submission
+- `T-{id}` 前缀路由到 `prisma.trainingSubmission.update`
+
+**修复训练提交评测调度** (`apps/server/src/routes/trainings.ts`)
+- submit 路由正确读取题目的 judgeConfig 和 testdataPath
+- 使用 `T-{id}` 前缀调用 dispatchJudgeTask
+
+### 涉及文件
+
+- `apps/web/src/components/training/TrainingCreateModal.tsx` — 新建
+- `apps/web/src/components/training/TrainingDetailPage.tsx` — 完整重写
+- `apps/web/src/components/training/TeamTrainingList.tsx` — 改为弹窗创建
+- `apps/server/src/ws/judge.ts` — handleResult 支持 TrainingSubmission
+- `apps/server/src/routes/trainings.ts` — 修复 dispatchJudgeTask 调用
+- 删除 `apps/web/src/app/teacher/teams/[id]/trainings/new/page.tsx`
+
+### 回归风险
+
+- `T-` 前缀约定是新增机制，不影响现有 Submission 评测流程
+- TrainingDetailPage 完整重写，需测试三个 tab 的加载和交互
+
 ## 2026-04-13 (评测系统假配置修复)
 
 ### 背景

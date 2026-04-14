@@ -18,6 +18,7 @@ import {
   type JoinRequestItem
 } from '@/components/team'
 import TeamProblemListsTab from './TeamProblemListsTab'
+import TeamTrainingList from '../training/TeamTrainingList'
 
 type TabType = 'members' | 'mock' | 'training' | 'tasks'
 
@@ -351,8 +352,8 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
   const tabs = [
     { key: 'members', label: '成员' },
-    { key: 'mock', label: '模拟赛' },
-    { key: 'training', label: '训练赛' },
+    { key: 'mock', label: '比赛' },
+    { key: 'training', label: '训练' },
     { key: 'tasks', label: '题单' }
   ]
 
@@ -462,23 +463,21 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
           {/* 模拟赛 Tab */}
           {activeTab === 'mock' && (
             <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>模拟赛</h2>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>比赛</h2>
               <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-                <p>暂无模拟赛</p>
+                <p>暂无比赛</p>
                 <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>(功能开发中)</p>
               </div>
             </div>
           )}
 
-          {/* 训练赛 Tab */}
+          {/* 训练 Tab */}
           {activeTab === 'training' && (
-            <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>训练赛</h2>
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-                <p>暂无训练赛</p>
-                <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>(功能开发中)</p>
-              </div>
-            </div>
+            <TeamTrainingList
+              teamId={teamId}
+              basePath={basePath}
+              isAdmin={permission.isAdmin}
+            />
           )}
 
           {/* 题单 Tab */}
