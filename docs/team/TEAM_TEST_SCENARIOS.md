@@ -506,7 +506,7 @@ grep -r '\b(alert|confirm|prompt)\(' apps/web/src --include='*.tsx'
 
 ```bash
 # 杀死已有进程重启
-cd apps/server && pnpm dev    # 后端 :3001
+cd apps/server && pnpm dev    # 后端 :3002
 cd apps/web && pnpm dev       # 前端 :3000
 ```
 

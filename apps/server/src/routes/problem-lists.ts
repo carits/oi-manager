@@ -141,9 +141,9 @@ function checkOptimisticLock(expectedUpdatedAt: string | undefined, currentUpdat
 async function getEntryListId(entryId: string): Promise<string | null> {
   const entry = await prisma.problemListEntry.findUnique({
     where: { id: entryId },
-    select: { Section: { select: { problemListId: true } } }
+    select: { ProblemListSection: { select: { problemListId: true } } }
   })
-  return entry?.Section?.problemListId || null
+  return entry?.ProblemListSection?.problemListId || null
 }
 
 /** 从 sectionId 反查题单 ID */
@@ -218,7 +218,7 @@ problemListsRouter.get('/', authenticate, async (req, res) => {
         skip: (p - 1) * ps,
         take: ps,
         include: {
-          _count: { select: { Sections: true } }
+          _count: { select: { ProblemListSection: true } }
         }
       }),
       prisma.problemList.count({ where })
@@ -229,7 +229,7 @@ problemListsRouter.get('/', authenticate, async (req, res) => {
     const entryCounts = await prisma.problemListEntry.groupBy({
       by: ['sectionId'],
       where: {
-        Section: { problemListId: { in: listIds } }
+        ProblemListSection: { problemListId: { in: listIds } }
       },
       _count: true
     })
@@ -318,11 +318,11 @@ problemListsRouter.post('/', authenticate, async (req, res) => {
         ownerId: req.user.userId,
         ownerType,
         visibility: visibility || 'private',
-        Sections: {
+        ProblemListSection: {
           create: { title: '默认章节', sortOrder: 0 }
         }
       },
-      include: { Sections: true }
+      include: { ProblemListSection: true }
     })
 
     res.json({ success: true, data: list })
@@ -346,10 +346,10 @@ problemListsRouter.get('/:id', authenticate, async (req, res) => {
     const list = await prisma.problemList.findUnique({
       where: { id: req.params.id },
       include: {
-        Sections: {
+        ProblemListSection: {
           orderBy: { sortOrder: 'asc' },
           include: {
-            Entries: {
+            ProblemListEntry: {
               orderBy: { sortOrder: 'asc' },
               include: {
                 Problem: {
@@ -366,7 +366,7 @@ problemListsRouter.get('/:id', authenticate, async (req, res) => {
             }
           }
         },
-        Shares: true
+        ProblemListShare: true
       }
     })
 
@@ -383,7 +383,7 @@ problemListsRouter.get('/:id', authenticate, async (req, res) => {
     }
 
     // Enrich Shares with targetName, targetAvatar, targetUsername
-    const enrichedShares = await Promise.all((list.Shares || []).map(async (share) => {
+    const enrichedShares = await Promise.all((list.ProblemListShare || []).map(async (share) => {
       let targetName = ''
       let targetAvatar: string | null = null
       let targetUsername = ''
@@ -732,7 +732,7 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
       found = true
     } else if (ojName === 'carits') {
       // Carits 平台：按 platform + problemId 查本地题库
-      const matched = await prisma.problem.findUnique({ where: { platform_problemId: { platform: 'carits', problemId } } })
+      const matched = await prisma.problem.findUnique({ where: { platform_problemId: { platform: 'carits', problemId: problemCode } } })
       if (matched && (matched.visibility === 'public' || matched.ownerId === req.user.userId)) {
         problemId = matched.id
         problemTitle = matched.title
@@ -744,7 +744,7 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
     } else {
       // 外部 OJ：按 platform + problemId 直接查
       const p = await prisma.problem.findUnique({
-        where: { platform_problemId: { platform: ojName, problemId } }
+        where: { platform_problemId: { platform: ojName, problemId: problemCode } }
       })
 
       if (p && (p.visibility === 'public' || p.ownerId === req.user.userId)) {

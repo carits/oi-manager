@@ -88,6 +88,9 @@ async function pollPendingSubmissions() {
       )
 
       if (result && result.result !== 'queuing') {
+        // HDU ACM 赛制：AC=100分，否则0分
+        const score = result.result === 'accepted' ? 100 : 0
+
         // 更新提交记录
         await prisma.submission.update({
           where: { id: submission.id },
@@ -95,6 +98,7 @@ async function pollPendingSubmissions() {
             result: result.result,
             timeUsed: result.timeUsed,
             memoryUsed: result.memoryUsed,
+            score,
           },
         })
 
@@ -105,6 +109,7 @@ async function pollPendingSubmissions() {
             result: result.result,
             timeUsed: result.timeUsed,
             memoryUsed: result.memoryUsed,
+            score,
           },
         })
       }

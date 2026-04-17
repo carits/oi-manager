@@ -68,7 +68,7 @@ teamImportRouter.post('/vjudge/preview', authenticate, async (req: Request, res:
       })
     }
 
-    const { shortName, includeAnnouncement, includeDescription, includeMembers, includeAvatar } = req.body
+    const { shortName, includeAnnouncement, includeDescription, includeMembers } = req.body
 
     if (!shortName) {
       return res.status(400).json({
@@ -91,8 +91,7 @@ teamImportRouter.post('/vjudge/preview', authenticate, async (req: Request, res:
       {
         includeAnnouncement: includeAnnouncement !== false,
         includeDescription: includeDescription !== false,
-        includeMembers: includeMembers !== false,
-        includeAvatar: includeAvatar !== false
+        includeMembers: includeMembers !== false
       }
     )
 

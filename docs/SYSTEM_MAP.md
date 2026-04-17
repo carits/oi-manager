@@ -20,7 +20,7 @@ oi-manager-v2/
 │   │   │   └── config/      # 配置文件
 │   │   └── public/          # 静态资源
 │   │
-│   └── server/              # Express 后端应用 (端口 3001)
+│   └── server/              # Express 后端应用 (端口 3002)
 │       ├── src/
 │       │   ├── routes/      # API 路由
 │       │   ├── middleware/  # 中间件
@@ -264,6 +264,8 @@ oi-manager-v2/
 
 ## 5. 数据库模型
 
+> 数据库: PostgreSQL（开发环境通过 Docker，测试环境用 SQLite 隔离）
+
 ### 5.1 核心模型关系
 
 ```
@@ -392,7 +394,7 @@ hooks/
 
 ### 8.3 数据流
 ```
-前端组件 → hooks/data/* → apiClient → /api/* 代理 → 后端路由 → Prisma → SQLite
+前端组件 → hooks/data/* → apiClient → /api/* 代理 → 后端路由 → Prisma → PostgreSQL
 ```
 
 ---

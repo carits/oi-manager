@@ -161,19 +161,11 @@ async function handleResult(payload: any) {
     }
     console.log(`[JudgeWS] Updating DB: score=${updateData.score}, cases_len=${updateData.cases?.length || 0}, subtasks=${!!updateData.subtasks}`)
 
-    // Check if this is a TrainingSubmission (prefixed with 'T-') or regular Submission
-    if (submissionId.startsWith('T-')) {
-      const realId = parseInt(submissionId.slice(2))
-      await prisma.trainingSubmission.update({
-        where: { id: realId },
-        data: updateData,
-      })
-    } else {
-      await prisma.submission.update({
-        where: { id: parseInt(submissionId) },
-        data: { ...updateData, errorMessage: message },
-      })
-    }
+    // 统一更新 Submission 表（训练和题库提交共用）
+    await prisma.submission.update({
+      where: { id: parseInt(submissionId) },
+      data: { ...updateData, errorMessage: message },
+    })
     console.log(`[JudgeWS] DB updated successfully for submission=${submissionId}`)
   } catch (e: any) {
     logger.error('judge_ws_update_error', {

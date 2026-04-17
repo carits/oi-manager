@@ -188,15 +188,20 @@ describe('Transactions Module', () => {
     })
 
     it('should not create student without school', async () => {
-      // 创建一个没有学校的教师
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher' })
+      // 创建两个学校，教师属于其中一个
+      const { school: school1 } = await createTestSchoolWithPrincipal()
+      const { school: school2 } = await createTestSchoolWithPrincipal()
+      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school1.id })
+
       const token = generateTestToken({
         userId: teacher.id,
         role: 'teacher',
         username: teacher.username,
-        teacherId
+        teacherId,
+        schoolId: school1.id
       })
 
+      // 尝试为另一个学校创建学生（应该失败）
       const res = await request(app)
         .post('/api/students')
         .set('Authorization', `Bearer ${token}`)
@@ -204,7 +209,7 @@ describe('Transactions Module', () => {
           username: `stu_${shortId()}`,
           password: 'password123',
           name: '测试学生',
-          // 不传 schoolId，教师也没有学校
+          schoolId: school2.id // 不同的学校
         })
 
       expect(res.status).toBe(400)

@@ -6,8 +6,9 @@
 
 - **测试框架**: Vitest
 - **HTTP 测试**: supertest
-- **数据库**: SQLite（test.db，与开发数据库 dev.db 完全隔离）
+- **数据库**: SQLite（test.db，与开发数据库 PostgreSQL 完全隔离）
 - **测试文件位置**: `apps/server/tests/`
+- **注意**: 生产/开发环境已迁移到 PostgreSQL，但测试环境保持 SQLite 以确保隔离性和速度
 
 ## 2. 数据库隔离机制（核心）
 

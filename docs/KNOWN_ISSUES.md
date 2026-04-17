@@ -164,13 +164,13 @@
 
 **解决方案**: 后端增加图片压缩中间件
 
-### 4.3 缺少请求缓存 [P2]
+### 4.3 ~~缺少请求缓存~~ ✅ 已解决
 
 **问题**: 前端没有请求缓存机制
 
-**影响**: 重复请求浪费资源
+**状态**: ✅ 已于 2026-04-15 解决
 
-**解决方案**: 使用 React Query 或 SWR
+**解决方案**: 新增 SWR 缓存层（`lib/fetcher.ts` + `hooks/useQuery.ts`），5 秒去重，关闭 focus 重验证
 
 ---
 
@@ -224,21 +224,21 @@
 
 ## 7. 部署层面
 
-### 7.1 仅支持 SQLite [P1]
+### 7.1 ~~仅支持 SQLite~~ ✅ 已解决
 
 **问题**: 数据库仅支持 SQLite
 
-**影响**: 不适合生产环境高并发场景
+**状态**: ✅ 已于 2026-04-15 解决
 
-**解决方案**: 支持 PostgreSQL/MySQL（Prisma 已支持）
+**解决方案**: 迁移到 PostgreSQL，schema provider 改为 postgresql，新增 Docker PostgreSQL 配置和数据迁移脚本
 
-### 7.2 缺少 Docker 配置 [P2]
+### 7.2 ~~缺少 Docker 配置~~ ✅ 已解决
 
 **问题**: 没有 Docker/Docker Compose 配置
 
-**影响**: 部署不够标准化
+**状态**: ✅ 已于 2026-04-15 解决
 
-**解决方案**: 添加 Dockerfile 和 docker-compose.yml
+**解决方案**: 新增 Dockerfile（多阶段构建）、docker-compose.yml（PostgreSQL）、ecosystem.config.js（PM2 cluster）、.dockerignore
 
 ### 7.3 缺少 CI/CD 配置 [P2]
 

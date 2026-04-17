@@ -39,7 +39,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     const skip = (pageNum - 1) * pageSizeNum
 
     // 构建查询条件
-    const where: any = {}
+    const where: any = { isGlobalVisible: true }  // 只显示全局可见的提交
 
     // 按学校过滤：教师/学生只能看到本学校的评测记录
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
@@ -135,6 +135,9 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       codeLength: s.codeLength,
       language: s.language,
       submittedAt: s.createdAt.toISOString(),
+      // 来源字段
+      submitSource: s.submitSource,
+      sourceId: s.sourceId,
     }))
 
     res.json({

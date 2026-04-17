@@ -4,8 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // SQLite 不支持并发写入，测试必须串行执行
-    // 否则多个测试文件同时清理/写入 test.db 会产生 FK 错误
+    // PostgreSQL 测试使用独立 schema，但仍建议串行执行以避免连接池竞争
     fileParallelism: false,
     include: ['tests/**/*.test.ts'],
     coverage: {

@@ -524,7 +524,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
         {/* 返回按钮 */}
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
           style={{
             background: 'none',
             border: 'none',
@@ -1274,7 +1274,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
               style={{
                 padding: '0.5rem 1rem',
                 border: '1px solid var(--border)',

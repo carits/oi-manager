@@ -8,18 +8,19 @@ import { useTeamPermission, type UserType } from '@/hooks/useTeamPermission'
 import { useTeamDetail } from '@/hooks/data/useTeamDetail'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
-import TeamMemberList from './TeamMemberList'
-import TeamInviteModal from './TeamInviteModal'
-import TeamInviteListModal from './TeamInviteListModal'
-import TeamTransferModal from './TeamTransferModal'
-import TeamEditModal from './TeamEditModal'
+import { TeamMemberList } from './TeamMemberList'
+import { TeamInviteModal } from './TeamInviteModal'
+import { TeamInviteListModal } from './TeamInviteListModal'
+import { TeamTransferModal } from './TeamTransferModal'
+import { TeamEditModal } from './TeamEditModal'
 import type { JoinRequestItem } from './TeamMemberList'
 import dynamic from 'next/dynamic'
 
-// TeamHeader 包含 react-markdown + katex (~3MB)，延迟加载
-const TeamHeader = dynamic(() => import('./TeamHeader'))
-const TeamProblemListsTab = dynamic(() => import('./TeamProblemListsTab'))
-const TeamTrainingList = dynamic(() => import('../training/TeamTrainingList'))
+// TeamHeader 包含 react-markdown + katex (~3MB)，延迟加载（命名导出）
+const TeamHeader = dynamic(() => import('./TeamHeader').then(mod => mod.TeamHeader))
+// TeamProblemListsTab 和 TeamTrainingList 使用 default export
+const TeamProblemListsTab = dynamic(() => import('./TeamProblemListsTab').then(mod => mod.default))
+const TeamTrainingList = dynamic(() => import('../training/TeamTrainingList').then(mod => mod.default))
 
 type TabType = 'members' | 'mock' | 'training' | 'tasks'
 
@@ -394,7 +395,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
           savingAnnouncement={savingAnnouncement}
           onEditTeam={handleEditTeam}
           onLeaveTeam={handleLeaveTeam}
-          onBack={() => router.back()}
+          onBack={() => router.push(basePath)}
           onApplyJoin={showApplyButton ? handleApplyJoin : undefined}
           applyStatus={showApplyButton ? team.requestStatus ?? null : null}
           applying={applying}

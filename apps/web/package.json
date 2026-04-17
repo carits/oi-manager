@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
+    "dev:prod": "next build && next start -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -22,7 +23,8 @@
     "remark-directive": "^4.0.0",
     "remark-directive-rehype": "^1.0.0",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "swr": "^2.4.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

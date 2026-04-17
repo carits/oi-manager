@@ -313,19 +313,19 @@ await prisma.$transaction(async (tx) => {
 ```bash
 # 获取团队列表
 curl -H "Authorization: Bearer <token>" \
-  http://localhost:3001/api/team-import/vjudge/groups
+  http://localhost:3002/api/team-import/vjudge/groups
 
 # 预览团队
 curl -X POST -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"shortName": "wildwolf_2027", "includeMembers": true}' \
-  http://localhost:3001/api/team-import/vjudge/preview
+  http://localhost:3002/api/team-import/vjudge/preview
 
 # 执行导入
 curl -X POST -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"teamId": "xxx", "members": [...]}' \
-  http://localhost:3001/api/team-import/vjudge/import
+  http://localhost:3002/api/team-import/vjudge/import
 ```
 
 ### 2. 前端功能测试

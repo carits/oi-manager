@@ -147,7 +147,7 @@ export default function AdminSchoolDetailPage() {
         <main style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
           {/* 返回按钮 */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <a href="#" onClick={(e) => { e.preventDefault(); router.back() }} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.875rem', cursor: 'pointer' }}>
+            <a href="/admin/schools" onClick={(e) => { e.preventDefault(); router.push('/admin/schools') }} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.875rem', cursor: 'pointer' }}>
               ← 返回学校列表
             </a>
           </div>

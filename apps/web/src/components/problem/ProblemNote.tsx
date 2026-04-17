@@ -93,7 +93,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
         setProblem(problemRes.data)
       } else {
         toast.error('题目不存在')
-        router.back()
+        router.push(`${pathPrefix}/problems`)
         return
       }
 
@@ -186,7 +186,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push(`${pathPrefix}/problems/${problemId}`)}
             style={{
               background: 'transparent',
               border: 'none',

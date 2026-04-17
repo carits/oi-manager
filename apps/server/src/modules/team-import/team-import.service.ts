@@ -182,7 +182,7 @@ export class TeamImportService {
         description: `从${platformNames[params.platform]}导入创建`,
         isPublic: params.visibility !== 'private',
       }, params.user)
-      teamId = team.id
+      teamId = team.id as string
     }
 
     // 创建批次记录
@@ -334,7 +334,7 @@ export class TeamImportService {
 
     return {
       batchId,
-      teamId: batch.teamId,
+      teamId: batch.teamId || '',
       platform: batch.platform as ImportPlatform,
       totalRows: items.length,
       parsedRows,
@@ -458,6 +458,7 @@ export class TeamImportService {
                 passwordHash,
                 role: 'student',
                 status: 'active',
+                schoolId: team.schoolId,
               },
             })
 
@@ -590,5 +591,16 @@ export class TeamImportService {
       items: resultItems,
       batch,
     }
+  }
+
+  /**
+   * 获取团队的导入历史
+   */
+  async getImportHistory(teamId: string) {
+    return prisma.teamMemberImportBatch.findMany({
+      where: { teamId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    })
   }
 }

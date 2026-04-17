@@ -2,7 +2,7 @@
 
 ## 数据库概述
 
-- **数据库类型**: SQLite
+- **数据库类型**: PostgreSQL（生产/开发），SQLite（测试隔离）
 - **ORM**: Prisma
 - **Schema 文件**: `apps/server/prisma/schema.prisma`
 
@@ -10,7 +10,7 @@
 
 ### 1. User (用户)
 
-用户账号基础表，所有角色共用。
+用户账号基础表，所有角色共用。**所有用户必须绑定一个学校**。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
@@ -19,6 +19,7 @@
 | username | String | ✅ | 用户名，唯一 |
 | passwordHash | String | ✅ | 密码哈希（bcrypt） |
 | role | String | ✅ | 角色：super_admin / platform_admin / school_principal / teacher / student |
+| schoolId | String | ✅ | 学校 ID（所有用户必须绑定学校，系统管理员绑定到平台学校） |
 | status | String | ✅ | 状态：active / disabled，默认 active |
 | avatar | String | ❌ | 头像 URL |
 | phone | String | ❌ | 手机号 |
@@ -28,15 +29,23 @@
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
-- `student`: 一对一关联 Student
-- `teacher`: 一对一关联 Teacher
+- `Student`: 一对一关联 Student
+- `Teacher`: 一对一关联 Teacher
+- `Admin`: 一对一关联 Admin
+- `School`: 多对一关联 School（所有用户必须绑定学校）
 - `contests`: 一对多关联 Contest（创建的比赛）
 
 **索引**:
 - `username`: 唯一索引
 - `role`: 普通索引（用户列表按角色筛选）
 - `status`: 普通索引（用户状态筛选）
+- `schoolId`: 普通索引（按学校筛选）
 - `createdAt`: 普通索引（按创建时间排序）
+
+**业务规则**:
+- 所有用户必须绑定一个学校（schoolId 必填）
+- 系统管理员（super_admin、platform_admin）绑定到平台学校（ID: platform-school-00000000）
+- 教师和学生绑定到其所属学校
 
 ---
 
@@ -65,6 +74,8 @@
 - `teams`: 一对多关联 Team
 - `teachers`: 一对多关联 Teacher
 - `students`: 一对多关联 Student
+- `users`: 一对多关联 User（所有用户必须绑定学校）
+- `admins`: 一对多关联 Admin（系统管理员绑定到平台学校）
 - `principalTransferLogs`: 一对多关联 PrincipalTransferLog
 
 **业务规则**:
@@ -76,7 +87,7 @@
 
 ### 3. Teacher (教师)
 
-教师信息表。
+教师信息表。**教师必须绑定一个学校**。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
@@ -90,7 +101,7 @@
 | bio | String | ❌ | 教学简介 |
 | title | String | ❌ | 职称/身份 |
 | status | String | ✅ | 状态：active / disabled，默认 active |
-| schoolId | String | ❌ | 学校 ID |
+| schoolId | String | ✅ | 学校 ID（教师必须绑定学校） |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
@@ -604,7 +615,7 @@
 
 ### 17. Admin (管理员)
 
-管理员信息表，存储超级管理员和平台管理员的扩展信息。
+管理员信息表，存储超级管理员和平台管理员的扩展信息。**管理员必须绑定到平台学校**。
 
 **字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
@@ -612,14 +623,20 @@
 | id | String | ✅ | UUID 主键 |
 | userId | String | ✅ | 关联 User.id，唯一 |
 | name | String | ✅ | 姓名 |
+| schoolId | String | ✅ | 学校 ID（绑定到平台学校 platform-school-00000000） |
 | createdAt | DateTime | ✅ | 创建时间 |
 | updatedAt | DateTime | ✅ | 更新时间 |
 
 **关联关系**:
 - `user`: 多对一关联 User
+- `school`: 多对一关联 School
 
 **索引**:
 - `userId`: 唯一索引
+
+**业务规则**:
+- 系统管理员（super_admin、platform_admin）必须绑定到平台学校
+- 平台学校 ID: platform-school-00000000
 
 ---
 
@@ -838,6 +855,18 @@ npx prisma studio
 ---
 
 ## 更新日志
+
+### 2026-04-15
+- ✅ **重要变更**：所有用户必须绑定学校
+  - User 模型新增必填字段 `schoolId`（所有用户必须绑定学校）
+  - Admin 模型新增必填字段 `schoolId`（系统管理员绑定到平台学校）
+  - Teacher 模型 `schoolId` 改为必填字段
+  - 新增平台学校（ID: `platform-school-00000000`）用于绑定系统管理员
+  - User 新增 `schoolId` 索引，支持按学校筛选用户
+  - School 新增关联 `User` 和 `Admin`（反向关联）
+- ✅ 创建迁移脚本处理现有数据（5325 用户绑定到平台学校）
+- ✅ 更新相关路由：auth.ts、school.routes.ts、users.ts、students.ts
+- ✅ 更新测试文件：testUser.ts、seed.ts、auth.test.ts、transactions.test.ts
 
 ### 2026-04-07
 - ✅ **ProblemList 模型变更**：移除 `status` 字段（不再有 active/archived/deleted 状态），`visibility, status` 复合索引简化为 `visibility` 单字段索引

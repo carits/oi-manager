@@ -1,5 +1,462 @@
 # 当前任务
 
+## 任务：训练编辑题号排序修复（2026-04-17）
+
+状态: **已完成** ✅
+
+### 问题
+
+训练编辑时删除题目后 orderIndex 不会重新排序，导致题号显示混乱。
+
+### 修改
+
+**前端** `apps/web/src/components/training/TrainingEditPage.tsx`:
+- 保存训练时新增步骤 5：调用 reorder API 重新排序所有题目
+- 确保删除题目后 orderIndex 保持连续（0, 1, 2, 3...）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/training/TrainingEditPage.tsx` | 新增 reorder 调用 |
+
+### 验证
+
+- TypeScript 编译通过
+
+---
+
+## 任务：提交详情弹窗移除分数列（2026-04-17）
+
+状态: **已完成** ✅
+
+### 问题
+
+用户反馈"提及结果弹窗不需要分数"。`SubmissionDetailModal.tsx` 测试点表格显示了每个测试点的分数列，但用户不需要这个功能。
+
+### 修改
+
+**前端** `apps/web/src/components/submission/SubmissionDetailModal.tsx`:
+- 移除 `getResultBadge()` 函数中的分数显示逻辑
+- 移除表头"得分"列（从 5 列改为 4 列）
+- 移除子任务标题行分数显示 + 子任务用例分数列
+- 移除平铺用例分数列（无子任务时的显示）
+- 移除未使用的变量：`cScore`、`stScore`
+- 移除未使用的函数：`getScoreColor()`
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/submission/SubmissionDetailModal.tsx` | 移除分数列及相关代码 |
+
+### 验证
+
+- TypeScript 编译通过（`npx tsc --noEmit` 无错误）
+- 测试点表格现在只有 4 列：#、状态、耗时、内存
+
+---
+
+## 任务：训练评测记录 OJ 列不显示 + 服务器缓存（2026-04-17）
+
+状态: **已完成** ✅
+
+### 问题
+
+训练评测记录 OJ 列显示为空（截图确认），尽管数据库有 `oj: "hdu"` 且代码中有 `oj: s.oj` 映射。
+
+### 根因
+
+运行中的后端服务器（`tsx watch`）未热更新到最新代码。源文件中已有 `oj: s.oj` 映射，但旧的进程缓存了没有 `oj` 字段的版本。`tsx watch` 存在多个实例导致热更新失效。
+
+### 修复
+
+重启后端服务器，API 响应中恢复 `oj: "hdu"` 和 `ojRemoteId` 字段。前端 `getOjLabel('hdu')` 返回 `"HDU"` 正常显示。
+
+### 验证
+
+- API 响应确认包含 `oj: "hdu"`
+- 前端 0 个 TS 编译错误
+
+---
+
+## 任务：HDU 评测结果 score 字段补全（2026-04-17）
+
+状态: **已完成** ✅
+
+### 问题
+
+训练列表展示的评测记录内容不全：耗时、OJ、分数没有显示。HDU 只有 0 分和 100 分（ACM 赛制）。
+
+### 根因
+
+`apps/server/src/lib/submission-poller.ts` 轮询 HDU 结果时只更新 `result`、`timeUsed`、`memoryUsed`，没有设置 `score` 字段。
+
+### 修复
+
+**submission-poller.ts** — 轮询结果时同时设置 score：
+- HDU ACM 赛制：`accepted` → 100 分，其他结果 → 0 分
+- 新增 `score` 字段到 `prisma.submission.update` 的 data 中
+- 日志也增加了 score 字段输出
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/src/lib/submission-poller.ts` | score 字段补全 |
+
+### 验证
+
+- 已有 HDU 提交（如 Run ID 40838874，Accepted）需重新提交才能触发 poller 写入 score
+- 新提交的 HDU 题目将自动获得正确分数
+
+---
+
+## 任务：训练评测记录样式对齐全局评测记录（2026-04-16）
+
+状态: **已完成** ✅
+
+### 问题
+
+训练模块评测记录 tab 样式与全局 SubmissionList 不一致，且 HDU 题目的远程 ID（ojRemoteId）没有对齐。
+
+### 修改
+
+1. **前端 TrainingDetailPage.tsx** — 评测记录表格对齐全局 SubmissionList 样式
+   - 评测 ID 改为可点击 `#id`（monospace + primary 色 + 下划线）
+   - 新增 OJ 列（显示 `本OJ` / `HDU` 等）
+   - 新增代码长度(B) 列
+   - 评测结果改为彩色 Badge（Accepted 绿、WA 红、TLE 黄等，Pending/Judging 带旋转动画）
+   - 表头统一样式：`padding: 0.75rem 1rem`、`fontWeight: 500`、`color: #6b7280`
+   - 数据行统一样式：`padding: 0.75rem 1rem`、`borderBottom: 1px solid #f3f4f6`
+
+2. **后端 training.routes.ts** — 评测记录接口返回 oj 和 ojRemoteId（此前已完成）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 评测记录表格样式对齐 |
+| `apps/server/src/modules/training/training.routes.ts` | 返回 oj/ojRemoteId（已完成） |
+
+---
+
+## 任务：训练提交弹窗对齐题库提交弹窗（2026-04-17）
+
+状态: **已完成** ✅
+
+### 问题
+
+训练模块的提交弹窗与题库题目提交弹窗不一致，HDU 题目无法通过机器人账号提交。
+
+### 修改
+
+1. **前端 TrainingDetailPage.tsx** — 提交弹窗对齐题库提交弹窗
+   - 新增提交方式选择：机器人账号 / 我的账号 / 归档（非 Carits 平台显示）
+   - 新增平台账号绑定提示
+   - 语言选项改为使用全局 `LANGUAGE_OPTIONS` 常量
+   - 非机器人方式禁用代码输入和提交
+   - 弹窗标题显示平台名和题号（如 "HDU 4000"）
+   - 提交成功后自动打开提交详情弹窗
+   - 传递 `submitMethod` 参数给后端
+
+2. **后端 training.routes.ts** — 训练提交支持 HDU 机器人提交
+   - 接受 `submitMethod` 参数
+   - HDU 平台 + robot 方式：复用 `submitToHdu()` 提交到 HDU（与题库提交相同逻辑）
+   - 洛谷等其他外部 OJ：回退到 `pending_review`（待人工评分）
+   - Carits 平台：本地评测（不变）
+
+3. **schema.prisma** — Submission.updatedAt 添加 `@updatedAt`
+   - 修复创建 Submission 时缺少 updatedAt 导致的 500 错误
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 提交弹窗 UI 对齐 + import 新增 |
+| `apps/server/src/modules/training/training.routes.ts` | HDU 机器人提交 + submitMethod 参数 |
+| `apps/server/prisma/schema.prisma` | Submission.updatedAt 添加 @updatedAt |
+
+### 验证
+
+- HDU 1000 提交成功（Run ID: 40838874，Accepted）
+- 洛谷题目提交成功（pending_review）
+- 前端无 TypeScript 编译错误
+
+---
+
+## 任务：TypeScript 编译错误修复（2026-04-16）
+
+状态: **已完成** ✅
+
+### 问题
+
+`tsc --noEmit` 报 17 个 TypeScript 编译错误 + 31 个 `declaration: true` 引发的 TS2742 错误。
+
+### 修复
+
+1. **requestLogger.ts** — 全局 Express Request 类型声明冲突，改为使用 `@oi-manager/shared` 的 `JwtPayload` 类型（与 auth.ts 统一）
+2. **school.routes.ts** — School create 缺少 `currentPrincipalTeacherId`；User create 缺少 `schoolId`
+3. **team.routes.ts** — 缺少 `prisma` 导入
+4. **team.service.ts** — 数组类型 `unknown[]` 改为 `Record<string, unknown>[]`，修复 map 回调类型不兼容
+5. **team.types.ts** — `CreateTeamDTO.id` 改为可选（`id?: string`），导入模块不需要预生成 ID
+6. **team-import 模块**（5 个文件）：
+   - 所有 User create 添加 `schoolId`（luogu、vjudge、repository、service）
+   - 移除不存在的 `includeAvatar` 参数
+   - 添加 `getImportHistory` 方法到 service
+   - `team.id` 添加 `as string` 类型断言
+   - `batch.teamId` 添加 `|| ''` 回退
+7. **tsconfig.json** — 移除 `declaration: true` 和 `declarationMap: true`（Express 服务器不需要发布声明文件，且 pnpm 严格链接导致 TS2742 错误）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/tsconfig.json` | 移除 declaration/declarationMap |
+| `apps/server/src/middleware/requestLogger.ts` | 统一 JwtPayload 类型 |
+| `apps/server/src/modules/school/school.routes.ts` | School/User create 补字段 |
+| `apps/server/src/modules/team/team.routes.ts` | 添加 prisma 导入 |
+| `apps/server/src/modules/team/team.service.ts` | 修复数组类型 |
+| `apps/server/src/modules/team/team.types.ts` | CreateTeamDTO.id 改可选 |
+| `apps/server/src/modules/team-import/team-import.service.ts` | User create + getImportHistory + 类型修复 |
+| `apps/server/src/modules/team-import/team-import.routes.ts` | 移除 includeAvatar |
+| `apps/server/src/modules/team-import/team-import.repository.ts` | User create 添加 schoolId |
+| `apps/server/src/modules/team-import/luogu-import.service.ts` | User create 添加 schoolId |
+| `apps/server/src/modules/team-import/vjudge-import.service.ts` | User create 添加 schoolId |
+
+---
+
+## 任务：时区修复 + 导航修复（2026-04-16）
+
+状态: **已完成** ✅
+
+### 问题
+
+1. **训练编辑时区 Bug（P0）**：编辑训练标题/公告时，后端误判"训练已经开始，不能修改开始时间"。根因：Node.js 服务器（UTC）和浏览器（UTC+8）对 datetime-local 字符串解析不同，时间戳差 8 小时。
+2. **学生训练 404（P0）**：学生团队页 `/student/team/`（单数）但训练详情页在 `/student/teams/`（复数）。
+3. **router.back() 失效（P1）**：直接访问页面时无浏览器历史，`router.back()` 不工作。
+
+### 修复
+
+- 前端改发 UTC ISO 字符串；后端增加时区容忍检查（检测 datetime-local 无时区信息的整数小时偏移）
+- 移动学生训练详情页到正确路径 + 修复 basePath
+- 22 处 `router.back()` 替换为 `router.push(具体路径)`
+- 训练列表 API 实时计算 status
+
+---
+
+## 任务：重构后全面错误探索与修复（2026-04-15）
+
+状态: **已完成** ✅
+
+### 背景
+
+路由拆分到 `modules/` 目录后，发现存在多个错误：
+- 前端页面/路由错误（import/export 不匹配）
+- 脚本数据创建错误
+- 数据库模型字段约束问题
+
+经过全面探索，发现并修复以下关键问题。
+
+### 修复内容
+
+#### 1. 后端动态导入路径修复（P0）
+
+路由文件从 `routes/` 移动到 `modules/problem/`、`modules/training/`、`modules/school/` 后，相对路径深度从 1 级变为 2 级，导致动态导入路径错误：
+
+| 文件 | 行号 | 修复 |
+|------|------|------|
+| `modules/problem/problem.routes.ts` | 1188, 1299 | `../lib/ai-translate` → `../../lib/ai-translate` |
+| `modules/training/training.routes.ts` | 903 | `../ws/judge` → `../../ws/judge` |
+
+#### 2. Prisma Schema 字段约束完善
+
+- 所有 `id String @id` 字段添加 `@default(cuid())`（44 个模型）
+- 所有 `updatedAt DateTime` 字段添加 `@updatedAt`
+- 这使得 Prisma 可以自动生成 ID 和更新时间戳
+
+#### 3. Prisma 关联字段名修复（FIELD_CONTRACT）
+
+根据 `docs/api/FIELD_CONTRACT.md` 规范，修复多处使用小写关联字段名导致的 500 错误：
+
+| 文件 | 修复内容 |
+|------|----------|
+| `routes/problem-lists.ts` | `Sections` → `ProblemListSection`, `Entries` → `ProblemListEntry`, `Shares` → `ProblemListShare` |
+| `routes/school-problem-lists.ts` | `_count.Sections` → `_count.ProblemListSection` |
+| `routes/team-problem-lists.ts` | 同上 |
+| `tests/helpers/problemListHelpers.ts` | `Sections` → `ProblemListSection` |
+
+#### 4. 测试辅助函数 ID 生成修复
+
+`tests/helpers/testUser.ts` 和 `tests/helpers/problemListHelpers.ts` 中所有 `prisma.create()` 调用添加显式 `crypto.randomUUID()` ids。
+
+### 测试验证
+
+- **230/230 测试全部通过** ✅
+- 后端服务器正常运行（端口 3002）
+- 前端应用正常运行（端口 3000）
+- 种子数据正确加载（5 个团队）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/src/modules/problem/problem.routes.ts` | 动态导入路径修复（2处） |
+| `apps/server/src/modules/training/training.routes.ts` | 动态导入路径修复（1处） |
+| `apps/server/prisma/schema.prisma` | @default(cuid()) + @updatedAt 添加到所有模型 |
+| `apps/server/src/routes/problem-lists.ts` | Prisma 关联字段名修复 |
+| `apps/server/src/routes/school-problem-lists.ts` | Prisma 关联字段名修复 |
+| `apps/server/src/routes/team-problem-lists.ts` | Prisma 关联字段名修复 |
+| `apps/server/tests/helpers/testUser.ts` | 显式 ID 生成 |
+| `apps/server/tests/helpers/problemListHelpers.ts` | 显式 ID 生成 + 关联字段名修复 |
+
+### 验证结果
+
+- **230/230 测试全部通过** ✅
+- PostgreSQL 服务运行正常（端口 5432）
+- 后端服务器正常运行（端口 3002）
+- 前端应用正常运行（端口 3000）
+- 种子数据正确加载
+
+---
+
+### PostgreSQL 全环境迁移（续）
+
+状态: **已完成** ✅
+
+**安装配置**:
+1. 安装 PostgreSQL 服务（Ubuntu 20.04）
+2. 创建数据库 `oi_manager` 和用户 `oi`
+3. 配置密码 `oi_password`
+
+**Schema 更新**:
+- `schema.prisma` provider 从 `sqlite` 改为 `postgresql`
+- 测试环境使用独立 `test` schema 隔离
+
+**测试 setup 修复**:
+- 新增 `beforeAll` 创建平台学校（系统管理员必须绑定学校）
+- `afterEach` 清理改用 Prisma `deleteMany`
+
+**验证结果**:
+- **230/230 测试全部通过** ✅
+- 后端（端口 3002）正常
+- 前端（端口 3000）正常
+
+**涉及文件**:
+- `apps/server/prisma/schema.prisma` — provider 改 postgresql
+- `apps/server/tests/setup.ts` — 新增平台学校创建 + deleteMany 清理
+
+---
+
+## 任务：1000 QPS 架构升级（2026-04-15）
+
+状态: **已完成** ✅
+
+### 目标
+
+将系统从 SQLite + 单进程 Express 架构升级为支持 1000 QPS 的生产架构。
+
+### 完成内容
+
+#### Phase 1: P0 — 硬性前提 ✅
+
+1. **SQLite → PostgreSQL 迁移**
+   - `schema.prisma` provider 改为 `postgresql`
+   - `.env` 连接串改为 `postgresql://oi:oi_password@localhost:5432/oi_manager`
+   - `.env.production` 模板（生产环境密钥占位）
+   - `scripts/migrate-sqlite-to-pg.ts` 数据迁移脚本（按依赖顺序 45 张表）
+   - `apps/server/package.json` 新增 `pg` 依赖
+   - `tests/setup-env.ts` 测试数据库指向 `test.db`（保持 SQLite 用于测试隔离）
+
+2. **限流参数调高**
+   - `rateLimiter.ts` 全局限流从 100/分钟 → 2000/分钟（支持环境变量 `RATE_LIMIT_MAX`）
+   - 按用户 ID（已登录）或 IP（未登录）维度限流
+
+#### Phase 2: P1 — 性能关键路径 ✅
+
+3. **排名 SQL 聚合**
+   - IOI 排名：`$queryRaw` 替代内存 JS 聚合，DB 侧完成 GROUP BY + MAX
+   - ICPC 排名：同理 SQL 聚合 solved + penalty
+   - 数据量从全量拉取降至只拿聚合结果
+
+4. **PM2 + Docker 部署配置**
+   - `ecosystem.config.js` — cluster 模式，instances: max
+   - `docker-compose.yml` — PostgreSQL 16 + healthcheck
+   - `Dockerfile` — 多阶段构建（deps → build-server → build-web → production）
+   - `.dockerignore`
+
+5. **前端 SWR 缓存**
+   - `apps/web/src/lib/fetcher.ts` — SWR fetcher 函数
+   - `apps/web/src/hooks/useQuery.ts` — 统一数据获取 hook（5 秒去重、关闭 focus 重验证）
+
+#### Phase 3: P2 — 查询优化 ✅
+
+6. **权限查询合并**
+   - `isTeamAdmin()` 合并 teacherId/student 查询为单条 `findFirst`
+   - `getParticipantNames()` 一次 JOIN 查询替代 3 次分别查 User/Teacher/Student
+
+7. **数据库索引**
+   - Submission: `@@index([userId, oj, problemId])`, `@@index([createdAt, result])`
+   - TrainingSubmission: `@@index([trainingId, userId])`, `@@index([trainingId, trainingProblemId, userId])`, `@@index([trainingId, result])`
+
+8. **Next.js standalone 输出**
+   - `apps/web/next.config.js` 新增 `output: 'standalone'`
+
+#### Phase 4: P3 — 架构改进 ✅
+
+9. **Nginx 反向代理配置**
+   - `nginx/oi-manager.conf` — upstream backend + frontend
+   - API 代理、WebSocket 升级、静态资源长缓存（365 天）
+
+10. **路由文件拆分** ✅
+     - `routes/trainings.ts` (1622行) → `modules/training/` (types + helpers + routes)
+     - `routes/problems.ts` (1633行) → `modules/problem/` (types + helpers + routes)
+     - `routes/schools.ts` (1392行) → `modules/school/` (types + routes)
+     - `index.ts` 和 `testRequest.ts` import 路径已更新
+     - 旧路由文件已删除
+
+### 测试验证
+
+- 229/230 测试通过（1 个预存注册失败，非本次变更引入）
+- 测试数据库仍使用 SQLite `test.db`（测试隔离不受影响）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/prisma/schema.prisma` | provider 改 postgresql + 新增索引 |
+| `apps/server/.env` | DATABASE_URL 改 PG 连接串 |
+| `apps/server/.env.production` | 新建生产环境模板 |
+| `apps/server/package.json` | 新增 pg 依赖 |
+| `apps/server/src/middleware/rateLimiter.ts` | 限流调高 + 按用户维度 |
+| `apps/server/src/modules/training/training.types.ts` | 新建训练类型定义 |
+| `apps/server/src/modules/training/training.helpers.ts` | 新建训练辅助函数 |
+| `apps/server/src/modules/training/training.routes.ts` | 新建训练路由（从 routes/trainings.ts 拆分） |
+| `apps/server/src/modules/problem/problem.types.ts` | 新建题目类型定义 |
+| `apps/server/src/modules/problem/problem.helpers.ts` | 新建题目辅助函数 |
+| `apps/server/src/modules/problem/problem.routes.ts` | 新建题目路由（从 routes/problems.ts 拆分） |
+| `apps/server/src/modules/school/school.types.ts` | 新建学校类型定义 |
+| `apps/server/src/modules/school/school.routes.ts` | 新建学校路由（从 routes/schools.ts 拆分） |
+| `apps/server/src/routes/trainings.ts` | 删除（已迁移到 modules/training/） |
+| `apps/server/src/routes/problems.ts` | 删除（已迁移到 modules/problem/） |
+| `apps/server/src/routes/schools.ts` | 删除（已迁移到 modules/school/） |
+| `apps/server/src/index.ts` | 改 import 路径 |
+| `apps/server/tests/helpers/testRequest.ts` | 改 schoolRouter import 路径 |
+| `apps/server/tests/setup-env.ts` | 测试环境变量 |
+| `apps/server/src/config/env.ts` | 环境配置适配 |
+| `apps/web/package.json` | 新增 swr 依赖 |
+| `apps/web/src/lib/fetcher.ts` | 新建 SWR fetcher |
+| `apps/web/src/hooks/useQuery.ts` | 新建统一 hook |
+| `apps/web/next.config.js` | output: standalone |
+| `ecosystem.config.js` | 新建 PM2 配置 |
+| `docker-compose.yml` | 新建 Docker 配置 |
+| `Dockerfile` | 新建多阶段构建 |
+| `.dockerignore` | 新建 |
+| `nginx/oi-manager.conf` | 新建 Nginx 配置 |
+| `scripts/migrate-sqlite-to-pg.ts` | 新建迁移脚本 |
+
+---
+
 ## 任务：团队训练模块（2026-04-14）
 
 状态: **开发中** 🔄（前端核心功能已完成，待测试和文档）
@@ -74,6 +531,20 @@
 1. **judge.ts handleResult** — 支持 `T-` 前缀的 submissionId，自动路由到 TrainingSubmission 表更新
 2. **trainings.ts submit** — 修复 dispatchJudgeTask 调用，传入正确的 testdataPath + problemConfig，使用 `T-{id}` 前缀
 
+#### Phase 6: 训练详情页"题目列表" Tab ✅
+
+1. **后端 API** — `GET /trainings/:id/problem-status` 返回题目列表（含来源、原题链接、当前用户提交状态）
+   - 查询 TrainingProblem + Problem 获取题目来源信息
+   - 查询 TrainingSubmission 聚合当前用户每题最佳成绩
+   - 使用 OJ adapter 的 getProblemUrl() 生成原题链接
+   - Carits 内部平台：前端构造本地链接（`/teacher/problems/{UUID}`）
+   - 所有团队成员可见来源信息（与题面 tab 隐藏来源策略不同）
+2. **前端 Tab** — 新增"题目列表" Tab，位于"题面"左侧，默认选中
+   - 表格 4 列：状态（分数+AC/WA）、序号（A/B/C...）、来源（平台+题号+链接）、标题（点击切换到题面）
+   - Carits 平台显示 "Carits 1000" 可点击跳转题库详情页
+   - 外部 OJ 显示 "HDU 4000" 可点击跳转原题链接
+   - Hydro OJ 风格状态列（AC 绿色、非满分红色、未提交灰色）
+
 ### 涉及文件
 
 - `apps/server/prisma/schema.prisma` — 新增 6 个模型
@@ -91,7 +562,6 @@
 
 - 附件前端 UI（下载/上传）
 - 测试
-- 文档更新（change-log.md 等）
 
 ---
 

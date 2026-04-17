@@ -1,0 +1,21 @@
+version: '3.3'
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: oi-postgres
+    environment:
+      POSTGRES_DB: oi_manager
+      POSTGRES_USER: oi
+      POSTGRES_PASSWORD: oi_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oi -d oi_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

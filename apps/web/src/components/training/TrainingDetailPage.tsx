@@ -7,7 +7,9 @@ import { useToast } from '@/components/ui/Toast'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
+import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
+import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, LANGUAGE_OPTIONS } from '@/lib/judge-constants'
+import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 
 // ========== Helper Functions ==========
 
@@ -26,6 +28,11 @@ function toExcelColumnName(index: number): string {
 }
 
 // ========== Types ==========
+
+interface PlatformLanguage {
+  id: string
+  name: string
+}
 
 interface TrainingInfo {
   id: string
@@ -84,30 +91,16 @@ interface SubmissionRow {
   userName: string
   userType: string
   problemAlias: string
+  problemOrderIndex: number
   trainingProblemId: string
+  oj: string
   language: string
   result: string
   score: number | null
   timeUsed: number | null
   memoryUsed: number | null
   codeLength: number
-  createdAt: string
-}
-
-interface SubmissionDetail {
-  id: number
-  userId: string
-  userType: string
-  problemAlias: string
-  language: string
-  result: string
-  score: number | null
-  timeUsed: number | null
-  memoryUsed: number | null
-  code: string | null
-  codeLength: number
-  cases: any[] | null
-  subtasks: any[] | null
+  ojRemoteId: string | null
   createdAt: string
 }
 
@@ -140,7 +133,24 @@ interface TrainingDetailPageProps {
   basePath: string
 }
 
+// ========== Constants ==========
+
+const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
+  zh: '中文',
+  en: 'English'
+}
+
 // ========== Helpers ==========
+
+function getPdfUrl(fileUrl: string): string | null {
+  if (!fileUrl) return null
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+  if (fileUrl.startsWith('/')) {
+    // 本地文件
+    return `${apiUrl}${fileUrl}`
+  }
+  return fileUrl
+}
 
 function getResultColor(result: string): string {
   if (result === 'accepted') return '#16a34a'
@@ -158,6 +168,41 @@ function formatLanguage(lang: string): string {
   return LANGUAGE_LABEL_MAP[lang] || lang
 }
 
+const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
+  accepted: { bg: '#dcfce7', text: '#166534' },
+  queuing: { bg: '#dbeafe', text: '#1e40af' },
+  tle: { bg: '#fef3c7', text: '#92400e' },
+  mle: { bg: '#fef3c7', text: '#92400e' },
+  wa: { bg: '#fee2e2', text: '#991b1b' },
+  re: { bg: '#fee2e2', text: '#991b1b' },
+  ce: { bg: '#f3e8ff', text: '#6b21a8' },
+  pe: { bg: '#fef3c7', text: '#92400e' },
+  ole: { bg: '#fef3c7', text: '#92400e' },
+}
+
+function getResultBadge(result: string) {
+  const label = JUDGE_RESULT_LABEL_MAP[result] || result
+  const colors = RESULT_COLORS[result] || { bg: '#f3f4f6', text: '#374151' }
+  if (result === 'queuing' || result === 'judging') {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500, background: colors.bg, color: colors.text }}>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid #e5e7eb', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '4px', verticalAlign: 'middle' }} />
+        {label}
+      </span>
+    )
+  }
+  return (
+    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500, background: colors.bg, color: colors.text }}>
+      {label}
+    </span>
+  )
+}
+
+function getOjLabel(oj: string): string {
+  if (oj === 'carits') return '本OJ'
+  return OJ_PLATFORM_LABEL_MAP[oj] || oj
+}
+
 function getScoreColor(score: number, max: number): string {
   const ratio = max > 0 ? score / max : 0
   if (ratio >= 1) return '#16a34a'
@@ -169,6 +214,11 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function getProblemOrderIndex(problems: TrainingProblem[], trainingProblemId: string): number {
+  const problem = problems.find(p => p.id === trainingProblemId)
+  return problem?.orderIndex ?? 0
 }
 
 // ========== Component ==========
@@ -194,11 +244,15 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const [showNotePanel, setShowNotePanel] = useState(false)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Statement switch
+  const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
+
   // Code submit
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [submitCode, setSubmitCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [showSubmitModal, setShowSubmitModal] = useState(false)
+  const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
 
   // Submissions tab - 筛选
   const [filterProblemId, setFilterProblemId] = useState<string>('')
@@ -208,14 +262,10 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([])
   const [submissionsPage, setSubmissionsPage] = useState(1)
   const [submissionsTotal, setSubmissionsTotal] = useState(0)
-  const [submissionDetail, setSubmissionDetail] = useState<SubmissionDetail | null>(null)
-  const [showSubmissionDetail, setShowSubmissionDetail] = useState(false)
+  const [detailSubmissionId, setDetailSubmissionId] = useState<number | null>(null)
 
   // Solutions tab - 所有题目的题解
-  const [allSolutions, setAllSolutions] = useState<Record<string, { content: string; visible: boolean }>>({})
-  const [editingSolutionId, setEditingSolutionId] = useState<string | null>(null)
-  const [editingSolutionContent, setEditingSolutionContent] = useState('')
-  const [editingSolutionVisible, setEditingSolutionVisible] = useState(false)
+  const [allSolutions, setAllSolutions] = useState<Record<string, { content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string }>>({})
 
   // Attachments tab - 所有题目的附件
   const [allAttachments, setAllAttachments] = useState<Record<string, Attachment[]>>({})
@@ -239,11 +289,11 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
           setTraining(res.data)
         } else {
           toast.error('训练不存在')
-          router.back()
+          router.push(`${basePath}/${teamId}?tab=training`)
         }
       } catch (error) {
         toast.error('加载失败')
-        router.back()
+        router.push(`${basePath}/${teamId}?tab=training`)
       }
     }
     loadTraining()
@@ -276,6 +326,23 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         const res = await apiClient.get<ProblemDetail>(`/api/trainings/${trainingId}/problems/${selectedProblemId}/detail`)
         if (res.success && res.data) {
           setProblemDetail(res.data)
+          // 恢复用户之前的题面版本偏好
+          const visibleStatements = (res.data.statements || []).filter(s => true)
+          if (visibleStatements.length > 0) {
+            const savedKey = localStorage.getItem(`training-stmt-pref-${selectedProblemId}`)
+            const savedStmt = savedKey
+              ? visibleStatements.find(s => `${s.format}-${s.language || 'unknown'}` === savedKey)
+              : null
+            if (savedStmt) {
+              setSelectedStatementId(savedStmt.id)
+            } else {
+              // 默认选择中文 markdown 版本
+              const zhStatement = visibleStatements.find(s => s.format === 'markdown' && s.language === 'zh')
+              setSelectedStatementId(zhStatement?.id || visibleStatements[0].id)
+            }
+          } else {
+            setSelectedStatementId(null)
+          }
         }
       } catch (error) {
         console.error('Failed to load problem detail:', error)
@@ -348,12 +415,18 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   useEffect(() => {
     if (activeTab !== 'solutions' || problems.length === 0) return
     const loadAllSolutions = async () => {
-      const solutions: Record<string, { content: string; visible: boolean }> = {}
+      const solutions: Record<string, { content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string }> = {}
       for (const p of problems) {
         try {
-          const res = await apiClient.get<{ id: string; content: string; visible: boolean } | null>(`/api/trainings/${trainingId}/problems/${p.id}/solution`)
+          const res = await apiClient.get<{ id: string | null; content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string } | null>(`/api/trainings/${trainingId}/problems/${p.id}/solution`)
           if (res.success && res.data) {
-            solutions[p.id] = { content: res.data.content || '', visible: res.data.visible ?? false }
+            solutions[p.id] = {
+              content: res.data.content || '',
+              visible: res.data.visible ?? false,
+              source: res.data.source,
+              solutionType: res.data.solutionType,
+              solutionPdfUrl: res.data.solutionPdfUrl,
+            }
           }
         } catch (error) {
           console.error('Failed to load solution for', p.id, error)
@@ -451,12 +524,17 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       toast.error('请输入代码')
       return
     }
+    if (submitMethod !== 'robot') {
+      toast.error('暂未开放此提交方式')
+      return
+    }
     setSubmitting(true)
     try {
-      const res = await apiClient.post(`/api/trainings/${trainingId}/submit`, {
+      const res = await apiClient.post<{ submissionId?: number }>(`/api/trainings/${trainingId}/submit`, {
         trainingProblemId: selectedProblemId,
         language: submitLanguage,
         code: submitCode,
+        submitMethod,
       })
       if (res.success) {
         toast.success('提交成功')
@@ -464,6 +542,10 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         setShowSubmitModal(false)
         if (activeTab === 'submissions') {
           setSubmissionsPage(1)
+        }
+        // 打开提交详情
+        if (res.data?.submissionId) {
+          setDetailSubmissionId(res.data.submissionId)
         }
       } else {
         toast.error(res.message || '提交失败')
@@ -475,34 +557,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     }
   }
 
-  const handleSaveSolution = async (problemId: string) => {
-    try {
-      const res = await apiClient.put(`/api/trainings/${trainingId}/problems/${problemId}/solution`, {
-        content: editingSolutionContent,
-        visible: editingSolutionVisible,
-      })
-      if (res.success) {
-        toast.success('题解已保存')
-        setAllSolutions(prev => ({ ...prev, [problemId]: { content: editingSolutionContent, visible: editingSolutionVisible } }))
-        setEditingSolutionId(null)
-      } else {
-        toast.error(res.message || '保存失败')
-      }
-    } catch (error) {
-      toast.error('保存失败')
-    }
-  }
-
-  const handleViewSubmission = async (submissionId: number) => {
-    try {
-      const res = await apiClient.get<SubmissionDetail>(`/api/trainings/${trainingId}/submissions/${submissionId}`)
-      if (res.success && res.data) {
-        setSubmissionDetail(res.data)
-        setShowSubmissionDetail(true)
-      }
-    } catch (error) {
-      toast.error('加载失败')
-    }
+  const handleViewSubmission = (submissionId: number) => {
+    setDetailSubmissionId(submissionId)
   }
 
   const handleDownloadAttachment = async (attachment: Attachment) => {
@@ -631,7 +687,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               <thead>
                 <tr style={{ background: '#f9fafb', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '80px' }}>状态</th>
-                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '60px' }}>序号</th>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '60px' }}>题号</th>
                   <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '180px' }}>来源</th>
                   <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)' }}>标题</th>
                 </tr>
@@ -671,7 +727,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                       <td style={{ padding: '0.6rem 1rem' }}>
                         {p.platform === 'carits' ? (
                           <a
-                            href={`${basePath.split('/teams')[0]}/problems/${p.problemTableId}`}
+                            href={`${basePath.split('/team')[0]}/problems/${p.problemTableId}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: 'var(--primary)', textDecoration: 'none' }}
@@ -774,18 +830,94 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                         </>
                       )}
                     </div>
-                    {/* Statement */}
+                    {/* Statement Version Selector */}
+                    {(() => {
+                      const visibleStatements = (problemDetail.statements || []).filter(s => true)
+                      return visibleStatements.length > 1 && (
+                        <div style={{
+                          padding: '0.5rem 1rem',
+                          borderBottom: '1px solid var(--border)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem'
+                        }}>
+                          <select
+                            value={selectedStatementId || ''}
+                            onChange={(e) => {
+                              const id = e.target.value
+                              setSelectedStatementId(id)
+                              // 持久化用户选择
+                              if (selectedProblemId) {
+                                const stmt = visibleStatements.find(s => s.id === id)
+                                if (stmt) {
+                                  localStorage.setItem(`training-stmt-pref-${selectedProblemId}`, `${stmt.format}-${stmt.language || 'unknown'}`)
+                                }
+                              }
+                            }}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px',
+                              fontSize: '0.8rem',
+                              background: 'white'
+                            }}
+                          >
+                            {visibleStatements.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.format === 'pdf' ? 'PDF' : `${s.language ? STATEMENT_LANGUAGE_LABELS[s.language] || s.language : '未知'}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )
+                    })()}
+                    {/* Statement Content */}
                     <div style={{ padding: '1.5rem' }}>
                       {(() => {
                         const visibleStatements = (problemDetail.statements || []).filter(s => true)
-                        const stmt = visibleStatements.find(s => s.format === 'markdown' && s.language === 'zh')
-                          || visibleStatements.find(s => s.format === 'markdown')
-                          || visibleStatements[0]
-                        if (stmt?.content) {
-                          return <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={stmt.content} /></div>
-                        }
-                        if (problemDetail.description) {
+                        if (visibleStatements.length === 0 && problemDetail.description) {
                           return <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={problemDetail.description} /></div>
+                        }
+                        // 获取当前选中的题面
+                        const currentStatement = selectedStatementId
+                          ? visibleStatements.find(s => s.id === selectedStatementId)
+                          : visibleStatements.find(s => s.format === 'markdown' && s.language === 'zh')
+                            || visibleStatements.find(s => s.format === 'markdown')
+                            || visibleStatements[0]
+                        if (!currentStatement) {
+                          return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>暂无题面</div>
+                        }
+                        // PDF 题面
+                        if (currentStatement.format === 'pdf' && currentStatement.fileUrl) {
+                          const pdfUrl = getPdfUrl(currentStatement.fileUrl)
+                          if (pdfUrl && pdfUrl.startsWith('/')) {
+                            return <iframe src={pdfUrl} style={{ width: '100%', height: '600px', border: 'none' }} />
+                          }
+                          return (
+                            <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+                              <p style={{ color: 'var(--gray-600)', marginBottom: '1rem' }}>题面为外部 PDF 文件，请在新窗口中查看</p>
+                              <a
+                                href={currentStatement.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'inline-block',
+                                  padding: '0.5rem 1.5rem',
+                                  backgroundColor: 'var(--primary)',
+                                  color: '#fff',
+                                  borderRadius: '6px',
+                                  textDecoration: 'none',
+                                  fontSize: '0.875rem',
+                                }}
+                              >
+                                打开 PDF 题面
+                              </a>
+                            </div>
+                          )
+                        }
+                        // Markdown 题面
+                        if (currentStatement.content) {
+                          return <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={currentStatement.content} /></div>
                         }
                         return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>暂无题面</div>
                       })()}
@@ -849,13 +981,13 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
-                    cursor: 'pointer',
+                    cursor: isOngoing && (selectedProblem?.platform === 'carits' || selectedProblem?.platform === 'hdu') ? 'pointer' : 'not-allowed',
                     fontSize: '0.85rem',
                     fontWeight: 500,
                     width: '100%',
-                    opacity: isOngoing ? 1 : 0.5,
+                    opacity: isOngoing && (selectedProblem?.platform === 'carits' || selectedProblem?.platform === 'hdu') ? 1 : 0.5,
                   }}
-                  disabled={!isOngoing}
+                  disabled={!isOngoing || (selectedProblem?.platform !== 'carits' && selectedProblem?.platform !== 'hdu')}
                 >
                   ▶ 提交代码
                 </button>
@@ -901,7 +1033,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                   style={{ padding: '0.35rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', minWidth: '80px', background: 'white' }}
                 >
                   <option value="">全部</option>
-                  {problems.map(p => <option key={p.id} value={p.id}>{p.alias}</option>)}
+                  {problems.map(p => <option key={p.id} value={p.id}>{toExcelColumnName(p.orderIndex)}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -962,48 +1094,57 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 重置
               </button>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>#</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>题号</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>提交者</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>评测结果</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>分数</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>耗时</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>内存</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>语言</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>提交时间</th>
+                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>题号</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>OJ</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>分数</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(MS)</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>提交时间</th>
                 </tr>
               </thead>
               <tbody>
-                {submissions.map(s => (
-                  <tr
-                    key={s.id}
-                    onClick={() => handleViewSubmission(s.id)}
-                    style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '')}
-                  >
-                    <td style={{ padding: '0.5rem 0.75rem' }}>{s.id}</td>
-                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 500 }}>{s.problemAlias}</td>
-                    <td style={{ padding: '0.5rem 0.75rem' }}>{s.userName}</td>
-                    <td style={{ padding: '0.5rem 0.75rem' }}>
-                      <span style={{ color: getResultColor(s.result), fontWeight: 500 }}>
-                        {formatResult(s.result)}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>{s.score ?? '-'}</td>
-                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>{s.timeUsed != null ? `${s.timeUsed}ms` : '-'}</td>
-                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>{s.memoryUsed != null ? `${(s.memoryUsed / 1024).toFixed(0)}MB` : '-'}</td>
-                    <td style={{ padding: '0.5rem 0.75rem' }}>{formatLanguage(s.language)}</td>
-                    <td style={{ padding: '0.5rem 0.75rem', color: 'var(--gray-500)' }}>{new Date(s.createdAt).toLocaleString('zh-CN')}</td>
-                  </tr>
-                ))}
-                {submissions.length === 0 && (
+                {submissions.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>暂无评测记录</td>
+                    <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                      暂无评测记录
+                    </td>
                   </tr>
+                ) : (
+                  submissions.map(s => (
+                    <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td
+                        onClick={() => handleViewSubmission(s.id)}
+                        style={{ padding: '0.75rem 1rem', color: 'var(--primary)', fontFamily: 'monospace', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        #{s.id}
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontWeight: 500 }}>{toExcelColumnName(s.problemOrderIndex)}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.userName}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{getOjLabel(s.oj)}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#1e293b' }}>{s.score ?? '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.timeUsed ?? '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.codeLength ?? '-'}</td>
+                      <td
+                        onClick={() => setDetailSubmissionId(s.id)}
+                        style={{ padding: '0.75rem 1rem', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {formatLanguage(s.language)}
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                        {new Date(s.createdAt).toLocaleString('zh-CN')}
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -1024,73 +1165,45 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>
             {problems.map(p => {
               const sol = allSolutions[p.id]
-              const isEditing = editingSolutionId === p.id
-              const canView = sol?.visible || training.isAdmin
+              const hasPdfSolution = sol?.solutionType === 'pdf' && sol?.solutionPdfUrl
+              const hasContent = sol?.content || hasPdfSolution
+              if (!hasContent) return null  // 只显示有题解的题目
               return (
                 <div key={p.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{p.alias}</span>
-                    {training.isAdmin && (
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {!isEditing && (
-                          <button
-                            onClick={() => {
-                              setEditingSolutionId(p.id)
-                              setEditingSolutionContent(sol?.content || '')
-                              setEditingSolutionVisible(sol?.visible || false)
-                            }}
-                            style={{ padding: '0.25rem 0.5rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
-                          >
-                            编辑
-                          </button>
-                        )}
-                        {!sol?.content && !isEditing && (
-                          <button
-                            onClick={() => {
-                              setEditingSolutionId(p.id)
-                              setEditingSolutionContent('')
-                              setEditingSolutionVisible(false)
-                            }}
-                            style={{ padding: '0.25rem 0.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
-                          >
-                            添加题解
-                          </button>
-                        )}
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{toExcelColumnName(p.orderIndex)}. {p.alias}</span>
+                    {sol?.source === 'problem' && (
+                      <span style={{ fontSize: '0.75rem', background: 'var(--gray-100)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'var(--gray-500)' }}>
+                        原题目题解
+                      </span>
                     )}
                   </div>
-                  {isEditing ? (
-                    <div>
-                      <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <input type="checkbox" checked={editingSolutionVisible} onChange={e => setEditingSolutionVisible(e.target.checked)} />
-                          对学生可见
-                        </label>
-                        <button onClick={() => handleSaveSolution(p.id)} style={{ padding: '0.25rem 0.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}>保存</button>
-                        <button onClick={() => setEditingSolutionId(null)} style={{ padding: '0.25rem 0.5rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}>取消</button>
+                  <div>
+                    {hasPdfSolution ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <a
+                          href={sol!.solutionPdfUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                        >
+                          <span>📄</span>
+                          <span>查看 PDF 题解</span>
+                        </a>
                       </div>
-                      <textarea
-                        value={editingSolutionContent}
-                        onChange={e => setEditingSolutionContent(e.target.value)}
-                        placeholder="编写题解（Markdown）..."
-                        rows={6}
-                        style={{
-                          width: '100%', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '6px',
-                          fontSize: '0.85rem', fontFamily: 'Consolas, Monaco, monospace', lineHeight: 1.5,
-                          resize: 'vertical', boxSizing: 'border-box',
-                        }}
-                      />
-                    </div>
-                  ) : canView && sol?.content ? (
-                    <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}><MarkdownRenderer content={sol.content} /></div>
-                  ) : (
-                    <div style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>暂无题解</div>
-                  )}
+                    ) : sol?.content ? (
+                      <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}><MarkdownRenderer content={sol.content} /></div>
+                    ) : null}
+                  </div>
                 </div>
               )
             })}
-            {problems.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无题目</div>
+            {problems.every(p => {
+              const sol = allSolutions[p.id]
+              const hasPdfSolution = sol?.solutionType === 'pdf' && sol?.solutionPdfUrl
+              return !sol?.content && !hasPdfSolution
+            }) && (
+              <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无题解</div>
             )}
           </div>
         )}
@@ -1103,7 +1216,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               if (atts.length === 0) return null
               return (
                 <div key={p.id} style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{p.alias}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{toExcelColumnName(p.orderIndex)}. {p.alias}</div>
                   {atts.map(a => (
                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--gray-100)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1141,7 +1254,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                     <>
                       <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>总分</th>
                       {rankingData.problems.map((p: any) => (
-                        <th key={p.id} style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>{p.alias}</th>
+                        <th key={p.id} style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
                       ))}
                     </>
                   ) : (
@@ -1149,7 +1262,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                       <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>通过</th>
                       <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>罚时</th>
                       {rankingData.problems.map((p: any) => (
-                        <th key={p.id} style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>{p.alias}</th>
+                        <th key={p.id} style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
                       ))}
                     </>
                   )}
@@ -1215,80 +1328,71 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       </div>
 
       {/* ====== Submission Detail Modal ====== */}
-      {showSubmissionDetail && submissionDetail && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-          onClick={() => setShowSubmissionDetail(false)}
-        >
-          <div
-            style={{ background: 'white', borderRadius: '8px', width: '800px', maxHeight: '80vh', overflowY: 'auto', padding: '1.5rem' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem' }}>提交 #{submissionDetail.id}</h3>
-              <button onClick={() => setShowSubmissionDetail(false)} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: 'var(--gray-400)' }}>×</button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
-              <div><strong>题号:</strong> {submissionDetail.problemAlias}</div>
-              <div><strong>语言:</strong> {formatLanguage(submissionDetail.language)}</div>
-              <div><strong>结果:</strong> <span style={{ color: getResultColor(submissionDetail.result), fontWeight: 600 }}>{formatResult(submissionDetail.result)}</span></div>
-              <div><strong>分数:</strong> {submissionDetail.score ?? '-'}</div>
-              <div><strong>耗时:</strong> {submissionDetail.timeUsed != null ? `${submissionDetail.timeUsed}ms` : '-'}</div>
-              <div><strong>内存:</strong> {submissionDetail.memoryUsed != null ? `${(submissionDetail.memoryUsed / 1024).toFixed(0)}MB` : '-'}</div>
-              <div><strong>代码长度:</strong> {submissionDetail.codeLength}B</div>
-              <div><strong>提交时间:</strong> {new Date(submissionDetail.createdAt).toLocaleString('zh-CN')}</div>
-            </div>
-            {submissionDetail.cases && submissionDetail.cases.length > 0 && (
-              <div style={{ marginBottom: '1rem' }}>
-                <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>测试点</h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                  <thead>
-                    <tr style={{ background: '#fafafa' }}>
-                      <th style={{ padding: '0.4rem', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>#</th>
-                      <th style={{ padding: '0.4rem', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>状态</th>
-                      <th style={{ padding: '0.4rem', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>分数</th>
-                      <th style={{ padding: '0.4rem', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>耗时</th>
-                      <th style={{ padding: '0.4rem', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>内存</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submissionDetail.cases.map((c: any, i: number) => (
-                      <tr key={i} style={{ borderLeft: `3px solid ${getResultColor(c.result || c.status || '')}` }}>
-                        <td style={{ padding: '0.4rem', textAlign: 'center' }}>{i + 1}</td>
-                        <td style={{ padding: '0.4rem', textAlign: 'center', color: getResultColor(c.result || c.status || '') }}>{formatResult(c.result || c.status || '')}</td>
-                        <td style={{ padding: '0.4rem', textAlign: 'center' }}>{c.score ?? '-'}</td>
-                        <td style={{ padding: '0.4rem', textAlign: 'center' }}>{c.time != null ? `${c.time}ms` : '-'}</td>
-                        <td style={{ padding: '0.4rem', textAlign: 'center' }}>{c.memory != null ? `${(c.memory / 1024).toFixed(0)}MB` : '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {submissionDetail.code && (
-              <div>
-                <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>源代码</h4>
-                <pre style={{
-                  background: '#1e293b', color: '#e2e8f0', padding: '1rem', borderRadius: '6px',
-                  fontSize: '0.8rem', fontFamily: 'Consolas, Monaco, monospace', lineHeight: 1.5,
-                  overflowX: 'auto', maxHeight: '300px', overflowY: 'auto',
-                }}>
-                  {submissionDetail.code}
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* 提交详情弹窗 */}
+      <SubmissionDetailModal
+        isOpen={detailSubmissionId !== null}
+        onClose={() => setDetailSubmissionId(null)}
+        submissionId={detailSubmissionId}
+        viewRole={basePath.startsWith('/student') ? 'student' : basePath.startsWith('/platform-admin') ? 'admin' : 'teacher'}
+        trainingId={parseInt(trainingId)}
+      />
 
       {/* ====== Submit Code Modal ====== */}
       {showSubmitModal && isOngoing && (
         <Modal
           isOpen={true}
           onClose={() => setShowSubmitModal(false)}
-          title={`提交代码 - ${selectedProblem?.alias || ''}`}
+          title={`${selectedProblem?.platform ? (OJ_PLATFORM_LABEL_MAP[selectedProblem.platform] || selectedProblem.platform) + ' ' : ''}${selectedProblem?.platformProblemId || ''} - ${selectedProblem?.alias || ''}`}
           width="700px"
         >
+          {/* 非 Carits 平台：提交方式选择 */}
+          {selectedProblem?.platform && selectedProblem.platform !== 'carits' && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              {([
+                { key: 'robot' as const, label: '机器人账号' },
+                { key: 'myAccount' as const, label: '我的账号' },
+                { key: 'archive' as const, label: '归档' },
+              ]).map(m => (
+                <button
+                  key={m.key}
+                  onClick={() => setSubmitMethod(m.key)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.875rem',
+                    border: '1px solid',
+                    borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
+                    borderRadius: '6px',
+                    background: submitMethod === m.key ? '#dbeafe' : 'white',
+                    color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
+                    cursor: 'pointer',
+                    fontWeight: submitMethod === m.key ? 600 : 400,
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 我的账号/归档时显示平台账号绑定提示 */}
+          {selectedProblem?.platform && selectedProblem.platform !== 'carits' && (submitMethod === 'myAccount' || submitMethod === 'archive') && (
+            <div style={{
+              fontSize: '0.875rem',
+              color: 'var(--gray-500)',
+              padding: '0.5rem 0.75rem',
+              background: 'var(--gray-50)',
+              borderRadius: '6px',
+              marginBottom: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>平台账号</span>
+              <span style={{ color: '#f59e0b' }}>未绑定</span>
+            </div>
+          )}
+
+          {/* 语言选择 */}
           <div style={{ marginBottom: '1rem' }}>
             <select
               value={submitLanguage}
@@ -1302,15 +1406,13 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 background: 'white',
               }}
             >
-              <option value="c">C</option>
-              <option value="cpp">C++</option>
-              <option value="cpp14">C++14</option>
-              <option value="cpp17">C++17</option>
-              <option value="cpp20">C++20</option>
-              <option value="java">Java</option>
-              <option value="python">Python</option>
+              {LANGUAGE_OPTIONS.filter(o => o.value).map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
+
+          {/* 代码输入框 */}
           <textarea
             placeholder="在此输入代码..."
             value={submitCode}
@@ -1326,21 +1428,33 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               lineHeight: 1.5,
               resize: 'vertical',
               boxSizing: 'border-box',
+              background: submitMethod === 'robot' ? 'white' : '#f8fafc',
+              color: submitMethod === 'robot' ? '#1e293b' : 'var(--gray-400)',
             }}
+            disabled={submitMethod !== 'robot'}
           />
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+
+          {/* 提交按钮 */}
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
+              {selectedProblem?.platform === 'carits'
+                ? '本地评测'
+                : submitMethod === 'robot'
+                  ? `${OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || ''} 机器人提交已启用`
+                  : '暂未开放此提交方式'}
+            </span>
             <button
               onClick={handleSubmitCode}
-              disabled={submitting || !submitCode.trim()}
+              disabled={submitting || !submitCode.trim() || submitMethod !== 'robot'}
               style={{
                 padding: '0.625rem 2rem',
-                background: submitting || !submitCode.trim() ? 'var(--gray-300)' : 'var(--primary)',
-                color: submitting || !submitCode.trim() ? 'var(--gray-500)' : 'white',
+                background: (submitting || !submitCode.trim() || submitMethod !== 'robot') ? 'var(--gray-300)' : 'var(--primary)',
+                color: (submitting || !submitCode.trim() || submitMethod !== 'robot') ? 'var(--gray-500)' : 'white',
                 border: 'none',
                 borderRadius: '6px',
                 fontSize: '0.875rem',
                 fontWeight: 500,
-                cursor: submitting || !submitCode.trim() ? 'not-allowed' : 'pointer',
+                cursor: (submitting || !submitCode.trim() || submitMethod !== 'robot') ? 'not-allowed' : 'pointer',
                 opacity: submitting ? 0.7 : 1,
               }}
             >

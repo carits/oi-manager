@@ -77,11 +77,12 @@ School (学校)
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | Next.js 14 + React + TypeScript |
+| 前端 | Next.js 14 + React + TypeScript + SWR |
 | 后端 | Express + TypeScript |
-| 数据库 | SQLite + Prisma ORM |
+| 数据库 | PostgreSQL + Prisma ORM |
 | 认证 | JWT |
 | 包管理 | pnpm + monorepo |
+| 部署 | Docker + PM2 + Nginx |
 
 ---
 

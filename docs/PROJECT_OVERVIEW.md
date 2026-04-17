@@ -131,9 +131,10 @@ oi-manager-v2/
 - **框架**: Express
 - **语言**: TypeScript
 - **ORM**: Prisma
-- **数据库**: SQLite
+- **数据库**: PostgreSQL（开发用 Docker，测试用 SQLite 隔离）
 - **认证**: JWT
 - **密码加密**: bcrypt
+- **部署**: PM2 cluster / Docker / Nginx
 
 #### 开发工具
 - **包管理**: pnpm
@@ -245,11 +246,12 @@ oi-manager-v2/
 ### 开发环境
 - Node.js >= 18
 - pnpm >= 8
-- SQLite 3
+- PostgreSQL >= 14（或 Docker）
+- Docker >= 20（可选，用于本地 PostgreSQL）
 
 ### 端口配置
 - 前端: http://localhost:3000
-- 后端: http://localhost:3001
+- 后端: http://localhost:3002
 
 ### 启动命令
 ```bash

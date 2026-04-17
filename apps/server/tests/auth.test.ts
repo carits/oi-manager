@@ -164,13 +164,12 @@ describe('Authentication Module', () => {
 
   describe('POST /api/auth/register', () => {
     it('should register a new student successfully', async () => {
-      const school = await prisma.school.create({
-        data: { name: '注册测试学校', currentPrincipalTeacherId: 'dummy', status: 'active' }
-      })
+      const { school } = await createTestSchoolWithPrincipal('注册测试学校')
+      const uniqueUsername = `reg_${Math.random().toString(36).slice(2, 8)}`
       const res = await request(app)
         .post('/api/auth/register')
         .send({
-          username: 'newstudent',
+          username: uniqueUsername,
           password: 'password123',
           name: 'New Student',
           schoolId: school.id

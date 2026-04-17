@@ -39,7 +39,7 @@ export default function NewProblemListPage() {
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '2rem' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push(`${pathPrefix}/problem-lists`)}
           style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}
         >
           ← 返回题单列表
@@ -93,7 +93,7 @@ export default function NewProblemListPage() {
             </button>
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.push(`${pathPrefix}/problem-lists`)}
               style={{
                 flex: 1,
                 padding: '0.625rem',

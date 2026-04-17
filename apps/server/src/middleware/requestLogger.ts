@@ -6,6 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express'
 import logger, { createRequestLogger } from '../lib/logger'
+import type { JwtPayload } from '@oi-manager/shared'
 
 // 扩展 Express Request 类型
 declare global {
@@ -14,15 +15,7 @@ declare global {
       requestId?: string
       requestLogger?: ReturnType<typeof createRequestLogger>
       startTime?: number
-      user?: {
-        userId: string
-        username: string
-        role: string
-        teacherId?: string
-        studentId?: string
-        adminId?: string
-        schoolId?: string
-      }
+      user?: JwtPayload
     }
   }
 }

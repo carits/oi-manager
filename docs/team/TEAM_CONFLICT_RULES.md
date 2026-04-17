@@ -176,7 +176,7 @@ owner A 正在删除团队，同时管理员 B 正在处理该团队的加入申
 | 方案 | 实现位置 | 说明 |
 |------|----------|------|
 | 级联删除 | schema.prisma | `onDelete: Cascade` |
-| 事务隔离 | 数据库级别 | SQLite 自动串行化写操作 |
+| 事务隔离 | 数据库级别 | PostgreSQL MVCC 行级锁 |
 
 ```prisma
 // schema.prisma

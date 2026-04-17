@@ -3,7 +3,7 @@
  * 平台绑定模块类型定义
  */
 
-import type { UserRole, JwtPayload } from '../../../../packages/shared/src/index.js'
+import type { UserRole, JwtPayload } from '@oi-manager/shared'
 
 // ==================== 基础类型 ====================
 

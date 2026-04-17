@@ -183,7 +183,8 @@ export class LuoguImportService {
                 username: systemUsername,
                 passwordHash,
                 role: 'student',
-                status: 'active'
+                status: 'active',
+                schoolId
               }
             })
 

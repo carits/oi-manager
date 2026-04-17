@@ -233,7 +233,7 @@ export default function TeamImportPage() {
 
             {/* 操作按钮 */}
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" onClick={() => router.back()}>
+              <Button variant="secondary" onClick={() => router.push('/teacher/students')}>
                 取消
               </Button>
               <Button onClick={handleNext} disabled={!createTeam || !selectedPlatform}>

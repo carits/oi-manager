@@ -1,6 +1,6 @@
 # 本地开发运维手册 (Runbook)
 
-> 最后更新: 2026-03-23
+> 最后更新: 2026-04-15
 
 本文档描述如何在本地启动、调试和维护 OI Manager V2 系统。
 
@@ -12,7 +12,8 @@
 |------|----------|----------|
 | Node.js | >= 18.0 | `node -v` |
 | pnpm | >= 8.0 | `pnpm -v` |
-| SQLite | >= 3.0 | `sqlite3 --version` |
+| PostgreSQL | >= 14.0 | `psql --version` 或 Docker |
+| Docker (可选) | >= 20.0 | `docker --version` |
 
 ---
 
@@ -25,7 +26,24 @@
 pnpm install
 ```
 
-### 2.2 初始化数据库
+### 2.2 启动数据库（PostgreSQL）
+
+**方式一：Docker（推荐）**
+```bash
+docker compose up -d db
+```
+
+**方式二：本地 PostgreSQL**
+```bash
+# macOS
+brew install postgresql@16
+brew services start postgresql@16
+
+# Ubuntu
+sudo apt install postgresql-16
+```
+
+### 2.3 初始化数据库
 
 ```bash
 cd apps/server
@@ -40,7 +58,17 @@ pnpm prisma:push
 pnpm prisma:seed
 ```
 
-### 2.3 启动开发环境
+### 2.4 从 SQLite 迁移（如有旧数据）
+
+```bash
+# 确保 PostgreSQL 已启动
+docker compose up -d db
+
+# 执行迁移脚本
+npx tsx scripts/migrate-sqlite-to-pg.ts
+```
+
+### 2.5 启动开发环境
 
 ```bash
 # 在项目根目录，同时启动前端和后端
@@ -50,7 +78,7 @@ pnpm dev
 或者分别启动：
 
 ```bash
-# 终端 1 - 启动后端 (端口 3001)
+# 终端 1 - 启动后端 (端口 3002)
 cd apps/server
 pnpm dev
 
@@ -59,10 +87,10 @@ cd apps/web
 pnpm dev
 ```
 
-### 2.4 访问应用
+### 2.6 访问应用
 
 - **前端**: http://localhost:3000
-- **后端 API**: http://localhost:3001
+- **后端 API**: http://localhost:3002
 
 ---
 
@@ -129,7 +157,11 @@ cat prisma/schema.prisma
 ### 5.2 数据库文件位置
 
 ```
-apps/server/prisma/dev.db
+# 开发环境（Docker PostgreSQL）
+docker compose exec db psql -U oi -d oi_manager
+
+# 连接串
+postgresql://oi:oi_password@localhost:5432/oi_manager
 ```
 
 ### 5.3 重置数据库
@@ -137,13 +169,16 @@ apps/server/prisma/dev.db
 ```bash
 cd apps/server
 
-# 删除数据库文件
-rm prisma/dev.db
-
-# 重新推送 schema
+# 方式一：Docker（推荐，重建容器）
+cd ../..
+docker compose down -v
+docker compose up -d db
+cd apps/server
 pnpm prisma:push
+pnpm prisma:seed
 
-# 重新执行种子数据
+# 方式二：直接清空
+pnpm prisma:push --force-reset
 pnpm prisma:seed
 ```
 
@@ -174,14 +209,17 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 文件位置: `apps/server/.env`
 
 ```bash
-# 数据库
-DATABASE_URL="file:./prisma/dev.db"
+# 数据库（PostgreSQL）
+DATABASE_URL="postgresql://oi:oi_password@localhost:5432/oi_manager"
 
 # JWT
 JWT_SECRET="your-secret-key"
 
 # 服务端口
-PORT=3001
+PORT=3002
+
+# API 限流（每分钟最大请求数）
+RATE_LIMIT_MAX=2000
 ```
 
 ---
@@ -319,12 +357,56 @@ npx prisma db pull
 
 ---
 
-## 11. 生产部署提示
+## 11. 生产部署
 
-> 本项目当前为 MVP 版本，生产部署需要额外配置：
+### 11.1 Docker Compose 部署（推荐）
+
+```bash
+# 修改 .env.production 为实际值
+cp apps/server/.env.production apps/server/.env
+
+# 启动所有服务
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+```
+
+### 11.2 PM2 部署
+
+```bash
+# 构建
+pnpm build
+
+# 启动 PM2 cluster 模式
+pm2 start ecosystem.config.js
+
+# 查看状态
+pm2 status
+
+# 查看日志
+pm2 logs oi-server
+```
+
+### 11.3 Nginx 反向代理
+
+```bash
+# 复制配置
+sudo cp nginx/oi-manager.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/oi-manager.conf /etc/nginx/sites-enabled/
+
+# 检查配置
+sudo nginx -t
+
+# 重载
+sudo nginx -s reload
+```
+
+### 11.4 生产环境清单
 
 1. **环境变量**: 修改所有默认密码和密钥
-2. **数据库**: 考虑迁移到 PostgreSQL/MySQL
+2. **数据库**: 使用 PostgreSQL（非 SQLite）
 3. **反向代理**: 使用 Nginx
 4. **HTTPS**: 配置 SSL 证书
-5. **进程管理**: 使用 PM2 或 Docker
+5. **进程管理**: PM2 cluster 模式或 Docker
+6. **限流**: 确认 `RATE_LIMIT_MAX` 设置合理

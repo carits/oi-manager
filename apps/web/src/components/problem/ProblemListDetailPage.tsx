@@ -356,7 +356,7 @@ export default function ProblemListDetailPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <button
-                onClick={() => router.back()}
+                onClick={() => router.push(`${pathPrefix}/problem-lists`)}
                 style={{ padding: '0.375rem 0.75rem', background: 'transparent', color: 'var(--gray-500)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
               >
                 ← 返回

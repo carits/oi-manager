@@ -40,7 +40,7 @@ schoolProblemListsRouter.get('/:schoolId/problem-lists', authenticate, async (re
             description: true,
             ownerId: true,
             ownerType: true,
-            _count: { select: { Sections: true } }
+            _count: { select: { ProblemListSection: true } }
           }
         }
       }
@@ -50,7 +50,7 @@ schoolProblemListsRouter.get('/:schoolId/problem-lists', authenticate, async (re
     const data = await Promise.all(items.map(async (item) => {
       // 获取条目总数
       const entryCount = await prisma.problemListEntry.count({
-        where: { Section: { ProblemList: { id: item.problemListId } } }
+        where: { ProblemListSection: { problemListId: item.problemListId } }
       })
 
       // 获取 owner 名字
@@ -93,7 +93,7 @@ schoolProblemListsRouter.get('/:schoolId/problem-lists', authenticate, async (re
           ownerId: item.ProblemList.ownerId,
           ownerName,
           ownerType: item.ProblemList.ownerType,
-          sectionCount: item.ProblemList._count.Sections,
+          sectionCount: item.ProblemList._count.ProblemListSection,
           entryCount
         }
       }

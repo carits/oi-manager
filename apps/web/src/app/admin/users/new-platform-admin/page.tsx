@@ -59,7 +59,7 @@ export default function NewPlatformAdminPage() {
         <main style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
           <div style={{ marginBottom: '1.5rem' }}>
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push('/admin/users')}
               style={{
                 padding: '0.5rem 1rem',
                 background: 'white',
@@ -177,7 +177,7 @@ export default function NewPlatformAdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => router.back()}
+                onClick={() => router.push('/admin/users')}
                 style={{
                   padding: '0.5rem 1.5rem',
                   background: 'white',

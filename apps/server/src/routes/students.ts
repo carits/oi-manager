@@ -237,7 +237,6 @@ studentRouter.get('/:id', authenticate, async (req, res) => {
       include: {
         School: { select: { id: true, name: true } },
         Teacher: { select: { id: true, name: true, title: true } },
-        Team: { select: { id: true, name: true } },
         User: { select: { username: true, phone: true, email: true, avatar: true, bio: true } },
         Milestone: { orderBy: { milestoneDate: 'desc' } },
         ContestResult: { include: { Contest: true }, orderBy: { Contest: { contestDate: 'desc' } } }
@@ -275,6 +274,13 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
       return res.status(400).json({ success: false, message: '学生必须关联学校，请确保您已归属学校' })
     }
 
+    // 权限检查：教师只能为本校创建学生（超管/平台管理员/学校负责人可以为任意学校创建）
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } })
+    const isPrivileged = currentUser?.role === 'super_admin' || currentUser?.role === 'platform_admin' || currentUser?.role === 'school_principal'
+    if (!isPrivileged && teacher?.schoolId && schoolId && schoolId !== teacher.schoolId) {
+      return res.status(400).json({ success: false, message: '您只能为本校创建学生' })
+    }
+
     // 确定主教练：优先使用传入的，否则使用当前登录的老师
     const finalHeadTeacherId = headTeacherId || teacher?.id
     if (!finalHeadTeacherId) {
@@ -298,6 +304,7 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
           username,
           passwordHash: hashedPassword,
           role: 'student',
+          schoolId: finalSchoolId, // 用户必须绑定学校
           phone,
           email,
           avatar

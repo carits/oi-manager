@@ -86,6 +86,23 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     return '/teacher'
   }
 
+  // 格式化内存显示（MB，保留小数点）
+  // HDU 返回 KB，需要转换为 MB；其他平台假设已经是 MB
+  const formatMemory = (oj: string, memoryUsed: number | null): string => {
+    if (memoryUsed === null) return '-'
+    if (oj === 'hdu') {
+      return (memoryUsed / 1024).toFixed(2)
+    }
+    return String(memoryUsed)
+  }
+
+  // 格式化时间显示（MS）
+  // HDU 和其他平台都返回毫秒，直接显示
+  const formatTime = (timeUsed: number | null): string => {
+    if (timeUsed === null) return '-'
+    return String(timeUsed)
+  }
+
   // 判断题目是否可点击（公开题目 或 管理员可点击所有）
   const canClickProblem = (submission: Submission) => {
     if (!submission.problemInternalId) return false
@@ -339,7 +356,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>OJ</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>题号</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(ms)</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(MS)</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
@@ -349,13 +366,13 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                  <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
                     加载中...
                   </td>
                 </tr>
               ) : submissions.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                  <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
                     暂无评测记录
                   </td>
                 </tr>
@@ -383,8 +400,8 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.timeUsed ?? '-'}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.memoryUsed ?? '-'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{formatTime(s.timeUsed)}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{formatMemory(s.oj, s.memoryUsed)}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.codeLength ?? '-'}</td>
                     <td
                       onClick={() => setDetailSubmissionId(s.id)}

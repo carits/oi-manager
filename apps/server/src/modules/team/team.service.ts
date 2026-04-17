@@ -4,7 +4,7 @@
  */
 
 import logger from '../../lib/logger'
-import type { JwtPayload } from '../../../../packages/shared/src/index.js'
+import type { JwtPayload } from '@oi-manager/shared'
 import { teamRepository, TeamRepository } from './team.repository'
 import { getUserName, getMemberDetails, getMemberDetailsBatch, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
 import type {
@@ -188,9 +188,9 @@ export class TeamService {
     const studentNameMap = new Map(students.map(s => [s.id, s.name]))
 
     // 分类：已加入、邀请（invitedBy != null）、申请（invitedBy == null）
-    const joinedTeams: unknown[] = []
-    const pendingInvitations: unknown[] = []
-    const pendingRequests: unknown[] = []
+    const joinedTeams: Record<string, unknown>[] = []
+    const pendingInvitations: Record<string, unknown>[] = []
+    const pendingRequests: Record<string, unknown>[] = []
 
     for (const record of memberRecords) {
       const team = teamMap.get(record.teamId)

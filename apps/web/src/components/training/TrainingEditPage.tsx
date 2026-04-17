@@ -3,6 +3,16 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
+
+/** 将 Date 格式化为 datetime-local 所需的本地时间字符串 "YYYY-MM-DDTHH:mm" */
+function toLocalDatetimeString(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d}T${h}:${min}`
+}
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -76,9 +86,9 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
           setTitle(t.title)
           setDescription(t.description || '')
           setFormat(t.format as 'ioi' | 'icpc')
-          const startStr = new Date(t.startTime).toISOString().slice(0, 16)
+          const startStr = toLocalDatetimeString(new Date(t.startTime))
           setStartTime(startStr)
-          setEndTime(new Date(t.endTime).toISOString().slice(0, 16))
+          setEndTime(toLocalDatetimeString(new Date(t.endTime)))
           setOriginalStartTime(new Date(t.startTime))
           setOriginalStartTimeStr(startStr)
         }
@@ -106,7 +116,7 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
         }
       } catch (error) {
         toast.error('加载失败')
-        router.back()
+        router.push(`${basePath}/${teamId}/trainings/${trainingId}`)
       } finally {
         setLoading(false)
       }
@@ -180,27 +190,44 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
     }, 500)
   }
 
+  const moveUp = (idx: number) => {
+    if (idx === 0) return
+    const rows = [...problemRows]
+    const temp = rows[idx - 1]
+    rows[idx - 1] = rows[idx]
+    rows[idx] = temp
+    setProblemRows(rows)
+  }
+
+  const moveDown = (idx: number) => {
+    if (idx === problemRows.length - 1) return
+    const rows = [...problemRows]
+    const temp = rows[idx]
+    rows[idx] = rows[idx + 1]
+    rows[idx + 1] = temp
+    setProblemRows(rows)
+  }
+
   const handleSave = async () => {
     if (!title.trim()) { toast.error('请输入标题'); return }
     if (!startTime || !endTime) { toast.error('请设置开始和结束时间'); return }
     if (new Date(endTime) <= new Date(startTime)) { toast.error('结束时间必须晚于开始时间'); return }
 
     // Check start time modification
-    const now = new Date()
-    const isStarted = originalStartTime ? now >= originalStartTime : false
+    const isStarted = originalStartTime ? new Date() >= originalStartTime : false
     if (isStarted && startTime !== originalStartTimeStr) {
       toast.error('训练已经开始，不能修改开始时间')
       return
     }
 
     // 未开始的训练，新的开始时间不能在过去
-    if (!isStarted && new Date(startTime) <= now) {
+    if (!isStarted && startTime !== originalStartTimeStr && new Date(startTime) <= new Date()) {
       toast.error('开始时间不能早于当前时间')
       return
     }
 
     // 结束时间不能早于当前时间
-    if (new Date(endTime) <= now) {
+    if (new Date(endTime) <= new Date()) {
       toast.error('结束时间不能早于当前时间')
       return
     }
@@ -217,7 +244,12 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
     try {
       // 1. Update training info
       const updateRes = await apiClient.put(`/api/trainings/${trainingId}`, {
-        title, description, format, startTime, endTime,
+        title, description, format,
+        // 只有用户实际修改了开始时间才发送（避免后端误判）
+        ...(startTime !== originalStartTimeStr && {
+          startTime: new Date(startTime).toISOString(),
+        }),
+        endTime: new Date(endTime).toISOString(),
       })
       if (!updateRes.success) {
         toast.error(updateRes.message || '更新失败')
@@ -243,13 +275,25 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
         })
       }
 
-      // 4. Add new problems
+      // 4. Add new problems and collect their IDs
+      const newTrainingProblemIds: string[] = []
       for (const row of newRows.filter(r => r.resolved?.found)) {
-        await apiClient.post(`/api/trainings/${trainingId}/problems`, {
+        const createRes = await apiClient.post(`/api/trainings/${trainingId}/problems`, {
           problemId: row.resolved!.problemId,
           alias: row.alias,
           points: format === 'ioi' ? row.points : null,
         })
+        if (createRes.success && createRes.data) {
+          newTrainingProblemIds.push((createRes.data as any).id)
+        }
+      }
+
+      // 5. Build order list: existing IDs in order + new IDs appended
+      const existingIdsInOrder = problemRows.filter(r => r.existing).map(r => r.trainingProblemId!)
+      const allIdsInOrder = [...existingIdsInOrder, ...newTrainingProblemIds]
+      const orders = allIdsInOrder.map((id, i) => ({ id, orderIndex: i }))
+      if (orders.length > 0) {
+        await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
       }
 
       toast.success('训练更新成功')
@@ -276,7 +320,7 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
         <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>编辑训练</h2>
-            <Button variant="secondary" onClick={() => router.back()}>取消</Button>
+            <Button variant="secondary" onClick={() => router.push(`${basePath}/${teamId}/trainings/${trainingId}`)}>取消</Button>
           </div>
 
           {/* Basic Info */}
@@ -317,6 +361,7 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ background: '#fafafa' }}>
+                      <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '50px' }}>排序</th>
                       <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '36px' }}>#</th>
                       <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '140px' }}>OJ</th>
                       <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '100px' }}>题号</th>
@@ -329,6 +374,37 @@ export function TrainingEditPage({ basePath }: TrainingEditPageProps) {
                   <tbody>
                     {problemRows.map((row, idx) => (
                       <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? '#fff' : '#fffbe6' }}>
+                        <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center' }}>
+                          <button
+                            onClick={() => moveUp(idx)}
+                            disabled={idx === 0}
+                            style={{
+                              background: idx === 0 ? '#f5f5f5' : 'white',
+                              border: '1px solid var(--border)',
+                              borderRadius: '3px',
+                              cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                              padding: '0.15rem 0.35rem',
+                              fontSize: '0.7rem',
+                              marginRight: '2px',
+                              color: idx === 0 ? '#ccc' : '#666',
+                            }}
+                            title="上移"
+                          >↑</button>
+                          <button
+                            onClick={() => moveDown(idx)}
+                            disabled={idx === problemRows.length - 1}
+                            style={{
+                              background: idx === problemRows.length - 1 ? '#f5f5f5' : 'white',
+                              border: '1px solid var(--border)',
+                              borderRadius: '3px',
+                              cursor: idx === problemRows.length - 1 ? 'not-allowed' : 'pointer',
+                              padding: '0.15rem 0.35rem',
+                              fontSize: '0.7rem',
+                              color: idx === problemRows.length - 1 ? '#ccc' : '#666',
+                            }}
+                            title="下移"
+                          >↓</button>
+                        </td>
                         <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{idx + 1}</td>
                         <td style={{ padding: '0.4rem 0.5rem' }}>
                           <select value={row.ojName}

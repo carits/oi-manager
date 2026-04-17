@@ -88,7 +88,7 @@ export default function UserDetailPage() {
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/admin/users')}
             style={{
               padding: '0.5rem 1rem',
               background: 'white',

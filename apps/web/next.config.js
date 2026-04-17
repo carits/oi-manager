@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 只在生产构建时使用 standalone 输出，dev 模式下会导致 vendor chunk 500 错误
+  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
   compress: true,
   transpilePackages: ['shared', '@oi-manager/shared'],
   webpack: (config) => {

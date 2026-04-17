@@ -1,7 +1,8 @@
 // 样式工具函数
 // 提供常用的样式对象，减少重复的内联样式
 
-import { CSSProperties } from 'react'
+// 使用本地类型替代 react 的 CSSProperties，避免服务器端依赖 react
+type CSSProperties = Record<string, string | number>
 
 // 按钮样式
 export const buttonStyles = {

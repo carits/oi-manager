@@ -432,6 +432,7 @@ export class TeamImportRepository {
           passwordHash: params.passwordHash,
           role: 'student',
           status: 'active',
+          schoolId: params.schoolId,
         },
       })
 

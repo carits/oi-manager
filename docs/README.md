@@ -35,9 +35,10 @@
 - **题单管理**: 题目分配、进度追踪
 
 ### 技术栈
-- **前端**: Next.js 14 + React + TypeScript
+- **前端**: Next.js 14 + React + TypeScript + SWR
 - **后端**: Express + TypeScript
-- **数据库**: SQLite + Prisma ORM
+- **数据库**: PostgreSQL + Prisma ORM
+- **部署**: Docker + PM2 + Nginx
 - **包管理**: pnpm + monorepo
 
 ## 文档状态
@@ -56,6 +57,13 @@
 | COMPONENTS.md | ✅ 完整 | 组件文档 |
 
 ## 更新日志
+
+### 2026-04-15
+- ✅ SQLite → PostgreSQL 迁移
+- ✅ Docker + PM2 + Nginx 部署配置
+- ✅ SWR 前端缓存层
+- ✅ 排名 SQL 聚合优化
+- ✅ 限流从 100/分钟调至 2000/分钟
 
 ### 2026-03-23
 - ✅ 文档一致性检查和修复

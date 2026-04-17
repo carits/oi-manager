@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 
+/** 将 Date 格式化为 datetime-local 所需的本地时间字符串 "YYYY-MM-DDTHH:mm" */
+function toLocalDatetimeString(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d}T${h}:${min}`
+}
+
 interface ResolvedProblem {
   found: boolean
   problemId: string
@@ -70,12 +80,12 @@ export function TrainingCreateModal({ isOpen, onClose, teamId, onCreated }: Trai
       }
       date.setHours(hours, 0, 0, 0)
 
-      setStartTime(date.toISOString().slice(0, 16))
+      setStartTime(toLocalDatetimeString(date))
 
       // 结束时间 = 开始时间 + 3h
       const end = new Date(date)
       end.setHours(end.getHours() + 3)
-      setEndTime(end.toISOString().slice(0, 16))
+      setEndTime(toLocalDatetimeString(end))
     }
   }, [isOpen])
 
@@ -168,7 +178,9 @@ export function TrainingCreateModal({ isOpen, onClose, teamId, onCreated }: Trai
     try {
       // 1. Create training
       const res = await apiClient.post(`/api/teams/${teamId}/trainings`, {
-        title, description, format, startTime, endTime,
+        title, description, format,
+        startTime: new Date(startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
       })
       if (!res.success || !res.data) {
         toast.error(res.message || '创建失败')

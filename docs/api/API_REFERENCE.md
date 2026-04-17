@@ -4,7 +4,7 @@
 
 ## API 概述
 
-- **Base URL**: `http://localhost:3001/api`
+- **Base URL**: `http://localhost:3002/api`
 - **认证方式**: JWT Bearer Token
 - **响应格式**: JSON
 - **统一响应结构**:
@@ -338,18 +338,18 @@ Content-Type: application/json
 
 ```bash
 # 登录获取 token
-curl -X POST http://localhost:3001/api/auth/login \
+curl -X POST http://localhost:3002/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"123456"}'
 
 # 使用 token 访问接口
-curl -X GET http://localhost:3001/api/users \
+curl -X GET http://localhost:3002/api/users \
   -H "Authorization: Bearer <token>"
 ```
 
 ### 使用 Postman
 
-1. 创建环境变量 `baseUrl`: `http://localhost:3001/api`
+1. 创建环境变量 `baseUrl`: `http://localhost:3002/api`
 2. 创建环境变量 `token`: 登录后获取的 token
 3. 在请求头中添加 `Authorization: Bearer {{token}}`
 

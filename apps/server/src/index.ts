@@ -7,11 +7,11 @@ import { authRouter } from './routes/auth'
 import { studentRouter } from './routes/students'
 import { milestoneRouter } from './routes/milestones'
 import { teamRouter } from './routes/teams'
-import { schoolRouter } from './routes/schools'
+import { schoolRouter } from './modules/school/school.routes'
 import { userRouter } from './routes/users'
 import { statsRouter } from './routes/stats'
 import { teacherRouter } from './routes/teachers'
-import { problemsRouter } from './routes/problems'
+import { problemsRouter } from './modules/problem/problem.routes'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { filesRouter } from './routes/files'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
@@ -23,7 +23,7 @@ import { teamProblemListsRouter } from './routes/team-problem-lists'
 import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
 import { submitRouter } from './routes/submit'
 import { testdataRouter } from './routes/testdata'
-import { trainingsRouter } from './routes/trainings'
+import { trainingsRouter } from './modules/training/training.routes'
 import { startSubmissionPoller } from './lib/submission-poller'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
@@ -204,4 +204,5 @@ const httpServer = app.listen(PORT, () => {
   initJudgeWebSocket()
 })
 
+export { httpServer }
 export default app

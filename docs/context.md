@@ -8,15 +8,15 @@
 
 ## 技术栈
 
-- **前端**: Next.js 14 + React + TypeScript
+- **前端**: Next.js 14 + React + TypeScript + SWR
 - **后端**: Express + TypeScript
-- **数据库**: SQLite + Prisma ORM
+- **数据库**: PostgreSQL + Prisma ORM（开发用 Docker，测试用 SQLite 隔离）
 - **包管理**: pnpm (Monorepo)
 
 ## 端口配置
 
 - 前端: http://localhost:3000
-- 后端: http://localhost:3001
+- 后端: http://localhost:3002
 
 ## 常用命令
 

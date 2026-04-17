@@ -32,7 +32,6 @@ export const platformAdminNav: NavConfig = {
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '评测记录', href: '/platform-admin/submissions' },
     { label: '提交管理', href: '/platform-admin/oj-accounts' },
-    { label: '统计数据', href: '/platform-admin/stats' },
   ]
 }
 

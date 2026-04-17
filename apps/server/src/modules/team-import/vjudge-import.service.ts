@@ -378,7 +378,8 @@ export class VjudgeImportService {
                 username: systemUsername,
                 passwordHash,
                 role: 'student',
-                status: 'active'
+                status: 'active',
+                schoolId
               }
             })
 

@@ -185,7 +185,7 @@ export default function TeamImportBindPage() {
             )}
 
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
-              <Button variant="secondary" onClick={() => router.back()}>
+              <Button variant="secondary" onClick={() => router.push('/teacher/students/import')}>
                 返回
               </Button>
               <Button onClick={handleBind} disabled={binding}>

@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { authenticate, AuthRequest, isAdmin, isSuperAdmin } from '../middleware/auth.js'
 import { prisma } from '../prisma.js'
-import { CreatePlatformAdminRequest, ResetUserPasswordRequest, GetUsersQueryParams } from '../../../../packages/shared/src/index.js'
+import { CreatePlatformAdminRequest, ResetUserPasswordRequest, GetUsersQueryParams } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation.js'
 import { passwordResetLimiter } from '../middleware/rateLimiter.js'
 
@@ -158,20 +158,22 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         skip,
         take,
         include: {
+          School: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
           Teacher: {
             select: {
               id: true,
-              name: true,
-              schoolId: true,
-              School: { select: { id: true, name: true } }
+              name: true
             }
           },
           Student: {
             select: {
               id: true,
-              name: true,
-              schoolId: true,
-              School: { select: { id: true, name: true } }
+              name: true
             }
           },
           Admin: {
@@ -187,32 +189,30 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     ])
 
     // 格式化响应
-    const formattedUsers = users.map(user => ({
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      status: user.status,
-      avatar: user.avatar,
-      phone: user.phone,
-      email: user.email,
-      bio: user.bio,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
-      profile: user.Teacher ? {
-        id: user.Teacher.id,
-        name: user.Teacher.name,
-        schoolId: user.Teacher.schoolId || undefined,
-        schoolName: user.Teacher.School?.name
-      } : user.Student ? {
-        id: user.Student.id,
-        name: user.Student.name,
-        schoolId: user.Student.schoolId || undefined,
-        schoolName: user.Student.School?.name
-      } : user.Admin ? {
-        id: user.Admin.id,
-        name: user.Admin.name
-      } : undefined
-    }))
+    const formattedUsers = users.map(user => {
+      // 从 Teacher/Student/Admin 获取姓名，如果没有则为空
+      const name = user.Teacher?.name || user.Student?.name || user.Admin?.name || ''
+      // 所有用户都有 schoolId，直接从 User.School 获取学校信息
+      const schoolName = user.School?.name || ''
+
+      return {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        status: user.status,
+        avatar: user.avatar,
+        phone: user.phone,
+        email: user.email,
+        bio: user.bio,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        profile: {
+          name,
+          schoolId: user.schoolId,
+          schoolName
+        }
+      }
+    })
 
     res.json({
       success: true,
@@ -352,18 +352,23 @@ userRouter.post('/platform-admin', authenticate, async (req: AuthRequest, res: R
     // 密码加密
     const passwordHash = await bcrypt.hash(password, 10)
 
+    // 获取平台学校 ID（用于绑定系统管理员）
+    const platformSchoolId = 'platform-school-00000000'
+
     // 创建用户和管理员档案
     const user = await prisma.user.create({
       data: {
         username,
         passwordHash,
         role: 'platform_admin',
+        schoolId: platformSchoolId, // 系统管理员绑定到平台学校
         phone,
         email,
         bio,
         Admin: {
           create: {
-            name
+            name,
+            schoolId: platformSchoolId // Admin 也需要 schoolId
           }
         }
       },

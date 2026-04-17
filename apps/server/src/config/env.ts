@@ -45,7 +45,7 @@ export function validateEnv(): void {
 
   // 输出当前环境信息
   console.log(`✅ Environment: ${nodeEnv}`)
-  console.log(`✅ Port: ${process.env.PORT || 3001}`)
+  console.log(`✅ Port: ${process.env.PORT || 3002}`)
 }
 
 /**

@@ -3,7 +3,7 @@
  * 团队模块类型定义
  */
 
-import type { UserRole, JwtPayload } from '../../../../packages/shared/src/index.js'
+import type { UserRole, JwtPayload } from '@oi-manager/shared'
 
 // ==================== 基础类型 ====================
 
@@ -55,7 +55,7 @@ export interface SchoolBase {
 
 /** 创建团队 DTO */
 export interface CreateTeamDTO {
-  id: string
+  id?: string
   name: string
   description?: string
   isPublic?: boolean

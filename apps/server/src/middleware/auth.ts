@@ -1,7 +1,16 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import { JwtPayload, UserRole } from '../../../../packages/shared/src'
+import { JwtPayload, UserRole } from '@oi-manager/shared'
 import { getJwtSecret } from '../lib/jwtSecret'
+
+// 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JwtPayload
+    }
+  }
+}
 
 export interface AuthRequest extends Request {
   user?: JwtPayload

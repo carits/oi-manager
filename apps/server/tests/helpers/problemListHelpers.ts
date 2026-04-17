@@ -19,14 +19,14 @@ export async function createTestProblemList(options: {
       ownerId,
       ownerType,
       schoolId,
-      Sections: {
+      ProblemListSection: {
         create: { title: '默认章节', sortOrder: 0 }
       }
     },
-    include: { Sections: true }
+    include: { ProblemListSection: true }
   })
 
-  return { list, defaultSection: list.Sections[0] }
+  return { list, defaultSection: list.ProblemListSection[0] }
 }
 
 /**
@@ -41,6 +41,7 @@ export async function shareTestProblemList(options: {
 }) {
   return prisma.problemListShare.create({
     data: {
+      id: crypto.randomUUID(),
       problemListId: options.problemListId,
       targetType: options.targetType,
       targetId: options.targetId,
@@ -52,19 +53,30 @@ export async function shareTestProblemList(options: {
 
 /**
  * 创建测试题目（用于条目测试）
+ *
+ * Carits 平台题号必须是纯数字，使用 Date.now() 保证唯一。
+ * 非 Carits 平台无此限制。
  */
+let testProblemCounter = 900000
+
 export async function createTestProblem(options: {
   platform?: string
   problemId?: string
   title?: string
   ownerId?: string
 }) {
-  const { platform = 'carits', problemId = `P${Date.now()}`, title = '测试题目', ownerId = 'system' } = options
+  const { platform = 'carits', problemId, title = '测试题目', ownerId = 'system' } = options
+
+  const actualProblemId = problemId || (
+    platform === 'carits'
+      ? String(++testProblemCounter)
+      : `P${Date.now()}`
+  )
 
   return prisma.problem.create({
     data: {
       platform,
-      problemId,
+      problemId: actualProblemId,
       title,
       ownerId,
       visibility: 'public',

@@ -6,7 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import { prisma } from '../prisma'
 import { authenticate } from '../middleware/auth'
-import { LoginRequest, JwtPayload, UserRole } from '../../../../packages/shared/src'
+import { LoginRequest, JwtPayload, UserRole } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { loginLimiter, registerLimiter, passwordLimiter } from '../middleware/rateLimiter'
@@ -213,23 +213,20 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     // 如果是管理员，添加 adminId
     if (user.Admin) {
       payload.adminId = user.Admin.id
+      // 系统管理员也有 schoolId（绑定到平台学校）
+      payload.schoolId = user.schoolId
     }
 
     // 如果是教师或学校负责人，添加 teacherId
     if (user.Teacher) {
       payload.teacherId = user.Teacher.id
-      // 所有教师都添加 schoolId（如果有的话）
-      if (user.Teacher.schoolId) {
-        payload.schoolId = user.Teacher.schoolId
-      }
+      payload.schoolId = user.schoolId
     }
 
-    // 如果是学生，添加 studentId 和 schoolId
+    // 如果是学生，添加 studentId
     if (user.Student) {
       payload.studentId = user.Student.id
-      if (user.Student.schoolId) {
-        payload.schoolId = user.Student.schoolId
-      }
+      payload.schoolId = user.schoolId
     }
 
     const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
@@ -268,7 +265,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         adminId: user.Admin?.id,
         teacherId: user.Teacher?.id,
         studentId: user.Student?.id,
-        schoolId: user.Teacher?.schoolId || user.Student?.schoolId || undefined
+        schoolId: user.schoolId // 所有用户都有 schoolId
       }
     })
   } catch (error) {
@@ -320,12 +317,13 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
     // 密码加密
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // 创建用户（强制为学生角色）
+    // 创建用户（强制为学生角色，必须有 schoolId）
     const user = await prisma.user.create({
       data: {
         username,
         passwordHash,
         role: 'student',
+        schoolId, // 所有用户必须绑定学校
         Student: {
           create: {
             name,
@@ -368,10 +366,9 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
 
     // 如果是教师，获取学校信息
     let schoolInfo = null
-    const userSchoolId = user.Teacher?.schoolId || user.Student?.schoolId
-    if (userSchoolId) {
+    if (user.schoolId) {
       const school = await prisma.school.findUnique({
-        where: { id: userSchoolId },
+        where: { id: user.schoolId },
         select: { id: true, name: true }
       })
       if (school) {
@@ -419,7 +416,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         adminId: user.Admin?.id,
         teacherId: user.Teacher?.id,
         studentId: user.Student?.id,
-        schoolId: userSchoolId,
+        schoolId: user.schoolId, // 所有用户都有 schoolId
         schoolName: schoolInfo?.name
       }
     })

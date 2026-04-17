@@ -373,7 +373,7 @@ export async function submitToHdu(
 
       // 获取页面返回的额外 cookies（如果有）
       const extraCookies = submitPageResp.headers.getSetCookie?.() || []
-      const allCookies = [cookieToUse, ...extraCookies.map(sc => sc.match(/^([^;]+)/)?.[1]).filter(Boolean)].join('; ')
+      let allCookies = [cookieToUse, ...extraCookies.map(sc => sc.match(/^([^;]+)/)?.[1]).filter(Boolean)].join('; ')
 
       // 提交代码
       // HDU 要求代码用 base64 编码放到 _usercode 字段
@@ -451,8 +451,53 @@ export async function submitToHdu(
         }
       }
 
-      // 403 错误，可能是 IP 被 WAF 封禁
+      // 403 错误：可能是 cookie 过期或 IP 被 WAF 封禁
       if (submitResp.status === 403) {
+        // 如果是第一次尝试且还没有重新登录，尝试重新登录
+        if (attempt === 1 && !shouldRelogin) {
+          logger.info('hdu_403_retry_login', {
+            action: 'hdu_submit',
+            metadata: { problemId, username: account.username, reason: 'cookie may be expired' }
+          })
+
+          // 重新登录
+          const plainPassword = decrypt(account.password, account.passwordIV)
+          const loginResult = await loginHdu(account.username, plainPassword)
+
+          if (loginResult.success && loginResult.cookie) {
+            cookieToUse = loginResult.cookie
+            allCookies = cookieToUse
+
+            // 更新数据库
+            await prisma.ojAccount.update({
+              where: { id: account.id },
+              data: {
+                cookie: loginResult.cookie,
+                cookieRaw: loginResult.cookie,
+                lastLoginAt: new Date(),
+                lastLoginFailureAt: null,
+                consecutiveFailures: 0,
+                status: 'active'
+              }
+            })
+
+            logger.info('hdu_403_login_success', {
+              action: 'hdu_submit',
+              metadata: { username: account.username }
+            })
+
+            // 继续下一次尝试（不跳过）
+            continue
+          } else {
+            // 登录也失败，可能是 IP 被 WAF 封禁
+            logger.warn('hdu_403_login_failed', {
+              action: 'hdu_submit',
+              metadata: { username: account.username, message: loginResult.message }
+            })
+          }
+        }
+
+        // 登录后仍然 403，或已经是重新登录后的尝试，说明是 IP 封禁
         await prisma.ojAccount.update({
           where: { id: account.id },
           data: {
@@ -461,13 +506,12 @@ export async function submitToHdu(
           }
         })
 
-        // 403 通常是 IP 被 WAF 封禁，重试无意义
         lastError = 'HTTP 403 - IP 可能被 HDU 封禁，请稍后重试或配置代理'
         logger.warn('hdu_403_waf', {
           action: 'hdu_submit',
           metadata: { problemId, attempt, message: 'IP may be blocked by HDU WAF' }
         })
-        // 403 通常是 WAF 封锁，重试无意义，直接返回
+        // WAF 封锁，重试无意义
         return {
           success: false,
           message: lastError,
@@ -572,8 +616,9 @@ export async function pollHduResult(
       const row = rowMatch[0]
 
       // 提取结果：在 RunID 和 Submit Time 之后，Problem ID 之前
-      // 格式：<td>...</td><td>时间</td><td>结果(可能有font)</td><td>题号</td>...
-      const resultMatch = row.match(/<td[^>]*>(?:<font[^>]*>)?([^<]+)(?:<\/font>)?<\/td>\s*<td[^>]*><a[^>]*>/i)
+      // HDU 格式：<td><font color=...>结果<br>(可能有额外信息)</font></td>
+      // 简化：直接匹配 <td> 后的结果关键词
+      const resultMatch = row.match(/<td[^>]*>(?:<font[^>]*>)?\s*([A-Za-z][A-Za-z\s]+?)(?:<br|\s*<\/font>|<\/td>)/i)
 
       // 提取时间：XXMS 格式
       const timeMatch = row.match(/(\d+)\s*MS/i)
@@ -591,22 +636,25 @@ export async function pollHduResult(
         return {
           result,
           timeUsed,
-          memoryUsed: memoryUsed ? Math.round(memoryUsed / 1024) : undefined, // KB -> MB
+          memoryUsed,  // 保持 KB 原始值，前端转换为 MB
         }
       }
     }
 
-    // 备用解析：直接搜索结果关键词
-    for (const [hduResult, systemResult] of Object.entries(HDU_RESULT_MAP)) {
+    // 备用解析：按优先级匹配（先匹配更具体的结果）
+    const resultPriority = ['Accepted', 'Wrong Answer', 'Time Limit Exceeded', 'Memory Limit Exceeded', 'Output Limit Exceeded', 'Runtime Error', 'Compilation Error', 'Presentation Error']
+    for (const hduResult of resultPriority) {
       if (html.includes(hduResult)) {
-        // 尝试提取时间和内存
-        const timeMatch = html.match(/(\d+)\s*MS/i)
-        const memMatch = html.match(/(\d+)\s*K/i)
+        const systemResult = HDU_RESULT_MAP[hduResult]
+        if (systemResult) {
+          const timeMatch = html.match(/(\d+)\s*MS/i)
+          const memMatch = html.match(/(\d+)\s*K/i)
 
-        return {
-          result: systemResult,
-          timeUsed: timeMatch ? parseInt(timeMatch[1]) : undefined,
-          memoryUsed: memMatch ? Math.round(parseInt(memMatch[1]) / 1024) : undefined,
+          return {
+            result: systemResult,
+            timeUsed: timeMatch ? parseInt(timeMatch[1]) : undefined,
+            memoryUsed: memMatch ? parseInt(memMatch[1]) : undefined,  // 保持 KB 原始值
+          }
         }
       }
     }

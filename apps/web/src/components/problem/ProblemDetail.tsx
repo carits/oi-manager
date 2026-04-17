@@ -37,6 +37,7 @@ interface Problem {
   memoryLimit: number | null
   status: string
   visibility: string
+  ownerId: string
   ownerType: string
   ownerName: string
   ojBindings: string | null
@@ -223,8 +224,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   // 当 problem 数据更新后，设置默认选中的版本
   useEffect(() => {
     if (problem) {
-      // 题面版本选择
-      const visibleStatements = problem.statements.filter(s => s.isVisible || canModify())
+      // 题面版本选择（所有版本可见）
+      const visibleStatements = problem.statements
       if (visibleStatements.length > 0 && !selectedStatementId) {
         // 1. 优先恢复用户上次的选择（localStorage）
         const savedStatementKey = localStorage.getItem(`problem-stmt-pref-${problem.id}`)
@@ -416,7 +417,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     try {
       const result = await apiClient.delete(`/api/problems/${problemId}`)
       if (result.success) {
-        router.back()
+        router.push(`${pathPrefix}/problems`)
       }
     } catch (error) {
       console.error('Failed to delete problem:', error)
@@ -428,13 +429,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     if (!problem || !user) return false
     // 管理员可以修改所有题目
     if (role === 'admin') return true
-    // 私有题目，所有者可以修改
-    if (problem.visibility === 'private') {
-      // 检查是否是所有者
-      if (role === 'student' && problem.ownerType === 'student') return true
-      if ((role === 'teacher') && problem.ownerType === 'teacher') return true
-    }
-    return false
+    // 题目所有者可以修改（不限可见性）
+    return problem.ownerId === user.userId
   }
 
   const getDifficultyColor = (difficulty: string | null) => {
@@ -458,12 +454,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     return problem.solutions.find(s => s.id === selectedSolutionId) || problem.solutions[0] || null
   }
 
-  // 获取可显示的题面列表
+  // 获取可显示的题面列表（所有版本对所有人可见，不做 isVisible 限制）
   const getVisibleStatements = (): Statement[] => {
     if (!problem) return []
-    // 编辑者可以看到所有版本，查看者只能看到可见版本
-    if (canModify()) return problem.statements
-    return problem.statements.filter(s => s.isVisible)
+    return problem.statements
   }
 
   // 获取可显示的题解列表
@@ -554,7 +548,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '2rem' }}>
         {/* 返回按钮 */}
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push(`${pathPrefix}/problems`)}
           style={{
             background: 'none',
             border: 'none',

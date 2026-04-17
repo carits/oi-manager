@@ -149,7 +149,7 @@ user3 李四`
         )}
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Button variant="secondary" onClick={() => router.back()}>
+          <Button variant="secondary" onClick={() => router.push('/teacher/students/import')}>
             上一步
           </Button>
           <Button onClick={handleSubmit} disabled={submitting}>

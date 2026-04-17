@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import type { RequestHandler } from 'express'
 
 // 测试环境跳过限流（避免测试被限流导致失败）
@@ -7,15 +7,19 @@ const shouldSkip = process.env.NODE_ENV === 'test'
 
 /**
  * 全局 API 限流
- * 限制：每分钟最多 100 次请求
- * 目的：防止 DDoS 攻击和恶意滥用
- * 风险缓解：100次/分钟对正常用户足够宽松，同时能阻止自动化攻击
+ * 限制：每分钟最多 2000 次请求（支持 1000 QPS，通过环境变量可调）
+ * 维度：按用户 ID（已登录）或 IP（未登录）
  */
 export const globalLimiter = shouldSkip ? noop : rateLimit({
   windowMs: 60 * 1000, // 1 分钟
-  max: 100,
+  max: parseInt(process.env.RATE_LIMIT_MAX || '2000'),
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const user = (req as any).user
+    if (user?.userId) return user.userId
+    return ipKeyGenerator(req.ip || 'unknown')
+  },
   message: { success: false, message: '请求过于频繁，请稍后再试' }
 })
 
