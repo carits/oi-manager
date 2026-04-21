@@ -12,7 +12,7 @@ export interface OjPlatformOption {
 /** 宲整 OJ 平台列表（含"全部"选项，用于筛选下拉） */
 export const OJ_PLATFORMS: OjPlatformOption[] = [
   { value: '', label: '全部平台' },
-  { value: 'carits', label: 'Carits（本平台）' },
+  { value: 'carits', label: 'Carits平台' },
   { value: 'poj', label: 'POJ' },
   { value: 'zoj', label: 'ZOJ' },
   { value: 'uva', label: 'UVA' },
@@ -150,9 +150,8 @@ export function hasCookieConfig(platform: string): boolean {
   return !!PLATFORM_COOKIE_FIELDS[platform]
 }
 
-/** 评测记录用的 OJ 选项（含"本OJ" + "全部平台"） */
+/** 评测记录用的 OJ 选项 */
 export const SUBMISSION_OJ_OPTIONS: OjPlatformOption[] = [
   { value: '', label: '全部平台' },
-  { value: 'local', label: '本OJ' },
   ...OJ_PLATFORMS_NO_ALL,
 ]

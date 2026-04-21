@@ -473,8 +473,28 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       if (result.success && result.data) {
         const createdId = result.data.id || problemId
 
-        // 编辑模式下检查评测配置是否有修改，有则弹确认弹窗
-        if (mode === 'edit' && problemId && judgeSettingsRef.current?.isDirty()) {
+        // 创建模式：上传暂存的评测数据 + 保存评测配置
+        if (mode === 'create') {
+          const stagedFiles = judgeSettingsRef.current?.getStagedFiles?.()
+          if (stagedFiles && stagedFiles.length > 0) {
+            try {
+              const formData = new FormData()
+              for (const f of stagedFiles) formData.append('files', f)
+              await apiClient.postFile(`/api/problems/${createdId}/testdata`, formData)
+            } catch (e) {
+              console.error('Failed to upload staged testdata:', e)
+              toast.warning('测试数据上传失败，请到编辑页面重新上传')
+            }
+          }
+          // 保存评测配置（如果有）
+          try {
+            await judgeSettingsRef.current?.saveConfig?.(createdId)
+          } catch (e) {
+            console.error('Failed to save judge config:', e)
+          }
+          router.push(`${pathPrefix}/problems/${createdId}/edit?tab=judge_settings`)
+        } else if (judgeSettingsRef.current?.isDirty()) {
+          // 编辑模式：评测配置有修改，弹确认弹窗
           setPendingSaveData({ createdId })
           setShowJudgeConfigConfirm(true)
         } else {
@@ -648,7 +668,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               }}>
               题解
             </button>
-            {form.platform === 'carits' && (
+            {(form.platform === 'carits' || mode === 'create') && (
               <button type="button" onClick={() => handleTabChange('judge_settings')}
                 style={{
                   padding: '0.75rem 1rem',

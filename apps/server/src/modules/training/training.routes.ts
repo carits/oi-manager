@@ -413,8 +413,11 @@ trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthReq
           }
         }
 
-        // 普通成员只看到别名和题面（不暴露标题和来源）
-        return base
+        // 普通成员：不暴露标题和来源，但返回 platform 以便前端判断提交按钮可用性
+        return {
+          ...base,
+          platform: p.Problem.platform,
+        }
       }),
     })
   } catch (e: any) {
@@ -1081,8 +1084,11 @@ trainingsRouter.post('/trainings/:id/submit', authenticate, async (req: AuthRequ
     logger.info('training_submission_created', { action: 'trainings', metadata: { submissionId: submission.id, trainingId: id } })
     res.json({ success: true, data: { submissionId: submission.id } })
   } catch (e: any) {
-    logger.error('training_submit_error', { action: 'trainings', metadata: { error: e instanceof Error ? e.message : String(e) } })
-    res.status(500).json({ success: false, message: '提交失败' })
+    const errorDetail = e instanceof Error
+      ? { name: e.name, message: e.message, meta: (e as any).meta, stack: e.stack?.slice(0, 500) }
+      : { value: String(e), json: (() => { try { return JSON.parse(JSON.stringify(e)) } catch { return undefined } })() }
+    logger.error('training_submit_error', { action: 'trainings', metadata: { error: errorDetail } })
+    res.status(500).json({ success: false, message: `提交失败: ${e instanceof Error ? e.message : String(e)}` })
   }
 })
 
@@ -1110,9 +1116,21 @@ trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: Auth
 
     const where: any = { submitSource: 'training', sourceId: `training-${id}` }
     if (filterUserId) where.userId = filterUserId
-    if (filterProblemId) where.problemId = filterProblemId  // 直接用 problemId
+    if (filterProblemId) where.problemId = filterProblemId
     if (filterResult) where.result = filterResult
     if (filterLanguage) where.language = filterLanguage
+
+    // 非管理员只能看到自己的评测记录
+    const isAdminUser = await isTeamAdmin(userId, training.teamId)
+    if (!isAdminUser) {
+      if (where.userId) {
+        if (where.userId !== userId) {
+          return res.json({ success: true, data: { submissions: [], page: pageNum, totalPages: 0, total: 0 } })
+        }
+      } else {
+        where.userId = userId
+      }
+    }
 
     // If username filter is provided, find matching user IDs
     let usernameFilterUserIds: string[] | null = null
@@ -1214,6 +1232,8 @@ trainingsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, as
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
+    const isAdminUser = await isTeamAdmin(userId, training.teamId)
+
     const submission = await prisma.submission.findUnique({
       where: { id: parseInt(submissionId) },
     })
@@ -1222,8 +1242,12 @@ trainingsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, as
       return res.status(404).json({ success: false, message: '提交不存在' })
     }
 
+    // 非管理员只能查看自己的提交详情
+    if (!isAdminUser && submission.userId !== userId) {
+      return res.status(403).json({ success: false, message: '无权限查看他人评测记录' })
+    }
+
     // Only show code to the submitter or admin
-    const isAdminUser = await isTeamAdmin(userId, training.teamId)
     const showCode = submission.userId === userId || isAdminUser
 
     let cases = null

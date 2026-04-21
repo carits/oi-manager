@@ -41,8 +41,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
   // 解析评测配置
   const cfg = problemConfig || {}
-  const timeLimit = parseTime(cfg.time || '1s')
-  const memoryLimit = parseMemory(cfg.memory || '256MB')
+  const timeLimit = parseTime(cfg.time || cfg.timeLimit || '1s')
+  const memoryLimit = parseMemory(cfg.memory || cfg.memoryLimit || '256MB')
   let checkerType = cfg.checker_type || 'default'
   const filename = cfg.filename || undefined
   const ignoreTrailingSpace = cfg.ignore_trailing_space !== false // 默认 true
@@ -205,7 +205,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
   // 结果
   const caseResults: JudgeCaseResult[] = []
-  let totalTime = 0
+  let maxTime = 0
   let maxMemory = 0
 
   try {
@@ -309,7 +309,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           subtaskCaseResults.push(caseResult)
           caseResults.push(caseResult)
 
-          totalTime += caseResult.time
+          maxTime = Math.max(maxTime, caseResult.time)
           maxMemory = Math.max(maxMemory, caseResult.memory)
 
           // 检查是否可以提前终止
@@ -344,7 +344,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       const totalScore = subtaskResults.reduce((sum, st) => sum + st.score, 0)
       const finalResult = calculateFinalResult(caseResults)
 
-      console.log(`[Judge] Total: ${caseResults.length} cases, time=${totalTime}ms, score=${totalScore}, result=${finalResult}`)
+      console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxTime}ms, score=${totalScore}, result=${finalResult}`)
 
       cleanupWorkDir(workDir)
       cleanupWorkDir(checkerWorkDirToCleanup)
@@ -359,7 +359,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       return {
         submissionId,
         result: finalResult,
-        time: totalTime,
+        time: maxTime,
         memory: maxMemory,
         score: totalScore,
         cases: caseResults,
@@ -391,7 +391,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         }
 
         caseResults.push(caseResult)
-        totalTime += caseResult.time
+        maxTime = Math.max(maxTime, caseResult.time)
         maxMemory = Math.max(maxMemory, caseResult.memory)
       }
 
@@ -399,7 +399,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
       const finalResult = calculateFinalResult(caseResults)
 
-      console.log(`[Judge] Total: ${caseResults.length} cases, time=${totalTime}ms, score=${totalScore}, result=${finalResult}`)
+      console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxTime}ms, score=${totalScore}, result=${finalResult}`)
 
       cleanupWorkDir(workDir)
       cleanupWorkDir(checkerWorkDirToCleanup)
@@ -413,7 +413,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       return {
         submissionId,
         result: finalResult,
-        time: totalTime,
+        time: maxTime,
         memory: maxMemory,
         score: totalScore,
         cases: caseResults
@@ -661,6 +661,7 @@ async function runCheckerInSandbox(
         copyOutOptional: ['stdout', ...copyOut],
         cpuLimit: 30000000000,  // 30s
         memoryLimit: 536870912, // 512MB
+        strictMemoryLimit: true,
         procLimit: 10
       })
 
@@ -789,13 +790,25 @@ function loadTestCases(
   const allCases: TestCaseConfig[] = []
   const subtasks: (SubtaskConfig & { id: number })[] = []
 
+  // 将 cases 中的数字转换为 {input, output} 对象，并将 scoring 映射到 type
+  function normalizeSubtask(st: any): any {
+    const rawCases = st.cases || []
+    const cases = rawCases.map((c: any) => {
+      if (typeof c === 'number') {
+        return { input: `${c}.in`, output: `${c}.ans` }
+      }
+      return c
+    })
+    return { ...st, cases, type: st.type || st.scoring }
+  }
+
   // 如果配置中有 subtasks
   if (config.subtasks && config.subtasks.length > 0) {
-    config.subtasks.forEach((st, idx) => {
-      const cases = st.cases || []
-      const subtask = { ...st, id: st.id || idx + 1, cases }
-      subtasks.push(subtask)
-      allCases.push(...cases)
+    config.subtasks.forEach((st: any, idx: number) => {
+      const subtask = normalizeSubtask(st)
+      const normalized = { ...subtask, id: subtask.id || idx + 1 }
+      subtasks.push(normalized)
+      allCases.push(...normalized.cases)
     })
     return { cases: allCases, subtasks }
   }
@@ -906,7 +919,8 @@ function cleanupWorkDir(workDir?: string) {
 /**
  * 解析时间限制
  */
-function parseTime(timeStr: string | number): number {
+function parseTime(timeStr: string | number | undefined): number {
+  if (!timeStr) return 1000
   if (typeof timeStr === 'number') return timeStr
   const match = timeStr.match(/^(\d+(?:\.\d+)?)(ms|s|us)?$/i)
   if (!match) return 1000
@@ -925,8 +939,9 @@ function parseTime(timeStr: string | number): number {
 /**
  * 解析内存限制
  */
-function parseMemory(memStr: string | number): number {
-  if (typeof memStr === 'number') return memStr
+function parseMemory(memStr: string | number | undefined): number {
+  if (!memStr) return 262144
+  if (typeof memStr === 'number') return memStr * 1024 // raw numbers are MB
   const match = memStr.match(/^(\d+(?:\.\d+)?)(KB|MB|GB)?$/i)
   if (!match) return 262144
 
@@ -1038,8 +1053,8 @@ async function judgeInteractive(params: {
   const { language, code, problemConfig, testdataPath, submissionId } = params
   const cfg = problemConfig
 
-  const timeLimit = parseTime(cfg.time || '1s')
-  const memoryLimit = parseMemory(cfg.memory || '256MB')
+  const timeLimit = parseTime(cfg.time || cfg.timeLimit || '1s')
+  const memoryLimit = parseMemory(cfg.memory || cfg.memoryLimit || '256MB')
 
   console.log(`[Judge Interactive] Starting interactive problem judging...`)
 
@@ -1172,7 +1187,7 @@ async function judgeInteractive(params: {
   }
 
   const caseResults: JudgeCaseResult[] = []
-  let totalTime = 0
+  let maxTime = 0
   let maxMemory = 0
 
   try {
@@ -1218,7 +1233,7 @@ async function judgeInteractive(params: {
       )
 
       caseResults.push(caseResult)
-      totalTime += caseResult.time
+      maxTime = Math.max(maxTime, caseResult.time)
       maxMemory = Math.max(maxMemory, caseResult.memory)
     }
 
@@ -1234,7 +1249,7 @@ async function judgeInteractive(params: {
     return {
       submissionId,
       result: finalResult,
-      time: totalTime,
+      time: maxTime,
       memory: maxMemory,
       score: totalScore,
       cases: caseResults
@@ -1378,6 +1393,7 @@ async function runInteractiveCase(
             copyOut: [],
             cpuLimit: timeLimit * 1000000,
             memoryLimit: memoryLimit * 1024,
+            strictMemoryLimit: true,
             procLimit: 50
           },
           {
@@ -1386,6 +1402,7 @@ async function runInteractiveCase(
             copyOut: ['stderr', '/w/tout?'],
             cpuLimit: timeLimit * 2 * 1000000,
             memoryLimit: memoryLimit * 2 * 1024,
+            strictMemoryLimit: true,
             procLimit: 50
           }
         ],
@@ -1452,8 +1469,8 @@ async function judgeCommunication(params: {
   const cfg = problemConfig
 
   const numProcesses = cfg.num_processes || 2
-  const timeLimit = parseTime(cfg.time || '1s')
-  const memoryLimit = parseMemory(cfg.memory || '256MB')
+  const timeLimit = parseTime(cfg.time || cfg.timeLimit || '1s')
+  const memoryLimit = parseMemory(cfg.memory || cfg.memoryLimit || '256MB')
 
   console.log(`[Judge Communication] Starting communication problem with ${numProcesses} processes...`)
 
@@ -1586,7 +1603,7 @@ async function judgeCommunication(params: {
   }
 
   const caseResults: JudgeCaseResult[] = []
-  let totalTime = 0
+  let maxTime = 0
   let maxMemory = 0
 
   try {
@@ -1627,7 +1644,7 @@ async function judgeCommunication(params: {
       )
 
       caseResults.push(caseResult)
-      totalTime += caseResult.time
+      maxTime = Math.max(maxTime, caseResult.time)
       maxMemory = Math.max(maxMemory, caseResult.memory)
     }
 
@@ -1642,7 +1659,7 @@ async function judgeCommunication(params: {
     return {
       submissionId,
       result: finalResult,
-      time: totalTime,
+      time: maxTime,
       memory: maxMemory,
       score: totalScore,
       cases: caseResults
@@ -1720,6 +1737,7 @@ async function runCommunicationCase(
         copyOutOptional?: string[]
         cpuLimit?: number
         memoryLimit?: number
+        strictMemoryLimit?: boolean
         procLimit?: number
       }> = []
 
@@ -1731,6 +1749,7 @@ async function runCommunicationCase(
         copyOutOptional: ['stdout', 'stderr'],
         cpuLimit: timeLimit * 2 * 1000000,
         memoryLimit: memoryLimit * 2 * 1024,
+        strictMemoryLimit: true,
         procLimit: 50
       })
 
@@ -1746,6 +1765,7 @@ async function runCommunicationCase(
           copyOut: [],
           cpuLimit: timeLimit * 1000000,
           memoryLimit: memoryLimit * 1024,
+          strictMemoryLimit: true,
           procLimit: 50
         })
       }
@@ -1770,13 +1790,13 @@ async function runCommunicationCase(
       const managerResult = results[0]
 
       // 检查各用户进程状态
-      let totalTime = 0
+      let maxTime = 0
       let maxMemory = 0
       let status: JudgeResult = 'Accepted'
 
       for (let p = 0; p < numProcesses; p++) {
         const userResult = results[p + 1]
-        totalTime += Math.round(userResult.time / 1000000)
+        maxTime = Math.max(maxTime, Math.round(userResult.time / 1000000))
         maxMemory = Math.max(maxMemory, Math.round(userResult.memory / 1024))
 
         if (userResult.time > timeLimit * 1000000) {
@@ -1789,7 +1809,7 @@ async function runCommunicationCase(
       }
 
       if (status !== 'Accepted') {
-        return { caseId: caseIndex, result: status, time: totalTime, memory: maxMemory, message: '' }
+        return { caseId: caseIndex, result: status, time: maxTime, memory: maxMemory, message: '' }
       }
 
       // Manager 输出分数百分比
@@ -1801,7 +1821,7 @@ async function runCommunicationCase(
       return {
         caseId: caseIndex,
         result: score === caseScore ? 'Accepted' : 'Wrong Answer',
-        time: totalTime,
+        time: maxTime,
         memory: maxMemory,
         score,
         message

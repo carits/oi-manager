@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
-import { dispatchJudgeTask } from '../ws/judge'
+import { dispatchJudgeTask, rejudgeSubmission } from '../ws/judge'
 
 export const submitRouter = Router()
 
@@ -140,6 +140,22 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
 
     // 机器人账号提交
     if (submitMethod === 'robot' && oj === 'hdu') {
+      // 自动恢复 WAF 封禁且冷却期已过的账号
+      await prisma.ojAccount.updateMany({
+        where: {
+          platform: 'hdu',
+          status: 'error',
+          lastErrorMessage: { contains: 'WAF' },
+          lastLoginFailureAt: {
+            lt: new Date(Date.now() - 30 * 60 * 1000) // 30 分钟后自动恢复
+          },
+        },
+        data: {
+          status: 'active',
+          consecutiveFailures: 0,
+        },
+      })
+
       // 查询所有可用的 HDU 账号（包含登录控制相关字段）
       const accounts = await prisma.ojAccount.findMany({
         where: {
@@ -314,6 +330,38 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
     return res.status(500).json({
       success: false,
       message: '提交失败',
+    })
+  }
+})
+
+/**
+ * POST /api/submit/rejudge
+ * 重新评测提交
+ *
+ * 请求体:
+ * - submissionId: 提交 ID
+ */
+submitRouter.post('/rejudge', authenticate, async (req: any, res) => {
+  try {
+    const { submissionId } = req.body
+
+    if (!submissionId) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少 submissionId',
+      })
+    }
+
+    const result = await rejudgeSubmission(Number(submissionId))
+    return res.json(result)
+  } catch (e: any) {
+    logger.error('rejudge_error', {
+      action: 'rejudge',
+      metadata: { error: e.message },
+    })
+    return res.status(500).json({
+      success: false,
+      message: '重评失败',
     })
   }
 })

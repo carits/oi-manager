@@ -130,10 +130,12 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       problemInternalId: s.problemInternalId,
       problemVisibility: s.problemInternalId ? (problemVisibilityMap.get(s.problemInternalId) || null) : null,
       result: s.result,
+      score: s.score,
       timeUsed: s.timeUsed,
       memoryUsed: s.memoryUsed,
       codeLength: s.codeLength,
       language: s.language,
+      ojRemoteId: s.ojRemoteId,
       submittedAt: s.createdAt.toISOString(),
       // 来源字段
       submitSource: s.submitSource,

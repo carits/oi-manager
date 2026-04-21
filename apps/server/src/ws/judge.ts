@@ -9,6 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { httpServer } from '../index'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
+import path from 'path'
 
 // 评测机连接
 interface JudgeConnection {
@@ -134,6 +135,38 @@ async function handleRegister(ws: WebSocket, payload: { judgeId: string; languag
     type: 'registered',
     payload: { judgeId }
   }))
+
+  // 自动恢复卡在 queuing 的任务
+  recoverQueuingSubmissions()
+}
+
+/**
+ * 恢复卡在 queuing 状态的提交
+ * 评测机注册时调用，重新分发所有未完成的 Carits 提交
+ */
+async function recoverQueuingSubmissions() {
+  const stuck = await prisma.submission.findMany({
+    where: { result: 'queuing', oj: 'carits' },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  })
+  if (stuck.length === 0) return
+
+  logger.info('recover_queuing_start', {
+    action: 'judge_ws',
+    metadata: { count: stuck.length },
+  })
+
+  for (const s of stuck) {
+    try {
+      await rejudgeSubmission(s.id)
+    } catch (e: any) {
+      logger.error('recover_queuing_error', {
+        action: 'judge_ws',
+        metadata: { submissionId: s.id, error: e.message },
+      })
+    }
+  }
 }
 
 /**
@@ -259,6 +292,87 @@ function mapResult(result: string): string {
   }
 
   return resultMap[result] || result.toLowerCase()
+}
+
+/**
+ * 重新评测提交（rejudge）
+ * 将提交状态重置为 queuing，然后重新分发到评测机
+ */
+export async function rejudgeSubmission(submissionId: number): Promise<{ success: boolean; message: string }> {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+  })
+
+  if (!submission) {
+    return { success: false, message: '提交不存在' }
+  }
+
+  if (submission.oj !== 'carits') {
+    return { success: false, message: '仅支持 Carits 平台题目的 rejudge' }
+  }
+
+  if (!submission.problemInternalId) {
+    return { success: false, message: '提交缺少题目内部 ID' }
+  }
+
+  // 重置状态
+  await prisma.submission.update({
+    where: { id: submissionId },
+    data: {
+      result: 'queuing',
+      timeUsed: null,
+      memoryUsed: null,
+      score: null,
+      cases: null,
+      subtasks: null,
+      errorMessage: null,
+      ojRemoteId: submissionId.toString(), // Carits 平台：远程提交ID就是本地评测ID
+    },
+  })
+
+  // 获取评测配置
+  const problem = await prisma.problem.findUnique({
+    where: { id: submission.problemInternalId },
+    select: { judgeConfig: true },
+  })
+
+  let problemConfig: any = {}
+  if (problem?.judgeConfig) {
+    try {
+      const yaml = await import('js-yaml')
+      problemConfig = yaml.load(problem.judgeConfig) || {}
+    } catch (e) {
+      logger.warn('rejudge_parse_config_error', { error: e })
+    }
+  }
+
+  const testdataPath = path.join(process.cwd(), 'testdata', submission.problemInternalId)
+
+  // 分发评测任务
+  try {
+    await dispatchJudgeTask({
+      submissionId: submissionId.toString(),
+      problemId: submission.problemInternalId,
+      code: submission.code,
+      language: submission.language,
+      testdataPath,
+      problemConfig,
+    })
+
+    logger.info('rejudge_dispatched', {
+      action: 'rejudge',
+      metadata: { submissionId },
+    })
+
+    return { success: true, message: '已重新提交评测' }
+  } catch (e: any) {
+    // 评测机不可用，状态保持 queuing，下次可再 rejudge
+    logger.error('rejudge_dispatch_error', {
+      action: 'rejudge',
+      metadata: { submissionId, error: e.message },
+    })
+    return { success: false, message: e.message || '评测服务不可用' }
+  }
 }
 
 /**

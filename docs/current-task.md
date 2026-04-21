@@ -1,12 +1,29 @@
 # 当前任务
 
-## 任务：训练编辑题号排序修复（2026-04-17）
+## 任务：评测耗时计算修复 + strictMemoryLimit（2026-04-18）
 
 状态: **已完成** ✅
 
 ### 问题
 
-训练编辑时删除题目后 orderIndex 不会重新排序，导致题号显示混乱。
+1. 评测耗时（timeUsed）计算错误：使用所有测试点耗时之和，应取最大值
+2. go-judge 沙箱未启用 `strictMemoryLimit: true`，栈空间不计入内存限制
+3. 创建题目时评测设置 tab 不可见
+4. 评测记录题号点击：Carits 题目不可点击 + 点击后页面丢失
+
+### 修改
+
+1. **judge.ts** — `totalTime +=` → `maxTime = Math.max()`，6 处修改覆盖所有评测路径（普通/交互/通信）
+2. **sandbox/client.ts** — 所有 go-judge API 调用添加 `strictMemoryLimit: true`
+3. **ProblemForm.tsx** — 创建模式显示评测设置 tab + 保存后跳转到 judge_settings tab
+4. **SubmissionList.tsx** — Carits 题号始终可点击 + 新窗口打开题目详情
+
+### 验证
+
+- TypeScript 编译通过（`npx tsc --noEmit` 无错误）
+- 无残留 `totalTime` 引用
+- 提交 23 验证：time=6ms（单点最大值，非求和）
+- submissions 15-18：time 从 60-69ms 降为合理值
 
 ### 修改
 

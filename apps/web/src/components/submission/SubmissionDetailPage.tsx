@@ -114,7 +114,7 @@ const LANGUAGE_HLJS_MAP: Record<string, string> = {
 
 // OJ display labels
 const OJ_LABELS: Record<string, string> = {
-  carits: '本OJ',
+  carits: 'Carits平台',
   luogu: '洛谷',
   codeforces: 'CF',
   hdu: 'HDU',
@@ -320,34 +320,6 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   <span style={{ color: '#9ca3af', fontSize: '0.8125rem', marginLeft: '0.25rem' }}>
                     {passedCount}/{cases.length}
                   </span>
-                )}
-                {/* Summary dots — Hydro style colored strip */}
-                {cases.length > 0 && !isQueuing && (
-                  <div style={{
-                    marginLeft: 'auto',
-                    display: 'flex',
-                    gap: '2px',
-                    flexShrink: 0,
-                  }}>
-                    {cases.map((c, idx) => {
-                      const cClass = getCaseStatusClass(c.result)
-                      return (
-                        <div
-                          key={idx}
-                          title={`#${idx + 1} ${c.result}`}
-                          style={{
-                            width: '8px',
-                            height: '18px',
-                            borderRadius: '2px',
-                            background: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555',
-                            opacity: cClass === 'pass' ? 0.8 : 1,
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => setExpandedCase(expandedCase === idx ? null : idx)}
-                        />
-                      )
-                    })}
-                  </div>
                 )}
               </div>
 
@@ -684,7 +656,27 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 {detail.ojRemoteId && (
                   <div>
                     <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Remote ID</div>
-                    <div style={{ fontWeight: 500, color: '#1e293b' }}>{detail.ojRemoteId}</div>
+                    <div style={{ fontWeight: 500, color: '#1e293b' }}>
+                      {detail.oj === 'carits' ? (
+                        <a
+                          href={`${role === 'admin' ? '/platform-admin' : role === 'student' ? '/student' : '/teacher'}/submissions/${detail.ojRemoteId}`}
+                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                        >
+                          {detail.ojRemoteId}
+                        </a>
+                      ) : detail.oj === 'hdu' ? (
+                        <a
+                          href={`https://acm.hdu.edu.cn/status.php?first=${detail.ojRemoteId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                        >
+                          {detail.ojRemoteId}
+                        </a>
+                      ) : (
+                        detail.ojRemoteId
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

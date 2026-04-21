@@ -130,8 +130,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>题单</h2>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem' }}>
         {canManage && (
           <Button onClick={handleOpenAddModal}>+ 添加题单</Button>
         )}

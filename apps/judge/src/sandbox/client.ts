@@ -106,6 +106,7 @@ export async function compile(params: {
       copyOutCached: [langConfig.execute_file || 'main'],
       cpuLimit: (langConfig.compile_time_limit || timeLimit) * 1000000,
       memoryLimit: (langConfig.compile_memory_limit || memoryLimit) * 1024,
+      strictMemoryLimit: true,
       procLimit: 50
     })
 
@@ -264,6 +265,7 @@ async function sandboxExecute(
       copyOutOptional: copyOutFiles,
       cpuLimit: timeLimit * 1000000,
       memoryLimit: memoryLimit * 1024,
+      strictMemoryLimit: true,
       procLimit: 50
     })
 
@@ -271,11 +273,16 @@ async function sandboxExecute(
     // File Error 状态只表示 copyOutOptional 文件不存在，不代表执行失败
     let status: SandboxResult['status'] = 'Accepted'
     const realStatus = (result.status === 'File Error') ? 'Accepted' : result.status
+    // TLE 时 go-judge 返回的 CPU 时间不准确，用 timeLimit 代替
+    let time = Math.round(result.time / 1000000)
+    let memory = Math.round(result.memory / 1024)
 
     if (realStatus === 'Time Limit Exceeded' || result.time > timeLimit * 1000000) {
       status = 'Time Limit Exceeded'
+      time = timeLimit
     } else if (realStatus === 'Memory Limit Exceeded') {
       status = 'Memory Limit Exceeded'
+      memory = memoryLimit
     } else if (realStatus === 'Output Limit Exceeded') {
       status = 'Output Limit Exceeded'
     } else if (result.exitStatus !== 0) {
@@ -296,8 +303,8 @@ async function sandboxExecute(
 
     return {
       status,
-      time: Math.round(result.time / 1000000),
-      memory: Math.round(result.memory / 1024),
+      time,
+      memory,
       exitCode: result.exitStatus,
       stdout,
       stderr
@@ -351,6 +358,7 @@ export async function runCommand(params: {
   stderr?: { fd: number } | { max: number }
   cpuLimit?: number
   memoryLimit?: number
+  strictMemoryLimit?: boolean
   procLimit?: number
   copyIn?: Record<string, { content: string } | { src: string } | { fileId: string }>
   copyOut?: string[]
@@ -384,6 +392,7 @@ export async function runPiped(params: {
     copyOutOptional?: string[]
     cpuLimit?: number
     memoryLimit?: number
+    strictMemoryLimit?: boolean
     procLimit?: number
   }>
   pipeMapping?: Array<{
@@ -410,6 +419,7 @@ export async function runPiped(params: {
       if (cmd.copyOutOptional) c.copyOutOptional = cmd.copyOutOptional
       if (cmd.cpuLimit) c.cpuLimit = cmd.cpuLimit
       if (cmd.memoryLimit) c.memoryLimit = cmd.memoryLimit
+      if (cmd.strictMemoryLimit) c.strictMemoryLimit = cmd.strictMemoryLimit
       if (cmd.procLimit) c.procLimit = cmd.procLimit
       // pipeMapping 模式下 stdin/stdout 需要 null
       if (pipeMapping) {
@@ -458,6 +468,7 @@ async function runCommands(cmds: Array<{
   stderr?: { fd: number } | { max: number }
   cpuLimit?: number
   memoryLimit?: number
+  strictMemoryLimit?: boolean
   procLimit?: number
   copyIn?: Record<string, { content: string } | { src: string } | { fileId: string }>
   copyOut?: string[]
@@ -483,6 +494,7 @@ async function runCommands(cmds: Array<{
     if (params.stderr) cmd.stderr = params.stderr
     if (params.cpuLimit) cmd.cpuLimit = params.cpuLimit
     if (params.memoryLimit) cmd.memoryLimit = params.memoryLimit
+    if (params.strictMemoryLimit) cmd.strictMemoryLimit = params.strictMemoryLimit
     if (params.procLimit) cmd.procLimit = params.procLimit
     if (params.copyIn) cmd.copyIn = params.copyIn
     if (params.copyOut) cmd.copyOut = params.copyOut

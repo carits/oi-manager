@@ -534,6 +534,8 @@ async function processFetchQueue(platform: string) {
           const linkMappings: Array<{ original: string; new: string }> = []
           for (const att of problemData.attachments!) {
             try {
+              // 附件下载间隔 2s，避免限流
+              await new Promise(resolve => setTimeout(resolve, 2000))
               const newUrl = await downloadAttachmentInternal(targetProblemId, att.downloadLink, att.filename, cookies, platform)
               linkMappings.push({ original: att.downloadLink, new: newUrl })
               await prisma.ojFetchJob.update({
@@ -607,8 +609,8 @@ async function processFetchQueue(platform: string) {
         })
       }
 
-      // 限流：每次处理间隔 500ms
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // 限流：每次处理间隔 2s（避免触发 OJ 反爬）
+      await new Promise(resolve => setTimeout(resolve, 2000))
     }
   } finally {
     processingPlatforms.delete(platform)

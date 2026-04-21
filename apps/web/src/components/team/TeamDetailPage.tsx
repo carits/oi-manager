@@ -464,12 +464,9 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
           {/* 模拟赛 Tab */}
           {activeTab === 'mock' && (
-            <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>比赛</h2>
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-                <p>暂无比赛</p>
-                <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>(功能开发中)</p>
-              </div>
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
+              <p>暂无比赛</p>
+              <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>(功能开发中)</p>
             </div>
           )}
 

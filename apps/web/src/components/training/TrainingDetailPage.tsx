@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
 import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, LANGUAGE_OPTIONS } from '@/lib/judge-constants'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { TrainingFormModal } from './TrainingFormModal'
 
 // ========== Helper Functions ==========
 
@@ -39,7 +40,7 @@ interface TrainingInfo {
   teamId: string
   title: string
   description: string | null
-  format: string
+  format: 'ioi' | 'icpc'
   startTime: string
   endTime: string
   status: string
@@ -199,7 +200,7 @@ function getResultBadge(result: string) {
 }
 
 function getOjLabel(oj: string): string {
-  if (oj === 'carits') return '本OJ'
+  if (oj === 'carits') return 'Carits平台'
   return OJ_PLATFORM_LABEL_MAP[oj] || oj
 }
 
@@ -220,6 +221,17 @@ function getProblemOrderIndex(problems: TrainingProblem[], trainingProblemId: st
   const problem = problems.find(p => p.id === trainingProblemId)
   return problem?.orderIndex ?? 0
 }
+
+const RESULT_SHORT_MAP: Record<string, string> = {
+  accepted: 'AC',
+  wa: 'WA', tle: 'TLE', mle: 'MLE', re: 'RE',
+  ce: 'CE', pe: 'PE', ole: 'OLE',
+  pending_review: 'Pending',
+  queuing: 'Queuing', judging: 'Judging',
+  remote_unavailable: 'Err', judge_failed: 'Err', unknown_error: 'Err', submit_failed: 'Err',
+}
+
+const RANK_MEDAL_COLORS = ['#ffd700', '#c0c0c0', '#cd7f32']
 
 // ========== Component ==========
 
@@ -278,26 +290,24 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
   // Countdown
   const [timeDisplay, setTimeDisplay] = useState('')
+  const [showEditModal, setShowEditModal] = useState(false)
 
   // ========== Data loading ==========
 
-  useEffect(() => {
-    const loadTraining = async () => {
-      try {
-        const res = await apiClient.get<TrainingInfo>(`/api/trainings/${trainingId}`)
-        if (res.success && res.data) {
-          setTraining(res.data)
-        } else {
-          toast.error('训练不存在')
-          router.push(`${basePath}/${teamId}?tab=training`)
-        }
-      } catch (error) {
-        toast.error('加载失败')
-        router.push(`${basePath}/${teamId}?tab=training`)
+  const loadTraining = useCallback(async () => {
+    try {
+      const res = await apiClient.get<TrainingInfo>(`/api/trainings/${trainingId}`)
+      if (res.success && res.data) {
+        setTraining(res.data)
       }
+    } catch {
+      // ignore refresh errors
     }
-    loadTraining()
   }, [trainingId])
+
+  useEffect(() => {
+    loadTraining()
+  }, [loadTraining])
 
   useEffect(() => {
     if (!training) return
@@ -617,7 +627,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
             </div>
             {training.isAdmin && (
               <button
-                onClick={() => router.push(`${basePath}/${teamId}/trainings/${trainingId}/edit`)}
+                onClick={() => setShowEditModal(true)}
                 style={{
                   padding: '0.5rem 1rem',
                   border: '1px solid var(--border)',
@@ -701,20 +711,39 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 {problemListData.map(p => {
                   const isAccepted = p.bestResult === 'accepted'
                   const hasSubmission = p.bestResult != null
-                  const scoreColor = !hasSubmission ? 'var(--gray-400)' : isAccepted ? '#16a34a' : '#dc2626'
                   const maxPoints = p.points ?? 100
 
                   return (
                     <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       {/* 状态列 */}
                       <td style={{ padding: '0.6rem 1rem' }}>
-                        {hasSubmission ? (
-                          <span style={{ fontWeight: 600, color: scoreColor }}>
-                            {isAccepted && '✓ '}
-                            {p.bestScore}/{maxPoints}
-                          </span>
+                        {training.format === 'icpc' ? (
+                          // ICPC: 紧凑缩写 Badge
+                          hasSubmission ? (
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '1px 6px',
+                              borderRadius: '3px',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              fontFamily: 'monospace',
+                              background: isAccepted ? '#dcfce7' : '#fee2e2',
+                              color: isAccepted ? '#166534' : '#991b1b',
+                            }}>
+                              {RESULT_SHORT_MAP[p.bestResult!] || p.bestResult}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#9ca3af' }}>-</span>
+                          )
                         ) : (
-                          <span style={{ color: 'var(--gray-400)' }}>-/{maxPoints}</span>
+                          // IOI: 分数显示
+                          hasSubmission ? (
+                            <span style={{ fontWeight: 600, color: getScoreColor(p.bestScore ?? 0, maxPoints) }}>
+                              {isAccepted ? '✓ ' : ''}{p.bestScore}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#9ca3af' }}>-</span>
+                          )
                         )}
                       </td>
 
@@ -1036,16 +1065,18 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                   {problems.map(p => <option key={p.id} value={p.id}>{toExcelColumnName(p.orderIndex)}</option>)}
                 </select>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>用户名:</label>
-                <input
-                  type="text"
-                  value={filterUsername}
-                  onChange={e => { setFilterUsername(e.target.value); setSubmissionsPage(1) }}
-                  placeholder="输入用户名"
-                  style={{ padding: '0.35rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', width: '120px' }}
-                />
-              </div>
+              {training.isAdmin && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>用户名:</label>
+                  <input
+                    type="text"
+                    value={filterUsername}
+                    onChange={e => { setFilterUsername(e.target.value); setSubmissionsPage(1) }}
+                    placeholder="输入用户名"
+                    style={{ padding: '0.35rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', width: '120px' }}
+                  />
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>结果:</label>
                 <select
@@ -1099,10 +1130,10 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>题号</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
+                  {training.isAdmin && <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>}
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>OJ</th>
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>分数</th>
+                  {training.format === 'ioi' && <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>分数</th>}
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(MS)</th>
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
@@ -1113,7 +1144,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               <tbody>
                 {submissions.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                    <td colSpan={9 + (training.isAdmin ? 1 : 0) + (training.format === 'ioi' ? 1 : 0)} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
                       暂无评测记录
                     </td>
                   </tr>
@@ -1127,10 +1158,10 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                         #{s.id}
                       </td>
                       <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontWeight: 500 }}>{toExcelColumnName(s.problemOrderIndex)}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.userName}</td>
+                      {training.isAdmin && <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.userName}</td>}
                       <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{getOjLabel(s.oj)}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#1e293b' }}>{s.score ?? '-'}</td>
+                      {training.format === 'ioi' && <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#1e293b' }}>{s.score ?? '-'}</td>}
                       <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.timeUsed ?? '-'}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.codeLength ?? '-'}</td>
@@ -1244,25 +1275,24 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         {/* ====== Ranking Tab ====== */}
         {activeTab === 'ranking' && rankingData && (
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
               <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '50px' }}>排名</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>姓名</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>用户名</th>
+                <tr style={{ background: '#f8fafc' }}>
+                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '50px' }}>#</th>
+                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '120px' }}>姓名</th>
                   {rankingData.format === 'ioi' ? (
                     <>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>总分</th>
+                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '70px' }}>总分</th>
                       {rankingData.problems.map((p: any) => (
-                        <th key={p.id} style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
+                        <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
                       ))}
                     </>
                   ) : (
                     <>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>通过</th>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>罚时</th>
+                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '50px' }}>通过</th>
+                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '70px' }}>罚时</th>
                       {rankingData.problems.map((p: any) => (
-                        <th key={p.id} style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
+                        <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
                       ))}
                     </>
                   )}
@@ -1270,41 +1300,42 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               </thead>
               <tbody>
                 {rankingData.ranking.map((row: any, idx: number) => (
-                  <tr key={row.userId} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 600 }}>{idx + 1}</td>
-                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 500 }}>{row.name}</td>
-                    <td style={{ padding: '0.5rem 0.75rem', color: 'var(--gray-500)', fontSize: '0.8rem' }}>{row.username || '-'}</td>
+                  <tr key={row.userId} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: idx < 3 ? RANK_MEDAL_COLORS[idx] : '#64748b' }}>
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: '#1e293b' }}>{row.name}</td>
                     {rankingData.format === 'ioi' ? (
                       <>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700 }}>{row.totalScore}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: '#16a34a' }}>{row.totalScore}</td>
                         {rankingData.problems.map((p: any) => {
                           const pd = row.problems[p.id]
                           const maxPts = p.points ?? 100
+                          const score = pd?.score ?? 0
+                          const isFull = score >= maxPts
                           return (
-                            <td key={p.id} style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: pd?.score > 0 ? getScoreColor(pd.score, maxPts) : 'var(--gray-400)' }}>
-                              {pd?.score ?? 0}
+                            <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center', fontWeight: isFull ? 600 : 400, color: score > 0 ? getScoreColor(score, maxPts) : '#cbd5e1' }}>
+                              {score}
                             </td>
                           )
                         })}
                       </>
                     ) : (
                       <>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700 }}>{row.solvedCount}</td>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>{row.totalPenalty} min</td>
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: '#16a34a' }}>{row.solvedCount}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>{row.totalPenalty}</td>
                         {rankingData.problems.map((p: any) => {
                           const pd = row.problems[p.id]
                           return (
-                            <td key={p.id} style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>
+                            <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center' }}>
                               {pd?.solved ? (
-                                <span style={{ color: '#16a34a', fontWeight: 500 }}>
-                                  +{pd.attempts > 1 ? `(${pd.attempts - 1})` : ''}
-                                  <br />
-                                  <span style={{ fontSize: '0.75rem' }}>{Math.round(pd.penalty)}min</span>
+                                <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                                  +{pd.attempts > 1 ? <span style={{ fontSize: '0.7rem', fontWeight: 400, color: '#64748b' }}>({pd.attempts - 1})</span> : ''}
                                 </span>
                               ) : pd?.attempts > 0 ? (
-                                <span style={{ color: '#dc2626', fontSize: '0.85rem' }}>-{pd.attempts}</span>
+                                <span style={{ color: '#ef4444', fontWeight: 500 }}>-{pd.attempts}</span>
                               ) : (
-                                <span style={{ color: 'var(--gray-400)' }}>-</span>
+                                <span style={{ color: '#cbd5e1' }}>-</span>
                               )}
                             </td>
                           )
@@ -1315,7 +1346,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 ))}
                 {rankingData.ranking.length === 0 && (
                   <tr>
-                    <td colSpan={20} style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>暂无排名数据</td>
+                    <td colSpan={20} style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>暂无排名数据</td>
                   </tr>
                 )}
               </tbody>
@@ -1335,6 +1366,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         submissionId={detailSubmissionId}
         viewRole={basePath.startsWith('/student') ? 'student' : basePath.startsWith('/platform-admin') ? 'admin' : 'teacher'}
         trainingId={parseInt(trainingId)}
+        trainingFormat={training.format}
       />
 
       {/* ====== Submit Code Modal ====== */}
@@ -1463,6 +1495,17 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
           </div>
         </Modal>
       )}
+
+      <TrainingFormModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        teamId={teamId}
+        trainingId={trainingId}
+        onSaved={() => {
+          setShowEditModal(false)
+          loadTraining()
+        }}
+      />
     </div>
   )
 }

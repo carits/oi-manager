@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
-import { Button } from '@/components/ui/Button'
-import { TrainingCreateModal } from './TrainingCreateModal'
+import { TrainingFormModal } from './TrainingFormModal'
 
 interface Training {
   id: string
@@ -26,15 +25,33 @@ interface TeamTrainingListProps {
   isAdmin: boolean
 }
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  upcoming: { label: '未开始', color: '#1e40af', bg: '#dbeafe' },
-  ongoing: { label: '进行中', color: '#166534', bg: '#dcfce7' },
-  finished: { label: '已结束', color: '#6b7280', bg: '#f3f4f6' },
+const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> = {
+  upcoming: { label: '未开始', color: '#3b82f6', dot: '#3b82f6' },
+  ongoing: { label: '进行中', color: '#16a34a', dot: '#16a34a' },
+  finished: { label: '已结束', color: '#9ca3af', dot: '#9ca3af' },
 }
 
 const FORMAT_MAP: Record<string, string> = {
   ioi: 'IOI',
   icpc: 'ICPC',
+}
+
+function formatDuration(start: string, end: string) {
+  const ms = new Date(end).getTime() - new Date(start).getTime()
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  if (h > 0 && m > 0) return `${h}h${m}m`
+  if (h > 0) return `${h}h`
+  return `${m}m`
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso)
+  const month = d.getMonth() + 1
+  const day = d.getDate()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hh}:${mm}`
 }
 
 export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrainingListProps) {
@@ -60,96 +77,182 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
     fetchTrainings()
   }, [fetchTrainings])
 
-  const getTrainingUrl = (trainingId: string) => {
-    return `${basePath}/${teamId}/trainings/${trainingId}`
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)', fontSize: '0.85rem' }}>加载中...</div>
   }
 
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
+  if (trainings.length === 0) {
+    return (
+      <>
+        <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--gray-400)' }}>
+          <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>暂无训练</div>
+          {isAdmin && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                marginTop: '1rem',
+                padding: '0.4rem 1.2rem',
+                fontSize: '0.8rem',
+                color: 'white',
+                background: 'var(--primary)',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              创建训练
+            </button>
+          )}
+        </div>
+        <TrainingFormModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          teamId={teamId}
+          onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
+        />
+      </>
+    )
   }
+
+  const ongoingCount = trainings.filter(t => t.status === 'ongoing').length
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>训练</h2>
+    <>
+      {/* 工具栏 */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '0.75rem',
+        padding: '0 2px',
+      }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>
+          共 {trainings.length} 场训练{ongoingCount > 0 ? `，进行中 ${ongoingCount} 场` : ''}
+        </div>
         {isAdmin && (
-          <Button onClick={() => setShowCreateModal(true)}>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '0.3rem 0.9rem',
+              fontSize: '0.8rem',
+              color: 'white',
+              background: 'var(--primary)',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              lineHeight: '1.5',
+            }}
+          >
             + 创建训练
-          </Button>
+          </button>
         )}
       </div>
 
-      {trainings.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-          <p>暂无训练</p>
-          {isAdmin && <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>点击「创建训练」开始</p>}
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
-          {trainings.map(training => {
+      {/* 表格 */}
+      <table style={{
+        width: '100%',
+        borderCollapse: 'collapse',
+        fontSize: '0.84rem',
+        background: 'white',
+        borderRadius: '6px',
+        overflow: 'hidden',
+        border: '1px solid #e5e7eb',
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        <thead>
+          <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>#</th>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>训练名称</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>赛制</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>状态</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>题数</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>人数</th>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>开始时间</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>时长</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trainings.map((training, idx) => {
             const statusInfo = STATUS_MAP[training.status] || STATUS_MAP.upcoming
             return (
-              <div
+              <tr
                 key={training.id}
-                onClick={() => router.push(getTrainingUrl(training.id))}
+                onClick={() => router.push(`${basePath}/${teamId}/trainings/${training.id}`)}
                 style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '1rem',
-                  background: 'white',
                   cursor: 'pointer',
-                  transition: 'box-shadow 0.2s',
+                  borderBottom: idx === trainings.length - 1 ? 'none' : '1px solid #f3f4f6',
+                  transition: 'background 0.1s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)')}
-                onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{training.title}</h3>
+                {/* 序号 */}
+                <td style={{ padding: '0.6rem 0.75rem', color: '#9ca3af', fontSize: '0.78rem', width: '32px' }}>
+                  {idx + 1}
+                </td>
+
+                {/* 训练名称 */}
+                <td style={{ padding: '0.6rem 0.75rem' }}>
+                  <span style={{ fontWeight: 600, color: '#111827' }}>{training.title}</span>
+                </td>
+
+                {/* 赛制 */}
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
                   <span style={{
+                    display: 'inline-block',
+                    padding: '0.1rem 0.4rem',
                     fontSize: '0.7rem',
-                    padding: '0.125rem 0.5rem',
-                    borderRadius: '4px',
-                    background: statusInfo.bg,
-                    color: statusInfo.color,
-                    whiteSpace: 'nowrap',
+                    fontWeight: 700,
+                    color: training.format === 'ioi' ? '#1d4ed8' : '#7c3aed',
+                    background: training.format === 'ioi' ? '#eff6ff' : '#f5f3ff',
+                    borderRadius: '3px',
+                    letterSpacing: '0.04em',
                   }}>
+                    {FORMAT_MAP[training.format] || training.format.toUpperCase()}
+                  </span>
+                </td>
+
+                {/* 状态 */}
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: statusInfo.color, fontWeight: 500 }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusInfo.dot }} />
                     {statusInfo.label}
                   </span>
-                </div>
+                </td>
 
-                {training.description && (
-                  <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', margin: '0 0 0.5rem 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {training.description}
-                  </p>
-                )}
+                {/* 题数 */}
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: '#6b7280' }}>
+                  {training.problemCount}
+                </td>
 
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: '0.5rem' }}>
-                  <span style={{ padding: '0.1rem 0.4rem', background: '#f3f4f6', borderRadius: '3px' }}>
-                    {FORMAT_MAP[training.format] || training.format}
-                  </span>
-                  <span>{training.problemCount} 题</span>
-                  <span>{training.participantCount} 人参与</span>
-                </div>
+                {/* 人数 */}
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: '#6b7280' }}>
+                  {training.participantCount}
+                </td>
 
-                <div style={{ fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: '0.5rem' }}>
-                  {new Date(training.startTime).toLocaleString('zh-CN')} ~ {new Date(training.endTime).toLocaleString('zh-CN')}
-                </div>
-              </div>
+                {/* 开始时间 */}
+                <td style={{ padding: '0.6rem 0.75rem', color: '#6b7280', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                  {formatDateTime(training.startTime)}
+                </td>
+
+                {/* 时长 */}
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: '#6b7280', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                  {formatDuration(training.startTime, training.endTime)}
+                </td>
+              </tr>
             )
           })}
-        </div>
-      )}
+        </tbody>
+      </table>
 
-      <TrainingCreateModal
+      <TrainingFormModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         teamId={teamId}
-        onCreated={(trainingId) => {
-          setShowCreateModal(false)
-          fetchTrainings()
-          router.push(getTrainingUrl(trainingId))
-        }}
+        onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
       />
-    </div>
+    </>
   )
 }

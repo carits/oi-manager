@@ -230,8 +230,7 @@ export function TeamMemberList({
   return (
     <div>
       {/* 头部：标题和管理按钮 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>团队成员</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '1rem' }}>
         {permission.canInvite && (
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {onViewInvites && (

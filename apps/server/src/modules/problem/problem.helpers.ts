@@ -13,13 +13,13 @@ import { prisma } from '../../prisma'
  */
 export async function generateCaritsProblemId(): Promise<string> {
   // 确保序列行存在
-  let seq = await prisma.caritsSequence.findFirst()
+  let seq = await (prisma as any).carits_sequence.findFirst()
   if (!seq) {
-    seq = await prisma.caritsSequence.create({ data: { nextId: 1000 } })
+    seq = await (prisma as any).carits_sequence.create({ data: { nextId: 1000 } })
   }
 
   // 原子递增：读取当前 nextId 并 +1
-  const updated = await prisma.caritsSequence.update({
+  const updated = await (prisma as any).carits_sequence.update({
     where: { id: seq.id },
     data: { nextId: seq.nextId + 1 }
   })

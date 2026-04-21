@@ -18,8 +18,9 @@ interface JudgeSettingsTabProps {
 }
 
 export interface JudgeSettingsTabHandle {
-  saveConfig: () => Promise<void>
+  saveConfig: (overrideProblemId?: string) => Promise<void>
   isDirty: () => boolean
+  getStagedFiles: () => File[]
 }
 
 interface TestdataFile {
@@ -227,6 +228,26 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   const [uploading, setUploading] = useState(false)
   const [deletingFile, setDeletingFile] = useState<string | null>(null)
 
+  // 创建模式暂存区
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [stagedPairs, setStagedPairs] = useState<TestCasePair[]>([])
+
+  // 从 File[] 自动检测配对
+  const detectPairs = (files: File[]): TestCasePair[] => {
+    const pairs: TestCasePair[] = []
+    const inFiles = files.filter(f => f.name.endsWith('.in'))
+    for (const inFile of inFiles) {
+      const baseName = inFile.name.replace(/\.in$/, '')
+      const outFile = files.find(f => f.name === `${baseName}.out`)
+      const ansFile = files.find(f => f.name === `${baseName}.ans`)
+      const outputFile = outFile || ansFile
+      if (outputFile) {
+        pairs.push({ input: inFile.name, output: outputFile.name })
+      }
+    }
+    return pairs
+  }
+
   // ==================== 构建配置对象 ====================
 
   const buildConfig = (subtasksOverride?: SubtaskConfig[]): Record<string, any> => {
@@ -427,8 +448,12 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   // ==================== 保存配置 ====================
 
-  const handleSaveConfig = async (subtasksOverride?: SubtaskConfig[]) => {
-    if (!problemId) return
+  const handleSaveConfig = async (subtasksOverride?: SubtaskConfig[], overrideProblemId?: string) => {
+    const pid = overrideProblemId || problemId
+    if (!pid) {
+      toast.warning('请先保存题目基本信息')
+      return
+    }
     try {
       setSaving(true)
       const config: JudgeConfig = buildConfig(subtasksOverride)
@@ -439,7 +464,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       console.log('[JudgeSettings] Saving config, subtasks count:', config.subtasks?.length ?? 0,
         'subtasks:', JSON.stringify(config.subtasks))
 
-      const result = await apiClient.put(`/api/problems/${problemId}/judge-config`, {
+      const result = await apiClient.put(`/api/problems/${pid}/judge-config`, {
         problemType,
         timeLimit: timeVal,
         memoryLimit: memVal,
@@ -467,10 +492,11 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     return JSON.stringify(buildConfig()) !== initialConfigRef.current
   }
 
-  // 暴露 saveConfig / isDirty 方法给父组件（ProblemForm 的主保存按钮调用）
+  // 暴露 saveConfig / isDirty / getStagedFiles 方法给父组件（ProblemForm 的主保存按钮调用）
   useImperativeHandle(ref, () => ({
-    saveConfig: () => handleSaveConfig(),
-    isDirty: checkIsDirty
+    saveConfig: (overrideProblemId?: string) => handleSaveConfig(undefined, overrideProblemId),
+    isDirty: checkIsDirty,
+    getStagedFiles: () => stagedFiles,
   }))
 
   // ==================== 测试数据操作 ====================
@@ -478,6 +504,20 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
+
+    if (!problemId) {
+      // 创建模式：暂存到本地
+      const newFiles = Array.from(files)
+      setStagedFiles(prev => {
+        const updated = [...prev, ...newFiles]
+        setStagedPairs(detectPairs(updated))
+        return updated
+      })
+      toast.success(`已暂存 ${newFiles.length} 个文件，保存题目后将自动上传`)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     try {
       setUploading(true)
       const formData = new FormData()
@@ -497,6 +537,17 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   }
 
   const handleDeleteFile = (fileId: string, filename: string) => {
+    // 创建模式：删除暂存文件
+    if (!problemId) {
+      setStagedFiles(prev => {
+        const updated = prev.filter(f => f.name !== filename)
+        setStagedPairs(detectPairs(updated))
+        return updated
+      })
+      toast.success('文件已移除')
+      return
+    }
+
     setConfirmState({
       message: `确定要删除 ${filename} 吗？`,
       action: async () => {
@@ -529,7 +580,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   const autoConfigure = useCallback(async () => {
     const assigned = getAssignedCases()
-    const available = testdataPairs.filter(p => !assigned.has(`${p.input}→${p.output}`))
+    const allPairs = !problemId ? stagedPairs : testdataPairs
+    const available = allPairs.filter(p => !assigned.has(`${p.input}→${p.output}`))
     if (available.length === 0) { toast.warning('没有可用的测试点'); return }
 
     const groups: Record<string, TestCasePair[]> = {}
@@ -556,7 +608,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     }
     await updateSubtasksAndSave(newSubtasks)
     toast.success(`已生成 ${groupKeys.length} 个子任务并保存`)
-  }, [testdataPairs, subtasks, getAssignedCases])
+  }, [testdataPairs, stagedPairs, subtasks, getAssignedCases])
 
   const addSubtask = async () => {
     const nextId = subtasks.length > 0 ? Math.max(...subtasks.map(s => s.id)) + 1 : 1
@@ -619,8 +671,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   useEffect(() => {
     const assigned = getAssignedCases()
-    setUnassignedCases(testdataPairs.filter(p => !assigned.has(`${p.input}→${p.output}`)))
-  }, [testdataPairs, subtasks, getAssignedCases])
+    const allPairs = !problemId ? stagedPairs : testdataPairs
+    setUnassignedCases(allPairs.filter(p => !assigned.has(`${p.input}→${p.output}`)))
+  }, [testdataPairs, stagedPairs, subtasks, getAssignedCases])
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
@@ -689,8 +742,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             }}
           >
             {label}
-            {key === 'testdata' && testdataFiles.length > 0 && (
-              <span style={{ marginLeft: '0.375rem', fontSize: '0.75rem', color: 'var(--gray-400)' }}>({testdataFiles.length})</span>
+            {key === 'testdata' && (testdataFiles.length > 0 || stagedFiles.length > 0) && (
+              <span style={{ marginLeft: '0.375rem', fontSize: '0.75rem', color: 'var(--gray-400)' }}>({testdataFiles.length + stagedFiles.length})</span>
             )}
             {key === 'subtasks' && subtasks.length > 0 && (
               <span style={{ marginLeft: '0.375rem', fontSize: '0.75rem', color: 'var(--gray-400)' }}>({subtasks.length})</span>
@@ -1075,6 +1128,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
               支持 .in, .out, .ans, .yaml 文件。同名配对的 .in 和 .out/.ans 文件将自动识别为测试点。
+              {!problemId && <span style={{ color: 'var(--warning)', marginLeft: '0.5rem' }}>（创建模式：文件暂存本地，保存题目后自动上传）</span>}
             </p>
             <label style={{ ...btnPrimary, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.7 : 1 }}>
               {uploading ? '上传中...' : '上传文件'}
@@ -1083,59 +1137,107 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           </div>
 
           {/* 已识别测试点 */}
-          {testdataPairs.length > 0 && (
-            <div style={{ ...cardStyle, background: 'rgba(16, 185, 129, 0.04)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-              <div style={{ ...sectionTitle, color: 'var(--success)' }}>已识别测试点 ({testdataPairs.length})</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {testdataPairs.map((pair, i) => (
-                  <span key={i} style={{ fontSize: '0.8125rem', padding: '0.375rem 0.625rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', fontFamily: 'monospace' }}>
-                    <span style={{ color: 'var(--primary)' }}>{pair.input}</span>
-                    <span style={{ color: 'var(--gray-400)', margin: '0 0.25rem' }}>→</span>
-                    <span style={{ color: 'var(--success)' }}>{pair.output}</span>
-                  </span>
-                ))}
+          {(() => {
+            const pairs = !problemId ? stagedPairs : testdataPairs
+            return pairs.length > 0 ? (
+              <div style={{ ...cardStyle, background: 'rgba(16, 185, 129, 0.04)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                <div style={{ ...sectionTitle, color: 'var(--success)' }}>已识别测试点 ({pairs.length})</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {pairs.map((pair, i) => (
+                    <span key={i} style={{ fontSize: '0.8125rem', padding: '0.375rem 0.625rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', fontFamily: 'monospace' }}>
+                      <span style={{ color: 'var(--primary)' }}>{pair.input}</span>
+                      <span style={{ color: 'var(--gray-400)', margin: '0 0.25rem' }}>→</span>
+                      <span style={{ color: 'var(--success)' }}>{pair.output}</span>
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            ) : null
+          })()}
 
           {/* 文件列表 */}
-          {testdataFiles.length > 0 ? (
-            <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ background: 'var(--gray-50)' }}>
-                    <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>文件名</th>
-                    <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>大小</th>
-                    <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '160px' }}>上传时间</th>
-                    <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '80px' }}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {testdataFiles.map(file => (
-                    <tr key={file.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.5rem 1rem', fontFamily: 'monospace' }}>
-                        <span style={{ color: file.filename.endsWith('.in') ? 'var(--primary)' : file.filename.endsWith('.out') || file.filename.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
-                          {file.filename}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{formatFileSize(file.size)}</td>
-                      <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</td>
-                      <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
-                        <button type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}
-                          style={{ ...btnDanger, opacity: deletingFile === file.id ? 0.5 : 1 }}>
-                          {deletingFile === file.id ? '...' : '删除'}
-                        </button>
-                      </td>
+          {(() => {
+            // 创建模式：显示暂存文件
+            if (!problemId) {
+              return stagedFiles.length > 0 ? (
+                <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--gray-50)' }}>
+                        <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>文件名</th>
+                        <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>大小</th>
+                        <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>状态</th>
+                        <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '80px' }}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stagedFiles.map((file, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.5rem 1rem', fontFamily: 'monospace' }}>
+                            <span style={{ color: file.name.endsWith('.in') ? 'var(--primary)' : file.name.endsWith('.out') || file.name.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
+                              {file.name}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{formatFileSize(file.size)}</td>
+                          <td style={{ padding: '0.5rem 1rem' }}>
+                            <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: '#fef3c7', color: '#92400e', borderRadius: '4px' }}>待上传</span>
+                          </td>
+                          <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
+                            <button type="button" onClick={() => handleDeleteFile('', file.name)} style={btnDanger}>
+                              删除
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)', border: '2px dashed var(--border)', borderRadius: '8px' }}>
+                  暂无测试数据，请上传 .in 和 .out/.ans 文件
+                </div>
+              )
+            }
+
+            // 编辑模式：显示已上传文件
+            return testdataFiles.length > 0 ? (
+              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--gray-50)' }}>
+                      <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>文件名</th>
+                      <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>大小</th>
+                      <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '160px' }}>上传时间</th>
+                      <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '80px' }}>操作</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)', border: '2px dashed var(--border)', borderRadius: '8px' }}>
-              暂无测试数据，请上传 .in 和 .out/.ans 文件
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {testdataFiles.map(file => (
+                      <tr key={file.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '0.5rem 1rem', fontFamily: 'monospace' }}>
+                          <span style={{ color: file.filename.endsWith('.in') ? 'var(--primary)' : file.filename.endsWith('.out') || file.filename.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
+                            {file.filename}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{formatFileSize(file.size)}</td>
+                        <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</td>
+                        <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
+                          <button type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}
+                            style={{ ...btnDanger, opacity: deletingFile === file.id ? 0.5 : 1 }}>
+                            {deletingFile === file.id ? '...' : '删除'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)', border: '2px dashed var(--border)', borderRadius: '8px' }}>
+                暂无测试数据，请上传 .in 和 .out/.ans 文件
+              </div>
+            )
+          })()}
         </div>
       )}
 

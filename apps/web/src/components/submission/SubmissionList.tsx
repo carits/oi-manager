@@ -32,6 +32,7 @@ interface SubmissionListProps {
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
   accepted: { bg: '#dcfce7', text: '#166534' },
   queuing: { bg: '#dbeafe', text: '#1e40af' },
+  judging: { bg: '#dbeafe', text: '#1e40af' },
   tle: { bg: '#fef3c7', text: '#92400e' },
   mle: { bg: '#fef3c7', text: '#92400e' },
   wa: { bg: '#fee2e2', text: '#991b1b' },
@@ -39,6 +40,11 @@ const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
   ce: { bg: '#f3e8ff', text: '#6b21a8' },
   pe: { bg: '#fef3c7', text: '#92400e' },
   ole: { bg: '#fef3c7', text: '#92400e' },
+  submit_failed: { bg: '#fee2e2', text: '#991b1b' },
+  judge_failed: { bg: '#fee2e2', text: '#991b1b' },
+  remote_unavailable: { bg: '#fee2e2', text: '#991b1b' },
+  unknown_error: { bg: '#fee2e2', text: '#991b1b' },
+  system_error: { bg: '#fee2e2', text: '#991b1b' },
 }
 
 const selectStyle: React.CSSProperties = {
@@ -86,34 +92,32 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     return '/teacher'
   }
 
-  // 格式化内存显示（MB，保留小数点）
-  // HDU 返回 KB，需要转换为 MB；其他平台假设已经是 MB
+  // 格式化内存显示（后端返回 KB，转换为 MB 显示）
   const formatMemory = (oj: string, memoryUsed: number | null): string => {
     if (memoryUsed === null) return '-'
-    if (oj === 'hdu') {
-      return (memoryUsed / 1024).toFixed(2)
-    }
-    return String(memoryUsed)
+    if (memoryUsed === 0) return '0'
+    return (memoryUsed / 1024).toFixed(2)
   }
 
   // 格式化时间显示（MS）
-  // HDU 和其他平台都返回毫秒，直接显示
   const formatTime = (timeUsed: number | null): string => {
     if (timeUsed === null) return '-'
     return String(timeUsed)
   }
 
-  // 判断题目是否可点击（公开题目 或 管理员可点击所有）
+  // 判断题目是否可点击
   const canClickProblem = (submission: Submission) => {
     if (!submission.problemInternalId) return false
     if (viewRole === 'admin') return true
+    // Carits 平台题目始终可点击
+    if (submission.oj === 'carits') return true
     return submission.problemVisibility === 'public'
   }
 
-  // 点击题号跳转到题目详情
+  // 点击题号在新 tab 打开题目详情
   const handleProblemClick = (submission: Submission) => {
     if (canClickProblem(submission)) {
-      router.push(`${getPathPrefix()}/problems/${submission.problemInternalId}`)
+      window.open(`${getPathPrefix()}/problems/${submission.problemInternalId}`, '_blank')
     }
   }
 
@@ -166,8 +170,8 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   }
 
   const getOjLabel = (oj: string) => {
-    if (oj === 'local') return '本OJ'
-    return OJ_PLATFORM_LABEL_MAP[oj] || oj
+    if (oj === 'carits') return 'Carits平台'
+    return OJ_PLATFORM_LABEL_MAP[oj] || oj.toUpperCase()
   }
 
   // 转圈动画组件
@@ -391,7 +395,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                       <span
                         onClick={() => handleProblemClick(s)}
                         style={{
-                          color: canClickProblem(s) ? 'var(--primary)' : (s.problemInternalId ? '#1d4ed8' : '#1d4ed8'),
+                          color: canClickProblem(s) ? 'var(--primary)' : '#6b7280',
                           cursor: canClickProblem(s) ? 'pointer' : 'default',
                           textDecoration: canClickProblem(s) ? 'underline' : 'none',
                         }}
