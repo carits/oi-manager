@@ -41,11 +41,11 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
   // 解析评测配置
   const cfg = problemConfig || {}
-  const timeLimit = parseTime(cfg.time || cfg.timeLimit || '1s')
-  const memoryLimit = parseMemory(cfg.memory || cfg.memoryLimit || '256MB')
-  let checkerType = cfg.checker_type || 'default'
-  const filename = cfg.filename || undefined
-  const ignoreTrailingSpace = cfg.ignore_trailing_space !== false // 默认 true
+  const timeLimit = parseTime((cfg as any).time || (cfg as any).timeLimit || '1s')
+  const memoryLimit = parseMemory((cfg as any).memory || (cfg as any).memoryLimit || '256MB')
+  let checkerType = (cfg as any).checker_type || 'default'
+  const filename = (cfg as any).filename || undefined
+  const ignoreTrailingSpace = (cfg as any).ignore_trailing_space !== false // 默认 true
 
   // 如果 checker_type 为 default 且 ignore_trailing_space 为 false，使用 strict checker
   if (checkerType === 'default' && !ignoreTrailingSpace) {
@@ -1053,8 +1053,8 @@ async function judgeInteractive(params: {
   const { language, code, problemConfig, testdataPath, submissionId } = params
   const cfg = problemConfig
 
-  const timeLimit = parseTime(cfg.time || cfg.timeLimit || '1s')
-  const memoryLimit = parseMemory(cfg.memory || cfg.memoryLimit || '256MB')
+  const timeLimit = parseTime((cfg as any).time || (cfg as any).timeLimit || '1s')
+  const memoryLimit = parseMemory((cfg as any).memory || (cfg as any).memoryLimit || '256MB')
 
   console.log(`[Judge Interactive] Starting interactive problem judging...`)
 
@@ -1469,8 +1469,8 @@ async function judgeCommunication(params: {
   const cfg = problemConfig
 
   const numProcesses = cfg.num_processes || 2
-  const timeLimit = parseTime(cfg.time || cfg.timeLimit || '1s')
-  const memoryLimit = parseMemory(cfg.memory || cfg.memoryLimit || '256MB')
+  const timeLimit = parseTime((cfg as any).time || (cfg as any).timeLimit || '1s')
+  const memoryLimit = parseMemory((cfg as any).memory || (cfg as any).memoryLimit || '256MB')
 
   console.log(`[Judge Communication] Starting communication problem with ${numProcesses} processes...`)
 
@@ -1871,7 +1871,7 @@ async function judgeSubmitAnswer(params: {
   }
 
   // 提交答案题通常需要 checker 比对
-  const checkerType = cfg.checker_type || 'default'
+  const checkerType = (cfg as any).checker_type || 'default'
 
   // 读取 checker 源码（如果有）
   let checkerCode: string | undefined

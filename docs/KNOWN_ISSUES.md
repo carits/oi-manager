@@ -1,6 +1,6 @@
 # 已知问题与技术债务 (Known Issues & Technical Debt)
 
-> 最后更新: 2026-03-23
+> 最后更新: 2026-04-23
 
 本文档记录 OI Manager V2 中的已知问题、技术债务和待优化项。
 
@@ -26,13 +26,17 @@
 
 **解决方案**: 将前端常用的类型定义迁移到 shared 包
 
-### 1.3 缺少通用 UI 组件库 [P2]
+### 1.3 ~~缺少通用 UI 组件库~~ ✅ 已解决
 
 **问题**: 项目使用内联样式，没有统一的 UI 组件库
 
-**影响**: 样式不统一，代码重复
+**状态**: ✅ 已于 2026-04-22 完成
 
-**解决方案**: 建议引入 `components/ui/` 目录，封装通用组件（Button、Modal、Table 等）
+**解决方案**:
+1. 建立 CSS 变量设计 token 系统（`globals.css` + `lib/tokens.ts` + `lib/styles.ts`）
+2. 增强 `components/ui/` 组件（Button 增加 outline/ghost/danger，Card 增加 hoverable/subtitle，Badge 增加 neutral/pending/dot）
+3. 消除所有紫色渐变，统一颜色为 CSS 变量引用
+4. 详细文档见 `docs/DESIGN_SYSTEM.md`
 
 ---
 
@@ -91,6 +95,76 @@
 2. 打开浏览器开发者工具 (F12) -> Application -> Cookies
 3. 复制所有 cookie 字符串（格式如 `key1=value1; key2=value2`）
 4. 在 `.env` 中添加：`LUOGU_COOKIE="你的Cookie"`
+
+### 2.6 ~~训练排名 Admin 过滤失效~~ ✅ 已解决
+
+**问题**: ICPC/IOI 训练排名中，owner 和 admin 教师未被正确过滤，仍然出现在排名列表中
+
+**根因**:
+- `TeamMember.userId` 存储的是 `Teacher.id` 或 `Student.id`
+- `Submission.userId` 存储的是 `User.id`
+- 排名代码直接用 `TeamMember.userId` 过滤 `Submission.userId`，导致 ID 不匹配
+
+**影响**: 教师提交被计入排名，影响学生排名准确性
+
+**涉及文件**: `apps/server/src/modules/training/training.routes.ts` 第 1333-1342 行
+
+**解决方案**:
+```typescript
+// 当前代码（错误）
+const adminMembers = await prisma.teamMember.findMany({
+  where: { teamId, role: { in: ['owner', 'admin'] } },
+  select: { userId: true },
+})
+const adminUserIds = adminMembers.map(m => m.userId)  // 这是 Teacher.id
+
+// 正确做法：查询 Teacher.userId (User.id)
+const adminUserIds: string[] = []
+for (const m of adminMembers) {
+  if (m.userType === 'teacher') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: m.userId },
+      select: { userId: true }
+    })
+    if (teacher) adminUserIds.push(teacher.userId)  // 这是 User.id
+  }
+}
+```
+
+**状态**: ✅ 已于 2026-04-23 解决
+
+**修复内容**:
+1. Admin 过滤：通过 Teacher/Student 表转换 TeamMember.userId → User.id
+2. Problem ID 匹配：ICPC 排名中 `Submission.problemId` 存储外部 ID（如 '1005'），需用 `p.Problem.problemId` 匹配
+
+**验证**: Training ID=4 ICPC 模拟赛，11 名学生排名正确，2 名教师不计入排名
+
+### 2.7 ~~Carits 训练提交 ojRemoteId 缺失~~ ✅ 已解决
+
+**问题**: 通过训练提交 API 提交的 Carits 题目，`ojRemoteId` 为 null，导致提交详情弹窗不显示远程 ID
+
+**根因**: `training.routes.ts` 中 Carits 训练提交只 dispatch judge task，未设置 `ojRemoteId`。而 `submit.ts` 中非训练提交已正确设置 `ojRemoteId = submission.id.toString()`
+
+**影响**: 训练提交详情弹窗不显示远程 ID
+
+**涉及文件**: `apps/server/src/modules/training/training.routes.ts` 第 966-977 行
+
+**解决方案**:
+```typescript
+// dispatchJudgeTask 后添加
+await prisma.submission.update({
+  where: { id: submission.id },
+  data: { ojRemoteId: submission.id.toString() }
+})
+```
+
+**状态**: ✅ 已于 2026-04-23 解决
+
+**修复内容**:
+1. 训练提交后设置 ojRemoteId
+2. 数据修复脚本更新现有 15 条记录
+
+**验证**: 111 条 Carits 训练提交全部有 ojRemoteId
 
 ---
 

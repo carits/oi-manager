@@ -45,11 +45,27 @@ trainingsRouter.get('/teams/:teamId/trainings', authenticate, async (req: AuthRe
     const trainings = await prisma.training.findMany({
       where: { teamId },
       include: {
-        _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
+        _count: { select: { TrainingProblem: true } },
         TrainingProblem: { select: { id: true } },
       },
       orderBy: { startTime: 'desc' },
     })
+
+    // 统计每个训练的实际参与人数（提交过代码的去重用户）
+    const trainingIds = trainings.map(t => t.id)
+    const participantCounts = new Map<number, number>()
+    if (trainingIds.length > 0) {
+      const rows = await prisma.$queryRaw<Array<{ sourceId: string; count: bigint }>>`
+        SELECT "sourceId", COUNT(DISTINCT "userId")::int as count
+        FROM "Submission"
+        WHERE "sourceId" IN (${Prisma.join(trainingIds.map(id => `training-${id}`))})
+        GROUP BY "sourceId"
+      `
+      for (const row of rows) {
+        const id = parseInt(row.sourceId.replace('training-', ''))
+        participantCounts.set(id, Number(row.count))
+      }
+    }
 
     res.json({
       success: true,
@@ -71,7 +87,7 @@ trainingsRouter.get('/teams/:teamId/trainings', authenticate, async (req: AuthRe
           status: computedStatus,
           createdBy: t.createdBy,
           problemCount: t._count.TrainingProblem,
-          participantCount: t._count.TrainingParticipant,
+          participantCount: participantCounts.get(t.id) || 0,
           createdAt: t.createdAt.toISOString(),
         }
       }),
@@ -971,6 +987,12 @@ trainingsRouter.post('/trainings/:id/submit', authenticate, async (req: AuthRequ
           testdataPath,
           problemConfig,
         })
+
+        // Carits 平台：远程提交ID就是本地评测ID
+        await prisma.submission.update({
+          where: { id: submission.id },
+          data: { ojRemoteId: submission.id.toString() }
+        })
       } catch (error) {
         console.error('Failed to dispatch judge task:', error)
       }
@@ -1114,7 +1136,14 @@ trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: Auth
     const pageNum = parseInt(page) || 1
     const pageSizeNum = Math.min(parseInt(pageSize) || 50, 200)
 
-    const where: any = { submitSource: 'training', sourceId: `training-${id}` }
+    const where: any = {
+      submitSource: 'training',
+      sourceId: `training-${id}`,
+      OR: [
+        { result: 'queuing' },
+        { cases: { not: null } },
+      ],
+    }
     if (filterUserId) where.userId = filterUserId
     if (filterProblemId) where.problemId = filterProblemId
     if (filterResult) where.result = filterResult
@@ -1177,11 +1206,15 @@ trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: Auth
       trainingProblems.map(tp => [tp.Problem.problemId, tp.orderIndex] as [string, number])
     )
 
-    // Get submitter names
+    // Get submitter names and usernames
     const userIds = [...new Set(submissions.map(s => s.userId))]
-    const teachers = await prisma.teacher.findMany({ where: { userId: { in: userIds } }, select: { userId: true, name: true } })
-    const students = await prisma.student.findMany({ where: { userId: { in: userIds } }, select: { userId: true, name: true } })
+    const [teachers, students, users] = await Promise.all([
+      prisma.teacher.findMany({ where: { userId: { in: userIds } }, select: { userId: true, name: true } }),
+      prisma.student.findMany({ where: { userId: { in: userIds } }, select: { userId: true, name: true } }),
+      prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } }),
+    ])
     const nameMap = new Map<string, string>([...teachers.map(t => [t.userId, t.name] as [string, string]), ...students.map(s => [s.userId, s.name] as [string, string])])
+    const usernameMap = new Map<string, string>(users.map(u => [u.id, u.username] as [string, string]))
 
     res.json({
       success: true,
@@ -1190,6 +1223,7 @@ trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: Auth
           id: s.id,
           userId: s.userId,
           userName: nameMap.get(s.userId) || '未知',
+          username: usernameMap.get(s.userId) || '未知',
           problemAlias: aliasMap.get(s.problemId) || s.problemId,
           problemOrderIndex: orderIndexMap.get(s.problemId) ?? 0,
           trainingProblemId: s.problemId,  // 使用 problemId
@@ -1239,6 +1273,11 @@ trainingsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, as
     })
 
     if (!submission || submission.sourceId !== `training-${id}`) {
+      return res.status(404).json({ success: false, message: '提交不存在' })
+    }
+
+    // 过滤未经过正规评测流程的假数据
+    if (submission.result !== 'queuing' && !submission.cases) {
       return res.status(404).json({ success: false, message: '提交不存在' })
     }
 
@@ -1319,7 +1358,7 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
     const training = await prisma.training.findUnique({
       where: { id },
       include: {
-        TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, alias: true, points: true, orderIndex: true, Problem: { select: { problemId: true } } } },
+        TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, problemId: true, alias: true, points: true, orderIndex: true, Problem: { select: { problemId: true } } } },
       },
     })
     if (!training) {
@@ -1331,15 +1370,26 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
     }
 
     // Get admin user IDs to exclude from ranking
+    // TeamMember.userId stores Teacher.id/Student.id, but Submission.userId stores User.id
+    // So we need to convert via Teacher/Student lookup
     const adminMembers = await prisma.teamMember.findMany({
       where: {
         teamId: training.teamId,
         status: 'active',
         role: { in: ['owner', 'admin'] },
       },
-      select: { userId: true },
+      select: { userId: true, userType: true },
     })
-    const adminUserIds = adminMembers.map(m => m.userId)
+    const adminUserIds: string[] = []
+    for (const m of adminMembers) {
+      if (m.userType === 'teacher') {
+        const teacher = await prisma.teacher.findUnique({ where: { id: m.userId }, select: { userId: true } })
+        if (teacher) adminUserIds.push(teacher.userId)
+      } else if (m.userType === 'student') {
+        const student = await prisma.student.findUnique({ where: { id: m.userId }, select: { userId: true } })
+        if (student) adminUserIds.push(student.userId)
+      }
+    }
 
     const problems = training.TrainingProblem
     const trainingStartTime = training.startTime
@@ -1365,12 +1415,14 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
         FROM "Submission"
         WHERE "submitSource" = 'training'
           AND "sourceId" = CONCAT('training-', ${id}::text)
+          AND "cases" IS NOT NULL
           AND score = (
             SELECT MAX(s2.score) FROM "Submission" s2
             WHERE s2."userId" = "Submission"."userId"
               AND s2."problemId" = "Submission"."problemId"
               AND s2."submitSource" = 'training'
               AND s2."sourceId" = CONCAT('training-', ${id}::text)
+              AND s2."cases" IS NOT NULL
           )
           ${adminFilter}
         GROUP BY "userId", "problemId"
@@ -1394,7 +1446,10 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
         let lastSubmitAt = new Date(0)
 
         for (const p of problems) {
-          const ps = problemScores.get(p.Problem.problemId)
+          // Submission.problemId 存储的是 Problem.problemId（外部 ID），而非 Problem.id（UUID）
+          // 所以需要用 p.Problem.problemId 来匹配
+          const externalProblemId = p.Problem.problemId
+          const ps = problemScores.get(externalProblemId)
           const score = ps?.maxScore ?? 0
           totalScore += score
           problemDetails[p.id] = { score, alias: p.alias }
@@ -1421,7 +1476,15 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
         : {}
 
       const submissions = await prisma.submission.findMany({
-        where: { submitSource: 'training', sourceId: `training-${id}`, ...adminFilterWhere },
+        where: {
+          submitSource: 'training',
+          sourceId: `training-${id}`,
+          ...adminFilterWhere,
+          OR: [
+            { result: 'queuing' },
+            { cases: { not: null } },
+          ],
+        },
         orderBy: { createdAt: 'asc' },
         select: { userId: true, problemId: true, score: true, result: true, createdAt: true },
       })
@@ -1439,6 +1502,7 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
         if (stat.solved) continue
 
         stat.attempts++
+        // Submission.problemId stores Problem.problemId (external ID like '1005'), not Problem.id (UUID)
         if (sub.result === 'accepted' || (sub.score ?? 0) >= (problems.find(p => p.Problem.problemId === sub.problemId)?.points ?? 100)) {
           stat.solved = true
           const timeDiff = (sub.createdAt.getTime() - trainingStartTime.getTime()) / 60000
@@ -1455,6 +1519,8 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
         const problemDetails: Record<string, { solved: boolean; penalty: number; attempts: number; alias: string }> = {}
 
         for (const p of problems) {
+          // Submission.problemId = Problem.problemId (external ID), TrainingProblem.problemId = Problem.id (UUID)
+          // Must use p.Problem.problemId to match submission keys
           const ps = problemStats.get(p.Problem.problemId)
           const solved = ps?.solved ?? false
           const penalty = ps?.penalty ?? 0

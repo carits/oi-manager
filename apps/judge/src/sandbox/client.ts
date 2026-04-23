@@ -152,8 +152,12 @@ export async function execute(params: {
   filename?: string
   /** 额外需要拷入执行环境的文件（如 user_extra_files） */
   extraCopyIn?: Record<string, string>
+  /** 启用地址空间限制（RLIMIT_AS），默认 false（使用 cgroup 内存限制） */
+  addressSpaceLimit?: boolean
 }): Promise<SandboxResult> {
-  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir, filename, extraCopyIn } = params
+  // addressSpaceLimit 默认 false，让 cgroup 内存限制生效
+  // RLIMIT_AS 会导致 malloc 提前失败，无法正确检测 MLE
+  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir, filename, extraCopyIn, addressSpaceLimit = false } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -221,9 +225,10 @@ async function sandboxExecute(
     compileFileId?: string
     filename?: string
     extraCopyIn?: Record<string, string>
+    addressSpaceLimit?: boolean
   }
 ): Promise<SandboxResult> {
-  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn } = params
+  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn, addressSpaceLimit = true } = params
 
   try {
     // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
@@ -266,7 +271,9 @@ async function sandboxExecute(
       cpuLimit: timeLimit * 1000000,
       memoryLimit: memoryLimit * 1024,
       strictMemoryLimit: true,
-      procLimit: 50
+      addressSpaceLimit,
+      procLimit: 50,
+      outputLimit
     })
 
     // 解析结果
@@ -277,18 +284,7 @@ async function sandboxExecute(
     let time = Math.round(result.time / 1000000)
     let memory = Math.round(result.memory / 1024)
 
-    if (realStatus === 'Time Limit Exceeded' || result.time > timeLimit * 1000000) {
-      status = 'Time Limit Exceeded'
-      time = timeLimit
-    } else if (realStatus === 'Memory Limit Exceeded') {
-      status = 'Memory Limit Exceeded'
-      memory = memoryLimit
-    } else if (realStatus === 'Output Limit Exceeded') {
-      status = 'Output Limit Exceeded'
-    } else if (result.exitStatus !== 0) {
-      status = 'Runtime Error'
-    }
-
+    // 先获取 stdout/stderr，用于后续判断
     let stdout: string | undefined
     let stderr: string | undefined
 
@@ -300,6 +296,55 @@ async function sandboxExecute(
       stdout = result.files?.stdout
     }
     stderr = result.files?.stderr
+
+    // 检测内存分配失败的信号（bad_alloc、OOM、memory allocation failed 等）
+    const isMemoryAllocationError = (stderr && (
+      stderr.includes('bad_alloc') ||
+      stderr.includes('std::bad_alloc') ||
+      stderr.includes('memory allocation failed') ||
+      stderr.includes('Cannot allocate memory') ||
+      stderr.includes('Out of memory')
+    )) || false
+
+    if (realStatus === 'Time Limit Exceeded' || result.time > timeLimit * 1000000) {
+      status = 'Time Limit Exceeded'
+      time = timeLimit
+    } else if (realStatus === 'Memory Limit Exceeded') {
+      status = 'Memory Limit Exceeded'
+      memory = memoryLimit
+    } else if (realStatus === 'Output Limit Exceeded') {
+      status = 'Output Limit Exceeded'
+    } else if (realStatus === 'Signalled') {
+      // 当程序被信号终止（如 SIGKILL/OOM 或 SIGSEGV），检查是否因为内存超限
+      // 如果内存使用接近限制（>90%）或有内存分配错误信号，判定为 MLE
+      if (memory >= memoryLimit * 0.9 || isMemoryAllocationError) {
+        status = 'Memory Limit Exceeded'
+        memory = memoryLimit
+      } else {
+        status = 'Runtime Error'
+      }
+    } else if (result.exitStatus !== 0) {
+      // Nonzero Exit Status: 检查是否因为内存分配失败
+      // 如果内存使用接近限制或有内存分配错误信号，判定为 MLE
+      if (memory >= memoryLimit * 0.9 || isMemoryAllocationError) {
+        status = 'Memory Limit Exceeded'
+        memory = memoryLimit
+      } else {
+        status = 'Runtime Error'
+      }
+    }
+
+    // 手动检测 OLE：go-judge 的 outputLimit 在 copyOut 模式下不自动触发 OLE
+    // 需要检查输出大小是否超过限制
+    if (status === 'Accepted' && stdout && stdout.length > outputLimit) {
+      status = 'Output Limit Exceeded'
+    }
+
+    // 手动检测 MLE：当 memoryUsed > memoryLimit 时标记为 MLE
+    // go-judge 可能返回 Accepted 但实际内存超限（取决于 cgroup 配置）
+    if (status === 'Accepted' && memory > memoryLimit) {
+      status = 'Memory Limit Exceeded'
+    }
 
     return {
       status,
@@ -359,11 +404,13 @@ export async function runCommand(params: {
   cpuLimit?: number
   memoryLimit?: number
   strictMemoryLimit?: boolean
+  addressSpaceLimit?: boolean
   procLimit?: number
   copyIn?: Record<string, { content: string } | { src: string } | { fileId: string }>
   copyOut?: string[]
   copyOutCached?: string[]
   copyOutOptional?: string[]
+  outputLimit?: number
 }): Promise<{
   status: string
   exitStatus: number
@@ -393,6 +440,8 @@ export async function runPiped(params: {
     cpuLimit?: number
     memoryLimit?: number
     strictMemoryLimit?: boolean
+    addressSpaceLimit?: boolean
+    outputLimit?: number
     procLimit?: number
   }>
   pipeMapping?: Array<{
@@ -420,7 +469,9 @@ export async function runPiped(params: {
       if (cmd.cpuLimit) c.cpuLimit = cmd.cpuLimit
       if (cmd.memoryLimit) c.memoryLimit = cmd.memoryLimit
       if (cmd.strictMemoryLimit) c.strictMemoryLimit = cmd.strictMemoryLimit
+      if (cmd.addressSpaceLimit) c.addressSpaceLimit = cmd.addressSpaceLimit
       if (cmd.procLimit) c.procLimit = cmd.procLimit
+      if (cmd.outputLimit) c.outputLimit = cmd.outputLimit
       // pipeMapping 模式下 stdin/stdout 需要 null
       if (pipeMapping) {
         const idx = cmds.indexOf(cmd)

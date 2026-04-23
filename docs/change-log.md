@@ -1,5 +1,189 @@
 # 变更日志
 
+## 2026-04-23 (ICPC 大规模 API 测试验证)
+
+### 背景
+
+验证 ICPC 赛制排名功能，通过 API 提交覆盖所有评测结果类型。
+
+### 测试结果
+
+**结果类型覆盖**（数据库统计，共 1324 条提交）：
+- AC: 571 条 ✅
+- WA: 446 条 ✅
+- CE: 164 条 ✅
+- RE: 75 条 ✅
+- TLE: 66 条 ✅
+- OLE: 1 条 ✅
+- MLE: 1 条 ✅
+- PE: 0 条 ⚠️（暂不支持，需 testlib checker）
+
+**排名验证**：
+- Training 4 排名正确，11 名学生按解题数/罚时排序
+- 教师过滤正确，owner/admin 不出现在排名中
+- 罚时计算正确：先失败后 AC 的题目包含失败次数 × 20 分钟
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/scripts/icpc-full-test.ts` | 新建测试脚本 |
+| `docs/current-task.md` | 更新验证结果 |
+
+---
+
+## 2026-04-23 (MLE/OLE/PE 检测研究 + sandbox client 增强)
+
+### 背景
+
+ICPC 赛制大规模测试需要覆盖 8 种评测结果类型。MLE/OLE/PE 三种类型无法触发，进行研究并修复。
+
+### 修改
+
+1. **sandbox/client.ts** — 参考 Hydro OJ 添加评测增强
+   - 新增 `addressSpaceLimit` 参数（控制 RLIMIT_AS）
+   - 新增 OLE 手动检测（stdout.length > outputLimit 时标记 OLE）
+   - 新增 MLE 手动检测（memory > memoryLimit 时标记 MLE）
+   - `runCommand` 接口和请求体传递 `addressSpaceLimit` 和 `outputLimit`
+
+2. **scripts/icpc-full-test.ts** — MLE 代码改用 vector 分配
+
+### 结论
+
+- MLE 检测需要 go-judge 启用 cgroup memory controller（生产环境用 Docker 部署）
+- OLE 检测已通过手动检查实现
+- PE 检测需要 testlib checker（超出当前 scope）
+
+### 影响模块
+
+- `apps/judge/src/sandbox/client.ts` — sandbox 执行参数和结果检测
+- `apps/server/scripts/icpc-full-test.ts` — ICPC 测试脚本
+
+---
+
+## 2026-04-23 (Carits 训练提交 ojRemoteId 缺失修复)
+
+### 背景
+
+通过训练提交 API 提交的 Carits 题目，提交详情弹窗不显示远程 ID（ojRemoteId 为 null）。
+- 训练提交（`training.routes.ts`）缺少设置 `ojRemoteId` 的步骤
+- 非训练提交（`submit.ts`）已正确设置 `ojRemoteId = submission.id.toString()`
+
+### 修改
+
+**`apps/server/src/modules/training/training.routes.ts`**
+- Carits 训练提交 dispatch judge task 后，新增 `prisma.submission.update` 设置 `ojRemoteId: submission.id.toString()`
+- 与 `submit.ts` 行为对齐
+
+**`apps/server/scripts/fix-carits-oj-remote-id.ts`**（新建）
+- 数据修复脚本，将现有 `oj='carits' + submitSource='training' + ojRemoteId=null` 的记录更新为 `ojRemoteId = id.toString()`
+- 已修复 15 条记录
+
+### 影响范围
+
+- 训练提交详情弹窗正常显示远程 ID
+- 后续新提交自动设置 ojRemoteId
+
+---
+
+## 2026-04-23 (ICPC 排名全零修复)
+
+### 背景
+
+ICPC 排名 API 返回所有学生的 solved 和 penalty 均为 0。
+
+### 根因
+
+1. **Problem ID 不匹配**：排名代码用 `p.problemId`（TrainingProblem 的外键，UUID）匹配 `sub.problemId`（存的是外部 ID 如 '1005'）。应使用 `p.Problem.problemId`。
+2. **Admin 过滤 ID 不匹配**：`TeamMember.userId` 存的是 Teacher.id/Student.id，而 `Submission.userId` 存的是 User.id。
+
+### 修改
+
+**`apps/server/src/modules/training/training.routes.ts`**
+- 排名代码中 `p.problemId` → `p.Problem.problemId`（3 处）
+- Admin 过滤通过 Teacher/Student 表转换 TeamMember.userId → User.id
+
+### 影响范围
+
+- ICPC 排名正常显示解题数和罚时
+- 教师提交不计入排名
+
+---
+
+## 2026-04-22 (学生 OJ 平台风格统一重构)
+
+### 背景
+
+前端有 29,361 行 TSX 代码、2,411 个内联样式对象、75 个页面、49 个组件。存在大量视觉不一致：
+- 10+ 处紫色渐变按钮
+- borderRadius 有 4px/6px/8px/12px 四种值混用
+- boxShadow 有 10+ 种不同值
+- fontSize 有 20+ 种非标准值
+- 73 处硬编码 #6b7280
+- CSS 变量缺失 warning/info/radius/shadow/spacing/typography token
+
+### 修改
+
+**第 1 阶段：设计 Token 与基础规范**
+- `styles/globals.css` 扩展 CSS 变量：色彩（primary/success/warning/error/info 及 light/text 变体）、背景（bg-page/bg-card/bg-hover/bg-muted）、文字（text-primary/text-secondary/text-muted/text-inverse）、边框、圆角（radius-sm/radius/radius-md/radius-lg）、阴影（shadow-sm/shadow/shadow-md/shadow-lg）、间距（space-1~space-10）、字号（text-xs~text-2xl）
+- `lib/tokens.ts` 新建 JS 设计 token 常量，导出 colors/radius/shadow/space/fontSize 对象
+- `lib/styles.ts` 全面改为 CSS 变量引用
+
+**第 2 阶段：底层组件统一**
+- `Button.tsx` 增加 outline/ghost/fullWidth 变体
+- `Card.tsx` 增加 hoverable/padding/subtitle/onClick props
+- `Badge.tsx` 增加 neutral/pending 变体、dot prop、getResultVariant() 函数
+- `Table.tsx` hover 改为 CSS class，使用 CSS 变量
+- `PageHeader.tsx` 描述颜色从 var(--gray-600) 改为 var(--text-secondary)，字号改为 var(--text-sm)
+- `AppShell.tsx` 移除内联 Card/PageHeader 定义（34 行），改用 ui/ 组件
+
+**第 3 阶段：高频核心页面重构**
+- `ProblemDetail.tsx` 3 处紫色渐变改为 var(--primary)
+- `TrainingDetailPage.tsx` 2 处紫色渐变改为 var(--primary)
+- `SubmissionList.tsx` RESULT_COLORS 改为 CSS 变量
+- `TeamTrainingList.tsx` STATUS_MAP 颜色改为 CSS 变量
+- `TranslateModal.tsx`、`ProfileEditor.tsx`、`TeamHeader.tsx` 等组件去渐变
+
+**第 4 阶段：批量颜色替换**
+- 92 个 TSX 文件批量替换硬编码颜色：
+  - 文字色：#1e293b/#374151/#111827 → var(--text-primary)
+  - 次要文字：#475569/#6b7280/#64748b → var(--text-secondary)
+  - 弱化文字：#9ca3af/#94a3b8/#999 → var(--text-muted)
+  - 背景：#f9fafb/#f3f4f6/#f8fafc → var(--bg-muted)
+  - 边框：#e5e7eb/#e2e8f0/#ccc → var(--border)
+  - 主色：#3b82f6/#2563eb/#667eea/#7c3aed/#8b5cf6 → var(--primary)
+  - 成功/错误/警告色统一为 var(--success)/var(--error)/var(--warning)
+
+**第 5 阶段：一致性校验**
+- borderRadius 12px → var(--radius-lg)（10 个文件）
+- borderRadius 3px → var(--radius-sm)（6 个文件）
+
+### 结果
+
+- 紫色渐变：17 处 → 0 处
+- 硬编码颜色：351 处 → 56 处（84% 减少，剩余为图表调色板等有意保留）
+- 非标准 borderRadius：全部标准化
+- TypeScript 编译通过
+
+### 涉及文件
+
+- `apps/web/src/styles/globals.css`
+- `apps/web/src/lib/tokens.ts`（新建）
+- `apps/web/src/lib/styles.ts`
+- `apps/web/src/components/ui/Button.tsx`
+- `apps/web/src/components/ui/Card.tsx`
+- `apps/web/src/components/ui/Badge.tsx`
+- `apps/web/src/components/ui/Table.tsx`
+- `apps/web/src/components/ui/PageHeader.tsx`
+- `apps/web/src/components/AppShell.tsx`
+- `apps/web/src/components/problem/ProblemDetail.tsx`
+- `apps/web/src/components/training/TrainingDetailPage.tsx`
+- `apps/web/src/components/submission/SubmissionList.tsx`
+- `apps/web/src/components/training/TeamTrainingList.tsx`
+- 92 个 TSX 文件（批量替换）
+
+---
+
 ## 2026-04-17 (训练编辑题号排序修复)
 
 ### 背景
