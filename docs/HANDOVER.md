@@ -1,6 +1,6 @@
 # 项目交接指南 (Handover Guide)
 
-> 最后更新: 2026-03-23
+> 最后更新: 2026-04-22
 
 本文档帮助新人快速接手 OI Manager V2 项目。建议按顺序阅读并实践。
 
@@ -251,10 +251,11 @@ npx prisma studio
 
 ### 6.3 前端规范
 
-- 使用内联样式
-- CSS 变量统一管理
-- 组件复用优先
+- 使用内联样式 + CSS 变量设计 token 系统
+- 设计 token 详见 `docs/DESIGN_SYSTEM.md`
+- 通用组件在 `components/ui/`（Button、Card、Badge、Table、Modal 等）
 - 使用 `apiClient` 调用 API
+- 颜色使用 `var(--xxx)` 语义变量，禁止硬编码 hex 值
 
 ### 6.4 Git 规范
 
@@ -271,9 +272,9 @@ npx prisma studio
 详见 [KNOWN_ISSUES.md](./KNOWN_ISSUES.md)
 
 **高优先级**:
-- 遗留直连 API 调用需要迁移到 apiClient
-- Token 存储安全性需要增强
-- 测试用例缺失
+- Rating 计算逻辑未实现
+- Token 存储安全性需要增强（生产环境建议 httpOnly Cookie）
+- 测试覆盖率不足
 
 ---
 
@@ -282,26 +283,33 @@ npx prisma studio
 ### 8.1 已完成功能
 
 - ✅ 用户认证和权限系统
-- ✅ 学校管理基础功能
+- ✅ 学校管理完整功能
 - ✅ 教师管理完整功能
-- ✅ 学生管理基础功能
-- ✅ 团队管理基础功能
+- ✅ 学生管理完整功能
+- ✅ 团队管理完整功能（含邀请/申请/角色管理）
 - ✅ 学校负责人权限体系
 - ✅ 分页功能
 - ✅ Markdown/LaTeX 支持
+- ✅ 题单管理（飞书文档式权限）
+- ✅ 学校题单 & 团队题单
+- ✅ 团队训练模块（IOI/ICPC 赛制）
+- ✅ Carits 本地评测系统
+- ✅ 评测记录列表 + 详情页
+- ✅ 前端设计 token 系统 + 风格统一
+- ✅ SWR 请求缓存
+- ✅ PostgreSQL 迁移 + Docker 部署
 
 ### 8.2 进行中功能
 
-- 🔄 比赛管理功能
 - 🔄 Rating 系统完善
-- ✅ 题单管理（飞书文档式权限）
+- 🔄 比赛管理功能增强
 
 ### 8.3 计划中功能
 
 - 📋 成绩中心
-- 📋 资源管理
 - 📋 学生成长报告
 - 📋 家长端
+- 📋 CI/CD 配置
 
 ---
 

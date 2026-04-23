@@ -1,6 +1,6 @@
 # 系统全景图 (System Map)
 
-> 最后更新: 2026-04-07
+> 最后更新: 2026-04-22
 
 本文档描述 OI Manager V2 的完整系统结构，帮助快速理解项目全貌。
 
@@ -328,6 +328,7 @@ School (学校)
 
 ```
 components/
+├── ui/                # 通用 UI 组件（Button, Card, Badge, Table, Modal 等）
 ├── business/          # 业务组件
 │   └── UserManagement.tsx
 ├── profile/           # 个人资料组件
@@ -337,8 +338,29 @@ components/
 │   ├── TeamCard.tsx
 │   ├── TeamHeader.tsx
 │   ├── TeamMemberList.tsx
-│   └── TeamInviteListModal.tsx
-└── ui/                # 通用 UI 组件 (待补充)
+│   ├── TeamDetailPage.tsx
+│   └── TeamProblemListsTab.tsx
+├── training/          # 训练相关组件
+│   ├── TeamTrainingList.tsx
+│   ├── TrainingDetailPage.tsx
+│   ├── TrainingCreateModal.tsx
+│   ├── TrainingEditPage.tsx
+│   └── TrainingFormModal.tsx
+├── problem/           # 题目相关组件
+│   ├── ProblemDetail.tsx
+│   ├── ProblemForm.tsx
+│   ├── ProblemListPage.tsx
+│   ├── ProblemListDetailPage.tsx
+│   ├── ProblemNote.tsx
+│   ├── JudgeSettingsTab.tsx
+│   └── TranslateModal.tsx
+├── submission/        # 评测记录组件
+│   ├── SubmissionList.tsx
+│   ├── SubmissionDetailPage.tsx
+│   └── SubmissionDetailModal.tsx
+├── AppShell.tsx       # 应用外壳（导航布局）
+├── AuthProvider.tsx   # 认证状态管理
+└── Providers.tsx      # 全局 Provider 封装
 ```
 
 ### 6.3 Hooks 结构

@@ -8,15 +8,16 @@
 
 ```
 apps/web/src/components/
-├── ui/                    # 通用 UI 组件
-│   ├── Button.tsx         # 按钮组件
-│   ├── Card.tsx           # 卡片组件
-│   ├── Table.tsx          # 表格组件
+├── ui/                    # 通用 UI 组件（设计 token 驱动）
+│   ├── Button.tsx         # 按钮（primary/secondary/outline/ghost/danger/text）
+│   ├── Card.tsx           # 卡片（padding/hoverable/subtitle）
+│   ├── Table.tsx          # 表格（CSS 变量 hover）
 │   ├── Modal.tsx          # 模态框组件
-│   ├── Badge.tsx          # 徽章组件
+│   ├── Badge.tsx          # 徽章（success/error/warning/info/neutral/pending + dot + getResultVariant）
 │   ├── Pagination.tsx     # 分页组件
 │   ├── PageHeader.tsx     # 页面头部组件
 │   ├── MarkdownRenderer.tsx # Markdown 渲染组件
+│   ├── MarkdownEditor.tsx # Markdown 编辑组件
 │   ├── Empty.tsx          # 空状态组件
 │   ├── ConfirmModal.tsx   # 确认对话框组件
 │   ├── Toast.tsx          # Toast 通知组件
@@ -28,24 +29,35 @@ apps/web/src/components/
 │   ├── TeamCard.tsx       # 团队卡片
 │   ├── TeamHeader.tsx     # 团队头部
 │   ├── TeamMemberList.tsx # 成员列表
-│   ├── TeamInviteListModal.tsx # 邀请列表弹窗
-│   ├── TeamInviteModal.tsx # 邀请弹窗
-│   ├── TeamEditModal.tsx  # 编辑弹窗
-│   ├── TeamTransferModal.tsx # 转移弹窗
-│   ├── TeamListPage.tsx   # 团队列表页面组件
-│   ├── TeamDetailPage.tsx # 团队详情页面组件
-│   └── InvitationCard.tsx # 邀请卡片
+│   ├── TeamDetailPage.tsx # 团队详情页
+│   └── TeamProblemListsTab.tsx # 团队题单
+├── training/              # 训练相关组件
+│   ├── TeamTrainingList.tsx    # 训练列表
+│   ├── TrainingDetailPage.tsx  # 训练详情页
+│   ├── TrainingCreateModal.tsx # 创建训练弹窗
+│   ├── TrainingEditPage.tsx    # 编辑训练页
+│   └── TrainingFormModal.tsx   # 训练表单弹窗
+├── problem/               # 题目相关组件
+│   ├── ProblemDetail.tsx       # 题目详情页
+│   ├── ProblemForm.tsx         # 题目表单
+│   ├── ProblemListPage.tsx     # 题单列表页
+│   ├── ProblemListDetailPage.tsx # 题单详情页
+│   ├── ProblemNote.tsx         # 写思路
+│   ├── JudgeSettingsTab.tsx    # 评测设置
+│   └── TranslateModal.tsx      # 翻译弹窗
+├── submission/            # 评测记录组件
+│   ├── SubmissionList.tsx      # 评测记录列表
+│   ├── SubmissionDetailPage.tsx # 提交详情页
+│   └── SubmissionDetailModal.tsx # 提交详情弹窗
 ├── profile/               # 个人资料组件
 │   ├── ProfileEditor.tsx  # 资料编辑组件
 │   └── PasswordEditor.tsx # 密码修改组件
-├── submission/            # 评测记录组件
-│   └── SubmissionList.tsx # 评测记录列表（共用组件）
-├── AppShell.tsx           # 应用外壳，导航布局
+├── AppShell.tsx           # 应用外壳（导航布局）
 ├── AuthProvider.tsx       # 认证上下文
 ├── ProtectedRoute.tsx     # 路由保护组件
 ├── Providers.tsx          # 全局 Provider 封装
 ├── Loading.tsx            # 加载状态组件
-├── ContestDetail.tsx      # 比赛详情共用组件
+└── ContestDetail.tsx      # 比赛详情共用组件
 ```
 
 ## UI 组件
@@ -59,25 +71,32 @@ apps/web/src/components/
 interface ButtonProps {
   children: React.ReactNode
   onClick?: () => void
-  variant?: 'primary' | 'secondary' | 'text'
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'text'
   disabled?: boolean
   type?: 'button' | 'submit' | 'reset'
+  fullWidth?: boolean
   style?: React.CSSProperties
 }
 ```
 
 **使用示例**:
 ```tsx
-<Button onClick={handleClick}>保存</Button>
+<Button variant="primary">保存</Button>
 <Button variant="secondary">取消</Button>
-<Button variant="text">编辑</Button>
-<Button disabled>禁用</Button>
+<Button variant="outline">边框按钮</Button>
+<Button variant="ghost">幽灵按钮</Button>
+<Button variant="danger">删除</Button>
+<Button variant="text">文字链接</Button>
+<Button fullWidth>占满宽度</Button>
 ```
 
 **样式变体**:
-- `primary`: 主要按钮（蓝色背景）
+- `primary`: 主要按钮（蓝色纯色背景，禁止渐变）
 - `secondary`: 次要按钮（灰色背景）
-- `text`: 文本按钮（无背景）
+- `outline`: 边框按钮（蓝色边框 + 白色背景）
+- `ghost`: 幽灵按钮（透明背景，悬停显示底色）
+- `danger`: 危险操作（红色背景）
+- `text`: 文本按钮（无背景，仅文字）
 
 ---
 
@@ -90,6 +109,10 @@ interface ButtonProps {
 interface CardProps {
   children: React.ReactNode
   style?: React.CSSProperties
+  padding?: boolean        // 是否添加内边距，默认 true
+  hoverable?: boolean      // 是否显示悬停效果
+  subtitle?: string        // 卡片副标题
+  onClick?: () => void     // 点击事件
 }
 ```
 
@@ -99,13 +122,15 @@ interface CardProps {
   <h3>标题</h3>
   <p>内容</p>
 </Card>
+<Card hoverable onClick={handleClick}>可点击卡片</Card>
+<Card subtitle="副标题">带副标题</Card>
 ```
 
 **默认样式**:
-- 白色背景
-- 圆角 8px
-- 边框 1px solid var(--border)
-- 内边距 1.5rem
+- 白色背景（`var(--bg-card)`）
+- 圆角 `var(--radius-md)`
+- 边框 `1px solid var(--border)`
+- 阴影 `var(--shadow-sm)`
 
 ---
 
@@ -209,7 +234,8 @@ interface ModalProps {
 ```typescript
 interface BadgeProps {
   children: React.ReactNode
-  variant?: 'success' | 'error' | 'warning' | 'info'
+  variant?: 'success' | 'error' | 'warning' | 'info' | 'neutral' | 'pending'
+  dot?: boolean    // 显示圆点指示器
 }
 ```
 
@@ -219,6 +245,16 @@ interface BadgeProps {
 <Badge variant="error">禁用</Badge>
 <Badge variant="warning">待审核</Badge>
 <Badge variant="info">进行中</Badge>
+<Badge variant="neutral">中性</Badge>
+<Badge variant="pending">待处理</Badge>
+<Badge dot>带圆点</Badge>
+```
+
+**辅助函数**:
+```tsx
+import { getResultVariant } from '@/components/ui/Badge'
+// 评测结果自动匹配颜色：Accepted→success, WrongAnswer→error, ...
+<Badge variant={getResultVariant(result)}>{result}</Badge>
 ```
 
 **样式变体**:
@@ -226,6 +262,8 @@ interface BadgeProps {
 - `error`: 红色（错误状态）
 - `warning`: 黄色（警告状态）
 - `info`: 蓝色（信息状态）
+- `neutral`: 灰色（中性状态）
+- `pending`: 蓝灰色（待处理状态）
 
 ---
 
@@ -848,81 +886,71 @@ const form = useForm(
 
 ## 样式系统
 
+> 详细设计文档：`docs/DESIGN_SYSTEM.md`
+
 ### CSS 变量
 
-**文件**: `apps/web/src/app/globals.css`
+**文件**: `apps/web/src/styles/globals.css`
+
+所有视觉值通过 CSS 变量管理，JS 侧通过 `lib/tokens.ts` 引用。
 
 ```css
 :root {
-  /* 颜色 */
-  --primary: #3b82f6;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
+  /* 主色 */
+  --primary: #2563eb;  --primary-hover: #1d4ed8;
+  --primary-light: #dbeafe;  --primary-text: #1e40af;
 
-  /* 灰度 */
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
+  /* 语义色（success/warning/error/info 各有 base/light/text 变体） */
+  --success / --success-light / --success-text
+  --warning / --warning-light / --warning-text
+  --error   / --error-light   / --error-text
+  --info    / --info-light    / --info-text
+
+  /* 背景 */
+  --bg-page / --bg-card / --bg-hover / --bg-muted
+
+  /* 文字 */
+  --text-primary / --text-secondary / --text-muted / --text-inverse
 
   /* 边框 */
-  --border: #e5e7eb;
+  --border / --border-hover
 
   /* 圆角 */
-  --radius: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 4px;  --radius: 6px;  --radius-md: 8px;  --radius-lg: 12px;
+
+  /* 阴影 */
+  --shadow-xs / --shadow-sm / --shadow / --shadow-md / --shadow-lg
+
+  /* 间距（4px 基数） */
+  --space-1 ~ --space-10
+
+  /* 字号 */
+  --text-xs: 0.75rem;  --text-sm: 0.875rem;  --text-base: 1rem;
+  --text-lg: 1.125rem;  --text-xl: 1.25rem;  --text-2xl: 1.5rem;
 }
 ```
 
-### 表单样式
+### JS Token
+
+**文件**: `apps/web/src/lib/tokens.ts`
+
+与 CSS 变量一一对应的 JS 常量，供内联样式使用：
+
+```tsx
+import { colors, radius, shadow, fontSize } from '@/lib/tokens'
+
+<div style={{ color: colors.textPrimary, borderRadius: radius.md }}>
+```
+
+### 样式预设
 
 **文件**: `apps/web/src/lib/styles.ts`
 
-```typescript
-export const formStyles = {
-  field: {
-    marginBottom: '1rem'
-  },
-  label: {
-    display: 'block',
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    marginBottom: '0.5rem',
-    color: 'var(--gray-700)'
-  },
-  input: {
-    width: '100%',
-    padding: '0.5rem',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    fontSize: '0.875rem',
-    boxSizing: 'border-box' as const
-  },
-  select: {
-    width: '100%',
-    padding: '0.5rem',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    fontSize: '0.875rem',
-    boxSizing: 'border-box' as const
-  },
-  textarea: {
-    width: '100%',
-    padding: '0.5rem',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    fontSize: '0.875rem',
-    resize: 'vertical' as const,
-    boxSizing: 'border-box' as const
-  }
-}
+导出 `formStyles`、`tableStyles`、`cardStyles`、`modalStyles`、`badgeStyles`、`layoutStyles` 等场景样式。所有值均使用 CSS 变量。
+
+```tsx
+import { formStyles } from '@/lib/styles'
+<input style={formStyles.input} />
 ```
 
 ---
@@ -957,6 +985,13 @@ export const formStyles = {
 ---
 
 ## 更新日志
+
+### 2026-04-22
+- ✅ 更新样式系统文档（CSS 变量、JS Token、样式预设）
+- ✅ 更新 Button（新增 outline/ghost/danger/fullWidth 变体）
+- ✅ 更新 Card（新增 padding/hoverable/subtitle/onClick）
+- ✅ 更新 Badge（新增 neutral/pending/dot/getResultVariant）
+- ✅ 更新组件目录结构（新增 training/、problem/、submission/）
 
 ### 2026-03-23
 - ✅ 添加团队组件文档（TeamCard, TeamHeader, TeamMemberList 等）

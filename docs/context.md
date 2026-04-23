@@ -73,7 +73,8 @@ pnpm prisma:seed      # 执行种子数据
 
 ## 前端规范
 
-- 使用内联样式
-- CSS 变量统一管理
-- 组件复用优先
-- 避免冗余代码
+- 使用内联样式 + CSS 变量设计 token 系统
+- 设计 token 详见 `docs/DESIGN_SYSTEM.md`
+- 通用组件在 `components/ui/`，使用 `lib/tokens.ts` 和 `lib/styles.ts`
+- 组件复用优先，避免冗余代码
+- 颜色使用 `var(--xxx)` 语义变量，禁止硬编码 hex 值

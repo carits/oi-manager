@@ -1,6 +1,6 @@
 # 本地开发运维手册 (Runbook)
 
-> 最后更新: 2026-04-15
+> 最后更新: 2026-04-22
 
 本文档描述如何在本地启动、调试和维护 OI Manager V2 系统。
 
@@ -201,7 +201,7 @@ npx prisma studio
 
 ```bash
 # API 服务地址
-NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_API_URL=http://localhost:3002
 ```
 
 ### 6.2 后端环境变量
@@ -266,7 +266,7 @@ pnpm prisma:push
 **症状**: 前端请求报 `Network Error` 或 `CORS Error`
 
 **排查步骤**:
-1. 确认后端已启动: 访问 http://localhost:3001/api/health
+1. 确认后端已启动: 访问 http://localhost:3002/api/health
 2. 检查 `NEXT_PUBLIC_API_URL` 环境变量
 3. 检查后端 CORS 配置
 
@@ -299,8 +299,8 @@ pnpm prisma:push
 # 使用 Prisma Studio
 npx prisma studio
 
-# 或直接使用 sqlite3
-sqlite3 apps/server/prisma/dev.db
+# 或直接使用 psql（PostgreSQL）
+docker compose exec db psql -U oi -d oi_manager
 ```
 
 ---
@@ -326,8 +326,7 @@ oi-manager-v2/
 │       │   └── index.ts        # 入口
 │       ├── prisma/
 │       │   ├── schema.prisma   # 数据库模型
-│       │   ├── seed.ts         # 种子数据
-│       │   └── dev.db          # 数据库文件
+│       │   └── seed.ts         # 种子数据
 │       └── .env                # 后端环境变量
 │
 └── docs/                       # 文档
@@ -340,7 +339,7 @@ oi-manager-v2/
 ### 10.1 后端健康检查
 
 ```bash
-curl http://localhost:3001/api/health
+curl http://localhost:3002/api/health
 ```
 
 ### 10.2 前端健康检查
