@@ -1,7 +1,7 @@
 'use client'
 
-import { ReactNode } from 'react'
-import { usePathname } from 'next/navigation'
+import { ReactNode, useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { AppShell } from '@/components/AppShell'
 
@@ -11,10 +11,18 @@ interface StudentLayoutProps {
 
 export default function StudentLayout({ children }: StudentLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, loading } = useAuth()
 
-  // 等待用户加载完成
-  if (loading || !user) {
+  // loading=false 且 user=null 时跳转登录页
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login?role=student')
+    }
+  }, [loading, user, router])
+
+  // loading=true 时显示加载中
+  if (loading) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -26,6 +34,11 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
         加载中...
       </div>
     )
+  }
+
+  // loading=false 且 user=null 时返回 null（等待跳转）
+  if (!user) {
+    return null
   }
 
   // student 目录下的页面使用 AppShell

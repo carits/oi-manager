@@ -63,22 +63,38 @@ class ApiClient {
       headers['Content-Type'] = 'application/json'
     }
 
+    // 10 秒超时
+    const timeoutMs = 10000
+    const timeoutController = new AbortController()
+    const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs)
+
+    // 合并用户 signal 和 timeout signal
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : timeoutController.signal
+
     try {
       const res = await fetch(url, {
         ...fetchOptions,
-        signal,
+        signal: combinedSignal,
         headers,
         body: isFormData
           ? (body as FormData)
           : body ? JSON.stringify(body) : undefined
       })
 
+      clearTimeout(timeoutId)
       const json = await res.json()
       // 保留 HTTP 状态码，方便调用方区分错误类型
       return { ...json, status: res.status }
     } catch (error) {
+      clearTimeout(timeoutId)
       // AbortError 需要抛出让调用方处理
       if (error instanceof Error && error.name === 'AbortError') {
+        // 区分是用户主动取消还是超时
+        if (timeoutController.signal.aborted && !signal?.aborted) {
+          return { success: false, message: '请求超时，请稍后重试', status: 0 }
+        }
         throw error
       }
       console.error('API request error:', error)

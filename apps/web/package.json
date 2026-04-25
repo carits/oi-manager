@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@oi-manager/shared": "workspace:*",
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.1",
     "katex": "^0.16.38",

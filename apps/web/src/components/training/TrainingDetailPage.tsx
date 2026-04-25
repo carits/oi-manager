@@ -122,7 +122,8 @@ interface Attachment {
 
 interface ProblemListEntry {
   id: string
-  alias: string
+  alias: string | null
+  title: string
   orderIndex: number
   points: number | null
   platform: string | null
@@ -256,6 +257,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const [problemDetail, setProblemDetail] = useState<ProblemDetail | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('problemList')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Note
   const [noteContent, setNoteContent] = useState('')
@@ -308,9 +310,13 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       const res = await apiClient.get<TrainingInfo>(`/api/trainings/${trainingId}`)
       if (res.success && res.data) {
         setTraining(res.data)
+      } else {
+        setError(res.message || '加载训练失败')
+        setLoading(false)
       }
     } catch {
-      // ignore refresh errors
+      setError('网络错误，请稍后重试')
+      setLoading(false)
     }
   }, [trainingId])
 
@@ -638,8 +644,29 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
   // ========== Render ==========
 
-  if (loading || !training) {
+  if (loading) {
     return <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>加载中...</div>
+  }
+
+  if (error || !training) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
+        <div style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error || '训练不存在'}</div>
+        <button
+          onClick={() => router.push(`${basePath}/${teamId}?tab=training`)}
+          style={{
+            padding: '0.5rem 1rem',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          返回训练列表
+        </button>
+      </div>
+    )
   }
 
   const formatLabel = training.format === 'icpc' ? 'ICPC' : 'IOI'
@@ -863,7 +890,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                           }}
                           style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'none' }}
                         >
-                          {p.alias || '未命名'}
+                          {p.alias || p.title || '未命名'}
                         </span>
                       </td>
                     </tr>

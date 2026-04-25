@@ -410,33 +410,52 @@ class FileService {
       return true
     }
 
+    // 管理员可以访问所有文件
+    if (userRole === 'super_admin' || userRole === 'platform_admin') {
+      return true
+    }
+
     // 根据业务类型检查权限
     switch (file.ownerType) {
       case 'problem': {
-        // 检查题目可见性
+        // 检查题目可见性和所有权
         const problem = await prisma.problem.findUnique({
-          where: { id: file.ownerId }
+          where: { id: file.ownerId },
+          select: { ownerId: true, visibility: true }
         })
         if (!problem) return false
+        // 公开题目允许访问
         if (problem.visibility === 'public') return true
-        // 私有题目只有所有者和管理员可以访问
-        if (userRole === 'super_admin' || userRole === 'platform_admin') return true
-        // 检查是否是所有者
-        // 这里需要根据具体业务逻辑实现
+        // 私有题目只有所有者可以访问
+        return problem.ownerId === userId
+      }
+      case 'contest': {
+        // 比赛资源：检查是否是团队成员
+        const contest = await prisma.contest.findUnique({
+          where: { id: file.ownerId },
+          select: { teamId: true }
+        })
+        if (!contest) return false
+        // 团队成员允许访问
+        if (contest.teamId) {
+          const member = await prisma.teamMember.findFirst({
+            where: { teamId: contest.teamId, userId }
+          })
+          return !!member
+        }
         return false
       }
-      case 'contest':
-        // 比赛资源：检查是否是参与者
-        // TODO: 实现比赛参与检查
-        return true
-      case 'team':
+      case 'team': {
         // 团队资源：检查是否是团队成员
-        // TODO: 实现团队成员检查
-        return true
-      case 'user':
-        // 用户资源：只有本人和管理员可以访问
-        if (userRole === 'super_admin' || userRole === 'platform_admin') return true
+        const member = await prisma.teamMember.findFirst({
+          where: { teamId: file.ownerId, userId }
+        })
+        return !!member
+      }
+      case 'user': {
+        // 用户资源：只有本人可以访问
         return file.ownerId === userId
+      }
       default:
         return false
     }

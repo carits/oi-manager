@@ -1,7 +1,7 @@
 'use client'
 
-import { ReactNode } from 'react'
-import { usePathname } from 'next/navigation'
+import { ReactNode, useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { AppShell } from '@/components/AppShell'
 
@@ -11,9 +11,18 @@ interface PlatformAdminLayoutProps {
 
 export default function PlatformAdminLayout({ children }: PlatformAdminLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, loading } = useAuth()
 
-  if (loading || !user) {
+  // loading=false 且 user=null 时跳转登录页
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login?role=platform-admin')
+    }
+  }, [loading, user, router])
+
+  // loading=true 时显示加载中
+  if (loading) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -25,6 +34,11 @@ export default function PlatformAdminLayout({ children }: PlatformAdminLayoutPro
         加载中...
       </div>
     )
+  }
+
+  // loading=false 且 user=null 时返回 null（等待跳转）
+  if (!user) {
+    return null
   }
 
   // 首页特殊处理：首页自己包含 AppShell，避免重复嵌套

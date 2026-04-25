@@ -1,5 +1,93 @@
 # 当前任务
 
+## 任务：代码质量修复 + Prisma 迁移基线（2026-04-25）
+
+状态: **已完成** ✅
+
+### 背景
+
+处理优先级列表中的多项代码质量改进任务。
+
+### 完成内容
+
+1. **文件 API 权限检查** ✅
+   - 上传/删除/by-owner 接口添加权限校验
+   - 基于 ownerType/ownerId 检查操作权限
+
+2. **附件删除改为软删除** ✅
+   - 使用 `fileService.softDelete(fileId)` 替代物理删除
+
+3. **提交评测改为非阻塞** ✅
+   - `dispatchJudgeTask` 使用 `.catch()` 模式，立即返回
+
+4. **评测 worker 并发控制** ✅
+   - 引入 `p-queue` 限制并发评测任务数
+
+5. **废弃 API 路由清理** ✅
+   - 删除 `/api/class-groups/` 和 `/api/exams/`
+
+6. **Next 14 route handler params 类型** ✅
+   - 验证已正确，无需修改
+
+7. **Prisma 迁移基线** ✅
+   - 创建并应用空迁移 `20260425_baseline_init`
+   - 后续 schema 变更可通过 `prisma migrate dev` 管理
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/src/routes/files.ts` | 添加权限检查函数 |
+| `apps/server/src/lib/storage.ts` | 完善权限逻辑 |
+| `apps/server/src/modules/problem/problem.routes.ts` | 附件删除改用 softDelete |
+| `apps/server/src/routes/submit.ts` | 非阻塞评测 |
+| `apps/server/src/modules/training/training.routes.ts` | 非阻塞评测 |
+| `apps/judge/src/client.ts` | p-queue 并发控制 |
+| `apps/web/src/app/api/class-groups/` | 删除 |
+| `apps/web/src/app/api/exams/` | 删除 |
+| `apps/server/prisma/migrations/20260425_baseline_init/` | 新增 |
+
+---
+
+## 任务：页面加载状态问题修复（2026-04-25）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈：页面经常显示"加载中"或一直卡在加载中，无法正常访问。
+
+**问题根因**：layout 文件中 `if (loading || !user)` 逻辑错误。当 API 请求失败时，`loading` 变为 `false` 但 `user` 为 `null`，导致页面永久卡在"加载中"状态。
+
+### 解决方案
+
+1. **修复 4 个 layout 文件**：将 `loading || !user` 改为分状态处理
+   - `loading=true` → 显示"加载中"
+   - `loading=false && user=null` → useEffect 跳转登录页
+   - `loading=false && user 存在` → 渲染页面
+2. **apiClient 添加 10 秒超时**：使用 AbortController，超时返回错误而非无限等待
+3. **AuthProvider 已验证正确**：finally 确保 loading=false
+4. **ENV 配置已验证正确**：空字符串走 Next.js API Route 代理
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/app/teacher/layout.tsx` | 修复 auth state judgment（上一轮已完成） |
+| `apps/web/src/app/student/layout.tsx` | 修复 auth state judgment |
+| `apps/web/src/app/admin/layout.tsx` | 修复 auth state judgment |
+| `apps/web/src/app/platform-admin/layout.tsx` | 修复 auth state judgment |
+| `apps/web/src/lib/apiClient.ts` | 添加 10 秒 AbortController timeout |
+
+### 验证清单
+
+- [x] 登录后正常访问各角色首页
+- [x] API 请求失败 → 自动跳转登录页而非卡住
+- [x] 网络慢请求 → 10 秒后显示超时错误
+- [x] Token 过期 → 跳转登录页而非卡住
+
+---
+
 ## 任务：训练删除按钮（2026-04-25）
 
 状态: **已完成** ✅

@@ -59,6 +59,8 @@ filesRouter.post('/upload', authenticate, upload.single('file'), async (req, res
     }
 
     const { category, ownerType, ownerId, isPublic } = req.body
+    const userId = (req as any).user.userId
+    const userRole = (req as any).user.role
 
     // 验证必填参数
     if (!category || !ownerType || !ownerId) {
@@ -66,6 +68,16 @@ filesRouter.post('/upload', authenticate, upload.single('file'), async (req, res
       return res.status(400).json({
         success: false,
         message: '缺少必要参数: category, ownerType, ownerId'
+      })
+    }
+
+    // 验证上传权限：用户必须有权限操作指定的 ownerType/ownerId
+    const hasUploadPermission = await checkUploadPermission(userId, userRole, ownerType as OwnerType, ownerId)
+    if (!hasUploadPermission) {
+      fs.unlinkSync(req.file.path) // 清理临时文件
+      return res.status(403).json({
+        success: false,
+        message: '无权上传文件到该业务对象'
       })
     }
 
@@ -243,11 +255,10 @@ filesRouter.delete('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, message: '文件不存在' })
     }
 
-    // 检查删除权限（管理员或文件所有者）
-    // 这里简化处理，实际需要根据业务逻辑检查
-    if (userRole !== 'super_admin' && userRole !== 'platform_admin') {
-      // 检查是否是文件所有者
-      // TODO: 根据业务逻辑实现更精确的权限检查
+    // 检查删除权限
+    const hasDeletePermission = await checkDeletePermission(userId, userRole, file)
+    if (!hasDeletePermission) {
+      return res.status(403).json({ success: false, message: '无权删除该文件' })
     }
 
     // 软删除
@@ -280,6 +291,14 @@ filesRouter.get('/by-owner/:ownerType/:ownerId', authenticate, async (req, res) 
   try {
     const { ownerType, ownerId } = req.params
     const { category } = req.query
+    const userId = (req as any).user.userId
+    const userRole = (req as any).user.role
+
+    // 检查查看权限
+    const hasViewPermission = await checkViewPermission(userId, userRole, ownerType as OwnerType, ownerId)
+    if (!hasViewPermission) {
+      return res.status(403).json({ success: false, message: '无权查看该业务对象的文件' })
+    }
 
     const files = await fileService.getFilesByOwner(
       ownerType as OwnerType,
@@ -299,3 +318,164 @@ filesRouter.get('/by-owner/:ownerType/:ownerId', authenticate, async (req, res) 
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
+
+// ==================== 权限检查辅助函数 ====================
+
+/**
+ * 检查上传权限
+ * 用户必须有权限操作指定的 ownerType/ownerId
+ */
+async function checkUploadPermission(
+  userId: string,
+  userRole: string,
+  ownerType: OwnerType,
+  ownerId: string
+): Promise<boolean> {
+  // 管理员可以上传到任何对象
+  if (userRole === 'super_admin' || userRole === 'platform_admin') {
+    return true
+  }
+
+  switch (ownerType) {
+    case 'problem': {
+      // 检查是否是题目所有者
+      const problem = await prisma.problem.findUnique({
+        where: { id: ownerId },
+        select: { ownerId: true }
+      })
+      return problem?.ownerId === userId
+    }
+    case 'contest': {
+      // 检查是否是团队管理员
+      const contest = await prisma.contest.findUnique({
+        where: { id: ownerId },
+        select: { teamId: true }
+      })
+      if (!contest || !contest.teamId) return false
+      // 检查团队管理员权限
+      const member = await prisma.teamMember.findFirst({
+        where: { teamId: contest.teamId, userId, role: { in: ['owner', 'admin'] } }
+      })
+      return !!member
+    }
+    case 'team': {
+      // 检查是否是团队管理员
+      const member = await prisma.teamMember.findFirst({
+        where: { teamId: ownerId, userId, role: { in: ['owner', 'admin'] } }
+      })
+      return !!member
+    }
+    case 'user': {
+      // 用户只能上传到自己的资源
+      return ownerId === userId
+    }
+    default:
+      return false
+  }
+}
+
+/**
+ * 检查删除权限
+ * 管理员、文件上传者、业务对象所有者可以删除
+ */
+async function checkDeletePermission(
+  userId: string,
+  userRole: string,
+  file: { id: string; ownerType: string; ownerId: string; category: string }
+): Promise<boolean> {
+  // 管理员可以删除任何文件
+  if (userRole === 'super_admin' || userRole === 'platform_admin') {
+    return true
+  }
+
+  switch (file.ownerType) {
+    case 'problem': {
+      // 检查是否是题目所有者
+      const problem = await prisma.problem.findUnique({
+        where: { id: file.ownerId },
+        select: { ownerId: true }
+      })
+      return problem?.ownerId === userId
+    }
+    case 'contest': {
+      // 检查是否是团队管理员
+      const contest = await prisma.contest.findUnique({
+        where: { id: file.ownerId },
+        select: { teamId: true }
+      })
+      if (!contest || !contest.teamId) return false
+      const member = await prisma.teamMember.findFirst({
+        where: { teamId: contest.teamId, userId, role: { in: ['owner', 'admin'] } }
+      })
+      return !!member
+    }
+    case 'team': {
+      // 检查是否是团队管理员
+      const member = await prisma.teamMember.findFirst({
+        where: { teamId: file.ownerId, userId, role: { in: ['owner', 'admin'] } }
+      })
+      return !!member
+    }
+    case 'user': {
+      // 用户只能删除自己的文件
+      return file.ownerId === userId
+    }
+    default:
+      return false
+  }
+}
+
+/**
+ * 检查查看权限
+ * 用户必须有权限查看指定 ownerType/ownerId 的文件
+ */
+async function checkViewPermission(
+  userId: string,
+  userRole: string,
+  ownerType: OwnerType,
+  ownerId: string
+): Promise<boolean> {
+  // 管理员可以查看任何文件
+  if (userRole === 'super_admin' || userRole === 'platform_admin') {
+    return true
+  }
+
+  switch (ownerType) {
+    case 'problem': {
+      // 公开题目所有人可见，私有题目只有所有者可见
+      const problem = await prisma.problem.findUnique({
+        where: { id: ownerId },
+        select: { ownerId: true, visibility: true }
+      })
+      if (!problem) return false
+      if (problem.visibility === 'public') return true
+      return problem.ownerId === userId
+    }
+    case 'contest': {
+      // 检查是否是团队成员
+      const contest = await prisma.contest.findUnique({
+        where: { id: ownerId },
+        select: { teamId: true }
+      })
+      if (!contest || !contest.teamId) return false
+      // 检查是否是团队成员
+      const member = await prisma.teamMember.findFirst({
+        where: { teamId: contest.teamId, userId }
+      })
+      return !!member
+    }
+    case 'team': {
+      // 检查是否是团队成员
+      const member = await prisma.teamMember.findFirst({
+        where: { teamId: ownerId, userId }
+      })
+      return !!member
+    }
+    case 'user': {
+      // 用户只能查看自己的文件
+      return ownerId === userId
+    }
+    default:
+      return false
+  }
+}

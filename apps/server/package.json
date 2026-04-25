@@ -18,6 +18,8 @@
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@oi-manager/shared": "workspace:*",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.2.0",
     "compression": "^1.8.1",
@@ -40,7 +42,6 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.17",

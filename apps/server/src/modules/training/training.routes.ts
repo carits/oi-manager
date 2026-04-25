@@ -16,6 +16,7 @@ import { logger } from '../../lib/logger'
 import type { AuthRequest } from '../../middleware/auth'
 import { getAdapter } from '../../oj-adapters'
 import { getSupportedPlatforms } from '../../oj-adapters'
+import { v4 as uuidv4 } from 'uuid'
 import {
   getParticipantNames,
   getTeamMember,
@@ -342,16 +343,11 @@ trainingsRouter.delete('/trainings/:id', authenticate, async (req: AuthRequest, 
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    // 只有创建者或 owner 可删除
+    // 只有创建者、团队管理员或 owner 可删除
     const isCreator = training.createdBy === userId
-    const isOwner = await (async () => {
-      const member = await getTeamMember(userId, training.teamId)
-      return member?.role === 'owner'
-    })()
-    const isSuperAdmin = (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role === 'super_admin'
-
-    if (!isCreator && !isOwner && !isSuperAdmin) {
-      return res.status(403).json({ success: false, message: '只有创建者或团队所有者可以删除训练' })
+    const isAdmin = await isTeamAdmin(userId, training.teamId)
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({ success: false, message: '只有创建者或团队管理员可以删除训练' })
     }
 
     await prisma.training.delete({ where: { id } })
@@ -443,12 +439,13 @@ trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthReq
         }
 
         // 普通成员：根据 problemIdVisible 决定是否显示题号
+        // problemTitle（题目标题）始终返回，只有 platformProblemId（来源题号）受控制
         return {
           ...base,
           platform: p.Problem.platform,
+          problemTitle: p.Problem.title,
           ...(showProblemId && {
             problemId: p.Problem.id,
-            problemTitle: p.Problem.title,
             platformProblemId: p.Problem.problemId,
             difficulty: p.Problem.difficulty,
             timeLimit: p.Problem.timeLimit,
@@ -547,6 +544,7 @@ trainingsRouter.get('/trainings/:id/problem-status', authenticate, async (req: A
       return {
         id: p.id,
         alias: p.alias,
+        title: p.Problem.title,
         orderIndex: p.orderIndex,
         points: p.points,
         platform: platform || null,
@@ -605,6 +603,7 @@ trainingsRouter.post('/trainings/:id/problems', authenticate, async (req: AuthRe
 
     const trainingProblem = await prisma.trainingProblem.create({
       data: {
+        id: uuidv4(),
         trainingId: id,
         problemId,
         alias: aliasValue,
@@ -985,40 +984,48 @@ trainingsRouter.post('/trainings/:id/submit', authenticate, async (req: AuthRequ
 
     // Carits 平台：本地评测
     if (platform === 'carits') {
-      try {
-        const { dispatchJudgeTask } = await import('../../ws/judge')
-        const path = await import('path')
+      const { dispatchJudgeTask } = await import('../../ws/judge')
+      const path = await import('path')
 
-        const problemWithConfig = await prisma.problem.findUnique({
-          where: { id: trainingProblem.Problem.id },
-          select: { judgeConfig: true },
-        })
-        let problemConfig: any = {}
-        if (problemWithConfig?.judgeConfig) {
-          try {
-            const yaml = await import('js-yaml')
-            problemConfig = yaml.load(problemWithConfig.judgeConfig) || {}
-          } catch (e) { /* ignore parse errors */ }
-        }
+      const problemWithConfig = await prisma.problem.findUnique({
+        where: { id: trainingProblem.Problem.id },
+        select: { judgeConfig: true },
+      })
+      let problemConfig: any = {}
+      if (problemWithConfig?.judgeConfig) {
+        try {
+          const yaml = await import('js-yaml')
+          problemConfig = yaml.load(problemWithConfig.judgeConfig) || {}
+        } catch (e) { /* ignore parse errors */ }
+      }
 
-        const testdataPath = path.join(process.cwd(), 'testdata', trainingProblem.Problem.id)
-        dispatchJudgeTask({
-          submissionId: String(submission.id),
-          problemId: trainingProblem.Problem.id,
-          code,
-          language,
-          testdataPath,
-          problemConfig,
-        })
+      const testdataPath = path.join(process.cwd(), 'testdata', trainingProblem.Problem.id)
 
-        // Carits 平台：远程提交ID就是本地评测ID
+      // 分发评测任务（不阻塞，后台执行）
+      dispatchJudgeTask({
+        submissionId: String(submission.id),
+        problemId: trainingProblem.Problem.id,
+        code,
+        language,
+        testdataPath,
+        problemConfig,
+      }).catch(async (error: any) => {
+        console.error('Failed to dispatch judge task:', error)
+        // 更新提交状态为失败
         await prisma.submission.update({
           where: { id: submission.id },
-          data: { ojRemoteId: submission.id.toString() }
+          data: {
+            result: 'submit_failed',
+            errorMessage: error.message || '评测服务不可用'
+          }
         })
-      } catch (error) {
-        console.error('Failed to dispatch judge task:', error)
-      }
+      })
+
+      // Carits 平台：远程提交ID就是本地评测ID
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: { ojRemoteId: submission.id.toString() }
+      })
     }
     // HDU 平台：机器人提交（复用 submit.ts 的逻辑）
     else if (platform === 'hdu' && method === 'robot') {

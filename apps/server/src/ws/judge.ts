@@ -11,6 +11,9 @@ import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import path from 'path'
 
+// JUDGE_TOKEN 校验
+const JUDGE_TOKEN = process.env.JUDGE_TOKEN
+
 // 评测机连接
 interface JudgeConnection {
   ws: WebSocket
@@ -37,6 +40,12 @@ let wss: WebSocketServer | null = null
  * 初始化 WebSocket 服务器
  */
 export function initJudgeWebSocket() {
+  // 生产环境必须配置 JUDGE_TOKEN
+  if (process.env.NODE_ENV === 'production' && !JUDGE_TOKEN) {
+    logger.error('judge_ws_no_token', { message: 'JUDGE_TOKEN must be set in production' })
+    throw new Error('JUDGE_TOKEN must be set in production')
+  }
+
   // 使用已有的 HTTP 服务器
   const server = (global as any).httpServer
   if (!server) {
@@ -48,14 +57,49 @@ export function initJudgeWebSocket() {
 
   wss.on('connection', (ws, req) => {
     const clientIp = req.socket.remoteAddress
+
+    // 从 URL query 或 first message 中获取 token
+    // 评测机需要在连接后立即发送 auth 消息
+    let authenticated = JUDGE_TOKEN ? false : true  // 开发环境无 token 时跳过认证
+
     logger.info('judge_ws_connected', {
       action: 'judge_ws',
-      metadata: { clientIp }
+      metadata: { clientIp, requiresAuth: !!JUDGE_TOKEN }
     })
+
+    // 认证超时：10 秒内必须完成认证
+    const authTimeout = setTimeout(() => {
+      if (!authenticated) {
+        logger.warn('judge_ws_auth_timeout', { action: 'judge_ws' })
+        ws.send(JSON.stringify({ type: 'error', payload: { message: 'Authentication timeout' } }))
+        ws.close()
+      }
+    }, 10000)
 
     ws.on('message', async (data) => {
       try {
         const msg = JSON.parse(data.toString())
+
+        // 认证消息
+        if (msg.type === 'auth') {
+          if (JUDGE_TOKEN && msg.payload?.token !== JUDGE_TOKEN) {
+            logger.warn('judge_ws_auth_failed', { action: 'judge_ws' })
+            ws.send(JSON.stringify({ type: 'error', payload: { message: 'Invalid token' } }))
+            ws.close()
+            return
+          }
+          authenticated = true
+          clearTimeout(authTimeout)
+          ws.send(JSON.stringify({ type: 'auth_success' }))
+          return
+        }
+
+        // 未认证时拒绝其他消息
+        if (!authenticated) {
+          ws.send(JSON.stringify({ type: 'error', payload: { message: 'Not authenticated' } }))
+          return
+        }
+
         await handleMessage(ws, msg)
       } catch (e: any) {
         logger.error('judge_ws_parse_error', {

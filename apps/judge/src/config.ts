@@ -25,6 +25,9 @@ export const config = {
   // 后端连接
   backendUrl: process.env.BACKEND_URL || 'ws://localhost:3002',
 
+  // 认证 Token（生产环境必须配置）
+  judgeToken: process.env.JUDGE_TOKEN || '',
+
   // 沙箱配置
   sandboxHost: process.env.SANDBOX_HOST || 'http://localhost:5050',
 

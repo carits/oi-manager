@@ -76,66 +76,64 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
 
     // Carits 平台本地评测
     if (problem.platform === 'carits' && submitMethod === 'robot') {
-      try {
-        // 获取评测配置
-        const problemWithConfig = await prisma.problem.findUnique({
-          where: { id: problem.id },
-          select: { judgeConfig: true }
-        })
+      // 获取评测配置
+      const problemWithConfig = await prisma.problem.findUnique({
+        where: { id: problem.id },
+        select: { judgeConfig: true }
+      })
 
-        let problemConfig = {}
-        if (problemWithConfig?.judgeConfig) {
-          try {
-            const yaml = await import('js-yaml')
-            problemConfig = yaml.load(problemWithConfig.judgeConfig) || {}
-          } catch (e) {
-            logger.warn('parse_judge_config_error', { error: e })
-          }
+      let problemConfig = {}
+      if (problemWithConfig?.judgeConfig) {
+        try {
+          const yaml = await import('js-yaml')
+          problemConfig = yaml.load(problemWithConfig.judgeConfig) || {}
+        } catch (e) {
+          logger.warn('parse_judge_config_error', { error: e })
         }
+      }
 
-        // 测试数据路径（使用绝对路径）
-        const testdataPath = path.join(process.cwd(), 'testdata', problem.id)
+      // 测试数据路径（使用绝对路径）
+      const testdataPath = path.join(process.cwd(), 'testdata', problem.id)
 
-        // 分发评测任务
-        await dispatchJudgeTask({
-          submissionId: submission.id.toString(),
-          problemId: problem.id,
-          code,
-          language,
-          testdataPath,
-          problemConfig
-        })
-
-        // Carits 平台：远程提交ID就是本地评测ID
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: { ojRemoteId: submission.id.toString() }
-        })
-
-        logger.info('carits_judge_dispatched', {
+      // 分发评测任务（不阻塞，后台执行）
+      dispatchJudgeTask({
+        submissionId: submission.id.toString(),
+        problemId: problem.id,
+        code,
+        language,
+        testdataPath,
+        problemConfig
+      }).catch(async (e: any) => {
+        // 后台错误处理：更新提交状态
+        logger.error('dispatch_judge_error', {
           action: 'submit',
-          metadata: { submissionId: submission.id }
+          metadata: { submissionId: submission.id, error: e.message }
         })
-
-        return res.json({
-          success: true,
-          data: { submissionId: submission.id },
-          message: '已提交评测队列'
-        })
-      } catch (e: any) {
         await prisma.submission.update({
           where: { id: submission.id },
           data: {
             result: 'submit_failed',
-            errorMessage: e.message
+            errorMessage: e.message || '评测服务不可用'
           }
         })
+      })
 
-        return res.json({
-          success: false,
-          message: e.message || '评测服务不可用'
-        })
-      }
+      // Carits 平台：远程提交ID就是本地评测ID
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: { ojRemoteId: submission.id.toString() }
+      })
+
+      logger.info('carits_judge_dispatched', {
+        action: 'submit',
+        metadata: { submissionId: submission.id }
+      })
+
+      return res.json({
+        success: true,
+        data: { submissionId: submission.id },
+        message: '已提交评测队列'
+      })
     }
 
     // 机器人账号提交

@@ -10,7 +10,7 @@ export const envConfig = {
   // 开发环境不需要强制校验的配置
   // SQLite 默认使用 file:./dev.db，不需要 DATABASE_URL
   required: [] as string[],
-  productionOnly: ['JWT_SECRET', 'CORS_ORIGINS']
+  productionOnly: ['JWT_SECRET', 'CORS_ORIGINS', 'JUDGE_TOKEN', 'ACCOUNT_ENCRYPT_KEY']
 }
 
 /**

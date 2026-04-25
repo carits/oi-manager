@@ -934,10 +934,12 @@ problemsRouter.delete('/:id/attachments/:attachmentId', authenticate, async (req
       return res.status(404).json({ success: false, message: '附件不存在' })
     }
 
-    // 删除文件
-    const filePath = path.join(__dirname, '../../', attachment.fileUrl)
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath)
+    // 使用 fileService.softDelete 删除文件（软删除，移动到回收站）
+    // fileUrl 格式: /api/files/{fileId}/download
+    const fileIdMatch = attachment.fileUrl.match(/\/api\/files\/([^/]+)\/download/)
+    if (fileIdMatch) {
+      const fileId = fileIdMatch[1]
+      await fileService.softDelete(fileId)
     }
 
     await prisma.problemAttachment.delete({ where: { id: attachmentId } })

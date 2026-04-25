@@ -20,6 +20,9 @@ apps/server/uploads/
 .env
 .env.local
 .env.*.local
+.env.production
+apps/server/.env
+apps/server/.env.production
 
 # Logs
 *.log
@@ -31,3 +34,9 @@ Thumbs.db
 
 # Test
 test/
+
+# Testdata (评测数据文件)
+apps/server/testdata/
+
+# Backups (数据库备份)
+backups/

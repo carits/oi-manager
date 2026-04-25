@@ -1,5 +1,71 @@
 # 变更日志
 
+## 2026-04-25 (代码质量修复 + Prisma 迁移基线)
+
+### 背景
+
+处理优先级列表中的多项代码质量改进任务。
+
+### 变更内容
+
+1. **文件 API 权限检查**
+   - 上传接口：添加 `checkUploadPermission` 检查 ownerType/ownerId 权限
+   - 删除接口：添加 `checkDeletePermission` 检查删除权限
+   - by-owner 接口：添加 `checkViewPermission` 检查查看权限
+   - 权限逻辑：管理员全局可操作，教师检查团队/题目所有权，学生只能操作自己的文件
+
+2. **附件删除改为软删除**
+   - `problem.routes.ts` 中删除附件改用 `fileService.softDelete(fileId)` 而非物理删除文件路径
+   - 通过正则匹配从 `fileUrl` 提取 fileId
+
+3. **提交评测改为非阻塞**
+   - `submit.ts`：`dispatchJudgeTask` 改为 `.catch()` 模式，不阻塞返回
+   - `training.routes.ts`：训练提交同样改为非阻塞
+   - 评测失败时通过 catch handler 更新 submission 状态为 `submit_failed`
+
+4. **评测 worker 并发控制**
+   - `judge/src/client.ts`：引入 `p-queue` 限制并发评测任务数
+   - 并发数从 `config.maxConcurrent` 读取
+   - 任务入队后立即返回，评测结果通过 WebSocket 回传
+
+5. **废弃 API 路由清理**
+   - 删除 `apps/web/src/app/api/class-groups/` 目录
+   - 删除 `apps/web/src/app/api/exams/` 目录
+
+6. **Next 14 route handler params 类型**
+   - 验证现有代码已正确使用 Promise params（使用 `await params` 或同步访问 `params.xxx`）
+   - 无需修改
+
+7. **Prisma 迁移基线**
+   - 创建空迁移 `20260425_baseline_init` 代表当前数据库状态
+   - 标记为已应用 (`prisma migrate resolve --applied`)
+   - 后续 schema 变变更可通过 `prisma migrate dev` 管理
+
+### 效果
+
+- 文件上传/删除/查看有正确的权限校验
+- 附件删除不会物理删除文件，通过 File 模型管理
+- 提交评测立即返回，后台处理不阻塞
+- 评测 worker 可控制并发数，避免资源耗尽
+- 废弃代码清理完成
+- 迁移系统建立，后续 schema 变更可追踪
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/src/routes/files.ts` | 修改 — 添加三个权限检查函数 |
+| `apps/server/src/lib/storage.ts` | 修改 — 完善 checkAccess 权限逻辑 |
+| `apps/server/src/modules/problem/problem.routes.ts` | 修改 — 附件删除改用 softDelete |
+| `apps/server/src/routes/submit.ts` | 修改 — dispatchJudgeTask 改为非阻塞 |
+| `apps/server/src/modules/training/training.routes.ts` | 修改 — 训练提交改为非阻塞 |
+| `apps/judge/src/client.ts` | 修改 — 添加 p-queue 并发控制 |
+| `apps/web/src/app/api/class-groups/` | 删除 |
+| `apps/web/src/app/api/exams/` | 删除 |
+| `apps/server/prisma/migrations/20260425_baseline_init/migration.sql` | 新增 |
+
+---
+
 ## 2026-04-24 (训练模块增强：题号/题解可见性 + 管理员排名开关)
 
 ### 背景

@@ -94,12 +94,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     }
   })
 
-  // 记录原始的 res.json 和 res.end
-  const originalJson = res.json.bind(res)
-  const originalEnd = res.end.bind(res)
-
   // 记录响应完成
-  const logResponse = (status: number) => {
+  res.on('finish', () => {
     const duration = Date.now() - (req.startTime || Date.now())
 
     logger.info('request_end', {
@@ -108,23 +104,11 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       metadata: {
         method: req.method,
         path: req.path,
-        status,
+        status: res.statusCode,
         duration
       }
     })
-  }
-
-  // 包装 res.json
-  res.json = function(body: any): Response {
-    logResponse(res.statusCode)
-    return originalJson(body)
-  }
-
-  // 包装 res.end
-  res.end = function(chunk?: any, encoding?: any, cb?: any): Response {
-    logResponse(res.statusCode)
-    return originalEnd(chunk, encoding, cb)
-  }
+  })
 
   next()
 }
