@@ -1,5 +1,100 @@
 # 当前任务
 
+## 任务：第三轮小步重构 — TrainingDetailPage.tsx（2026-04-25）
+
+状态: **已完成** ✅
+
+### 背景
+
+TrainingDetailPage.tsx 有 1655 行，混合了数据请求、状态管理、6 个 tab 的 JSX 渲染、弹窗逻辑。本次只做前端结构拆分，不改业务逻辑、不改接口、不改后端、不改数据库、不改视觉。
+
+### 完成内容
+
+将 1655 行单文件拆分为 11 个文件：
+
+| 文件 | 行数 | 职责 |
+|------|------|------|
+| `TrainingDetailPage.tsx` | ~310 | 组装层（hooks 调用、header、tab bar、modal、solutions/attachments useEffect） |
+| `types.ts` | ~105 | 共用类型定义 |
+| `hooks/useTrainingDetail.ts` | ~140 | 训练信息 + 题目 + 笔记 + loading/error |
+| `hooks/useTrainingRank.ts` | ~27 | 排行榜数据 |
+| `hooks/useTrainingSubmissions.ts` | ~65 | 提交记录（筛选/分页） |
+| `hooks/useTrainingActions.ts` | ~125 | 提交代码/删除/下载附件 |
+| `components/TrainingProblemList.tsx` | ~153 | 题目列表 tab |
+| `components/TrainingProblemDetail.tsx` | ~305 | 题面 tab |
+| `components/TrainingRankTable.tsx` | ~117 | 排名 tab |
+| `components/TrainingSubmissionPanel.tsx` | ~243 | 评测记录 tab |
+| `components/TrainingSolutionPanel.tsx` | ~89 | 题解 tab |
+| `components/TrainingAttachmentPanel.tsx` | ~59 | 附件 tab |
+
+### 行为变化
+
+无。所有功能、API、视觉、权限逻辑完全不变。
+
+### 修复
+
+- TrainingSubmissionPanel.tsx 中 `require('@/lib/oj-platforms')` 改为 ES module `import`
+
+### 验证
+
+- `pnpm build` ✅ 构建通过（零错误）
+- 所有 6 个 tab 正确渲染（problemList, problems, submissions, solutions, attachments, ranking）
+- 弹窗正常（提交代码、编辑训练、删除训练、提交详情）
+
+---
+
+## 任务：第二轮性能优化（2026-04-25）
+
+状态: **已完成** ✅
+
+### 背景
+
+第一轮稳定性修复完成后，第二轮专注慢接口和慢页面，不改 UI，不重构业务模块。
+
+### 完成内容
+
+1. **团队详情 N+1 查询优化** ✅
+   - `team.service.ts` getTeamDetail: 5 处 `getMemberDetails` → `getMemberDetailsBatch`（40+ 查询 → 4 查询）
+   - `team.routes.ts` pending-invites: N×2 查询 → 批量 + 并行 inviter 查询
+   - `team.routes.ts` admins 列表: N×2 查询 → 批量查询
+   - `team.repository.ts` searchAvailableMembers: N×2 user 查询 → findMany 批量查询
+
+2. **未分页接口添加分页** ✅
+   - `GET /schools/:id/student-rankings`: 添加分页（默认50，最大200）
+   - `GET /schools/:id/students-by-grade`: 添加分页（默认50，最大200）
+
+3. **训练详情页请求并行化** ✅
+   - TrainingDetailPage: 题目详情 + 笔记从两个串行 useEffect 合并为 Promise.all
+
+### 涉及文件
+
+| 文件 | 修改 |
+|------|------|
+| `apps/server/src/modules/team/team.service.ts` | getTeamDetail N+1 → batch |
+| `apps/server/src/modules/team/team.routes.ts` | pending-invites + admins N+1 → batch |
+| `apps/server/src/modules/team/team.repository.ts` | searchAvailableMembers N+1 → batch |
+| `apps/server/src/modules/school/school.routes.ts` | student-rankings + students-by-grade 添加分页 |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | detail+note 合并为 Promise.all |
+
+### 优化效果
+
+| 接口 | 优化前 | 优化后 |
+|------|--------|--------|
+| 团队详情 (20 成员) | 40+ DB 查询 | 4 DB 查询 |
+| pending-invites | N×2 查询 | 4 查询 |
+| admins 列表 | N×2 查询 | 4 查询 |
+| searchAvailableMembers | N+1 user 查询 | 2 批量 user 查询 |
+| student-rankings | 无分页 | 分页 (默认50, max200) |
+| students-by-grade | 无分页 | 分页 (默认50, max200) |
+| 训练详情题目 | 2 串行请求 | 1 轮并行 |
+
+### 验证
+
+- `pnpm build` ✅ 构建通过
+- `npx vitest run` ✅ 230 测试通过
+
+---
+
 ## 任务：代码质量修复 + Prisma 迁移基线（2026-04-25）
 
 状态: **已完成** ✅

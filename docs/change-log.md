@@ -1,5 +1,72 @@
 # 变更日志
 
+## 2026-04-25 (第三轮小步重构 — TrainingDetailPage)
+
+### 改动内容
+
+**TrainingDetailPage.tsx 从 1655 行拆分为 11 个文件**（只做前端结构拆分，不改业务逻辑/API/DB/视觉）：
+
+- 新建 `types.ts`：共用类型（TrainingInfo, TrainingProblem, ProblemDetail, SubmissionRow, Attachment, ProblemListEntry, TabType）
+- 新建 `hooks/useTrainingDetail.ts`：训练信息+题目+笔记+statement 选择+loading/error
+- 新建 `hooks/useTrainingRank.ts`：排行榜数据加载（tab 切换时触发）
+- 新建 `hooks/useTrainingSubmissions.ts`：提交记录（筛选/分页/detailSubmissionId）
+- 新建 `hooks/useTrainingActions.ts`：提交代码/删除训练/下载附件/模态框状态
+- 新建 `components/TrainingProblemList.tsx`：题目列表 tab
+- 新建 `components/TrainingProblemDetail.tsx`：题面 tab（题面内容+笔记+操作按钮）
+- 新建 `components/TrainingRankTable.tsx`：排名 tab
+- 新建 `components/TrainingSubmissionPanel.tsx`：评测记录 tab（筛选栏+表格+分页）
+- 新建 `components/TrainingSolutionPanel.tsx`：题解 tab
+- 新建 `components/TrainingAttachmentPanel.tsx`：附件 tab
+- 重写 `TrainingDetailPage.tsx`：瘦身为组装层（~310 行），调用 4 个 hooks + 6 个组件
+
+### 修复
+
+- TrainingSubmissionPanel.tsx 中 `require()` 改为 ES module `import`
+
+### 影响模块
+
+- 前端训练详情页（student/team/[id]/trainings/[tid]、teacher/teams/[id]/trainings/[tid]）
+
+### 行为变化
+
+无。所有功能、API 路径、权限逻辑、视觉效果完全不变。
+
+### 兼容性风险
+
+无。页面入口签名不变，两个路由页面（student/teacher）只引用 TrainingDetailPage 组件，无需修改。
+
+---
+
+## 2026-04-25 (第二轮性能优化)
+
+### 改动内容
+
+**团队模块 N+1 查询优化**（team.service.ts, team.routes.ts, team.repository.ts）：
+- getTeamDetail 中 5 处 `getMemberDetails` 单条查询替换为 `getMemberDetailsBatch` 批量查询
+- pending-invites 和 admins 接口同样替换为批量 + 并行 inviter 查询
+- searchAvailableMembers 中 `Promise.all(user.findUnique)` 替换为 `user.findMany({ where: { id: { in } } })` 批量查询
+- 效果：20 成员团队详情从 40+ DB 查询降至 4 查询
+
+**未分页接口添加分页**（school.routes.ts）：
+- `student-rankings` 和 `students-by-grade` 添加 page/pageSize 参数（默认50，最大200）
+- 返回分页元数据（total, totalPages）
+
+**训练详情页请求并行化**（TrainingDetailPage.tsx）：
+- 题目详情 + 笔记加载从两个串行 useEffect 合并为一个 Promise.all
+
+### 影响模块
+
+- 团队管理（详情、邀请、管理员、成员搜索）
+- 学校管理（学生排名、年级分组）
+- 训练详情页
+
+### 兼容性
+
+- 前端向后兼容：`student-rankings` 和 `students-by-grade` 新增分页参数有默认值，不传也能用
+- 无 schema 变更
+
+---
+
 ## 2026-04-25 (代码质量修复 + Prisma 迁移基线)
 
 ### 背景

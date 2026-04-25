@@ -1,0 +1,125 @@
+import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
+import type { TrainingInfo, TrainingProblem, Attachment } from '../types'
+
+export function useTrainingActions(
+  trainingId: string,
+  training: TrainingInfo | null,
+  basePath: string,
+  teamId: string,
+  selectedProblemId: string | null,
+  problems: TrainingProblem[],
+  activeTab: string,
+) {
+  const router = useRouter()
+  const toast = useToast()
+
+  // Submit modal state
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
+  const [submitLanguage, setSubmitLanguage] = useState('cpp')
+  const [submitCode, setSubmitCode] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
+
+  // Edit/delete state
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleSubmitCode = useCallback(async () => {
+    if (!selectedProblemId || !submitCode.trim()) {
+      toast.error('请输入代码')
+      return
+    }
+    if (submitMethod !== 'robot') {
+      toast.error('暂未开放此提交方式')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await apiClient.post<{ submissionId?: number }>(`/api/trainings/${trainingId}/submit`, {
+        trainingProblemId: selectedProblemId,
+        language: submitLanguage,
+        code: submitCode,
+        submitMethod,
+      })
+      if (res.success) {
+        toast.success('提交成功')
+        setSubmitCode('')
+        setShowSubmitModal(false)
+        // 打开提交详情
+        if (res.data?.submissionId) {
+          return res.data.submissionId
+        }
+      } else {
+        toast.error(res.message || '提交失败')
+      }
+      return null
+    } catch {
+      toast.error('提交失败')
+      return null
+    } finally {
+      setSubmitting(false)
+    }
+  }, [selectedProblemId, submitCode, submitMethod, submitLanguage, trainingId, toast])
+
+  const handleDelete = useCallback(async () => {
+    if (!training) return false
+    setDeleting(true)
+    try {
+      const res = await apiClient.delete(`/api/trainings/${training.id}`)
+      if (res.success) {
+        toast.success('训练已删除')
+        router.push(`${basePath}/${teamId}?tab=training`)
+        return true
+      } else {
+        toast.error(res.message || '删除失败')
+        return false
+      }
+    } catch {
+      toast.error('删除失败')
+      return false
+    } finally {
+      setDeleting(false)
+    }
+  }, [training, basePath, teamId, router, toast])
+
+  const handleDownloadAttachment = useCallback(async (attachment: Attachment) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}${attachment.fileUrl}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      })
+      if (!response.ok) throw new Error('下载失败')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = attachment.fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch {
+      toast.error('下载失败')
+    }
+  }, [toast])
+
+  return {
+    // Submit
+    showSubmitModal, setShowSubmitModal,
+    submitLanguage, setSubmitLanguage,
+    submitCode, setSubmitCode,
+    submitting,
+    submitMethod, setSubmitMethod,
+    handleSubmitCode,
+    // Edit/delete
+    showEditModal, setShowEditModal,
+    showDeleteConfirm, setShowDeleteConfirm,
+    deleting,
+    handleDelete,
+    // Download
+    handleDownloadAttachment,
+  }
+}
