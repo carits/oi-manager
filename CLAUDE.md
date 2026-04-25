@@ -1,5 +1,55 @@
 # OI-MANAGER-V2 默认协作规则
 
+## 零、绝对红线（违反即严重事故）
+
+### 禁止删除/重置数据库
+
+**绝对禁止使用以下任何命令或操作：**
+
+- `prisma db push --force-reset`
+- `prisma migrate reset`
+- `DROP DATABASE` / `DROP TABLE` / `TRUNCATE`
+- `docker compose down -v`（`-v` 会删除 volume）
+- 任何会清空或删除生产/开发数据库的操作
+
+**2026-04-17 事故**：使用 `--force-reset` 导致生产数据库全部数据丢失（评测记录、OJ账号、训练等），无法恢复。
+
+Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新字段，先加 `@default` 再 push，永远不需要重置。
+
+**自动备份已配置**：每天凌晨3点自动备份到 `backups/`，保留7天。恢复命令：`gunzip -c backups/oi_manager_时间戳.sql.gz | docker exec -i oi-postgres psql -U oi -d oi_manager`
+
+### 禁止直接操作数据库（必须走 API）
+
+**所有数据操作必须通过 API 进行，禁止脚本直接读写数据库。**
+
+**禁止的操作：**
+- 在 `scripts/` 目录下编写直接使用 `prisma.*.create/update/delete` 的脚本
+- 使用 `npx tsx scripts/xxx.ts` 直接修改数据库数据
+- 使用 `npx prisma studio` 手动修改生产数据
+
+**允许的操作：**
+- 通过 API 调用（`fetch`、`apiClient`、`curl`）进行数据操作
+- 只读脚本（查询、统计、验证）可以直接访问数据库
+- 数据库迁移脚本（`prisma migrate`）用于 schema 变更
+
+**原因：**
+1. API 层有权限校验、业务逻辑验证、日志记录
+2. 直接操作数据库容易绕过业务规则，导致数据不一致
+3. 操作可追溯，便于审计和问题排查
+
+**如果需要批量操作数据：**
+1. 先创建对应的 API 端点（通常是 `POST /api/admin/xxx` 形式）
+2. 在 API 中实现权限校验和业务逻辑
+3. 脚本通过 HTTP 调用 API 执行操作
+
+**现有违规脚本**（已标记为废弃，仅供参考）：
+- `scripts/fix-*.ts` — 数据修复脚本
+- `scripts/migrate-*.ts` — 数据迁移脚本
+- `scripts/generate-icpc-test-data.ts` — 测试数据生成
+- `scripts/clean-icpc-test-data.ts` — 测试数据清理
+
+---
+
 ## 一、启动时默认加载的项目文档
 
 ### 1. 必读文档（优先加载）
@@ -25,6 +75,9 @@
   @docs/components/COMPONENTS.md
   @docs/components/
   @docs/MODULE_INDEX.md
+
+- 涉及前端样式、设计 token、颜色/圆角/阴影规范时：
+  @docs/DESIGN_SYSTEM.md
 
 - 涉及启动、环境变量、本地调试、部署排查时：
   @docs/RUNBOOK.md
@@ -304,11 +357,13 @@ apps/web/src/
 │   └── login/         # 登录页面
 │
 ├── components/        # React 组件
-│   ├── ui/            # 通用 UI 组件（Button, Modal, Table 等）
+│   ├── ui/            # 通用 UI 组件（Button, Modal, Table, Card, Badge 等）
 │   ├── business/      # 业务组件（RegionSelector 等）
 │   ├── team/          # 团队相关组件
+│   ├── training/      # 训练相关组件（TeamTrainingList, TrainingDetailPage 等）
+│   ├── problem/       # 题目相关组件（ProblemDetail, ProblemForm, JudgeSettingsTab 等）
+│   ├── submission/    # 评测记录组件（SubmissionList, SubmissionDetailPage 等）
 │   ├── profile/       # 个人资料组件
-│   ├── problem/       # 题目相关组件
 │   ├── AppShell.tsx   # 应用外壳（导航布局）
 │   ├── AuthProvider.tsx # 认证状态管理
 │   └── Providers.tsx  # 全局 Provider 封装
@@ -325,7 +380,8 @@ apps/web/src/
 │   ├── assets.ts      # 资源 URL 辅助
 │   ├── grade.ts       # 年级计算
 │   ├── regionData.ts  # 区域数据
-│   └── styles.ts      # 表单样式定义
+│   ├── tokens.ts      # 设计 token 常量（与 CSS 变量一一对应）
+│   └── styles.ts      # 样式预设（表单、表格、卡片等场景样式）
 │
 └── config/            # 配置文件
     ├── navigation.ts  # 导航配置
@@ -337,8 +393,22 @@ apps/web/src/
 
 1. **API 调用**：必须使用 `lib/apiClient.ts`，禁止直接使用 `fetch`
 2. **状态管理**：使用 `AuthProvider` 管理全局登录状态
-3. **样式**：使用内联样式 + CSS 变量
+3. **样式**：使用内联样式 + CSS 变量，遵守设计 token 规范（见下方）
 4. **路由**：使用 Next.js App Router（`app/` 目录）
+
+### 设计 Token 规范（必须遵守）
+
+**详细文档**: `docs/DESIGN_SYSTEM.md`
+
+1. **颜色**：使用 `var(--xxx)` 或 `lib/tokens.ts` 导出，禁止硬编码 hex 值
+   - 文字：`var(--text-primary)` / `var(--text-secondary)` / `var(--text-muted)`
+   - 背景：`var(--bg-card)` / `var(--bg-hover)` / `var(--bg-muted)`
+   - 语义色：`var(--success)` / `var(--error)` / `var(--warning)` / `var(--info)` 及 `-light`/`-text` 变体
+2. **圆角**：使用 `var(--radius-sm/md/lg)`，禁止 `3px`、`12px` 等非标值
+3. **字号**：使用 `var(--text-xs/sm/base/lg/xl/2xl)`
+4. **阴影**：使用 `var(--shadow-xs/sm/md/lg)`
+5. **按钮**：禁止渐变背景，使用纯色 `var(--primary)`
+6. **例外**：图表调色板等数据可视化颜色允许硬编码
 
 ---
 

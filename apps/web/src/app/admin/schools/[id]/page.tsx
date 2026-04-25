@@ -327,8 +327,8 @@ export default function AdminSchoolDetailPage() {
                                 padding: '0.125rem 0.5rem',
                                 borderRadius: '4px',
                                 fontSize: '0.75rem',
-                                background: teacher.user.role === 'school_principal' ? '#fef3c7' : '#e0f2fe',
-                                color: teacher.user.role === 'school_principal' ? '#92400e' : '#0369a1'
+                                background: teacher.user.role === 'school_principal' ? 'var(--warning-light)' : '#e0f2fe',
+                                color: teacher.user.role === 'school_principal' ? 'var(--warning-text)' : '#0369a1'
                               }}>
                                 {teacher.user.role === 'school_principal' ? '负责人' : '教师'}
                               </span>

@@ -17,5 +17,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # go-judge 评测沙箱（Docker 部署自动获得 cgroup 支持）
+  judge:
+    image: criyle/go-judge:latest
+    container_name: oi-judge
+    ports:
+      - "5050:5050"
+    volumes:
+      - judge-data:/tmp/go-judge
+      # 挂载 cgroup 文件系统以支持 MLE 检测
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    environment:
+      - ES_CGROUP_PREFIX=gojudge
+    # 需要 privileged 权限访问 cgroup
+    privileged: true
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  judge-data:

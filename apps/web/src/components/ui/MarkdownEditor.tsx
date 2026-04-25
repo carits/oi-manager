@@ -104,7 +104,7 @@ export function MarkdownEditor({
               fontFamily: 'Consolas, Monaco, "Courier New", monospace',
               lineHeight: 1.6,
               resize: 'none',
-              background: mode === 'split' ? '#fafafa' : 'white',
+              background: mode === 'split' ? 'var(--bg-muted)' : 'white',
               outline: 'none',
               boxSizing: 'border-box'
             }}

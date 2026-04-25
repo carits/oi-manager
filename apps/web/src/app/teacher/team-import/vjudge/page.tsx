@@ -348,8 +348,8 @@ const h2Style: React.CSSProperties = {
 }
 
 const errorBoxStyle: React.CSSProperties = {
-  padding: '1rem', background: '#fef2f2', border: '1px solid #fecaca',
-  borderRadius: '6px', marginBottom: '1rem', color: '#dc2626'
+  padding: '1rem', background: 'var(--error-light)', border: '1px solid #fecaca',
+  borderRadius: '6px', marginBottom: '1rem', color: 'var(--error)'
 }
 
 const btnPrimary: React.CSSProperties = {

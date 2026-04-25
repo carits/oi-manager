@@ -49,7 +49,7 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
             disabled={loading || availableOptions.length === 0}
             style={{
               padding: '0.5rem 1rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'var(--primary)',
               color: 'white',
               border: 'none',
               borderRadius: '6px',

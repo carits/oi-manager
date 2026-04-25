@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import helmet from 'helmet'
+import compression from 'compression'
 import { MulterError } from 'multer'
 import { authRouter } from './routes/auth'
 import { studentRouter } from './routes/students'
@@ -24,6 +25,7 @@ import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts
 import { submitRouter } from './routes/submit'
 import { testdataRouter } from './routes/testdata'
 import { trainingsRouter } from './modules/training/training.routes'
+import { adminDataRouter } from './routes/admin-data'
 import { startSubmissionPoller } from './lib/submission-poller'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
@@ -59,6 +61,10 @@ app.use(helmet({
 // 2. CORS 跨域配置
 // 目的：开发环境宽松，生产环境严格白名单
 app.use(cors(getCorsOptions()))
+
+// 2.5. Gzip 压缩
+// 目的：减少响应体积，加快传输速度
+app.use(compression())
 
 // 3. 请求体大小限制
 // 目的：防止大请求拖垮服务器
@@ -101,6 +107,7 @@ app.use('/api/oj-accounts', ojAccountsRouter)
 app.use('/api/submit', submitRouter)
 app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
 app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
+app.use('/api/admin/data', adminDataRouter)  // 管理员数据维护 API
 
 // 健康检查
 app.get('/api/health', (req, res) => {

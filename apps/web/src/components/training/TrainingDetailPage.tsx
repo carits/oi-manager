@@ -7,10 +7,12 @@ import { useToast } from '@/components/ui/Toast'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
 import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, LANGUAGE_OPTIONS } from '@/lib/judge-constants'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { TrainingFormModal } from './TrainingFormModal'
+import { useAuth } from '@/components/AuthProvider'
 
 // ========== Helper Functions ==========
 
@@ -45,13 +47,16 @@ interface TrainingInfo {
   endTime: string
   status: string
   createdBy: string
+  problemIdVisible: boolean
+  solutionVisible: boolean
+  includeAdminInRanking: boolean
   problemCount: number
   isAdmin: boolean
 }
 
 interface TrainingProblem {
   id: string
-  alias: string
+  alias: string | null
   orderIndex: number
   points: number | null
   hasSolution: boolean
@@ -67,7 +72,7 @@ interface TrainingProblem {
 }
 
 interface ProblemDetail {
-  alias: string
+  alias: string | null
   points: number | null
   timeLimit: number | null
   memoryLimit: number | null
@@ -90,6 +95,7 @@ interface SubmissionRow {
   id: number
   userId: string
   userName: string
+  username: string
   userType: string
   problemAlias: string
   problemOrderIndex: number
@@ -154,11 +160,11 @@ function getPdfUrl(fileUrl: string): string | null {
 }
 
 function getResultColor(result: string): string {
-  if (result === 'accepted') return '#16a34a'
-  if (['wa', 'tle', 'mle', 're', 'ole'].includes(result)) return '#dc2626'
-  if (result === 'ce') return '#d97706'
-  if (result === 'pending_review') return '#8b5cf6'
-  return '#6b7280'
+  if (result === 'accepted') return 'var(--success)'
+  if (['wa', 'tle', 'mle', 're', 'ole'].includes(result)) return 'var(--error)'
+  if (result === 'ce') return 'var(--warning)'
+  if (result === 'pending_review') return 'var(--primary)'
+  return 'var(--text-secondary)'
 }
 
 function formatResult(result: string): string {
@@ -170,24 +176,24 @@ function formatLanguage(lang: string): string {
 }
 
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
-  accepted: { bg: '#dcfce7', text: '#166534' },
-  queuing: { bg: '#dbeafe', text: '#1e40af' },
-  tle: { bg: '#fef3c7', text: '#92400e' },
-  mle: { bg: '#fef3c7', text: '#92400e' },
-  wa: { bg: '#fee2e2', text: '#991b1b' },
-  re: { bg: '#fee2e2', text: '#991b1b' },
-  ce: { bg: '#f3e8ff', text: '#6b21a8' },
-  pe: { bg: '#fef3c7', text: '#92400e' },
-  ole: { bg: '#fef3c7', text: '#92400e' },
+  accepted: { bg: 'var(--success-light)', text: 'var(--success-text)' },
+  queuing: { bg: 'var(--info-light)', text: 'var(--info-text)' },
+  tle: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  mle: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  wa: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  re: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  ce: { bg: 'var(--warning-light)', text: 'var(--text-secondary)' },
+  pe: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  ole: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
 }
 
 function getResultBadge(result: string) {
   const label = JUDGE_RESULT_LABEL_MAP[result] || result
-  const colors = RESULT_COLORS[result] || { bg: '#f3f4f6', text: '#374151' }
+  const colors = RESULT_COLORS[result] || { bg: 'var(--bg-muted)', text: 'var(--text-primary)' }
   if (result === 'queuing' || result === 'judging') {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500, background: colors.bg, color: colors.text }}>
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid #e5e7eb', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '4px', verticalAlign: 'middle' }} />
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid #e5e7eb', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '4px', verticalAlign: 'middle' }} />
         {label}
       </span>
     )
@@ -206,9 +212,9 @@ function getOjLabel(oj: string): string {
 
 function getScoreColor(score: number, max: number): string {
   const ratio = max > 0 ? score / max : 0
-  if (ratio >= 1) return '#16a34a'
-  if (ratio >= 0.5) return '#d97706'
-  return '#dc2626'
+  if (ratio >= 1) return 'var(--success)'
+  if (ratio >= 0.5) return 'var(--warning)'
+  return 'var(--error)'
 }
 
 function formatFileSize(bytes: number): string {
@@ -239,6 +245,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const params = useParams()
   const router = useRouter()
   const toast = useToast()
+  const { user } = useAuth()
   const trainingId = params.tid as string
   const teamId = params.id as string
 
@@ -291,6 +298,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   // Countdown
   const [timeDisplay, setTimeDisplay] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // ========== Data loading ==========
 
@@ -395,9 +404,13 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [noteContent, selectedProblemId, trainingId, showNotePanel])
 
-  // Load submissions when tab changes
+  // Load submissions when tab changes, clear on leave
   useEffect(() => {
-    if (activeTab !== 'submissions') return
+    if (activeTab !== 'submissions') {
+      setSubmissions([])
+      setSubmissionsTotal(0)
+      return
+    }
     const loadSubmissions = async () => {
       try {
         const params = new URLSearchParams()
@@ -421,12 +434,16 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     loadSubmissions()
   }, [activeTab, trainingId, submissionsPage, filterProblemId, filterUsername, filterResult, filterLanguage])
 
-  // Load all solutions when tab changes
+  // Load all solutions when tab changes, clear on leave
   useEffect(() => {
-    if (activeTab !== 'solutions' || problems.length === 0) return
+    if (activeTab !== 'solutions') {
+      setAllSolutions({})
+      return
+    }
+    if (problems.length === 0) return
     const loadAllSolutions = async () => {
       const solutions: Record<string, { content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string }> = {}
-      for (const p of problems) {
+      await Promise.all(problems.map(async (p) => {
         try {
           const res = await apiClient.get<{ id: string | null; content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string } | null>(`/api/trainings/${trainingId}/problems/${p.id}/solution`)
           if (res.success && res.data) {
@@ -441,18 +458,22 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         } catch (error) {
           console.error('Failed to load solution for', p.id, error)
         }
-      }
+      }))
       setAllSolutions(solutions)
     }
     loadAllSolutions()
   }, [activeTab, trainingId, problems])
 
-  // Load all attachments when tab changes
+  // Load all attachments when tab changes, clear on leave
   useEffect(() => {
-    if (activeTab !== 'attachments' || problems.length === 0) return
+    if (activeTab !== 'attachments') {
+      setAllAttachments({})
+      return
+    }
+    if (problems.length === 0) return
     const loadAllAttachments = async () => {
       const attachments: Record<string, Attachment[]> = {}
-      for (const p of problems) {
+      await Promise.all(problems.map(async (p) => {
         try {
           const res = await apiClient.get<Attachment[]>(`/api/trainings/${trainingId}/problems/${p.id}/attachments`)
           if (res.success && res.data) {
@@ -461,15 +482,18 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         } catch (error) {
           console.error('Failed to load attachments for', p.id, error)
         }
-      }
+      }))
       setAllAttachments(attachments)
     }
     loadAllAttachments()
   }, [activeTab, trainingId, problems])
 
-  // Load ranking when tab changes
+  // Load ranking when tab changes, clear on leave
   useEffect(() => {
-    if (activeTab !== 'ranking') return
+    if (activeTab !== 'ranking') {
+      setRankingData(null)
+      return
+    }
     const loadRanking = async () => {
       try {
         const res = await apiClient.get<any>(`/api/trainings/${trainingId}/ranking`)
@@ -483,9 +507,12 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     loadRanking()
   }, [activeTab, trainingId])
 
-  // Load problem list when tab changes
+  // Load problem list when tab changes, clear on leave
   useEffect(() => {
-    if (activeTab !== 'problemList') return
+    if (activeTab !== 'problemList') {
+      setProblemListData([])
+      return
+    }
     const loadProblemList = async () => {
       try {
         const res = await apiClient.get<{ problems: ProblemListEntry[] }>(`/api/trainings/${trainingId}/problem-status`)
@@ -591,6 +618,24 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     }
   }
 
+  const handleDelete = async () => {
+    if (!training) return
+    setDeleting(true)
+    try {
+      const res = await apiClient.delete(`/api/trainings/${training.id}`)
+      if (res.success) {
+        toast.success('训练已删除')
+        router.push(`${basePath}/${teamId}?tab=training`)
+      } else {
+        toast.error(res.message || '删除失败')
+      }
+    } catch {
+      toast.error('删除失败')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   // ========== Render ==========
 
   if (loading || !training) {
@@ -599,9 +644,9 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
   const formatLabel = training.format === 'icpc' ? 'ICPC' : 'IOI'
   const statusColors: Record<string, { bg: string; color: string }> = {
-    upcoming: { bg: '#dbeafe', color: '#1e40af' },
-    ongoing: { bg: '#dcfce7', color: '#166534' },
-    finished: { bg: '#f3f4f6', color: '#6b7280' },
+    upcoming: { bg: 'var(--info-light)', color: 'var(--info-text)' },
+    ongoing: { bg: 'var(--success-light)', color: 'var(--success-text)' },
+    finished: { bg: 'var(--bg-muted)', color: 'var(--text-secondary)' },
   }
   const sc = statusColors[training.status] || statusColors.upcoming
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
@@ -613,11 +658,11 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.75rem 1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button onClick={() => router.push(`${basePath}/${teamId}?tab=training`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-600)', fontSize: '0.875rem' }}>← 返回</button>
+            <button onClick={() => router.push(`${basePath}/${teamId}?tab=training`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>← 返回</button>
             <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
             <h1 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>{training.title}</h1>
-            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '3px', background: '#f3f4f6' }}>{formatLabel}</span>
-            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '3px', background: sc.bg, color: sc.color }}>
+            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-muted)' }}>{formatLabel}</span>
+            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: sc.bg, color: sc.color }}>
               {training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}
             </span>
           </div>
@@ -626,19 +671,35 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               {timeDisplay}
             </div>
             {training.isAdmin && (
-              <button
-                onClick={() => setShowEditModal(true)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: '1px solid var(--border)',
-                  background: 'white',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                }}
-              >
-                编辑
-              </button>
+              <>
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid var(--border)',
+                    background: 'white',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  编辑
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid var(--error)',
+                    background: 'white',
+                    color: 'var(--error)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  删除
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -646,7 +707,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
       {/* Announcement */}
       {training.description && (
-        <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '0.5rem 1.5rem', fontSize: '0.8rem', color: '#92400e' }}>
+        <div style={{ background: 'var(--warning-light)', borderBottom: '1px solid #fde68a', padding: '0.5rem 1.5rem', fontSize: '0.8rem', color: 'var(--warning-text)' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <strong>公告：</strong>{training.description}
           </div>
@@ -691,21 +752,26 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       {/* Main Content */}
       <div style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '1rem', boxSizing: 'border-box' }}>
         {/* ====== Problem List Tab ====== */}
-        {activeTab === 'problemList' && (
+        {activeTab === 'problemList' && (() => {
+          // 判断是否应该隐藏来源列
+          const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
+          const hideSourceColumn = !training.problemIdVisible && !trainingFinished && !training.isAdmin
+
+          return (
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
-                <tr style={{ background: '#f9fafb', borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '80px' }}>状态</th>
-                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '60px' }}>题号</th>
-                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)', width: '180px' }}>来源</th>
-                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-600)' }}>标题</th>
+                <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>状态</th>
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '60px' }}>题号</th>
+                  {!hideSourceColumn && <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '180px' }}>来源</th>}
+                  <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)' }}>标题</th>
                 </tr>
               </thead>
               <tbody>
                 {problemListData.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>暂无题目</td>
+                    <td colSpan={hideSourceColumn ? 3 : 4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>暂无题目</td>
                   </tr>
                 )}
                 {problemListData.map(p => {
@@ -723,17 +789,17 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                             <span style={{
                               display: 'inline-block',
                               padding: '1px 6px',
-                              borderRadius: '3px',
+                              borderRadius: 'var(--radius-sm)',
                               fontSize: '0.7rem',
                               fontWeight: 600,
                               fontFamily: 'monospace',
-                              background: isAccepted ? '#dcfce7' : '#fee2e2',
-                              color: isAccepted ? '#166534' : '#991b1b',
+                              background: isAccepted ? 'var(--success-light)' : 'var(--error-light)',
+                              color: isAccepted ? 'var(--success-text)' : 'var(--error-text)',
                             }}>
                               {RESULT_SHORT_MAP[p.bestResult!] || p.bestResult}
                             </span>
                           ) : (
-                            <span style={{ color: '#9ca3af' }}>-</span>
+                            <span style={{ color: 'var(--text-muted)' }}>-</span>
                           )
                         ) : (
                           // IOI: 分数显示
@@ -742,7 +808,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                               {isAccepted ? '✓ ' : ''}{p.bestScore}
                             </span>
                           ) : (
-                            <span style={{ color: '#9ca3af' }}>-</span>
+                            <span style={{ color: 'var(--text-muted)' }}>-</span>
                           )
                         )}
                       </td>
@@ -752,32 +818,41 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                         {toExcelColumnName(p.orderIndex)}
                       </td>
 
-                      {/* 来源列 */}
+                      {/* 来源列 - 仅当允许显示时渲染 */}
+                      {!hideSourceColumn && (
                       <td style={{ padding: '0.6rem 1rem' }}>
-                        {p.platform === 'carits' ? (
-                          <a
-                            href={`${basePath.split('/team')[0]}/problems/${p.problemTableId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--primary)', textDecoration: 'none' }}
-                          >
-                            Carits {p.platformProblemId}
-                          </a>
-                        ) : p.platform && p.problemUrl ? (
-                          <a
-                            href={p.problemUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--primary)', textDecoration: 'none' }}
-                          >
-                            {p.platformLabel} {p.platformProblemId}
-                          </a>
-                        ) : p.platform ? (
-                          <span style={{ color: 'var(--gray-600)' }}>{p.platformLabel} {p.platformProblemId}</span>
-                        ) : (
-                          <span style={{ color: 'var(--gray-400)' }}>-</span>
-                        )}
+                        {(() => {
+                          // 显示题号
+                          if (p.platform === 'carits') {
+                            return (
+                              <a
+                                href={`${basePath.split('/team')[0]}/problems/${p.problemTableId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                              >
+                                Carits {p.platformProblemId}
+                              </a>
+                            )
+                          } else if (p.platform && p.problemUrl) {
+                            return (
+                              <a
+                                href={p.problemUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                              >
+                                {p.platformLabel} {p.platformProblemId}
+                              </a>
+                            )
+                          } else if (p.platform) {
+                            return <span style={{ color: 'var(--text-secondary)' }}>{p.platformLabel} {p.platformProblemId}</span>
+                          } else {
+                            return <span style={{ color: 'var(--gray-400)' }}>-</span>
+                          }
+                        })()}
                       </td>
+                      )}
 
                       {/* 标题列 */}
                       <td style={{ padding: '0.6rem 1rem' }}>
@@ -788,7 +863,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                           }}
                           style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'none' }}
                         >
-                          {p.alias}
+                          {p.alias || '未命名'}
                         </span>
                       </td>
                     </tr>
@@ -797,7 +872,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               </tbody>
             </table>
           </div>
-        )}
+          )})()}
 
         {/* ====== Problems Tab ====== */}
         {activeTab === 'problems' && (
@@ -840,13 +915,13 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 {problemDetail ? (
                   <>
                     {/* Problem Header */}
-                    <div style={{ padding: '0.5rem 1rem', background: '#fafafa', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--gray-600)' }}>
-                      <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--gray-800)' }}>{problemDetail.alias}</span>
+                    <div style={{ padding: '0.5rem 1rem', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--gray-800)' }}>{problemDetail.alias || problemDetail.problemTitle || '未命名'}</span>
                       {problemDetail.points != null && <span>分值: {problemDetail.points}</span>}
                       {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}s</span>}
                       {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}
                       {problemDetail.difficulty && (
-                        <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '3px', background: problemDetail.difficulty === '简单' ? '#d1fae5' : problemDetail.difficulty === '中等' ? '#fef3c7' : '#fee2e2', color: problemDetail.difficulty === '简单' ? '#166534' : problemDetail.difficulty === '中等' ? '#92400e' : '#991b1b' }}>
+                        <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: problemDetail.difficulty === '简单' ? 'var(--success-light)' : problemDetail.difficulty === '中等' ? 'var(--warning-light)' : 'var(--error-light)', color: problemDetail.difficulty === '简单' ? 'var(--success-text)' : problemDetail.difficulty === '中等' ? 'var(--warning-text)' : 'var(--error-text)' }}>
                           {problemDetail.difficulty}
                         </span>
                       )}
@@ -924,7 +999,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                           }
                           return (
                             <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
-                              <p style={{ color: 'var(--gray-600)', marginBottom: '1rem' }}>题面为外部 PDF 文件，请在新窗口中查看</p>
+                              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>题面为外部 PDF 文件，请在新窗口中查看</p>
                               <a
                                 href={currentStatement.fileUrl}
                                 target="_blank"
@@ -933,7 +1008,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                                   display: 'inline-block',
                                   padding: '0.5rem 1.5rem',
                                   backgroundColor: 'var(--primary)',
-                                  color: '#fff',
+                                  color: 'var(--text-inverse)',
                                   borderRadius: '6px',
                                   textDecoration: 'none',
                                   fontSize: '0.875rem',
@@ -964,7 +1039,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 <div style={{ marginTop: '1rem', background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                     <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>思路记录</span>
-                    {noteSaving && <span style={{ color: '#92400e', fontSize: '0.7rem' }}>保存中...</span>}
+                    {noteSaving && <span style={{ color: 'var(--warning-text)', fontSize: '0.7rem' }}>保存中...</span>}
                   </div>
                   <textarea
                     value={noteContent}
@@ -989,8 +1064,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                   onClick={() => setShowNotePanel(!showNotePanel)}
                   style={{
                     padding: '0.6rem 1rem',
-                    background: showNotePanel ? 'var(--gray-100)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: showNotePanel ? 'var(--gray-600)' : 'white',
+                    background: showNotePanel ? 'var(--bg-hover)' : 'var(--primary)',
+                    color: showNotePanel ? 'var(--text-secondary)' : 'white',
                     border: showNotePanel ? '1px solid var(--border)' : 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
@@ -1006,7 +1081,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                   onClick={() => setShowSubmitModal(true)}
                   style={{
                     padding: '0.6rem 1rem',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'var(--primary)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -1032,7 +1107,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                     style={{
                       padding: '0.6rem 1rem',
                       background: 'white',
-                      color: 'var(--gray-600)',
+                      color: 'var(--text-secondary)',
                       border: '1px solid var(--border)',
                       borderRadius: '6px',
                       cursor: 'pointer',
@@ -1055,7 +1130,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
             {/* 筛选栏 */}
             <div style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>题号:</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>题号:</label>
                 <select
                   value={filterProblemId}
                   onChange={e => { setFilterProblemId(e.target.value); setSubmissionsPage(1) }}
@@ -1067,7 +1142,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               </div>
               {training.isAdmin && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>用户名:</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>用户名:</label>
                   <input
                     type="text"
                     value={filterUsername}
@@ -1078,7 +1153,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>结果:</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>结果:</label>
                 <select
                   value={filterResult}
                   onChange={e => { setFilterResult(e.target.value); setSubmissionsPage(1) }}
@@ -1098,7 +1173,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--gray-600)' }}>语言:</label>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>语言:</label>
                 <select
                   value={filterLanguage}
                   onChange={e => { setFilterLanguage(e.target.value); setSubmissionsPage(1) }}
@@ -1120,31 +1195,36 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               </div>
               <button
                 onClick={() => { setFilterProblemId(''); setFilterUsername(''); setFilterResult(''); setFilterLanguage(''); setSubmissionsPage(1) }}
-                style={{ padding: '0.35rem 0.75rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
+                style={{ padding: '0.35rem 0.75rem', background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
               >
                 重置
               </button>
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
-                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>题号</th>
-                  {training.isAdmin && <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>}
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>OJ</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
-                  {training.format === 'ioi' && <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>分数</th>}
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(MS)</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>提交时间</th>
+                <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测ID</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>题号</th>
+                  {training.isAdmin && (
+                    <>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>姓名</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>用户名</th>
+                    </>
+                  )}
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>OJ</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测结果</th>
+                  {training.format === 'ioi' && <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>分数</th>}
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(MS)</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>代码长度(B)</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>语言</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>提交时间</th>
                 </tr>
               </thead>
               <tbody>
                 {submissions.length === 0 ? (
                   <tr>
-                    <td colSpan={9 + (training.isAdmin ? 1 : 0) + (training.format === 'ioi' ? 1 : 0)} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                    <td colSpan={9 + (training.isAdmin ? 2 : 0) + (training.format === 'ioi' ? 1 : 0)} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                       暂无评测记录
                     </td>
                   </tr>
@@ -1157,21 +1237,26 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                       >
                         #{s.id}
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontWeight: 500 }}>{toExcelColumnName(s.problemOrderIndex)}</td>
-                      {training.isAdmin && <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.userName}</td>}
-                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{getOjLabel(s.oj)}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)', fontWeight: 500 }}>{toExcelColumnName(s.problemOrderIndex)}</td>
+                      {training.isAdmin && (
+                        <>
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.userName}</td>
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{s.username}</td>
+                        </>
+                      )}
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{getOjLabel(s.oj)}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
-                      {training.format === 'ioi' && <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#1e293b' }}>{s.score ?? '-'}</td>}
-                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.timeUsed ?? '-'}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.codeLength ?? '-'}</td>
+                      {training.format === 'ioi' && <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--text-primary)' }}>{s.score ?? '-'}</td>}
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.timeUsed ?? '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.codeLength ?? '-'}</td>
                       <td
                         onClick={() => setDetailSubmissionId(s.id)}
                         style={{ padding: '0.75rem 1rem', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
                       >
                         {formatLanguage(s.language)}
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                         {new Date(s.createdAt).toLocaleString('zh-CN')}
                       </td>
                     </tr>
@@ -1194,48 +1279,67 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         {/* ====== Solutions Tab ====== */}
         {activeTab === 'solutions' && (
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>
-            {problems.map(p => {
-              const sol = allSolutions[p.id]
-              const hasPdfSolution = sol?.solutionType === 'pdf' && sol?.solutionPdfUrl
-              const hasContent = sol?.content || hasPdfSolution
-              if (!hasContent) return null  // 只显示有题解的题目
-              return (
-                <div key={p.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{toExcelColumnName(p.orderIndex)}. {p.alias}</span>
-                    {sol?.source === 'problem' && (
-                      <span style={{ fontSize: '0.75rem', background: 'var(--gray-100)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'var(--gray-500)' }}>
-                        原题目题解
-                      </span>
-                    )}
+            {(() => {
+              const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
+              const hideSolution = !training.solutionVisible && !trainingFinished && !training.isAdmin
+
+              if (hideSolution) {
+                return (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                    题解将在比赛结束后显示
                   </div>
-                  <div>
-                    {hasPdfSolution ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <a
-                          href={sol!.solutionPdfUrl!}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                        >
-                          <span>📄</span>
-                          <span>查看 PDF 题解</span>
-                        </a>
-                      </div>
-                    ) : sol?.content ? (
-                      <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}><MarkdownRenderer content={sol.content} /></div>
-                    ) : null}
+                )
+              }
+
+              return problems.map(p => {
+                const sol = allSolutions[p.id]
+                const hasPdfSolution = sol?.solutionType === 'pdf' && sol?.solutionPdfUrl
+                const hasContent = sol?.content || hasPdfSolution
+                if (!hasContent) return null  // 只显示有题解的题目
+                return (
+                  <div key={p.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{toExcelColumnName(p.orderIndex)}. {p.alias || p.problemTitle || '未命名'}</span>
+                      {sol?.source === 'problem' && (
+                        <span style={{ fontSize: '0.75rem', background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'var(--gray-500)' }}>
+                          原题目题解
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      {hasPdfSolution ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <a
+                            href={sol!.solutionPdfUrl!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          >
+                            <span>📄</span>
+                            <span>查看 PDF 题解</span>
+                          </a>
+                        </div>
+                      ) : sol?.content ? (
+                        <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}><MarkdownRenderer content={sol.content} /></div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
+                )
+              })
+            })()}
+            {(() => {
+              const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
+              const hideSolution = !training.solutionVisible && !trainingFinished && !training.isAdmin
+              if (hideSolution) return null
+
+              return problems.every(p => {
+                const sol = allSolutions[p.id]
+                const hasPdfSolution = sol?.solutionType === 'pdf' && sol?.solutionPdfUrl
+                return !sol?.content && !hasPdfSolution
+              }) && (
+                <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无题解</div>
               )
-            })}
-            {problems.every(p => {
-              const sol = allSolutions[p.id]
-              const hasPdfSolution = sol?.solutionType === 'pdf' && sol?.solutionPdfUrl
-              return !sol?.content && !hasPdfSolution
-            }) && (
-              <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无题解</div>
-            )}
+            })()}
           </div>
         )}
 
@@ -1247,7 +1351,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               if (atts.length === 0) return null
               return (
                 <div key={p.id} style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{toExcelColumnName(p.orderIndex)}. {p.alias}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{toExcelColumnName(p.orderIndex)}. {p.alias || p.problemTitle || '未命名'}</div>
                   {atts.map(a => (
                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--gray-100)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1277,44 +1381,48 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
               <thead>
-                <tr style={{ background: '#f8fafc' }}>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '50px' }}>#</th>
-                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '120px' }}>姓名</th>
+                <tr style={{ background: 'var(--bg-muted)' }}>
+                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '50px' }}>#</th>
+                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '120px' }}>姓名</th>
+                  <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '100px' }}>用户名</th>
                   {rankingData.format === 'ioi' ? (
                     <>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '70px' }}>总分</th>
+                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '70px' }}>总分</th>
                       {rankingData.problems.map((p: any) => (
-                        <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
+                        <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
                       ))}
                     </>
                   ) : (
                     <>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '50px' }}>通过</th>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0', width: '70px' }}>罚时</th>
+                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '50px' }}>通过</th>
+                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '70px' }}>罚时</th>
                       {rankingData.problems.map((p: any) => (
-                        <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
+                        <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
                       ))}
                     </>
                   )}
                 </tr>
               </thead>
               <tbody>
-                {rankingData.ranking.map((row: any, idx: number) => (
-                  <tr key={row.userId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: idx < 3 ? RANK_MEDAL_COLORS[idx] : '#64748b' }}>
+                {rankingData.ranking.map((row: any, idx: number) => {
+                  const isCurrentUser = row.userId === user?.userId
+                  return (
+                  <tr key={row.userId} style={{ borderBottom: '1px solid #f1f5f9', background: isCurrentUser ? 'var(--info-light)' : 'transparent' }}>
+                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: idx < 3 ? RANK_MEDAL_COLORS[idx] : 'var(--text-secondary)' }}>
                       {idx + 1}
                     </td>
-                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: '#1e293b' }}>{row.name}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</td>
+                    <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{row.username}</td>
                     {rankingData.format === 'ioi' ? (
                       <>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: '#16a34a' }}>{row.totalScore}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--success)' }}>{row.totalScore}</td>
                         {rankingData.problems.map((p: any) => {
                           const pd = row.problems[p.id]
                           const maxPts = p.points ?? 100
                           const score = pd?.score ?? 0
                           const isFull = score >= maxPts
                           return (
-                            <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center', fontWeight: isFull ? 600 : 400, color: score > 0 ? getScoreColor(score, maxPts) : '#cbd5e1' }}>
+                            <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center', fontWeight: isFull ? 600 : 400, color: score > 0 ? getScoreColor(score, maxPts) : 'var(--border-hover)' }}>
                               {score}
                             </td>
                           )
@@ -1322,20 +1430,20 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                       </>
                     ) : (
                       <>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: '#16a34a' }}>{row.solvedCount}</td>
-                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>{row.totalPenalty}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: 'var(--success)' }}>{row.solvedCount}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{row.totalPenalty}</td>
                         {rankingData.problems.map((p: any) => {
                           const pd = row.problems[p.id]
                           return (
                             <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center' }}>
                               {pd?.solved ? (
-                                <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                                  +{pd.attempts > 1 ? <span style={{ fontSize: '0.7rem', fontWeight: 400, color: '#64748b' }}>({pd.attempts - 1})</span> : ''}
+                                <span style={{ color: 'var(--success)', fontWeight: 600 }}>
+                                  +{pd.attempts > 1 ? <span style={{ fontSize: '0.7rem', fontWeight: 400, color: 'var(--text-secondary)' }}>({pd.attempts - 1})</span> : ''}
                                 </span>
                               ) : pd?.attempts > 0 ? (
-                                <span style={{ color: '#ef4444', fontWeight: 500 }}>-{pd.attempts}</span>
+                                <span style={{ color: 'var(--error)', fontWeight: 500 }}>-{pd.attempts}</span>
                               ) : (
-                                <span style={{ color: '#cbd5e1' }}>-</span>
+                                <span style={{ color: 'var(--border-hover)' }}>-</span>
                               )}
                             </td>
                           )
@@ -1343,10 +1451,11 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                       </>
                     )}
                   </tr>
-                ))}
+                )
+                })}
                 {rankingData.ranking.length === 0 && (
                   <tr>
-                    <td colSpan={20} style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>暂无排名数据</td>
+                    <td colSpan={20} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>暂无排名数据</td>
                   </tr>
                 )}
               </tbody>
@@ -1374,7 +1483,13 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         <Modal
           isOpen={true}
           onClose={() => setShowSubmitModal(false)}
-          title={`${selectedProblem?.platform ? (OJ_PLATFORM_LABEL_MAP[selectedProblem.platform] || selectedProblem.platform) + ' ' : ''}${selectedProblem?.platformProblemId || ''} - ${selectedProblem?.alias || ''}`}
+          title={(() => {
+            const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
+            const hideProblemId = !training.problemIdVisible && !trainingFinished && !training.isAdmin
+            const platformPrefix = selectedProblem?.platform ? (OJ_PLATFORM_LABEL_MAP[selectedProblem.platform] || selectedProblem.platform) + ' ' : ''
+            const problemIdPart = hideProblemId ? '' : (selectedProblem?.platformProblemId || '')
+            return `${platformPrefix}${problemIdPart} - ${selectedProblem?.alias || selectedProblem?.problemTitle || ''}`
+          })()}
           width="700px"
         >
           {/* 非 Carits 平台：提交方式选择 */}
@@ -1394,7 +1509,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
                     border: '1px solid',
                     borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
                     borderRadius: '6px',
-                    background: submitMethod === m.key ? '#dbeafe' : 'white',
+                    background: submitMethod === m.key ? 'var(--info-light)' : 'white',
                     color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
                     cursor: 'pointer',
                     fontWeight: submitMethod === m.key ? 600 : 400,
@@ -1420,7 +1535,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               alignItems: 'center',
             }}>
               <span>平台账号</span>
-              <span style={{ color: '#f59e0b' }}>未绑定</span>
+              <span style={{ color: 'var(--warning)' }}>未绑定</span>
             </div>
           )}
 
@@ -1460,8 +1575,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               lineHeight: 1.5,
               resize: 'vertical',
               boxSizing: 'border-box',
-              background: submitMethod === 'robot' ? 'white' : '#f8fafc',
-              color: submitMethod === 'robot' ? '#1e293b' : 'var(--gray-400)',
+              background: submitMethod === 'robot' ? 'white' : 'var(--bg-muted)',
+              color: submitMethod === 'robot' ? 'var(--text-primary)' : 'var(--gray-400)',
             }}
             disabled={submitMethod !== 'robot'}
           />
@@ -1505,6 +1620,17 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
           setShowEditModal(false)
           loadTraining()
         }}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="删除训练"
+        message={`确定要删除训练「${training.title}」吗？训练题目和题解将被删除，但已提交的评测记录会保留。`}
+        confirmText="确认删除"
+        danger
+        loading={deleting}
       />
     </div>
   )

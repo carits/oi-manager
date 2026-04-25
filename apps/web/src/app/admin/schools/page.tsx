@@ -43,7 +43,7 @@ export default function AdminSchoolsPage() {
           </PageHeader>
 
           {error ? (
-            <div style={{ padding: '1rem', background: '#fee2e2', borderRadius: '6px', color: '#991b1b' }}>
+            <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
               {error}
             </div>
           ) : (
@@ -70,7 +70,7 @@ export default function AdminSchoolsPage() {
                     school.principal ? (
                       school.principal.name
                     ) : (
-                      <span style={{ color: '#ef4444', fontWeight: 500 }}>待指派</span>
+                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>待指派</span>
                     )
                 },
                 {

@@ -75,7 +75,7 @@ export default function UserDetailPage() {
     return (
       <ProtectedRoute requiredRole="super_admin">
         <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem' }}>
-          <div style={{ padding: '1rem', background: '#fee2e2', borderRadius: '6px', color: '#991b1b' }}>
+          <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
             {error || '用户不存在'}
           </div>
         </div>
@@ -124,8 +124,8 @@ export default function UserDetailPage() {
                   padding: '2px 8px',
                   borderRadius: '4px',
                   fontSize: '0.75rem',
-                  background: user.status === 'active' ? '#dcfce7' : '#fee2e2',
-                  color: user.status === 'active' ? '#166534' : '#991b1b'
+                  background: user.status === 'active' ? 'var(--success-light)' : 'var(--error-light)',
+                  color: user.status === 'active' ? 'var(--success-text)' : 'var(--error-text)'
                 }}>
                   {user.status === 'active' ? '正常' : '禁用'}
                 </span>

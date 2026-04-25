@@ -251,7 +251,7 @@ function ClassGroupModal({
     }}>
       <div style={{
         background: 'white',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-lg)',
         padding: '1.5rem',
         width: '100%',
         maxWidth: '500px'

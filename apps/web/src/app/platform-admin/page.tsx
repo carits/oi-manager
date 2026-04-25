@@ -65,11 +65,11 @@ export default function PlatformAdminPage() {
               </div>
               <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>活跃用户</p>
-                <p style={{ fontSize: '2rem', fontWeight: 600, color: '#16a34a' }}>{stats.activeUsers}</p>
+                <p style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--success)' }}>{stats.activeUsers}</p>
               </div>
               <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>禁用用户</p>
-                <p style={{ fontSize: '2rem', fontWeight: 600, color: '#dc2626' }}>{stats.disabledUsers}</p>
+                <p style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--error)' }}>{stats.disabledUsers}</p>
               </div>
               <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>近30天注册</p>

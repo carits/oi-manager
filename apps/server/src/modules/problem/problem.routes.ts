@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../prisma'
 import { authenticate, authorize } from '../../middleware/auth'
 import logger from '../../lib/logger'
@@ -539,13 +540,15 @@ problemsRouter.put('/:id', authenticate, async (req, res) => {
             // 创建新记录
             const newStmt = await prisma.problemStatement.create({
               data: {
+                id: uuidv4(),
                 problemId: id,
                 type: stmt.type,
                 format: stmt.format,
                 language: stmt.language || null,
                 content: stmt.content || null,
                 fileUrl: stmt.fileUrl || null,
-                isVisible: stmt.isVisible ?? true
+                isVisible: stmt.isVisible ?? true,
+                updatedAt: new Date()
               }
             })
             newStatementIds.add(newStmt.id)

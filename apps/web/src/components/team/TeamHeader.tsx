@@ -112,10 +112,10 @@ export function TeamHeader({
               style={{
                 width: '80px',
                 height: '80px',
-                borderRadius: '12px',
+                borderRadius: 'var(--radius-lg)',
                 background: team.avatar
                   ? `url(${getAssetUrl(team.avatar)}) center/cover`
-                  : 'linear-gradient(135deg, var(--primary), #6366f1)',
+                  : 'var(--primary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

@@ -48,7 +48,7 @@ const Spinner = () => (
     width: '14px',
     height: '14px',
     border: '2px solid #e5e7eb',
-    borderTopColor: '#3b82f6',
+    borderTopColor: 'var(--primary)',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
     marginRight: '6px',
@@ -88,17 +88,17 @@ const LANGUAGE_HLJS_MAP: Record<string, string> = {
 
 // 评测结果颜色
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
-  accepted: { bg: '#dcfce7', text: '#166534' },
-  queuing: { bg: '#dbeafe', text: '#1e40af' },
-  judging: { bg: '#dbeafe', text: '#1e40af' },
-  tle: { bg: '#fef3c7', text: '#92400e' },
-  mle: { bg: '#fef3c7', text: '#92400e' },
-  wa: { bg: '#fee2e2', text: '#991b1b' },
-  re: { bg: '#fee2e2', text: '#991b1b' },
-  ce: { bg: '#f3e8ff', text: '#6b21a8' },
-  pe: { bg: '#fef3c7', text: '#92400e' },
-  ole: { bg: '#fef3c7', text: '#92400e' },
-  submit_failed: { bg: '#fee2e2', text: '#991b1b' },
+  accepted: { bg: 'var(--success-light)', text: 'var(--success-text)' },
+  queuing: { bg: 'var(--info-light)', text: 'var(--info-text)' },
+  judging: { bg: 'var(--info-light)', text: 'var(--info-text)' },
+  tle: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  mle: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  wa: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  re: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  ce: { bg: 'var(--warning-light)', text: 'var(--text-secondary)' },
+  pe: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  ole: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  submit_failed: { bg: 'var(--error-light)', text: 'var(--error-text)' },
 }
 
 // 分数颜色渐变（0=红 → 100=绿）
@@ -199,7 +199,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
   const getResultBadge = (result: string, score?: number | null) => {
     const label = JUDGE_RESULT_LABEL_MAP[result] || result
-    const colors = RESULT_COLORS[result] || { bg: '#f3f4f6', text: '#374151' }
+    const colors = RESULT_COLORS[result] || { bg: 'var(--bg-muted)', text: 'var(--text-primary)' }
 
     // queuing 状态显示转圈动画
     if (result === 'queuing' || result === 'judging') {
@@ -263,7 +263,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
         width="900px"
       >
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           加载中...
         </div>
       ) : detail ? (
@@ -275,35 +275,35 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             gap: '1rem',
             marginBottom: '1.5rem',
             padding: '1rem',
-            background: '#f9fafb',
+            background: 'var(--bg-muted)',
             borderRadius: '8px',
           }}>
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>评测结果</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>评测结果</div>
               {getResultBadge(detail.result, detail.score)}
             </div>
             {trainingFormat !== 'icpc' && (
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>分数</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>分数</div>
               <div style={{
                 fontWeight: 700,
                 fontSize: '1.125rem',
                 color: detail.score !== null && detail.score !== undefined
                   ? getScoreColor(detail.score)
-                  : '#9ca3af',
+                  : 'var(--text-muted)',
               }}>
                 {detail.score !== null && detail.score !== undefined ? detail.score : '-'}
               </div>
             </div>
             )}
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>耗时</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>耗时</div>
               <div style={{ fontWeight: 500 }}>
                 {detail.timeUsed ? `${detail.timeUsed}MS` : '-'}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>内存</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>内存</div>
               <div style={{ fontWeight: 500 }}>
                 {detail.memoryUsed != null
                   ? `${(detail.memoryUsed / 1024).toFixed(2)}MB`
@@ -311,11 +311,11 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>代码长度</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>代码长度</div>
               <div style={{ fontWeight: 500 }}>{detail.codeLength}B</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>语言</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>语言</div>
               <div style={{ fontWeight: 500 }}>{getLanguageLabelLocal(detail.language)}</div>
             </div>
           </div>
@@ -326,15 +326,15 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             gap: '2rem',
             marginBottom: '1.5rem',
             padding: '0.75rem 1rem',
-            background: '#f9fafb',
+            background: 'var(--bg-muted)',
             borderRadius: '8px',
           }}>
             <div>
-              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>提交时间：</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>提交时间：</span>
               <span style={{ fontWeight: 500 }}>{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
             </div>
             <div>
-              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>远程提交ID：</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
                 getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole) ? (
                   <a
@@ -349,7 +349,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                   <span>{detail.ojRemoteId}</span>
                 )
               ) : (
-                <span style={{ display: 'inline-flex', alignItems: 'center', color: '#6b7280' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
                   <Spinner />
                   等待分配...
                 </span>
@@ -362,9 +362,9 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             <div style={{
               marginBottom: '1rem',
               padding: '0.75rem',
-              background: '#fef2f2',
+              background: 'var(--error-light)',
               borderRadius: '8px',
-              color: '#991b1b',
+              color: 'var(--error-text)',
               fontSize: '0.875rem',
             }}>
               {detail.errorMessage}
@@ -401,7 +401,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             <div style={{
               maxHeight: '400px',
               overflow: 'auto',
-              background: '#f8fafc',
+              background: 'var(--bg-muted)',
             }}>
               <pre style={{
                 margin: 0,
@@ -418,7 +418,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           </div>
         </div>
       ) : (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           提交记录不存在
         </div>
       )}

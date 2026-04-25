@@ -262,7 +262,7 @@ export function TeamMemberList({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '0.75rem',
-                  background: '#fef3c7',
+                  background: 'var(--warning-light)',
                   borderRadius: '6px'
                 }}
               >

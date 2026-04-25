@@ -104,9 +104,9 @@ export default function RankingsTab({ schoolId, educationSystem }: RankingsTabPr
                   fontWeight: 600,
                   color:
                     student.rating >= 1500
-                      ? '#16a34a'
+                      ? 'var(--success)'
                       : student.rating >= 1200
-                      ? '#f59e0b'
+                      ? 'var(--warning)'
                       : 'var(--gray-600)'
                 }}
               >

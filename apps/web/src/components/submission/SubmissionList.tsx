@@ -30,21 +30,21 @@ interface SubmissionListProps {
 
 // 评测结果颜色
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
-  accepted: { bg: '#dcfce7', text: '#166534' },
-  queuing: { bg: '#dbeafe', text: '#1e40af' },
-  judging: { bg: '#dbeafe', text: '#1e40af' },
-  tle: { bg: '#fef3c7', text: '#92400e' },
-  mle: { bg: '#fef3c7', text: '#92400e' },
-  wa: { bg: '#fee2e2', text: '#991b1b' },
-  re: { bg: '#fee2e2', text: '#991b1b' },
-  ce: { bg: '#f3e8ff', text: '#6b21a8' },
-  pe: { bg: '#fef3c7', text: '#92400e' },
-  ole: { bg: '#fef3c7', text: '#92400e' },
-  submit_failed: { bg: '#fee2e2', text: '#991b1b' },
-  judge_failed: { bg: '#fee2e2', text: '#991b1b' },
-  remote_unavailable: { bg: '#fee2e2', text: '#991b1b' },
-  unknown_error: { bg: '#fee2e2', text: '#991b1b' },
-  system_error: { bg: '#fee2e2', text: '#991b1b' },
+  accepted: { bg: 'var(--success-light)', text: 'var(--success-text)' },
+  queuing: { bg: 'var(--info-light)', text: 'var(--info-text)' },
+  judging: { bg: 'var(--info-light)', text: 'var(--info-text)' },
+  tle: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  mle: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  wa: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  re: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  ce: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  pe: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  ole: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
+  submit_failed: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  judge_failed: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  remote_unavailable: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  unknown_error: { bg: 'var(--error-light)', text: 'var(--error-text)' },
+  system_error: { bg: 'var(--error-light)', text: 'var(--error-text)' },
 }
 
 const selectStyle: React.CSSProperties = {
@@ -181,7 +181,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
       width: '12px',
       height: '12px',
       border: '2px solid #e5e7eb',
-      borderTopColor: '#3b82f6',
+      borderTopColor: 'var(--primary)',
       borderRadius: '50%',
       animation: 'spin 1s linear infinite',
       marginRight: '4px',
@@ -191,7 +191,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
   const getResultBadge = (result: string) => {
     const label = JUDGE_RESULT_LABEL_MAP[result] || result
-    const colors = RESULT_COLORS[result] || { bg: '#f3f4f6', text: '#374151' }
+    const colors = RESULT_COLORS[result] || { bg: 'var(--bg-muted)', text: 'var(--text-secondary)' }
 
     // queuing 状态显示转圈动画
     if (result === 'queuing') {
@@ -237,7 +237,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         }
       `}</style>
       <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', color: '#1e293b' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', color: 'var(--text-primary)' }}>
           评测记录
         </h2>
 
@@ -249,12 +249,12 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           alignItems: 'center',
           marginBottom: '1rem',
           padding: '1rem',
-          background: '#f9fafb',
+          background: 'var(--bg-muted)',
           borderRadius: '8px',
           border: '1px solid #e5e7eb',
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>用户名</label>
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>用户名</label>
             <input
               style={inputStyle}
               placeholder="搜索用户名"
@@ -265,7 +265,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>OJ</label>
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>OJ</label>
             <select
               style={selectStyle}
               value={filterOj}
@@ -278,7 +278,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>题号</label>
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>题号</label>
             <input
               style={inputStyle}
               placeholder="搜索题号"
@@ -289,7 +289,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>评测结果</label>
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>评测结果</label>
             <select
               style={selectStyle}
               value={filterResult}
@@ -302,7 +302,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>语言</label>
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>语言</label>
             <select
               style={selectStyle}
               value={filterLanguage}
@@ -334,7 +334,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
               style={{
                 padding: '0.5rem 1rem',
                 background: 'var(--gray-100)',
-                color: '#374151',
+                color: 'var(--text-primary)',
                 border: '1px solid var(--border)',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -354,29 +354,29 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
             <thead>
-              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>OJ</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>题号</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(MS)</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>提交时间</th>
+              <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测ID</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>用户名</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>OJ</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>题号</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测结果</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(MS)</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>代码长度(B)</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>语言</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>提交时间</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                  <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                     加载中...
                   </td>
                 </tr>
               ) : submissions.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                  <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                     暂无评测记录
                   </td>
                 </tr>
@@ -389,13 +389,13 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                     >
                       #{s.id}
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.username}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{getOjLabel(s.oj)}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.username}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{getOjLabel(s.oj)}</td>
                     <td style={{ padding: '0.75rem 1rem' }}>
                       <span
                         onClick={() => handleProblemClick(s)}
                         style={{
-                          color: canClickProblem(s) ? 'var(--primary)' : '#6b7280',
+                          color: canClickProblem(s) ? 'var(--primary)' : 'var(--text-secondary)',
                           cursor: canClickProblem(s) ? 'pointer' : 'default',
                           textDecoration: canClickProblem(s) ? 'underline' : 'none',
                         }}
@@ -404,9 +404,9 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{formatTime(s.timeUsed)}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{formatMemory(s.oj, s.memoryUsed)}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#1e293b' }}>{s.codeLength ?? '-'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{formatTime(s.timeUsed)}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{formatMemory(s.oj, s.memoryUsed)}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.codeLength ?? '-'}</td>
                     <td
                       onClick={() => setDetailSubmissionId(s.id)}
                       style={{
@@ -418,7 +418,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                     >
                       {getLanguageLabel(s.language)}
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                       {new Date(s.submittedAt).toLocaleString('zh-CN')}
                     </td>
                   </tr>

@@ -124,8 +124,8 @@ export function TeamCard({
             padding: '0.25rem 0.5rem',
             borderRadius: '4px',
             fontSize: '0.75rem',
-            background: '#fef3c7',
-            color: '#92400e'
+            background: 'var(--warning-light)',
+            color: 'var(--warning-text)'
           }}>
             🔒 私有
           </span>
@@ -140,7 +140,7 @@ export function TeamCard({
       style={{
         display: 'block',
         background: 'white',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)',
         padding: '1.25rem',
         textDecoration: 'none',

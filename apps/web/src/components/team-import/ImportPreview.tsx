@@ -46,7 +46,7 @@ function EditableField({
       }}
       style={{
         ...style,
-        ...(error ? { borderColor: '#ef4444', background: '#fef2f2' } : {}),
+        ...(error ? { borderColor: 'var(--error)', background: 'var(--error-light)' } : {}),
       }}
     />
   )
@@ -423,7 +423,7 @@ export default function ImportPreview({
             style={{
               flex: 1,
               padding: '0.375rem 0.625rem',
-              border: `1px solid ${teamIdError ? '#ef4444' : 'var(--border)'}`,
+              border: `1px solid ${teamIdError ? 'var(--error)' : 'var(--border)'}`,
               borderRadius: '4px',
               fontSize: '0.875rem',
               fontFamily: 'monospace'
@@ -433,10 +433,10 @@ export default function ImportPreview({
             <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>校验中...</span>
           )}
           {!teamIdValidating && teamId && !teamIdError && (
-            <span style={{ fontSize: '0.75rem', color: '#10b981' }}>✓</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>✓</span>
           )}
           {!teamIdValidating && teamIdError && (
-            <span style={{ fontSize: '0.75rem', color: '#ef4444', whiteSpace: 'nowrap' }}>{teamIdError}</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--error)', whiteSpace: 'nowrap' }}>{teamIdError}</span>
           )}
           {!teamId && !teamIdError && (
             <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>必填，创建后不可修改</span>
@@ -450,7 +450,7 @@ export default function ImportPreview({
           padding: '0.75rem 1rem',
           marginBottom: '1rem',
           borderRadius: '6px',
-          background: allResolved ? '#f0fdf4' : '#fefce8',
+          background: allResolved ? 'var(--success-light)' : '#fefce8',
           border: `1px solid ${allResolved ? '#bbf7d0' : '#fef08a'}`,
           display: 'flex',
           justifyContent: 'space-between',
@@ -484,7 +484,7 @@ export default function ImportPreview({
             return (
               <div key={index} style={{
                 padding: '1rem',
-                border: `1px solid ${hasConflict ? '#fca5a5' : 'var(--border)'}`,
+                border: `1px solid ${hasConflict ? 'var(--error)' : 'var(--border)'}`,
                 borderRadius: '6px',
                 background: !member.selected ? 'var(--gray-50)' : hasConflict ? '#fff5f5' : 'white'
               }}>
@@ -502,13 +502,13 @@ export default function ImportPreview({
                   {validated && member.conflictStatus === 'clear' && (
                     <span style={{
                       padding: '0.125rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem',
-                      background: '#dcfce7', color: '#166534'
+                      background: 'var(--success-light)', color: 'var(--success-text)'
                     }}>✓ 通过</span>
                   )}
                   {validated && hasConflict && (
                     <span style={{
                       padding: '0.125rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem',
-                      background: '#fee2e2', color: '#991b1b'
+                      background: 'var(--error-light)', color: 'var(--error-text)'
                     }}>问题</span>
                   )}
                   <button onClick={() => removeMember(index)} style={{
@@ -530,13 +530,13 @@ export default function ImportPreview({
                       }}
                       style={{
                         ...inputStyle,
-                        borderColor: member.username && !isValidUsername(member.username) ? '#ef4444' : undefined,
-                        background: member.username && !isValidUsername(member.username) ? '#fef2f2' : undefined
+                        borderColor: member.username && !isValidUsername(member.username) ? 'var(--error)' : undefined,
+                        background: member.username && !isValidUsername(member.username) ? 'var(--error-light)' : undefined
                       }}
                       error={!!(member.username && !isValidUsername(member.username))}
                     />
                     {member.username && !isValidUsername(member.username) && (
-                      <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: 'var(--error)', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
                         ⚠ 格式错误
                       </span>
                     )}
@@ -585,12 +585,12 @@ export default function ImportPreview({
 
                   {/* 问题详情 */}
                   {hasConflict && member.conflicts.map((conflict, ci) => {
-                    const label = CONFLICT_LABELS[conflict.type] || { text: '未知问题', color: '#999' }
+                    const label = CONFLICT_LABELS[conflict.type] || { text: '未知问题', color: 'var(--text-muted)' }
                     return (
                       <div key={ci} style={{
                         marginTop: '0.5rem',
                         padding: '0.75rem',
-                        background: '#fff',
+                        background: 'var(--text-inverse)',
                         border: `1px solid ${label.color}33`,
                         borderRadius: '6px',
                         borderLeft: `3px solid ${label.color}`
@@ -677,15 +677,15 @@ export default function ImportPreview({
       {validated && allResolved && (
         <div style={{
           padding: '1.5rem',
-          background: '#f0fdf4',
+          background: 'var(--success-light)',
           borderRadius: '8px',
           border: '1px solid #bbf7d0',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '1.125rem', fontWeight: 600, color: '#166534', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--success-text)', marginBottom: '0.5rem' }}>
             ✅ 校验全部通过
           </div>
-          <p style={{ color: '#15803d', margin: 0 }}>
+          <p style={{ color: 'var(--success-text)', margin: 0 }}>
             共 {selectedMembers.length} 人准备导入，点击下方按钮执行导入
           </p>
         </div>

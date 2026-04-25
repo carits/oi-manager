@@ -24,7 +24,7 @@ export function InvitationCard({ invitation, onAccept, onReject, processing }: I
   return (
     <div
       style={{
-        background: isMember ? '#dbeafe' : '#fef3c7',
+        background: isMember ? 'var(--info-light)' : 'var(--warning-light)',
         border: isMember ? '1px solid #93c5fd' : '1px solid #fcd34d',
         borderRadius: '8px',
         padding: '1rem',

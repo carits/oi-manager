@@ -67,8 +67,8 @@ const selectStyle: React.CSSProperties = {
 
 const smallBtnStyle = (variant: 'default' | 'primary' | 'danger' = 'default'): React.CSSProperties => ({
   padding: '0.25rem 0.5rem',
-  background: variant === 'primary' ? 'var(--primary)' : variant === 'danger' ? '#fef2f2' : 'var(--gray-100)',
-  color: variant === 'primary' ? 'white' : variant === 'danger' ? '#dc2626' : 'inherit',
+  background: variant === 'primary' ? 'var(--primary)' : variant === 'danger' ? 'var(--error-light)' : 'var(--gray-100)',
+  color: variant === 'primary' ? 'white' : variant === 'danger' ? 'var(--error)' : 'inherit',
   border: variant === 'primary' ? 'none' : '1px solid var(--border)',
   borderRadius: '4px',
   cursor: 'pointer',
@@ -346,32 +346,32 @@ export default function PlatformAdminProblemsPage() {
 
   const renderStatus = (status: string) => {
     const map: Record<string, { text: string; color: string }> = {
-      pending: { text: '⏳ 等待中', color: '#9ca3af' },
-      fetching: { text: '🔄 拉取中', color: '#3b82f6' },
-      success: { text: '✅ 成功', color: '#10b981' },
-      failed: { text: '❌ 失败', color: '#ef4444' },
-      duplicate: { text: '⚠️ 已存在', color: '#f59e0b' },
+      pending: { text: '⏳ 等待中', color: 'var(--text-muted)' },
+      fetching: { text: '🔄 拉取中', color: 'var(--primary)' },
+      success: { text: '✅ 成功', color: 'var(--success)' },
+      failed: { text: '❌ 失败', color: 'var(--error)' },
+      duplicate: { text: '⚠️ 已存在', color: 'var(--warning)' },
     }
-    const s = map[status] || { text: status, color: '#6b7280' }
+    const s = map[status] || { text: status, color: 'var(--text-secondary)' }
     return <span style={{ color: s.color }}>{s.text}</span>
   }
 
   const renderAttachmentStatus = (status: string | null) => {
-    if (!status) return <span style={{ color: '#9ca3af' }}>-</span>
+    if (!status) return <span style={{ color: 'var(--text-muted)' }}>-</span>
     const map: Record<string, { text: string; color: string }> = {
-      pending: { text: '⏳ 待处理', color: '#9ca3af' },
-      success: { text: '✅ 成功', color: '#10b981' },
-      failed: { text: '❌ 失败', color: '#ef4444' },
-      skipped: { text: '⚠️ 跳过', color: '#f59e0b' },
+      pending: { text: '⏳ 待处理', color: 'var(--text-muted)' },
+      success: { text: '✅ 成功', color: 'var(--success)' },
+      failed: { text: '❌ 失败', color: 'var(--error)' },
+      skipped: { text: '⚠️ 跳过', color: 'var(--warning)' },
     }
-    const s = map[status] || { text: status, color: '#6b7280' }
+    const s = map[status] || { text: status, color: 'var(--text-secondary)' }
     return <span style={{ color: s.color }}>{s.text}</span>
   }
 
   // 渲染附件列：区分"无附件"和"有附件但xxx"
   const renderAttachmentColumn = (job: FetchJob) => {
     if (!job.hasAttachment) {
-      return <span style={{ color: '#9ca3af' }}>无附件</span>
+      return <span style={{ color: 'var(--text-muted)' }}>无附件</span>
     }
     return renderAttachmentStatus(job.attachmentStatus)
   }

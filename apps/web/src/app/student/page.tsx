@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { AppShell, PageHeader, Card } from '@/components/AppShell'
+import { AppShell } from '@/components/AppShell'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Card } from '@/components/ui/Card'
 
 // 学生首页
 export default function StudentPage() {
@@ -18,7 +20,7 @@ export default function StudentPage() {
   if (!mounted) {
     return (
       <ProtectedRoute requiredRole="student">
-        <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--bg-page)', padding: '2rem', textAlign: 'center' }}>
           加载中...
         </div>
       </ProtectedRoute>
@@ -35,13 +37,13 @@ export default function StudentPage() {
           {/* 左侧：快捷操作 */}
           <Card title="快捷操作">
             <div style={{ display: 'grid', gap: '0.75rem' }}>
-              <Link href="/student/team" style={{ display: 'block', padding: '0.75rem', background: 'var(--gray-50)', borderRadius: '6px', color: 'var(--gray-700)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              <Link href="/student/team" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
                 进入我的团队
               </Link>
-              <Link href="/student/rating" style={{ display: 'block', padding: '0.75rem', background: 'var(--gray-50)', borderRadius: '6px', color: 'var(--gray-700)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              <Link href="/student/rating" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
                 查看我的成长
               </Link>
-              <Link href="/student/problems" style={{ display: 'block', padding: '0.75rem', background: 'var(--gray-50)', borderRadius: '6px', color: 'var(--gray-700)', fontSize: '0.875rem', textDecoration: 'none' }}>
+              <Link href="/student/problems" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
                 浏览题库
               </Link>
             </div>
@@ -49,7 +51,7 @@ export default function StudentPage() {
 
           {/* 右侧：我的信息 */}
           <Card title="我的信息">
-            <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               <p><strong>用户名：</strong>{user?.username}</p>
               <p><strong>角色：</strong>学生</p>
             </div>

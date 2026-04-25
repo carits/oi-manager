@@ -426,25 +426,25 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
 // 年级颜色映射（统一配色，彩虹色谱）
 function getGradeColor(grade: string): string {
   const colors: Record<string, string> = {
-    '高三': '#ef4444',  // 红
+    '高三': 'var(--error)',  // 红
     '高二': '#f97316',  // 橙
     '高一': '#eab308',  // 黄
     '初四': '#84cc16',  // 黄绿
-    '初三': '#22c55e',  // 绿
+    '初三': 'var(--success)',  // 绿
     '初二': '#14b8a6',  // 青绿
     '初一': '#06b6d4',  // 青
     '小六': '#0ea5e9',  // 天蓝
-    '小五': '#3b82f6',  // 蓝
+    '小五': 'var(--primary)',  // 蓝
     '小四': '#6366f1',  // 靛蓝
-    '小三': '#8b5cf6',  // 紫
+    '小三': 'var(--primary)',  // 紫
     '小二': '#a855f7',  // 亮紫
     '小一': '#ec4899',  // 粉
     '幼三': '#f472b6',  // 浅粉
     '幼二': '#fb7185',  // 玫瑰粉
     '幼一': '#fda4af',  // 淡粉
-    '其他': '#9ca3af'   // 灰
+    '其他': 'var(--text-muted)'   // 灰
   }
-  return colors[grade] || '#9ca3af'
+  return colors[grade] || 'var(--text-muted)'
 }
 
 // 年级分布组件
@@ -491,7 +491,7 @@ function GradeDistribution({
               width: '100%',
               height: '6px',
               backgroundColor: 'var(--gray-100)',
-              borderRadius: '3px',
+              borderRadius: 'var(--radius-sm)',
               overflow: 'hidden'
             }}>
               <div style={{

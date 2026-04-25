@@ -206,7 +206,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   if (loading) {
     return (
       <ProtectedRoute requiredRole={role === 'admin' ? undefined : role}>
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           加载中...
         </div>
       </ProtectedRoute>
@@ -216,7 +216,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   if (!detail) {
     return (
       <ProtectedRoute requiredRole={role === 'admin' ? undefined : role}>
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           提交记录不存在
           <div style={{ marginTop: '1rem' }}>
             <button
@@ -259,13 +259,13 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
             onClick={() => router.push(`${getPathPrefix()}/submissions`)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: '0.875rem', color: '#6b7280', padding: '0.25rem 0',
+              fontSize: '0.875rem', color: 'var(--text-secondary)', padding: '0.25rem 0',
             }}
           >
             ← 返回列表
           </button>
           <span style={{ color: '#d1d5db' }}>|</span>
-          <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>#{detail.id}</span>
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>#{detail.id}</span>
         </div>
 
         <div style={{ display: 'flex', gap: '1.25rem' }}>
@@ -280,7 +280,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
             }}>
               <div style={{
                 padding: '0.875rem 1rem',
-                background: '#fafafa',
+                background: 'var(--bg-muted)',
                 borderBottom: '1px solid #e5e7eb',
                 display: 'flex',
                 alignItems: 'center',
@@ -317,7 +317,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 </span>
                 {/* Progress */}
                 {isQueuing && detail.cases && detail.cases.length > 0 && (
-                  <span style={{ color: '#9ca3af', fontSize: '0.8125rem', marginLeft: '0.25rem' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginLeft: '0.25rem' }}>
                     {passedCount}/{cases.length}
                   </span>
                 )}
@@ -329,7 +329,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   padding: '0.625rem 1rem',
                   background: '#fff5f5',
                   fontSize: '0.8125rem',
-                  color: '#991b1b',
+                  color: 'var(--error-text)',
                   fontFamily: 'Consolas, Monaco, monospace',
                   whiteSpace: 'pre-wrap',
                   maxHeight: '200px',
@@ -348,12 +348,12 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     fontSize: '0.8125rem',
                   }}>
                     <thead>
-                      <tr style={{ background: '#fafafa' }}>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', width: '60px' }}>#</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: '#6b7280' }}>Status</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: '#6b7280', width: '80px' }}>Score</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: '#6b7280', width: '100px' }}>Time</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: '#6b7280', width: '100px' }}>Memory</th>
+                      <tr style={{ background: 'var(--bg-muted)' }}>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '60px' }}>#</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)' }}>Status</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>Score</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>Time</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>Memory</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -375,8 +375,8 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                   fontWeight: 600,
                                   fontSize: '0.8125rem',
                                 }}>
-                                  <span style={{ color: '#374151' }}>子任务 {st.id}</span>
-                                  <span style={{ marginLeft: '0.75rem', color: '#9ca3af', fontWeight: 400 }}>
+                                  <span style={{ color: 'var(--text-primary)' }}>子任务 {st.id}</span>
+                                  <span style={{ marginLeft: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>
                                     {st.cases.length} 测试点 · {st.type}
                                   </span>
                                   <span style={{ marginLeft: '0.75rem', fontWeight: 700, color: stColor }}>
@@ -388,24 +388,24 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                             // 子任务的测试点行
                             for (const c of st.cases) {
                               const cClass = getCaseStatusClass(c.result)
-                              const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555'
+                              const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555'
                               rows.push(
                                 <tr key={`case-${caseIdx}`}>
                                   <td style={{
                                     padding: '0.5rem 0.625rem',
-                                    color: '#6b7280',
+                                    color: 'var(--text-secondary)',
                                     borderLeft: `3px solid ${borderColor}`,
                                     fontWeight: 500,
                                   }}>
                                     {caseIdx + 1}
                                   </td>
                                   <td style={{ padding: '0.5rem 0.625rem' }}>
-                                    <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555', fontWeight: 500 }}>
+                                    <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555', fontWeight: 500 }}>
                                       {cClass === 'pass' ? '✓' : cClass === 'skip' ? '-' : '✕'}
                                     </span>
-                                    <span style={{ marginLeft: '0.375rem', color: '#374151' }}>{c.result}</span>
+                                    <span style={{ marginLeft: '0.375rem', color: 'var(--text-primary)' }}>{c.result}</span>
                                     {c.message && (
-                                      <span style={{ marginLeft: '0.5rem', color: '#9ca3af', fontSize: '0.75rem' }}>{c.message}</span>
+                                      <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{c.message}</span>
                                     )}
                                   </td>
                                   <td style={{
@@ -413,15 +413,15 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                     textAlign: 'right',
                                     color: c.score !== undefined && c.score !== null
                                       ? (cClass === 'pass' ? '#25ad40' : '#fb5555')
-                                      : '#9ca3af',
+                                      : 'var(--text-muted)',
                                     fontWeight: 600,
                                   }}>
                                     {c.score !== undefined && c.score !== null ? c.score : '-'}
                                   </td>
-                                  <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: '#374151' }}>
+                                  <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
                                     {c.time ? `${c.time}ms` : '-'}
                                   </td>
-                                  <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: '#374151' }}>
+                                  <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
                                     {c.memory ? formatMemory(c.memory) : '-'}
                                   </td>
                                 </tr>
@@ -434,24 +434,24 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                         // 无子任务：直接显示测试点
                         return cases.map((c, idx) => {
                           const cClass = getCaseStatusClass(c.result)
-                          const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555'
+                          const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555'
                           return (
                             <tr key={idx}>
                               <td style={{
                                 padding: '0.5rem 0.625rem',
-                                color: '#6b7280',
+                                color: 'var(--text-secondary)',
                                 borderLeft: `3px solid ${borderColor}`,
                                 fontWeight: 500,
                               }}>
                                 {idx + 1}
                               </td>
                               <td style={{ padding: '0.5rem 0.625rem' }}>
-                                <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? '#9ca3af' : '#fb5555', fontWeight: 500 }}>
+                                <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555', fontWeight: 500 }}>
                                   {cClass === 'pass' ? '✓' : cClass === 'skip' ? '-' : '✕'}
                                 </span>
-                                <span style={{ marginLeft: '0.375rem', color: '#374151' }}>{c.result}</span>
+                                <span style={{ marginLeft: '0.375rem', color: 'var(--text-primary)' }}>{c.result}</span>
                                 {c.message && (
-                                  <span style={{ marginLeft: '0.5rem', color: '#9ca3af', fontSize: '0.75rem' }}>{c.message}</span>
+                                  <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{c.message}</span>
                                 )}
                               </td>
                               <td style={{
@@ -459,15 +459,15 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                 textAlign: 'right',
                                 color: c.score !== undefined && c.score !== null
                                   ? (cClass === 'pass' ? '#25ad40' : '#fb5555')
-                                  : '#9ca3af',
+                                  : 'var(--text-muted)',
                                 fontWeight: 600,
                               }}>
                                 {c.score !== undefined && c.score !== null ? c.score : '-'}
                               </td>
-                              <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: '#374151' }}>
+                              <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
                                 {c.time ? `${c.time}ms` : '-'}
                               </td>
-                              <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: '#374151' }}>
+                              <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
                                 {c.memory ? formatMemory(c.memory) : '-'}
                               </td>
                             </tr>
@@ -486,9 +486,9 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   gap: '2rem',
                   padding: '0.625rem 1rem',
                   borderTop: '1px solid #f3f4f6',
-                  background: '#fafafa',
+                  background: 'var(--bg-muted)',
                   fontSize: '0.8125rem',
-                  color: '#6b7280',
+                  color: 'var(--text-secondary)',
                 }}>
                   {detail.score !== null && detail.score !== undefined && (
                     <div>
@@ -499,19 +499,19 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   {detail.timeUsed !== null && detail.timeUsed !== undefined && (
                     <div>
                       <span>Total Time: </span>
-                      <span style={{ fontWeight: 500, color: '#374151' }}>{detail.timeUsed}ms</span>
+                      <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.timeUsed}ms</span>
                     </div>
                   )}
                   {peakTime !== null && (
                     <div>
                       <span>Peak Time: </span>
-                      <span style={{ fontWeight: 500, color: '#374151' }}>{peakTime}ms</span>
+                      <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{peakTime}ms</span>
                     </div>
                   )}
                   {detail.memoryUsed !== null && detail.memoryUsed !== undefined && (
                     <div>
                       <span>Peak Memory: </span>
-                      <span style={{ fontWeight: 500, color: '#374151' }}>{formatMemory(detail.memoryUsed)}</span>
+                      <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatMemory(detail.memoryUsed)}</span>
                     </div>
                   )}
                 </div>
@@ -529,15 +529,15 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '0.625rem 1rem',
-                background: '#fafafa',
+                background: 'var(--bg-muted)',
                 borderBottom: '1px solid #e5e7eb',
               }}>
                 <button
                   onClick={() => setShowCode(!showCode)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: '#374151' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}
                 >
                   {showCode ? '▾ Source Code' : '▸ Source Code'}
-                  <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: '0.5rem', fontSize: '0.8125rem' }}>
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.8125rem' }}>
                     ({detail.codeLength}B)
                   </span>
                 </button>
@@ -551,7 +551,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                       borderRadius: '4px',
                       fontSize: '0.75rem',
                       cursor: 'pointer',
-                      color: '#374151',
+                      color: 'var(--text-primary)',
                     }}
                   >
                     {copied ? 'Copied' : 'Copy'}
@@ -562,7 +562,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 <div style={{
                   maxHeight: '500px',
                   overflow: 'auto',
-                  background: '#f8fafc',
+                  background: 'var(--bg-muted)',
                 }}>
                   <pre style={{
                     margin: 0,
@@ -589,11 +589,11 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
             }}>
               <div style={{
                 padding: '0.625rem 1rem',
-                background: '#fafafa',
+                background: 'var(--bg-muted)',
                 borderBottom: '1px solid #e5e7eb',
                 fontWeight: 600,
                 fontSize: '0.875rem',
-                color: '#374151',
+                color: 'var(--text-primary)',
               }}>
                 Information
               </div>
@@ -601,7 +601,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
               <div style={{ padding: '0.875rem 1rem', fontSize: '0.8125rem' }}>
                 {/* Submitter */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Submit By</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Submit By</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {detail.submitterAvatar ? (
                       <img
@@ -614,19 +614,19 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                         width: '28px', height: '28px', borderRadius: '50%',
                         background: 'var(--primary)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.75rem', fontWeight: 600, color: '#fff',
+                        fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-inverse)',
                       }}>
                         {detail.submitterName?.charAt(0) || '?'}
                       </div>
                     )}
-                    <span style={{ fontWeight: 500, color: '#1e293b' }}>{detail.submitterName}</span>
+                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.submitterName}</span>
                   </div>
                 </div>
 
                 {/* Problem */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Problem</div>
-                  <div style={{ fontWeight: 500, color: '#1e293b' }}>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Problem</div>
+                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                     [{ojLabel}-{detail.problemId}]
                     {detail.problemTitle ? ` ${detail.problemTitle}` : ''}
                   </div>
@@ -634,20 +634,20 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
 
                 {/* Language */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Language</div>
-                  <div style={{ fontWeight: 500, color: '#1e293b' }}>{getLanguageLabel(detail.language)}</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Language</div>
+                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{getLanguageLabel(detail.language)}</div>
                 </div>
 
                 {/* Code Length */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Code Length</div>
-                  <div style={{ fontWeight: 500, color: '#1e293b' }}>{detail.codeLength}B</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Code Length</div>
+                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.codeLength}B</div>
                 </div>
 
                 {/* Submit At */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Submit At</div>
-                  <div style={{ fontWeight: 500, color: '#1e293b' }}>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Submit At</div>
+                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                     {new Date(detail.submittedAt).toLocaleString('zh-CN')}
                   </div>
                 </div>
@@ -655,8 +655,8 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 {/* OJ Remote ID */}
                 {detail.ojRemoteId && (
                   <div>
-                    <div style={{ color: '#9ca3af', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Remote ID</div>
-                    <div style={{ fontWeight: 500, color: '#1e293b' }}>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Remote ID</div>
+                    <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                       {detail.oj === 'carits' ? (
                         <a
                           href={`${role === 'admin' ? '/platform-admin' : role === 'student' ? '/student' : '/teacher'}/submissions/${detail.ojRemoteId}`}

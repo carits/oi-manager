@@ -1,3 +1,5 @@
+'use client'
+
 import React from 'react'
 import { tableStyles } from '@/lib/styles'
 import { Empty } from './Empty'
@@ -27,19 +29,21 @@ export interface TableProps<T> {
   emptyText?: string
   actions?: (item: T) => React.ReactNode
   onRowClick?: (item: T) => void
+  rowKey?: (item: T) => string
 }
 
-export function Table<T extends { id: string }>({
+export function Table<T extends { id?: string }>({
   data,
   columns,
   loading,
   emptyText = '暂无数据',
   actions,
-  onRowClick
+  onRowClick,
+  rowKey,
 }: TableProps<T>) {
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>
+      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
         加载中...
       </div>
     )
@@ -47,6 +51,12 @@ export function Table<T extends { id: string }>({
 
   if (data.length === 0) {
     return <Empty text={emptyText} />
+  }
+
+  const getKey = (item: T, index: number): string => {
+    if (rowKey) return rowKey(item)
+    if (item.id) return String(item.id)
+    return String(index)
   }
 
   return (
@@ -59,28 +69,18 @@ export function Table<T extends { id: string }>({
                 {col.label}
               </th>
             ))}
-            {actions && <th style={tableStyles.th}>操作</th>}
+            {actions && <th style={{ ...tableStyles.th, width: '120px' }}>操作</th>}
           </tr>
         </thead>
         <tbody>
           {data.map((item, rowIndex) => (
             <tr
-              key={item.id}
+              key={getKey(item, rowIndex)}
               onClick={() => onRowClick?.(item)}
               style={{
-                ...tableStyles.row,
-                cursor: onRowClick ? 'pointer' : 'default'
+                cursor: onRowClick ? 'pointer' : 'default',
               }}
-              onMouseEnter={(e) => {
-                if (onRowClick) {
-                  e.currentTarget.style.background = 'var(--gray-50)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (onRowClick) {
-                  e.currentTarget.style.background = 'transparent'
-                }
-              }}
+              className="table-row"
             >
               {columns.map((col) => (
                 <td key={col.key} style={tableStyles.td}>
@@ -88,7 +88,7 @@ export function Table<T extends { id: string }>({
                 </td>
               ))}
               {actions && (
-                <td style={tableStyles.td} onClick={(e) => e.stopPropagation()}>
+                <td style={{ ...tableStyles.td, borderBottom: '1px solid var(--border)' }} onClick={(e) => e.stopPropagation()}>
                   {actions(item)}
                 </td>
               )}
@@ -96,6 +96,11 @@ export function Table<T extends { id: string }>({
           ))}
         </tbody>
       </table>
+      <style jsx>{`
+        .table-row:hover {
+          background: var(--bg-hover);
+        }
+      `}</style>
     </div>
   )
 }

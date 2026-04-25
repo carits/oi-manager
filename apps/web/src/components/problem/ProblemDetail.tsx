@@ -435,9 +435,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   const getDifficultyColor = (difficulty: string | null) => {
     switch (difficulty) {
-      case '简单': return '#10b981'
-      case '中等': return '#f59e0b'
-      case '困难': return '#ef4444'
+      case '简单': return 'var(--success)'
+      case '中等': return 'var(--warning)'
+      case '困难': return 'var(--error)'
       default: return 'var(--gray-500)'
     }
   }
@@ -544,7 +544,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const currentSolution = getSelectedSolution()
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-muted)' }}>
       <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '2rem' }}>
         {/* 返回按钮 */}
         <button
@@ -585,8 +585,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 <span style={{
                   padding: '0.125rem 0.5rem',
                   borderRadius: '4px',
-                  background: problem.visibility === 'public' ? '#dbeafe' : 'var(--gray-100)',
-                  color: problem.visibility === 'public' ? '#1d4ed8' : 'var(--gray-600)'
+                  background: problem.visibility === 'public' ? 'var(--info-light)' : 'var(--gray-100)',
+                  color: problem.visibility === 'public' ? 'var(--primary-hover)' : 'var(--gray-600)'
                 }}>
                   {problem.visibility === 'public' ? '公共' : '私有'}
                 </span>
@@ -616,7 +616,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '0.875rem',
-                    color: '#ef4444'
+                    color: 'var(--error)'
                   }}
                 >
                   删除
@@ -738,7 +738,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             onClick={() => router.push(`${pathPrefix}/problems/${problemId}/note`)}
             style={{
               padding: '0.5rem 1rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'var(--primary)',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
@@ -829,7 +829,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                             display: 'inline-block',
                             padding: '0.5rem 1.5rem',
                             backgroundColor: 'var(--primary)',
-                            color: '#fff',
+                            color: 'var(--text-inverse)',
                             borderRadius: 'var(--radius)',
                             textDecoration: 'none',
                             fontSize: '0.875rem',
@@ -923,7 +923,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                             display: 'inline-block',
                             padding: '0.5rem 1.5rem',
                             backgroundColor: 'var(--primary)',
-                            color: '#fff',
+                            color: 'var(--text-inverse)',
                             borderRadius: 'var(--radius)',
                             textDecoration: 'none',
                             fontSize: '0.875rem',
@@ -1008,27 +1008,27 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             <div style={{ padding: '1rem' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
-                  <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测ID</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>用户名</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>评测结果</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>耗时(ms)</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>内存(MB)</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>代码长度(B)</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>语言</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap' }}>提交时间</th>
+                  <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid #e5e7eb' }}>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测ID</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>用户名</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测结果</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(ms)</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>代码长度(B)</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>语言</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>提交时间</th>
                   </tr>
                 </thead>
                 <tbody>
                   {problemSubmissionsLoading ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                         加载中...
                       </td>
                     </tr>
                   ) : problemSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                         暂无提交记录
                       </td>
                     </tr>
@@ -1050,8 +1050,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                             borderRadius: '4px',
                             fontSize: '0.75rem',
                             fontWeight: 500,
-                            background: s.result === 'accepted' ? '#dcfce7' : s.result === 'queuing' ? '#dbeafe' : '#fee2e2',
-                            color: s.result === 'accepted' ? '#166534' : s.result === 'queuing' ? '#1e40af' : '#991b1b',
+                            background: s.result === 'accepted' ? 'var(--success-light)' : s.result === 'queuing' ? 'var(--info-light)' : 'var(--error-light)',
+                            color: s.result === 'accepted' ? 'var(--success-text)' : s.result === 'queuing' ? 'var(--info-text)' : 'var(--error-text)',
                           }}>
                             {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
                           </span>
@@ -1070,7 +1070,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         >
                           {getLanguageLabel(s.language)}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                           {s.submittedAt ? new Date(s.submittedAt).toLocaleString('zh-CN') : '-'}
                         </td>
                       </tr>
@@ -1122,8 +1122,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                       disabled={aiLoading === 'translate' || !!alreadyTranslated}
                       style={{
                         padding: '0.5rem',
-                        background: alreadyTranslated ? 'var(--gray-100)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: alreadyTranslated ? 'var(--gray-400)' : 'white',
+                        background: alreadyTranslated ? 'var(--bg-hover)' : 'var(--primary)',
+                        color: alreadyTranslated ? 'var(--text-muted)' : 'white',
                         border: alreadyTranslated ? '1px solid var(--border)' : 'none',
                         borderRadius: '6px',
                         cursor: (aiLoading === 'translate' || alreadyTranslated) ? 'not-allowed' : 'pointer',
@@ -1173,7 +1173,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 )
               })()}
               {aiError && (
-                <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '0.25rem' }}>
                   {aiError}
                 </div>
               )}
@@ -1192,7 +1192,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               style={{
                 width: '100%',
                 padding: '0.5rem',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'var(--primary)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -1236,7 +1236,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     border: '1px solid',
                     borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
                     borderRadius: '6px',
-                    background: submitMethod === m.key ? '#dbeafe' : 'white',
+                    background: submitMethod === m.key ? 'var(--info-light)' : 'white',
                     color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
                     cursor: 'pointer',
                     fontWeight: submitMethod === m.key ? 600 : 400,
@@ -1262,7 +1262,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               alignItems: 'center',
             }}>
               <span>平台账号</span>
-              <span style={{ color: '#f59e0b' }}>未绑定</span>
+              <span style={{ color: 'var(--warning)' }}>未绑定</span>
             </div>
           )}
 
@@ -1312,8 +1312,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               lineHeight: 1.5,
               resize: 'vertical',
               boxSizing: 'border-box',
-              background: submitMethod === 'robot' ? 'white' : '#f8fafc',
-              color: submitMethod === 'robot' ? '#1e293b' : 'var(--gray-400)',
+              background: submitMethod === 'robot' ? 'white' : 'var(--bg-muted)',
+              color: submitMethod === 'robot' ? 'var(--text-primary)' : 'var(--gray-400)',
             }}
             disabled={submitMethod !== 'robot'}
           />

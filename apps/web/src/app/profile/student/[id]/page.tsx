@@ -133,7 +133,7 @@ export default function StudentProfilePage() {
         maxWidth: '600px',
         margin: '2rem auto',
         background: 'white',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--border)',
         overflow: 'hidden'
       }}>
@@ -143,7 +143,7 @@ export default function StudentProfilePage() {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)'
+          background: 'var(--primary)'
         }}>
           {profile.avatar ? (
             <div

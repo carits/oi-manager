@@ -11,7 +11,7 @@ const PLATFORMS = [
   { id: 'vjudge', name: 'Vjudge', color: '#4A90A4' },
   { id: 'luogu', name: '洛谷', color: '#3498db' },
   { id: 'codeforces', name: 'Codeforces', color: '#1f8dd6' },
-  { id: 'atcoder', name: 'AtCoder', color: '#333' },
+  { id: 'atcoder', name: 'AtCoder', color: 'var(--text-primary)' },
 ]
 
 interface PlatformBinding {
@@ -271,8 +271,8 @@ export default function StudentPlatformBindingsPage() {
               style={{
                 width: '60px',
                 height: '60px',
-                borderRadius: '12px',
-                background: selectedPlatformInfo?.color || '#ccc',
+                borderRadius: 'var(--radius-lg)',
+                background: selectedPlatformInfo?.color || 'var(--border)',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',

@@ -102,9 +102,9 @@ export function ProblemList({ role }: ProblemListProps) {
 
   const getDifficultyColor = (difficulty: string | null) => {
     switch (difficulty) {
-      case '简单': return '#10b981'
-      case '中等': return '#f59e0b'
-      case '困难': return '#ef4444'
+      case '简单': return 'var(--success)'
+      case '中等': return 'var(--warning)'
+      case '困难': return 'var(--error)'
       default: return 'var(--gray-500)'
     }
   }

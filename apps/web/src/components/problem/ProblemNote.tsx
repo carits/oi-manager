@@ -156,16 +156,16 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
 
   const getDifficultyColor = (difficulty: string | null) => {
     switch (difficulty) {
-      case '简单': return '#10b981'
-      case '中等': return '#f59e0b'
-      case '困难': return '#ef4444'
+      case '简单': return 'var(--success)'
+      case '中等': return 'var(--warning)'
+      case '困难': return 'var(--error)'
       default: return 'var(--gray-500)'
     }
   }
 
   if (loading) {
     return (
-      <div style={{ height: '100vh', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ height: '100vh', background: 'var(--bg-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ color: 'var(--gray-500)' }}>加载中...</span>
       </div>
     )
@@ -174,7 +174,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   if (!problem) return null
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f5f5f5' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-muted)' }}>
       {/* 顶部栏 */}
       <div style={{
         display: 'flex',
@@ -207,7 +207,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               fontSize: '0.7rem',
               padding: '0.125rem 0.375rem',
               borderRadius: '4px',
-              background: problem.difficulty === '简单' ? '#d1fae5' : problem.difficulty === '中等' ? '#fef3c7' : '#fee2e2',
+              background: problem.difficulty === '简单' ? 'var(--success-light)' : problem.difficulty === '中等' ? 'var(--warning-light)' : 'var(--error-light)',
               color: getDifficultyColor(problem.difficulty)
             }}>
               {problem.difficulty}
@@ -218,9 +218,9 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
           <div style={{
             padding: '0.25rem 0.5rem',
             borderRadius: '4px',
-            background: noteSaving ? '#fef3c7' : noteLastSaved ? '#d1fae5' : 'transparent',
+            background: noteSaving ? 'var(--warning-light)' : noteLastSaved ? 'var(--success-light)' : 'transparent',
             fontSize: '0.75rem',
-            color: noteSaving ? '#92400e' : noteLastSaved ? '#166534' : 'var(--gray-400)',
+            color: noteSaving ? 'var(--warning-text)' : noteLastSaved ? 'var(--success-text)' : 'var(--gray-400)',
             minWidth: '100px',
             textAlign: 'center'
           }}>
@@ -237,7 +237,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             disabled={noteSaving}
             style={{
               padding: '0.375rem 0.875rem',
-              background: noteSaving ? 'var(--gray-300)' : '#8b5cf6',
+              background: noteSaving ? 'var(--gray-300)' : 'var(--primary)',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
@@ -264,7 +264,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
         }}>
           <div style={{
             padding: '0.5rem 0.75rem',
-            background: '#fafafa',
+            background: 'var(--bg-muted)',
             borderBottom: '1px solid var(--border)',
             fontWeight: 500,
             fontSize: '0.8rem',
@@ -341,7 +341,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
         }}>
           <div style={{
             padding: '0.5rem 0.75rem',
-            background: '#fafafa',
+            background: 'var(--bg-muted)',
             borderBottom: '1px solid var(--border)',
             fontWeight: 500,
             fontSize: '0.8rem',
@@ -353,9 +353,9 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             <span>✏️</span>
             <span>思路记录</span>
             <div style={{ flex: 1 }} />
-            <button onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: '3px', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</button>
-            <button onClick={() => setEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: '3px', background: editMode === 'preview' ? 'var(--primary)' : 'transparent', color: editMode === 'preview' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</button>
-            <button onClick={() => setEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: '3px', background: editMode === 'split' ? 'var(--primary)' : 'transparent', color: editMode === 'split' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</button>
+            <button onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</button>
+            <button onClick={() => setEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'preview' ? 'var(--primary)' : 'transparent', color: editMode === 'preview' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</button>
+            <button onClick={() => setEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'split' ? 'var(--primary)' : 'transparent', color: editMode === 'split' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</button>
           </div>
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -391,7 +391,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
                   fontFamily: 'Consolas, Monaco, monospace',
                   lineHeight: 1.6,
                   resize: 'none',
-                  background: editMode === 'split' ? '#fafafa' : 'white',
+                  background: editMode === 'split' ? 'var(--bg-muted)' : 'white',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}

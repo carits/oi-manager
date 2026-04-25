@@ -26,9 +26,9 @@ interface TeamTrainingListProps {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> = {
-  upcoming: { label: '未开始', color: '#3b82f6', dot: '#3b82f6' },
-  ongoing: { label: '进行中', color: '#16a34a', dot: '#16a34a' },
-  finished: { label: '已结束', color: '#9ca3af', dot: '#9ca3af' },
+  upcoming: { label: '未开始', color: 'var(--info)', dot: 'var(--info)' },
+  ongoing: { label: '进行中', color: 'var(--success)', dot: 'var(--success)' },
+  finished: { label: '已结束', color: 'var(--text-muted)', dot: 'var(--text-muted)' },
 }
 
 const FORMAT_MAP: Record<string, string> = {
@@ -162,15 +162,15 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
         fontVariantNumeric: 'tabular-nums',
       }}>
         <thead>
-          <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>#</th>
-            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>训练名称</th>
-            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>赛制</th>
-            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>状态</th>
-            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>题数</th>
-            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>人数</th>
-            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>开始时间</th>
-            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: '#6b7280', fontSize: '0.76rem' }}>时长</th>
+          <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>#</th>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>训练名称</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>赛制</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>状态</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>题数</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>人数</th>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>开始时间</th>
+            <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>时长</th>
           </tr>
         </thead>
         <tbody>
@@ -185,17 +185,17 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
                   borderBottom: idx === trainings.length - 1 ? 'none' : '1px solid #f3f4f6',
                   transition: 'background 0.1s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
               >
                 {/* 序号 */}
-                <td style={{ padding: '0.6rem 0.75rem', color: '#9ca3af', fontSize: '0.78rem', width: '32px' }}>
+                <td style={{ padding: '0.6rem 0.75rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', width: '32px' }}>
                   {idx + 1}
                 </td>
 
                 {/* 训练名称 */}
                 <td style={{ padding: '0.6rem 0.75rem' }}>
-                  <span style={{ fontWeight: 600, color: '#111827' }}>{training.title}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{training.title}</span>
                 </td>
 
                 {/* 赛制 */}
@@ -205,9 +205,9 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
                     padding: '0.1rem 0.4rem',
                     fontSize: '0.7rem',
                     fontWeight: 700,
-                    color: training.format === 'ioi' ? '#1d4ed8' : '#7c3aed',
-                    background: training.format === 'ioi' ? '#eff6ff' : '#f5f3ff',
-                    borderRadius: '3px',
+                    color: training.format === 'ioi' ? 'var(--info-text)' : 'var(--text-secondary)',
+                    background: training.format === 'ioi' ? 'var(--info-light)' : 'var(--bg-muted)',
+                    borderRadius: 'var(--radius-sm)',
                     letterSpacing: '0.04em',
                   }}>
                     {FORMAT_MAP[training.format] || training.format.toUpperCase()}
@@ -216,29 +216,29 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
 
                 {/* 状态 */}
                 <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.78rem', color: statusInfo.color, fontWeight: 500 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: 'var(--text-sm)', color: statusInfo.color, fontWeight: 500 }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusInfo.dot }} />
                     {statusInfo.label}
                   </span>
                 </td>
 
                 {/* 题数 */}
-                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: '#6b7280' }}>
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   {training.problemCount}
                 </td>
 
                 {/* 人数 */}
-                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: '#6b7280' }}>
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   {training.participantCount}
                 </td>
 
                 {/* 开始时间 */}
-                <td style={{ padding: '0.6rem 0.75rem', color: '#6b7280', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.6rem 0.75rem', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>
                   {formatDateTime(training.startTime)}
                 </td>
 
                 {/* 时长 */}
-                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: '#6b7280', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>
                   {formatDuration(training.startTime, training.endTime)}
                 </td>
               </tr>

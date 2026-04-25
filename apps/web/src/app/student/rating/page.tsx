@@ -69,7 +69,7 @@ export default function StudentRatingPage() {
     <ProtectedRoute requiredRole="student">
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
           {/* Rating 概览 */}
-          <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '12px', padding: '2rem', marginBottom: '1.5rem', color: 'white' }}>
+          <div style={{ background: 'var(--primary)', borderRadius: 'var(--radius-lg)', padding: '2rem', marginBottom: '1.5rem', color: 'white' }}>
             <p style={{ fontSize: '0.875rem', opacity: 0.9, marginBottom: '0.5rem' }}>当前 Rating</p>
             <p style={{ fontSize: '4rem', fontWeight: 700, marginBottom: '1rem' }}>{currentRating}</p>
             <div style={{ display: 'flex', gap: '2rem' }}>
@@ -124,7 +124,7 @@ export default function StudentRatingPage() {
                         style={{
                           width: '100%',
                           height: `${Math.max(height, 10)}%`,
-                          background: isUp ? '#22c55e' : '#ef4444',
+                          background: isUp ? 'var(--success)' : 'var(--error)',
                           borderRadius: '2px',
                           minHeight: '4px'
                         }}
@@ -153,7 +153,7 @@ export default function StudentRatingPage() {
                         const maxR = Math.max(...contestResults.map(r => r.ratingAfter), currentRating) + 50
                         return ((currentRating - minR) / (maxR - minR)) * 100
                       })()}%`,
-                      background: '#667eea',
+                      background: 'var(--primary)',
                       borderRadius: '2px',
                       minHeight: '4px'
                     }}
@@ -190,13 +190,13 @@ export default function StudentRatingPage() {
                     <tr key={result.id} style={{ borderTop: '1px solid var(--border)' }}>
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{result.contest.title}</td>
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
-                        <span style={{ padding: '0.125rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', background: result.contest.type === 'training' ? '#3b82f6' : result.contest.type === 'official' ? '#8b5cf6' : '#f59e0b', color: 'white' }}>
+                        <span style={{ padding: '0.125rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', background: result.contest.type === 'training' ? 'var(--primary)' : result.contest.type === 'official' ? 'var(--primary)' : 'var(--warning)', color: 'white' }}>
                           {contestTypeLabels[result.contest.type]}
                         </span>
                       </td>
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{result.ratingBefore}</td>
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600 }}>{result.ratingAfter}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: result.ratingChange >= 0 ? '#16a34a' : '#dc2626' }}>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 600, color: result.ratingChange >= 0 ? 'var(--success)' : 'var(--error)' }}>
                         {result.ratingChange >= 0 ? '+' : ''}{result.ratingChange}
                       </td>
                       <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>#{result.rank || '-'}</td>

@@ -56,10 +56,10 @@ interface PlatformStats {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  active: { label: '有效', color: '#16a34a' },
-  expired: { label: '已失效', color: '#dc2626' },
-  error: { label: '错误', color: '#f59e0b' },
-  unverified: { label: '未验证', color: '#6b7280' },
+  active: { label: '有效', color: 'var(--success)' },
+  expired: { label: '已失效', color: 'var(--error)' },
+  error: { label: '错误', color: 'var(--warning)' },
+  unverified: { label: '未验证', color: 'var(--text-secondary)' },
 }
 
 export default function OjAccountsPage() {
@@ -216,7 +216,7 @@ export default function OjAccountsPage() {
                         <span style={{ color: 'var(--gray-400)', fontSize: '0.9rem' }}> / {s.total}</span>
                       </div>
                       {s.expired > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.25rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '0.25rem' }}>
                           {s.expired} 个已失效
                         </div>
                       )}
@@ -238,10 +238,10 @@ export default function OjAccountsPage() {
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                   {[
-                    { title: '平台有效账号数', key: 'active', color: '#16a34a' },
-                    { title: '平台失效账号数', key: 'expired', color: '#dc2626' },
-                    { title: '平台提交数', key: 'totalSubmissions', color: '#3b82f6' },
-                    { title: '平台提交失败数', key: 'totalSubmissionErrors', color: '#f59e0b' },
+                    { title: '平台有效账号数', key: 'active', color: 'var(--success)' },
+                    { title: '平台失效账号数', key: 'expired', color: 'var(--error)' },
+                    { title: '平台提交数', key: 'totalSubmissions', color: 'var(--primary)' },
+                    { title: '平台提交失败数', key: 'totalSubmissionErrors', color: 'var(--warning)' },
                   ].map(({ title, key, color }) => (
                     <div key={key} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', overflow: 'hidden' }}>
                       <div style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.75rem', color: 'var(--gray-700)' }}>{title}</div>
@@ -322,7 +322,7 @@ export default function OjAccountsPage() {
                         <td style={{ padding: '0.75rem' }}>{OJ_PLATFORM_LABEL_MAP[acc.platform] || acc.platform}</td>
                         <td style={{ padding: '0.75rem', fontWeight: 500 }}>{acc.username}</td>
                         <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                          <span style={{ color: acc.enabled ? '#16a34a' : '#dc2626', fontSize: '0.8rem', fontWeight: 500 }}>
+                          <span style={{ color: acc.enabled ? 'var(--success)' : 'var(--error)', fontSize: '0.8rem', fontWeight: 500 }}>
                             {acc.enabled ? '启用' : '停用'}
                           </span>
                         </td>
@@ -330,7 +330,7 @@ export default function OjAccountsPage() {
                         <td style={{ padding: '0.75rem' }}>
                           <span style={{
                             padding: '0.15rem 0.5rem',
-                            borderRadius: '12px',
+                            borderRadius: 'var(--radius-lg)',
                             fontSize: '0.75rem',
                             fontWeight: 500,
                             color: sc.color,
@@ -368,7 +368,7 @@ export default function OjAccountsPage() {
                             )}
                             <button
                               onClick={() => setRemoveTarget(acc)}
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', border: '1px solid #fecaca', borderRadius: '4px', background: 'white', color: '#dc2626', cursor: 'pointer' }}
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', border: '1px solid #fecaca', borderRadius: '4px', background: 'white', color: 'var(--error)', cursor: 'pointer' }}
                             >
                               删除
                             </button>

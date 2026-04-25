@@ -1,5 +1,80 @@
 # 变更日志
 
+## 2026-04-24 (训练模块增强：题号/题解可见性 + 管理员排名开关)
+
+### 背景
+
+用户需要在团队训练模块的创建和编辑功能中添加以下选项：
+1. **题号显示**：控制来源平台题号（如 LOJ 1234、CF 753A）何时对成员可见（始终显示 / 赛后才显示）
+2. **题解显示**：控制题解何时对成员可见（始终显示 / 赛后才显示）
+3. **管理员排名**：控制团队管理员（owner/admin）是否出现在排名中
+
+### 变更内容
+
+1. **数据库模型**：Training 模型新增三个字段
+   - `problemIdVisible` (Boolean, 默认 false)：题号可见性
+   - `solutionVisible` (Boolean, 默认 false)：题解可见性
+   - `includeAdminInRanking` (Boolean, 默认 false)：是否包含管理员在排名中
+
+2. **后端 API**：
+   - 创建/更新训练 API 接收新字段
+   - 排名 API 根据 `includeAdminInRanking` 决定是否过滤管理员
+   - 题目列表 API 根据 `problemIdVisible` 和训练状态决定是否返回平台题号
+   - 题解 API 根据 `solutionVisible` 和训练状态决定是否返回题解内容
+
+3. **前端表单**：TrainingFormModal 新增三个控件
+   - 题号显示：下拉选择（赛后显示 / 始终显示）
+   - 题解显示：下拉选择（赛后显示 / 始终显示）
+   - 管理员排名：复选框（包含团队管理员在排名中）
+
+4. **前端显示**：TrainingDetailPage 实现可见性逻辑
+   - 题号隐藏时，来源列只显示平台名称，不显示具体题号
+   - 题解隐藏时，题解 Tab 显示"题解将在比赛结束后显示"
+   - 管理员始终可见完整信息
+
+### 效果
+
+- 创建/编辑训练时可设置三个新选项
+- 题号"赛后显示"时，训练进行中成员看不到来源平台题号
+- 题解"赛后显示"时，训练进行中成员看不到题解内容
+- 管理员排名关闭时，owner/admin 不在排名中；开启时则参与排名
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/prisma/schema.prisma` | 修改 — 添加 problemIdVisible, solutionVisible, includeAdminInRanking 字段 |
+| `apps/server/src/modules/training/training.routes.ts` | 修改 — 创建/更新/排名/题解/题目列表 API |
+| `apps/web/src/components/training/TrainingFormModal.tsx` | 修改 — 添加三个表单字段 |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 修改 — 题号/题解显示逻辑 |
+
+---
+
+## 2026-04-24 (训练排名当前用户高亮)
+
+### 背景
+
+用户反馈训练排名页面无法一眼看出自己的排名位置。
+
+### 变更内容
+
+1. **顶部排名信息卡片**：在排名表格上方显示"您的排名：第 X 名 / 共 N 人"，以及总分/通过数
+2. **当前用户行高亮**：当前用户所在行使用浅蓝色背景（`var(--info-light)`）高亮
+
+### 效果
+
+- 成员端登录后查看训练排名，能看到自己的排名信息卡片
+- 当前用户行有明显浅蓝色高亮背景
+- 管理员端查看排名不受影响（管理员不在排名中）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 修改 — 导入 useAuth、添加排名信息卡片、高亮当前用户行 |
+
+---
+
 ## 2026-04-23 (ICPC 大规模 API 测试验证)
 
 ### 背景
@@ -5271,3 +5346,12 @@ model TeamMember {
 - `apps/web/src/components/training/TrainingDetailPage.tsx`
 - `apps/server/src/modules/training/training.routes.ts`
 - `apps/server/prisma/schema.prisma`
+
+### 2026-04-25
+
+**训练删除按钮**
+- 在训练详情页编辑按钮旁添加红色"删除"按钮
+- 使用 ConfirmModal 确认，提示"评测记录会保留"
+- 调用已有 `DELETE /api/trainings/:id` API
+- 删除成功后跳转回训练列表
+- 修改文件：`apps/web/src/components/training/TrainingDetailPage.tsx`

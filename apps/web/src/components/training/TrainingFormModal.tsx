@@ -55,6 +55,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
   const [format, setFormat] = useState<'ioi' | 'icpc'>('ioi')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
+  const [problemIdVisible, setProblemIdVisible] = useState(false)
+  const [solutionVisible, setSolutionVisible] = useState(false)
+  const [includeAdminInRanking, setIncludeAdminInRanking] = useState(false)
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
   const [originalStartTimeStr, setOriginalStartTimeStr] = useState<string>('')
 
@@ -79,6 +82,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
             setTitle(t.title)
             setDescription(t.description || '')
             setFormat(t.format as 'ioi' | 'icpc')
+            setProblemIdVisible(t.problemIdVisible ?? false)
+            setSolutionVisible(t.solutionVisible ?? false)
+            setIncludeAdminInRanking(t.includeAdminInRanking ?? false)
             const startStr = toLocalDatetimeString(new Date(t.startTime))
             setStartTime(startStr)
             setEndTime(toLocalDatetimeString(new Date(t.endTime)))
@@ -118,6 +124,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
       setTitle('')
       setDescription('')
       setFormat('ioi')
+      setProblemIdVisible(false)
+      setSolutionVisible(false)
+      setIncludeAdminInRanking(false)
       setProblemRows([])
       setSaving(false)
       setOriginalStartTime(null)
@@ -274,6 +283,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
         // 1. Update training info
         const updateRes = await apiClient.put(`/api/trainings/${trainingId}`, {
           title, description, format,
+          problemIdVisible, solutionVisible, includeAdminInRanking,
           ...(startTime !== originalStartTimeStr && {
             startTime: new Date(startTime).toISOString(),
           }),
@@ -332,6 +342,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
           title, description, format,
           startTime: new Date(startTime).toISOString(),
           endTime: new Date(endTime).toISOString(),
+          problemIdVisible, solutionVisible, includeAdminInRanking,
         })
         if (!res.success || !res.data) {
           toast.error(res.message || '创建失败')
@@ -428,6 +439,31 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
               </div>
             </div>
 
+            {/* 可见性设置 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题号显示</label>
+                <select value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
+                  <option value="after">赛后显示</option>
+                  <option value="always">始终显示</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题解显示</label>
+                <select value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')} style={inputStyle}>
+                  <option value="after">赛后显示</option>
+                  <option value="always">始终显示</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>管理员排名</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '0.5rem' }}>
+                  <input type="checkbox" checked={includeAdminInRanking} onChange={e => setIncludeAdminInRanking(e.target.checked)} style={{ width: '1rem', height: '1rem' }} />
+                  <span style={{ fontSize: '0.85rem' }}>包含管理员</span>
+                </label>
+              </div>
+            </div>
+
             {/* Problems */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>题目列表</h3>
@@ -436,7 +472,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                 <div style={{ border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', marginBottom: '0.75rem' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                     <thead>
-                      <tr style={{ background: '#fafafa' }}>
+                      <tr style={{ background: 'var(--bg-muted)' }}>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '50px' }}>排序</th>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '36px' }}>#</th>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '140px' }}>OJ</th>
@@ -449,20 +485,20 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                     </thead>
                     <tbody>
                       {problemRows.map((row, idx) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? '#fff' : '#fffbe6' }}>
+                        <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
                           <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center' }}>
                             <button
                               onClick={() => moveUp(idx)}
                               disabled={idx === 0}
                               style={{
-                                background: idx === 0 ? '#f5f5f5' : 'white',
+                                background: idx === 0 ? 'var(--bg-muted)' : 'white',
                                 border: '1px solid var(--border)',
-                                borderRadius: '3px',
+                                borderRadius: 'var(--radius-sm)',
                                 cursor: idx === 0 ? 'not-allowed' : 'pointer',
                                 padding: '0.15rem 0.35rem',
                                 fontSize: '0.7rem',
                                 marginRight: '2px',
-                                color: idx === 0 ? '#ccc' : '#666',
+                                color: idx === 0 ? 'var(--border)' : '#666',
                               }}
                               title="上移"
                             >↑</button>
@@ -470,13 +506,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                               onClick={() => moveDown(idx)}
                               disabled={idx === problemRows.length - 1}
                               style={{
-                                background: idx === problemRows.length - 1 ? '#f5f5f5' : 'white',
+                                background: idx === problemRows.length - 1 ? 'var(--bg-muted)' : 'white',
                                 border: '1px solid var(--border)',
-                                borderRadius: '3px',
+                                borderRadius: 'var(--radius-sm)',
                                 cursor: idx === problemRows.length - 1 ? 'not-allowed' : 'pointer',
                                 padding: '0.15rem 0.35rem',
                                 fontSize: '0.7rem',
-                                color: idx === problemRows.length - 1 ? '#ccc' : '#666',
+                                color: idx === problemRows.length - 1 ? 'var(--border)' : '#666',
                               }}
                               title="下移"
                             >↓</button>
@@ -501,18 +537,18 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                               }}
                               placeholder="输入题号"
                               disabled={row.existing}
-                              style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%', background: row.existing ? '#f5f5f5' : 'white' }}
+                              style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%', background: row.existing ? 'var(--bg-muted)' : 'white' }}
                             />
                           </td>
                           <td style={{ padding: '0.4rem 0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {row.existing ? (
-                              <span><span style={{ color: '#10b981', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#10003;</span><span style={{ color: 'var(--gray-600)', fontSize: '0.85rem' }}>{row.resolved?.title || '-'}</span></span>
+                              <span><span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#10003;</span><span style={{ color: 'var(--gray-600)', fontSize: '0.85rem' }}>{row.resolved?.title || '-'}</span></span>
                             ) : row.resolving
                               ? <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>检索中...</span>
                               : row.resolved
                                 ? row.resolved.found
-                                  ? <span><span style={{ color: '#10b981', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#10003;</span><span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>{row.resolved.title}</span></span>
-                                  : <span><span style={{ color: '#ef4444', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#9888;</span><span style={{ color: '#ef4444', fontSize: '0.85rem' }}>题目不存在</span></span>
+                                  ? <span><span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#10003;</span><span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>{row.resolved.title}</span></span>
+                                  : <span><span style={{ color: 'var(--error)', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#9888;</span><span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>题目不存在</span></span>
                                 : <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>-</span>
                             }
                           </td>
@@ -520,7 +556,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                             <input
                               value={row.alias}
                               onChange={e => updateRow(row.id, { alias: e.target.value })}
-                              style={{ width: '36px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '3px', textAlign: 'center', fontSize: '0.85rem' }}
+                              style={{ width: '36px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
                             />
                           </td>
                           {format === 'ioi' && (
@@ -529,12 +565,12 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                                 type="number"
                                 value={row.points}
                                 onChange={e => updateRow(row.id, { points: parseInt(e.target.value) || 0 })}
-                                style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '3px', textAlign: 'center', fontSize: '0.85rem' }}
+                                style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
                               />
                             </td>
                           )}
                           <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
-                            <button onClick={() => removeRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.85rem', padding: '0.1rem 0.2rem' }} title="移除">&#10005;</button>
+                            <button onClick={() => removeRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.85rem', padding: '0.1rem 0.2rem' }} title="移除">&#10005;</button>
                           </td>
                         </tr>
                       ))}

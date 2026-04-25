@@ -120,7 +120,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
               width: '80px',
               height: '80px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--primary), #6366f1)',
+              background: 'var(--primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

@@ -457,7 +457,7 @@ export default function ProblemListDetailPage() {
                               </span>
                             </td>
                             <td style={{ padding: '0.4rem 0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <span style={{ color: '#10b981', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span>
+                              <span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span>
                               <span onClick={() => router.push(`${pathPrefix}/problems/${entry.problemId}`)} style={{ color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem' }} title={entry.Problem.title}>
                                 {entry.Problem.title}
                               </span>
@@ -474,10 +474,10 @@ export default function ProblemListDetailPage() {
                                 >
                                   <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
                                     autoFocus rows={2} wrap="soft"
-                                    style={{ flex: 1, padding: '0.15rem 0.3rem', border: '1px solid var(--primary)', borderRadius: '3px', fontSize: '0.8rem', minWidth: 0, resize: 'vertical', lineHeight: '1.4', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-all', boxSizing: 'border-box' }}
+                                    style={{ flex: 1, padding: '0.15rem 0.3rem', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', minWidth: 0, resize: 'vertical', lineHeight: '1.4', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-all', boxSizing: 'border-box' }}
                                   />
                                   <button onClick={() => handleUpdateEntry(entry.id, { notes: editNotes || null })}
-                                    style={{ padding: '0.1rem 0.3rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0 }}>
+                                    style={{ padding: '0.1rem 0.3rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0 }}>
                                     ✓
                                   </button>
                                 </div>
@@ -496,7 +496,7 @@ export default function ProblemListDetailPage() {
                                   <button onClick={() => handleMoveEntry(section.id, entry.id, 'down')} disabled={idx === section.Entries.length - 1}
                                     style={{ background: 'none', border: 'none', cursor: idx === section.Entries.length - 1 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === section.Entries.length - 1 ? 0.3 : 1 }}>↓</button>
                                   <button onClick={() => setDeleteEntryConfirm(entry.id)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', padding: '0.1rem 0.2rem' }}>✕</button>
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.8rem', padding: '0.1rem 0.2rem' }}>✕</button>
                                 </div>
                               </td>
                             )}
@@ -523,22 +523,22 @@ export default function ProblemListDetailPage() {
                             <td style={{ padding: '0.4rem 0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {row.saving ? <span style={{ color: 'var(--primary)', fontSize: '0.8rem' }}>保存中...</span>
                                 : row.resolving ? <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>检索中...</span>
-                                : row.resolved ? row.resolved.found ? <span><span style={{ color: '#10b981', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span><span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>{row.resolved.title}</span></span>
-                                  : <span><span style={{ color: '#ef4444', fontSize: '0.75rem', marginRight: '0.25rem' }}>⚠️</span><span style={{ color: '#ef4444', fontSize: '0.85rem' }}>题目不存在</span></span>
+                                : row.resolved ? row.resolved.found ? <span><span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span><span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>{row.resolved.title}</span></span>
+                                  : <span><span style={{ color: 'var(--error)', fontSize: '0.75rem', marginRight: '0.25rem' }}>⚠️</span><span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>题目不存在</span></span>
                                 : <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>-</span>}
                             </td>
                             <td style={{ padding: '0.4rem 0.75rem' }}>
                               <textarea value={row.notes} onChange={e => updateNewRow(row.id, { notes: e.target.value })}
                                 placeholder="备注" disabled={row.saving} rows={2} wrap="soft"
-                                style={{ width: '100%', padding: '0.15rem 0.3rem', border: '1px solid var(--border)', borderRadius: '3px', fontSize: '0.8rem', minWidth: 0, resize: 'vertical', lineHeight: '1.4', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-all', boxSizing: 'border-box' }} />
+                                style={{ width: '100%', padding: '0.15rem 0.3rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', minWidth: 0, resize: 'vertical', lineHeight: '1.4', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-all', boxSizing: 'border-box' }} />
                             </td>
                             <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center' }}>
                               <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center', alignItems: 'center' }}>
                                 {row.saving ? <span style={{ color: 'var(--primary)', fontSize: '0.75rem' }}>保存中...</span>
-                                  : row.resolved?.found ? <span style={{ color: '#10b981', fontSize: '0.75rem' }}>✓ 已就绪</span>
-                                  : row.resolved && !row.resolved.found ? <span style={{ color: '#ef4444', fontSize: '0.75rem' }}>不存在</span>
+                                  : row.resolved?.found ? <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}>✓ 已就绪</span>
+                                  : row.resolved && !row.resolved.found ? <span style={{ color: 'var(--error)', fontSize: '0.75rem' }}>不存在</span>
                                   : null}
-                                {!row.saving && <button onClick={() => removeNewRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', padding: '0.1rem 0.2rem' }}>✕</button>}
+                                {!row.saving && <button onClick={() => removeNewRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.8rem', padding: '0.1rem 0.2rem' }}>✕</button>}
                               </div>
                             </td>
                           </tr>
@@ -757,7 +757,7 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
               placeholder="搜索用户"
               style={{
                 width: '100%', padding: '0.55rem 1rem',
-                border: `1px solid ${selectedCandidate ? '#10b981' : 'var(--border)'}`,
+                border: `1px solid ${selectedCandidate ? 'var(--success)' : 'var(--border)'}`,
                 borderRadius: '6px', fontSize: '0.95rem', boxSizing: 'border-box',
                 outline: 'none',
               }}
@@ -778,11 +778,11 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '0.75rem',
                       padding: '0.6rem 1rem', cursor: 'pointer',
-                      background: selectedCandidate?.id === c.id ? '#eff6ff' : 'transparent',
+                      background: selectedCandidate?.id === c.id ? 'var(--info-light)' : 'transparent',
                       borderBottom: '1px solid var(--gray-100)',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
-                    onMouseLeave={e => (e.currentTarget.style.background = selectedCandidate?.id === c.id ? '#eff6ff' : 'transparent')}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = selectedCandidate?.id === c.id ? 'var(--info-light)' : 'transparent')}
                   >
                     {/* 头像 */}
                     <div style={{
@@ -799,8 +799,8 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
                     </div>
                     <span style={{
                       fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
-                      background: c.type === 'teacher' ? '#dbeafe' : '#dcfce7',
-                      color: c.type === 'teacher' ? '#1d4ed8' : '#16a34a',
+                      background: c.type === 'teacher' ? 'var(--info-light)' : 'var(--success-light)',
+                      color: c.type === 'teacher' ? 'var(--primary-hover)' : 'var(--success)',
                     }}>
                       {c.type === 'teacher' ? '教师' : '学生'}
                     </span>

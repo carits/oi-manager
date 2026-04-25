@@ -218,7 +218,7 @@ export default function PlatformAdminUsersPage() {
           {loading ? (
             <p>加载中...</p>
           ) : error ? (
-            <div style={{ padding: '1rem', background: '#fee2e2', borderRadius: '6px', color: '#991b1b' }}>
+            <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
               {error}
             </div>
           ) : (
@@ -254,8 +254,8 @@ export default function PlatformAdminUsersPage() {
                             padding: '2px 8px',
                             borderRadius: '4px',
                             fontSize: '0.75rem',
-                            background: user.status === 'active' ? '#dcfce7' : '#fee2e2',
-                            color: user.status === 'active' ? '#166534' : '#991b1b'
+                            background: user.status === 'active' ? 'var(--success-light)' : 'var(--error-light)',
+                            color: user.status === 'active' ? 'var(--success-text)' : 'var(--error-text)'
                           }}>
                             {user.status === 'active' ? '正常' : '禁用'}
                           </span>
@@ -278,7 +278,7 @@ export default function PlatformAdminUsersPage() {
                           </button>
                           <button
                             onClick={() => handleToggleStatus(user.id, user.status, user.username)}
-                            style={{ color: user.status === 'active' ? '#dc2626' : '#16a34a', background: 'none', border: 'none', cursor: 'pointer' }}
+                            style={{ color: user.status === 'active' ? 'var(--error)' : 'var(--success)', background: 'none', border: 'none', cursor: 'pointer' }}
                           >
                             {user.status === 'active' ? '禁用' : '启用'}
                           </button>

@@ -771,7 +771,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                             border: '1px solid #ef4444',
                             borderRadius: '4px',
                             background: 'white',
-                            color: '#ef4444',
+                            color: 'var(--error)',
                             cursor: 'pointer',
                             fontSize: '0.75rem'
                           }}
@@ -939,7 +939,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                             border: '1px solid #ef4444',
                             borderRadius: '4px',
                             background: 'white',
-                            color: '#ef4444',
+                            color: 'var(--error)',
                             cursor: 'pointer',
                             fontSize: '0.75rem'
                           }}
@@ -1138,7 +1138,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                           border: '1px solid #ef4444',
                           borderRadius: '6px',
                           background: 'white',
-                          color: '#ef4444',
+                          color: 'var(--error)',
                           cursor: 'pointer',
                           fontSize: '0.75rem'
                         }}
@@ -1220,7 +1220,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                               padding: '0.375rem 0.75rem',
                               border: '1px solid #ef4444',
                               background: 'white',
-                              color: '#ef4444',
+                              color: 'var(--error)',
                               borderRadius: '4px',
                               cursor: 'pointer',
                               fontSize: '0.875rem'
@@ -1253,7 +1253,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                             justifyContent: 'space-between',
                             padding: '0.75rem 1rem',
                             borderBottom: '1px solid var(--border)',
-                            background: '#fef3c7'
+                            background: 'var(--warning-light)'
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

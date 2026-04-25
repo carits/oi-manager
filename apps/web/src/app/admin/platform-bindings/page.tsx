@@ -296,8 +296,8 @@ export default function AdminPlatformBindingsPage() {
               style={{
                 width: '60px',
                 height: '60px',
-                borderRadius: '12px',
-                background: selectedPlatform?.color || '#ccc',
+                borderRadius: 'var(--radius-lg)',
+                background: selectedPlatform?.color || 'var(--border)',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',

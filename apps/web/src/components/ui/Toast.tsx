@@ -33,10 +33,10 @@ export function useToast() {
 // ==================== 颜色配置 ====================
 
 const typeConfig: Record<ToastType, { bg: string; border: string; icon: string }> = {
-  success: { bg: '#f0fdf4', border: '#86efac', icon: '✓' },
-  error:   { bg: '#fef2f2', border: '#fca5a5', icon: '✕' },
-  warning: { bg: '#fffbeb', border: '#fcd34d', icon: '!' },
-  info:    { bg: '#eff6ff', border: '#93c5fd', icon: 'i' },
+  success: { bg: 'var(--success-light)', border: 'var(--success)', icon: '✓' },
+  error:   { bg: 'var(--error-light)', border: 'var(--error)', icon: '✕' },
+  warning: { bg: 'var(--warning-light)', border: 'var(--warning)', icon: '!' },
+  info:    { bg: 'var(--info-light)', border: 'var(--info)', icon: 'i' },
 }
 
 // ==================== ToastItem 组件 ====================
@@ -58,8 +58,8 @@ function ToastItemView({ item, onRemove }: { item: ToastItem; onRemove: (id: num
         padding: '0.75rem 1rem',
         background: config.bg,
         border: `1px solid ${config.border}`,
-        borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        borderRadius: 'var(--radius-md)',
+        boxShadow: 'var(--shadow)',
         minWidth: '280px',
         maxWidth: '420px',
         animation: 'toast-in 0.25s ease-out',
@@ -74,16 +74,16 @@ function ToastItemView({ item, onRemove }: { item: ToastItem; onRemove: (id: num
         borderRadius: '50%',
         fontSize: '0.7rem',
         fontWeight: 700,
-        color: '#fff',
-        background: item.type === 'success' ? '#22c55e'
-          : item.type === 'error' ? '#ef4444'
-          : item.type === 'warning' ? '#f59e0b'
-          : '#3b82f6',
+        color: 'var(--text-inverse)',
+        background: item.type === 'success' ? 'var(--success)'
+          : item.type === 'error' ? 'var(--error)'
+          : item.type === 'warning' ? 'var(--warning)'
+          : 'var(--info)',
         flexShrink: 0,
       }}>
         {config.icon}
       </span>
-      <span style={{ fontSize: '0.875rem', color: '#374151', flex: 1, lineHeight: 1.4 }}>
+      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', flex: 1, lineHeight: 1.4 }}>
         {item.message}
       </span>
       <button
@@ -93,7 +93,7 @@ function ToastItemView({ item, onRemove }: { item: ToastItem; onRemove: (id: num
           border: 'none',
           cursor: 'pointer',
           fontSize: '1rem',
-          color: '#9ca3af',
+          color: 'var(--text-muted)',
           padding: '0 0.125rem',
           lineHeight: 1,
           flexShrink: 0,
@@ -118,11 +118,11 @@ export function showToastNotification(message: string, type: ToastType = 'info')
   el.style.cssText = 'display:flex;align-items:center;gap:0.625rem;padding:0.75rem 1rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);min-width:280px;max-width:420px;background:' + config.bg + ';border:1px solid ' + config.border + ';animation:toast-in 0.25s ease-out;'
 
   const icon = document.createElement('span')
-  icon.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.7rem;font-weight:700;color:#fff;flex-shrink:0;background:' + (type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6')
+  icon.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.7rem;font-weight:700;color:#fff;flex-shrink:0;background:' + (type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--error)' : type === 'warning' ? 'var(--warning)' : 'var(--info)')
   icon.textContent = config.icon
 
   const text = document.createElement('span')
-  text.style.cssText = 'font-size:0.875rem;color:#374151;flex:1;line-height:1.4'
+  text.style.cssText = 'font-size:0.875rem;color:var(--text-primary);flex:1;line-height:1.4'
   text.textContent = message
 
   el.appendChild(icon)

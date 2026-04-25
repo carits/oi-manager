@@ -82,7 +82,7 @@ export default function LoginPage() {
         maxWidth: '400px',
         padding: '2rem',
         background: 'white',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-lg)',
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
       }}>
         <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>

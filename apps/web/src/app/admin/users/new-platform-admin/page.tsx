@@ -76,7 +76,7 @@ export default function NewPlatformAdminPage() {
           </div>
 
           {error && (
-            <div style={{ padding: '1rem', background: '#fee2e2', borderRadius: '6px', color: '#991b1b', marginBottom: '1rem' }}>
+            <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)', marginBottom: '1rem' }}>
               {error}
             </div>
           )}
@@ -84,7 +84,7 @@ export default function NewPlatformAdminPage() {
           <form onSubmit={handleSubmit} style={{ background: 'white', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-                用户名 <span style={{ color: '#dc2626' }}>*</span>
+                用户名 <span style={{ color: 'var(--error)' }}>*</span>
               </label>
               <input
                 type="text"
@@ -97,7 +97,7 @@ export default function NewPlatformAdminPage() {
 
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-                密码 <span style={{ color: '#dc2626' }}>*</span>
+                密码 <span style={{ color: 'var(--error)' }}>*</span>
               </label>
               <input
                 type="password"
@@ -112,7 +112,7 @@ export default function NewPlatformAdminPage() {
 
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-                姓名 <span style={{ color: '#dc2626' }}>*</span>
+                姓名 <span style={{ color: 'var(--error)' }}>*</span>
               </label>
               <input
                 type="text"

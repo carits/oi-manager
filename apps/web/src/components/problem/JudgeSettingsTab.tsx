@@ -1089,7 +1089,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                                 setSubtasks(newSubtasks)
                               }}
                               onBlur={() => updateSubtasksAndSave(subtasks)}
-                              style={{ width: '40px', fontSize: '0.7rem', padding: '0.125rem 0.25rem', border: '1px solid var(--border)', borderRadius: '3px' }}
+                              style={{ width: '40px', fontSize: '0.7rem', padding: '0.125rem 0.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
                               min={0}
                             />
                           )}
@@ -1180,7 +1180,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                           </td>
                           <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{formatFileSize(file.size)}</td>
                           <td style={{ padding: '0.5rem 1rem' }}>
-                            <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: '#fef3c7', color: '#92400e', borderRadius: '4px' }}>待上传</span>
+                            <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: 'var(--warning-light)', color: 'var(--warning-text)', borderRadius: '4px' }}>待上传</span>
                           </td>
                           <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
                             <button type="button" onClick={() => handleDeleteFile('', file.name)} style={btnDanger}>

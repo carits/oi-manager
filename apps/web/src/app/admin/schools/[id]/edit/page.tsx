@@ -414,7 +414,7 @@ export default function EditSchoolPage() {
                       </div>
                     </div>
                     {principalError && (
-                      <p style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '0.5rem' }}>{principalError}</p>
+                      <p style={{ color: 'var(--error)', fontSize: '0.75rem', marginTop: '0.5rem' }}>{principalError}</p>
                     )}
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
                       <button
@@ -428,7 +428,7 @@ export default function EditSchoolPage() {
                       <button
                         type="button"
                         onClick={() => { setShowPrincipalForm(false); setPrincipalError(''); }}
-                        style={{ padding: '0.5rem 1rem', background: 'white', color: '#6b7280', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
+                        style={{ padding: '0.5rem 1rem', background: 'white', color: 'var(--text-secondary)', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
                       >
                         取消
                       </button>

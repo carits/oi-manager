@@ -106,7 +106,7 @@ trainingsRouter.post('/teams/:teamId/trainings', authenticate, async (req: AuthR
   try {
     const { teamId } = req.params
     const userId = req.user!.userId
-    const { title, description, format, startTime, endTime } = req.body
+    const { title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking } = req.body
 
     if (!await isTeamAdmin(userId, teamId)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以创建训练' })
@@ -134,14 +134,18 @@ trainingsRouter.post('/teams/:teamId/trainings', authenticate, async (req: AuthR
         endTime: new Date(endTime),
         status: 'upcoming',
         createdBy: userId,
+        problemIdVisible: problemIdVisible ?? false,
+        solutionVisible: solutionVisible ?? false,
+        includeAdminInRanking: includeAdminInRanking ?? false,
+        updatedAt: new Date(),
       },
     })
 
     logger.info('training_created', { action: 'trainings', metadata: { trainingId: training.id, teamId } })
     res.json({ success: true, data: training })
   } catch (e: any) {
-    logger.error('training_create_error', { action: 'trainings', metadata: { error: e.message } })
-    res.status(500).json({ success: false, message: '创建失败' })
+    logger.error('training_create_error', { action: 'trainings', metadata: { error: e.message, stack: e.stack } })
+    res.status(500).json({ success: false, message: '创建失败: ' + e.message })
   }
 })
 
@@ -197,6 +201,9 @@ trainingsRouter.get('/trainings/:id', authenticate, async (req: AuthRequest, res
         endTime: training.endTime.toISOString(),
         status: computedStatus,
         createdBy: training.createdBy,
+        problemIdVisible: training.problemIdVisible,
+        solutionVisible: training.solutionVisible,
+        includeAdminInRanking: training.includeAdminInRanking,
         problemCount: training._count.TrainingProblem,
         participantCount: training._count.TrainingParticipant,
         isAdmin,
@@ -217,7 +224,7 @@ trainingsRouter.put('/trainings/:id', authenticate, async (req: AuthRequest, res
   try {
     const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
-    const { title, description, format, startTime, endTime } = req.body
+    const { title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking } = req.body
 
     const training = await prisma.training.findUnique({ where: { id } })
     if (!training) {
@@ -263,6 +270,9 @@ trainingsRouter.put('/trainings/:id', authenticate, async (req: AuthRequest, res
         ...(format !== undefined && { format }),
         ...(startTime !== undefined && { startTime: newStartTime }),
         ...(endTime !== undefined && { endTime: newEndTime }),
+        ...(problemIdVisible !== undefined && { problemIdVisible }),
+        ...(solutionVisible !== undefined && { solutionVisible }),
+        ...(includeAdminInRanking !== undefined && { includeAdminInRanking }),
       },
     })
 
@@ -415,6 +425,9 @@ trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthReq
           attachmentCount,
         }
 
+        // 判断题号是否可见：problemIdVisible=true 或 训练已结束
+        const showProblemId = training.problemIdVisible || training.status === 'finished' || new Date() > training.endTime
+
         // 管理员可看到完整信息
         if (isAdmin) {
           return {
@@ -429,10 +442,18 @@ trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthReq
           }
         }
 
-        // 普通成员：不暴露标题和来源，但返回 platform 以便前端判断提交按钮可用性
+        // 普通成员：根据 problemIdVisible 决定是否显示题号
         return {
           ...base,
           platform: p.Problem.platform,
+          ...(showProblemId && {
+            problemId: p.Problem.id,
+            problemTitle: p.Problem.title,
+            platformProblemId: p.Problem.problemId,
+            difficulty: p.Problem.difficulty,
+            timeLimit: p.Problem.timeLimit,
+            memoryLimit: p.Problem.memoryLimit,
+          }),
         }
       }),
     })
@@ -564,9 +585,11 @@ trainingsRouter.post('/trainings/:id/problems', authenticate, async (req: AuthRe
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
-    if (!problemId || !alias) {
-      return res.status(400).json({ success: false, message: '题目ID和别名为必填' })
+    if (!problemId) {
+      return res.status(400).json({ success: false, message: '题目ID为必填' })
     }
+
+    const aliasValue = alias || null
 
     // 检查题目是否存在
     const problem = await prisma.problem.findUnique({ where: { id: problemId } })
@@ -584,7 +607,7 @@ trainingsRouter.post('/trainings/:id/problems', authenticate, async (req: AuthRe
       data: {
         trainingId: id,
         problemId,
-        alias,
+        alias: aliasValue,
         points: points || null,
         orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
       },
@@ -1369,25 +1392,27 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    // Get admin user IDs to exclude from ranking
+    // Get admin user IDs to exclude from ranking (unless includeAdminInRanking is true)
     // TeamMember.userId stores Teacher.id/Student.id, but Submission.userId stores User.id
     // So we need to convert via Teacher/Student lookup
-    const adminMembers = await prisma.teamMember.findMany({
-      where: {
-        teamId: training.teamId,
-        status: 'active',
-        role: { in: ['owner', 'admin'] },
-      },
-      select: { userId: true, userType: true },
-    })
-    const adminUserIds: string[] = []
-    for (const m of adminMembers) {
-      if (m.userType === 'teacher') {
-        const teacher = await prisma.teacher.findUnique({ where: { id: m.userId }, select: { userId: true } })
-        if (teacher) adminUserIds.push(teacher.userId)
-      } else if (m.userType === 'student') {
-        const student = await prisma.student.findUnique({ where: { id: m.userId }, select: { userId: true } })
-        if (student) adminUserIds.push(student.userId)
+    let adminUserIds: string[] = []
+    if (!training.includeAdminInRanking) {
+      const adminMembers = await prisma.teamMember.findMany({
+        where: {
+          teamId: training.teamId,
+          status: 'active',
+          role: { in: ['owner', 'admin'] },
+        },
+        select: { userId: true, userType: true },
+      })
+      for (const m of adminMembers) {
+        if (m.userType === 'teacher') {
+          const teacher = await prisma.teacher.findUnique({ where: { id: m.userId }, select: { userId: true } })
+          if (teacher) adminUserIds.push(teacher.userId)
+        } else if (m.userType === 'student') {
+          const student = await prisma.student.findUnique({ where: { id: m.userId }, select: { userId: true } })
+          if (student) adminUserIds.push(student.userId)
+        }
       }
     }
 
@@ -1569,6 +1594,16 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/solution', authenticate,
 
     if (!await isTeamMember(userId, training.teamId)) {
       return res.status(403).json({ success: false, message: '无权限' })
+    }
+
+    // 检查题解可见性：solutionVisible=true 或 训练已结束
+    const showSolution = training.solutionVisible || training.status === 'finished' || new Date() > training.endTime
+    if (!showSolution) {
+      // 非管理员且题解不可见，返回提示信息
+      const isAdmin = await isTeamAdmin(userId, training.teamId)
+      if (!isAdmin) {
+        return res.json({ success: true, data: null, message: '题解将在比赛结束后显示' })
+      }
     }
 
     // 查询训练题目关联的原题目

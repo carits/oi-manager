@@ -49,7 +49,7 @@ export function AppShell({ children }: AppShellProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'var(--gray-50)'
+        background: 'var(--bg-page)'
       }}>
         加载中...
       </div>
@@ -98,10 +98,10 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-page)' }}>
       {/* 统一顶部导航 */}
       <header style={{
-        background: 'white',
+        background: 'var(--bg-card)',
         borderBottom: '1px solid var(--border)',
         padding: '0.75rem 2rem',
         display: 'flex',
@@ -125,7 +125,7 @@ export function AppShell({ children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 style={{
-                  color: activeItem === item.label ? 'var(--primary)' : 'var(--gray-600)',
+                  color: activeItem === item.label ? 'var(--primary)' : 'var(--text-secondary)',
                   fontWeight: activeItem === item.label ? 500 : 400,
                   textDecoration: 'none',
                   padding: '0.25rem 0',
@@ -149,10 +149,10 @@ export function AppShell({ children }: AppShellProps) {
               gap: '0.75rem',
               cursor: 'pointer',
               padding: '0.25rem 0.5rem',
-              borderRadius: '6px',
+              borderRadius: 'var(--radius)',
               transition: 'background 0.2s',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-100)'}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
           >
             {/* 头像 */}
@@ -186,17 +186,17 @@ export function AppShell({ children }: AppShellProps) {
             )}
             {/* 用户名和角色 */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--gray-800)' }}>
+              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)' }}>
                 {user.username}
               </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 {roleLabel}
               </span>
             </div>
             {/* 下拉箭头 */}
             <span style={{
               fontSize: '0.75rem',
-              color: 'var(--gray-400)',
+              color: 'var(--text-muted)',
               transform: showUserMenu ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s'
             }}>
@@ -210,9 +210,9 @@ export function AppShell({ children }: AppShellProps) {
               position: 'absolute',
               top: 'calc(100% + 8px)',
               right: 0,
-              background: 'white',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              background: 'var(--bg-card)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-lg)',
               border: '1px solid var(--border)',
               minWidth: '160px',
               overflow: 'hidden',
@@ -225,12 +225,12 @@ export function AppShell({ children }: AppShellProps) {
                   display: 'block',
                   padding: '0.75rem 1rem',
                   fontSize: '0.875rem',
-                  color: 'var(--gray-700)',
+                  color: 'var(--text-primary)',
                   textDecoration: 'none',
                   borderBottom: '1px solid var(--border)',
                   transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 个人信息
@@ -242,12 +242,12 @@ export function AppShell({ children }: AppShellProps) {
                   display: 'block',
                   padding: '0.75rem 1rem',
                   fontSize: '0.875rem',
-                  color: 'var(--gray-700)',
+                  color: 'var(--text-primary)',
                   textDecoration: 'none',
                   borderBottom: '1px solid var(--border)',
                   transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 账号安全
@@ -259,12 +259,12 @@ export function AppShell({ children }: AppShellProps) {
                   display: 'block',
                   padding: '0.75rem 1rem',
                   fontSize: '0.875rem',
-                  color: 'var(--gray-700)',
+                  color: 'var(--text-primary)',
                   textDecoration: 'none',
                   borderBottom: '1px solid var(--border)',
                   transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 平台绑定
@@ -279,14 +279,14 @@ export function AppShell({ children }: AppShellProps) {
                   width: '100%',
                   padding: '0.75rem 1rem',
                   fontSize: '0.875rem',
-                  color: '#ef4444',
+                  color: 'var(--error)',
                   background: 'transparent',
                   border: 'none',
                   textAlign: 'left',
                   cursor: 'pointer',
                   transition: 'background 0.2s'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--error-light)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 退出登录
@@ -300,40 +300,6 @@ export function AppShell({ children }: AppShellProps) {
       <main style={{ padding: '1.5rem 2rem', maxWidth: '1400px', margin: '0 auto' }}>
         {children}
       </main>
-    </div>
-  )
-}
-
-// 页面标题组件
-export function PageHeader({ title, description }: { title: string; description?: string }) {
-  return (
-    <div style={{ marginBottom: '1.5rem' }}>
-      <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{title}</h2>
-      {description && (
-        <p style={{ color: 'var(--gray-500)', marginTop: '0.25rem', fontSize: '0.875rem' }}>
-          {description}
-        </p>
-      )}
-    </div>
-  )
-}
-
-// 卡片容器组件
-export function Card({ children, title, style }: { children: ReactNode; title?: string; style?: React.CSSProperties }) {
-  return (
-    <div style={{
-      background: 'white',
-      borderRadius: '8px',
-      padding: '1.5rem',
-      border: '1px solid var(--border)',
-      ...style
-    }}>
-      {title && (
-        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>
-          {title}
-        </h3>
-      )}
-      {children}
     </div>
   )
 }

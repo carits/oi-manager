@@ -203,9 +203,9 @@ export default function StudentsPage() {
                     fontWeight: 600,
                     color:
                       student.rating >= 1500
-                        ? '#16a34a'
+                        ? 'var(--success)'
                         : student.rating >= 1200
-                        ? '#f59e0b'
+                        ? 'var(--warning)'
                         : 'var(--gray-600)'
                   }}
                 >
@@ -330,8 +330,8 @@ export default function StudentsPage() {
             top: 24,
             left: '50%',
             transform: 'translateX(-50%)',
-            background: '#fff',
-            color: '#333',
+            background: 'var(--text-inverse)',
+            color: 'var(--text-primary)',
             padding: '12px 28px',
             borderRadius: 8,
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)',

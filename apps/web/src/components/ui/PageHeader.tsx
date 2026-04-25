@@ -13,7 +13,7 @@ export function PageHeader({ title, description, children }: PageHeaderProps) {
       <div>
         <h2 style={layoutStyles.title}>{title}</h2>
         {description && (
-          <p style={{ margin: '0.5rem 0 0 0', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+          <p style={{ margin: '0.5rem 0 0 0', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
             {description}
           </p>
         )}

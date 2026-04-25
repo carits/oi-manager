@@ -1,5 +1,113 @@
 # 当前任务
 
+## 任务：训练删除按钮（2026-04-25）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户需要在训练详情页的编辑按钮旁边添加删除按钮。后端 DELETE API 已存在，只需前端添加按钮和交互逻辑。
+
+### 解决方案
+
+1. 在编辑按钮旁边添加红色"删除"按钮（仅管理员可见）
+2. 使用 ConfirmModal 确认删除，提示会保留评测记录
+3. 调用已有的 `DELETE /api/trainings/:id` API
+4. 删除成功后跳转回训练列表
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 添加删除按钮 + ConfirmModal + handleDelete |
+
+### 关键约束
+
+- **不删除提交记录**：Submission 模型无 Training 外键，不受级联影响
+- **级联删除**：TrainingProblem、TrainingAttachment、TrainingSolution、TrainingParticipant 会被自动删除
+- **权限**：创建者、团队 owner、super_admin 可删除（后端已有校验）
+
+---
+
+## 任务：训练模块增强（2026-04-24）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户需要在团队训练模块的创建和编辑功能中添加以下选项：
+1. **题号显示**：控制来源平台题号何时对成员可见（始终显示 / 赛后才显示）
+2. **题解显示**：控制题解何时对成员可见（始终显示 / 赛后才显示）
+3. **管理员排名**：控制团队管理员是否出现在排名中
+
+### 解决方案
+
+1. **数据库模型**：Training 模型新增 `problemIdVisible`, `solutionVisible`, `includeAdminInRanking` 三个布尔字段
+2. **后端 API**：创建/更新训练接收新字段，排名/题目列表/题解 API 根据设置过滤数据
+3. **前端表单**：TrainingFormModal 添加三个控件
+4. **前端显示**：TrainingDetailPage 实现可见性逻辑
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/prisma/schema.prisma` | 添加三个新字段 |
+| `apps/server/src/modules/training/training.routes.ts` | 修改创建/更新/排名/题解/题目列表 API |
+| `apps/web/src/components/training/TrainingFormModal.tsx` | 添加三个表单字段 |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 题号/题解显示逻辑 |
+
+### 验证清单
+
+- [x] 创建训练时可设置题号显示、题解显示、管理员排名
+- [x] 编辑训练时可修改这三个选项
+- [x] 题号"赛后显示"时，训练进行中隐藏原题号
+- [x] 题号"始终显示"时，训练进行中可查看原题号
+- [x] 题解"赛后显示"时，训练进行中不显示题解
+- [x] 题解"始终显示"时，训练进行中可查看题解
+- [x] 管理员排名关闭时，owner/admin 不在排名中
+- [x] 管理员排名开启时，owner/admin 在排名中
+- [x] 更新 docs/current-task.md 和 docs/change-log.md
+
+---
+
+## 任务：训练排名当前用户高亮（2026-04-24）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈："请你对训练 排名做出重新铺垫一下 要求一眼能看出自己的排名 目前完全不能一眼看出当前账号排名"
+
+### 问题分析
+
+训练详情页的排名表格中，所有行的样式相同，用户无法快速定位自己在排名中的位置。
+
+### 解决方案
+
+1. **顶部排名信息卡片**：在排名表格上方显示"您的排名：第 X 名 / 共 N 人"，以及总分/通过数
+2. **当前用户行高亮**：当前用户所在行使用浅蓝色背景（`var(--info-light)`）
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 导入 useAuth、添加排名信息卡片、高亮当前用户行 |
+
+### 实现细节
+
+1. 导入 `useAuth` 获取当前用户 `user.userId`
+2. 在排名表格上方添加 IIFE 计算并显示排名信息卡片（仅当用户在排名中时显示）
+3. 在表格行渲染中判断 `row.userId === user?.userId`，高亮当前用户行
+
+### 验证
+
+- 成员端登录后查看训练排名，能看到自己的排名信息卡片
+- 当前用户行有明显浅蓝色高亮背景
+- 管理员端查看排名不受影响（管理员不在排名中，不显示排名信息）
+- IOI/ICPC 赛制显示正确信息（总分/通过数+罚时）
+
+---
+
 ## 任务：MLE 检测修复（2026-04-23）
 
 状态: **已完成** ✅
