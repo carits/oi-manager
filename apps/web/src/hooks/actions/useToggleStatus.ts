@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getAuthHeaders } from '@/lib/auth'
-import { ENV } from '@/config/env'
+import { apiClient } from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 
 export interface UseToggleStatusResult {
@@ -17,20 +16,12 @@ export function useToggleStatus(endpoint: string, onSuccess?: () => void): UseTo
   const toggleStatus = async (id: string, newStatus: 'active' | 'disabled'): Promise<boolean> => {
     setToggling(true)
     try {
-      const res = await fetch(`${ENV.API_URL}${endpoint}/${id}/status`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: newStatus })
-      })
-      const data = await res.json()
-      if (data.success) {
+      const res = await apiClient.put(`${endpoint}/${id}/status`, { status: newStatus })
+      if (res.success) {
         onSuccess?.()
         return true
       } else {
-        toast.error(data.message || '操作失败')
+        toast.error(res.message || '操作失败')
         return false
       }
     } catch (error) {

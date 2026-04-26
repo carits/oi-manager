@@ -4,8 +4,8 @@ module.exports = {
       name: 'oi-server',
       script: 'dist/index.js',
       cwd: './apps/server',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',

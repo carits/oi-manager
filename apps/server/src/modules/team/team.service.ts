@@ -368,37 +368,35 @@ export class TeamService {
     const admins = team.TeamMember.filter(m => m.role === 'admin')
     const members = team.TeamMember.filter(m => m.role === 'member')
 
-    const ownerInfo = owner ? await getMemberDetails(owner.userId, owner.userType as MemberType) : null
-    const adminsInfo = await Promise.all(admins.map(a => getMemberDetails(a.userId, a.userType as MemberType)))
-
-    const teachersInfo = await Promise.all(
-      members
-        .filter(m => m.userType === 'teacher')
-        .map(async m => {
-          const details = await getMemberDetails(m.userId, m.userType as MemberType)
-          return details ? { ...details, joinedAt: m.joinedAt } : null
-        })
-    )
-
-    const studentsInfo = await Promise.all(
-      members
-        .filter(m => m.userType === 'student')
-        .map(async m => {
-          const details = await getMemberDetails(m.userId, m.userType as MemberType)
-          return details ? { ...details, joinedAt: m.joinedAt } : null
-        })
-    )
-
     // 查询 pending 状态的教师请求
     const pendingTeachers = await this.repo.findMembers(teamId, { status: 'pending', userType: 'teacher' })
-      .then(members => members.filter(m => !m.invitedBy))
+      .then(ms => ms.filter(m => !m.invitedBy))
 
-    const pendingTeachersInfo = await Promise.all(
-      pendingTeachers.map(async m => {
-        const details = await getMemberDetails(m.userId, m.userType as MemberType)
-        return details ? { ...details, memberId: m.id, requestedAt: m.joinedAt } : null
-      })
-    )
+    // 批量获取所有成员详情（4 次查询替代 N×2 次）
+    const allMembers = [
+      ...(owner ? [{ userId: owner.userId, userType: owner.userType as MemberType, role: 'owner' as const, joinedAt: owner.joinedAt, id: '' }] : []),
+      ...admins.map(a => ({ userId: a.userId, userType: a.userType as MemberType, role: 'admin' as const, joinedAt: a.joinedAt, id: '' })),
+      ...members.map(m => ({ userId: m.userId, userType: m.userType as MemberType, role: 'member' as const, joinedAt: m.joinedAt, id: m.id })),
+      ...pendingTeachers.map(m => ({ userId: m.userId, userType: m.userType as MemberType, role: 'pending' as const, joinedAt: m.joinedAt, id: m.id })),
+    ]
+    const detailsMap = await getMemberDetailsBatch(allMembers)
+
+    const ownerInfo = owner ? (detailsMap.get(`teacher:${owner.userId}`) || detailsMap.get(`student:${owner.userId}`)) ?? null : null
+
+    const adminsInfo = admins.map(a => detailsMap.get(`${a.userType}:${a.userId}`)).filter(Boolean)
+
+    const teachersInfo = members
+      .filter(m => m.userType === 'teacher')
+      .map(m => { const d = detailsMap.get(`teacher:${m.userId}`); return d ? { ...d, joinedAt: m.joinedAt } : null })
+
+    const studentsInfo = members
+      .filter(m => m.userType === 'student')
+      .map(m => { const d = detailsMap.get(`student:${m.userId}`); return d ? { ...d, joinedAt: m.joinedAt } : null })
+
+    const pendingTeachersInfo = pendingTeachers.map(m => {
+      const d = detailsMap.get(`teacher:${m.userId}`)
+      return d ? { ...d, memberId: m.id, requestedAt: m.joinedAt } : null
+    })
 
     return transformTeamForFrontend({
       ...team,

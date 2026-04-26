@@ -77,6 +77,14 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
     fetchTrainings()
   }, [fetchTrainings])
 
+  // Auto-refresh when upcoming/ongoing trainings exist
+  useEffect(() => {
+    const hasActive = trainings.some(t => t.status === 'upcoming' || t.status === 'ongoing')
+    if (!hasActive) return
+    const timer = setInterval(fetchTrainings, 30000)
+    return () => clearInterval(timer)
+  }, [trainings, fetchTrainings])
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)', fontSize: '0.85rem' }}>加载中...</div>
   }

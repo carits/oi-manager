@@ -1,5 +1,104 @@
 # 当前任务
 
+## 任务：页面状态自动刷新（2026-04-26）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈：训练从未开始（upcoming）变成开始（ongoing）后，页面内容不会自动更新，需要手动刷新浏览器。类似的状态变化不自动刷新问题在很多场景下都存在。
+
+### 完成内容
+
+| 场景 | 修改前 | 修改后 | 机制 |
+|------|--------|--------|------|
+| 训练 upcoming → ongoing | 页面锁定不消失 | 倒计时检测到时间跨越 startTime 后自动 refresh | 边界检测（1秒精度） |
+| 训练 ongoing → finished | 状态标签不更新 | 倒计时检测到时间超过 endTime 后自动 refresh | 边界检测（1秒精度） |
+| 提交代码后题目列表 | AC 状态不更新 | 提交成功后刷新 problemListData | 事件驱动 |
+| 评测记录 queuing | 列表不自动刷新 | queuing/judging 记录时 5 秒轮询 | 条件轮询 |
+| 训练列表页状态 | 不自动刷新 | 有 upcoming/ongoing 训练时 30 秒刷新 | 条件轮询 |
+
+### 涉及文件
+
+| 文件 | 修改 |
+|------|------|
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 倒计时添加状态边界检测 + 提交后刷新题目列表 |
+| `apps/web/src/components/training/hooks/useTrainingSubmissions.ts` | loadSubmissions 提取为 useCallback + queuing 时 5 秒轮询 |
+| `apps/web/src/components/training/TeamTrainingList.tsx` | 有 active 训练时 30 秒自动刷新 |
+
+### 验证
+
+- `pnpm build` ✅ 构建通过（零错误）
+
+---
+
+## 任务：弹窗尺寸和交互体验修复（2026-04-26）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈多个弹窗尺寸不合理：训练创建/编辑弹窗过小、别名输入太窄、提交记录详情弹窗过窄过矮。全面审查所有弹窗后修正。
+
+### 完成内容
+
+| 弹窗 | 修改前 | 修改后 | 问题 |
+|------|--------|--------|------|
+| TrainingFormModal | 750px | 960px | 表格6-7列挤在一起，别名36px太窄 |
+| TrainingFormModal 别名列 | 45px/36px | 70px/60px | 输入框无法显示2字符以上别名 |
+| TrainingFormModal 题号列 | 100px | 120px | 长题号显示不全 |
+| TrainingFormModal 分值列 | 55px/50px | 65px/58px | 偏紧 |
+| TrainingFormModal 排序列 | 50px | 64px | 上下按钮空间不足 |
+| SubmissionDetailModal 代码区 | maxHeight 400px | maxHeight 60vh | 长代码看不了多少 |
+| SubmissionDetailModal 整体 | 无高度限制 | maxHeight 75vh + flex | 测试点多时信息区过长 |
+| 提交代码 Modal | 700px | 750px | 代码编辑区偏窄 |
+| TranslateModal | 400px | 640px | 翻译结果文字多，行宽太短 |
+
+### 涉及文件
+
+| 文件 | 修改 |
+|------|------|
+| `apps/web/src/components/training/TrainingFormModal.tsx` | 宽度 750→960，列宽调整 |
+| `apps/web/src/components/submission/SubmissionDetailModal.tsx` | 代码区 400px→60vh，整体 maxHeight 75vh + flex |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 提交代码 Modal 700→750 |
+| `apps/web/src/components/problem/TranslateModal.tsx` | 宽度 400→640 |
+
+### 验证
+
+- `pnpm build` ✅ 构建通过
+
+---
+
+## 任务：未开始训练可见性权限修复（2026-04-26）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户报告：未开始的训练（status=upcoming），普通团队成员可以看到题目列表、题面、评测记录、排名等所有内容。这是权限漏洞——未开始的训练只应对团队管理员可见，普通成员只能看到训练基本信息。
+
+### 完成内容
+
+1. **后端状态检查** ✅
+   - 添加 `requireTrainingStarted` 辅助函数，动态计算训练状态，upcoming 时拒绝非管理员访问
+   - 对 9 个内容路由添加状态检查：problems、problem-status、detail、note(GET)、note(PUT)、submissions、submission-detail、ranking、attachments
+
+2. **前端 UI 提示** ✅
+   - TrainingDetailPage 添加 upcoming 非 admin 提示 UI，显示锁定图标、开始时间、等待提示
+
+### 涉及文件
+
+| 文件 | 修改 |
+|------|------|
+| `apps/server/src/modules/training/training.routes.ts` | 添加 `requireTrainingStarted` 函数，9 个路由添加状态检查 |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 添加 upcoming 非 admin 的锁定提示 UI |
+
+### 验证
+
+- `pnpm build` ✅ 构建通过（零错误）
+
+---
+
 ## 任务：第三轮小步重构 — TrainingDetailPage.tsx（2026-04-25）
 
 状态: **已完成** ✅

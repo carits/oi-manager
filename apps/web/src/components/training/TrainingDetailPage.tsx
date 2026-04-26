@@ -64,6 +64,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const [allAttachments, setAllAttachments] = useState<Record<string, Attachment[]>>({})
 
   const isOngoing = training?.status === 'ongoing'
+  const isUpcoming = training?.status === 'upcoming'
+  const hideContent = isUpcoming && !training.isAdmin
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
 
   // Load problem list when tab changes
@@ -129,13 +131,25 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     loadAllAttachments()
   }, [activeTab, trainingId, problems])
 
-  // Countdown timer
+  // Countdown timer + status boundary detection
   useEffect(() => {
     if (!training) return
+    const start = new Date(training.startTime)
+    const end = new Date(training.endTime)
+    let refreshed = false
+
     const update = () => {
       const now = new Date()
-      const start = new Date(training.startTime)
-      const end = new Date(training.endTime)
+      // Detect status boundary: time crossed but frontend state is stale
+      if (!refreshed) {
+        if (training.status === 'upcoming' && now >= start) {
+          refresh()
+          refreshed = true
+        } else if (training.status === 'ongoing' && now > end) {
+          refresh()
+          refreshed = true
+        }
+      }
       if (now < start) {
         const diff = start.getTime() - now.getTime()
         const h = Math.floor(diff / 3600000)
@@ -155,7 +169,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     update()
     const timer = setInterval(update, 1000)
     return () => clearInterval(timer)
-  }, [training])
+  }, [training, refresh])
 
   // Wire submit code → set detail submission id
   const handleSubmitCode = async () => {
@@ -163,6 +177,9 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     if (submissionId != null) {
       if (activeTab === 'submissions') {
         sub.setSubmissionsPage(1)
+      }
+      if (activeTab === 'problemList') {
+        loadProblemListData()
       }
       sub.setDetailSubmissionId(submissionId)
     }
@@ -276,6 +293,19 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
       {/* Main Content */}
       <div style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '1rem', boxSizing: 'border-box' }}>
+        {hideContent ? (
+          <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>训练尚未开始</h2>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+              开始时间：{new Date(training.startTime).toLocaleString('zh-CN')}
+            </p>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              请等待管理员开启训练后再查看内容
+            </p>
+          </div>
+        ) : (
+        <>
         {activeTab === 'problemList' && (
           <TrainingProblemList
             problemListData={problemListData}
@@ -350,6 +380,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         {activeTab === 'ranking' && !rankingData && (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}>加载中...</div>
         )}
+        </>
+        )}
       </div>
 
       {/* Submission Detail Modal */}
@@ -374,7 +406,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
             const problemIdPart = hideProblemId ? '' : (selectedProblem?.platformProblemId || '')
             return `${platformPrefix}${problemIdPart} - ${selectedProblem?.alias || selectedProblem?.problemTitle || ''}`
           })()}
-          width="700px"
+          width="750px"
         >
           {/* Submit method selection for non-Carits platforms */}
           {selectedProblem?.platform && selectedProblem.platform !== 'carits' && (

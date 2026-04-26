@@ -166,13 +166,21 @@ schoolRouter.get('/:id/student-rankings', authenticate, async (req: AuthRequest,
       select: { educationSystem: true, schoolType: true }
     })
 
-    const students = await prisma.student.findMany({
-      where: { schoolId: id },
-      include: {
-        User: { select: { username: true, avatar: true } }
-      },
-      orderBy: { rating: 'desc' }
-    })
+    const page = Math.max(1, parseInt(req.query.page as string) || 1)
+    const pageSize = Math.min(Math.max(1, parseInt(req.query.pageSize as string) || 50), 200)
+
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        where: { schoolId: id },
+        include: {
+          User: { select: { username: true, avatar: true } }
+        },
+        orderBy: { rating: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.student.count({ where: { schoolId: id } })
+    ])
 
     // 将学校信息附加到每个学生
     const studentsWithSchool = students.map(s => ({
@@ -183,7 +191,14 @@ schoolRouter.get('/:id/student-rankings', authenticate, async (req: AuthRequest,
       }
     }))
 
-    res.json({ success: true, data: studentsWithSchool })
+    res.json({
+      success: true,
+      data: studentsWithSchool,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize)
+    })
   } catch (error) {
     console.error('Get student rankings error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -200,17 +215,25 @@ schoolRouter.get('/:id/students-by-grade', authenticate, async (req: AuthRequest
       return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生列表' })
     }
 
-    const students = await prisma.student.findMany({
-      where: { schoolId: id },
-      include: {
-        User: { select: { username: true } },
-        Teacher: { select: { name: true } }
-      },
-      orderBy: [
-        { enrollmentYear: 'asc' }, // 入学年份升序（越早入学年级越高）
-        { name: 'asc' }
-      ]
-    })
+    const page = Math.max(1, parseInt(req.query.page as string) || 1)
+    const pageSize = Math.min(Math.max(1, parseInt(req.query.pageSize as string) || 50), 200)
+
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        where: { schoolId: id },
+        include: {
+          User: { select: { username: true } },
+          Teacher: { select: { name: true } }
+        },
+        orderBy: [
+          { enrollmentYear: 'asc' }, // 入学年份升序（越早入学年级越高）
+          { name: 'asc' }
+        ],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.student.count({ where: { schoolId: id } })
+    ])
 
     // 按入学年份分组
     const grouped = students.reduce((acc, student) => {
@@ -220,7 +243,14 @@ schoolRouter.get('/:id/students-by-grade', authenticate, async (req: AuthRequest
       return acc
     }, {} as Record<number, typeof students>)
 
-    res.json({ success: true, data: grouped })
+    res.json({
+      success: true,
+      data: grouped,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize)
+    })
   } catch (error) {
     console.error('Get students by grade error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })

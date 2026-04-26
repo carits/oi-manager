@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getAuthHeaders } from '@/lib/auth'
-import { ENV } from '@/config/env'
+import { apiClient } from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 
 export interface UseDeleteResult {
@@ -21,16 +20,12 @@ export function useDelete(endpoint: string, onSuccess?: () => void): UseDeleteRe
 
     setDeleting(true)
     try {
-      const res = await fetch(`${ENV.API_URL}${endpoint}/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      })
-      const data = await res.json()
-      if (data.success) {
+      const res = await apiClient.delete(`${endpoint}/${id}`)
+      if (res.success) {
         onSuccess?.()
         return true
       } else {
-        toast.error(data.message || '删除失败')
+        toast.error(res.message || '删除失败')
         return false
       }
     } catch (error) {

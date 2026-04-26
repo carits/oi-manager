@@ -81,8 +81,11 @@ app.use('/api', globalLimiter)
 
 // ==================== 静态文件服务 ====================
 
-// 上传的文件（注意：当前无权限控制，记录为已知问题 P2）
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+// 公开静态文件（头像等）
+// 私有文件必须通过 /api/files/:id/download 权限接口访问
+app.use('/uploads/public', express.static(path.join(__dirname, '../uploads/public')))
+// 兼容旧路径 /public
+app.use('/public', express.static(path.join(__dirname, '../uploads/public')))
 
 // ==================== API 路由 ====================
 

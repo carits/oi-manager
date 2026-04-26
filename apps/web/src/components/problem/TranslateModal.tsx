@@ -27,7 +27,7 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
       isOpen={true}
       onClose={onCancel}
       title="AI 翻译"
-      width="400px"
+      width="640px"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <button

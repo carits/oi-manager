@@ -267,7 +267,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           加载中...
         </div>
       ) : detail ? (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '75vh', overflow: 'hidden' }}>
           {/* 提交信息表格 */}
           <div style={{
             display: 'grid',
@@ -277,6 +277,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             padding: '1rem',
             background: 'var(--bg-muted)',
             borderRadius: '8px',
+            flexShrink: 0,
           }}>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>评测结果</div>
@@ -328,6 +329,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             padding: '0.75rem 1rem',
             background: 'var(--bg-muted)',
             borderRadius: '8px',
+            flexShrink: 0,
           }}>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>提交时间：</span>
@@ -366,6 +368,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               borderRadius: '8px',
               color: 'var(--error-text)',
               fontSize: '0.875rem',
+              flexShrink: 0,
             }}>
               {detail.errorMessage}
             </div>
@@ -377,6 +380,8 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             border: '1px solid #e5e7eb',
             borderRadius: '8px',
             overflow: 'hidden',
+            flex: 1,
+            minHeight: 0,
           }}>
             {/* Copy Code 按钮 */}
             <button
@@ -399,7 +404,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
             {/* 代码区域 */}
             <div style={{
-              maxHeight: '400px',
+              maxHeight: '60vh',
               overflow: 'auto',
               background: 'var(--bg-muted)',
             }}>

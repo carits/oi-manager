@@ -140,7 +140,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'registered' | 'judge' | 'result' | 'ping' | 'pong'
+  type: 'register' | 'registered' | 'judge' | 'result' | 'ping' | 'pong' | 'auth_success' | 'error'
   payload: any
 }
 

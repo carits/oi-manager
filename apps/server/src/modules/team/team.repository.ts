@@ -734,20 +734,20 @@ export class TeamRepository {
         select: { id: true, name: true, avatar: true, userId: true },
         take: 20
       })
-      // 获取用户名和头像
-      const studentUsers = await Promise.all(
-        students.map(s =>
-          s.userId
-            ? prisma.user.findUnique({ where: { id: s.userId }, select: { username: true, avatar: true } })
-            : Promise.resolve(null)
-        )
-      )
-      result.students = students.map((s, i) => ({
-        id: s.id,
-        name: s.name,
-        avatar: studentUsers[i]?.avatar || s.avatar,
-        username: studentUsers[i]?.username || ''
-      }))
+      const studentUserIds = students.filter(s => s.userId).map(s => s.userId!)
+      const studentUsers = studentUserIds.length > 0
+        ? await prisma.user.findMany({ where: { id: { in: studentUserIds } }, select: { id: true, username: true, avatar: true } })
+        : []
+      const studentUserMap = new Map(studentUsers.map(u => [u.id, u]))
+      result.students = students.map(s => {
+        const user = s.userId ? studentUserMap.get(s.userId) : undefined
+        return {
+          id: s.id,
+          name: s.name,
+          avatar: user?.avatar || s.avatar,
+          username: user?.username || ''
+        }
+      })
     }
 
     // 搜索教师
@@ -761,18 +761,20 @@ export class TeamRepository {
         select: { id: true, name: true, avatar: true, userId: true },
         take: 20
       })
-      // 获取用户名和头像
-      const teacherUsers = await Promise.all(
-        teachers.map(t =>
-          prisma.user.findUnique({ where: { id: t.userId }, select: { username: true, avatar: true } })
-        )
-      )
-      result.teachers = teachers.map((t, i) => ({
-        id: t.id,
-        name: t.name,
-        avatar: teacherUsers[i]?.avatar || t.avatar,
-        username: teacherUsers[i]?.username || ''
-      }))
+      const teacherUserIds = teachers.map(t => t.userId)
+      const teacherUsers = teacherUserIds.length > 0
+        ? await prisma.user.findMany({ where: { id: { in: teacherUserIds } }, select: { id: true, username: true, avatar: true } })
+        : []
+      const teacherUserMap = new Map(teacherUsers.map(u => [u.id, u]))
+      result.teachers = teachers.map(t => {
+        const user = teacherUserMap.get(t.userId)
+        return {
+          id: t.id,
+          name: t.name,
+          avatar: user?.avatar || t.avatar,
+          username: user?.username || ''
+        }
+      })
     }
 
     return result

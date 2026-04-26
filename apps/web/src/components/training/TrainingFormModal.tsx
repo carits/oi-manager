@@ -395,7 +395,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
       isOpen={isOpen}
       onClose={onClose}
       title={isEdit ? '编辑训练' : '创建训练'}
-      width="750px"
+      width="960px"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
@@ -473,13 +473,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-muted)' }}>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '50px' }}>排序</th>
+                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '64px' }}>排序</th>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '36px' }}>#</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '140px' }}>OJ</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '100px' }}>题号</th>
+                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '130px' }}>OJ</th>
+                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '120px' }}>题号</th>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>题目</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '45px' }}>别名</th>
-                        {format === 'ioi' && <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '55px' }}>分值</th>}
+                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '70px' }}>别名</th>
+                        {format === 'ioi' && <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '65px' }}>分值</th>}
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '40px' }}></th>
                       </tr>
                     </thead>
@@ -556,7 +556,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                             <input
                               value={row.alias}
                               onChange={e => updateRow(row.id, { alias: e.target.value })}
-                              style={{ width: '36px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
+                              style={{ width: '60px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
                             />
                           </td>
                           {format === 'ioi' && (
@@ -565,7 +565,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                                 type="number"
                                 value={row.points}
                                 onChange={e => updateRow(row.id, { points: parseInt(e.target.value) || 0 })}
-                                style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
+                                style={{ width: '58px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
                               />
                             </td>
                           )}

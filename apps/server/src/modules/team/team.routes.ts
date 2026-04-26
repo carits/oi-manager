@@ -12,7 +12,7 @@ import { authenticate } from '../../middleware/auth'
 import { canAccessSchool, canViewStudent } from '../../middleware/permissions'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
-import { getUserName, getMemberDetails, transformTeamForFrontend } from './team.utils'
+import { getUserName, getMemberDetails, getMemberDetailsBatch, getUserNames, transformTeamForFrontend } from './team.utils'
 import logger from '../../lib/logger'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { prisma } from '../../prisma'
@@ -850,28 +850,24 @@ teamRouter.get('/:id/pending-invites', authenticate, async (req, res) => {
 
     const pendingMembers = await teamRepository.findMembers(id, { status: 'pending' })
 
-    const invites = await Promise.all(
-      pendingMembers.map(async (member) => {
-        let invitedByName = '未知'
-        if (member.invitedBy) {
-          invitedByName = await getUserName(member.invitedBy, 'teacher')
-        }
+    // 批量查询成员详情 + 邀请人名称
+    const [detailsMap, inviterNames] = await Promise.all([
+      getMemberDetailsBatch(pendingMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType }))),
+      getUserNames(pendingMembers.filter(m => m.invitedBy).map(m => m.invitedBy!), 'teacher'),
+    ])
 
-        const userDetails = await getMemberDetails(member.userId, member.userType as MemberType)
-
-        // 如果用户信息查不到（已被删除），跳过该邀请
-        if (!userDetails) return null
-
-        return {
-          id: member.id,
-          type: member.userType,
-          role: member.role,
-          invitedAt: member.joinedAt,
-          invitedByName,
-          user: userDetails
-        }
-      })
-    )
+    const invites = pendingMembers.map(member => {
+      const userDetails = detailsMap.get(`${member.userType}:${member.userId}`)
+      if (!userDetails) return null
+      return {
+        id: member.id,
+        type: member.userType,
+        role: member.role,
+        invitedAt: member.joinedAt,
+        invitedByName: member.invitedBy ? (inviterNames.get(member.invitedBy) || '未知') : '未知',
+        user: userDetails
+      }
+    })
 
     res.json({ success: true, data: invites.filter(Boolean) })
   } catch (error) {
@@ -887,12 +883,12 @@ teamRouter.get('/:id/admins', authenticate, async (req, res) => {
 
     const adminMembers = await teamRepository.findAdmins(id)
 
-    const admins = await Promise.all(
-      adminMembers.map(async m => {
-        const details = await getMemberDetails(m.userId, m.userType as MemberType)
-        return details ? { ...details, adminType: m.userType } : null
-      })
-    )
+    const detailsMap = await getMemberDetailsBatch(adminMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType })))
+
+    const admins = adminMembers.map(m => {
+      const details = detailsMap.get(`${m.userType}:${m.userId}`)
+      return details ? { ...details, adminType: m.userType } : null
+    })
 
     res.json({ success: true, data: admins.filter(Boolean) })
   } catch (error) {

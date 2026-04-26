@@ -9,6 +9,7 @@
  */
 
 import { CookieJar, Cookie } from 'tough-cookie'
+import logger from '../../../lib/logger'
 
 const VJUDGE_BASE_URL = 'https://vjudge.net/'
 const VJUDGE_LOGIN_URL = 'https://vjudge.net/user/login'
@@ -124,16 +125,16 @@ export class VJudgeSession {
         const cookie = new Cookie({ key, value, domain, path: '/' })
         this.jar.setCookieSync(cookie, `https://${domain}/`)
       } catch (e) {
-        console.error(`[VJudge] Failed to load raw cookie: ${key}`, e)
+        logger.warn('vjudge_error', { action: 'load_raw_cookie_failed', metadata: { error: e instanceof Error ? e.message : String(e) } })
       }
     }
-    console.log(`[VJudge] loadRawCookieString: loaded ${pairs.length} cookies`)
+    logger.info('vjudge_debug', { action: 'load_raw_cookie_string', metadata: { cookieCount: pairs.length } })
   }
 
   loadCookies(data: string): void {
     try {
       const parsed = JSON.parse(data)
-      console.log('[VJudge] loadCookies: parsed type =', typeof parsed, Array.isArray(parsed))
+      logger.info('vjudge_debug', { action: 'load_cookies_parsed', metadata: { isParsed: typeof parsed === 'object', isArray: Array.isArray(parsed) } })
 
       // tough-cookie v6 序列化格式可能是对象 { cookies: [...] } 或数组 [...]
       let cookies: any[]
@@ -142,11 +143,11 @@ export class VJudgeSession {
       } else if (parsed && Array.isArray(parsed.cookies)) {
         cookies = parsed.cookies
       } else {
-        console.log('[VJudge] loadCookies: unknown format, keys =', parsed ? Object.keys(parsed) : 'null')
+        logger.info('vjudge_debug', { action: 'load_cookies_unknown_format', metadata: { hasParsed: !!parsed } })
         return
       }
 
-      console.log('[VJudge] loadCookies: loading', cookies.length, 'cookies')
+      logger.info('vjudge_debug', { action: 'load_cookies_loading', metadata: { cookieCount: cookies.length } })
       for (const cookieData of cookies) {
         try {
           const cookie = Cookie.fromJSON(cookieData)
@@ -156,11 +157,11 @@ export class VJudgeSession {
             this.jar.setCookieSync(cookie, `https://${domain}${path}`)
           }
         } catch (e) {
-          console.error('[VJudge] Failed to load cookie:', cookieData.key, e)
+          logger.warn('vjudge_error', { action: 'load_cookie_failed', metadata: { error: e instanceof Error ? e.message : String(e) } })
         }
       }
     } catch (err) {
-      console.error('[VJudge] Failed to load cookies:', err)
+      logger.warn('vjudge_error', { action: 'load_cookies_failed', metadata: { error: err instanceof Error ? err.message : String(err) } })
     }
   }
 
@@ -185,7 +186,7 @@ export class VJudgeSession {
         return !skipPrefixes.some(prefix => key.startsWith(prefix) || key === prefix)
       })
 
-      console.log(`[VJudge] loadCookiesFiltered: ${cookies.length} total, ${filtered.length} after filter (skipped keys: ${cookies.filter(c => !filtered.includes(c)).map(c => c.key).join(', ')})`)
+      logger.info('vjudge_debug', { action: 'load_cookies_filtered', metadata: { totalCount: cookies.length, filteredCount: filtered.length } })
 
       for (const cookieData of filtered) {
         try {
@@ -200,7 +201,7 @@ export class VJudgeSession {
         }
       }
     } catch (err) {
-      console.error('[VJudge] loadCookiesFiltered failed:', err)
+      logger.warn('vjudge_error', { action: 'load_cookies_filtered_failed', metadata: { error: err instanceof Error ? err.message : String(err) } })
     }
   }
 
@@ -278,17 +279,17 @@ export class VJudgeSession {
    */
   async login(username: string, password: string): Promise<LoginResult> {
     try {
-      console.log(`[VJudge] Starting login for: ${username}`)
+      logger.info('vjudge_debug', { action: 'login_start', metadata: { username } })
 
       // 1. 先访问首页，获取初始 Cookie（包括 Cloudflare）
-      console.log('[VJudge] Step 1: Visiting homepage...')
+      logger.info('vjudge_debug', { action: 'login_visit_homepage' })
       const homeResp = await this.fetchWithRedirect(VJUDGE_BASE_URL)
 
       // 不再检查首页内容，直接继续登录流程
-      console.log(`[VJudge] Homepage status: ${homeResp.status}`)
+      logger.info('vjudge_debug', { action: 'login_homepage_status', metadata: { status: homeResp.status } })
 
       // 2. POST 登录
-      console.log('[VJudge] Step 2: Posting login...')
+      logger.info('vjudge_debug', { action: 'login_posting' })
       const loginResp = await this.fetch(VJUDGE_LOGIN_URL, {
         method: 'POST',
         headers: {
@@ -303,7 +304,7 @@ export class VJudgeSession {
       })
 
       const loginText = await loginResp.text()
-      console.log(`[VJudge] Login response: ${loginText.substring(0, 200)}`)
+      logger.info('vjudge_debug', { action: 'login_response_received', metadata: { responseLength: loginText.length } })
 
       // 3. 直接检查登录 API 响应
       // VJudge 登录成功返回 "success"，失败返回错误信息
@@ -311,7 +312,7 @@ export class VJudgeSession {
 
       if (trimmedResponse === 'success' || loginText.includes('success')) {
         this.username = username
-        console.log(`[VJudge] Login successful (API response): ${username}`)
+        logger.info('vjudge_debug', { action: 'login_success_api', metadata: { username } })
         return {
           success: true,
           username: this.username,
@@ -335,12 +336,12 @@ export class VJudgeSession {
       }
 
       // 其他情况，尝试验证登录状态（可能触发 Cloudflare）
-      console.log('[VJudge] Step 3: Verifying login status (fallback)...')
+      logger.info('vjudge_debug', { action: 'login_verify_fallback' })
       const verifyResult = await this.isLoggedIn()
 
       if (verifyResult.logged_in) {
         this.username = verifyResult.username || username
-        console.log(`[VJudge] Login successful: ${this.username}`)
+        logger.info('vjudge_debug', { action: 'login_success_verified', metadata: { username: this.username } })
         return {
           success: true,
           username: this.username,
@@ -352,7 +353,7 @@ export class VJudgeSession {
         message: verifyResult.reason || '登录失败',
       }
     } catch (err) {
-      console.error('[VJudge] Login error:', err)
+      logger.warn('vjudge_error', { action: 'login_error', metadata: { error: err instanceof Error ? err.message : String(err) } })
       return {
         success: false,
         message: `登录异常: ${err instanceof Error ? err.message : String(err)}`,
@@ -415,8 +416,8 @@ export class VJudgeSession {
         }
       }
 
-      // 保存调试信息
-      console.log('[VJudge] Unknown page state, preview:', html.substring(0, 500))
+      // 记录未知页面状态（不输出 HTML 内容）
+      logger.info('vjudge_debug', { action: 'unknown_page_state', metadata: { htmlLength: html.length } })
 
       return {
         logged_in: false,
@@ -468,7 +469,7 @@ export class VJudgeSession {
       // 匹配 <textarea name="dataJson">...</textarea>
       const match = html.match(/<textarea[^>]*name=["']dataJson["'][^>]*>([\s\S]*?)<\/textarea>/i)
       if (!match) {
-        console.log('[VJudge] dataJson textarea not found')
+        logger.info('vjudge_debug', { action: 'data_json_not_found' })
         return null
       }
       // 解码 HTML 实体
@@ -483,7 +484,7 @@ export class VJudgeSession {
         .replace(/&apos;/g, "'")
       return JSON.parse(raw)
     } catch (err) {
-      console.error('[VJudge] Failed to parse dataJson:', err)
+      logger.warn('vjudge_error', { action: 'parse_data_json_failed', metadata: { error: err instanceof Error ? err.message : String(err) } })
       return null
     }
   }
@@ -493,12 +494,11 @@ export class VJudgeSession {
    */
   async getMyGroups(): Promise<VjudgeGroupItem[]> {
     try {
-      console.log('[VJudge] Fetching my groups...')
+      logger.info('vjudge_debug', { action: 'fetch_my_groups' })
 
       // 先检查 Cookie Jar 中有多少 cookie
       const allCookies = await this.jar.getCookies('https://vjudge.net')
-      console.log('[VJudge] Cookie jar has', allCookies.length, 'cookies for vjudge.net')
-      console.log('[VJudge] Cookie keys:', allCookies.map(c => c.key).join(', '))
+      logger.info('vjudge_debug', { action: 'cookie_jar_status', metadata: { cookieCount: allCookies.length } })
 
       const html = await this.get('https://vjudge.net/group')
 
@@ -508,7 +508,7 @@ export class VJudgeSession {
       const hasLogin = html.includes('/user/login')
       const hasDropdown = html.includes('userNameDropdown')
       const isLoggedIn = hasLogout || hasLogoutItem || hasDropdown
-      console.log('[VJudge] Page analysis: hasLogout=', hasLogout, 'hasLogoutItem=', hasLogoutItem, 'hasDropdown=', hasDropdown, 'hasLogin=', hasLogin)
+      logger.info('vjudge_debug', { action: 'page_analysis', metadata: { isLoggedIn, hasLogout, hasLogoutItem, hasDropdown, hasLogin } })
 
       // 只有确定未登录 + Cloudflare 标记时才判断为拦截
       // VJudge 使用 Cloudflare CDN，正常页面也可能包含这些字符串
@@ -516,19 +516,17 @@ export class VJudgeSession {
         // 确认在登录页 → 检查是否被 Cloudflare 拦截
         if (html.includes('Just a moment') || html.includes('cf-browser-verification') ||
             html.includes('challenge-platform') || html.includes('Human verification')) {
-          console.log('[VJudge] Blocked by Cloudflare!')
+          logger.info('vjudge_debug', { action: 'cloudflare_blocked' })
           throw new Error('CLOUDFLARE_BLOCKED: 被 Cloudflare 人机验证拦截，请重新获取 Cookie')
         }
-        console.log('[VJudge] Not logged in, but not Cloudflare blocked')
+        logger.info('vjudge_debug', { action: 'not_logged_in_no_cloudflare' })
         return []
       }
 
       const data = this.extractDataJson(html)
 
       if (!data) {
-        console.log('[VJudge] No dataJson found in group page')
-        // 打印HTML前500字符用于调试
-        console.log('[VJudge] HTML preview:', html.substring(0, 500))
+        logger.info('vjudge_debug', { action: 'no_data_json_group_page' })
         return []
       }
 
@@ -543,10 +541,10 @@ export class VJudgeSession {
         })
       }
 
-      console.log(`[VJudge] Found ${groups.length} groups`)
+      logger.info('vjudge_debug', { action: 'groups_found', metadata: { count: groups.length } })
       return groups
     } catch (err) {
-      console.error('[VJudge] Failed to get my groups:', err)
+      logger.warn('vjudge_error', { action: 'get_my_groups_failed', metadata: { error: err instanceof Error ? err.message : String(err) } })
       return []
     }
   }
@@ -556,7 +554,7 @@ export class VJudgeSession {
    */
   async getGroupDetails(shortName: string): Promise<VjudgeGroupDetails | null> {
     try {
-      console.log(`[VJudge] Fetching group details: ${shortName}`)
+      logger.info('vjudge_debug', { action: 'fetch_group_details', metadata: { shortName } })
       const html = await this.get(`https://vjudge.net/group/${shortName}`)
 
       // 检查是否被 Cloudflare 拦截（只有页面不包含正常内容时才判断）
@@ -568,7 +566,7 @@ export class VJudgeSession {
       const data = this.extractDataJson(html)
 
       if (!data) {
-        console.log('[VJudge] No dataJson found in group detail page')
+        logger.info('vjudge_debug', { action: 'no_data_json_group_detail_page' })
         return null
       }
 
@@ -604,7 +602,7 @@ export class VJudgeSession {
         }
       }
 
-      console.log(`[VJudge] Group "${groupName}" has ${members.length} members, avatar: ${avatarUrl ? 'yes' : 'no'}`)
+      logger.info('vjudge_debug', { action: 'group_details_loaded', metadata: { groupName, memberCount: members.length, hasAvatar: !!avatarUrl } })
 
       return {
         groupId: shortName,
@@ -615,7 +613,7 @@ export class VJudgeSession {
         members
       }
     } catch (err) {
-      console.error('[VJudge] Failed to get group details:', err)
+      logger.warn('vjudge_error', { action: 'get_group_details_failed', metadata: { error: err instanceof Error ? err.message : String(err) } })
       return null
     }
   }

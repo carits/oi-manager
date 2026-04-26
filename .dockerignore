@@ -4,7 +4,13 @@ dist/
 *.db
 *.db-journal
 .git/
+
+# Environment files - must not be included in Docker image
+.env
 .env.local
 .env.production
+apps/server/.env
+apps/server/.env.production
+
 uploads/
 testdata/

@@ -29,7 +29,7 @@ export interface PaginationParams {
 export interface LoginRequest {
     username: string;
     password: string;
-    role: UserRole;
+    role: UserRole | 'admin' | 'teacher';
 }
 export interface LoginResponse {
     token: string;
@@ -150,4 +150,3 @@ export interface GlobalStatsResponse {
     recentRegistrations: number;
 }
 export { calculateGrade, calculateGradeSimple, calculateGradeByEducationSystem, getAllGrades, getGradeSortValue, parseEducationSystem, type CalculateGradeParams } from './utils/grade';
-//# sourceMappingURL=index.d.ts.map

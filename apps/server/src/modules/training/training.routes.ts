@@ -28,6 +28,23 @@ import {
 
 export const trainingsRouter = Router()
 
+async function requireTrainingStarted(
+  training: { status: string; startTime: Date; endTime: Date },
+  userId: string,
+  teamId: string,
+): Promise<string | null> {
+  let status = training.status
+  if (status !== 'finished') {
+    const now = new Date()
+    if (now < training.startTime) status = 'upcoming'
+    else if (now <= training.endTime) status = 'ongoing'
+    else status = 'finished'
+  }
+  if (status !== 'upcoming') return null
+  if (await isTeamAdmin(userId, teamId)) return null
+  return '训练尚未开始'
+}
+
 // ========== 训练 CRUD ==========
 
 /**
@@ -380,6 +397,11 @@ trainingsRouter.get('/trainings/:id/problems', authenticate, async (req: AuthReq
       return res.status(403).json({ success: false, message: '无权限查看' })
     }
 
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
+    }
+
     const isAdmin = await isTeamAdmin(userId, training.teamId)
 
     const problems = await prisma.trainingProblem.findMany({
@@ -477,6 +499,11 @@ trainingsRouter.get('/trainings/:id/problem-status', authenticate, async (req: A
 
     if (!await isTeamMember(userId, training.teamId)) {
       return res.status(403).json({ success: false, message: '无权限查看' })
+    }
+
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
     }
 
     // 获取所有训练题目
@@ -764,6 +791,11 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/detail', authenticate, a
       return res.status(403).json({ success: false, message: '无权限查看' })
     }
 
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
+    }
+
     const trainingProblem = await prisma.trainingProblem.findUnique({
       where: { id: problemId },
       include: {
@@ -838,6 +870,11 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/note', authenticate, asy
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
+    }
+
     const trainingProblem = await prisma.trainingProblem.findUnique({ where: { id: problemId } })
     if (!trainingProblem) {
       return res.status(404).json({ success: false, message: '题目不存在' })
@@ -879,6 +916,11 @@ trainingsRouter.put('/trainings/:id/problems/:problemId/note', authenticate, asy
 
     if (!await isTeamMember(userId, training.teamId)) {
       return res.status(403).json({ success: false, message: '无权限' })
+    }
+
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
     }
 
     const trainingProblem = await prisma.trainingProblem.findUnique({ where: { id: problemId } })
@@ -1163,6 +1205,11 @@ trainingsRouter.get('/trainings/:id/submissions', authenticate, async (req: Auth
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
+    }
+
     const pageNum = parseInt(page) || 1
     const pageSizeNum = Math.min(parseInt(pageSize) || 50, 200)
 
@@ -1296,6 +1343,11 @@ trainingsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, as
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
+    }
+
     const isAdminUser = await isTeamAdmin(userId, training.teamId)
 
     const submission = await prisma.submission.findUnique({
@@ -1399,6 +1451,11 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
+    }
+
     // Get admin user IDs to exclude from ranking (unless includeAdminInRanking is true)
     // TeamMember.userId stores Teacher.id/Student.id, but Submission.userId stores User.id
     // So we need to convert via Teacher/Student lookup
@@ -1484,7 +1541,7 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
           const ps = problemScores.get(externalProblemId)
           const score = ps?.maxScore ?? 0
           totalScore += score
-          problemDetails[p.id] = { score, alias: p.alias }
+          problemDetails[p.id] = { score, alias: p.alias ?? '' }
           if (ps && ps.lastSubmitAt > lastSubmitAt) lastSubmitAt = ps.lastSubmitAt
         }
 
@@ -1561,7 +1618,7 @@ trainingsRouter.get('/trainings/:id/ranking', authenticate, async (req: AuthRequ
             solvedCount++
             totalPenalty += penalty
           }
-          problemDetails[p.id] = { solved, penalty, attempts, alias: p.alias }
+          problemDetails[p.id] = { solved, penalty, attempts, alias: p.alias ?? '' }
         }
 
         return {
@@ -1687,6 +1744,11 @@ trainingsRouter.get('/trainings/:id/problems/:problemId/attachments', authentica
 
     if (!await isTeamMember(userId, training.teamId)) {
       return res.status(403).json({ success: false, message: '无权限' })
+    }
+
+    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    if (notStarted) {
+      return res.status(403).json({ success: false, message: notStarted })
     }
 
     // 获取训练题目关联的原始题目 ID

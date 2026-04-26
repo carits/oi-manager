@@ -11,13 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "sourceMap": true,
-    "declaration": false,
-    "baseUrl": ".",
-    "paths": {
-      "@oi-manager/shared": ["../../packages/shared/dist"],
-      "@oi-manager/shared/*": ["../../packages/shared/dist/*"]
-    }
+    "declaration": true,
+    "declarationMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "prisma", "tests"]
+  "exclude": ["node_modules", "dist"]
 }

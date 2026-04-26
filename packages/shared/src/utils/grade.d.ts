@@ -54,4 +54,3 @@ export declare function isStudentGraduated(params: CalculateGradeParams): boolea
  * @returns 排序值，数字越小年级越高
  */
 export declare function getGradeSortValue(enrollmentYear: number | null | undefined): number;
-//# sourceMappingURL=grade.d.ts.map
