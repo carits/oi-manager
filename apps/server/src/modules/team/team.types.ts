@@ -70,7 +70,7 @@ export interface UpdateTeamDTO {
 
 /** 邀请成员 DTO */
 export interface InviteMembersDTO {
-  members?: Array<{ id: string; type: MemberType }>
+  members?: Array<{ userId: string; userType: MemberType; role?: MemberRole }>
   usernames?: string[]
   role?: MemberRole
 }

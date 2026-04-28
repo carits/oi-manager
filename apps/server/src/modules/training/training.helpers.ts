@@ -82,3 +82,21 @@ export function parseTrainingId(raw: string): number {
   if (isNaN(n)) throw new Error('无效的训练 ID')
   return n
 }
+
+/** 检查训练是否已开始（非管理员在 upcoming 时拒绝访问） */
+export async function requireTrainingStarted(
+  training: { status: string; startTime: Date; endTime: Date },
+  userId: string,
+  teamId: string,
+): Promise<string | null> {
+  let status = training.status
+  if (status !== 'finished') {
+    const now = new Date()
+    if (now < training.startTime) status = 'upcoming'
+    else if (now <= training.endTime) status = 'ongoing'
+    else status = 'finished'
+  }
+  if (status !== 'upcoming') return null
+  if (await isTeamAdmin(userId, teamId)) return null
+  return '训练尚未开始'
+}

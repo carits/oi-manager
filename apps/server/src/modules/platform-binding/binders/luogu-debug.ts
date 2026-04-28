@@ -8,6 +8,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import logger from '../../../lib/logger'
 
 // 调试文件保存目录
 const DEBUG_DIR = path.join(__dirname, '../../../../debug/luogu')
@@ -65,7 +66,7 @@ export function logDebugInfo(info: DebugLogInfo): void {
     ...info,
   }
 
-  console.log('[Luogu Debug]', JSON.stringify(logData))
+  logger.info('luogu_debug', { action: 'luogu_debug', metadata: logData })
 }
 
 /**

@@ -234,11 +234,18 @@ oi-manager-v2/
 - ✅ 题单管理（飞书文档式权限）
 - ✅ 学校题单 & 团队题单
 - ✅ 团队训练模块（IOI/ICPC 赛制）
+- ✅ 团队比赛模块（OI 赛制）
 - ✅ Carits 本地评测系统
 - ✅ 评测记录列表 + 详情页
 - ✅ 前端设计 token 系统 + 风格统一
 - ✅ SWR 请求缓存
 - ✅ PostgreSQL 迁移 + Docker 部署
+- ✅ 代码质量优化（结构化日志、慢请求告警、asyncHandler、分页工具）
+- ✅ 大文件拆分（training/team/problem/school 路由）
+- ✅ 关键操作事务保护
+- ✅ API 输入校验（zod）
+- ✅ 前端 ErrorBoundary
+- ✅ 230+ 单元测试
 
 **进行中**:
 - 🔄 Rating 系统完善

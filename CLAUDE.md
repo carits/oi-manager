@@ -298,7 +298,11 @@ apps/server/src/
 │   ├── auth.ts        # 认证工具函数（密码哈希等）
 │   ├── grade.ts       # 年级计算工具
 │   ├── regionData.ts  # 区域数据
-│   └── api.ts         # API 辅助函数
+│   ├── api.ts         # API 辅助函数
+│   ├── pagination.ts  # 分页解析 + 响应生成
+│   ├── asyncHandler.ts # 异步路由错误处理
+│   ├── zodValidate.ts # zod 校验中间件
+│   └── storage.ts     # 文件存储服务
 │
 ├── middleware/        # Express 中间件
 │   ├── auth.ts        # 认证中间件（authenticate, authorize）
@@ -312,7 +316,13 @@ apps/server/src/
 │       ├── team.utils.ts      # 工具函数
 │       ├── team.repository.ts # 数据访问层
 │       ├── team.service.ts    # 业务逻辑层
-│       └── team.routes.ts     # 路由层
+│       ├── team.routes.ts     # 路由挂载入口
+│       ├── team.crud.routes.ts    # 团队 CRUD 路由
+│       ├── team.members.routes.ts # 成员管理路由
+│       ├── team.invitations.routes.ts # 邀请处理路由
+│       ├── team.requests.routes.ts    # 申请处理路由
+│       └── schemas/
+│           └── team.schemas.ts # zod 校验 schema
 │
 ├── oj-adapters/       # OJ 平台适配器
 │   ├── index.ts       # 适配器注册和导出

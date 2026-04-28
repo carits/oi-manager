@@ -1,9 +1,12 @@
 /**
  * OJ 远程题目拉取适配器
  * @description 统一管理和导出所有 OJ 平台适配器
+ * P0 可观测性增强：添加调用计时和 metrics
  */
 
-import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode, KNOWN_OJ_PLATFORMS } from './types'
+import { OjAdapter, OjPlatform, OjFetchError, OjErrorCode, KNOWN_OJ_PLATFORMS, OjProblem } from './types'
+import logger from '../lib/logger'
+import { metrics } from '../lib/metrics'
 import { LuoguAdapter } from './luogu'
 import { AtcoderAdapter } from './atcoder'
 import { CodeforcesAdapter } from './codeforces'
@@ -203,4 +206,53 @@ export function isPlatformSupported(platform: OjPlatform): boolean {
  */
 export function isKnownPlatform(platform: string): boolean {
   return KNOWN_OJ_PLATFORMS.some(p => p.value === platform)
+}
+
+/**
+ * 带计时的题目拉取函数
+ * @description 包装 adapter.fetch，添加调用计时和 metrics 记录
+ * P0 可观测性增强：外部调用监控
+ */
+export async function fetchProblemWithMetrics(
+  platform: OjPlatform,
+  problemId: string
+): Promise<OjProblem> {
+  const startTime = Date.now()
+  const metricName = `oj_fetch:${platform}`
+
+  logger.info('oj_fetch_start', {
+    action: 'oj_adapter',
+    metadata: { platform, problemId }
+  })
+
+  try {
+    const adapter = getAdapter(platform)
+    const result = await adapter.fetch(problemId)
+    const duration = Date.now() - startTime
+
+    metrics.recordExternalCall(metricName, duration, true)
+
+    logger.info('oj_fetch_success', {
+      action: 'oj_adapter',
+      metadata: {
+        platform,
+        problemId,
+        durationMs: duration,
+        hasTitle: !!result.title,
+        hasDescription: !!result.description
+      }
+    })
+
+    return result
+  } catch (error) {
+    const duration = Date.now() - startTime
+    metrics.recordExternalCall(metricName, duration, false)
+
+    logger.error('oj_fetch_error', error, {
+      action: 'oj_adapter',
+      metadata: { platform, problemId, durationMs: duration }
+    })
+
+    throw error
+  }
 }

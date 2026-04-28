@@ -4,12 +4,14 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { TrainingFormModal } from './TrainingFormModal'
+import { typeLabel } from './types'
 
 interface Training {
   id: string
   title: string
   description: string | null
   format: string
+  type: string
   startTime: string
   endTime: string
   status: string
@@ -23,6 +25,7 @@ interface TeamTrainingListProps {
   teamId: string
   basePath: string
   isAdmin: boolean
+  mode?: 'training' | 'contest'
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> = {
@@ -32,6 +35,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> 
 }
 
 const FORMAT_MAP: Record<string, string> = {
+  oi: 'OI',
   ioi: 'IOI',
   icpc: 'ICPC',
 }
@@ -54,7 +58,7 @@ function formatDateTime(iso: string) {
   return `${month}/${day} ${hh}:${mm}`
 }
 
-export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrainingListProps) {
+export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'training' }: TeamTrainingListProps) {
   const router = useRouter()
   const [trainings, setTrainings] = useState<Training[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,7 +66,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
 
   const fetchTrainings = useCallback(async () => {
     try {
-      const result = await apiClient.get<Training[]>(`/api/teams/${teamId}/trainings`)
+      const result = await apiClient.get<Training[]>(`/api/teams/${teamId}/trainings?type=${mode}`)
       if (result.success) {
         setTrainings(result.data || [])
       }
@@ -71,7 +75,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
     } finally {
       setLoading(false)
     }
-  }, [teamId])
+  }, [teamId, mode])
 
   useEffect(() => {
     fetchTrainings()
@@ -93,7 +97,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
     return (
       <>
         <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--gray-400)' }}>
-          <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>暂无训练</div>
+          <div style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>暂无{typeLabel(mode)}</div>
           {isAdmin && (
             <button
               onClick={() => setShowCreateModal(true)}
@@ -109,7 +113,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
                 fontWeight: 500,
               }}
             >
-              创建训练
+              创建{typeLabel(mode)}
             </button>
           )}
         </div>
@@ -118,6 +122,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
           onClose={() => setShowCreateModal(false)}
           teamId={teamId}
           onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
+          mode={mode}
         />
       </>
     )
@@ -136,7 +141,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
         padding: '0 2px',
       }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>
-          共 {trainings.length} 场训练{ongoingCount > 0 ? `，进行中 ${ongoingCount} 场` : ''}
+          共 {trainings.length} 场{typeLabel(mode)}{ongoingCount > 0 ? `，进行中 ${ongoingCount} 场` : ''}
         </div>
         {isAdmin && (
           <button
@@ -153,7 +158,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
               lineHeight: '1.5',
             }}
           >
-            + 创建训练
+            + 创建{typeLabel(mode)}
           </button>
         )}
       </div>
@@ -172,7 +177,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
         <thead>
           <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
             <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>#</th>
-            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>训练名称</th>
+            <th style={{ textAlign: 'left', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>{typeLabel(mode)}名称</th>
             <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>赛制</th>
             <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>状态</th>
             <th style={{ textAlign: 'center', padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>题数</th>
@@ -187,7 +192,10 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
             return (
               <tr
                 key={training.id}
-                onClick={() => router.push(`${basePath}/${teamId}/trainings/${training.id}`)}
+                onClick={() => {
+                  const detailPath = mode === 'contest' ? 'contests' : 'trainings'
+                  router.push(`${basePath}/${teamId}/${detailPath}/${training.id}`)
+                }}
                 style={{
                   cursor: 'pointer',
                   borderBottom: idx === trainings.length - 1 ? 'none' : '1px solid #f3f4f6',
@@ -260,6 +268,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin }: TeamTrai
         onClose={() => setShowCreateModal(false)}
         teamId={teamId}
         onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
+        mode={mode}
       />
     </>
   )

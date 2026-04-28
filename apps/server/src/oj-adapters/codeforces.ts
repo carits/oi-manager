@@ -18,6 +18,7 @@ import { OjAdapter, OjProblem, OjFetchError, OjErrorCode, OjStatement } from './
 import { LuoguAdapter } from './luogu'
 import * as cheerio from 'cheerio'
 import type { AnyNode, Element as DomElement } from 'domhandler'
+import logger from '../lib/logger'
 
 /**
  * 题号解析结果
@@ -97,7 +98,7 @@ export class CodeforcesAdapter implements OjAdapter {
 
     // 兜底：从洛谷拉取
     try {
-      console.log(`[CF Adapter] Direct fetch failed, falling back to Luogu: CF${problemId}`)
+      logger.info('cf_adapter_fallback_to_luogu', { action: 'cf_adapter', metadata: { problemId: `CF${problemId}` } })
       const luoguAdapter = new LuoguAdapter()
       const luoguProblem = await luoguAdapter.fetch(`CF${problemId}`)
 

@@ -27,6 +27,7 @@ import { testdataRouter } from './routes/testdata'
 import { trainingsRouter } from './modules/training/training.routes'
 import { adminDataRouter } from './routes/admin-data'
 import { startSubmissionPoller } from './lib/submission-poller'
+import { metrics } from './lib/metrics'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -208,6 +209,7 @@ const httpServer = app.listen(PORT, () => {
   })
   startAutoVerifyScheduler()
   startSubmissionPoller(5000) // 每 5 秒轮询一次
+  metrics.startPeriodicLog(300000) // 每 5 分钟输出一次指标汇总
 
   // 初始化评测机 WebSocket 服务器
   ;(global as any).httpServer = httpServer

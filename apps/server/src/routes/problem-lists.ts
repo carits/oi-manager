@@ -9,6 +9,8 @@ import { Router } from 'express'
 import { prisma } from '../prisma'
 import { authenticate } from '../middleware/auth'
 import logger from '../lib/logger'
+import { asyncHandler } from '../lib/asyncHandler'
+import { parsePagination, paginatedResponse } from '../lib/pagination'
 
 export const problemListsRouter = Router()
 
@@ -161,17 +163,15 @@ async function getSectionListId(sectionId: string): Promise<string | null> {
  * GET /api/problem-lists
  * 获取题单列表（我的 + 共享给我的）
  */
-problemListsRouter.get('/', authenticate, async (req, res) => {
-  try {
+problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
     }
 
     const userId = req.user.userId
-    const { tab = 'all', page = '1', pageSize = '20', keyword = '' } = req.query as Record<string, string>
-    const p = parseInt(page)
-    const ps = parseInt(pageSize)
+    const { tab = 'all', keyword = '' } = req.query as Record<string, string>
+    const { page, pageSize, skip } = parsePagination(req.query)
 
     const where: any = {}
 
@@ -215,8 +215,8 @@ problemListsRouter.get('/', authenticate, async (req, res) => {
       prisma.problemList.findMany({
         where,
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
-        skip: (p - 1) * ps,
-        take: ps,
+        skip,
+        take: pageSize,
         include: {
           _count: { select: { ProblemListSection: true } }
         }
@@ -277,24 +277,16 @@ problemListsRouter.get('/', authenticate, async (req, res) => {
       success: true,
       data: {
         lists: enriched,
-        page: p,
-        pageSize: ps,
-        total,
-        totalPages: Math.ceil(total / ps)
+        ...paginatedResponse(enriched, total, page, pageSize),
       }
     })
-  } catch (error) {
-    logger.error('get_problem_lists_error', error)
-    res.status(500).json({ success: false, message: '获取题单列表失败' })
-  }
-})
+}, '获取题单列表失败'))
 
 /**
  * POST /api/problem-lists
  * 创建题单（同时创建一个默认章节）
  */
-problemListsRouter.post('/', authenticate, async (req, res) => {
-  try {
+problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -326,18 +318,13 @@ problemListsRouter.post('/', authenticate, async (req, res) => {
     })
 
     res.json({ success: true, data: list })
-  } catch (error) {
-    logger.error('create_problem_list_error', error)
-    res.status(500).json({ success: false, message: '创建题单失败' })
-  }
-})
+}, '创建题单失败'))
 
 /**
  * GET /api/problem-lists/:id
  * 题单详情（含章节 → 题目条目）
  */
-problemListsRouter.get('/:id', authenticate, async (req, res) => {
-  try {
+problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -404,18 +391,13 @@ problemListsRouter.get('/:id', authenticate, async (req, res) => {
     }))
 
     res.json({ success: true, data: { ...list, Shares: enrichedShares, _permission: perm || 'admin' } })
-  } catch (error) {
-    logger.error('get_problem_list_error', error)
-    res.status(500).json({ success: false, message: '获取题单详情失败' })
-  }
-})
+}, '获取题单详情失败'))
 
 /**
  * PUT /api/problem-lists/:id
  * 更新题单元信息
  */
-problemListsRouter.put('/:id', authenticate, async (req, res) => {
-  try {
+problemListsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -452,18 +434,13 @@ problemListsRouter.put('/:id', authenticate, async (req, res) => {
     })
 
     res.json({ success: true, data: updated })
-  } catch (error) {
-    logger.error('update_problem_list_error', error)
-    res.status(500).json({ success: false, message: '更新题单失败' })
-  }
-})
+}, '更新题单失败'))
 
 /**
  * DELETE /api/problem-lists/:id
  * 硬删除题单（级联删除章节→条目→分享）
  */
-problemListsRouter.delete('/:id', authenticate, async (req, res) => {
-  try {
+problemListsRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -494,11 +471,7 @@ problemListsRouter.delete('/:id', authenticate, async (req, res) => {
     await prisma.problemList.delete({ where: { id: req.params.id } })
 
     res.json({ success: true, message: '删除成功' })
-  } catch (error) {
-    logger.error('delete_problem_list_error', error)
-    res.status(500).json({ success: false, message: '删除题单失败' })
-  }
-})
+}, '删除题单失败'))
 
 // ==================== 章节 CRUD ====================
 
@@ -506,8 +479,7 @@ problemListsRouter.delete('/:id', authenticate, async (req, res) => {
  * POST /api/problem-lists/:id/sections
  * 添加章节
  */
-problemListsRouter.post('/:id/sections', authenticate, async (req, res) => {
-  try {
+problemListsRouter.post('/:id/sections', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -541,18 +513,13 @@ problemListsRouter.post('/:id/sections', authenticate, async (req, res) => {
     })
 
     res.json({ success: true, data: section })
-  } catch (error) {
-    logger.error('create_section_error', error)
-    res.status(500).json({ success: false, message: '添加章节失败' })
-  }
-})
+}, '添加章节失败'))
 
 /**
  * PUT /api/problem-lists/sections/:sectionId
  * 更新章节（标题 / sortOrder）
  */
-problemListsRouter.put('/sections/:sectionId', authenticate, async (req, res) => {
-  try {
+problemListsRouter.put('/sections/:sectionId', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -589,18 +556,13 @@ problemListsRouter.put('/sections/:sectionId', authenticate, async (req, res) =>
     })
 
     res.json({ success: true, data: updated })
-  } catch (error) {
-    logger.error('update_section_error', error)
-    res.status(500).json({ success: false, message: '更新章节失败' })
-  }
-})
+}, '更新章节失败'))
 
 /**
  * DELETE /api/problem-lists/sections/:sectionId
  * 删除章节（级联删除其下所有条目）
  */
-problemListsRouter.delete('/sections/:sectionId', authenticate, async (req, res) => {
-  try {
+problemListsRouter.delete('/sections/:sectionId', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -629,18 +591,13 @@ problemListsRouter.delete('/sections/:sectionId', authenticate, async (req, res)
 
     await prisma.problemListSection.delete({ where: { id: req.params.sectionId } })
     res.json({ success: true, message: '删除成功' })
-  } catch (error) {
-    logger.error('delete_section_error', error)
-    res.status(500).json({ success: false, message: '删除章节失败' })
-  }
-})
+}, '删除章节失败'))
 
 /**
  * PUT /api/problem-lists/:id/sections/reorder
  * 重排章节顺序
  */
-problemListsRouter.put('/:id/sections/reorder', authenticate, async (req, res) => {
-  try {
+problemListsRouter.put('/:id/sections/reorder', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -668,11 +625,7 @@ problemListsRouter.put('/:id/sections/reorder', authenticate, async (req, res) =
     )
 
     res.json({ success: true })
-  } catch (error) {
-    logger.error('reorder_sections_error', error)
-    res.status(500).json({ success: false, message: '排序失败' })
-  }
-})
+}, '排序失败'))
 
 // ==================== 题目条目 CRUD ====================
 
@@ -680,8 +633,7 @@ problemListsRouter.put('/:id/sections/reorder', authenticate, async (req, res) =
  * POST /api/problem-lists/sections/:sectionId/entries/single
  * 单条添加题目到指定章节（VJudge 逐行输入）
  */
-problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, async (req, res) => {
-  try {
+problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -813,18 +765,13 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
       success: true,
       data: { entry, found, created: !found }
     })
-  } catch (error) {
-    logger.error('add_single_entry_error', error)
-    res.status(500).json({ success: false, message: '添加题目失败' })
-  }
-})
+}, '添加题目失败'))
 
 /**
  * POST /api/problem-lists/:id/entries/resolve
  * 批量解析题号 → 查找/创建 Problem 记录（不创建 Entry，仅预览）
  */
-problemListsRouter.post('/:id/entries/resolve', authenticate, async (req, res) => {
-  try {
+problemListsRouter.post('/:id/entries/resolve', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -924,18 +871,13 @@ problemListsRouter.post('/:id/entries/resolve', authenticate, async (req, res) =
     }
 
     res.json({ success: true, data: { resolved } })
-  } catch (error) {
-    logger.error('resolve_entries_error', error)
-    res.status(500).json({ success: false, message: '解析题号失败' })
-  }
-})
+}, '解析题号失败'))
 
 /**
  * PUT /api/problem-lists/entries/:entryId
  * 更新条目（alias / notes / sortOrder）
  */
-problemListsRouter.put('/entries/:entryId', authenticate, async (req, res) => {
-  try {
+problemListsRouter.put('/entries/:entryId', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -985,18 +927,8 @@ problemListsRouter.put('/entries/:entryId', authenticate, async (req, res) => {
     })
 
     res.json({ success: true, data: updated })
-  } catch (error) {
-    logger.error('update_entry_error', error)
-    res.status(500).json({ success: false, message: '更新条目失败' })
-  }
-})
-
-/**
- * DELETE /api/problem-lists/entries/:entryId
- * 删除条目
- */
-problemListsRouter.delete('/entries/:entryId', authenticate, async (req, res) => {
-  try {
+}, '更新条目失败'))
+problemListsRouter.delete('/entries/:entryId', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -1016,18 +948,13 @@ problemListsRouter.delete('/entries/:entryId', authenticate, async (req, res) =>
 
     await prisma.problemListEntry.delete({ where: { id: req.params.entryId } })
     res.json({ success: true, message: '删除成功' })
-  } catch (error) {
-    logger.error('delete_entry_error', error)
-    res.status(500).json({ success: false, message: '删除条目失败' })
-  }
-})
+}, '删除条目失败'))
 
 /**
  * PUT /api/problem-lists/sections/:sectionId/entries/reorder
  * 重排某章节内的条目顺序
  */
-problemListsRouter.put('/sections/:sectionId/entries/reorder', authenticate, async (req, res) => {
-  try {
+problemListsRouter.put('/sections/:sectionId/entries/reorder', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -1061,20 +988,14 @@ problemListsRouter.put('/sections/:sectionId/entries/reorder', authenticate, asy
     )
 
     res.json({ success: true })
-  } catch (error) {
-    logger.error('reorder_entries_error', error)
-    res.status(500).json({ success: false, message: '排序失败' })
-  }
-})
+}, '排序失败'))
 
-// ==================== 分享管理 ====================
 
 /**
  * GET /api/problem-lists/:id/shares
  * 获取题单分享列表
  */
-problemListsRouter.get('/:id/shares', authenticate, async (req, res) => {
-  try {
+problemListsRouter.get('/:id/shares', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -1114,18 +1035,13 @@ problemListsRouter.get('/:id/shares', authenticate, async (req, res) => {
     }))
 
     res.json({ success: true, data: enrichedShares })
-  } catch (error) {
-    logger.error('get_shares_error', error)
-    res.status(500).json({ success: false, message: '获取分享列表失败' })
-  }
-})
+}, '获取分享列表失败'))
 
 /**
  * GET /api/problem-lists/:id/share-candidates
  * 搜索本校可分享的教师/学生
  */
-problemListsRouter.get('/:id/share-candidates', authenticate, async (req, res) => {
-  try {
+problemListsRouter.get('/:id/share-candidates', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -1184,18 +1100,13 @@ problemListsRouter.get('/:id/share-candidates', authenticate, async (req, res) =
     }
 
     res.json({ success: true, data: candidates })
-  } catch (error) {
-    logger.error('share_candidates_error', error)
-    res.status(500).json({ success: false, message: '搜索失败' })
-  }
-})
+}, '搜索失败'))
 
 /**
  * POST /api/problem-lists/:id/shares
  * 添加/更新分享
  */
-problemListsRouter.post('/:id/shares', authenticate, async (req, res) => {
-  try {
+problemListsRouter.post('/:id/shares', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -1245,18 +1156,13 @@ problemListsRouter.post('/:id/shares', authenticate, async (req, res) => {
     })
 
     res.json({ success: true, data: share })
-  } catch (error) {
-    logger.error('create_share_error', error)
-    res.status(500).json({ success: false, message: '添加分享失败' })
-  }
-})
+}, '添加分享失败'))
 
 /**
  * DELETE /api/problem-lists/:id/shares/:shareId
  * 移除分享
  */
-problemListsRouter.delete('/:id/shares/:shareId', authenticate, async (req, res) => {
-  try {
+problemListsRouter.delete('/:id/shares/:shareId', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
       return
@@ -1275,8 +1181,4 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, async (req, res)
 
     await prisma.problemListShare.delete({ where: { id: req.params.shareId } })
     res.json({ success: true, message: '移除成功' })
-  } catch (error) {
-    logger.error('delete_share_error', error)
-    res.status(500).json({ success: false, message: '移除分享失败' })
-  }
-})
+}, '移除分享失败'))

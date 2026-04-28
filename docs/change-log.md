@@ -1,5 +1,335 @@
 # 变更日志
 
+## 2026-04-27 (API 输入校验 zod)
+
+### 改动内容
+
+为关键 API 路由添加 zod 校验中间件，确保输入数据格式正确。
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `lib/zodValidate.ts` | zod 校验中间件（validateBody/validateQuery/validateParams/validate） |
+| `modules/team/schemas/team.schemas.ts` | 团队模块 zod schema 定义 |
+
+### 变更列表
+
+| 文件 | 校验路由 |
+|------|----------|
+| `team.crud.routes.ts` | POST /（创建）、PUT /:id（更新）、POST /:id/transfer（转移） |
+| `team.members.routes.ts` | POST /:id/members（添加）、DELETE /:id/members/:memberId（移除）、POST /:id/admins（设置管理员） |
+
+### zod schema 定义
+
+- `createTeamSchema`: 团队 ID 格式（字母数字下划线，2-50字符）、名称长度、描述上限
+- `updateTeamSchema`: 可选字段更新
+- `transferTeamSchema`: 新所有者 ID 和类型
+- `addMembersSchema`: members 数组或 usernames 数组（至少提供一个）
+- `memberIdSchema`: 团队 ID + 成员 ID params 校验
+- `setAdminSchema`: 成员 ID + 类型校验
+
+### zod v4 兼容性
+
+- `ZodError.errors` → `ZodError.issues`（zod v4 breaking change）
+- 泛型类型参数确保类型推断正确
+
+---
+
+## 2026-04-27 (关键操作事务保护)
+
+### 改动内容
+
+为涉及多表写入的关键操作添加 Prisma `$transaction`，确保数据一致性。
+
+### 变更列表
+
+| 文件 | 操作 | 涉及表 |
+|------|------|--------|
+| `team.members.routes.ts` | 移除成员 | TeamMember + TeamOperationLog |
+| `team.members.routes.ts` | 设置管理员 | TeamMember + TeamOperationLog |
+| `team.members.routes.ts` | 取消管理员 | TeamMember + TeamOperationLog |
+| `team.invitations.routes.ts` | 接受邀请 | TeamMember + TeamOperationLog |
+| `team.invitations.routes.ts` | 拒绝邀请 | TeamMember + TeamOperationLog |
+| `team.requests.routes.ts` | 拒绝教师申请 | TeamMember + TeamOperationLog |
+| `team.requests.routes.ts` | 拒绝学生申请 | TeamJoinRequest + TeamOperationLog |
+
+### 实现方式
+
+- 使用 `prisma.$transaction(async (tx) => { ... })`
+- 在事务内执行主操作和日志记录
+- 使用 `updateMany`/`deleteMany` 条件更新确保并发安全
+- 错误时抛出特定错误字符串，外层 catch 处理返回 400
+
+### 影响范围
+
+- 仅后端逻辑变化，API 路径和返回格式不变
+- 前端无需改动
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-27 (school.routes.ts 拆分)
+
+### 改动内容
+
+将 school.routes.ts（1321 行、20 路由）拆分为 6 个子文件，每个控制在 500 行以内。
+
+### 变更列表
+
+1. **主路由简化**：school.routes.ts 改为仅导入并挂载子路由（20 行）
+2. **CRUD 子路由**：school.crud.routes.ts（485 行，6 路由）— 学校列表、详情、创建、更新、删除、状态
+3. **成员子路由**：school.members.routes.ts（400 行，7 路由）— 教师/学生列表、排名、年级分组、成员状态、本校教师 CRUD
+4. **负责人子路由**：school.principal.routes.ts（320 行，4 路由）— 设置负责人、创建负责人、负责人日志、转移负责人
+5. **统计子路由**：school.stats.routes.ts（71 行，1 路由）— 学校统计数据
+6. **杂项子路由**：school.misc.routes.ts（96 行，2 路由）— 初始化、公告更新
+
+### 拆分效果
+
+| 指标 | 拆分前 | 拆分后 |
+|------|--------|--------|
+| 最大文件行数 | 1321 | 485 |
+| 总文件数 | 1 | 6 |
+| 单路由文件最大路由数 | 20 | 7 |
+
+### 影响范围
+
+- 仅后端结构变化，API 路径和功能不变
+- 前端无需改动
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-27 (problem.routes.ts 拆分)
+
+### 改动内容
+
+将 problem.routes.ts（1474 行、21 路由）拆分为 7 个子文件，每个控制在 500 行以内。
+
+### 变更列表
+
+1. **主路由简化**：problem.routes.ts 改为仅导入并挂载子路由（25 行）
+2. **CRUD 子路由**：problem.crud.routes.ts（~380 行，5 路由）— 题目列表、创建、详情、更新、删除
+3. **文件子路由**：problem.files.routes.ts（~280 行，8 路由）— PDF上传、附件上传/删除、题面版本管理
+4. **笔记子路由**：problem.notes.routes.ts（~60 行，2 路由）— 思路记录 GET/PUT
+5. **AI 子路由**：problem.ai.routes.ts（~220 行，3 路由）— 翻译、格式化、使用情况
+6. **提交子路由**：problem.submissions.routes.ts（~90 行，1 路由）— 提交记录列表
+7. **评测子路由**：problem.judge.routes.ts（~85 行，2 路由）— 评测配置 GET/PUT
+
+### 拆分效果
+
+| 指标 | 拆分前 | 拆分后 |
+|------|--------|--------|
+| 最大文件行数 | 1474 | ~380 |
+| 总文件数 | 1 | 7 |
+| 单路由文件最大路由数 | 21 | 8 |
+
+### 影响范围
+
+- 仅后端结构变化，API 路径和功能不变
+- 前端无需改动
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-27 (team.routes.ts 拆分)
+
+### 改动内容
+
+将 team.routes.ts（1543 行、40 路由）拆分为 5 个子文件，每个控制在 500 行以内。
+
+### 变更列表
+
+1. **主路由简化**：team.routes.ts 改为仅导入并挂载子路由（19 行）
+2. **CRUD 子路由**：team.crud.routes.ts（333 行，12 路由）— 团队列表、详情、创建、更新、公告、头像、校验ID、转移、删除、退出
+3. **成员子路由**：team.members.routes.ts（347 行，9 路由）— 邀请/移除成员、可用成员、待处理邀请、管理员管理、取消邀请
+4. **邀请子路由**：team.invitations.routes.ts（356 行，11 路由）— 邀请列表、管理员/成员/统一邀请处理
+5. **申请子路由**：team.requests.routes.ts（491 行，10 路由）— 加入申请、教师申请、统一审批、兼容旧API
+
+### 拆分效果
+
+| 指标 | 拆分前 | 拆分后 |
+|------|--------|--------|
+| 最大文件行数 | 1543 | 491 |
+| 总文件数 | 1 | 5 |
+| 单路由文件最大路由数 | 40 | 12 |
+
+### 影响范围
+
+- 仅后端结构变化，API 路径和功能不变
+- 前端无需改动
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-27 (training.routes.ts 拆分)
+
+### 改动内容
+
+将 training.routes.ts（1784 行、22 路由）拆分为 8 个子文件，每个控制在 300-500 行。
+
+### 变更列表
+
+1. **主路由简化**：training.routes.ts 改为仅导入并挂载子路由（26 行）
+2. **CRUD 子路由**：training.crud.routes.ts（321 行，6 路由）— 训练列表、创建、详情、更新、结束时间、删除
+3. **题目子路由**：training.problems.routes.ts（458 行，7 路由）— 题目列表、状态、添加、重排、更新、删除、详情
+4. **笔记子路由**：training.notes.routes.ts（110 行，2 路由）— GET/PUT 笔记
+5. **提交子路由**：training.submissions.routes.ts（487 行，3 路由）— 提交代码、评测列表、提交详情
+6. **排名子路由**：training.ranking.routes.ts（236 行，1 路由）— 排名计算（IOI/ICPC）
+7. **杂项子路由**：training.misc.routes.ts（214 行，3 路由）— 题解、附件、题号解析
+8. **辅助函数迁移**：requireTrainingStarted 移动到 training.helpers.ts
+
+### 拆分效果
+
+| 指标 | 拆分前 | 拆分后 |
+|------|--------|--------|
+| 最大文件行数 | 1784 | 487 |
+| 总文件数 | 2 | 8 |
+| 单路由文件最大路由数 | 22 | 7 |
+
+### 影响范围
+
+- 仅后端结构变化，API 路径和功能不变
+- 前端无需改动
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-27 (代码质量优化 P0/P1)
+
+### 改动内容
+
+代码质量审计后的第一轮优化：替换全部 console.log 为结构化日志、添加慢请求告警、提取通用工具函数。
+
+### 变更列表
+
+1. **慢请求告警**：requestLogger 中 duration > 1s 自动 warn 级别日志
+2. **console.log 清理**：57 处 console.log 替换为 logger.info/warn/error（覆盖 binders、adapters、routes、ws、config）
+3. **分页工具**：新建 `lib/pagination.ts`，统一 parsePagination + paginatedResponse
+4. **异步错误处理**：新建 `lib/asyncHandler.ts`，统一 try/catch 模式
+
+### 影响范围
+
+- 后端所有模块的日志输出规范化
+- 慢请求可在日志中直接搜索 `slow_request`
+- 分页和错误处理工具可供后续路由重构使用
+
+### 验证
+
+- `pnpm build` ✅ 通过
+- console.log 数量：0（排除 logger.ts 内部和测试文件）
+
+---
+
+## 2026-04-27 (asyncHandler 全路由应用 + 前端 ErrorBoundary)
+
+### 改动内容
+
+将 asyncHandler 工具函数应用到所有后端路由文件，消除 ~120+ 个重复 try/catch 块。新建前端 ErrorBoundary 防止白屏。
+
+### 变更列表
+
+1. **asyncHandler 全量应用**：8 个路由文件共 ~139 个路由改用 asyncHandler 包裹，移除所有最外层 try/catch
+   - `training.routes.ts` (22)、`team.routes.ts` (40)、`school.routes.ts` (20)、`problem.routes.ts` (21)
+   - `users.ts` (8)、`teachers.ts` (3)、`students.ts` (7)、`problem-lists.ts` (18)
+2. **前端 ErrorBoundary**：新建 `components/ErrorBoundary.tsx`，在 `Providers.tsx` 最外层包裹，捕获渲染错误并显示友好提示
+
+### 影响范围
+
+- 后端所有路由的错误处理统一走 asyncHandler → 结构化日志
+- 前端组件 JS 错误不再导致白屏
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-27 (pagination.ts 全路由应用)
+
+### 改动内容
+
+将 `pagination.ts` 工具函数应用到所有分页路由，消除 ~20+ 处手写分页模式。
+
+### 变更列表
+
+1. **parsePagination 应用**：统一分页参数解析（page、pageSize、skip），支持自定义 defaultPageSize 和 maxPageSize
+2. **paginatedResponse 应用**：统一分页响应格式（data、page、pageSize、total、totalPages）
+3. **涉及文件**：
+   - `modules/training/training.routes.ts` — 提交记录、排名
+   - `modules/team/team.routes.ts` — 团队列表、可用成员、加入申请
+   - `modules/team/team.service.ts` — getTeamList 签名修改
+   - `modules/school/school.routes.ts` — 教师列表、学生排名、年级分布
+   - `modules/problem/problem.routes.ts` — 题目列表、提交记录
+   - `routes/students.ts`、`routes/oj-fetcher.ts`、`routes/users.ts`、`routes/problem-lists.ts`、`routes/milestones.ts` — 各列表接口
+
+### 影响范围
+
+- 所有分页 API 使用统一的参数解析和响应格式
+- 减少约 60+ 行重复代码
+
+### 验证
+
+- `pnpm build` ✅ 通过
+
+---
+
+## 2026-04-26 (团队比赛模块 + OI 赛制)
+
+### 改动内容
+
+在团队详情页的"比赛" tab 实现完整的比赛功能，复用训练模块（Training 表），通过 `type` 字段区分训练/比赛，新增 OI 赛制（赛中不反馈，赛后统一公布结果）。
+
+### 关键设计决策
+
+- 比赛和训练共用 Training 数据库表，通过 `type` 字段（`'training'` | `'contest'`）区分
+- 前端组件通过 `mode` prop 复用，文案根据 mode 自动切换
+- OI 赛制核心：赛中提交只返回"已提交"状态，排行榜不可见，赛后统一显示
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `apps/server/prisma/schema.prisma` | Training 模型添加 `type` 字段 |
+| `apps/server/src/modules/training/training.routes.ts` | type 过滤 + OI 赛制逻辑（隐藏反馈/延迟评测/隐藏排名） |
+| `apps/web/src/components/training/types.ts` | type/format 类型更新 + typeLabel/formatLabel 辅助函数 |
+| `apps/web/src/components/training/TeamTrainingList.tsx` | mode prop + type 过滤 API + 文案适配 |
+| `apps/web/src/components/training/TrainingFormModal.tsx` | mode prop + OI/IOI/ICPC 三种赛制选项 |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | OI 赛制 UI + typeLabel 文案 + 路由参数 cid 支持 |
+| `apps/web/src/components/training/components/TrainingRankTable.tsx` | OI 排名隐藏 + format 判断修复 |
+| `apps/web/src/components/team/TeamDetailPage.tsx` | 比赛 tab 接入 TeamTrainingList mode="contest" |
+| `apps/web/src/components/submission/SubmissionDetailModal.tsx` | trainingFormat 类型添加 'oi' |
+| `apps/web/src/app/teacher/teams/[id]/contests/[cid]/page.tsx` | 新建教师端比赛详情页 |
+| `apps/web/src/app/student/team/[id]/contests/[cid]/page.tsx` | 新建学生端比赛详情页 |
+
+### 三种赛制对比
+
+| 赛制 | 赛中反馈 | 排行榜 | 评分 | 排名依据 |
+|------|---------|--------|------|---------|
+| OI | 无（只显示"已提交"） | 赛后可见 | 部分分（赛后评测） | 赛后总分 |
+| IOI | 即时反馈 | 实时可见 | 部分分（每题最高分） | 实时总分 |
+| ICPC | 即时反馈 | 实时可见 | AC/不AC | 通过题数+罚时 |
+
+### 风险评估
+
+- 低风险：新增功能不影响现有训练模块，type 默认值为 'training'
+- OI 赛制赛后评测需要手动触发（当前实现保存提交但不自动评测）
+
 ## 2026-04-26 (页面状态自动刷新)
 
 ### 改动内容

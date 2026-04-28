@@ -15,6 +15,7 @@ import { OjAdapter, OjProblem, OjFetchError, OjErrorCode, OjStatement } from './
 import { LuoguAdapter } from './luogu'
 import * as cheerio from 'cheerio'
 import type { AnyNode, Element as DomElement } from 'domhandler'
+import logger from '../lib/logger'
 
 /**
  * 时间/内存限制提取结果
@@ -98,7 +99,7 @@ export class AtcoderAdapter implements OjAdapter {
     // 兜底：从洛谷拉取 AT_ 题号
     try {
       const luoguProblemId = `AT_${problemId}`
-      console.log(`[AtCoder Adapter] Direct fetch failed, falling back to Luogu: ${luoguProblemId}`)
+      logger.info('atcoder_adapter_fallback_to_luogu', { action: 'atcoder_adapter', metadata: { luoguProblemId } })
       const luoguAdapter = new LuoguAdapter()
       const luoguProblem = await luoguAdapter.fetch(luoguProblemId)
 

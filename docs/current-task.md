@@ -1,5 +1,291 @@
 # 当前任务
 
+## 任务：代码质量优化 P3（2026-04-27）
+
+状态: **已完成** ✅
+
+### 背景
+
+完成 P0/P1/P2 后，继续处理 P3 级别的代码质量优化：关键操作添加数据库事务确保原子性。
+
+### 完成内容
+
+1. **团队成员操作事务** ✅ — `team.members.routes.ts` 中移除成员、设置管理员、取消管理员操作使用 `$transaction`
+2. **邀请处理事务** ✅ — `team.invitations.routes.ts` 中接受/拒绝邀请操作使用 `$transaction`
+3. **申请拒绝事务** ✅ — `team.requests.routes.ts` 中拒绝教师/学生申请操作使用 `$transaction`
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `modules/team/team.members.routes.ts` | 3 处多表操作改用 `$transaction` |
+| `modules/team/team.invitations.routes.ts` | 2 处多表操作改用 `$transaction` |
+| `modules/team/team.requests.routes.ts` | 2 处多表操作改用 `$transaction` |
+
+### 事务保护的操作
+
+| 路由 | 操作 | 涉及表 |
+|------|------|--------|
+| DELETE `/:id/members/:memberId` | 移除成员 | TeamMember + TeamOperationLog |
+| POST `/:id/admins` | 设置管理员 | TeamMember + TeamOperationLog |
+| DELETE `/:id/admins/:adminId` | 取消管理员 | TeamMember + TeamOperationLog |
+| POST `/invitations/:invitationId/accept` | 接受邀请 | TeamMember + TeamOperationLog |
+| POST `/invitations/:invitationId/reject` | 拒绝邀请 | TeamMember + TeamOperationLog |
+| POST `/requests/:requestId/reject` (teacher) | 拒绝教师申请 | TeamMember + TeamOperationLog |
+| POST `/requests/:requestId/reject` (student) | 拒绝学生申请 | TeamJoinRequest + TeamOperationLog |
+
+### 验证
+
+- `pnpm build` ✅ 构建通过（零错误）
+
+### 已完成（P3）
+
+**API 输入校验（zod）** ✅
+
+1. **zod 校验中间件** ✅ — 新建 `lib/zodValidate.ts`（validateBody/validateQuery/validateParams/validate）
+2. **zod schema 定义** ✅ — 新建 `modules/team/schemas/team.schemas.ts`（团队 CRUD/成员管理/邀请处理/申请处理）
+3. **团队路由应用校验** ✅ — team.crud.routes.ts 和 team.members.routes.ts 应用 zod 校验中间件
+
+### 涉及文件（zod 校验）
+
+| 文件 | 改动 |
+|------|------|
+| `lib/zodValidate.ts` | **新建** — zod 校验中间件（支持 zod v4 的 `error.issues`） |
+| `modules/team/schemas/team.schemas.ts` | **新建** — 团队模块 zod schema 定义 |
+| `modules/team/team.crud.routes.ts` | 添加 validateBody 到 create/update/transfer 路由 |
+| `modules/team/team.members.routes.ts` | 添加 validateBody/validateParams 到成员管理路由 |
+
+### zod schema 定义
+
+| schema | 用途 |
+|--------|------|
+| `createTeamSchema` | 创建团队校验（ID格式、名称长度、描述上限） |
+| `updateTeamSchema` | 更新团队校验 |
+| `transferTeamSchema` | 转移团队校验 |
+| `addMembersSchema` | 添加成员校验（支持 members 数组或 usernames 数组） |
+| `memberIdSchema` | 成员 ID params 校验 |
+| `setAdminSchema` | 设置管理员校验 |
+
+### zod v4 兼容性处理
+
+- `ZodError.errors` → `ZodError.issues`（zod v4 breaking change）
+- 泛型类型参数 `validateBody<T>(schema: ZodSchema<T>)` 确保类型推断正确
+
+### 验证
+
+- `pnpm build` ✅ 构建通过（零错误）
+
+---
+
+## 任务：代码质量优化 P0/P1（2026-04-27）
+
+状态: **已完成** ✅
+
+### 背景
+
+全面代码质量审计后，按优先级实施 P0/P1 修复：替换 console.log 为结构化日志、添加慢请求告警、提取分页和异步处理工具函数。
+
+### 完成内容
+
+1. **慢请求告警** ✅ — requestLogger.ts 中 duration > 1000ms 自动 logger.warn
+2. **console.log 清理** ✅ — 57 处 console.log 全部替换为 logger.info/warn/error
+3. **分页工具函数** ✅ — 新建 `lib/pagination.ts`（parsePagination + paginatedResponse）
+4. **异步错误处理** ✅ — 新建 `lib/asyncHandler.ts`（统一 try/catch 包裹）
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `middleware/requestLogger.ts` | 添加 >1s 慢请求 warn |
+| `lib/pagination.ts` | **新建** — 分页解析 + 响应生成 |
+| `lib/asyncHandler.ts` | **新建** — 异步路由错误处理 |
+| `lib/logger.ts` | 无改动（已是结构化日志） |
+| `modules/platform-binding/binders/vjudge.ts` | 12 处 console.log → logger |
+| `modules/platform-binding/binders/luogu-session.ts` | 7 处 console.log → logger |
+| `modules/platform-binding/binders/luogu-debug.ts` | 1 处 console.log → logger |
+| `modules/team-import/vjudge-import.service.ts` | 13 处 console.log → logger |
+| `modules/problem/problem.routes.ts` | 2 处 console.log → logger |
+| `routes/students.ts` | 5 处 console.log → logger |
+| `routes/teachers.ts` | 3 处 console.log → logger |
+| `routes/oj-fetcher.ts` | 16 处 console.log → logger |
+| `ws/judge.ts` | 3 处 console.log → logger |
+| `oj-adapters/codeforces.ts` | 1 处 console.log → logger |
+| `oj-adapters/atcoder.ts` | 1 处 console.log → logger |
+| `oj-adapters/luogu.ts` | 1 处 console.log → logger |
+| `oj-adapters/html-utils.ts` | 1 处 console.log → logger |
+| `config/env.ts` | 2 处 console.log → logger |
+
+### 验证
+
+- `grep -rn "console\.log" apps/server/src/ --include='*.ts'` → 0（排除 logger.ts 和测试文件）
+- `pnpm build` ✅ 构建通过
+
+### 后续已完成（P1/P2）
+
+5. **asyncHandler 应用到全部路由** ✅ — 所有路由文件移除 ~120+ 重复 try/catch，改用 asyncHandler 包裹
+6. **前端 ErrorBoundary** ✅ — 新建 `components/ErrorBoundary.tsx`，挂载到 `Providers.tsx` 最外层
+
+#### asyncHandler 涉及文件
+
+| 文件 | 路由数 |
+|------|--------|
+| `modules/training/training.routes.ts` | 22 |
+| `modules/team/team.routes.ts` | 40 |
+| `modules/school/school.routes.ts` | 20 |
+| `modules/problem/problem.routes.ts` | 21 |
+| `routes/users.ts` | 8 |
+| `routes/teachers.ts` | 3 |
+| `routes/students.ts` | 7 |
+| `routes/problem-lists.ts` | 18 |
+
+### 后续已完成（P1/P2）
+
+5. **asyncHandler 应用到全部路由** ✅ — 所有路由文件移除 ~120+ 重复 try/catch，改用 asyncHandler 包裹
+6. **前端 ErrorBoundary** ✅ — 新建 `components/ErrorBoundary.tsx`，挂载到 `Providers.tsx` 最外层
+7. **pagination.ts 应用到全部路由** ✅ — 所有分页接口统一使用 `parsePagination` + `paginatedResponse`
+
+#### asyncHandler 涉及文件
+
+| 文件 | 路由数 |
+|------|--------|
+| `modules/training/training.routes.ts` | 22 |
+| `modules/team/team.routes.ts` | 40 |
+| `modules/school/school.routes.ts` | 20 |
+| `modules/problem/problem.routes.ts` | 21 |
+| `routes/users.ts` | 8 |
+| `routes/teachers.ts` | 3 |
+| `routes/students.ts` | 7 |
+| `routes/problem-lists.ts` | 18 |
+
+#### pagination.ts 涉及文件
+
+| 文件 | 分页路由数 |
+|------|------------|
+| `modules/training/training.routes.ts` | 2（提交记录、排名） |
+| `modules/team/team.routes.ts` | 3（团队列表、可用成员、加入申请） |
+| `modules/team/team.service.ts` | 修改 getTeamList 签名 |
+| `modules/school/school.routes.ts` | 3（教师列表、学生排名、年级分布） |
+| `modules/problem/problem.routes.ts` | 2（题目列表、提交记录） |
+| `routes/students.ts` | 2（学生列表、排名） |
+| `routes/oj-fetcher.ts` | 2 |
+| `routes/users.ts` | 2 |
+| `routes/problem-lists.ts` | 2 |
+| `routes/milestones.ts` | 2 |
+
+### 已完成（P3）
+
+**training.routes.ts 拆分** ✅ — 将 1784 行大文件拆分为 8 个子文件（最大 487 行）
+
+| 文件 | 行数 | 路由数 |
+|------|------|--------|
+| `training.routes.ts` | 26 | 0（路由挂载） |
+| `training.crud.routes.ts` | 321 | 6 |
+| `training.problems.routes.ts` | 458 | 7 |
+| `training.notes.routes.ts` | 110 | 2 |
+| `training.submissions.routes.ts` | 487 | 3 |
+| `training.ranking.routes.ts` | 236 | 1 |
+| `training.misc.routes.ts` | 214 | 3 |
+| `training.helpers.ts` | 102 | - |
+
+验证：`pnpm build` ✅ 构建通过（零错误）
+
+**team.routes.ts 拆分** ✅ — 将 1543 行大文件拆分为 5 个子文件（最大 491 行）
+
+| 文件 | 行数 | 路由数 |
+|------|------|--------|
+| `team.routes.ts` | 19 | 0（路由挂载） |
+| `team.crud.routes.ts` | 333 | 12 |
+| `team.members.routes.ts` | 347 | 9 |
+| `team.invitations.routes.ts` | 356 | 11 |
+| `team.requests.routes.ts` | 491 | 10 |
+
+验证：`pnpm build` ✅ 构建通过（零错误）
+
+**problem.routes.ts 拆分** ✅ — 将 1474 行大文件拆分为 7 个子文件（最大约 571 行）
+
+| 文件 | 行数 | 路由数 |
+|------|------|--------|
+| `problem.routes.ts` | 21 | 0（路由挂载） |
+| `problem.crud.routes.ts` | 571 | 5（列表、创建、详情、更新、删除） |
+| `problem.files.routes.ts` | 409 | 8（PDF上传、附件、题面版本管理） |
+| `problem.notes.routes.ts` | 83 | 2（思路记录 GET/PUT） |
+| `problem.ai.routes.ts` | 259 | 3（translate、format、usage） |
+| `problem.submissions.routes.ts` | 102 | 1（提交记录） |
+| `problem.judge.routes.ts` | 106 | 2（评测配置 GET/PUT） |
+
+验证：`pnpm build` ✅ 构建通过（零错误）
+
+**school.routes.ts 拆分** ✅ — 将 1321 行大文件拆分为 6 个子文件（最大 485 行）
+
+| 文件 | 行数 | 路由数 |
+|------|------|--------|
+| `school.routes.ts` | 20 | 0（路由挂载） |
+| `school.crud.routes.ts` | 485 | 6（列表、详情、创建、更新、删除、状态） |
+| `school.members.routes.ts` | 400 | 7（教师列表、学生排名、年级分组、成员状态、本校教师 CRUD） |
+| `school.principal.routes.ts` | 320 | 4（设置负责人、创建负责人、负责人日志、转移负责人） |
+| `school.stats.routes.ts` | 71 | 1（统计数据） |
+| `school.misc.routes.ts` | 96 | 2（初始化、公告更新） |
+
+验证：`pnpm build` ✅ 构建通过（零错误）
+
+### 待完善（P3）
+
+- ~~关键操作加数据库事务~~ ✅ 已完成
+- ~~API 输入校验（zod）~~ ✅ 已完成
+
+---
+
+## 任务：OI 赛制赛后自动评测（2026-04-26）
+
+状态: **已完成** ✅
+
+### 背景
+
+OI 赛制比赛中提交代码后，提交被保存为 `result: 'submitted'` 但不触发评测。比赛结束后这些提交仍是 submitted 状态，结果不可见。
+
+### 方案
+
+参考 Hydro 实现：赛中照常评测，通过隐藏逻辑控制可见性。赛后隐藏逻辑自动失效，结果立即可见。
+
+### 修改
+
+- 删除 submit 路由中 OI 赛制跳过评测的提前返回逻辑
+- 统一所有赛制的 submission result 为 `'queuing'`
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `apps/server/src/modules/training/training.routes.ts` | 删除 OI 提前返回块 + 统一 result 为 'queuing' |
+
+---
+
+## 任务：团队比赛模块 + OI 赛制（2026-04-26）
+
+状态: **已完成** ✅
+
+### 背景
+
+在团队详情页的"比赛" tab（原为空占位）实现完整的比赛功能，复用训练模块代码和数据库表，通过 `type` 字段区分。新增 OI 赛制支持。
+
+### 完成内容
+
+1. **数据库** ✅ — Training 模型添加 `type` 字段（`'training'` | `'contest'`），`format` 支持 `'oi' | 'ioi' | 'icpc'`
+2. **后端** ✅ — 列表 type 过滤、创建 type 支持、OI 赛制隐藏逻辑（提交/评测记录/排名）
+3. **前端类型** ✅ — types.ts 添加 type/format 字段、typeLabel/formatLabel 辅助函数
+4. **前端列表** ✅ — TeamTrainingList mode prop、API type 过滤、文案适配
+5. **前端表单** ✅ — TrainingFormModal mode prop、三种赛制下拉
+6. **前端详情** ✅ — TrainingDetailPage OI 适配、cid 路由参数、文案替换
+7. **前端排名** ✅ — TrainingRankTable OI 排名隐藏、format 判断修复
+8. **前端路由** ✅ — TeamDetailPage 比赛 tab 接入、教师/学生比赛详情页
+9. **构建验证** ✅ — `pnpm build` 零错误
+
+### 待完善
+
+- OI 赛制赛后评测触发机制（当前提交保存为 'submitted'，需手动触发评测）
+
+---
+
 ## 任务：页面状态自动刷新（2026-04-26）
 
 状态: **已完成** ✅

@@ -1,6 +1,6 @@
 # 业务模块索引 (Module Index)
 
-> 最后更新: 2026-04-07
+> 最后更新: 2026-04-27
 
 本文档列出 OI Manager V2 的所有业务模块及其对应的前后端代码位置。
 
@@ -12,16 +12,18 @@
 |------|------|------|
 | 认证 | ✅ 完成 | 登录、注册、Token 管理 |
 | 用户管理 | ✅ 完成 | 用户 CRUD、状态管理 |
-| 学校管理 | ✅ 完成 | 学校 CRUD、负责人管理 |
+| 学校管理 | ✅ 完成 | 学校 CRUD、负责人管理（已拆分路由） |
 | 教师管理 | ✅ 完成 | 教师 CRUD、权限管理 |
 | 学生管理 | ✅ 完成 | 学生 CRUD、Rating 管理 |
-| 团队管理 | ✅ 完成 | 团队 CRUD、成员管理 |
-| 比赛管理 | 🔄 进行中 | 比赛 CRUD、成绩导入 |
+| 团队管理 | ✅ 完成 | 团队 CRUD、成员管理、邀请/申请（已拆分路由 + zod 校验） |
+| 训练模块 | ✅ 完成 | 训练 CRUD、题目管理、提交评测、排名（已拆分路由） |
+| 比赛模块 | ✅ 完成 | 比赛 CRUD、OI/IOI/ICPC 赛制支持 |
+| 题目模块 | ✅ 完成 | 题目 CRUD、PDF上传、AI翻译、评测配置（已拆分路由） |
 | 题单管理 | ✅ 完成 | 飞书文档式权限题单（题单→章节→题目） |
-| 评测记录 | 🔄 进行中 | 评测记录列表、筛选（UI 骨架已完成） |
+| 评测记录 | ✅ 完成 | 评测记录列表、筛选、详情（教师/学生/管理员端） |
 | Rating 系统 | 🔄 进行中 | Rating 计算、历史记录 |
 | 成绩中心 | 📋 计划中 | 成绩统计、报告生成 |
-| 资源管理 | 📋 计划中 | 文件上传、下载 |
+| 文件存储 | ✅ 完成 | 统一文件管理、权限控制、软删除 |
 
 ---
 
@@ -219,7 +221,14 @@
 ### 后端代码
 | 文件 | 说明 |
 |------|------|
-| `routes/teams.ts` | 团队 API 路由 |
+| `modules/team/team.routes.ts` | 路由挂载入口 |
+| `modules/team/team.crud.routes.ts` | 团队 CRUD（12 路由） |
+| `modules/team/team.members.routes.ts` | 成员管理（9 路由） |
+| `modules/team/team.invitations.routes.ts` | 邀请处理（11 路由） |
+| `modules/team/team.requests.routes.ts` | 申请处理（10 路由） |
+| `modules/team/schemas/team.schemas.ts` | zod 校验 schema |
+| `modules/team/team.service.ts` | 业务逻辑层 |
+| `modules/team/team.repository.ts` | 数据访问层 |
 
 ### API
 | 方法 | 路径 | 说明 |

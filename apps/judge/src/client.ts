@@ -1,11 +1,14 @@
 /**
  * WebSocket 客户端
  *
- * 连接后端，接收评测任务，返回评测结果
+ * Hydro-style 持久化队列模式：
+ * - 服务端 Consumer 主动从 Submission 表消费任务
+ * - 客户端发送 start 消息启动服务端消费
+ * - 并发由服务端通过 WebSocket config 消息控制
+ * - 心跳检测（每 30 秒发送 ping）
  */
 
 import WebSocket from 'ws'
-import PQueue from 'p-queue'
 import { config } from './config'
 import { judge } from './judge'
 import type { JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
@@ -13,10 +16,10 @@ import type { JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './
 class JudgeClient {
   private ws: WebSocket | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
+  private heartbeatTimer: NodeJS.Timeout | null = null
   private isConnected = false
   private isAuthenticated = false
-  // 并发队列：限制同时运行的评测任务数
-  private queue = new PQueue({ concurrency: config.maxConcurrent })
+  private judgeId: string | null = null
 
   connect() {
     const url = `${config.backendUrl}/ws/judge`
@@ -56,6 +59,8 @@ class JudgeClient {
       console.log('[Judge] Disconnected from backend')
       this.isConnected = false
       this.isAuthenticated = false
+      this.judgeId = null
+      this.stopHeartbeat()
       this.scheduleReconnect()
     })
 
@@ -90,15 +95,30 @@ class JudgeClient {
           this.ws?.close()
         }
         break
-      case 'judge':
-        await this.handleJudgeTask(msg as JudgeMessage)
-        break
       case 'registered':
         // 服务端确认注册成功
-        console.log('[Judge] Registration confirmed by backend')
+        this.judgeId = msg.payload?.judgeId || config.judgeId
+        console.log('[Judge] Registration confirmed, judgeId:', this.judgeId)
+        // 注册成功后发送 start 消息启动服务端 Consumer
+        this.send({
+          type: 'start',
+          payload: {
+            judgeId: this.judgeId,
+            concurrency: config.maxConcurrent
+          }
+        })
+        // 启动心跳
+        this.startHeartbeat()
+        break
+      case 'started':
+        console.log('[Judge] Consumer started, concurrency:', msg.payload?.concurrency)
         break
       case 'ping':
+        // 服务端心跳请求，响应 pong
         this.send({ type: 'pong', payload: {} })
+        break
+      case 'judge':
+        await this.handleJudgeTask(msg as JudgeMessage)
         break
       default:
         console.log('[Judge] Unknown message type:', msg.type)
@@ -106,52 +126,65 @@ class JudgeClient {
   }
 
   private async handleJudgeTask(msg: JudgeMessage) {
-    const { submissionId, problemId, code, language, config: problemConfig, testdataPath } = msg.payload
+    const { submissionId, problemId, code, language, problemConfig, testdataPath } = msg.payload
 
-    console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}, queue_size=${this.queue.size}, pending=${this.queue.pending}`)
+    console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
 
-    // 使用并发队列处理任务
-    this.queue.add(async () => {
-      try {
-        const result = await judge({
-          submissionId,
-          problemId,
-          code,
-          language,
-          config: problemConfig,
-          testdataPath
-        })
+    // 直接执行评测任务（无 PQueue，并发由服务端 Consumer 控制）
+    try {
+      const result = await judge({
+        submissionId,
+        problemId,
+        code,
+        language,
+        config: problemConfig,
+        testdataPath
+      })
 
-        console.log(`[Judge] Task completed: submission=${submissionId}, result=${result.result}`)
+      console.log(`[Judge] Task completed: submission=${submissionId}, result=${result.result}`)
 
-        const resultMsg: ResultMessage = {
-          type: 'result',
-          payload: result
-        }
-        this.send(resultMsg)
-      } catch (e: any) {
-        console.error(`[Judge] Task failed: submission=${submissionId}`, e.message)
-
-        const resultMsg: ResultMessage = {
-          type: 'result',
-          payload: {
-            submissionId,
-            result: 'System Error',
-            time: 0,
-            memory: 0,
-            score: 0,
-            cases: [],
-            message: e.message
-          }
-        }
-        this.send(resultMsg)
+      const resultMsg: ResultMessage = {
+        type: 'result',
+        payload: result
       }
-    }).catch(() => {}) // p-queue 内部错误已在 add 的回调中处理，这里忽略外层错误
+      this.send(resultMsg)
+    } catch (e: any) {
+      console.error(`[Judge] Task failed: submission=${submissionId}`, e.message)
+
+      const resultMsg: ResultMessage = {
+        type: 'result',
+        payload: {
+          submissionId,
+          result: 'System Error',
+          time: 0,
+          memory: 0,
+          score: 0,
+          cases: [],
+          message: e.message
+        }
+      }
+      this.send(resultMsg)
+    }
   }
 
   private send(msg: WSMessage) {
     if (this.ws && this.isConnected) {
       this.ws.send(JSON.stringify(msg))
+    }
+  }
+
+  private startHeartbeat() {
+    this.heartbeatTimer = setInterval(() => {
+      if (this.isConnected) {
+        this.send({ type: 'ping', payload: {} })
+      }
+    }, 30 * 1000) // 每 30 秒发送心跳
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
     }
   }
 
@@ -167,6 +200,7 @@ class JudgeClient {
   }
 
   disconnect() {
+    this.stopHeartbeat()
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null

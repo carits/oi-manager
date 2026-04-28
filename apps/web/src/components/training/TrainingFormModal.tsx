@@ -41,18 +41,19 @@ interface TrainingFormModalProps {
   teamId: string
   trainingId?: string
   onSaved?: () => void
+  mode?: 'training' | 'contest'
 }
 
 let tempIdCounter = 0
 
-export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved }: TrainingFormModalProps) {
+export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved, mode = 'training' }: TrainingFormModalProps) {
   const toast = useToast()
   const isEdit = !!trainingId
 
   // Form state
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [format, setFormat] = useState<'ioi' | 'icpc'>('ioi')
+  const [format, setFormat] = useState<'oi' | 'ioi' | 'icpc'>('ioi')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [problemIdVisible, setProblemIdVisible] = useState(false)
@@ -309,7 +310,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
         for (const row of problemRows.filter(r => r.existing)) {
           await apiClient.put(`/api/trainings/${trainingId}/problems/${row.trainingProblemId}`, {
             alias: row.alias,
-            points: format === 'ioi' ? row.points : null,
+            points: (format === 'ioi' || format === 'oi') ? row.points : null,
           })
         }
 
@@ -320,7 +321,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
           const createRes = await apiClient.post(`/api/trainings/${trainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
-            points: format === 'ioi' ? row.points : null,
+            points: (format === 'ioi' || format === 'oi') ? row.points : null,
           })
           if (createRes.success && createRes.data) {
             newTrainingProblemIds.push((createRes.data as any).id)
@@ -335,11 +336,11 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
           await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
         }
 
-        toast.success('训练更新成功')
+        toast.success(`${mode === 'contest' ? '比赛' : '训练'}更新成功`)
       } else {
         // === 创建模式 ===
         const res = await apiClient.post(`/api/teams/${teamId}/trainings`, {
-          title, description, format,
+          title, description, format, type: mode,
           startTime: new Date(startTime).toISOString(),
           endTime: new Date(endTime).toISOString(),
           problemIdVisible, solutionVisible, includeAdminInRanking,
@@ -356,7 +357,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
           await apiClient.post(`/api/trainings/${newTrainingId}/problems`, {
             problemId: row.resolved!.problemId,
             alias: row.alias,
-            points: format === 'ioi' ? row.points : null,
+            points: (format === 'ioi' || format === 'oi') ? row.points : null,
           })
         }
 
@@ -394,13 +395,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEdit ? '编辑训练' : '创建训练'}
+      title={isEdit ? `编辑${mode === 'contest' ? '比赛' : '训练'}` : `创建${mode === 'contest' ? '比赛' : '训练'}`}
       width="960px"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
           <Button onClick={handleSave} disabled={saving || loading}>
-            {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : '创建训练')}
+            {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : '训练'}`)}
           </Button>
         </div>
       }
@@ -424,9 +425,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>赛制</label>
-                <select value={format} onChange={e => setFormat(e.target.value as 'ioi' | 'icpc')} style={inputStyle}>
-                  <option value="ioi">IOI</option>
-                  <option value="icpc">ICPC</option>
+                <select value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
+                  <option value="ioi">IOI（即时反馈+部分分）</option>
+                  <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
+                  <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
                 </select>
               </div>
               <div>
@@ -479,7 +481,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '120px' }}>题号</th>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>题目</th>
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '70px' }}>别名</th>
-                        {format === 'ioi' && <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '65px' }}>分值</th>}
+                        {(format === 'ioi' || format === 'oi') && <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '65px' }}>分值</th>}
                         <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '40px' }}></th>
                       </tr>
                     </thead>
@@ -559,7 +561,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
                               style={{ width: '60px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
                             />
                           </td>
-                          {format === 'ioi' && (
+                          {(format === 'ioi' || format === 'oi') && (
                             <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
                               <input
                                 type="number"

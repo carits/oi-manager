@@ -8,7 +8,8 @@ export interface TrainingInfo {
   teamId: string
   title: string
   description: string | null
-  format: 'ioi' | 'icpc'
+  type: 'training' | 'contest'
+  format: 'oi' | 'ioi' | 'icpc'
   startTime: string
   endTime: string
   status: string
@@ -102,3 +103,12 @@ export interface ProblemListEntry {
 }
 
 export type TabType = 'problems' | 'problemList' | 'submissions' | 'solutions' | 'attachments' | 'ranking'
+
+export function typeLabel(type: string) {
+  return type === 'contest' ? '比赛' : '训练'
+}
+
+export function formatLabel(format: string) {
+  const map: Record<string, string> = { oi: 'OI', ioi: 'IOI', icpc: 'ICPC' }
+  return map[format] || format.toUpperCase()
+}

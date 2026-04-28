@@ -1,13 +1,15 @@
 import { Router, Response } from 'express'
 import { prisma } from '../prisma'
 import { authenticate, authorize } from '../middleware/auth'
+import { parsePagination, paginatedResponse } from '../lib/pagination'
 
 export const milestoneRouter = Router()
 
 // 获取里程碑列表
 milestoneRouter.get('/', authenticate, async (req, res) => {
   try {
-    const { studentId, page = '1', pageSize = '20' } = req.query
+    const { studentId } = req.query
+    const { page, pageSize, skip } = parsePagination(req.query)
 
     const where: Record<string, unknown> = {}
     if (studentId) where.studentId = studentId as string
@@ -15,8 +17,8 @@ milestoneRouter.get('/', authenticate, async (req, res) => {
     const [milestones, total] = await Promise.all([
       prisma.milestone.findMany({
         where,
-        skip: (Number(page) - 1) * Number(pageSize),
-        take: Number(pageSize),
+        skip,
+        take: pageSize,
         include: {
           Student: true,
           Teacher: { include: { User: true } }
@@ -28,7 +30,7 @@ milestoneRouter.get('/', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      data: { list: milestones, total, page: Number(page), pageSize: Number(pageSize) }
+      data: { list: milestones, ...paginatedResponse(milestones, total, page, pageSize) }
     })
   } catch (error) {
     console.error('Get milestones error:', error)

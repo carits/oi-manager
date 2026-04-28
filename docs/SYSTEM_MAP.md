@@ -1,6 +1,6 @@
 # 系统全景图 (System Map)
 
-> 最后更新: 2026-04-22
+> 最后更新: 2026-04-27
 
 本文档描述 OI Manager V2 的完整系统结构，帮助快速理解项目全貌。
 
@@ -23,6 +23,12 @@ oi-manager-v2/
 │   └── server/              # Express 后端应用 (端口 3002)
 │       ├── src/
 │       │   ├── routes/      # API 路由
+│       │   ├── modules/     # 业务模块（分层架构）
+│       │   │   ├── team/    # 团队模块
+│       │   │   ├── training/ # 训练模块
+│       │   │   ├── problem/  # 题目模块
+│       │   │   └── school/   # 学校模块
+│       │   ├── lib/         # 工具函数
 │       │   ├── middleware/  # 中间件
 │       │   └── index.ts     # 入口文件
 │       └── prisma/
@@ -390,13 +396,25 @@ hooks/
 | `apps/web/src/config/runtime.ts` | 运行时配置 |
 | `apps/web/src/lib/assets.ts` | 资源 URL 辅助 |
 
-### 7.2 工具函数
+### 7.2 后端工具函数
 
 | 文件 | 说明 |
 |------|------|
-| `lib/apiClient.ts` | 统一 API 客户端 |
-| `lib/api.ts` | API 客户端类 |
+| `lib/logger.ts` | 结构化日志 |
+| `lib/jwtSecret.ts` | JWT Secret 统一获取 |
 | `lib/auth.ts` | 认证工具函数 |
+| `lib/pagination.ts` | 分页解析 + 响应生成 |
+| `lib/asyncHandler.ts` | 异步路由错误处理 |
+| `lib/zodValidate.ts` | zod 校验中间件 |
+| `lib/storage.ts` | 文件存储服务 |
+
+### 7.3 前端工具函数
+
+| 文件 | 说明 |
+|------|------|
+| `apps/web/src/lib/apiClient.ts` | 统一 API 客户端 |
+| `apps/web/src/lib/tokens.ts` | 设计 token 常量 |
+| `apps/web/src/lib/styles.ts` | 场景样式预设 |
 
 ---
 

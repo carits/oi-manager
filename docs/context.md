@@ -12,6 +12,7 @@
 - **后端**: Express + TypeScript
 - **数据库**: PostgreSQL + Prisma ORM（开发用 Docker，测试用 SQLite 隔离）
 - **包管理**: pnpm (Monorepo)
+- **测试**: Vitest + supertest（230+ 测试）
 
 ## 端口配置
 

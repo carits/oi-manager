@@ -1,6 +1,8 @@
 import { Router, Response } from 'express'
 import { authenticate, AuthRequest } from '../middleware/auth.js'
 import { prisma } from '../prisma.js'
+import logger from '../lib/logger'
+import { asyncHandler } from '../lib/asyncHandler'
 
 export const teacherRouter = Router()
 
@@ -187,7 +189,7 @@ async function handleTeacherOwnerDeletion(teacherId: string, schoolId: string | 
           // 更新团队表（owner 信息现在通过 TeamMember 查询，无需更新 Team 表）
         })
 
-        console.log(`团队 ${ownerMember.Team.name} 所有权已转移给学校负责人`)
+        logger.info('team_ownership_transferred_to_principal', { action: 'teacher_delete', metadata: { teamName: ownerMember.Team.name } })
         continue
       }
     }
@@ -223,11 +225,11 @@ async function handleTeacherOwnerDeletion(teacherId: string, schoolId: string | 
           data: { role: 'owner' }
         })
       ])
-      console.log(`团队 ${ownerMember.Team.name} 所有权已转移给${newOwner.userType === 'teacher' ? '教师' : '学生'}`)
+      logger.info('team_ownership_transferred', { action: 'teacher_delete', metadata: { teamName: ownerMember.Team.name, newOwnerType: newOwner.userType } })
     } else {
       // 团队无其他成员，解散团队
       await prisma.team.delete({ where: { id: teamId } })
-      console.log(`团队 ${ownerMember.Team.name} 已解散（无其他成员）`)
+      logger.info('team_dissolved', { action: 'teacher_delete', metadata: { teamName: ownerMember.Team.name, reason: 'no_other_members' } })
     }
   }
 }

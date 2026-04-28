@@ -38,7 +38,7 @@ interface SubmissionDetailModalProps {
   submissionId: number | null
   viewRole?: 'teacher' | 'student' | 'admin'
   trainingId?: number // 可选：用于训练模块的提交详情
-  trainingFormat?: 'ioi' | 'icpc' // 可选：训练赛制，ICPC时不显示分数
+  trainingFormat?: 'oi' | 'ioi' | 'icpc' // 可选：训练赛制，ICPC时不显示分数
 }
 
 // 转圈动画组件

@@ -2,10 +2,12 @@
  * 请求追踪中间件
  *
  * 为每个请求生成唯一 requestId，记录请求入口和出口
+ * P0 可观测性增强：按端点聚合延迟统计
  */
 
 import { Request, Response, NextFunction } from 'express'
 import logger, { createRequestLogger } from '../lib/logger'
+import { metrics } from '../lib/metrics'
 import type { JwtPayload } from '@oi-manager/shared'
 
 // 扩展 Express Request 类型
@@ -97,6 +99,23 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   // 记录响应完成
   res.on('finish', () => {
     const duration = Date.now() - (req.startTime || Date.now())
+
+    // 记录到 metrics（用于聚合统计）
+    const success = res.statusCode < 400
+    metrics.recordEndpoint(req.method, req.path, duration, success)
+
+    if (duration > 1000) {
+      logger.warn('slow_request', {
+        requestId,
+        action: 'slow',
+        metadata: {
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          duration
+        }
+      })
+    }
 
     logger.info('request_end', {
       requestId,

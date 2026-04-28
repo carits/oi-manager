@@ -13,7 +13,7 @@ model Admin {
   name      String
   schoolId  String
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
   School    School   @relation(fields: [schoolId], references: [id])
   User      User     @relation(fields: [userId], references: [id])
 }
@@ -47,7 +47,7 @@ model Contest {
   countRating         Boolean               @default(false)
   scope               String                @default("public")
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime              @default(now()) @updatedAt
   Team                Team?                 @relation(fields: [teamId], references: [id])
   ContestProblem      ContestProblem[]
   ContestProblemNote  ContestProblemNote[]
@@ -79,7 +79,7 @@ model ContestProblem {
   solutionMarkdown    String?
   solutionVisible     Boolean               @default(false)
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime              @default(now()) @updatedAt
   Contest             Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblemNote  ContestProblemNote[]
   ContestProblemScore ContestProblemScore[]
@@ -95,7 +95,7 @@ model ContestProblemNote {
   studentId      String
   content        String         @default("")
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime       @default(now()) @updatedAt
   Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -113,7 +113,7 @@ model ContestProblemScore {
   score          Float?
   note           String?
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime       @default(now()) @updatedAt
   Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -147,7 +147,7 @@ model ContestResult {
   ratingChange Int
   note         String?
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime @default(now()) @updatedAt
   Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
   Student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -176,7 +176,7 @@ model File {
   deletedAt    DateTime?
   expiresAt    DateTime?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime  @default(now()) @updatedAt
 
   @@index([category])
   @@index([md5Hash])
@@ -211,7 +211,7 @@ model Milestone {
   milestoneDate DateTime
   type          String
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime @default(now()) @updatedAt
   Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   Teacher       Teacher  @relation(fields: [teacherId], references: [id])
 
@@ -262,7 +262,7 @@ model OjAccount {
   rateLimitThreshold          Int          @default(2)
   banSuspicionCooldownHours   Int          @default(6)
   createdAt                   DateTime     @default(now())
-  updatedAt                   DateTime @updatedAt
+  updatedAt                   DateTime     @default(now()) @updatedAt
   Submission                  Submission[]
 
   @@unique([platform, username])
@@ -280,7 +280,7 @@ model OjFetchJob {
   attachmentStatus String?
   createdProblemId String?
   createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime @default(now()) @updatedAt
 
   @@unique([platform, problemId])
   @@index([createdAt])
@@ -293,7 +293,7 @@ model OjPlatformConfig {
   cookies    String?
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  updatedAt  DateTime  @default(now()) @updatedAt
 }
 
 model PasswordResetLog {
@@ -341,7 +341,7 @@ model Problem {
   ownerId           String
   status            String              @default("draft")
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime            @default(now()) @updatedAt
   allowedLanguages  String?
   ojBindings        String?
   ProblemAttachment ProblemAttachment[]
@@ -382,7 +382,7 @@ model ProblemList {
   visibility         String               @default("private")
   sortOrder          Int                  @default(0)
   createdAt          DateTime             @default(now())
-  updatedAt          DateTime @updatedAt
+  updatedAt          DateTime             @default(now()) @updatedAt
   ProblemListSection ProblemListSection[]
   ProblemListShare   ProblemListShare[]
   SchoolProblemList  SchoolProblemList[]
@@ -403,7 +403,7 @@ model ProblemListEntry {
   notes              String?
   ojName             String?
   createdAt          DateTime           @default(now())
-  updatedAt          DateTime @updatedAt
+  updatedAt          DateTime           @default(now()) @updatedAt
   Problem            Problem            @relation(fields: [problemId], references: [id])
   ProblemListSection ProblemListSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
@@ -418,7 +418,7 @@ model ProblemListSection {
   title            String
   sortOrder        Int                @default(0)
   createdAt        DateTime           @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime           @default(now()) @updatedAt
   ProblemListEntry ProblemListEntry[]
   ProblemList      ProblemList        @relation(fields: [problemListId], references: [id], onDelete: Cascade)
 
@@ -447,7 +447,7 @@ model ProblemNote {
   userType  String
   content   String   @default("")
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
   Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([problemId, userId, userType])
@@ -465,7 +465,7 @@ model ProblemStatement {
   fileUrl   String?
   isVisible Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
   Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([problemId, type, format, language])
@@ -485,7 +485,7 @@ model School {
   status                    String                 @default("active")
   currentPrincipalTeacherId String
   createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime @updatedAt
+  updatedAt                 DateTime               @default(now()) @updatedAt
   Admin                     Admin[]
   PrincipalTransferLog      PrincipalTransferLog[]
   SchoolProblemList         SchoolProblemList[]
@@ -526,7 +526,7 @@ model Student {
   avatar                    String?
   rating                    Int                         @default(1200)
   createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime @updatedAt
+  updatedAt                 DateTime                    @default(now()) @updatedAt
   ContestProblemNote        ContestProblemNote[]
   ContestProblemScore       ContestProblemScore[]
   ContestResult             ContestResult[]
@@ -560,7 +560,7 @@ model Submission {
   ojRemoteId        String?
   errorMessage      String?
   createdAt         DateTime   @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime   @default(now()) @updatedAt
   problemInternalId String?
   cases             String?
   score             Int?
@@ -568,6 +568,8 @@ model Submission {
   isGlobalVisible   Boolean    @default(true)
   sourceId          String?
   submitSource      String?
+  judgeId           String?
+  judgeStarted      DateTime?
   OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
   User              User       @relation(fields: [userId], references: [id])
 
@@ -578,6 +580,7 @@ model Submission {
   @@index([oj])
   @@index([problemId])
   @@index([result])
+  @@index([result, judgeId])
   @@index([sourceId])
   @@index([submitSource])
   @@index([userId])
@@ -596,7 +599,7 @@ model Teacher {
   status    String      @default("active")
   schoolId  String
   createdAt DateTime    @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime    @default(now()) @updatedAt
   Milestone Milestone[]
   Student   Student[]
   School    School      @relation(fields: [schoolId], references: [id])
@@ -616,7 +619,7 @@ model Team {
   schoolId                  String
   isPublic                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime @updatedAt
+  updatedAt                 DateTime                    @default(now()) @updatedAt
   Contest                   Contest[]
   School                    School                      @relation(fields: [schoolId], references: [id])
   TeamJoinRequest           TeamJoinRequest[]
@@ -675,7 +678,7 @@ model TeamMemberExternalAccount {
   status           String   @default("pending")
   inviteId         String?
   createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime @default(now()) @updatedAt
   Student          Student? @relation(fields: [studentId], references: [id])
   Team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
@@ -788,10 +791,11 @@ model Training {
   status                String                @default("upcoming")
   createdBy             String
   createdAt             DateTime              @default(now())
-  updatedAt             DateTime @updatedAt
+  updatedAt             DateTime              @default(now()) @updatedAt
+  includeAdminInRanking Boolean               @default(false)
   problemIdVisible      Boolean               @default(false)
   solutionVisible       Boolean               @default(false)
-  includeAdminInRanking Boolean               @default(false)
+  type                  String                @default("training")
   Team                  Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   TrainingParticipant   TrainingParticipant[]
   TrainingProblem       TrainingProblem[]
@@ -854,7 +858,7 @@ model TrainingSolution {
   visible           Boolean         @default(false)
   createdBy         String
   createdAt         DateTime        @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime        @default(now()) @updatedAt
   TrainingProblem   TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
 }
 
@@ -870,7 +874,7 @@ model User {
   email               String?
   bio                 String?
   createdAt           DateTime              @default(now())
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime              @default(now()) @updatedAt
   Admin               Admin?
   Student             Student?
   Submission          Submission[]
@@ -893,7 +897,7 @@ model UserPlatformBinding {
   bindingData      String?
   verifiedAt       DateTime?
   createdAt        DateTime  @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime  @default(now()) @updatedAt
   platformConfig   String?
   platformUid      String?
   statusMessage    String?

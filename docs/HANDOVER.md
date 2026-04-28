@@ -1,6 +1,6 @@
 # 项目交接指南 (Handover Guide)
 
-> 最后更新: 2026-04-22
+> 最后更新: 2026-04-27
 
 本文档帮助新人快速接手 OI Manager V2 项目。建议按顺序阅读并实践。
 
@@ -293,11 +293,17 @@ npx prisma studio
 - ✅ 题单管理（飞书文档式权限）
 - ✅ 学校题单 & 团队题单
 - ✅ 团队训练模块（IOI/ICPC 赛制）
+- ✅ 团队比赛模块（OI 赛制）
 - ✅ Carits 本地评测系统
 - ✅ 评测记录列表 + 详情页
 - ✅ 前端设计 token 系统 + 风格统一
 - ✅ SWR 请求缓存
 - ✅ PostgreSQL 迁移 + Docker 部署
+- ✅ 代码质量优化（结构化日志、asyncHandler、分页工具、zod 校验）
+- ✅ 大文件拆分（training/team/problem/school 路由）
+- ✅ 关键操作事务保护
+- ✅ 前端 ErrorBoundary
+- ✅ 230+ 单元测试
 
 ### 8.2 进行中功能
 

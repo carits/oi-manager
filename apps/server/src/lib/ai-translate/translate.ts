@@ -2,6 +2,7 @@
  * translate.ts — 统一服务入口
  *
  * 完整流水线：保护 → 分块 → 翻译 → 还原 → 校验 → 缓存 → 降级
+ * P0 可观测性增强：添加调用计时和 metrics
  */
 
 import type { TranslateOptions, TranslationResult, Language } from './types'
@@ -13,6 +14,8 @@ import { getGlossary } from './glossary'
 import { callDeepSeek } from './deepseek'
 import { validate } from './validate'
 import { TranslationCache, getTranslationCache } from './cache'
+import logger from '../logger'
+import { metrics } from '../metrics'
 
 /**
  * 检测文本语言（中文 vs 英文）
@@ -33,6 +36,7 @@ function detectLanguage(text: string): Language {
  * @returns 翻译结果 + 诊断信息
  */
 export async function translateDocument(input: TranslateOptions): Promise<TranslationResult> {
+  const startTime = Date.now()
   const {
     text,
     targetLang,
@@ -61,6 +65,18 @@ export async function translateDocument(input: TranslateOptions): Promise<Transl
   })
   const cached = cache.get(cacheKey)
   if (cached) {
+    const duration = Date.now() - startTime
+    metrics.recordExternalCall('ai_translate:cached', duration, true)
+    logger.info('ai_translate_cache_hit', {
+      action: 'ai_translate',
+      metadata: {
+        sourceLang,
+        targetLang,
+        platform,
+        durationMs: duration,
+        cached: true
+      }
+    })
     return {
       translated: cached.translated,
       sourceFormat: format,
@@ -73,6 +89,16 @@ export async function translateDocument(input: TranslateOptions): Promise<Transl
       },
     }
   }
+
+  logger.info('ai_translate_start', {
+    action: 'ai_translate',
+    metadata: {
+      sourceLang,
+      targetLang,
+      platform,
+      textLength: text.length
+    }
+  })
 
   // 2. 保护危险片段
   resetCounter()
@@ -197,6 +223,23 @@ export async function translateDocument(input: TranslateOptions): Promise<Transl
   // 7. 写入缓存
   cache.set(cacheKey, restoredText, result.metadata)
 
+  // 8. 记录指标
+  const duration = Date.now() - startTime
+  const success = validation.valid && restoreSuccess
+  metrics.recordExternalCall('ai_translate:call', duration, success)
+  logger.info('ai_translate_success', {
+    action: 'ai_translate',
+    metadata: {
+      sourceLang,
+      targetLang,
+      platform,
+      durationMs: duration,
+      chunksProcessed: chunks.length,
+      totalTokens: totalUsage.totalTokens,
+      structureValid: success
+    }
+  })
+
   return result
 }
 
@@ -212,6 +255,7 @@ export async function formatDocument(
     timeout?: number
   } = {}
 ): Promise<TranslationResult> {
+  const startTime = Date.now()
   const {
     platform,
     temperature = 1,
@@ -246,6 +290,14 @@ export async function formatDocument(
 
   // 校验
   const validation = validate(text, restoredText, placeholders)
+
+  // 记录指标
+  const duration = Date.now() - startTime
+  metrics.recordExternalCall('ai_translate:format', duration, validation.valid && restoreSuccess)
+  logger.info('ai_format_done', {
+    action: 'ai_translate',
+    metadata: { durationMs: duration, platform, structureValid: validation.valid }
+  })
 
   return {
     translated: restoredText,

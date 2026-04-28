@@ -6,8 +6,10 @@
 import { Router, Request, Response } from 'express'
 import path from 'path'
 import { prisma } from '../prisma'
-import { getAdapter, isPlatformSupported, getSupportedPlatforms, isKnownPlatform, KNOWN_OJ_PLATFORMS, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS } from '../oj-adapters'
+import { getAdapter, isPlatformSupported, getSupportedPlatforms, isKnownPlatform, KNOWN_OJ_PLATFORMS, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS, fetchProblemWithMetrics } from '../oj-adapters'
 import { fileService } from '../lib/storage'
+import logger from '../lib/logger'
+import { parsePagination, paginatedResponse } from '../lib/pagination'
 
 export const ojFetcherRouter = Router()
 
@@ -106,7 +108,8 @@ ojFetcherRouter.put('/platforms/:platform/config', async (req: Request, res: Res
  */
 ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
   try {
-    const { status, platform, problemId, page = '1', pageSize = '20' } = req.query
+    const { status, platform, problemId } = req.query
+    const { page, pageSize, skip } = parsePagination(req.query)
 
     const where: any = {}
     if (status) where.status = status
@@ -115,15 +118,12 @@ ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
       where.problemId = { contains: problemId }
     }
 
-    const pageNum = Math.max(1, parseInt(page as string, 10) || 1)
-    const pageSizeNum = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 20))
-
     const [jobs, total] = await Promise.all([
       prisma.ojFetchJob.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (pageNum - 1) * pageSizeNum,
-        take: pageSizeNum,
+        skip,
+        take: pageSize,
       }),
       prisma.ojFetchJob.count({ where }),
     ])
@@ -132,10 +132,7 @@ ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
       success: true,
       data: {
         list: jobs,
-        page: pageNum,
-        pageSize: pageSizeNum,
-        total,
-        totalPages: Math.ceil(total / pageSizeNum),
+        ...paginatedResponse(jobs, total, page, pageSize),
       },
     })
   } catch (error) {
@@ -367,7 +364,7 @@ async function processFetchQueue(platform: string) {
           continue
         }
 
-        const problemData = await adapter.fetch(job.problemId)
+        const problemData = await fetchProblemWithMetrics(platform as any, job.problemId)
 
         // 检查该平台+题号组合是否已存在
         const existingProblem = await prisma.problem.findFirst({
@@ -451,7 +448,7 @@ async function processFetchQueue(platform: string) {
                 },
               })
             }
-            console.log(`[OJ Fetcher] Created ${problemData.statements.length} statement records for problem ${targetProblemId}`)
+            logger.info('oj_fetcher_statements_created', { action: 'oj_fetch', metadata: { statementCount: problemData.statements.length, problemId: targetProblemId } })
           }
         }
 
@@ -464,7 +461,7 @@ async function processFetchQueue(platform: string) {
           for (const img of oldImages) {
             await fileService.hardDelete(img.id).catch(() => {})
           }
-          console.log(`[OJ Fetcher] Cleaned ${oldImages.length} old images for problem ${existingProblem.id}`)
+          logger.info('oj_fetcher_old_images_cleaned', { action: 'oj_fetch', metadata: { imageCount: oldImages.length, problemId: existingProblem.id } })
 
           // 更新时也检测 PDF 题面
           const pdfStatementUpdate = problemData.statements?.find(s => s.format === 'pdf' && s.fileUrl)
@@ -490,7 +487,7 @@ async function processFetchQueue(platform: string) {
             const deleted = await prisma.problemStatement.deleteMany({
               where: { problemId: existingProblem.id },
             })
-            console.log(`[OJ Fetcher] Deleted ${deleted.count} old statements for problem ${existingProblem.id}`)
+            logger.info('oj_fetcher_statements_deleted', { action: 'oj_fetch', metadata: { deletedCount: deleted.count, problemId: existingProblem.id } })
 
             for (const stmt of problemData.statements) {
               await prisma.problemStatement.create({
@@ -505,7 +502,7 @@ async function processFetchQueue(platform: string) {
                 },
               })
             }
-            console.log(`[OJ Fetcher] Recreated ${problemData.statements.length} statement records for problem ${existingProblem.id}`)
+            logger.info('oj_fetcher_statements_recreated', { action: 'oj_fetch', metadata: { statementCount: problemData.statements.length, problemId: existingProblem.id } })
           }
         }
 
@@ -556,7 +553,7 @@ async function processFetchQueue(platform: string) {
             for (const mapping of linkMappings) {
               processedDescription = processedDescription.split(mapping.original).join(mapping.new)
             }
-            console.log(`[OJ Fetcher] Updated ${linkMappings.length} attachment links in description`)
+            logger.info('oj_fetcher_attachment_links_updated', { action: 'oj_fetch', metadata: { linkCount: linkMappings.length } })
           }
         } else {
           // 无附件或无 Cookie
@@ -578,7 +575,7 @@ async function processFetchQueue(platform: string) {
             where: { id: targetProblemId },
             data: { description: processedDescription },
           })
-          console.log(`[OJ Fetcher] Updated problem description with processed images/attachments`)
+          logger.info('oj_fetcher_description_updated', { action: 'oj_fetch', metadata: { problemId: targetProblemId } })
         }
 
         // 同时处理 ProblemStatement 中的图片
@@ -593,7 +590,7 @@ async function processFetchQueue(platform: string) {
                 where: { id: stmt.id },
                 data: { content: processedContent },
               })
-              console.log(`[OJ Fetcher] Updated statement ${stmt.id} with processed images`)
+              logger.info('oj_fetcher_statement_images_updated', { action: 'oj_fetch', metadata: { statementId: stmt.id } })
             }
           }
         }
@@ -698,7 +695,7 @@ async function downloadAttachmentInternal(
     }
     // 删除旧的附件记录
     await prisma.problemAttachment.delete({ where: { id: existingAttachment.id } })
-    console.log(`[OJ Fetcher] Deleted existing attachment: ${filename}`)
+    logger.info('oj_fetcher_attachment_deleted', { action: 'oj_fetch', metadata: { filename } })
   }
 
   // 检查是否已存在同名图片（重新拉取时覆盖）
@@ -713,7 +710,7 @@ async function downloadAttachmentInternal(
     })
     if (existingFile) {
       await fileService.hardDelete(existingFile.id).catch(() => {})
-      console.log(`[OJ Fetcher] Deleted existing image: ${filename}`)
+      logger.info('oj_fetcher_image_deleted', { action: 'oj_fetch', metadata: { filename } })
     }
   }
 
@@ -885,7 +882,7 @@ async function downloadAndUploadImage(
       isPublic: true // 图片公开访问
     })
 
-    console.log(`[OJ Fetcher] Image uploaded: ${imageUrl} -> ${result.fileUrl}`)
+    logger.info('oj_fetcher_image_uploaded', { action: 'oj_fetch', metadata: { imageUrl, fileUrl: result.fileUrl } })
     return result.fileUrl
   } catch (error) {
     console.error(`[OJ Fetcher] Image upload failed: ${imageUrl}`, error)
@@ -908,7 +905,7 @@ async function processMarkdownImages(
     return markdown
   }
 
-  console.log(`[OJ Fetcher] Found ${images.length} images in markdown`)
+  logger.info('oj_fetcher_images_found_in_markdown', { action: 'oj_fetch', metadata: { imageCount: images.length } })
 
   let updatedMarkdown = markdown
   for (const image of images) {
@@ -983,7 +980,7 @@ ojFetcherRouter.get('/:platform/:problemId', async (req: Request, res: Response)
     }
 
     // 拉取题目
-    const problem = await adapter.fetch(problemId)
+    const problem = await fetchProblemWithMetrics(platform as any, problemId)
 
     // 处理图片：下载远程图片到本地
     try {
@@ -1084,7 +1081,7 @@ ojFetcherRouter.post('/download-attachment', async (req: Request, res: Response)
     }
 
     // 下载文件（跟随重定向）
-    console.log(`[OJ Fetcher] Downloading attachment: ${filename} from ${url}`)
+    logger.info('oj_fetcher_attachment_downloading', { action: 'oj_fetch', metadata: { filename, url } })
 
     // 洛谷附件下载会重定向到 OSS，需要手动处理
     let downloadUrl = url
@@ -1108,7 +1105,7 @@ ojFetcherRouter.post('/download-attachment', async (req: Request, res: Response)
           })
         }
         visitedUrls.add(location)
-        console.log(`[OJ Fetcher] Redirect ${response.status} -> ${location}`)
+        logger.info('oj_fetcher_redirect_followed', { action: 'oj_fetch', metadata: { statusCode: response.status, location } })
         downloadUrl = location
         // 继续使用 manual 模式处理重定向
         response = await fetch(downloadUrl, {
@@ -1164,7 +1161,7 @@ ojFetcherRouter.post('/download-attachment', async (req: Request, res: Response)
       })
     }
 
-    console.log(`[OJ Fetcher] File saved: ${filename} (${buffer.length} bytes, ${isImage ? 'image' : 'attachment'})`)
+    logger.info('oj_fetcher_file_saved', { action: 'oj_fetch', metadata: { filename, fileSize: buffer.length, fileType: isImage ? 'image' : 'attachment' } })
 
     res.json({
       success: true,

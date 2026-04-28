@@ -1,0 +1,107 @@
+/**
+ * Problem Judge Config Routes
+ * 评测配置路由
+ */
+
+import { Router } from 'express'
+import { prisma } from '../../prisma'
+import { authenticate } from '../../middleware/auth'
+import { asyncHandler } from '../../lib/asyncHandler'
+import { canModifyProblem } from './problem.helpers'
+import logger from '../../lib/logger'
+
+export const problemJudgeRouter = Router()
+
+/**
+ * GET /api/problems/:id/judge-config
+ * 获取题目的评测配置
+ */
+problemJudgeRouter.get('/:id/judge-config', authenticate, asyncHandler(async (req, res) => {
+    const { id } = req.params
+
+    const problem = await prisma.problem.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        platform: true,
+        problemType: true,
+        judgeConfig: true,
+        timeLimit: true,
+        memoryLimit: true
+      }
+    })
+
+    if (!problem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    // 解析 YAML 配置
+    let config = null
+    if (problem.judgeConfig) {
+      try {
+        const yaml = await import('js-yaml')
+        config = yaml.load(problem.judgeConfig)
+        logger.info('judge_config_loaded', { action: 'getJudgeConfig', metadata: { subtasksCount: (config as any)?.subtasks?.length ?? 0 } })
+      } catch (e) {
+        logger.warn('parse_judge_config_error', { error: e })
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        problemType: problem.problemType,
+        timeLimit: problem.timeLimit,
+        memoryLimit: problem.memoryLimit,
+        config
+      }
+    })
+}))
+
+/**
+ * PUT /api/problems/:id/judge-config
+ * 保存题目的评测配置
+ */
+problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (req, res) => {
+    const { id } = req.params
+    const user = (req as any).user
+    const { problemType, timeLimit, memoryLimit, config } = req.body
+
+    const existingProblem = await prisma.problem.findUnique({ where: { id } })
+
+    if (!existingProblem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
+    if (!canModifyProblem(user, existingProblem)) {
+      return res.status(403).json({ success: false, message: '没有权限编辑此题目' })
+    }
+
+    // 将配置序列化为 YAML
+    let judgeConfigYaml = null
+    if (config) {
+      const yaml = await import('js-yaml')
+      judgeConfigYaml = yaml.dump(config, { lineWidth: -1 })
+      logger.info('judge_config_saving', { action: 'saveJudgeConfig', metadata: { subtasksCount: config.subtasks?.length ?? 0 } })
+    }
+
+    const updateData: any = {}
+    if (problemType) updateData.problemType = problemType
+    if (timeLimit !== undefined) updateData.timeLimit = timeLimit
+    if (memoryLimit !== undefined) updateData.memoryLimit = memoryLimit
+    updateData.judgeConfig = judgeConfigYaml
+
+    const problem = await prisma.problem.update({
+      where: { id },
+      data: updateData
+    })
+
+    logger.audit('judge_config_updated', {
+      userId: user.userId,
+      action: 'update_judge_config',
+      target: id,
+      metadata: { problemType, timeLimit, memoryLimit }
+    })
+
+    res.json({ success: true, data: problem })
+}))

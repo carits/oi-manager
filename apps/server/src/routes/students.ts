@@ -4,14 +4,17 @@ import { prisma } from '../prisma'
 import { authenticate, authorize } from '../middleware/auth'
 import { canViewStudent, canManageStudent, getUserSchoolId } from '../middleware/permissions'
 import { generateTempPassword, hashPassword } from '../utils/password'
+import logger from '../lib/logger'
+import { asyncHandler } from '../lib/asyncHandler'
+import { parsePagination, paginatedResponse } from '../lib/pagination'
 
 export const studentRouter = Router()
 
 // 获取学生列表 (老师、学校负责人和管理员)
 // 性能优化：使用数据库级分页和排序，避免全量查询后在内存中处理
-studentRouter.get('/', authenticate, async (req, res) => {
-  try {
-    const { headTeacherId, teamId, schoolId, username, page = '1', pageSize = '20' } = req.query
+studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+    const { headTeacherId, teamId, schoolId, username } = req.query
+    const { page, pageSize, skip } = parsePagination(req.query)
 
     // 获取当前登录教师信息
     const userId = req.user!.userId
@@ -47,20 +50,14 @@ studentRouter.get('/', authenticate, async (req, res) => {
       }
     }
 
-    const pageNum = Number(page)
-    const pageSizeNum = Number(pageSize)
-
     // 获取总数
     const total = await prisma.student.count({ where })
 
     // 性能优化：使用数据库级分页和排序
-    // 排序规则：按入学年份降序（年级低的在前）
-    // 注意："主教练优先"的特殊排序已移除，改为统一的数据库级排序
-    // 如果需要保持"主教练优先"语义，可考虑在前端处理或使用更复杂的查询
     const students = await prisma.student.findMany({
       where,
-      skip: (pageNum - 1) * pageSizeNum,
-      take: pageSizeNum,
+      skip,
+      take: pageSize,
       orderBy: [
         { enrollmentYear: 'desc' }
       ],
@@ -107,21 +104,14 @@ studentRouter.get('/', authenticate, async (req, res) => {
       success: true,
       data: {
         list: formattedStudents,
-        total,
-        page: pageNum,
-        pageSize: pageSizeNum
+        ...paginatedResponse(formattedStudents, total, page, pageSize)
       }
     })
-  } catch (error) {
-    console.error('Get students error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 获取学生 rating 排名 (老师)
 // 性能优化：使用数据库级排序，优化最近成绩变化的获取方式
-studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
-  try {
+studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
     // 获取当前用户的学校 ID，限制只返回本校学生
     const schoolId = await getUserSchoolId(req.user!.userId)
 
@@ -200,15 +190,10 @@ studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_princi
         total: rankings.length
       }
     })
-  } catch (error) {
-    console.error('Get rankings error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 获取学生详情 - 支持通过 id 或 userId 查询
-studentRouter.get('/:id', authenticate, async (req, res) => {
-  try {
+studentRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     const { id } = req.params
 
     // 先查询学生基本信息（用于权限检查）
@@ -248,15 +233,10 @@ studentRouter.get('/:id', authenticate, async (req, res) => {
     }
 
     res.json({ success: true, data: student })
-  } catch (error) {
-    console.error('Get student error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 创建学生 (老师)
-studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
-  try {
+studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
     const { name, gender, schoolId, enrollmentYear, targetContest, headTeacherId, tags, notes, username, phone, email, avatar } = req.body
 
     // 验证必填字段：用户名
@@ -328,18 +308,10 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
     })
 
     res.json({ success: true, data: student })
-  } catch (error) {
-    if (error instanceof Error && error.message === 'USERNAME_EXISTS') {
-      return res.status(400).json({ success: false, message: '用户名已存在' })
-    }
-    console.error('Create student error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 更新学生 (老师)
-studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
-  try {
+studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
     const { id } = req.params
     const { name, gender, schoolId, enrollmentYear, targetContest, headTeacherId, tags, notes, avatar, rating, password } = req.body
 
@@ -377,7 +349,7 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
     }
 
     // 使用事务更新学生及相关数据，确保原子性
-    console.log('[StudentUpdate] password field received:', password ? `"${password}" (${password.length} chars)` : '(empty)')
+    logger.info('student_update_password_field_received', { action: 'student_update', metadata: { passwordProvided: !!password, passwordLength: password?.length || 0 } })
     const student = await prisma.$transaction(async (tx) => {
       // 更新学生的 User 关联信息（如果存在）
       if (existingStudent.userId) {
@@ -389,7 +361,7 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
 
         // 如果提供了新密码，则更新密码
         if (password && password.length >= 6) {
-          console.log('[StudentUpdate] Hashing new password for user:', existingStudent.userId)
+          logger.info('student_update_hashing_password', { action: 'student_update', metadata: { userId: existingStudent.userId } })
           userUpdateData.passwordHash = await bcrypt.hash(password, 10)
         }
 
@@ -418,15 +390,10 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
     })
 
     res.json({ success: true, data: student })
-  } catch (error) {
-    console.error('Update student error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 删除学生 (老师) - 同时删除关联的 User 记录
-studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
-  try {
+studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
     const { id } = req.params
 
     // 资源级权限检查
@@ -451,15 +418,10 @@ studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principa
       }
     })
     res.json({ success: true, message: '删除成功' })
-  } catch (error) {
-    console.error('Delete student error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 禁用/启用学生账号 (老师)
-studentRouter.put('/:id/account-status', authenticate, authorize('teacher', 'school_principal'), async (req, res) => {
-  try {
+studentRouter.put('/:id/account-status', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
     const { id } = req.params
     const { status } = req.body // 'disabled' | 'active'
 
@@ -489,11 +451,7 @@ studentRouter.put('/:id/account-status', authenticate, authorize('teacher', 'sch
     })
 
     res.json({ success: true, message: status === 'disabled' ? '账号已禁用' : '账号已启用' })
-  } catch (error) {
-    console.error('Toggle student account status error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 处理学生作为所有者被删除时的团队所有权转移
 async function handleStudentOwnerDeletion(studentId: string) {
@@ -541,11 +499,11 @@ async function handleStudentOwnerDeletion(studentId: string) {
           data: { role: 'owner' }
         })
       ])
-      console.log(`团队 ${ownerMember.Team.name} 所有权已从学生转移到 ${newOwner.userType === 'teacher' ? '教师' : '学生'}`)
+      logger.info('team_ownership_transferred_to_teacher', { action: 'team_transfer', metadata: { teamName: ownerMember.Team.name, newOwnerType: newOwner.userType } })
     } else {
       // 团队无其他成员，解散团队
       await prisma.team.delete({ where: { id: teamId } })
-      console.log(`团队 ${ownerMember.Team.name} 已解散（无其他成员）`)
+      logger.info('team_dissolved', { action: 'team_transfer', metadata: { teamName: ownerMember.Team.name, reason: 'no_other_members' } })
     }
   }
 }

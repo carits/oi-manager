@@ -10,6 +10,7 @@
 
 import { OjAdapter, OjProblem, OjFetchError, OjErrorCode, OjStatement } from './types'
 import * as cheerio from 'cheerio'
+import logger from '../lib/logger'
 
 /**
  * 洛谷 API 返回的题目数据结构
@@ -294,18 +295,17 @@ export class LuoguAdapter implements OjAdapter {
         )
       }
 
-      // 调试：打印题目数据结构
-      console.log('[LuoguAdapter] Problem data structure:', {
-        pid: problem.pid,
-        title: problem.title,
-        hasContent: !!problem.content,
-        contentKeys: problem.content ? Object.keys(problem.content) : [],
-        background: problem.content?.background ? problem.content.background.substring(0, 100) + '...' : 'N/A',
-        description: problem.content?.description ? problem.content.description.substring(0, 100) + '...' : 'N/A',
-        hasSamples: !!problem.samples,
-        samplesCount: problem.samples?.length,
-        hasLimits: !!problem.limits,
-        hasAttachments: !!problem.attachments,
+      logger.info('luogu_adapter_problem_data', {
+        action: 'luogu_adapter',
+        metadata: {
+          pid: problem.pid,
+          title: problem.title,
+          hasContent: !!problem.content,
+          hasSamples: !!problem.samples,
+          samplesCount: problem.samples?.length,
+          hasLimits: !!problem.limits,
+          hasAttachments: !!problem.attachments,
+        }
       })
 
       return problem

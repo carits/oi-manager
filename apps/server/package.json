@@ -39,7 +39,8 @@
     "tough-cookie": "^6.0.1",
     "undici": "^7.24.6",
     "uuid": "^13.0.0",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

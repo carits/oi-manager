@@ -5,12 +5,13 @@ import { prisma } from '../prisma.js'
 import { CreatePlatformAdminRequest, ResetUserPasswordRequest, GetUsersQueryParams } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation.js'
 import { passwordResetLimiter } from '../middleware/rateLimiter.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
+import { parsePagination, paginatedResponse } from '../lib/pagination.js'
 
 export const userRouter = Router()
 
 // 获取用户公开信息（所有登录用户可访问）
-userRouter.get('/:userId/profile', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     const { userId } = req.params
     const { userType } = req.query
 
@@ -88,21 +89,17 @@ userRouter.get('/:userId/profile', authenticate, async (req: AuthRequest, res: R
     }
 
     res.json({ success: true, data: profileData })
-  } catch (error) {
-    console.error('Get user profile error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 获取所有用户列表（super_admin, platform_admin）
-userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.get('/', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     // 权限检查
     if (!isAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '权限不足' })
     }
 
-    const { role, status, schoolId, keyword, page = 1, pageSize = 20 } = req.query as unknown as GetUsersQueryParams
+    const { role, status, schoolId, keyword } = req.query as unknown as GetUsersQueryParams
+    const { page, pageSize, skip } = parsePagination(req.query)
 
     // 构建查询条件
     const where: any = {}
@@ -118,8 +115,8 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
             data: {
               users: [],
               total: 0,
-              page: Number(page),
-              pageSize: Number(pageSize),
+              page,
+              pageSize,
               totalPages: 0
             }
           })
@@ -149,14 +146,11 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       ]
     }
 
-    const skip = (Number(page) - 1) * Number(pageSize)
-    const take = Number(pageSize)
-
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
         skip,
-        take,
+        take: pageSize,
         include: {
           School: {
             select: {
@@ -218,21 +212,13 @@ userRouter.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       success: true,
       data: {
         users: formattedUsers,
-        total,
-        page: Number(page),
-        pageSize: Number(pageSize),
-        totalPages: Math.ceil(total / Number(pageSize))
+        ...paginatedResponse(formattedUsers, total, page, pageSize),
       }
     })
-  } catch (error) {
-    console.error('Get users error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 获取用户详情（super_admin, platform_admin）
-userRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!isAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '权限不足' })
     }
@@ -295,15 +281,10 @@ userRouter.get('/:id', authenticate, async (req: AuthRequest, res: Response) => 
     }
 
     res.json({ success: true, data: response })
-  } catch (error) {
-    console.error('Get user detail error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 创建平台管理员（仅 super_admin）
-userRouter.post('/platform-admin', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.post('/platform-admin', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!isSuperAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '只有超级管理员可以创建平台管理员' })
     }
@@ -386,15 +367,10 @@ userRouter.post('/platform-admin', authenticate, async (req: AuthRequest, res: R
         adminId: user.Admin?.id
       }
     })
-  } catch (error) {
-    console.error('Create platform admin error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 启用/禁用用户（super_admin, platform_admin）
-userRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.put('/:id/status', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!isAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '权限不足' })
     }
@@ -442,15 +418,10 @@ userRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Respon
         status: updatedUser.status
       }
     })
-  } catch (error) {
-    console.error('Update user status error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 重置用户密码（super_admin, platform_admin）
-userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!isAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '权限不足' })
     }
@@ -497,32 +468,10 @@ userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, async
       success: true,
       message: '密码重置成功'
     })
-  } catch (error) {
-    console.error('Reset password error:', error)
-
-    // 记录失败日志
-    try {
-      await prisma.passwordResetLog.create({
-        data: {
-          targetUserId: req.params.id,
-          operatorUserId: req.user!.userId,
-          operatorRole: req.user!.role,
-          resetMethod: req.body.resetMethod || 'manual_set',
-          result: 'failed',
-          message: error instanceof Error ? error.message : '未知错误'
-        }
-      })
-    } catch (logError) {
-      console.error('Failed to log password reset error:', logError)
-    }
-
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))
 
 // 获取用户操作日志（super_admin, platform_admin）
-userRouter.get('/:id/logs', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
+userRouter.get('/:id/logs', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!isAdmin(req.user!.role)) {
       return res.status(403).json({ success: false, message: '权限不足' })
     }
@@ -555,8 +504,4 @@ userRouter.get('/:id/logs', authenticate, async (req: AuthRequest, res: Response
         }))
       }
     })
-  } catch (error) {
-    console.error('Get user logs error:', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
+}, '服务器错误'))

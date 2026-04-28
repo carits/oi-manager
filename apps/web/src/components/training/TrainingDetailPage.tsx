@@ -11,6 +11,7 @@ import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { TrainingFormModal } from './TrainingFormModal'
 import { useAuth } from '@/components/AuthProvider'
 import type { Attachment, TabType } from './types'
+import { typeLabel, formatLabel as formatLabelFn } from './types'
 
 import { useTrainingDetail } from './hooks/useTrainingDetail'
 import { useTrainingRank } from './hooks/useTrainingRank'
@@ -32,7 +33,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const trainingId = params.tid as string
+  const trainingId = (params.tid || params.cid) as string
   const teamId = params.id as string
 
   const [activeTab, setActiveTab] = useState<TabType>('problemList')
@@ -194,12 +195,12 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   if (error || !training) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-        <div style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error || '训练不存在'}</div>
+        <div style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error || '内容不存在'}</div>
         <button
-          onClick={() => router.push(`${basePath}/${teamId}?tab=training`)}
+          onClick={() => router.push(`${basePath}/${teamId}`)}
           style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
         >
-          返回训练列表
+          返回
         </button>
       </div>
     )
@@ -207,7 +208,9 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
 
   // ========== Derived ==========
 
-  const formatLabel = training.format === 'icpc' ? 'ICPC' : 'IOI'
+  const fmtLabel = formatLabelFn(training.format)
+  const tl = typeLabel(training.type)
+  const backTab = training.type === 'contest' ? 'mock' : 'training'
   const statusColors: Record<string, { bg: string; color: string }> = {
     upcoming: { bg: 'var(--info-light)', color: 'var(--info-text)' },
     ongoing: { bg: 'var(--success-light)', color: 'var(--success-text)' },
@@ -226,7 +229,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
             <button onClick={() => router.push(`${basePath}/${teamId}?tab=training`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>← 返回</button>
             <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
             <h1 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>{training.title}</h1>
-            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-muted)' }}>{formatLabel}</span>
+            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-muted)' }}>{fmtLabel}</span>
             <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: sc.bg, color: sc.color }}>
               {training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}
             </span>
@@ -296,12 +299,12 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         {hideContent ? (
           <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
             <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>训练尚未开始</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{tl}尚未开始</h2>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
               开始时间：{new Date(training.startTime).toLocaleString('zh-CN')}
             </p>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              请等待管理员开启训练后再查看内容
+              请等待管理员开启{tl}后再查看内容
             </p>
           </div>
         ) : (
@@ -512,6 +515,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         onClose={() => actions.setShowEditModal(false)}
         teamId={teamId}
         trainingId={trainingId}
+        mode={training.type === 'contest' ? 'contest' : 'training'}
         onSaved={() => {
           actions.setShowEditModal(false)
           refresh()
@@ -523,8 +527,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
         isOpen={actions.showDeleteConfirm}
         onClose={() => actions.setShowDeleteConfirm(false)}
         onConfirm={actions.handleDelete}
-        title="删除训练"
-        message={`确定要删除训练「${training.title}」吗？训练题目和题解将被删除，但已提交的评测记录会保留。`}
+        title={`删除${tl}`}
+        message={`确定要删除${tl}「${training.title}」吗？${tl}题目和题解将被删除，但已提交的评测记录会保留。`}
         confirmText="确认删除"
         danger
         loading={actions.deleting}

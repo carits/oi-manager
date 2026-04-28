@@ -17,6 +17,7 @@
  */
 
 import { prisma } from '../../../prisma'
+import logger from '../../../lib/logger'
 import {
   buildHeaders,
   cookiesToString,
@@ -130,12 +131,12 @@ export class LuoguSession {
     try {
       const data = JSON.parse(binding.bindingData)
       if (!data.clientId || !data.uidCookie) {
-        console.error('[LuoguSession] bindingData missing clientId/uidCookie')
+        logger.error('luogu_session_binding_data_missing', { action: 'luogu_session_fromBinding', metadata: { detail: 'bindingData missing clientId/uidCookie' } })
         return null
       }
       return new LuoguSession(data.clientId, data.uidCookie)
     } catch (err) {
-      console.error('[LuoguSession] Failed to parse bindingData:', err)
+      logger.error('luogu_session_parse_binding_failed', err, { action: 'luogu_session_fromBinding' })
       return null
     }
   }
@@ -232,7 +233,7 @@ export class LuoguSession {
       if (isChallengePage(html)) {
         const c3vk = this.pickC3VK(response, html)
         if (c3vk) {
-          console.log(`[LuoguSession] C3VK challenge detected (round ${round + 1}), retrying...`)
+          logger.info('luogu_session_c3vk_challenge', { action: 'luogu_fetchPage', metadata: { round: round + 1 } })
           this.extraCookies['C3VK'] = c3vk
           continue
         }
@@ -299,7 +300,7 @@ export class LuoguSession {
         try {
           return JSON.parse(raw)
         } catch (err) {
-          console.error('[LuoguSession] lentille-context JSON parse failed:', err instanceof Error ? err.message : String(err))
+          logger.error('luogu_session_lentille_parse_failed', undefined, { action: 'luogu_extractPageData', metadata: { detail: err instanceof Error ? err.message : String(err) } })
         }
       }
     }
@@ -321,13 +322,13 @@ export class LuoguSession {
           }
           return feData
         } catch (err) {
-          console.error('[LuoguSession] _feInjection parse failed:', err instanceof Error ? err.message : String(err))
+          logger.error('luogu_session_feinjection_parse_failed', undefined, { action: 'luogu_extractPageData', metadata: { detail: err instanceof Error ? err.message : String(err) } })
         }
       }
     }
 
     // 调试：输出 HTML 前缀帮助排查
-    console.error('[LuoguSession] No data found in HTML, first 500 chars:', html.substring(0, 500))
+    logger.error('luogu_session_no_data_in_html', undefined, { action: 'luogu_extractPageData', metadata: { preview: html.substring(0, 500) } })
     throw new Error('页面中未找到数据（未匹配 lentille-context / _feInjection / JSON 格式）')
   }
 
@@ -357,7 +358,7 @@ export class LuoguSession {
         }
       }
     } catch (err) {
-      console.log('[LuoguSession] Team list JSON way failed:', err instanceof Error ? err.message : String(err))
+      logger.warn('luogu_session_team_list_json_failed', { action: 'luogu_getMyGroups', metadata: { detail: err instanceof Error ? err.message : String(err) } })
     }
 
     // 策略2：HTML 页面（参考 luogu_group_list.py 的 fetch_html_way）
@@ -439,7 +440,7 @@ export class LuoguSession {
         }
       }
     } catch (err) {
-      console.log('[LuoguSession] Member JSON way failed:', err instanceof Error ? err.message : String(err))
+      logger.warn('luogu_session_member_json_failed', { action: 'luogu_fetchMembers', metadata: { detail: err instanceof Error ? err.message : String(err) } })
     }
 
     // 策略2：HTML 页面方式

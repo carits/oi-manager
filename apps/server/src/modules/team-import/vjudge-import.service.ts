@@ -13,6 +13,7 @@ import bcrypt from 'bcryptjs'
 import fs from 'fs'
 import path from 'path'
 import { prisma } from '../../prisma'
+import logger from '../../lib/logger'
 import { VJudgeSession } from '../platform-binding/binders/vjudge-session'
 import { teamService } from '../team/team.service'
 import { memberMatchService } from './member-match.service'
@@ -49,7 +50,7 @@ export class VjudgeImportService {
       session.loadCookies(sessionData.cookies)
       return session
     } catch (err) {
-      console.error('[VjudgeImport] Failed to create session:', err)
+      logger.error('vjudge_import_session_create_failed', err, { action: 'vjudge_import_getSession' })
       return null
     }
   }
@@ -76,7 +77,7 @@ export class VjudgeImportService {
       const sessionData = JSON.parse(binding.bindingData)
 
       // 策略1：用保存的会话 Cookie（过滤掉 Cloudflare Cookie 避免被拦截）
-      console.log('[VjudgeImport] Trying with saved session cookies...')
+      logger.info('vjudge_import_session_cookies_attempt', { action: 'vjudge_import_getGroups' })
       const session = new VJudgeSession()
 
       // 过滤 Cloudflare 和分析 Cookie，只保留 VJudge 会话 Cookie
@@ -84,18 +85,18 @@ export class VjudgeImportService {
       session.loadCookiesFiltered(sessionData.cookies, CLOUDFLARE_KEYS)
 
       // 先访问首页建立连接（获取新的 Cloudflare Cookie）
-      console.log('[VjudgeImport] Visiting homepage to establish connection...')
+      logger.info('vjudge_import_homepage_visit', { action: 'vjudge_import_getGroups' })
       try {
         await session.get('https://vjudge.net/')
       } catch (e) {
-        console.log('[VjudgeImport] Homepage visit failed:', e instanceof Error ? e.message : String(e))
+        logger.warn('vjudge_import_homepage_failed', { action: 'vjudge_import_getGroups', metadata: { detail: e instanceof Error ? e.message : String(e) } })
       }
 
       let groups = await session.getMyGroups()
 
       // 如果 Cookie 有效（拿到了团队），更新保存的 Cookie
       if (groups.length > 0) {
-        console.log(`[VjudgeImport] Got ${groups.length} groups with saved session`)
+        logger.info('vjudge_import_groups_fetched', { action: 'vjudge_import_getGroups', metadata: { count: groups.length } })
 
         // 更新 Cookie（包括新的 Cloudflare Cookie）
         try {
@@ -109,15 +110,15 @@ export class VjudgeImportService {
             where: { id: binding.id },
             data: { bindingData: JSON.stringify(newBindingData) }
           })
-          console.log('[VjudgeImport] Cookies updated after successful fetch')
+          logger.info('vjudge_import_cookies_updated', { action: 'vjudge_import_getGroups' })
         } catch (e) {
-          console.log('[VjudgeImport] Failed to update cookies:', e instanceof Error ? e.message : String(e))
+          logger.warn('vjudge_import_cookies_update_failed', { action: 'vjudge_import_getGroups', metadata: { detail: e instanceof Error ? e.message : String(e) } })
         }
 
         return groups
       }
 
-      console.log('[VjudgeImport] Saved session returned 0 groups, trying re-login...')
+      logger.info('vjudge_import_session_expired_relogin', { action: 'vjudge_import_getGroups' })
 
       // 策略2：会话过期，尝试用存储的密码重新登录
       if (sessionData.password) {
@@ -135,22 +136,22 @@ export class VjudgeImportService {
             where: { id: binding.id },
             data: { bindingData: JSON.stringify(newBindingData) }
           })
-          console.log('[VjudgeImport] Re-login successful, cookies updated')
+          logger.info('vjudge_import_relogin_success', { action: 'vjudge_import_getGroups' })
 
           groups = await loginSession.getMyGroups()
           if (groups.length > 0) {
             return groups
           }
         } else {
-          console.warn('[VjudgeImport] Re-login failed:', loginResult.message)
+          logger.warn('vjudge_import_relogin_failed', { action: 'vjudge_import_getGroups', metadata: { detail: loginResult.message } })
         }
       }
 
       // 两种策略都没拿到团队
-      console.log('[VjudgeImport] All strategies failed to get groups')
+      logger.warn('vjudge_import_all_strategies_failed', { action: 'vjudge_import_getGroups' })
       return groups
     } catch (err) {
-      console.error('[VjudgeImport] Failed to get groups:', err)
+      logger.error('vjudge_import_get_groups_failed', err, { action: 'vjudge_import_getGroups' })
       throw err
     }
   }
@@ -237,10 +238,10 @@ export class VjudgeImportService {
       try {
         const buffer = await session.getBinary(avatarUrl)
         fs.writeFileSync(filePath, buffer)
-        console.log(`[VjudgeImport] Avatar downloaded via session: ${filename} (${buffer.length} bytes)`)
+        logger.info('vjudge_import_avatar_downloaded', { action: 'vjudge_import_downloadAvatar', metadata: { filename, size: buffer.length } })
         return `/uploads/public/avatars/${filename}`
       } catch (err) {
-        console.warn('[VjudgeImport] Session download failed, trying direct fetch:', err instanceof Error ? err.message : String(err))
+        logger.warn('vjudge_import_session_download_failed', { action: 'vjudge_import_downloadAvatar', metadata: { detail: err instanceof Error ? err.message : String(err) } })
       }
     }
 
@@ -288,9 +289,9 @@ export class VjudgeImportService {
         try {
           const session = await this.getSession(userId)
           localAvatarPath = await this.downloadAvatar(request.avatarUrl, session || undefined)
-          console.log(`[VjudgeImport] Avatar downloaded: ${localAvatarPath}`)
+          logger.info('vjudge_import_avatar_saved', { action: 'vjudge_import_importMembers', metadata: { path: localAvatarPath } })
         } catch (err) {
-          console.warn('[VjudgeImport] Failed to download avatar, skipping:', err instanceof Error ? err.message : String(err))
+          logger.warn('vjudge_import_avatar_download_failed', { action: 'vjudge_import_importMembers', metadata: { detail: err instanceof Error ? err.message : String(err) } })
           // 不回退到外部 URL（需要认证，前端无法直接加载）
           localAvatarPath = null
         }
@@ -407,7 +408,7 @@ export class VjudgeImportService {
               verifiedAt: new Date()
             }
           }).catch(err => {
-            console.error('[VjudgeImport] Failed to bind platform:', err)
+            logger.error('vjudge_import_platform_bind_failed', err, { action: 'vjudge_import_importMembers' })
           })
 
           directAddStudents.push({ id: student.id, type: 'student' })

@@ -4,6 +4,7 @@
  */
 
 import logger from '../../lib/logger'
+import { paginatedResponse } from '../../lib/pagination'
 import type { JwtPayload } from '@oi-manager/shared'
 import { teamRepository, TeamRepository } from './team.repository'
 import { getUserName, getMemberDetails, getMemberDetailsBatch, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
@@ -246,10 +247,11 @@ export class TeamService {
     schoolId?: string
     page: number
     pageSize: number
+    skip: number
     view?: string
     user: JwtPayload
   }) {
-    const { schoolId, page, pageSize, view, user } = params
+    const { schoolId, page, pageSize, skip, view, user } = params
 
     const userId = user.studentId || user.teacherId
     const userType = user.studentId ? 'student' : 'teacher'
@@ -260,13 +262,7 @@ export class TeamService {
     // 构建过滤条件
     if (view === 'mine') {
       if (!userId || userId === 'undefined' || userId === 'null') {
-        return {
-          list: [],
-          total: 0,
-          page,
-          pageSize,
-          totalPages: 0
-        }
+        return { ...paginatedResponse([], 0, page, pageSize), list: [] }
       }
 
       const myTeamIds = await this.repo.findUserTeamIds(userId, userType)
@@ -284,8 +280,6 @@ export class TeamService {
         }
       }
     }
-
-    const skip = (page - 1) * pageSize
 
     const [allTeams, total] = await Promise.all([
       this.repo.findMany({ where, skip, take: pageSize }),
@@ -335,11 +329,8 @@ export class TeamService {
     })
 
     return {
+      ...paginatedResponse(teamsWithOwner.map(transformTeamForFrontend), total, page, pageSize),
       list: teamsWithOwner.map(transformTeamForFrontend),
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize)
     }
   }
 
@@ -579,8 +570,12 @@ export class TeamService {
     // 处理统一的 members 参数
     if (dto.members && Array.isArray(dto.members)) {
       for (const member of dto.members) {
-        if (typeof member === 'object' && member.id && member.type) {
-          targetMembers.push({ id: member.id, type: member.type })
+        if (typeof member === 'object') {
+          const id = member.userId
+          const type = member.userType
+          if (id && type) {
+            targetMembers.push({ id, type })
+          }
         }
       }
     }

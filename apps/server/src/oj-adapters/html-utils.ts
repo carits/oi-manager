@@ -3,6 +3,8 @@
  * @description 从 HDU 适配器提取的公共方法，供多个适配器复用
  */
 
+import logger from '../lib/logger'
+
 /** 去除 HTML 标签 */
 export function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '')
@@ -288,10 +290,10 @@ export async function downloadAndSavePdf(
     })
 
     const fileUrl = `/api/files/${result.id}/public`
-    console.log(`[PDF Download] Saved: ${pdfUrl} -> ${fileUrl} (${buffer.length} bytes)`)
+    logger.info('pdf_download_saved', { action: 'pdf_download', metadata: { pdfUrl, fileUrl, bytes: buffer.length } })
     return fileUrl
   } catch (error) {
-    console.error(`[PDF Download] Failed: ${pdfUrl}`, error)
+    logger.error('pdf_download_failed', error, { action: 'pdf_download', metadata: { pdfUrl } })
     return null
   }
 }

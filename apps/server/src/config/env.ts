@@ -1,3 +1,5 @@
+import logger from '../lib/logger'
+
 /**
  * 环境变量配置和校验
  *
@@ -43,9 +45,7 @@ export function validateEnv(): void {
     process.exit(1)
   }
 
-  // 输出当前环境信息
-  console.log(`✅ Environment: ${nodeEnv}`)
-  console.log(`✅ Port: ${process.env.PORT || 3002}`)
+  logger.info('server_start', { action: 'config', metadata: { env: nodeEnv, port: process.env.PORT || 3002 } })
 }
 
 /**

@@ -93,7 +93,7 @@ describe('Team Operations', () => {
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          members: [{ id: newMemberId, type: 'teacher' }],
+          members: [{ userId: newMemberId, userType: 'teacher' }],
           role: 'member'
         })
 
@@ -207,7 +207,7 @@ describe('Team Operations', () => {
         .post(`/api/teams/${team.id}/members`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          members: [{ id: newMemberId, type: 'teacher' }],
+          members: [{ userId: newMemberId, userType: 'teacher' }],
           role: 'member'
         })
 

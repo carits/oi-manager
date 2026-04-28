@@ -11,6 +11,7 @@
 import { PlatformBinder } from './types'
 import { VJudgeSession, VJudgeSessionData } from './vjudge-session'
 import type { PlatformConfigSchema, BindResult } from '../platform-binding.types'
+import logger from '../../../lib/logger'
 
 /**
  * VJudge 绑定器
@@ -48,7 +49,7 @@ export class VJudgeBinder implements PlatformBinder {
 
     // 优先使用 Cookie 模式（绕过 Cloudflare）
     if (cookieString) {
-      console.log(`[VJudge] Cookie mode binding for: ${username}`)
+      logger.info('vjudge_cookie_mode_binding', { action: 'vjudge_cookie_bind', metadata: { username } })
       try {
         const session = new VJudgeSession()
         session.loadRawCookieString(cookieString)
@@ -63,8 +64,8 @@ export class VJudgeBinder implements PlatformBinder {
         const hasDropdown = html.includes('userNameDropdown')
         const isLoggedIn = hasLogout || hasUsername || hasDropdown
 
-        console.log(`[VJudge] Cookie validation: hasLogout=${hasLogout}, hasUsername(${username})=${hasUsername}, hasDropdown=${hasDropdown}`)
-        console.log('[VJudge] HTML length:', html.length, ', preview:', html.substring(0, 300))
+        logger.info('vjudge_cookie_validation', { action: 'vjudge_cookie_bind', metadata: { hasLogout, hasUsername, hasDropdown, username } })
+        logger.info('vjudge_html_preview', { action: 'vjudge_cookie_bind', metadata: { htmlLength: html.length, preview: html.substring(0, 300) } })
 
         if (isLoggedIn) {
           // 尝试从页面提取实际用户名
@@ -72,7 +73,7 @@ export class VJudgeBinder implements PlatformBinder {
           const dropdownMatch = html.match(/userNameDropdown[^>]*>([^<]+)</)
           if (dropdownMatch) {
             realUsername = dropdownMatch[1].trim()
-            console.log(`[VJudge] Extracted username from page: ${realUsername}`)
+            logger.info('vjudge_username_extracted', { action: 'vjudge_cookie_bind', metadata: { realUsername } })
           }
 
           const cookiesData = await session.saveCookies()
@@ -83,7 +84,7 @@ export class VJudgeBinder implements PlatformBinder {
             verifiedAt: new Date().toISOString(),
           }
 
-          console.log(`[VJudge] Cookie mode bind successful for: ${realUsername}`)
+          logger.info('vjudge_cookie_bind_success', { action: 'vjudge_cookie_bind', metadata: { realUsername } })
           return {
             success: true,
             message: '绑定成功',
@@ -91,14 +92,14 @@ export class VJudgeBinder implements PlatformBinder {
             bindingData: JSON.stringify(bindingData),
           }
         } else {
-          console.log('[VJudge] Login indicators not found. HTML preview:', html.substring(0, 1000))
+          logger.warn('vjudge_login_indicators_not_found', { action: 'vjudge_cookie_bind', metadata: { preview: html.substring(0, 1000) } })
           return {
             success: false,
             message: 'Cookie 已失效，请重新从浏览器获取 Cookie',
           }
         }
       } catch (err) {
-        console.error('[VJudge] Cookie mode bind error:', err)
+        logger.error('vjudge_cookie_bind_error', err, { action: 'vjudge_cookie_bind' })
         return {
           success: false,
           message: `Cookie 绑定失败: ${err instanceof Error ? err.message : '未知错误'}`,
@@ -111,7 +112,7 @@ export class VJudgeBinder implements PlatformBinder {
       return { success: false, message: '请输入密码或提供 Cookie' }
     }
 
-    console.log(`[VJudge] Password mode binding for: ${username}`)
+    logger.info('vjudge_password_mode_binding', { action: 'vjudge_password_bind', metadata: { username } })
 
     const session = new VJudgeSession()
     const result = await session.login(username, actualPassword)
@@ -126,7 +127,7 @@ export class VJudgeBinder implements PlatformBinder {
           verifiedAt: new Date().toISOString(),
         }
 
-        console.log(`[VJudge] Bind successful for: ${result.username}`)
+        logger.info('vjudge_bind_success', { action: 'vjudge_password_bind', metadata: { username: result.username } })
         return {
           success: true,
           message: '绑定成功',
@@ -134,7 +135,7 @@ export class VJudgeBinder implements PlatformBinder {
           bindingData: JSON.stringify(bindingData),
         }
       } catch (err) {
-        console.error('[VJudge] Failed to save cookies:', err)
+        logger.error('vjudge_save_cookies_failed', err, { action: 'vjudge_password_bind' })
         return {
           success: false,
           message: '保存会话失败，请重试',
@@ -151,7 +152,7 @@ export class VJudgeBinder implements PlatformBinder {
       }
     }
 
-    console.log(`[VJudge] Bind failed: ${result.message}`)
+    logger.warn('vjudge_bind_failed', { action: 'vjudge_password_bind', metadata: { message: result.message } })
     return {
       success: false,
       message: result.message || '绑定失败',
@@ -163,7 +164,7 @@ export class VJudgeBinder implements PlatformBinder {
    */
   async unbind(userId: string): Promise<{ success: boolean; message?: string }> {
     // VJudge 无需调用远程 API，只需清除本地记录
-    console.log(`[VJudge] Unbind for user: ${userId}`)
+    logger.info('vjudge_unbind', { action: 'vjudge_unbind', metadata: { userId } })
     return { success: true, message: '已解除绑定' }
   }
 

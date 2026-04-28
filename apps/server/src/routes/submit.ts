@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
-import { dispatchJudgeTask, rejudgeSubmission } from '../ws/judge'
+import { rejudgeSubmission } from '../ws/judge'
 
 export const submitRouter = Router()
 
@@ -74,57 +74,15 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
       metadata: { submissionId: submission.id, userId, oj, problemId, language },
     })
 
-    // Carits 平台本地评测
+    // Carits 平台本地评测（新模式：入队后由 Consumer 自动消费）
     if (problem.platform === 'carits' && submitMethod === 'robot') {
-      // 获取评测配置
-      const problemWithConfig = await prisma.problem.findUnique({
-        where: { id: problem.id },
-        select: { judgeConfig: true }
-      })
-
-      let problemConfig = {}
-      if (problemWithConfig?.judgeConfig) {
-        try {
-          const yaml = await import('js-yaml')
-          problemConfig = yaml.load(problemWithConfig.judgeConfig) || {}
-        } catch (e) {
-          logger.warn('parse_judge_config_error', { error: e })
-        }
-      }
-
-      // 测试数据路径（使用绝对路径）
-      const testdataPath = path.join(process.cwd(), 'testdata', problem.id)
-
-      // 分发评测任务（不阻塞，后台执行）
-      dispatchJudgeTask({
-        submissionId: submission.id.toString(),
-        problemId: problem.id,
-        code,
-        language,
-        testdataPath,
-        problemConfig
-      }).catch(async (e: any) => {
-        // 后台错误处理：更新提交状态
-        logger.error('dispatch_judge_error', {
-          action: 'submit',
-          metadata: { submissionId: submission.id, error: e.message }
-        })
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: {
-            result: 'submit_failed',
-            errorMessage: e.message || '评测服务不可用'
-          }
-        })
-      })
-
-      // Carits 平台：远程提交ID就是本地评测ID
+      // 更新 ojRemoteId（Carits 平台：远程提交ID就是本地评测ID）
       await prisma.submission.update({
         where: { id: submission.id },
         data: { ojRemoteId: submission.id.toString() }
       })
 
-      logger.info('carits_judge_dispatched', {
+      logger.info('carits_submission_queued', {
         action: 'submit',
         metadata: { submissionId: submission.id }
       })

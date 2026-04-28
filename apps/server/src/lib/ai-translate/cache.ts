@@ -3,10 +3,12 @@
  *
  * 应用侧缓存，避免相同题面重复调用 API。
  * 缓存键 = hash(原文 + 源语言 + 目标语言 + 平台 + 术语表版本 + 模型名)
+ * P0 可观测性增强：添加 hit/miss 统计
  */
 
 import { createHash } from 'crypto'
 import type { CacheEntry } from './types'
+import { metrics } from '../metrics'
 
 const DEFAULT_TTL = 24 * 60 * 60 * 1000 // 24 小时
 
@@ -16,6 +18,8 @@ const DEFAULT_TTL = 24 * 60 * 60 * 1000 // 24 小时
 export class TranslationCache {
   private cache = new Map<string, CacheEntry>()
   private enabled: boolean
+  private hitCount = 0
+  private missCount = 0
 
   constructor(enabled?: boolean) {
     this.enabled = enabled ?? (process.env.TRANSLATION_ENABLE_CACHE !== 'false')
@@ -53,14 +57,23 @@ export class TranslationCache {
     if (!this.enabled) return null
 
     const entry = this.cache.get(key)
-    if (!entry) return null
+    if (!entry) {
+      this.missCount++
+      metrics.recordCacheMiss('translation')
+      return null
+    }
 
     // 过期检查
     if (Date.now() - entry.timestamp > DEFAULT_TTL) {
       this.cache.delete(key)
+      this.missCount++
+      metrics.recordCacheMiss('translation')
       return null
     }
 
+    this.hitCount++
+    metrics.recordCacheHit('translation')
+    metrics.updateCacheSize('translation', this.cache.size)
     return entry
   }
 
@@ -75,6 +88,9 @@ export class TranslationCache {
       timestamp: Date.now(),
       metadata,
     })
+
+    // 更新缓存大小
+    metrics.updateCacheSize('translation', this.cache.size)
   }
 
   /**
@@ -82,6 +98,9 @@ export class TranslationCache {
    */
   clear(): void {
     this.cache.clear()
+    this.hitCount = 0
+    this.missCount = 0
+    metrics.updateCacheSize('translation', 0)
   }
 
   /**
@@ -89,6 +108,19 @@ export class TranslationCache {
    */
   get size(): number {
     return this.cache.size
+  }
+
+  /**
+   * 缓存统计
+   */
+  getStats(): { hitCount: number; missCount: number; hitRate: string; size: number } {
+    const total = this.hitCount + this.missCount
+    return {
+      hitCount: this.hitCount,
+      missCount: this.missCount,
+      hitRate: total > 0 ? `${((this.hitCount / total) * 100).toFixed(1)}%` : '0%',
+      size: this.cache.size
+    }
   }
 }
 

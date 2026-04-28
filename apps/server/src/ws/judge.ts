@@ -1,40 +1,183 @@
 /**
  * WebSocket 评测机服务端
  *
- * 处理评测机连接，分发评测任务，接收评测结果
+ * 处理评测机连接，采用 Hydro 风格的持久化队列模式：
+ * - 评测机主动消费 Submission 表（queuing → judging）
+ * - 支持动态并发调整（config 消息）
+ * - 断连时精准恢复任务
+ * - 心跳检测 + 超时扫描
  */
 
 import { Router, Request, Response } from 'express'
 import { WebSocketServer, WebSocket } from 'ws'
-import { httpServer } from '../index'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import path from 'path'
+import yaml from 'js-yaml'
+
+// 简单的随机 ID 生成（替代 nanoid）
+const generateId = () => Math.random().toString(36).substring(2, 10)
 
 // JUDGE_TOKEN 校验
 const JUDGE_TOKEN = process.env.JUDGE_TOKEN
 
-// 评测机连接
+// 评测机连接信息
 interface JudgeConnection {
   ws: WebSocket
   judgeId: string
   languages: string[]
-  isAvailable: boolean
+  consumer: JudgeConsumer | null
 }
 
 // 连接的评测机
 const judges = new Map<WebSocket, JudgeConnection>()
-
-// 等待中的评测任务
-interface PendingTask {
-  submissionId: string
-  resolve: (result: any) => void
-  reject: (error: Error) => void
-}
-
-const pendingTasks = new Map<string, PendingTask>()
+const judgeHeartbeats = new Map<WebSocket, number>()
 
 let wss: WebSocketServer | null = null
+
+/**
+ * JudgeConsumer 类：轮询 Submission 表，分发任务到评测机
+ */
+class JudgeConsumer {
+  consuming: boolean = false
+  processing: Map<string, { submissionId: string; startTime: number }> = new Map()
+  concurrency: number = 1
+  notify: ((value?: unknown) => void) | null = null
+  ws: WebSocket
+  judgeId: string
+
+  constructor(ws: WebSocket, judgeId: string, concurrency: number = 1) {
+    this.ws = ws
+    this.judgeId = judgeId
+    this.concurrency = concurrency
+  }
+
+  async consume() {
+    while (this.consuming) {
+      if (this.processing.size >= this.concurrency) {
+        await new Promise(resolve => { this.notify = resolve })
+        continue
+      }
+
+      // 从 Submission 表取任务（原子：查询 + 更新状态）
+      const task = await this.fetchNextTask()
+      if (!task) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        continue
+      }
+
+      this.processing.set(task.submissionId, { submissionId: task.submissionId, startTime: Date.now() })
+
+      logger.info('consumer_task_dispatched', {
+        action: 'judge_consumer',
+        metadata: { judgeId: this.judgeId, submissionId: task.submissionId, processingSize: this.processing.size }
+      })
+
+      // 发送任务到评测机
+      this.ws.send(JSON.stringify({
+        type: 'judge',
+        payload: task
+      }))
+    }
+  }
+
+  async fetchNextTask(): Promise<JudgeTask | null> {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const submission = await tx.submission.findFirst({
+          where: { result: 'queuing', oj: 'carits' },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, problemInternalId: true, code: true, language: true }
+        })
+        if (!submission) return null
+
+        // 标记为 judging，同时记录评测机 ID 和开始时间
+        await tx.submission.update({
+          where: { id: submission.id },
+          data: {
+            result: 'judging',
+            judgeId: this.judgeId,
+            judgeStarted: new Date()
+          }
+        })
+
+        // 构建任务数据
+        const problem = await tx.problem.findUnique({
+          where: { id: submission.problemInternalId! },
+          select: { judgeConfig: true }
+        })
+
+        return {
+          submissionId: submission.id.toString(),
+          problemId: submission.problemInternalId!,
+          code: submission.code,
+          language: submission.language,
+          testdataPath: path.join(process.cwd(), 'testdata', submission.problemInternalId!),
+          problemConfig: problem?.judgeConfig ? yaml.load(problem.judgeConfig) : {}
+        }
+      })
+    } catch (e: any) {
+      logger.error('fetch_task_error', {
+        action: 'judge_consumer',
+        metadata: { judgeId: this.judgeId, error: e.message }
+      })
+      return null
+    }
+  }
+
+  handleResult(submissionId: string) {
+    this.processing.delete(submissionId)
+    this.notify?.()
+  }
+
+  setConcurrency(n: number) {
+    this.concurrency = n
+    this.notify?.()
+    logger.info('consumer_concurrency_updated', {
+      action: 'judge_consumer',
+      metadata: { judgeId: this.judgeId, concurrency: n }
+    })
+  }
+
+  async destroy() {
+    this.consuming = false
+    this.notify?.()
+
+    // 精准恢复该评测机的任务（断连时）
+    const recoveredCount = this.processing.size
+    for (const [id, _] of this.processing) {
+      try {
+        await prisma.submission.update({
+          where: { id: parseInt(id) },
+          data: {
+            result: 'queuing',
+            judgeId: null,
+            judgeStarted: null
+          }
+        })
+      } catch (e: any) {
+        logger.error('reset_task_error', {
+          action: 'judge_consumer',
+          metadata: { submissionId: id, error: e.message }
+        })
+      }
+    }
+
+    logger.info('consumer_destroyed', {
+      action: 'judge_consumer',
+      metadata: { judgeId: this.judgeId, recoveredCount }
+    })
+  }
+}
+
+interface JudgeTask {
+  submissionId: string
+  problemId: string
+  code: string
+  language: string
+  testdataPath: string
+  problemConfig: any
+}
 
 /**
  * 初始化 WebSocket 服务器
@@ -55,12 +198,55 @@ export function initJudgeWebSocket() {
 
   wss = new WebSocketServer({ server, path: '/ws/judge' })
 
+  // 服务启动时恢复悬空任务
+  recoverAllStaleTasks()
+
+  // 心跳检测定时器（每 30 秒）
+  setInterval(() => {
+    const now = Date.now()
+    for (const [ws, lastPing] of judgeHeartbeats) {
+      if (now - lastPing > 60 * 1000) { // 60 秒无心跳
+        const judgeId = judges.get(ws)?.judgeId
+        logger.warn('judge_heartbeat_timeout', { action: 'judge_ws', metadata: { judgeId } })
+        ws.close() // 触发断连恢复
+      }
+    }
+  }, 30 * 1000)
+
+  // 超时任务扫描定时器（每 1 分钟）
+  setInterval(async () => {
+    try {
+      const stale = await prisma.submission.updateMany({
+        where: {
+          result: 'judging',
+          judgeStarted: { lt: new Date(Date.now() - 5 * 60 * 1000) } // 5 分钟前
+        },
+        data: {
+          result: 'queuing',
+          judgeId: null,
+          judgeStarted: null
+        }
+      })
+
+      if (stale.count > 0) {
+        logger.warn('stale_tasks_recovered', {
+          action: 'judge_ws',
+          metadata: { count: stale.count }
+        })
+      }
+    } catch (e: any) {
+      logger.error('stale_scan_error', {
+        action: 'judge_ws',
+        metadata: { error: e.message }
+      })
+    }
+  }, 60 * 1000)
+
   wss.on('connection', (ws, req) => {
     const clientIp = req.socket.remoteAddress
 
     // 从 URL query 或 first message 中获取 token
-    // 评测机需要在连接后立即发送 auth 消息
-    let authenticated = JUDGE_TOKEN ? false : true  // 开发环境无 token 时跳过认证
+    let authenticated = JUDGE_TOKEN ? false : true
 
     logger.info('judge_ws_connected', {
       action: 'judge_ws',
@@ -109,15 +295,19 @@ export function initJudgeWebSocket() {
       }
     })
 
-    ws.on('close', () => {
+    ws.on('close', async () => {
       const judge = judges.get(ws)
       if (judge) {
+        // 断连时精准恢复该评测机的任务
+        await judge.consumer?.destroy()
+
         logger.info('judge_ws_disconnected', {
           action: 'judge_ws',
           metadata: { judgeId: judge.judgeId }
         })
         judges.delete(ws)
       }
+      judgeHeartbeats.delete(ws)
     })
 
     ws.on('error', (error) => {
@@ -135,18 +325,59 @@ export function initJudgeWebSocket() {
 }
 
 /**
+ * 服务启动时恢复所有悬空任务
+ */
+async function recoverAllStaleTasks() {
+  try {
+    // 恢复所有 judging 状态的任务（上次服务重启遗留）
+    const recovered = await prisma.submission.updateMany({
+      where: { result: 'judging', oj: 'carits' },
+      data: {
+        result: 'queuing',
+        judgeId: null,
+        judgeStarted: null
+      }
+    })
+
+    if (recovered.count > 0) {
+      logger.info('startup_recovered_stale_tasks', {
+        action: 'judge_ws',
+        metadata: { count: recovered.count }
+      })
+    }
+  } catch (e: any) {
+    logger.error('startup_recovery_error', {
+      action: 'judge_ws',
+      metadata: { error: e.message }
+    })
+  }
+}
+
+/**
  * 处理消息
  */
 async function handleMessage(ws: WebSocket, msg: any) {
+  // 心跳响应
+  if (msg.type === 'pong') {
+    judgeHeartbeats.set(ws, Date.now())
+    return
+  }
+
   switch (msg.type) {
     case 'register':
       await handleRegister(ws, msg.payload)
       break
-    case 'result':
-      await handleResult(msg.payload)
+    case 'start':
+      await handleStart(ws, msg.payload)
       break
-    case 'pong':
-      // ignore
+    case 'config':
+      handleConfig(ws, msg.payload)
+      break
+    case 'result':
+      await handleResult(ws, msg.payload)
+      break
+    case 'ping':
+      ws.send(JSON.stringify({ type: 'pong' }))
       break
     default:
       logger.warn('judge_ws_unknown_message', {
@@ -166,8 +397,10 @@ async function handleRegister(ws: WebSocket, payload: { judgeId: string; languag
     ws,
     judgeId,
     languages,
-    isAvailable: true
+    consumer: null
   })
+
+  judgeHeartbeats.set(ws, Date.now())
 
   logger.info('judge_ws_registered', {
     action: 'judge_ws',
@@ -179,52 +412,72 @@ async function handleRegister(ws: WebSocket, payload: { judgeId: string; languag
     type: 'registered',
     payload: { judgeId }
   }))
-
-  // 自动恢复卡在 queuing 的任务
-  recoverQueuingSubmissions()
 }
 
 /**
- * 恢复卡在 queuing 状态的提交
- * 评测机注册时调用，重新分发所有未完成的 Carits 提交
+ * 处理评测机启动消费
  */
-async function recoverQueuingSubmissions() {
-  const stuck = await prisma.submission.findMany({
-    where: { result: 'queuing', oj: 'carits' },
-    select: { id: true },
-    orderBy: { id: 'asc' },
-  })
-  if (stuck.length === 0) return
+async function handleStart(ws: WebSocket, payload: { concurrency?: number; judgeId?: string }) {
+  const judge = judges.get(ws)
+  if (!judge) {
+    ws.send(JSON.stringify({ type: 'error', payload: { message: 'Not registered' } }))
+    return
+  }
 
-  logger.info('recover_queuing_start', {
+  const judgeId = payload.judgeId || judge.judgeId || generateId()
+  const concurrency = payload.concurrency || 1
+
+  // 更新 judgeId（如果提供了新的）
+  if (payload.judgeId) {
+    judge.judgeId = payload.judgeId
+  }
+
+  // 创建 Consumer
+  const consumer = new JudgeConsumer(ws, judgeId, concurrency)
+  judge.consumer = consumer
+
+  consumer.consuming = true
+  consumer.consume()
+
+  ws.send(JSON.stringify({
+    type: 'started',
+    payload: { judgeId, concurrency }
+  }))
+
+  logger.info('judge_consumer_started', {
     action: 'judge_ws',
-    metadata: { count: stuck.length },
+    metadata: { judgeId, concurrency }
   })
+}
 
-  for (const s of stuck) {
-    try {
-      await rejudgeSubmission(s.id)
-    } catch (e: any) {
-      logger.error('recover_queuing_error', {
-        action: 'judge_ws',
-        metadata: { submissionId: s.id, error: e.message },
-      })
-    }
+/**
+ * 处理动态调整并发
+ */
+function handleConfig(ws: WebSocket, payload: { concurrency?: number }) {
+  const judge = judges.get(ws)
+  if (!judge?.consumer) {
+    logger.warn('config_no_consumer', {
+      action: 'judge_ws',
+      metadata: { judgeId: judge?.judgeId }
+    })
+    return
+  }
+
+  if (payload.concurrency && Number.isSafeInteger(payload.concurrency) && payload.concurrency > 0) {
+    judge.consumer.setConcurrency(payload.concurrency)
   }
 }
 
 /**
  * 处理评测结果
  */
-async function handleResult(payload: any) {
+async function handleResult(ws: WebSocket, payload: any) {
   const { submissionId, result, time, memory, score, cases, subtasks, message } = payload
 
   logger.info('judge_ws_result', {
     action: 'judge_ws',
-    metadata: { submissionId, result, time, memory, score, casesCount: cases?.length, subtasksCount: subtasks?.length }
+    metadata: { submissionId, result, time, memory, score }
   })
-
-  console.log(`[JudgeWS] Result received: submission=${submissionId}, result=${result}, score=${score}, cases=${cases?.length || 0}, subtasks=${subtasks?.length || 0}`)
 
   // 更新数据库
   try {
@@ -235,86 +488,26 @@ async function handleResult(payload: any) {
       score: score ?? null,
       cases: cases ? JSON.stringify(cases) : null,
       subtasks: subtasks ? JSON.stringify(subtasks) : null,
+      judgeId: null,
+      judgeStarted: null
     }
-    console.log(`[JudgeWS] Updating DB: score=${updateData.score}, cases_len=${updateData.cases?.length || 0}, subtasks=${!!updateData.subtasks}`)
 
-    // 统一更新 Submission 表（训练和题库提交共用）
     await prisma.submission.update({
       where: { id: parseInt(submissionId) },
-      data: { ...updateData, errorMessage: message },
+      data: { ...updateData, errorMessage: message }
     })
-    console.log(`[JudgeWS] DB updated successfully for submission=${submissionId}`)
+
+    logger.info('judge_ws_db_updated', { action: 'judge_ws', metadata: { submissionId } })
   } catch (e: any) {
     logger.error('judge_ws_update_error', {
       action: 'judge_ws',
       metadata: { submissionId, error: e.message }
     })
-    console.error(`[JudgeWS] DB update error: ${e.message}`)
   }
 
-  // 解析等待中的任务
-  const pending = pendingTasks.get(submissionId)
-  if (pending) {
-    pending.resolve(payload)
-    pendingTasks.delete(submissionId)
-  }
-}
-
-/**
- * 分发评测任务
- */
-export async function dispatchJudgeTask(params: {
-  submissionId: string
-  problemId: string
-  code: string
-  language: string
-  testdataPath: string
-  problemConfig: any
-}): Promise<any> {
-  const { submissionId, problemId, code, language, testdataPath, problemConfig } = params
-
-  // 查找可用的评测机
-  const availableJudges = Array.from(judges.values()).filter(j => j.isAvailable)
-
-  if (availableJudges.length === 0) {
-    throw new Error('没有可用的评测机')
-  }
-
-  // 选择第一个可用评测机
-  const judge = availableJudges[0]
-
-  logger.info('judge_ws_dispatch', {
-    action: 'judge_ws',
-    metadata: { submissionId, judgeId: judge.judgeId, language }
-  })
-
-  // 创建等待 Promise
-  const taskPromise = new Promise<any>((resolve, reject) => {
-    pendingTasks.set(submissionId, { submissionId, resolve, reject })
-
-    // 超时处理
-    setTimeout(() => {
-      if (pendingTasks.has(submissionId)) {
-        pendingTasks.delete(submissionId)
-        reject(new Error('评测超时'))
-      }
-    }, 60000) // 60 秒超时
-  })
-
-  // 发送任务
-  judge.ws.send(JSON.stringify({
-    type: 'judge',
-    payload: {
-      submissionId,
-      problemId,
-      code,
-      language,
-      config: problemConfig,
-      testdataPath
-    }
-  }))
-
-  return taskPromise
+  // 通知 Consumer 任务完成
+  const judge = judges.get(ws)
+  judge?.consumer?.handleResult(submissionId)
 }
 
 /**
@@ -340,11 +533,11 @@ function mapResult(result: string): string {
 
 /**
  * 重新评测提交（rejudge）
- * 将提交状态重置为 queuing，然后重新分发到评测机
+ * 将提交状态重置为 queuing，Consumer 会自动消费
  */
 export async function rejudgeSubmission(submissionId: number): Promise<{ success: boolean; message: string }> {
   const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
+    where: { id: submissionId }
   })
 
   if (!submission) {
@@ -359,7 +552,7 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
     return { success: false, message: '提交缺少题目内部 ID' }
   }
 
-  // 重置状态
+  // 重置状态为 queuing（入队）
   await prisma.submission.update({
     where: { id: submissionId },
     data: {
@@ -370,53 +563,18 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
       cases: null,
       subtasks: null,
       errorMessage: null,
-      ojRemoteId: submissionId.toString(), // Carits 平台：远程提交ID就是本地评测ID
-    },
-  })
-
-  // 获取评测配置
-  const problem = await prisma.problem.findUnique({
-    where: { id: submission.problemInternalId },
-    select: { judgeConfig: true },
-  })
-
-  let problemConfig: any = {}
-  if (problem?.judgeConfig) {
-    try {
-      const yaml = await import('js-yaml')
-      problemConfig = yaml.load(problem.judgeConfig) || {}
-    } catch (e) {
-      logger.warn('rejudge_parse_config_error', { error: e })
+      judgeId: null,
+      judgeStarted: null,
+      ojRemoteId: submissionId.toString()
     }
-  }
+  })
 
-  const testdataPath = path.join(process.cwd(), 'testdata', submission.problemInternalId)
+  logger.info('rejudge_queued', {
+    action: 'rejudge',
+    metadata: { submissionId }
+  })
 
-  // 分发评测任务
-  try {
-    await dispatchJudgeTask({
-      submissionId: submissionId.toString(),
-      problemId: submission.problemInternalId,
-      code: submission.code,
-      language: submission.language,
-      testdataPath,
-      problemConfig,
-    })
-
-    logger.info('rejudge_dispatched', {
-      action: 'rejudge',
-      metadata: { submissionId },
-    })
-
-    return { success: true, message: '已重新提交评测' }
-  } catch (e: any) {
-    // 评测机不可用，状态保持 queuing，下次可再 rejudge
-    logger.error('rejudge_dispatch_error', {
-      action: 'rejudge',
-      metadata: { submissionId, error: e.message },
-    })
-    return { success: false, message: e.message || '评测服务不可用' }
-  }
+  return { success: true, message: '已加入评测队列' }
 }
 
 /**
@@ -425,11 +583,19 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
 export function getJudgeStatus() {
   return {
     totalJudges: judges.size,
-    availableJudges: Array.from(judges.values()).filter(j => j.isAvailable).length,
+    activeConsumers: Array.from(judges.values()).filter(j => j.consumer?.consuming).length,
     judges: Array.from(judges.values()).map(j => ({
       judgeId: j.judgeId,
       languages: j.languages,
-      isAvailable: j.isAvailable
+      consuming: j.consumer?.consuming || false,
+      concurrency: j.consumer?.concurrency || 0,
+      processingCount: j.consumer?.processing.size || 0
     }))
   }
+}
+
+// 导出 dispatchJudgeTask 为空函数（兼容旧代码）
+export async function dispatchJudgeTask(params: any): Promise<any> {
+  // 新模式：不再直接分发，任务入队后由 Consumer 自动消费
+  throw new Error('dispatchJudgeTask 已废弃，请使用 Submission 入队模式')
 }

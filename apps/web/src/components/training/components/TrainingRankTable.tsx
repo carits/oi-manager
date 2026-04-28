@@ -29,6 +29,18 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
     return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}>加载中...</div>
   }
 
+  if (rankingData.hidden) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🔒</div>
+        <div style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>排名尚未公布</div>
+        <div style={{ fontSize: '0.85rem' }}>OI 赛制比赛结束后公布排名</div>
+      </div>
+    )
+  }
+
+  const isScoreBased = rankingData.format === 'ioi' || rankingData.format === 'oi'
+
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
@@ -65,7 +77,7 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
               </td>
               <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</td>
               <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{row.username}</td>
-              {rankingData.format === 'ioi' ? (
+              {isScoreBased ? (
                 <>
                   <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--success)' }}>{row.totalScore}</td>
                   {rankingData.problems.map((p: any) => {
