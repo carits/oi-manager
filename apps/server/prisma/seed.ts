@@ -180,7 +180,7 @@ async function main() {
     })
   } else {
     // 用户存在，确保 Teacher 记录也存在
-    const existingTeacher = await prisma.teacher.findUnique({ where: { userId: existingTeacher1.id } })
+    const existingTeacher = await prisma.teacher.findUnique({ where: { id: existingTeacher1.id } })
     if (!existingTeacher) {
       await prisma.teacher.create({
         data: {
@@ -240,7 +240,7 @@ async function main() {
       }
     })
   } else {
-    const existingT2 = await prisma.teacher.findUnique({ where: { userId: existingTeacher2.id } })
+    const existingT2 = await prisma.teacher.findUnique({ where: { id: existingTeacher2.id } })
     if (!existingT2) {
       await prisma.teacher.create({
         data: {
@@ -289,7 +289,7 @@ async function main() {
       }
     })
   } else {
-    const existingT3 = await prisma.teacher.findUnique({ where: { userId: existingTeacher3.id } })
+    const existingT3 = await prisma.teacher.findUnique({ where: { id: existingTeacher3.id } })
     if (!existingT3) {
       await prisma.teacher.create({
         data: {
@@ -454,7 +454,7 @@ async function main() {
       }
     })
 
-    const student = await prisma.student.findUnique({ where: { userId: user.id } })
+    const student = await prisma.student.findUnique({ where: { id: user.id } })
     if (student) {
       students.push(student)
 

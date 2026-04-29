@@ -39,7 +39,7 @@ export type ConflictType =
 export interface ConflictInfo {
   type: ConflictType
   message: string
-  matchedStudentId?: string
+  matchedStudentId?: string  // 新字段，指向 User.id
   matchedStudentName?: string
   matchedStudentGrade?: string
   matchedSchoolName?: string
@@ -68,7 +68,7 @@ export interface MemberInput {
 /** VJudge 成员（带匹配状态） */
 export interface VjudgeMemberWithStatus extends VjudgeMember {
   status: 'new' | 'existing'
-  matchedStudentId?: string
+  matchedStudentId?: string  // 新字段，指向 User.id
   matchedStudentName?: string
   matchedStudentGrade?: string
   gender: string             // 性别，默认 '男'
@@ -82,7 +82,7 @@ export interface VjudgeMemberInput {
   username: string
   nickname: string
   status: 'new' | 'existing' | 'invite' | 'skip'
-  matchedStudentId?: string
+  matchedStudentId?: string  // 新字段，指向 User.id
   matchedStudentName?: string
   studentName?: string
   gender?: string
@@ -165,7 +165,7 @@ export interface LuoguMemberInput {
   username: string
   nickname: string
   status: 'new' | 'existing' | 'invite' | 'skip'
-  matchedStudentId?: string
+  matchedStudentId?: string  // 新字段，指向 User.id
   matchedStudentName?: string
   studentName?: string
   gender?: string
@@ -266,7 +266,7 @@ export type SuggestedAction =
 export interface MatchResult {
   lineNumber: number
   matchType: MatchType
-  matchedStudentId?: string
+  matchedStudentId?: string  // 新字段，指向 User.id
   matchedStudentName?: string
   suggestedAction: SuggestedAction
   canAutoProcess: boolean

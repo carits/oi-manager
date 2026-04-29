@@ -49,7 +49,7 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '50px' }}>#</th>
             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '120px' }}>姓名</th>
             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '100px' }}>用户名</th>
-            {rankingData.format === 'ioi' ? (
+            {isScoreBased ? (
               <>
                 <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '70px' }}>总分</th>
                 {rankingData.problems.map((p: any) => (

@@ -94,7 +94,7 @@ async function main() {
   // 获取团队成员中的学生
   const teamMembers = await prisma.teamMember.findMany({
     where: { teamId: training.teamId, status: 'active', userType: 'student', role: 'member' },
-    select: { userId: true },
+    select: { id: true },
     take: 5,
   })
 
@@ -103,7 +103,7 @@ async function main() {
   for (const m of teamMembers) {
     const student = await prisma.student.findUnique({
       where: { id: m.userId },
-      select: { userId: true, name: true },
+      select: { id: true, name: true },
     })
     if (student) {
       students.push({

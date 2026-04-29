@@ -344,7 +344,7 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
 // 获取当前用户信息
 authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId
+    const userId = (req as any).user.userId  // JWT payload 使用 userId 字段
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -461,12 +461,12 @@ authRouter.put('/profile', authenticate, async (req: Request, res: Response) => 
     // 根据角色更新对应的profile表
     if (decoded.role === 'student') {
       await prisma.student.update({
-        where: { userId: decoded.userId },
+        where: { id: decoded.userId },
         data: { name }
       })
     } else if (decoded.role === 'teacher' || decoded.role === 'school_principal') {
       await prisma.teacher.update({
-        where: { userId: decoded.userId },
+        where: { id: decoded.userId },
         data: { name, bio }
       })
     }
@@ -518,12 +518,12 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
     // 同步更新 Teacher 或 Student 表的头像
     if (decoded.role === 'teacher' || decoded.role === 'school_principal') {
       await prisma.teacher.update({
-        where: { userId: decoded.userId },
+        where: { id: decoded.userId },
         data: { avatar: avatarUrl }
       })
     } else if (decoded.role === 'student') {
       await prisma.student.update({
-        where: { userId: decoded.userId },
+        where: { id: decoded.userId },
         data: { avatar: avatarUrl }
       })
     }

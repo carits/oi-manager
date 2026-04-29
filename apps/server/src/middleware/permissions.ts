@@ -58,7 +58,7 @@ export async function getUserSchoolId(userId: string): Promise<string | null> {
  */
 export async function getUserTeacherId(userId: string): Promise<string | null> {
   const teacher = await prisma.teacher.findUnique({
-    where: { userId }
+    where: { id: userId }
   })
   return teacher?.id || null
 }
@@ -68,7 +68,7 @@ export async function getUserTeacherId(userId: string): Promise<string | null> {
  */
 export async function getUserStudentId(userId: string): Promise<string | null> {
   const student = await prisma.student.findUnique({
-    where: { userId }
+    where: { id: userId }
   })
   return student?.id || null
 }
@@ -146,7 +146,7 @@ export async function canViewStudent(req: AuthRequest, studentId: string): Promi
   // 获取学生信息
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    select: { schoolId: true, userId: true }
+    select: { schoolId: true }
   })
   if (!student) {
     logPermissionDenied(req, 'view_student', 'student', studentId, '学生不存在')
@@ -155,7 +155,7 @@ export async function canViewStudent(req: AuthRequest, studentId: string): Promi
 
   // 学生只能查看自己
   if (role === 'student') {
-    const hasAccess = student.userId === req.user!.userId
+    const hasAccess = studentId === req.user!.userId
     if (!hasAccess) {
       logPermissionDenied(req, 'view_student', 'student', studentId, '学生只能查看自己')
     }
@@ -393,8 +393,8 @@ export async function canManageTeam(req: AuthRequest, teamId: string): Promise<b
  */
 export async function getTeamMemberRole(teamId: string, userId: string): Promise<'owner' | 'admin' | 'member' | null> {
   // 获取用户的教师 ID 和学生 ID
-  const teacher = await prisma.teacher.findUnique({ where: { userId } })
-  const student = await prisma.student.findUnique({ where: { userId } })
+  const teacher = await prisma.teacher.findUnique({ where: { id: userId } })
+  const student = await prisma.student.findUnique({ where: { id: userId } })
 
   const member = await prisma.teamMember.findFirst({
     where: {

@@ -12,7 +12,7 @@ teacherRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) =
     const userId = req.user!.userId
 
     const teacher = await prisma.teacher.findUnique({
-      where: { userId },
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -65,19 +65,19 @@ teacherRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Res
 
     // 权限检查：只有学校负责人可以操作
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
-      if (user.teacherId !== teacher.School?.currentPrincipalTeacherId) {
+      if (user.userId !== teacher.School?.currentPrincipalTeacherId) {
         return res.status(403).json({ success: false, message: '只有学校负责人可以操作' })
       }
     }
 
     // 不能禁用自己
-    if (user.teacherId === id && status === 'disabled') {
+    if (user.userId === id && status === 'disabled') {
       return res.status(400).json({ success: false, message: '不能禁用自己的账号' })
     }
 
-    // 更新用户状态
+    // 更新用户状态（Teacher.id = User.id）
     await prisma.user.update({
-      where: { id: teacher.userId },
+      where: { id: teacher.id },
       data: { status }
     })
 
@@ -106,13 +106,13 @@ teacherRouter.delete('/:id', authenticate, async (req: AuthRequest, res: Respons
 
     // 权限检查：只有学校负责人和超管可以操作
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
-      if (user.teacherId !== teacher.School?.currentPrincipalTeacherId) {
+      if (user.userId !== teacher.School?.currentPrincipalTeacherId) {
         return res.status(403).json({ success: false, message: '只有学校负责人可以删除教师' })
       }
     }
 
     // 不能删除自己
-    if (user.teacherId === id) {
+    if (user.userId === id) {
       return res.status(400).json({ success: false, message: '不能删除自己的账号' })
     }
 

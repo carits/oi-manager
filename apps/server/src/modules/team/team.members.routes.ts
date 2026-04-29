@@ -109,7 +109,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
     return res.status(403).json({ success: false, message: '只有所有者可以移除管理员' })
   }
 
-  const callerId = user.teacherId || user.studentId
+  const callerId = user.userId
   if (member.userId === callerId) {
     return res.status(400).json({ success: false, message: '如需退出团队，请使用退出功能' })
   }
@@ -118,7 +118,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
   await prisma.$transaction(async (tx) => {
     await tx.teamMember.delete({ where: { id: member.id } })
 
-    const callerType = user.teacherId ? 'teacher' : 'student'
+    const callerType = user.role === 'student' ? 'student' : 'teacher'
     await tx.teamOperationLog.create({
       data: {
         teamId: id,
@@ -236,8 +236,8 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
       data: { role: 'admin' }
     })
 
-    const callerId = user.teacherId || user.studentId
-    const callerType = user.teacherId ? 'teacher' : 'student'
+    const callerId = user.userId
+    const callerType = user.role === 'student' ? 'student' : 'teacher'
     await tx.teamOperationLog.create({
       data: {
         teamId: id,
@@ -299,8 +299,8 @@ teamMembersRouter.delete('/:id/admins/:adminId', authenticate, asyncHandler(asyn
       data: { role: 'member' }
     })
 
-    const callerId = user.teacherId || user.studentId
-    const callerType = user.teacherId ? 'teacher' : 'student'
+    const callerId = user.userId
+    const callerType = user.role === 'student' ? 'student' : 'teacher'
     await tx.teamOperationLog.create({
       data: {
         teamId: id,

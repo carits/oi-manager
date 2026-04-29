@@ -1,5 +1,65 @@
 # 变更日志
 
+## 2026-04-28 (OI 赛制可见性体系化修复)
+
+### 问题
+
+OI 赛制比赛中，学生可以通过多个入口绕过前端隐藏逻辑看到真实评测结果：
+- 全局提交详情接口 `/api/submissions/:id`
+- 全局提交列表 `/api/submissions`
+- 题库提交记录 `/api/problems/:id/submissions`
+- 提交详情弹窗（通过远程 ID 跳转）
+
+### 根本原因
+
+Submission 和 Training 之间缺乏强关联，依赖字符串约定（submitSource/sourceId）识别。全局提交接口没有 OI 感知。
+
+### 解决方案
+
+**核心原则**：真实 result 和展示 result 分开。数据库保留真实值，API 返回时脱敏。后端兜底。
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `modules/training/training.visibility.ts` | OI 可见性辅助函数（getTrainingRuntimeStatus、shouldHideOiResults、sanitizeSubmissionForOi、sanitizeRankingForOi） |
+
+### 数据库变更
+
+| 模型 | 新增字段 |
+|------|---------|
+| Submission | `submitScope`（problem/training/contest）、`trainingId`、`trainingProblemId` |
+
+### 后端变更
+
+| 文件 | 修改内容 |
+|------|---------|
+| `routes/submissions.ts` | GET /:id 拦截训练提交（返回 403），GET / 排除训练提交（submitScope: 'problem'） |
+| `modules/problem/problem.submissions.routes.ts` | GET /:id/submissions 排除训练提交 |
+| `modules/training/training.submissions.routes.ts` | 创建时写新字段 + isGlobalVisible=false，OI 赞中非管理员脱敏处理 |
+| `modules/training/training.ranking.routes.ts` | OI 赞中非管理员返回隐藏排名 |
+| `modules/training/training.problems.routes.ts` | problem-status 添加 hasSubmitted 字段 |
+
+### 前端变更
+
+| 文件 | 修改内容 |
+|------|---------|
+| `components/submission/SubmissionDetailModal.tsx` | 有 trainingId 时调训练端点，处理 hidden/displayResult |
+| `components/training/components/TrainingSubmissionPanel.tsx` | OI 赞中非管理员隐藏耗时/内存列 |
+| `components/training/components/TrainingProblemList.tsx` | hasSubmitted 显示"已提交"标记 |
+| `components/training/types.ts` | 新增 hidden、displayResult、hasSubmitted 类型 |
+
+### 验证
+
+- OI 赞中学生看不到真实 result、score、cases、subtasks、timeUsed、memoryUsed、ojRemoteId
+- OI 赞中学生只能看到"已提交"标记
+- OI 赞中管理员可以看到完整数据
+- OI 赛后所有用户可以看到完整数据
+- 全局提交接口不返回训练提交
+- 直接请求训练提交 ID 返回 403
+
+---
+
 ## 2026-04-27 (API 输入校验 zod)
 
 ### 改动内容

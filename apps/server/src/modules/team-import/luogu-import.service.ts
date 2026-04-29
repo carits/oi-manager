@@ -190,8 +190,7 @@ export class LuoguImportService {
 
             return tx.student.create({
               data: {
-                id: uuidv4(),
-                userId: newUser.id,
+                id: newUser.id,
                 name: studentName,
                 gender: member.gender || null,
                 schoolId,
@@ -205,7 +204,7 @@ export class LuoguImportService {
           await prisma.userPlatformBinding.create({
             data: {
               id: uuidv4(),
-              userId: student.userId,
+              userId: student.id,
               platform: 'luogu',
               platformUsername: member.username,
               bindingStatus: 'bound',
@@ -246,7 +245,7 @@ export class LuoguImportService {
     // 已存在的学生发送邀请
     if (teamId && inviteStudents.length > 0) {
       const uniqueInvites = [...new Map(inviteStudents.map(s => [s.id, s])).values()]
-      const operatorId = user.teacherId || user.studentId || ''
+      const operatorId = user.userId
 
       for (const inv of uniqueInvites) {
         const existing = await prisma.teamMember.findFirst({

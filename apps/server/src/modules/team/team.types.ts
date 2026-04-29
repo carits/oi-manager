@@ -125,7 +125,6 @@ export interface MemberDetails {
   id: string
   name: string
   avatar: string | null
-  userId: string
   username: string
   type: MemberType
   title?: string
@@ -294,8 +293,8 @@ export interface UserIdentity {
 
 /** 从 JWT Payload 提取用户身份 */
 export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
-  const userId = user.studentId || user.teacherId
-  const userType = user.studentId ? 'student' : 'teacher'
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
 
   if (!userId) return null
 
@@ -308,11 +307,6 @@ export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
 
 /** 获取用户身份（带类型保护） */
 export function getUserIdentity(user: JwtPayload): { id: string; type: MemberType } | null {
-  if (user.teacherId) {
-    return { id: user.teacherId, type: 'teacher' }
-  }
-  if (user.studentId) {
-    return { id: user.studentId, type: 'student' }
-  }
-  return null
+  const type = user.role === 'student' ? 'student' : 'teacher'
+  return { id: user.userId, type }
 }

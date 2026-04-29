@@ -67,7 +67,7 @@ milestoneRouter.post('/', authenticate, authorize('teacher'), async (req, res) =
     const { studentId, title, description, milestoneDate, type } = req.body
     const teacherId = req.user!.userId
 
-    const teacher = await prisma.teacher.findUnique({ where: { userId: teacherId } })
+    const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } })
 
     if (!teacher) {
       return res.status(400).json({ success: false, message: '请先完善老师信息' })

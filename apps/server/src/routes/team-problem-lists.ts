@@ -10,7 +10,6 @@
 import { Router } from 'express'
 import { prisma } from '../prisma'
 import { authenticate } from '../middleware/auth'
-import { getUserTeacherId } from '../middleware/permissions'
 import type { AuthRequest } from '../middleware/auth'
 
 export const teamProblemListsRouter = Router()
@@ -23,15 +22,9 @@ async function canManageTeamProblemList(userId: string, teamId: string): Promise
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
   if (user?.role === 'super_admin') return { canAdd: true, role: 'super_admin' }
 
-  const teacherId = await getUserTeacherId(userId)
-
   // 检查是否是团队成员
   const member = await prisma.teamMember.findFirst({
-    where: {
-      teamId,
-      ...(teacherId ? { userId: teacherId, userType: 'teacher' } : {}),
-      status: 'active'
-    }
+    where: { teamId, userId, status: 'active' }
   })
 
   if (!member) return { canAdd: false, role: null }
@@ -58,17 +51,8 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
 
     // 权限：团队成员可查看（超管也能看）
     if (role !== 'super_admin' && role !== 'platform_admin') {
-      const teacherId = await getUserTeacherId(userId)
-      const student = await prisma.student.findUnique({ where: { userId } })
       const member = await prisma.teamMember.findFirst({
-        where: {
-          teamId,
-          OR: [
-            ...(teacherId ? [{ userId: teacherId, userType: 'teacher' as const }] : []),
-            ...(student ? [{ userId: student.id, userType: 'student' as const }] : [])
-          ].filter(m => m !== null),
-          status: 'active'
-        }
+        where: { teamId, userId, status: 'active' }
       })
       if (!member) {
         return res.status(403).json({ success: false, message: '无权限查看该团队题单' })
@@ -102,13 +86,13 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
       let ownerName = '未知'
       if (item.ProblemList.ownerType === 'teacher') {
         const teacher = await prisma.teacher.findUnique({
-          where: { userId: item.ProblemList.ownerId },
+          where: { id: item.ProblemList.ownerId },
           select: { name: true }
         })
         ownerName = teacher?.name || '未知'
       } else if (item.ProblemList.ownerType === 'student') {
         const student = await prisma.student.findUnique({
-          where: { userId: item.ProblemList.ownerId },
+          where: { id: item.ProblemList.ownerId },
           select: { name: true }
         })
         ownerName = student?.name || '未知'
@@ -228,13 +212,8 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
 
     // 权限：owner 可删所有，非 owner 只能删自己添加的
     if (role !== 'super_admin') {
-      const teacherId = await getUserTeacherId(userId)
       const member = await prisma.teamMember.findFirst({
-        where: {
-          teamId,
-          ...(teacherId ? { userId: teacherId, userType: 'teacher' } : {}),
-          status: 'active'
-        }
+        where: { teamId, userId, status: 'active' }
       })
 
       const isOwner = member?.role === 'owner'

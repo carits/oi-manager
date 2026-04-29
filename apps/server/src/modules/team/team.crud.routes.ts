@@ -186,7 +186,7 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
   } catch (error) {
     if (error instanceof Error && error.message === 'TEAM_LIMIT_EXCEEDED') {
       const user = (req as any).user!
-      const maxTeams = user.teacherId ? 50 : 5
+      const maxTeams = (user.role === 'teacher' || user.role === 'school_principal') ? 50 : 5
       return res.status(400).json({ success: false, message: `您创建的团队数量已达上限（${maxTeams}个）` })
     }
     if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {

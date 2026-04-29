@@ -70,9 +70,9 @@ async function getProblemListPermission(
 
   for (const share of shares) {
     let matched = false
-    if (share.targetType === 'teacher' && share.targetId === user.teacherId) {
+    if (share.targetType === 'teacher' && share.targetId === user.userId) {
       matched = true
-    } else if (share.targetType === 'student' && share.targetId === user.studentId) {
+    } else if (share.targetType === 'student' && share.targetId === user.userId) {
       matched = true
     }
 
@@ -93,15 +93,13 @@ async function getProblemListPermission(
   }
 
   // 查团队收录：如果题单被收录到用户所在的团队，给 view 权限
-  const teacherId = user.teacherId
-  const studentId = user.studentId
-  if (teacherId || studentId) {
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
+  if (userId) {
     const teamIds = (await prisma.teamMember.findMany({
       where: {
-        OR: [
-          ...(teacherId ? [{ userId: teacherId, userType: 'teacher' }] : []),
-          ...(studentId ? [{ userId: studentId, userType: 'student' }] : [])
-        ],
+        userId,
+        userType,
         status: 'active'
       },
       select: { teamId: true }
@@ -122,12 +120,12 @@ async function getProblemListPermission(
 
 /** 获取用户的 schoolId */
 async function getUserSchoolId(user: NonNullable<Express.Request['user']>): Promise<string | null> {
-  if (user.teacherId) {
-    const t = await prisma.teacher.findUnique({ where: { id: user.teacherId }, select: { schoolId: true } })
+  if (user.role === 'teacher' || user.role === 'school_principal') {
+    const t = await prisma.teacher.findUnique({ where: { id: user.userId }, select: { schoolId: true } })
     return t?.schoolId || null
   }
-  if (user.studentId) {
-    const s = await prisma.student.findUnique({ where: { id: user.studentId }, select: { schoolId: true } })
+  if (user.role === 'student') {
+    const s = await prisma.student.findUnique({ where: { id: user.userId }, select: { schoolId: true } })
     return s?.schoolId || null
   }
   return null
@@ -191,8 +189,8 @@ problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
       const sharedListIds = await prisma.problemListShare.findMany({
         where: {
           OR: [
-            { targetType: 'teacher', targetId: req.user.teacherId || '__none__' },
-            { targetType: 'student', targetId: req.user.studentId || '__none__' },
+            { targetType: 'teacher', targetId: req.user.userId || '__none__' },
+            { targetType: 'student', targetId: req.user.userId || '__none__' },
           ]
         },
         select: { problemListId: true }
@@ -260,8 +258,8 @@ problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
       where: {
         problemListId: { in: listIds },
         OR: [
-          { targetType: 'teacher', targetId: req.user.teacherId || '__none__' },
-          { targetType: 'student', targetId: req.user.studentId || '__none__' },
+          { targetType: 'teacher', targetId: req.user.userId || '__none__' },
+          { targetType: 'student', targetId: req.user.userId || '__none__' },
         ]
       },
       select: { problemListId: true, permission: true }
@@ -299,7 +297,7 @@ problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     }
 
     const schoolId = await getUserSchoolId(req.user as NonNullable<Express.Request['user']>)
-    const ownerType = req.user.teacherId ? 'teacher' : 'student'
+    const ownerType = req.user.role === 'student' ? 'student' : 'teacher'
 
     const list = await prisma.problemList.create({
       data: {

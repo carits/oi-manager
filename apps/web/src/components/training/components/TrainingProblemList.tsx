@@ -44,8 +44,13 @@ export function TrainingProblemList({
   onSelectProblem,
   onSwitchToProblemsTab,
 }: TrainingProblemListProps) {
-  const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
-  const hideSourceColumn = !training.problemIdVisible && !trainingFinished && !training.isAdmin
+  // 运行时状态判断
+  const runtimeFinished = training.runtimeStatus === 'finished' || training.status === 'finished' || new Date() > new Date(training.endTime)
+
+  // OI 赞中非管理员隐藏真实结果
+  const hideOiResults = training.format === 'oi' && !training.isAdmin && !runtimeFinished
+
+  const hideSourceColumn = !training.problemIdVisible && !runtimeFinished && !training.isAdmin
 
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -61,12 +66,82 @@ export function TrainingProblemList({
         <tbody>
           {problemListData.length === 0 && (
             <tr>
-              <td colSpan={hideSourceColumn ? 3 : 4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>暂无题目</td>
+              <td colSpan={hideSourceColumn ? 3 : 4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>暂无题目</td>
             </tr>
           )}
           {problemListData.map(p => {
+            // OI 赞中非管理员：只显示"已提交"或"-"
+            if (hideOiResults) {
+              return (
+                <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  {/* 状态列 */}
+                  <td style={{ padding: '0.6rem 1rem' }}>
+                    {p.hasSubmitted ? (
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '1px 6px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.7rem',
+                        fontWeight: 500,
+                        background: 'var(--info-light)',
+                        color: 'var(--info-text)',
+                      }}>
+                        已提交
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>-</span>
+                    )}
+                  </td>
+
+                  {/* 序号列 */}
+                  <td style={{ padding: '0.6rem 1rem', fontFamily: 'monospace', fontWeight: 500 }}>
+                    {toExcelColumnName(p.orderIndex)}
+                  </td>
+
+                  {/* 来源列 */}
+                  {!hideSourceColumn && (
+                  <td style={{ padding: '0.6rem 1rem' }}>
+                    {(() => {
+                      if (p.platform === 'carits') {
+                        return (
+                          <a href={`${basePath.split('/team')[0]}/problems/${p.problemTableId}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                            Carits {p.platformProblemId}
+                          </a>
+                        )
+                      } else if (p.platform && p.problemUrl) {
+                        return (
+                          <a href={p.problemUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+                            {p.platformLabel} {p.platformProblemId}
+                          </a>
+                        )
+                      } else if (p.platform) {
+                        return <span style={{ color: 'var(--text-secondary)' }}>{p.platformLabel} {p.platformProblemId}</span>
+                      } else {
+                        return <span style={{ color: 'var(--text-muted)' }}>-</span>
+                      }
+                    })()}
+                  </td>
+                  )}
+
+                  {/* 标题列 */}
+                  <td style={{ padding: '0.6rem 1rem' }}>
+                    <span
+                      onClick={() => {
+                        onSelectProblem(p.id)
+                        onSwitchToProblemsTab()
+                      }}
+                      style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'none' }}
+                    >
+                      {p.alias || p.title || '未命名'}
+                    </span>
+                  </td>
+                </tr>
+              )
+            }
+
+            // 正常显示（非 OI 或管理员）
             const isAccepted = p.bestResult === 'accepted'
-            const hasSubmission = p.bestResult != null
+            const hasSubmission = p.hasSubmitted || p.bestResult != null
             const maxPoints = p.points ?? 100
 
             return (
@@ -125,7 +200,7 @@ export function TrainingProblemList({
                     } else if (p.platform) {
                       return <span style={{ color: 'var(--text-secondary)' }}>{p.platformLabel} {p.platformProblemId}</span>
                     } else {
-                      return <span style={{ color: 'var(--gray-400)' }}>-</span>
+                      return <span style={{ color: 'var(--text-muted)' }}>-</span>
                     }
                   })()}
                 </td>

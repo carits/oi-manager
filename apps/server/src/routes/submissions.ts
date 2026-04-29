@@ -56,16 +56,16 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       const [teachers, students] = await Promise.all([
         prisma.teacher.findMany({
           where: { schoolId },
-          select: { userId: true },
+          select: { id: true },
         }),
         prisma.student.findMany({
           where: { schoolId },
-          select: { userId: true },
+          select: { id: true },
         }),
       ])
       const schoolUserIds = [
-        ...teachers.map(t => t.userId),
-        ...students.map(s => s.userId),
+        ...teachers.map(t => t.id),
+        ...students.map(s => s.id),
       ]
       where.userId = { in: schoolUserIds }
     }
@@ -195,6 +195,14 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: '提交记录不存在',
+      })
+    }
+
+    // 权限检查：训练提交不能通过全局 API 访问
+    if (submission.submitScope === 'training') {
+      return res.status(403).json({
+        success: false,
+        message: '训练提交请通过训练页面查看',
       })
     }
 

@@ -15,7 +15,7 @@ async function test() {
   // 获取学生成员
   const members = await prisma.teamMember.findMany({
     where: { teamId: training.teamId, status: 'active' },
-    select: { userId: true, userType: true, role: true }
+    select: { id: true, userType: true, role: true }
   })
 
   console.log('Team members:', members.length)
@@ -26,7 +26,7 @@ async function test() {
 
   const student = await prisma.student.findUnique({
     where: { id: studentMember.userId },
-    select: { userId: true, name: true }
+    select: { id: true, name: true }
   })
 
   if (!student) { console.log('Student not found'); return }

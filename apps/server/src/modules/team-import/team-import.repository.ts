@@ -265,7 +265,7 @@ export class TeamImportRepository {
     return prisma.userPlatformBinding.findUnique({
       where: {
         userId_platform: {
-          userId: student.userId,
+          userId: student.id,
           platform,
         },
       },
@@ -328,12 +328,12 @@ export class TeamImportRepository {
     // 获取学生详情
     const studentIds = members.map((m) => m.userId)
     const students = await prisma.student.findMany({
-      where: { userId: { in: studentIds } },
+      where: { id: { in: studentIds } },
     })
 
     return members.map((m) => ({
       ...m,
-      student: students.find((s) => s.userId === m.userId),
+      student: students.find((s) => s.id === m.userId),
     }))
   }
 
@@ -439,8 +439,7 @@ export class TeamImportRepository {
       // 创建学生
       const student = await tx.student.create({
         data: {
-          id: uuidv4(),
-          userId: user.id,
+          id: user.id,
           name: params.name,
           schoolId: params.schoolId,
           headTeacherId: params.headTeacherId,

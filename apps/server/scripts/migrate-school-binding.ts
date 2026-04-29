@@ -104,7 +104,7 @@ async function main() {
   `
 
   // 学生用户
-  const students = await prisma.student.findMany({ select: { userId: true, schoolId: true } })
+  const students = await prisma.student.findMany({ select: { id: true, schoolId: true } })
   for (const s of students) {
     await prisma.$executeRaw`
       UPDATE User SET schoolId = ${s.schoolId}
@@ -127,7 +127,7 @@ async function main() {
 
   // 填充 Admin 表
   console.log('更新 Admin 表...')
-  const admins = await prisma.admin.findMany({ select: { userId: true } })
+  const admins = await prisma.admin.findMany({ select: { id: true } })
   for (const a of admins) {
     await prisma.$executeRaw`
       UPDATE Admin SET schoolId = ${PLATFORM_SCHOOL_ID}

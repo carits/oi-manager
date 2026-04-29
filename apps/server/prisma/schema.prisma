@@ -8,14 +8,13 @@ datasource db {
 }
 
 model Admin {
-  id        String   @id @default(cuid())
-  userId    String   @unique
+  id        String   @id  // 主键，等于 User.id
   name      String
   schoolId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
   School    School   @relation(fields: [schoolId], references: [id])
-  User      User     @relation(fields: [userId], references: [id])
+  User      User     @relation(fields: [id], references: [id], onDelete: Cascade)
 }
 
 model AiUsageLog {
@@ -92,7 +91,7 @@ model ContestProblemNote {
   id             String         @id @default(cuid())
   contestId      String
   problemId      String
-  studentId      String
+  studentId      String         // 存 Student.id（即 User.id）
   content        String         @default("")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @default(now()) @updatedAt
@@ -109,7 +108,7 @@ model ContestProblemScore {
   id             String         @id @default(cuid())
   contestId      String
   problemId      String
-  studentId      String
+  studentId      String         // 存 Student.id（即 User.id）
   score          Float?
   note           String?
   createdAt      DateTime       @default(now())
@@ -137,19 +136,19 @@ model ContestResource {
 }
 
 model ContestResult {
-  id           String   @id @default(cuid())
-  contestId    String
-  studentId    String
-  rank         Int?
-  score        Float?
-  ratingBefore Int
-  ratingAfter  Int
-  ratingChange Int
-  note         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
-  Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  Student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  contestId       String
+  studentId       String   // 存 Student.id（即 User.id）
+  rank            Int?
+  score           Float?
+  ratingBefore    Int
+  ratingAfter     Int
+  ratingChange    Int
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+  Contest         Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  Student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, studentId])
   @@index([createdAt])
@@ -203,17 +202,17 @@ model LoginLog {
 }
 
 model Milestone {
-  id            String   @id @default(cuid())
-  studentId     String
-  teacherId     String
-  title         String
-  description   String?
-  milestoneDate DateTime
-  type          String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
-  Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  Teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  id                String   @id @default(cuid())
+  studentId         String   // 存 Student.id（即 User.id）
+  teacherId         String   // 存 Teacher.id（即 User.id）
+  title             String
+  description       String?
+  milestoneDate     DateTime
+  type              String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+  Student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  Teacher           Teacher  @relation(fields: [teacherId], references: [id])
 
   @@index([milestoneDate])
   @@index([studentId])
@@ -298,8 +297,8 @@ model OjPlatformConfig {
 
 model PasswordResetLog {
   id             String   @id @default(cuid())
-  targetUserId   String
-  operatorUserId String
+  targetId       String
+  operatorId     String
   operatorRole   String
   resetMethod    String
   result         String
@@ -308,15 +307,15 @@ model PasswordResetLog {
 }
 
 model PrincipalTransferLog {
-  id                    String   @id @default(cuid())
-  schoolId              String
-  oldPrincipalTeacherId String?
-  newPrincipalTeacherId String
-  operatorUserId        String
-  result                String
-  message               String?
-  createdAt             DateTime @default(now())
-  School                School   @relation(fields: [schoolId], references: [id])
+  id                      String   @id @default(cuid())
+  schoolId                String
+  oldPrincipalTeacherId   String?  // 存 Teacher.id（即 User.id）
+  newPrincipalTeacherId   String   // 存 Teacher.id（即 User.id）
+  operatorId              String   // 存 User.id
+  result                  String
+  message                 String?
+  createdAt               DateTime @default(now())
+  School                  School   @relation(fields: [schoolId], references: [id])
 }
 
 model Problem {
@@ -473,26 +472,27 @@ model ProblemStatement {
 }
 
 model School {
-  id                        String                 @id @default(cuid())
-  name                      String
-  announcement              String?
-  region                    String?
-  schoolType                String?
-  educationSystem           String?                @default("6-3-3")
-  contactPerson             String?
-  contactPhone              String?
-  contactEmail              String?
-  status                    String                 @default("active")
-  currentPrincipalTeacherId String
-  createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime               @default(now()) @updatedAt
-  Admin                     Admin[]
-  PrincipalTransferLog      PrincipalTransferLog[]
-  SchoolProblemList         SchoolProblemList[]
-  Student                   Student[]
-  Teacher                   Teacher[]
-  Team                      Team[]
-  User                      User[]
+  id                          String                 @id @default(cuid())
+  name                        String
+  announcement                String?
+  region                      String?
+  schoolType                  String?
+  educationSystem             String?                @default("6-3-3")
+  contactPerson               String?
+  contactPhone                String?
+  contactEmail                String?
+  status                      String                 @default("active")
+  currentPrincipalTeacherId   String                  // 存 Teacher.userId（即 User.id）
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @default(now()) @updatedAt
+  Admin                       Admin[]
+  PrincipalTransferLog        PrincipalTransferLog[]
+  SchoolProblemList           SchoolProblemList[]
+  Student                     Student[]
+  Teacher                     Teacher[]
+  CurrentPrincipalTeacher     Teacher                 @relation("SchoolPrincipal", fields: [currentPrincipalTeacherId], references: [id])
+  Team                        Team[]
+  User                        User[]
 }
 
 model SchoolProblemList {
@@ -513,14 +513,13 @@ model SchoolProblemList {
 }
 
 model Student {
-  id                        String                      @id @default(cuid())
-  userId                    String                      @unique
+  id                        String                      @id  // 主键，等于 User.id
   name                      String
   gender                    String?
   schoolId                  String
   enrollmentYear            Int?
   targetContest             String?
-  headTeacherId             String?
+  headTeacherId             String?                     // 指向 Teacher.id（即 User.id）
   tags                      String?
   notes                     String?
   avatar                    String?
@@ -531,9 +530,9 @@ model Student {
   ContestProblemScore       ContestProblemScore[]
   ContestResult             ContestResult[]
   Milestone                 Milestone[]
-  Teacher                   Teacher?                    @relation(fields: [headTeacherId], references: [id])
+  HeadTeacher               Teacher?                    @relation("HeadTeacher", fields: [headTeacherId], references: [id])
   School                    School                      @relation(fields: [schoolId], references: [id])
-  User                      User                        @relation(fields: [userId], references: [id])
+  User                      User                        @relation(fields: [id], references: [id], onDelete: Cascade)
   TeamJoinRequest           TeamJoinRequest[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
 
@@ -570,6 +569,12 @@ model Submission {
   submitSource      String?
   judgeId           String?
   judgeStarted      DateTime?
+
+  // 新增字段（OI 赛制可见性体系化修复）
+  submitScope       String     @default("problem")  // "problem" / "training" / "contest"
+  trainingId        Int?
+  trainingProblemId String?
+
   OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
   User              User       @relation(fields: [userId], references: [id])
 
@@ -583,13 +588,17 @@ model Submission {
   @@index([result, judgeId])
   @@index([sourceId])
   @@index([submitSource])
+  @@index([submitScope])
+  @@index([trainingId])
+  @@index([trainingProblemId])
   @@index([userId])
   @@index([userId, oj, problemId])
+  @@index([userId, trainingId])
+  @@index([userId, trainingProblemId])
 }
 
 model Teacher {
-  id        String      @id @default(cuid())
-  userId    String      @unique
+  id        String      @id  // 主键，等于 User.id
   name      String
   email     String?
   phone     String?
@@ -601,9 +610,10 @@ model Teacher {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @default(now()) @updatedAt
   Milestone Milestone[]
-  Student   Student[]
+  Student   Student[]   @relation("HeadTeacher")
   School    School      @relation(fields: [schoolId], references: [id])
-  User      User        @relation(fields: [userId], references: [id])
+  SchoolsAsPrincipal School[] @relation("SchoolPrincipal")
+  User      User        @relation(fields: [id], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
   @@index([schoolId])
@@ -636,29 +646,29 @@ model Team {
 }
 
 model TeamJoinRequest {
-  id          String    @id @default(cuid())
-  teamId      String
-  studentId   String
-  status      String    @default("pending")
-  message     String?
-  createdAt   DateTime  @default(now())
-  processedAt DateTime?
-  processedBy String?
-  Student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  Team        Team      @relation(fields: [teamId], references: [id])
+  id              String    @id @default(cuid())
+  teamId          String
+  userId          String    // 存 User.id（实际存 Student.id 即 User.id）
+  status          String    @default("pending")
+  message         String?
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+  processedBy     String?   // 处理人 User.id
+  Student         Student   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Team            Team      @relation(fields: [teamId], references: [id])
 
-  @@unique([teamId, studentId])
+  @@unique([teamId, userId])
 }
 
 model TeamMember {
   id        String   @id @default(cuid())
   teamId    String
-  userId    String
+  userId    String   // 统一身份 ID：存 User.id（原存 Teacher.id/Student.id，数据迁移后改为 User.id）
   userType  String
   role      String
   status    String   @default("active")
   joinedAt  DateTime @default(now())
-  invitedBy String?
+  invitedBy String?  // 邀请人 User.id
   Team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId, userType])
@@ -671,7 +681,7 @@ model TeamMember {
 model TeamMemberExternalAccount {
   id               String   @id @default(cuid())
   teamId           String
-  studentId        String?
+  studentId        String?  // 存 Student.id（即 User.id）
   platform         String
   platformUsername String
   displayName      String?
@@ -690,7 +700,7 @@ model TeamMemberExternalAccount {
 model TeamMemberImportBatch {
   id                   String                 @id @default(cuid())
   teamId               String?
-  operatorId           String
+  operatorId           String                  // 存 User.id
   platform             String
   totalCount           Int
   successCount         Int                    @default(0)
@@ -717,9 +727,9 @@ model TeamMemberImportItem {
   candidateDisplayName  String?
   matchType             String
   matchStatus           String                @default("pending")
-  matchedStudentId      String?
+  matchedStudentId      String?               // 存 Student.id（即 User.id）
   matchedStudentName    String?
-  createdStudentId      String?
+  createdStudentId      String?               // 存 Student.id（即 User.id）
   action                String?
   userChoice            String?
   errorMessage          String?
@@ -732,17 +742,17 @@ model TeamMemberImportItem {
 }
 
 model TeamOperationLog {
-  id           String   @id @default(cuid())
-  teamId       String
-  operatorId   String
-  operatorType String
-  action       String
-  targetId     String?
-  targetType   String?
-  oldValue     String?
-  newValue     String?
-  metadata     String?
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  teamId        String
+  operatorId    String   // 存 User.id
+  operatorType  String
+  action        String
+  targetId      String?  // 存 User.id
+  targetType    String?
+  oldValue      String?
+  newValue      String?
+  metadata      String?
+  createdAt     DateTime @default(now())
 
   @@index([action])
   @@index([createdAt])
@@ -910,8 +920,8 @@ model UserPlatformBinding {
 
 model UserStatusLog {
   id             String   @id @default(cuid())
-  targetUserId   String
-  operatorUserId String
+  targetId       String
+  operatorId     String
   operatorRole   String
   oldStatus      String
   newStatus      String

@@ -5,33 +5,46 @@ import { prisma } from '../src/prisma'
 
 // 平台学校 ID（用于系统管理员）
 const PLATFORM_SCHOOL_ID = 'platform-school-00000000'
+// 平台负责人占位用户 ID
+const PLATFORM_PRINCIPAL_USER_ID = 'platform-principal-user-placeholder'
 
 beforeAll(async () => {
   // 确保数据库连接
   await prisma.$connect()
 
-  // 使用事务处理循环外键依赖：User.schoolId → School, School.currentPrincipalTeacherId → Teacher
+  // 处理循环外键依赖：
+  // User.schoolId → School.id
+  // School.currentPrincipalTeacherId → Teacher.id (= User.id)
+  // Teacher.schoolId → School.id
+  //
+  // 由于 Prisma 创建的 FK 是 NOT DEFERRABLE，需要暂时禁用 FK 约束
   await prisma.$transaction(async (tx) => {
-    // 1. 先创建学校（使用临时占位 Teacher ID）
-    await tx.$executeRaw`
-      INSERT INTO "School" (id, name, "currentPrincipalTeacherId", "updatedAt")
-      VALUES (${PLATFORM_SCHOOL_ID}, '平台学校', 'platform-principal-placeholder', NOW())
-      ON CONFLICT (id) DO NOTHING
-    `
+    // 暂时禁用 FK 约束检查
+    await tx.$executeRaw`SET session_replication_role = replica`
 
-    // 2. 创建平台负责人占位用户
+    // 1. 创建平台负责人占位用户
     await tx.$executeRaw`
       INSERT INTO "User" (id, username, "passwordHash", role, "schoolId", "updatedAt")
-      VALUES ('platform-principal-user-placeholder', 'platform_principal_placeholder', 'placeholder', 'teacher', ${PLATFORM_SCHOOL_ID}, NOW())
+      VALUES (${PLATFORM_PRINCIPAL_USER_ID}, 'platform_principal_placeholder', 'placeholder', 'teacher', ${PLATFORM_SCHOOL_ID}, NOW())
       ON CONFLICT (id) DO NOTHING
     `
 
-    // 3. 创建平台负责人占位教师
+    // 2. 创建平台负责人占位教师（Teacher.id = User.id）
     await tx.$executeRaw`
-      INSERT INTO "Teacher" (id, "userId", name, "schoolId", "updatedAt")
-      VALUES ('platform-principal-placeholder', 'platform-principal-user-placeholder', '平台负责人', ${PLATFORM_SCHOOL_ID}, NOW())
+      INSERT INTO "Teacher" (id, name, "schoolId", "updatedAt")
+      VALUES (${PLATFORM_PRINCIPAL_USER_ID}, '平台负责人', ${PLATFORM_SCHOOL_ID}, NOW())
       ON CONFLICT (id) DO NOTHING
     `
+
+    // 3. 创建平台学校
+    await tx.$executeRaw`
+      INSERT INTO "School" (id, name, "currentPrincipalTeacherId", "updatedAt")
+      VALUES (${PLATFORM_SCHOOL_ID}, '平台学校', ${PLATFORM_PRINCIPAL_USER_ID}, NOW())
+      ON CONFLICT (id) DO NOTHING
+    `
+
+    // 重新启用 FK 约束检查
+    await tx.$executeRaw`SET session_replication_role = origin`
   })
 })
 
@@ -60,11 +73,12 @@ afterEach(async () => {
     await prisma.team.deleteMany()
     await prisma.milestone.deleteMany()
     await prisma.student.deleteMany()
-    await prisma.teacher.deleteMany({ where: { id: { not: 'platform-principal-placeholder' } } })
+    // Teacher 主键是 id，保留平台负责人占位教师
+    await prisma.teacher.deleteMany({ where: { id: { not: PLATFORM_PRINCIPAL_USER_ID } } })
     await prisma.principalTransferLog.deleteMany()
     await prisma.admin.deleteMany()
     await prisma.school.deleteMany({ where: { id: { not: PLATFORM_SCHOOL_ID } } })
-    await prisma.user.deleteMany({ where: { id: { not: 'platform-principal-user-placeholder' } } })
+    await prisma.user.deleteMany({ where: { id: { not: PLATFORM_PRINCIPAL_USER_ID } } })
   } catch (error) {
     // 忽略清理错误，某些表可能为空
   }

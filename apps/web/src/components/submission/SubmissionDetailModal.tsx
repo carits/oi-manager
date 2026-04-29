@@ -14,12 +14,14 @@ interface SubmissionDetail {
   username: string
   oj: string
   problemId: string
-  result: string
+  result: string | null
+  displayResult?: 'pending' | 'queuing' | string  // OI 赞中非管理员显示的脱敏结果
+  hidden?: boolean  // OI 赞中非管理员标记
   timeUsed: number | null
   memoryUsed: number | null
   codeLength: number
   language: string
-  code: string
+  code: string | null
   submitMethod: string
   ojRemoteId: string | null
   ojAccountUsername: string | null
@@ -139,12 +141,16 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
       setLoading(true)
 
       const fetchDetail = async () => {
-        const res = await apiClient.get<SubmissionDetail>(`/api/submissions/${submissionId}`)
+        // 训练提交使用训练专用端点
+        const res = trainingId
+          ? await apiClient.get<SubmissionDetail>(`/api/trainings/${trainingId}/submissions/${submissionId}`)
+          : await apiClient.get<SubmissionDetail>(`/api/submissions/${submissionId}`)
+
         if (res.success && res.data) {
           setDetail(res.data)
           setLoading(false)
-          // 如果不再是 queuing 状态，停止轮询
-          if (res.data.result !== 'queuing' && intervalRef.current) {
+          // OI 赞中非管理员（hidden=true）或不再是 queuing 状态，停止轮询
+          if ((res.data.hidden || res.data.result !== 'queuing') && intervalRef.current) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
           }
@@ -153,8 +159,8 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
       fetchDetail() // 立即加载一次
 
-      // 如果是 queuing 状态，启动轮询
-      if (detail?.result === 'queuing' || !detail) {
+      // 如果是 queuing 状态且未隐藏，启动轮询
+      if (detail?.result === 'queuing' && !detail?.hidden || !detail) {
         intervalRef.current = setInterval(fetchDetail, 2000)
       }
 
@@ -197,7 +203,40 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
     }
   }
 
-  const getResultBadge = (result: string, score?: number | null) => {
+  const getResultBadge = (result: string | null, score?: number | null, hidden?: boolean, displayResult?: string) => {
+    // OI 赞中非管理员：显示"已提交"
+    if (hidden || displayResult === 'pending') {
+      return (
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 12px',
+          borderRadius: '6px',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          background: 'var(--info-light)',
+          color: 'var(--info-text)',
+        }}>
+          已提交
+        </span>
+      )
+    }
+
+    if (!result) {
+      return (
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 12px',
+          borderRadius: '6px',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          background: 'var(--bg-muted)',
+          color: 'var(--text-muted)',
+        }}>
+          -
+        </span>
+      )
+    }
+
     const label = JUDGE_RESULT_LABEL_MAP[result] || result
     const colors = RESULT_COLORS[result] || { bg: 'var(--bg-muted)', text: 'var(--text-primary)' }
 
@@ -281,9 +320,9 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           }}>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>评测结果</div>
-              {getResultBadge(detail.result, detail.score)}
+              {getResultBadge(detail.result, detail.score, detail.hidden, detail.displayResult)}
             </div>
-            {trainingFormat !== 'icpc' && (
+            {trainingFormat !== 'icpc' && !detail.hidden && (
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>分数</div>
               <div style={{
@@ -297,6 +336,8 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               </div>
             </div>
             )}
+            {!detail.hidden && (
+            <>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>耗时</div>
               <div style={{ fontWeight: 500 }}>
@@ -311,6 +352,8 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                   : '-'}
               </div>
             </div>
+            </>
+            )}
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>代码长度</div>
               <div style={{ fontWeight: 500 }}>{detail.codeLength}B</div>
@@ -335,6 +378,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>提交时间：</span>
               <span style={{ fontWeight: 500 }}>{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
             </div>
+            {!detail.hidden && (
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
@@ -357,6 +401,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                 </span>
               )}
             </div>
+            )}
           </div>
 
           {/* 错误信息 */}

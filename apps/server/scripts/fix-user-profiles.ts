@@ -29,7 +29,7 @@ async function main() {
   console.log(`教师角色用户数: ${teachersToCreate.length}`)
 
   for (const user of teachersToCreate) {
-    const existingTeacher = await prisma.teacher.findUnique({ where: { userId: user.id } })
+    const existingTeacher = await prisma.teacher.findUnique({ where: { id: user.id } })
     if (!existingTeacher) {
       // 检查 schoolId 是否有效
       const school = await prisma.school.findUnique({ where: { id: user.schoolId } })
@@ -62,7 +62,7 @@ async function main() {
   console.log(`学生角色用户数: ${studentsToCreate.length}`)
 
   for (const user of studentsToCreate) {
-    const existingStudent = await prisma.student.findUnique({ where: { userId: user.id } })
+    const existingStudent = await prisma.student.findUnique({ where: { id: user.id } })
     if (!existingStudent) {
       // 检查 schoolId 是否有效
       const school = await prisma.school.findUnique({ where: { id: user.schoolId } })
@@ -95,7 +95,7 @@ async function main() {
   console.log(`管理员角色用户数: ${adminsToCreate.length}`)
 
   for (const user of adminsToCreate) {
-    const existingAdmin = await prisma.admin.findUnique({ where: { userId: user.id } })
+    const existingAdmin = await prisma.admin.findUnique({ where: { id: user.id } })
     if (!existingAdmin) {
       // 检查 schoolId 是否有效
       const school = await prisma.school.findUnique({ where: { id: user.schoolId } })

@@ -67,10 +67,10 @@ export default function StudentTeamPage() {
   // 获取邀请列表 - 后端会从 JWT token 中获取 studentId
   useEffect(() => {
     const fetchInvitations = async () => {
-      if (!mounted || !user?.studentId) return
+      if (!mounted || !user?.userId) return
       try {
         setLoadingInvitations(true)
-        const data = await apiClient.get<any>(`/api/teams/student/${user.studentId}`)
+        const data = await apiClient.get<any>(`/api/teams/student/${user.userId}`)
         if (data.success) {
           const pending = (data.data?.pending || []).map((inv: any) => ({
             id: inv.invitationId,
@@ -91,7 +91,7 @@ export default function StudentTeamPage() {
       }
     }
     fetchInvitations()
-  }, [mounted, user?.studentId])
+  }, [mounted, user?.userId])
 
   // 接受邀请
   const handleAcceptInvitation = async (invitationId: string) => {

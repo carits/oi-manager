@@ -19,7 +19,7 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     // 获取当前登录教师信息
     const userId = req.user!.userId
     const currentUser = await prisma.user.findUnique({ where: { id: userId } })
-    const currentTeacher = await prisma.teacher.findUnique({ where: { userId } })
+    const currentTeacher = await prisma.teacher.findUnique({ where: { id: userId } })
     const currentTeacherId = currentTeacher?.id
 
     // 权限检查：普通教师只能查看自己的学生
@@ -70,14 +70,14 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
             schoolType: true
           }
         },
-        Teacher: { select: { id: true, name: true } },
+        HeadTeacher: { select: { id: true, name: true } },
         User: { select: { username: true, phone: true, email: true, avatar: true, status: true } }
       }
     })
 
     // 转换字段名为前端期望的格式
     const formattedStudents = students.map(student => {
-      const { User, Teacher, School, ...rest } = student
+      const { User, HeadTeacher, School, ...rest } = student
       return {
         ...rest,
         user: User ? {
@@ -93,9 +93,9 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
           educationSystem: School.educationSystem,
           schoolType: School.schoolType
         } : null,
-        headTeacher: Teacher ? {
-          id: Teacher.id,
-          name: Teacher.name
+        headTeacher: HeadTeacher ? {
+          id: HeadTeacher.id,
+          name: HeadTeacher.name
         } : null
       }
     })
@@ -201,10 +201,10 @@ studentRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       where: {
         OR: [
           { id },
-          { userId: id }
+          { User: { username: id } }
         ]
       },
-      select: { id: true, userId: true }
+      select: { id: true }
     })
 
     if (!studentBasic) {
@@ -221,7 +221,7 @@ studentRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       where: { id: studentBasic.id },
       include: {
         School: { select: { id: true, name: true } },
-        Teacher: { select: { id: true, name: true, title: true } },
+        HeadTeacher: { select: { id: true, name: true, title: true } },
         User: { select: { username: true, phone: true, email: true, avatar: true, bio: true } },
         Milestone: { orderBy: { milestoneDate: 'desc' } },
         ContestResult: { include: { Contest: true }, orderBy: { Contest: { contestDate: 'desc' } } }
@@ -246,7 +246,7 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
 
     // 获取当前登录老师的信息
     const userId = req.user!.userId
-    const teacher = await prisma.teacher.findUnique({ where: { userId } })
+    const teacher = await prisma.teacher.findUnique({ where: { id: userId } })
 
     // 确定 schoolId：优先使用传入的，否则使用当前教师的学校
     const finalSchoolId = schoolId || teacher?.schoolId
@@ -294,6 +294,7 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
       // 创建学生
       return await tx.student.create({
         data: {
+          id: newUser.id,
           name,
           gender,
           schoolId: finalSchoolId,
@@ -302,7 +303,6 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
           headTeacherId: finalHeadTeacherId,
           tags: tags ? JSON.stringify(tags) : null,
           notes,
-          userId: newUser.id
         }
       })
     })
@@ -317,7 +317,7 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
 
     // 获取当前登录老师的信息
     const userId = req.user!.userId
-    const teacher = await prisma.teacher.findUnique({ where: { userId } })
+    const teacher = await prisma.teacher.findUnique({ where: { id: userId } })
 
     // 先获取学生信息
     const existingStudent = await prisma.student.findUnique({
@@ -351,25 +351,23 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
     // 使用事务更新学生及相关数据，确保原子性
     logger.info('student_update_password_field_received', { action: 'student_update', metadata: { passwordProvided: !!password, passwordLength: password?.length || 0 } })
     const student = await prisma.$transaction(async (tx) => {
-      // 更新学生的 User 关联信息（如果存在）
-      if (existingStudent.userId) {
-        const userUpdateData: any = {
-          avatar,
-          phone: req.body.phone,
-          email: req.body.email
-        }
-
-        // 如果提供了新密码，则更新密码
-        if (password && password.length >= 6) {
-          logger.info('student_update_hashing_password', { action: 'student_update', metadata: { userId: existingStudent.userId } })
-          userUpdateData.passwordHash = await bcrypt.hash(password, 10)
-        }
-
-        await tx.user.update({
-          where: { id: existingStudent.userId },
-          data: userUpdateData
-        })
+      // 更新学生的 User 关联信息（Student.id = User.id，所以直接用 student.id）
+      const userUpdateData: any = {
+        avatar,
+        phone: req.body.phone,
+        email: req.body.email
       }
+
+      // 如果提供了新密码，则更新密码
+      if (password && password.length >= 6) {
+        logger.info('student_update_hashing_password', { action: 'student_update', metadata: { userId: existingStudent.id } })
+        userUpdateData.passwordHash = await bcrypt.hash(password, 10)
+      }
+
+      await tx.user.update({
+        where: { id: existingStudent.id },
+        data: userUpdateData
+      })
 
       // 更新学生
       return await tx.student.update({
@@ -402,7 +400,7 @@ studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principa
     }
 
     // 获取学生信息，找到关联的 userId
-    const student = await prisma.student.findUnique({ where: { id }, select: { userId: true } })
+    const student = await prisma.student.findUnique({ where: { id }, select: { id: true } })
     if (!student) {
       return res.status(404).json({ success: false, message: '学生不存在' })
     }
@@ -410,12 +408,10 @@ studentRouter.delete('/:id', authenticate, authorize('teacher', 'school_principa
     // 在删除学生前，处理其作为团队所有者的情况
     await handleStudentOwnerDeletion(id)
 
-    // 使用事务：先删 Student，再删关联的 User
+    // 使用事务：先删 Student，再删关联的 User（Student.id = User.id）
     await prisma.$transaction(async (tx) => {
       await tx.student.delete({ where: { id } })
-      if (student.userId) {
-        await tx.user.delete({ where: { id: student.userId } })
-      }
+      await tx.user.delete({ where: { id: student.id } })
     })
     res.json({ success: true, message: '删除成功' })
 }, '服务器错误'))
@@ -436,17 +432,14 @@ studentRouter.put('/:id/account-status', authenticate, authorize('teacher', 'sch
 
     const student = await prisma.student.findUnique({
       where: { id },
-      select: { userId: true }
+      select: { id: true }
     })
     if (!student) {
       return res.status(404).json({ success: false, message: '学生不存在' })
     }
-    if (!student.userId) {
-      return res.status(400).json({ success: false, message: '该学生没有关联账号' })
-    }
 
     await prisma.user.update({
-      where: { id: student.userId },
+      where: { id: student.id },
       data: { status }
     })
 

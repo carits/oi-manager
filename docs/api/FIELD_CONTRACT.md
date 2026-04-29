@@ -1,6 +1,6 @@
 # 前后端字段契约规范
 
-> 最后更新: 2026-03-25
+> 最后更新: 2026-04-29
 
 本文档定义 OI Manager V2 项目的前后端字段契约，确保 API 响应结构与前端期望一致。
 
@@ -151,13 +151,15 @@ include: {
     role: string,
     username: string,
     avatar: string | null,
-    adminId?: string,
-    teacherId?: string,
-    studentId?: string,
+    adminId?: string,    // 冗余字段，等于 userId
+    teacherId?: string,  // 冗余字段，等于 userId
+    studentId?: string,  // 冗余字段，等于 userId
     schoolId?: string
   }
 }
 ```
+
+> **注意**：`adminId`/`teacherId`/studentId` 是为了向后兼容保留的冗余字段。前端应使用 `userId` + `role` 判断用户身份。
 
 ### 4.2 GET /auth/me
 
@@ -178,9 +180,9 @@ include: {
       name: string,
       // ...其他基本字段
     } | null,
-    adminId?: string,
-    teacherId?: string,
-    studentId?: string,
+    adminId?: string,    // 冗余字段，等于 userId
+    teacherId?: string,  // 冗余字段，等于 userId
+    studentId?: string,  // 冗余字段，等于 userId
     schoolId?: string,
     schoolName?: string
   }

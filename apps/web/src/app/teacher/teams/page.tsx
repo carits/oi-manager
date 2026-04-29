@@ -81,8 +81,8 @@ export default function TeamsPage() {
         setLoadingInvitations(false)
       }
     }
-    if (user?.teacherId) fetchData()
-  }, [user?.teacherId])
+    if (user?.role === 'teacher' || user?.role === 'school_principal') fetchData()
+  }, [user?.role])
 
   // 接受邀请
   const handleAcceptInvitation = async (invitationId: string, type: 'admin' | 'member') => {

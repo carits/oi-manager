@@ -57,8 +57,6 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
     }
 
     // Get admin user IDs to exclude from ranking (unless includeAdminInRanking is true)
-    // TeamMember.userId stores Teacher.id/Student.id, but Submission.userId stores User.id
-    // So we need to convert via Teacher/Student lookup
     let adminUserIds: string[] = []
     if (!training.includeAdminInRanking) {
       const adminMembers = await prisma.teamMember.findMany({
@@ -67,17 +65,9 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           status: 'active',
           role: { in: ['owner', 'admin'] },
         },
-        select: { userId: true, userType: true },
+        select: { id: true },
       })
-      for (const m of adminMembers) {
-        if (m.userType === 'teacher') {
-          const teacher = await prisma.teacher.findUnique({ where: { id: m.userId }, select: { userId: true } })
-          if (teacher) adminUserIds.push(teacher.userId)
-        } else if (m.userType === 'student') {
-          const student = await prisma.student.findUnique({ where: { id: m.userId }, select: { userId: true } })
-          if (student) adminUserIds.push(student.userId)
-        }
-      }
+      adminUserIds = adminMembers.map(m => m.id)
     }
 
     const problems = training.TrainingProblem
@@ -175,7 +165,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           ],
         },
         orderBy: { createdAt: 'asc' },
-        select: { userId: true, problemId: true, score: true, result: true, createdAt: true },
+        select: { id: true, userId: true, problemId: true, score: true, result: true, createdAt: true },
       })
 
       const userStats = new Map<string, Map<string, { solved: boolean; penalty: number; attempts: number }>>()

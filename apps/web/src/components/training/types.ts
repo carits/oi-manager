@@ -13,6 +13,7 @@ export interface TrainingInfo {
   startTime: string
   endTime: string
   status: string
+  runtimeStatus?: 'upcoming' | 'ongoing' | 'finished'  // 运行时状态（动态计算）
   createdBy: string
   problemIdVisible: boolean
   solutionVisible: boolean
@@ -69,7 +70,9 @@ export interface SubmissionRow {
   trainingProblemId: string
   oj: string
   language: string
-  result: string
+  result: string | null
+  displayResult?: 'pending' | 'queuing' | string  // OI 赞中非管理员显示的脱敏结果
+  hidden?: boolean  // OI 赞中非管理员标记
   score: number | null
   timeUsed: number | null
   memoryUsed: number | null
@@ -98,6 +101,7 @@ export interface ProblemListEntry {
   problemTableId: string
   platformLabel: string
   problemUrl: string | null
+  hasSubmitted?: boolean  // 是否已提交（OI 赞中用于显示"已提交"标记）
   bestScore: number | null
   bestResult: string | null
 }

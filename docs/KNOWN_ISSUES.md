@@ -282,6 +282,27 @@ await prisma.submission.update({
 
 **解决方案**: 新建 `lib/zodValidate.ts` 校验中间件 + `modules/team/schemas/team.schemas.ts`，应用到团队模块关键路由
 
+### 5.5 ~~userId 统一优化~~ ✅ 已解决
+
+**问题**: 后端代码存在 41 处使用 `user.teacherId || user.studentId` 获取用户 ID，以及 `user.teacherId ? 'teacher' : 'student'` 做角色判断，这些模式冗余且不一致
+
+**根因**: JWT payload 中包含冗余字段 `teacherId/studentId/adminId`（值都等于 `userId`），历史代码依赖这些字段做身份判断
+
+**影响**:
+- 代码冗余，增加维护成本
+- 身份判断逻辑分散，不一致
+
+**涉及文件**: `modules/team/team.service.ts`, `routes/problem-lists.ts`, `routes/teachers.ts`
+
+**状态**: ✅ 已于 2026-04-29 完成
+
+**解决方案**:
+1. 添加 `getUserType(role)` 工具函数到 `middleware/auth.ts`
+2. 所有身份判断统一改为 `userId` + `role` 模式
+3. 更新文档说明冗余字段用途
+
+**验证**: 238 个测试全部通过
+
 ---
 
 ## 6. 文档层面

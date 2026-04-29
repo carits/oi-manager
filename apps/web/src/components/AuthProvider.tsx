@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react'
-import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName, setTeacherId, setStudentId, setAdminId } from '@/lib/auth'
+import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName } from '@/lib/auth'
 import { ENV } from '@/config/env'
 
 interface AuthUser {
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 基于登录身份生成 sessionKey，用于数据隔离
   const sessionKey = useMemo(() => {
     if (!user) return null
-    return `${user.role}:${user.userId}:${user.teacherId || user.studentId || user.adminId || ''}`
+    return `${user.role}:${user.userId}`
   }, [user])
 
   const fetchUserData = async () => {
@@ -67,17 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: data.data.email,
           bio: data.data.bio,
           profile: data.data.profile,
-          teacherId: data.data.teacherId,
-          studentId: data.data.studentId,
-          adminId: data.data.adminId,
           schoolId: data.data.schoolId,
           schoolName: data.data.schoolName
         }
         setUser(userData)
         setSchoolId(data.data.schoolId || null)
         setSchoolName(data.data.schoolName || null)
-        setTeacherId(data.data.teacherId || null)
-        setAdminId(data.data.adminId || null)
         return userData
       } else {
         // 只有在 401/403 等认证失败时才清除认证状态
@@ -118,15 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json()
 
       if (data.success) {
-        const { token, userId, role: userRole, username: userName, avatar, teacherId, studentId, adminId, schoolId } = data.data
+        const { token, userId, role: userRole, username: userName, avatar, schoolId } = data.data
         setToken(token)
         setRole(userRole)
         setUserId(userId)
-        setTeacherId(teacherId || null)
-        setStudentId(studentId || null)
-        setAdminId(adminId || null)
         setSchoolId(schoolId || null)
-        setUser({ userId, username: userName, role: userRole, avatar, teacherId, studentId, adminId, schoolId })
+        setUser({ userId, username: userName, role: userRole, avatar, schoolId })
         return { success: true }
       }
       return { success: false, message: data.message }

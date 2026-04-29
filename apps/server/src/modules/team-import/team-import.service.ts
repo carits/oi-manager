@@ -464,8 +464,7 @@ export class TeamImportService {
 
             return tx.student.create({
               data: {
-                id: uuidv4(),
-                userId: newUser.id,
+                id: newUser.id,
                 name: studentName,
                 schoolId: team.schoolId,
                 headTeacherId: operatorId,

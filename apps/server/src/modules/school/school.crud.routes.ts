@@ -252,10 +252,15 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
     }
 
     // 使用事务创建学校及相关数据，确保原子性
+    // 注意：循环 FK 依赖 - User.schoolId → School.id, School.currentPrincipalTeacherId → Teacher.id (= User.id)
+    // 解决方案：使用 $executeRaw 暂时禁用 FK 约束检查
     const hashedPassword = await bcrypt.hash(password || username, 10)
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. 创建学校（先创建，后续更新负责人）
+      // 暂时禁用 FK 约束检查
+      await tx.$executeRaw`SET session_replication_role = replica`
+
+      // 1. 创建学校（使用临时占位 ID）
       const school = await tx.school.create({
         data: {
           name,
@@ -282,10 +287,10 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
         }
       })
 
-      // 3. 创建教师并关联学校
+      // 3. 创建教师并关联学校（Teacher.id = User.id）
       const teacher = await tx.teacher.create({
         data: {
-          userId: user.id,
+          id: user.id,
           name: teacherName,
           email: contactEmail || null,
           phone: contactPhone || null,
@@ -300,6 +305,9 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
         where: { id: school.id },
         data: { currentPrincipalTeacherId: teacher.id }
       })
+
+      // 重新启用 FK 约束检查
+      await tx.$executeRaw`SET session_replication_role = origin`
 
       return { school, teacher, user }
     })
@@ -379,7 +387,7 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
       })
     } else if (userRole === 'school_principal') {
       // 学校负责人只能编辑自己学校的基本信息
-      const teacher = await prisma.teacher.findUnique({ where: { userId } })
+      const teacher = await prisma.teacher.findUnique({ where: { id: userId } })
       if (!teacher) {
         return res.status(400).json({ success: false, message: '教师不存在' })
       }

@@ -1,6 +1,6 @@
 # 认证与权限系统 (Auth & Permission)
 
-> 最后更新: 2026-03-23
+> 最后更新: 2026-04-29
 
 本文档详细描述 OI Manager V2 的认证流程和权限控制机制。
 
@@ -74,15 +74,17 @@ super_admin (超管)
 
 ```typescript
 interface JwtPayload {
-  userId: string       // 用户 ID
+  userId: string       // 用户 ID（核心字段）
   username: string     // 用户名
-  role: UserRole       // 角色
-  adminId?: string     // 管理员 ID（仅管理员）
-  teacherId?: string   // 教师 ID（仅教师/学校负责人）
-  studentId?: string   // 学生 ID（仅学生）
+  role: UserRole       // 角色（用于身份判断）
+  adminId?: string     // 管理员 ID（冗余字段，等于 userId）
+  teacherId?: string   // 教师 ID（冗余字段，等于 userId）
+  studentId?: string   // 学生 ID（冗余字段，等于 userId）
   schoolId?: string    // 学校 ID（教师和学生）
 }
 ```
+
+> **注意**：`adminId`/`teacherId`/`studentId` 字段是为了向后兼容保留的冗余字段，它们的值都等于 `userId`。代码中不应依赖这些字段做身份判断，应统一使用 `userId` + `role`。
 
 ### 2.4 Token 有效期
 
@@ -110,6 +112,21 @@ export function isAdmin(role: UserRole): boolean
 
 // 检查是否为超级管理员
 export function isSuperAdmin(role: UserRole): boolean
+
+// 从角色推导用户类型（student → 'student'，其他 → 'teacher'）
+export function getUserType(role: string): 'teacher' | 'student'
+```
+
+**使用 `getUserType` 替代冗余的身份判断**：
+
+```typescript
+// ❌ 旧模式（不推荐）
+const userType = user.teacherId ? 'teacher' : 'student'
+const userId = user.teacherId || user.studentId
+
+// ✅ 新模式（推荐）
+const userType = getUserType(user.role)
+const userId = user.userId
 ```
 
 ### 3.2 使用示例

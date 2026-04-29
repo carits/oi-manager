@@ -126,7 +126,7 @@ class JudgeClient {
   }
 
   private async handleJudgeTask(msg: JudgeMessage) {
-    const { submissionId, problemId, code, language, problemConfig, testdataPath } = msg.payload
+    const { submissionId, problemId, code, language, config, testdataPath } = msg.payload
 
     console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
 
@@ -137,7 +137,7 @@ class JudgeClient {
         problemId,
         code,
         language,
-        config: problemConfig,
+        config: config,
         testdataPath
       })
 

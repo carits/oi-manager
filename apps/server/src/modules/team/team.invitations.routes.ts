@@ -18,12 +18,8 @@ export const teamInvitationsRouter = Router()
 
 teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
-  const userId = user.teacherId || user.studentId
-  const userType = user.teacherId ? 'teacher' : 'student'
-
-  if (!userId) {
-    return res.status(400).json({ success: false, message: '无法获取邀请列表' })
-  }
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
 
   const invitations = await teamRepository.findUserPendingInvites(userId, userType as MemberType)
 
@@ -62,15 +58,10 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
 
 teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
 
-  if (!user.teacherId && !user.studentId) {
-    return res.json({ success: true, data: [] })
-  }
-
-  const userId = user.teacherId || user.studentId
-  const userType = user.teacherId ? 'teacher' : 'student'
-
-  const memberRecords = await teamRepository.findUserAdminTeams(userId!, userType as MemberType)
+  const memberRecords = await teamRepository.findUserAdminTeams(userId, userType as MemberType)
 
   const teams = await Promise.all(
     memberRecords.map(async (record) => {
@@ -93,12 +84,11 @@ teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (r
 
 teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
-
-  if (!user.teacherId) {
+  if (user.role !== 'teacher' && user.role !== 'school_principal') {
     return res.json({ success: true, data: [] })
   }
 
-  const memberRecords = await teamRepository.findUserMemberTeams(user.teacherId, 'teacher')
+  const memberRecords = await teamRepository.findUserMemberTeams(user.userId, 'teacher')
 
   const teams = await Promise.all(
     memberRecords.map(async (record) => {
@@ -121,15 +111,10 @@ teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (
 
 teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
 
-  if (!user.teacherId && !user.studentId) {
-    return res.status(400).json({ success: false, message: '无法获取邀请列表' })
-  }
-
-  const userId = user.teacherId || user.studentId
-  const userType = user.teacherId ? 'teacher' : 'student'
-
-  const invitations = await teamRepository.findUserAdminInvites(userId!, userType as MemberType)
+  const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType)
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {
@@ -162,8 +147,7 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/accept', authentica
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
-  const isMyInvitation = (invitation.userType === 'teacher' && user.teacherId === invitation.userId) ||
-                         (invitation.userType === 'student' && user.studentId === invitation.userId)
+  const isMyInvitation = invitation.userId === user.userId
   if (!isMyInvitation) {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
@@ -186,8 +170,7 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/reject', authentica
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
-  const isMyInvitation = (invitation.userType === 'teacher' && user.teacherId === invitation.userId) ||
-                         (invitation.userType === 'student' && user.studentId === invitation.userId)
+  const isMyInvitation = invitation.userId === user.userId
   if (!isMyInvitation) {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
@@ -205,11 +188,11 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/reject', authentica
 teamInvitationsRouter.get('/member-invitations', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
 
-  if (!user.teacherId) {
+  if (user.role !== 'teacher' && user.role !== 'school_principal') {
     return res.json({ success: true, data: [] })
   }
 
-  const invitations = await teamRepository.findUserMemberInvites(user.teacherId, 'teacher')
+  const invitations = await teamRepository.findUserMemberInvites(user.userId, 'teacher')
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {
@@ -237,13 +220,13 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/accept', authentic
   const { invitationId } = req.params
   const user = (req as any).user!
 
-  if (!user.teacherId) {
+  if (user.role !== 'teacher' && user.role !== 'school_principal') {
     return res.status(400).json({ success: false, message: '只有教师可以处理成员邀请' })
   }
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
-  if (!invitation || invitation.userId !== user.teacherId || invitation.userType !== 'teacher') {
+  if (!invitation || invitation.userId !== user.userId || invitation.userType !== 'teacher') {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
@@ -259,13 +242,13 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/reject', authentic
   const { invitationId } = req.params
   const user = (req as any).user!
 
-  if (!user.teacherId) {
+  if (user.role !== 'teacher' && user.role !== 'school_principal') {
     return res.status(400).json({ success: false, message: '只有教师可以处理成员邀请' })
   }
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
-  if (!invitation || invitation.userId !== user.teacherId || invitation.userType !== 'teacher') {
+  if (!invitation || invitation.userId !== user.userId || invitation.userType !== 'teacher') {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
@@ -283,12 +266,8 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   const { invitationId } = req.params
   const user = (req as any).user!
 
-  const userId = user.teacherId || user.studentId
-  const userType = user.teacherId ? 'teacher' : 'student'
-
-  if (!userId) {
-    return res.status(400).json({ success: false, message: '无法识别用户身份' })
-  }
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
@@ -301,7 +280,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   }
 
   // 使用事务确保状态更新和日志记录原子性
-  const callerType = user.teacherId ? 'teacher' : 'student'
+  const callerType = user.role === 'student' ? 'student' : 'teacher'
   try {
     await prisma.$transaction(async (tx) => {
       const result = await tx.teamMember.updateMany({
@@ -335,12 +314,8 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   const { invitationId } = req.params
   const user = (req as any).user!
 
-  const userId = user.teacherId || user.studentId
-  const userType = user.teacherId ? 'teacher' : 'student'
-
-  if (!userId) {
-    return res.status(400).json({ success: false, message: '无法识别用户身份' })
-  }
+  const userId = user.userId
+  const userType = user.role === 'student' ? 'student' : 'teacher'
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
@@ -353,7 +328,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   }
 
   // 使用事务确保删除和日志记录原子性
-  const callerType = user.teacherId ? 'teacher' : 'student'
+  const callerType = user.role === 'student' ? 'student' : 'teacher'
   try {
     await prisma.$transaction(async (tx) => {
       const result = await tx.teamMember.deleteMany({

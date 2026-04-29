@@ -304,11 +304,11 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     // Get submitter names and usernames
     const userIds = [...new Set(submissions.map(s => s.userId))]
     const [teachers, students, users] = await Promise.all([
-      prisma.teacher.findMany({ where: { userId: { in: userIds } }, select: { userId: true, name: true } }),
-      prisma.student.findMany({ where: { userId: { in: userIds } }, select: { userId: true, name: true } }),
+      prisma.teacher.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
+      prisma.student.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
       prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } }),
     ])
-    const nameMap = new Map<string, string>([...teachers.map(t => [t.userId, t.name] as [string, string]), ...students.map(s => [s.userId, s.name] as [string, string])])
+    const nameMap = new Map<string, string>([...teachers.map(t => [t.id, t.name] as [string, string]), ...students.map(s => [s.id, s.name] as [string, string])])
     const usernameMap = new Map<string, string>(users.map(u => [u.id, u.username] as [string, string]))
 
     // OI 赛制：赛中非管理员隐藏评测结果

@@ -57,13 +57,13 @@ schoolProblemListsRouter.get('/:schoolId/problem-lists', authenticate, async (re
       let ownerName = '未知'
       if (item.ProblemList.ownerType === 'teacher') {
         const teacher = await prisma.teacher.findUnique({
-          where: { userId: item.ProblemList.ownerId },
+          where: { id: item.ProblemList.ownerId },
           select: { name: true }
         })
         ownerName = teacher?.name || '未知'
       } else if (item.ProblemList.ownerType === 'student') {
         const student = await prisma.student.findUnique({
-          where: { userId: item.ProblemList.ownerId },
+          where: { id: item.ProblemList.ownerId },
           select: { name: true }
         })
         ownerName = student?.name || '未知'
@@ -198,7 +198,7 @@ schoolProblemListsRouter.delete('/:schoolId/problem-lists/:id', authenticate, as
         select: { currentPrincipalTeacherId: true }
       })
       const teacher = await prisma.teacher.findUnique({
-        where: { userId },
+        where: { id: userId },
         select: { id: true }
       })
       const isPrincipal = teacher && school?.currentPrincipalTeacherId === teacher.id

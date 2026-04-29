@@ -386,8 +386,7 @@ export class VjudgeImportService {
 
             return tx.student.create({
               data: {
-                id: uuidv4(),
-                userId: newUser.id,
+                id: newUser.id,
                 name: studentName,
                 gender: member.gender || null,
                 schoolId,
@@ -401,7 +400,7 @@ export class VjudgeImportService {
           await prisma.userPlatformBinding.create({
             data: {
               id: uuidv4(),
-              userId: student.userId,
+              userId: student.id,
               platform: 'vjudge',
               platformUsername: member.username,
               bindingStatus: 'bound',
@@ -442,10 +441,9 @@ export class VjudgeImportService {
     // 已存在的学生发送邀请（pending 状态，需学生端确认）
     if (teamId && inviteStudents.length > 0) {
       const uniqueInvites = [...new Map(inviteStudents.map(s => [s.id, s])).values()]
-      const operatorId = user.teacherId || user.studentId || ''
+      const operatorId = user.userId
 
       for (const inv of uniqueInvites) {
-        // inviteStudents 中存的是 Student.id，TeamMember.userId 约定存 Student.id/Teacher.id
         // 检查是否已是成员
         const existing = await prisma.teamMember.findFirst({
           where: { teamId, userId: inv.id, userType: 'student' }

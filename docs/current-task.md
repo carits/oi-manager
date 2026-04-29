@@ -1,5 +1,84 @@
 # 当前任务
 
+## 任务：OI 赛制可见性体系化修复（2026-04-28）
+
+状态: **已完成** ✅
+
+### 背景
+
+原问题：OI 赛制比赛中，学生可以通过多个入口（全局提交接口、题库提交记录、提交详情弹窗、远程 ID 跳转）绕过前端隐藏逻辑，看到真实评测结果、分数、测试点、子任务、耗时、内存、远程 ID。
+
+根本原因：Submission 和 Training 之间没有强关联，依赖字符串约定（submitSource/sourceId）识别，脆弱且容易遗漏。全局提交接口没有 OI 感知，训练提交混入全局池。
+
+### 解决方案
+
+**核心原则**：真实 result 和展示 result 分开，数据库保留真实值，API 返回时脱敏。后端兜底，不依赖前端隐藏。
+
+### 完成内容
+
+#### P0：防泄露（必须先修）
+
+| # | 修改内容 |
+|---|---------|
+| 1 | **数据库迁移**：Submission 模型新增 `submitScope`、`trainingId`、`trainingProblemId` 字段 |
+| 2 | **创建 helper**：`training.visibility.ts` 统一 OI 可见性判断（getTrainingRuntimeStatus、shouldHideOiResults、sanitizeSubmissionForOi、sanitizeRankingForOi） |
+| 3 | **全局提交详情拦截**：`GET /api/submissions/:id` 如果是训练提交返回 403 |
+| 4 | **全局提交列表排除**：`GET /api/submissions` 添加 `submitScope: 'problem'` 过滤 |
+| 5 | **题库提交排除**：`GET /api/problems/:id/submissions` 添加 `submitScope: 'problem'` 过滤 |
+| 6 | **训练提交创建**：设置 `submitScope: 'training'`、`trainingId`、`trainingProblemId`、`isGlobalVisible: false` |
+| 7 | **训练提交列表/详情脱敏**：OI 赞中非管理员返回 `hidden: true`、`displayResult: 'pending'`、真实字段置空 |
+| 8 | **训练排名隐藏**：OI 赞中非管理员返回 `{ hidden: true, ranking: [] }` |
+| 9 | **problem-status 添加 hasSubmitted**：OI 赞中用于显示"已提交"标记 |
+
+#### 前端修复
+
+| # | 修改内容 |
+|---|---------|
+| 1 | **SubmissionDetailModal**：有 trainingId 时调用训练专用端点，处理 `hidden`/`displayResult` |
+| 2 | **TrainingSubmissionPanel**：OI 赞中非管理员隐藏耗时/内存列，结果显示"已提交" |
+| 3 | **TrainingProblemList**：OI 赞中非管理员使用 `hasSubmitted` 显示"已提交"标记 |
+| 4 | **TrainingRankTable**：处理 `rankingData.hidden`，`isScoreBased` 判断已正确（OI + IOI） |
+| 5 | **types.ts**：新增 `hidden`、`displayResult`、`hasSubmitted` 字段类型 |
+
+### 涉及文件
+
+#### 后端
+
+| 文件 | 修改 |
+|------|------|
+| `prisma/schema.prisma` | Submission 新增字段 + 索引 |
+| `modules/training/training.visibility.ts` | **新建**：OI 可见性辅助函数 |
+| `routes/submissions.ts` | 全局提交拦截/排除训练提交 |
+| `modules/problem/problem.submissions.routes.ts` | 题库提交排除训练提交 |
+| `modules/training/training.submissions.routes.ts` | 创建写新字段 + 脱敏处理 |
+| `modules/training/training.ranking.routes.ts` | OI 赞中隐藏排名 |
+| `modules/training/training.problems.routes.ts` | problem-status 添加 hasSubmitted |
+
+#### 前端
+
+| 文件 | 修改 |
+|------|------|
+| `components/submission/SubmissionDetailModal.tsx` | 调训练端点 + 处理脱敏 |
+| `components/training/components/TrainingSubmissionPanel.tsx` | OI 赞中隐藏部分列 |
+| `components/training/components/TrainingProblemList.tsx` | hasSubmitted 显示 |
+| `components/training/types.ts` | 新增字段类型 |
+
+### 展示状态设计
+
+| 场景 | 数据库 result | API 返回给非管理员学生 |
+|------|----------------|----------------------|
+| OI 赞中已评测 | `accepted` 等 | `result: null`，`displayResult: 'pending'`，`hidden: true` |
+| OI 赞中排队 | `queuing` | `result: 'queuing'`（正常显示排队） |
+| OI 赛后 | 真实值 | 返回真实值 |
+| 管理员赛中 | 真实值 | 返回真实值 |
+
+### 验证
+
+- `pnpm build` ✅ 后端构建通过（零错误）
+- `pnpm build` ✅ 前端构建通过（零错误）
+
+---
+
 ## 任务：代码质量优化 P3（2026-04-27）
 
 状态: **已完成** ✅

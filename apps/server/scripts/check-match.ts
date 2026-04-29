@@ -6,7 +6,7 @@ async function check() {
   // 检查提交数据
   const subs = await prisma.submission.findMany({
     where: { sourceId: 'training-4' },
-    select: { userId: true, problemId: true, result: true, score: true },
+    select: { id: true, problemId: true, result: true, score: true },
     take: 5
   })
   console.log('Training-4 提交数据:')

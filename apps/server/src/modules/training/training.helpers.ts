@@ -4,7 +4,6 @@
  */
 
 import { prisma } from '../../prisma'
-import { getUserTeacherId } from '../../middleware/permissions'
 
 /** Get participant names in a single query (replaces 3 separate queries) */
 export async function getParticipantNames(userIds: string[]): Promise<Map<string, { name: string; username: string }>> {
@@ -26,36 +25,18 @@ export async function getParticipantNames(userIds: string[]): Promise<Map<string
 
 /** 获取用户在团队中的成员信息 */
 export async function getTeamMember(userId: string, teamId: string) {
-  const teacherId = await getUserTeacherId(userId)
-  const student = await prisma.student.findUnique({ where: { userId } })
-
-  const orConditions: Array<{ userId: string; userType: string }> = []
-  if (teacherId) orConditions.push({ userId: teacherId, userType: 'teacher' })
-  if (student) orConditions.push({ userId: student.id, userType: 'student' })
-
-  if (orConditions.length === 0) return null
-
   return prisma.teamMember.findFirst({
-    where: { teamId, OR: orConditions, status: 'active' }
+    where: { teamId, userId, status: 'active' }
   })
 }
 
-/** 检查是否是团队管理员（优化：合并查询，常见路径 1-2 次 DB 查询） */
+/** 检查是否是团队管理员 */
 export async function isTeamAdmin(userId: string, teamId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  // 只有 super_admin 有全局管理员权限
   if (user?.role === 'super_admin') return true
 
-  const teacherId = await getUserTeacherId(userId)
-  const student = await prisma.student.findUnique({ where: { userId } })
-
-  const orConditions: Array<{ userId: string; userType: string }> = []
-  if (teacherId) orConditions.push({ userId: teacherId, userType: 'teacher' })
-  if (student) orConditions.push({ userId: student.id, userType: 'student' })
-  if (orConditions.length === 0) return false
-
   const member = await prisma.teamMember.findFirst({
-    where: { teamId, OR: orConditions, status: 'active', role: { in: ['owner', 'admin'] } }
+    where: { teamId, userId, status: 'active', role: { in: ['owner', 'admin'] } }
   })
   return !!member
 }

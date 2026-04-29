@@ -6,7 +6,7 @@ async function check() {
   // 查询 teamMember 的 userId 和 User 表的 userId 关系
   const members = await prisma.teamMember.findMany({
     where: { teamId: 'team-contest', role: { in: ['owner', 'admin'] } },
-    select: { userId: true, role: true, userType: true }
+    select: { id: true, role: true, userType: true }
   })
 
   console.log('Admin/Owner TeamMember.userId:')
@@ -17,7 +17,7 @@ async function check() {
     if (m.userType === 'teacher') {
       const teacher = await prisma.teacher.findUnique({
         where: { id: m.userId },  // TeamMember.userId 是 Teacher.id
-        select: { userId: true, name: true }
+        select: { id: true, name: true }
       })
       console.log('  Teacher.id:', m.userId, '-> Teacher.userId (User.id):', teacher?.userId)
     }
@@ -26,7 +26,7 @@ async function check() {
   // 查询提交的 userId
   const sub = await prisma.submission.findFirst({
     where: { sourceId: 'training-4', result: 'accepted' },
-    select: { userId: true }
+    select: { id: true }
   })
   console.log('\nSubmission.userId:', sub?.userId)
 
@@ -41,7 +41,7 @@ async function check() {
     if (m.userType === 'teacher') {
       const teacher = await prisma.teacher.findUnique({
         where: { id: m.userId },
-        select: { userId: true }
+        select: { id: true }
       })
       if (teacher) adminUserIds.push(teacher.userId)
     }

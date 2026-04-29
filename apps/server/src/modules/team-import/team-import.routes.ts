@@ -175,7 +175,7 @@ teamImportRouter.post('/vjudge/import', authenticate, async (req: Request, res: 
 
     // createTeam 参数由前端传入，不再需要验证
 
-    const teacherId = user.teacherId
+    const teacherId = user.userId
     const schoolId = user.schoolId
 
     if (!teacherId || !schoolId) {
@@ -317,7 +317,7 @@ teamImportRouter.post('/luogu/import', authenticate, async (req: Request, res: R
       return res.status(400).json({ success: false, message: '缺少成员列表' })
     }
 
-    const teacherId = user.teacherId
+    const teacherId = user.userId
     const schoolId = user.schoolId
 
     if (!teacherId || !schoolId) {
@@ -359,7 +359,7 @@ teamImportRouter.get('/teams', authenticate, async (req: Request, res: Response)
     }
 
     // 获取教师 ID
-    const teacherId = user.teacherId
+    const teacherId = user.userId
     if (!teacherId) {
       return res.status(400).json({
         success: false,
@@ -434,7 +434,7 @@ teamImportRouter.post('/start', authenticate, async (req: Request, res: Response
       })
     }
 
-    const teacherId = user.teacherId
+    const teacherId = user.userId
     const schoolId = user.schoolId
     if (!teacherId || !schoolId) {
       return res.status(400).json({
@@ -527,7 +527,7 @@ teamImportRouter.post('/:batchId/confirm', authenticate, async (req: Request, re
       })
     }
 
-    const teacherId = user.teacherId
+    const teacherId = user.userId
     if (!teacherId) {
       return res.status(400).json({
         success: false,

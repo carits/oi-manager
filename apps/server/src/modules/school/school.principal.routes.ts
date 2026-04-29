@@ -50,7 +50,7 @@ schoolPrincipalRouter.put('/:id/principal', authenticate, asyncHandler(async (re
     // 获取新负责人的 userId
     const newPrincipalTeacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
-      select: { userId: true }
+      select: { id: true }
     })
 
     // 获取旧负责人的 userId（如果存在）
@@ -58,9 +58,9 @@ schoolPrincipalRouter.put('/:id/principal', authenticate, asyncHandler(async (re
     if (oldPrincipalId) {
       const oldPrincipalTeacher = await prisma.teacher.findUnique({
         where: { id: oldPrincipalId },
-        select: { userId: true }
+        select: { id: true }
       })
-      oldPrincipalUserId = oldPrincipalTeacher?.userId || null
+      oldPrincipalUserId = oldPrincipalTeacher?.id || null
     }
 
     // 使用事务确保原子性
@@ -72,7 +72,7 @@ schoolPrincipalRouter.put('/:id/principal', authenticate, asyncHandler(async (re
       }),
       // 更新新负责人的 user 角色
       prisma.user.update({
-        where: { id: newPrincipalTeacher!.userId },
+        where: { id: newPrincipalTeacher!.id },
         data: { role: 'school_principal' }
       }),
       // 记录日志
@@ -81,7 +81,7 @@ schoolPrincipalRouter.put('/:id/principal', authenticate, asyncHandler(async (re
           schoolId: id,
           oldPrincipalTeacherId: oldPrincipalId,
           newPrincipalTeacherId: teacherId,
-          operatorUserId: req.user!.userId,
+          operatorId: req.user!.userId,
           result: 'success',
           message: '超管指定负责人'
         }
@@ -182,7 +182,7 @@ schoolPrincipalRouter.post('/:id/principal', authenticate, asyncHandler(async (r
       // 2. 创建教师并关联学校
       const teacher = await tx.teacher.create({
         data: {
-          userId: user.id,
+          id: user.id,
           name: teacherName,
           email: email || null,
           phone: phone || null,
@@ -247,7 +247,7 @@ schoolPrincipalRouter.post('/current/principal-transfer', authenticate, asyncHan
 
     // 获取当前负责人信息
     const currentPrincipal = await prisma.teacher.findFirst({
-      where: { userId: req.user!.userId }
+      where: { id: req.user!.userId }
     })
 
     if (!currentPrincipal || !currentPrincipal.schoolId) {
@@ -277,10 +277,10 @@ schoolPrincipalRouter.post('/current/principal-transfer', authenticate, asyncHan
     }
 
     // 获取新旧负责人的 userId
-    const oldPrincipalUserId = currentPrincipal.userId
+    const oldPrincipalUserId = currentPrincipal.id
     const newPrincipalTeacher = await prisma.teacher.findUnique({
       where: { id: newTeacherId },
-      select: { userId: true }
+      select: { id: true }
     })
 
     if (!newPrincipalTeacher) {
@@ -301,7 +301,7 @@ schoolPrincipalRouter.post('/current/principal-transfer', authenticate, asyncHan
       }),
       // 新负责人的 user 角色升级
       prisma.user.update({
-        where: { id: newPrincipalTeacher.userId },
+        where: { id: newPrincipalTeacher.id },
         data: { role: 'school_principal' }
       }),
       // 记录日志
@@ -310,7 +310,7 @@ schoolPrincipalRouter.post('/current/principal-transfer', authenticate, asyncHan
           schoolId: currentPrincipal.schoolId,
           oldPrincipalTeacherId: currentPrincipal.id,
           newPrincipalTeacherId: newTeacherId,
-          operatorUserId: req.user!.userId,
+          operatorId: req.user!.userId,
           result: 'success',
           message: '学校负责人转移'
         }

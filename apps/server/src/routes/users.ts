@@ -30,8 +30,7 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
           avatar: true,
           bio: true,
           schoolId: true,
-          School: { select: { id: true, name: true } },
-          userId: true
+          School: { select: { id: true, name: true } }
         }
       })
 
@@ -40,10 +39,10 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
       }
 
       // 获取 User 表的头像和用户名（优先使用 User 表的）
-      const user = teacher.userId ? await prisma.user.findUnique({
-        where: { id: teacher.userId },
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
         select: { username: true, avatar: true, bio: true }
-      }) : null
+      })
 
       profileData = {
         id: teacher.id,
@@ -62,8 +61,7 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
           name: true,
           avatar: true,
           schoolId: true,
-          School: { select: { id: true, name: true } },
-          userId: true
+          School: { select: { id: true, name: true } }
         }
       })
 
@@ -72,10 +70,10 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
       }
 
       // 获取 User 表的头像和用户名（优先使用 User 表的）
-      const user = student.userId ? await prisma.user.findUnique({
-        where: { id: student.userId },
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
         select: { username: true, avatar: true, bio: true }
-      }) : null
+      })
 
       profileData = {
         id: student.id,
@@ -401,8 +399,8 @@ userRouter.put('/:id/status', authenticate, asyncHandler(async (req: AuthRequest
       }),
       prisma.userStatusLog.create({
         data: {
-          targetUserId: id,
-          operatorUserId: req.user!.userId,
+          targetId: id,
+          operatorId: req.user!.userId,
           operatorRole: req.user!.role,
           oldStatus: targetUser.status,
           newStatus: status,
@@ -455,8 +453,8 @@ userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, async
       }),
       prisma.passwordResetLog.create({
         data: {
-          targetUserId: id,
-          operatorUserId: req.user!.userId,
+          targetId: id,
+          operatorId: req.user!.userId,
           operatorRole: req.user!.role,
           resetMethod: resetMethod || 'manual_set',
           result: 'success'
@@ -480,12 +478,12 @@ userRouter.get('/:id/logs', authenticate, asyncHandler(async (req: AuthRequest, 
 
     const [passwordResetLogs, statusLogs] = await Promise.all([
       prisma.passwordResetLog.findMany({
-        where: { targetUserId: id },
+        where: { targetId: id },
         orderBy: { createdAt: 'desc' },
         take: 50
       }),
       prisma.userStatusLog.findMany({
-        where: { targetUserId: id },
+        where: { targetId: id },
         orderBy: { createdAt: 'desc' },
         take: 50
       })

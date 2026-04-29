@@ -23,7 +23,7 @@ teamRequestsRouter.post('/:id/join-request', authenticate, asyncHandler(async (r
 
   const result = await teamService.joinRequest(id, { message }, user)
 
-  if (user.studentId) {
+  if (user.userId) {
     res.json({ success: true, data: result, message: '申请已提交' })
   } else {
     res.json({ success: true, data: result, message: '申请已提交，等待审批' })
@@ -35,7 +35,7 @@ teamRequestsRouter.post('/:id/teacher-join-request', authenticate, asyncHandler(
   const { message } = req.body
   const user = (req as any).user!
 
-  if (!user.teacherId) {
+  if (user.role !== 'teacher' && user.role !== 'school_principal') {
     return res.status(403).json({ success: false, message: '只有教师可以申请加入' })
   }
 
@@ -59,8 +59,8 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
 
   const studentUserAvatars = await Promise.all(
     studentRequests.map(r =>
-      r.Student?.userId
-        ? teamRepository.findUserAvatar(r.Student.userId)
+      r.Student?.id
+        ? teamRepository.findUserAvatar(r.Student.id)
         : Promise.resolve(null)
     )
   )
@@ -72,9 +72,9 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
   const teacherRequestsWithDetails = await Promise.all(
     teacherRequests.map(async (member) => {
       const teacher = await teamRepository.findTeacher(member.userId)
-      const user = teacher ? await teamRepository.findUserAvatar(teacher.userId) : null
+      const user = teacher ? await teamRepository.findUserAvatar(teacher.id) : null
       return {
-        id: member.id,
+        id: member.userId,
         type: 'teacher',
         message: null,
         createdAt: member.joinedAt,
@@ -84,7 +84,7 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
   )
 
   const formattedStudentRequests = studentRequests.map((r, i) => ({
-    id: r.id,
+    id: r.userId,
     type: 'student',
     source: 'join-request',
     message: r.message,
@@ -143,8 +143,8 @@ teamRequestsRouter.post('/teacher-join-requests/:memberId/approve', authenticate
     return res.status(400).json({ success: false, message: '该申请已被处理' })
   }
 
-  const callerId = user.teacherId || user.studentId || ''
-  const callerType = user.teacherId ? 'teacher' : 'student'
+  const callerId = user.userId
+  const callerType = user.role === 'student' ? 'student' : 'teacher'
   await teamRepository.logOperation({
     teamId: member.teamId,
     operatorId: callerId,
@@ -185,8 +185,8 @@ teamRequestsRouter.post('/teacher-join-requests/:memberId/reject', authenticate,
     return res.status(400).json({ success: false, message: '该申请已被处理' })
   }
 
-  const callerId = user.teacherId || user.studentId || ''
-  const callerType = user.teacherId ? 'teacher' : 'student'
+  const callerId = user.userId
+  const callerType = user.role === 'student' ? 'student' : 'teacher'
   await teamRepository.logOperation({
     teamId: member.teamId,
     operatorId: callerId,
@@ -205,7 +205,7 @@ teamRequestsRouter.post('/requests/:requestId/approve', authenticate, asyncHandl
   const { requestId } = req.params
   const { type } = req.query
   const user = (req as any).user!
-  const callerId = user.teacherId || user.studentId || ''
+  const callerId = user.userId
 
   try {
     if (type === 'teacher') {
@@ -228,7 +228,7 @@ teamRequestsRouter.post('/requests/:requestId/approve', authenticate, asyncHandl
           throw new Error('ALREADY_PROCESSED')
         }
 
-        const callerType = user.teacherId ? 'teacher' : 'student'
+        const callerType = user.role === 'student' ? 'student' : 'teacher'
         await tx.teamOperationLog.create({
           data: {
             teamId: member.teamId,
@@ -244,7 +244,7 @@ teamRequestsRouter.post('/requests/:requestId/approve', authenticate, asyncHandl
           userId: user.userId,
           action: 'join_approve',
           target: requestId,
-          metadata: { teamId: member.teamId, type: 'teacher', targetUserId: member.userId }
+          metadata: { teamId: member.teamId, type: 'teacher', targetId: member.userId }
         })
       })
 
@@ -273,14 +273,14 @@ teamRequestsRouter.post('/requests/:requestId/approve', authenticate, asyncHandl
           where: {
             teamId_userId_userType: {
               teamId: request.teamId,
-              userId: request.studentId,
+              userId: request.userId,
               userType: 'student'
             }
           },
           update: { status: 'active', invitedBy: callerId },
           create: {
             teamId: request.teamId,
-            userId: request.studentId,
+            userId: request.userId,
             userType: 'student',
             role: 'member',
             status: 'active',
@@ -289,14 +289,14 @@ teamRequestsRouter.post('/requests/:requestId/approve', authenticate, asyncHandl
           }
         })
 
-        const callerType = user.teacherId ? 'teacher' : 'student'
+        const callerType = user.role === 'student' ? 'student' : 'teacher'
         await tx.teamOperationLog.create({
           data: {
             teamId: request.teamId,
             operatorId: callerId,
             operatorType: callerType,
             action: 'join_approve',
-            targetId: request.studentId,
+            targetId: request.userId,
             targetType: 'student'
           }
         })
@@ -305,7 +305,7 @@ teamRequestsRouter.post('/requests/:requestId/approve', authenticate, asyncHandl
           userId: user.userId,
           action: 'join_approve',
           target: requestId,
-          metadata: { teamId: request.teamId, type: 'student', targetUserId: request.studentId }
+          metadata: { teamId: request.teamId, type: 'student', targetId: request.id }
         })
       })
 
@@ -345,8 +345,8 @@ teamRequestsRouter.post('/requests/:requestId/reject', authenticate, asyncHandle
     }
 
     // 使用事务确保删除和日志记录原子性
-    const callerId = user.teacherId || user.studentId || ''
-    const callerType = user.teacherId ? 'teacher' : 'student'
+    const callerId = user.userId
+    const callerType = user.role === 'student' ? 'student' : 'teacher'
     try {
       await prisma.$transaction(async (tx) => {
         const result = await tx.teamMember.deleteMany({
@@ -394,8 +394,8 @@ teamRequestsRouter.post('/requests/:requestId/reject', authenticate, asyncHandle
       return res.status(403).json({ success: false, message: '无权操作' })
     }
 
-    const processedBy = user.teacherId || user.studentId || ''
-    const callerType = user.teacherId ? 'teacher' : 'student'
+    const processedBy = user.userId
+    const callerType = user.role === 'student' ? 'student' : 'teacher'
 
     // 使用事务确保状态更新和日志记录原子性
     try {
@@ -414,7 +414,7 @@ teamRequestsRouter.post('/requests/:requestId/reject', authenticate, asyncHandle
             operatorId: processedBy,
             operatorType: callerType as MemberType,
             action: 'join_reject',
-            targetId: request.studentId,
+            targetId: request.userId,
             targetType: 'student'
           }
         })
@@ -443,49 +443,81 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
   const { requestId } = req.params
   const user = (req as any).user!
 
+  // 先查 TeamJoinRequest（学生申请），再查 TeamMember（教师申请）
   const request = await teamRepository.findJoinRequestById(requestId)
+  if (request) {
+    // 学生申请处理
+    const { isAdmin } = await teamService.isTeamAdmin(request.teamId, user)
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: '无权操作' })
+    }
 
-  if (!request) {
-    return res.status(404).json({ success: false, message: '申请不存在' })
-  }
+    const processedBy = user.userId
 
-  const { isAdmin } = await teamService.isTeamAdmin(request.teamId, user)
-  if (!isAdmin) {
-    return res.status(403).json({ success: false, message: '无权操作' })
-  }
-
-  const processedBy = user.teacherId || user.studentId || ''
-
-  try {
-    await teamRepository.transaction(async (tx) => {
-      const result = await tx.teamJoinRequest.updateMany({
-        where: { id: requestId, status: 'pending' },
-        data: { status: 'approved', processedAt: new Date(), processedBy }
-      })
-      if (result.count === 0) {
-        throw new Error('ALREADY_PROCESSED')
-      }
-
-      await tx.teamMember.create({
-        data: {
-          teamId: request.teamId,
-          userId: request.studentId,
-          userType: 'student',
-          role: 'member',
-          status: 'active',
-          invitedBy: processedBy,
-          joinedAt: new Date()
+    try {
+      await teamRepository.transaction(async (tx) => {
+        const result = await tx.teamJoinRequest.updateMany({
+          where: { id: requestId, status: 'pending' },
+          data: { status: 'approved', processedAt: new Date(), processedBy }
+        })
+        if (result.count === 0) {
+          throw new Error('ALREADY_PROCESSED')
         }
-      })
-    })
 
-    res.json({ success: true, message: '已同意申请' })
-  } catch (error) {
-    if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
+        await tx.teamMember.create({
+          data: {
+            teamId: request.teamId,
+            userId: request.userId,
+            userType: 'student',
+            role: 'member',
+            status: 'active',
+            invitedBy: processedBy,
+            joinedAt: new Date()
+          }
+        })
+      })
+
+      res.json({ success: true, message: '已同意申请' })
+    } catch (error) {
+      if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
+        return res.status(400).json({ success: false, message: '该申请已被处理' })
+      }
+      throw error
+    }
+    return
+  }
+
+  // 教师申请处理：requestId 可能是 userId，查找 pending 的教师 TeamMember
+  const member = await prisma.teamMember.findFirst({
+    where: { userId: requestId, userType: 'teacher', status: 'pending', invitedBy: null }
+  })
+  if (member) {
+    const { isAdmin } = await teamService.isTeamAdmin(member.teamId, user)
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: '无权操作' })
+    }
+
+    const count = await teamRepository.updateMemberStatusIfPending(member.id, 'active')
+    if (count === 0) {
       return res.status(400).json({ success: false, message: '该申请已被处理' })
     }
-    throw error
+
+    const callerId = user.userId
+    const callerType = user.role === 'student' ? 'student' : 'teacher'
+    await teamRepository.logOperation({
+      teamId: member.teamId,
+      operatorId: callerId,
+      operatorType: callerType as MemberType,
+      action: 'join_approve',
+      targetId: member.userId,
+      targetType: 'teacher'
+    })
+
+    res.json({ success: true, message: '已同意加入请求' })
+    return
   }
+
+  res.status(404).json({ success: false, message: '申请不存在' })
 }))
 
 teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncHandler(async (req, res) => {
@@ -493,26 +525,40 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
   const user = (req as any).user!
 
   const request = await teamRepository.findJoinRequestById(requestId)
+  if (request) {
+    const { isAdmin } = await teamService.isTeamAdmin(request.teamId, user)
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: '无权操作' })
+    }
 
-  if (!request) {
-    return res.status(404).json({ success: false, message: '申请不存在' })
+    const processedBy = user.userId
+    const count = await teamRepository.updateJoinRequestIfPending(requestId, {
+      status: 'rejected',
+      processedAt: new Date(),
+      processedBy
+    })
+    if (count === 0) {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
+
+    res.json({ success: true, message: '已拒绝申请' })
+    return
   }
 
-  const { isAdmin } = await teamService.isTeamAdmin(request.teamId, user)
-  if (!isAdmin) {
-    return res.status(403).json({ success: false, message: '无权操作' })
-  }
-
-  const processedBy = user.teacherId || user.studentId || ''
-
-  const count = await teamRepository.updateJoinRequestIfPending(requestId, {
-    status: 'rejected',
-    processedAt: new Date(),
-    processedBy
+  // 教师申请：requestId 是 userId，查找 pending 的 TeamMember
+  const member = await prisma.teamMember.findFirst({
+    where: { userId: requestId, status: 'pending', invitedBy: null }
   })
-  if (count === 0) {
-    return res.status(400).json({ success: false, message: '该申请已被处理' })
+  if (member) {
+    const { isAdmin } = await teamService.isTeamAdmin(member.teamId, user)
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: '无权操作' })
+    }
+
+    await prisma.teamMember.delete({ where: { id: member.id } })
+    res.json({ success: true, message: '已拒绝申请' })
+    return
   }
 
-  res.json({ success: true, message: '已拒绝申请' })
+  res.status(404).json({ success: false, message: '申请不存在' })
 }))

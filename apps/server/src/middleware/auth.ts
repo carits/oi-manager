@@ -70,3 +70,12 @@ export function authorizeAny(...roles: UserRole[]) {
     next()
   }
 }
+
+/**
+ * 从用户角色推导用户类型
+ * student → 'student'
+ * teacher/school_principal/super_admin/platform_admin → 'teacher'
+ */
+export function getUserType(role: string): 'teacher' | 'student' {
+  return role === 'student' ? 'student' : 'teacher'
+}

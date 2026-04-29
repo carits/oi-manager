@@ -125,7 +125,7 @@ schoolMembersRouter.get('/:id/students-by-grade', authenticate, asyncHandler(asy
         where: { schoolId: id },
         include: {
           User: { select: { username: true } },
-          Teacher: { select: { name: true } }
+          HeadTeacher: { select: { name: true } }
         },
         orderBy: [
           { enrollmentYear: 'asc' }, // 入学年份升序（越早入学年级越高）
@@ -163,7 +163,7 @@ schoolMembersRouter.put('/:id/teachers/:teacherId/status', authenticate, asyncHa
     const userId = req.user!.userId
 
     // 验证当前用户是否为该学校负责人
-    const currentTeacher = await prisma.teacher.findUnique({ where: { userId } })
+    const currentTeacher = await prisma.teacher.findUnique({ where: { id: userId } })
     if (!currentTeacher) {
       return res.status(400).json({ success: false, message: '教师不存在' })
     }
@@ -186,7 +186,7 @@ schoolMembersRouter.put('/:id/teachers/:teacherId/status', authenticate, asyncHa
 
     // 更新用户状态
     await prisma.user.update({
-      where: { id: targetTeacher.userId },
+      where: { id: targetTeacher.id },
       data: { status }
     })
 
@@ -202,7 +202,7 @@ schoolMembersRouter.get('/current/teachers', authenticate, asyncHandler(async (r
 
     // 获取当前用户的教师信息
     const teacher = await prisma.teacher.findFirst({
-      where: { userId: req.user!.userId }
+      where: { id: req.user!.userId }
     })
 
     if (!teacher || !teacher.schoolId) {
@@ -267,7 +267,7 @@ schoolMembersRouter.post('/current/teachers', authenticate, asyncHandler(async (
 
     // 获取当前用户的教师信息
     const currentTeacher = await prisma.teacher.findFirst({
-      where: { userId: req.user!.userId }
+      where: { id: req.user!.userId }
     })
 
     if (!currentTeacher || !currentTeacher.schoolId) {
@@ -304,7 +304,7 @@ schoolMembersRouter.post('/current/teachers', authenticate, asyncHandler(async (
     // 创建教师
     const newTeacher = await prisma.teacher.create({
       data: {
-        userId: user.id,
+        id: user.id,
         name,
         email,
         phone,
@@ -330,7 +330,7 @@ schoolMembersRouter.put('/current/teachers/:teacherId', authenticate, asyncHandl
 
     // 获取当前用户的教师信息
     const currentTeacher = await prisma.teacher.findFirst({
-      where: { userId: req.user!.userId }
+      where: { id: req.user!.userId }
     })
 
     if (!currentTeacher || !currentTeacher.schoolId) {
@@ -371,7 +371,7 @@ schoolMembersRouter.put('/current/teachers/:teacherId', authenticate, asyncHandl
 
     // 检查目标教师是否是学校负责人（通过 user.role 判断）
     const targetUser = await prisma.user.findUnique({
-      where: { id: targetTeacher.userId }
+      where: { id: targetTeacher.id }
     })
 
     // 如果是编辑负责人，不允许通过此接口修改

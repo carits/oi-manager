@@ -170,13 +170,14 @@ describe('Transactions Module', () => {
           gender: '男',
           enrollmentYear: 2023,
           schoolId: school.id,
-          headTeacherId: teacherId
+          headTeacherId: teacherId  // 指向 Teacher.id (= User.id)
         })
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
 
       // Verify both User and Student were created
+      // Student 主键是 id，等于 User.id
       const student = await prisma.student.findUnique({
         where: { id: res.body.data.id },
         include: { User: true }

@@ -16,7 +16,24 @@ const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
   ole: { bg: 'var(--warning-light)', text: 'var(--warning-text)' },
 }
 
-function getResultBadge(result: string) {
+function getResultBadge(result: string | null, hidden?: boolean, displayResult?: string) {
+  // OI 赞中非管理员：显示"已提交"
+  if (hidden || displayResult === 'pending') {
+    return (
+      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500, background: 'var(--info-light)', color: 'var(--info-text)' }}>
+        已提交
+      </span>
+    )
+  }
+
+  if (!result) {
+    return (
+      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500, background: 'var(--bg-muted)', color: 'var(--text-muted)' }}>
+        -
+      </span>
+    )
+  }
+
   const label = JUDGE_RESULT_LABEL_MAP[result] || result
   const colors = RESULT_COLORS[result] || { bg: 'var(--bg-muted)', text: 'var(--text-primary)' }
   if (result === 'queuing' || result === 'judging') {
@@ -90,6 +107,12 @@ export function TrainingSubmissionPanel({
   onViewSubmission,
   onLanguageClick,
 }: TrainingSubmissionPanelProps) {
+  // 判断是否隐藏 OI 结果（OI 赛制 + 非管理员 + 非结束状态）
+  const hideOiResults = training.format === 'oi' && !training.isAdmin && training.runtimeStatus !== 'finished'
+
+  // 判断是否基于分数的赛制（OI 或 IOI）
+  const isScoreBased = training.format === 'oi' || training.format === 'ioi'
+
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
       {/* 筛选栏 */}
@@ -178,9 +201,13 @@ export function TrainingSubmissionPanel({
             )}
             <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>OJ</th>
             <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测结果</th>
-            {training.format === 'ioi' && <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>分数</th>}
-            <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(MS)</th>
-            <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
+            {isScoreBased && <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>分数</th>}
+            {!hideOiResults && (
+              <>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(MS)</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
+              </>
+            )}
             <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>代码长度(B)</th>
             <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>语言</th>
             <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>提交时间</th>
@@ -189,7 +216,7 @@ export function TrainingSubmissionPanel({
         <tbody>
           {submissions.length === 0 ? (
             <tr>
-              <td colSpan={9 + (training.isAdmin ? 2 : 0) + (training.format === 'ioi' ? 1 : 0)} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <td colSpan={7 + (training.isAdmin ? 2 : 0) + (isScoreBased ? 1 : 0) + (hideOiResults ? 0 : 2)} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                 暂无评测记录
               </td>
             </tr>
@@ -210,10 +237,14 @@ export function TrainingSubmissionPanel({
                   </>
                 )}
                 <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{getOjLabel(s.oj)}</td>
-                <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
-                {training.format === 'ioi' && <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--text-primary)' }}>{s.score ?? '-'}</td>}
-                <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.timeUsed ?? '-'}</td>
-                <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
+                <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result, s.hidden, s.displayResult)}</td>
+                {isScoreBased && <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--text-primary)' }}>{s.hidden ? '-' : (s.score ?? '-')}</td>}
+                {!hideOiResults && (
+                  <>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.timeUsed ?? '-'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
+                  </>
+                )}
                 <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.codeLength ?? '-'}</td>
                 <td
                   onClick={() => onLanguageClick(s.id)}

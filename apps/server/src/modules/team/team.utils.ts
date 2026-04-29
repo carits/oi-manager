@@ -13,13 +13,13 @@ export async function getUserName(userId: string, userType: MemberType): Promise
   if (userType === 'teacher') {
     const teacher = await prisma.teacher.findUnique({
       where: { id: userId },
-      select: { name: true }
+      select: { id: true, name: true, avatar: true, title: true }
     })
     return teacher?.name || '未知'
   } else {
     const student = await prisma.student.findUnique({
       where: { id: userId },
-      select: { name: true }
+      select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true }
     })
     return student?.name || '未知'
   }
@@ -57,12 +57,12 @@ export async function getMemberDetails(userId: string, userType: MemberType): Pr
   if (userType === 'teacher') {
     const teacher = await prisma.teacher.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, avatar: true, userId: true, title: true }
+      select: { id: true, name: true, avatar: true, title: true }
     })
     if (!teacher) return null
 
     const user = await prisma.user.findUnique({
-      where: { id: teacher.userId },
+      where: { id: teacher.id },
       select: { username: true, avatar: true }
     })
 
@@ -71,7 +71,6 @@ export async function getMemberDetails(userId: string, userType: MemberType): Pr
       id: teacher.id,
       name: teacher.name,
       avatar: user?.avatar || teacher.avatar,
-      userId: teacher.userId,
       username: user?.username || '',
       type: 'teacher',
       title: teacher.title || undefined
@@ -79,12 +78,12 @@ export async function getMemberDetails(userId: string, userType: MemberType): Pr
   } else {
     const student = await prisma.student.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, avatar: true, userId: true, rating: true, enrollmentYear: true }
+      select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true }
     })
     if (!student) return null
 
     const user = await prisma.user.findUnique({
-      where: { id: student.userId! },
+      where: { id: student.id },
       select: { username: true, avatar: true }
     })
 
@@ -93,7 +92,6 @@ export async function getMemberDetails(userId: string, userType: MemberType): Pr
       id: student.id,
       name: student.name,
       avatar: user?.avatar || student.avatar,
-      userId: student.userId!,
       username: user?.username || '',
       type: 'student',
       rating: student.rating || undefined,
@@ -118,23 +116,21 @@ export async function getMemberDetailsBatch(
   if (teacherIds.length > 0) {
     const teachers = await prisma.teacher.findMany({
       where: { id: { in: teacherIds } },
-      select: { id: true, name: true, avatar: true, userId: true, title: true }
+      select: { id: true, name: true, avatar: true, title: true }
     })
 
-    const teacherUserIds = teachers.map(t => t.userId)
     const teacherUsers = await prisma.user.findMany({
-      where: { id: { in: teacherUserIds } },
+      where: { id: { in: teacherIds } },
       select: { id: true, username: true, avatar: true }
     })
     const teacherUserMap = new Map(teacherUsers.map(u => [u.id, u]))
 
     for (const teacher of teachers) {
-      const user = teacherUserMap.get(teacher.userId)
+      const user = teacherUserMap.get(teacher.id)
       result.set(`teacher:${teacher.id}`, {
         id: teacher.id,
         name: teacher.name,
         avatar: user?.avatar || teacher.avatar,
-        userId: teacher.userId,
         username: user?.username || '',
         type: 'teacher',
         title: teacher.title || undefined
@@ -146,23 +142,21 @@ export async function getMemberDetailsBatch(
   if (studentIds.length > 0) {
     const students = await prisma.student.findMany({
       where: { id: { in: studentIds } },
-      select: { id: true, name: true, avatar: true, userId: true, rating: true, enrollmentYear: true }
+      select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true }
     })
 
-    const studentUserIds = students.map(s => s.userId).filter(Boolean) as string[]
     const studentUsers = await prisma.user.findMany({
-      where: { id: { in: studentUserIds } },
+      where: { id: { in: studentIds } },
       select: { id: true, username: true, avatar: true }
     })
     const studentUserMap = new Map(studentUsers.map(u => [u.id, u]))
 
     for (const student of students) {
-      const user = student.userId ? studentUserMap.get(student.userId) : null
+      const user = studentUserMap.get(student.id)
       result.set(`student:${student.id}`, {
         id: student.id,
         name: student.name,
         avatar: user?.avatar || student.avatar,
-        userId: student.userId!,
         username: user?.username || '',
         type: 'student',
         rating: student.rating || undefined,

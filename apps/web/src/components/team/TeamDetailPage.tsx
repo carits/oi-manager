@@ -50,7 +50,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   const [mounted, setMounted] = useState(false)
 
   // 获取用户ID
-  const userId = userType === 'teacher' ? user?.teacherId : user?.studentId
+  const userId = user?.userId
 
   // 使用公共 hook 获取团队数据
   const { team, loading, error, refetch, joinRequests: apiJoinRequests, fetchJoinRequests } = useTeamDetail(mounted ? teamId : null, true, sessionKey)
