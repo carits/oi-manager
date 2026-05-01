@@ -37,7 +37,7 @@ adminDataRouter.get('/submission-stats', async (req, res) => {
       prisma.submission.count(),
       prisma.submission.count({ where: { oj: 'carits' } }),
       prisma.submission.count({ where: { oj: 'carits', ojRemoteId: null } }),
-      prisma.submission.count({ where: { submitSource: 'training' } }),
+      prisma.submission.count({ where: { submitScope: { in: ['training', 'contest'] } } }),
       prisma.submission.groupBy({
         by: ['result'],
         _count: true,
@@ -137,7 +137,7 @@ adminDataRouter.post('/clean-training-submissions', async (req, res) => {
     }
 
     const result = await prisma.submission.deleteMany({
-      where: { submitSource: 'training', sourceId: `training-${trainingId}` },
+      where: { submitScope: { in: ['training', 'contest'] }, trainingId },
     })
 
     res.json({

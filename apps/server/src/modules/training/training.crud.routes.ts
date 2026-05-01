@@ -43,15 +43,15 @@ trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(as
     const trainingIds = trainings.map(t => t.id)
     const participantCounts = new Map<number, number>()
     if (trainingIds.length > 0) {
-      const rows = await prisma.$queryRaw<Array<{ sourceId: string; count: bigint }>>`
-        SELECT "sourceId", COUNT(DISTINCT "userId")::int as count
+      const rows = await prisma.$queryRaw<Array<{ trainingId: number; count: bigint }>>`
+        SELECT "trainingId", COUNT(DISTINCT "userId")::int as count
         FROM "Submission"
-        WHERE "sourceId" IN (${Prisma.join(trainingIds.map(id => `training-${id}`))})
-        GROUP BY "sourceId"
+        WHERE "trainingId" IN (${Prisma.join(trainingIds)})
+          AND "submitScope" IN ('training', 'contest')
+        GROUP BY "trainingId"
       `
       for (const row of rows) {
-        const id = parseInt(row.sourceId.replace('training-', ''))
-        participantCounts.set(id, Number(row.count))
+        participantCounts.set(Number(row.trainingId), Number(row.count))
       }
     }
 

@@ -178,19 +178,17 @@ export function sanitizeRankingForOi(
 
 /**
  * 判断提交是否属于训练
- * 兼容新旧字段
+ * 使用新字段 submitScope + trainingId
  */
 export function isTrainingSubmission(
-  submission: { submitScope?: string | null; submitSource?: string | null; trainingId?: number | null; sourceId?: string | null },
+  submission: { submitScope?: string | null; trainingId?: number | null },
   trainingId: number
 ): boolean {
-  // 新字段优先
   if (submission.submitScope === 'training' && submission.trainingId === trainingId) {
     return true
   }
-
-  // 兼容旧字段
-  if (submission.submitSource === 'training' && submission.sourceId === `training-${trainingId}`) {
+  // 比赛提交也属于该训练（contest 复用 Training 表）
+  if (submission.submitScope === 'contest' && submission.trainingId === trainingId) {
     return true
   }
 
@@ -201,13 +199,10 @@ export function isTrainingSubmission(
  * 判断提交是否为任何训练提交（用于全局接口排除）
  */
 export function isAnyTrainingSubmission(
-  submission: { submitScope?: string | null; submitSource?: string | null }
+  submission: { submitScope?: string | null }
 ): boolean {
-  // 新字段
   if (submission.submitScope === 'training') return true
-
-  // 兼容旧字段
-  if (submission.submitSource === 'training') return true
+  if (submission.submitScope === 'contest') return true
 
   return false
 }

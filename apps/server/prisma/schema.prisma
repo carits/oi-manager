@@ -570,13 +570,16 @@ model Submission {
   judgeId           String?
   judgeStarted      DateTime?
 
-  // 新增字段（OI 赛制可见性体系化修复）
+  // 提交来源字段（submitScope 为核心）
   submitScope       String     @default("problem")  // "problem" / "training" / "contest"
   trainingId        Int?
   trainingProblemId String?
+  contestId         Int?       // 指向 Training.id where type='contest'
+  contestProblemId  String?    // 指向 TrainingProblem.id（比赛题目实例）
 
   OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
   User              User       @relation(fields: [userId], references: [id])
+  ContestTraining   Training?  @relation("SubmissionContest", fields: [contestId], references: [id])
 
   @@index([createdAt])
   @@index([createdAt, result])
@@ -591,10 +594,14 @@ model Submission {
   @@index([submitScope])
   @@index([trainingId])
   @@index([trainingProblemId])
+  @@index([contestId])
   @@index([userId])
   @@index([userId, oj, problemId])
   @@index([userId, trainingId])
   @@index([userId, trainingProblemId])
+  @@index([userId, contestId])
+  @@index([submitScope, trainingId])
+  @@index([submitScope, contestId])
 }
 
 model Teacher {
@@ -809,6 +816,9 @@ model Training {
   Team                  Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   TrainingParticipant   TrainingParticipant[]
   TrainingProblem       TrainingProblem[]
+  TrainingUserProblemStatus TrainingUserProblemStatus[]
+  ContestStatuses       ContestUserProblemStatus[]   @relation("ContestStatuses")
+  ContestSubmissions    Submission[]                 @relation("SubmissionContest")
 
   @@index([startTime])
   @@index([status])
@@ -850,10 +860,15 @@ model TrainingProblem {
   orderIndex         Int
   points             Int?
   createdAt          DateTime             @default(now())
+  statementSnapshot  String?              // JSON：题面快照（比赛创建时冻结）
+  dataVersion        String?              // 测试数据版本 hash
+  snapshotCreatedAt  DateTime?            // 快照创建时间
   TrainingAttachment TrainingAttachment[]
   Problem            Problem              @relation(fields: [problemId], references: [id])
   Training           Training             @relation(fields: [trainingId], references: [id], onDelete: Cascade)
   TrainingSolution   TrainingSolution?
+  TrainingUserProblemStatus TrainingUserProblemStatus[]
+  ContestUserProblemStatus  ContestUserProblemStatus[]  @relation("ContestProblemStatuses")
 
   @@unique([trainingId, alias])
   @@unique([trainingId, orderIndex])
@@ -891,6 +906,8 @@ model User {
   Teacher             Teacher?
   School              School                @relation(fields: [schoolId], references: [id])
   UserPlatformBinding UserPlatformBinding[]
+  TrainingUserProblemStatus TrainingUserProblemStatus[]
+  ContestUserProblemStatus  ContestUserProblemStatus[]
 
   @@index([createdAt])
   @@index([role])
@@ -927,6 +944,50 @@ model UserStatusLog {
   newStatus      String
   reason         String?
   createdAt      DateTime @default(now())
+}
+
+model TrainingUserProblemStatus {
+  id                String   @id @default(cuid())
+  trainingId        Int
+  userId            String
+  trainingProblemId String
+  bestScore         Int?
+  bestResult        String?
+  attemptCount      Int      @default(0)
+  acAt              DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  Training         Training        @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  User             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  TrainingProblem  TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, userId, trainingProblemId])
+  @@index([trainingId, userId])
+  @@index([userId])
+}
+
+model ContestUserProblemStatus {
+  id                String   @id @default(cuid())
+  contestId         Int      // 指向 Training.id where type='contest'
+  userId            String
+  contestProblemId  String   // 指向 TrainingProblem.id
+  bestScore         Int?
+  bestResult        String?
+  attemptCount      Int      @default(0)
+  acAt              DateTime?
+  frozenScore       Int?     // 比赛结束时冻结的分数
+  frozenResult      String?  // 比赛结束时冻结的结果
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  Contest          Training        @relation("ContestStatuses", fields: [contestId], references: [id], onDelete: Cascade)
+  User             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ContestProblem   TrainingProblem @relation("ContestProblemStatuses", fields: [contestProblemId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId, contestProblemId])
+  @@index([contestId, userId])
+  @@index([userId])
 }
 
 model carits_sequence {

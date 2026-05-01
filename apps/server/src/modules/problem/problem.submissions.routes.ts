@@ -33,11 +33,12 @@ problemSubmissionsRouter.get('/:id/submissions', authenticate, asyncHandler(asyn
       })
     }
 
-    // 查询该题目的提交记录（只返回当前用户的）
+    // 查询该题目的提交记录（只返回当前用户的，且只返回题库提交）
     const where = {
       oj: problem.platform,
       problemId: problem.problemId,
       userId: (req as any).user?.userId,
+      submitScope: 'problem',  // 只显示题库提交，排除训练/比赛提交
     }
 
     // 调试日志

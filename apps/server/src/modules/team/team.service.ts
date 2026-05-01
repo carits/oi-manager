@@ -136,16 +136,21 @@ export class TeamService {
       }
     })
 
-    // 如果是学生，检查申请状态
+    // 如果是学生，检查申请状态（统一从 TeamMember 查询）
     if (user.role === 'student') {
-      const joinRequests = await this.repo.findJoinRequests(user.userId)
-        .then(requests => requests.filter(r => teams.some(t => t.id === r.teamId)))
-
-      const requestMap = new Map(joinRequests.map(r => [r.teamId, r.status]))
-
       const memberRecords = await this.repo.findMembersByUser(user.userId, 'student')
 
-      const memberMap = new Map(memberRecords.map(m => [m.teamId, m.status]))
+      // 区分：已加入(active)、邀请(pending + invitedBy!=null)、申请(pending + invitedBy==null)
+      const requestMap = new Map(
+        memberRecords
+          .filter(m => m.status === 'pending' && !m.invitedBy)
+          .map(m => [m.teamId, 'pending'])
+      )
+      const memberMap = new Map(
+        memberRecords
+          .filter(m => m.status === 'active')
+          .map(m => [m.teamId, 'active'])
+      )
 
       teamsWithStatus = teamsWithStatus.map(team => ({
         ...team,
@@ -360,8 +365,8 @@ export class TeamService {
     const admins = team.TeamMember.filter(m => m.role === 'admin')
     const members = team.TeamMember.filter(m => m.role === 'member')
 
-    // 查询 pending 状态的教师请求
-    const pendingTeachers = await this.repo.findMembers(teamId, { status: 'pending', userType: 'teacher' })
+    // 查询所有待处理的申请（TeamMember status=pending, invitedBy=null）
+    const pendingRequests = await this.repo.findMembers(teamId, { status: 'pending' })
       .then(ms => ms.filter(m => !m.invitedBy))
 
     // 批量获取所有成员详情（4 次查询替代 N×2 次）
@@ -369,7 +374,7 @@ export class TeamService {
       ...(owner ? [{ userId: owner.userId, userType: owner.userType as MemberType, role: 'owner' as const, joinedAt: owner.joinedAt, id: '' }] : []),
       ...admins.map(a => ({ userId: a.userId, userType: a.userType as MemberType, role: 'admin' as const, joinedAt: a.joinedAt, id: '' })),
       ...members.map(m => ({ userId: m.userId, userType: m.userType as MemberType, role: 'member' as const, joinedAt: m.joinedAt, id: m.id })),
-      ...pendingTeachers.map(m => ({ userId: m.userId, userType: m.userType as MemberType, role: 'pending' as const, joinedAt: m.joinedAt, id: m.id })),
+      ...pendingRequests.map(m => ({ userId: m.userId, userType: m.userType as MemberType, role: 'pending' as const, joinedAt: m.joinedAt, id: m.id })),
     ]
     const detailsMap = await getMemberDetailsBatch(allMembers)
 
@@ -385,8 +390,8 @@ export class TeamService {
       .filter(m => m.userType === 'student')
       .map(m => { const d = detailsMap.get(`student:${m.userId}`); return d ? { ...d, joinedAt: m.joinedAt } : null })
 
-    const pendingTeachersInfo = pendingTeachers.map(m => {
-      const d = detailsMap.get(`teacher:${m.userId}`)
+    const pendingRequestsInfo = pendingRequests.map(m => {
+      const d = detailsMap.get(`${m.userType}:${m.userId}`)
       return d ? { ...d, memberId: m.id, requestedAt: m.joinedAt } : null
     })
 
@@ -396,7 +401,7 @@ export class TeamService {
       admins: adminsInfo.filter(Boolean),
       teachers: teachersInfo.filter(Boolean),
       students: studentsInfo.filter(Boolean),
-      pendingTeachers: pendingTeachersInfo.filter(Boolean)
+      pendingRequests: pendingRequestsInfo.filter(Boolean)
     })
   }
 
@@ -938,29 +943,14 @@ export class TeamService {
       }
     }
 
-    // 对于学生，检查 TeamJoinRequest 表
-    if (userType === 'student') {
-      const existingRequest = await this.repo.findJoinRequest({ teamId, userId })
-
-      if (existingRequest) {
-        throw new Error('HAS_PENDING_REQUEST')
-      }
-
-      return this.repo.createJoinRequest({
-        teamId,
-        userId,
-        message: dto.message
-      })
-    } else {
-      // 教师创建 pending 状态的 TeamMember 记录
-      return this.repo.createMember({
-        teamId,
-        userId,
-        userType: 'teacher',
-        role: 'member',
-        status: 'pending'
-      })
-    }
+    // 统一创建 pending 状态的 TeamMember 记录（不再区分教师/学生）
+    return this.repo.createMember({
+      teamId,
+      userId,
+      userType,
+      role: 'member',
+      status: 'pending'
+    })
   }
 
   /**

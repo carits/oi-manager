@@ -337,7 +337,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
 
   // 转换申请数据格式（API 返回统一的 user 字段）
   const joinRequestItems: JoinRequestItem[] = (apiJoinRequests || []).map(r => {
-    const user = r.user || r.student
+    const user = r.user
     return {
       id: r.id,
       message: r.message,
@@ -347,7 +347,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         name: user?.name || '未知',
         username: user?.username,
         avatar: user?.avatar,
-        type: (r.type || 'student') as 'student' | 'teacher'
+        userType: (user?.userType || 'student') as 'student' | 'teacher'
       }
     }
   })

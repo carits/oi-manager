@@ -10,7 +10,7 @@ import { getAssetUrl } from '@/lib/assets'
 
 interface PendingInvite {
   id: string
-  type: 'student' | 'teacher' | 'teacher-member'
+  type: 'student' | 'teacher'
   role: 'admin' | 'member'
   invitedAt: string
   invitedByName: string
@@ -19,7 +19,6 @@ interface PendingInvite {
     name: string
     username?: string
     avatar?: string | null
-    type: 'teacher' | 'student'
   }
 }
 
@@ -68,16 +67,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
     if (!cancelTarget) return
 
     try {
-      let endpoint = ''
-      if (cancelTarget.type === 'student') {
-        endpoint = `/api/teams/${teamId}/invites/${cancelTarget.id}`
-      } else if (cancelTarget.type === 'teacher-member') {
-        endpoint = `/api/teams/${teamId}/teacher-invites/${cancelTarget.id}`
-      } else {
-        endpoint = `/api/teams/${teamId}/admin-invites/${cancelTarget.id}`
-      }
-
-      const result = await apiClient.delete(endpoint)
+      const result = await apiClient.delete(`/api/teams/${teamId}/invites/${cancelTarget.id}`)
       if (result.success) {
         fetchInviteList()
       } else {
@@ -102,7 +92,8 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
       ) : pendingInvites.length > 0 ? (
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {pendingInvites.map(invite => {
-            const user = invite.user || { name: '未知用户', type: invite.type, username: '' }
+            const user = invite.user || { name: '未知用户', username: '' }
+            const inviteeType = invite.type
             return (
             <div
               key={invite.id}
@@ -144,10 +135,10 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.375rem',
                       borderRadius: '4px',
-                      background: user.type === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
-                      color: user.type === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
+                      background: inviteeType === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
+                      color: inviteeType === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
                     }}>
-                      {user.type === 'teacher' ? '教师' : '学生'}
+                      {inviteeType === 'teacher' ? '教师' : '学生'}
                     </span>
                     <span style={{
                       fontSize: '0.75rem',

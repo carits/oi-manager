@@ -226,7 +226,7 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/accept', authentic
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
-  if (!invitation || invitation.userId !== user.userId || invitation.userType !== 'teacher') {
+  if (!invitation || invitation.userId !== user.userId) {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
@@ -248,7 +248,7 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/reject', authentic
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
-  if (!invitation || invitation.userId !== user.userId || invitation.userType !== 'teacher') {
+  if (!invitation || invitation.userId !== user.userId) {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
@@ -271,7 +271,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
-  if (!invitation || invitation.userId !== userId || invitation.userType !== userType) {
+  if (!invitation || invitation.userId !== userId) {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 
@@ -319,7 +319,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
-  if (!invitation || invitation.userId !== userId || invitation.userType !== userType) {
+  if (!invitation || invitation.userId !== userId) {
     return res.status(404).json({ success: false, message: '邀请不存在' })
   }
 

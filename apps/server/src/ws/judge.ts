@@ -12,6 +12,7 @@ import { Router, Request, Response } from 'express'
 import { WebSocketServer, WebSocket } from 'ws'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
+import { onSubmissionJudged } from '../lib/submission-sync'
 import path from 'path'
 import yaml from 'js-yaml'
 
@@ -498,6 +499,33 @@ async function handleResult(ws: WebSocket, payload: any) {
     })
 
     logger.info('judge_ws_db_updated', { action: 'judge_ws', metadata: { submissionId } })
+
+    // 触发 AC 同步（submitScope/trainingId/contestId 等字段由创建时设置）
+    try {
+      const submission = await prisma.submission.findUnique({
+        where: { id: parseInt(submissionId) },
+        select: {
+          id: true,
+          userId: true,
+          problemId: true,
+          result: true,
+          score: true,
+          submitScope: true,
+          trainingId: true,
+          trainingProblemId: true,
+          contestId: true,
+          contestProblemId: true,
+        },
+      })
+      if (submission) {
+        await onSubmissionJudged(submission)
+      }
+    } catch (syncErr: any) {
+      logger.error('judge_ws_sync_error', {
+        action: 'judge_ws',
+        metadata: { submissionId, error: syncErr.message }
+      })
+    }
   } catch (e: any) {
     logger.error('judge_ws_update_error', {
       action: 'judge_ws',

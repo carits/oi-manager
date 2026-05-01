@@ -156,9 +156,10 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       orderBy: { orderIndex: 'asc' },
     })
 
-    // 获取当前用户的所有提交（统一 Submission 表）
+    // 获取当前用户的所有提交（使用 submitScope + trainingId）
+    const submitScopeValue = training.type === 'contest' ? 'contest' : 'training'
     const submissions = await prisma.submission.findMany({
-      where: { submitSource: 'training', sourceId: `training-${id}`, userId },
+      where: { submitScope: submitScopeValue, trainingId: id, userId },
       orderBy: { createdAt: 'asc' },
     })
 

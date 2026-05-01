@@ -80,6 +80,9 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         ? Prisma.sql`AND "userId" NOT IN (${Prisma.join(adminUserIds)})`
         : Prisma.empty
 
+      // Determine submitScope based on training type
+      const submitScopeValue = training.type === 'contest' ? 'contest' : 'training'
+
       const aggregated: Array<{
         userId: string
         problemId: string
@@ -92,15 +95,15 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           MAX(score) as "maxScore",
           MAX("createdAt") as "lastSubmitAt"
         FROM "Submission"
-        WHERE "submitSource" = 'training'
-          AND "sourceId" = CONCAT('training-', ${id}::text)
+        WHERE "submitScope" = ${submitScopeValue}
+          AND "trainingId" = ${id}
           AND "cases" IS NOT NULL
           AND score = (
             SELECT MAX(s2.score) FROM "Submission" s2
             WHERE s2."userId" = "Submission"."userId"
               AND s2."problemId" = "Submission"."problemId"
-              AND s2."submitSource" = 'training'
-              AND s2."sourceId" = CONCAT('training-', ${id}::text)
+              AND s2."submitScope" = ${submitScopeValue}
+              AND s2."trainingId" = ${id}
               AND s2."cases" IS NOT NULL
           )
           ${adminFilter}
@@ -154,10 +157,13 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         ? { NOT: { userId: { in: adminUserIds } } }
         : {}
 
+      // Determine submitScope based on training type
+      const submitScopeValue = training.type === 'contest' ? 'contest' : 'training'
+
       const submissions = await prisma.submission.findMany({
         where: {
-          submitSource: 'training',
-          sourceId: `training-${id}`,
+          submitScope: submitScopeValue,
+          trainingId: id,
           ...adminFilterWhere,
           OR: [
             { result: 'queuing' },

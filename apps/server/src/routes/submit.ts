@@ -66,6 +66,9 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
         codeLength: Buffer.byteLength(code, 'utf8'),
         result: 'queuing',
         submitMethod,
+        // 题库提交：设置 submitScope 和可见性
+        submitScope: 'problem',
+        isGlobalVisible: true,
       },
     })
 

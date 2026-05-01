@@ -15,7 +15,7 @@ export interface JoinRequestItem {
     name: string
     username?: string
     avatar?: string | null
-    type: 'teacher' | 'student'
+    userType: 'teacher' | 'student'
   }
 }
 
@@ -276,10 +276,10 @@ export function TeamMemberList({
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.375rem',
                       borderRadius: '4px',
-                      background: request.user.type === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
-                      color: request.user.type === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
+                      background: request.user.userType === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
+                      color: request.user.userType === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
                     }}>
-                      {request.user.type === 'teacher' ? '教师' : '学生'}
+                      {request.user.userType === 'teacher' ? '教师' : '学生'}
                     </span>
                   </div>
                   {request.message && (

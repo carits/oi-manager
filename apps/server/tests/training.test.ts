@@ -532,8 +532,8 @@ describe('训练模块权限测试', () => {
   })
 })
 
-// ==================== OI 赞制可见性测试 ====================
-describe('OI 赞制可见性测试', () => {
+// ==================== OI 赛制可见性测试 ====================
+describe('OI 赛制可见性测试', () => {
   let schoolData: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
   let ownerUser: Awaited<ReturnType<typeof createTestUser>>
   let studentUser: Awaited<ReturnType<typeof createTestUser>>
@@ -582,7 +582,7 @@ describe('OI 赞制可见性测试', () => {
       schoolId: schoolData.school.id
     })
 
-    // 创建 OI 赞制训练（赛中）
+    // 创建 OI 赛制训练（赛中）
     const now = Date.now()
     oiTraining = await prisma.training.create({
       data: {
@@ -593,21 +593,21 @@ describe('OI 赞制可见性测试', () => {
         startTime: new Date(now - 3600000), // 1小时前开始
         endTime: new Date(now + 3600000), // 1小时后结束
         status: 'ongoing',
-        problemIdVisible: false, // OI 赞制题号赛后显示
+        problemIdVisible: false, // OI 赛制题号赛后显示
         solutionVisible: false,
         createdBy: ownerUser.user.id
       }
     })
   })
 
-  describe('OI 赞制排名隐藏', () => {
+  describe('OI 赛制排名隐藏', () => {
     it('OI-A1: 学生赛中看不到排名', async () => {
       const res = await createAuthenticatedRequest(app, studentToken)
         .get(`/api/trainings/${oiTraining.id}/ranking`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      // OI 赞制赛中，排名应该被隐藏
+      // OI 赛制赛中，排名应该被隐藏
       expect(res.body.data.hidden).toBe(true)
       expect(res.body.data.ranking).toEqual([])
     })
@@ -623,7 +623,7 @@ describe('OI 赞制可见性测试', () => {
     })
   })
 
-  describe('OI 赞制题号隐藏', () => {
+  describe('OI 赛制题号隐藏', () => {
     it('OI-C1: 学生赛中看不到原题号', async () => {
       const res = await createAuthenticatedRequest(app, studentToken)
         .get(`/api/trainings/${oiTraining.id}/problems`)

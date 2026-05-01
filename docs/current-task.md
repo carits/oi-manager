@@ -1,5 +1,67 @@
 # 当前任务
 
+## 任务：提交来源字段重构（2026-05-01）
+
+状态: **已完成** ✅
+
+### 背景
+
+当前提交系统依赖 `submitSource`/`sourceId` 字段标识来源，脆弱且不一致。训练提交仍使用旧字段而非已有的 `submitScope`/`trainingId`。比赛提交没有独立 `contestId` 字段（比赛复用 Training 表 type='contest'）。OI 赛制可见性逻辑分散在各路由中，没有统一策略函数。缺少训练/比赛进度聚合模型。AC 同步逻辑缺失。
+
+**目标**：`submitScope` 成为核心字段，三种来源（problem/training/contest）统一处理，后端兜底脱敏，新增进度聚合和 AC 同步。
+
+### 完成内容
+
+#### Phase 1: Schema 变更
+
+| # | 修改内容 |
+|---|---------|
+| 1 | Submission 模型新增 `contestId`、`contestProblemId` 字段 |
+| 2 | 新增 `TrainingUserProblemStatus` 模型（训练进度聚合） |
+| 3 | 新增 `ContestUserProblemStatus` 模型（比赛进度聚合） |
+| 4 | 新增索引：`submitScope`、`trainingId`、`contestId`、复合索引 |
+
+#### Phase 2: 新建文件
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 1 | `lib/submission-view.ts` | 统一可见性策略（getSubmissionView、shouldHideOiResults） |
+| 2 | `lib/submission-sync.ts` | AC 同步服务（onSubmissionJudged、syncProblemAC、syncTrainingProblemStatus、syncContestProblemStatus） |
+| 3 | `routes/migration.ts` | 数据迁移 API |
+
+#### Phase 3: 修改现有文件
+
+| # | 文件 | 修改 |
+|---|------|------|
+| 1 | `training.ranking.routes.ts` | 查询改用 `submitScope` + `trainingId`/`contestId` |
+| 2 | `training.problems.routes.ts` | problem-status 改用新字段 |
+| 3 | `training.submissions.routes.ts` | 创建写新字段 + 脱敏处理 |
+| 4 | `training.crud.routes.ts` | participantCount 查询改用新字段 |
+| 5 | `training.visibility.ts` | 简化为调用 getSubmissionView |
+| 6 | `submissions.ts` | 全局列表过滤 + 详情拦截 |
+| 7 | `problem.submissions.routes.ts` | 题库提交过滤 |
+| 8 | `judge.ts` | 评测完成后调用 onSubmissionJudged |
+| 9 | `admin-data.ts` | 统计查询改用新字段 |
+
+#### Phase 4: 数据迁移
+
+| # | 操作 | 数量 |
+|---|------|------|
+| 1 | 提交记录迁移（submitScope） | 1,432 条 |
+| 2 | trainingProblemId 回填 | 1,305 条 |
+| 3 | contestProblemId 回填 | 127 条 |
+| 4 | TrainingUserProblemStatus 创建 | 567 条 |
+| 5 | ContestUserProblemStatus 创建 | 11 条 |
+
+### 验证
+
+- `pnpm build` ✅ 后端构建通过（零错误）
+- `pnpm build` ✅ 前端构建通过（零错误）
+- 数据迁移 ✅ 1,432 条提交已迁移
+- submitScope 分布：training=1,305, contest=127, problem=19
+
+---
+
 ## 任务：OI 赛制可见性体系化修复（2026-04-28）
 
 状态: **已完成** ✅

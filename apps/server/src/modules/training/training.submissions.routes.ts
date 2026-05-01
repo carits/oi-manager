@@ -75,10 +75,16 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
         result: 'queuing',
         submitMethod: method,
         problemInternalId: trainingProblem.Problem.id,
-        // 来源字段
-        submitSource: 'training',
-        sourceId: `training-${id}`,
-        isGlobalVisible: true,
+        // 新字段：submitScope 为核心
+        submitScope: training.type === 'contest' ? 'contest' : 'training',
+        trainingId: id,
+        trainingProblemId: trainingProblem.id,
+        // 比赛提交额外设置 contestId/contestProblemId
+        ...(training.type === 'contest' ? {
+          contestId: id,
+          contestProblemId: trainingProblem.id,
+        } : {}),
+        isGlobalVisible: false,
       },
     })
 
@@ -232,8 +238,8 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     }
 
     const where: any = {
-      submitSource: 'training',
-      sourceId: `training-${id}`,
+      submitScope: training.type === 'contest' ? 'contest' : 'training',
+      trainingId: id,
       OR: [
         { result: 'queuing' },
         { cases: { not: null } },
@@ -381,7 +387,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
       where: { id: parseInt(submissionId) },
     })
 
-    if (!submission || submission.sourceId !== `training-${id}`) {
+    if (!submission || submission.trainingId !== id) {
       return res.status(404).json({ success: false, message: '提交不存在' })
     }
 
@@ -475,10 +481,10 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
     // 重置该训练下所有 carits 提交为 queuing
     const { count } = await prisma.submission.updateMany({
       where: {
-        submitSource: 'training',
-        sourceId: `training-${id}`,
+        submitScope: training.type === 'contest' ? 'contest' : 'training',
+        trainingId: id,
         oj: 'carits',
-        result: { in: ['accepted', 'wa', 'tle', 're', 'mle', 'ce', 'ole'] },
+        result: { in: ['accepted', 'wa', 'tle', 're', 'mle', 'ce', 'ole', 'Accepted', 'WrongAnswer', 'TimeLimitExceeded', 'RuntimeError', 'MemoryLimitExceeded', 'CompileError', 'OutputLimitExceeded'] },
       },
       data: {
         result: 'queuing',
