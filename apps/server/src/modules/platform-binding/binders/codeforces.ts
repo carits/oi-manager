@@ -76,7 +76,10 @@ export class CodeforcesBinder implements PlatformBinder {
     }
 
     const config = params.extra as CfConfig
-    const jsessionid = config.JSESSIONID.trim()
+    const rawJsessionid = config.JSESSIONID.trim()
+
+    // 使用 parseJsessionId 解析完整 Cookie 字符串
+    const jsessionid = parseJsessionId(rawJsessionid) || rawJsessionid
 
     logger.info('[CF Binder] Starting bind process', {
       jsessionidLength: jsessionid.length,

@@ -405,3 +405,79 @@ export async function pollCfResultPlaywright(
 export function getCfRemoteUrl(submissionId: string): string {
   return `${CF_BASE_URL}/contest/submission/${submissionId}`
 }
+
+/**
+ * 通过 CF API 轮询评测结果
+ *
+ * @param handle - CF 用户名
+ * @param submissionId - CF 提交 ID
+ * @param contestId - 比赛 ID（用于构建跳转 URL，可选）
+ */
+export async function pollCfResultByApi(
+  handle: string,
+  submissionId: string,
+  contestId?: string
+): Promise<CfPollResult & { done: boolean; raw?: any }> {
+  const url = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(handle)}&from=1&count=50`
+
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10000) // 10 秒超时
+    })
+
+    if (!response.ok) {
+      throw new Error(`CF API 请求失败: ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status !== 'OK') {
+      throw new Error(data.comment || 'CF API 查询失败')
+    }
+
+    // 查找指定提交
+    const sub = data.result.find((x: any) => String(x.id) === String(submissionId))
+
+    if (!sub) {
+      return { result: 'judging', done: false }
+    }
+
+    // 仍在评测中
+    if (!sub.verdict || sub.verdict === 'TESTING') {
+      return { result: 'judging', done: false }
+    }
+
+    return {
+      result: mapCfVerdict(sub.verdict),
+      done: true,
+      timeUsed: sub.timeConsumedMillis ?? null,
+      memoryUsed: sub.memoryConsumedBytes ? Math.round(sub.memoryConsumedBytes / 1024) : null,
+      raw: sub,
+    }
+  } catch (error) {
+    logger.error('cf_api_poll_error', error as Error, { action: 'cf_poll' })
+    throw error
+  }
+}
+
+/**
+ * 映射 CF verdict 到本地 result
+ */
+function mapCfVerdict(verdict: string): string {
+  const map: Record<string, string> = {
+    'OK': 'accepted',
+    'WRONG_ANSWER': 'wrong_answer',
+    'TIME_LIMIT_EXCEEDED': 'time_limit_exceeded',
+    'MEMORY_LIMIT_EXCEEDED': 'memory_limit_exceeded',
+    'COMPILATION_ERROR': 'compile_error',
+    'RUNTIME_ERROR': 'runtime_error',
+    'PRESENTATION_ERROR': 'presentation_error',
+    'IDLENESS_LIMIT_EXCEEDED': 'idleness_limit_exceeded',
+    'SECURITY_VIOLATED': 'security_violated',
+    'CRASHED': 'crashed',
+    'REJECTED': 'rejected',
+    'FAILED': 'failed',
+    'PARTIAL': 'partial',
+  }
+  return map[verdict] || verdict.toLowerCase()
+}

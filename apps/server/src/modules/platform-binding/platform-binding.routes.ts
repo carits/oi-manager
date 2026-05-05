@@ -172,11 +172,12 @@ platformBindingRouter.post('/:platform/refresh', authenticate, async (req: Reque
  * Body:
  * - startTime?: string - 开始时间（比赛/训练归档时传入）
  * - endTime?: string - 结束时间（比赛/训练归档时传入）
+ * - problemId?: string - 单题归档时传入（题库页归档当前题）
  */
 platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId
-    const { startTime, endTime } = req.body
+    const { startTime, endTime, problemId } = req.body
 
     // 1. 获取用户的 CF 绑定信息
     const binding = await service.getUserPlatformBinding(userId, 'codeforces')
@@ -214,15 +215,35 @@ platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req:
     const options = {
       startTime: startTime ? new Date(startTime) : undefined,
       endTime: endTime ? new Date(endTime) : undefined,
+      problemId, // 新增：单题归档
     }
 
     // 4. 执行归档同步
     const { archiveCfProblemsForUser } = await import('./binders/codeforces-archiver')
     const result = await archiveCfProblemsForUser(userId, jsessionid, handle, options)
 
+    // 5. 改进返回信息
+    let message = ''
+    if (problemId) {
+      // 单题归档
+      if (result.count > 0) {
+        message = '已将当前题加入归档'
+      } else if (result.skipped > 0) {
+        message = '当前题已在归档中'
+      } else {
+        message = '未在 Codeforces 最近 1000 条提交记录中找到该题 AC 记录'
+      }
+    } else {
+      // 全量同步
+      message = `已同步 ${result.count} 道 Codeforces AC 题目`
+      if (result.skipped > 0) {
+        message += `，跳过 ${result.skipped} 道已归档`
+      }
+    }
+
     res.json({
       success: true,
-      message: `成功归档 ${result.count} 道题目${result.skipped > 0 ? `，跳过 ${result.skipped} 道已归档` : ''}`,
+      message,
       data: {
         count: result.count,
         total: result.total,

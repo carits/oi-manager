@@ -34,6 +34,9 @@ interface CfProblemInfo {
   title: string
   rating?: number
   tags: string[]
+  submissionId?: string  // CF submission id
+  submittedAt?: Date
+  programmingLanguage?: string
   solvedAt?: Date
 }
 
@@ -53,6 +56,7 @@ interface CfSubmissionInfo {
 interface ArchiveOptions {
   startTime?: Date    // 可选：开始时间（比赛/训练归档时传入）
   endTime?: Date      // 可选：结束时间（比赛/训练归档时传入）
+  problemId?: string  // 可选：单题归档时传入
 }
 
 /**
@@ -66,7 +70,76 @@ interface ArchiveResult {
 }
 
 /**
- * 从 Codeforces 抓取用户已解决的题目列表
+ * 通过 CF API 获取用户已解决的题目列表
+ *
+ * @param handle - CF 用户名
+ * @param options - 归档选项（时间范围过滤、单题过滤）
+ * @returns 已解决的题目列表
+ */
+export async function fetchCfSolvedProblemsByApi(
+  handle: string,
+  options?: ArchiveOptions
+): Promise<CfProblemInfo[]> {
+  const problems: CfProblemInfo[] = []
+  const maxPages = 10 // 最多查 10 页，即最近 1000 条提交
+  const count = 100
+
+  for (let page = 0; page < maxPages; page++) {
+    const from = page * count + 1
+    const url = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(handle)}&from=${from}&count=${count}`
+
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+      const data = await response.json()
+
+      if (data.status !== 'OK' || !data.result?.length) break
+
+      for (const sub of data.result) {
+        // 只处理 AC
+        if (sub.verdict !== 'OK') continue
+
+        const problemId = `${sub.problem.contestId}${sub.problem.index}`
+
+        // 如果指定了 problemId，只处理该题
+        if (options?.problemId && problemId !== options.problemId) continue
+
+        // 时间范围过滤
+        if (options?.startTime || options?.endTime) {
+          const submittedAt = new Date(sub.creationTimeSeconds * 1000)
+          if (options.startTime && submittedAt < options.startTime) continue
+          if (options.endTime && submittedAt > options.endTime) continue
+        }
+
+        problems.push({
+          contestId: String(sub.problem.contestId),
+          index: sub.problem.index,
+          problemId,
+          title: sub.problem.name || '',
+          rating: sub.problem.rating,
+          tags: sub.problem.tags || [],
+          submissionId: String(sub.id),
+          submittedAt: new Date(sub.creationTimeSeconds * 1000),
+          programmingLanguage: sub.programmingLanguage,
+        })
+
+        // 如果指定了 problemId 且已找到，可以提前退出
+        if (options?.problemId) break
+      }
+
+      // 如果返回数量小于 count，说明没有更多了
+      if (data.result.length < count) break
+
+    } catch (error) {
+      logger.error('cf_api_fetch_error', error as Error, { action: 'fetch_cf_solved_api' })
+      break
+    }
+  }
+
+  return problems
+}
+
+/**
+ * 从 Codeforces 抓取用户已解决的题目列表（Playwright 方式，作为备用）
  *
  * @param jsessionid - 用户绑定的 JSESSIONID
  * @param handle - CF 用户名
@@ -78,6 +151,20 @@ export async function fetchCfSolvedProblems(
   handle: string,
   options?: ArchiveOptions
 ): Promise<CfProblemInfo[]> {
+  // 优先使用 API 方式
+  try {
+    const apiProblems = await fetchCfSolvedProblemsByApi(handle, options)
+    if (apiProblems.length > 0) {
+      return apiProblems
+    }
+  } catch (apiError) {
+    logger.warn('cf_archiver_api_failed_fallback_playwright', {
+      action: 'fetch_cf_solved',
+      metadata: { error: (apiError as Error).message }
+    })
+  }
+
+  // API 失败时回退到 Playwright
   const cookies = buildCfCookies(jsessionid)
   const problems: CfProblemInfo[] = []
   let browser: Browser | null = null
@@ -132,6 +219,9 @@ export async function fetchCfSolvedProblems(
           }
         }
 
+        // 单题过滤
+        if (options?.problemId && sub.problemId !== options.problemId) continue
+
         if (!acProblems.has(sub.problemId)) {
           const parsedTime = sub.submittedAt ? parseCfTime(sub.submittedAt) : undefined
           acProblems.set(sub.problemId, {
@@ -140,6 +230,7 @@ export async function fetchCfSolvedProblems(
             problemId: sub.problemId,
             title: '',  // 标题需要单独获取
             tags: [],
+            submissionId: sub.submissionId,
             solvedAt: parsedTime || undefined,
           })
         }
@@ -362,13 +453,13 @@ export async function archiveCfProblemsForUser(
           userId,
           platform: 'codeforces',
           problemId: problem.problemId,
-          ojRemoteId: problem.solvedAt?.getTime()?.toString(), // 用时间戳作为远程 ID 参考
+          ojRemoteId: problem.submissionId || problem.solvedAt?.getTime()?.toString(), // 真正的 submission id
           result: 'accepted',
           title: problem.title || problem.problemId,
           difficulty: problem.rating?.toString(),
           tags: problem.tags.length > 0 ? JSON.stringify(problem.tags) : null,
-          submittedAt: problem.solvedAt,
-          solvedAt: problem.solvedAt,
+          submittedAt: problem.submittedAt || problem.solvedAt,
+          solvedAt: problem.solvedAt || problem.submittedAt,
           sourceUrl: `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`,
         },
       })

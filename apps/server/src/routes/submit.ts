@@ -403,6 +403,22 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
 
       // Codeforces 提交
       if (oj === 'codeforces') {
+        // 检查是否为 Gym 题
+        const isGym = !problemId.match(/^\d+[A-Z]\d*$/)
+        if (isGym) {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              result: 'submit_failed',
+              errorMessage: '暂不支持 Codeforces Gym 题目在线提交',
+            },
+          })
+          return res.json({
+            success: false,
+            message: '暂不支持 Codeforces Gym 题目在线提交',
+          })
+        }
+
         const { jsessionid } = bindingData
 
         if (!jsessionid) {

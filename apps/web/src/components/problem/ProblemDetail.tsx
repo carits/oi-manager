@@ -375,11 +375,17 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     setSubmitLoading(true)
     try {
       const result = await apiClient.post<{ count: number; total: number; skipped: number }>(`/api/platform-bindings/${problem.platform}/sync-archive`, {
-        // 题库归档不传时间范围，同步所有 AC 提交
+        problemId: problem.problemId, // 传递当前题号
       })
       if (result.success && result.data) {
         const { count, skipped } = result.data
-        toast.success(`成功归档 ${count} 道题目${skipped > 0 ? `，跳过 ${skipped} 道已归档` : ''}`)
+        if (count > 0) {
+          toast.success('已将当前题加入归档')
+        } else if (skipped > 0) {
+          toast.info('当前题已在归档中')
+        } else {
+          toast.warning('未在 Codeforces 最近 1000 条提交记录中找到该题 AC 记录')
+        }
         setShowSubmitPanel(false)
       } else {
         toast.error(result.message || '归档同步失败')
@@ -1263,8 +1269,22 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           isOpen={true}
           onClose={() => setShowSubmitPanel(false)}
           title={`${OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} ${problem.problemId}`}
-          width="700px"
+          width="750px"
         >
+          {/* Gym 题提示 */}
+          {problem.platform === 'codeforces' && !problem.problemId.match(/^\d+[A-Z]\d*$/) && (
+            <div style={{
+              padding: '0.75rem',
+              background: 'var(--warning-light)',
+              borderRadius: '6px',
+              marginBottom: '1rem',
+              fontSize: '0.875rem',
+              color: 'var(--warning-text)',
+            }}>
+              ⚠️ Codeforces Gym 题目暂不支持在线提交，请前往 Codeforces 网站提交
+            </div>
+          )}
+
           {/* 非 Carits 平台：提交方式选择 */}
           {problem.platform !== 'carits' && (
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -1272,25 +1292,33 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 { key: 'robot', label: '机器人账号' },
                 { key: 'myAccount', label: '我的账号' },
                 { key: 'archive', label: '归档' },
-              ] as const).map(m => (
-                <button
-                  key={m.key}
-                  onClick={() => setSubmitMethod(m.key)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.875rem',
-                    border: '1px solid',
-                    borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
-                    borderRadius: '6px',
-                    background: submitMethod === m.key ? 'var(--info-light)' : 'white',
-                    color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
-                    cursor: 'pointer',
-                    fontWeight: submitMethod === m.key ? 600 : 400,
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
+              ] as const)
+                .filter(m => {
+                  // Gym 题不显示"我的账号"选项
+                  if (m.key === 'myAccount' && problem.platform === 'codeforces' && !problem.problemId.match(/^\d+[A-Z]\d*$/)) {
+                    return false
+                  }
+                  return true
+                })
+                .map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => setSubmitMethod(m.key)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.875rem',
+                      border: '1px solid',
+                      borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
+                      borderRadius: '6px',
+                      background: submitMethod === m.key ? 'var(--info-light)' : 'white',
+                      color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
+                      cursor: 'pointer',
+                      fontWeight: submitMethod === m.key ? 600 : 400,
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
             </div>
           )}
 
@@ -1371,18 +1399,19 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               lineHeight: 1.5,
               resize: 'vertical',
               boxSizing: 'border-box',
-              background: submitMethod === 'robot' ? 'white' : 'var(--bg-muted)',
-              color: submitMethod === 'robot' ? 'var(--text-primary)' : 'var(--gray-400)',
+              background: submitMethod === 'archive' ? 'var(--bg-muted)' : 'white',
+              color: submitMethod === 'archive' ? 'var(--gray-400)' : 'var(--text-primary)',
             }}
-            disabled={submitMethod !== 'robot'}
+            disabled={submitMethod === 'archive'}
           />
 
           {/* 提交按钮 */}
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
-              {submitMethod === 'robot' ? 'HDU 机器人提交已启用' :
-               submitMethod === 'archive' ? '同步该题目已 AC 的提交记录到归档' :
-               '暂未开放此提交方式'}
+              {submitMethod === 'robot' ? '机器人账号提交已启用' :
+               submitMethod === 'myAccount' ?
+                 (platformBinding?.bound ? '使用绑定账号提交' : '请先绑定平台账号') :
+               '归档：同步已 AC 题目'}
             </span>
             {submitMethod === 'archive' ? (
               <button
@@ -1405,16 +1434,19 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             ) : (
               <button
                 onClick={handleSubmitCode}
-                disabled={submitLoading || submitMethod !== 'robot'}
+                disabled={
+                  submitLoading ||
+                  (submitMethod === 'myAccount' && !platformBinding?.bound)
+                }
                 style={{
                   padding: '0.625rem 2rem',
-                  background: submitMethod === 'robot' ? 'var(--primary)' : 'var(--gray-300)',
-                  color: submitMethod === 'robot' ? 'white' : 'var(--gray-500)',
+                  background: (submitMethod === 'robot' || (submitMethod === 'myAccount' && platformBinding?.bound)) ? 'var(--primary)' : 'var(--gray-300)',
+                  color: (submitMethod === 'robot' || (submitMethod === 'myAccount' && platformBinding?.bound)) ? 'white' : 'var(--gray-500)',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '0.875rem',
                   fontWeight: 500,
-                  cursor: submitMethod === 'robot' ? 'pointer' : 'not-allowed',
+                  cursor: (submitMethod === 'robot' || (submitMethod === 'myAccount' && platformBinding?.bound)) ? 'pointer' : 'not-allowed',
                   opacity: submitLoading ? 0.7 : 1,
                 }}
               >

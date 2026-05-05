@@ -6,7 +6,7 @@
 import { prisma } from '../prisma'
 import { logger } from './logger'
 import { pollHduResult } from './hdu-submit'
-import { pollCfResultPlaywright } from './cf-submit'
+import { pollCfResultPlaywright, pollCfResultByApi } from './cf-submit'
 
 let pollInterval: NodeJS.Timeout | null = null
 
@@ -118,7 +118,7 @@ async function pollPendingSubmissions() {
         }
       }
 
-      // Codeforces 提交轮询（需要用户绑定的账号）
+      // Codeforces 提交轮询（使用 CF API）
       if (submission.oj === 'codeforces') {
         // 获取用户绑定的 CF 账号
         const binding = await prisma.userPlatformBinding.findFirst({
@@ -129,35 +129,73 @@ async function pollPendingSubmissions() {
         })
 
         if (binding?.bindingData) {
-          const { jsessionid } = JSON.parse(binding.bindingData)
-          const result = await pollCfResultPlaywright(jsessionid, submission.ojRemoteId)
+          const { handle } = JSON.parse(binding.bindingData)
 
-          if (result && result.result !== 'queuing' && result.result !== 'judging') {
-            // CF OI 赛制：分数由评测系统给出（暂不计算）
-            const score = result.result === 'accepted' ? 100 : 0
+          try {
+            // 使用新的 API 轮询方法
+            const result = await pollCfResultByApi(handle, submission.ojRemoteId)
 
-            // 更新提交记录
-            await prisma.submission.update({
-              where: { id: submission.id },
-              data: {
-                result: result.result,
-                timeUsed: result.timeUsed,
-                memoryUsed: result.memoryUsed,
-                score,
-              },
-            })
+            if (result.done) {
+              // CF OI 赛制：分数由评测系统给出（暂不计算）
+              const score = result.result === 'accepted' ? 100 : 0
 
-            logger.info('poller_cf_result_updated', {
+              // 更新提交记录
+              await prisma.submission.update({
+                where: { id: submission.id },
+                data: {
+                  result: result.result,
+                  timeUsed: result.timeUsed,
+                  memoryUsed: result.memoryUsed,
+                  score,
+                },
+              })
+
+              logger.info('poller_cf_result_updated', {
+                action: 'poller',
+                metadata: {
+                  submissionId: submission.id,
+                  result: result.result,
+                  timeUsed: result.timeUsed,
+                  memoryUsed: result.memoryUsed,
+                  score,
+                },
+              })
+            }
+          } catch (apiError: any) {
+            // API 失败时回退到 Playwright
+            logger.warn('cf_api_fallback_to_playwright', {
               action: 'poller',
-              metadata: {
-                submissionId: submission.id,
-                result: result.result,
-                timeUsed: result.timeUsed,
-                memoryUsed: result.memoryUsed,
-                testCount: result.testCount,
-                score,
-              },
+              metadata: { submissionId: submission.id, error: apiError.message }
             })
+
+            const { jsessionid } = JSON.parse(binding.bindingData)
+            const result = await pollCfResultPlaywright(jsessionid, submission.ojRemoteId)
+
+            if (result && result.result !== 'queuing' && result.result !== 'judging') {
+              const score = result.result === 'accepted' ? 100 : 0
+
+              await prisma.submission.update({
+                where: { id: submission.id },
+                data: {
+                  result: result.result,
+                  timeUsed: result.timeUsed,
+                  memoryUsed: result.memoryUsed,
+                  score,
+                },
+              })
+
+              logger.info('poller_cf_result_updated_playwright', {
+                action: 'poller',
+                metadata: {
+                  submissionId: submission.id,
+                  result: result.result,
+                  timeUsed: result.timeUsed,
+                  memoryUsed: result.memoryUsed,
+                  testCount: result.testCount,
+                  score,
+                },
+              })
+            }
           }
         }
       }

@@ -33,8 +33,9 @@ export function useTrainingActions(
       toast.error('请输入代码')
       return
     }
+    // 训练/比赛只支持机器人账号提交
     if (submitMethod !== 'robot') {
-      toast.error('暂未开放此提交方式')
+      toast.error('训练/比赛暂不支持个人账号提交，请使用机器人账号')
       return
     }
     setSubmitting(true)
