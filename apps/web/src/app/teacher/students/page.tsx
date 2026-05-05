@@ -114,9 +114,9 @@ export default function StudentsPage() {
     const fetchTeachers = async () => {
       if (!user?.schoolId) return
       try {
-        const result = await apiClient.get<{ list: Teacher[]; total: number }>(`/api/schools/${user.schoolId}/teachers`)
+        const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/schools/${user.schoolId}/teachers`)
         if (result.success && result.data) {
-          setTeachers(result.data.list)
+          setTeachers(result.data.data)
         }
       } catch (error) {
         console.error('Failed to fetch teachers:', error)
@@ -128,7 +128,7 @@ export default function StudentsPage() {
   }, [user?.schoolId])
 
   // 学生列表直接使用后端返回的数据（后端已根据 headTeacherId 筛选）
-  const students = data?.list || []
+  const students = data?.data || []
 
   const total = data?.total || 0
   const totalPages = Math.ceil(total / pagination.pageSize)

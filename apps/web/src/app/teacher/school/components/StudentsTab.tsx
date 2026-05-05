@@ -59,9 +59,9 @@ export default function StudentsTab({ schoolId, showHeader = false }: StudentsTa
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await apiClient.get<{ list: Student[] }>(`/api/students?schoolId=${schoolId}&pageSize=1000`)
+      const result = await apiClient.get<{ data: Student[] }>(`/api/students?schoolId=${schoolId}&pageSize=1000`)
       if (result.success) {
-        setAllStudents(result.data?.list || [])
+        setAllStudents(result.data?.data || [])
         setPage(1)
       }
     } catch (error) {

@@ -30,7 +30,7 @@ milestoneRouter.get('/', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      data: { list: milestones, ...paginatedResponse(milestones, total, page, pageSize) }
+      data: paginatedResponse(milestones, total, page, pageSize)
     })
   } catch (error) {
     console.error('Get milestones error:', error)

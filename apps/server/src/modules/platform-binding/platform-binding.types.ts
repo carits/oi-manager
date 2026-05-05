@@ -55,7 +55,7 @@ export interface PlatformConfig {
 export const PLATFORM_CONFIGS: PlatformConfig[] = [
   { id: 'vjudge', name: 'Vjudge', color: '#4A90A4', supported: false },
   { id: 'luogu', name: '洛谷', color: '#3498db', supported: true },
-  { id: 'codeforces', name: 'Codeforces', color: '#1f8dd6', supported: false },
+  { id: 'codeforces', name: 'Codeforces', color: '#1f8dd6', supported: true },
   { id: 'atcoder', name: 'AtCoder', color: '#000', supported: false },
 ]
 

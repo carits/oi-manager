@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
+import { submitToCfPlaywright } from '../lib/cf-submit'
 import { rejudgeSubmission } from '../ws/judge'
 
 export const submitRouter = Router()
@@ -32,10 +33,10 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
       })
     }
 
-    if (submitMethod !== 'robot') {
+    if (submitMethod !== 'robot' && submitMethod !== 'myAccount') {
       return res.status(400).json({
         success: false,
-        message: '目前仅支持机器人账号提交',
+        message: '不支持的提交方式',
       })
     }
 
@@ -266,6 +267,210 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
           message: result.message,
         })
       }
+    }
+
+    // 个人账号提交
+    if (submitMethod === 'myAccount') {
+      // 获取用户绑定的账号
+      const binding = await prisma.userPlatformBinding.findUnique({
+        where: {
+          userId_platform: { userId, platform: oj }
+        }
+      })
+
+      if (!binding?.bindingData) {
+        await prisma.submission.update({
+          where: { id: submission.id },
+          data: {
+            result: 'submit_failed',
+            errorMessage: `请先绑定 ${oj.toUpperCase()} 账号`,
+          },
+        })
+        return res.json({
+          success: false,
+          message: `请先绑定 ${oj.toUpperCase()} 账号`,
+        })
+      }
+
+      const bindingData = JSON.parse(binding.bindingData)
+
+      // HDU 提交
+      if (oj === 'hdu') {
+        // HDU 需要用户名和密码，从 bindingData 获取
+        const { username, password } = bindingData
+
+        if (!username || !password) {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              result: 'submit_failed',
+              errorMessage: 'HDU 绑定信息不完整，请重新绑定',
+            },
+          })
+          return res.json({
+            success: false,
+            message: 'HDU 绑定信息不完整，请重新绑定',
+          })
+        }
+
+        // 查找或创建 OjAccount 用于 HDU 提交
+        let ojAccount = await prisma.ojAccount.findFirst({
+          where: {
+            platform: 'hdu',
+            username,
+          }
+        })
+
+        // 如果没有对应的 OjAccount，临时创建一个（仅用于提交）
+        if (!ojAccount) {
+          ojAccount = await prisma.ojAccount.create({
+            data: {
+              platform: 'hdu',
+              username,
+              password,
+              addedBy: userId, // 使用当前用户的 ID
+              enabled: true,
+              status: 'unverified',
+              priority: 0,
+            }
+          })
+        } else if (!ojAccount.password || !ojAccount.passwordIV) {
+          // 更新密码（如果绑定后密码变更）
+          await prisma.ojAccount.update({
+            where: { id: ojAccount.id },
+            data: { password, passwordIV: '' }
+          })
+        }
+
+        // 复用现有的 HDU 提交逻辑
+        const result = await submitToHdu(
+          {
+            id: ojAccount.id,
+            username: ojAccount.username,
+            password: ojAccount.password || password,
+            passwordIV: ojAccount.passwordIV || '',
+            cookie: ojAccount.cookie,
+            lastLoginAt: ojAccount.lastLoginAt,
+            lastLoginFailureAt: ojAccount.lastLoginFailureAt,
+            lastSubmitAt: ojAccount.lastSubmitAt,
+            consecutiveFailures: ojAccount.consecutiveFailures,
+            cookieValidMinutes: ojAccount.cookieValidMinutes,
+            renewLoginThresholdMinutes: ojAccount.renewLoginThresholdMinutes,
+            loginFailureCooldownMinutes: ojAccount.loginFailureCooldownMinutes,
+            minSubmitIntervalSeconds: ojAccount.minSubmitIntervalSeconds,
+            maxConsecutiveFailures: ojAccount.maxConsecutiveFailures,
+            submitMaxRetries: ojAccount.submitMaxRetries,
+          },
+          problemId,
+          language,
+          code
+        )
+
+        if (result.success) {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              ojAccountId: ojAccount.id,
+              ojRemoteId: result.ojRemoteId,
+            },
+          })
+
+          logger.info('hdu_myaccount_submit_success', {
+            action: 'submit',
+            metadata: { submissionId: submission.id, ojRemoteId: result.ojRemoteId },
+          })
+
+          return res.json({
+            success: true,
+            data: { submissionId: submission.id },
+            message: '提交成功',
+          })
+        } else {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              result: 'submit_failed',
+              errorMessage: result.message,
+            },
+          })
+
+          return res.json({
+            success: false,
+            message: result.message,
+          })
+        }
+      }
+
+      // Codeforces 提交
+      if (oj === 'codeforces') {
+        const { jsessionid } = bindingData
+
+        if (!jsessionid) {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              result: 'submit_failed',
+              errorMessage: 'Codeforces 绑定信息不完整，请重新绑定',
+            },
+          })
+          return res.json({
+            success: false,
+            message: 'Codeforces 绑定信息不完整，请重新绑定',
+          })
+        }
+
+        const result = await submitToCfPlaywright(
+          jsessionid,
+          problemId,
+          language,
+          code
+        )
+
+        if (result.success) {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: { ojRemoteId: result.ojRemoteId }
+          })
+
+          logger.info('cf_myaccount_submit_success', {
+            action: 'submit',
+            metadata: { submissionId: submission.id, ojRemoteId: result.ojRemoteId }
+          })
+
+          return res.json({
+            success: true,
+            data: { submissionId: submission.id },
+            message: '提交成功',
+          })
+        } else {
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              result: 'submit_failed',
+              errorMessage: result.message,
+            },
+          })
+
+          return res.json({
+            success: false,
+            message: result.message,
+          })
+        }
+      }
+
+      // 其他平台暂不支持
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          result: 'submit_failed',
+          errorMessage: `暂不支持 ${oj.toUpperCase()} 的个人账号提交`,
+        },
+      })
+
+      return res.json({
+        success: false,
+        message: `暂不支持 ${oj.toUpperCase()} 的个人账号提交`,
+      })
     }
 
     // 其他平台暂不支持

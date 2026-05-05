@@ -1,5 +1,88 @@
 # 变更日志
 
+## 2026-05-05 (CF 平台绑定提交与归档功能修复)
+
+### 问题
+
+Codeforces 平台通过绑定账号提交与归档的功能未完成：
+1. 提交窗口没有绑定的流程
+2. 平台绑定成功后弹窗没有更新
+3. 归档功能没有更新
+
+### 根本原因
+
+`ProblemDetail.tsx` 第 1265 行硬编码 "未绑定"，没有调用 API 获取实际绑定状态。没有 "去绑定" 按钮引导用户到绑定页面。选择 "归档" 时没有触发归档同步 API。
+
+### 解决方案
+
+1. **绑定状态获取**：当 submitMethod 变为 `myAccount` 或 `archive` 时，调用 `GET /api/platform-bindings/:platform` 获取绑定状态
+2. **去绑定按钮**：未绑定时显示 "未绑定，点击去绑定"，点击跳转到平台绑定页面
+3. **归档同步**：选择 "归档" 时显示同步按钮，调用 `POST /api/platform-bindings/:platform/sync-archive`
+
+### 前端变更
+
+| 文件 | 修改内容 |
+|------|---------|
+| `components/problem/ProblemDetail.tsx` | 新增 `platformBinding` 状态、绑定状态获取 useEffect、去绑定按钮、归档同步按钮和 `handleArchiveSync` 函数 |
+
+### 新增代码
+
+```typescript
+// 新增状态
+const [platformBinding, setPlatformBinding] = useState<{
+  bound: boolean
+  platformUsername?: string
+} | null>(null)
+
+// 绑定状态获取
+useEffect(() => {
+  if (problem?.platform && problem.platform !== 'carits' && (submitMethod === 'myAccount' || submitMethod === 'archive')) {
+    setPlatformBinding(null)
+    apiClient.get(`/api/platform-bindings/${problem.platform}`).then(res => {
+      if (res.success && res.data) {
+        const data = res.data as { bound: boolean; platformUsername?: string }
+        setPlatformBinding({ bound: data.bound, platformUsername: data.platformUsername })
+      }
+    }).catch(() => {
+      setPlatformBinding({ bound: false })
+    })
+  }
+}, [problem?.platform, submitMethod])
+
+// 归档同步
+const handleArchiveSync = async () => {
+  if (!problem || !platformBinding?.bound) return
+  setSubmitLoading(true)
+  try {
+    const result = await apiClient.post<{ count: number; total: number; skipped: number }>(
+      `/api/platform-bindings/${problem.platform}/sync-archive`, {}
+    )
+    if (result.success && result.data) {
+      const { count, skipped } = result.data
+      toast.success(`成功归档 ${count} 道题目${skipped > 0 ? `，跳过 ${skipped} 道已归档` : ''}`)
+      setShowSubmitPanel(false)
+    } else {
+      toast.error(result.message || '归档同步失败')
+    }
+  } catch (error: any) {
+    toast.error(error.message || '归档同步失败')
+  } finally {
+    setSubmitLoading(false)
+  }
+}
+```
+
+### 验证
+
+- 打开题目详情页，选择 "我的账号" 或 "归档"
+- 未绑定时显示 "未绑定，点击去绑定"
+- 点击跳转到平台绑定页面
+- 绑定成功后返回，弹窗显示 "已绑定: xxx"
+- 选择 "归档" 时显示同步按钮
+- 点击同步按钮，调用 API 成功，显示归档数量
+
+---
+
 ## 2026-04-28 (OI 赛制可见性体系化修复)
 
 ### 问题

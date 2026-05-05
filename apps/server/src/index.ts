@@ -27,6 +27,7 @@ import { testdataRouter } from './routes/testdata'
 import { trainingsRouter } from './modules/training/training.routes'
 import { adminDataRouter } from './routes/admin-data'
 import { migrationRouter } from './routes/migration'
+import { archivedProblemsRouter } from './routes/archived-problems'
 import { startSubmissionPoller } from './lib/submission-poller'
 import { metrics } from './lib/metrics'
 import path from 'path'
@@ -114,6 +115,7 @@ app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata p
 app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
 app.use('/api/admin/data', adminDataRouter)  // 管理员数据维护 API
 app.use('/api/admin/migration', migrationRouter)  // 数据迁移 API
+app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
 
 // 健康检查
 app.get('/api/health', (req, res) => {

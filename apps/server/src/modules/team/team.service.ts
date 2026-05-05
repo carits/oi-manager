@@ -268,7 +268,7 @@ export class TeamService {
     // 构建过滤条件
     if (view === 'mine') {
       if (!userId || userId === 'undefined' || userId === 'null') {
-        return { ...paginatedResponse([], 0, page, pageSize), list: [] }
+        return paginatedResponse([], 0, page, pageSize)
       }
 
       const myTeamIds = await this.repo.findUserTeamIds(userId, userType)
@@ -334,10 +334,7 @@ export class TeamService {
       }
     })
 
-    return {
-      ...paginatedResponse(teamsWithOwner.map(transformTeamForFrontend), total, page, pageSize),
-      list: teamsWithOwner.map(transformTeamForFrontend),
-    }
+    return paginatedResponse(teamsWithOwner.map(transformTeamForFrontend), total, page, pageSize)
   }
 
   // ==================== 团队详情 ====================

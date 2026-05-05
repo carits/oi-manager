@@ -130,10 +130,7 @@ ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: {
-        list: jobs,
-        ...paginatedResponse(jobs, total, page, pageSize),
-      },
+      data: paginatedResponse(jobs, total, page, pageSize),
     })
   } catch (error) {
     console.error('[OJ Fetcher] Get jobs error:', error)

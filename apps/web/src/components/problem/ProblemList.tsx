@@ -73,9 +73,11 @@ export function ProblemList({ role }: ProblemListProps) {
 
       const result = await apiClient.get<ProblemListResponse>(`/api/problems?${params}`)
       if (result.success && result.data) {
-        setProblems((result.data as ProblemListResponse)?.list || [])
-        setTotal(result.data.total)
-        setTotalPages(result.data.totalPages)
+        // API 返回 { data: [...], total, totalPages }，前端期望 { list: [...] }
+        const responseData = result.data as any
+        setProblems(responseData?.data || [])
+        setTotal(responseData.total)
+        setTotalPages(responseData.totalPages)
       }
     } catch (error) {
       console.error('Failed to fetch problems:', error)

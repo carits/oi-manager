@@ -78,7 +78,7 @@ schoolCrudRouter.get('/', authenticate, asyncHandler(async (req: AuthRequest, re
     res.json({
       success: true,
       data: {
-        list: schoolsWithPrincipal,
+        data: schoolsWithPrincipal,
         total: schoolsWithPrincipal.length
       }
     })

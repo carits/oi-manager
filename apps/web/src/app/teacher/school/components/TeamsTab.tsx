@@ -20,7 +20,7 @@ export default function TeamsTab({ schoolId, sessionKey }: TeamsTabProps) {
     pageSize: pagination.pageSize
   }, sessionKey)
 
-  const teams = data?.list || []
+  const teams = data?.data || []
   const total = data?.total || 0
   const totalPages = data?.totalPages || 1
 

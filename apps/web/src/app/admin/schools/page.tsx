@@ -22,7 +22,7 @@ export default function AdminSchoolsPage() {
 
   const { data, loading, error } = useSchools(pagination, sessionKey)
 
-  const schools = data?.list || []
+  const schools = data?.data || []
   const total = data?.total || 0
   const totalPages = Math.ceil(total / pagination.pageSize)
 

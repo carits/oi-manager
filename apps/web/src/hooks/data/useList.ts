@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useFetch, UseFetchResult } from './useFetch'
 
 export interface ListResponse<T> {
-  list: T[]
+  data: T[]
   total: number
   page?: number
   pageSize?: number

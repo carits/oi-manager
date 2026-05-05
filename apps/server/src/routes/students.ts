@@ -102,10 +102,7 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        list: formattedStudents,
-        ...paginatedResponse(formattedStudents, total, page, pageSize)
-      }
+      data: paginatedResponse(formattedStudents, total, page, pageSize)
     })
 }, '服务器错误'))
 

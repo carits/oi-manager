@@ -8,6 +8,7 @@ import { PlatformBindingRepository } from './platform-binding.repository'
 import { getBinder, getSupportedPlatforms } from './binders'
 import { getLuoguConfigSchema } from './binders/luogu'
 import { getVJudgeConfigSchema } from './binders/vjudge'
+import { getCodeforcesConfigSchema } from './binders/codeforces'
 import type {
   BindingPlatform,
   PlatformBindingResponse,
@@ -72,6 +73,8 @@ export class PlatformBindingService {
         return getLuoguConfigSchema()
       case 'vjudge':
         return getVJudgeConfigSchema()
+      case 'codeforces':
+        return getCodeforcesConfigSchema()
       default:
         return null
     }

@@ -28,7 +28,7 @@ const binders = new Map<BindingPlatform, PlatformBinder>()
 // 注册绑定器
 binders.set('vjudge', new VJudgeBinder())
 binders.set('luogu', new LuoguBinder())
-// binders.set('codeforces', new CodeforcesBinder())
+binders.set('codeforces', new CodeforcesBinder())
 // binders.set('atcoder', new AtcoderBinder())
 
 /**

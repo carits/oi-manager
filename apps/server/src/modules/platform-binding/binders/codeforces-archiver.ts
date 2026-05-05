@@ -1,0 +1,399 @@
+/**
+ * Codeforces Problem Archiver
+ * Codeforces 题目归档抓取逻辑
+ *
+ * 功能：从 Codeforces 抓取用户已解决的题目列表，并归档到本地
+ */
+
+import { chromium, Browser, Page } from 'playwright'
+import { prisma } from '../../../prisma'
+import logger from '../../../lib/logger'
+import type { PlaywrightCookie } from '../../../lib/playwright-helper'
+
+/**
+ * 构建 CF Cookie
+ */
+function buildCfCookies(jsessionid: string): PlaywrightCookie[] {
+  return [
+    {
+      name: 'JSESSIONID',
+      value: jsessionid,
+      domain: 'codeforces.com',
+      path: '/',
+    },
+  ]
+}
+
+/**
+ * CF 题目信息
+ */
+interface CfProblemInfo {
+  contestId: string
+  index: string
+  problemId: string  // 如 "1669H"
+  title: string
+  rating?: number
+  tags: string[]
+  solvedAt?: Date
+}
+
+/**
+ * CF 提交记录
+ */
+interface CfSubmissionInfo {
+  submissionId: string
+  problemId: string
+  verdict: string
+  submittedAt: string
+}
+
+/**
+ * 归档选项
+ */
+interface ArchiveOptions {
+  startTime?: Date    // 可选：开始时间（比赛/训练归档时传入）
+  endTime?: Date      // 可选：结束时间（比赛/训练归档时传入）
+}
+
+/**
+ * 归档结果
+ */
+interface ArchiveResult {
+  count: number       // 新归档数量
+  total: number       // 用户在该平台总 AC 数
+  skipped: number     // 已归档跳过的数量
+  problems: CfProblemInfo[]
+}
+
+/**
+ * 从 Codeforces 抓取用户已解决的题目列表
+ *
+ * @param jsessionid - 用户绑定的 JSESSIONID
+ * @param handle - CF 用户名
+ * @param options - 归档选项（时间范围过滤）
+ * @returns 已解决的题目列表
+ */
+export async function fetchCfSolvedProblems(
+  jsessionid: string,
+  handle: string,
+  options?: ArchiveOptions
+): Promise<CfProblemInfo[]> {
+  const cookies = buildCfCookies(jsessionid)
+  const problems: CfProblemInfo[] = []
+  let browser: Browser | null = null
+
+  try {
+    logger.info('cf_archiver_start', {
+      action: 'fetch_cf_solved',
+      metadata: { handle },
+    })
+
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    })
+
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    })
+
+    await context.addCookies(cookies)
+    const page = await context.newPage()
+
+    // 访问用户提交页面
+    const submissionsUrl = `https://codeforces.com/submissions/${handle}`
+    logger.info('cf_archiver_navigating', { action: 'fetch_cf_solved', metadata: { url: submissionsUrl } })
+
+    await page.goto(submissionsUrl, {
+      timeout: 30000,
+      waitUntil: 'domcontentloaded',
+    })
+
+    // 等待 Cloudflare challenge
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+
+    // 解析提交记录
+    const submissions = await parseSubmissionsPage(page)
+    logger.info('cf_archiver_parsed', {
+      action: 'fetch_cf_solved',
+      metadata: { submissionCount: submissions.length },
+    })
+
+    // 去重：只保留 AC 的题目
+    const acProblems = new Map<string, CfProblemInfo>()
+    for (const sub of submissions) {
+      if (sub.verdict === 'Accepted' && sub.problemId) {
+        // 时间范围过滤（比赛/训练归档时）
+        if (options?.startTime || options?.endTime) {
+          const submittedAt = sub.submittedAt ? parseCfTime(sub.submittedAt) : null
+          if (submittedAt) {
+            if (options.startTime && submittedAt < options.startTime) continue
+            if (options.endTime && submittedAt > options.endTime) continue
+          }
+        }
+
+        if (!acProblems.has(sub.problemId)) {
+          const parsedTime = sub.submittedAt ? parseCfTime(sub.submittedAt) : undefined
+          acProblems.set(sub.problemId, {
+            contestId: sub.problemId.replace(/[A-Z]\d*$/, ''),
+            index: sub.problemId.match(/[A-Z]\d*$/)?.[0] || '',
+            problemId: sub.problemId,
+            title: '',  // 标题需要单独获取
+            tags: [],
+            solvedAt: parsedTime || undefined,
+          })
+        }
+      }
+    }
+
+    // 获取题目详情（标题、rating、tags）
+    const problemList = Array.from(acProblems.values())
+
+    // 批量获取题目信息（可选，API 方式更快）
+    await enrichProblemDetails(page, problemList)
+
+    return problemList
+
+  } catch (error) {
+    logger.error('cf_archiver_error', error as Error, {
+      action: 'fetch_cf_solved',
+    })
+    throw error
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
+  }
+}
+
+/**
+ * 解析 CF 时间格式
+ * 如 "Jan/01/2024 12:34" -> Date
+ */
+function parseCfTime(timeStr: string): Date | null {
+  try {
+    // CF 时间格式：Jan/01/2024 12:34
+    const match = timeStr.match(/(\w{3})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/)
+    if (match) {
+      const [, month, day, year, hour, minute] = match
+      const months: Record<string, number> = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+      }
+      return new Date(
+        parseInt(year),
+        months[month] || 0,
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute)
+      )
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 解析提交记录页面
+ */
+async function parseSubmissionsPage(page: Page): Promise<CfSubmissionInfo[]> {
+  const submissions: CfSubmissionInfo[] = []
+
+  try {
+    // 等待表格加载
+    await page.waitForSelector('table.status-frame-datatable', { timeout: 10000 })
+
+    // 获取所有行
+    const rows = await page.$$('table.status-frame-datatable tbody tr')
+
+    for (const row of rows) {
+      try {
+        // 提取题号
+        const problemLink = await row.$('td:nth-child(4) a')
+        if (!problemLink) continue
+
+        const problemHref = await problemLink.getAttribute('href')
+        if (!problemHref) continue
+
+        // 解析题号：/contest/1669/problem/H -> 1669H
+        const problemMatch = problemHref.match(/\/contest\/(\d+)\/problem\/([A-Z]\d*)/)
+        if (!problemMatch) continue
+
+        const problemId = problemMatch[1] + problemMatch[2]
+
+        // 提取评测结果
+        const verdictCell = await row.$('td:nth-child(6)')
+        const verdict = await verdictCell?.textContent() || ''
+        const isAccepted = verdict.includes('Accepted')
+
+        // 提交时间
+        const timeCell = await row.$('td:nth-child(2)')
+        const submittedAt = await timeCell?.textContent() || ''
+
+        submissions.push({
+          submissionId: await row.getAttribute('data-submission-id') || '',
+          problemId,
+          verdict: isAccepted ? 'Accepted' : verdict.trim(),
+          submittedAt: submittedAt.trim(),
+        })
+
+      } catch (rowError) {
+        // 单行解析失败，继续处理其他行
+        continue
+      }
+    }
+
+    // 检查是否有分页，需要翻页获取更多数据
+    const hasNextPage = await page.$('div.pagination ul li:nth-last-child(2) a')
+    if (hasNextPage) {
+      // TODO: 实现分页抓取（当前只抓取第一页）
+      logger.info('cf_archiver_has_more_pages', {
+        action: 'parse_submissions',
+        metadata: { message: 'More pages available, only first page fetched' },
+      })
+    }
+
+  } catch (error) {
+    logger.error('cf_archiver_parse_error', error as Error)
+  }
+
+  return submissions
+}
+
+/**
+ * 通过 CF API 获取题目详情
+ */
+async function enrichProblemDetails(page: Page, problems: CfProblemInfo[]): Promise<void> {
+  // 使用 CF API 批量获取题目信息
+  const problemIds = problems.map(p => p.problemId)
+
+  // CF API 每次最多查询 10000 个题目，这里分批处理
+  const batchSize = 100
+  for (let i = 0; i < problemIds.length; i += batchSize) {
+    const batch = problemIds.slice(i, i + batchSize)
+
+    try {
+      // 解析 contestId 和 index
+      const handles = batch.map(id => {
+        const match = id.match(/^(\d+)([A-Z]\d*)$/)
+        return match ? { contestId: match[1], index: match[2] } : null
+      }).filter(Boolean) as Array<{ contestId: string; index: string }>
+
+      // 调用 CF API
+      // 注意：CF API 没有 batch 接口，需要逐个查询或使用 contest.standings
+      // 这里简化处理，只获取已知的题目信息
+
+      for (const problem of problems) {
+        if (!problem.problemId) continue
+
+        // 尝试从题目页面获取详情
+        try {
+          const { contestId, index } = problem
+          const problemUrl = `https://codeforces.com/problemset/problem/${contestId}/${index}`
+
+          // 使用 API 获取题目信息
+          const apiUrl = `https://codeforces.com/api/contest.standings?contestId=${contestId}&from=1&count=1`
+          const response = await fetch(apiUrl)
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.status === 'OK' && data.result?.problems) {
+              const problemData = data.result.problems.find((p: any) => p.index === index)
+              if (problemData) {
+                problem.title = problemData.name || ''
+                problem.rating = problemData.rating
+                problem.tags = problemData.tags || []
+              }
+            }
+          }
+        } catch {
+          // 单个题目获取失败，跳过
+        }
+      }
+
+    } catch (error) {
+      logger.error('cf_archiver_enrich_error', error as Error)
+    }
+  }
+}
+
+/**
+ * 将 CF 题目归档到用户账号
+ *
+ * @param userId - 用户 ID
+ * @param jsessionid - CF JSESSIONID
+ * @param handle - CF 用户名
+ * @param options - 归档选项（时间范围过滤）
+ * @returns 归档结果
+ */
+export async function archiveCfProblemsForUser(
+  userId: string,
+  jsessionid: string,
+  handle: string,
+  options?: ArchiveOptions
+): Promise<ArchiveResult> {
+  // 1. 抓取已解决的题目
+  const problems = await fetchCfSolvedProblems(jsessionid, handle, options)
+
+  // 2. 查询已归档的题目（去重）
+  const existingArchived = await prisma.userArchivedProblem.findMany({
+    where: {
+      userId,
+      platform: 'codeforces',
+      problemId: { in: problems.map(p => p.problemId) },
+    },
+    select: { problemId: true },
+  })
+  const existingIds = new Set(existingArchived.map(a => a.problemId))
+
+  // 3. 批量归档新题目
+  let count = 0
+  for (const problem of problems) {
+    // 跳过已归档的题目
+    if (existingIds.has(problem.problemId)) {
+      continue
+    }
+
+    try {
+      await prisma.userArchivedProblem.create({
+        data: {
+          id: `${userId}_codeforces_${problem.problemId}`,
+          userId,
+          platform: 'codeforces',
+          problemId: problem.problemId,
+          ojRemoteId: problem.solvedAt?.getTime()?.toString(), // 用时间戳作为远程 ID 参考
+          result: 'accepted',
+          title: problem.title || problem.problemId,
+          difficulty: problem.rating?.toString(),
+          tags: problem.tags.length > 0 ? JSON.stringify(problem.tags) : null,
+          submittedAt: problem.solvedAt,
+          solvedAt: problem.solvedAt,
+          sourceUrl: `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`,
+        },
+      })
+      count++
+    } catch (error) {
+      // 唯一约束冲突（并发场景），忽略
+      logger.error('cf_archiver_save_error', error as Error, {
+        action: 'archive_problem',
+        metadata: { problemId: problem.problemId },
+      })
+    }
+  }
+
+  const result: ArchiveResult = {
+    count,                           // 新归档数量
+    total: problems.length,          // 本次抓取到的 AC 数
+    skipped: existingIds.size,       // 已归档跳过的数量
+    problems,
+  }
+
+  logger.info('cf_archiver_complete', {
+    action: 'archive_cf_problems',
+    userId,
+    metadata: result,
+  })
+
+  return result
+}

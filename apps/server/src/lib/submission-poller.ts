@@ -6,6 +6,7 @@
 import { prisma } from '../prisma'
 import { logger } from './logger'
 import { pollHduResult } from './hdu-submit'
+import { pollCfResultPlaywright } from './cf-submit'
 
 let pollInterval: NodeJS.Timeout | null = null
 
@@ -72,47 +73,96 @@ async function pollPendingSubmissions() {
   })
 
   for (const submission of pendingSubmissions) {
-    if (!submission.OjAccount || !submission.ojRemoteId) {
+    if (!submission.ojRemoteId) {
       continue
     }
 
     try {
-      const result = await pollHduResult(
-        {
-          username: submission.OjAccount.username,
-          password: submission.OjAccount.password!,
-          passwordIV: submission.OjAccount.passwordIV!,
-          cookie: submission.OjAccount.cookie,
-        },
-        submission.ojRemoteId
-      )
-
-      if (result && result.result !== 'queuing') {
-        // HDU ACM 赛制：AC=100分，否则0分
-        const score = result.result === 'accepted' ? 100 : 0
-
-        // 更新提交记录
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: {
-            result: result.result,
-            timeUsed: result.timeUsed,
-            memoryUsed: result.memoryUsed,
-            score,
+      // HDU 提交轮询（需要 OjAccount）
+      if (submission.oj === 'hdu' && submission.OjAccount) {
+        const result = await pollHduResult(
+          {
+            username: submission.OjAccount.username,
+            password: submission.OjAccount.password!,
+            passwordIV: submission.OjAccount.passwordIV!,
+            cookie: submission.OjAccount.cookie,
           },
-        })
+          submission.ojRemoteId
+        )
 
-        logger.info('poller_result_updated', {
-          action: 'poller',
-          metadata: {
-            submissionId: submission.id,
-            result: result.result,
-            timeUsed: result.timeUsed,
-            memoryUsed: result.memoryUsed,
-            score,
-          },
-        })
+        if (result && result.result !== 'queuing') {
+          // HDU ACM 赛制：AC=100分，否则0分
+          const score = result.result === 'accepted' ? 100 : 0
+
+          // 更新提交记录
+          await prisma.submission.update({
+            where: { id: submission.id },
+            data: {
+              result: result.result,
+              timeUsed: result.timeUsed,
+              memoryUsed: result.memoryUsed,
+              score,
+            },
+          })
+
+          logger.info('poller_hdu_result_updated', {
+            action: 'poller',
+            metadata: {
+              submissionId: submission.id,
+              result: result.result,
+              timeUsed: result.timeUsed,
+              memoryUsed: result.memoryUsed,
+              score,
+            },
+          })
+        }
       }
+
+      // Codeforces 提交轮询（需要用户绑定的账号）
+      if (submission.oj === 'codeforces') {
+        // 获取用户绑定的 CF 账号
+        const binding = await prisma.userPlatformBinding.findFirst({
+          where: {
+            userId: submission.userId,
+            platform: 'codeforces',
+          }
+        })
+
+        if (binding?.bindingData) {
+          const { jsessionid } = JSON.parse(binding.bindingData)
+          const result = await pollCfResultPlaywright(jsessionid, submission.ojRemoteId)
+
+          if (result && result.result !== 'queuing' && result.result !== 'judging') {
+            // CF OI 赛制：分数由评测系统给出（暂不计算）
+            const score = result.result === 'accepted' ? 100 : 0
+
+            // 更新提交记录
+            await prisma.submission.update({
+              where: { id: submission.id },
+              data: {
+                result: result.result,
+                timeUsed: result.timeUsed,
+                memoryUsed: result.memoryUsed,
+                score,
+              },
+            })
+
+            logger.info('poller_cf_result_updated', {
+              action: 'poller',
+              metadata: {
+                submissionId: submission.id,
+                result: result.result,
+                timeUsed: result.timeUsed,
+                memoryUsed: result.memoryUsed,
+                testCount: result.testCount,
+                score,
+              },
+            })
+          }
+        }
+      }
+
+      // 其他平台暂不支持轮询
     } catch (e: any) {
       logger.error('poller_submission_error', {
         action: 'poller',

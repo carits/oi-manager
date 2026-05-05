@@ -69,11 +69,11 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   const fetchTeachers = async () => {
     setLoading(true)
     try {
-      const result = await apiClient.get<{ list: Teacher[]; total: number }>(
+      const result = await apiClient.get<{ data: Teacher[]; total: number }>(
         `/api/schools/${school.id}/teachers?page=${pagination.page}&pageSize=${pagination.pageSize}`
       )
       if (result.success) {
-        setTeachers(result.data?.list || [])
+        setTeachers(result.data?.data || [])
         setTotal(result.data?.total || 0)
       }
     } catch (error) {

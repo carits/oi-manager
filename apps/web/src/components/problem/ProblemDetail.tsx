@@ -197,6 +197,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     formattedStatementIds: string[]
   } | null>(null)
 
+  // 平台绑定状态
+  const [platformBinding, setPlatformBinding] = useState<{
+    bound: boolean
+    platformUsername?: string
+  } | null>(null)
+
   // 获取路径前缀
   const getPathPrefix = () => {
     if (role === 'admin') return '/platform-admin'
@@ -210,6 +216,24 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
     fetchAiUsage()
   }, [problemId])
+
+  // 当 submitMethod 变为 myAccount 或 archive 时，获取平台绑定状态
+  useEffect(() => {
+    if (problem?.platform && problem.platform !== 'carits' && (submitMethod === 'myAccount' || submitMethod === 'archive')) {
+      setPlatformBinding(null) // 先重置状态
+      apiClient.get(`/api/platform-bindings/${problem.platform}`).then(res => {
+        if (res.success && res.data) {
+          const data = res.data as { bound: boolean; platformUsername?: string }
+          setPlatformBinding({
+            bound: data.bound,
+            platformUsername: data.platformUsername
+          })
+        }
+      }).catch(() => {
+        setPlatformBinding({ bound: false })
+      })
+    }
+  }, [problem?.platform, submitMethod])
 
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
@@ -340,6 +364,28 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       }
     } catch (error: any) {
       toast.error(error.message || '提交失败')
+    } finally {
+      setSubmitLoading(false)
+    }
+  }
+
+  // 归档同步处理
+  const handleArchiveSync = async () => {
+    if (!problem || !platformBinding?.bound) return
+    setSubmitLoading(true)
+    try {
+      const result = await apiClient.post<{ count: number; total: number; skipped: number }>(`/api/platform-bindings/${problem.platform}/sync-archive`, {
+        // 题库归档不传时间范围，同步所有 AC 提交
+      })
+      if (result.success && result.data) {
+        const { count, skipped } = result.data
+        toast.success(`成功归档 ${count} 道题目${skipped > 0 ? `，跳过 ${skipped} 道已归档` : ''}`)
+        setShowSubmitPanel(false)
+      } else {
+        toast.error(result.message || '归档同步失败')
+      }
+    } catch (error: any) {
+      toast.error(error.message || '归档同步失败')
     } finally {
       setSubmitLoading(false)
     }
@@ -1262,7 +1308,20 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               alignItems: 'center',
             }}>
               <span>平台账号</span>
-              <span style={{ color: 'var(--warning)' }}>未绑定</span>
+              {platformBinding === null ? (
+                <span style={{ color: 'var(--gray-400)' }}>检查中...</span>
+              ) : platformBinding.bound ? (
+                <span style={{ color: 'var(--success)' }}>
+                  已绑定: {platformBinding.platformUsername}
+                </span>
+              ) : (
+                <span
+                  style={{ color: 'var(--warning)', cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => router.push(`${pathPrefix}/platform-bindings`)}
+                >
+                  未绑定，点击去绑定
+                </span>
+              )}
             </div>
           )}
 
@@ -1321,25 +1380,47 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           {/* 提交按钮 */}
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
-              {submitMethod === 'robot' ? 'HDU 机器人提交已启用' : '暂未开放此提交方式'}
+              {submitMethod === 'robot' ? 'HDU 机器人提交已启用' :
+               submitMethod === 'archive' ? '同步该题目已 AC 的提交记录到归档' :
+               '暂未开放此提交方式'}
             </span>
-            <button
-              onClick={handleSubmitCode}
-              disabled={submitLoading || submitMethod !== 'robot'}
-              style={{
-                padding: '0.625rem 2rem',
-                background: submitMethod === 'robot' ? 'var(--primary)' : 'var(--gray-300)',
-                color: submitMethod === 'robot' ? 'white' : 'var(--gray-500)',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                cursor: submitMethod === 'robot' ? 'pointer' : 'not-allowed',
-                opacity: submitLoading ? 0.7 : 1,
-              }}
-            >
-              {submitLoading ? '提交中...' : '提交'}
-            </button>
+            {submitMethod === 'archive' ? (
+              <button
+                onClick={handleArchiveSync}
+                disabled={submitLoading || !platformBinding?.bound}
+                style={{
+                  padding: '0.625rem 2rem',
+                  background: platformBinding?.bound ? 'var(--primary)' : 'var(--gray-300)',
+                  color: platformBinding?.bound ? 'white' : 'var(--gray-500)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  cursor: platformBinding?.bound ? 'pointer' : 'not-allowed',
+                  opacity: submitLoading ? 0.7 : 1,
+                }}
+              >
+                {submitLoading ? '同步中...' : '同步归档'}
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmitCode}
+                disabled={submitLoading || submitMethod !== 'robot'}
+                style={{
+                  padding: '0.625rem 2rem',
+                  background: submitMethod === 'robot' ? 'var(--primary)' : 'var(--gray-300)',
+                  color: submitMethod === 'robot' ? 'white' : 'var(--gray-500)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  cursor: submitMethod === 'robot' ? 'pointer' : 'not-allowed',
+                  opacity: submitLoading ? 0.7 : 1,
+                }}
+              >
+                {submitLoading ? '提交中...' : '提交'}
+              </button>
+            )}
           </div>
         </Modal>
       )}

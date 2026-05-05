@@ -103,9 +103,9 @@ export default function AdminSchoolDetailPage() {
 
   const fetchStudents = async () => {
     try {
-      const result = await apiClient.get<{ list: Student[]; total: number }>(`/api/students?schoolId=${schoolId}&page=${studentPage}&pageSize=${pageSize}`)
+      const result = await apiClient.get<{ data: Student[]; total: number }>(`/api/students?schoolId=${schoolId}&page=${studentPage}&pageSize=${pageSize}`)
       if (result.success) {
-        setStudents(result.data?.list || [])
+        setStudents(result.data?.data || [])
         setStudentTotal(result.data?.total || 0)
       }
     } catch (error) {
@@ -115,9 +115,9 @@ export default function AdminSchoolDetailPage() {
 
   const fetchTeachers = async () => {
     try {
-      const result = await apiClient.get<{ list: Teacher[]; total: number }>(`/api/schools/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`)
+      const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/schools/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`)
       if (result.success) {
-        setTeachers(result.data?.list || [])
+        setTeachers(result.data?.data || [])
         setTeacherTotal(result.data?.total || 0)
       }
     } catch (error) {

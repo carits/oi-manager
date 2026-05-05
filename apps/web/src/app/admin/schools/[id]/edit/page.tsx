@@ -122,9 +122,9 @@ export default function EditSchoolPage() {
 
   const fetchTeachers = async () => {
     try {
-      const result = await apiClient.get<{ list: Teacher[] }>(`/api/schools/${schoolId}/teachers`)
+      const result = await apiClient.get<{ data: Teacher[] }>(`/api/schools/${schoolId}/teachers`)
       if (result.success) {
-        setTeachers(result.data?.list || [])
+        setTeachers(result.data?.data || [])
       }
     } catch (error) {
       console.error('Failed to fetch teachers:', error)

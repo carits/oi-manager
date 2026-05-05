@@ -53,7 +53,7 @@ export default function StudentTeamPage() {
   const [creating, setCreating] = useState(false)
 
   // 转换 Team 数据格式
-  const teams: TeamItem[] = (data?.list || []).map((team: Team) => ({
+  const teams: TeamItem[] = (data?.data || []).map((team: Team) => ({
     id: team.id,
     name: team.name,
     avatar: team.avatar,

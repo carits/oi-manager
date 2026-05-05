@@ -145,9 +145,9 @@ export default function PlatformAdminProblemsPage() {
       })
       if (jobsPlatformFilter) params.append('platform', jobsPlatformFilter)
       if (jobsStatusFilter) params.append('status', jobsStatusFilter)
-      const result = await apiClient.get<{ list: FetchJob[]; page: number; totalPages: number; total: number }>(`/api/oj-fetcher/jobs?${params}`)
+      const result = await apiClient.get<{ data: FetchJob[]; page: number; totalPages: number; total: number }>(`/api/oj-fetcher/jobs?${params}`)
       if (result.success && result.data) {
-        setJobs(result.data.list ?? [])
+        setJobs(result.data.data ?? [])
         setJobsTotalPages(result.data.totalPages ?? 1)
         setJobsTotal(result.data.total ?? 0)
       }
@@ -181,9 +181,9 @@ export default function PlatformAdminProblemsPage() {
       })
       if (selectedPlatform) params.append('platform', selectedPlatform)
       if (searchKeyword) params.append('keyword', searchKeyword)
-      const result = await apiClient.get<{ list: Problem[]; totalPages: number; total: number }>(`/api/problems?${params}`)
+      const result = await apiClient.get<{ data: Problem[]; totalPages: number; total: number }>(`/api/problems?${params}`)
       if (result.success && result.data) {
-        setPublicProblems(result.data.list ?? [])
+        setPublicProblems(result.data.data ?? [])
         setPublicTotalPages(result.data.totalPages)
         setPublicTotal(result.data.total ?? 0)
       }
@@ -204,9 +204,9 @@ export default function PlatformAdminProblemsPage() {
         pageSize: privatePageSize.toString(),
       })
       if (searchKeyword) params.append('keyword', searchKeyword)
-      const result = await apiClient.get<{ list: Problem[]; totalPages: number; total: number }>(`/api/problems?${params}`)
+      const result = await apiClient.get<{ data: Problem[]; totalPages: number; total: number }>(`/api/problems?${params}`)
       if (result.success && result.data) {
-        setPrivateProblems(result.data.list ?? [])
+        setPrivateProblems(result.data.data ?? [])
         setPrivateTotalPages(result.data.totalPages)
         setPrivateTotal(result.data.total ?? 0)
       }

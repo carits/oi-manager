@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { PlatformBindingService } from './platform-binding.service'
+import { prisma } from '../../prisma'
 import type { BindingPlatform } from './platform-binding.types'
 
 export const platformBindingRouter = Router()
@@ -91,15 +92,15 @@ platformBindingRouter.post('/:platform/bind', authenticate, async (req: Request,
     const actualUsername = platformUsername || extra?.username
     const actualPassword = password || extra?.password
 
-    // 洛谷平台不需要 platformUsername（从 Cookie 自动获取）
+    // 洛谷和 Codeforces 平台不需要 platformUsername（从 Cookie 自动获取）
     // 其他平台需要 platformUsername
-    if (platform !== 'luogu' && !actualUsername) {
+    if (platform !== 'luogu' && platform !== 'codeforces' && !actualUsername) {
       return res.status(400).json({ success: false, message: '请输入平台用户名' })
     }
 
     // Cookie 模式可以替代密码（绕过 Cloudflare）
-    const hasCookie = extra?.cookieString || extra?.cookies
-    if (platform !== 'luogu' && !actualPassword && !hasCookie) {
+    const hasCookie = extra?.cookieString || extra?.cookies || extra?.JSESSIONID
+    if (platform !== 'luogu' && platform !== 'codeforces' && !actualPassword && !hasCookie) {
       return res.status(400).json({ success: false, message: '请输入密码或提供 Cookie' })
     }
 
@@ -161,5 +162,77 @@ platformBindingRouter.post('/:platform/refresh', authenticate, async (req: Reque
   } catch (error) {
     console.error('Refresh binding error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+/**
+ * 同步归档题目（Codeforces 专用）
+ * POST /api/platform-bindings/codeforces/sync-archive
+ *
+ * Body:
+ * - startTime?: string - 开始时间（比赛/训练归档时传入）
+ * - endTime?: string - 结束时间（比赛/训练归档时传入）
+ */
+platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const { startTime, endTime } = req.body
+
+    // 1. 获取用户的 CF 绑定信息
+    const binding = await service.getUserPlatformBinding(userId, 'codeforces')
+
+    if (!binding.bound) {
+      return res.status(400).json({
+        success: false,
+        message: '请先绑定 Codeforces 账号',
+      })
+    }
+
+    // 2. 获取绑定数据
+    const bindingRecord = await prisma.userPlatformBinding.findUnique({
+      where: { userId_platform: { userId, platform: 'codeforces' } },
+    })
+
+    if (!bindingRecord?.bindingData) {
+      return res.status(400).json({
+        success: false,
+        message: '绑定数据不完整，请重新绑定',
+      })
+    }
+
+    const bindingData = JSON.parse(bindingRecord.bindingData)
+    const { jsessionid, handle } = bindingData
+
+    if (!jsessionid || !handle) {
+      return res.status(400).json({
+        success: false,
+        message: '绑定数据不完整，请重新绑定',
+      })
+    }
+
+    // 3. 构建归档选项
+    const options = {
+      startTime: startTime ? new Date(startTime) : undefined,
+      endTime: endTime ? new Date(endTime) : undefined,
+    }
+
+    // 4. 执行归档同步
+    const { archiveCfProblemsForUser } = await import('./binders/codeforces-archiver')
+    const result = await archiveCfProblemsForUser(userId, jsessionid, handle, options)
+
+    res.json({
+      success: true,
+      message: `成功归档 ${result.count} 道题目${result.skipped > 0 ? `，跳过 ${result.skipped} 道已归档` : ''}`,
+      data: {
+        count: result.count,
+        total: result.total,
+        skipped: result.skipped,
+        problems: result.problems.slice(0, 10), // 只返回前 10 道题目预览
+      },
+    })
+
+  } catch (error) {
+    console.error('Sync CF archive error:', error)
+    res.status(500).json({ success: false, message: '同步归档失败' })
   }
 })
