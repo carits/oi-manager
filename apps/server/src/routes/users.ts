@@ -30,7 +30,7 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
           avatar: true,
           bio: true,
           schoolId: true,
-          School: { select: { id: true, name: true } }
+          School_Teacher_schoolIdToSchool: { select: { id: true, name: true } }
         }
       })
 
@@ -51,7 +51,7 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
         avatar: user?.avatar || teacher.avatar,
         bio: user?.bio || teacher.bio,
         userType: 'teacher',
-        school: teacher.School
+        school: teacher.School_Teacher_schoolIdToSchool
       }
     } else {
       const student = await prisma.student.findUnique({
@@ -228,7 +228,7 @@ userRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: 
       include: {
         Teacher: {
           include: {
-            School: { select: { id: true, name: true } }
+            School_Teacher_schoolIdToSchool: { select: { id: true, name: true } }
           }
         },
         Student: {
@@ -266,7 +266,7 @@ userRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: 
         id: user.Teacher.id,
         name: user.Teacher.name,
         schoolId: user.Teacher.schoolId || undefined,
-        schoolName: user.Teacher.School?.name
+        schoolName: user.Teacher.School_Teacher_schoolIdToSchool?.name
       } : user.Student ? {
         id: user.Student.id,
         name: user.Student.name,

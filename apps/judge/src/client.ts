@@ -126,7 +126,9 @@ class JudgeClient {
   }
 
   private async handleJudgeTask(msg: JudgeMessage) {
-    const { submissionId, problemId, code, language, config, testdataPath } = msg.payload
+    // 兼容旧字段名 problemConfig 和新字段名 config
+    const { submissionId, problemId, code, language, testdataPath } = msg.payload
+    const config = msg.payload.config ?? msg.payload.problemConfig ?? {}
 
     console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
 

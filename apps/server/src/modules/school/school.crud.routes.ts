@@ -33,7 +33,7 @@ schoolCrudRouter.get('/', authenticate, asyncHandler(async (req: AuthRequest, re
         _count: {
           select: {
             Team: true,
-            Teacher: true,
+            Teacher_Teacher_schoolIdToSchool: true,
             Student: true
           }
         }
@@ -69,7 +69,7 @@ schoolCrudRouter.get('/', authenticate, asyncHandler(async (req: AuthRequest, re
           : null,
         _count: {
           teams: _count.Team,
-          teachers: _count.Teacher,
+          teachers: _count.Teacher_Teacher_schoolIdToSchool,
           students: _count.Student
         }
       }
@@ -91,7 +91,7 @@ schoolCrudRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest,
     const school = await prisma.school.findUnique({
       where: { id },
       include: {
-        Teacher: {
+        Teacher_Teacher_schoolIdToSchool: {
           select: {
             id: true,
             name: true,
@@ -102,7 +102,7 @@ schoolCrudRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest,
         _count: {
           select: {
             Team: true,
-            Teacher: true,
+            Teacher_Teacher_schoolIdToSchool: true,
             Student: true
           }
         }
@@ -130,7 +130,7 @@ schoolCrudRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest,
             educationSystem: school.educationSystem,
             _count: {
               teams: _count.Team,
-              teachers: _count.Teacher,
+              teachers: _count.Teacher_Teacher_schoolIdToSchool,
               students: _count.Student
             }
           }
@@ -155,14 +155,14 @@ schoolCrudRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest,
     }
 
         // 转换字段名以符合前端契约
-    const { _count, Teacher, ...schoolRest } = school
+    const { _count, Teacher_Teacher_schoolIdToSchool, ...schoolRest } = school
     res.json({
       success: true,
       data: {
         ...schoolRest,
         _count: {
           teams: _count.Team,
-          teachers: _count.Teacher,
+          teachers: _count.Teacher_Teacher_schoolIdToSchool,
           students: _count.Student
         },
         principal: principal ? {
@@ -441,7 +441,7 @@ schoolCrudRouter.delete('/:id', authenticate, asyncHandler(async (req: AuthReque
     const existing = await prisma.school.findUnique({
       where: { id },
       include: {
-        _count: { select: { Team: true, Teacher: true, Student: true } }
+        _count: { select: { Team: true, Teacher_Teacher_schoolIdToSchool: true, Student: true } }
       }
     })
 
@@ -450,7 +450,7 @@ schoolCrudRouter.delete('/:id', authenticate, asyncHandler(async (req: AuthReque
     }
 
     // 检查是否有关联数据
-    if (existing._count.Team > 0 || existing._count.Teacher > 0 || existing._count.Student > 0) {
+    if (existing._count.Team > 0 || existing._count.Teacher_Teacher_schoolIdToSchool > 0 || existing._count.Student > 0) {
       return res.status(400).json({
         success: false,
         message: '该学校下存在团队、教师或学生，无法删除'

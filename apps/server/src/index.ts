@@ -34,6 +34,7 @@ import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
 import logger from './lib/logger'
+import { startCronTasks } from './lib/cron-tasks'
 import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
 
@@ -211,6 +212,7 @@ const httpServer = app.listen(PORT, () => {
     action: 'server_start',
     metadata: { port: PORT, env: process.env.NODE_ENV || 'development' }
   })
+  startCronTasks()
   startAutoVerifyScheduler()
   startSubmissionPoller(5000) // 每 5 秒轮询一次
   metrics.startPeriodicLog(300000) // 每 5 分钟输出一次指标汇总

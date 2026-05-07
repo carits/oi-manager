@@ -369,22 +369,22 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     }
   }
 
-  // 归档同步处理
+  // 归档同步处理（同步提交记录到 Submission 表）
   const handleArchiveSync = async () => {
     if (!problem || !platformBinding?.bound) return
     setSubmitLoading(true)
     try {
-      const result = await apiClient.post<{ count: number; total: number; skipped: number }>(`/api/platform-bindings/${problem.platform}/sync-archive`, {
+      const result = await apiClient.post<{ count: number; total: number; skipped: number }>(`/api/platform-bindings/${problem.platform}/sync-submissions`, {
         problemId: problem.problemId, // 传递当前题号
       })
       if (result.success && result.data) {
         const { count, skipped } = result.data
         if (count > 0) {
-          toast.success('已将当前题加入归档')
+          toast.success(`已同步 ${count} 条提交记录`)
         } else if (skipped > 0) {
-          toast.info('当前题已在归档中')
+          toast.info('该题提交记录已存在')
         } else {
-          toast.warning('未在 Codeforces 最近 1000 条提交记录中找到该题 AC 记录')
+          toast.warning('未在 Codeforces 最近 1000 条提交记录中找到该题')
         }
         setShowSubmitPanel(false)
       } else {
@@ -1353,7 +1353,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             </div>
           )}
 
-          {/* 语言选择 */}
+          {/* 语言选择 - 归档模式下隐藏 */}
+          {submitMethod !== 'archive' && (
           <div style={{ marginBottom: '1rem' }}>
             {(() => {
               const platformLangs: PlatformLanguage[] = problem.allowedLanguages
@@ -1382,8 +1383,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               )
             })()}
           </div>
+          )}
 
-          {/* 代码输入框 */}
+          {/* 代码输入框 - 归档模式下隐藏 */}
+          {submitMethod !== 'archive' && (
           <textarea
             placeholder="在此输入代码..."
             value={submitCode}
@@ -1399,11 +1402,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               lineHeight: 1.5,
               resize: 'vertical',
               boxSizing: 'border-box',
-              background: submitMethod === 'archive' ? 'var(--bg-muted)' : 'white',
-              color: submitMethod === 'archive' ? 'var(--gray-400)' : 'var(--text-primary)',
+              background: 'white',
+              color: 'var(--text-primary)',
             }}
-            disabled={submitMethod === 'archive'}
           />
+          )}
 
           {/* 提交按钮 */}
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

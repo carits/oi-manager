@@ -164,6 +164,22 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
       // 自动更新状态
       if (computedStatus !== training.status) {
         await prisma.training.update({ where: { id }, data: { status: computedStatus } })
+
+        // 比赛结束后，更新所有提交的 isGlobalVisible 为 true
+        if (computedStatus === 'finished' && training.type === 'contest') {
+          const { count } = await prisma.submission.updateMany({
+            where: {
+              submitScope: 'contest',
+              contestId: id,
+              isGlobalVisible: false,
+            },
+            data: { isGlobalVisible: true },
+          })
+          logger.info('contest_submissions_visible', {
+            action: 'training',
+            metadata: { contestId: id, updatedCount: count, message: '比赛结束，提交记录已公开' }
+          })
+        }
       }
     }
 

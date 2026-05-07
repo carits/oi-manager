@@ -1,23 +1,56 @@
 # 当前任务
 
-## 任务：CF 平台绑定提交与归档功能修复（2026-05-05）
+## 任务：CF 归档提交记录格式修复（2026-05-07）
 
 状态: **已完成** ✅
 
 ### 背景
 
-用户反馈：Codeforces 平台通过绑定账号提交与归档的功能未完成：
-1. 提交窗口没有绑定的流程
-2. 平台绑定成功后弹窗没有更新
-3. 归档功能没有更新
+用户反馈：Codeforces 归档后的评测记录格式不对，对比 HDU 远程提交（ID=3）和 CF 归档提交（ID=2350），CF 归档缺少多个字段，且前端缺少 Codeforces 的远程跳转链接逻辑。
 
-**问题定位**：
-- `ProblemDetail.tsx` 第 1265 行硬编码 "未绑定"，没有调用 API 获取实际绑定状态
-- 没有 "去绑定" 按钮引导用户到绑定页面
-- 选择 "归档" 时没有触发归档同步 API
+### 问题
 
-**已有基础设施**：
-- 平台绑定 API：`GET /api/platform-bindings/:platform` 获取绑定状态
+| 字段 | HDU (ID=3) | CF 归档 (ID=2350) | 问题 |
+|------|-----------|-------------------|------|
+| `ojAccountId` | 有值 | `null` | CF 归档未设置 OJ 账号 ID |
+| `score` | `0` | `null` | CF 归档未设置分数 |
+| `isGlobalVisible` | `true` | `null` | CF 归档未设置全局可见 |
+| 远程提交ID链接 | 可跳转 HDU | 无跳转 | 前端缺少 CF 跳转逻辑 |
+| 题号链接 | 可跳转本地题 | 无跳转 | CF 归档无 problemInternalId，应跳转 CF 原题 |
+| 代码显示 | 有代码 | 空代码区 | CF API 不返回代码，应显示提示 |
+
+### 解决方案
+
+#### 后端：CF 归档补充缺失字段
+
+- `codeforces-archiver.ts`：`syncCfSubmissionsForUser` 新增 `ojAccountId` 参数，创建提交时设置 `score`、`isGlobalVisible`、`ojAccountId`
+- `platform-binding.routes.ts`：调用 `syncCfSubmissionsForUser` 时传入 `bindingRecord.id`
+
+#### 前端：添加 Codeforces 链接跳转
+
+- `SubmissionDetailModal.tsx`：`getRemoteSubmitUrl` 添加 codeforces 分支
+- `SubmissionList.tsx`：添加 `getCfProblemUrl` 函数，题号列渲染 CF 外部链接
+- `SubmissionDetailPage.tsx`：添加 CF 远程提交 ID 链接
+
+#### 前端：归档提交代码区优化
+
+- `SubmissionDetailModal.tsx`：空代码时显示"归档记录，源代码不可用"
+- `SubmissionDetailPage.tsx`：空代码时显示"归档记录，源代码不可用"
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `apps/server/src/modules/platform-binding/binders/codeforces-archiver.ts` | 修改 — 补充 score、isGlobalVisible、ojAccountId 字段 |
+| `apps/server/src/modules/platform-binding/platform-binding.routes.ts` | 修改 — 传入 bindingRecord.id |
+| `apps/web/src/components/submission/SubmissionDetailModal.tsx` | 修改 — CF 远程链接 + 空代码提示 |
+| `apps/web/src/components/submission/SubmissionList.tsx` | 修改 — CF 题号外部链接 |
+| `apps/web/src/components/submission/SubmissionDetailPage.tsx` | 修改 — CF 远程链接 + 空代码提示 |
+
+### 验证
+
+- 前端构建通过 ✅
+- 后端有 2 个预存在的类型错误（非本次修改引入）
 - 归档同步 API：`POST /api/platform-bindings/codeforces/sync-archive`
 - 平台绑定页面：`/teacher/platform-bindings`
 

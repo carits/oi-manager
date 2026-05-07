@@ -84,7 +84,8 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
           contestId: id,
           contestProblemId: trainingProblem.id,
         } : {}),
-        isGlobalVisible: false,
+        // isGlobalVisible: 训练提交全局可见，比赛提交赛中不可见（结束后自动更新）
+        isGlobalVisible: training.type === 'contest' ? false : true,
       },
     })
 

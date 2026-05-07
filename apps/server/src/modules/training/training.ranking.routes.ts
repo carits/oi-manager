@@ -57,6 +57,8 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
     }
 
     // Get admin user IDs to exclude from ranking (unless includeAdminInRanking is true)
+    // TeamMember.userId 存储 Teacher.id 或 Student.id
+    // 由于 Teacher.id = Student.id = User.id（共享主键），可以直接使用
     let adminUserIds: string[] = []
     if (!training.includeAdminInRanking) {
       const adminMembers = await prisma.teamMember.findMany({
@@ -65,9 +67,11 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           status: 'active',
           role: { in: ['owner', 'admin'] },
         },
-        select: { id: true },
+        select: { userId: true, userType: true },
       })
-      adminUserIds = adminMembers.map(m => m.id)
+
+      // TeamMember.userId 本身就是 User.id（共享主键设计）
+      adminUserIds = adminMembers.map(m => m.userId)
     }
 
     const problems = training.TrainingProblem

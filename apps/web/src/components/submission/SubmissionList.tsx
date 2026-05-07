@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { SUBMISSION_OJ_OPTIONS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
@@ -105,16 +106,11 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     return String(timeUsed)
   }
 
-  // 判断题目是否可点击
   const canClickProblem = (submission: Submission) => {
-    if (!submission.problemInternalId) return false
-    if (viewRole === 'admin') return true
-    // Carits 平台题目始终可点击
-    if (submission.oj === 'carits') return true
-    return submission.problemVisibility === 'public'
+    return !!submission.problemInternalId && (submission.problemVisibility === 'public' || submission.problemVisibility === 'private')
   }
 
-  // 点击题号在新 tab 打开题目详情
+  // 点击题号跳转题库本地题目详情页
   const handleProblemClick = (submission: Submission) => {
     if (canClickProblem(submission)) {
       window.open(`${getPathPrefix()}/problems/${submission.problemInternalId}`, '_blank')
@@ -392,16 +388,22 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                     <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.username}</td>
                     <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{getOjLabel(s.oj)}</td>
                     <td style={{ padding: '0.75rem 1rem' }}>
+                      {canClickProblem(s) ? (
                       <span
                         onClick={() => handleProblemClick(s)}
                         style={{
-                          color: canClickProblem(s) ? 'var(--primary)' : 'var(--text-secondary)',
-                          cursor: canClickProblem(s) ? 'pointer' : 'default',
-                          textDecoration: canClickProblem(s) ? 'underline' : 'none',
+                          color: 'var(--primary)',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
                         }}
                       >
                         {s.problemId}
                       </span>
+                      ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {s.problemId}
+                      </span>
+                      )}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>{getResultBadge(s.result)}</td>
                     <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{formatTime(s.timeUsed)}</td>

@@ -12,29 +12,37 @@ import { logger } from './logger'
 
 /**
  * 判断结果是否为 AC（Accepted）
+ * 支持大小写不敏感匹配
  */
 function isAcceptedResult(result: string | null | undefined): boolean {
   if (!result) return false
-  return result === 'Accepted' || result === 'AC'
+  const normalized = result.toLowerCase()
+  return normalized === 'accepted' || normalized === 'ac'
 }
 
 /**
  * 同步题库 AC 状态
  *
  * 当用户在某题上首次 AC 时，更新 Problem 的 AC 计数
+ *
+ * @param userId - 用户 ID
+ * @param problemInternalId - 题目内部 ID
+ * @param currentSubmissionId - 当前提交 ID（用于排除当前提交，避免重复计数）
  */
 export async function syncProblemAC(
   userId: string,
-  problemInternalId: string
+  problemInternalId: string,
+  currentSubmissionId?: number
 ): Promise<void> {
   try {
-    // 检查该用户是否已经 AC 过这道题（避免重复计数）
+    // 查询该用户是否之前已 AC 过（排除当前提交）
     const existingAc = await prisma.submission.findFirst({
       where: {
         userId,
         problemId: problemInternalId,
-        result: { in: ['Accepted', 'AC'] },
+        result: { in: ['Accepted', 'AC', 'accepted', 'ac'] },
         submitScope: { in: ['problem', 'training'] },
+        id: currentSubmissionId ? { not: currentSubmissionId } : undefined,
       },
       select: { id: true },
     })
@@ -43,19 +51,6 @@ export async function syncProblemAC(
       // 用户已经 AC 过，不重复计数
       return
     }
-
-    // 检查是否有新的 AC 提交
-    const hasAc = await prisma.submission.findFirst({
-      where: {
-        userId,
-        problemId: problemInternalId,
-        result: { in: ['Accepted', 'AC'] },
-        submitScope: { in: ['problem', 'training'] },
-      },
-      select: { id: true },
-    })
-
-    if (!hasAc) return
 
     // Problem 模型暂无 acceptedCount 字段，跳过 AC 计数更新
     // 后续如需添加该字段，可在此处启用：
@@ -246,7 +241,7 @@ export async function onSubmissionJudged(submission: {
   if (submitScope === 'problem') {
     // 题库提交：同步题库 AC
     if (isAcceptedResult(submission.result)) {
-      await syncProblemAC(submission.userId, submission.problemId)
+      await syncProblemAC(submission.userId, submission.problemId, submission.id)
     }
   } else if (submitScope === 'training') {
     // 训练提交：更新训练状态 + 同步题库 AC
@@ -260,7 +255,7 @@ export async function onSubmissionJudged(submission: {
       )
     }
     if (isAcceptedResult(submission.result)) {
-      await syncProblemAC(submission.userId, submission.problemId)
+      await syncProblemAC(submission.userId, submission.problemId, submission.id)
     }
   } else if (submitScope === 'contest') {
     // 比赛提交：更新比赛状态 + **不**同步题库 AC

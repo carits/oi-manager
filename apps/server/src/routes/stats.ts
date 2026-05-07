@@ -58,7 +58,7 @@ statsRouter.get('/schools', authenticate, async (req: AuthRequest, res: Response
         _count: {
           select: {
             Team: true,
-            Teacher: true,
+            Teacher_Teacher_schoolIdToSchool: true,
             Student: true
           }
         }
@@ -73,7 +73,7 @@ statsRouter.get('/schools', authenticate, async (req: AuthRequest, res: Response
       schoolType: school.schoolType,
       status: school.status,
       teamCount: school._count.Team,
-      teacherCount: school._count.Teacher,
+      teacherCount: school._count.Teacher_Teacher_schoolIdToSchool,
       studentCount: school._count.Student,
       createdAt: school.createdAt.toISOString()
     }))

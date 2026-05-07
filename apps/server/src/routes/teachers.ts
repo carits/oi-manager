@@ -21,7 +21,7 @@ teacherRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) =
         title: true,
         avatar: true,
         schoolId: true,
-        School: {
+        School_Teacher_schoolIdToSchool: {
           select: {
             id: true,
             name: true
@@ -34,7 +34,14 @@ teacherRouter.get('/me', authenticate, async (req: AuthRequest, res: Response) =
       return res.status(404).json({ success: false, message: '教师信息不存在' })
     }
 
-    res.json({ success: true, data: teacher })
+    // 转换字段名
+    const { School_Teacher_schoolIdToSchool, ...rest } = teacher
+    const result = {
+      ...rest,
+      school: School_Teacher_schoolIdToSchool
+    }
+
+    res.json({ success: true, data: result })
   } catch (error) {
     console.error('Get current teacher error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -56,7 +63,7 @@ teacherRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Res
     // 获取教师信息
     const teacher = await prisma.teacher.findUnique({
       where: { id },
-      include: { School: true }
+      include: { School_Teacher_schoolIdToSchool: true }
     })
 
     if (!teacher) {
@@ -65,7 +72,7 @@ teacherRouter.put('/:id/status', authenticate, async (req: AuthRequest, res: Res
 
     // 权限检查：只有学校负责人可以操作
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
-      if (user.userId !== teacher.School?.currentPrincipalTeacherId) {
+      if (user.userId !== teacher.School_Teacher_schoolIdToSchool?.currentPrincipalTeacherId) {
         return res.status(403).json({ success: false, message: '只有学校负责人可以操作' })
       }
     }
@@ -97,7 +104,7 @@ teacherRouter.delete('/:id', authenticate, async (req: AuthRequest, res: Respons
     // 获取教师信息
     const teacher = await prisma.teacher.findUnique({
       where: { id },
-      include: { School: true }
+      include: { School_Teacher_schoolIdToSchool: true }
     })
 
     if (!teacher) {
@@ -106,7 +113,7 @@ teacherRouter.delete('/:id', authenticate, async (req: AuthRequest, res: Respons
 
     // 权限检查：只有学校负责人和超管可以操作
     if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
-      if (user.userId !== teacher.School?.currentPrincipalTeacherId) {
+      if (user.userId !== teacher.School_Teacher_schoolIdToSchool?.currentPrincipalTeacherId) {
         return res.status(403).json({ success: false, message: '只有学校负责人可以删除教师' })
       }
     }

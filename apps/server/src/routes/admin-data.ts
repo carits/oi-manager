@@ -244,3 +244,53 @@ adminDataRouter.post('/backfill-training-participants', async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 })
+
+/**
+ * POST /api/admin/data/fix-submission-visibility
+ * 修复提交记录的 isGlobalVisible 字段
+ *
+ * 业务规则：
+ * - 训练提交（submitScope='training'）：isGlobalVisible = true
+ * - 已结束的比赛提交（submitScope='contest' 且比赛 status='finished'）：isGlobalVisible = true
+ * - 进行中的比赛提交：isGlobalVisible = false（保持不变）
+ */
+adminDataRouter.post('/fix-submission-visibility', async (req, res) => {
+  try {
+    // 1. 训练提交：设置 isGlobalVisible = true
+    const trainingResult = await prisma.submission.updateMany({
+      where: { submitScope: 'training', isGlobalVisible: false },
+      data: { isGlobalVisible: true },
+    })
+
+    // 2. 已结束的比赛提交：设置 isGlobalVisible = true
+    const finishedContests = await prisma.training.findMany({
+      where: { type: 'contest', status: 'finished' },
+      select: { id: true },
+    })
+    const finishedContestIds = finishedContests.map(t => t.id)
+
+    let contestResult = { count: 0 }
+    if (finishedContestIds.length > 0) {
+      contestResult = await prisma.submission.updateMany({
+        where: {
+          submitScope: 'contest',
+          isGlobalVisible: false,
+          contestId: { in: finishedContestIds },
+        },
+        data: { isGlobalVisible: true },
+      })
+    }
+
+    res.json({
+      success: true,
+      data: {
+        trainingUpdated: trainingResult.count,
+        contestUpdated: contestResult.count,
+        totalUpdated: trainingResult.count + contestResult.count,
+        message: `已修复 ${trainingResult.count} 条训练提交，${contestResult.count} 条比赛提交`,
+      },
+    })
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})

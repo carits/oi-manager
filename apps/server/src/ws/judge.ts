@@ -108,13 +108,16 @@ class JudgeConsumer {
           select: { judgeConfig: true }
         })
 
+        // 统一使用 TESTDATA_DIR 环境变量
+        const TESTDATA_DIR = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
+
         return {
           submissionId: submission.id.toString(),
           problemId: submission.problemInternalId!,
           code: submission.code,
           language: submission.language,
-          testdataPath: path.join(process.cwd(), 'testdata', submission.problemInternalId!),
-          problemConfig: problem?.judgeConfig ? yaml.load(problem.judgeConfig) : {}
+          testdataPath: path.join(TESTDATA_DIR, submission.problemInternalId!),
+          config: problem?.judgeConfig ? yaml.load(problem.judgeConfig) : {}
         }
       })
     } catch (e: any) {
@@ -177,7 +180,7 @@ interface JudgeTask {
   code: string
   language: string
   testdataPath: string
-  problemConfig: any
+  config: any
 }
 
 /**

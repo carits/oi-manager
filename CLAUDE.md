@@ -279,6 +279,32 @@ res.json({ success: true, data: { profile: profileData } })
 
 详细规范见：`docs/api/FIELD_CONTRACT.md`
 
+### Teacher/Student/Admin ID 规范（必须遵守）
+
+**核心事实**：`Teacher.id` = `Student.id` = `Admin.id` = `User.id`（共享主键）
+
+**禁止使用的字段**：
+- ❌ `teacher.userId` - Teacher 模型没有这个字段
+- ❌ `student.userId` - Student 模型没有这个字段
+- ❌ `admin.userId` - Admin 模型没有这个字段
+
+**正确做法**：
+```typescript
+// ✅ Teacher.id 就是 User.id
+const userId = teacher.id
+
+// ✅ Student.id 就是 User.id
+const userId = student.id
+
+// ✅ Admin.id 就是 User.id
+const userId = admin.id
+```
+
+**TeamMember.userId 说明**：
+- 存储 `Teacher.id` 或 `Student.id`
+- 由于共享主键，`TeamMember.userId` = `User.id`
+- 可以直接用于过滤 `Submission.userId`
+
 ---
 
 ## 八、后端代码目录结构

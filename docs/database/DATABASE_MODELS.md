@@ -6,6 +6,32 @@
 - **ORM**: Prisma
 - **Schema 文件**: `apps/server/prisma/schema.prisma`
 
+## 重要说明：共享主键设计
+
+**核心事实**：`Teacher.id` = `Student.id` = `Admin.id` = `User.id`
+
+这三个模型与 User 是一对一关系，共享同一个主键：
+
+```
+User.id ←→ Teacher.id
+User.id ←→ Student.id
+User.id ←→ Admin.id
+```
+
+**不存在 `userId` 字段**：
+- Teacher 模型没有 `userId` 字段
+- Student 模型没有 `userId` 字段
+- Admin 模型没有 `userId` 字段
+
+**如需获取 User.id，直接使用 Teacher.id / Student.id / Admin.id**。
+
+**TeamMember.userId 说明**：
+- 存储 `Teacher.id` 或 `Student.id`
+- 由于共享主键，`TeamMember.userId` = `User.id`
+- 可以直接用于过滤 `Submission.userId`
+
+---
+
 ## 核心模型
 
 ### 1. User (用户)

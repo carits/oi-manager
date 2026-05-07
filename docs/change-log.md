@@ -1,5 +1,35 @@
 # 变更日志
 
+## 2026-05-07 (CF 归档提交记录格式修复)
+
+### 问题
+
+CF 归档提交记录（ID=2350）对比 HDU 远程提交（ID=3），缺少 `ojAccountId`、`score`、`isGlobalVisible` 字段。前端缺少 Codeforces 远程提交 ID 和题号的跳转链接逻辑。归档提交代码为空时显示空代码区而非提示。全局评测记录题号链接应优先跳转题库本地题目而非源题外部链接。
+
+### 修改
+
+| 文件 | 改动 |
+|------|------|
+| `apps/server/src/modules/platform-binding/binders/codeforces-archiver.ts` | `syncCfSubmissionsForUser` 新增 `ojAccountId` 参数，创建提交时补充 `score`、`isGlobalVisible`、`ojAccountId` |
+| `apps/server/src/modules/platform-binding/platform-binding.routes.ts` | 调用 `syncCfSubmissionsForUser` 时传入 `bindingRecord.id` |
+| `apps/server/src/routes/submissions.ts` | 对于无 `problemInternalId` 的提交，根据 `oj`+`problemId` 查询题库是否存在题目并填充 |
+| `apps/web/src/components/submission/SubmissionDetailModal.tsx` | `getRemoteSubmitUrl` 添加 codeforces 分支；空代码时显示"归档记录，源代码不可用" |
+| `apps/web/src/components/submission/SubmissionList.tsx` | 添加 `getCfProblemUrl` 函数；题号链接优先跳转题库本地题目（添加注释说明优先级）；CF 题目作为 fallback |
+| `apps/web/src/components/submission/SubmissionDetailPage.tsx` | 添加 CF 远程提交 ID 链接；空代码时显示"归档记录，源代码不可用" |
+
+### 影响
+
+- 新的 CF 归档提交将包含完整的字段（score、isGlobalVisible、ojAccountId）
+- CF 归档提交的远程 ID 可跳转到 Codeforces 提交详情页
+- **题号链接优先跳转题库本地题目**（如果题库有对应题目），否则跳转 CF 原题
+- 归档提交空代码不再显示空代码区，改为提示文字
+- HDU 远程提交的跳转逻辑不受影响
+
+### 验证
+
+- 前端构建通过 ✅
+- 后端 submissions.ts 类型检查通过 ✅（有 2 个预存在错误在 cf-submit.ts 和 vjudge-import.service.ts）
+
 ## 2026-05-05 (CF 平台绑定提交与归档功能修复)
 
 ### 问题

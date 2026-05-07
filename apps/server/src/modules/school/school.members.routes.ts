@@ -125,7 +125,7 @@ schoolMembersRouter.get('/:id/students-by-grade', authenticate, asyncHandler(asy
         where: { schoolId: id },
         include: {
           User: { select: { username: true } },
-          HeadTeacher: { select: { name: true } }
+          Teacher: { select: { name: true } }
         },
         orderBy: [
           { enrollmentYear: 'asc' }, // 入学年份升序（越早入学年级越高）

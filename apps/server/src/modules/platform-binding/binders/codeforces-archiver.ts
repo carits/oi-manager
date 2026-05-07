@@ -41,6 +41,204 @@ interface CfProblemInfo {
 }
 
 /**
+ * CF 提交记录（完整）
+ */
+interface CfSubmissionRecord {
+  submissionId: string        // CF submission id
+  problemId: string           // 如 "1669H"
+  verdict: string             // OK, WRONG_ANSWER, TIME_LIMIT_EXCEEDED 等
+  submittedAt: Date
+  programmingLanguage: string
+  timeUsed: number            // ms
+  memoryUsed: number          // bytes
+}
+
+/**
+ * 同步结果
+ */
+interface SyncResult {
+  count: number       // 新同步数量
+  total: number       // 本次抓取到的提交总数
+  skipped: number     // 已存在跳过的数量
+}
+
+/**
+ * CF verdict 转换为 Submission result
+ */
+function convertCfVerdict(verdict: string): string {
+  const verdictMap: Record<string, string> = {
+    'OK': 'accepted',
+    'WRONG_ANSWER': 'wrong_answer',
+    'TIME_LIMIT_EXCEEDED': 'time_limit_exceeded',
+    'MEMORY_LIMIT_EXCEEDED': 'memory_limit_exceeded',
+    'RUNTIME_ERROR': 'runtime_error',
+    'COMPILATION_ERROR': 'compilation_error',
+    'CHALLENGED': 'hacked',
+    'SKIPPED': 'skipped',
+    'TESTING': 'testing',
+    'REJECTED': 'rejected',
+    'PARTIAL': 'partial',
+    'IDLENESS_LIMIT_EXCEEDED': 'time_limit_exceeded',
+    'SECURITY_VIOLATED': 'security_violated',
+    'CRASHED': 'crashed',
+    'INPUT_PREPARATION_CRASHED': 'crashed',
+  }
+  return verdictMap[verdict] || verdict.toLowerCase()
+}
+
+/**
+ * 通过 CF API 获取用户所有提交记录
+ *
+ * @param handle - CF 用户名
+ * @param options - 同步选项（时间范围过滤、单题过滤）
+ * @returns 提交记录列表
+ */
+export async function fetchCfAllSubmissions(
+  handle: string,
+  options?: ArchiveOptions
+): Promise<CfSubmissionRecord[]> {
+  const submissions: CfSubmissionRecord[] = []
+  const maxPages = 10 // 最多查 10 页，即最近 1000 条提交
+  const count = 100
+
+  for (let page = 0; page < maxPages; page++) {
+    const from = page * count + 1
+    const url = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(handle)}&from=${from}&count=${count}`
+
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+      const data = await response.json()
+
+      if (data.status !== 'OK' || !data.result?.length) break
+
+      for (const sub of data.result) {
+        // 只处理有 verdict 的提交（跳过正在评测的）
+        if (!sub.verdict) continue
+
+        const problemId = `${sub.problem.contestId}${sub.problem.index}`
+
+        // 如果指定了 problemId，只处理该题
+        if (options?.problemId && problemId !== options.problemId) continue
+
+        // 时间范围过滤
+        if (options?.startTime || options?.endTime) {
+          const submittedAt = new Date(sub.creationTimeSeconds * 1000)
+          if (options.startTime && submittedAt < options.startTime) continue
+          if (options.endTime && submittedAt > options.endTime) continue
+        }
+
+        submissions.push({
+          submissionId: String(sub.id),
+          problemId,
+          verdict: sub.verdict,
+          submittedAt: new Date(sub.creationTimeSeconds * 1000),
+          programmingLanguage: sub.programmingLanguage || 'unknown',
+          timeUsed: sub.timeConsumedMillis || 0,
+          memoryUsed: sub.memoryConsumedBytes || 0,
+        })
+      }
+
+      // 如果指定了 problemId 且已找到，可以提前退出
+      if (options?.problemId && submissions.length > 0) {
+        // 继续获取该题的所有提交
+      }
+
+      // 如果返回数量小于 count，说明没有更多了
+      if (data.result.length < count) break
+
+    } catch (error) {
+      logger.error('cf_api_fetch_submissions_error', error as Error, { action: 'fetch_cf_submissions' })
+      break
+    }
+  }
+
+  return submissions
+}
+
+/**
+ * 同步 CF 提交记录到 Submission 表
+ *
+ * @param userId - 用户 ID
+ * @param handle - CF 用户名
+ * @param options - 同步选项
+ * @returns 同步结果
+ */
+export async function syncCfSubmissionsForUser(
+  userId: string,
+  handle: string,
+  options?: ArchiveOptions,
+  ojAccountId?: string
+): Promise<SyncResult> {
+  // 1. 获取所有提交记录
+  const submissions = await fetchCfAllSubmissions(handle, options)
+
+  // 2. 查询已存在的提交（通过 ojRemoteId 去重）
+  const existingSubmissions = await prisma.submission.findMany({
+    where: {
+      userId,
+      oj: 'codeforces',
+      ojRemoteId: { in: submissions.map(s => s.submissionId) },
+    },
+    select: { ojRemoteId: true },
+  })
+  const existingIds = new Set(existingSubmissions.map(s => s.ojRemoteId))
+
+  // 3. 批量创建新提交记录
+  let count = 0
+  for (const sub of submissions) {
+    // 跳过已存在的提交
+    if (existingIds.has(sub.submissionId)) {
+      continue
+    }
+
+    try {
+      await prisma.submission.create({
+        data: {
+          userId,
+          oj: 'codeforces',
+          ojRemoteId: sub.submissionId,
+          problemId: sub.problemId,  // 外部题号
+          result: convertCfVerdict(sub.verdict),
+          language: sub.programmingLanguage,
+          timeUsed: sub.timeUsed,
+          memoryUsed: Math.floor(sub.memoryUsed / 1024), // bytes → KB
+          createdAt: sub.submittedAt,
+          submitScope: 'problem',
+          code: '',  // CF API 不返回源代码，设为空字符串
+          codeLength: 0,
+          submitMethod: 'archive',
+          // 补充缺失字段
+          score: sub.verdict === 'OK' ? 100 : 0,
+          isGlobalVisible: true,
+          ojAccountId: ojAccountId || undefined,
+        },
+      })
+      count++
+    } catch (error) {
+      // 唯一约束冲突（并发场景），忽略
+      logger.error('cf_sync_submission_error', error as Error, {
+        action: 'sync_submission',
+        metadata: { submissionId: sub.submissionId },
+      })
+    }
+  }
+
+  const result: SyncResult = {
+    count,                           // 新同步数量
+    total: submissions.length,       // 本次抓取到的提交总数
+    skipped: existingIds.size,       // 已存在跳过的数量
+  }
+
+  logger.info('cf_sync_complete', {
+    action: 'sync_cf_submissions',
+    userId,
+    metadata: result,
+  })
+
+  return result
+}
+
+/**
  * CF 提交记录
  */
 interface CfSubmissionInfo {

@@ -450,8 +450,8 @@ export async function pollCfResultByApi(
     return {
       result: mapCfVerdict(sub.verdict),
       done: true,
-      timeUsed: sub.timeConsumedMillis ?? null,
-      memoryUsed: sub.memoryConsumedBytes ? Math.round(sub.memoryConsumedBytes / 1024) : null,
+      timeUsed: sub.timeConsumedMillis ?? undefined,
+      memoryUsed: sub.memoryConsumedBytes ? Math.round(sub.memoryConsumedBytes / 1024) : undefined,
       raw: sub,
     }
   } catch (error) {

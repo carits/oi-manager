@@ -299,7 +299,7 @@ export class VjudgeImportService {
 
       const newTeam = await prisma.team.create({
         data: {
-          id: request.teamId || request.vjudgeGroupId,
+          id: request.teamId || request.vjudgeGroupId || `vjudge-${Date.now()}`,
           name: request.teamName || `VJudge导入团队-${Date.now()}`,
           schoolId,
           isPublic: request.visibility === 'public',

@@ -151,6 +151,14 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
               intervalRef.current = null
             }
           }
+          // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
+          if (res.data.oj === 'codeforces' && (!res.data.code || res.data.code.length === 0) && res.data.submitMethod === 'archive') {
+            apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`).then(fetchRes => {
+              if (fetchRes.success && fetchRes.data?.code) {
+                setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
+              }
+            }).catch(() => {})
+          }
         }
       } catch {
         setLoading(false)
@@ -541,7 +549,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     ({detail.codeLength}B)
                   </span>
                 </button>
-                {showCode && (
+                {showCode && detail.code && (
                   <button
                     onClick={handleCopy}
                     style={{
@@ -559,6 +567,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 )}
               </div>
               {showCode && (
+                detail.code ? (
                 <div style={{
                   maxHeight: '500px',
                   overflow: 'auto',
@@ -576,6 +585,16 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     />
                   </pre>
                 </div>
+                ) : (
+                <div style={{
+                  padding: '2rem',
+                  textAlign: 'center',
+                  color: 'var(--text-muted)',
+                  background: 'var(--bg-muted)',
+                }}>
+                  {detail.submitMethod === 'archive' ? '归档记录，源代码不可用' : '无源代码'}
+                </div>
+                )
               )}
             </div>
           </div>
@@ -667,6 +686,15 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                       ) : detail.oj === 'hdu' ? (
                         <a
                           href={`https://acm.hdu.edu.cn/status.php?first=${detail.ojRemoteId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                        >
+                          {detail.ojRemoteId}
+                        </a>
+                      ) : detail.oj === 'codeforces' ? (
+                        <a
+                          href={`https://codeforces.com/contest/${detail.problemId.replace(/^(\d+).*$/, '$1')}/submission/${detail.ojRemoteId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ color: 'var(--primary)', textDecoration: 'none' }}

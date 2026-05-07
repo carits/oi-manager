@@ -450,7 +450,8 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
             </div>
           )}
 
-          {/* Language selection */}
+          {/* Language selection - 归档模式下隐藏 */}
+          {actions.submitMethod !== 'archive' && (
           <div style={{ marginBottom: '1rem' }}>
             <select
               value={actions.submitLanguage}
@@ -465,8 +466,10 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               ))}
             </select>
           </div>
+          )}
 
-          {/* Code input */}
+          {/* Code input - 归档模式下隐藏 */}
+          {actions.submitMethod !== 'archive' && (
           <textarea
             placeholder="在此输入代码..."
             value={actions.submitCode}
@@ -476,11 +479,11 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
               borderRadius: '8px', fontSize: '0.875rem',
               fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
               lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box',
-              background: actions.submitMethod === 'robot' ? 'white' : 'var(--bg-muted)',
-              color: actions.submitMethod === 'robot' ? 'var(--text-primary)' : 'var(--gray-400)',
+              background: 'white',
+              color: 'var(--text-primary)',
             }}
-            disabled={actions.submitMethod !== 'robot'}
           />
+          )}
 
           {/* Submit button */}
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

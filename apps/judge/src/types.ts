@@ -78,6 +78,8 @@ export interface JudgeRequest {
   language: string
   config: ProblemConfig
   testdataPath: string
+  /** @deprecated Use config instead */
+  problemConfig?: ProblemConfig
 }
 
 export interface JudgeCaseResult {

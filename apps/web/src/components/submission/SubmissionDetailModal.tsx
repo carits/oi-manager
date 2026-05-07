@@ -119,9 +119,15 @@ function getCaseStatusClass(result: string): 'pass' | 'fail' | 'skip' {
   return 'fail'
 }
 
-function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string): string | null {
+function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string, problemId?: string): string | null {
   if (oj === 'hdu') {
     return `https://acm.hdu.edu.cn/status.php?first=${ojRemoteId}`
+  }
+  if (oj === 'codeforces' && problemId) {
+    const match = problemId.match(/^(\d+)/)
+    if (match) {
+      return `https://codeforces.com/contest/${match[1]}/submission/${ojRemoteId}`
+    }
   }
   if (oj === 'carits' && viewRole) {
     const prefix = viewRole === 'admin' ? '/platform-admin' : viewRole === 'student' ? '/student' : '/teacher'
@@ -153,6 +159,14 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           if ((res.data.hidden || res.data.result !== 'queuing') && intervalRef.current) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
+          }
+          // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
+          if (!trainingId && res.data.oj === 'codeforces' && (!res.data.code || res.data.code.length === 0) && res.data.submitMethod === 'archive') {
+            apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`).then(fetchRes => {
+              if (fetchRes.success && fetchRes.data?.code) {
+                setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
+              }
+            }).catch(() => {})
           }
         }
       }
@@ -382,9 +396,9 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
-                getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole) ? (
+                getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole, detail.problemId) ? (
                   <a
-                    href={getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole)!}
+                    href={getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole, detail.problemId)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: 'var(--primary)', textDecoration: 'none' }}
@@ -420,6 +434,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           )}
 
           {/* 源码显示区 */}
+          {detail.code ? (
           <div style={{
             position: 'relative',
             border: '1px solid #e5e7eb',
@@ -466,6 +481,18 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               </pre>
             </div>
           </div>
+          ) : (
+          <div style={{
+            padding: '2rem',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            background: 'var(--bg-muted)',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+          }}>
+            {detail.submitMethod === 'archive' ? '归档记录，源代码不可用' : '无源代码'}
+          </div>
+          )}
         </div>
       ) : (
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>

@@ -70,14 +70,14 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
             schoolType: true
           }
         },
-        HeadTeacher: { select: { id: true, name: true } },
+        Teacher: { select: { id: true, name: true } },
         User: { select: { username: true, phone: true, email: true, avatar: true, status: true } }
       }
     })
 
     // 转换字段名为前端期望的格式
     const formattedStudents = students.map(student => {
-      const { User, HeadTeacher, School, ...rest } = student
+      const { User, Teacher, School, ...rest } = student
       return {
         ...rest,
         user: User ? {
@@ -93,9 +93,9 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
           educationSystem: School.educationSystem,
           schoolType: School.schoolType
         } : null,
-        headTeacher: HeadTeacher ? {
-          id: HeadTeacher.id,
-          name: HeadTeacher.name
+        headTeacher: Teacher ? {
+          id: Teacher.id,
+          name: Teacher.name
         } : null
       }
     })
@@ -218,7 +218,7 @@ studentRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       where: { id: studentBasic.id },
       include: {
         School: { select: { id: true, name: true } },
-        HeadTeacher: { select: { id: true, name: true, title: true } },
+        Teacher: { select: { id: true, name: true, title: true } },
         User: { select: { username: true, phone: true, email: true, avatar: true, bio: true } },
         Milestone: { orderBy: { milestoneDate: 'desc' } },
         ContestResult: { include: { Contest: true }, orderBy: { Contest: { contestDate: 'desc' } } }

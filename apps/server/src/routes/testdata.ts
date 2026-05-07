@@ -22,6 +22,29 @@ if (!fs.existsSync(TESTDATA_DIR)) {
   fs.mkdirSync(TESTDATA_DIR, { recursive: true })
 }
 
+/**
+ * 检查用户是否有权限管理测试数据
+ * - 题目 owner 有权限
+ * - super_admin / platform_admin 有权限
+ */
+async function canManageTestdata(userId: string, problemId: string): Promise<boolean> {
+  const problem = await prisma.problem.findUnique({
+    where: { id: problemId },
+    select: { ownerId: true },
+  })
+  if (!problem) return false
+
+  // owner 直接有权限
+  if (problem.ownerId === userId) return true
+
+  // 检查是否为管理员
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  })
+  return user?.role === 'super_admin' || user?.role === 'platform_admin'
+}
+
 // 配置 multer 存储
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
@@ -60,6 +83,7 @@ function calculateMd5(filePath: string): string {
 testdataRouter.get('/problems/:id/testdata', authenticate, async (req: any, res) => {
   try {
     const { id } = req.params
+    const userId = req.user.userId
 
     // 检查题目是否存在
     const problem = await prisma.problem.findUnique({
@@ -70,6 +94,14 @@ testdataRouter.get('/problems/:id/testdata', authenticate, async (req: any, res)
       return res.status(404).json({
         success: false,
         message: '题目不存在'
+      })
+    }
+
+    // 权限检查：只有 owner 或管理员可查看测试数据
+    if (!await canManageTestdata(userId, id)) {
+      return res.status(403).json({
+        success: false,
+        message: '只有题目所有者或管理员可查看测试数据'
       })
     }
 
@@ -324,6 +356,7 @@ testdataRouter.delete('/problems/:id/testdata/:fileId', authenticate, async (req
 testdataRouter.post('/problems/:id/testdata/auto', authenticate, async (req: any, res) => {
   try {
     const { id } = req.params
+    const userId = req.user.userId
 
     // 检查题目是否存在
     const problem = await prisma.problem.findUnique({
@@ -334,6 +367,14 @@ testdataRouter.post('/problems/:id/testdata/auto', authenticate, async (req: any
       return res.status(404).json({
         success: false,
         message: '题目不存在'
+      })
+    }
+
+    // 权限检查：只有 owner 或管理员可查看测试数据
+    if (!await canManageTestdata(userId, id)) {
+      return res.status(403).json({
+        success: false,
+        message: '只有题目所有者或管理员可查看测试数据'
       })
     }
 
@@ -372,6 +413,15 @@ testdataRouter.post('/problems/:id/testdata/auto', authenticate, async (req: any
 testdataRouter.get('/problems/:id/testdata/download/:filename', authenticate, async (req: any, res) => {
   try {
     const { id, filename } = req.params
+    const userId = req.user.userId
+
+    // 安全检查：防止路径穿越
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({
+        success: false,
+        message: '非法文件名'
+      })
+    }
 
     // 检查文件记录是否存在
     const testdataFile = await prisma.testdataFile.findUnique({
@@ -390,7 +440,26 @@ testdataRouter.get('/problems/:id/testdata/download/:filename', authenticate, as
       })
     }
 
+    // 权限检查：只有 owner 或管理员可下载测试数据
+    if (!await canManageTestdata(userId, id)) {
+      return res.status(403).json({
+        success: false,
+        message: '只有题目所有者或管理员可下载测试数据'
+      })
+    }
+
     const filePath = path.join(TESTDATA_DIR, id, filename)
+
+    // 二次校验：确保解析后的路径在预期目录内
+    const resolvedPath = path.resolve(filePath)
+    const expectedDir = path.resolve(TESTDATA_DIR, id)
+    if (!resolvedPath.startsWith(expectedDir)) {
+      return res.status(400).json({
+        success: false,
+        message: '非法路径'
+      })
+    }
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,

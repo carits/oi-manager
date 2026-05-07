@@ -257,3 +257,95 @@ platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req:
     res.status(500).json({ success: false, message: '同步归档失败' })
   }
 })
+
+/**
+ * 同步 Codeforces 提交记录到 Submission 表
+ * POST /api/platform-bindings/codeforces/sync-submissions
+ *
+ * Body:
+ * - startTime?: string - 开始时间
+ * - endTime?: string - 结束时间
+ * - problemId?: string - 单题同步时传入
+ */
+platformBindingRouter.post('/codeforces/sync-submissions', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const { startTime, endTime, problemId } = req.body
+
+    // 1. 获取用户的 CF 绑定信息
+    const binding = await service.getUserPlatformBinding(userId, 'codeforces')
+
+    if (!binding.bound) {
+      return res.status(400).json({
+        success: false,
+        message: '请先绑定 Codeforces 账号',
+      })
+    }
+
+    // 2. 获取绑定数据
+    const bindingRecord = await prisma.userPlatformBinding.findUnique({
+      where: { userId_platform: { userId, platform: 'codeforces' } },
+    })
+
+    if (!bindingRecord?.bindingData) {
+      return res.status(400).json({
+        success: false,
+        message: '绑定数据不完整，请重新绑定',
+      })
+    }
+
+    const bindingData = JSON.parse(bindingRecord.bindingData)
+    const { handle } = bindingData
+
+    if (!handle) {
+      return res.status(400).json({
+        success: false,
+        message: '绑定数据不完整，请重新绑定',
+      })
+    }
+
+    // 3. 构建同步选项
+    const options = {
+      startTime: startTime ? new Date(startTime) : undefined,
+      endTime: endTime ? new Date(endTime) : undefined,
+      problemId,
+    }
+
+    // 4. 执行同步
+    const { syncCfSubmissionsForUser } = await import('./binders/codeforces-archiver')
+    const result = await syncCfSubmissionsForUser(userId, handle, options, bindingRecord.id)
+
+    // 5. 返回结果
+    let message = ''
+    if (problemId) {
+      // 单题同步
+      if (result.count > 0) {
+        message = `已同步 ${result.count} 条提交记录`
+      } else if (result.skipped > 0) {
+        message = '该题提交记录已存在'
+      } else {
+        message = '未在 Codeforces 最近 1000 条提交记录中找到该题'
+      }
+    } else {
+      // 全量同步
+      message = `已同步 ${result.count} 条提交记录`
+      if (result.skipped > 0) {
+        message += `，跳过 ${result.skipped} 条已存在`
+      }
+    }
+
+    res.json({
+      success: true,
+      message,
+      data: {
+        count: result.count,
+        total: result.total,
+        skipped: result.skipped,
+      },
+    })
+
+  } catch (error) {
+    console.error('Sync CF submissions error:', error)
+    res.status(500).json({ success: false, message: '同步提交记录失败' })
+  }
+})

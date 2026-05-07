@@ -596,8 +596,8 @@ model Submission {
   trainingProblemId String?
   contestId         Int?
   contestProblemId  String?
-  Training          Training?  @relation(fields: [contestId], references: [id])
   OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
+  Training          Training?  @relation(fields: [trainingId], references: [id])
   User              User       @relation(fields: [userId], references: [id])
 
   @@index([contestId])
@@ -960,17 +960,17 @@ model UserArchivedProblem {
   userId      String
   platform    String
   problemId   String
-  ojRemoteId  String?   // 提交 ID（用于跳转到原提交）
-  result      String?   // 评测结果
   title       String?
   difficulty  String?
   tags        String?
-  submittedAt DateTime? // 原提交时间
   solvedAt    DateTime?
   sourceUrl   String?
   note        String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
+  ojRemoteId  String?
+  result      String?
+  submittedAt DateTime?
   User        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform, problemId])

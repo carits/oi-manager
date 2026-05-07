@@ -191,6 +191,9 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       : 'upcoming'
     const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
 
+    // OI 赞中是否显示平台信息（与 problems 列表逻辑一致）
+    const showProblemId = training.problemIdVisible || training.status === 'finished' || now > training.endTime.getTime()
+
     // 构建结果
     const result = problems.map(p => {
       const platform = p.Problem.platform
@@ -210,17 +213,20 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         // 平台不支持生成链接，忽略
       }
 
+      // OI 赞中非管理员隐藏平台信息
+      const shouldShowPlatformInfo = isAdminUser || showProblemId
+
       return {
         id: p.id,
         alias: p.alias,
         title: p.Problem.title,
         orderIndex: p.orderIndex,
         points: p.points,
-        platform: platform || null,
-        platformProblemId: platformProblemId || null,
+        platform: shouldShowPlatformInfo ? (platform || null) : null,
+        platformProblemId: shouldShowPlatformInfo ? (platformProblemId || null) : null,
         problemTableId: p.Problem.id,
-        platformLabel: platformLabelMap.get(platform as any) || platform || '',
-        problemUrl,
+        platformLabel: shouldShowPlatformInfo ? (platformLabelMap.get(platform as any) || platform || '') : '',
+        problemUrl: shouldShowPlatformInfo ? problemUrl : null,
         bestScore: hideOiStatus ? null : (best?.score ?? null),
         bestResult: hideOiStatus ? null : (best?.result ?? null),
       }
@@ -360,6 +366,15 @@ trainingProblemsRouter.put('/trainings/:id/problems/:problemId', authenticate, a
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
+    // 验证题目属于该训练
+    const existingProblem = await prisma.trainingProblem.findUnique({
+      where: { id: problemId },
+      select: { trainingId: true },
+    })
+    if (!existingProblem || existingProblem.trainingId !== id) {
+      return res.status(403).json({ success: false, message: '题目不属于该训练' })
+    }
+
     const updated = await prisma.trainingProblem.update({
       where: { id: problemId },
       data: {
@@ -388,6 +403,15 @@ trainingProblemsRouter.delete('/trainings/:id/problems/:problemId', authenticate
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
+    // 验证题目属于该训练
+    const existingProblem = await prisma.trainingProblem.findUnique({
+      where: { id: problemId },
+      select: { trainingId: true },
+    })
+    if (!existingProblem || existingProblem.trainingId !== id) {
+      return res.status(403).json({ success: false, message: '题目不属于该训练' })
+    }
+
     await prisma.trainingProblem.delete({ where: { id: problemId } })
 
     res.json({ success: true, message: '删除成功' })
@@ -413,6 +437,15 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     const notStarted = await requireTrainingStarted(training, userId, training.teamId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
+    }
+
+    // 验证题目属于该训练
+    const trainingProblemCheck = await prisma.trainingProblem.findUnique({
+      where: { id: problemId },
+      select: { trainingId: true },
+    })
+    if (!trainingProblemCheck || trainingProblemCheck.trainingId !== id) {
+      return res.status(403).json({ success: false, message: '题目不属于该训练' })
     }
 
     const trainingProblem = await prisma.trainingProblem.findUnique({

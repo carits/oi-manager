@@ -6,6 +6,7 @@ import { Router } from 'express'
 import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
+import { fetchAndStoreCfCode } from '../lib/cf-code-fetcher'
 
 export const submissionsRouter = Router()
 
@@ -39,16 +40,22 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     const skip = (pageNum - 1) * pageSizeNum
 
     // 构建查询条件
+    // 全局评测记录显示 isGlobalVisible 的提交
+    // 包括题库提交、训练提交、已结束的比赛提交等
+    // 训练/比赛模块与全局评测记录是独立功能，不产生强制关联
     const where: any = {
       isGlobalVisible: true,
-      submitScope: 'problem',  // 只显示题库提交，排除训练/比赛提交
     }
 
-    // 按学校过滤：教师/学生只能看到本学校的评测记录
-    if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
+    // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有
+    if (user.role === 'student') {
+      // 学生只能看到自己的提交
+      where.userId = user.userId
+    } else if (user.role === 'teacher' || user.role === 'school_principal') {
+      // 教师可以看到本校所有教师和学生的提交
       const schoolId = user.schoolId
       if (!schoolId) {
-        // 没有学校关联的教师/学生，返回空列表
+        // 没有学校关联的教师，返回空列表
         return res.json({
           success: true,
           data: { submissions: [], page: pageNum, totalPages: 0, total: 0 },
@@ -72,6 +79,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       ]
       where.userId = { in: schoolUserIds }
     }
+    // super_admin 和 platform_admin 不加过滤，可以看到所有
 
     if (username) {
       where.User = { username: { contains: username } }
@@ -110,6 +118,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     })
 
     // 批量获取关联题目的可见性信息
+    // 对于有 problemInternalId 的提交，直接查询题目可见性
     const internalIds = submissions
       .map(s => s.problemInternalId)
       .filter((id): id is string => !!id)
@@ -124,25 +133,62 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       }
     }
 
+    // 对于没有 problemInternalId 的提交（如 CF 归档），查询题库是否存在对应题目
+    // 根据 oj + problemId 匹配题库中的题目
+    const submissionsWithoutInternalId = submissions.filter(s => !s.problemInternalId)
+    const problemLookupMap = new Map<string, string>() // key: `${oj}:${problemId}`, value: internalId
+    if (submissionsWithoutInternalId.length > 0) {
+      // 收集所有需要查找的 (oj, problemId) 组合
+      const lookupKeys = submissionsWithoutInternalId.map(s => ({ oj: s.oj, problemId: s.problemId }))
+      // 按 oj 分组查找
+      const ojGroups = new Map<string, string[]>()
+      for (const key of lookupKeys) {
+        if (!ojGroups.has(key.oj)) ojGroups.set(key.oj, [])
+        ojGroups.get(key.oj)!.push(key.problemId)
+      }
+      // 批量查询每个 oj 的题目
+      for (const [oj, problemIds] of ojGroups) {
+        const problems = await prisma.problem.findMany({
+          where: {
+            platform: oj,
+            problemId: { in: problemIds },
+          },
+          select: { id: true, problemId: true, visibility: true },
+        })
+        for (const p of problems) {
+          problemLookupMap.set(`${oj}:${p.problemId}`, p.id)
+          problemVisibilityMap.set(p.id, p.visibility)
+        }
+      }
+    }
+
     // 格式化响应
-    const formattedSubmissions = submissions.map(s => ({
-      id: s.id,
-      username: s.User.username,
-      oj: s.oj,
-      problemId: s.problemId,
-      problemInternalId: s.problemInternalId,
-      problemVisibility: s.problemInternalId ? (problemVisibilityMap.get(s.problemInternalId) || null) : null,
-      result: s.result,
-      score: s.score,
-      timeUsed: s.timeUsed,
-      memoryUsed: s.memoryUsed,
-      codeLength: s.codeLength,
-      language: s.language,
-      ojRemoteId: s.ojRemoteId,
-      submittedAt: s.createdAt.toISOString(),
-      // 来源字段
-      submitScope: s.submitScope,
-    }))
+    const formattedSubmissions = submissions.map(s => {
+      // 如果没有 problemInternalId，尝试从题库查找
+      let problemInternalId = s.problemInternalId
+      if (!problemInternalId) {
+        const lookupKey = `${s.oj}:${s.problemId}`
+        problemInternalId = problemLookupMap.get(lookupKey) || null
+      }
+      return {
+        id: s.id,
+        username: s.User.username,
+        oj: s.oj,
+        problemId: s.problemId,
+        problemInternalId,
+        problemVisibility: problemInternalId ? (problemVisibilityMap.get(problemInternalId) || null) : null,
+        result: s.result,
+        score: s.score,
+        timeUsed: s.timeUsed,
+        memoryUsed: s.memoryUsed,
+        codeLength: s.codeLength,
+        language: s.language,
+        ojRemoteId: s.ojRemoteId,
+        submittedAt: s.createdAt.toISOString(),
+        // 来源字段
+        submitScope: s.submitScope,
+      }
+    })
 
     res.json({
       success: true,
@@ -200,16 +246,18 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       })
     }
 
-    // 权限检查：训练/比赛提交不能通过全局 API 访问
-    if (submission.submitScope !== 'problem') {
-      return res.status(403).json({
-        success: false,
-        message: '训练/比赛提交请通过对应页面查看',
-      })
-    }
-
-    // 权限检查：教师/学生只能查看本学校的提交
-    if (user.role !== 'super_admin' && user.role !== 'platform_admin') {
+    // 权限检查：学生只能看自己的，教师看本校，管理员看所有
+    // 训练/比赛提交出现在全局评测记录中是正常机制，不做 submitScope 限制
+    if (user.role === 'student') {
+      // 学生只能查看自己的提交
+      if (submission.userId !== user.userId) {
+        return res.status(403).json({
+          success: false,
+          message: '无权查看该提交记录',
+        })
+      }
+    } else if (user.role === 'teacher' || user.role === 'school_principal') {
+      // 教师只能查看本学校的提交
       const userSchoolId = user.schoolId
       const submitterSchoolId = submission.User.Teacher?.schoolId || submission.User.Student?.schoolId
       if (!userSchoolId || userSchoolId !== submitterSchoolId) {
@@ -219,6 +267,7 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
         })
       }
     }
+    // super_admin 和 platform_admin 不加过滤，可以查看所有
 
     // 获取题目标题
     let problemTitle: string | null = null
@@ -289,5 +338,62 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       success: false,
       message: '查询失败',
     })
+  }
+})
+
+/**
+ * POST /api/submissions/:id/fetch-code
+ * 按需抓取 CF 提交源代码
+ * 当提交的 code 为空且 oj 为 codeforces 时，立即通过 Playwright 抓取并存储
+ */
+submissionsRouter.post('/:id/fetch-code', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const submissionId = parseInt(id)
+
+    const submission = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      select: { id: true, oj: true, code: true, codeLength: true },
+    })
+
+    if (!submission) {
+      return res.status(404).json({ success: false, message: '提交记录不存在' })
+    }
+
+    if (submission.oj !== 'codeforces') {
+      return res.status(400).json({ success: false, message: '仅支持 Codeforces 提交的代码抓取' })
+    }
+
+    if (submission.code && submission.code.length > 0) {
+      return res.json({
+        success: true,
+        data: { code: submission.code, codeLength: submission.codeLength },
+      })
+    }
+
+    // 执行抓取
+    const fetched = await fetchAndStoreCfCode(submissionId)
+
+    if (fetched) {
+      const updated = await prisma.submission.findUnique({
+        where: { id: submissionId },
+        select: { code: true, codeLength: true },
+      })
+      res.json({
+        success: true,
+        data: { code: updated?.code || '', codeLength: updated?.codeLength || 0 },
+      })
+    } else {
+      res.json({
+        success: false,
+        message: '抓取源代码失败，请稍后重试',
+      })
+    }
+  } catch (e: any) {
+    logger.error('submission_fetch_code_error', {
+      action: 'submissions',
+      metadata: { error: e.message },
+    })
+    res.status(500).json({ success: false, message: '抓取失败' })
   }
 })
