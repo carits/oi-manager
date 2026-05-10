@@ -109,7 +109,7 @@ export default function ProblemListDetailPage() {
   const params = useParams()
   const { user } = useAuth()
   const listId = params.id as string
-  const pathPrefix = user?.role === 'student' ? '/student' : '/teacher'
+  const pathPrefix = user?.role === 'student' ? '/student' : user?.role === 'platform_admin' ? '/platform-admin' : '/teacher'
 
   const [detail, setDetail] = useState<ListDetail | null>(null)
   const [loading, setLoading] = useState(true)

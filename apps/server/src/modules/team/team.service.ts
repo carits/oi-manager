@@ -886,6 +886,7 @@ export class TeamService {
       // 记录审计日志
       await tx.teamOperationLog.create({
         data: {
+          id: crypto.randomUUID(),
           teamId,
           operatorId: callerId,
           operatorType: callerType,

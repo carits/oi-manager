@@ -199,6 +199,7 @@ problemFilesRouter.post('/:id/attachments', authenticate, attachmentUpload.singl
     const fileUrl = `/api/files/${result.id}/download`
     const attachment = await prisma.problemAttachment.create({
       data: {
+        id: crypto.randomUUID(),
         problemId: id,
         fileName: result.originalName,
         fileSize: result.fileSize,
@@ -300,6 +301,7 @@ problemFilesRouter.post('/:id/statements/pdf', authenticate, problemUpload.singl
       // 创建新的 PDF 记录
       statement = await prisma.problemStatement.create({
         data: {
+          id: crypto.randomUUID(),
           problemId: id,
           type,
           format: 'pdf',

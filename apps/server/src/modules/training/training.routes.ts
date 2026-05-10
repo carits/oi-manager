@@ -15,12 +15,14 @@ import { trainingNotesRouter } from './training.notes.routes'
 import { trainingSubmissionsRouter } from './training.submissions.routes'
 import { trainingRankingRouter } from './training.ranking.routes'
 import { trainingMiscRouter } from './training.misc.routes'
+import { trainingRecordRouter } from './training.record.routes'
 
 export const trainingsRouter = Router()
 
 trainingsRouter.use(trainingCrudRouter)
 trainingsRouter.use(trainingProblemsRouter)
 trainingsRouter.use(trainingNotesRouter)
+trainingsRouter.use(trainingRecordRouter)
 trainingsRouter.use(trainingSubmissionsRouter)
 trainingsRouter.use(trainingRankingRouter)
 trainingsRouter.use(trainingMiscRouter)

@@ -12,8 +12,9 @@ import TeachersTab from '@/app/teacher/school/components/TeachersTab'
 import StudentsTab from '@/app/teacher/school/components/StudentsTab'
 import RankingsTab from '@/app/teacher/school/components/RankingsTab'
 import TeamsTab from '@/app/teacher/school/components/TeamsTab'
+import ContestsTab from '@/app/teacher/school/components/ContestsTab'
 
-type TabType = 'home' | 'teachers' | 'students' | 'rankings' | 'teams'
+type TabType = 'home' | 'teachers' | 'students' | 'rankings' | 'teams' | 'contests'
 
 interface School {
   id: string
@@ -52,7 +53,7 @@ export default function StudentSchoolPage() {
 
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
-    if (tab && ['home', 'teachers', 'students', 'rankings', 'teams'].includes(tab)) {
+    if (tab && ['home', 'teachers', 'students', 'rankings', 'teams', 'contests'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])
@@ -98,7 +99,8 @@ export default function StudentSchoolPage() {
     { key: 'teachers', label: '教师' },
     { key: 'students', label: '学生' },
     { key: 'rankings', label: 'Rating 排名' },
-    { key: 'teams', label: '团队' }
+    { key: 'teams', label: '团队' },
+    { key: 'contests', label: '比赛' }
   ]
 
   return (
@@ -149,6 +151,7 @@ export default function StudentSchoolPage() {
             {activeTab === 'students' && <StudentsTab schoolId={school.id} showHeader={true} />}
             {activeTab === 'rankings' && <RankingsTab schoolId={school.id} educationSystem={school.educationSystem} />}
             {activeTab === 'teams' && <TeamsTab schoolId={school.id} sessionKey={sessionKey} />}
+            {activeTab === 'contests' && <ContestsTab schoolId={school.id} />}
           </div>
         </div>
       </div>

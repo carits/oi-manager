@@ -194,6 +194,7 @@ migrationRouter.post('/migrate-problem-status', async (req, res) => {
               },
             },
             create: {
+              id: crypto.randomUUID(),
               trainingId: sub.trainingId,
               userId: sub.userId,
               trainingProblemId: sub.trainingProblemId,
@@ -223,6 +224,7 @@ migrationRouter.post('/migrate-problem-status', async (req, res) => {
               },
             },
             create: {
+              id: crypto.randomUUID(),
               contestId: sub.contestId,
               userId: sub.userId,
               contestProblemId: sub.contestProblemId,

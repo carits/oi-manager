@@ -49,6 +49,70 @@ export async function isTeamMember(userId: string, teamId: string): Promise<bool
   return !!(await getTeamMember(userId, teamId))
 }
 
+/** 检查是否是学校比赛管理员（可创建/管理校级比赛） */
+export async function isSchoolContestAdmin(userId: string, schoolId: string, trainingCreatedBy?: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true } })
+  if (!user) return false
+  if (user.role === 'super_admin') return true
+  // 学校负责人可以管理本校所有校级比赛
+  if (user.role === 'school_principal' && user.schoolId === schoolId) return true
+  // 普通教师可以创建校级比赛，只能管理自己创建的比赛
+  if ((user.role === 'teacher' || user.role === 'school_principal') && user.schoolId === schoolId) {
+    // 创建权限：只要是本校教师即可
+    if (!trainingCreatedBy) return true
+    // 管理权限：只能管理自己创建的，或者自己是学校负责人
+    if (user.role === 'school_principal') return true
+    return trainingCreatedBy === userId
+  }
+  return false
+}
+
+/** 检查是否是学校成员（可查看/参加校级比赛） */
+export async function isSchoolMember(userId: string, schoolId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true } })
+  if (!user) return false
+  if (user.role === 'super_admin' || user.role === 'platform_admin') return true
+  return user.schoolId === schoolId
+}
+
+/** 训练访问模式：team 或 school */
+export type TrainingAccessMode = 'team' | 'school' | null
+
+/** 判断训练的访问模式（基于 teamId/schoolId） */
+export function getTrainingAccessMode(training: { teamId: string | null; schoolId: string | null }): TrainingAccessMode {
+  if (training.teamId) return 'team'
+  if (training.schoolId) return 'school'
+  return null
+}
+
+/** 检查用户是否有权限访问训练（统一入口） */
+export async function canAccessTraining(
+  userId: string,
+  training: { teamId: string | null; schoolId: string | null },
+): Promise<boolean> {
+  const mode = getTrainingAccessMode(training)
+  if (mode === 'team') {
+    return isTeamMember(userId, training.teamId!)
+  } else if (mode === 'school') {
+    return isSchoolMember(userId, training.schoolId!)
+  }
+  return false // 无归属的训练拒绝访问
+}
+
+/** 检查用户是否有权限管理训练（统一入口） */
+export async function canManageTraining(
+  userId: string,
+  training: { teamId: string | null; schoolId: string | null; createdBy: string },
+): Promise<boolean> {
+  const mode = getTrainingAccessMode(training)
+  if (mode === 'team') {
+    return isTeamAdmin(userId, training.teamId!)
+  } else if (mode === 'school') {
+    return isSchoolContestAdmin(userId, training.schoolId!, training.createdBy)
+  }
+  return false
+}
+
 /** 获取用户的 userType 用于训练上下文 */
 export async function getUserTypeForTeam(userId: string): Promise<string> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
@@ -66,9 +130,8 @@ export function parseTrainingId(raw: string): number {
 
 /** 检查训练是否已开始（非管理员在 upcoming 时拒绝访问） */
 export async function requireTrainingStarted(
-  training: { status: string; startTime: Date; endTime: Date },
+  training: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; schoolId: string | null; createdBy: string },
   userId: string,
-  teamId: string,
 ): Promise<string | null> {
   let status = training.status
   if (status !== 'finished') {
@@ -78,6 +141,13 @@ export async function requireTrainingStarted(
     else status = 'finished'
   }
   if (status !== 'upcoming') return null
-  if (await isTeamAdmin(userId, teamId)) return null
+
+  // 根据训练归属判断管理员权限
+  const mode = getTrainingAccessMode(training)
+  if (mode === 'team' && training.teamId) {
+    if (await isTeamAdmin(userId, training.teamId)) return null
+  } else if (mode === 'school' && training.schoolId) {
+    if (await isSchoolContestAdmin(userId, training.schoolId, training.createdBy)) return null
+  }
   return '训练尚未开始'
 }

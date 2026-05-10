@@ -14,6 +14,9 @@ import {
   isTeamMember,
   isTeamAdmin,
   parseTrainingId,
+  canAccessTraining,
+  canManageTraining,
+  getTrainingAccessMode,
 } from './training.helpers'
 
 export const trainingCrudRouter = Router()
@@ -149,7 +152,7 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限查看该训练' })
     }
 
@@ -183,13 +186,14 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
       }
     }
 
-    const isAdmin = await isTeamAdmin(userId, training.teamId)
+    const isAdmin = await canManageTraining(userId, training)
 
     res.json({
       success: true,
       data: {
         id: training.id,
         teamId: training.teamId,
+        schoolId: training.schoolId,
         title: training.title,
         description: training.description,
         format: training.format,
@@ -223,8 +227,8 @@ trainingCrudRouter.put('/trainings/:id', authenticate, asyncHandler(async (req: 
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
-      return res.status(403).json({ success: false, message: '只有团队管理员可以编辑训练' })
+    if (!await canManageTraining(userId, training)) {
+      return res.status(403).json({ success: false, message: '只有管理员可以编辑训练' })
     }
 
     const now = new Date()
@@ -290,8 +294,8 @@ trainingCrudRouter.put('/trainings/:id/end-time', authenticate, asyncHandler(asy
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
-      return res.status(403).json({ success: false, message: '只有团队管理员可以修改结束时间' })
+    if (!await canManageTraining(userId, training)) {
+      return res.status(403).json({ success: false, message: '只有管理员可以修改结束时间' })
     }
 
     const newEndTime = new Date(endTime)
@@ -324,11 +328,11 @@ trainingCrudRouter.delete('/trainings/:id', authenticate, asyncHandler(async (re
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    // 只有创建者、团队管理员或 owner 可删除
+    // 只有创建者或管理员可删除
     const isCreator = training.createdBy === userId
-    const isAdmin = await isTeamAdmin(userId, training.teamId)
+    const isAdmin = await canManageTraining(userId, training)
     if (!isCreator && !isAdmin) {
-      return res.status(403).json({ success: false, message: '只有创建者或团队管理员可以删除训练' })
+      return res.status(403).json({ success: false, message: '只有创建者或管理员可以删除训练' })
     }
 
     await prisma.training.delete({ where: { id } })

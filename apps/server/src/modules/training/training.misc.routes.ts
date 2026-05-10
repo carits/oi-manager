@@ -9,8 +9,8 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import {
-  isTeamMember,
-  isTeamAdmin,
+  canAccessTraining,
+  canManageTraining,
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
@@ -30,7 +30,7 @@ trainingMiscRouter.get('/trainings/:id/problems/:problemId/solution', authentica
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
@@ -38,7 +38,7 @@ trainingMiscRouter.get('/trainings/:id/problems/:problemId/solution', authentica
     const showSolution = training.solutionVisible || training.status === 'finished' || new Date() > training.endTime
     if (!showSolution) {
       // 非管理员且题解不可见，返回提示信息
-      const isAdmin = await isTeamAdmin(userId, training.teamId)
+      const isAdmin = await canManageTraining(userId, training)
       if (!isAdmin) {
         return res.json({ success: true, data: null, message: '题解将在比赛结束后显示' })
       }
@@ -109,11 +109,11 @@ trainingMiscRouter.get('/trainings/:id/problems/:problemId/attachments', authent
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }

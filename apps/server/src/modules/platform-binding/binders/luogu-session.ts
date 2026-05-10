@@ -467,4 +467,60 @@ export class LuoguSession {
 
     return members
   }
+
+  // ── 归档器支持方法 ──
+  // 以下方法供 luogu-archiver.ts 使用，公开必要的基础设施
+
+  /**
+   * 获取当前会话的 uid（用于 API 请求）
+   */
+  public getUid(): string {
+    return this.uidCookie
+  }
+
+  /**
+   * 执行带限速和 C3VK 处理的 API 请求
+   * 供归档器获取提交记录使用
+   */
+  public async fetchApi(endpoint: string, extraHeaders?: Record<string, string>): Promise<{ ok: boolean; status: number; data?: any; text?: string }> {
+    const url = `${LUOGU_BASE}${endpoint}`
+
+    // 策略1：JSON API 方式
+    const response = await this.throttledGet(url, {
+      'Accept': 'application/json, text/plain, */*',
+      'X-Lentille-Request': 'content-only',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Referer': `${LUOGU_BASE}/`,
+      ...extraHeaders,
+    })
+
+    const text = await response.text()
+
+    if (response.ok) {
+      try {
+        const data = JSON.parse(text)
+        return { ok: true, status: response.status, data }
+      } catch {
+        return { ok: true, status: response.status, text }
+      }
+    }
+
+    return { ok: false, status: response.status, text }
+  }
+
+  /**
+   * 执行带限速和 C3VK 处理的页面请求
+   * 供归档器获取提交详情（含代码）使用
+   */
+  public async fetchPageContent(url: string): Promise<string> {
+    return this.fetchPage(url)
+  }
+
+  /**
+   * 解析页面数据
+   * 供归档器解析提交详情使用
+   */
+  public parsePageData(html: string): any {
+    return this.extractPageData(html)
+  }
 }

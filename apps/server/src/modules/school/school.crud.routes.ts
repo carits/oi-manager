@@ -261,8 +261,10 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
       await tx.$executeRaw`SET session_replication_role = replica`
 
       // 1. 创建学校（使用临时占位 ID）
+      const schoolId = crypto.randomUUID()
       const school = await tx.school.create({
         data: {
+          id: schoolId,
           name,
           region: region || null,
           schoolType: schoolType || null,
@@ -276,8 +278,10 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
       })
 
       // 2. 创建用户（必须绑定学校）
+      const userId = crypto.randomUUID()
       const user = await tx.user.create({
         data: {
+          id: userId,
           username,
           passwordHash: hashedPassword,
           role: 'school_principal',

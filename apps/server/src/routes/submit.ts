@@ -325,6 +325,7 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
         if (!ojAccount) {
           ojAccount = await prisma.ojAccount.create({
             data: {
+              id: crypto.randomUUID(),
               platform: 'hdu',
               username,
               password,

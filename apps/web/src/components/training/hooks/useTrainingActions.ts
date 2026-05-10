@@ -8,7 +8,7 @@ export function useTrainingActions(
   trainingId: string,
   training: TrainingInfo | null,
   basePath: string,
-  teamId: string,
+  teamId: string | null | undefined,
   selectedProblemId: string | null,
   problems: TrainingProblem[],
   activeTab: string,
@@ -73,7 +73,7 @@ export function useTrainingActions(
       const res = await apiClient.delete(`/api/trainings/${training.id}`)
       if (res.success) {
         toast.success('训练已删除')
-        router.push(`${basePath}/${teamId}?tab=training`)
+        router.push(`${basePath}?tab=contest`)
         return true
       } else {
         toast.error(res.message || '删除失败')

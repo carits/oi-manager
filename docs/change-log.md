@@ -1,5 +1,178 @@
 # 变更日志
 
+## 2026-05-10
+
+- **洛谷归档功能**
+
+  ### 背景
+
+  实现洛谷提交记录归档功能，类似已有的 Codeforces 归档。通过用户绑定的洛谷 Cookie 获取提交记录和代码，同步到 Submission 表。
+
+  ### 关键发现
+
+  直接 curl 洛谷 API 返回 302（C3VK 挑战页），必须使用 `LuoguSession` 处理会话。
+
+  ### 后端变更
+
+  | 文件 | 操作 |
+  |------|------|
+  | `modules/platform-binding/binders/luogu-archiver.ts` | **新建** — 洛谷归档器（获取提交列表、获取代码、同步到 Submission/UserArchivedProblem） |
+  | `modules/platform-binding/binders/luogu-session.ts` | 修改 — 新增公开方法 `fetchApi()`, `fetchPageContent()`, `parsePageData()`, `getUid()` 供归档器使用 |
+  | `modules/platform-binding/platform-binding.routes.ts` | 修改 — 新增 `/luogu/sync-archive` 和 `/luogu/sync-submissions` 路由 |
+
+  ### API
+
+  | 方法 | 路径 | 说明 |
+  |------|------|------|
+  | POST | `/api/platform-bindings/luogu/sync-archive` | 同步洛谷 AC 题目到 UserArchivedProblem 表 |
+  | POST | `/api/platform-bindings/luogu/sync-submissions` | 同步洛谷提交记录到 Submission 表 |
+
+  ### 验证
+
+  - TypeScript 编译 ✅ 新文件零错误
+  - 需要绑定洛谷账号后通过 API 调用验证实际数据获取
+
+## 2026-05-10
+
+- **校级比赛功能**
+
+  ### 背景
+
+  在学校页面加入比赛 tab，实现校级比赛功能。校级比赛独立于团队，由学校负责人和本校教师创建和管理，全校学生可参加。
+
+  ### 数据库变更
+
+  - Training 模型 `teamId` 改为可选（`String?`）
+  - 新增 `schoolId` 可选字段 + School 关联
+  - 新增索引：`schoolId`、`schoolId+status`
+
+  ### 后端变更
+
+  | 文件 | 操作 |
+  |------|------|
+  | `prisma/schema.prisma` | Training teamId 可选 + schoolId + School 关联 |
+  | `modules/training/training.helpers.ts` | 新增 isSchoolContestAdmin/isSchoolMember/canAccessTraining/canManageTraining |
+  | `modules/school/school.contest.routes.ts` | **新建** — 校级比赛 CRUD API |
+  | `modules/school/school.routes.ts` | 挂载 schoolContestRouter |
+  | `modules/training/training.crud.routes.ts` | 详情/更新/删除兼容 schoolId |
+  | `modules/training/training.problems.routes.ts` | 权限检查兼容 schoolId |
+  | `modules/training/training.submissions.routes.ts` | 权限检查兼容 schoolId |
+  | `modules/training/training.ranking.routes.ts` | 权限检查兼容 schoolId |
+  | `modules/training/training.notes.routes.ts` | 权限检查兼容 schoolId |
+  | `modules/training/training.record.routes.ts` | 权限检查兼容 schoolId |
+  | `modules/training/training.misc.routes.ts` | 权限检查兼容 schoolId |
+
+  ### 前端变更
+
+  | 文件 | 操作 |
+  |------|------|
+  | `components/training/TeamTrainingList.tsx` | 支持schoolId模式 |
+  | `components/training/TrainingFormModal.tsx` | 支持schoolId创建 |
+  | `components/training/TrainingDetailPage.tsx` | teamId可选，导航兼容校级 |
+  | `components/training/hooks/useTrainingActions.ts` | teamId可选 |
+  | `app/teacher/school/components/ContestsTab.tsx` | **新建** |
+  | `app/teacher/school/contests/[cid]/page.tsx` | **新建** |
+  | `app/teacher/school/page.tsx` | 添加contests tab |
+  | `app/student/school/contests/[cid]/page.tsx` | **新建** |
+  | `app/student/school/page.tsx` | 添加contests tab |
+
+  ### 权限
+
+  - super_admin: 管理所有校级比赛
+  - school_principal: 管理本校所有校级比赛
+  - teacher: 创建校级比赛，管理自己创建的
+  - student: 查看/参加本校校级比赛
+
+  ### 验证
+
+  - prisma db push ✅
+  - 前端 tsc --noEmit ✅
+  - 后端 tsc --noEmit（修改文件零错误）
+
+## 2026-05-09
+
+- **导航按钮审计修复**
+
+  ### 问题
+
+  全面审计所有"返回"等导航按钮的跳转目标，发现 4 个问题。
+
+  ### 修复
+
+  1. `admin/schools/new/page.tsx` — 返回按钮从 `<a href>` 改为 `<button onClick={router.push}>`，避免全页刷新
+  2. `admin/schools/[id]/edit/page.tsx` — 同上
+  3. 新建 `platform-admin/platform-bindings/page.tsx` — platform_admin 角色点击"去绑定"不再跳转到 404
+  4. `ProblemListDetailPage.tsx` 和 `ProblemListPage.tsx` — `pathPrefix` 支持 `platform_admin` 角色
+
+  ### 涉及文件
+
+  | 文件 | 改动 |
+  |------|------|
+  | `apps/web/src/app/admin/schools/new/page.tsx` | `<a href>` → `<button onClick>` |
+  | `apps/web/src/app/admin/schools/[id]/edit/page.tsx` | `<a href>` → `<button onClick>` |
+  | `apps/web/src/app/platform-admin/platform-bindings/page.tsx` | **新建** — 复用 admin 版本 |
+  | `apps/web/src/components/problem/ProblemListDetailPage.tsx` | pathPrefix 支持 platform_admin |
+  | `apps/web/src/components/problem/ProblemListPage.tsx` | pathPrefix 支持 platform_admin |
+
+- **训练笔记自动保存 Bug 修复 + 手动保存按钮 + beforeunload 保护**
+
+  ### 问题
+
+  切换题目时，React useEffect cleanup 函数 clearTimeout 取消了正在等待的自动保存定时器，导致旧题目内容丢失。缺少手动保存按钮和浏览器关闭保护。
+  
+  ### 后端修复
+
+  Prisma `upsert` 在 `create` block 缺少 `id: uuidv4()` 字段，导致保存失败报错"Argument `id` is missing"。已修复：
+  
+  - `training.notes.routes.ts` 第 100 行添加 `id: uuidv4()`
+  - `problem.notes.routes.ts` 第 76 行添加 `id: uuidv4()`
+
+  ### 修改
+
+  | 文件 | 改动 |
+  |------|------|
+  | `apps/web/src/components/training/hooks/useTrainingDetail.ts` | 修复自动保存：切换题目时立即保存旧内容；新增 `saveNoteNow`/`saveRecordNow` 手动保存函数 |
+  | `apps/web/src/components/training/components/TrainingProblemDetail.tsx` | 新增保存按钮（编辑器面板头部），新增 `saveNoteNow`/`saveRecordNow` props |
+  | `apps/web/src/components/training/TrainingDetailPage.tsx` | 传递保存函数给 TrainingProblemDetail；添加 beforeunload 事件保护 |
+  | `apps/web/src/components/problem/ProblemNote.tsx` | 添加 beforeunload 事件保护 |
+
+  ### 关键发现
+
+  - 训练笔记和题库笔记天然同步：两者共用同一个 ProblemNote 数据库表，同一用户对同一题目无论从训练还是题库入口，读写的是同一条记录
+  - ContestRecord 是独立的（按 trainingId + userId 唯一），不与 ProblemNote 共享
+
+- 删除 ContestProblemNote 模型（比赛已改为比赛记录 ContestRecord，不再有对单题的写思路）
+
+## 2026-05-08 (比赛记录功能 Contest Record)
+
+### 问题
+
+比赛模块不再有对单题的"写思路"功能，改为比赛记录——针对一个比赛的整体记录，而不是针对单个题目。
+
+### 修改
+
+| 文件 | 改动 |
+|------|------|
+| `apps/server/prisma/schema.prisma` | 新增 ContestRecord 模型（trainingId + userId + userType 唯一），Training 添加 ContestRecord 关联 |
+| `apps/server/src/modules/training/training.record.routes.ts` | **新增** — GET/PUT `/api/trainings/:id/record` 比赛记录 API |
+| `apps/server/src/modules/training/training.routes.ts` | 挂载 trainingRecordRouter |
+| `apps/web/src/components/training/components/TrainingProblemDetail.tsx` | 比赛场景（type='contest'）替换"写思路"为"比赛记录"按钮 + 编辑/预览/分栏面板 |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 传递 record props 给 TrainingProblemDetail |
+| `apps/web/src/components/training/hooks/useTrainingDetail.ts` | 添加 recordContent/recordSaving/showRecordPanel/recordEditMode state + 加载/自动保存逻辑 |
+
+### 影响
+
+- 比赛详情页（type='contest'）右侧按钮区显示"比赛记录"而非"写思路"
+- 训练详情页（type='training'）保持原有"写思路"功能不变
+- 比赛记录按 trainingId + userId 唯一，一个比赛一条记录
+- 编辑器支持编辑/预览/分栏三种模式，2 秒 debounce 自动保存
+
+### 验证
+
+- Prisma db push ✅
+- 前端 tsc --noEmit ✅ 零错误
+- 后端预存在类型错误非本次引入
+
 ## 2026-05-07 (CF 归档提交记录格式修复)
 
 ### 问题
@@ -149,8 +322,8 @@ Submission 和 Training 之间缺乏强关联，依赖字符串约定（submitSo
 |------|---------|
 | `routes/submissions.ts` | GET /:id 拦截训练提交（返回 403），GET / 排除训练提交（submitScope: 'problem'） |
 | `modules/problem/problem.submissions.routes.ts` | GET /:id/submissions 排除训练提交 |
-| `modules/training/training.submissions.routes.ts` | 创建时写新字段 + isGlobalVisible=false，OI 赞中非管理员脱敏处理 |
-| `modules/training/training.ranking.routes.ts` | OI 赞中非管理员返回隐藏排名 |
+| `modules/training/training.submissions.routes.ts` | 创建时写新字段 + isGlobalVisible=false，OI 赛中非管理员脱敏处理 |
+| `modules/training/training.ranking.routes.ts` | OI 赛中非管理员返回隐藏排名 |
 | `modules/training/training.problems.routes.ts` | problem-status 添加 hasSubmitted 字段 |
 
 ### 前端变更
@@ -158,15 +331,15 @@ Submission 和 Training 之间缺乏强关联，依赖字符串约定（submitSo
 | 文件 | 修改内容 |
 |------|---------|
 | `components/submission/SubmissionDetailModal.tsx` | 有 trainingId 时调训练端点，处理 hidden/displayResult |
-| `components/training/components/TrainingSubmissionPanel.tsx` | OI 赞中非管理员隐藏耗时/内存列 |
+| `components/training/components/TrainingSubmissionPanel.tsx` | OI 赛中非管理员隐藏耗时/内存列 |
 | `components/training/components/TrainingProblemList.tsx` | hasSubmitted 显示"已提交"标记 |
 | `components/training/types.ts` | 新增 hidden、displayResult、hasSubmitted 类型 |
 
 ### 验证
 
-- OI 赞中学生看不到真实 result、score、cases、subtasks、timeUsed、memoryUsed、ojRemoteId
-- OI 赞中学生只能看到"已提交"标记
-- OI 赞中管理员可以看到完整数据
+- OI 赛中学生看不到真实 result、score、cases、subtasks、timeUsed、memoryUsed、ojRemoteId
+- OI 赛中学生只能看到"已提交"标记
+- OI 赛中管理员可以看到完整数据
 - OI 赛后所有用户可以看到完整数据
 - 全局提交接口不返回训练提交
 - 直接请求训练提交 ID 返回 403

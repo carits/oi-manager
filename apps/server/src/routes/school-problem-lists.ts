@@ -156,6 +156,7 @@ schoolProblemListsRouter.post('/:schoolId/problem-lists', authenticate, async (r
 
     const item = await prisma.schoolProblemList.create({
       data: {
+        id: crypto.randomUUID(),
         schoolId,
         problemListId,
         addedBy: userId,

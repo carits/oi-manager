@@ -1,5 +1,252 @@
 # 当前任务
 
+## 任务：洛谷归档功能（2026-05-10）
+
+状态: **已完成** ✅
+
+### 背景
+
+实现洛谷提交记录归档功能，类似已有的 Codeforces 归档。通过用户绑定的洛谷 Cookie 获取提交记录和代码，同步到 Submission 表。
+
+**关键发现**：直接 curl 洛谷 API 返回 302（C3VK 挑战页），必须使用 `LuoguSession` 处理会话。
+
+### 后端变更
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `modules/platform-binding/binders/luogu-archiver.ts` | **新建** | 洛谷归档器（获取提交列表、获取代码、同步到 Submission/UserArchivedProblem） |
+| `modules/platform-binding/binders/luogu-session.ts` | 修改 | 新增公开方法 `fetchApi()`, `fetchPageContent()`, `parsePageData()`, `getUid()` |
+| `modules/platform-binding/platform-binding.routes.ts` | 修改 | 新增 `/luogu/sync-archive` 和 `/luogu/sync-submissions` 路由 |
+
+### API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/platform-bindings/luogu/sync-archive` | 同步洛谷 AC 题目到 UserArchivedProblem 表 |
+| POST | `/api/platform-bindings/luogu/sync-submissions` | 同步洛谷提交记录到 Submission 表 |
+
+### 验证
+
+- TypeScript 编译 ✅ 新文件零错误（预存在错误与本次修改无关）
+- 需绑定洛谷账号后通过 API 调用验证实际数据获取
+
+---
+
+## 任务：学校比赛 Tab（校级比赛）（2026-05-10）
+
+状态: **已完成** ✅
+
+### 背景
+
+在学校页面加入比赛 tab，实现校级比赛功能。校级比赛是学校层面的独立实体，由学校负责人和本校教师创建和管理，全校师生可参加。复用训练模块（Training）数据表，通过 `schoolId` 字段区分归属。
+
+### 数据库变更
+
+- Training 模型 `teamId` 改为可选（`String?`）
+- 新增 `schoolId` 可选字段 + School 关联 + 索引
+
+### 后端变更
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `prisma/schema.prisma` | 修改 | Training teamId 可选 + schoolId + School 关联 + 索引 |
+| `modules/training/training.helpers.ts` | 修改 | 新增 isSchoolContestAdmin / isSchoolMember / canAccessTraining / canManageTraining / getTrainingAccessMode；requireTrainingStarted 签名变更 |
+| `modules/school/school.contest.routes.ts` | **新建** | 校级比赛 CRUD API（列表/创建/更新/删除） |
+| `modules/school/school.routes.ts` | 修改 | 挂载 schoolContestRouter |
+| `modules/training/training.crud.routes.ts` | 修改 | 详情/更新/删除路由使用 canAccessTraining / canManageTraining |
+| `modules/training/training.problems.routes.ts` | 修改 | 权限检查兼容 schoolId |
+| `modules/training/training.submissions.routes.ts` | 修改 | 权限检查兼容 schoolId |
+| `modules/training/training.ranking.routes.ts` | 修改 | 权限检查兼容 schoolId |
+| `modules/training/training.notes.routes.ts` | 修改 | 权限检查兼容 schoolId |
+| `modules/training/training.record.routes.ts` | 修改 | 权限检查兼容 schoolId |
+| `modules/training/training.misc.routes.ts` | 修改 | 权限检查兼容 schoolId |
+
+### 前端变更
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `components/training/TeamTrainingList.tsx` | 修改 | 支持 schoolId 模式 |
+| `components/training/TrainingFormModal.tsx` | 修改 | 支持 schoolId 创建 |
+| `components/training/TrainingDetailPage.tsx` | 修改 | 兼容校级比赛详情（teamId 可选） |
+| `components/training/hooks/useTrainingActions.ts` | 修改 | teamId 类型改为可选 |
+| `app/teacher/school/components/ContestsTab.tsx` | **新建** | 教师端校级比赛列表 |
+| `app/teacher/school/contests/[cid]/page.tsx` | **新建** | 教师端校级比赛详情页 |
+| `app/teacher/school/page.tsx` | 修改 | 添加 contests tab |
+| `app/student/school/contests/[cid]/page.tsx` | **新建** | 学生端校级比赛详情页 |
+| `app/student/school/page.tsx` | 修改 | 添加 contests tab |
+
+### 权限矩阵
+
+| 操作 | super_admin | school_principal | teacher | student |
+|------|:-----------:|:----------------:|:-------:|:-------:|
+| 查看本校比赛 | ✅ | ✅ | ✅ | ✅ |
+| 创建校级比赛 | ✅ | ✅（本校） | ✅（本校） | ❌ |
+| 管理校级比赛 | ✅ | ✅（本校所有） | ✅（本校，自己创建的） | ❌ |
+| 参加校级比赛 | - | - | - | ✅（本校） |
+
+### 验证
+
+- prisma db push ✅ 数据库已同步
+- 前端 tsc --noEmit ✅ 零错误
+- 后端 tsc --noEmit ✅ 修改文件零错误（预存在的 problem/submission-sync 错误与本次无关）
+
+---
+
+## 任务：导航按钮审计修复（2026-05-09）
+
+状态: **已完成** ✅
+
+### 背景
+
+全面审计所有"返回"等导航按钮的跳转目标是否正确。
+
+### 发现的问题
+
+1. `admin/schools/new` 和 `admin/schools/[id]/edit` 使用 `<a href>` 导致全页刷新（应用 `router.push`）
+2. `ProblemDetail.tsx` 中 platform_admin 点击"去绑定"跳转到不存在的 `/platform-admin/platform-bindings`
+3. `ProblemListDetailPage.tsx` 和 `ProblemListPage.tsx` 的 `pathPrefix` 不支持 `platform_admin`
+
+### 修复
+
+| 文件 | 改动 |
+|------|------|
+| `apps/web/src/app/admin/schools/new/page.tsx` | `<a href>` → `<button onClick>` |
+| `apps/web/src/app/admin/schools/[id]/edit/page.tsx` | `<a href>` → `<button onClick>` |
+| `apps/web/src/app/platform-admin/platform-bindings/page.tsx` | **新建** — 复用 admin 版本 |
+| `apps/web/src/components/problem/ProblemListDetailPage.tsx` | pathPrefix 支持 platform_admin |
+| `apps/web/src/components/problem/ProblemListPage.tsx` | pathPrefix 支持 platform_admin |
+
+### 验证
+
+- TypeScript 编译零错误 ✅
+
+---
+
+## 任务：训练笔记保存功能修复与增强（2026-05-09）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈：训练中写思路，自动保存不生效——切出去之后内容丢失。同时缺少手动保存按钮，用户无法主动确认保存。
+
+### 问题分析
+
+**核心 Bug**：切换题目时，React useEffect cleanup 函数 `clearTimeout` 取消了正在等待的自动保存定时器（2 秒 debounce），导致旧题目内容从未被保存。
+
+**复现路径**：
+1. 在题目 A 输入思路
+2. 1 秒后点击题目 B（2 秒定时器还没触发）
+3. 定时器被清除，题目 A 的内容丢失
+
+**其他问题**：
+- 缺少手动保存按钮（ProblemNote.tsx 有，TrainingProblemDetail.tsx 没有）
+- 缺少 beforeunload 保护（关闭浏览器标签时内容丢失）
+
+### 关键发现
+
+训练笔记和题库笔记天然同步：两者共用同一个 `ProblemNote` 数据库表（唯一键：`problemId + userId + userType`），同一用户对同一题目无论从训练还是题库入口，读写的是同一条记录。
+
+### 解决方案
+
+| 文件 | 改动 |
+|------|------|
+| `useTrainingDetail.ts` | 修复自动保存：切换题目时立即保存旧内容；新增 `saveNoteNow`/`saveRecordNow` 手动保存函数并导出 |
+| `TrainingProblemDetail.tsx` | 新增保存按钮（编辑器面板头部，保存状态旁）；新增 `saveNoteNow`/`saveRecordNow` props |
+| `TrainingDetailPage.tsx` | 传递保存函数给 TrainingProblemDetail；添加 beforeunload 事件保护（正在保存时阻止关闭） |
+| `ProblemNote.tsx` | 添加 beforeunload 事件保护 |
+
+### 验证
+
+- 前端 TypeScript 验证 ✅ 零错误
+- 验收清单：
+  1. 训练详情页输入思路，1 秒后切换题目，旧题目内容应已保存
+  2. 编辑器面板有"保存"按钮，点击立即保存
+  3. 输入内容后刷新页面，浏览器弹出"确认离开"提示
+  4. 训练中写思路 → 去题库同一题目查看 → 内容一致（天然同步）
+
+---
+
+## 任务：删除 ContestProblemNote 模型（2026-05-09）
+
+状态: **已完成** ✅
+
+### 背景
+
+比赛模块已改为比赛记录（ContestRecord），不再有对单题的"写思路"。ContestProblemNote 模型无任何代码引用，属于孤立模型，需要清理。
+
+### 修改
+
+| 文件 | 改动 |
+|------|------|
+| `apps/server/prisma/schema.prisma` | 删除 ContestProblemNote 模型定义 + Contest/ContestProblem/Student 的关联字段 |
+| `scripts/migrate-sqlite-to-pg.ts` | 移除 ContestProblemNote 表迁移 |
+| `docs/api/FIELD_CONTRACT.md` | 移除 Student 关联字段对照中的 ContestProblemNote |
+| `docs/change-log.md` | 记录变更 |
+
+### 验证
+
+- prisma db push ✅ 数据库已同步（ContestProblemNote 表已删除）
+- prisma generate ✅ Client 已生成
+- grep 确认 schema 中无 ContestProblemNote 残留
+
+## 任务：比赛记录功能（Contest Record）（2026-05-08）
+
+状态: **已完成** ✅
+
+### 背景
+
+比赛模块不再有对单题的"写思路"功能，改为**比赛记录**——针对一个比赛（Contest/Training type='contest'）的整体记录，而不是针对单个题目。编辑器沿用现有 Markdown 编辑器样式（分栏编辑/预览、自动保存）。
+
+### 修改内容
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `apps/server/prisma/schema.prisma` | 修改 | 新增 ContestRecord 模型 + Training 关联 |
+| `apps/server/src/modules/training/training.record.routes.ts` | **新增** | 比赛记录 API（GET/PUT） |
+| `apps/server/src/modules/training/training.routes.ts` | 修改 | 挂载新路由 |
+| `apps/web/src/components/training/components/TrainingProblemDetail.tsx` | 修改 | 比赛场景替换"写思路"为"比赛记录" |
+| `apps/web/src/components/training/TrainingDetailPage.tsx` | 修改 | 传递 record props |
+| `apps/web/src/components/training/hooks/useTrainingDetail.ts` | 修改 | 添加比赛记录 state + 加载/自动保存 |
+
+### 数据库变更
+
+新增 `ContestRecord` 模型：
+- `id` String @id
+- `trainingId` Int + `userId` String + `userType` String（@@unique 复合唯一键）
+- `content` String @default("")
+- `createdAt` / `updatedAt` DateTime
+- 关联 Training，onDelete: Cascade
+
+### API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/trainings/:id/record` | 获取当前用户的比赛记录 |
+| PUT | `/api/trainings/:id/record` | 保存/更新比赛记录（upsert） |
+
+### 前端行为
+
+- `training.type === 'contest'` 时：右侧按钮区显示"📝 比赛记录"，点击展开编辑器面板（编辑/预览/分栏模式）
+- `training.type !== 'contest'` 时：保持原有"✏️ 写思路"按钮和面板
+- 比赛记录面板：2 秒 debounce 自动保存，MarkdownRenderer 预览
+
+### 验证
+
+- Prisma db push ✅ 数据库已同步
+- Prisma generate ✅ Client 已生成
+- 前端 tsc --noEmit ✅ 零错误
+- 后端有预存在的类型错误（非本次修改引入，与 ContestRecord 无关）
+
+### 手工验收清单
+
+- [ ] 打开比赛详情页（type='contest'），右侧按钮区显示"比赛记录"而非"写思路"
+- [ ] 打开训练详情页（type='training'），右侧按钮区仍显示"写思路"
+- [ ] 点击"比赛记录"按钮，展开编辑器面板（编辑/预览/分栏）
+- [ ] 输入 Markdown 内容，2 秒后自动保存
+- [ ] 刷新页面后内容仍在
+- [ ] 不同用户有各自独立的比赛记录
+
 ## 任务：CF 归档提交记录格式修复（2026-05-07）
 
 状态: **已完成** ✅
@@ -174,17 +421,17 @@
 | 4 | **全局提交列表排除**：`GET /api/submissions` 添加 `submitScope: 'problem'` 过滤 |
 | 5 | **题库提交排除**：`GET /api/problems/:id/submissions` 添加 `submitScope: 'problem'` 过滤 |
 | 6 | **训练提交创建**：设置 `submitScope: 'training'`、`trainingId`、`trainingProblemId`、`isGlobalVisible: false` |
-| 7 | **训练提交列表/详情脱敏**：OI 赞中非管理员返回 `hidden: true`、`displayResult: 'pending'`、真实字段置空 |
-| 8 | **训练排名隐藏**：OI 赞中非管理员返回 `{ hidden: true, ranking: [] }` |
-| 9 | **problem-status 添加 hasSubmitted**：OI 赞中用于显示"已提交"标记 |
+| 7 | **训练提交列表/详情脱敏**：OI 赛中非管理员返回 `hidden: true`、`displayResult: 'pending'`、真实字段置空 |
+| 8 | **训练排名隐藏**：OI 赛中非管理员返回 `{ hidden: true, ranking: [] }` |
+| 9 | **problem-status 添加 hasSubmitted**：OI 赛中用于显示"已提交"标记 |
 
 #### 前端修复
 
 | # | 修改内容 |
 |---|---------|
 | 1 | **SubmissionDetailModal**：有 trainingId 时调用训练专用端点，处理 `hidden`/`displayResult` |
-| 2 | **TrainingSubmissionPanel**：OI 赞中非管理员隐藏耗时/内存列，结果显示"已提交" |
-| 3 | **TrainingProblemList**：OI 赞中非管理员使用 `hasSubmitted` 显示"已提交"标记 |
+| 2 | **TrainingSubmissionPanel**：OI 赛中非管理员隐藏耗时/内存列，结果显示"已提交" |
+| 3 | **TrainingProblemList**：OI 赛中非管理员使用 `hasSubmitted` 显示"已提交"标记 |
 | 4 | **TrainingRankTable**：处理 `rankingData.hidden`，`isScoreBased` 判断已正确（OI + IOI） |
 | 5 | **types.ts**：新增 `hidden`、`displayResult`、`hasSubmitted` 字段类型 |
 
@@ -199,7 +446,7 @@
 | `routes/submissions.ts` | 全局提交拦截/排除训练提交 |
 | `modules/problem/problem.submissions.routes.ts` | 题库提交排除训练提交 |
 | `modules/training/training.submissions.routes.ts` | 创建写新字段 + 脱敏处理 |
-| `modules/training/training.ranking.routes.ts` | OI 赞中隐藏排名 |
+| `modules/training/training.ranking.routes.ts` | OI 赛中隐藏排名 |
 | `modules/training/training.problems.routes.ts` | problem-status 添加 hasSubmitted |
 
 #### 前端
@@ -207,7 +454,7 @@
 | 文件 | 修改 |
 |------|------|
 | `components/submission/SubmissionDetailModal.tsx` | 调训练端点 + 处理脱敏 |
-| `components/training/components/TrainingSubmissionPanel.tsx` | OI 赞中隐藏部分列 |
+| `components/training/components/TrainingSubmissionPanel.tsx` | OI 赛中隐藏部分列 |
 | `components/training/components/TrainingProblemList.tsx` | hasSubmitted 显示 |
 | `components/training/types.ts` | 新增字段类型 |
 
@@ -215,8 +462,8 @@
 
 | 场景 | 数据库 result | API 返回给非管理员学生 |
 |------|----------------|----------------------|
-| OI 赞中已评测 | `accepted` 等 | `result: null`，`displayResult: 'pending'`，`hidden: true` |
-| OI 赞中排队 | `queuing` | `result: 'queuing'`（正常显示排队） |
+| OI 赛中已评测 | `accepted` 等 | `result: null`，`displayResult: 'pending'`，`hidden: true` |
+| OI 赛中排队 | `queuing` | `result: 'queuing'`（正常显示排队） |
 | OI 赛后 | 真实值 | 返回真实值 |
 | 管理员赛中 | 真实值 | 返回真实值 |
 

@@ -149,6 +149,7 @@ ojAccountsRouter.post('/', async (req: any, res) => {
 
     const account = await prisma.ojAccount.create({
       data: {
+        id: crypto.randomUUID(),
         platform,
         username,
         password: encryptedPassword,

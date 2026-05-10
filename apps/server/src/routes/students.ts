@@ -276,8 +276,10 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
       const tempPassword = generateTempPassword()
       const hashedPassword = await hashPassword(tempPassword)
 
+      const userId = crypto.randomUUID()
       const newUser = await tx.user.create({
         data: {
+          id: userId,
           username,
           passwordHash: hashedPassword,
           role: 'student',

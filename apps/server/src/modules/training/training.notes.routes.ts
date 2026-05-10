@@ -4,12 +4,13 @@
  */
 
 import { Router } from 'express'
+import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import {
-  isTeamMember,
+  canAccessTraining,
   parseTrainingId,
   getUserTypeForTeam,
   requireTrainingStarted,
@@ -29,11 +30,11 @@ trainingNotesRouter.get('/trainings/:id/problems/:problemId/note', authenticate,
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
@@ -72,11 +73,11 @@ trainingNotesRouter.put('/trainings/:id/problems/:problemId/note', authenticate,
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
@@ -97,6 +98,7 @@ trainingNotesRouter.put('/trainings/:id/problems/:problemId/note', authenticate,
         },
       },
       create: {
+        id: uuidv4(),
         problemId: trainingProblem.problemId,
         userId,
         userType,

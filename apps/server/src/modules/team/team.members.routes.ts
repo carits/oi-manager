@@ -121,6 +121,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
     const callerType = user.role === 'student' ? 'student' : 'teacher'
     await tx.teamOperationLog.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: id,
         operatorId: callerId || '',
         operatorType: callerType as MemberType,
@@ -240,6 +241,7 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
     const callerType = user.role === 'student' ? 'student' : 'teacher'
     await tx.teamOperationLog.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: id,
         operatorId: callerId || '',
         operatorType: callerType as MemberType,
@@ -303,6 +305,7 @@ teamMembersRouter.delete('/:id/admins/:adminId', authenticate, asyncHandler(asyn
     const callerType = user.role === 'student' ? 'student' : 'teacher'
     await tx.teamOperationLog.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: id,
         operatorId: callerId || '',
         operatorType: callerType as MemberType,

@@ -4,6 +4,7 @@
  */
 
 import { Router } from 'express'
+import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
@@ -73,6 +74,7 @@ problemNotesRouter.put('/:id/note', authenticate, asyncHandler(async (req, res) 
       },
       update: { content: content || '' },
       create: {
+        id: uuidv4(),
         problemId: id,
         userId: ownerInfo.ownerId,
         userType,

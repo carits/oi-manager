@@ -127,6 +127,7 @@ export class TeamImportRepository {
   }) {
     return prisma.teamMemberImportBatch.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: params.teamId || null,
         operatorId: params.operatorId,
         platform: params.platform,
@@ -148,6 +149,7 @@ export class TeamImportRepository {
     const data = parsedRows.map((row, index) => {
       const match = matchResults[index]
       return {
+        id: crypto.randomUUID(),
         batchId,
         lineNumber: row.lineNumber,
         rawUsername: row.rawUsername,
@@ -350,6 +352,7 @@ export class TeamImportRepository {
   }) {
     return prisma.teamMemberExternalAccount.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: params.teamId,
         studentId: params.studentId || null,
         platform: params.platform,

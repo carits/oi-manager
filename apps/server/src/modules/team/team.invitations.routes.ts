@@ -293,6 +293,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
 
       await tx.teamOperationLog.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: invitation.teamId,
           operatorId: userId,
           operatorType: callerType as MemberType,
@@ -340,6 +341,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
 
       await tx.teamOperationLog.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: invitation.teamId,
           operatorId: userId,
           operatorType: callerType as MemberType,

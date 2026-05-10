@@ -227,9 +227,12 @@ export default function EditSchoolPage() {
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
           <div style={{ marginBottom: '1.5rem' }}>
-            <a href="/admin/schools" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.875rem' }}>
+            <button
+              onClick={() => router.push('/admin/schools')}
+              style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', padding: 0, textDecoration: 'none' }}
+            >
               ← 返回学校列表
-            </a>
+            </button>
           </div>
 
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>

@@ -144,6 +144,7 @@ describe('Team Operations', () => {
       // Add member first
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: memberId!,
           userType: 'student',
@@ -186,6 +187,7 @@ describe('Team Operations', () => {
       // Add regular member (not admin)
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: regularMemberId!,
           userType: 'teacher',
@@ -226,6 +228,7 @@ describe('Team Operations', () => {
       // Add member first
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: memberId!,
           userType: 'teacher',
@@ -273,6 +276,7 @@ describe('Team Operations', () => {
       // Add new owner as member first
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: newOwnerId!,
           userType: 'teacher',
@@ -350,6 +354,7 @@ describe('Team Operations', () => {
       // Add student to team
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: studentId!,
           userType: 'student',
@@ -440,6 +445,7 @@ describe('Team Operations', () => {
       // Add admin
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: adminId!,
           userType: 'teacher',

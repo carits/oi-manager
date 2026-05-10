@@ -15,8 +15,8 @@ interface SubmissionDetail {
   oj: string
   problemId: string
   result: string | null
-  displayResult?: 'pending' | 'queuing' | string  // OI 赞中非管理员显示的脱敏结果
-  hidden?: boolean  // OI 赞中非管理员标记
+  displayResult?: 'pending' | 'queuing' | string  // OI 赛中非管理员显示的脱敏结果
+  hidden?: boolean  // OI 赛中非管理员标记
   timeUsed: number | null
   memoryUsed: number | null
   codeLength: number
@@ -155,7 +155,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
         if (res.success && res.data) {
           setDetail(res.data)
           setLoading(false)
-          // OI 赞中非管理员（hidden=true）或不再是 queuing 状态，停止轮询
+          // OI 赛中非管理员（hidden=true）或不再是 queuing 状态，停止轮询
           if ((res.data.hidden || res.data.result !== 'queuing') && intervalRef.current) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
@@ -218,7 +218,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
   }
 
   const getResultBadge = (result: string | null, score?: number | null, hidden?: boolean, displayResult?: string) => {
-    // OI 赞中非管理员：显示"已提交"
+    // OI 赛中非管理员：显示"已提交"
     if (hidden || displayResult === 'pending') {
       return (
         <span style={{

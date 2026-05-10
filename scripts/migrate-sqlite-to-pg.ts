@@ -37,7 +37,6 @@ const TABLES_IN_ORDER = [
   'TeamOperationLog',
   'Contest',
   'ContestProblem',
-  'ContestProblemNote',
   'ContestProblemScore',
   'ContestResource',
   'ContestResult',

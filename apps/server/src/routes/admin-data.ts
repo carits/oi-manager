@@ -210,7 +210,7 @@ adminDataRouter.post('/backfill-training-participants', async (req, res) => {
 
     for (const t of trainings) {
       const studentMembers = await prisma.teamMember.findMany({
-        where: { teamId: t.teamId, userType: 'student', status: 'active' },
+        where: { teamId: t.teamId!, userType: 'student', status: 'active' },
         select: { userId: true },
       })
 
@@ -221,6 +221,7 @@ adminDataRouter.post('/backfill-training-participants', async (req, res) => {
 
       const result = await prisma.trainingParticipant.createMany({
         data: studentMembers.map(m => ({
+          id: crypto.randomUUID(),
           trainingId: t.id,
           userId: m.userId,
           userType: 'student',

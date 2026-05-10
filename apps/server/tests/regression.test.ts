@@ -34,7 +34,7 @@ describe('Regression Tests - Basic List and Detail', () => {
       expect(res.body.success).toBe(true)
       expect(res.body.data.page).toBe(1)
       expect(res.body.data.pageSize).toBe(3)
-      expect(res.body.data.list.length).toBeLessThanOrEqual(3)
+      expect(res.body.data.data.length).toBeLessThanOrEqual(3)
     })
 
     it('should filter students by school', async () => {
@@ -59,7 +59,7 @@ describe('Regression Tests - Basic List and Detail', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
       // All returned students should belong to school A
-      res.body.data.list.forEach((student: any) => {
+      res.body.data.data.forEach((student: any) => {
         expect(student.schoolId).toBe(school.id)
       })
     })
@@ -109,7 +109,7 @@ describe('Regression Tests - Basic List and Detail', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      expect(res.body.data.list.length).toBeGreaterThanOrEqual(2)
+      expect(res.body.data.data.length).toBeGreaterThanOrEqual(2)
     })
 
     it('should get school detail', async () => {

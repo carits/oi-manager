@@ -177,6 +177,7 @@ async function handleTeacherOwnerDeletion(teacherId: string, schoolId: string | 
             // 学校负责人不是成员，创建 owner 记录
             principalMember = await tx.teamMember.create({
               data: {
+                id: crypto.randomUUID(),
                 teamId,
                 userId: school.currentPrincipalTeacherId,
                 userType: 'teacher',

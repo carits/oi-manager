@@ -12,9 +12,21 @@ export function useTrainingDetail(trainingId: string) {
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
   const [noteContent, setNoteContent] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
-  const [showNotePanel, setShowNotePanel] = useState(false)
+  const [noteEditMode, setNoteEditMode] = useState<'edit' | 'preview' | 'split'>('split')
+  const [editModeActive, setEditModeActive] = useState(false)
   const [problemListData, setProblemListData] = useState<ProblemListEntry[]>([])
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const lastNoteProblemIdRef = useRef<string | null>(null)
+  const lastNoteContentRef = useRef('')
+
+  // Contest record state
+  const [recordContent, setRecordContent] = useState('')
+  const [recordSaving, setRecordSaving] = useState(false)
+  const [recordEditMode, setRecordEditMode] = useState<'edit' | 'preview' | 'split'>('split')
+  const [recordLoaded, setRecordLoaded] = useState(false)
+  const [noteLastSaved, setNoteLastSaved] = useState<Date | null>(null)
+  const [recordLastSaved, setRecordLastSaved] = useState<Date | null>(null)
+  const recordSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load training
   const loadTraining = useCallback(async () => {
@@ -90,25 +102,73 @@ export function useTrainingDetail(trainingId: string) {
       }
     }
     loadDetailAndNote()
-    setShowNotePanel(false)
   }, [selectedProblemId, trainingId])
 
-  // Auto-save note
+  // Auto-save note (immediately save old content when switching problems)
   useEffect(() => {
-    if (!selectedProblemId || !showNotePanel) return
+    if (!selectedProblemId) return
+
+    // When switching problems, immediately save the old problem's content
+    if (lastNoteProblemIdRef.current && lastNoteProblemIdRef.current !== selectedProblemId && lastNoteContentRef.current) {
+      apiClient.put(`/api/trainings/${trainingId}/problems/${lastNoteProblemIdRef.current}/note`, { content: lastNoteContentRef.current }).catch(error => {
+        console.error('Failed to save note on switch:', error)
+      })
+    }
+
+    lastNoteProblemIdRef.current = selectedProblemId
+    lastNoteContentRef.current = noteContent
+
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
       try {
         setNoteSaving(true)
         await apiClient.put(`/api/trainings/${trainingId}/problems/${selectedProblemId}/note`, { content: noteContent })
+        setNoteLastSaved(new Date())
       } catch (error) {
         console.error('Failed to save note:', error)
       } finally {
         setNoteSaving(false)
       }
     }, 2000)
+
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [noteContent, selectedProblemId, trainingId, showNotePanel])
+  }, [noteContent, selectedProblemId, trainingId])
+
+  // Load contest record when training is contest type
+  useEffect(() => {
+    if (!training || training.type !== 'contest' || recordLoaded) return
+    const loadRecord = async () => {
+      try {
+        const res = await apiClient.get<{ content: string }>(`/api/trainings/${trainingId}/record`)
+        if (res.success && res.data) {
+          setRecordContent(res.data.content || '')
+        }
+      } catch (error) {
+        console.error('Failed to load contest record:', error)
+      } finally {
+        setRecordLoaded(true)
+      }
+    }
+    loadRecord()
+  }, [training, trainingId, recordLoaded])
+
+  // Auto-save contest record
+  useEffect(() => {
+    if (!recordLoaded) return
+    if (recordSaveTimerRef.current) clearTimeout(recordSaveTimerRef.current)
+    recordSaveTimerRef.current = setTimeout(async () => {
+      try {
+        setRecordSaving(true)
+        await apiClient.put(`/api/trainings/${trainingId}/record`, { content: recordContent })
+      } catch (error) {
+        console.error('Failed to save contest record:', error)
+      } finally {
+        setRecordSaving(false)
+        setRecordLastSaved(new Date())
+      }
+    }, 2000)
+    return () => { if (recordSaveTimerRef.current) clearTimeout(recordSaveTimerRef.current) }
+  }, [recordContent, trainingId, recordLoaded])
 
   // Load problem list (called externally when tab changes)
   const loadProblemListData = useCallback(async () => {
@@ -124,6 +184,43 @@ export function useTrainingDetail(trainingId: string) {
 
   const clearProblemListData = useCallback(() => setProblemListData([]), [])
 
+  // Manual save note (immediately save without waiting for debounce)
+  const saveNoteNow = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    const pid = lastNoteProblemIdRef.current || selectedProblemId
+    const content = lastNoteContentRef.current || noteContent
+    if (!pid) return
+    try {
+      setNoteSaving(true)
+      await apiClient.put(`/api/trainings/${trainingId}/problems/${pid}/note`, { content })
+      setNoteLastSaved(new Date())
+    } catch (error) {
+      console.error('Failed to save note:', error)
+    } finally {
+      setNoteSaving(false)
+    }
+  }, [selectedProblemId, noteContent, trainingId])
+
+  // Manual save contest record
+  const saveRecordNow = useCallback(async () => {
+    if (recordSaveTimerRef.current) {
+      clearTimeout(recordSaveTimerRef.current)
+      recordSaveTimerRef.current = null
+    }
+    try {
+      setRecordSaving(true)
+      await apiClient.put(`/api/trainings/${trainingId}/record`, { content: recordContent })
+      setRecordLastSaved(new Date())
+    } catch (error) {
+      console.error('Failed to save contest record:', error)
+    } finally {
+      setRecordSaving(false)
+    }
+  }, [recordContent, trainingId])
+
   return {
     training, setTraining,
     problems, setProblems,
@@ -132,9 +229,14 @@ export function useTrainingDetail(trainingId: string) {
     selectedStatementId, setSelectedStatementId,
     loading, error,
     noteContent, setNoteContent,
-    noteSaving,
-    showNotePanel, setShowNotePanel,
+    noteSaving, noteLastSaved,
+    noteEditMode, setNoteEditMode,
+    editModeActive, setEditModeActive,
+    recordContent, setRecordContent,
+    recordSaving, recordLastSaved,
+    recordEditMode, setRecordEditMode,
     problemListData, loadProblemListData, clearProblemListData,
+    saveNoteNow, saveRecordNow,
     refresh: loadTraining,
   }
 }

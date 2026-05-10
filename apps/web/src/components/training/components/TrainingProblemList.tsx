@@ -47,7 +47,7 @@ export function TrainingProblemList({
   // 运行时状态判断
   const runtimeFinished = training.runtimeStatus === 'finished' || training.status === 'finished' || new Date() > new Date(training.endTime)
 
-  // OI 赞中非管理员隐藏真实结果
+  // OI 赛中非管理员隐藏真实结果
   const hideOiResults = training.format === 'oi' && !training.isAdmin && !runtimeFinished
 
   const hideSourceColumn = !training.problemIdVisible && !runtimeFinished && !training.isAdmin
@@ -70,7 +70,7 @@ export function TrainingProblemList({
             </tr>
           )}
           {problemListData.map(p => {
-            // OI 赞中非管理员：只显示"已提交"或"-"
+            // OI 赛中非管理员：只显示"已提交"或"-"
             if (hideOiResults) {
               return (
                 <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>

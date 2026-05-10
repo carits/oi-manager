@@ -9,6 +9,7 @@ import { schoolMembersRouter } from './school.members.routes'
 import { schoolPrincipalRouter } from './school.principal.routes'
 import { schoolStatsRouter } from './school.stats.routes'
 import { schoolMiscRouter } from './school.misc.routes'
+import { schoolContestRouter } from './school.contest.routes'
 
 export const schoolRouter = Router()
 
@@ -18,4 +19,5 @@ schoolRouter.use(schoolMiscRouter)
 schoolRouter.use(schoolMembersRouter)
 schoolRouter.use(schoolPrincipalRouter)
 schoolRouter.use(schoolStatsRouter)
+schoolRouter.use(schoolContestRouter)
 schoolRouter.use(schoolCrudRouter)

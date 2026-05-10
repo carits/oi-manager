@@ -57,7 +57,7 @@ export interface SanitizedSubmission {
   hidden: boolean
   displayResult: 'pending' | 'queuing' | string
 
-  // 真实字段置空（OI 赞中非管理员）
+  // 真实字段置空（OI 赛中非管理员）
   result: string | null
   score: number | null
   timeUsed: number | null
@@ -110,12 +110,12 @@ export async function isTrainingAdmin(userId: string, trainingId: number): Promi
   if (user?.role === 'super_admin' || user?.role === 'platform_admin') return true
 
   // 检查团队管理员权限
-  return await isTeamAdmin(userId, training.teamId)
+  return await isTeamAdmin(userId, training.teamId!)
 }
 
 /**
  * OI 赛制是否需要隐藏结果
- * @returns true 表示需要隐藏（OI 赞中非管理员）
+ * @returns true 表示需要隐藏（OI 赛中非管理员）
  */
 export async function shouldHideOiResults(
   training: TrainingForVisibility,
@@ -130,7 +130,7 @@ export async function shouldHideOiResults(
 }
 
 /**
- * 脱敏提交数据（OI 赞中非管理员）
+ * 脱敏提交数据（OI 赛中非管理员）
  * 使用 displayResult: 'pending' 表示"已提交，结果待公布"
  */
 export function sanitizeSubmissionForOi(submission: SubmissionForSanitization): SanitizedSubmission {
@@ -161,7 +161,7 @@ export function sanitizeSubmissionForOi(submission: SubmissionForSanitization): 
 }
 
 /**
- * 脱敏排名数据（OI 赞中非管理员）
+ * 脱敏排名数据（OI 赛中非管理员）
  */
 export function sanitizeRankingForOi(
   training: TrainingForVisibility

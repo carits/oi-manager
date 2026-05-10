@@ -217,6 +217,7 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
       if (stmt.content || stmt.fileUrl) {
         await prisma.problemStatement.create({
           data: {
+            id: crypto.randomUUID(),
             problemId: problem.id,
             type: stmt.type,
             format: stmt.format,
@@ -233,6 +234,7 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     if (description && !statements.some((s: any) => s.format === 'markdown' && s.language === 'zh')) {
       await prisma.problemStatement.create({
         data: {
+          id: crypto.randomUUID(),
           problemId: problem.id,
           type: 'statement',
           format: 'markdown',
@@ -247,6 +249,7 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     if (solutionMarkdown && !solutions.some((s: any) => s.format === 'markdown' && s.language === 'zh')) {
       await prisma.problemStatement.create({
         data: {
+          id: crypto.randomUUID(),
           problemId: problem.id,
           type: 'solution',
           format: 'markdown',

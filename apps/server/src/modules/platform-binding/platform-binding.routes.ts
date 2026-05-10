@@ -349,3 +349,145 @@ platformBindingRouter.post('/codeforces/sync-submissions', authenticate, async (
     res.status(500).json({ success: false, message: '同步提交记录失败' })
   }
 })
+
+/**
+ * 同步归档题目（洛谷专用）
+ * POST /api/platform-bindings/luogu/sync-archive
+ *
+ * Body:
+ * - startTime?: string - 开始时间
+ * - endTime?: string - 结束时间
+ * - problemId?: string - 单题归档时传入（如 P6790）
+ */
+platformBindingRouter.post('/luogu/sync-archive', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const { startTime, endTime, problemId } = req.body
+
+    // 1. 获取用户的洛谷绑定信息
+    const binding = await service.getUserPlatformBinding(userId, 'luogu')
+
+    if (!binding.bound) {
+      return res.status(400).json({
+        success: false,
+        message: '请先绑定洛谷账号',
+      })
+    }
+
+    // 2. 构建归档选项
+    const options = {
+      startTime: startTime ? new Date(startTime) : undefined,
+      endTime: endTime ? new Date(endTime) : undefined,
+      problemId,
+    }
+
+    // 3. 执行归档同步
+    const { archiveLuoguProblemsForUser } = await import('./binders/luogu-archiver')
+    const result = await archiveLuoguProblemsForUser(userId, undefined, options)
+
+    // 4. 返回结果
+    let message = ''
+    if (problemId) {
+      if (result.count > 0) {
+        message = '已将当前题加入归档'
+      } else if (result.skipped > 0) {
+        message = '当前题已在归档中'
+      } else {
+        message = '未在洛谷找到该题 AC 记录'
+      }
+    } else {
+      message = `已同步 ${result.count} 道洛谷 AC 题目`
+      if (result.skipped > 0) {
+        message += `，跳过 ${result.skipped} 道已归档`
+      }
+    }
+
+    res.json({
+      success: true,
+      message,
+      data: {
+        count: result.count,
+        total: result.total,
+        skipped: result.skipped,
+        problems: result.problems.slice(0, 10),
+      },
+    })
+
+  } catch (error) {
+    console.error('Sync Luogu archive error:', error)
+    res.status(500).json({ success: false, message: '同步归档失败' })
+  }
+})
+
+/**
+ * 同步洛谷提交记录到 Submission 表
+ * POST /api/platform-bindings/luogu/sync-submissions
+ *
+ * Body:
+ * - startTime?: string - 开始时间
+ * - endTime?: string - 结束时间
+ * - problemId?: string - 单题同步时传入（如 P6790）
+ */
+platformBindingRouter.post('/luogu/sync-submissions', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const { startTime, endTime, problemId } = req.body
+
+    // 1. 获取用户的洛谷绑定信息
+    const binding = await service.getUserPlatformBinding(userId, 'luogu')
+
+    if (!binding.bound) {
+      return res.status(400).json({
+        success: false,
+        message: '请先绑定洛谷账号',
+      })
+    }
+
+    // 2. 获取绑定记录（用于 ojAccountId）
+    const bindingRecord = await prisma.userPlatformBinding.findUnique({
+      where: { userId_platform: { userId, platform: 'luogu' } },
+    })
+
+    // 3. 构建同步选项
+    const options = {
+      startTime: startTime ? new Date(startTime) : undefined,
+      endTime: endTime ? new Date(endTime) : undefined,
+      problemId,
+    }
+
+    // 4. 执行同步
+    const { syncLuoguSubmissionsForUser } = await import('./binders/luogu-archiver')
+    const result = await syncLuoguSubmissionsForUser(userId, undefined, options, bindingRecord?.id)
+
+    // 5. 返回结果
+    let message = ''
+    if (problemId) {
+      if (result.count > 0) {
+        message = `已同步 ${result.count} 条提交记录`
+      } else if (result.skipped > 0) {
+        message = '该题提交记录已存在'
+      } else {
+        message = '未在洛谷找到该题提交记录'
+      }
+    } else {
+      message = `已同步 ${result.count} 条提交记录`
+      if (result.skipped > 0) {
+        message += `，跳过 ${result.skipped} 条已存在`
+      }
+    }
+
+    res.json({
+      success: true,
+      message,
+      data: {
+        count: result.count,
+        total: result.total,
+        skipped: result.skipped,
+      },
+    })
+
+  } catch (error) {
+    console.error('Sync Luogu submissions error:', error)
+    res.status(500).json({ success: false, message: '同步提交记录失败' })
+  }
+})

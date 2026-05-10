@@ -27,14 +27,15 @@ import { TrainingAttachmentPanel } from './components/TrainingAttachmentPanel'
 
 interface TrainingDetailPageProps {
   basePath: string
+  teamIdOverride?: string
 }
 
-export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
+export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailPageProps) {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
   const trainingId = (params.tid || params.cid) as string
-  const teamId = params.id as string
+  const teamId = teamIdOverride || (params.id as string)
 
   const [activeTab, setActiveTab] = useState<TabType>('problemList')
   const [timeDisplay, setTimeDisplay] = useState('')
@@ -44,8 +45,14 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     problemDetail, loading, error, refresh,
     selectedStatementId, setSelectedStatementId,
     noteContent, setNoteContent, noteSaving,
-    showNotePanel, setShowNotePanel,
+    noteLastSaved,
+    noteEditMode, setNoteEditMode,
+    editModeActive, setEditModeActive,
+    recordContent, setRecordContent, recordSaving,
+    recordLastSaved,
+    recordEditMode, setRecordEditMode,
     problemListData, loadProblemListData, clearProblemListData,
+    saveNoteNow, saveRecordNow,
   } = useTrainingDetail(trainingId)
 
   const { rankingData } = useTrainingRank(trainingId, activeTab)
@@ -64,7 +71,6 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   }>>({})
   const [allAttachments, setAllAttachments] = useState<Record<string, Attachment[]>>({})
 
-  const isOngoing = training?.status === 'ongoing'
   const isUpcoming = training?.status === 'upcoming'
   const hideContent = isUpcoming && !training.isAdmin
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
@@ -172,6 +178,19 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
     return () => clearInterval(timer)
   }, [training, refresh])
 
+  // beforeunload protection (prevent accidental data loss when saving is in progress)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (noteSaving || recordSaving) {
+        e.preventDefault()
+        // Legacy browsers require returnValue to be set
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [noteSaving, recordSaving])
+
   // Wire submit code → set detail submission id
   const handleSubmitCode = async () => {
     const submissionId = await actions.handleSubmitCode()
@@ -197,7 +216,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
         <div style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error || '内容不存在'}</div>
         <button
-          onClick={() => router.push(`${basePath}/${teamId}`)}
+          onClick={() => router.push(backUrl)}
           style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
         >
           返回
@@ -211,6 +230,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
   const fmtLabel = formatLabelFn(training.format)
   const tl = typeLabel(training.type)
   const backTab = training.type === 'contest' ? 'mock' : 'training'
+  const backUrl = teamId ? `${basePath}/${teamId}?tab=${backTab}` : `${basePath}?tab=contests`
   const statusColors: Record<string, { bg: string; color: string }> = {
     upcoming: { bg: 'var(--info-light)', color: 'var(--info-text)' },
     ongoing: { bg: 'var(--success-light)', color: 'var(--success-text)' },
@@ -226,7 +246,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.75rem 1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button onClick={() => router.push(`${basePath}/${teamId}?tab=training`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>← 返回</button>
+            <button onClick={() => router.push(backUrl)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>← 返回</button>
             <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
             <h1 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>{training.title}</h1>
             <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-muted)' }}>{fmtLabel}</span>
@@ -330,12 +350,23 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
             training={training}
             noteContent={noteContent}
             setNoteContent={setNoteContent}
-            showNotePanel={showNotePanel}
-            setShowNotePanel={setShowNotePanel}
             noteSaving={noteSaving}
-            isOngoing={isOngoing}
+            noteLastSaved={noteLastSaved}
+            noteEditMode={noteEditMode}
+            setNoteEditMode={setNoteEditMode}
+            editModeActive={editModeActive}
+            setEditModeActive={setEditModeActive}
+            recordContent={recordContent}
+            setRecordContent={setRecordContent}
+            recordSaving={recordSaving}
+            recordLastSaved={recordLastSaved}
+            recordEditMode={recordEditMode}
+            setRecordEditMode={setRecordEditMode}
+            trainingStatus={training.status as 'upcoming' | 'ongoing' | 'finished'}
             onSubmitClick={() => actions.setShowSubmitModal(true)}
             onGoToAttachments={() => setActiveTab('attachments')}
+            saveNoteNow={saveNoteNow}
+            saveRecordNow={saveRecordNow}
           />
         )}
 
@@ -398,12 +429,12 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       />
 
       {/* Submit Code Modal */}
-      {actions.showSubmitModal && isOngoing && (
+      {actions.showSubmitModal && training.status === 'ongoing' && (
         <Modal
           isOpen={true}
           onClose={() => actions.setShowSubmitModal(false)}
           title={(() => {
-            const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
+            const trainingFinished = (training.status as string) === 'finished' || new Date() > new Date(training.endTime)
             const hideProblemId = !training.problemIdVisible && !trainingFinished && !training.isAdmin
             const platformPrefix = selectedProblem?.platform ? (OJ_PLATFORM_LABEL_MAP[selectedProblem.platform] || selectedProblem.platform) + ' ' : ''
             const problemIdPart = hideProblemId ? '' : (selectedProblem?.platformProblemId || '')
@@ -516,7 +547,7 @@ export function TrainingDetailPage({ basePath }: TrainingDetailPageProps) {
       <TrainingFormModal
         isOpen={actions.showEditModal}
         onClose={() => actions.setShowEditModal(false)}
-        teamId={teamId}
+        teamId={teamId || undefined}
         trainingId={trainingId}
         mode={training.type === 'contest' ? 'contest' : 'training'}
         onSaved={() => {

@@ -176,6 +176,7 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
 
     const item = await prisma.teamProblemList.create({
       data: {
+        id: crypto.randomUUID(),
         teamId,
         problemListId,
         addedBy: userId,

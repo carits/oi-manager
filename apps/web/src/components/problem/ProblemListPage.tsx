@@ -29,7 +29,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const pathPrefix = user?.role === 'student' ? '/student' : '/teacher'
+  const pathPrefix = user?.role === 'student' ? '/student' : user?.role === 'platform_admin' ? '/platform-admin' : '/teacher'
 
   const [activeTab, setActiveTab] = useState<'mine' | 'shared'>(
     (searchParams.get('tab') as 'mine' | 'shared') || 'mine'

@@ -102,6 +102,7 @@
 - 指定学校负责人
 - 发布学校公告
 - 年级分布统计
+- 校级比赛管理
 
 ### 前端代码
 | 文件 | 说明 |
@@ -111,12 +112,20 @@
 | `app/admin/schools/[id]/page.tsx` | 学校详情 |
 | `app/admin/schools/[id]/edit/page.tsx` | 编辑学校 |
 | `app/teacher/school/page.tsx` | 学校信息（教师端） |
+| `app/teacher/school/contests/[cid]/page.tsx` | 校级比赛详情（教师端） |
 | `app/student/school/page.tsx` | 学校信息（学生端） |
+| `app/student/school/contests/[cid]/page.tsx` | 校级比赛详情（学生端） |
 
 ### 后端代码
 | 文件 | 说明 |
 |------|------|
-| `routes/schools.ts` | 学校 API 路由 |
+| `modules/school/school.routes.ts` | 路由挂载入口 |
+| `modules/school/school.crud.routes.ts` | 学校 CRUD |
+| `modules/school/school.members.routes.ts` | 成员管理 |
+| `modules/school/school.principal.routes.ts` | 负责人管理 |
+| `modules/school/school.stats.routes.ts` | 统计数据 |
+| `modules/school/school.misc.routes.ts` | 其他（初始化、公告） |
+| `modules/school/school.contest.routes.ts` | 校级比赛 CRUD |
 
 ### API
 | 方法 | 路径 | 说明 |
@@ -127,6 +136,10 @@
 | PUT | `/api/schools/:id` | 更新学校 |
 | DELETE | `/api/schools/:id` | 删除学校 |
 | PUT | `/api/schools/:id/principal` | 转移负责人 |
+| GET | `/api/schools/:schoolId/contests` | 校级比赛列表 |
+| POST | `/api/schools/:schoolId/contests` | 创建校级比赛 |
+| PUT | `/api/schools/:schoolId/contests/:id` | 更新校级比赛 |
+| DELETE | `/api/schools/:schoolId/contests/:id` | 删除校级比赛 |
 
 ---
 

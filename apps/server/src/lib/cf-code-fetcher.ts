@@ -158,8 +158,8 @@ async function fetchWithProxy(
     // 等待页面加载（VJudge 代理会自动处理 Cloudflare challenge）
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
 
-    // 提取源代码
-    const code = await page.$eval('#program-source-text', el => (el as HTMLElement).textContent || '')
+    // 提取源代码 - 使用 innerText 正确处理 <br> 标签转换为换行符
+    const code = await page.$eval('#program-source-text', el => (el as HTMLElement).innerText || '')
 
     await context.close()
     await browser.close()
@@ -225,7 +225,8 @@ async function fetchWithDirectAccess(
     await page.goto(url, { timeout: 30000, waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
 
-    const code = await page.$eval('#program-source-text', el => (el as HTMLElement).textContent || '')
+    // 提取源代码 - 使用 innerText 正确处理 <br> 标签转换为换行符
+    const code = await page.$eval('#program-source-text', el => (el as HTMLElement).innerText || '')
 
     await context.close()
     await browser.close()

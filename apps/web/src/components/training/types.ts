@@ -71,8 +71,8 @@ export interface SubmissionRow {
   oj: string
   language: string
   result: string | null
-  displayResult?: 'pending' | 'queuing' | string  // OI 赞中非管理员显示的脱敏结果
-  hidden?: boolean  // OI 赞中非管理员标记
+  displayResult?: 'pending' | 'queuing' | string  // OI 赛中非管理员显示的脱敏结果
+  hidden?: boolean  // OI 赛中非管理员标记
   score: number | null
   timeUsed: number | null
   memoryUsed: number | null
@@ -101,7 +101,7 @@ export interface ProblemListEntry {
   problemTableId: string
   platformLabel: string
   problemUrl: string | null
-  hasSubmitted?: boolean  // 是否已提交（OI 赞中用于显示"已提交"标记）
+  hasSubmitted?: boolean  // 是否已提交（OI 赛中用于显示"已提交"标记）
   bestScore: number | null
   bestResult: string | null
 }

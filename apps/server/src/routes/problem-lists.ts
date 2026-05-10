@@ -309,7 +309,7 @@ problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
         ownerType,
         visibility: visibility || 'private',
         ProblemListSection: {
-          create: { title: '默认章节', sortOrder: 0 }
+          create: { id: crypto.randomUUID(), title: '默认章节', sortOrder: 0 }
         }
       },
       include: { ProblemListSection: true }
@@ -504,6 +504,7 @@ problemListsRouter.post('/:id/sections', authenticate, asyncHandler(async (req, 
 
     const section = await prisma.problemListSection.create({
       data: {
+        id: crypto.randomUUID(),
         problemListId: req.params.id,
         title: title.trim(),
         sortOrder: (maxSection?.sortOrder ?? -1) + 1
@@ -738,6 +739,7 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
     // 5. 创建条目
     const entry = await prisma.problemListEntry.create({
       data: {
+        id: crypto.randomUUID(),
         sectionId: req.params.sectionId,
         problemId: problemId!,
         alias: alias?.trim() || null,
@@ -1141,6 +1143,7 @@ problemListsRouter.post('/:id/shares', authenticate, asyncHandler(async (req, re
         }
       },
       create: {
+        id: crypto.randomUUID(),
         problemListId: req.params.id,
         targetType,
         targetId,

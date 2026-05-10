@@ -17,7 +17,7 @@ const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
 }
 
 function getResultBadge(result: string | null, hidden?: boolean, displayResult?: string) {
-  // OI 赞中非管理员：显示"已提交"
+  // OI 赛中非管理员：显示"已提交"
   if (hidden || displayResult === 'pending') {
     return (
       <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 500, background: 'var(--info-light)', color: 'var(--info-text)' }}>

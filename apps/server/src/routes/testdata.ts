@@ -231,6 +231,7 @@ testdataRouter.post(
           // 创建新记录
           const testdataFile = await prisma.testdataFile.create({
             data: {
+              id: crypto.randomUUID(),
               problemId: id,
               filename: file.originalname,
               size: file.size,

@@ -100,6 +100,7 @@ export async function syncTrainingProblemStatus(
         },
       },
       create: {
+        id: crypto.randomUUID(),
         trainingId,
         userId,
         trainingProblemId,
@@ -169,6 +170,7 @@ export async function syncContestProblemStatus(
         },
       },
       create: {
+        id: crypto.randomUUID(),
         contestId,
         userId,
         contestProblemId,

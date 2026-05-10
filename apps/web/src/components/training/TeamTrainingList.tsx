@@ -22,7 +22,8 @@ interface Training {
 }
 
 interface TeamTrainingListProps {
-  teamId: string
+  teamId?: string
+  schoolId?: string
   basePath: string
   isAdmin: boolean
   mode?: 'training' | 'contest'
@@ -58,7 +59,7 @@ function formatDateTime(iso: string) {
   return `${month}/${day} ${hh}:${mm}`
 }
 
-export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'training' }: TeamTrainingListProps) {
+export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, mode = 'training' }: TeamTrainingListProps) {
   const router = useRouter()
   const [trainings, setTrainings] = useState<Training[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,7 +67,10 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'tr
 
   const fetchTrainings = useCallback(async () => {
     try {
-      const result = await apiClient.get<Training[]>(`/api/teams/${teamId}/trainings?type=${mode}`)
+      const url = schoolId
+        ? `/api/schools/${schoolId}/contests?type=${mode}`
+        : `/api/teams/${teamId}/trainings?type=${mode}`
+      const result = await apiClient.get<Training[]>(url)
       if (result.success) {
         setTrainings(result.data || [])
       }
@@ -75,7 +79,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'tr
     } finally {
       setLoading(false)
     }
-  }, [teamId, mode])
+  }, [teamId, schoolId, mode])
 
   useEffect(() => {
     fetchTrainings()
@@ -121,6 +125,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'tr
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           teamId={teamId}
+          schoolId={schoolId}
           onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
           mode={mode}
         />
@@ -194,7 +199,11 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'tr
                 key={training.id}
                 onClick={() => {
                   const detailPath = mode === 'contest' ? 'contests' : 'trainings'
-                  router.push(`${basePath}/${teamId}/${detailPath}/${training.id}`)
+                  if (schoolId) {
+                    router.push(`${basePath}/contests/${training.id}`)
+                  } else {
+                    router.push(`${basePath}/${teamId}/${detailPath}/${training.id}`)
+                  }
                 }}
                 style={{
                   cursor: 'pointer',
@@ -267,6 +276,7 @@ export default function TeamTrainingList({ teamId, basePath, isAdmin, mode = 'tr
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         teamId={teamId}
+        schoolId={schoolId}
         onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
         mode={mode}
       />

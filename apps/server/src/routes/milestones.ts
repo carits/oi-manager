@@ -75,6 +75,7 @@ milestoneRouter.post('/', authenticate, authorize('teacher'), async (req, res) =
 
     const milestone = await prisma.milestone.create({
       data: {
+        id: crypto.randomUUID(),
         studentId,
         teacherId: teacher.id,
         title,

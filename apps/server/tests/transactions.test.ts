@@ -40,12 +40,12 @@ describe('Transactions Module', () => {
       const school = await prisma.school.findUnique({
         where: { id: res.body.data.id },
         include: {
-          Teacher: true
+          Teacher_Teacher_schoolIdToSchool: true
         }
       })
 
       expect(school).not.toBeNull()
-      expect(school!.Teacher.length).toBeGreaterThan(0)
+      expect(school!.Teacher_Teacher_schoolIdToSchool.length).toBeGreaterThan(0)
       expect(school!.currentPrincipalTeacherId).toBeDefined()
     })
 

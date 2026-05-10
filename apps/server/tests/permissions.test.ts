@@ -360,6 +360,7 @@ describe('Permissions Module', () => {
       // Add user as team member
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: studentId!,
           userType: 'student',
@@ -396,6 +397,7 @@ describe('Permissions Module', () => {
       // Add user as team owner
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: teacherId!,
           userType: 'teacher',
@@ -419,6 +421,7 @@ describe('Permissions Module', () => {
       // Add user as team admin
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: teacherId!,
           userType: 'teacher',
@@ -442,6 +445,7 @@ describe('Permissions Module', () => {
       // Add user as regular member
       await prisma.teamMember.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: team.id,
           userId: teacherId!,
           userType: 'teacher',

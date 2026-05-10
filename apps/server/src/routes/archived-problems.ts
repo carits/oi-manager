@@ -116,6 +116,7 @@ archivedProblemsRouter.post('/', authenticate, async (req: Request, res: Respons
     // 创建新记录
     const item = await prisma.userArchivedProblem.create({
       data: {
+        id: crypto.randomUUID(),
         userId,
         platform,
         problemId,

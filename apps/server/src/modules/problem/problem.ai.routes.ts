@@ -89,6 +89,7 @@ problemAiRouter.post('/:id/ai/translate', authenticate, asyncHandler(async (req:
     // 创建新的题面记录（继承原始题面的可见性）
     const newStatement = await prisma.problemStatement.create({
       data: {
+        id: crypto.randomUUID(),
         problemId: id,
         type: 'statement',
         format: 'markdown',
@@ -101,6 +102,7 @@ problemAiRouter.post('/:id/ai/translate', authenticate, asyncHandler(async (req:
     // 记录使用日志
     await prisma.aiUsageLog.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.userId,
         problemId: id,
         action: 'translate',
@@ -208,6 +210,7 @@ problemAiRouter.post('/:id/ai/format', authenticate, asyncHandler(async (req: Re
     // 记录使用日志
     await prisma.aiUsageLog.create({
       data: {
+        id: crypto.randomUUID(),
         userId: user.userId,
         problemId: id,
         action: 'format',

@@ -49,7 +49,6 @@ model Contest {
   updatedAt           DateTime              @default(now())
   Team                Team?                 @relation(fields: [teamId], references: [id])
   ContestProblem      ContestProblem[]
-  ContestProblemNote  ContestProblemNote[]
   ContestProblemScore ContestProblemScore[]
   ContestResource     ContestResource[]
   ContestResult       ContestResult[]
@@ -80,28 +79,10 @@ model ContestProblem {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @default(now())
   Contest             Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  ContestProblemNote  ContestProblemNote[]
   ContestProblemScore ContestProblemScore[]
   ContestResource     ContestResource[]
 
   @@unique([contestId, orderIndex])
-}
-
-model ContestProblemNote {
-  id             String         @id
-  contestId      String
-  problemId      String
-  studentId      String
-  content        String         @default("")
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @default(now())
-  Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([contestId, problemId, studentId])
-  @@index([studentId])
-  @@index([updatedAt])
 }
 
 model ContestProblemScore {
@@ -118,6 +99,21 @@ model ContestProblemScore {
   Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, problemId, studentId])
+}
+
+model ContestRecord {
+  id         String   @id
+  trainingId Int
+  userId     String
+  userType   String
+  content    String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+  Training   Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, userId, userType])
+  @@index([updatedAt])
+  @@index([userId])
 }
 
 model ContestResource {
@@ -514,6 +510,7 @@ model School {
   Student                                           Student[]
   Teacher_Teacher_schoolIdToSchool                  Teacher[]              @relation("Teacher_schoolIdToSchool")
   Team                                              Team[]
+  Training                                          Training[]
   User                                              User[]
 }
 
@@ -548,7 +545,6 @@ model Student {
   rating                    Int                         @default(1200)
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
-  ContestProblemNote        ContestProblemNote[]
   ContestProblemScore       ContestProblemScore[]
   ContestResult             ContestResult[]
   Milestone                 Milestone[]
@@ -818,7 +814,7 @@ model TestdataFile {
 
 model Training {
   id                        Int                         @id @default(autoincrement())
-  teamId                    String
+  teamId                    String?
   title                     String
   description               String?
   format                    String                      @default("ioi")
@@ -832,13 +828,18 @@ model Training {
   problemIdVisible          Boolean                     @default(false)
   solutionVisible           Boolean                     @default(false)
   type                      String                      @default("training")
+  schoolId                  String?
+  ContestRecord             ContestRecord[]
   ContestUserProblemStatus  ContestUserProblemStatus[]
   Submission                Submission[]
-  Team                      Team                        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  School                    School?                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  Team                      Team?                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   TrainingParticipant       TrainingParticipant[]
   TrainingProblem           TrainingProblem[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
 
+  @@index([schoolId])
+  @@index([schoolId, status])
   @@index([startTime])
   @@index([status])
   @@index([teamId])

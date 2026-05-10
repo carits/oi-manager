@@ -117,7 +117,7 @@
 |------|----------|----------|----------|----------|
 | IOI | 实时可见 | 实时可见 | 实时可见 | 实时可见 |
 | ICPC | 实时可见 | 实时可见 | AC数+罚时 | 实时可见 |
-| OI | 赛后可见 | 赞后可见 | 赛后可见 | 赛后可见 |
+| OI | 赛后可见 | 赛后可见 | 赛后可见 | 赛后可见 |
 
 ### 3.2 OI 赛制可见性场景
 
@@ -126,23 +126,23 @@
 | ID | 场景 | 时间 | 操作者 | 预期结果 |
 |----|------|------|--------|----------|
 | OI-A1 | 学生赛中查看排名 | 赛中（ongoing） | student | `{hidden: true, ranking: []}` |
-| OI-A2 | 管理员赛中查看排名 | 赞中 | owner/admin | `{hidden: false, ranking: [...]}` |
+| OI-A2 | 管理员赛中查看排名 | 赛中 | owner/admin | `{hidden: false, ranking: [...]}` |
 | OI-A3 | 赛后查看排名 | 赛后（finished） | student | `{hidden: false, ranking: [...]}` |
 
 #### OI-B. 提交详情可见性（3场景）
 
 | ID | 场景 | 时间 | 操作者 | 预期结果 |
 |----|------|------|--------|----------|
-| OI-B1 | 学生赛中查看自己提交详情 | 赞中 | student | `hidden: true`, `displayResult: 'pending'`, 真实 result/score/time/memory 为 null |
-| OI-B2 | 管理员赛中查看提交详情 | 赞中 | owner/admin | 返回真实 result/score/time/memory |
+| OI-B1 | 学生赛中查看自己提交详情 | 赛中 | student | `hidden: true`, `displayResult: 'pending'`, 真实 result/score/time/memory 为 null |
+| OI-B2 | 管理员赛中查看提交详情 | 赛中 | owner/admin | 返回真实 result/score/time/memory |
 | OI-B3 | 赛后查看提交详情 | 赛后 | student | 返回真实 result/score |
 
 #### OI-C. 题目详情可见性（2场景）
 
 | ID | 场景 | 时间 | 操作者 | 预期结果 |
 |----|------|------|--------|----------|
-| OI-C1 | 学生赛中查看题面 | 赞中 | student | 200, 可查看题面 |
-| OI-C2 | 学生赛中查看题解 | 赞中 | student | 403 或 不显示（depends on solutionVisible 配置） |
+| OI-C1 | 学生赛中查看题面 | 赛中 | student | 200, 可查看题面 |
+| OI-C2 | 学生赛中查看题解 | 赛中 | student | 403 或 不显示（depends on solutionVisible 配置） |
 
 ### 3.3 训练状态可见性场景
 

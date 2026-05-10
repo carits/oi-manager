@@ -385,6 +385,7 @@ export class TeamRepository {
   }) {
     return prisma.teamMember.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: data.teamId,
         userId: data.userId,
         userType: data.userType,
@@ -520,6 +521,7 @@ export class TeamRepository {
         }
       },
       create: {
+        id: crypto.randomUUID(),
         teamId: params.teamId,
         userId: params.userId,
         userType: params.userType,
@@ -567,7 +569,12 @@ export class TeamRepository {
     message?: string
   }) {
     return prisma.teamJoinRequest.create({
-      data
+      data: {
+        id: crypto.randomUUID(),
+        teamId: data.teamId,
+        userId: data.userId,
+        message: data.message
+      }
     })
   }
 
@@ -626,6 +633,7 @@ export class TeamRepository {
     try {
       await prisma.teamOperationLog.create({
         data: {
+          id: crypto.randomUUID(),
           teamId: params.teamId,
           operatorId: params.operatorId,
           operatorType: params.operatorType,

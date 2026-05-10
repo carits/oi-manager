@@ -318,8 +318,10 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
     const passwordHash = await bcrypt.hash(password, 10)
 
     // 创建用户（强制为学生角色，必须有 schoolId）
+    const userId = crypto.randomUUID()
     const user = await prisma.user.create({
       data: {
+        id: userId,
         username,
         passwordHash,
         role: 'student',

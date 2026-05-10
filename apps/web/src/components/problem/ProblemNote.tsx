@@ -154,6 +154,18 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     }
   }, [noteContent])
 
+  // beforeunload protection
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (noteSaving) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [noteSaving])
+
   const getDifficultyColor = (difficulty: string | null) => {
     switch (difficulty) {
       case '简单': return 'var(--success)'

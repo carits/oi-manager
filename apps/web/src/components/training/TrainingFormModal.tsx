@@ -38,7 +38,8 @@ interface ProblemRow {
 interface TrainingFormModalProps {
   isOpen: boolean
   onClose: () => void
-  teamId: string
+  teamId?: string
+  schoolId?: string
   trainingId?: string
   onSaved?: () => void
   mode?: 'training' | 'contest'
@@ -46,7 +47,7 @@ interface TrainingFormModalProps {
 
 let tempIdCounter = 0
 
-export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved, mode = 'training' }: TrainingFormModalProps) {
+export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingId, onSaved, mode = 'training' }: TrainingFormModalProps) {
   const toast = useToast()
   const isEdit = !!trainingId
 
@@ -339,7 +340,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
         toast.success(`${mode === 'contest' ? '比赛' : '训练'}更新成功`)
       } else {
         // === 创建模式 ===
-        const res = await apiClient.post(`/api/teams/${teamId}/trainings`, {
+        const createUrl = schoolId
+          ? `/api/schools/${schoolId}/contests`
+          : `/api/teams/${teamId}/trainings`
+        const res = await apiClient.post(createUrl, {
           title, description, format, type: mode,
           startTime: new Date(startTime).toISOString(),
           endTime: new Date(endTime).toISOString(),
@@ -374,7 +378,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, trainingId, onSaved
           }
         }
 
-        toast.success('训练创建成功')
+        toast.success(schoolId ? '比赛创建成功' : '训练创建成功')
       }
 
       onClose()

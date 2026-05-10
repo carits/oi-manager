@@ -11,8 +11,8 @@ import type { AuthRequest } from '../../middleware/auth'
 import { getAdapter, getSupportedPlatforms } from '../../oj-adapters'
 import { v4 as uuidv4 } from 'uuid'
 import {
-  isTeamMember,
-  isTeamAdmin,
+  canAccessTraining,
+  canManageTraining,
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
@@ -32,16 +32,16 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限查看' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
 
-    const isAdmin = await isTeamAdmin(userId, training.teamId)
+    const isAdmin = await canManageTraining(userId, training)
 
     const problems = await prisma.trainingProblem.findMany({
       where: { trainingId: id },
@@ -131,11 +131,11 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限查看' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
@@ -184,14 +184,14 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
     ])
 
     // OI 赛制可见性检查
-    const isAdminUser = await isTeamAdmin(userId, training.teamId)
+    const isAdminUser = await canManageTraining(userId, training)
     const now = Date.now()
     const computedStatus = training.status === 'finished' ? 'finished'
       : (now >= training.startTime.getTime() && now <= training.endTime.getTime()) ? 'ongoing'
       : 'upcoming'
     const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
 
-    // OI 赞中是否显示平台信息（与 problems 列表逻辑一致）
+    // OI 赛中是否显示平台信息（与 problems 列表逻辑一致）
     const showProblemId = training.problemIdVisible || training.status === 'finished' || now > training.endTime.getTime()
 
     // 构建结果
@@ -213,7 +213,7 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         // 平台不支持生成链接，忽略
       }
 
-      // OI 赞中非管理员隐藏平台信息
+      // OI 赛中非管理员隐藏平台信息
       const shouldShowPlatformInfo = isAdminUser || showProblemId
 
       return {
@@ -249,7 +249,7 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
+    if (!await canManageTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
@@ -308,7 +308,7 @@ trainingProblemsRouter.put('/trainings/:id/problems/reorder', authenticate, asyn
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
+    if (!await canManageTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
@@ -362,7 +362,7 @@ trainingProblemsRouter.put('/trainings/:id/problems/:problemId', authenticate, a
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
+    if (!await canManageTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
@@ -399,7 +399,7 @@ trainingProblemsRouter.delete('/trainings/:id/problems/:problemId', authenticate
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
+    if (!await canManageTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
@@ -430,11 +430,11 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限查看' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
@@ -473,7 +473,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
-    const isAdmin = await isTeamAdmin(userId, training.teamId)
+    const isAdmin = await canManageTraining(userId, training)
 
     // 返回题面内容（不暴露标题和来源给非管理员）
     const problem = trainingProblem.Problem

@@ -73,6 +73,7 @@ ojFetcherRouter.put('/platforms/:platform/config', async (req: Request, res: Res
         lastUsedAt: new Date(),
       },
       create: {
+        id: crypto.randomUUID(),
         platform,
         cookies: cookiesJson,
         lastUsedAt: new Date(),
@@ -201,6 +202,7 @@ ojFetcherRouter.post('/jobs/batch', async (req: Request, res: Response) => {
         // 创建新任务
         const job = await prisma.ojFetchJob.create({
           data: {
+            id: crypto.randomUUID(),
             platform,
             problemId,
             status: 'pending',
@@ -406,6 +408,7 @@ async function processFetchQueue(platform: string) {
           // 创建新题目（基本信息）
           const newProblem = await prisma.problem.create({
             data: {
+              id: crypto.randomUUID(),
               platform,
               problemId: job.problemId,
               title: problemData.title,
@@ -435,6 +438,7 @@ async function processFetchQueue(platform: string) {
             for (const stmt of problemData.statements) {
               await prisma.problemStatement.create({
                 data: {
+                  id: crypto.randomUUID(),
                   problemId: targetProblemId,
                   type: stmt.type,
                   format: stmt.format,
@@ -489,6 +493,7 @@ async function processFetchQueue(platform: string) {
             for (const stmt of problemData.statements) {
               await prisma.problemStatement.create({
                 data: {
+                  id: crypto.randomUUID(),
                   problemId: existingProblem.id,
                   type: stmt.type,
                   format: stmt.format,
@@ -725,6 +730,7 @@ async function downloadAttachmentInternal(
   if (!isImage) {
     await prisma.problemAttachment.create({
       data: {
+        id: crypto.randomUUID(),
         problemId,
         fileName: filename,
         fileSize: buffer.length,
@@ -1149,6 +1155,7 @@ ojFetcherRouter.post('/download-attachment', async (req: Request, res: Response)
     if (!isImage) {
       attachment = await prisma.problemAttachment.create({
         data: {
+          id: crypto.randomUUID(),
           problemId,
           fileName: filename,
           fileSize: buffer.length,

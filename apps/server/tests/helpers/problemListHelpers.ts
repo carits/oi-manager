@@ -20,7 +20,7 @@ export async function createTestProblemList(options: {
       ownerType,
       schoolId,
       ProblemListSection: {
-        create: { title: '默认章节', sortOrder: 0 }
+        create: { id: crypto.randomUUID(), title: '默认章节', sortOrder: 0 }
       }
     },
     include: { ProblemListSection: true }
@@ -75,6 +75,7 @@ export async function createTestProblem(options: {
 
   return prisma.problem.create({
     data: {
+      id: `prob_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       platform,
       problemId: actualProblemId,
       title,

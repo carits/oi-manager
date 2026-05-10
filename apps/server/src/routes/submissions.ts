@@ -342,18 +342,17 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
 })
 
 /**
- * POST /api/submissions/:id/fetch-code
- * 按需抓取 CF 提交源代码
- * 当提交的 code 为空且 oj 为 codeforces 时，立即通过 Playwright 抓取并存储
+ * POST /api/submissions/:id/refetch-code
+ * 强制重新抓取 CF 提交源代码（清空已有 code 后重新抓取）
  */
-submissionsRouter.post('/:id/fetch-code', authenticate, async (req, res) => {
+submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
   try {
     const { id } = req.params
     const submissionId = parseInt(id)
 
     const submission = await prisma.submission.findUnique({
       where: { id: submissionId },
-      select: { id: true, oj: true, code: true, codeLength: true },
+      select: { id: true, oj: true, ojRemoteId: true, problemId: true, userId: true },
     })
 
     if (!submission) {
@@ -364,12 +363,15 @@ submissionsRouter.post('/:id/fetch-code', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: '仅支持 Codeforces 提交的代码抓取' })
     }
 
-    if (submission.code && submission.code.length > 0) {
-      return res.json({
-        success: true,
-        data: { code: submission.code, codeLength: submission.codeLength },
-      })
+    if (!submission.ojRemoteId) {
+      return res.status(400).json({ success: false, message: '缺少远程提交 ID' })
     }
+
+    // 先清空 code
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { code: '', codeLength: 0 },
+    })
 
     // 执行抓取
     const fetched = await fetchAndStoreCfCode(submissionId)
@@ -390,7 +392,7 @@ submissionsRouter.post('/:id/fetch-code', authenticate, async (req, res) => {
       })
     }
   } catch (e: any) {
-    logger.error('submission_fetch_code_error', {
+    logger.error('submission_refetch_code_error', {
       action: 'submissions',
       metadata: { error: e.message },
     })

@@ -287,9 +287,11 @@ schoolMembersRouter.post('/current/teachers', authenticate, asyncHandler(async (
     }
 
     // 创建用户
+    const userId = crypto.randomUUID()
     const hashedPassword = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
       data: {
+        id: userId,
         username,
         passwordHash: hashedPassword,
         role: 'teacher',
@@ -304,7 +306,7 @@ schoolMembersRouter.post('/current/teachers', authenticate, asyncHandler(async (
     // 创建教师
     const newTeacher = await prisma.teacher.create({
       data: {
-        id: user.id,
+        id: userId,
         name,
         email,
         phone,

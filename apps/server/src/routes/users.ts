@@ -334,9 +334,11 @@ userRouter.post('/platform-admin', authenticate, asyncHandler(async (req: AuthRe
     // 获取平台学校 ID（用于绑定系统管理员）
     const platformSchoolId = 'platform-school-00000000'
 
-    // 创建用户和管理员档案
+    // 创建用户和管理员档案（共享主键：User.id = Admin.id）
+    const userId = crypto.randomUUID()
     const user = await prisma.user.create({
       data: {
+        id: userId,
         username,
         passwordHash,
         role: 'platform_admin',
@@ -399,6 +401,7 @@ userRouter.put('/:id/status', authenticate, asyncHandler(async (req: AuthRequest
       }),
       prisma.userStatusLog.create({
         data: {
+          id: crypto.randomUUID(),
           targetId: id,
           operatorId: req.user!.userId,
           operatorRole: req.user!.role,
@@ -453,6 +456,7 @@ userRouter.post('/:id/reset-password', passwordResetLimiter, authenticate, async
       }),
       prisma.passwordResetLog.create({
         data: {
+          id: crypto.randomUUID(),
           targetId: id,
           operatorId: req.user!.userId,
           operatorRole: req.user!.role,

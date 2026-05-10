@@ -10,8 +10,8 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import {
-  isTeamMember,
-  isTeamAdmin,
+  canAccessTraining,
+  canManageTraining,
   parseTrainingId,
   getParticipantNames,
   requireTrainingStarted,
@@ -37,17 +37,17 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
 
     // OI 赛制：赛中非管理员不显示排名
-    const isAdminUser = await isTeamAdmin(userId, training.teamId)
+    const isAdminUser = await canManageTraining(userId, training)
     const nowRank = Date.now()
     const rankStatus = training.status === 'finished' ? 'finished'
       : (training.status === 'ongoing' || nowRank >= training.startTime.getTime() && nowRank <= training.endTime.getTime()) ? 'ongoing'
@@ -60,7 +60,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
     // TeamMember.userId 存储 Teacher.id 或 Student.id
     // 由于 Teacher.id = Student.id = User.id（共享主键），可以直接使用
     let adminUserIds: string[] = []
-    if (!training.includeAdminInRanking) {
+    if (!training.includeAdminInRanking && training.teamId) {
       const adminMembers = await prisma.teamMember.findMany({
         where: {
           teamId: training.teamId,

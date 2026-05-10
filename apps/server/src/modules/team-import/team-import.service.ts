@@ -188,6 +188,7 @@ export class TeamImportService {
     // 创建批次记录
     const batch = await prisma.teamMemberImportBatch.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: teamId || null,
         operatorId: params.operatorId,
         platform: params.platform,

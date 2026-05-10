@@ -78,6 +78,7 @@ schoolPrincipalRouter.put('/:id/principal', authenticate, asyncHandler(async (re
       // 记录日志
       prisma.principalTransferLog.create({
         data: {
+          id: crypto.randomUUID(),
           schoolId: id,
           oldPrincipalTeacherId: oldPrincipalId,
           newPrincipalTeacherId: teacherId,
@@ -168,8 +169,10 @@ schoolPrincipalRouter.post('/:id/principal', authenticate, asyncHandler(async (r
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. 创建用户
+      const userId = crypto.randomUUID()
       const user = await tx.user.create({
         data: {
+          id: userId,
           username,
           passwordHash: hashedPassword,
           role: 'school_principal',
@@ -182,7 +185,7 @@ schoolPrincipalRouter.post('/:id/principal', authenticate, asyncHandler(async (r
       // 2. 创建教师并关联学校
       const teacher = await tx.teacher.create({
         data: {
-          id: user.id,
+          id: userId,
           name: teacherName,
           email: email || null,
           phone: phone || null,
@@ -307,6 +310,7 @@ schoolPrincipalRouter.post('/current/principal-transfer', authenticate, asyncHan
       // 记录日志
       prisma.principalTransferLog.create({
         data: {
+          id: crypto.randomUUID(),
           schoolId: currentPrincipal.schoolId,
           oldPrincipalTeacherId: currentPrincipal.id,
           newPrincipalTeacherId: newTeacherId,

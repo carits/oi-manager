@@ -11,8 +11,8 @@ import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import {
-  isTeamMember,
-  isTeamAdmin,
+  canAccessTraining,
+  canManageTraining,
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
@@ -39,7 +39,7 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
@@ -229,11 +229,11 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
@@ -252,7 +252,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     if (filterLanguage) where.language = filterLanguage
 
     // 非管理员只能看到自己的评测记录
-    const isAdminUser = await isTeamAdmin(userId, training.teamId)
+    const isAdminUser = await canManageTraining(userId, training)
     if (!isAdminUser) {
       if (where.userId) {
         if (where.userId !== userId) {
@@ -373,16 +373,16 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamMember(userId, training.teamId)) {
+    if (!await canAccessTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '无权限' })
     }
 
-    const notStarted = await requireTrainingStarted(training, userId, training.teamId)
+    const notStarted = await requireTrainingStarted(training, userId)
     if (notStarted) {
       return res.status(403).json({ success: false, message: notStarted })
     }
 
-    const isAdminUser = await isTeamAdmin(userId, training.teamId)
+    const isAdminUser = await canManageTraining(userId, training)
 
     const submission = await prisma.submission.findUnique({
       where: { id: parseInt(submissionId) },
@@ -475,7 +475,7 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
 
-    if (!await isTeamAdmin(userId, training.teamId)) {
+    if (!await canManageTraining(userId, training)) {
       return res.status(403).json({ success: false, message: '仅团队管理员可执行重新评测' })
     }
 

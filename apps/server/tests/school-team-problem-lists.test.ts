@@ -319,6 +319,7 @@ describe('团队题单 API', () => {
     // 添加 admin
     await prisma.teamMember.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: team.id,
         userId: adminUser.teacherId!,
         userType: 'teacher',
@@ -331,6 +332,7 @@ describe('团队题单 API', () => {
     // 添加教师成员
     await prisma.teamMember.create({
       data: {
+        id: crypto.randomUUID(),
         teamId: team.id,
         userId: teacherUser.teacherId!,
         userType: 'teacher',
