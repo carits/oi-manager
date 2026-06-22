@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { AppShell } from '@/components/AppShell'
@@ -13,16 +13,23 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading } = useAuth()
+  // 本地状态：是否已检查过登录状态（避免依赖 AuthProvider 的 loading）
+  const [checked, setChecked] = useState(false)
 
-  // loading=false 且 user=null 时跳转登录页
+  // 组件挂载后立即检查 localStorage
   useEffect(() => {
-    if (!loading && !user) {
+    const token = localStorage.getItem('token')
+    const role = localStorage.getItem('role')
+    if (!token || !role) {
+      // 无 token，直接跳转登录页
       router.replace('/login?role=student')
+    } else {
+      setChecked(true)
     }
-  }, [loading, user, router])
+  }, [router])
 
-  // loading=true 时显示加载中
-  if (loading) {
+  // 未检查完成时显示加载中
+  if (!checked) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -36,8 +43,24 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
     )
   }
 
-  // loading=false 且 user=null 时返回 null（等待跳转）
+  // loading=true 时等待 AuthProvider 完成验证
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--gray-50)'
+      }}>
+        验证登录状态...
+      </div>
+    )
+  }
+
+  // loading=false 且 user=null 时跳转登录页
   if (!user) {
+    router.replace('/login?role=student')
     return null
   }
 

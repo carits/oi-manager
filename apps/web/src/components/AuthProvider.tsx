@@ -38,8 +38,24 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [loading, setLoading] = useState(true)
+  // 初始化时同步检查 localStorage，避免 SSR/客户端不一致
+  // 使用函数初始化，只在客户端执行一次
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === 'undefined') return null
+    return null // 初始 user 为 null，后续通过 fetchUserData 获取
+  })
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true // SSR 时 loading=true
+    // 客户端初始化时同步检查 localStorage
+    const token = getToken()
+    const role = getRole()
+    const userId = getUserId()
+    // 无 token 时直接设置 loading=false，避免等待 useEffect
+    if (!token || !role || !userId) {
+      return false
+    }
+    return true // 有 token，需要验证
+  })
 
   // 基于登录身份生成 sessionKey，用于数据隔离
   const sessionKey = useMemo(() => {
@@ -90,7 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // 检查本地存储的 token
+    // 如果 loading 已经是 false（初始化时已检查无 token），直接返回
+    if (!loading) return
+
+    // 检查本地存储的 token（此时一定有 token，否则 loading 不会是 true）
     const token = getToken()
     const role = getRole()
     const userId = getUserId()
@@ -98,9 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token && role && userId) {
       fetchUserData().finally(() => setLoading(false))
     } else {
+      // 异步安全检查：万一初始化时有 token 但现在没了
       setLoading(false)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = async (username: string, password: string, role: string): Promise<LoginResult> => {
     try {

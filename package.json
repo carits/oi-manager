@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "bash scripts/kill-ports.sh && pnpm --parallel -r dev",
     "dev:dirty": "pnpm --parallel -r dev",
+    "restart": "bash scripts/restart-dev.sh",
+    "stop": "bash scripts/stop-dev.sh",
     "kill-ports": "bash scripts/kill-ports.sh",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

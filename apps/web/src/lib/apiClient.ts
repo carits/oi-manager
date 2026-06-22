@@ -13,6 +13,7 @@ import { ENV } from '@/config/env'
 export interface ApiClientOptions extends Omit<RequestInit, 'body'> {
   signal?: AbortSignal
   body?: unknown
+  timeout?: number  // 自定义超时时间（毫秒），默认 10000
 }
 
 export interface ApiResponse<T> {
@@ -47,7 +48,7 @@ class ApiClient {
     endpoint: string,
     options: ApiClientOptions = {}
   ): Promise<ApiResponse<T>> {
-    const { signal, body, ...fetchOptions } = options
+    const { signal, body, timeout, ...fetchOptions } = options
     const url = `${this.baseURL}${endpoint}`
 
     // 判断是否为 FormData
@@ -63,8 +64,8 @@ class ApiClient {
       headers['Content-Type'] = 'application/json'
     }
 
-    // 10 秒超时
-    const timeoutMs = 10000
+    // 支持自定义超时，默认 10 秒
+    const timeoutMs = timeout ?? 10000
     const timeoutController = new AbortController()
     const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs)
 

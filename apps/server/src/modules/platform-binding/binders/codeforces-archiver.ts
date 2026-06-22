@@ -9,6 +9,7 @@ import { chromium, Browser, Page } from 'playwright'
 import { prisma } from '../../../prisma'
 import logger from '../../../lib/logger'
 import type { PlaywrightCookie } from '../../../lib/playwright-helper'
+import { normalizeResult, ResultEnum } from '../../../lib/result-enum'
 
 /**
  * 构建 CF Cookie
@@ -63,30 +64,6 @@ interface SyncResult {
 }
 
 /**
- * CF verdict 转换为 Submission result
- */
-function convertCfVerdict(verdict: string): string {
-  const verdictMap: Record<string, string> = {
-    'OK': 'accepted',
-    'WRONG_ANSWER': 'wrong_answer',
-    'TIME_LIMIT_EXCEEDED': 'time_limit_exceeded',
-    'MEMORY_LIMIT_EXCEEDED': 'memory_limit_exceeded',
-    'RUNTIME_ERROR': 'runtime_error',
-    'COMPILATION_ERROR': 'compilation_error',
-    'CHALLENGED': 'hacked',
-    'SKIPPED': 'skipped',
-    'TESTING': 'testing',
-    'REJECTED': 'rejected',
-    'PARTIAL': 'partial',
-    'IDLENESS_LIMIT_EXCEEDED': 'time_limit_exceeded',
-    'SECURITY_VIOLATED': 'security_violated',
-    'CRASHED': 'crashed',
-    'INPUT_PREPARATION_CRASHED': 'crashed',
-  }
-  return verdictMap[verdict] || verdict.toLowerCase()
-}
-
-/**
  * 通过 CF API 获取用户所有提交记录
  *
  * @param handle - CF 用户名
@@ -98,10 +75,13 @@ export async function fetchCfAllSubmissions(
   options?: ArchiveOptions
 ): Promise<CfSubmissionRecord[]> {
   const submissions: CfSubmissionRecord[] = []
-  const maxPages = 10 // 最多查 10 页，即最近 1000 条提交
+  // 单题同步：不限制页数，获取该题所有提交
+  // 批量同步：限制10页（最近1000条提交）
+  const maxPages = options?.problemId ? Infinity : 10
   const count = 100
+  let page = 0
 
-  for (let page = 0; page < maxPages; page++) {
+  while (page < maxPages) {
     const from = page * count + 1
     const url = `https://codeforces.com/api/user.status?handle=${encodeURIComponent(handle)}&from=${from}&count=${count}`
 
@@ -138,13 +118,10 @@ export async function fetchCfAllSubmissions(
         })
       }
 
-      // 如果指定了 problemId 且已找到，可以提前退出
-      if (options?.problemId && submissions.length > 0) {
-        // 继续获取该题的所有提交
-      }
-
       // 如果返回数量小于 count，说明没有更多了
       if (data.result.length < count) break
+
+      page++
 
     } catch (error) {
       logger.error('cf_api_fetch_submissions_error', error as Error, { action: 'fetch_cf_submissions' })
@@ -166,8 +143,7 @@ export async function fetchCfAllSubmissions(
 export async function syncCfSubmissionsForUser(
   userId: string,
   handle: string,
-  options?: ArchiveOptions,
-  ojAccountId?: string
+  options?: ArchiveOptions
 ): Promise<SyncResult> {
   // 1. 获取所有提交记录
   const submissions = await fetchCfAllSubmissions(handle, options)
@@ -192,13 +168,18 @@ export async function syncCfSubmissionsForUser(
     }
 
     try {
+      const problemRecord = await prisma.problem.findFirst({
+        where: { platform: 'codeforces', problemId: sub.problemId },
+      })
+
       await prisma.submission.create({
         data: {
           userId,
           oj: 'codeforces',
           ojRemoteId: sub.submissionId,
           problemId: sub.problemId,  // 外部题号
-          result: convertCfVerdict(sub.verdict),
+          problemInternalId: problemRecord?.id || null,
+          result: normalizeResult(sub.verdict),
           language: sub.programmingLanguage,
           timeUsed: sub.timeUsed,
           memoryUsed: Math.floor(sub.memoryUsed / 1024), // bytes → KB
@@ -210,7 +191,7 @@ export async function syncCfSubmissionsForUser(
           // 补充缺失字段
           score: sub.verdict === 'OK' ? 100 : 0,
           isGlobalVisible: true,
-          ojAccountId: ojAccountId || undefined,
+          // 归档提交不设置 ojAccountId（该字段引用 OjAccount 表，不是 UserPlatformBinding）
         },
       })
       count++

@@ -37,8 +37,11 @@ export function getResultVariant(result: string): BadgeVariant {
   if (['time_limit_exceeded', 'tle', 'time limit'].includes(r)) return 'warning'
   if (['memory_limit_exceeded', 'mle', 'memory limit'].includes(r)) return 'warning'
   if (['runtime_error', 're', 'runtime error'].includes(r)) return 'error'
+  if (['compilation_error', 'ce', 'compile error', 'compile_error'].includes(r)) return 'error'
   if (['system_error', 'se', 'system error'].includes(r)) return 'error'
-  if (['pending', 'queuing', 'judging'].includes(r)) return 'pending'
+  if (['output_limit_exceeded', 'ole', 'output limit'].includes(r)) return 'warning'
+  if (['pending', 'queuing', 'judging', 'waiting'].includes(r)) return 'pending'
+  if (['unaccepted', 'partial', 'partial accepted'].includes(r)) return 'warning'
   if (r === 'pending_review') return 'pending'
   return 'neutral'
 }

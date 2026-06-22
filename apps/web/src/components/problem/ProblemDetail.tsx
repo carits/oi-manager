@@ -370,23 +370,49 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   }
 
   // 归档同步处理（同步提交记录到 Submission 表）
+  // 快速同步最新一条 → 弹窗展示 → 后台异步同步剩余
   const handleArchiveSync = async () => {
     if (!problem || !platformBinding?.bound) return
     setSubmitLoading(true)
     try {
-      const result = await apiClient.post<{ count: number; total: number; skipped: number }>(`/api/platform-bindings/${problem.platform}/sync-submissions`, {
-        problemId: problem.problemId, // 传递当前题号
-      })
+      const result = await apiClient.post<{
+        firstSubmission?: {
+          id: string
+          result: string
+          score: number
+          language: string
+          code: string
+          timeUsed: number
+          memoryUsed: number
+          submittedAt: string
+          ojRemoteId: string
+          problemId: string
+        }
+        totalCount: number
+        pendingCount: number
+        skipped: number
+      }>(
+        `/api/platform-bindings/${problem.platform}/sync-submissions`,
+        { problemId: problem.problemId },
+        { timeout: 30000 }  // 30秒超时（快速同步只需约5秒）
+      )
+
       if (result.success && result.data) {
-        const { count, skipped } = result.data
-        if (count > 0) {
-          toast.success(`已同步 ${count} 条提交记录`)
+        const { firstSubmission, totalCount, pendingCount, skipped } = result.data
+
+        if (firstSubmission) {
+          // 弹窗展示最新提交
+          setDetailSubmissionId(parseInt(firstSubmission.id))
+          toast.success(`已同步最新提交，剩余 ${pendingCount} 条正在后台同步`)
+          setShowSubmitPanel(false)
+          // 立即刷新提交列表
+          fetchProblemSubmissions()
         } else if (skipped > 0) {
           toast.info('该题提交记录已存在')
         } else {
-          toast.warning('未在 Codeforces 最近 1000 条提交记录中找到该题')
+          const platformName = OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform
+          toast.warning(`未在 ${platformName} 提交记录中找到该题`)
         }
-        setShowSubmitPanel(false)
       } else {
         toast.error(result.message || '归档同步失败')
       }

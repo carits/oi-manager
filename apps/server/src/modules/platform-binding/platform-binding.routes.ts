@@ -313,7 +313,7 @@ platformBindingRouter.post('/codeforces/sync-submissions', authenticate, async (
 
     // 4. 执行同步
     const { syncCfSubmissionsForUser } = await import('./binders/codeforces-archiver')
-    const result = await syncCfSubmissionsForUser(userId, handle, options, bindingRecord.id)
+    const result = await syncCfSubmissionsForUser(userId, handle, options)
 
     // 5. 返回结果
     let message = ''
@@ -427,11 +427,13 @@ platformBindingRouter.post('/luogu/sync-archive', authenticate, async (req: Requ
  * - startTime?: string - 开始时间
  * - endTime?: string - 结束时间
  * - problemId?: string - 单题同步时传入（如 P6790）
+ *
+ * 改进：快速同步最新一条 → 立即返回弹窗展示 → 后台异步同步剩余
  */
 platformBindingRouter.post('/luogu/sync-submissions', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.userId
-    const { startTime, endTime, problemId } = req.body
+    const { problemId } = req.body
 
     // 1. 获取用户的洛谷绑定信息
     const binding = await service.getUserPlatformBinding(userId, 'luogu')
@@ -443,37 +445,59 @@ platformBindingRouter.post('/luogu/sync-submissions', authenticate, async (req: 
       })
     }
 
-    // 2. 获取绑定记录（用于 ojAccountId）
-    const bindingRecord = await prisma.userPlatformBinding.findUnique({
-      where: { userId_platform: { userId, platform: 'luogu' } },
-    })
+    // 单题同步：使用快速同步第一条 + 异步同步剩余
+    if (problemId) {
+      const { syncFirstLuoguSubmission, startAsyncSyncRemaining } = await import('./binders/luogu-archiver')
 
-    // 3. 构建同步选项
+      // 快速同步第一条
+      const result = await syncFirstLuoguSubmission(userId, problemId)
+
+      if (result.firstSubmission) {
+        // 立即返回，后台异步同步剩余
+        res.json({
+          success: true,
+          message: `已同步最新提交，剩余 ${result.pendingCount} 条正在后台同步`,
+          data: {
+            firstSubmission: result.firstSubmission,  // 用于弹窗展示
+            totalCount: result.totalCount,
+            pendingCount: result.pendingCount,
+            skipped: result.skipped
+          },
+        })
+
+        // 后台异步同步剩余（不阻塞响应）
+        if (result.pendingRecordIds.length > 0) {
+          startAsyncSyncRemaining(userId, problemId, result.pendingRecordIds)
+        }
+      } else if (result.skipped > 0) {
+        res.json({
+          success: true,
+          message: '该题提交记录已存在',
+          data: { firstSubmission: null, totalCount: result.totalCount, skipped: result.skipped }
+        })
+      } else {
+        res.json({
+          success: true,
+          message: '未找到该题提交记录',
+          data: { firstSubmission: null, totalCount: 0 }
+        })
+      }
+      return
+    }
+
+    // 批量同步（无 problemId）：保持原有逻辑
+    const { startTime, endTime } = req.body
     const options = {
       startTime: startTime ? new Date(startTime) : undefined,
       endTime: endTime ? new Date(endTime) : undefined,
-      problemId,
     }
 
-    // 4. 执行同步
     const { syncLuoguSubmissionsForUser } = await import('./binders/luogu-archiver')
-    const result = await syncLuoguSubmissionsForUser(userId, undefined, options, bindingRecord?.id)
+    const result = await syncLuoguSubmissionsForUser(userId, undefined, options)
 
-    // 5. 返回结果
-    let message = ''
-    if (problemId) {
-      if (result.count > 0) {
-        message = `已同步 ${result.count} 条提交记录`
-      } else if (result.skipped > 0) {
-        message = '该题提交记录已存在'
-      } else {
-        message = '未在洛谷找到该题提交记录'
-      }
-    } else {
-      message = `已同步 ${result.count} 条提交记录`
-      if (result.skipped > 0) {
-        message += `，跳过 ${result.skipped} 条已存在`
-      }
+    let message = `已同步 ${result.count} 条提交记录`
+    if (result.skipped > 0) {
+      message += `，跳过 ${result.skipped} 条已存在`
     }
 
     res.json({
@@ -489,5 +513,178 @@ platformBindingRouter.post('/luogu/sync-submissions', authenticate, async (req: 
   } catch (error) {
     console.error('Sync Luogu submissions error:', error)
     res.status(500).json({ success: false, message: '同步提交记录失败' })
+  }
+})
+
+/**
+ * 清理重复提交记录和修复语言映射（管理员专用）
+ * POST /api/platform-bindings/admin/cleanup-submissions
+ *
+ * Body:
+ * - action: 'deduplicate' | 'fix-language' | 'all'
+ */
+platformBindingRouter.post('/admin/cleanup-submissions', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const userRole = (req as any).user.role
+
+    // 权限检查：只有管理员可以执行
+    if (userRole !== 'super_admin' && userRole !== 'platform_admin') {
+      return res.status(403).json({ success: false, message: '只有管理员可以执行清理操作' })
+    }
+
+    const { action = 'all' } = req.body
+    const results: { deduplicated?: number; fixedLanguage?: number; fixedResult?: number; fixedInternalIds?: number; orphanedSubmissions?: number; testProblems?: number } = {}
+
+    // 1. 去重：删除重复的提交记录（保留最早的一条）
+    if (action === 'deduplicate' || action === 'all') {
+      const duplicates = await prisma.$queryRaw<{ ojRemoteId: string; count: bigint }[]>`
+        SELECT "ojRemoteId", COUNT(*) as count
+        FROM "Submission"
+        WHERE "ojRemoteId" IS NOT NULL
+        GROUP BY "ojRemoteId"
+        HAVING COUNT(*) > 1
+      `
+
+      let deduplicatedCount = 0
+      for (const dup of duplicates) {
+        // 获取所有重复记录，按创建时间排序
+        const submissions = await prisma.submission.findMany({
+          where: { ojRemoteId: dup.ojRemoteId },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, createdAt: true },
+        })
+
+        // 保留第一条，删除其余
+        const toDelete = submissions.slice(1)
+        if (toDelete.length > 0) {
+          await prisma.submission.deleteMany({
+            where: { id: { in: toDelete.map(s => s.id) } },
+          })
+          deduplicatedCount += toDelete.length
+        }
+      }
+      results.deduplicated = deduplicatedCount
+    }
+
+    // 2. 修复语言映射：将 luogu_lang_27 和之前错误修改的 swift 改为 cpp20
+    if (action === 'fix-language' || action === 'all') {
+      // 修复 luogu_lang_27 -> cpp20
+      const fixed1 = await prisma.submission.updateMany({
+        where: { language: 'luogu_lang_27' },
+        data: { language: 'cpp20' },
+      })
+      // 修复之前错误修改的 swift -> cpp20
+      const fixed2 = await prisma.submission.updateMany({
+        where: { language: 'swift' },
+        data: { language: 'cpp20' },
+      })
+      results.fixedLanguage = fixed1.count + fixed2.count
+    }
+
+    // 3. 修复评测结果映射：统一为缩写形式
+    if (action === 'fix-result' || action === 'all') {
+      // unaccepted -> wa
+      const fixedResult1 = await prisma.submission.updateMany({
+        where: { result: 'unaccepted' },
+        data: { result: 'wa' },
+      })
+      // wrong_answer -> wa
+      const fixedResult2 = await prisma.submission.updateMany({
+        where: { result: 'wrong_answer' },
+        data: { result: 'wa' },
+      })
+      // compilation_error -> ce
+      const fixedResult3 = await prisma.submission.updateMany({
+        where: { result: 'compilation_error' },
+        data: { result: 'ce' },
+      })
+      // compile_error -> ce
+      const fixedResult4 = await prisma.submission.updateMany({
+        where: { result: 'compile_error' },
+        data: { result: 'ce' },
+      })
+      // waiting -> queuing
+      const fixedResult5 = await prisma.submission.updateMany({
+        where: { result: 'waiting' },
+        data: { result: 'queuing' },
+      })
+      results.fixedResult = fixedResult1.count + fixedResult2.count + fixedResult3.count + fixedResult4.count + fixedResult5.count
+    }
+
+    // 4. 修复 problemInternalId：对无 problemInternalId 但 Problem 表中存在对应题目的提交补全关联
+    if (action === 'fix-internal-ids' || action === 'all') {
+      const submissions = await prisma.submission.findMany({
+        where: { problemInternalId: null },
+        select: { id: true, oj: true, problemId: true },
+      })
+
+      let fixed = 0
+      for (const sub of submissions) {
+        const problem = await prisma.problem.findFirst({
+          where: { platform: sub.oj, problemId: sub.problemId },
+        })
+        if (problem) {
+          await prisma.submission.update({
+            where: { id: sub.id },
+            data: { problemInternalId: problem.id },
+          })
+          fixed++
+        }
+      }
+      results.fixedInternalIds = fixed
+    }
+
+    // 5. 清理 Carits 测试数据（只删除 Carits，不碰其他平台）
+    //    顺序：先删提交 → 删所有关联记录 → 再删题目（避免 FK 冲突）
+    if (action === 'clean-orphaned' || action === 'all') {
+      // 5a. 删除无 problemInternalId 的 Carits 提交
+      const caritsOrphaned = await prisma.submission.deleteMany({
+        where: { oj: 'carits', problemInternalId: null },
+      })
+      // 5b. 找到所有 Carits 测试题目
+      const testProblemIds = await prisma.problem.findMany({
+        where: {
+          platform: 'carits',
+          OR: [{ title: { contains: '测试' } }, { title: { contains: '兼容' } }],
+        },
+        select: { id: true },
+      })
+      let testSubmissionCount = 0
+      if (testProblemIds.length > 0) {
+        const ids = testProblemIds.map(p => p.id)
+        // 5b-1. 删除关联到测试题目的 Carits 提交
+        const deleted = await prisma.submission.deleteMany({
+          where: { oj: 'carits', problemInternalId: { in: ids } },
+        })
+        testSubmissionCount = deleted.count
+        // 5b-2. 删除所有引用测试题目的关联记录（按依赖顺序）
+        await prisma.trainingProblem.deleteMany({ where: { problemId: { in: ids } } })
+        await prisma.problemListEntry.deleteMany({ where: { problemId: { in: ids } } })
+        await prisma.problemNote.deleteMany({ where: { problemId: { in: ids } } })
+        await prisma.problemStatement.deleteMany({ where: { problemId: { in: ids } } })
+        await prisma.testdataFile.deleteMany({ where: { problemId: { in: ids } } })
+        await prisma.problemAttachment.deleteMany({ where: { problemId: { in: ids } } })
+      }
+      // 5c. 删除测试题目
+      const testProblems = await prisma.problem.deleteMany({
+        where: {
+          platform: 'carits',
+          OR: [{ title: { contains: '测试' } }, { title: { contains: '兼容' } }],
+        },
+      })
+      results.orphanedSubmissions = caritsOrphaned.count + testSubmissionCount
+      results.testProblems = testProblems.count
+    }
+
+    res.json({
+      success: true,
+      message: '清理完成',
+      data: results,
+    })
+
+  } catch (error) {
+    console.error('Cleanup submissions error:', error)
+    res.status(500).json({ success: false, message: '清理失败' })
   }
 })

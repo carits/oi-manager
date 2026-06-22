@@ -110,6 +110,21 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     return !!submission.problemInternalId && (submission.problemVisibility === 'public' || submission.problemVisibility === 'private')
   }
 
+  // 获取外部题目链接（用于归档提交）
+  const getExternalProblemUrl = (oj: string, problemId: string): string | null => {
+    if (oj === 'luogu') return `https://www.luogu.com.cn/problem/${problemId}`
+    if (oj === 'codeforces') {
+      // CF 题号格式如 1234A, 1234B1, round1234_problemA
+      const match = problemId.match(/^(\d+)/)
+      if (match) {
+        const contestId = match[1]
+        const problemIndex = problemId.replace(contestId, '') || problemId
+        return `https://codeforces.com/problemset/problem/${contestId}/${problemIndex}`
+      }
+    }
+    return null
+  }
+
   // 点击题号跳转题库本地题目详情页
   const handleProblemClick = (submission: Submission) => {
     if (canClickProblem(submission)) {
@@ -399,6 +414,18 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
                       >
                         {s.problemId}
                       </span>
+                      ) : getExternalProblemUrl(s.oj, s.problemId) ? (
+                      <a
+                        href={getExternalProblemUrl(s.oj, s.problemId)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: 'var(--primary)',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {s.problemId}
+                      </a>
                       ) : (
                       <span style={{ color: 'var(--text-secondary)' }}>
                         {s.problemId}

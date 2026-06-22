@@ -1,5 +1,247 @@
 # 当前任务
 
+## 任务：schema.prisma 修复 — 移除 Problem.Submission 关联 + FK 约束（2026-05-14）
+
+状态: **已完成** ✅
+
+### 背景
+
+之前在 Submission 模型添加了 `Problem Problem? @relation(...)` 关联，Prisma 强制在 Problem 模型生成 `Submission Submission[]` 反向字段。用户明确反对 Problem 上有 submission 数组。
+
+### 修改
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `prisma/schema.prisma` | 修改 | 移除 Problem 的 `Submission Submission[]` 字段 |
+| `prisma/schema.prisma` | 修改 | 移除 Submission 的 `Problem Problem? @relation(...)` 字段 |
+| 数据库 | raw SQL | 重新添加 FK 约束 `Submission_problemInternalId_fkey` |
+
+### 关键决策
+
+- Prisma 强制双向关联，无法只加单边 `@relation`
+- 解决方案：Prisma 中不定义 relation，`problemInternalId` 保留为纯 `String?` 字段
+- FK 约束通过 raw SQL 添加（`ON DELETE SET NULL ON UPDATE CASCADE`）
+- Prisma 不知道此 FK，但数据库层面保护生效
+
+### 验证
+
+- ✅ `prisma db push` 成功
+- ✅ FK 约束 `Submission_problemInternalId_fkey` 存在
+- ✅ TypeScript 编译零错误
+
+---
+
+## 任务：洛谷同步异步刷新 + 评测结果映射修复（2026-05-13）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈：洛谷同步成功后前端应该异步刷新，同时评测结果没有正确对应 OJ 评测结果。
+
+### 问题
+
+1. 洛谷提交 result 使用全称（`unaccepted`、`compilation_error`），系统用缩写（`wa`、`ce`）
+2. Badge 不认识全称状态，显示灰色
+3. 同步成功后前端没有刷新提交列表
+
+### 修复
+
+| 文件 | 操作 |
+|------|------|
+| `luogu-archiver.ts` | 修改 `LUOGU_STATUS_CODE_MAP`（14→wa）、`convertLuoguResult` |
+| `Badge.tsx` | 扩展 `getResultVariant` |
+| `ProblemDetail.tsx` | `handleArchiveSync` 添加 `fetchProblemSubmissions()` |
+| `platform-binding.routes.ts` | 清理 API 新增 `fix-result` |
+
+### 数据修复
+
+- 28 条记录评测结果修复
+
+### 验证
+
+- ✅ 洛谷提交 result：wa(21)、accepted(19)、ce(7)
+- ✅ 同步成功后前端列表刷新
+
+---
+
+## 任务：洛谷语言映射修正（2026-05-13）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户提供了洛谷完整的语言 ID 对应关系，发现当前映射完全错误。ID 27 实际对应 C++20。
+
+### 洛谷语言 ID 正确对应关系
+
+| ID | 语言 |
+|----|------|
+| 1-4 | Pascal/C/C++98/C++11 |
+| 7-9 | Python3/Java8/Nodejs |
+| 11-12 | C++14/C++17 |
+| 13-17 | Ruby/Go/Rust/PHP/C#Mono |
+| 19-23 | Haskell/Kotlin/Scala/Perl |
+| 27-28 | C++20/C++14(GCC9) |
+| 30-34 | OCaml/Julia/Lua/Java21/C++23 |
+
+**注意**：O2 优化是独立参数 `enableO2=true`。
+
+### 修复
+
+| 文件 | 操作 |
+|------|------|
+| `luogu-archiver.ts` | 重写 `LUOGU_LANGUAGE_ID_MAP` |
+| `platform-binding.routes.ts` | 修改清理 API：`swift` → `cpp20` |
+
+### 验证
+
+- ✅ `ojRemoteId=256246102` language = `cpp20`
+- ✅ 无错误语言残留
+
+---
+
+## 任务：洛谷归档数据清理（2026-05-13）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈：洛谷归档只返回一条提交记录（bestRecord），无法获取包括 WA/TLE 的全部提交。
+
+### 问题
+
+1. `fetchAllSubmissionsForProblem` 从题目页面获取 `bestRecord`（仅最佳提交）
+2. `fetchAllUserSubmissions` 使用 `/user/${uid}#submissions` 页面（旧数据结构）
+3. 洛谷 API 已变更：正确端点是 `/record/list`
+
+### 关键发现
+
+- `/record/list?user=${uid}&pid=${problemId}&page=1` API 返回全部提交
+- 数据结构：`currentData.records.result[]`
+- 状态码：12=AC, 14=Unaccepted（部分得分）
+
+### 修复
+
+| 文件 | 操作 |
+|------|------|
+| `luogu-archiver.ts` | `fetchAllSubmissionsForProblem` 改用 `/record/list` API；`fetchAllUserSubmissions` 改用 `/record/list` API；新增 `LUOGU_STATUS_CODE_MAP` |
+| `platform-binding.routes.ts` | 移除 API 限制错误提示 |
+
+### 验证
+
+- ✅ 测试脚本返回 8 条提交（1 AC + 7 未满分）
+- ✅ 服务重启正常
+
+---
+
+## 任务：开发环境重启脚本（2026-05-11）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈：经常遇到重启时有多量残余旧进程，要么某一端没启动，要么评测机都没启动。
+
+### 问题
+
+1. 多次运行 `pnpm dev` 导致进程树叠加（两棵树：PID 1256xxx 和 1629xxx）
+2. `kill-ports.sh` 只杀端口占用进程，不清理父进程树
+3. go-judge Docker 容器需要单独启动
+
+### 修复
+
+| 文件 | 操作 |
+|------|------|
+| `scripts/restart-dev.sh` | 新建 — 完整重启脚本 |
+| `scripts/stop-dev.sh` | 新建 — 停止脚本 |
+| `package.json` | 修改 — 添加 `restart` 和 `stop` scripts |
+
+### 使用
+
+```bash
+pnpm restart  # 完整重启（清理进程 + 启动 Docker + 启动开发）
+pnpm stop     # 只停止（清理所有进程和端口）
+```
+
+### 验证
+
+- ✅ 前端 3000 正常启动
+- ✅ 后端 3002 正常启动
+- ✅ go-judge Docker 容器运行
+- ✅ PostgreSQL Docker 容器运行
+- ✅ 评测机 judge 连接到后端
+
+---
+
+## 任务：登录页面加载优化（2026-05-11）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户反馈 login 页面"非常慢"，结合之前无痕模式下 `/student/submissions` 一直加载的问题。
+
+### 问题分析
+
+- AuthProvider 初始化 `loading=true`，SSR 渲染时显示"加载中..."
+- 客户端 hydration 后 useEffect 才执行 localStorage 检查
+- 无 token 时仍需等待一个渲染周期才能设置 `loading=false`
+
+### 修复
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `components/AuthProvider.tsx` | 修改 | useState 使用函数初始化，客户端同步检查 localStorage |
+
+### 改进
+
+- 无 token 用户：客户端初始化时直接设置 `loading=false`，减少一个渲染周期
+- 有 token 用户：保持 `loading=true`，等待 fetchUserData 完成
+
+---
+
+## 任务：洛谷归档功能 — 远程 ID 链接和语言映射修复（2026-05-11）
+
+状态: **已完成** ✅
+
+### 背景
+
+用户报告："洛谷归档还是有问题 没有对应远程ID连接 语言也没有完全对上"
+
+**用户补充需求**：系统中显示的语言应该和洛谷上显示的一致，例如 "C++17 O2"
+
+### 问题
+
+1. 远程提交 ID 链接缺失：`getRemoteSubmitUrl()` 没有处理 luogu
+2. 语言显示不完整：`LUOGU_LANGUAGE_ID_MAP` 将 O2 版本简化为相同值（ID 12→cpp11 而非 cpp11_o2）
+3. 题号外部链接缺失：没有洛谷题目外部跳转链接
+
+### 修复
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `modules/platform-binding/binders/luogu-archiver.ts` | 修改 | `LUOGU_LANGUAGE_ID_MAP` 保留 O2 信息 |
+| `lib/judge-constants.ts` | 修改 | 新增 `LUOGU_LANGUAGE_MAP`，`cpp11`→"C++11 (O2)" |
+| `components/submission/SubmissionDetailModal.tsx` | 修改 | `getRemoteSubmitUrl()` 添加 luogu 分支 |
+| `components/submission/SubmissionList.tsx` | 修改 | 新增 `getExternalProblemUrl()`，题号支持外部链接 |
+
+### 语言映射
+
+| 洛谷 ID | 洛谷显示 | 存储值 | 前端显示 |
+|---------|---------|--------|---------|
+| 12 | C++11 (O2) | `cpp11_o2` | C++11 (O2) |
+| 13 | C++14 (O2) | `cpp14_o2` | C++14 (O2) |
+| 14 | C++17 (O2) | `cpp17_o2` | C++17 (O2) |
+
+旧数据 `cpp11` 显示为 "C++11 (O2)"（洛谷默认推荐 O2）
+
+### 验证
+
+- 前端构建 ✅ 零错误
+
+---
+
 ## 任务：洛谷归档功能（2026-05-10）
 
 状态: **已完成** ✅

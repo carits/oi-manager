@@ -13,6 +13,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { onSubmissionJudged } from '../lib/submission-sync'
+import { normalizeResult } from '../lib/result-enum'
 import path from 'path'
 import yaml from 'js-yaml'
 
@@ -486,7 +487,7 @@ async function handleResult(ws: WebSocket, payload: any) {
   // 更新数据库
   try {
     const updateData = {
-      result: mapResult(result),
+      result: normalizeResult(result),
       timeUsed: time,
       memoryUsed: memory,
       score: score ?? null,
@@ -539,27 +540,6 @@ async function handleResult(ws: WebSocket, payload: any) {
   // 通知 Consumer 任务完成
   const judge = judges.get(ws)
   judge?.consumer?.handleResult(submissionId)
-}
-
-/**
- * 映射评测结果
- */
-function mapResult(result: string): string {
-  const resultMap: Record<string, string> = {
-    'Accepted': 'accepted',
-    'Wrong Answer': 'wa',
-    'Time Limit Exceeded': 'tle',
-    'Memory Limit Exceeded': 'mle',
-    'Runtime Error': 're',
-    'Compilation Error': 'ce',
-    'Presentation Error': 'pe',
-    'Output Limit Exceeded': 'ole',
-    'System Error': 'se',
-    'Waiting': 'queuing',
-    'Judging': 'judging'
-  }
-
-  return resultMap[result] || result.toLowerCase()
 }
 
 /**

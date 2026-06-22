@@ -7,6 +7,7 @@
 
 import { chromium, Browser, Page } from 'playwright'
 import { logger } from './logger'
+import { normalizeResult } from './result-enum'
 
 const CF_BASE_URL = 'https://codeforces.com'
 
@@ -464,20 +465,5 @@ export async function pollCfResultByApi(
  * 映射 CF verdict 到本地 result
  */
 function mapCfVerdict(verdict: string): string {
-  const map: Record<string, string> = {
-    'OK': 'accepted',
-    'WRONG_ANSWER': 'wrong_answer',
-    'TIME_LIMIT_EXCEEDED': 'time_limit_exceeded',
-    'MEMORY_LIMIT_EXCEEDED': 'memory_limit_exceeded',
-    'COMPILATION_ERROR': 'compile_error',
-    'RUNTIME_ERROR': 'runtime_error',
-    'PRESENTATION_ERROR': 'presentation_error',
-    'IDLENESS_LIMIT_EXCEEDED': 'idleness_limit_exceeded',
-    'SECURITY_VIOLATED': 'security_violated',
-    'CRASHED': 'crashed',
-    'REJECTED': 'rejected',
-    'FAILED': 'failed',
-    'PARTIAL': 'partial',
-  }
-  return map[verdict] || verdict.toLowerCase()
+  return normalizeResult(verdict)
 }

@@ -123,6 +123,9 @@ function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string, p
   if (oj === 'hdu') {
     return `https://acm.hdu.edu.cn/status.php?first=${ojRemoteId}`
   }
+  if (oj === 'luogu') {
+    return `https://www.luogu.com.cn/record/${ojRemoteId}`
+  }
   if (oj === 'codeforces' && problemId) {
     const match = problemId.match(/^(\d+)/)
     if (match) {

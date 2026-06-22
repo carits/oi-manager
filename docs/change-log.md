@@ -1,5 +1,277 @@
 # 变更日志
 
+## 2026-05-13
+
+- **洛谷同步异步刷新 + 评测结果映射修复**
+
+  ### 背景
+
+  用户反馈：洛谷同步成功后前端应该异步刷新，同时评测结果没有正确对应 OJ 评测结果。
+
+  ### 问题
+
+  1. 洛谷提交 result 使用全称（`unaccepted`、`compilation_error`），系统用缩写（`wa`、`ce`）
+  2. Badge 不认识全称状态，显示灰色
+  3. 同步成功后前端没有刷新提交列表
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `luogu-archiver.ts` | 修改 `LUOGU_STATUS_CODE_MAP`（14→wa）、`convertLuoguResult`（统一缩写映射） |
+  | `Badge.tsx` | 扩展 `getResultVariant` 支持 `ce`、`ole`、`unaccepted` 等状态 |
+  | `ProblemDetail.tsx` | `handleArchiveSync` 成功后调用 `fetchProblemSubmissions()` 刷新列表 |
+  | `platform-binding.routes.ts` | 清理 API 新增 `fix-result` 操作 |
+
+  ### 数据修复结果
+
+  - 28 条记录评测结果修复（`unaccepted`→`wa`、`compilation_error`→`ce`、`waiting`→`queuing`）
+
+  ### 验证
+
+  - ✅ 洛谷提交 result 分布：wa(21)、accepted(19)、ce(7)
+  - ✅ 无错误状态残留
+
+- **洛谷语言映射修正 — 重写完整映射表**
+
+  ### 背景
+
+  用户提供了洛谷完整的语言 ID 对应关系，发现当前映射完全错误。ID 27 实际对应 C++20，而非之前假设的 swift。
+
+  ### 用户提供的洛谷语言 ID 正确对应关系
+
+  | ID | 语言 |
+  |----|------|
+  | 1 | Pascal |
+  | 2 | C |
+  | 3 | C++98 |
+  | 4 | C++11 |
+  | 7 | Python 3 |
+  | 8 | Java 8 |
+  | 9 | Node.js LTS |
+  | 11 | C++14 |
+  | 12 | C++17 |
+  | 13 | Ruby |
+  | 14 | Go |
+  | 15 | Rust |
+  | 16 | PHP |
+  | 17 | C# Mono |
+  | 19 | Haskell |
+  | 21 | Kotlin/JVM |
+  | 22 | Scala |
+  | 23 | Perl |
+  | 27 | C++20 |
+  | 28 | C++14 (GCC 9) |
+  | 30 | OCaml |
+  | 31 | Julia |
+  | 32 | Lua |
+  | 33 | Java 21 |
+  | 34 | C++23 |
+
+  **注意**：O2 优化是独立参数 `enableO2=true`，不参与语言 ID。
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `luogu-archiver.ts` | 重写 `LUOGU_LANGUAGE_ID_MAP`（删除所有旧映射，按用户提供重新编写） |
+  | `platform-binding.routes.ts` | 修改清理 API：把 `swift` 和 `luogu_lang_27` 都改为 `cpp20` |
+
+  ### 数据修复结果
+
+  - 1 条记录语言从 `swift` → `cpp20`
+
+  ### 验证
+
+  - ✅ `ojRemoteId=256246102` 的 language 为 `cpp20`
+  - ✅ 无 `luogu_lang_*` 或 `swift` 语言残留
+
+- **洛谷归档数据清理 — 去重 + 语言映射修复**（已修正）
+
+  ### 背景
+
+  用户报告："归档没有进行按远程ID去重 现有数据已经有重复 而且 256246102这个远程ID映射语言映射错误"
+
+  ### 问题
+
+  1. 6 个远程 ID 存在重复提交记录（各重复 2 次）
+  2. 语言 ID 27 显示为 `luogu_lang_27`
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `platform-binding.routes.ts` | 新增 — `POST /api/platform-bindings/admin/cleanup-submissions` 管理端清理 API |
+
+  ### 数据清理结果
+
+  - 去重：删除 6 条重复提交（保留最早记录）
+
+  ### 验证
+
+  - 无重复远程 ID ✅
+
+- **洛谷归档功能修复 — 获取全部提交记录**
+
+  ### 背景
+
+  用户反馈：洛谷归档只返回一条提交记录（bestRecord），无法获取包括 WA/TLE 的全部提交。
+
+  ### 问题
+
+  1. `fetchAllSubmissionsForProblem` 从题目页面获取 `bestRecord`（仅最佳提交）
+  2. `fetchAllUserSubmissions` 使用 `/user/${uid}#submissions` 页面（数据结构旧）
+  3. 洛谷 API 已变更：`/record?pid=xxx&user=xxx` 返回 404，正确端点是 `/record/list`
+
+  ### 关键发现
+
+  - `/record/list?user=${uid}&pid=${problemId}&page=1` API 返回全部提交
+  - 数据结构：`currentData.records.result[]`（直接是提交数组）
+  - 状态码：12=AC, 14=Unaccepted（部分得分）
+  - 分页：perPage=20
+
+  ### 测试验证
+
+  题 P5410（用户 401467）返回 8 条提交：
+  - 1 条 AC（status=12, score=100）
+  - 7 条未满分（status=14, scores 14-37）
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `modules/platform-binding/binders/luogu-archiver.ts` | 修改 — `fetchAllSubmissionsForProblem` 改用 `/record/list` API；`fetchAllUserSubmissions` 改用 `/record/list` API；新增 `LUOGU_STATUS_CODE_MAP` 状态码映射（含 status=14）；数据解析改为 `currentData.records.result[]` |
+  | `modules/platform-binding/platform-binding.routes.ts` | 修改 — 移除错误提示中的 API 限制说明 |
+
+  ### 验证
+
+  - 测试脚本返回 8 条提交 ✅
+  - 1 条 AC + 7 条未满分 ✅
+
+- **洛谷同步异步化 — 快速响应 + 后台同步**
+
+  ### 背景
+
+  同步请求耗时约 18 秒（8 条提交 × 2.5 秒限速），前端超时断开连接，响应丢失。
+
+  ### 用户需求
+
+  **原来流程**：获取所有提交详情 → 创建所有 Submission → 返回（超时）
+
+  **新流程**：
+  1. 获取最新一条提交详情 → 创建 Submission → 弹窗展示 + 返回响应
+  2. 剩下的提交 → 后台异步逐个获取详情并创建 Submission
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `luogu-archiver.ts` | 新增 `syncFirstLuoguSubmission` 函数（快速同步第一条）；新增 `startAsyncSyncRemaining` 函数（异步同步剩余） |
+  | `platform-binding.routes.ts` | 修改 `/luogu/sync-submissions` 返回第一条 + 启动异步同步 |
+  | `ProblemDetail.tsx` | 修改前端处理返回的 `firstSubmission`，弹窗展示 |
+  | `apiClient.ts` | 新增 `timeout` 参数支持自定义超时 |
+
+  ### 预期效果
+
+  - 响应时间：**4-5 秒**（仅列表 + 第一条详情）
+  - 用户立即看到最新提交详情弹窗
+  - 后台异步同步剩余提交
+
+- **前端 API 超时修复**
+
+  ### 背景
+
+  同步请求耗时约 18 秒（8 条提交 × 2.5 秒限速），但前端 apiClient 硬编码 10 秒超时，导致请求被中断，响应丢失。
+
+  ### 问题
+
+  - `apiClient.ts` 超时硬编码 10000ms
+  - 同步需要为每条提交单独请求详情页
+  - 前端超时断开连接，后端完成同步但响应丢失
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `lib/apiClient.ts` | 修改 — 新增 `timeout` 参数支持自定义超时 |
+  | `components/problem/ProblemDetail.tsx` | 修改 — 同步 API 调用使用 60 秒超时 |
+
+## 2026-05-11
+
+- **开发环境重启脚本**
+
+  ### 背景
+
+  用户反馈：经常遇到重启时有多量残余旧进程，要么某一端没启动，要么评测机都没启动。
+
+  ### 问题
+
+  1. 多次运行 `pnpm dev` 导致进程树叠加
+  2. `kill-ports.sh` 只杀端口占用进程，不清理父进程树
+  3. go-judge Docker 容器需要单独启动
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `scripts/restart-dev.sh` | 新建 — 完整重启脚本（清理进程 + 启动 Docker + 启动开发） |
+  | `scripts/stop-dev.sh` | 新建 — 停止脚本（清理所有进程和端口） |
+  | `package.json` | 修改 — 添加 `restart` 和 `stop` scripts |
+
+  ### 使用
+
+  ```bash
+  pnpm restart  # 完整重启（清理 + 启动）
+  pnpm stop     # 只停止（清理进程）
+  ```
+
+- **登录页面加载优化**
+
+  ### 背景
+
+  用户反馈 login 页面"非常慢"，结合无痕模式下一直加载的问题。
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `components/AuthProvider.tsx` | 修改 — useState 使用函数初始化，客户端同步检查 localStorage |
+
+  ### 效果
+
+  无 token 用户访问 login 页面时，减少一个渲染周期的延迟。
+
+- **洛谷归档功能 — 远程 ID 链接和语言映射修复**
+
+  ### 背景
+
+  用户报告："洛谷归档还是有问题 没有对应远程ID连接 语言也没有完全对上"
+
+  ### 问题
+
+  1. 远程提交 ID 链接缺失：`SubmissionDetailModal.tsx` 的 `getRemoteSubmitUrl()` 没有处理 luogu
+  2. 语言显示不完整：`judge-constants.ts` 缺少洛谷特有语言选项，且后端 `LUOGU_LANGUAGE_ID_MAP` 将 O2 版本简化为相同值
+  3. 题号外部链接缺失：`SubmissionList.tsx` 没有为 luogu 题目提供外部跳转链接
+
+  ### 修复
+
+  | 文件 | 操作 |
+  |------|------|
+  | `modules/platform-binding/binders/luogu-archiver.ts` | 修改 — `LUOGU_LANGUAGE_ID_MAP` 保留 O2 信息（ID 12→cpp11_o2, ID 13→cpp14_o2, ID 14→cpp17_o2） |
+  | `lib/judge-constants.ts` | 修改 — 新增 `LUOGU_LANGUAGE_MAP` 映射，`cpp11`→"C++11 (O2)" 等 |
+  | `components/submission/SubmissionDetailModal.tsx` | 修改 — `getRemoteSubmitUrl()` 添加 luogu 分支 |
+  | `components/submission/SubmissionList.tsx` | 修改 — 新增 `getExternalProblemUrl()` 函数，题号列支持外部链接 |
+
+  ### 语言映射
+
+  - 后端：新提交存储完整格式（`cpp11_o2` 等）
+  - 前端：兼容新旧两种格式，`cpp11` 显示 "C++11 (O2)"
+
+  ### 验证
+
+  - 前端构建 ✅ 零错误
+  - 打开洛谷归档提交详情，远程 ID 应为链接，语言显示 "C++11 (O2)"
+
 ## 2026-05-10
 
 - **洛谷归档功能**
