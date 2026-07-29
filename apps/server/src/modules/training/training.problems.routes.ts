@@ -14,6 +14,7 @@ import {
   canAccessTraining,
   canManageTraining,
   parseTrainingId,
+  populateSnapshotData,
   requireTrainingStarted,
 } from './training.helpers'
 
@@ -82,8 +83,8 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
           attachmentCount,
         }
 
-        // 判断题号是否可见：problemIdVisible=true 或 训练已结束
-        const showProblemId = training.problemIdVisible || training.status === 'finished' || new Date() > training.endTime
+        // 判断题号是否可见：只由 problemIdVisible 和管理员身份控制，不自动赛后公开
+        const showProblemId = isAdmin || training.problemIdVisible
 
         // 管理员可看到完整信息
         if (isAdmin) {
@@ -191,8 +192,8 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       : 'upcoming'
     const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
 
-    // OI 赛中是否显示平台信息（与 problems 列表逻辑一致）
-    const showProblemId = training.problemIdVisible || training.status === 'finished' || now > training.endTime.getTime()
+    // OI 赛中是否显示平台信息：只由 problemIdVisible 和管理员身份控制，不自动赛后公开
+    const showProblemId = isAdminUser || training.problemIdVisible
 
     // 构建结果
     const result = problems.map(p => {
@@ -213,8 +214,12 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         // 平台不支持生成链接，忽略
       }
 
-      // OI 赛中非管理员隐藏平台信息
+      // 管理员或 problemIdVisible 可看到完整信息
       const shouldShowPlatformInfo = isAdminUser || showProblemId
+
+      // 学生视角：不返回 problemTableId、platform、platformProblemId、problemUrl
+      const isStudent = req.user!.role === 'student'
+      const studentSafePlatformInfo = !isStudent && shouldShowPlatformInfo
 
       return {
         id: p.id,
@@ -222,11 +227,11 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         title: p.Problem.title,
         orderIndex: p.orderIndex,
         points: p.points,
-        platform: shouldShowPlatformInfo ? (platform || null) : null,
-        platformProblemId: shouldShowPlatformInfo ? (platformProblemId || null) : null,
-        problemTableId: p.Problem.id,
-        platformLabel: shouldShowPlatformInfo ? (platformLabelMap.get(platform as any) || platform || '') : '',
-        problemUrl: shouldShowPlatformInfo ? problemUrl : null,
+        platform: studentSafePlatformInfo ? (platform || null) : null,
+        platformProblemId: studentSafePlatformInfo ? (platformProblemId || null) : null,
+        problemTableId: !isStudent && shouldShowPlatformInfo ? p.Problem.id : null,
+        platformLabel: studentSafePlatformInfo ? (platformLabelMap.get(platform as any) || platform || '') : '',
+        problemUrl: studentSafePlatformInfo ? problemUrl : null,
         bestScore: hideOiStatus ? null : (best?.score ?? null),
         bestResult: hideOiStatus ? null : (best?.result ?? null),
       }
@@ -260,7 +265,10 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
     const aliasValue = alias || null
 
     // 检查题目是否存在
-    const problem = await prisma.problem.findUnique({ where: { id: problemId } })
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId },
+      include: { ProblemStatement: { where: { isVisible: true } } },
+    })
     if (!problem) {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
@@ -270,6 +278,8 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
       where: { trainingId: id },
       _max: { orderIndex: true },
     })
+
+    const snapshotData = populateSnapshotData(problem)
 
     let trainingProblem
     try {
@@ -281,6 +291,7 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
           alias: aliasValue,
           points: points || null,
           orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
+          ...snapshotData,
         },
       })
     } catch (e: any) {

@@ -9,7 +9,7 @@
 
 import { Router } from 'express'
 import { prisma } from '../prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, isPersonalMode } from '../middleware/auth'
 import type { AuthRequest } from '../middleware/auth'
 
 export const teamProblemListsRouter = Router()
@@ -145,6 +145,11 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
     const { problemListId } = req.body
     const userId = req.user!.userId
 
+    // 校园模式：学生不能添加团队题单；个人模式可以
+    if (req.user!.role === 'student' && !isPersonalMode(req.user)) {
+      return res.status(403).json({ success: false, message: '校园模式下学生不能添加团队题单' })
+    }
+
     if (!problemListId) {
       return res.status(400).json({ success: false, message: '缺少 problemListId' })
     }
@@ -199,6 +204,11 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
     const { teamId, id } = req.params
     const userId = req.user!.userId
     const role = req.user!.role
+
+    // 校园模式：学生不能移除团队题单；个人模式可以
+    if (role === 'student' && !isPersonalMode(req.user)) {
+      return res.status(403).json({ success: false, message: '校园模式下学生不能移除团队题单' })
+    }
 
     // 查找记录
     const item = await prisma.teamProblemList.findUnique({

@@ -35,47 +35,55 @@ export const platformAdminNav: NavConfig = {
   ]
 }
 
-// 学校负责人导航
+// 学校负责人导航（校园模式）
 export const schoolManagerNav: NavConfig = {
   role: 'school_principal',
   items: [
-    { label: '首页', href: '/teacher' },
-    { label: '我的团队', href: '/teacher/teams' },
-    { label: '我的学校', href: '/teacher/school' },
-    { label: '学生管理', href: '/teacher/students' },
     { label: '教师管理', href: '/teacher/teachers' },
-    { label: '题库', href: '/teacher/problems' },
+    { label: '学生管理', href: '/teacher/students' },
+    { label: '团队', href: '/teacher/teams' },
+    { label: '作业', href: '/teacher/homeworks' },
+    { label: '比赛', href: '/teacher/contests' },
     { label: '题单', href: '/teacher/problem-lists' },
-    { label: '评测记录', href: '/teacher/submissions' },
+    { label: '排名', href: '/teacher/rankings' },
   ]
 }
 
-// 教师导航
+// 教师导航（校园模式）
 export const teacherNav: NavConfig = {
   role: 'teacher',
   items: [
-    { label: '首页', href: '/teacher' },
-    { label: '我的团队', href: '/teacher/teams' },
-    { label: '我的学校', href: '/teacher/school' },
     { label: '学生管理', href: '/teacher/students' },
-    { label: '教师管理', href: '/teacher/teachers' },
-    { label: '题库', href: '/teacher/problems' },
+    { label: '团队', href: '/teacher/teams' },
+    { label: '作业', href: '/teacher/homeworks' },
+    { label: '比赛', href: '/teacher/contests' },
     { label: '题单', href: '/teacher/problem-lists' },
-    { label: '评测记录', href: '/teacher/submissions' },
+    { label: '排名', href: '/teacher/rankings' },
   ]
 }
 
-// 学生导航
+// 学生导航（校园模式）
 export const studentNav: NavConfig = {
   role: 'student',
   items: [
-    { label: '首页', href: '/student' },
+    { label: '团队', href: '/student/team' },
+    { label: '作业', href: '/student/homeworks' },
+    { label: '比赛', href: '/student/contests' },
+    { label: '题单', href: '/student/problem-lists' },
+    { label: '排名', href: '/student/rating' },
+  ]
+}
+
+// 学生导航（个人模式）
+export const studentPersonalNav: NavConfig = {
+  role: 'student',
+  items: [
     { label: '我的团队', href: '/student/team' },
-    { label: '我的学校', href: '/student/school' },
     { label: '题库', href: '/student/problems' },
+    { label: '比赛', href: '/student/contests' },
     { label: '题单', href: '/student/problem-lists' },
     { label: '评测记录', href: '/student/submissions' },
-    { label: '我的成长', href: '/student/rating' },
+    { label: '排名', href: '/student/rating' },
   ]
 }
 
@@ -89,20 +97,22 @@ export const roleNavMap: Record<UserRole, NavConfig> = {
 }
 
 // 根据角色获取导航配置
-export function getNavConfig(role: UserRole | string): NavConfig {
+export function getNavConfig(role: UserRole | string, studentMode?: string): NavConfig {
   const validRole = role as UserRole
   if (validRole === 'super_admin') return superAdminNav
   if (validRole === 'platform_admin') return platformAdminNav
   if (validRole === 'school_principal') return schoolManagerNav
   if (validRole === 'teacher') return teacherNav
-  if (validRole === 'student') return studentNav
+  if (validRole === 'student') {
+    return studentMode === 'personal' ? studentPersonalNav : studentNav
+  }
   // 默认返回教师导航
   return teacherNav
 }
 
 // 根据路径获取当前激活的 nav item
-export function getActiveNavItem(href: string, role: UserRole | string): string {
-  const config = getNavConfig(role)
+export function getActiveNavItem(href: string, role: UserRole | string, studentMode?: string): string {
+  const config = getNavConfig(role, studentMode)
   const pathname = href.split('?')[0]
 
   let bestMatch = ''

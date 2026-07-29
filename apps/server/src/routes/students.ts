@@ -189,6 +189,120 @@ studentRouter.get('/rankings', authenticate, authorize('teacher', 'school_princi
     })
 }, '服务器错误'))
 
+/**
+ * GET /api/students/my-homeworks
+ * 学生查看自己所在团队的作业列表
+ */
+studentRouter.get('/my-homeworks', authenticate, authorize('student'), asyncHandler(async (req, res) => {
+    const userId = req.user!.userId
+
+    // 获取学生所在的所有团队
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { userId, userType: 'student', status: 'active' },
+      select: { teamId: true }
+    })
+    const teamIds = teamMembers.map(m => m.teamId)
+
+    if (teamIds.length === 0) {
+      return res.json({ success: true, data: [] })
+    }
+
+    // 查询这些团队的 homework 类型训练
+    const trainings = await prisma.training.findMany({
+      where: {
+        teamId: { in: teamIds },
+        type: 'homework',
+      },
+      orderBy: { startTime: 'desc' },
+      include: {
+        _count: { select: { TrainingProblem: true } },
+      }
+    })
+
+    const data = trainings.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      startTime: t.startTime,
+      endTime: t.endTime,
+      status: t.status,
+      format: t.format,
+      teamId: t.teamId,
+      problemCount: t._count.TrainingProblem,
+      createdAt: t.createdAt,
+    }))
+
+    res.json({ success: true, data })
+}, '获取作业列表失败'))
+
+/**
+ * GET /api/students/my-contests
+ * 学生查看自己所在团队的比赛 + 学校级比赛
+ */
+studentRouter.get('/my-contests', authenticate, authorize('student'), asyncHandler(async (req, res) => {
+    const userId = req.user!.userId
+
+    // 获取学生所在的所有团队
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { userId, userType: 'student', status: 'active' },
+      select: { teamId: true }
+    })
+    const teamIds = teamMembers.map(m => m.teamId)
+
+    // 获取学生学校
+    const student = await prisma.student.findUnique({
+      where: { id: userId },
+      select: { schoolId: true }
+    })
+
+    // 查询团队比赛
+    const teamTrainings = teamIds.length > 0 ? await prisma.training.findMany({
+      where: {
+        teamId: { in: teamIds },
+        type: 'contest',
+      },
+      orderBy: { startTime: 'desc' },
+      include: {
+        _count: { select: { TrainingProblem: true } },
+      }
+    }) : []
+
+    // 查询学校级比赛
+    const schoolTrainings = student?.schoolId ? await prisma.training.findMany({
+      where: {
+        schoolId: student.schoolId,
+        teamId: null,
+        type: 'contest',
+      },
+      orderBy: { startTime: 'desc' },
+      include: {
+        _count: { select: { TrainingProblem: true } },
+      }
+    }) : []
+
+    const formatTraining = (t: any, source: string) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      startTime: t.startTime,
+      endTime: t.endTime,
+      status: t.status,
+      format: t.format,
+      teamId: t.teamId,
+      schoolId: t.schoolId,
+      problemCount: t._count.TrainingProblem,
+      source,
+      createdAt: t.createdAt,
+    })
+
+    const data = [
+      ...teamTrainings.map(t => formatTraining(t, 'team')),
+      ...schoolTrainings.map(t => formatTraining(t, 'school')),
+    ]
+
+    res.json({ success: true, data })
+}, '获取比赛列表失败'))
+
 // 获取学生详情 - 支持通过 id 或 userId 查询
 studentRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     const { id } = req.params

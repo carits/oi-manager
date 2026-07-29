@@ -637,6 +637,96 @@ User.id ←→ Admin.id
 
 ---
 
+### 16.7 Training (训练/比赛/作业)
+
+训练、比赛、作业共用同一张表，通过 `type` 字段区分。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | Int | ✅ | 自增主键 |
+| teamId | String | ❌ | 团队 ID |
+| title | String | ✅ | 标题 |
+| description | String | ❌ | 描述 |
+| format | String | ✅ | 赛制：ioi / icpc / oi，默认 ioi |
+| startTime | DateTime | ✅ | 开始时间 |
+| endTime | DateTime | ✅ | 结束时间 |
+| status | String | ✅ | 状态：upcoming / ongoing / finished，默认 upcoming |
+| type | String | ✅ | 类型：training / contest / homework，默认 training |
+| createdBy | String | ✅ | 创建者 userId |
+| schoolId | String | ❌ | 学校 ID（校级比赛时使用） |
+| sourceTrainingId | Int | ❌ | 补题作业指向的原训练 ID |
+| includeAdminInRanking | Boolean | ✅ | 排名是否包含管理员，默认 false |
+| problemIdVisible | Boolean | ✅ | 题源是否可见，默认 false |
+| solutionVisible | Boolean | ✅ | 题解是否可见，默认 false |
+| createdAt | DateTime | ✅ | 创建时间 |
+| updatedAt | DateTime | ✅ | 更新时间 |
+
+**关联关系**:
+- `Team`: 多对一关联 Team
+- `School`: 多对一关联 School（校级比赛）
+- `TrainingProblem`: 一对多关联 TrainingProblem
+- `Submission`: 一对多关联 Submission
+
+**索引**:
+- `teamId`: 普通索引
+- `teamId, status`: 复合索引
+- `schoolId`: 普通索引
+- `schoolId, status`: 复合索引
+- `status`: 普通索引
+- `startTime`: 普通索引
+
+**业务规则**:
+- `type = 'homework'` 且 `sourceTrainingId` 非空时为补题作业
+- 补题作业自动设置 `problemIdVisible: true`、`solutionVisible: true`
+- 补题作业的 `startTime` 允许设为过去时间
+
+---
+
+### 16.8 TrainingProblem (训练题目)
+
+训练/比赛/作业中的题目，含完整快照字段。
+
+**字段说明**:
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | String | ✅ | UUID 主键 |
+| trainingId | Int | ✅ | 训练 ID |
+| problemId | String | ✅ | 关联 Problem.id |
+| alias | String | ❌ | 题目别名（如 A/B/C） |
+| orderIndex | Int | ✅ | 排序索引 |
+| points | Int | ❌ | 分值 |
+| statementSnapshot | String | ❌ | 题面快照（旧字段，兼容） |
+| titleSnapshot | String | ❌ | 标题快照 |
+| statementsSnapshotJson | String | ❌ | 题面 JSON 快照（@db.Text） |
+| timeLimitSnapshot | Int | ❌ | 时间限制快照(ms) |
+| memoryLimitSnapshot | Int | ❌ | 内存限制快照(KB) |
+| judgeConfigSnapshot | String | ❌ | 评测配置快照（@db.Text） |
+| allowedLanguagesSnapshot | String | ❌ | 允许语言快照 |
+| sourcePlatformSnapshot | String | ❌ | 来源平台快照（教师可见） |
+| sourceProblemIdSnapshot | String | ❌ | 来源题号快照（教师可见） |
+| sourceUrlSnapshot | String | ❌ | 来源链接快照（教师可见） |
+| dataVersion | String | ❌ | 快照数据版本 |
+| snapshotCreatedAt | DateTime | ❌ | 快照创建时间 |
+| createdAt | DateTime | ✅ | 创建时间 |
+
+**关联关系**:
+- `Training`: 多对一关联 Training（onDelete: Cascade）
+- `Problem`: 多对一关联 Problem
+
+**索引**:
+- `(trainingId, alias)`: 唯一索引
+- `(trainingId, orderIndex)`: 唯一索引
+- `trainingId`: 普通索引
+- `problemId`: 普通索引
+
+**业务规则**:
+- 所有 TrainingProblem 都应生成快照（不只 homework）
+- 旧数据快照为空时做安全 fallback：`title = titleSnapshot ?? Problem.title`
+- 学生视角 fallback 不返回 platform/problemId/sourceUrl
+
+---
+
 ## 日志表
 
 ### 17. Admin (管理员)

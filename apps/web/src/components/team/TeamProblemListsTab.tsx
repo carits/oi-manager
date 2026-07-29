@@ -47,6 +47,8 @@ interface TeamProblemListsTabProps {
 
 export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwner, userId }: TeamProblemListsTabProps) {
   const { user } = useAuth()
+  const isStudent = user?.role === 'student'
+  const effectiveCanManage = canManage && !isStudent
   const toast = useToast()
   const [items, setItems] = useState<TeamProblemListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -131,20 +133,21 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem' }}>
-        {canManage && (
-          <Button onClick={handleOpenAddModal}>+ 添加题单</Button>
+        {effectiveCanManage && (
+          <Button onClick={handleOpenAddModal}>+ 共享题单</Button>
         )}
       </div>
 
       {items.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
           <p>暂无题单</p>
-          {canManage && <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>点击「添加题单」将你的题单收录到团队题单</p>}
+          {effectiveCanManage && <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>点击「共享题单」将你的题单共享给团队</p>}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
           {items.map(item => {
-            const canRemove = isOwner || item.addedBy === (userId || user?.userId)
+            const canRemove = !isStudent && (isOwner || item.addedBy === (userId || user?.userId))
+            const pathPrefix = isStudent ? '/student/problem-lists' : '/teacher/problem-lists'
             return (
               <div
                 key={item.id}
@@ -160,7 +163,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Link
-                    href={`/teacher/problem-lists/${item.problemListId}`}
+                    href={`${pathPrefix}/${item.problemListId}`}
                     style={{ fontWeight: 600, color: 'var(--primary)', textDecoration: 'none', fontSize: '0.95rem' }}
                   >
                     {item.problemList.title}
@@ -202,7 +205,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="添加题单到团队"
+        title="共享题单给团队"
         width="600px"
       >
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -260,7 +263,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
         onClose={() => setRemoveTarget(null)}
         onConfirm={handleRemove}
         title="移除题单"
-        message={`确定要从团队题单中移除「${removeTarget?.problemList?.title || ''}」吗？`}
+        message={`确定要从团队可见题单中移除「${removeTarget?.problemList?.title || ''}」吗？`}
         confirmText="移除"
         danger
       />

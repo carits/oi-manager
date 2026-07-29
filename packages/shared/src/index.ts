@@ -34,6 +34,7 @@ export interface JwtPayload {
   studentId?: string // 学生ID（student 角色才有）
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   schoolId?: string // 学校ID（教师或学生所属学校）
+  studentMode?: 'campus' | 'personal' // 学生模式（仅 student 角色有）
 }
 
 // API 响应类型
@@ -67,6 +68,7 @@ export interface LoginResponse {
   studentId?: string
   adminId?: string
   schoolId?: string
+  studentMode?: 'campus' | 'personal'
 }
 
 // ========== 学校管理 DTO ==========

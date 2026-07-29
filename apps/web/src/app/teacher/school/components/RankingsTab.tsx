@@ -107,7 +107,7 @@ export default function RankingsTab({ schoolId, educationSystem }: RankingsTabPr
                       ? 'var(--success)'
                       : student.rating >= 1200
                       ? 'var(--warning)'
-                      : 'var(--gray-600)'
+                      : 'var(--text-secondary)'
                 }}
               >
                 {student.rating}

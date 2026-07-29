@@ -7,10 +7,12 @@
 
 import { Router } from 'express'
 import { prisma } from '../prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, isPersonalMode } from '../middleware/auth'
 import logger from '../lib/logger'
 import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
+import { populateSnapshotData } from '../modules/training/training.helpers'
+import { v4 as uuidv4 } from 'uuid'
 
 export const problemListsRouter = Router()
 
@@ -82,8 +84,9 @@ async function getProblemListPermission(
   }
 
   // 查学校收录：如果题单被收录到用户所在学校，给 view 权限
+  // 校园模式下学生不能通过 SchoolProblemList 获得自动 view 权限
   const userSchoolId = await getUserSchoolId(user)
-  if (userSchoolId) {
+  if (userSchoolId && user.role !== 'student') {
     const schoolLink = await prisma.schoolProblemList.findUnique({
       where: { schoolId_problemListId: { schoolId: userSchoolId, problemListId } }
     })
@@ -290,6 +293,12 @@ problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
       return
     }
 
+    // 校园模式：学生不能创建题单；个人模式可以
+    if (req.user.role === 'student' && !isPersonalMode(req.user)) {
+      res.status(403).json({ success: false, message: '校园模式下学生不能创建题单' })
+      return
+    }
+
     const { title, description, visibility } = req.body
     if (!title || !title.trim()) {
       res.status(400).json({ success: false, message: '标题不能为空' })
@@ -297,7 +306,7 @@ problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     }
 
     const schoolId = await getUserSchoolId(req.user as NonNullable<Express.Request['user']>)
-    const ownerType = req.user.role === 'student' ? 'student' : 'teacher'
+    const ownerType: 'teacher' | 'student' = 'teacher'
 
     const list = await prisma.problemList.create({
       data: {
@@ -388,8 +397,37 @@ problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       return { ...share, targetName, targetAvatar, targetUsername }
     }))
 
-    res.json({ success: true, data: { ...list, Shares: enrichedShares, _permission: perm || 'admin' } })
+    // 学生视角脱敏
+    const isStudent = req.user.role === 'student'
+    const sanitizedList = isStudent ? {
+      ...list,
+      ProblemListSection: list.ProblemListSection.map((section: any) => ({
+        ...section,
+        ProblemListEntry: section.ProblemListEntry.map((entry: any) => sanitizeEntryForStudent(entry)),
+      })),
+      ProblemListShare: [], // 学生不需要看分享列表
+    } : list
+
+    res.json({ success: true, data: { ...sanitizedList, Shares: isStudent ? [] : enrichedShares, _permission: perm || 'admin' } })
 }, '获取题单详情失败'))
+
+/** 学生视角题单详情脱敏：只保留 title 和 difficulty */
+function sanitizeProblemForStudent(problem: any): any {
+  return {
+    title: problem.title,
+    difficulty: problem.difficulty,
+  }
+}
+
+/** 学生视角条目脱敏：隐藏 problemId */
+function sanitizeEntryForStudent(entry: any): any {
+  const { problemId, ...rest } = entry
+  return {
+    ...rest,
+    problemId: undefined,
+    Problem: entry.Problem ? sanitizeProblemForStudent(entry.Problem) : undefined,
+  }
+}
 
 /**
  * PUT /api/problem-lists/:id
@@ -398,6 +436,12 @@ problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
 problemListsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
+      return
+    }
+
+    // 校园模式：学生不能编辑题单；个人模式可以编辑自己的
+    if (req.user.role === 'student' && !isPersonalMode(req.user)) {
+      res.status(403).json({ success: false, message: '校园模式下学生不能编辑题单' })
       return
     }
 
@@ -441,6 +485,12 @@ problemListsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
 problemListsRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: '未登录' })
+      return
+    }
+
+    // 校园模式：学生不能删除题单；个人模式可以删除自己的
+    if (req.user.role === 'student' && !isPersonalMode(req.user)) {
+      res.status(403).json({ success: false, message: '校园模式下学生不能删除题单' })
       return
     }
 
@@ -1112,6 +1162,12 @@ problemListsRouter.post('/:id/shares', authenticate, asyncHandler(async (req, re
       return
     }
 
+    // 校园模式：学生不能管理分享；个人模式可以管理自己的
+    if (req.user.role === 'student' && !isPersonalMode(req.user)) {
+      res.status(403).json({ success: false, message: '校园模式下学生不能管理题单分享' })
+      return
+    }
+
     const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
     if (!list) {
       res.status(404).json({ success: false, message: '题单不存在' })
@@ -1183,3 +1239,118 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, asyncHandler(asy
     await prisma.problemListShare.delete({ where: { id: req.params.shareId } })
     res.json({ success: true, message: '移除成功' })
 }, '移除分享失败'))
+
+/**
+ * POST /api/problem-lists/:id/publish-homework
+ * 将题单发布为作业（平铺所有条目，不保留章节结构）
+ */
+problemListsRouter.post('/:id/publish-homework', authenticate, asyncHandler(async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: '未登录' })
+    }
+
+    const userId = req.user.userId
+    const userRole = req.user.role
+
+    // 校园模式下学生不能发布作业；个人模式也不允许（作业需要团队上下文）
+    if (userRole === 'student') {
+      return res.status(403).json({ success: false, message: '学生不能发布作业' })
+    }
+
+    const { teamId, title, startTime, endTime, format } = req.body
+
+    if (!teamId) {
+      return res.status(400).json({ success: false, message: '必须选择团队' })
+    }
+    if (!startTime || !endTime) {
+      return res.status(400).json({ success: false, message: '必须设置开始和结束时间' })
+    }
+
+    // 检查题单权限
+    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
+    if (!perm || perm === 'view') {
+      return res.status(403).json({ success: false, message: '需要编辑权限才能发布作业' })
+    }
+
+    // 检查团队权限
+    const team = await prisma.team.findUnique({ where: { id: teamId } })
+    if (!team) {
+      return res.status(404).json({ success: false, message: '团队不存在' })
+    }
+
+    // 检查用户是团队管理员
+    const member = await prisma.teamMember.findFirst({
+      where: { teamId, userId, status: 'active', role: { in: ['owner', 'admin'] } }
+    })
+    if (!member && userRole !== 'super_admin') {
+      return res.status(403).json({ success: false, message: '只有团队管理员可以发布作业' })
+    }
+
+    // 获取题单所有条目（平铺，不保留章节）
+    const problemList = await prisma.problemList.findUnique({
+      where: { id: req.params.id },
+      include: {
+        ProblemListSection: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            ProblemListEntry: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                Problem: {
+                  include: { ProblemStatement: { where: { isVisible: true } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!problemList) {
+      return res.status(404).json({ success: false, message: '题单不存在' })
+    }
+
+    // 平铺所有条目
+    const allEntries = problemList.ProblemListSection.flatMap((s: any) => s.ProblemListEntry)
+    if (allEntries.length === 0) {
+      return res.status(400).json({ success: false, message: '题单中没有题目，无法发布' })
+    }
+
+    // 创建 Training.type = 'homework'
+    const homeworkTitle = title || `${problemList.title} - 作业`
+    const training = await prisma.training.create({
+      data: {
+        title: homeworkTitle,
+        description: `由题单「${problemList.title}」发布`,
+        teamId,
+        schoolId: team.schoolId,
+        type: 'homework',
+        format: format || 'ioi',
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        status: 'upcoming',
+        createdBy: userId,
+        problemIdVisible: false,
+        solutionVisible: false,
+        includeAdminInRanking: false,
+      }
+    })
+
+    // 为每个条目创建 TrainingProblem（含快照）
+    const problemsData = allEntries.map((entry: any, index: number) => {
+      const snapshotData = populateSnapshotData(entry.Problem)
+      return {
+        id: uuidv4(),
+        trainingId: training.id,
+        problemId: entry.problemId,
+        alias: entry.alias || String.fromCharCode(65 + index), // A, B, C...
+        orderIndex: index,
+        points: null,
+        ...snapshotData,
+      }
+    })
+
+    await prisma.trainingProblem.createMany({ data: problemsData })
+
+    res.json({ success: true, data: { trainingId: training.id, title: homeworkTitle, problemCount: problemsData.length } })
+}, '发布作业失败'))

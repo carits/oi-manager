@@ -26,7 +26,7 @@ interface TeamTrainingListProps {
   schoolId?: string
   basePath: string
   isAdmin: boolean
-  mode?: 'training' | 'contest'
+  mode?: 'training' | 'contest' | 'homework'
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; dot: string }> = {
@@ -198,9 +198,12 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
               <tr
                 key={training.id}
                 onClick={() => {
-                  const detailPath = mode === 'contest' ? 'contests' : 'trainings'
+                  const detailPath =
+                    mode === 'contest' ? 'contests' :
+                    mode === 'homework' ? 'homeworks' :
+                    'trainings'
                   if (schoolId) {
-                    router.push(`${basePath}/contests/${training.id}`)
+                    router.push(`${basePath}/${detailPath}/${training.id}`)
                   } else {
                     router.push(`${basePath}/${teamId}/${detailPath}/${training.id}`)
                   }

@@ -20,6 +20,12 @@ export const problemCrudRouter = Router()
 problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId
     const role = (req as any).user.role
+
+    // 校园模式：学生不能访问题库
+    if (role === 'student') {
+      return res.status(403).json({ success: false, message: '校园模式下学生不能访问题库' })
+    }
+
     const { visibility, status, keyword, platform } = req.query
     const { page, pageSize, skip } = parsePagination(req.query)
 
@@ -276,6 +282,11 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     const user = (req as any).user
     const role = user.role
     const userId = user.userId
+
+    // 校园模式：学生不能访问题库
+    if (role === 'student') {
+      return res.status(403).json({ success: false, message: '校园模式下学生不能访问题库' })
+    }
 
     const problem = await prisma.problem.findUnique({
       where: { id },

@@ -115,8 +115,8 @@ describe('题单权限模块', () => {
       const res = await createAuthenticatedRequest(app, token)
         .post('/api/problem-lists')
         .send({ title: '学生题单' })
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
+      // 校园模式：学生不能创建题单
+      expect(res.status).toBe(403)
     })
   })
 

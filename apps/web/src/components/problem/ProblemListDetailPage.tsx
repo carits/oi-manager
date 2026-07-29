@@ -132,8 +132,11 @@ export default function ProblemListDetailPage() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
 
+  const [showPublishModal, setShowPublishModal] = useState(false)
+
   const canEdit = detail?._permission === 'admin' || detail?._permission === 'edit'
   const isAdmin = detail?._permission === 'admin'
+  const isStudentView = user?.role === 'student'
 
   useEffect(() => { fetchDetail() }, [listId])
 
@@ -145,8 +148,11 @@ export default function ProblemListDetailPage() {
         const data = res.data as any
         setDetail({
           ...data,
-          Sections: data.Sections || data.sections || [],
-          Shares: data.Shares || data.shares || [],
+          Sections: (data.Sections || data.sections || data.ProblemListSection || []).map((s: any) => ({
+            ...s,
+            Entries: s.Entries || s.ProblemListEntry || [],
+          })),
+          Shares: data.Shares || data.shares || data.ProblemListShare || [],
         })
       }
     } catch (e) {
@@ -373,17 +379,22 @@ export default function ProblemListDetailPage() {
                 </div>
               ) : (
                 <h1
-                  onClick={() => { if (canEdit) { setEditingTitle(true); setTitleDraft(detail.title) } }}
-                  style={{ fontSize: '1.25rem', fontWeight: 600, cursor: canEdit ? 'pointer' : 'default' }}
+                  onClick={() => { if (canEdit && !isStudentView) { setEditingTitle(true); setTitleDraft(detail.title) } }}
+                  style={{ fontSize: '1.25rem', fontWeight: 600, cursor: canEdit && !isStudentView ? 'pointer' : 'default' }}
                 >
                   {detail.title}
                 </h1>
               )}
             </div>
-            {isAdmin && (
-              <button onClick={() => setShowSharePanel(true)} style={{ padding: '0.375rem 0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                权限管理
-              </button>
+            {isAdmin && !isStudentView && (
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button onClick={() => setShowPublishModal(true)} style={{ padding: '0.375rem 0.75rem', background: 'var(--primary)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', color: 'white' }}>
+                  发布为作业
+                </button>
+                <button onClick={() => setShowSharePanel(true)} style={{ padding: '0.375rem 0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  权限管理
+                </button>
+              </div>
             )}
           </div>
 
@@ -408,14 +419,14 @@ export default function ProblemListDetailPage() {
                     </div>
                   ) : (
                     <>
-                      <h2 onClick={() => { if (canEdit) { setEditingSection(section.id); setSectionTitleDraft(section.title) } }}
-                        style={{ fontSize: '1rem', fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', margin: 0 }}>
+                      <h2 onClick={() => { if (canEdit && !isStudentView) { setEditingSection(section.id); setSectionTitleDraft(section.title) } }}
+                        style={{ fontSize: '1rem', fontWeight: 600, cursor: canEdit && !isStudentView ? 'pointer' : 'default', margin: 0 }}>
                         {section.title}
                       </h2>
                       <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>({section.Entries.length} 题)</span>
                     </>
                   )}
-                  {canEdit && editingSection !== section.id && (
+                  {canEdit && !isStudentView && editingSection !== section.id && (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem' }}>
                       {detail.Sections.length > 1 && (
                         <button onClick={() => setDeleteSectionConfirm(section.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', fontSize: '0.75rem', padding: '0.1rem 0.3rem' }} title="删除章节">✕</button>
@@ -430,43 +441,46 @@ export default function ProblemListDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: '36px' }} />
-                        <col style={{ width: '150px' }} />
-                        <col style={{ width: '80px' }} />
-                        <col />{/* 标题 - 自适应 */}
-                        <col style={{ width: '600px' }} />{/* 备注 */}
-                        {canEdit && <col style={{ width: '60px' }} />}
+                        {!isStudentView && <col style={{ width: '150px' }} />}
+                        {!isStudentView && <col style={{ width: '80px' }} />}
+                        <col />
+                        {!isStudentView && <col style={{ width: '600px' }} />}
+                        {canEdit && !isStudentView && <col style={{ width: '60px' }} />}
                       </colgroup>
                       <thead>
                         <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid var(--border)' }}>
                           <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>#</th>
-                          <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>OJ</th>
-                          <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>题号</th>
+                          {!isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>OJ</th>}
+                          {!isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>题号</th>}
                           <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>标题</th>
-                          <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>备注</th>
-                          {canEdit && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>操作</th>}
+                          {!isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>备注</th>}
+                          {canEdit && !isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>操作</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {section.Entries.map((entry, idx) => (
                           <tr key={entry.id} style={{ borderBottom: '1px solid var(--gray-100)' }}>
                             <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{idx + 1}</td>
-                            <td style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</td>
-                            <td style={{ padding: '0.4rem 0.75rem' }}>
+                            {!isStudentView && <td style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</td>}
+                            {!isStudentView && <td style={{ padding: '0.4rem 0.75rem' }}>
                               <span onClick={() => router.push(`${pathPrefix}/problems/${entry.problemId}`)} style={{ color: 'var(--primary)', cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.85rem' }}>
                                 {entry.Problem.problemId}
                               </span>
-                            </td>
+                            </td>}
                             <td style={{ padding: '0.4rem 0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               <span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span>
-                              <span onClick={() => router.push(`${pathPrefix}/problems/${entry.problemId}`)} style={{ color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem' }} title={entry.Problem.title}>
-                                {entry.Problem.title}
-                              </span>
+                              {!isStudentView ? (
+                                <span onClick={() => router.push(`${pathPrefix}/problems/${entry.problemId}`)} style={{ color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem' }} title={entry.Problem.title}>
+                                  {entry.Problem.title}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '0.85rem' }}>{entry.Problem.title}</span>
+                              )}
                             </td>
-                            <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {!isStudentView && <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                               {editingEntry === entry.id ? (
                                 <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}
                                   onBlur={(e) => {
-                                    // 仅在焦点离开整个容器时保存
                                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                                       handleUpdateEntry(entry.id, { notes: editNotes || null })
                                     }
@@ -487,8 +501,8 @@ export default function ProblemListDetailPage() {
                                   {entry.notes || (canEdit ? '点击添加' : '-')}
                                 </span>
                               )}
-                            </td>
-                            {canEdit && (
+                            </td>}
+                            {canEdit && !isStudentView && (
                               <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center' }}>
                                 <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center', alignItems: 'center' }}>
                                   <button onClick={() => handleMoveEntry(section.id, entry.id, 'up')} disabled={idx === 0}
@@ -504,7 +518,7 @@ export default function ProblemListDetailPage() {
                         ))}
 
                         {/* 新行 */}
-                        {canEdit && sectionNewRows.map((row) => (
+                        {canEdit && !isStudentView && sectionNewRows.map((row) => (
                           <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: '#fffbe6' }}>
                             <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</td>
                             <td style={{ padding: '0.4rem 0.75rem' }}>
@@ -551,7 +565,7 @@ export default function ProblemListDetailPage() {
                 )}
 
                 {/* 添加题目 + 保存按钮 */}
-                {canEdit && (
+                {canEdit && !isStudentView && (
                   <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
                     <button onClick={() => addNewRow(section.id)}
                       style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: '1px dashed var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--gray-400)', fontSize: '0.85rem' }}>
@@ -607,6 +621,14 @@ export default function ProblemListDetailPage() {
         </div>
       </div>
 
+      {showPublishModal && detail && (
+        <PublishHomeworkModal
+          listId={listId}
+          onClose={() => setShowPublishModal(false)}
+          onPublished={() => { setShowPublishModal(false); toast.success('作业发布成功') }}
+        />
+      )}
+
       {showSharePanel && detail && (
         <SharePanelModal listId={listId} shares={detail.Shares} onClose={() => setShowSharePanel(false)} onUpdate={fetchDetail} />
       )}
@@ -619,6 +641,106 @@ export default function ProblemListDetailPage() {
         onConfirm={() => { if (deleteSectionConfirm) handleDeleteSection(deleteSectionConfirm) }}
         title="确认删除章节" message="删除章节将同时删除其下所有题目，确认继续？" confirmText="删除" danger />
     </>
+  )
+}
+
+// ==================== 发布为作业弹窗 ====================
+
+function PublishHomeworkModal({ listId, onClose, onPublished }: {
+  listId: string
+  onClose: () => void
+  onPublished: () => void
+}) {
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([])
+  const [selectedTeamId, setSelectedTeamId] = useState('')
+  const [title, setTitle] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [format, setFormat] = useState('oi')
+  const [submitting, setSubmitting] = useState(false)
+  const toast = useToast()
+
+  useEffect(() => {
+    apiClient.get('/api/teams?view=mine&pageSize=100').then(res => {
+      if (res.success) {
+        const list = (res.data as any)?.items || res.data || []
+        setTeams(list)
+        if (list.length > 0) setSelectedTeamId(list[0].id)
+      }
+    })
+  }, [])
+
+  const handleSubmit = async () => {
+    if (!selectedTeamId || !startTime || !endTime) {
+      toast.warning('请填写完整信息')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await apiClient.post(`/api/problem-lists/${listId}/publish-homework`, {
+        teamId: selectedTeamId,
+        title: title.trim() || undefined,
+        startTime,
+        endTime,
+        format,
+      })
+      if (res.success) {
+        onPublished()
+      } else {
+        toast.error(res.message || '发布失败')
+      }
+    } catch (e: any) {
+      toast.error(e?.message || '发布失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="发布为作业" width="520px">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>目标团队</label>
+          <select value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
+            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem' }}>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>作业标题（留空则使用题单标题）</label>
+          <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="可选"
+            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>赛制</label>
+          <select value={format} onChange={e => setFormat(e.target.value)}
+            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem' }}>
+            <option value="oi">OI</option>
+            <option value="ioi">IOI</option>
+            <option value="icpc">ICPC</option>
+          </select>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>开始时间</label>
+            <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>结束时间</label>
+            <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <button onClick={onClose} style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '0.9rem' }}>取消</button>
+          <button onClick={handleSubmit} disabled={submitting}
+            style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+            {submitting ? '发布中...' : '发布'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

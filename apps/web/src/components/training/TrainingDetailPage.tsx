@@ -39,6 +39,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
 
   const [activeTab, setActiveTab] = useState<TabType>('problemList')
   const [timeDisplay, setTimeDisplay] = useState('')
+  const [showMakeupModal, setShowMakeupModal] = useState(false)
+  const [makeupTitle, setMakeupTitle] = useState('')
+  const [makeupStartTime, setMakeupStartTime] = useState('')
+  const [makeupEndTime, setMakeupEndTime] = useState('')
+  const [makeupLoading, setMakeupLoading] = useState(false)
 
   const {
     training, problems, selectedProblemId, setSelectedProblemId,
@@ -229,8 +234,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
 
   const fmtLabel = formatLabelFn(training.format)
   const tl = typeLabel(training.type)
-  const backTab = training.type === 'contest' ? 'mock' : 'training'
-  const backUrl = teamId ? `${basePath}/${teamId}?tab=${backTab}` : `${basePath}?tab=contests`
+  const backTab =
+    training.type === 'contest' ? 'mock' :
+    training.type === 'homework' ? 'homeworks' :
+    'training'
+  const backUrl = teamId ? `${basePath}/${teamId}?tab=${backTab}` : training.type === 'homework' ? `${basePath}/homeworks` : training.type === 'contest' ? `${basePath}/contests` : `${basePath}?tab=training`
   const statusColors: Record<string, { bg: string; color: string }> = {
     upcoming: { bg: 'var(--info-light)', color: 'var(--info-text)' },
     ongoing: { bg: 'var(--success-light)', color: 'var(--success-text)' },
@@ -249,6 +257,22 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             <button onClick={() => router.push(backUrl)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>← 返回</button>
             <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
             <h1 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>{training.title}</h1>
+            {training.sourceTrainingId && (
+              <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--info-light)', color: 'var(--info-text)' }}>补题练习</span>
+            )}
+            {training.sourceTrainingId && (
+              <button
+                onClick={() => {
+                  const sourcePath = training.type === 'homework'
+                    ? (basePath.startsWith('/student') ? `${basePath}/contests/${training.sourceTrainingId}` : `${basePath}/contests/${training.sourceTrainingId}`)
+                    : `${basePath}/${teamId}?tab=training`
+                  router.push(sourcePath)
+                }}
+                style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                查看原活动
+              </button>
+            )}
             <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-muted)' }}>{fmtLabel}</span>
             <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: sc.bg, color: sc.color }}>
               {training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}
@@ -260,6 +284,20 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             </div>
             {training.isAdmin && (
               <>
+                {training.status === 'finished' && (
+                  <button
+                    onClick={() => {
+                      setMakeupTitle(`${training.title} - 补题练习`)
+                      setMakeupStartTime(new Date().toISOString().slice(0, 16))
+                      const defaultEnd = new Date(Date.now() + 7 * 24 * 3600 * 1000)
+                      setMakeupEndTime(defaultEnd.toISOString().slice(0, 16))
+                      setShowMakeupModal(true)
+                    }}
+                    style={{ padding: '0.5rem 1rem', border: '1px solid var(--primary)', background: 'white', color: 'var(--primary)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
+                  >
+                    创建补题作业
+                  </button>
+                )}
                 <button
                   onClick={() => actions.setShowEditModal(true)}
                   style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
@@ -549,7 +587,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
         onClose={() => actions.setShowEditModal(false)}
         teamId={teamId || undefined}
         trainingId={trainingId}
-        mode={training.type === 'contest' ? 'contest' : 'training'}
+        mode={training.type === 'contest' ? 'contest' : training.type === 'homework' ? 'homework' : 'training'}
         onSaved={() => {
           actions.setShowEditModal(false)
           refresh()
@@ -567,6 +605,82 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
         danger
         loading={actions.deleting}
       />
+
+      {/* Makeup Homework Modal */}
+      <Modal
+        isOpen={showMakeupModal}
+        onClose={() => setShowMakeupModal(false)}
+        title="创建补题作业"
+        width="500px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>标题</label>
+            <input
+              value={makeupTitle}
+              onChange={e => setMakeupTitle(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>开始时间</label>
+            <input
+              type="datetime-local"
+              value={makeupStartTime}
+              onChange={e => setMakeupStartTime(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>结束时间</label>
+            <input
+              type="datetime-local"
+              value={makeupEndTime}
+              onChange={e => setMakeupEndTime(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button
+              onClick={() => setShowMakeupModal(false)}
+              style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              取消
+            </button>
+            <button
+              onClick={async () => {
+                setMakeupLoading(true)
+                try {
+                  const res = await apiClient.post(`/api/trainings/${trainingId}/create-makeup-homework`, {
+                    title: makeupTitle,
+                    startTime: makeupStartTime ? new Date(makeupStartTime).toISOString() : undefined,
+                    endTime: new Date(makeupEndTime).toISOString(),
+                  })
+                  if (res.success && (res.data as { id?: number })?.id) {
+                    setShowMakeupModal(false)
+                    router.push(`${basePath}/homeworks/${(res.data as { id: number }).id}`)
+                  } else {
+                    alert(res.message || '创建失败')
+                  }
+                } catch (err: unknown) {
+                  alert((err as Error).message || '创建失败')
+                } finally {
+                  setMakeupLoading(false)
+                }
+              }}
+              disabled={makeupLoading || !makeupEndTime}
+              style={{
+                padding: '0.5rem 1rem',
+                background: (makeupLoading || !makeupEndTime) ? 'var(--gray-300)' : 'var(--primary)',
+                color: (makeupLoading || !makeupEndTime) ? 'var(--gray-500)' : 'white',
+                border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500,
+              }}
+            >
+              {makeupLoading ? '创建中...' : '创建'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

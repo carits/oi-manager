@@ -389,6 +389,14 @@ export async function canManageTeam(req: AuthRequest, teamId: string): Promise<b
 }
 
 /**
+ * 判断用户是否可以访问题库
+ * 校园模式下学生不能访问题库
+ */
+export function canAccessProblemBank(role: string): boolean {
+  return role !== 'student'
+}
+
+/**
  * 获取用户在团队中的角色
  */
 export async function getTeamMemberRole(teamId: string, userId: string): Promise<'owner' | 'admin' | 'member' | null> {

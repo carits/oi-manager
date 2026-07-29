@@ -8,6 +8,10 @@ const SCHOOL_NAME_KEY = 'schoolName'
 const TEACHER_ID_KEY = 'teacherId'
 const STUDENT_ID_KEY = 'studentId'
 const ADMIN_ID_KEY = 'adminId'
+const STUDENT_MODE_KEY = 'studentMode'
+const LAST_STUDENT_MODE_KEY = 'lastStudentMode'
+
+export type StudentMode = 'campus' | 'personal'
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
@@ -110,6 +114,30 @@ export function clearAuth(): void {
   localStorage.removeItem(TEACHER_ID_KEY)
   localStorage.removeItem(STUDENT_ID_KEY)
   localStorage.removeItem(ADMIN_ID_KEY)
+  localStorage.removeItem(STUDENT_MODE_KEY)
+  // 注意：不清除 LAST_STUDENT_MODE_KEY，以便下次登录时记住上次模式
+}
+
+export function getStudentMode(): StudentMode | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(STUDENT_MODE_KEY) as StudentMode | null
+}
+
+export function setStudentMode(mode: StudentMode | null): void {
+  if (mode) {
+    localStorage.setItem(STUDENT_MODE_KEY, mode)
+  } else {
+    localStorage.removeItem(STUDENT_MODE_KEY)
+  }
+}
+
+export function getLastStudentMode(): StudentMode | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(LAST_STUDENT_MODE_KEY) as StudentMode | null
+}
+
+export function setLastStudentMode(mode: StudentMode): void {
+  localStorage.setItem(LAST_STUDENT_MODE_KEY, mode)
 }
 
 export function isAuthenticated(): boolean {

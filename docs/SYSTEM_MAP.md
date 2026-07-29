@@ -100,6 +100,9 @@ oi-manager-v2/
 | `/teacher/students` | 学生管理 |
 | `/teacher/teams` | 团队列表 |
 | `/teacher/teams/[id]` | 团队详情 |
+| `/teacher/teams/[id]/contests/[cid]` | 团队比赛详情 |
+| `/teacher/teams/[id]/trainings/[tid]` | 团队训练详情 |
+| `/teacher/teams/[id]/homeworks/[cid]` | 团队作业详情 |
 | `/teacher/classes` | 班级/团队管理 |
 | `/teacher/contests` | 比赛管理 |
 | `/teacher/contests/[id]` | 比赛详情 |
@@ -119,6 +122,10 @@ oi-manager-v2/
 | `/student/team` | 我的团队 |
 | `/student/team/browse` | 浏览可加入团队 |
 | `/student/team/[id]` | 团队详情 |
+| `/student/team/[id]/contests/[cid]` | 团队比赛详情 |
+| `/student/team/[id]/trainings/[tid]` | 团队训练详情 |
+| `/student/homeworks` | 作业列表 |
+| `/student/homeworks/[cid]` | 作业详情 |
 | `/student/contests` | 比赛列表 |
 | `/student/contests/[id]` | 比赛详情 |
 | `/student/problems` | 题目列表 |
@@ -208,6 +215,24 @@ oi-manager-v2/
 | GET | `/api/contests/:id/resources` | 比赛资源 |
 | POST | `/api/contests/:id/resources` | 上传资源 |
 | DELETE | `/api/contests/:id/resources/:resourceId` | 删除资源 |
+
+### 4.7.1 训练/比赛/作业管理 (`/api/trainings/*`, `/api/teams/:teamId/trainings`)
+
+> 训练、比赛、作业共用 Training 表，通过 `type` 字段区分
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/teams/:teamId/trainings` | 团队训练列表（支持 `?type=contest\|homework\|training`） |
+| POST | `/api/teams/:teamId/trainings` | 创建训练/比赛 |
+| GET | `/api/trainings/:id` | 训练详情 |
+| PUT | `/api/trainings/:id` | 更新训练 |
+| DELETE | `/api/trainings/:id` | 删除训练 |
+| GET | `/api/trainings/:id/problems` | 训练题目列表 |
+| POST | `/api/trainings/:id/problems` | 添加题目 |
+| GET | `/api/trainings/:id/problem-status` | 学生做题状态 |
+| POST | `/api/trainings/:id/submit` | 提交代码 |
+| GET | `/api/trainings/:id/ranking` | 排名 |
+| **POST** | **`/api/trainings/:id/create-makeup-homework`** | **创建补题作业** |
 
 ### 4.8 题单管理 (`/api/problem-lists/*`)
 

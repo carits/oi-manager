@@ -829,6 +829,7 @@ model Training {
   solutionVisible           Boolean                     @default(false)
   type                      String                      @default("training")
   schoolId                  String?
+  sourceTrainingId          Int?
   ContestRecord             ContestRecord[]
   ContestUserProblemStatus  ContestUserProblemStatus[]
   Submission                Submission[]
@@ -883,6 +884,15 @@ model TrainingProblem {
   dataVersion               String?
   snapshotCreatedAt         DateTime?
   statementSnapshot         String?
+  titleSnapshot             String?
+  statementsSnapshotJson    String?                     @db.Text
+  timeLimitSnapshot         Int?
+  memoryLimitSnapshot       Int?
+  judgeConfigSnapshot       String?                     @db.Text
+  allowedLanguagesSnapshot  String?
+  sourcePlatformSnapshot    String?
+  sourceProblemIdSnapshot   String?
+  sourceUrlSnapshot         String?
   ContestUserProblemStatus  ContestUserProblemStatus[]
   TrainingAttachment        TrainingAttachment[]
   Problem                   Problem                     @relation(fields: [problemId], references: [id])

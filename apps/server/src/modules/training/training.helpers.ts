@@ -121,6 +121,35 @@ export async function getUserTypeForTeam(userId: string): Promise<string> {
   return 'student'
 }
 
+/** 从 Problem 生成快照数据，供 TrainingProblem 创建时使用 */
+export function populateSnapshotData(problem: {
+  title: string
+  description: string | null
+  timeLimit: number | null
+  memoryLimit: number | null
+  judgeConfig: string | null
+  allowedLanguages: string | null
+  platform: string
+  problemId: string
+  ProblemStatement?: { content: string | null; isVisible: boolean }[]
+}) {
+  const statements = problem.ProblemStatement?.filter(s => s.isVisible).map(s => s.content).filter((c): c is string => c !== null) || []
+  return {
+    titleSnapshot: problem.title,
+    statementSnapshot: problem.description,
+    statementsSnapshotJson: statements.length > 0 ? JSON.stringify(statements) : null,
+    timeLimitSnapshot: problem.timeLimit,
+    memoryLimitSnapshot: problem.memoryLimit,
+    judgeConfigSnapshot: problem.judgeConfig,
+    allowedLanguagesSnapshot: problem.allowedLanguages,
+    sourcePlatformSnapshot: problem.platform,
+    sourceProblemIdSnapshot: problem.problemId,
+    sourceUrlSnapshot: null,
+    snapshotCreatedAt: new Date(),
+    dataVersion: '1',
+  }
+}
+
 /** 解析训练 ID（数字） */
 export function parseTrainingId(raw: string): number {
   const n = parseInt(raw, 10)

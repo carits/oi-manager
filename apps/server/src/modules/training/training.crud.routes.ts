@@ -205,6 +205,7 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
         solutionVisible: training.solutionVisible,
         includeAdminInRanking: training.includeAdminInRanking,
         type: training.type,
+        sourceTrainingId: training.sourceTrainingId,
         problemCount: training._count.TrainingProblem,
         participantCount: training._count.TrainingParticipant,
         isAdmin,
@@ -340,3 +341,116 @@ trainingCrudRouter.delete('/trainings/:id', authenticate, asyncHandler(async (re
     logger.info('training_deleted', { action: 'trainings', metadata: { trainingId: id } })
     res.json({ success: true, message: '删除成功' })
 }, '删除失败'))
+
+/**
+ * POST /api/trainings/:id/create-makeup-homework
+ * 从已结束的比赛/训练创建补题作业
+ */
+trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+    const id = parseTrainingId(req.params.id)
+    const userId = req.user!.userId
+    const { title, startTime, endTime } = req.body
+
+    const training = await prisma.training.findUnique({
+      where: { id },
+      include: {
+        TrainingProblem: {
+          orderBy: { orderIndex: 'asc' },
+        },
+      },
+    })
+
+    if (!training) {
+      return res.status(404).json({ success: false, message: '训练不存在' })
+    }
+
+    if (!await canManageTraining(userId, training)) {
+      return res.status(403).json({ success: false, message: '只有管理员可以创建补题作业' })
+    }
+
+    // 只有已结束的训练才能创建补题作业
+    const now = new Date()
+    if (now <= training.endTime && training.status !== 'finished') {
+      return res.status(400).json({ success: false, message: '只有已结束的比赛/训练才能创建补题作业' })
+    }
+
+    if (!endTime) {
+      return res.status(400).json({ success: false, message: '结束时间为必填' })
+    }
+
+    const makeupStartTime = startTime ? new Date(startTime) : now
+    const makeupEndTime = new Date(endTime)
+
+    if (makeupEndTime <= makeupStartTime) {
+      return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
+    }
+
+    const makeupTitle = title || `${training.title} - 补题练习`
+
+    // 创建补题作业
+    const makeupTraining = await prisma.training.create({
+      data: {
+        teamId: training.teamId,
+        schoolId: training.schoolId,
+        title: makeupTitle,
+        description: training.description,
+        format: training.format,
+        startTime: makeupStartTime,
+        endTime: makeupEndTime,
+        status: makeupStartTime <= now ? 'ongoing' : 'upcoming',
+        createdBy: userId,
+        problemIdVisible: true,
+        solutionVisible: true,
+        includeAdminInRanking: false,
+        type: 'homework',
+        sourceTrainingId: id,
+      },
+    })
+
+    // 克隆题目快照
+    for (const tp of training.TrainingProblem) {
+      await prisma.trainingProblem.create({
+        data: {
+          id: `makeup-${makeupTraining.id}-${tp.orderIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          trainingId: makeupTraining.id,
+          problemId: tp.problemId,
+          alias: tp.alias,
+          orderIndex: tp.orderIndex,
+          points: tp.points,
+          titleSnapshot: tp.titleSnapshot,
+          statementSnapshot: tp.statementSnapshot,
+          statementsSnapshotJson: tp.statementsSnapshotJson,
+          timeLimitSnapshot: tp.timeLimitSnapshot,
+          memoryLimitSnapshot: tp.memoryLimitSnapshot,
+          judgeConfigSnapshot: tp.judgeConfigSnapshot,
+          allowedLanguagesSnapshot: tp.allowedLanguagesSnapshot,
+          sourcePlatformSnapshot: tp.sourcePlatformSnapshot,
+          sourceProblemIdSnapshot: tp.sourceProblemIdSnapshot,
+          sourceUrlSnapshot: tp.sourceUrlSnapshot,
+          snapshotCreatedAt: tp.snapshotCreatedAt ? new Date(tp.snapshotCreatedAt) : new Date(),
+          dataVersion: tp.dataVersion || '1',
+        },
+      })
+    }
+
+    logger.info('makeup_homework_created', {
+      action: 'training',
+      metadata: { sourceTrainingId: id, makeupTrainingId: makeupTraining.id, teamId: training.teamId }
+    })
+
+    res.json({
+      success: true,
+      data: {
+        id: makeupTraining.id,
+        title: makeupTraining.title,
+        type: makeupTraining.type,
+        sourceTrainingId: makeupTraining.sourceTrainingId,
+        startTime: makeupTraining.startTime.toISOString(),
+        endTime: makeupTraining.endTime.toISOString(),
+        format: makeupTraining.format,
+        teamId: makeupTraining.teamId,
+        schoolId: makeupTraining.schoolId,
+        problemCount: training.TrainingProblem.length,
+      },
+    })
+}, '创建补题作业失败'))

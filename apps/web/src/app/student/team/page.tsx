@@ -189,11 +189,7 @@ export default function StudentTeamPage() {
         processingInvitation={processingInvitation}
         onAcceptInvitation={(id) => handleAcceptInvitation(id)}
         onRejectInvitation={(id) => handleRejectInvitation(id)}
-        onCreateTeam={handleCreateTeam}
-        createModalOpen={createModalOpen}
-        onOpenCreateModal={() => setCreateModalOpen(true)}
-        onCloseCreateModal={() => setCreateModalOpen(false)}
-        creating={creating}
+        showCreateButton={user?.studentMode === 'personal'}
       />
     </ProtectedRoute>
   )

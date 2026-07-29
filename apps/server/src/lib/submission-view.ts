@@ -314,6 +314,41 @@ export function sanitizeSubmissionForOi(
 }
 
 /**
+ * 将序号转换为 Excel 列名（A, B, C, ..., Z, AA, AB, ...）
+ * 用于提交列表的 problemAlias fallback，替代真实题号
+ */
+export function toExcelColumnName(index: number): string {
+  let result = ''
+  let n = index
+  while (n >= 0) {
+    result = String.fromCharCode(65 + (n % 26)) + result
+    n = Math.floor(n / 26) - 1
+  }
+  return result
+}
+
+/**
+ * 脱敏提交记录的学生活动字段
+ *
+ * 学生活动提交不得返回：problemInternalId、真实 problemId、ojRemoteId
+ * problemId 显示为活动内别名（A/B/C 或 orderIndex）
+ */
+export function sanitizeSubmissionForStudent(
+  submission: SubmissionRecord,
+  aliasMap?: Map<string, string>,
+  orderIndex?: number
+): Partial<SubmissionViewResult> {
+  // 用别名或 A/B/C 替代真实 problemId
+  const alias = aliasMap?.get(submission.problemId)
+    || (orderIndex !== undefined ? toExcelColumnName(orderIndex) : null)
+
+  return {
+    problemId: alias || submission.problemId,
+    ojRemoteId: null,
+  }
+}
+
+/**
  * 判断用户是否可以查看提交详情
  *
  * 规则：

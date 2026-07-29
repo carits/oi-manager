@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react'
-import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName } from '@/lib/auth'
+import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName, setStudentMode, setLastStudentMode } from '@/lib/auth'
 import { ENV } from '@/config/env'
 
 interface AuthUser {
@@ -18,6 +18,7 @@ interface AuthUser {
   adminId?: string
   schoolId?: string
   schoolName?: string
+  studentMode?: 'campus' | 'personal'
 }
 
 interface LoginResult {
@@ -28,9 +29,10 @@ interface LoginResult {
 interface AuthContextType {
   user: AuthUser | null
   loading: boolean
-  login: (username: string, password: string, role: string) => Promise<LoginResult>
+  login: (username: string, password: string, role: string, mode?: 'campus' | 'personal') => Promise<LoginResult>
   logout: () => void
   refreshUser: () => Promise<void>
+  switchMode: (mode: 'campus' | 'personal') => Promise<void>
   isAuthenticated: boolean
   sessionKey: string | null
 }
@@ -84,11 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           bio: data.data.bio,
           profile: data.data.profile,
           schoolId: data.data.schoolId,
-          schoolName: data.data.schoolName
+          schoolName: data.data.schoolName,
+          studentMode: data.data.studentMode
         }
         setUser(userData)
         setSchoolId(data.data.schoolId || null)
         setSchoolName(data.data.schoolName || null)
+        setStudentMode(data.data.studentMode || null)
+        if (data.data.studentMode) {
+          setLastStudentMode(data.data.studentMode)
+        }
         return userData
       } else {
         // 只有在 401/403 等认证失败时才清除认证状态
@@ -122,23 +129,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const login = async (username: string, password: string, role: string): Promise<LoginResult> => {
+  const login = async (username: string, password: string, role: string, mode?: 'campus' | 'personal'): Promise<LoginResult> => {
     try {
       const res = await fetch(`${ENV.API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role })
+        body: JSON.stringify({ username, password, role, mode })
       })
 
       const data = await res.json()
 
       if (data.success) {
-        const { token, userId, role: userRole, username: userName, avatar, schoolId } = data.data
+        const { token, userId, role: userRole, username: userName, avatar, schoolId, studentMode } = data.data
         setToken(token)
         setRole(userRole)
         setUserId(userId)
         setSchoolId(schoolId || null)
-        setUser({ userId, username: userName, role: userRole, avatar, schoolId })
+        setStudentMode(studentMode || null)
+        if (studentMode) {
+          setLastStudentMode(studentMode)
+        }
+        setUser({ userId, username: userName, role: userRole, avatar, schoolId, studentMode: studentMode || undefined })
         return { success: true }
       }
       return { success: false, message: data.message }
@@ -153,6 +164,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/login'
   }
 
+  const switchMode = async (mode: 'campus' | 'personal') => {
+    const token = getToken()
+    if (!token) return
+
+    try {
+      const res = await fetch(`${ENV.API_URL}/api/auth/switch-mode`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ mode })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setToken(data.data.token)
+        setStudentMode(data.data.studentMode)
+        setLastStudentMode(data.data.studentMode)
+        setUser(prev => prev ? { ...prev, studentMode: data.data.studentMode } : null)
+      }
+    } catch {
+      // 网络错误，不做任何变更
+    }
+  }
+
   const refreshUser = async () => {
     await fetchUserData()
   }
@@ -165,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         refreshUser,
+        switchMode,
         isAuthenticated: !!user,
         sessionKey
       }}

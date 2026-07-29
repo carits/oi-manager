@@ -156,6 +156,58 @@ Token 通过登录接口获取，包含用户信息：
 - PUT `/milestones/:id` - 更新里程碑
 - DELETE `/milestones/:id` - 删除里程碑
 
+### 9.1 训练/比赛/作业接口
+
+> 训练、比赛、作业共用 Training 表，通过 `type` 字段区分
+
+- GET `/teams/:teamId/trainings` - 获取团队训练列表（支持 `?type=contest|homework|training`）
+- GET `/trainings/:id` - 获取训练详情
+- POST `/teams/:teamId/trainings` - 创建训练/比赛
+- PUT `/trainings/:id` - 更新训练
+- DELETE `/trainings/:id` - 删除训练
+- GET `/trainings/:id/problems` - 获取训练题目列表
+- POST `/trainings/:id/problems` - 添加题目（自动生成快照）
+- GET `/trainings/:id/problem-status` - 获取学生做题状态
+- POST `/trainings/:id/submit` - 提交代码
+- GET `/trainings/:id/ranking` - 获取排名
+- **POST `/trainings/:id/create-makeup-homework`** - 创建补题作业（仅已结束的训练，需团队管理权限）
+
+#### 创建补题作业
+
+```
+POST /api/trainings/:id/create-makeup-homework
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "可选，默认 {原标题} - 补题练习",
+  "startTime": "可选，默认当前时间，允许过去时间",
+  "endTime": "必填，ISO 8601 格式"
+}
+```
+
+**响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1130,
+    "title": "OI赛 - 补题练习",
+    "type": "homework",
+    "sourceTrainingId": 17,
+    "startTime": "2026-06-24T00:00:00.000Z",
+    "endTime": "2026-07-01T00:00:00.000Z",
+    "format": "oi",
+    "teamId": "team-contest",
+    "problemCount": 9
+  }
+}
+```
+
+**前置条件**: 原训练 status 为 finished（`now > endTime`）
+**权限**: 团队 owner/admin 或校级管理员
+**默认设置**: `problemIdVisible: true`、`solutionVisible: true`
+
 ### 9.5 学校题单接口
 - GET `/schools/:schoolId/problem-lists` - 获取学校题单列表（本校成员可见）
 - POST `/schools/:schoolId/problem-lists` - 添加题单到学校（负责人/教师，仅 owner 的题单）

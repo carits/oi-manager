@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
+import { getLastStudentMode } from '@/lib/auth'
 
 type Role = 'teacher' | 'student' | 'admin'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login, isAuthenticated, loading: authLoading, user } = useAuth()
   const [role, setRole] = useState<Role>('teacher')
   const [username, setUsername] = useState('')
@@ -37,7 +39,9 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const result = await login(username, password, role)
+    // 学生登录默认使用上次模式
+    const mode = role === 'student' ? (getLastStudentMode() || 'campus') : undefined
+    const result = await login(username, password, role, mode)
 
     if (result.success) {
       // 登录成功后会触发 useEffect 进行跳转
@@ -48,13 +52,11 @@ export default function LoginPage() {
     setLoading(false)
   }
 
-  const roleLabels = {
-    teacher: '教师端',
-    student: '学生端',
-    admin: '管理员端'
-  }
-
-  const allowedRoles: Role[] = ['teacher', 'student', 'admin']
+  const roleOptions: Array<{ key: string; label: string; role: Role }> = [
+    { key: 'teacher', label: '教师端', role: 'teacher' },
+    { key: 'student', label: '学生端', role: 'student' },
+    { key: 'admin', label: '管理员端', role: 'admin' },
+  ]
 
   if (authLoading) {
     return (
@@ -75,44 +77,46 @@ export default function LoginPage() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--gray-50)'
+      background: 'var(--bg-page)'
     }}>
       <div style={{
         width: '100%',
         maxWidth: '400px',
         padding: '2rem',
-        background: 'white',
+        background: 'var(--bg-card)',
         borderRadius: 'var(--radius-lg)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        boxShadow: 'var(--shadow-sm)'
       }}>
         <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
           <img src="/logo.png" alt="Carits" style={{ height: '48px' }} />
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-          {allowedRoles.map((r) => (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          {roleOptions.map((opt) => (
             <button
-              key={r}
-              onClick={() => setRole(r)}
+              key={opt.key}
+              onClick={() => setRole(opt.role)}
               style={{
-                flex: '1 1 30%',
-                minWidth: '80px',
+                flex: 1,
                 padding: '0.5rem',
-                borderRadius: '6px',
-                background: role === r ? 'var(--primary)' : 'var(--gray-100)',
-                color: role === r ? 'white' : 'var(--gray-700)',
-                fontWeight: role === r ? 500 : 400,
-                fontSize: '0.875rem'
+                borderRadius: 'var(--radius)',
+                background: role === opt.role ? 'var(--primary)' : 'var(--bg-hover)',
+                color: role === opt.role ? 'white' : 'var(--text-secondary)',
+                fontWeight: role === opt.role ? 500 : 400,
+                fontSize: '0.875rem',
+                border: '1px solid ' + (role === opt.role ? 'var(--primary)' : 'var(--border)'),
+                cursor: 'pointer',
+                transition: 'all 0.2s'
               }}
             >
-              {roleLabels[r]}
+              {opt.label}
             </button>
           ))}
         </div>
 
         <form onSubmit={handleLogin} style={{ display: 'grid', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--gray-700)' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               用户名
             </label>
             <input
@@ -124,14 +128,14 @@ export default function LoginPage() {
                 width: '100%',
                 padding: '0.75rem',
                 border: '1px solid var(--border)',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius)',
                 fontSize: '1rem'
               }}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--gray-700)' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               密码
             </label>
             <input
@@ -143,7 +147,7 @@ export default function LoginPage() {
                 width: '100%',
                 padding: '0.75rem',
                 border: '1px solid var(--border)',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius)',
                 fontSize: '1rem'
               }}
             />
@@ -161,17 +165,19 @@ export default function LoginPage() {
               padding: '0.75rem',
               background: 'var(--primary)',
               color: 'white',
-              borderRadius: '6px',
+              borderRadius: 'var(--radius)',
               fontSize: '1rem',
               fontWeight: 500,
-              opacity: loading ? 0.7 : 1
+              opacity: loading ? 0.7 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              border: 'none'
             }}
           >
             {loading ? '登录中...' : '登录'}
           </button>
         </form>
 
-        <p style={{ marginTop: '1.5rem', fontSize: '0.875rem', color: 'var(--gray-500)', textAlign: 'center' }}>
+        <p style={{ marginTop: '1.5rem', fontSize: '0.875rem', color: 'var(--text-muted)', textAlign: 'center' }}>
           演示账号: teacher / student / admin (密码: 123456)
         </p>
       </div>

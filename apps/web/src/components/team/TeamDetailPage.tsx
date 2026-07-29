@@ -486,7 +486,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
             <TeamProblemListsTab
               teamId={teamId}
               basePath={basePath}
-              canManage={permission.isAdmin}
+              canManage={userType === 'teacher' && permission.isAdmin}
               isOwner={permission.isOwner}
               userId={user?.userId}
             />

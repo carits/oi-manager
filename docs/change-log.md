@@ -1,5 +1,84 @@
 # 变更日志
 
+## 2026-06-26
+
+- **个人模式入口与模式切换（修订版 — 登录后切换）**
+  - 用户修正: 登录页不选模式，登录后在 App 内切换，切换入口要明显
+  - 后端: 新增 `POST /api/auth/switch-mode` 端点，仅学生可用，刷新 JWT studentMode（无需重新验证密码）
+  - 前端: AuthProvider 新增 `switchMode()` 方法，调用 switch-mode API 并更新 token/user state
+  - 前端: AppShell 导航栏右侧新增显眼胶囊形模式切换按钮（仅学生可见）
+    - 校园模式: "校园模式 · 切换到个人"（灰色边框）
+    - 个人模式: "个人模式 · 切换到校园"（蓝色边框 + 浅蓝背景）
+  - 前端: 删除学生退出登录的模式选择弹窗，退出直接退出
+  - 前端: 登录页回复 3 按钮（教师端/学生端/管理员端），学生默认上次模式（lastStudentMode）
+  - 439 vitest 测试全部通过
+
+- **个人模式入口与模式切换（初版）**
+  - 设计: 模式存储在 JWT `studentMode: 'campus' | 'personal'` 字段，schoolId 不变
+  - 后端: 登录 API 接受 `mode` 参数，写入 JWT payload；`/me` 返回 `studentMode`
+  - 后端: `middleware/auth.ts` 新增 `isPersonalMode()` 工具函数
+  - 后端: 个人模式学生放行创建团队/题单/团队题单（teams、problem-lists、team-problem-lists 路由）
+  - 后端: 注册 schoolId 可选，不提供时默认为平台学校（个人模式注册）
+  - 前端: `navigation.ts` 新增 `studentPersonalNav`，`getNavConfig` 接受 studentMode 参数
+  - 前端: 学生首页根据模式显示不同快捷入口
+  - 前端: 学生团队/题单页创建按钮根据模式动态决定
+  - 前端: `lib/auth.ts` 新增 getStudentMode/setStudentMode/getLastStudentMode/setLastStudentMode
+  - 前端: AuthProvider 处理 studentMode（login/fetchUserData/logout）
+  - 种子数据: 新增 `personal_student1` 测试账号
+  - 共享类型: JwtPayload 和 LoginResponse 新增 `studentMode` 字段
+
+## 2026-06-25
+
+- **校园排名页重构 — 做题量排名 + Rating 排名**
+  - 后端: 新增 `GET /api/schools/:id/student-solved-rankings` 路由，使用 `$queryRaw` 查询 Submission AC 和 UserArchivedProblem 归档题，Node.js 内存 Set 合并去重
+  - 前端: 新建 `SolvedCountTab.tsx` 做题量排名组件（颜色编码 >=100/>=50/>=20）
+  - 前端: 重写 `/student/rating` 页面，从个人历史改为校内排名（Rating + 做题量两个 tab）
+  - 前端: 重写 `/teacher/rankings` 页面，从重定向改为独立校内排名页（Rating + 做题量两个 tab）
+  - 做题量定义: Submission AC + UserArchivedProblem 归档题的并集（去重后数量）
+  - 439 vitest 测试全部通过
+  - 影响模块: 学校模块、学生端排名页、教师端排名页
+
+## 2026-06-24
+
+- **校园模式重构 Phase 5 — 补题作业**
+  - Schema: Training 新增 `sourceTrainingId Int?` 字段，链接补题作业到原比赛/训练
+  - 后端: 新增 `POST /api/trainings/:id/create-makeup-homework` 路由，克隆原训练题目（含快照）为新 homework
+  - 前端: TrainingDetailPage 添加"创建补题作业"按钮 + Modal（仅已结束训练的管理员可见）
+  - 前端: 补题作业显示"补题练习"标签和"查看原活动"链接
+  - 类型: TrainingInfo 新增 sourceTrainingId 字段
+  - 测试 schema 同步: `prisma db push` 到 test schema
+  - 439 vitest 测试全部通过（含 17 个补题作业专用测试）
+  - 11 Playwright E2E 测试全部通过
+  - E2E 修复: Playwright 版本不匹配（用项目本地 `node_modules/.bin/playwright`）、problems API 响应结构（数组 vs 对象）、教师端缺少 homework 详情路由（新建 page.tsx）
+  - 影响模块: 训练模块、训练详情页
+  - 文档更新: DATABASE_MODELS.md（Training/TrainingProblem 模型）、API_REFERENCE.md（训练/补题 API）、SYSTEM_MAP.md（路由和页面）、MODULE_INDEX.md（训练模块）
+
+- **校园模式重构 Phase 4 — E2E 验收修复**
+  - 修复 ProblemListDetailPage.tsx fetchDetail：添加 `ProblemListSection`/`ProblemListEntry` fallback 映射，解决 API 返回 Prisma 大写关联字段名但前端只映射小写的问题
+  - 修复 Playwright 测试：作业 startTime 改为过去（避免"训练尚未开始"403）；setAuthToken 增加 role/userId 参数（AuthProvider 需要 localStorage 中有 role/userId 才能正常工作）
+  - Playwright 12/12 通过，单元测试 422/422 通过
+  - 影响模块: 题单详情页、E2E 测试
+
+- **校园模式重构 Phase 4 — 路由排序修复**
+  - 修复 `routes/students.ts` 中 Express 路由注册顺序：`/my-homeworks` 和 `/my-contests` 必须在 `/:id` 之前注册，否则 Express 将 `my-homeworks` 匹配为参数 `id`，返回 404 "学生不存在"
+  - 删除重复的路由定义（移动后旧位置残留的副本）
+  - 最终注册顺序：`/` → `/rankings` → `/my-homeworks` → `/my-contests` → `/:id` → POST/PUT/DELETE
+  - Playwright 验收测试 12/12 通过，单元测试 422/422 通过
+  - 影响模块: 学生路由
+
+## 2026-06-23
+
+- **校园模式重构 Phase 4 — 题单发布为作业**
+  - Schema: TrainingProblem 补 9 个快照字段（titleSnapshot, statementsSnapshotJson, timeLimitSnapshot, memoryLimitSnapshot, judgeConfigSnapshot, allowedLanguagesSnapshot, sourcePlatformSnapshot, sourceProblemIdSnapshot, sourceUrlSnapshot）
+  - 后端: 新增 `populateSnapshotData()` helper、POST /api/problem-lists/:id/publish-homework 路由、GET /api/students/my-homeworks 和 my-contests 路由
+  - 后端: training.problems.routes.ts POST 添加题目时自动写入快照
+  - 后端: problem-lists.ts 修复 pre-existing TypeScript 错误（ownerType 赋值在学生 403 之后）
+  - 前端: 学生作业/比赛列表页和详情页实现，教师作业/比赛管理页面替换占位
+  - 前端: TrainingDetailPage/TrainingFormModal 扩展 homework mode
+  - 前端: ProblemListDetailPage 添加"发布为作业"按钮和 Modal
+  - 测试: PostgreSQL test schema 补齐新字段，422 测试全部通过
+  - 影响模块: 训练模块、题单模块、学生路由、前端教师/学生页面
+
 ## 2026-05-13
 
 - **洛谷同步异步刷新 + 评测结果映射修复**
@@ -6530,3 +6609,35 @@ model TeamMember {
 - 调用已有 `DELETE /api/trainings/:id` API
 - 删除成功后跳转回训练列表
 - 修改文件：`apps/web/src/components/training/TrainingDetailPage.tsx`
+
+---
+
+## 2026-06-25 UI 审计与修复
+
+### 修复双重 AppShell 嵌套
+
+6 个页面手动 import `<AppShell>` 并在 JSX 中包裹内容，但 layout 已经统一提供了 `<AppShell>`，导致双重嵌套（双导航栏、布局错乱）。
+
+修复：从以下 6 个页面移除手动的 `<AppShell>` 包裹：
+- `apps/web/src/app/student/homeworks/page.tsx`
+- `apps/web/src/app/student/contests/page.tsx`
+- `apps/web/src/app/teacher/homeworks/page.tsx`
+- `apps/web/src/app/teacher/contests/page.tsx`
+- `apps/web/src/app/student/scores/page.tsx`
+- `apps/web/src/app/teacher/scores/page.tsx`
+
+注意：`student/homeworks/page.tsx` 的 apiClient import 在修复过程中被误删，已恢复。
+
+### 修复 RankingsTab CSS 变量
+
+`apps/web/src/app/teacher/school/components/RankingsTab.tsx` Rating 颜色：
+- `var(--gray-600)` → `var(--text-secondary)`（符合设计 token 规范）
+
+### 新建 Playwright UI 审计测试
+
+`ui-audit.spec.ts` 覆盖：双重 AppShell 检测、导航流、Tab 切换、异常重定向检测、页面标题检查。
+
+### 验证
+
+- 前端 TypeScript 零错误
+- 439 vitest 测试全部通过

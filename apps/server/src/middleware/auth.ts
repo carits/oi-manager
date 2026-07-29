@@ -79,3 +79,11 @@ export function authorizeAny(...roles: UserRole[]) {
 export function getUserType(role: string): 'teacher' | 'student' {
   return role === 'student' ? 'student' : 'teacher'
 }
+
+/**
+ * 检查用户是否为个人模式学生
+ * 个人模式学生拥有更多权限（创建团队、题单等）
+ */
+export function isPersonalMode(user?: JwtPayload): boolean {
+  return user?.role === 'student' && user?.studentMode === 'personal'
+}

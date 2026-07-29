@@ -69,7 +69,7 @@ export const authRouter = Router()
 // 登录
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password, role } = req.body as { username: string; password: string; role: 'admin' | 'teacher' | 'student' }
+    const { username, password, role, mode } = req.body as { username: string; password: string; role: 'admin' | 'teacher' | 'student'; mode?: 'campus' | 'personal' }
     const clientIp = getClientIp(req)
     const userAgent = getUserAgent(req)
 
@@ -227,6 +227,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     if (user.Student) {
       payload.studentId = user.Student.id
       payload.schoolId = user.schoolId
+      payload.studentMode = mode || 'campus'
     }
 
     const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
@@ -265,7 +266,8 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         adminId: user.Admin?.id,
         teacherId: user.Teacher?.id,
         studentId: user.Student?.id,
-        schoolId: user.schoolId // 所有用户都有 schoolId
+        schoolId: user.schoolId, // 所有用户都有 schoolId
+        studentMode: payload.studentMode
       }
     })
   } catch (error) {
@@ -309,10 +311,11 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
       return res.status(400).json({ success: false, message: '用户名已存在' })
     }
 
-    // 学生注册需要 schoolId
-    if (!schoolId) {
-      return res.status(400).json({ success: false, message: '请提供学校信息' })
-    }
+    // 学生注册：schoolId 可选，不提供时默认为平台学校（个人模式）
+    const effectiveSchoolId = schoolId || 'platform-school-00000000'
+
+    // 如果未指定 schoolId，则为个人模式注册
+    const isPersonalRegistration = !schoolId
 
     // 密码加密
     const passwordHash = await bcrypt.hash(password, 10)
@@ -325,18 +328,32 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
         username,
         passwordHash,
         role: 'student',
-        schoolId, // 所有用户必须绑定学校
+        schoolId: effectiveSchoolId, // 所有用户必须绑定学校
         Student: {
           create: {
             name,
-            schoolId,
+            schoolId: effectiveSchoolId,
             ...(headTeacherId ? { headTeacherId } : {})
           }
         }
       }
     })
 
-    res.json({ success: true, data: { userId: user.id } })
+    // 个人模式注册时，自动生成带 studentMode=personal 的 token
+    if (isPersonalRegistration) {
+      const payload: JwtPayload = {
+        userId: user.id,
+        role: 'student',
+        username: user.username,
+        studentId: user.id,
+        schoolId: effectiveSchoolId,
+        studentMode: 'personal'
+      }
+      const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
+      res.json({ success: true, data: { userId: user.id, token, studentMode: 'personal' } })
+    } else {
+      res.json({ success: true, data: { userId: user.id } })
+    }
   } catch (error) {
     logger.error('register_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -419,7 +436,8 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         teacherId: user.Teacher?.id,
         studentId: user.Student?.id,
         schoolId: user.schoolId, // 所有用户都有 schoolId
-        schoolName: schoolInfo?.name
+        schoolName: schoolInfo?.name,
+        studentMode: (req as any).user?.studentMode
       }
     })
   } catch {
@@ -549,6 +567,36 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
       fs.unlinkSync(req.file.path)
     }
     logger.error('upload_avatar_error', error)
+    res.status(500).json({ success: false, message: '服务器错误' })
+  }
+})
+
+// 切换学生模式（校园/个人），无需重新登录
+authRouter.post('/switch-mode', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { mode } = req.body as { mode: 'campus' | 'personal' }
+    const user = (req as any).user as JwtPayload
+
+    if (user.role !== 'student') {
+      return res.status(403).json({ success: false, message: '仅学生可切换模式' })
+    }
+
+    if (!mode || (mode !== 'campus' && mode !== 'personal')) {
+      return res.status(400).json({ success: false, message: '无效的模式参数' })
+    }
+
+    const newPayload: JwtPayload = { ...user, studentMode: mode }
+    const token = jwt.sign(newPayload, getJwtSecret(), { expiresIn: '7d' })
+
+    logger.audit('switch_student_mode', {
+      userId: user.userId,
+      action: 'switch_mode',
+      metadata: { from: user.studentMode, to: mode }
+    })
+
+    res.json({ success: true, data: { token, studentMode: mode } })
+  } catch (error) {
+    logger.error('switch_mode_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })

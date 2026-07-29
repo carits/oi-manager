@@ -109,6 +109,86 @@ schoolMembersRouter.get('/:id/student-rankings', authenticate, asyncHandler(asyn
     })
 }))
 
+// ==================== 获取学校学生做题量排名 ====================
+schoolMembersRouter.get('/:id/student-solved-rankings', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params
+
+    if (!await canAccessSchool(req, id)) {
+      return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生排名' })
+    }
+
+    const school = await prisma.school.findUnique({
+      where: { id },
+      select: { educationSystem: true, schoolType: true }
+    })
+
+    const { page, pageSize } = parsePagination(req.query, { defaultPageSize: 50, maxPageSize: 200 })
+
+    // 获取学校所有学生
+    const students = await prisma.student.findMany({
+      where: { schoolId: id },
+      include: {
+        User: { select: { username: true, avatar: true } }
+      }
+    })
+
+    const studentIds = students.map(s => s.id)
+
+    // 批量查询 Submission AC 的 distinct problemId
+    const submissionAcRows = await prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
+      SELECT DISTINCT "userId", "problemId" FROM "Submission"
+      WHERE "userId" = ANY(${studentIds}::text[])
+        AND "result" IN ('accepted', 'Accepted', 'AC', 'ac')
+    `
+
+    // 批量查询 UserArchivedProblem 的 solved 题目
+    const archivedRows = await prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
+      SELECT "userId", "problemId" FROM "UserArchivedProblem"
+      WHERE "userId" = ANY(${studentIds}::text[])
+        AND "solvedAt" IS NOT NULL
+    `
+
+    // 按 userId 合并去重
+    const solvedMap = new Map<string, Set<string>>()
+    for (const row of submissionAcRows) {
+      let set = solvedMap.get(row.userId)
+      if (!set) { set = new Set(); solvedMap.set(row.userId, set) }
+      set.add(row.problemId)
+    }
+    for (const row of archivedRows) {
+      let set = solvedMap.get(row.userId)
+      if (!set) { set = new Set(); solvedMap.set(row.userId, set) }
+      set.add(row.problemId)
+    }
+
+    // 附加 solvedCount 并排序
+    const studentsWithSolved = students.map(s => ({
+      ...s,
+      solvedCount: solvedMap.get(s.id)?.size || 0,
+      school: {
+        educationSystem: school?.educationSystem,
+        schoolType: school?.schoolType
+      }
+    }))
+
+    studentsWithSolved.sort((a, b) => b.solvedCount - a.solvedCount)
+
+    // 内存分页
+    const total = studentsWithSolved.length
+    const totalPages = Math.ceil(total / pageSize)
+    const startIndex = (page - 1) * pageSize
+    const paginated = studentsWithSolved.slice(startIndex, startIndex + pageSize)
+
+    res.json({
+      success: true,
+      data: paginated,
+      page,
+      pageSize,
+      total,
+      totalPages
+    })
+}))
+
 // ==================== 获取学校学生列表（按年级分组） ====================
 schoolMembersRouter.get('/:id/students-by-grade', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params

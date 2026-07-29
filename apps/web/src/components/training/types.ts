@@ -8,7 +8,7 @@ export interface TrainingInfo {
   teamId: string
   title: string
   description: string | null
-  type: 'training' | 'contest'
+  type: 'training' | 'contest' | 'homework'
   format: 'oi' | 'ioi' | 'icpc'
   startTime: string
   endTime: string
@@ -20,6 +20,7 @@ export interface TrainingInfo {
   includeAdminInRanking: boolean
   problemCount: number
   isAdmin: boolean
+  sourceTrainingId?: number | null
 }
 
 export interface TrainingProblem {
@@ -109,7 +110,9 @@ export interface ProblemListEntry {
 export type TabType = 'problems' | 'problemList' | 'submissions' | 'solutions' | 'attachments' | 'ranking'
 
 export function typeLabel(type: string) {
-  return type === 'contest' ? '比赛' : '训练'
+  if (type === 'contest') return '比赛'
+  if (type === 'homework') return '作业'
+  return '训练'
 }
 
 export function formatLabel(format: string) {

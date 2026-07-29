@@ -1,5 +1,9 @@
+'use client'
+
+import { useAuth } from '@/components/AuthProvider'
 import ProblemListPage from '@/components/problem/ProblemListPage'
 
 export default function StudentProblemListsPage() {
-  return <ProblemListPage canCreate displayMode="table" />
+  const { user } = useAuth()
+  return <ProblemListPage canCreate={user?.studentMode === 'personal'} displayMode="card" />
 }

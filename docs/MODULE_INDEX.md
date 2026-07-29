@@ -273,6 +273,7 @@
 |------|------|
 | `app/teacher/contests/page.tsx` | 比赛管理（教师端） |
 | `app/teacher/contests/[id]/page.tsx` | 比赛详情（教师端） |
+| `app/teacher/teams/[id]/contests/[cid]/page.tsx` | 团队比赛详情（教师端） |
 | `app/student/contests/page.tsx` | 比赛列表（学生端） |
 | `app/student/contests/[id]/page.tsx` | 比赛详情（学生端） |
 | `components/ContestDetail.tsx` | 比赛详情共用组件 |
@@ -294,6 +295,62 @@
 | POST | `/api/contests/:id/results` | 导入成绩 |
 | GET | `/api/contests/:id/resources` | 比赛资源 |
 | POST | `/api/contests/:id/resources` | 上传资源 |
+
+---
+
+## 8.1 训练/比赛/作业模块 (Training)
+
+> 训练、比赛、作业共用 Training 表，通过 `type` 字段区分（training/contest/homework）
+> Phase 5 新增补题作业功能：从已结束训练一键克隆为 homework
+
+### 功能
+- 训练/比赛/作业 CRUD
+- 题目管理（含快照生成）
+- 提交评测
+- 排名展示
+- 补题作业创建（从已结束训练克隆）
+- 学生作业/比赛列表
+
+### 前端代码
+| 文件 | 说明 |
+|------|------|
+| `app/student/homeworks/page.tsx` | 学生作业列表 |
+| `app/student/homeworks/[cid]/page.tsx` | 学生作业详情 |
+| `app/teacher/homeworks/page.tsx` | 教师作业列表 |
+| `app/teacher/teams/[id]/homeworks/[cid]/page.tsx` | 教师团队作业详情（Phase 5 新增） |
+| `app/teacher/teams/[id]/contests/[cid]/page.tsx` | 教师团队比赛详情 |
+| `app/student/teams/[id]/contests/[cid]/page.tsx` | 学生团队比赛详情 |
+| `components/training/TrainingDetailPage.tsx` | 训练详情页（含补题按钮、补题标签、查看原活动） |
+| `components/training/TeamTrainingList.tsx` | 训练列表（支持 homework mode） |
+| `components/training/TrainingFormModal.tsx` | 训练表单（支持 homework mode） |
+
+### 后端代码
+| 文件 | 说明 |
+|------|------|
+| `modules/training/training.routes.ts` | 路由挂载入口 |
+| `modules/training/training.crud.routes.ts` | 训练 CRUD + 补题作业 |
+| `modules/training/training.problems.routes.ts` | 题目管理 |
+| `modules/training/training.submissions.routes.ts` | 提交评测 |
+| `modules/training/training.ranking.routes.ts` | 排名 |
+
+### API
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/teams/:teamId/trainings` | 团队训练列表（`?type=contest\|homework\|training`） |
+| POST | `/api/teams/:teamId/trainings` | 创建训练/比赛 |
+| GET | `/api/trainings/:id` | 训练详情（返回 sourceTrainingId） |
+| PUT | `/api/trainings/:id` | 更新训练 |
+| DELETE | `/api/trainings/:id` | 删除训练 |
+| GET | `/api/trainings/:id/problems` | 训练题目列表 |
+| POST | `/api/trainings/:id/problems` | 添加题目（自动生成快照） |
+| **POST** | **`/api/trainings/:id/create-makeup-homework`** | **创建补题作业** |
+
+### 补题作业设计要点
+- 新 Training `type='homework'`，`sourceTrainingId` 指向原训练
+- 克隆原 TrainingProblem 的所有快照字段
+- 默认 `problemIdVisible: true`、`solutionVisible: true`
+- `startTime` 允许设为过去时间（跳过正常校验）
+- 提交天然隔离：不同 trainingId，`submitScope='training'`
 
 ---
 

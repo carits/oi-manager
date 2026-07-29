@@ -7,7 +7,7 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, isPersonalMode } from '../../middleware/auth'
 import { canAccessSchool, canViewStudent } from '../../middleware/permissions'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
@@ -179,6 +179,11 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
   const validated = (req as any).validated?.body
   const { name, description, isPublic, id } = validated
   const user = (req as any).user!
+
+  // 校园模式：学生不能创建团队；个人模式可以
+  if (user.role === 'student' && !isPersonalMode(user)) {
+    return res.status(403).json({ success: false, message: '校园模式下学生不能创建团队' })
+  }
 
   try {
     const team = await teamService.createTeam({ name, description, isPublic, id }, user)

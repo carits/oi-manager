@@ -13,7 +13,14 @@
     "lint": "pnpm -r lint",
     "install:all": "pnpm install"
   },
-  "keywords": ["oi", "education", "contest"],
+  "keywords": [
+    "oi",
+    "education",
+    "contest"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0"
+  }
 }

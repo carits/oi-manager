@@ -14,7 +14,7 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, logout, loading } = useAuth()
+  const { user, logout, switchMode, loading } = useAuth()
   const [mounted, setMounted] = useState(false)
   const [activeItem, setActiveItem] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -27,7 +27,7 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     if (mounted && user?.role) {
-      setActiveItem(getActiveNavItem(pathname, user.role))
+      setActiveItem(getActiveNavItem(pathname, user.role, user.studentMode))
     }
   }, [mounted, pathname, user?.role])
 
@@ -62,9 +62,14 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   const role = user.role as UserRole
-  const navConfig = getNavConfig(role)
+  const navConfig = getNavConfig(role, user.studentMode)
   const roleLabel = roleLabels[role] || '用户'
   const roleName = roleNames[role] || user.role
+
+  // 学生模式下显示模式标识
+  const modeLabel = role === 'student'
+    ? (user.studentMode === 'personal' ? '个人模式' : (user.schoolName || '校园模式'))
+    : roleLabel
 
   // 根据角色获取个人中心和账号安全页面路径
   const getProfilePath = () => {
@@ -87,7 +92,6 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleLogout = async () => {
     await logout()
-    router.push('/login')
   }
 
   // 获取用户名首字母
@@ -139,160 +143,191 @@ export function AppShell({ children }: AppShellProps) {
           </nav>
         </div>
 
-        {/* 右侧：头像下拉菜单 */}
-        <div style={{ position: 'relative' }} ref={userMenuRef}>
-          <div
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              cursor: 'pointer',
-              padding: '0.25rem 0.5rem',
-              borderRadius: 'var(--radius)',
-              transition: 'background 0.2s',
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            {/* 头像 */}
-            {user.avatar ? (
-              <img
-                src={getAssetUrl(user.avatar)}
-                alt="头像"
-                style={{
+        {/* 右侧：模式切换 + 头像下拉菜单 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* 学生模式切换按钮 — 显眼位置 */}
+          {role === 'student' && (
+            <button
+              onClick={() => switchMode(user.studentMode === 'personal' ? 'campus' : 'personal')}
+              style={{
+                padding: '0.3rem 0.75rem',
+                borderRadius: 'var(--radius-full)',
+                background: user.studentMode === 'personal' ? 'var(--primary-light)' : 'var(--bg-muted)',
+                color: user.studentMode === 'personal' ? 'var(--primary-text)' : 'var(--text-secondary)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 500,
+                border: '1px solid ' + (user.studentMode === 'personal' ? 'var(--primary)' : 'var(--border)'),
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap' as const,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = user.studentMode === 'personal' ? 'var(--primary)' : 'var(--bg-hover)'
+                if (user.studentMode === 'personal') e.currentTarget.style.color = 'white'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = user.studentMode === 'personal' ? 'var(--primary-light)' : 'var(--bg-muted)'
+                e.currentTarget.style.color = user.studentMode === 'personal' ? 'var(--primary-text)' : 'var(--text-secondary)'
+              }}
+            >
+              {user.studentMode === 'personal' ? '个人模式 · 切换到校园' : '校园模式 · 切换到个人'}
+            </button>
+          )}
+
+          <div style={{ position: 'relative' }} ref={userMenuRef}>
+            <div
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                cursor: 'pointer',
+                padding: '0.25rem 0.5rem',
+                borderRadius: 'var(--radius)',
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              {/* 头像 */}
+              {user.avatar ? (
+                <img
+                  src={getAssetUrl(user.avatar)}
+                  alt="头像"
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2px solid var(--border)'
+                  }}
+                />
+              ) : (
+                <div style={{
                   width: '36px',
                   height: '36px',
                   borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: '2px solid var(--border)'
-                }}
-              />
-            ) : (
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                background: 'var(--primary)',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.875rem',
-                fontWeight: 600
+                  background: 'var(--primary)',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.875rem',
+                  fontWeight: 600
+                }}>
+                  {getInitial()}
+                </div>
+              )}
+              {/* 用户名和角色 */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)' }}>
+                  {user.username}
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {modeLabel}
+                </span>
+              </div>
+              {/* 下拉箭头 */}
+              <span style={{
+                fontSize: '0.75rem',
+                color: 'var(--text-muted)',
+                transform: showUserMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s'
               }}>
-                {getInitial()}
+                ▼
+              </span>
+            </div>
+
+            {/* 下拉菜单 */}
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                background: 'var(--bg-card)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                border: '1px solid var(--border)',
+                minWidth: '160px',
+                overflow: 'hidden',
+                zIndex: 200
+              }}>
+                <Link
+                  href={getProfilePath()}
+                  onClick={() => setShowUserMenu(false)}
+                  style={{
+                    display: 'block',
+                    padding: '0.75rem 1rem',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-primary)',
+                    textDecoration: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  个人信息
+                </Link>
+                <Link
+                  href={getSecurityPath()}
+                  onClick={() => setShowUserMenu(false)}
+                  style={{
+                    display: 'block',
+                    padding: '0.75rem 1rem',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-primary)',
+                    textDecoration: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  账号安全
+                </Link>
+                <Link
+                  href={getPlatformBindingPath()}
+                  onClick={() => setShowUserMenu(false)}
+                  style={{
+                    display: 'block',
+                    padding: '0.75rem 1rem',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-primary)',
+                    textDecoration: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  平台绑定
+                </Link>
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    handleLogout()
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    fontSize: '0.875rem',
+                    color: 'var(--error)',
+                    background: 'transparent',
+                    border: 'none',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--error-light)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  退出登录
+                </button>
               </div>
             )}
-            {/* 用户名和角色 */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)' }}>
-                {user.username}
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {roleLabel}
-              </span>
-            </div>
-            {/* 下拉箭头 */}
-            <span style={{
-              fontSize: '0.75rem',
-              color: 'var(--text-muted)',
-              transform: showUserMenu ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s'
-            }}>
-              ▼
-            </span>
           </div>
-
-          {/* 下拉菜单 */}
-          {showUserMenu && (
-            <div style={{
-              position: 'absolute',
-              top: 'calc(100% + 8px)',
-              right: 0,
-              background: 'var(--bg-card)',
-              borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-lg)',
-              border: '1px solid var(--border)',
-              minWidth: '160px',
-              overflow: 'hidden',
-              zIndex: 200
-            }}>
-              <Link
-                href={getProfilePath()}
-                onClick={() => setShowUserMenu(false)}
-                style={{
-                  display: 'block',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-primary)',
-                  textDecoration: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                个人信息
-              </Link>
-              <Link
-                href={getSecurityPath()}
-                onClick={() => setShowUserMenu(false)}
-                style={{
-                  display: 'block',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-primary)',
-                  textDecoration: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                账号安全
-              </Link>
-              <Link
-                href={getPlatformBindingPath()}
-                onClick={() => setShowUserMenu(false)}
-                style={{
-                  display: 'block',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-primary)',
-                  textDecoration: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                平台绑定
-              </Link>
-              <button
-                onClick={() => {
-                  setShowUserMenu(false)
-                  handleLogout()
-                }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem',
-                  color: 'var(--error)',
-                  background: 'transparent',
-                  border: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--error-light)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                退出登录
-              </button>
-            </div>
-          )}
         </div>
       </header>
 

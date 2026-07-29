@@ -42,7 +42,7 @@ interface TrainingFormModalProps {
   schoolId?: string
   trainingId?: string
   onSaved?: () => void
-  mode?: 'training' | 'contest'
+  mode?: 'training' | 'contest' | 'homework'
 }
 
 let tempIdCounter = 0
@@ -337,7 +337,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
           await apiClient.put(`/api/trainings/${trainingId}/problems/reorder`, { orders })
         }
 
-        toast.success(`${mode === 'contest' ? '比赛' : '训练'}更新成功`)
+        toast.success(`${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}更新成功`)
       } else {
         // === 创建模式 ===
         const createUrl = schoolId
@@ -399,13 +399,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEdit ? `编辑${mode === 'contest' ? '比赛' : '训练'}` : `创建${mode === 'contest' ? '比赛' : '训练'}`}
+      title={isEdit ? `编辑${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}` : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`}
       width="960px"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
           <Button onClick={handleSave} disabled={saving || loading}>
-            {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : '训练'}`)}
+            {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`)}
           </Button>
         </div>
       }

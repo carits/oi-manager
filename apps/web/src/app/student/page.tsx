@@ -37,15 +37,31 @@ export default function StudentPage() {
           {/* 左侧：快捷操作 */}
           <Card title="快捷操作">
             <div style={{ display: 'grid', gap: '0.75rem' }}>
-              <Link href="/student/team" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                进入我的团队
-              </Link>
-              <Link href="/student/rating" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                查看我的成长
-              </Link>
-              <Link href="/student/problems" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
-                浏览题库
-              </Link>
+              {user?.studentMode === 'personal' ? (
+                <>
+                  <Link href="/student/problems" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                    浏览题库
+                  </Link>
+                  <Link href="/student/team" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                    我的团队
+                  </Link>
+                  <Link href="/student/submissions" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                    评测记录
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/student/team" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                    进入我的团队
+                  </Link>
+                  <Link href="/student/rating" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                    查看我的成长
+                  </Link>
+                  <Link href="/student/homeworks" style={{ display: 'block', padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.875rem', textDecoration: 'none' }}>
+                    我的作业
+                  </Link>
+                </>
+              )}
             </div>
           </Card>
 

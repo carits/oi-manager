@@ -632,6 +632,31 @@ async function main() {
   })
   console.log('创建演示学生: student')
 
+  // === Step 9: 创建个人模式测试学生 ===
+  const personalStudentPassword = await bcrypt.hash('123456', 10)
+  await prisma.user.upsert({
+    where: { username: 'personal_student1' },
+    update: {},
+    create: {
+      id: crypto.randomUUID(),
+      username: 'personal_student1',
+      passwordHash: personalStudentPassword,
+      role: 'student',
+      schoolId: school.id, // 绑定到同一个学校（schoolId 不变）
+      Student: {
+        create: {
+          id: crypto.randomUUID(),
+          name: '个人模式同学',
+          gender: '男',
+          schoolId: school.id,
+          targetContest: 'NOIP',
+          rating: 1200
+        }
+      }
+    }
+  })
+  console.log('创建个人模式测试学生: personal_student1 (密码: 123456，登录时选择学生端-个人)')
+
   console.log('Seeding completed!')
 }
 
