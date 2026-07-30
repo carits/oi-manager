@@ -15,7 +15,7 @@ source_of_truth: package.json and workspace package manifests
 | `pnpm dev:dirty` | 不清理端口，直接启动工作区 |
 | `pnpm restart` | 重启开发服务 |
 | `pnpm stop` | 停止开发服务 |
-| `pnpm build` | `shared → server → web → judge` 正式构建 |
+| `pnpm build` | 构建 Shared、生成 Prisma Client，再构建 Server、Web、Judge |
 | `pnpm test` | 依次运行 Server、Web、Judge Vitest |
 | `pnpm test:ui:smoke` | Chromium/Firefox UI 冒烟 |
 | `pnpm test:ui` | 全量 Playwright |
@@ -39,6 +39,9 @@ source_of_truth: package.json and workspace package manifests
 - JWT、角色和跨应用 DTO 在 `packages/shared/src` 定义。
 - Prisma Schema 是数据库字段与关系的唯一事实来源。
 
+根构建会在 Server 编译前执行 `prisma generate`，因此干净检出无需依赖旧工作树中的
+生成产物。
+
 ## 数据库变化
 
 开发阶段可使用 `prisma:push` 快速同步本地 schema；需要保留升级历史或准备正式环境
@@ -51,4 +54,3 @@ source_of_truth: package.json and workspace package manifests
 - 统一使用根目录 `pnpm-lock.yaml`。
 - 不提交 Shared 源目录中的生成 JS/DTS。
 - 文档移动使用 `git mv`，同时更新仓库内引用。
-

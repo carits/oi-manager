@@ -9,7 +9,7 @@
     "restart": "bash scripts/restart-dev.sh",
     "stop": "bash scripts/stop-dev.sh",
     "kill-ports": "bash scripts/kill-ports.sh",
-    "build": "pnpm --filter @oi-manager/shared build && pnpm --filter server build && pnpm --filter web build && pnpm --filter @oi-manager/judge build",
+    "build": "pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate && pnpm --filter server build && pnpm --filter web build && pnpm --filter @oi-manager/judge build",
     "test": "pnpm --filter server test && pnpm --filter web test && pnpm --filter @oi-manager/judge test",
     "test:ui:prepare": "pnpm --filter server exec tsx scripts/e2e/reset.ts",
     "test:ui": "pnpm test:ui:prepare && playwright test",

@@ -33,7 +33,7 @@ OI Manager 仍处于开发阶段。当前服务器运行 Next.js 开发服务和
 
 以下数字是 2026-07-30 的验证快照，不作为永久常量：
 
-- 根构建按 `shared → server → web → judge` 顺序通过。
+- 根构建按 `shared → Prisma Client → server → web → judge` 顺序通过。
 - Vitest：Server 444、Web 8、Judge 2，共 454 个测试。
 - Chromium 全量 UI：122/122，通过三次连续运行。
 - 紧凑桌面视口与 Firefox 冒烟：58/58。
@@ -56,4 +56,3 @@ OI Manager 仍处于开发阶段。当前服务器运行 Next.js 开发服务和
 - `apps/server/.env.example` 和 `apps/judge/.env.example` 仍包含旧端口/数据库示例；
   开发启动请使用 [开发环境启动](guide/DEVELOPMENT_SETUP.md) 中的配置。
 - 历史设计和调研仅供追溯，参见 [归档索引](archive/README.md)。
-

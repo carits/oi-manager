@@ -28,8 +28,8 @@ pnpm install --frozen-lockfile
 pnpm build
 ```
 
-构建顺序是 Shared、Server、Web、Judge。构建期间 Next 使用 `.next`，开发服务使用
-`.next-dev`，两者不会覆盖。
+构建顺序是 Shared、Prisma Client、Server、Web、Judge。构建期间 Next 使用 `.next`，
+开发服务使用 `.next-dev`，两者不会覆盖。
 
 ## 配置准备
 
@@ -70,4 +70,3 @@ pnpm build
 
 上线前保存前一版本 commit、构建产物、数据库备份和存储备份。回滚顺序为停止新进程、
 恢复兼容代码、仅在 schema 不兼容时恢复数据库、启动旧进程并执行健康检查。
-
