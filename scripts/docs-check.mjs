@@ -79,6 +79,20 @@ for (const file of linkedMarkdown) {
   }
 }
 
+const codeReferencePattern =
+  /`((?:(?:apps|packages|e2e|scripts|nginx)\/[^`\r\n]+)|(?:package\.json|docker-compose\.yml|ecosystem\.config\.js|playwright(?:\.live)?\.config\.ts))`/g
+for (const file of activeMarkdown) {
+  const content = fs.readFileSync(file, 'utf8')
+  for (const match of content.matchAll(codeReferencePattern)) {
+    const reference = match[1].replace(/\/+$/, '')
+    if (/[<>{}*]/.test(reference) || /(?:^|\/)\.env(?:\.|$)/.test(reference)) continue
+    if (!path.extname(reference)) continue
+    if (!fs.existsSync(path.join(root, reference))) {
+      errors.push(`${relative(file)} references missing code path: ${reference}`)
+    }
+  }
+}
+
 const stalePatterns = [
   ['SQLite test database URL', /file:\.\/prisma\/test\.db/],
   ['copying dev.db into test.db', /cp\s+prisma\/dev\.db\s+prisma\/test\.db/],
