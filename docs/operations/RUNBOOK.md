@@ -56,9 +56,9 @@ docker-compose stop db judge
 ```
 
 `pnpm stop` 停止应用开发进程；Docker 基础设施需要单独停止。不要在仍有数据库写入时
-当前服务器使用 `/usr/bin/docker-compose`；安装 Compose Plugin 的环境可使用
-`docker compose`。不要执行 `docker-compose down -v` 或 `docker compose down -v`，
-这两个命令都会删除数据库卷。
+停止 PostgreSQL。当前服务器使用 `/usr/bin/docker-compose`；安装 Compose Plugin
+的环境可使用 `docker compose`。不要执行 `docker-compose down -v` 或
+`docker compose down -v`，这两个命令都会删除数据库卷。
 
 ## 端口冲突
 
