@@ -809,7 +809,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 <div style={gridRow}>
                   <div>
                     <label style={fieldLabel}>类型</label>
-                    <select value={checkerCategory} onChange={(e) => setCheckerCategory(e.target.value as 'preset' | 'custom')} style={selectStyle}>
+                    <select aria-label="选择" value={checkerCategory} onChange={(e) => setCheckerCategory(e.target.value as 'preset' | 'custom')} style={selectStyle}>
                       <option value="preset">预设</option>
                       <option value="custom">自定义</option>
                     </select>
@@ -817,7 +817,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                   {checkerCategory === 'preset' ? (
                     <div>
                       <label style={fieldLabel}>Checker</label>
-                      <select value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)} style={selectStyle}>
+                      <select aria-label="选择" value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)} style={selectStyle}>
                         <option value="acmp">acmp</option>
                         <option value="ncmp">ncmp (整数比较)</option>
                         <option value="rcmp4">rcmp4 (浮点 1e-4)</option>
@@ -840,7 +840,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 <div style={gridRow}>
                   <div>
                     <label style={fieldLabel}>接口类型</label>
-                    <select value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)} style={selectStyle}>
+                    <select aria-label="选择" value={checkerPreset} onChange={(e) => setCheckerPreset(e.target.value)} style={selectStyle}>
                       {CHECKER_INTERFACES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
                   </div>
@@ -864,7 +864,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 </div>
                 <div>
                   <label style={fieldLabel}>语言</label>
-                  <select value={interactorLang} onChange={(e) => setInteractorLang(e.target.value)} style={selectStyle}>
+                  <select aria-label="选择" value={interactorLang} onChange={(e) => setInteractorLang(e.target.value)} style={selectStyle}>
                     <option value="auto">自动</option><option value="cpp">C++</option><option value="c">C</option><option value="python">Python</option>
                   </select>
                 </div>
@@ -883,7 +883,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 </div>
                 <div>
                   <label style={fieldLabel}>语言</label>
-                  <select value={managerLang} onChange={(e) => setManagerLang(e.target.value)} style={selectStyle}>
+                  <select aria-label="选择" value={managerLang} onChange={(e) => setManagerLang(e.target.value)} style={selectStyle}>
                     <option value="auto">自动</option><option value="cpp">C++</option><option value="c">C</option><option value="python">Python</option>
                   </select>
                 </div>
@@ -997,7 +997,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 {subtasks.length > 0 && (
                   <div style={{ width: '100%', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>全部分配到:</span>
-                    <select onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} style={{ ...selectStyle, width: '160px' }} defaultValue="">
+                    <select aria-label="选择" onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} style={{ ...selectStyle, width: '160px' }} defaultValue="">
                       <option value="" disabled>选择子任务...</option>
                       {subtasks.map(st => <option key={st.id} value={st.id}>子任务 {st.id}</option>)}
                     </select>
@@ -1051,7 +1051,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                         </div>
                         <div>
                           <label style={fieldLabel}>评分方式</label>
-                          <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })} style={selectStyle}>
+                          <select aria-label="选择" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })} style={selectStyle}>
                             {SUBTASK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                           </select>
                         </div>
@@ -1100,7 +1100,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                         </span>
                       ))}
                       {unassignedCases.length > 0 && (
-                        <select onChange={(e) => { const inp = e.target.value; if (!inp) return; const pair = unassignedCases.find(c => c.input === inp); if (pair) assignCasesToSubtask(st.id, [pair]); e.target.value = '' }}
+                        <select aria-label="选择" onChange={(e) => { const inp = e.target.value; if (!inp) return; const pair = unassignedCases.find(c => c.input === inp); if (pair) assignCasesToSubtask(st.id, [pair]); e.target.value = '' }}
                           style={{ fontSize: '0.75rem', padding: '0.25rem 0.375rem', border: '1px dashed var(--border)', borderRadius: '4px' }} defaultValue="">
                           <option value="">+ 添加测试点</option>
                           {unassignedCases.map((c, i) => <option key={i} value={c.input}>{c.input} → {c.output}</option>)}

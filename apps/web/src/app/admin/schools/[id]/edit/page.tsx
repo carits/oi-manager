@@ -16,14 +16,14 @@ interface School {
   contactPerson: string | null
   contactPhone: string | null
   contactEmail: string | null
-  principal: { id: string; name: string; title: string | null; email: string | null; User: { username: string } } | null
+  principal: { id: string; name: string; title: string | null; email: string | null; user: { username: string } | null } | null
 }
 
 interface Teacher {
   id: string
   name: string
   title: string | null
-  User: { username: string; role: string }
+  user: { username: string; role: string } | null
 }
 
 export default function EditSchoolPage() {
@@ -247,6 +247,7 @@ export default function EditSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学校名称 *</label>
                     <input
+                      aria-label="学校名称"
                       type="text"
                       value={formData.name}
                       onChange={(e) => updateField('name', e.target.value)}
@@ -258,7 +259,7 @@ export default function EditSchoolPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学校类型</label>
-                      <select
+                      <select aria-label="学校类型"
                         value={formData.schoolType}
                         onChange={(e) => updateField('schoolType', e.target.value)}
                         style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
@@ -275,7 +276,7 @@ export default function EditSchoolPage() {
 
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学制</label>
-                      <select
+                      <select aria-label="学制"
                         value={formData.educationSystem}
                         onChange={(e) => updateField('educationSystem', e.target.value)}
                         style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
@@ -308,6 +309,7 @@ export default function EditSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系人</label>
                     <input
+                      aria-label="联系人"
                       type="text"
                       value={formData.contactPerson}
                       onChange={(e) => updateField('contactPerson', e.target.value)}
@@ -318,6 +320,7 @@ export default function EditSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系电话</label>
                     <input
+                      aria-label="联系电话"
                       type="text"
                       value={formData.contactPhone}
                       onChange={(e) => updateField('contactPhone', e.target.value)}
@@ -328,6 +331,7 @@ export default function EditSchoolPage() {
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系邮箱</label>
                     <input
+                      aria-label="联系邮箱"
                       type="email"
                       value={formData.contactEmail}
                       onChange={(e) => updateField('contactEmail', e.target.value)}
@@ -358,6 +362,7 @@ export default function EditSchoolPage() {
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#9a3412' }}>负责人姓名 *</label>
                         <input
+                          aria-label="负责人姓名"
                           type="text"
                           value={principalData.teacherName}
                           onChange={(e) => setPrincipalData({ ...principalData, teacherName: e.target.value })}
@@ -368,6 +373,7 @@ export default function EditSchoolPage() {
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#9a3412' }}>职务/职称</label>
                         <input
+                          aria-label="负责人职务"
                           type="text"
                           value={principalData.teacherTitle}
                           onChange={(e) => setPrincipalData({ ...principalData, teacherTitle: e.target.value })}
@@ -378,6 +384,7 @@ export default function EditSchoolPage() {
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#9a3412' }}>登录账号 *</label>
                         <input
+                          aria-label="负责人登录账号"
                           type="text"
                           value={principalData.username}
                           onChange={(e) => setPrincipalData({ ...principalData, username: e.target.value })}
@@ -388,6 +395,7 @@ export default function EditSchoolPage() {
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#9a3412' }}>登录密码</label>
                         <input
+                          aria-label="负责人登录密码"
                           type="text"
                           value={principalData.password}
                           onChange={(e) => setPrincipalData({ ...principalData, password: e.target.value })}
@@ -398,6 +406,7 @@ export default function EditSchoolPage() {
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#9a3412' }}>邮箱</label>
                         <input
+                          aria-label="负责人邮箱"
                           type="email"
                           value={principalData.email}
                           onChange={(e) => setPrincipalData({ ...principalData, email: e.target.value })}
@@ -408,6 +417,7 @@ export default function EditSchoolPage() {
                       <div>
                         <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#9a3412' }}>手机</label>
                         <input
+                          aria-label="负责人手机"
                           type="text"
                           value={principalData.phone}
                           onChange={(e) => setPrincipalData({ ...principalData, phone: e.target.value })}
@@ -443,7 +453,7 @@ export default function EditSchoolPage() {
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
                       {principal ? `校长 (${principal.title || '校长'})` : '选择负责人'}
                     </label>
-                    <select
+                    <select aria-label="选择负责人"
                       value={selectedTeacherId}
                       onChange={(e) => setSelectedTeacherId(e.target.value)}
                       style={{ width: '100%', padding: '0.5rem', border: '1px solid #a7f3d0', borderRadius: '4px', fontSize: '0.875rem' }}
@@ -451,13 +461,13 @@ export default function EditSchoolPage() {
                       <option value="">请选择负责人</option>
                       {teachers.map((teacher) => (
                         <option key={teacher.id} value={teacher.id}>
-                          {teacher.User.username} - {teacher.name}
+                          {teacher.user?.username || '-'} - {teacher.name}
                         </option>
                       ))}
                     </select>
                     {principal && (
                       <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
-                        账号：{principal.User?.username}
+                        账号：{principal.user?.username || '-'}
                       </p>
                     )}
                   </div>

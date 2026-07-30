@@ -492,7 +492,7 @@ export default function PlatformAdminProblemsPage() {
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>选择平台</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <select value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
+                  <select aria-label="选择" value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
                     {OJ_PLATFORMS_NO_ALL.map(p => (
                       <option key={p.value} value={p.value}>{p.label}</option>
                     ))}
@@ -557,10 +557,10 @@ export default function PlatformAdminProblemsPage() {
 
               {/* 任务筛选栏 */}
               <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                <select value={jobsPlatformFilter} onChange={(e) => { setJobsPlatformFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
+                <select aria-label="选择" value={jobsPlatformFilter} onChange={(e) => { setJobsPlatformFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
                   {OJ_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
-                <select value={jobsStatusFilter} onChange={(e) => { setJobsStatusFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
+                <select aria-label="选择" value={jobsStatusFilter} onChange={(e) => { setJobsStatusFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
                   {JOB_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 {(jobsPlatformFilter || jobsStatusFilter) && (
@@ -629,7 +629,7 @@ export default function PlatformAdminProblemsPage() {
             <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem 1.5rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>平台</label>
-                <select value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)} style={selectStyle}>
+                <select aria-label="选择" value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)} style={selectStyle}>
                   {OJ_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>

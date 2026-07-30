@@ -37,6 +37,7 @@ import logger from './lib/logger'
 import { startCronTasks } from './lib/cron-tasks'
 import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
+import { STORAGE_ROOT } from './config/storage'
 
 // 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
 const envFile = process.env.ENV_FILE ||
@@ -89,9 +90,9 @@ app.use('/api', globalLimiter)
 
 // 公开静态文件（头像等）
 // 私有文件必须通过 /api/files/:id/download 权限接口访问
-app.use('/uploads/public', express.static(path.join(__dirname, '../uploads/public')))
+app.use('/uploads/public', express.static(path.join(STORAGE_ROOT, 'public')))
 // 兼容旧路径 /public
-app.use('/public', express.static(path.join(__dirname, '../uploads/public')))
+app.use('/public', express.static(path.join(STORAGE_ROOT, 'public')))
 
 // ==================== API 路由 ====================
 
@@ -214,10 +215,12 @@ const httpServer = app.listen(PORT, () => {
     action: 'server_start',
     metadata: { port: PORT, env: process.env.NODE_ENV || 'development' }
   })
-  startCronTasks()
-  startAutoVerifyScheduler()
-  startSubmissionPoller(5000) // 每 5 秒轮询一次
-  metrics.startPeriodicLog(300000) // 每 5 分钟输出一次指标汇总
+  if (process.env.DISABLE_BACKGROUND_JOBS !== 'true') {
+    startCronTasks()
+    startAutoVerifyScheduler()
+    startSubmissionPoller(5000) // 每 5 秒轮询一次
+    metrics.startPeriodicLog(300000) // 每 5 分钟输出一次指标汇总
+  }
 
   // 初始化评测机 WebSocket 服务器
   ;(global as any).httpServer = httpServer

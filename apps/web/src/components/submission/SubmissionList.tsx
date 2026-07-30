@@ -277,7 +277,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>OJ</label>
-            <select
+            <select aria-label="选择"
               style={selectStyle}
               value={filterOj}
               onChange={e => setFilterOj(e.target.value)}
@@ -301,7 +301,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>评测结果</label>
-            <select
+            <select aria-label="选择"
               style={selectStyle}
               value={filterResult}
               onChange={e => setFilterResult(e.target.value)}
@@ -314,7 +314,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>语言</label>
-            <select
+            <select aria-label="选择"
               style={selectStyle}
               value={filterLanguage}
               onChange={e => setFilterLanguage(e.target.value)}

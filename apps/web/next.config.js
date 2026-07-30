@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // 只在生产构建时使用 standalone 输出，dev 模式下会导致 vendor chunk 500 错误
-  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
+  ...(process.env.NODE_ENV === 'production' && process.env.E2E_BUILD !== 'true' && { output: 'standalone' }),
   compress: true,
   reactStrictMode: false,
   transpilePackages: ['shared', '@oi-manager/shared'],

@@ -69,7 +69,7 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.375rem', color: 'var(--gray-700)' }}>
             翻译到
           </label>
-          <select
+          <select aria-label="选择"
             value={targetLang}
             onChange={(e) => setTargetLang(e.target.value)}
             style={{

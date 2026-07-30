@@ -192,7 +192,7 @@ export function ProblemList({ role }: ProblemListProps) {
         {/* 搜索和筛选 */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {activeTab === 'public' && (
-            <select
+            <select aria-label="选择"
               value={selectedPlatform}
               onChange={(e) => { setSelectedPlatform(e.target.value); setPage(1); }}
               style={{

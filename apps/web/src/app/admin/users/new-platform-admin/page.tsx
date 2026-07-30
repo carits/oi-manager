@@ -87,6 +87,7 @@ export default function NewPlatformAdminPage() {
                 用户名 <span style={{ color: 'var(--error)' }}>*</span>
               </label>
               <input
+                aria-label="用户名"
                 type="text"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -100,6 +101,7 @@ export default function NewPlatformAdminPage() {
                 密码 <span style={{ color: 'var(--error)' }}>*</span>
               </label>
               <input
+                aria-label="密码"
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -115,6 +117,7 @@ export default function NewPlatformAdminPage() {
                 姓名 <span style={{ color: 'var(--error)' }}>*</span>
               </label>
               <input
+                aria-label="姓名"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -128,6 +131,7 @@ export default function NewPlatformAdminPage() {
                 手机号
               </label>
               <input
+                aria-label="手机号"
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -140,6 +144,7 @@ export default function NewPlatformAdminPage() {
                 邮箱
               </label>
               <input
+                aria-label="邮箱"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -152,6 +157,7 @@ export default function NewPlatformAdminPage() {
                 简介
               </label>
               <textarea
+                aria-label="简介"
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 rows={3}

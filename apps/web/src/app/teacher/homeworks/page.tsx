@@ -25,7 +25,14 @@ export default function TeacherHomeworksPage() {
     try {
       const res = await apiClient.get('/api/teams?view=mine&pageSize=100')
       if (res.success) {
-        const list: Team[] = (res.data as any)?.items || res.data || []
+        const payload = res.data as any
+        const list: Team[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+            ? payload.items
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : []
         setTeams(list)
         if (list.length > 0) setActiveTeamId(list[0].id)
       } else {

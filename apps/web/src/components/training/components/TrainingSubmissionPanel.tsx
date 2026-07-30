@@ -119,7 +119,7 @@ export function TrainingSubmissionPanel({
       <div style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
           <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>题号:</label>
-          <select
+          <select aria-label="选择"
             value={filterProblemId}
             onChange={e => { setFilterProblemId(e.target.value); setSubmissionsPage(1) }}
             style={{ padding: '0.35rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', minWidth: '80px', background: 'white' }}
@@ -142,7 +142,7 @@ export function TrainingSubmissionPanel({
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
           <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>结果:</label>
-          <select
+          <select aria-label="选择"
             value={filterResult}
             onChange={e => { setFilterResult(e.target.value); setSubmissionsPage(1) }}
             style={{ padding: '0.35rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', minWidth: '100px', background: 'white' }}
@@ -162,7 +162,7 @@ export function TrainingSubmissionPanel({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
           <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>语言:</label>
-          <select
+          <select aria-label="选择"
             value={filterLanguage}
             onChange={e => { setFilterLanguage(e.target.value); setSubmissionsPage(1) }}
             style={{ padding: '0.35rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', minWidth: '100px', background: 'white' }}

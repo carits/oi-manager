@@ -265,7 +265,30 @@ describe('新模块', () => {
 })
 ```
 
-## 7. 常见问题
+## 7. 全 UI E2E
+
+Playwright 套件位于 `e2e/`，使用 PostgreSQL 的独立 `e2e` schema、`3100/3102`
+端口和 `test-results/storage` 文件目录。准备脚本会拒绝 `public` 或未明确指定
+`schema=e2e` 的数据库 URL。
+
+```bash
+pnpm test:ui:smoke
+pnpm test:ui
+pnpm test:ui:headed
+pnpm test:ui:report
+```
+
+- `test:ui:smoke`：Chromium 与 Firefox 的登录、权限、导航和角色核心流程。
+- `test:ui`：90 个页面路由、双桌面视口、核心业务、文件和模拟 Judge 全量回归。
+- `test:ui:live`：仅手动运行的真实 OJ/Judge 连通性检查，需要仓库 Secrets。
+- 失败证据写入 `test-results/`，包括 HTML/JSON、截图、视频、trace 和缺陷摘要。
+
+环境变量模板见 `e2e/.env.example`。测试认证状态由登录 API 动态生成到
+`e2e/.auth/`。准备脚本每次生成随机账号密码、JWT 密钥和 Judge 令牌，并以
+`0600` 权限写入忽略的 `test-results/e2e-runtime.json`。不得提交认证状态、
+运行时凭据或真实平台凭据。
+
+## 8. 常见问题
 
 ### Q: 运行测试后 dev.db 数据丢失了
 
@@ -301,7 +324,7 @@ npx vitest run tests/problem-lists.test.ts
 npx vitest run -t "应该正常工作"
 ```
 
-## 8. 变更日志
+## 9. 变更日志
 
 ### 2026-04-08
 - 创建测试文档

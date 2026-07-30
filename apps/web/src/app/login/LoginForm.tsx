@@ -94,7 +94,9 @@ export function LoginForm({ initialRole }: { initialRole: LoginRole }) {
           {roleOptions.map((opt) => (
             <button
               key={opt.key}
+              type="button"
               onClick={() => setRole(opt.role)}
+              aria-pressed={role === opt.role}
               style={{
                 flex: 1,
                 padding: '0.5rem',
@@ -115,11 +117,14 @@ export function LoginForm({ initialRole }: { initialRole: LoginRole }) {
 
         <form onSubmit={handleLogin} style={{ display: 'grid', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            <label htmlFor="login-username" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               用户名
             </label>
             <input
+              id="login-username"
+              name="username"
               type="text"
+              autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -134,11 +139,14 @@ export function LoginForm({ initialRole }: { initialRole: LoginRole }) {
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            <label htmlFor="login-password" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               密码
             </label>
             <input
+              id="login-password"
+              name="password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

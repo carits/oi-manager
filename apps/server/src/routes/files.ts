@@ -109,8 +109,14 @@ filesRouter.post('/upload', authenticate, upload.single('file'), async (req, res
       fs.unlinkSync(req.file.path)
     }
 
-    logger.error('file_upload_error', error)
-    res.status(500).json({ success: false, message: error instanceof Error ? error.message : '服务器错误' })
+    const message = error instanceof Error ? error.message : '服务器错误'
+    const isValidationError = /^(File extension not allowed|File type not allowed|File size exceeds limit):/.test(message)
+    if (isValidationError) {
+      logger.warn('file_upload_rejected', { action: 'file_upload', metadata: { message } })
+    } else {
+      logger.error('file_upload_error', error)
+    }
+    res.status(isValidationError ? 400 : 500).json({ success: false, message })
   }
 })
 

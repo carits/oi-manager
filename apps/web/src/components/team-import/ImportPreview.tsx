@@ -381,7 +381,7 @@ export default function ImportPreview({
       {/* 批量设置入学年份 */}
       <div style={batchBarStyle}>
         <span>批量设置入学年份:</span>
-        <select value={batchEnrollmentYear} disabled style={smallSelectStyle}>
+        <select aria-label="选择" value={batchEnrollmentYear} disabled style={smallSelectStyle}>
           {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(year => (
             <option key={year} value={year}>{year}</option>
           ))}
@@ -558,7 +558,7 @@ export default function ImportPreview({
                   {/* 性别 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={fieldLabelStyle}>性别:</span>
-                    <select
+                    <select aria-label="选择"
                       value={member.gender}
                       onChange={e => updateMember(index, { gender: e.target.value })}
                       style={smallSelectStyle}
@@ -571,7 +571,7 @@ export default function ImportPreview({
                   {/* 入学年份 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={fieldLabelStyle}>入学年份:</span>
-                    <select
+                    <select aria-label="选择"
                       value={member.enrollmentYear || ''}
                       onChange={e => updateMember(index, { enrollmentYear: Number(e.target.value) })}
                       style={smallSelectStyle}

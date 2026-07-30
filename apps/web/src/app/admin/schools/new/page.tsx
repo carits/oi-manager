@@ -175,6 +175,7 @@ export default function NewSchoolPage() {
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学校名称 *</label>
                     <input
+                      aria-label="学校名称"
                       type="text"
                       value={formData.name}
                       onChange={(e) => updateField('name', e.target.value)}
@@ -185,7 +186,7 @@ export default function NewSchoolPage() {
 
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学校类型</label>
-                    <select
+                    <select aria-label="选择"
                       value={formData.schoolType}
                       onChange={(e) => updateField('schoolType', e.target.value)}
                       style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
@@ -202,7 +203,7 @@ export default function NewSchoolPage() {
 
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学制</label>
-                    <select
+                    <select aria-label="选择"
                       value={formData.educationSystem}
                       onChange={(e) => updateField('educationSystem', e.target.value)}
                       style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
@@ -236,6 +237,7 @@ export default function NewSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系人</label>
                     <input
+                      aria-label="联系人"
                       type="text"
                       value={formData.contactPerson}
                       onChange={(e) => updateField('contactPerson', e.target.value)}
@@ -246,6 +248,7 @@ export default function NewSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系电话</label>
                     <input
+                      aria-label="联系电话"
                       type="text"
                       value={formData.contactPhone}
                       onChange={(e) => updateField('contactPhone', e.target.value)}
@@ -259,6 +262,7 @@ export default function NewSchoolPage() {
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系邮箱</label>
                     <input
+                      aria-label="联系邮箱"
                       type="text"
                       value={formData.contactEmail}
                       onChange={(e) => updateField('contactEmail', e.target.value)}
@@ -279,6 +283,7 @@ export default function NewSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>账号 *</label>
                     <input
+                      aria-label="负责人账号"
                       type="text"
                       value={formData.username}
                       onChange={(e) => updateField('username', e.target.value)}
@@ -293,6 +298,7 @@ export default function NewSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>密码</label>
                     <input
+                      aria-label="负责人密码"
                       type="text"
                       value={formData.password}
                       onChange={(e) => updateField('password', e.target.value)}
@@ -304,6 +310,7 @@ export default function NewSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>姓名 *</label>
                     <input
+                      aria-label="负责人姓名"
                       type="text"
                       value={formData.teacherName}
                       onChange={(e) => updateField('teacherName', e.target.value)}
@@ -316,6 +323,7 @@ export default function NewSchoolPage() {
                   <div>
                     <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>职务</label>
                     <input
+                      aria-label="负责人职务"
                       type="text"
                       value={formData.teacherTitle}
                       onChange={(e) => updateField('teacherTitle', e.target.value)}

@@ -588,7 +588,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>难度</label>
-                <select
+                <select aria-label="选择"
                   value={form.difficulty}
                   onChange={(e) => handleChange('difficulty', e.target.value)}
                   style={{
@@ -872,7 +872,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
                 {/* 添加版本下拉 */}
                 <div style={{ marginTop: '1rem' }}>
-                  <select
+                  <select aria-label="选择"
                     onChange={(e) => {
                       const value = e.target.value
                       if (value === 'markdown-zh') addStatement('markdown', 'zh')
@@ -996,7 +996,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
                 {/* 添加版本下拉 */}
                 <div style={{ marginTop: '1rem' }}>
-                  <select
+                  <select aria-label="选择"
                     onChange={(e) => {
                       const value = e.target.value
                       if (value === 'markdown-zh') addSolution('markdown', 'zh')
@@ -1043,7 +1043,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 {role === 'admin' && (
                   <div style={{ marginBottom: '1.5rem' }}>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>可见性</label>
-                    <select
+                    <select aria-label="选择"
                       value={form.visibility}
                       onChange={(e) => handleChange('visibility', e.target.value)}
                       style={{
@@ -1061,7 +1061,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>状态</label>
-                  <select
+                  <select aria-label="选择"
                     value={form.status}
                     onChange={(e) => handleChange('status', e.target.value)}
                     style={{
@@ -1085,7 +1085,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
                   {ojBindings.map((binding, index) => (
                     <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                      <select
+                      <select aria-label="选择"
                         value={binding.platform}
                         onChange={(e) => updateOjBinding(index, 'platform', e.target.value)}
                         style={{

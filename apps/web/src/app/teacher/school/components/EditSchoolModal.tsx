@@ -121,7 +121,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess }: EditScho
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>学校类型</label>
-          <select
+          <select aria-label="选择"
             value={form.values.schoolType}
             onChange={(e) => form.handleChange('schoolType', e.target.value)}
             style={formStyles.select}
@@ -138,7 +138,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess }: EditScho
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>学制</label>
-          <select
+          <select aria-label="选择"
             value={form.values.educationSystem}
             onChange={(e) => form.handleChange('educationSystem', e.target.value)}
             style={formStyles.select}

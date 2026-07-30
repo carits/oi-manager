@@ -247,7 +247,7 @@ export default function TeamImportPreviewPage() {
                       {match.matchType === 'invalid' || match.matchType === 'conflict' ? (
                         <span style={{ color: 'var(--gray-400)' }}>自动跳过</span>
                       ) : (
-                        <select
+                        <select aria-label="选择"
                           value={choice?.action || 'confirm'}
                           onChange={(e) =>
                             setUserChoices({

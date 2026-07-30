@@ -225,7 +225,7 @@ export default function StudentsPage() {
                 if (transferringStudent?.id === student.id) {
                   return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <select
+                      <select aria-label="选择"
                         value={selectedTeacherId}
                         onChange={(e) => setSelectedTeacherId(e.target.value)}
                         style={{
@@ -424,7 +424,7 @@ function StudentFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>性别</label>
-          <select
+          <select aria-label="选择"
             value={form.values.gender}
             onChange={(e) => form.handleChange('gender', e.target.value)}
             style={formStyles.select}

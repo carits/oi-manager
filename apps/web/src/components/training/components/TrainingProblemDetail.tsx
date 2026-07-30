@@ -132,7 +132,7 @@ export function TrainingProblemDetail({
     if (visibleStatements.length <= 1) return null
     return (
       <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <select
+        <select aria-label="选择"
           value={selectedStatementId || ''}
           onChange={(e) => {
             const id = e.target.value

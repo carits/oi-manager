@@ -856,7 +856,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   alignItems: 'center',
                   gap: '0.5rem'
                 }}>
-                  <select
+                  <select aria-label="选择"
                     value={selectedStatementId || ''}
                     onChange={(e) => {
                       const id = e.target.value
@@ -945,7 +945,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   alignItems: 'center',
                   gap: '0.5rem'
                 }}>
-                  <select
+                  <select aria-label="选择"
                     value={selectedSolutionId || ''}
                     onChange={(e) => {
                       const id = e.target.value
@@ -1390,7 +1390,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 ? platformLangs
                 : LANGUAGE_OPTIONS.filter(o => o.value).map(o => ({ id: o.value, name: o.label }))
               return (
-                <select
+                <select aria-label="选择"
                   value={submitLanguage}
                   onChange={e => setSubmitLanguage(e.target.value)}
                   style={{

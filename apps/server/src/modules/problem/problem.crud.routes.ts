@@ -21,8 +21,8 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId
     const role = (req as any).user.role
 
-    // 校园模式：学生不能访问题库
-    if (role === 'student') {
+    // 校园模式学生使用学校题单；个人模式学生可管理自己的题库。
+    if (role === 'student' && (req as any).user.studentMode !== 'personal') {
       return res.status(403).json({ success: false, message: '校园模式下学生不能访问题库' })
     }
 
@@ -283,8 +283,8 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     const role = user.role
     const userId = user.userId
 
-    // 校园模式：学生不能访问题库
-    if (role === 'student') {
+    // 校园模式学生使用学校题单；个人模式学生可管理自己的题库。
+    if (role === 'student' && user.studentMode !== 'personal') {
       return res.status(403).json({ success: false, message: '校园模式下学生不能访问题库' })
     }
 

@@ -169,7 +169,7 @@ export function Pagination({
         {onPageSizeChange && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>每页</span>
-            <select
+            <select aria-label="选择"
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               style={selectStyle}

@@ -2,6 +2,7 @@ node_modules
 
 # Build outputs
 .next
+.next-e2e
 dist
 build
 *.tsbuildinfo
@@ -39,6 +40,8 @@ test-results/
 **/test-results/
 playwright-report/
 **/playwright-report/
+e2e/.auth/
+e2e/.env
 phase*.png
 apps/web/phase*.png
 apps/server/debug/

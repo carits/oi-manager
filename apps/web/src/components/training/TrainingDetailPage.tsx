@@ -522,7 +522,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
           {/* Language selection - 归档模式下隐藏 */}
           {actions.submitMethod !== 'archive' && (
           <div style={{ marginBottom: '1rem' }}>
-            <select
+            <select aria-label="选择"
               value={actions.submitLanguage}
               onChange={e => actions.setSubmitLanguage(e.target.value)}
               style={{

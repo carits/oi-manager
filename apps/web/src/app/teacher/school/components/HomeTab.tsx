@@ -350,7 +350,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
 
             <div style={formStyles.field}>
               <label style={formStyles.label}>学校类型</label>
-              <select
+              <select aria-label="选择"
                 value={schoolForm.schoolType}
                 onChange={(e) => setSchoolForm({ ...schoolForm, schoolType: e.target.value })}
                 style={formStyles.select}
@@ -367,7 +367,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
 
             <div style={formStyles.field}>
               <label style={formStyles.label}>学制</label>
-              <select
+              <select aria-label="选择"
                 value={schoolForm.educationSystem}
                 onChange={(e) => setSchoolForm({ ...schoolForm, educationSystem: e.target.value })}
                 style={formStyles.select}

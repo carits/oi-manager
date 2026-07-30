@@ -429,7 +429,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>赛制</label>
-                <select value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
+                <select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
                   <option value="ioi">IOI（即时反馈+部分分）</option>
                   <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
                   <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
@@ -449,14 +449,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题号显示</label>
-                <select value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
+                <select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>
                 </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题解显示</label>
-                <select value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')} style={inputStyle}>
+                <select aria-label="选择" value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')} style={inputStyle}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>
                 </select>
@@ -525,7 +525,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
                           </td>
                           <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{idx + 1}</td>
                           <td style={{ padding: '0.4rem 0.5rem' }}>
-                            <select value={row.ojName}
+                            <select aria-label="选择" value={row.ojName}
                               onChange={e => {
                                 updateRow(row.id, { ojName: e.target.value, resolved: row.existing ? row.resolved : null })
                                 if (!row.existing) handleResolve({ ...row, ojName: e.target.value, resolved: null })

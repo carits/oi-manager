@@ -522,7 +522,7 @@ export default function ProblemListDetailPage() {
                           <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: '#fffbe6' }}>
                             <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</td>
                             <td style={{ padding: '0.4rem 0.75rem' }}>
-                              <select value={row.ojName} onChange={e => updateNewRow(row.id, { ojName: e.target.value, resolved: null })}
+                              <select aria-label="选择" value={row.ojName} onChange={e => updateNewRow(row.id, { ojName: e.target.value, resolved: null })}
                                 style={{ padding: '0.25rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', width: '100%' }}>
                                 {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
                               </select>
@@ -701,7 +701,7 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>目标团队</label>
-          <select value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
+          <select aria-label="选择" value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
             style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem' }}>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -713,7 +713,7 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
         </div>
         <div>
           <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>赛制</label>
-          <select value={format} onChange={e => setFormat(e.target.value)}
+          <select aria-label="选择" value={format} onChange={e => setFormat(e.target.value)}
             style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem' }}>
             <option value="oi">OI</option>
             <option value="ioi">IOI</option>
@@ -933,7 +933,7 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
           </div>
 
           {/* 权限下拉 */}
-          <select value={permission} onChange={e => setPermission(e.target.value as 'view' | 'edit')}
+          <select aria-label="选择" value={permission} onChange={e => setPermission(e.target.value as 'view' | 'edit')}
             style={{ width: '110px', padding: '0.55rem 0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.95rem' }}>
             <option value="view">只读</option>
             <option value="edit">可读写</option>

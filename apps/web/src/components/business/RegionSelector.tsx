@@ -37,7 +37,7 @@ export function RegionSelector({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-      <select
+      <select aria-label="省份"
         value={province}
         onChange={(e) => handleProvinceChange(e.target.value)}
         style={formStyles.select}
@@ -50,7 +50,7 @@ export function RegionSelector({
         ))}
       </select>
 
-      <select
+      <select aria-label="城市"
         value={city}
         onChange={(e) => handleCityChange(e.target.value)}
         style={formStyles.select}
@@ -64,7 +64,7 @@ export function RegionSelector({
         ))}
       </select>
 
-      <select
+      <select aria-label="区县"
         value={district}
         onChange={(e) => onDistrictChange(e.target.value)}
         style={formStyles.select}

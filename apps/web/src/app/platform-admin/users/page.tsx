@@ -164,7 +164,7 @@ export default function PlatformAdminUsersPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>角色</label>
-                <select
+                <select aria-label="选择"
                   value={filters.role}
                   onChange={(e) => setFilters({ ...filters, role: e.target.value })}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
@@ -177,7 +177,7 @@ export default function PlatformAdminUsersPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>状态</label>
-                <select
+                <select aria-label="选择"
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}

@@ -272,7 +272,7 @@ export default function OjAccountsPage() {
 
             {/* 筛选栏 */}
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center' }}>
-              <select
+              <select aria-label="选择"
                 value={filterPlatform}
                 onChange={e => setFilterPlatform(e.target.value)}
                 style={{ padding: '0.4rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem' }}
@@ -282,7 +282,7 @@ export default function OjAccountsPage() {
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
-              <select
+              <select aria-label="选择"
                 value={filterStatus}
                 onChange={e => setFilterStatus(e.target.value)}
                 style={{ padding: '0.4rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem' }}
@@ -482,7 +482,7 @@ function AddAccountModal({ isOpen, onClose, onSuccess }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>平台</label>
-          <select
+          <select aria-label="选择"
             value={platform}
             onChange={e => setPlatform(e.target.value)}
             style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem' }}

@@ -303,6 +303,7 @@ export function initJudgeWebSocket() {
         if (msg.type === 'auth') {
           if (judgeToken && msg.payload?.token !== judgeToken) {
             logger.warn('judge_ws_auth_failed', { action: 'judge_ws' })
+            clearTimeout(authTimeout)
             ws.send(JSON.stringify({ type: 'error', payload: { message: 'Invalid token' } }))
             ws.close()
             return
@@ -329,6 +330,7 @@ export function initJudgeWebSocket() {
     })
 
     ws.on('close', async () => {
+      clearTimeout(authTimeout)
       const judge = judges.get(ws)
       if (judge) {
         // 断连时精准恢复该评测机的任务

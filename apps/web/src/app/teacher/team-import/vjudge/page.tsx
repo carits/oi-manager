@@ -278,7 +278,7 @@ export default function VjudgeImportPage() {
             ) : (
               <>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>选择要导入的团队</label>
-                <select
+                <select aria-label="选择"
                   value={selectedGroupId}
                   onChange={e => setSelectedGroupId(e.target.value)}
                   style={selectStyle}

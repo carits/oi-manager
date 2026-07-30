@@ -291,7 +291,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
             </p>
             <div style={formStyles.field}>
               <label style={formStyles.label}>选择新负责人 *</label>
-              <select
+              <select aria-label="选择"
                 value={selectedNewPrincipal}
                 onChange={(e) => setSelectedNewPrincipal(e.target.value)}
                 style={formStyles.select}
