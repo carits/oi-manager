@@ -35,6 +35,26 @@ Thumbs.db
 
 # Test
 test/
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
+phase*.png
+apps/web/phase*.png
+apps/server/debug/
+
+# This workspace uses pnpm only
+apps/*/package-lock.json
+
+# Generated shared-package artifacts belong in dist/
+packages/shared/src/index.js
+packages/shared/src/index.js.map
+packages/shared/src/index.d.ts
+packages/shared/src/index.d.ts.map
+packages/shared/src/utils/*.js
+packages/shared/src/utils/*.js.map
+packages/shared/src/utils/*.d.ts
+packages/shared/src/utils/*.d.ts.map
 
 # Testdata (评测数据文件)
 apps/server/testdata/

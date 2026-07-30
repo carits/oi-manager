@@ -5,8 +5,10 @@
 import * as path from 'path'
 import * as fs from 'fs'
 
-// 加载 .env 文件
-const envPath = path.join(__dirname, '../.env')
+// 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
+const envFile = process.env.ENV_FILE ||
+  (process.env.NODE_ENV === 'production' ? '.env.production' : '.env')
+const envPath = path.join(__dirname, '..', envFile)
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8')
   envContent.split('\n').forEach(line => {
@@ -25,8 +27,11 @@ export const config = {
   // 后端连接
   backendUrl: process.env.BACKEND_URL || 'ws://localhost:3002',
 
-  // 认证 Token（生产环境必须配置）
+  // 认证 Token（开发和生产环境均应配置）
   judgeToken: process.env.JUDGE_TOKEN || '',
+
+  // 仅用于显式的本机开发，远程连接仍会被服务端拒绝。
+  allowUnauthenticated: process.env.ALLOW_UNAUTHENTICATED_JUDGE === 'true',
 
   // 沙箱配置
   sandboxHost: process.env.SANDBOX_HOST || 'http://localhost:5050',
@@ -45,4 +50,10 @@ export const config = {
 
   // 日志级别
   logLevel: process.env.LOG_LEVEL || 'info'
+}
+
+if (!config.judgeToken && !config.allowUnauthenticated) {
+  throw new Error(
+    'JUDGE_TOKEN is required. Set ALLOW_UNAUTHENTICATED_JUDGE=true only for loopback development.',
+  )
 }

@@ -1,8 +1,9 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './AuthProvider'
+import { getRoleHome, roleHasAccess } from '@/lib/roleAccess'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -14,12 +15,18 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   const router = useRouter()
 
   // 权限检查
-  const hasAccess = !requiredRole ||
-    (Array.isArray(requiredRole)
-      ? requiredRole.includes(user?.role || '')
-      : user?.role === requiredRole ||
-        (requiredRole === 'super_admin' && user?.role === 'platform_admin') ||
-        (requiredRole === 'teacher' && user?.role === 'school_principal'))
+  const hasAccess = roleHasAccess(user?.role, requiredRole)
+
+  useEffect(() => {
+    if (loading) return
+    if (!isAuthenticated) {
+      router.replace('/login')
+      return
+    }
+    if (!hasAccess) {
+      router.replace(getRoleHome(user?.role))
+    }
+  }, [hasAccess, isAuthenticated, loading, router, user?.role])
 
   if (loading) {
     return (
@@ -35,17 +42,10 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   if (!isAuthenticated) {
-    if (typeof window !== 'undefined') {
-      router.push('/login')
-    }
     return null
   }
 
   if (!hasAccess) {
-    // 角色不匹配，跳转到对应角色的首页
-    if (typeof window !== 'undefined') {
-      router.push(`/${user?.role}`)
-    }
     return null
   }
 

@@ -20,7 +20,38 @@ export interface ApiResponse<T> {
   success: boolean
   data?: T
   message?: string
-  status?: number  // 保留 HTTP 状态码
+  status: number
+  code?: string
+}
+
+export async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T>> {
+  const text = await res.text()
+  let payload: Record<string, unknown> = {}
+
+  if (text) {
+    try {
+      const parsed = JSON.parse(text)
+      payload = parsed && typeof parsed === 'object'
+        ? parsed as Record<string, unknown>
+        : { data: parsed }
+    } catch {
+      payload = { message: text }
+    }
+  }
+
+  const success = typeof payload.success === 'boolean'
+    ? payload.success
+    : res.ok
+
+  return {
+    ...payload,
+    success,
+    status: res.status,
+    message: typeof payload.message === 'string'
+      ? payload.message
+      : success ? undefined : `请求失败（HTTP ${res.status}）`,
+    code: typeof payload.code === 'string' ? payload.code : undefined,
+  } as ApiResponse<T>
 }
 
 class ApiClient {
@@ -85,9 +116,7 @@ class ApiClient {
       })
 
       clearTimeout(timeoutId)
-      const json = await res.json()
-      // 保留 HTTP 状态码，方便调用方区分错误类型
-      return { ...json, status: res.status }
+      return await parseApiResponse<T>(res)
     } catch (error) {
       clearTimeout(timeoutId)
       // AbortError 需要抛出让调用方处理

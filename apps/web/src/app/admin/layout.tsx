@@ -1,53 +1,14 @@
-'use client'
+import type { ReactNode } from 'react'
+import { RoleLayout } from '@/components/RoleLayout'
 
-import { ReactNode, useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
-import { useAuth } from '@/components/AuthProvider'
-import { AppShell } from '@/components/AppShell'
-
-interface AdminLayoutProps {
-  children: ReactNode
-}
-
-export default function AdminLayout({ children }: AdminLayoutProps) {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { user, loading } = useAuth()
-
-  // loading=false 且 user=null 时跳转登录页
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login?role=admin')
-    }
-  }, [loading, user, router])
-
-  // loading=true 时显示加载中
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--gray-50)'
-      }}>
-        加载中...
-      </div>
-    )
-  }
-
-  // loading=false 且 user=null 时返回 null（等待跳转）
-  if (!user) {
-    return null
-  }
-
-  // admin 目录下的页面使用 AppShell
-  // 注意：admin/page.tsx (首页) 自己处理 AppShell，避免重复嵌套
-  const isAdminHome = pathname === '/admin'
-
-  if (isAdminHome) {
-    return <>{children}</>
-  }
-
-  return <AppShell>{children}</AppShell>
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <RoleLayout
+      allowedRoles={['super_admin', 'platform_admin']}
+      loginRole="admin"
+      homePath="/admin"
+    >
+      {children}
+    </RoleLayout>
+  )
 }

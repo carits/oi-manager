@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
 import { getAssetUrl } from '@/lib/assets'
+import { getRoleHome } from '@/lib/roleAccess'
 
 interface AppShellProps {
   children: ReactNode
@@ -117,12 +118,13 @@ export function AppShell({ children }: AppShellProps) {
       }}>
         {/* 左侧：Logo + 导航 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <img
-            src="/logo.png"
-            alt="Carits"
-            style={{ height: '48px', cursor: 'pointer' }}
-            onClick={() => router.push(`/${role === 'super_admin' ? 'admin/schools' : role === 'platform_admin' ? 'platform-admin' : role === 'student' ? 'student' : 'teacher'}`)}
-          />
+          <Link href={getRoleHome(role)} aria-label="返回首页">
+            <img
+              src="/logo.png"
+              alt="Carits"
+              style={{ height: '48px', display: 'block' }}
+            />
+          </Link>
           <nav style={{ display: 'flex', gap: '1.5rem', fontSize: '0.875rem' }}>
             {navConfig.items.map((item) => (
               <Link
@@ -175,8 +177,12 @@ export function AppShell({ children }: AppShellProps) {
           )}
 
           <div style={{ position: 'relative' }} ref={userMenuRef}>
-            <div
+            <button
+              type="button"
               onClick={() => setShowUserMenu(!showUserMenu)}
+              aria-expanded={showUserMenu}
+              aria-haspopup="menu"
+              aria-label="打开用户菜单"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -185,6 +191,9 @@ export function AppShell({ children }: AppShellProps) {
                 padding: '0.25rem 0.5rem',
                 borderRadius: 'var(--radius)',
                 transition: 'background 0.2s',
+                border: 'none',
+                background: 'transparent',
+                font: 'inherit',
               }}
               onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -236,7 +245,7 @@ export function AppShell({ children }: AppShellProps) {
               }}>
                 ▼
               </span>
-            </div>
+            </button>
 
             {/* 下拉菜单 */}
             {showUserMenu && (

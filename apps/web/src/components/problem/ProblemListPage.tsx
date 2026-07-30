@@ -210,7 +210,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
         </div>
       ) : displayMode === 'card' ? (
         /* 卡片模式（学生端） */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr)', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
           {lists.map(list => (
             <div
               key={list.id}

@@ -10,8 +10,21 @@ import { getAdapter, isPlatformSupported, getSupportedPlatforms, isKnownPlatform
 import { fileService } from '../lib/storage'
 import logger from '../lib/logger'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
+import { authenticate, authorize } from '../middleware/auth'
 
 export const ojFetcherRouter = Router()
+const adminOnly = [authenticate, authorize('super_admin' as const, 'platform_admin' as const)]
+const superAdminOnly = [authenticate, authorize('super_admin' as const)]
+const authenticatedUsers = [
+  authenticate,
+  authorize(
+    'super_admin' as const,
+    'platform_admin' as const,
+    'school_principal' as const,
+    'teacher' as const,
+    'student' as const,
+  ),
+]
 
 // ==================== 平台配置 API ====================
 
@@ -19,7 +32,7 @@ export const ojFetcherRouter = Router()
  * GET /api/oj-fetcher/platforms/:platform/config
  * @description 获取平台 Cookie 配置
  */
-ojFetcherRouter.get('/platforms/:platform/config', async (req: Request, res: Response) => {
+ojFetcherRouter.get('/platforms/:platform/config', ...superAdminOnly, async (req: Request, res: Response) => {
   try {
     const { platform } = req.params
 
@@ -41,7 +54,8 @@ ojFetcherRouter.get('/platforms/:platform/config', async (req: Request, res: Res
       success: true,
       data: {
         platform,
-        cookies,
+        configured: Object.keys(cookies).length > 0,
+        cookieNames: Object.keys(cookies),
         lastUsedAt: config?.lastUsedAt || null,
       },
     })
@@ -58,13 +72,30 @@ ojFetcherRouter.get('/platforms/:platform/config', async (req: Request, res: Res
  * PUT /api/oj-fetcher/platforms/:platform/config
  * @description 更新平台 Cookie 配置
  */
-ojFetcherRouter.put('/platforms/:platform/config', async (req: Request, res: Response) => {
+ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, async (req: Request, res: Response) => {
   try {
     const { platform } = req.params
     const { cookies } = req.body
 
-    // 将 cookies 对象转为 JSON 字符串
-    const cookiesJson = cookies ? JSON.stringify(cookies) : null
+    if (
+      cookies != null &&
+      (typeof cookies !== 'object' || Array.isArray(cookies) ||
+        Object.values(cookies).some(value => typeof value !== 'string'))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cookie 配置必须是字符串键值对象',
+      })
+    }
+
+    const normalizedCookies = Object.fromEntries(
+      Object.entries((cookies || {}) as Record<string, string>)
+        .map(([key, value]) => [key.trim(), value.trim()])
+        .filter(([key, value]) => key && value),
+    )
+    const cookiesJson = Object.keys(normalizedCookies).length > 0
+      ? JSON.stringify(normalizedCookies)
+      : null
 
     const config = await prisma.ojPlatformConfig.upsert({
       where: { platform },
@@ -84,7 +115,9 @@ ojFetcherRouter.put('/platforms/:platform/config', async (req: Request, res: Res
       success: true,
       data: {
         platform: config.platform,
-        cookies: cookies || {},
+        configured: Object.keys(normalizedCookies).length > 0,
+        cookieNames: Object.keys(normalizedCookies),
+        lastUsedAt: config.lastUsedAt,
       },
     })
   } catch (error) {
@@ -107,7 +140,7 @@ ojFetcherRouter.put('/platforms/:platform/config', async (req: Request, res: Res
  * @query page - 页码（默认1）
  * @query pageSize - 每页条数（默认20）
  */
-ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
+ojFetcherRouter.get('/jobs', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { status, platform, problemId } = req.query
     const { page, pageSize, skip } = parsePagination(req.query)
@@ -146,7 +179,7 @@ ojFetcherRouter.get('/jobs', async (req: Request, res: Response) => {
  * POST /api/oj-fetcher/jobs/batch
  * @description 批量创建拉取任务
  */
-ojFetcherRouter.post('/jobs/batch', async (req: Request, res: Response) => {
+ojFetcherRouter.post('/jobs/batch', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { platform, problemIds } = req.body
 
@@ -242,7 +275,7 @@ ojFetcherRouter.post('/jobs/batch', async (req: Request, res: Response) => {
  * POST /api/oj-fetcher/jobs/:id/retry
  * @description 重试任务
  */
-ojFetcherRouter.post('/jobs/:id/retry', async (req: Request, res: Response) => {
+ojFetcherRouter.post('/jobs/:id/retry', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -287,7 +320,7 @@ ojFetcherRouter.post('/jobs/:id/retry', async (req: Request, res: Response) => {
  * DELETE /api/oj-fetcher/jobs/:id
  * @description 删除任务
  */
-ojFetcherRouter.delete('/jobs/:id', async (req: Request, res: Response) => {
+ojFetcherRouter.delete('/jobs/:id', ...adminOnly, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -953,7 +986,7 @@ ojFetcherRouter.get('/platforms', async (req: Request, res: Response) => {
  *
  * @returns {OjProblem} 标准化的题目信息
  */
-ojFetcherRouter.get('/:platform/:problemId', async (req: Request, res: Response) => {
+ojFetcherRouter.get('/:platform/:problemId', ...authenticatedUsers, async (req: Request, res: Response) => {
   const { platform, problemId } = req.params
 
   try {
@@ -1045,7 +1078,7 @@ ojFetcherRouter.get('/:platform/:problemId', async (req: Request, res: Response)
  *
  * @body { problemId: string, url: string, filename: string }
  */
-ojFetcherRouter.post('/download-attachment', async (req: Request, res: Response) => {
+ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: Request, res: Response) => {
   try {
     const { problemId, url, filename } = req.body
 

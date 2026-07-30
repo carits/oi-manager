@@ -194,18 +194,25 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
         <tbody>
           {trainings.map((training, idx) => {
             const statusInfo = STATUS_MAP[training.status] || STATUS_MAP.upcoming
+            const detailPath =
+              mode === 'contest' ? 'contests' :
+              mode === 'homework' ? 'homeworks' :
+              'trainings'
+            const trainingHref = schoolId
+              ? `${basePath}/${detailPath}/${training.id}`
+              : `${basePath}/${teamId}/${detailPath}/${training.id}`
+            const openTraining = () => router.push(trainingHref)
             return (
               <tr
                 key={training.id}
-                onClick={() => {
-                  const detailPath =
-                    mode === 'contest' ? 'contests' :
-                    mode === 'homework' ? 'homeworks' :
-                    'trainings'
-                  if (schoolId) {
-                    router.push(`${basePath}/${detailPath}/${training.id}`)
-                  } else {
-                    router.push(`${basePath}/${teamId}/${detailPath}/${training.id}`)
+                role="link"
+                tabIndex={0}
+                aria-label={`打开${typeLabel(mode)}：${training.title}`}
+                onClick={openTraining}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    openTraining()
                   }
                 }}
                 style={{

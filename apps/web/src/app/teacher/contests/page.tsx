@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import TeamTrainingList from '@/components/training/TeamTrainingList'
 import { Empty } from '@/components/ui/Empty'
+import { LoadError } from '@/components/ui/LoadError'
 
 interface Team {
   id: string
@@ -16,26 +17,34 @@ interface Team {
 export default function TeacherContestsPage() {
   const { user } = useAuth()
   const [teams, setTeams] = useState<Team[]>([])
-  const [schoolId, setSchoolId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [showSchool, setShowSchool] = useState(false)
+  const schoolId = user?.schoolId || null
 
-  useEffect(() => {
-    apiClient.get('/api/teams?view=mine&pageSize=100').then(res => {
+  const loadTeams = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await apiClient.get('/api/teams?view=mine&pageSize=100')
       if (res.success) {
         const list: Team[] = (res.data as any)?.items || res.data || []
         setTeams(list)
         if (list.length > 0) setActiveTeamId(list[0].id)
+      } else {
+        setError(res.message || '比赛范围加载失败')
       }
-    }).catch(() => {})
-
-    if (user?.schoolId) {
-      setSchoolId(user.schoolId)
+    } catch {
+      setError('比赛范围加载失败')
+    } finally {
+      setLoading(false)
     }
-
-    Promise.resolve().finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    loadTeams()
+  }, [loadTeams])
 
   const showSchoolTab = !!schoolId
 
@@ -46,6 +55,8 @@ export default function TeacherContestsPage() {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>加载中...</div>
+          ) : error ? (
+            <LoadError message={error} onRetry={loadTeams} />
           ) : teams.length === 0 && !schoolId ? (
             <Empty text="暂无团队，请先创建团队" />
           ) : (

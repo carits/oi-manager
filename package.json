@@ -4,12 +4,14 @@
   "private": true,
   "description": "信息学竞赛三端成长管理平台",
   "scripts": {
-    "dev": "bash scripts/kill-ports.sh && pnpm --parallel -r dev",
-    "dev:dirty": "pnpm --parallel -r dev",
+    "dev": "pnpm --filter @oi-manager/shared build && bash scripts/kill-ports.sh && pnpm --parallel -r dev",
+    "dev:dirty": "pnpm --filter @oi-manager/shared build && pnpm --parallel -r dev",
     "restart": "bash scripts/restart-dev.sh",
     "stop": "bash scripts/stop-dev.sh",
     "kill-ports": "bash scripts/kill-ports.sh",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @oi-manager/shared build && pnpm --filter server build && pnpm --filter web build && pnpm --filter @oi-manager/judge build",
+    "test": "pnpm --filter server test && pnpm --filter web test && pnpm --filter @oi-manager/judge test",
+    "start:production": "pm2 start ecosystem.config.js --update-env",
     "lint": "pnpm -r lint",
     "install:all": "pnpm install"
   },

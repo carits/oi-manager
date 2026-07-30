@@ -6,8 +6,16 @@
 import { Router } from 'express'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
+import { authenticate, authorize } from '../middleware/auth'
 
 export const migrationRouter = Router()
+
+migrationRouter.use(authenticate, authorize('super_admin'), (_req, res, next) => {
+  if (process.env.ENABLE_MAINTENANCE_API !== 'true') {
+    return res.status(404).json({ success: false, message: '接口不存在' })
+  }
+  next()
+})
 
 /**
  * POST /api/admin/migrate-submission-scope

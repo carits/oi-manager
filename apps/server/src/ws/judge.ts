@@ -16,12 +16,10 @@ import { onSubmissionJudged } from '../lib/submission-sync'
 import { normalizeResult } from '../lib/result-enum'
 import path from 'path'
 import yaml from 'js-yaml'
+import { getHeartbeatAction } from './judge-protocol'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
-
-// JUDGE_TOKEN 校验
-const JUDGE_TOKEN = process.env.JUDGE_TOKEN
 
 // 评测机连接信息
 interface JudgeConnection {
@@ -86,9 +84,19 @@ class JudgeConsumer {
   async fetchNextTask(): Promise<JudgeTask | null> {
     try {
       return await prisma.$transaction(async (tx) => {
-        const submission = await tx.submission.findFirst({
-          where: { result: 'queuing', oj: 'carits' },
-          orderBy: { createdAt: 'asc' },
+        const candidates = await tx.$queryRaw<Array<{ id: number }>>`
+          SELECT id
+          FROM "Submission"
+          WHERE result = 'queuing' AND oj = 'carits'
+          ORDER BY "createdAt" ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+        `
+        const candidate = candidates[0]
+        if (!candidate) return null
+
+        const submission = await tx.submission.findUnique({
+          where: { id: candidate.id },
           select: { id: true, problemInternalId: true, code: true, language: true }
         })
         if (!submission) return null
@@ -188,10 +196,15 @@ interface JudgeTask {
  * 初始化 WebSocket 服务器
  */
 export function initJudgeWebSocket() {
-  // 生产环境必须配置 JUDGE_TOKEN
-  if (process.env.NODE_ENV === 'production' && !JUDGE_TOKEN) {
-    logger.error('judge_ws_no_token', { message: 'JUDGE_TOKEN must be set in production' })
-    throw new Error('JUDGE_TOKEN must be set in production')
+  const judgeToken = process.env.JUDGE_TOKEN?.trim()
+  const allowUnauthenticatedLocalJudge =
+    process.env.ALLOW_UNAUTHENTICATED_JUDGE === 'true'
+
+  if (!judgeToken && !allowUnauthenticatedLocalJudge) {
+    logger.error('judge_ws_no_token', {
+      message: 'JUDGE_TOKEN must be set unless loopback-only development is explicitly enabled'
+    })
+    throw new Error('JUDGE_TOKEN is required')
   }
 
   // 使用已有的 HTTP 服务器
@@ -249,14 +262,29 @@ export function initJudgeWebSocket() {
 
   wss.on('connection', (ws, req) => {
     const clientIp = req.socket.remoteAddress
+    const isLoopback =
+      clientIp === '127.0.0.1' ||
+      clientIp === '::1' ||
+      clientIp === '::ffff:127.0.0.1'
+    const requiresAuth =
+      Boolean(judgeToken) || !allowUnauthenticatedLocalJudge || !isLoopback
 
     // 从 URL query 或 first message 中获取 token
-    let authenticated = JUDGE_TOKEN ? false : true
+    let authenticated = !requiresAuth
 
     logger.info('judge_ws_connected', {
       action: 'judge_ws',
-      metadata: { clientIp, requiresAuth: !!JUDGE_TOKEN }
+      metadata: { clientIp, requiresAuth }
     })
+
+    if (requiresAuth && !judgeToken) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        payload: { message: 'Judge authentication is not configured' }
+      }))
+      ws.close()
+      return
+    }
 
     // 认证超时：10 秒内必须完成认证
     const authTimeout = setTimeout(() => {
@@ -273,7 +301,7 @@ export function initJudgeWebSocket() {
 
         // 认证消息
         if (msg.type === 'auth') {
-          if (JUDGE_TOKEN && msg.payload?.token !== JUDGE_TOKEN) {
+          if (judgeToken && msg.payload?.token !== judgeToken) {
             logger.warn('judge_ws_auth_failed', { action: 'judge_ws' })
             ws.send(JSON.stringify({ type: 'error', payload: { message: 'Invalid token' } }))
             ws.close()
@@ -362,9 +390,12 @@ async function recoverAllStaleTasks() {
  * 处理消息
  */
 async function handleMessage(ws: WebSocket, msg: any) {
-  // 心跳响应
-  if (msg.type === 'pong') {
+  const heartbeat = getHeartbeatAction(msg.type)
+  if (heartbeat.handled) {
     judgeHeartbeats.set(ws, Date.now())
+    if (heartbeat.reply) {
+      ws.send(JSON.stringify({ type: heartbeat.reply }))
+    }
     return
   }
 
@@ -380,9 +411,6 @@ async function handleMessage(ws: WebSocket, msg: any) {
       break
     case 'result':
       await handleResult(ws, msg.payload)
-      break
-    case 'ping':
-      ws.send(JSON.stringify({ type: 'pong' }))
       break
     default:
       logger.warn('judge_ws_unknown_message', {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useAuth } from '@/components/AuthProvider'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Pagination } from '@/components/ui/Pagination'
@@ -30,7 +31,8 @@ interface FetchJob {
 // 平台配置类型
 interface PlatformConfig {
   platform: string
-  cookies: Record<string, string>
+  configured: boolean
+  cookieNames: string[]
   lastUsedAt: string | null
 }
 
@@ -80,6 +82,8 @@ export default function PlatformAdminProblemsPage() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const toast = useToast()
+  const { user } = useAuth()
+  const canManageCredentials = user?.role === 'super_admin'
   const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
 
   // 从URL参数获取当前tab，默认为 'fetch'
@@ -100,6 +104,7 @@ export default function PlatformAdminProblemsPage() {
   // Cookie 配置（通用，按平台动态）
   const [platformCookies, setPlatformCookies] = useState<Record<string, string>>({})
   const [savingCookies, setSavingCookies] = useState(false)
+  const [configuredCookieNames, setConfiguredCookieNames] = useState<string[]>([])
 
   // 批量拉取
   const [problemIdsInput, setProblemIdsInput] = useState('')
@@ -160,10 +165,12 @@ export default function PlatformAdminProblemsPage() {
 
   // 加载当前平台的 Cookie 配置
   const fetchConfig = async () => {
+    if (!canManageCredentials) return
     try {
       const result = await apiClient.get<PlatformConfig>(`/api/oj-fetcher/platforms/${fetchPlatform}/config`)
       if (result.success && result.data) {
-        setPlatformCookies(result.data.cookies || {})
+        setConfiguredCookieNames(result.data.cookieNames || [])
+        setPlatformCookies({})
       }
     } catch (error) {
       console.error('Failed to fetch config:', error)
@@ -228,7 +235,15 @@ export default function PlatformAdminProblemsPage() {
       for (const [key, value] of Object.entries(platformCookies)) {
         if (value) cookies[key] = value
       }
-      await apiClient.put(`/api/oj-fetcher/platforms/${fetchPlatform}/config`, { cookies })
+      const result = await apiClient.put<PlatformConfig>(
+        `/api/oj-fetcher/platforms/${fetchPlatform}/config`,
+        { cookies },
+      )
+      if (!result.success) {
+        throw new Error(result.message || '保存失败')
+      }
+      setConfiguredCookieNames(result.data?.cookieNames || Object.keys(cookies))
+      setPlatformCookies({})
       toast.success('配置已保存')
     } catch (error) {
       console.error('Failed to save config:', error)
@@ -318,16 +333,19 @@ export default function PlatformAdminProblemsPage() {
 
   // ==================== Effects ====================
 
-  useEffect(() => { fetchConfig(); fetchJobs() }, [])
+  useEffect(() => {
+    if (canManageCredentials) fetchConfig()
+    fetchJobs()
+  }, [canManageCredentials])
   // 从 localStorage 恢复平台选择（SSR 安全）
   useEffect(() => {
     const saved = localStorage.getItem('oj-fetch-platform')
     if (saved && saved !== fetchPlatform) setFetchPlatform(saved)
   }, [])
   useEffect(() => {
-    fetchConfig()
+    if (canManageCredentials) fetchConfig()
     localStorage.setItem('oj-fetch-platform', fetchPlatform)
-  }, [fetchPlatform])
+  }, [canManageCredentials, fetchPlatform])
   useEffect(() => { if (activeTab === 'public') fetchPublicProblems() }, [activeTab, publicPage, publicPageSize, selectedPlatform, searchKeyword])
   useEffect(() => { if (activeTab === 'private') fetchPrivateProblems() }, [activeTab, privatePage, privatePageSize, searchKeyword])
   useEffect(() => { if (activeTab === 'fetch') fetchJobs() }, [jobsPage, jobsPageSize, jobsPlatformFilter, jobsStatusFilter])
@@ -488,10 +506,12 @@ export default function PlatformAdminProblemsPage() {
               </div>
 
               {/* Cookie 配置（仅对该平台有字段定义时显示） */}
-              {PLATFORM_COOKIE_FIELDS[fetchPlatform] && (
+              {PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials && (
                 <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '6px', border: '1px solid var(--border)' }}>
                   <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
-                    配置后可下载需要登录的附件。在浏览器登录对应平台后，从开发者工具获取所需 Cookie 值。
+                    已保存的值不会回传到浏览器。当前已配置：
+                    {configuredCookieNames.length > 0 ? configuredCookieNames.join('、') : '无'}。
+                    输入的新值会整体替换现有配置。
                   </p>
                   <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     {PLATFORM_COOKIE_FIELDS[fetchPlatform].map(field => (
@@ -510,7 +530,7 @@ export default function PlatformAdminProblemsPage() {
               )}
 
               {/* 批量拉取 */}
-              <div style={{ borderTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] ? '1px solid var(--border)' : 'none', paddingTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] ? '1rem' : 0 }}>
+              <div style={{ borderTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? '1px solid var(--border)' : 'none', paddingTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? '1rem' : 0 }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>批量拉取</h3>
                 <textarea value={problemIdsInput} onChange={(e) => setProblemIdsInput(e.target.value)}
                   placeholder="输入题号，每行一个或逗号分隔，例如：&#10;P1001&#10;P1002&#10;B2001"

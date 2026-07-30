@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { Empty } from '@/components/ui/Empty'
+import { LoadError } from '@/components/ui/LoadError'
 
 interface ContestItem {
   id: number
@@ -41,16 +41,30 @@ function formatTime(t: string) {
 }
 
 export default function StudentContestsPage() {
-  const { user } = useAuth()
   const [contests, setContests] = useState<ContestItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const loadContests = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await apiClient.get<ContestItem[]>('/api/students/my-contests')
+      if (res.success) {
+        setContests(res.data || [])
+      } else {
+        setError(res.message || '比赛加载失败')
+      }
+    } catch {
+      setError('比赛加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    apiClient.get<ContestItem[]>('/api/students/my-contests').then(res => {
-      if (res.success) setContests(res.data || [])
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+    loadContests()
+  }, [loadContests])
 
   return (
     <ProtectedRoute requiredRole="student">
@@ -59,6 +73,8 @@ export default function StudentContestsPage() {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>加载中...</div>
+          ) : error ? (
+            <LoadError message={error} onRetry={loadContests} />
           ) : contests.length === 0 ? (
             <Empty text="暂无比赛" />
           ) : (

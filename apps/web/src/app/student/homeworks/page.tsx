@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
-import { useAuth } from '@/components/AuthProvider'
+import { LoadError } from '@/components/ui/LoadError'
 
 interface HomeworkItem {
   id: number
@@ -19,16 +19,30 @@ interface HomeworkItem {
 }
 
 export default function StudentHomeworksPage() {
-  const { user } = useAuth()
   const [homeworks, setHomeworks] = useState<HomeworkItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const loadHomeworks = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await apiClient.get<HomeworkItem[]>('/api/students/my-homeworks')
+      if (res.success) {
+        setHomeworks(res.data || [])
+      } else {
+        setError(res.message || '作业加载失败')
+      }
+    } catch {
+      setError('作业加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    apiClient.get<HomeworkItem[]>('/api/students/my-homeworks').then(res => {
-      if (res.success) setHomeworks(res.data || [])
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+    loadHomeworks()
+  }, [loadHomeworks])
 
   const getStatusLabel = (startTime: string, endTime: string) => {
     const now = new Date()
@@ -48,6 +62,8 @@ export default function StudentHomeworksPage() {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>加载中...</div>
+          ) : error ? (
+            <LoadError message={error} onRetry={loadHomeworks} />
           ) : homeworks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
               <p>暂无作业</p>

@@ -39,6 +39,14 @@ export function validateEnv(): void {
     }
   }
 
+  const allowsLocalUnauthenticatedJudge =
+    process.env.ALLOW_UNAUTHENTICATED_JUDGE === 'true'
+  if (nodeEnv !== 'test' && !process.env.JUDGE_TOKEN && !allowsLocalUnauthenticatedJudge) {
+    errors.push(
+      'Missing required env: JUDGE_TOKEN (or explicitly set ALLOW_UNAUTHENTICATED_JUDGE=true for loopback-only development)',
+    )
+  }
+
   if (errors.length > 0) {
     console.error('❌ Environment validation failed:')
     errors.forEach(err => console.error(`   - ${err}`))

@@ -38,8 +38,10 @@ import { startCronTasks } from './lib/cron-tasks'
 import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
 
-// 加载环境变量
-dotenv.config()
+// 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
+const envFile = process.env.ENV_FILE ||
+  (process.env.NODE_ENV === 'production' ? '.env.production' : '.env')
+dotenv.config({ path: path.resolve(process.cwd(), envFile) })
 
 // 增加 undici 全局连接超时（默认 10s 不够，VJudge 等海外站点从国内连接需要更久）
 import { setGlobalDispatcher, Agent } from 'undici'

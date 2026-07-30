@@ -12,6 +12,7 @@ import WebSocket from 'ws'
 import { config } from './config'
 import { judge } from './judge'
 import type { JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
+import { getClientHeartbeatReply } from './protocol'
 
 class JudgeClient {
   private ws: WebSocket | null = null
@@ -82,6 +83,14 @@ class JudgeClient {
   }
 
   private async handleMessage(msg: WSMessage) {
+    const heartbeatReply = getClientHeartbeatReply(msg.type)
+    if (heartbeatReply !== undefined) {
+      if (heartbeatReply) {
+        this.send({ type: heartbeatReply, payload: {} })
+      }
+      return
+    }
+
     switch (msg.type) {
       case 'auth_success':
         console.log('[Judge] Authentication successful')
@@ -112,10 +121,6 @@ class JudgeClient {
         break
       case 'started':
         console.log('[Judge] Consumer started, concurrency:', msg.payload?.concurrency)
-        break
-      case 'ping':
-        // 服务端心跳请求，响应 pong
-        this.send({ type: 'pong', payload: {} })
         break
       case 'judge':
         await this.handleJudgeTask(msg as JudgeMessage)
