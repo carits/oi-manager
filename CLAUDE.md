@@ -9,7 +9,7 @@
 - `prisma db push --force-reset`
 - `prisma migrate reset`
 - `DROP DATABASE` / `DROP TABLE` / `TRUNCATE`
-- `docker compose down -v`（`-v` 会删除 volume）
+- `docker-compose down -v` / `docker compose down -v`（`-v` 会删除 volume）
 - 任何会清空或删除生产/开发数据库的操作
 
 **2026-04-17 事故**：使用 `--force-reset` 导致生产数据库全部数据丢失（评测记录、OJ账号、训练等），无法恢复。
@@ -53,46 +53,47 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 ## 一、启动时默认加载的项目文档
 
 ### 1. 必读文档（优先加载）
-@docs/PROJECT_OVERVIEW.md
-@docs/context.md
-@docs/current-task.md
-@docs/SYSTEM_MAP.md
-@docs/HANDOVER.md
-@docs/KNOWN_ISSUES.md
+@docs/README.md
+@docs/STATUS.md
+@docs/guide/PROJECT_OVERVIEW.md
+@docs/guide/PROJECT_TOUR.md
+@docs/architecture/SYSTEM_OVERVIEW.md
 
 ### 2. 按需加载文档
 - 涉及数据库结构、数据关系、Prisma 模型时：
-  @docs/database/DATABASE_MODELS.md
-  @docs/database/
+  @docs/architecture/DATA_MODEL.md
+  @docs/reference/DATABASE_SCHEMA.md
 
 - 涉及接口开发、接口联调、权限边界时：
-  @docs/api/API_REFERENCE.md
-  @docs/api/FIELD_CONTRACT.md
-  @docs/api/
-  @docs/AUTH_AND_PERMISSION.md
+  @docs/reference/api/README.md
+  @docs/reference/FIELD_CONTRACTS.md
+  @docs/reference/api/
+  @docs/architecture/AUTHORIZATION.md
 
 - 涉及前端页面、组件、hooks、模块入口时：
-  @docs/components/COMPONENTS.md
-  @docs/components/
-  @docs/MODULE_INDEX.md
+  @docs/development/FRONTEND.md
+  @docs/reference/WEB_ROUTES.md
+  @docs/architecture/modules/
 
 - 涉及前端样式、设计 token、颜色/圆角/阴影规范时：
-  @docs/DESIGN_SYSTEM.md
+  @docs/development/DESIGN_SYSTEM.md
 
 - 涉及启动、环境变量、本地调试、部署排查时：
-  @docs/RUNBOOK.md
+  @docs/operations/RUNBOOK.md
+  @docs/operations/ENVIRONMENTS.md
 
 - 涉及测试、编写测试用例、测试数据库时：
-  @docs/TESTING.md
+  @docs/development/TESTING.md
+  @docs/development/UI_E2E.md
 
 - 涉及业务流程、调用链、数据流时：
-  @docs/context.md
+  @docs/guide/PROJECT_TOUR.md
 
 - 涉及历史决策、设计取舍时：
-  @docs/HANDOVER.md
+  @docs/archive/README.md
 
 - 不明确的目录、模块、职责边界时：
-  优先查阅 @docs/SYSTEM_MAP.md 和 @docs/HANDOVER.md
+  优先查阅 @docs/architecture/SYSTEM_OVERVIEW.md 和 @docs/guide/PROJECT_TOUR.md
   不要仅凭目录名称做假设
 
 ---
@@ -123,7 +124,7 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 - 数据库结构、Prisma schema、迁移脚本
 - 请求层统一、代理层、资源 URL 拼接
 - 目录职责边界不清的区域（尤其存在历史遗留代码时）
-- **Prisma 查询**：关联字段名必须大写（见 `docs/api/FIELD_CONTRACT.md`）
+- **Prisma 查询**：关联字段名必须大写（见 `docs/reference/FIELD_CONTRACTS.md`）
 
 ### 5. 默认排查顺序
 遇到功能异常时，优先按以下顺序排查：
@@ -138,22 +139,24 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 
 ## 三、完成任务前必须检查
 
-### 1. 必须同步更新任务与变更记录
-- 更新 `docs/current-task.md`
-- 追加写入 `docs/change-log.md`
+### 1. 必须同步更新状态与变更记录
+- 当前事实发生变化时更新 `docs/STATUS.md`
+- 对外行为或工程流程变化时追加 `docs/CHANGELOG.md`
+- 运行 `pnpm docs:check`
 
 ### 2. 必须检查是否需要同步更新文档
 若本次改动影响以下任一内容，必须同步更新相应文档：
-- 项目结构、目录职责、真实运行链路 → `docs/SYSTEM_MAP.md`
-- 启动方式、环境变量、调试流程 → `docs/RUNBOOK.md`
-- 权限、身份、JWT、角色关系 → `docs/AUTH_AND_PERMISSION.md`
-- 模块入口、核心文件、状态说明 → `docs/MODULE_INDEX.md`
-- 已知问题、技术债、风险提示 → `docs/KNOWN_ISSUES.md`
-- 关键背景、架构决策 → `docs/context.md` 和 `docs/HANDOVER.md`
+- 项目结构、目录职责、真实运行链路 → `docs/architecture/SYSTEM_OVERVIEW.md`
+- 启动方式、环境变量、调试流程 → `docs/operations/RUNBOOK.md`
+- 权限、身份、JWT、角色关系 → `docs/architecture/AUTHORIZATION.md`
+- 模块入口、核心文件、状态说明 → `docs/guide/PROJECT_TOUR.md` 与 `docs/architecture/modules/`
+- 已知问题、技术债、风险提示 → `docs/STATUS.md`
+- 关键背景、架构决策 → `docs/guide/PROJECT_OVERVIEW.md` 与对应架构文档
 
 ### 3. 不允许在以下情况下直接结束任务
-- 没有更新 `docs/current-task.md`
-- 没有追加 `docs/change-log.md`
+- 当前事实变化却没有更新 `docs/STATUS.md`
+- 对外行为变化却没有追加 `docs/CHANGELOG.md`
+- 没有运行 `pnpm docs:check`
 - 改了结构/接口/权限/环境变量却没有检查文档是否需要同步
 - 发现文档与代码不一致却未说明
 - 留下“待确认”信息却没有在输出中明确列出
@@ -215,21 +218,17 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 
 ## 六、文档维护约定
 
-### 1. `docs/PROJECT_OVERVIEW.md`
-作为总览首页，说明项目目标、技术栈、核心模块、当前阶段、文档导航
+### 1. `docs/README.md`
+作为唯一入口，维护面向开发、架构、测试、运维和接口查阅的阅读路径。
 
-### 2. `docs/context.md`
-作为长期上下文，记录真实架构、关键背景、主要技术债、近期重要决定
+### 2. `docs/STATUS.md`
+只记录当前可验证事实、开发阶段、验证快照和已知限制，不充当临时任务看板。
 
-### 3. `docs/current-task.md`
-作为当前任务说明，记录当前目标、修改范围、下一步计划、阻塞点，保持短小易更新
+### 3. `docs/CHANGELOG.md`
+从 2026-07 起记录安全、工程流程和用户可见行为变化；完整旧记录保留在归档。
 
-### 4. `docs/change-log.md`
-记录每次改动：
-- 改了什么
-- 为什么改
-- 影响哪些模块
-- 是否存在兼容性或回归风险
+### 4. 活动文档元数据
+活动文档必须维护 `status`、`audience`、`last_verified` 和 `source_of_truth`；历史文档必须标记 `archived`。
 
 ---
 
@@ -277,7 +276,7 @@ const profileData = { id: user.Teacher.id, name: user.Teacher.name }
 res.json({ success: true, data: { profile: profileData } })
 ```
 
-详细规范见：`docs/api/FIELD_CONTRACT.md`
+详细规范见：`docs/reference/FIELD_CONTRACTS.md`
 
 ### Teacher/Student/Admin ID 规范（必须遵守）
 
@@ -434,7 +433,7 @@ apps/web/src/
 
 ### 设计 Token 规范（必须遵守）
 
-**详细文档**: `docs/DESIGN_SYSTEM.md`
+**详细文档**: `docs/development/DESIGN_SYSTEM.md`
 
 1. **颜色**：使用 `var(--xxx)` 或 `lib/tokens.ts` 导出，禁止硬编码 hex 值
    - 文字：`var(--text-primary)` / `var(--text-secondary)` / `var(--text-muted)`
@@ -450,7 +449,7 @@ apps/web/src/
 
 ## 十、AI 翻译模块规则（必须遵守）
 
-**详细设计文档**: `docs/translate.md`
+**当前模块文档**: `docs/architecture/modules/PROBLEMS_AND_OJ.md`
 
 ### 格式保护红线
 
@@ -496,16 +495,17 @@ apps/web/src/
 
 ### 1. 测试数据库隔离（红线规则）
 
-**测试必须且只能使用 `test.db`，绝对禁止影响 `dev.db`。**
+**测试必须且只能使用 PostgreSQL 的 `test` schema，绝对禁止影响开发 `public` schema。**
 
-- 测试数据库：`apps/server/prisma/test.db`
-- 开发数据库：`apps/server/prisma/dev.db`
+- 测试 schema：`postgresql://.../oi_manager?schema=test`
+- UI E2E schema：`postgresql://.../oi_manager?schema=e2e`
+- 开发 schema：`postgresql://.../oi_manager?schema=public`
 
 **实现机制**（已配置，无需修改）：
 
 1. `tests/setup-env.ts` — 在所有 import 之前设置 `DATABASE_URL`，由 vitest 作为第一个 setupFile 加载
 2. `vitest.config.ts` — `setupFiles: ['./tests/setup-env.ts', './tests/setup.ts']`，顺序不可颠倒
-3. `src/prisma.ts` — PrismaClient 单例在首次 import 时创建，setup-env.ts 确保在此之前 DATABASE_URL 已指向 test.db
+3. `src/prisma.ts` — PrismaClient 单例在首次 import 时创建，setup-env.ts 确保在此之前 `DATABASE_URL` 已指向 `test` schema
 
 **禁止事项**：
 - 禁止在测试代码中直接修改 `process.env.DATABASE_URL`（由 setup-env.ts 统一管理）
@@ -535,7 +535,7 @@ apps/server/tests/
 
 ### 3. afterEach 数据清理规则
 
-`setup.ts` 的 `afterEach` 会在每个测试后清理 test.db 中的数据，清理范围：
+`setup.ts` 的 `afterEach` 会在每个测试后清理 `test` schema 中的数据，清理范围：
 
 **会清理的表**（测试自己创建的数据）：
 - ProblemListEntry, ProblemListSection, ProblemListShare, ProblemList
@@ -574,12 +574,11 @@ npx vitest tests/problem-lists.test.ts
 
 ### 6. 测试数据库初始化
 
-如果 `test.db` 不存在或 schema 过期：
+单元测试与 UI E2E 都使用 PostgreSQL 隔离 schema。数据库 URL 必须显式指向 `schema=test` 或 `schema=e2e`，不得复用开发 schema。
 
 ```bash
-cd apps/server
-# 从 dev.db 复制（包含 schema 和种子数据）
-cp prisma/dev.db prisma/test.db
+pnpm test
+pnpm test:ui:smoke
 ```
 
-详细测试文档：`docs/TESTING.md`
+详细测试文档：`docs/development/TESTING.md` 和 `docs/development/UI_E2E.md`

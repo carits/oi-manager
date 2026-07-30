@@ -17,6 +17,7 @@
     "test:ui:headed": "pnpm test:ui:prepare && playwright test --project=chromium-desktop --headed",
     "test:ui:live": "playwright test --config=playwright.live.config.ts",
     "test:ui:report": "playwright show-report test-results/playwright-report",
+    "docs:check": "node scripts/docs-check.mjs",
     "start:production": "pm2 start ecosystem.config.js --update-env",
     "lint": "pnpm -r lint",
     "install:all": "pnpm install"

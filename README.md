@@ -66,7 +66,7 @@ pnpm install
 ### 启动数据库
 
 ```bash
-docker compose up -d db
+docker-compose up -d db judge
 ```
 
 ### 数据库初始化
@@ -124,10 +124,12 @@ oi-manager-v2/
 ├── packages/
 │   └── shared/              # 共享类型定义
 ├── docs/                    # 项目文档
-│   ├── api/                 # API 文档
-│   ├── components/          # 组件文档
-│   ├── database/            # 数据库文档
-│   └── ...
+│   ├── guide/               # 入门与项目导览
+│   ├── architecture/        # 架构与业务模块
+│   ├── development/         # 开发与测试
+│   ├── operations/          # 环境、运行与部署
+│   ├── reference/           # 路由、模型和 API 参考
+│   └── archive/             # 历史文档
 ├── docker-compose.yml       # Docker 配置
 ├── package.json             # 根 package.json
 ├── pnpm-workspace.yaml      # pnpm workspace 配置
@@ -136,20 +138,16 @@ oi-manager-v2/
 
 ## 文档
 
-详细文档请查看 [docs](./docs/) 目录：
+文档统一从 [docs/README.md](./docs/README.md) 进入：
 
-- [项目概述](./docs/PROJECT_OVERVIEW.md) - 项目目标、技术栈、功能模块
-- [系统全景图](./docs/SYSTEM_MAP.md) - 系统结构和路由
-- [运维手册](./docs/RUNBOOK.md) - 本地开发、调试、部署
-- [交接指南](./docs/HANDOVER.md) - 新人上手指南
-- [认证与权限](./docs/AUTH_AND_PERMISSION.md) - 权限体系详解
-- [业务模块索引](./docs/MODULE_INDEX.md) - 模块代码定位
-- [数据库模型](./docs/database/DATABASE_MODELS.md) - 数据库模型定义
-- [API 接口文档](./docs/api/API_REFERENCE.md) - API 接口参考
-- [前端组件库](./docs/components/COMPONENTS.md) - 组件使用文档
-- [设计系统](./docs/DESIGN_SYSTEM.md) - 设计 token、样式规范
-- [评测模块](./docs/JUDGE_MODULE.md) - 评测引擎架构与配置
-- [已知问题](./docs/KNOWN_ISSUES.md) - 技术债务清单
+- [项目状态](./docs/STATUS.md) - 开发阶段、验证结果和已知限制
+- [开发环境](./docs/guide/DEVELOPMENT_SETUP.md) - 从干净检出到可登录
+- [系统架构](./docs/architecture/SYSTEM_OVERVIEW.md) - 组件、数据和请求链路
+- [认证与授权](./docs/architecture/AUTHORIZATION.md) - 角色、学生模式和权限边界
+- [测试体系](./docs/development/TESTING.md) - Vitest、数据库隔离和验收
+- [UI E2E](./docs/development/UI_E2E.md) - 90 路由与角色流程
+- [运维手册](./docs/operations/RUNBOOK.md) - 启停、端口、日志和备份
+- [API 目录](./docs/reference/api/README.md) - 当前 Express 接口清单
 
 ## 开发规范
 
@@ -166,6 +164,7 @@ oi-manager-v2/
 pnpm install           # 安装依赖
 pnpm dev               # 启动开发环境
 pnpm build             # 构建生产版本
+pnpm docs:check        # 校验文档、路由、模型和 API 清单
 
 cd apps/server
 pnpm prisma:generate   # 生成 Prisma Client
@@ -176,29 +175,4 @@ npx prisma studio      # 打开 Prisma Studio
 
 ## 项目状态
 
-### 已完成
-- 用户认证和权限系统
-- 学校管理、教师管理、学生管理
-- 团队管理（含邀请/申请/角色管理）
-- 题单管理（飞书文档式权限）
-- 学校题单 & 团队题单
-- 团队训练模块（IOI/ICPC 赛制）
-- Carits 本地评测系统
-- 评测记录列表 + 详情页
-- 前端设计 token 系统 + 风格统一
-- SWR 请求缓存
-- PostgreSQL 迁移 + Docker 部署
-
-### 进行中
-- Rating 系统完善
-- 比赛管理功能增强
-
-### 计划中
-- 成绩中心
-- 学生成长报告
-- 家长端
-- CI/CD 配置
-
-## 许可证
-
-[MIT License](./LICENSE)
+项目仍处于开发阶段，当前使用 `3000/3002` 开发服务，尚未切换正式部署。已实现能力、验证快照和限制以 [docs/STATUS.md](./docs/STATUS.md) 为准。

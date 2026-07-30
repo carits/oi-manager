@@ -1,0 +1,310 @@
+---
+status: archived
+audience: historical
+last_verified: 2026-07-30
+source_of_truth: historical snapshot
+replacement: docs/guide/PROJECT_OVERVIEW.md
+---
+
+> 历史文档：本文件保留当时的设计、调查或实现记录，不代表当前系统行为。请以 `docs/guide/PROJECT_OVERVIEW.md` 为准。
+
+# 项目概述
+
+## 项目简介
+
+OI Manager V2 是一个面向信息学竞赛培养场景的三端成长管理平台。系统定位为"信息学竞赛训练管理平台"，不是在线判题 OJ。
+
+## 核心定位
+
+- **目标用户**: 信息学竞赛培训机构、学校、教师、学生
+- **核心功能**: 学校管理、团队管理、学生成长追踪、比赛管理、Rating 系统
+- **技术特点**: Monorepo 架构、TypeScript 全栈、Prisma ORM
+
+## 角色体系
+
+### 1. 超级管理员 (super_admin)
+- **权限**: 系统最高权限
+- **职责**:
+  - 创建和管理学校
+  - 指定学校负责人
+  - 创建平台管理员
+  - 管理所有用户账号
+  - 系统配置和维护
+
+### 2. 平台管理员 (platform_admin)
+- **权限**: 平台级管理权限
+- **职责**:
+  - 查看和管理用户账号（不含超管和平台管理员）
+  - 重置用户密码
+  - 启用/禁用用户账号
+  - 查看系统数据统计
+
+### 3. 学校负责人 (school_principal)
+- **权限**: 学校级管理权限
+- **职责**:
+  - 管理本校教师（创建、编辑、禁用、删除）
+  - 编辑学校信息
+  - 发布学校公告
+  - 转移学校负责人
+  - 同时具备教师的所有权限
+
+### 4. 教师 (teacher)
+- **权限**: 团队级管理权限
+- **职责**:
+  - 创建和管理团队
+  - 管理团队学生
+  - 创建和管理比赛
+  - 创建和管理题单
+  - 查看学生成长数据
+  - 导入比赛成绩
+
+### 5. 学生 (student)
+- **权限**: 个人数据查看权限
+- **职责**:
+  - 查看个人训练数据
+  - 查看比赛成绩
+  - 查看题单任务
+  - 下载比赛资源
+
+## 核心数据模型
+
+### 组织结构
+```
+学校 (School)
+  ├── 学校负责人 (School Principal) - 唯一
+  ├── 团队 (Team)
+  │     ├── 团队负责人 (Team Leader) - 教师
+  │     ├── 教师 (Teacher) - 成员
+  │     └── 学生 (Student) - 成员 + 主教练
+  ├── 教师 (Teacher) - 归属学校
+  └── 学生 (Student) - 归属学校和团队
+```
+
+### 关键业务对象
+
+#### School (学校)
+- 上层组织单位
+- 有唯一的学校负责人
+- 包含多个团队、教师、学生
+- 支持学制配置（6-3-3 或 5-4-3）
+
+#### Team (团队)
+- 训练单元
+- 归属学校
+- 有团队负责人（教师）
+- 包含多个教师和学生成员
+
+#### Teacher (教师)
+- 归属学校
+- 可担任团队负责人或普通成员
+- 可管理多个团队
+- 可担任学生主教练
+
+#### Student (学生)
+- 归属学校
+- 可加入多个团队
+- 绑定主教练（可选）
+- 有唯一的校内 Rating
+
+#### Contest (比赛)
+- 训练赛/模拟赛归团队
+- 正赛独立
+- 支持榜单导入
+- 可关联 Rating 计算
+
+## 技术架构
+
+### Monorepo 结构
+```
+oi-manager-v2/
+├── apps/
+│   ├── web/          # Next.js 前端应用
+│   └── server/       # Express 后端应用
+├── packages/
+│   └── shared/       # 共享类型定义
+├── docs/             # 项目文档
+└── test/             # 测试文件
+```
+
+### 技术栈
+
+#### 前端
+- **框架**: Next.js 14 (App Router)
+- **语言**: TypeScript
+- **UI**: React + 内联样式
+- **状态管理**: React Hooks
+- **路由**: Next.js App Router
+- **Markdown**: react-markdown + remark-gfm
+- **LaTeX**: remark-math + rehype-katex
+
+#### 后端
+- **框架**: Express
+- **语言**: TypeScript
+- **ORM**: Prisma
+- **数据库**: PostgreSQL（开发用 Docker，测试用 SQLite 隔离）
+- **认证**: JWT
+- **密码加密**: bcrypt
+- **部署**: PM2 cluster / Docker / Nginx
+
+#### 开发工具
+- **包管理**: pnpm
+- **构建工具**: tsx (TypeScript execution)
+- **代码规范**: TypeScript strict mode
+
+## 核心功能模块
+
+### 1. 用户管理
+- 用户注册、登录、认证
+- 角色权限控制
+- 密码重置
+- 账号启用/禁用
+- 分页查询和筛选
+
+### 2. 学校管理
+- 学校创建和编辑
+- 学校负责人指定和转移
+- 学校公告发布（支持 Markdown）
+- 学校统计数据
+- 年级分布可视化
+
+### 3. 教师管理
+- 教师创建和编辑
+- 联系方式必填验证
+- 教师启用/禁用
+- 学校负责人转移
+
+### 4. 学生管理
+- 学生创建和编辑
+- 入学年份和年级计算
+- 主教练绑定
+- Rating 管理
+- 团队关联（多对多）
+
+### 5. 团队管理
+- 团队创建和编辑
+- 团队负责人指定
+- 成员管理（教师、学生）
+- 团队统计
+
+### 6. 比赛管理
+- 比赛创建和编辑
+- 榜单导入
+- 成绩管理
+- Rating 计算
+- 资源上传
+
+### 7. Rating 系统
+- 校内唯一 Rating
+- Rating 历史记录
+- Rating 排名
+- 年级筛选
+
+## 开发规范
+
+### 代码规范
+- 使用 TypeScript strict mode
+- 避免使用 any 类型
+- 函数保持短小
+- 命名清晰，避免过度缩写
+- 关键业务逻辑添加注释
+
+### API 规范
+- RESTful 风格
+- 统一响应格式：`{ success: boolean, data?: any, message?: string }`
+- 使用 JWT 认证
+- 错误处理统一
+
+### 前端规范
+- 使用内联样式 + CSS 变量设计 token 系统
+- 设计 token 详见 `docs/DESIGN_SYSTEM.md`
+- 通用组件在 `components/ui/`，使用 `lib/tokens.ts` 和 `lib/styles.ts`
+- 组件复用优先，避免冗余代码
+- 颜色使用 `var(--xxx)` 语义变量，禁止硬编码 hex 值
+
+### 数据库规范
+- 使用 Prisma schema
+- 外键关联明确
+- 索引合理设置
+- 数据迁移记录
+
+## 项目状态
+
+### 当前版本: V1 MVP
+
+**已完成**:
+- ✅ 用户认证和权限系统
+- ✅ 学校管理完整功能
+- ✅ 教师管理完整功能
+- ✅ 学生管理完整功能
+- ✅ 团队管理完整功能（含邀请/申请/角色管理）
+- ✅ 学校负责人权限体系
+- ✅ 分页功能
+- ✅ Markdown/LaTeX 支持
+- ✅ 年级计算和分布可视化
+- ✅ 题单管理（飞书文档式权限）
+- ✅ 学校题单 & 团队题单
+- ✅ 团队训练模块（IOI/ICPC 赛制）
+- ✅ 团队比赛模块（OI 赛制）
+- ✅ Carits 本地评测系统
+- ✅ 评测记录列表 + 详情页
+- ✅ 前端设计 token 系统 + 风格统一
+- ✅ SWR 请求缓存
+- ✅ PostgreSQL 迁移 + Docker 部署
+- ✅ 代码质量优化（结构化日志、慢请求告警、asyncHandler、分页工具）
+- ✅ 大文件拆分（training/team/problem/school 路由）
+- ✅ 关键操作事务保护
+- ✅ API 输入校验（zod）
+- ✅ 前端 ErrorBoundary
+- ✅ 230+ 单元测试
+
+**进行中**:
+- 🔄 Rating 系统完善
+- 🔄 比赛管理功能增强
+
+**计划中**:
+- 📋 成绩中心
+- 📋 学生成长报告
+- 📋 家长端
+- 📋 CI/CD 配置
+
+## 部署信息
+
+### 开发环境
+- Node.js >= 18
+- pnpm >= 8
+- PostgreSQL >= 14（或 Docker）
+- Docker >= 20（可选，用于本地 PostgreSQL）
+
+### 端口配置
+- 前端: http://localhost:3000
+- 后端: http://localhost:3002
+
+### 启动命令
+```bash
+# 安装依赖
+pnpm install
+
+# 启动开发环境（前端 + 后端）
+pnpm dev
+
+# 数据库操作
+cd apps/server
+pnpm prisma:generate  # 生成 Prisma Client
+pnpm prisma:push      # 推送 schema 到数据库
+pnpm prisma:seed      # 执行种子数据
+```
+
+## 相关文档
+
+- [系统全景图](./SYSTEM_MAP.md) - 系统结构和路由
+- [运维手册](./RUNBOOK.md) - 本地开发指南
+- [认证与权限](./AUTH_AND_PERMISSION.md) - 权限体系详解
+- [业务模块索引](./MODULE_INDEX.md) - 模块代码定位
+- [已知问题](./KNOWN_ISSUES.md) - 技术债务清单
+- [交接指南](./HANDOVER.md) - 新人上手指南
+
+## 联系方式
+
+- 项目仓库: [GitHub]
+- 问题反馈: [Issues]
+- 文档更新: 2026-04-22
