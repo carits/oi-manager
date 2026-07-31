@@ -17,6 +17,22 @@ if kill -0 "$pid" 2>/dev/null; then
   fi
   process_group="$(ps -o pgid= -p "$pid" | tr -d ' ')"
   kill -TERM -- "-$process_group"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 1
+  done
+fi
+
+if kill -0 "$pid" 2>/dev/null; then
+  current_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+  current_group="$(ps -o pgid= -p "$pid" | tr -d ' ')"
+  if [ "$current_cwd" != "$ROOT_DIR" ] || [ "$current_group" != "$process_group" ]; then
+    echo "Refusing to force-stop canary PID $pid because its ownership changed." >&2
+    exit 1
+  fi
+
+  echo "Canary did not stop after SIGTERM; force-stopping managed process group $process_group."
+  kill -KILL -- "-$process_group"
   for _ in 1 2 3 4 5; do
     kill -0 "$pid" 2>/dev/null || break
     sleep 1
@@ -24,7 +40,7 @@ if kill -0 "$pid" 2>/dev/null; then
 fi
 
 if kill -0 "$pid" 2>/dev/null; then
-  echo "Canary PID $pid did not stop cleanly; inspect it before taking action." >&2
+  echo "Managed canary PID $pid is still present after forced shutdown." >&2
   exit 1
 fi
 
