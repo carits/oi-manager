@@ -93,7 +93,7 @@ pnpm dev
 
 根命令会先构建 `packages/shared`，确认 `3001/3002` 没有未知进程，再并行启动
 Web HMR、Server 和 Judge。它不会清理或占用公网预览的 `3000`；发现端口冲突时会报告 PID
-并退出。后台管理开发进程使用 `pnpm restart`，该命令只停止仓库自己记录的进程组。
+并退出。后台管理开发进程使用 `pnpm run restart`，该命令只停止仓库自己记录的进程组。
 
 访问：
 
@@ -102,7 +102,7 @@ Web HMR、Server 和 Judge。它不会清理或占用公网预览的 `3000`；�
 - API 健康检查：`http://localhost:3002/api/health`
 - go-judge：`http://localhost:5050`
 
-停止开发服务使用 `pnpm stop`；重启使用 `pnpm restart`。
+停止开发服务使用 `pnpm stop`；重启使用 `pnpm run restart`。
 
 ## 5. 首次验证
 

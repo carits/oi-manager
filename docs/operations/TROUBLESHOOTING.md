@@ -29,7 +29,7 @@ API 失败时，检查 Next `BACKEND_URL` 和 Server CORS。
 
 ## 端口被占用
 
-使用 [运行手册](RUNBOOK.md) 的端口命令找到监听 PID。优先执行 `pnpm restart`，
+使用 [运行手册](RUNBOOK.md) 的端口命令找到监听 PID。优先执行 `pnpm run restart`，
 不要连续启动多个后台命令。确认端口释放后再启动。
 
 ## 数据库错误

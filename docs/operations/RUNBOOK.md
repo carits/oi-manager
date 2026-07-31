@@ -30,7 +30,7 @@ curl -I http://127.0.0.1:3000/login
 
 ```bash
 cd /data/oi-manager
-pnpm restart
+pnpm run restart
 pnpm preview:build
 pnpm preview:start
 pnpm preview:health
@@ -74,7 +74,7 @@ pstree -ap <PID>
 ```
 
 不要重复运行多个 `nohup pnpm dev`。旧的 `pnpm kill-ports` 已删除；统一使用
-`pnpm restart` 与 `pnpm preview:start/stop`，并在启动后检查监听 PID、健康接口和日志。
+`pnpm run restart` 与 `pnpm preview:start/stop`，并在启动后检查监听 PID、健康接口和日志。
 
 ## 日志
 

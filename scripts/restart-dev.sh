@@ -56,6 +56,23 @@ if ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 
+api_ready=false
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  if curl --fail --silent --show-error http://127.0.0.1:3002/api/health >/dev/null 2>&1; then
+    api_ready=true
+    break
+  fi
+  if ! kill -0 "$pid" 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+
+if [ "$api_ready" != "true" ]; then
+  echo "Development API did not become healthy within 20 seconds. See $LOG_FILE" >&2
+  exit 1
+fi
+
 echo "Development services started with PID $pid."
 echo "HMR: http://127.0.0.1:3001"
 echo "API: http://127.0.0.1:3002"

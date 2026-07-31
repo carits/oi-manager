@@ -16,7 +16,7 @@ source_of_truth: package.json and workspace package manifests
 | `pnpm preview:build` | 生成供公网检查的优化 Web 构建 |
 | `pnpm preview:start` | 由独立 PID 启动 `3000` 优化预览 |
 | `pnpm preview:health` | 检查优化预览健康状态 |
-| `pnpm restart` | 重启开发服务 |
+| `pnpm run restart` | 重启开发服务 |
 | `pnpm stop` | 停止开发服务 |
 | `pnpm build` | 构建 Shared、生成 Prisma Client，再构建 Server、Web、Judge |
 | `pnpm test` | 依次运行 Server、Web、Judge Vitest |
