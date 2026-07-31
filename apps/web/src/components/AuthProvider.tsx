@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react'
 import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName, setStudentMode, setLastStudentMode } from '@/lib/auth'
-import { ENV } from '@/config/env'
+import apiClient from '@/lib/apiClient'
 
 interface AuthUser {
   userId: string
@@ -29,6 +29,7 @@ interface LoginResult {
 interface AuthContextType {
   user: AuthUser | null
   loading: boolean
+  authError: string | null
   login: (username: string, password: string, role: string, mode?: 'campus' | 'personal') => Promise<LoginResult>
   logout: () => void
   refreshUser: () => Promise<void>
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 服务端和客户端第一次渲染必须一致，登录状态统一在挂载后验证。
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   // 基于登录身份生成 sessionKey，用于数据隔离
   const sessionKey = useMemo(() => {
@@ -52,49 +54,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async () => {
     const token = getToken()
-    if (!token) return null
-
-    try {
-      const res = await fetch(`${ENV.API_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-
-      if (data.success) {
-        const userData = {
-          userId: data.data.userId,
-          username: data.data.username,
-          role: data.data.role,
-          avatar: data.data.avatar,
-          phone: data.data.phone,
-          email: data.data.email,
-          bio: data.data.bio,
-          profile: data.data.profile,
-          schoolId: data.data.schoolId,
-          schoolName: data.data.schoolName,
-          studentMode: data.data.studentMode
-        }
-        setUser(userData)
-        setSchoolId(data.data.schoolId || null)
-        setSchoolName(data.data.schoolName || null)
-        setStudentMode(data.data.studentMode || null)
-        if (data.data.studentMode) {
-          setLastStudentMode(data.data.studentMode)
-        }
-        return userData
-      } else {
-        // 只有在 401/403 等认证失败时才清除认证状态
-        // 其他错误（如服务器错误）保留认证状态，让用户可以重试
-        if (res.status === 401 || res.status === 403) {
-          clearAuth()
-        }
-        return null
-      }
-    } catch {
-      // 网络错误时不清除认证状态，保留 localStorage 中的 token
-      // 用户可能是网络波动，刷新后可以恢复
+    if (!token) {
+      setAuthError(null)
       return null
     }
+
+    setAuthError(null)
+    const res = await apiClient.get<AuthUser>('/api/auth/me')
+
+    if (res.success && res.data) {
+      const userData = {
+        userId: res.data.userId,
+        username: res.data.username,
+        role: res.data.role,
+        avatar: res.data.avatar,
+        phone: res.data.phone,
+        email: res.data.email,
+        bio: res.data.bio,
+        profile: res.data.profile,
+        schoolId: res.data.schoolId,
+        schoolName: res.data.schoolName,
+        studentMode: res.data.studentMode
+      }
+      setUser(userData)
+      setSchoolId(res.data.schoolId || null)
+      setSchoolName(res.data.schoolName || null)
+      setStudentMode(res.data.studentMode || null)
+      if (res.data.studentMode) {
+        setLastStudentMode(res.data.studentMode)
+      }
+      return userData
+    }
+
+    // 只有认证失效时才清除本地状态；网络波动和服务端错误允许重试。
+    if (res.status === 401 || res.status === 403) {
+      clearAuth()
+      setUser(null)
+      return null
+    }
+
+    setAuthError(res.message || '登录状态验证失败，请重新加载')
+    return null
   }
 
   useEffect(() => {
@@ -110,32 +110,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = async (username: string, password: string, role: string, mode?: 'campus' | 'personal'): Promise<LoginResult> => {
-    try {
-      const res = await fetch(`${ENV.API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role, mode })
-      })
+    const res = await apiClient.post<{
+      token: string
+      userId: string
+      role: string
+      username: string
+      avatar?: string | null
+      schoolId?: string
+      studentMode?: 'campus' | 'personal'
+    }>('/api/auth/login', { username, password, role, mode })
 
-      const data = await res.json()
-
-      if (data.success) {
-        const { token, userId, role: userRole, username: userName, avatar, schoolId, studentMode } = data.data
-        setToken(token)
-        setRole(userRole)
-        setUserId(userId)
-        setSchoolId(schoolId || null)
-        setStudentMode(studentMode || null)
-        if (studentMode) {
-          setLastStudentMode(studentMode)
-        }
-        setUser({ userId, username: userName, role: userRole, avatar, schoolId, studentMode: studentMode || undefined })
-        return { success: true }
+    if (res.success && res.data) {
+      const { token, userId, role: userRole, username: userName, avatar, schoolId, studentMode } = res.data
+      setToken(token)
+      setRole(userRole)
+      setUserId(userId)
+      setSchoolId(schoolId || null)
+      setStudentMode(studentMode || null)
+      if (studentMode) {
+        setLastStudentMode(studentMode)
       }
-      return { success: false, message: data.message }
-    } catch (error) {
-      return { success: false, message: '网络错误，请稍后重试' }
+      setAuthError(null)
+      setUser({ userId, username: userName, role: userRole, avatar, schoolId, studentMode: studentMode || undefined })
+      return { success: true }
     }
+    return { success: false, message: res.message || '登录失败，请稍后重试' }
   }
 
   const logout = () => {
@@ -148,30 +147,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = getToken()
     if (!token) return
 
-    try {
-      const res = await fetch(`${ENV.API_URL}/api/auth/switch-mode`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ mode })
-      })
-      const data = await res.json()
+    const res = await apiClient.post<{ token: string; studentMode: 'campus' | 'personal' }>(
+      '/api/auth/switch-mode',
+      { mode }
+    )
 
-      if (data.success) {
-        setToken(data.data.token)
-        setStudentMode(data.data.studentMode)
-        setLastStudentMode(data.data.studentMode)
-        setUser(prev => prev ? { ...prev, studentMode: data.data.studentMode } : null)
-      }
-    } catch {
-      // 网络错误，不做任何变更
+    if (res.success && res.data) {
+      setToken(res.data.token)
+      setStudentMode(res.data.studentMode)
+      setLastStudentMode(res.data.studentMode)
+      setUser(prev => prev ? { ...prev, studentMode: res.data!.studentMode } : null)
     }
   }
 
   const refreshUser = async () => {
-    await fetchUserData()
+    setLoading(true)
+    try {
+      await fetchUserData()
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -179,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
+        authError,
         login,
         logout,
         refreshUser,

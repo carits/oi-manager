@@ -1,5 +1,7 @@
 'use client'
 
+import { Loading } from '@/components/Loading'
+import { LoadError } from '@/components/ui/LoadError'
 import type { TrainingProblem, Attachment } from '../types'
 
 function toExcelColumnName(index: number): string {
@@ -21,10 +23,23 @@ function formatFileSize(bytes: number): string {
 interface TrainingAttachmentPanelProps {
   problems: TrainingProblem[]
   allAttachments: Record<string, Attachment[]>
+  loading: boolean
+  error: string | null
+  onRetry: () => void
   onDownload: (attachment: Attachment) => void
 }
 
-export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }: TrainingAttachmentPanelProps) {
+export function TrainingAttachmentPanel({
+  problems,
+  allAttachments,
+  loading,
+  error,
+  onRetry,
+  onDownload,
+}: TrainingAttachmentPanelProps) {
+  if (loading) return <Loading tip="正在加载附件..." />
+  if (error) return <LoadError message={error} onRetry={onRetry} />
+
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>
       {problems.map(p => {
@@ -51,7 +66,7 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
           </div>
         )
       })}
-      {Object.keys(allAttachments).length === 0 && (
+      {problems.every(problem => (allAttachments[problem.id] || []).length === 0) && (
         <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无附件</div>
       )}
     </div>

@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from './AuthProvider'
 import { AppShell } from './AppShell'
 import { getRoleHome } from '@/lib/roleAccess'
+import { Loading } from './Loading'
+import { LoadError } from './ui/LoadError'
 
 interface RoleLayoutProps {
   children: ReactNode
@@ -24,11 +26,11 @@ export function RoleLayout({
 }: RoleLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, authError, refreshUser } = useAuth()
   const allowed = Boolean(user && allowedRoles.includes(user.role))
 
   useEffect(() => {
-    if (loading) return
+    if (loading || authError) return
     if (!user) {
       router.replace(`/login?role=${loginRole}`)
       return
@@ -36,7 +38,7 @@ export function RoleLayout({
     if (!allowed) {
       router.replace(getRoleHome(user.role))
     }
-  }, [allowed, loading, loginRole, router, user])
+  }, [allowed, authError, loading, loginRole, router, user])
 
   if (loading) {
     return (
@@ -49,7 +51,15 @@ export function RoleLayout({
           background: 'var(--gray-50)',
         }}
       >
-        加载中...
+        <Loading tip="正在验证登录状态..." />
+      </div>
+    )
+  }
+
+  if (authError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--gray-50)' }}>
+        <LoadError message={authError} onRetry={refreshUser} />
       </div>
     )
   }

@@ -4,6 +4,8 @@ import { ReactNode, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './AuthProvider'
 import { getRoleHome, roleHasAccess } from '@/lib/roleAccess'
+import { Loading } from './Loading'
+import { LoadError } from './ui/LoadError'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -11,14 +13,14 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { user, loading, isAuthenticated, sessionKey } = useAuth()
+  const { user, loading, authError, refreshUser, isAuthenticated, sessionKey } = useAuth()
   const router = useRouter()
 
   // 权限检查
   const hasAccess = roleHasAccess(user?.role, requiredRole)
 
   useEffect(() => {
-    if (loading) return
+    if (loading || authError) return
     if (!isAuthenticated) {
       router.replace('/login')
       return
@@ -26,7 +28,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     if (!hasAccess) {
       router.replace(getRoleHome(user?.role))
     }
-  }, [hasAccess, isAuthenticated, loading, router, user?.role])
+  }, [authError, hasAccess, isAuthenticated, loading, router, user?.role])
 
   if (loading) {
     return (
@@ -36,9 +38,13 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
         alignItems: 'center',
         justifyContent: 'center'
       }}>
-        <p>加载中...</p>
+        <Loading tip="正在验证登录状态..." />
       </div>
     )
+  }
+
+  if (authError) {
+    return <LoadError message={authError} onRetry={refreshUser} />
   }
 
   if (!isAuthenticated) {

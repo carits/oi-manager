@@ -1,6 +1,8 @@
 'use client'
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { Loading } from '@/components/Loading'
+import { LoadError } from '@/components/ui/LoadError'
 import type { TrainingInfo, TrainingProblem } from '../types'
 
 function toExcelColumnName(index: number): string {
@@ -25,11 +27,24 @@ interface TrainingSolutionPanelProps {
   training: TrainingInfo
   problems: TrainingProblem[]
   allSolutions: Record<string, SolutionData>
+  loading: boolean
+  error: string | null
+  onRetry: () => void
 }
 
-export function TrainingSolutionPanel({ training, problems, allSolutions }: TrainingSolutionPanelProps) {
+export function TrainingSolutionPanel({
+  training,
+  problems,
+  allSolutions,
+  loading,
+  error,
+  onRetry,
+}: TrainingSolutionPanelProps) {
   const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
   const hideSolution = !training.solutionVisible && !trainingFinished && !training.isAdmin
+
+  if (loading) return <Loading tip="正在加载题解..." />
+  if (error) return <LoadError message={error} onRetry={onRetry} />
 
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>

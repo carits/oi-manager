@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { Modal } from '@/components/ui/Modal'
@@ -24,6 +24,8 @@ import { TrainingRankTable } from './components/TrainingRankTable'
 import { TrainingSubmissionPanel } from './components/TrainingSubmissionPanel'
 import { TrainingSolutionPanel } from './components/TrainingSolutionPanel'
 import { TrainingAttachmentPanel } from './components/TrainingAttachmentPanel'
+import { Loading } from '@/components/Loading'
+import { LoadError } from '@/components/ui/LoadError'
 
 interface TrainingDetailPageProps {
   basePath: string
@@ -56,11 +58,17 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     recordContent, setRecordContent, recordSaving,
     recordLastSaved,
     recordEditMode, setRecordEditMode,
-    problemListData, loadProblemListData, clearProblemListData,
+    problemListData, problemListLoading, problemListError,
+    loadProblemListData, clearProblemListData,
     saveNoteNow, saveRecordNow,
   } = useTrainingDetail(trainingId)
 
-  const { rankingData } = useTrainingRank(trainingId, activeTab)
+  const {
+    rankingData,
+    rankingLoading,
+    rankingError,
+    refreshRanking,
+  } = useTrainingRank(trainingId, activeTab)
 
   const sub = useTrainingSubmissions(trainingId, activeTab)
 
@@ -75,6 +83,10 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     solutionType?: string; solutionPdfUrl?: string
   }>>({})
   const [allAttachments, setAllAttachments] = useState<Record<string, Attachment[]>>({})
+  const [solutionsLoading, setSolutionsLoading] = useState(false)
+  const [solutionsError, setSolutionsError] = useState<string | null>(null)
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
+  const [attachmentsError, setAttachmentsError] = useState<string | null>(null)
 
   const isUpcoming = training?.status === 'upcoming'
   const hideContent = isUpcoming && !training.isAdmin
@@ -89,59 +101,86 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     loadProblemListData()
   }, [activeTab, trainingId, loadProblemListData, clearProblemListData])
 
-  // Load all solutions when tab changes
+  const loadAllSolutions = useCallback(async () => {
+    setSolutionsLoading(true)
+    setSolutionsError(null)
+    const solutions: Record<string, {
+      content: string
+      visible: boolean
+      source?: 'training' | 'problem'
+      solutionType?: string
+      solutionPdfUrl?: string
+    }> = {}
+    let firstError: string | null = null
+
+    await Promise.all(problems.map(async (problem) => {
+      const res = await apiClient.get<{
+        id: string | null
+        content: string
+        visible: boolean
+        source?: 'training' | 'problem'
+        solutionType?: string
+        solutionPdfUrl?: string
+      } | null>(`/api/trainings/${trainingId}/problems/${problem.id}/solution`)
+
+      if (!res.success) {
+        firstError ||= res.message || '加载题解失败'
+        return
+      }
+
+      solutions[problem.id] = {
+        content: res.data?.content || '',
+        visible: res.data?.visible ?? false,
+        source: res.data?.source,
+        solutionType: res.data?.solutionType,
+        solutionPdfUrl: res.data?.solutionPdfUrl,
+      }
+    }))
+
+    setAllSolutions(solutions)
+    setSolutionsError(firstError)
+    setSolutionsLoading(false)
+  }, [problems, trainingId])
+
   useEffect(() => {
     if (activeTab !== 'solutions') {
-      setAllSolutions({})
+      setSolutionsLoading(false)
+      setSolutionsError(null)
       return
-    }
-    if (problems.length === 0) return
-    const loadAllSolutions = async () => {
-      const solutions: Record<string, { content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string }> = {}
-      await Promise.all(problems.map(async (p) => {
-        try {
-          const res = await apiClient.get<{ id: string | null; content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string } | null>(`/api/trainings/${trainingId}/problems/${p.id}/solution`)
-          if (res.success && res.data) {
-            solutions[p.id] = {
-              content: res.data.content || '',
-              visible: res.data.visible ?? false,
-              source: res.data.source,
-              solutionType: res.data.solutionType,
-              solutionPdfUrl: res.data.solutionPdfUrl,
-            }
-          }
-        } catch (error) {
-          console.error('Failed to load solution for', p.id, error)
-        }
-      }))
-      setAllSolutions(solutions)
     }
     loadAllSolutions()
-  }, [activeTab, trainingId, problems])
+  }, [activeTab, loadAllSolutions])
 
-  // Load all attachments when tab changes
+  const loadAllAttachments = useCallback(async () => {
+    setAttachmentsLoading(true)
+    setAttachmentsError(null)
+    const attachments: Record<string, Attachment[]> = {}
+    let firstError: string | null = null
+
+    await Promise.all(problems.map(async (problem) => {
+      const res = await apiClient.get<Attachment[]>(
+        `/api/trainings/${trainingId}/problems/${problem.id}/attachments`
+      )
+      if (!res.success) {
+        firstError ||= res.message || '加载附件失败'
+        return
+      }
+      attachments[problem.id] = res.data || []
+    }))
+
+    setAllAttachments(attachments)
+    setAttachmentsError(firstError)
+    setAttachmentsLoading(false)
+  }, [problems, trainingId])
+
   useEffect(() => {
     if (activeTab !== 'attachments') {
-      setAllAttachments({})
+      setAttachmentsLoading(false)
+      setAttachmentsError(null)
       return
     }
-    if (problems.length === 0) return
-    const loadAllAttachments = async () => {
-      const attachments: Record<string, Attachment[]> = {}
-      await Promise.all(problems.map(async (p) => {
-        try {
-          const res = await apiClient.get<Attachment[]>(`/api/trainings/${trainingId}/problems/${p.id}/attachments`)
-          if (res.success && res.data) {
-            attachments[p.id] = res.data
-          }
-        } catch (error) {
-          console.error('Failed to load attachments for', p.id, error)
-        }
-      }))
-      setAllAttachments(attachments)
-    }
     loadAllAttachments()
-  }, [activeTab, trainingId, problems])
+  }, [activeTab, loadAllAttachments])
 
   // Countdown timer + status boundary detection
   useEffect(() => {
@@ -213,21 +252,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   // ========== Loading / Error ==========
 
   if (loading) {
-    return <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>加载中...</div>
+    return <Loading tip="正在加载活动..." />
   }
 
   if (error || !training) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-        <div style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error || '内容不存在'}</div>
-        <button
-          onClick={() => router.push(backUrl)}
-          style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-        >
-          返回
-        </button>
-      </div>
-    )
+    return <LoadError message={error || '内容不存在'} onRetry={refresh} />
   }
 
   // ========== Derived ==========
@@ -372,6 +401,9 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             problemListData={problemListData}
             training={training}
             basePath={basePath}
+            loading={problemListLoading}
+            error={problemListError}
+            onRetry={loadProblemListData}
             onSelectProblem={(id) => setSelectedProblemId(id)}
             onSwitchToProblemsTab={() => setActiveTab('problems')}
           />
@@ -413,6 +445,9 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             training={training}
             problems={problems}
             submissions={sub.submissions}
+            loading={sub.submissionsLoading}
+            error={sub.submissionsError}
+            onRetry={() => sub.refreshSubmissions()}
             submissionsPage={sub.submissionsPage}
             submissionsTotal={sub.submissionsTotal}
             filterProblemId={sub.filterProblemId}
@@ -435,6 +470,9 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             training={training}
             problems={problems}
             allSolutions={allSolutions}
+            loading={solutionsLoading}
+            error={solutionsError}
+            onRetry={loadAllSolutions}
           />
         )}
 
@@ -442,15 +480,21 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
           <TrainingAttachmentPanel
             problems={problems}
             allAttachments={allAttachments}
+            loading={attachmentsLoading}
+            error={attachmentsError}
+            onRetry={loadAllAttachments}
             onDownload={actions.handleDownloadAttachment}
           />
         )}
 
         {activeTab === 'ranking' && (
-          <TrainingRankTable rankingData={rankingData} currentUserId={user?.userId} />
-        )}
-        {activeTab === 'ranking' && !rankingData && (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}>加载中...</div>
+          <TrainingRankTable
+            rankingData={rankingData}
+            loading={rankingLoading}
+            error={rankingError}
+            onRetry={refreshRanking}
+            currentUserId={user?.userId}
+          />
         )}
         </>
         )}

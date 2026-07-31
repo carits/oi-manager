@@ -1,7 +1,10 @@
 'use client'
 
 import { Button } from '@/components/ui/Button'
+import { Loading } from '@/components/Loading'
+import { LoadError } from '@/components/ui/LoadError'
 import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
+import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import type { TrainingInfo, TrainingProblem, SubmissionRow } from '../types'
 
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -51,8 +54,6 @@ function getResultBadge(result: string | null, hidden?: boolean, displayResult?:
   )
 }
 
-import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
-
 function getOjLabel(oj: string): string {
   if (oj === 'carits') return 'Carits平台'
   return OJ_PLATFORM_LABEL_MAP[oj] || oj
@@ -72,6 +73,9 @@ interface TrainingSubmissionPanelProps {
   training: TrainingInfo
   problems: TrainingProblem[]
   submissions: SubmissionRow[]
+  loading: boolean
+  error: string | null
+  onRetry: () => void
   submissionsPage: number
   submissionsTotal: number
   filterProblemId: string
@@ -92,6 +96,9 @@ export function TrainingSubmissionPanel({
   training,
   problems,
   submissions,
+  loading,
+  error,
+  onRetry,
   submissionsPage,
   submissionsTotal,
   filterProblemId,
@@ -188,6 +195,12 @@ export function TrainingSubmissionPanel({
           重置
         </button>
       </div>
+      {loading ? (
+        <Loading tip="正在加载评测记录..." />
+      ) : error ? (
+        <LoadError message={error} onRetry={onRetry} />
+      ) : (
+      <>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
         <thead>
           <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
@@ -268,6 +281,8 @@ export function TrainingSubmissionPanel({
           </span>
           <Button variant="secondary" disabled={submissionsPage >= Math.ceil(submissionsTotal / 50)} onClick={() => setSubmissionsPage(p => p + 1)}>下一页</Button>
         </div>
+      )}
+      </>
       )}
     </div>
   )

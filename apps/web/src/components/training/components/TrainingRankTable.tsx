@@ -1,5 +1,8 @@
 'use client'
 
+import { Loading } from '@/components/Loading'
+import { LoadError } from '@/components/ui/LoadError'
+
 function toExcelColumnName(index: number): string {
   let result = ''
   let i = index
@@ -21,13 +24,22 @@ const RANK_MEDAL_COLORS = ['#ffd700', '#c0c0c0', '#cd7f32']
 
 interface TrainingRankTableProps {
   rankingData: any
+  loading: boolean
+  error: string | null
+  onRetry: () => void
   currentUserId?: string
 }
 
-export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTableProps) {
-  if (!rankingData) {
-    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}>加载中...</div>
-  }
+export function TrainingRankTable({
+  rankingData,
+  loading,
+  error,
+  onRetry,
+  currentUserId,
+}: TrainingRankTableProps) {
+  if (loading) return <Loading tip="正在加载排名..." />
+  if (error) return <LoadError message={error} onRetry={onRetry} />
+  if (!rankingData) return null
 
   if (rankingData.hidden) {
     return (

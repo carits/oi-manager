@@ -3,25 +3,38 @@ import apiClient from '@/lib/apiClient'
 
 export function useTrainingRank(trainingId: string, activeTab: string) {
   const [rankingData, setRankingData] = useState<any>(null)
+  const [rankingLoading, setRankingLoading] = useState(false)
+  const [rankingError, setRankingError] = useState<string | null>(null)
 
   const refreshRanking = useCallback(async () => {
-    try {
-      const res = await apiClient.get<any>(`/api/trainings/${trainingId}/ranking`)
-      if (res.success && res.data) {
-        setRankingData(res.data)
-      }
-    } catch (error) {
-      console.error('Failed to load ranking:', error)
+    setRankingLoading(true)
+    setRankingError(null)
+    const res = await apiClient.get<any>(`/api/trainings/${trainingId}/ranking`)
+    if (res.success && res.data) {
+      setRankingData(res.data)
+    } else {
+      setRankingError(res.message || '加载排名失败')
     }
+    setRankingLoading(false)
   }, [trainingId])
 
   useEffect(() => {
     if (activeTab !== 'ranking') {
-      setRankingData(null)
+      setRankingLoading(false)
+      setRankingError(null)
       return
     }
     refreshRanking()
-  }, [activeTab, trainingId, refreshRanking])
+  }, [activeTab, refreshRanking])
 
-  return { rankingData, refreshRanking }
+  useEffect(() => {
+    setRankingData(null)
+  }, [trainingId])
+
+  return {
+    rankingData,
+    rankingLoading,
+    rankingError,
+    refreshRanking,
+  }
 }

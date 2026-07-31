@@ -73,6 +73,26 @@ test.describe('core role workflows @smoke', () => {
     await expect(page.locator('body')).toContainText('E2E Training Team')
     await page.goto(`/student/homeworks/${ids.homework}`)
     await expect(page.locator('body')).toContainText('E2E Active Homework')
+
+    let failRankingOnce = true
+    await page.route(`**/api/trainings/${ids.homework}/ranking`, async route => {
+      if (failRankingOnce) {
+        failRankingOnce = false
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: false, message: '排名加载失败（E2E）' }),
+        })
+        return
+      }
+      await route.continue()
+    })
+    await page.getByRole('button', { name: '排名' }).click()
+    await expect(page.getByRole('alert').filter({ hasText: '排名加载失败（E2E）' })).toBeVisible()
+    await expect(page.getByText('正在加载排名...')).toHaveCount(0)
+    await page.getByRole('button', { name: '重新加载' }).click()
+    await expect(page.getByRole('table')).toBeVisible()
+
     await page.goto(`/student/submissions/${ids.submission}`)
     await expect(page.locator('body')).toContainText(/accepted|通过/i)
 

@@ -1,6 +1,8 @@
 'use client'
 
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { Loading } from '@/components/Loading'
+import { LoadError } from '@/components/ui/LoadError'
 import type { TrainingInfo, ProblemListEntry } from '../types'
 
 const RESULT_SHORT_MAP: Record<string, string> = {
@@ -33,6 +35,9 @@ interface TrainingProblemListProps {
   problemListData: ProblemListEntry[]
   training: TrainingInfo
   basePath: string
+  loading: boolean
+  error: string | null
+  onRetry: () => void
   onSelectProblem: (id: string) => void
   onSwitchToProblemsTab: () => void
 }
@@ -41,6 +46,9 @@ export function TrainingProblemList({
   problemListData,
   training,
   basePath,
+  loading,
+  error,
+  onRetry,
   onSelectProblem,
   onSwitchToProblemsTab,
 }: TrainingProblemListProps) {
@@ -51,6 +59,9 @@ export function TrainingProblemList({
   const hideOiResults = training.format === 'oi' && !training.isAdmin && !runtimeFinished
 
   const hideSourceColumn = !training.problemIdVisible && !runtimeFinished && !training.isAdmin
+
+  if (loading) return <Loading tip="正在加载题目状态..." />
+  if (error) return <LoadError message={error} onRetry={onRetry} />
 
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>

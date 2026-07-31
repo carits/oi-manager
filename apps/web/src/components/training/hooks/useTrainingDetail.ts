@@ -15,6 +15,8 @@ export function useTrainingDetail(trainingId: string) {
   const [noteEditMode, setNoteEditMode] = useState<'edit' | 'preview' | 'split'>('split')
   const [editModeActive, setEditModeActive] = useState(false)
   const [problemListData, setProblemListData] = useState<ProblemListEntry[]>([])
+  const [problemListLoading, setProblemListLoading] = useState(false)
+  const [problemListError, setProblemListError] = useState<string | null>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastNoteProblemIdRef = useRef<string | null>(null)
   const lastNoteContentRef = useRef('')
@@ -30,16 +32,14 @@ export function useTrainingDetail(trainingId: string) {
 
   // Load training
   const loadTraining = useCallback(async () => {
-    try {
-      const res = await apiClient.get<TrainingInfo>(`/api/trainings/${trainingId}`)
-      if (res.success && res.data) {
-        setTraining(res.data)
-      } else {
-        setError(res.message || '加载训练失败')
-        setLoading(false)
-      }
-    } catch {
-      setError('网络错误，请稍后重试')
+    setLoading(true)
+    setError(null)
+    const res = await apiClient.get<TrainingInfo>(`/api/trainings/${trainingId}`)
+    if (res.success && res.data) {
+      setTraining(res.data)
+    } else {
+      setTraining(null)
+      setError(res.message || '加载训练失败')
       setLoading(false)
     }
   }, [trainingId])
@@ -54,18 +54,19 @@ export function useTrainingDetail(trainingId: string) {
         const res = await apiClient.get<TrainingProblem[]>(`/api/trainings/${trainingId}/problems`)
         if (res.success && res.data) {
           setProblems(res.data)
-          if (res.data.length > 0 && !selectedProblemId) {
-            setSelectedProblemId(res.data[0].id)
+          if (res.data.length > 0) {
+            setSelectedProblemId(current => current || res.data![0].id)
           }
+        } else {
+          setProblems([])
+          setError(res.message || '加载题目列表失败')
         }
-      } catch (error) {
-        console.error('Failed to load problems:', error)
       } finally {
         setLoading(false)
       }
     }
     loadProblems()
-  }, [training])
+  }, [training, trainingId])
 
   // Load problem detail + note
   useEffect(() => {
@@ -172,17 +173,22 @@ export function useTrainingDetail(trainingId: string) {
 
   // Load problem list (called externally when tab changes)
   const loadProblemListData = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ problems: ProblemListEntry[] }>(`/api/trainings/${trainingId}/problem-status`)
-      if (res.success && res.data) {
-        setProblemListData(res.data.problems)
-      }
-    } catch (error) {
-      console.error('Failed to load problem list:', error)
+    setProblemListLoading(true)
+    setProblemListError(null)
+    const res = await apiClient.get<{ problems: ProblemListEntry[] }>(`/api/trainings/${trainingId}/problem-status`)
+    if (res.success && res.data) {
+      setProblemListData(res.data.problems)
+    } else {
+      setProblemListError(res.message || '加载题目状态失败')
     }
+    setProblemListLoading(false)
   }, [trainingId])
 
-  const clearProblemListData = useCallback(() => setProblemListData([]), [])
+  const clearProblemListData = useCallback(() => {
+    setProblemListData([])
+    setProblemListLoading(false)
+    setProblemListError(null)
+  }, [])
 
   // Manual save note (immediately save without waiting for debounce)
   const saveNoteNow = useCallback(async () => {
@@ -235,7 +241,8 @@ export function useTrainingDetail(trainingId: string) {
     recordContent, setRecordContent,
     recordSaving, recordLastSaved,
     recordEditMode, setRecordEditMode,
-    problemListData, loadProblemListData, clearProblemListData,
+    problemListData, problemListLoading, problemListError,
+    loadProblemListData, clearProblemListData,
     saveNoteNow, saveRecordNow,
     refresh: loadTraining,
   }
