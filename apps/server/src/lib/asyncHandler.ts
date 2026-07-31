@@ -27,15 +27,17 @@ type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise
 export function asyncHandler(fn: AsyncHandler, errorMessage = '服务器错误') {
   return (req: Request, res: Response, next: NextFunction): void => {
     fn(req, res, next).catch((e: any) => {
+      if (e?.message === 'TEAM_SCOPE_MISMATCH') {
+        if (!res.headersSent) {
+          res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
+        }
+        return
+      }
       logger.error('unhandled_error', e, {
         action: req.path,
         metadata: { method: req.method, error: e.message }
       })
       if (!res.headersSent) {
-        if (e?.message === 'TEAM_SCOPE_MISMATCH') {
-          res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
-          return
-        }
         res.status(500).json({ success: false, message: errorMessage })
       }
     })
