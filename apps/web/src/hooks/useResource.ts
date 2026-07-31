@@ -27,23 +27,28 @@ export function useResource<T>(
   const cacheKey = enabledKey
     ? [enabledKey, options.sessionKey || 'anonymous'] as const
     : null
-  const requestController = useRef<AbortController | null>(null)
+  const activeRequest = useRef<{
+    key: string
+    controller: AbortController
+  } | null>(null)
   const fetchResource = useCallback(async ([endpoint]: readonly [string, string]) => {
-    requestController.current?.abort()
+    activeRequest.current?.controller.abort()
     const controller = new AbortController()
-    requestController.current = controller
+    activeRequest.current = { key: endpoint, controller }
 
     try {
       return await apiClient.query<T>(endpoint, { signal: controller.signal })
     } finally {
-      if (requestController.current === controller) {
-        requestController.current = null
+      if (activeRequest.current?.controller === controller) {
+        activeRequest.current = null
       }
     }
   }, [])
 
   useEffect(() => () => {
-    requestController.current?.abort()
+    if (enabledKey && activeRequest.current?.key === enabledKey) {
+      activeRequest.current.controller.abort()
+    }
   }, [enabledKey])
 
   const result = useSWR<T, ApiError>(
