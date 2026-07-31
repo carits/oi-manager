@@ -12,6 +12,7 @@ export interface FixtureIds {
   }
   school: string
   team: string
+  personalTeam: string
   problem: string
   personalProblem: string
   problemList: string
