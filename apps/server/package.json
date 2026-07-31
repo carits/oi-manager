@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "prebuild": "pnpm --filter @oi-manager/shared build",
+    "prebuild": "pnpm --filter @oi-manager/shared build && prisma generate",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",

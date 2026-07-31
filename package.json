@@ -4,8 +4,8 @@
   "private": true,
   "description": "信息学竞赛三端成长管理平台",
   "scripts": {
-    "dev": "pnpm --filter @oi-manager/shared build && bash scripts/check-ports.sh 3001 3002 && pnpm --parallel -r dev",
-    "dev:dirty": "bash scripts/check-ports.sh 3001 3002 && pnpm --parallel -r dev",
+    "dev": "pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate && bash scripts/check-ports.sh 3001 3002 && pnpm --parallel -r dev",
+    "dev:dirty": "pnpm --filter server prisma:generate && bash scripts/check-ports.sh 3001 3002 && pnpm --parallel -r dev",
     "dev:hmr": "pnpm --filter web dev:hmr",
     "preview:build": "bash scripts/build-preview.sh",
     "preview:start": "bash scripts/start-preview.sh",
