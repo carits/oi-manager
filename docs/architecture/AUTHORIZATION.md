@@ -85,5 +85,7 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 挂载。它不是数据库字段、访问令牌或后端隔离机制。真正隔离由 JWT、权限中间件和
 资源查询条件完成。
 
-Token 当前保存在 `localStorage`。这是开发阶段现状，不代表最终生产安全方案。
+浏览器登录由 Server 设置同域 `HttpOnly`、`SameSite=Lax` 会话 Cookie；正式环境同时要求
+HTTPS 和 `Secure=true`。鉴权中间件暂时兼容 Bearer Token，供脚本、测试与旧会话一次性
+迁移使用。旧 Token 迁移成功后会从 `localStorage` 清除，不能再把它作为浏览器长期会话来源。
 

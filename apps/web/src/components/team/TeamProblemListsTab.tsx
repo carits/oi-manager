@@ -127,7 +127,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   }
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
+    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
   }
 
   return (
@@ -210,7 +210,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
       >
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
           {loadingMyLists ? (
-            <div style={{ textAlign: 'center', padding: '2rem' }}>加载中...</div>
+            <div style={{ textAlign: 'center', padding: '2rem' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
           ) : myLists.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
               <p>你还没有创建题单</p>

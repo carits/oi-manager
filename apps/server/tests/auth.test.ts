@@ -26,6 +26,9 @@ describe('Authentication Module', () => {
       expect(res.body.data.token).toBeDefined()
       expect(res.body.data.userId).toBe(user.id)
       expect(res.body.data.role).toBe('student')
+      expect(res.headers['set-cookie']?.[0]).toContain('oi_session=')
+      expect(res.headers['set-cookie']?.[0]).toContain('HttpOnly')
+      expect(res.headers['set-cookie']?.[0]).toContain('SameSite=Lax')
     })
 
     it('should fail with wrong password', async () => {
@@ -257,6 +260,84 @@ describe('Authentication Module', () => {
       expect(res.body.data.userId).toBe(user.id)
       expect(res.body.data.username).toBe(user.username)
       expect(res.body.data.role).toBe('student')
+    })
+
+    it('accepts the HttpOnly session cookie without a bearer token', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const agent = request.agent(app)
+
+      const login = await agent
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: 'student' })
+
+      expect(login.status).toBe(200)
+
+      const me = await agent.get('/api/auth/me')
+      expect(me.status).toBe(200)
+      expect(me.body.data.userId).toBe(user.id)
+    })
+
+    it('rejects a cross-origin mutation made with a session cookie', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const agent = request.agent(app)
+
+      await agent
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: 'student' })
+
+      const logout = await agent
+        .post('/api/auth/logout')
+        .set('Origin', 'https://untrusted.example')
+
+      expect(logout.status).toBe(403)
+      expect(logout.body.code).toBe('CSRF_ORIGIN_REJECTED')
+    })
+
+    it('still checks the origin when cookie and bearer credentials are both present', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: 'student' })
+      const sessionCookie = login.headers['set-cookie']?.[0]?.split(';')[0]
+
+      const logout = await request(app)
+        .post('/api/auth/logout')
+        .set('Origin', 'https://untrusted.example')
+        .set('Cookie', sessionCookie || '')
+        .set('Authorization', `Bearer ${login.body.data.token}`)
+
+      expect(logout.status).toBe(403)
+      expect(logout.body.code).toBe('CSRF_ORIGIN_REJECTED')
+    })
+
+    it('allows development preview ports on the same host', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: 'student' })
+      const sessionCookie = login.headers['set-cookie']?.[0]?.split(';')[0]
+
+      const logout = await request(app)
+        .post('/api/auth/logout')
+        .set('Host', '47.99.222.76:3002')
+        .set('Origin', 'http://47.99.222.76:3000')
+        .set('Cookie', sessionCookie || '')
+
+      expect(logout.status).toBe(200)
+    })
+
+    it('clears the session cookie on logout', async () => {
+      const { user, password } = await createTestUser({ role: 'student' })
+      const agent = request.agent(app)
+
+      await agent
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: 'student' })
+
+      const logout = await agent.post('/api/auth/logout')
+      expect(logout.status).toBe(200)
+      expect(logout.headers['set-cookie']?.[0]).toContain('oi_session=')
+      expect(logout.headers['set-cookie']?.[0]).toContain('Expires=Thu, 01 Jan 1970')
     })
 
     it('should return 401 without token', async () => {

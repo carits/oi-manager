@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import RankingsTab from '@/app/teacher/school/components/RankingsTab'
 import SolvedCountTab from '@/app/teacher/school/components/SolvedCountTab'
@@ -30,7 +29,7 @@ export default function TeacherRankingsPage() {
   ]
 
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1.5rem' }}>校内排名</h1>
 
@@ -72,6 +71,6 @@ export default function TeacherRankingsPage() {
           </p>
         )}
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

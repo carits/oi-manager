@@ -75,6 +75,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   const requestId = generateRequestId()
   req.requestId = requestId
   req.startTime = Date.now()
+  res.setHeader('X-Request-ID', requestId)
 
   // 创建请求级别日志上下文（初始时没有用户信息）
   req.requestLogger = createRequestLogger(requestId)

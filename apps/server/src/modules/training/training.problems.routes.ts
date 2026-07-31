@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid'
 import {
   canAccessTraining,
   canManageTraining,
+  getUserTypeForTeam,
   parseTrainingId,
   populateSnapshotData,
   requireTrainingStarted,
@@ -232,6 +233,7 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         problemTableId: !isStudent && shouldShowPlatformInfo ? p.Problem.id : null,
         platformLabel: studentSafePlatformInfo ? (platformLabelMap.get(platform as any) || platform || '') : '',
         problemUrl: studentSafePlatformInfo ? problemUrl : null,
+        hasSubmitted: Boolean(best),
         bestScore: hideOiStatus ? null : (best?.score ?? null),
         bestResult: hideOiStatus ? null : (best?.result ?? null),
       }
@@ -485,6 +487,17 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     }
 
     const isAdmin = await canManageTraining(userId, training)
+    const userType = await getUserTypeForTeam(userId)
+    const note = await prisma.problemNote.findUnique({
+      where: {
+        problemId_userId_userType: {
+          problemId: trainingProblem.problemId,
+          userId,
+          userType,
+        },
+      },
+      select: { content: true },
+    })
 
     // 返回题面内容（不暴露标题和来源给非管理员）
     const problem = trainingProblem.Problem
@@ -500,6 +513,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
         statementType: problem.statementType,
         statementPdfUrl: problem.statementPdfUrl,
         statements: problem.ProblemStatement,
+        noteContent: note?.content ?? '',
         // 管理员额外信息
         ...(isAdmin && {
           problemTitle: problem.title,

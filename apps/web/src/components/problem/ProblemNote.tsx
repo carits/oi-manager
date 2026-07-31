@@ -178,7 +178,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   if (loading) {
     return (
       <div style={{ height: '100vh', background: 'var(--bg-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: 'var(--gray-500)' }}>加载中...</span>
+        <span style={{ color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></span>
       </div>
     )
   }

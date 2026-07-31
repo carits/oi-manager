@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { getRole } from '@/lib/auth'
+import { useAuth } from '@/components/AuthProvider'
 import { Pagination } from '@/components/ui/Pagination'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PasswordResetModal } from '@/components/ui/PasswordResetModal'
@@ -24,8 +23,7 @@ interface User {
 
 export default function AdminUsersPage() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  const [role, setRole] = useState<string | null>(null)
+  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,15 +45,8 @@ export default function AdminUsersPage() {
   const [toggleConfirm, setToggleConfirm] = useState<{ userId: string; newStatus: string; username: string } | null>(null)
 
   useEffect(() => {
-    setMounted(true)
-    setRole(getRole())
-  }, [])
-
-  useEffect(() => {
-    if (mounted) {
-      fetchUsers()
-    }
-  }, [mounted, pagination.page, pagination.pageSize])
+    fetchUsers()
+  }, [pagination.page, pagination.pageSize])
 
   const fetchUsers = async () => {
     try {
@@ -141,23 +132,13 @@ export default function AdminUsersPage() {
     fetchUsers()
   }
 
-  if (!mounted) {
-    return (
-      <ProtectedRoute requiredRole={['super_admin', 'platform_admin']}>
-        <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
-  }
-
   return (
-    <ProtectedRoute requiredRole={['super_admin', 'platform_admin']}>
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>账号管理</h2>
-            {role === 'super_admin' && (
+            {currentUser?.role === 'super_admin' && (
               <button
                 onClick={() => router.push('/admin/users/new-platform-admin')}
                 style={{
@@ -234,7 +215,7 @@ export default function AdminUsersPage() {
           </div>
 
           {loading ? (
-            <p>加载中...</p>
+            <p><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></p>
           ) : error ? (
             <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
               {error}
@@ -348,6 +329,6 @@ export default function AdminUsersPage() {
           danger={toggleConfirm?.newStatus === 'disabled'}
         />
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

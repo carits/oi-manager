@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
 import { useToast } from '@/components/ui/Toast'
@@ -151,7 +150,7 @@ export default function NewSchoolPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
           <div style={{ marginBottom: '1.5rem' }}>
@@ -367,6 +366,6 @@ export default function NewSchoolPage() {
           </div>
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

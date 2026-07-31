@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -403,7 +402,7 @@ export default function PlatformAdminProblemsPage() {
   ) => (
     <>
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
       ) : problems.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无题目</div>
       ) : (
@@ -470,7 +469,7 @@ export default function PlatformAdminProblemsPage() {
   // ==================== 渲染 ====================
 
   return (
-    <ProtectedRoute requiredRole="platform_admin">
+    <>
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>题库管理</h1>
 
@@ -572,7 +571,7 @@ export default function PlatformAdminProblemsPage() {
               </div>
 
               {jobsLoading ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
+                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
               ) : !jobs || jobs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无任务</div>
               ) : (
@@ -683,6 +682,6 @@ export default function PlatformAdminProblemsPage() {
         confirmText="确认"
         danger
       />
-    </ProtectedRoute>
+    </>
   )
 }

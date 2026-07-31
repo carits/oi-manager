@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORM_LABEL_MAP, OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 interface OjAccount {
   id: string
@@ -172,15 +172,11 @@ export default function OjAccountsPage() {
   }
 
   if (loading) {
-    return (
-      <ProtectedRoute requiredRole="platform_admin">
-          <div style={{ padding: '2rem', textAlign: 'center' }}>加载中...</div>
-      </ProtectedRoute>
-    )
+    return <PageLoadingFrame title="OJ 账号管理" />
   }
 
   return (
-    <ProtectedRoute requiredRole="platform_admin">
+    <>
         <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
           <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -416,7 +412,7 @@ export default function OjAccountsPage() {
           confirmText="删除"
           danger
         />
-    </ProtectedRoute>
+    </>
   )
 }
 

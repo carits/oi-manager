@@ -1,35 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppShell } from '@/components/AppShell'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 
 // 超管首页 - 平台级概览
 export default function AdminPage() {
-  const router = useRouter()
   const { user } = useAuth()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <ProtectedRoute requiredRole="super_admin">
-        <div style={{ minHeight: '100vh', background: 'var(--bg-page)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
-  }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <AppShell>
         <PageHeader title="超级管理员控制台" description={`欢迎回来，${user?.username}`} />
 
@@ -66,6 +47,6 @@ export default function AdminPage() {
           </div>
         </div>
       </AppShell>
-    </ProtectedRoute>
+    </>
   )
 }

@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { accounts } from '../fixtures/auth'
+import { loadFixtureIds } from '../fixtures/data'
+
+const ids = loadFixtureIds()
 
 test.describe('loading, empty, error and retry states @compact', () => {
   test.use({ storageState: accounts.principal.storageState })
@@ -39,5 +42,33 @@ test.describe('loading, empty, error and retry states @compact', () => {
     await page.goto('/teacher/homeworks')
     await expect(page.locator('body')).toContainText('暂无团队')
     await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toHaveCount(0)
+  })
+
+  test('training shell stays visible while the overview request is delayed', async ({ page }) => {
+    await page.route(`**/api/trainings/${ids.homework}/overview`, async route => {
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      await route.continue()
+    })
+
+    await page.goto(`/teacher/teams/${ids.team}/homeworks/${ids.homework}`, {
+      waitUntil: 'domcontentloaded',
+    })
+
+    await expect(page.getByRole('navigation')).toBeVisible()
+    await expect(page.locator('[aria-busy="true"]').first()).toBeVisible()
+    await expect(page.locator('body')).not.toContainText('加载中')
+    await expect(page.locator('body')).toContainText('E2E Active Homework', { timeout: 8000 })
+  })
+
+  test('a stalled overview becomes a retryable error instead of waiting forever', async ({ page }) => {
+    await page.route(`**/api/trainings/${ids.homework}/overview`, async route => {
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      await route.continue()
+    })
+
+    await page.goto(`/teacher/teams/${ids.team}/homeworks/${ids.homework}`)
+    const alert = page.locator('[role="alert"]').filter({ hasText: /超时|重试/ })
+    await expect(alert).toBeVisible({ timeout: 6000 })
+    await expect(alert.getByRole('button', { name: '重试' })).toBeVisible()
   })
 })

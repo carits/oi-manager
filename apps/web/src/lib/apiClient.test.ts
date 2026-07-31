@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { parseApiResponse } from './apiClient'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiError, apiClient, parseApiResponse } from './apiClient'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseApiResponse', () => {
   it('preserves structured HTTP errors', async () => {
@@ -40,5 +44,159 @@ describe('parseApiResponse', () => {
       status: 502,
       message: 'Bad Gateway',
     })
+  })
+
+  it('classifies malformed successful payloads as invalid responses', async () => {
+    const result = await parseApiResponse(
+      new Response('<html>unexpected</html>', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html',
+          'X-Request-ID': 'request-123',
+        },
+      }),
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 200,
+      errorKind: 'invalid_response',
+      requestId: 'request-123',
+    })
+  })
+
+  it('uses Retry-After to explain a rate limit response', async () => {
+    const result = await parseApiResponse(
+      new Response(JSON.stringify({
+        success: false,
+        message: 'generic rate limit message',
+      }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': '12',
+        },
+      }),
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 429,
+      message: '请求过于频繁，请在 12 秒后重试',
+    })
+  })
+
+  it('throws an ApiError for failed reads and does not retry a 403', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: 'forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await expect(apiClient.query('/api/private')).rejects.toMatchObject({
+      name: 'ApiError',
+      kind: 'http',
+      status: 403,
+      retryable: false,
+    } satisfies Partial<ApiError>)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries one early 5xx response within the same deadline', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: false, message: 'temporary' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { value: 1 } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+
+    await expect(apiClient.query('/api/retry')).resolves.toEqual({ value: 1 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('aborts a read when its total deadline expires', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      }),
+    )
+
+    await expect(
+      apiClient.query('/api/slow', { timeout: 25, retry: false }),
+    ).rejects.toMatchObject({
+      name: 'ApiError',
+      kind: 'timeout',
+      retryable: false,
+    } satisfies Partial<ApiError>)
+  })
+
+  it('classifies caller cancellation separately from timeout', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      }),
+    )
+    const controller = new AbortController()
+    const promise = apiClient.query('/api/cancelled', {
+      signal: controller.signal,
+      retry: false,
+    })
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({
+      name: 'ApiError',
+      kind: 'cancelled',
+      retryable: false,
+    } satisfies Partial<ApiError>)
+  })
+
+  it('downloads authenticated files with the session cookie contract', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('fixture', {
+        status: 200,
+        headers: {
+          'Content-Disposition': 'attachment; filename="fixture.txt"',
+          'X-Request-ID': 'download-1',
+        },
+      }),
+    )
+
+    const result = await apiClient.download('/api/files/fixture/download')
+    expect(await result.blob.text()).toBe('fixture')
+    expect(result.contentDisposition).toContain('fixture.txt')
+    expect(result.requestId).toBe('download-1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/files/fixture/download',
+      expect.objectContaining({ credentials: 'include' }),
+    )
+  })
+
+  it('throws a structured error when a download is rejected', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: 'forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await expect(
+      apiClient.download('/api/files/private/download'),
+    ).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 403,
+      retryable: false,
+    } satisfies Partial<ApiError>)
   })
 })

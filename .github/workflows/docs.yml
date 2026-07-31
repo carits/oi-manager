@@ -17,4 +17,5 @@ jobs:
         with:
           node-version: 24
       - run: pnpm docs:check
+      - run: pnpm ui:state-check
 

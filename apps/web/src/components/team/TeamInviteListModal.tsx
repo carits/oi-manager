@@ -87,7 +87,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
     <Modal isOpen={isOpen} onClose={onClose} title="邀请列表" width="500px">
       {loading ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-          加载中...
+          <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
         </div>
       ) : pendingInvites.length > 0 ? (
         <div style={{ display: 'grid', gap: '0.75rem' }}>

@@ -4,9 +4,19 @@ import { RoleLayout } from '@/components/RoleLayout'
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <RoleLayout
-      allowedRoles={['super_admin', 'platform_admin']}
+      allowedRoles={['super_admin']}
       loginRole="admin"
       homePath="/admin"
+      roleOverrides={[
+        {
+          prefix: '/admin/profile',
+          allowedRoles: ['super_admin', 'platform_admin'],
+        },
+        {
+          prefix: '/admin/security',
+          allowedRoles: ['super_admin', 'platform_admin'],
+        },
+      ]}
     >
       {children}
     </RoleLayout>

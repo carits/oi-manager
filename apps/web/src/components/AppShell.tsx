@@ -2,35 +2,31 @@
 
 import { ReactNode, useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
 import { getAssetUrl } from '@/lib/assets'
 import { getRoleHome } from '@/lib/roleAccess'
+import { SessionUnavailable } from './SessionUnavailable'
 
 interface AppShellProps {
   children: ReactNode
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const router = useRouter()
   const pathname = usePathname()
-  const { user, logout, switchMode, loading } = useAuth()
-  const [mounted, setMounted] = useState(false)
-  const [activeItem, setActiveItem] = useState('')
+  const { user, logout, switchMode } = useAuth()
+  const [activeItem, setActiveItem] = useState(() =>
+    user?.role ? getActiveNavItem(pathname, user.role, user.studentMode) : '',
+  )
   const [showUserMenu, setShowUserMenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    console.log('[AppShell] Mounted, pathname:', pathname)
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (mounted && user?.role) {
+    if (user?.role) {
       setActiveItem(getActiveNavItem(pathname, user.role, user.studentMode))
     }
-  }, [mounted, pathname, user?.role])
+  }, [pathname, user?.role, user?.studentMode])
 
   // 点击外部关闭下拉菜单
   useEffect(() => {
@@ -43,23 +39,8 @@ export function AppShell({ children }: AppShellProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  if (!mounted) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-page)'
-      }}>
-        加载中...
-      </div>
-    )
-  }
-
   if (!user) {
-    router.push('/login')
-    return null
+    return <SessionUnavailable message="当前会话不可用，请重新登录" />
   }
 
   const role = user.role as UserRole

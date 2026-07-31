@@ -263,6 +263,24 @@ describe('训练模块权限测试', () => {
 
       expect(res.status).toBe(403)
     })
+
+    it('B6: overview 在一次响应中返回训练和题目摘要', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .get(`/api/trainings/${training.id}/overview`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.training.id).toBe(training.id)
+      expect(Array.isArray(res.body.data.problems)).toBe(true)
+      expect(Array.isArray(res.body.data.problemStatus)).toBe(true)
+    })
+
+    it('B7: overview 同样执行资源归属校验', async () => {
+      const res = await createAuthenticatedRequest(app, outsiderToken)
+        .get(`/api/trainings/${training.id}/overview`)
+
+      expect(res.status).toBe(403)
+    })
   })
 
   // ==================== C. 训练编辑权限 ====================

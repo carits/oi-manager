@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 source_of_truth: scripts, docker-compose.yml, runtime health endpoints
 ---
 
@@ -16,29 +16,31 @@ cd /data/oi-manager
 git status --short
 docker-compose ps
 lsof -nP -iTCP:3000 -sTCP:LISTEN
+lsof -nP -iTCP:3001 -sTCP:LISTEN
 lsof -nP -iTCP:3002 -sTCP:LISTEN
 lsof -nP -iTCP:5050 -sTCP:LISTEN
 curl -fsS http://127.0.0.1:3002/api/health
 curl -I http://127.0.0.1:3000/login
 ```
 
-只应有一组 Web/Server 开发进程监听 `3000/3002`。多个父级 `pnpm` 进程不一定代表
-冲突，以监听 PID 和进程树为准。
+`3000` 只允许优化预览进程监听，`3001/3002` 只允许一组 HMR/Server 开发进程监听。
+多个父级 `pnpm` 进程不一定代表冲突，以监听 PID、仓库 `.run/*.pid` 和进程树为准。
 
 ## 启动与重启
 
 ```bash
 cd /data/oi-manager
 pnpm restart
+pnpm preview:build
+pnpm preview:start
+pnpm preview:health
 tail -f /tmp/oi-dev.log
+tail -f /tmp/oi-web-preview.log
 ```
 
-`restart` 会：
-
-1. 停止旧 pnpm、tsx 和 Next 开发进程。
-2. 确保 PostgreSQL 与 go-judge Docker 服务启动。
-3. 等待 PostgreSQL 健康。
-4. 后台执行 `pnpm dev`，日志写入 `/tmp/oi-dev.log`。
+`restart` 只停止 `.run/oi-dev.pid` 记录且工作目录匹配的进程组，随后启动 PostgreSQL、
+go-judge、`3001` HMR、`3002` Server 和 Judge。`preview:start` 独立持有 `3000`；
+两个命令遇到未知端口占用都会失败并报告，不会执行广泛 `pkill` 或 `kill -9`。
 
 首次启动或依赖变化前执行：
 
@@ -52,6 +54,7 @@ pnpm --filter server prisma:generate
 
 ```bash
 pnpm stop
+pnpm preview:stop
 docker-compose stop db judge
 ```
 
@@ -64,20 +67,21 @@ docker-compose stop db judge
 
 ```bash
 lsof -nP -iTCP:3000 -sTCP:LISTEN
+lsof -nP -iTCP:3001 -sTCP:LISTEN
 lsof -nP -iTCP:3002 -sTCP:LISTEN
 ps -fp <PID>
 pstree -ap <PID>
-pnpm kill-ports
 ```
 
-不要重复运行多个 `nohup pnpm dev`。统一使用 `pnpm restart`，并在启动后同时检查
-监听 PID、健康接口和 `/tmp/oi-dev.log`。
+不要重复运行多个 `nohup pnpm dev`。旧的 `pnpm kill-ports` 已删除；统一使用
+`pnpm restart` 与 `pnpm preview:start/stop`，并在启动后检查监听 PID、健康接口和日志。
 
 ## 日志
 
 | 对象 | 命令或位置 |
 |------|------------|
 | 开发应用 | `tail -f /tmp/oi-dev.log` |
+| 优化预览 | `tail -f /tmp/oi-web-preview.log` |
 | PostgreSQL | `docker logs -f oi-postgres` |
 | go-judge | `docker logs -f oi-judge` |
 | PM2 模板 | `pm2 logs` |

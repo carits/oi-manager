@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { LoadError } from '@/components/ui/LoadError'
 
@@ -56,12 +55,12 @@ export default function StudentHomeworksPage() {
   const formatTime = (t: string) => new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
         <div style={{ padding: '2rem' }}>
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: '1.5rem' }}>作业</h1>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>加载中...</div>
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
           ) : error ? (
             <LoadError message={error} onRetry={loadHomeworks} />
           ) : homeworks.length === 0 ? (
@@ -103,6 +102,6 @@ export default function StudentHomeworksPage() {
             </div>
           )}
         </div>
-    </ProtectedRoute>
+    </>
   )
 }

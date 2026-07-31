@@ -9,6 +9,8 @@ import remarkDirectiveRehype from 'remark-directive-rehype'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { showToastNotification } from '@/components/ui/Toast'
+import apiClient from '@/lib/apiClient'
+import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 
 // 复制按钮组件
 function CopyButton({ text }: { text: string }) {
@@ -59,48 +61,12 @@ const handleFileDownload = async (e: React.MouseEvent<HTMLAnchorElement>, href: 
 
   e.preventDefault()
 
-  const token = localStorage.getItem('token')
-  if (!token) {
-    showToastNotification('请先登录', 'warning')
-    return
-  }
-
   try {
-    const response = await fetch(`${API_URL}${href}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error('下载失败')
-    }
-
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-
-    const contentDisposition = response.headers.get('Content-Disposition')
-    let filename = 'download'
-
-    if (contentDisposition) {
-      const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+?)(?:;|$)/i)
-      if (utf8Match && utf8Match[1]) {
-        filename = decodeURIComponent(utf8Match[1].trim())
-      } else {
-        const asciiMatch = contentDisposition.match(/filename="?([^";\n]+)"?/i)
-        if (asciiMatch && asciiMatch[1]) {
-          filename = asciiMatch[1].trim()
-        }
-      }
-    }
-
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
+    const result = await apiClient.download(href)
+    saveBlobDownload(
+      result.blob,
+      filenameFromContentDisposition(result.contentDisposition, 'download'),
+    )
   } catch (error) {
     console.error('Download failed:', error)
     showToastNotification('下载失败，请重试', 'error')

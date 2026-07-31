@@ -3,6 +3,8 @@
 import { Button } from '@/components/ui/Button'
 import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constants'
 import type { TrainingInfo, TrainingProblem, SubmissionRow } from '../types'
+import { LoadError } from '@/components/ui/LoadError'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
   accepted: { bg: 'var(--success-light)', text: 'var(--success-text)' },
@@ -86,6 +88,9 @@ interface TrainingSubmissionPanelProps {
   resetFilters: () => void
   onViewSubmission: (id: number) => void
   onLanguageClick: (id: number) => void
+  loading?: boolean
+  error?: string | null
+  onRetry?: () => void
 }
 
 export function TrainingSubmissionPanel({
@@ -106,6 +111,9 @@ export function TrainingSubmissionPanel({
   resetFilters,
   onViewSubmission,
   onLanguageClick,
+  loading,
+  error,
+  onRetry,
 }: TrainingSubmissionPanelProps) {
   // 判断是否隐藏 OI 结果（OI 赛制 + 非管理员 + 非结束状态）
   const hideOiResults = training.format === 'oi' && !training.isAdmin && training.runtimeStatus !== 'finished'
@@ -188,7 +196,13 @@ export function TrainingSubmissionPanel({
           重置
         </button>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+      {error && (
+        <LoadError compact message={error} onRetry={onRetry || (() => undefined)} />
+      )}
+      {loading && submissions.length === 0 ? (
+        <SkeletonRegion rows={6} label="评测记录正在准备" />
+      ) : (
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', opacity: loading ? 0.72 : 1 }}>
         <thead>
           <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
             <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测ID</th>
@@ -260,6 +274,7 @@ export function TrainingSubmissionPanel({
           )}
         </tbody>
       </table>
+      )}
       {submissionsTotal > 50 && (
         <div style={{ padding: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
           <Button variant="secondary" disabled={submissionsPage <= 1} onClick={() => setSubmissionsPage(p => p - 1)}>上一页</Button>

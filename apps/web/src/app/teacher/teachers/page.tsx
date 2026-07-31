@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import TeachersTab from '../school/components/TeachersTab'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 interface School {
   id: string
@@ -55,34 +55,30 @@ export default function TeachersPage() {
   }
 
   if (loading) {
-    return (
-      <ProtectedRoute requiredRole="teacher">
-        <div style={{ padding: '2rem', textAlign: 'center' }}>加载中...</div>
-      </ProtectedRoute>
-    )
+    return <PageLoadingFrame title="教师管理" />
   }
 
   if (!school) {
     return (
-      <ProtectedRoute requiredRole="teacher">
+      <>
         <div style={{ marginBottom: '1.5rem' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>教师管理</h2>
         </div>
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <p>未找到学校信息</p>
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>教师管理</h2>
       </div>
       <div style={{ background: 'white', borderRadius: '8px', padding: '1.5rem', border: '1px solid var(--border)' }}>
         <TeachersTab school={school} isPrincipal={isPrincipal} showActions={true} />
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

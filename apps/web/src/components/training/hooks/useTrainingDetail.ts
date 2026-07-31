@@ -1,128 +1,167 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import apiClient from '@/lib/apiClient'
+import { useResource } from '@/hooks/useResource'
+import type { ResourceState } from '@/lib/resource'
 import type { TrainingInfo, TrainingProblem, ProblemDetail, ProblemListEntry } from '../types'
 
-export function useTrainingDetail(trainingId: string) {
-  const [training, setTraining] = useState<TrainingInfo | null>(null)
-  const [problems, setProblems] = useState<TrainingProblem[]>([])
-  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null)
-  const [problemDetail, setProblemDetail] = useState<ProblemDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+interface TrainingOverview {
+  training: TrainingInfo
+  problems: TrainingProblem[]
+  problemStatus: ProblemListEntry[]
+}
+
+export function useTrainingDetail(
+  trainingId: string,
+  activeTab: string,
+  sessionKey: string | null,
+) {
+  const [selectedProblemId, setSelectedProblemIdState] = useState<string | null>(null)
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null)
   const [noteContent, setNoteContent] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [noteEditMode, setNoteEditMode] = useState<'edit' | 'preview' | 'split'>('split')
   const [editModeActive, setEditModeActive] = useState(false)
-  const [problemListData, setProblemListData] = useState<ProblemListEntry[]>([])
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastNoteProblemIdRef = useRef<string | null>(null)
   const lastNoteContentRef = useRef('')
+  const loadedNoteProblemIdRef = useRef<string | null>(null)
+  const lastSavedNoteContentRef = useRef('')
 
   // Contest record state
   const [recordContent, setRecordContent] = useState('')
   const [recordSaving, setRecordSaving] = useState(false)
   const [recordEditMode, setRecordEditMode] = useState<'edit' | 'preview' | 'split'>('split')
   const [recordLoaded, setRecordLoaded] = useState(false)
+  const lastSavedRecordContentRef = useRef('')
   const [noteLastSaved, setNoteLastSaved] = useState<Date | null>(null)
   const [recordLastSaved, setRecordLastSaved] = useState<Date | null>(null)
   const recordSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Load training
-  const loadTraining = useCallback(async () => {
-    try {
-      const res = await apiClient.get<TrainingInfo>(`/api/trainings/${trainingId}`)
-      if (res.success && res.data) {
-        setTraining(res.data)
-      } else {
-        setError(res.message || '加载训练失败')
-        setLoading(false)
+  const overviewResource = useResource<TrainingOverview>(
+    `/api/trainings/${trainingId}/overview`,
+    {
+      sessionKey,
+      keepPreviousData: false,
+      isEmpty: () => false,
+      dedupingInterval: 30000,
+    },
+  )
+  const overview =
+    overviewResource.data ??
+    (overviewResource.state.state === 'error'
+      ? overviewResource.state.previousData
+      : undefined)
+  const training = overview?.training ?? null
+  const problems = overview?.problems ?? []
+  const loading = overviewResource.state.state === 'pending'
+  const error =
+    overviewResource.state.state === 'error' && !overviewResource.state.previousData
+      ? overviewResource.state.error.message
+      : null
+  const refreshError =
+    overviewResource.state.state === 'error' && overviewResource.state.previousData
+      ? overviewResource.state.error
+      : null
+  const problemListData = overview?.problemStatus ?? []
+  const problemListState: ResourceState<ProblemListEntry[]> = refreshError
+    ? {
+        state: 'error',
+        error: refreshError,
+        previousData: problemListData,
       }
-    } catch {
-      setError('网络错误，请稍后重试')
-      setLoading(false)
-    }
-  }, [trainingId])
-
-  useEffect(() => { loadTraining() }, [loadTraining])
-
-  // Load problems after training
-  useEffect(() => {
-    if (!training) return
-    const loadProblems = async () => {
-      try {
-        const res = await apiClient.get<TrainingProblem[]>(`/api/trainings/${trainingId}/problems`)
-        if (res.success && res.data) {
-          setProblems(res.data)
-          if (res.data.length > 0 && !selectedProblemId) {
-            setSelectedProblemId(res.data[0].id)
+    : loading
+      ? { state: 'pending' }
+      : problemListData.length === 0
+        ? { state: 'empty' }
+        : {
+            state: 'ready',
+            data: problemListData,
+            refreshing: overviewResource.isValidating,
           }
-        }
-      } catch (error) {
-        console.error('Failed to load problems:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadProblems()
-  }, [training])
 
-  // Load problem detail + note
   useEffect(() => {
-    if (!selectedProblemId || !training) return
-    const loadDetailAndNote = async () => {
-      try {
-        const [detailRes, noteRes] = await Promise.all([
-          apiClient.get<ProblemDetail>(`/api/trainings/${trainingId}/problems/${selectedProblemId}/detail`),
-          apiClient.get<{ content: string }>(`/api/trainings/${trainingId}/problems/${selectedProblemId}/note`),
-        ])
-        if (detailRes.success && detailRes.data) {
-          setProblemDetail(detailRes.data)
-          const visibleStatements = (detailRes.data.statements || []).filter(s => true)
-          if (visibleStatements.length > 0) {
-            const savedKey = localStorage.getItem(`training-stmt-pref-${selectedProblemId}`)
-            const savedStmt = savedKey
-              ? visibleStatements.find(s => `${s.format}-${s.language || 'unknown'}` === savedKey)
-              : null
-            if (savedStmt) {
-              setSelectedStatementId(savedStmt.id)
-            } else {
-              const zhStatement = visibleStatements.find(s => s.format === 'markdown' && s.language === 'zh')
-              setSelectedStatementId(zhStatement?.id || visibleStatements[0].id)
-            }
-          } else {
-            setSelectedStatementId(null)
-          }
-        }
-        if (noteRes.success && noteRes.data) {
-          setNoteContent(noteRes.data.content || '')
-        }
-      } catch (error) {
-        console.error('Failed to load problem detail/note:', error)
-      }
+    setSelectedProblemIdState(current =>
+      current && problems.some(problem => problem.id === current)
+        ? current
+        : problems[0]?.id ?? null,
+    )
+  }, [problems])
+
+  const problemDetailResource = useResource<ProblemDetail>(
+    selectedProblemId && training && activeTab === 'problems'
+      ? `/api/trainings/${trainingId}/problems/${selectedProblemId}/detail`
+      : null,
+    {
+      sessionKey,
+      keepPreviousData: false,
+      isEmpty: () => false,
+      dedupingInterval: 30000,
+    },
+  )
+  const problemDetail =
+    problemDetailResource.data ??
+    (problemDetailResource.state.state === 'error'
+      ? problemDetailResource.state.previousData ?? null
+      : null)
+
+  // Initialize the problem workspace once. Revalidation must not overwrite a
+  // locally edited note that has not been saved yet.
+  useEffect(() => {
+    if (
+      !problemDetail ||
+      !selectedProblemId ||
+      loadedNoteProblemIdRef.current === selectedProblemId
+    ) {
+      return
     }
-    loadDetailAndNote()
-  }, [selectedProblemId, trainingId])
+
+    const visibleStatements = problemDetail.statements || []
+    if (visibleStatements.length > 0) {
+      const savedKey = localStorage.getItem(`training-stmt-pref-${selectedProblemId}`)
+      const savedStatement = savedKey
+        ? visibleStatements.find(
+            statement =>
+              `${statement.format}-${statement.language || 'unknown'}` === savedKey,
+          )
+        : null
+      const preferredStatement =
+        savedStatement ||
+        visibleStatements.find(
+          statement => statement.format === 'markdown' && statement.language === 'zh',
+        ) ||
+        visibleStatements[0]
+      setSelectedStatementId(preferredStatement.id)
+    } else {
+      setSelectedStatementId(null)
+    }
+
+    const content = problemDetail.noteContent || ''
+    loadedNoteProblemIdRef.current = selectedProblemId
+    lastSavedNoteContentRef.current = content
+    lastNoteProblemIdRef.current = selectedProblemId
+    lastNoteContentRef.current = content
+    setNoteContent(content)
+  }, [problemDetail, selectedProblemId])
 
   // Auto-save note (immediately save old content when switching problems)
   useEffect(() => {
-    if (!selectedProblemId) return
-
-    // When switching problems, immediately save the old problem's content
-    if (lastNoteProblemIdRef.current && lastNoteProblemIdRef.current !== selectedProblemId && lastNoteContentRef.current) {
-      apiClient.put(`/api/trainings/${trainingId}/problems/${lastNoteProblemIdRef.current}/note`, { content: lastNoteContentRef.current }).catch(error => {
-        console.error('Failed to save note on switch:', error)
-      })
-    }
+    if (!selectedProblemId || loadedNoteProblemIdRef.current !== selectedProblemId) return
 
     lastNoteProblemIdRef.current = selectedProblemId
     lastNoteContentRef.current = noteContent
+    if (noteContent === lastSavedNoteContentRef.current) return
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
       try {
         setNoteSaving(true)
-        await apiClient.put(`/api/trainings/${trainingId}/problems/${selectedProblemId}/note`, { content: noteContent })
+        const result = await apiClient.mutate(
+          `/api/trainings/${trainingId}/problems/${selectedProblemId}/note`,
+          'PUT',
+          { content: noteContent },
+        )
+        if (!result.ok) throw result.error
+        lastSavedNoteContentRef.current = noteContent
         setNoteLastSaved(new Date())
       } catch (error) {
         console.error('Failed to save note:', error)
@@ -139,10 +178,10 @@ export function useTrainingDetail(trainingId: string) {
     if (!training || training.type !== 'contest' || recordLoaded) return
     const loadRecord = async () => {
       try {
-        const res = await apiClient.get<{ content: string }>(`/api/trainings/${trainingId}/record`)
-        if (res.success && res.data) {
-          setRecordContent(res.data.content || '')
-        }
+      const data = await apiClient.query<{ content: string }>(`/api/trainings/${trainingId}/record`)
+      const content = data.content || ''
+      lastSavedRecordContentRef.current = content
+      setRecordContent(content)
       } catch (error) {
         console.error('Failed to load contest record:', error)
       } finally {
@@ -155,11 +194,18 @@ export function useTrainingDetail(trainingId: string) {
   // Auto-save contest record
   useEffect(() => {
     if (!recordLoaded) return
+    if (recordContent === lastSavedRecordContentRef.current) return
     if (recordSaveTimerRef.current) clearTimeout(recordSaveTimerRef.current)
     recordSaveTimerRef.current = setTimeout(async () => {
       try {
         setRecordSaving(true)
-        await apiClient.put(`/api/trainings/${trainingId}/record`, { content: recordContent })
+        const result = await apiClient.mutate(
+          `/api/trainings/${trainingId}/record`,
+          'PUT',
+          { content: recordContent },
+        )
+        if (!result.ok) throw result.error
+        lastSavedRecordContentRef.current = recordContent
       } catch (error) {
         console.error('Failed to save contest record:', error)
       } finally {
@@ -170,19 +216,24 @@ export function useTrainingDetail(trainingId: string) {
     return () => { if (recordSaveTimerRef.current) clearTimeout(recordSaveTimerRef.current) }
   }, [recordContent, trainingId, recordLoaded])
 
-  // Load problem list (called externally when tab changes)
-  const loadProblemListData = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ problems: ProblemListEntry[] }>(`/api/trainings/${trainingId}/problem-status`)
-      if (res.success && res.data) {
-        setProblemListData(res.data.problems)
-      }
-    } catch (error) {
-      console.error('Failed to load problem list:', error)
-    }
-  }, [trainingId])
+  const setSelectedProblemId = useCallback((nextProblemId: string | null) => {
+    const previousProblemId = selectedProblemId
+    const hasUnsavedNote =
+      previousProblemId &&
+      loadedNoteProblemIdRef.current === previousProblemId &&
+      noteContent !== lastSavedNoteContentRef.current
 
-  const clearProblemListData = useCallback(() => setProblemListData([]), [])
+    if (hasUnsavedNote) {
+      void apiClient.mutate(
+        `/api/trainings/${trainingId}/problems/${previousProblemId}/note`,
+        'PUT',
+        { content: noteContent },
+      )
+    }
+
+    loadedNoteProblemIdRef.current = null
+    setSelectedProblemIdState(nextProblemId)
+  }, [noteContent, selectedProblemId, trainingId])
 
   // Manual save note (immediately save without waiting for debounce)
   const saveNoteNow = useCallback(async () => {
@@ -212,7 +263,13 @@ export function useTrainingDetail(trainingId: string) {
     }
     try {
       setRecordSaving(true)
-      await apiClient.put(`/api/trainings/${trainingId}/record`, { content: recordContent })
+      const result = await apiClient.mutate(
+        `/api/trainings/${trainingId}/record`,
+        'PUT',
+        { content: recordContent },
+      )
+      if (!result.ok) throw result.error
+      lastSavedRecordContentRef.current = recordContent
       setRecordLastSaved(new Date())
     } catch (error) {
       console.error('Failed to save contest record:', error)
@@ -222,12 +279,15 @@ export function useTrainingDetail(trainingId: string) {
   }, [recordContent, trainingId])
 
   return {
-    training, setTraining,
-    problems, setProblems,
+    training,
+    problems,
     selectedProblemId, setSelectedProblemId,
     problemDetail,
     selectedStatementId, setSelectedStatementId,
+    problemDetailState: problemDetailResource.state,
+    retryProblemDetail: problemDetailResource.retry,
     loading, error,
+    refreshError,
     noteContent, setNoteContent,
     noteSaving, noteLastSaved,
     noteEditMode, setNoteEditMode,
@@ -235,8 +295,10 @@ export function useTrainingDetail(trainingId: string) {
     recordContent, setRecordContent,
     recordSaving, recordLastSaved,
     recordEditMode, setRecordEditMode,
-    problemListData, loadProblemListData, clearProblemListData,
+    problemListData,
+    problemListState,
+    loadProblemListData: overviewResource.retry,
     saveNoteNow, saveRecordNow,
-    refresh: loadTraining,
+    refresh: overviewResource.retry,
   }
 }

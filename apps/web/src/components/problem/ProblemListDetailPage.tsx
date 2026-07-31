@@ -351,7 +351,7 @@ export default function ProblemListDetailPage() {
 
   // ==================== 渲染 ====================
 
-  if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>加载中...</div>
+  if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
   if (!detail) return <div style={{ padding: '3rem', textAlign: 'center' }}>题单不存在或无权限访问</div>
 
   return (

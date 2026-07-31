@@ -259,7 +259,7 @@ export function ProblemList({ role }: ProblemListProps) {
 
         {/* 内容 */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem' }}>加载中...</div>
+          <div style={{ textAlign: 'center', padding: '3rem' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
         ) : problems.length === 0 ? (
           <div style={{
             textAlign: 'center',

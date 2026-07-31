@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import ImportPreview from '@/components/team-import/ImportPreview'
 import { useToast } from '@/components/ui/Toast'
@@ -37,7 +36,6 @@ export default function VjudgeImportPage() {
   const router = useRouter()
   const toast = useToast()
   const searchParams = useSearchParams()
-  const [mounted, setMounted] = useState(false)
 
   const createTeam = searchParams.get('createTeam') === 'yes'
   const visibility = searchParams.get('visibility') || 'public'
@@ -68,11 +66,9 @@ export default function VjudgeImportPage() {
   const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | undefined>()
   const [loadingPreview, setLoadingPreview] = useState(false)
 
-  useEffect(() => { setMounted(true) }, [])
-
   useEffect(() => {
-    if (mounted) validateCookie()
-  }, [mounted])
+    validateCookie()
+  }, [])
 
   // ── 校验 Cookie ──
   const validateCookie = async () => {
@@ -211,10 +207,8 @@ export default function VjudgeImportPage() {
     }
   }
 
-  if (!mounted) return <div style={{ padding: '2rem' }}>加载中...</div>
-
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
       <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
           VJudge 团队导入
@@ -310,7 +304,7 @@ export default function VjudgeImportPage() {
             <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between' }}>
               <button onClick={() => router.push('/teacher/students/import')} style={btnSecondary}>返回</button>
               <button onClick={handlePreview} disabled={!selectedGroupId || loadingPreview} style={btnPrimary}>
-                {loadingPreview ? '加载中...' : '下一步'}
+                {loadingPreview ? '正在获取' : '下一步'}
               </button>
             </div>
           </div>
@@ -333,7 +327,7 @@ export default function VjudgeImportPage() {
           />
         )}
       </div>
-    </ProtectedRoute>
+    </>
   )
 }
 

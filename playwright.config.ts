@@ -45,6 +45,8 @@ export default defineConfig({
       env: {
         ...process.env,
         NODE_ENV: 'test',
+        APP_ENV: 'development',
+        COOKIE_SECURE: 'false',
         E2E_BUILD: 'true',
         PORT: '3102',
         DATABASE_URL: databaseUrl,
@@ -56,13 +58,16 @@ export default defineConfig({
       },
     },
     {
-      command: 'pnpm exec next dev -p 3100',
+      command: 'pnpm exec next build && pnpm exec next start -p 3100',
       cwd: webDir,
       url: 'http://127.0.0.1:3100/login',
       timeout: 180_000,
       reuseExistingServer: false,
       env: {
         ...process.env,
+        NODE_ENV: 'production',
+        APP_ENV: 'development',
+        NEXT_PUBLIC_APP_ENV: 'development',
         BACKEND_URL: 'http://127.0.0.1:3102',
         NEXT_PUBLIC_API_URL: '',
         E2E_BUILD: 'true',

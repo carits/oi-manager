@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
@@ -239,7 +238,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   }
 
   return (
-    <ProtectedRoute>
+    <>
       {/* 添加 spin 动画 */}
       <style jsx global>{`
         @keyframes spin {
@@ -382,7 +381,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
               {loading ? (
                 <tr>
                   <td colSpan={11} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    加载中...
+                    <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
                   </td>
                 </tr>
               ) : submissions.length === 0 ? (
@@ -478,6 +477,6 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           viewRole={viewRole}
         />
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

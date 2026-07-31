@@ -26,7 +26,7 @@ interface TrainingRankTableProps {
 
 export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTableProps) {
   if (!rankingData) {
-    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}>加载中...</div>
+    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
   }
 
   if (rankingData.hidden) {

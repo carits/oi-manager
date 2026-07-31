@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import apiClient from '@/lib/apiClient'
@@ -112,7 +111,7 @@ export default function TeamImportBindPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+    <>
       <div style={{ padding: '1rem 0' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
           绑定 {platformNames[platform || '']} 账号
@@ -195,10 +194,10 @@ export default function TeamImportBindPage() {
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-            加载中...
+            <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
           </div>
         )}
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

@@ -9,7 +9,8 @@ export const ENV = {
   /** 后端地址（仅服务端 API Route 使用） */
   BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:3002',
   /** 是否为开发环境 */
-  IS_DEV: process.env.NODE_ENV === 'development',
+  APP_ENV: process.env.NEXT_PUBLIC_APP_ENV || 'development',
+  IS_DEV: (process.env.NEXT_PUBLIC_APP_ENV || 'development') === 'development',
   /** 是否为生产环境 */
-  IS_PROD: process.env.NODE_ENV === 'production',
+  IS_PROD: process.env.NEXT_PUBLIC_APP_ENV === 'production',
 } as const

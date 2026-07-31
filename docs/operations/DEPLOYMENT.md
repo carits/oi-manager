@@ -52,8 +52,8 @@ pnpm build
 6. 执行备份与恢复演练。
 7. 检查 HTTPS、CORS、密钥、维护开关和无凭据日志。
 
-现有 Next `standalone` 输出与 PM2 `next start` 组合必须在 staging 实测后再采用；
-如改为运行 standalone `server.js`，应同步更新 `ecosystem.config.js`。
+当前 Web 使用标准 `next build` / `next start` 组合。若未来切换为 standalone
+`server.js`，必须同时调整构建产物复制和 PM2 启动入口，并在 staging 验证。
 
 ## Nginx
 

@@ -3,6 +3,8 @@
 import React from 'react'
 import { tableStyles } from '@/lib/styles'
 import { Empty } from './Empty'
+import { LoadError } from './LoadError'
+import { SkeletonRegion } from './AsyncRegion'
 
 // 辅助函数：根据 key 路径获取嵌套对象的值
 function get(obj: any, path: string): any {
@@ -26,6 +28,9 @@ export interface TableProps<T> {
   data: T[]
   columns: Column<T>[]
   loading?: boolean
+  error?: string | null
+  onRetry?: () => void
+  refreshing?: boolean
   emptyText?: string
   actions?: (item: T) => React.ReactNode
   onRowClick?: (item: T) => void
@@ -36,17 +41,20 @@ export function Table<T extends { id?: string }>({
   data,
   columns,
   loading,
+  error,
+  onRetry,
+  refreshing,
   emptyText = '暂无数据',
   actions,
   onRowClick,
   rowKey,
 }: TableProps<T>) {
   if (loading) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-        加载中...
-      </div>
-    )
+    return <SkeletonRegion rows={5} label="表格内容正在准备" />
+  }
+
+  if (error) {
+    return <LoadError message={error} onRetry={onRetry || (() => window.location.reload())} />
   }
 
   if (data.length === 0) {
@@ -60,7 +68,7 @@ export function Table<T extends { id?: string }>({
   }
 
   return (
-    <div style={tableStyles.container}>
+    <div style={{ ...tableStyles.container, opacity: refreshing ? 0.72 : 1 }}>
       <table style={tableStyles.table}>
         <thead style={tableStyles.thead}>
           <tr>

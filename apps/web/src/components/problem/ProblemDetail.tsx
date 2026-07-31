@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Modal } from '@/components/ui/Modal'
 import apiClient from '@/lib/apiClient'
+import { saveBlobDownload } from '@/lib/download'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
@@ -179,6 +180,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
   const [submitCode, setSubmitCode] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
+  const submitKeyRef = useRef<string | null>(null)
   const [detailSubmissionId, setDetailSubmissionId] = useState<number | null>(null)
   const [problemSubmissions, setProblemSubmissions] = useState<any[]>([])
   const [problemSubmissionsLoading, setProblemSubmissionsLoading] = useState(false)
@@ -343,15 +345,22 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
     setSubmitLoading(true)
     try {
-      const result = await apiClient.post<any>('/api/submit', {
-        problemId: problem.problemId,
-        oj: problem.platform,
-        language: submitLanguage,
-        code: submitCode,
-        submitMethod,
-      })
+      submitKeyRef.current ||= crypto.randomUUID()
+      const result = await apiClient.mutate<{ submissionId?: number }>(
+        '/api/submit',
+        'POST',
+        {
+          problemId: problem.problemId,
+          oj: problem.platform,
+          language: submitLanguage,
+          code: submitCode,
+          submitMethod,
+        },
+        { headers: { 'Idempotency-Key': submitKeyRef.current } },
+      )
 
-      if (result.success && result.data?.submissionId) {
+      if (result.ok && result.data?.submissionId) {
+        submitKeyRef.current = null
         toast.success('提交成功')
         setShowSubmitPanel(false)
         setSubmitCode('')
@@ -360,7 +369,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         // 打开状态弹窗
         setDetailSubmissionId(result.data.submissionId)
       } else {
-        toast.error(result.message || '提交失败')
+        if (!result.ok && result.error.status > 0 && result.error.status < 500) {
+          submitKeyRef.current = null
+        }
+        toast.error(result.ok ? '提交结果缺少评测编号' : result.error.message)
       }
     } catch (error: any) {
       toast.error(error.message || '提交失败')
@@ -460,21 +472,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     try {
       // 如果是新格式的 File API URL
       if (attachment.fileUrl.startsWith('/api/files/')) {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}${attachment.fileUrl}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-        if (!response.ok) throw new Error('下载失败')
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = attachment.fileName
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        const result = await apiClient.download(attachment.fileUrl)
+        saveBlobDownload(result.blob, attachment.fileName)
       } else {
         // 旧格式直接打开
         window.open(`${process.env.NEXT_PUBLIC_API_URL || ''}${attachment.fileUrl}`, '_blank')
@@ -601,7 +600,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        加载中...
+        <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
       </div>
     )
   }
@@ -1032,7 +1031,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             <div style={{ padding: '2rem' }}>
               {attachmentsLoading ? (
                 <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
-                  加载中...
+                  <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
                 </div>
               ) : attachments.length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
@@ -1101,7 +1100,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   {problemSubmissionsLoading ? (
                     <tr>
                       <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        加载中...
+                        <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
                       </td>
                     </tr>
                   ) : problemSubmissions.length === 0 ? (

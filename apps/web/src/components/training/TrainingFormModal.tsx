@@ -412,7 +412,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
     >
       <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '0 0.25rem' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-400)' }}>加载中...</div>
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-400)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
         ) : (
           <>
             {/* Basic Info */}

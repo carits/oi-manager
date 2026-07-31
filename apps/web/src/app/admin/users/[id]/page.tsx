@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 interface UserDetail {
   id: string
@@ -62,29 +62,23 @@ export default function UserDetailPage() {
   }
 
   if (loading) {
-    return (
-      <ProtectedRoute requiredRole="super_admin">
-        <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
+    return <PageLoadingFrame title="用户详情" />
   }
 
   if (error || !user) {
     return (
-      <ProtectedRoute requiredRole="super_admin">
+      <>
         <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem' }}>
           <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
             {error || '用户不存在'}
           </div>
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
           <button
@@ -165,6 +159,6 @@ export default function UserDetailPage() {
           </div>
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

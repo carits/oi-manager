@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { PageHeader } from '@/components/ui/PageHeader'
 import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 // 复用教师端的组件
 import HomeTab from '@/app/teacher/school/components/HomeTab'
 import TeachersTab from '@/app/teacher/school/components/TeachersTab'
@@ -77,20 +77,16 @@ export default function StudentSchoolPage() {
   }
 
   if (loading) {
-    return (
-      <ProtectedRoute requiredRole="student">
-        <div style={{ padding: '2rem', textAlign: 'center' }}>加载中...</div>
-      </ProtectedRoute>
-    )
+    return <PageLoadingFrame title="我的学校" />
   }
 
   if (!school) {
     return (
-      <ProtectedRoute requiredRole="student">
+      <>
         <div style={{ padding: '2rem', textAlign: 'center' }}>
           <p>未找到学校信息</p>
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
@@ -104,7 +100,7 @@ export default function StudentSchoolPage() {
   ]
 
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
           <PageHeader title={school.name} />
@@ -155,6 +151,6 @@ export default function StudentSchoolPage() {
           </div>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { getLanguageLabel } from '@/lib/judge-constants'
 import { getAvatarUrl } from '@/lib/assets'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
+import { LoadError } from '@/components/ui/LoadError'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 
 interface CaseResult {
   caseId: number
@@ -131,6 +132,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   const router = useRouter()
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [showCode, setShowCode] = useState(true)
   const [expandedCase, setExpandedCase] = useState<number | null>(null)
@@ -140,27 +142,27 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
     if (!submissionId) return
 
     const fetchDetail = async () => {
+      setError(null)
       try {
-        const res = await apiClient.get<SubmissionDetail>(`/api/submissions/${submissionId}`)
-        if (res.success && res.data) {
-          setDetail(res.data)
-          setLoading(false)
-          if (res.data.result !== 'queuing' && res.data.result !== 'judging') {
+        const data = await apiClient.query<SubmissionDetail>(`/api/submissions/${submissionId}`)
+          setDetail(data)
+          if (data.result !== 'queuing' && data.result !== 'judging') {
             if (intervalRef.current) {
               clearInterval(intervalRef.current)
               intervalRef.current = null
             }
           }
           // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
-          if (res.data.oj === 'codeforces' && (!res.data.code || res.data.code.length === 0) && res.data.submitMethod === 'archive') {
+          if (data.oj === 'codeforces' && (!data.code || data.code.length === 0) && data.submitMethod === 'archive') {
             apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`).then(fetchRes => {
               if (fetchRes.success && fetchRes.data?.code) {
                 setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
               }
             }).catch(() => {})
           }
-        }
-      } catch {
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : '评测详情获取失败')
+      } finally {
         setLoading(false)
       }
     }
@@ -213,17 +215,19 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
 
   if (loading) {
     return (
-      <ProtectedRoute requiredRole={role === 'admin' ? undefined : role}>
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
+      <SkeletonRegion rows={8} label="评测详情正在准备" />
+    )
+  }
+
+  if (error && !detail) {
+    return (
+      <LoadError message={error} onRetry={() => window.location.reload()} />
     )
   }
 
   if (!detail) {
     return (
-      <ProtectedRoute requiredRole={role === 'admin' ? undefined : role}>
+      <>
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           提交记录不存在
           <div style={{ marginTop: '1rem' }}>
@@ -235,7 +239,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
             </button>
           </div>
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
@@ -252,7 +256,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   const peakMemory = cases.length > 0 ? Math.max(...cases.map(c => c.memory || 0)) : null
 
   return (
-    <ProtectedRoute requiredRole={role === 'admin' ? undefined : role}>
+    <>
       <style jsx global>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -712,6 +716,6 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
           </div>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

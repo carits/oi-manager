@@ -1,9 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppShell } from '@/components/AppShell'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -11,26 +9,11 @@ import { Card } from '@/components/ui/Card'
 // 教师/学校负责人首页
 export default function TeacherPage() {
   const { user } = useAuth()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <ProtectedRoute requiredRole="teacher">
-        <div style={{ minHeight: '100vh', background: 'var(--bg-page)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
-  }
 
   const isSchoolPrincipal = user?.role === 'school_principal'
 
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
       <AppShell>
         <PageHeader
           title={isSchoolPrincipal ? '学校负责人控制台' : '教师控制台'}
@@ -66,6 +49,6 @@ export default function TeacherPage() {
           </Card>
         </div>
       </AppShell>
-    </ProtectedRoute>
+    </>
   )
 }

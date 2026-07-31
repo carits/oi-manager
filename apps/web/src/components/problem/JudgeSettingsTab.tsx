@@ -684,7 +684,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 渲染 ====================
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>加载中...</div>
+    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
   }
 
   return (

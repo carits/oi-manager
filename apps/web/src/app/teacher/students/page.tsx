@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Button } from '@/components/ui/Button'
@@ -169,7 +168,7 @@ export default function StudentsPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <PageHeader title="学生管理">
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -353,7 +352,7 @@ export default function StudentsPage() {
         confirmText="确认"
         danger
       />
-    </ProtectedRoute>
+    </>
   )
 }
 

@@ -5,14 +5,15 @@ const { PHASE_DEVELOPMENT_SERVER } = require('next/constants')
  * @returns {import('next').NextConfig}
  */
 function createNextConfig(phase) {
+  const appEnv = process.env.APP_ENV || 'development'
   return {
+    env: {
+      NEXT_PUBLIC_APP_ENV: appEnv,
+    },
     // Never let a build overwrite the cache used by a running development server.
     distDir:
       process.env.NEXT_DIST_DIR ||
       (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
-    // 只在生产构建时使用 standalone 输出，dev 模式下会导致 vendor chunk 500 错误
-    ...(process.env.NODE_ENV === 'production' &&
-      process.env.E2E_BUILD !== 'true' && { output: 'standalone' }),
     compress: true,
     reactStrictMode: false,
     transpilePackages: ['shared', '@oi-manager/shared'],

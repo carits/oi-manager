@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 
@@ -63,7 +62,7 @@ user2
 user3 李四`
 
   return (
-    <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+    <>
       <div style={{ padding: '1rem 0' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
           输入导入数据 - {platformNames[platform || '']}
@@ -157,6 +156,6 @@ user3 李四`
           </Button>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

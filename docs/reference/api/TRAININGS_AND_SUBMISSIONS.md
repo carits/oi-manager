@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 source_of_truth: training modules, submit and submissions routes
 ---
 
@@ -14,6 +14,7 @@ source_of_truth: training modules, submit and submissions routes
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
 | `GET` | `/api/trainings/:id` | 登录、资源 | 任务详情 |
+| `GET` | `/api/trainings/:id/overview` | 登录、资源 | 首屏任务、题目摘要及当前用户题目状态 |
 | `PUT` | `/api/trainings/:id` | 教师/负责人、管理资源 | 更新任务 |
 | `DELETE` | `/api/trainings/:id` | 教师/负责人、管理资源 | 删除任务 |
 | `PUT` | `/api/trainings/:id/end-time` | 教师/负责人、管理资源 | 修改截止时间 |
@@ -23,9 +24,11 @@ source_of_truth: training modules, submit and submissions routes
 | `PUT` | `/api/trainings/:id/problems/reorder` | 教师/负责人、管理资源 | 题目排序 |
 | `PUT` | `/api/trainings/:id/problems/:problemId` | 教师/负责人、管理资源 | 更新任务题目 |
 | `DELETE` | `/api/trainings/:id/problems/:problemId` | 教师/负责人、管理资源 | 移除题目 |
-| `GET` | `/api/trainings/:id/problems/:problemId/detail` | 登录、资源 | 任务题目详情 |
+| `GET` | `/api/trainings/:id/problems/:problemId/detail` | 登录、资源 | 任务题面与当前用户笔记工作区 |
 | `GET` | `/api/trainings/:id/problems/:problemId/attachments` | 登录、资源 | 任务题目附件 |
 | `GET` | `/api/trainings/:id/problems/:problemId/solution` | 登录、可见性 | 题解 |
+| `GET` | `/api/trainings/:id/solutions` | 登录、可见性 | 批量题解 |
+| `GET` | `/api/trainings/:id/attachments` | 登录、资源 | 批量附件 |
 | `GET` | `/api/trainings/:id/problems/:problemId/note` | 登录、本人 | 个人笔记 |
 | `PUT` | `/api/trainings/:id/problems/:problemId/note` | 登录、本人 | 保存个人笔记 |
 | `GET` | `/api/trainings/:id/problem-status` | 登录、资源 | 用户题目状态 |
@@ -67,4 +70,9 @@ source_of_truth: training modules, submit and submissions routes
 
 任务内提交使用 `/api/trainings/:id/submit` 并包含任务题目上下文。Carits 提交进入
 `queuing`，Judge 完成后写入结果、用时、内存、分数、cases 和 subtasks。
+
+两个提交入口都接受 `Idempotency-Key` 请求头。相同用户、相同键和相同请求体在
+十分钟内返回同一提交；同一键对应不同请求体返回 `409 IDEMPOTENCY_CONFLICT`。
+当前开发服务器使用单进程内存登记，进程重启后登记失效，正式多实例部署前需要
+替换为共享持久化存储。
 

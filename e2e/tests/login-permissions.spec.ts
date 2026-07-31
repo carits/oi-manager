@@ -63,4 +63,18 @@ test.describe('authenticated permission matrix @smoke', () => {
     await expect(page).toHaveURL(/\/platform-admin\/problems/)
     await context.close()
   })
+
+  test('platform admin cannot enter super-admin management pages', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: accounts.platformAdmin.storageState,
+    })
+    const page = await context.newPage()
+
+    await page.goto('/admin/schools')
+    await expect(page).toHaveURL(/\/platform-admin$/)
+
+    await page.goto('/admin/profile')
+    await expect(page).toHaveURL(/\/admin\/profile/)
+    await context.close()
+  })
 })

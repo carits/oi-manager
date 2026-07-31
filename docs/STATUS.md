@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -9,12 +9,13 @@ source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright con
 
 ## 阶段
 
-OI Manager 仍处于开发阶段。当前服务器运行 Next.js 开发服务和 `tsx watch` 后端，
-没有切换到正式构建、正式密钥或生产进程。公网可访问不等于已经正式上线。
+OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作为开发预览，内部
+`3001` 保留 HMR，`3002` 使用 `tsx watch` 后端。优化构建使用 `NODE_ENV=production`
+只为启用 Next 优化，业务环境仍是 `APP_ENV=development`，不代表已经正式上线。
 
 | 服务 | 开发端口 | E2E 端口 | 说明 |
 |------|----------|----------|------|
-| Web | `3000` | `3100` | Next.js App Router |
+| Web preview / HMR | `3000` / `127.0.0.1:3001` | `3100` | Next.js App Router |
 | Server/API | `3002` | `3102` | Express + Prisma |
 | PostgreSQL | `5432` | 同实例 `e2e` schema | Docker Compose 基础设施 |
 | go-judge | `5050` | `5050` | 评测沙箱 |
@@ -52,7 +53,7 @@ OI Manager 仍处于开发阶段。当前服务器运行 Next.js 开发服务和
 
 - 当前服务器没有启用正式部署配置。
 - 外部 OJ 受登录状态、反爬策略和页面结构变化影响，真实连通性不作为 PR 门禁。
-- 前端 Token 仍保存在 `localStorage`，生产化前应重新评估会话存储方案。
+- 浏览器会话使用同域 HttpOnly Cookie；Bearer Token 仅作脚本和旧会话迁移兼容。
 - `apps/server/.env.example` 和 `apps/judge/.env.example` 仍包含旧端口/数据库示例；
   开发启动请使用 [开发环境启动](guide/DEVELOPMENT_SETUP.md) 中的配置。
 - 历史设计和调研仅供追溯，参见 [归档索引](archive/README.md)。

@@ -7,12 +7,26 @@ export interface UseQueryOptions {
   dedupingInterval?: number
 }
 
-export function useQuery<T>(key: string | null, options?: UseQueryOptions) {
-  const swrKey = options?.enabled === false ? null : key
-  const { data, error, isLoading, mutate } = useSWR<T>(swrKey, fetcher, {
+export function useQuery<T>(
+  key: string | null,
+  options?: UseQueryOptions,
+  cacheScope?: string | null,
+) {
+  const swrKey = options?.enabled === false || !key
+    ? null
+    : cacheScope
+      ? [key, cacheScope] as const
+      : key
+  const { data, error, isLoading, mutate } = useSWR<T>(
+    swrKey,
+    resourceKey => fetcher<T>(
+      Array.isArray(resourceKey) ? resourceKey[0] : resourceKey,
+    ),
+    {
     revalidateOnFocus: false,
     dedupingInterval: options?.dedupingInterval ?? 10000,
     refreshInterval: options?.refreshInterval,
-  })
+    },
+  )
   return { data: data ?? null, error, isLoading, mutate }
 }

@@ -65,3 +65,8 @@ apps/server/testdata/
 
 # Backups (数据库备份)
 backups/
+.run/
+apps/web/.next-candidate/
+apps/web/.next-current/
+apps/web/.next-previous/
+apps/web/.next-failed-*/

@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
+import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, Attachment } from '../types'
 
@@ -22,6 +23,7 @@ export function useTrainingActions(
   const [submitCode, setSubmitCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
+  const submitKeyRef = useRef<string | null>(null)
 
   // Edit/delete state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -40,22 +42,32 @@ export function useTrainingActions(
     }
     setSubmitting(true)
     try {
-      const res = await apiClient.post<{ submissionId?: number }>(`/api/trainings/${trainingId}/submit`, {
-        trainingProblemId: selectedProblemId,
-        language: submitLanguage,
-        code: submitCode,
-        submitMethod,
-      })
-      if (res.success) {
+      submitKeyRef.current ||= crypto.randomUUID()
+      const result = await apiClient.mutate<{ submissionId?: number }>(
+        `/api/trainings/${trainingId}/submit`,
+        'POST',
+        {
+          trainingProblemId: selectedProblemId,
+          language: submitLanguage,
+          code: submitCode,
+          submitMethod,
+        },
+        { headers: { 'Idempotency-Key': submitKeyRef.current } },
+      )
+      if (result.ok) {
+        submitKeyRef.current = null
         toast.success('提交成功')
         setSubmitCode('')
         setShowSubmitModal(false)
         // 打开提交详情
-        if (res.data?.submissionId) {
-          return res.data.submissionId
+        if (result.data?.submissionId) {
+          return result.data.submissionId
         }
       } else {
-        toast.error(res.message || '提交失败')
+        if (result.error.status > 0 && result.error.status < 500) {
+          submitKeyRef.current = null
+        }
+        toast.error(result.error.message || '提交失败')
       }
       return null
     } catch {
@@ -89,19 +101,8 @@ export function useTrainingActions(
 
   const handleDownloadAttachment = useCallback(async (attachment: Attachment) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}${attachment.fileUrl}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      })
-      if (!response.ok) throw new Error('下载失败')
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = attachment.fileName
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      const result = await apiClient.download(attachment.fileUrl)
+      saveBlobDownload(result.blob, attachment.fileName)
     } catch {
       toast.error('下载失败')
     }

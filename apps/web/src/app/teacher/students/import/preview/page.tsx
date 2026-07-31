@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
+import { LoadError } from '@/components/ui/LoadError'
 
 interface ParsedRow {
   lineNumber: number
@@ -55,10 +56,16 @@ export default function TeamImportPreviewPage() {
   useEffect(() => {
     if (batchId) {
       fetchPreview()
+    } else {
+      setError('缺少导入批次参数')
+      setLoading(false)
     }
   }, [batchId])
 
   const fetchPreview = async () => {
+    if (!batchId) return
+    setLoading(true)
+    setError(null)
     try {
       const result = await apiClient.get<PreviewData>(`/api/team-import/${batchId}/preview`)
       if (result.success && result.data) {
@@ -76,9 +83,12 @@ export default function TeamImportPreviewPage() {
           }
         })
         setUserChoices(initial)
+      } else {
+        setError(result.message || '导入预览读取失败')
       }
     } catch (err) {
       console.error('Failed to fetch preview:', err)
+      setError('导入预览读取失败')
     }
     setLoading(false)
   }
@@ -134,27 +144,31 @@ export default function TeamImportPreviewPage() {
   }
 
   if (loading) {
+    return <PageLoadingFrame title="导入预览" />
+  }
+
+  if (error && !preview) {
     return (
-      <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>
-          加载预览数据...
-        </div>
-      </ProtectedRoute>
+      <LoadError
+        message={error}
+        onRetry={fetchPreview}
+        onBack={() => router.push('/teacher/students/import')}
+      />
     )
   }
 
   if (!preview) {
     return (
-      <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+      <>
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>
           预览数据不存在
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
   return (
-    <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+    <>
       <div style={{ padding: '1rem 0' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
           预览导入结果
@@ -343,6 +357,6 @@ export default function TeamImportPreviewPage() {
           </Button>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

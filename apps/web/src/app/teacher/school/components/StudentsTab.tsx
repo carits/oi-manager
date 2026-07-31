@@ -174,7 +174,7 @@ export default function StudentsTab({ schoolId, showHeader = false }: StudentsTa
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-          加载中...
+          <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
         </div>
       ) : allStudents.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>

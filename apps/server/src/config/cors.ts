@@ -11,9 +11,9 @@ import { CorsOptions } from 'cors'
  * 获取 CORS 配置
  */
 export function getCorsOptions(): CorsOptions {
-  const nodeEnv = process.env.NODE_ENV || 'development'
+  const appEnv = process.env.APP_ENV || process.env.NODE_ENV || 'development'
 
-  if (nodeEnv === 'production') {
+  if (appEnv === 'production') {
     // 生产环境：从环境变量读取白名单
     const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || []
 
@@ -37,18 +37,20 @@ export function getCorsOptions(): CorsOptions {
         }
       },
       credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      exposedHeaders: ['Content-Disposition'] // 允许前端读取文件名
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+      exposedHeaders: ['Content-Disposition', 'X-Request-ID'] // 允许前端读取文件名和请求编号
     }
   }
 
-  // 开发环境：允许 localhost 和 127.0.0.1
+  // Development preview can be reached through a public IP, VPN, or SSH
+  // tunnel. Reflect the concrete Origin; cookie + Origin validation still
+  // protects state-changing requests.
   return {
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: true,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Disposition'] // 允许前端读取文件名
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    exposedHeaders: ['Content-Disposition', 'X-Request-ID'] // 允许前端读取文件名和请求编号
   }
 }

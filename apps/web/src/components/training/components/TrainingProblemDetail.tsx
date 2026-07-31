@@ -1,6 +1,9 @@
 'use client'
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
+import { LoadError } from '@/components/ui/LoadError'
+import type { ResourceState } from '@/lib/resource'
 import type { TrainingInfo, TrainingProblem, ProblemDetail } from '../types'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
@@ -30,6 +33,8 @@ interface TrainingProblemDetailProps {
   selectedProblemId: string | null
   setSelectedProblemId: (id: string) => void
   problemDetail: ProblemDetail | null
+  problemDetailState: ResourceState<ProblemDetail>
+  retryProblemDetail: () => Promise<void>
   selectedStatementId: string | null
   setSelectedStatementId: (id: string | null) => void
   training: TrainingInfo
@@ -59,6 +64,8 @@ export function TrainingProblemDetail({
   selectedProblemId,
   setSelectedProblemId,
   problemDetail,
+  problemDetailState,
+  retryProblemDetail,
   selectedStatementId,
   setSelectedStatementId,
   training,
@@ -87,6 +94,20 @@ export function TrainingProblemDetail({
   // ========== 题面内容渲染（两种布局共用） ==========
 
   const renderStatementContent = () => {
+    if (problemDetailState.state === 'pending') {
+      return <SkeletonRegion rows={8} label="题面正在准备" />
+    }
+
+    if (problemDetailState.state === 'error' && !problemDetail) {
+      return (
+        <LoadError
+          message={problemDetailState.error.message}
+          requestId={problemDetailState.error.requestId}
+          onRetry={retryProblemDetail}
+        />
+      )
+    }
+
     if (!problemDetail) {
       return (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>

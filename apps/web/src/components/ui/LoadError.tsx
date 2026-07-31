@@ -1,36 +1,65 @@
 interface LoadErrorProps {
   message?: string
+  requestId?: string
+  compact?: boolean
   onRetry: () => void
+  onBack?: () => void
 }
 
 export function LoadError({
   message = '数据加载失败，请稍后重试',
+  requestId,
+  compact = false,
   onRetry,
+  onBack,
 }: LoadErrorProps) {
   return (
     <div
       role="alert"
       style={{
-        padding: '3rem',
+        padding: compact ? '0.75rem 1rem' : '3rem',
         textAlign: 'center',
         color: 'var(--error)',
       }}
     >
       <p style={{ marginBottom: '1rem' }}>{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        style={{
-          padding: '0.5rem 1rem',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          background: 'var(--bg-card)',
-          color: 'var(--text-primary)',
-          cursor: 'pointer',
-        }}
-      >
-        重新加载
-      </button>
+      {requestId && (
+        <p style={{ margin: '-0.5rem 0 1rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+          请求编号：{requestId}
+        </p>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            padding: '0.5rem 1rem',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+          }}
+        >
+          重试
+        </button>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              padding: '0.5rem 1rem',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            返回
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,27 +1,28 @@
-import { useEffect, useState, useCallback } from 'react'
-import apiClient from '@/lib/apiClient'
+import { useResource } from '@/hooks/useResource'
 
-export function useTrainingRank(trainingId: string, activeTab: string) {
-  const [rankingData, setRankingData] = useState<any>(null)
+export function useTrainingRank(
+  trainingId: string,
+  activeTab: string,
+  sessionKey: string | null,
+) {
+  const resource = useResource<any>(
+    activeTab === 'ranking'
+      ? `/api/trainings/${trainingId}/ranking`
+      : null,
+    {
+      dedupingInterval: 30000,
+      isEmpty: () => false,
+      sessionKey,
+    },
+  )
 
-  const refreshRanking = useCallback(async () => {
-    try {
-      const res = await apiClient.get<any>(`/api/trainings/${trainingId}/ranking`)
-      if (res.success && res.data) {
-        setRankingData(res.data)
-      }
-    } catch (error) {
-      console.error('Failed to load ranking:', error)
-    }
-  }, [trainingId])
+  const rankingData =
+    resource.data ??
+    (resource.state.state === 'error' ? resource.state.previousData : undefined)
 
-  useEffect(() => {
-    if (activeTab !== 'ranking') {
-      setRankingData(null)
-      return
-    }
-    refreshRanking()
-  }, [activeTab, trainingId, refreshRanking])
-
-  return { rankingData, refreshRanking }
+  return {
+    rankingData: rankingData ?? null,
+    rankingState: resource.state,
+    refreshRanking: resource.retry,
+  }
 }

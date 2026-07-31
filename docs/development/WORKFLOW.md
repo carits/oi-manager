@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 source_of_truth: package.json and workspace package manifests
 ---
 
@@ -11,8 +11,11 @@ source_of_truth: package.json and workspace package manifests
 
 | 命令 | 用途 |
 |------|------|
-| `pnpm dev` | 清理 `3000/3002`，构建 Shared，启动全部开发应用 |
-| `pnpm dev:dirty` | 不清理端口，直接启动工作区 |
+| `pnpm dev` | 检查 `3001/3002`，构建 Shared，启动内部 HMR、Server 和 Judge |
+| `pnpm dev:dirty` | 检查 `3001/3002`，不重建 Shared，直接启动工作区 |
+| `pnpm preview:build` | 生成供公网检查的优化 Web 构建 |
+| `pnpm preview:start` | 由独立 PID 启动 `3000` 优化预览 |
+| `pnpm preview:health` | 检查优化预览健康状态 |
 | `pnpm restart` | 重启开发服务 |
 | `pnpm stop` | 停止开发服务 |
 | `pnpm build` | 构建 Shared、生成 Prisma Client，再构建 Server、Web、Judge |
@@ -20,6 +23,7 @@ source_of_truth: package.json and workspace package manifests
 | `pnpm test:ui:smoke` | Chromium/Firefox UI 冒烟 |
 | `pnpm test:ui` | 全量 Playwright |
 | `pnpm docs:check` | 文档、路由、模型和 API 清单检查 |
+| `pnpm ui:state-check` | 拒绝整页等待文案、mounted 门和页面级重复鉴权 |
 
 ## 修改流程
 

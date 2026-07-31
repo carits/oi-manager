@@ -6,6 +6,12 @@ import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
 import { submitToCfPlaywright } from '../lib/cf-submit'
 import { rejudgeSubmission } from '../ws/judge'
+import {
+  IdempotencyConflictError,
+  readIdempotencyKey,
+  requestFingerprint,
+  runIdempotent,
+} from '../lib/idempotency'
 
 export const submitRouter = Router()
 
@@ -24,6 +30,14 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
   try {
     const { problemId, oj, language, code, submitMethod } = req.body
     const userId = req.user.userId
+    const idempotencyKey = readIdempotencyKey(req)
+    const fingerprint = requestFingerprint({
+      problemId,
+      oj,
+      language,
+      code,
+      submitMethod,
+    })
 
     // 参数验证
     if (!problemId || !oj || !language || !code) {
@@ -56,8 +70,14 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
     }
 
     // 创建提交记录
-    const submission = await prisma.submission.create({
-      data: {
+    let submissionResult
+    try {
+      submissionResult = await runIdempotent(
+        `problem-submit:${userId}`,
+        idempotencyKey,
+        fingerprint,
+        () => prisma.submission.create({
+          data: {
         userId,
         oj,
         problemId,
@@ -70,8 +90,27 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
         // 题库提交：设置 submitScope 和可见性
         submitScope: 'problem',
         isGlobalVisible: true,
-      },
-    })
+          },
+        }),
+      )
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        return res.status(409).json({
+          success: false,
+          code: 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        })
+      }
+      throw error
+    }
+    const submission = submissionResult.value
+    if (submissionResult.replayed) {
+      return res.json({
+        success: true,
+        data: { submissionId: submission.id, replayed: true },
+        message: '已返回同一次提交的结果',
+      })
+    }
 
     logger.info('submission_created', {
       action: 'submit',

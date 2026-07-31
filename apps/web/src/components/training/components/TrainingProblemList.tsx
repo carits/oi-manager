@@ -125,15 +125,24 @@ export function TrainingProblemList({
 
                   {/* 标题列 */}
                   <td style={{ padding: '0.6rem 1rem' }}>
-                    <span
+                    <button
+                      type="button"
                       onClick={() => {
                         onSelectProblem(p.id)
                         onSwitchToProblemsTab()
                       }}
-                      style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'none' }}
+                      style={{
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        textDecoration: 'none',
+                        border: 0,
+                        background: 'none',
+                        padding: 0,
+                        font: 'inherit',
+                      }}
                     >
                       {p.alias || p.title || '未命名'}
-                    </span>
+                    </button>
                   </td>
                 </tr>
               )
@@ -208,15 +217,24 @@ export function TrainingProblemList({
 
                 {/* 标题列 */}
                 <td style={{ padding: '0.6rem 1rem' }}>
-                  <span
+                  <button
+                    type="button"
                     onClick={() => {
                       onSelectProblem(p.id)
                       onSwitchToProblemsTab()
                     }}
-                    style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'none' }}
+                    style={{
+                      color: 'var(--primary)',
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      border: 0,
+                      background: 'none',
+                      padding: 0,
+                      font: 'inherit',
+                    }}
                   >
                     {p.alias || p.title || '未命名'}
-                  </span>
+                  </button>
                 </td>
               </tr>
             )

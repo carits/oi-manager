@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
+import { LoadError } from '@/components/ui/LoadError'
 
 interface ImportResultItem {
   lineNumber: number
@@ -39,21 +40,31 @@ export default function TeamImportResultPage() {
 
   const [result, setResult] = useState<ImportResult | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (batchId) {
       fetchResult()
+    } else {
+      setError('缺少导入批次参数')
+      setLoading(false)
     }
   }, [batchId])
 
   const fetchResult = async () => {
+    if (!batchId) return
+    setLoading(true)
+    setError(null)
     try {
       const res = await apiClient.get<ImportResult>(`/api/team-import/${batchId}/result`)
       if (res.success && res.data) {
         setResult(res.data)
+      } else {
+        setError(res.message || '导入结果读取失败')
       }
     } catch (err) {
       console.error('Failed to fetch result:', err)
+      setError('导入结果读取失败')
     }
     setLoading(false)
   }
@@ -68,27 +79,31 @@ export default function TeamImportResultPage() {
   }
 
   if (loading) {
+    return <PageLoadingFrame title="导入结果" />
+  }
+
+  if (error) {
     return (
-      <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>
-          加载导入结果...
-        </div>
-      </ProtectedRoute>
+      <LoadError
+        message={error}
+        onRetry={fetchResult}
+        onBack={() => router.push('/teacher/students/import')}
+      />
     )
   }
 
   if (!result) {
     return (
-      <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+      <>
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>
           结果数据不存在
         </div>
-      </ProtectedRoute>
+      </>
     )
   }
 
   return (
-    <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+    <>
       <div style={{ padding: '1rem 0' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
           导入完成
@@ -212,6 +227,6 @@ export default function TeamImportResultPage() {
           </Button>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

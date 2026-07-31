@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
@@ -186,7 +185,7 @@ export default function StudentPlatformBindingsPage() {
   const currentBinding = selectedPlatform ? bindings[selectedPlatform] : null
 
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
       <div style={{ padding: '1rem 0' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
           平台绑定
@@ -197,7 +196,7 @@ export default function StudentPlatformBindingsPage() {
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-            加载中...
+            <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '1rem', maxWidth: '600px' }}>
@@ -407,6 +406,6 @@ export default function StudentPlatformBindingsPage() {
           </div>
         </div>
       </Modal>
-    </ProtectedRoute>
+    </>
   )
 }

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Pagination } from '@/components/ui/Pagination'
 import apiClient from '@/lib/apiClient'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 interface School {
   id: string
@@ -126,23 +126,19 @@ export default function AdminSchoolDetailPage() {
   }
 
   if (loading) {
-    return (
-      <ProtectedRoute requiredRole="super_admin">
-        <div style={{ padding: '2rem', textAlign: 'center' }}>加载中...</div>
-      </ProtectedRoute>
-    )
+    return <PageLoadingFrame title="学校详情" />
   }
 
   if (!school) {
     return (
-      <ProtectedRoute requiredRole="super_admin">
+      <>
         <div style={{ padding: '2rem', textAlign: 'center' }}>学校不存在</div>
-      </ProtectedRoute>
+      </>
     )
   }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
           {/* 返回按钮 */}
@@ -358,6 +354,6 @@ export default function AdminSchoolDetailPage() {
           </div>
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

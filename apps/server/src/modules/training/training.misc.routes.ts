@@ -8,6 +8,7 @@ import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
+import { getAdapter, getSupportedPlatforms } from '../../oj-adapters'
 import {
   canAccessTraining,
   canManageTraining,
@@ -16,6 +17,392 @@ import {
 } from './training.helpers'
 
 export const trainingMiscRouter = Router()
+
+/**
+ * GET /api/trainings/:id/overview
+ * Return the metadata and visible problem summaries needed by the first
+ * viewport in one bounded request.
+ */
+trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  const id = parseTrainingId(req.params.id)
+  const userId = req.user!.userId
+  const training = await prisma.training.findUnique({
+    where: { id },
+    include: {
+      _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
+      TrainingProblem: {
+        include: {
+          Problem: {
+            select: {
+              id: true,
+              title: true,
+              platform: true,
+              problemId: true,
+              difficulty: true,
+              timeLimit: true,
+              memoryLimit: true,
+              _count: { select: { ProblemAttachment: true } },
+            },
+          },
+          TrainingSolution: { select: { id: true, visible: true } },
+          _count: { select: { TrainingAttachment: true } },
+        },
+        orderBy: { orderIndex: 'asc' },
+      },
+    },
+  })
+
+  if (!training) {
+    return res.status(404).json({ success: false, message: '训练不存在' })
+  }
+  if (!await canAccessTraining(userId, training)) {
+    return res.status(403).json({ success: false, message: '无权查看该训练' })
+  }
+
+  const now = new Date()
+  const computedStatus =
+    training.status === 'finished'
+      ? 'finished'
+      : now < training.startTime
+        ? 'upcoming'
+        : now <= training.endTime
+          ? 'ongoing'
+          : 'finished'
+  if (computedStatus !== training.status) {
+    await prisma.training.update({
+      where: { id },
+      data: { status: computedStatus },
+    })
+    if (computedStatus === 'finished' && training.type === 'contest') {
+      await prisma.submission.updateMany({
+        where: {
+          submitScope: 'contest',
+          contestId: id,
+          isGlobalVisible: false,
+        },
+        data: { isGlobalVisible: true },
+      })
+    }
+  }
+  const isAdmin = await canManageTraining(userId, training)
+  const canSeeProblems = computedStatus !== 'upcoming' || isAdmin
+  const submissions = canSeeProblems
+    ? await prisma.submission.findMany({
+        where: {
+          submitScope: training.type === 'contest' ? 'contest' : 'training',
+          trainingId: id,
+          userId,
+        },
+        select: {
+          trainingProblemId: true,
+          oj: true,
+          problemId: true,
+          score: true,
+          result: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+    : []
+  const bestByProblem = new Map<string, { score: number; result: string }>()
+  for (const submission of submissions) {
+    const problemKey =
+      submission.trainingProblemId || `${submission.oj}:${submission.problemId}`
+    const score = submission.score ?? 0
+    const current = bestByProblem.get(problemKey)
+    if (
+      !current ||
+      score > current.score ||
+      (score === current.score &&
+        submission.result === 'accepted' &&
+        current.result !== 'accepted')
+    ) {
+      bestByProblem.set(problemKey, {
+        score,
+        result: submission.result,
+      })
+    }
+  }
+  const platformLabelMap = new Map<string, string>([
+    ...getSupportedPlatforms().map(platform => [platform.platform, platform.name] as [string, string]),
+    ['carits', 'Carits'],
+  ])
+  const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdmin
+  const showProblemId = isAdmin || training.problemIdVisible
+  const isStudent = req.user!.role === 'student'
+
+  const problems = canSeeProblems
+    ? training.TrainingProblem.map(problem => {
+        const attachmentCount =
+          (problem.Problem._count?.ProblemAttachment ?? 0) +
+          problem._count.TrainingAttachment
+        const summary = {
+          id: problem.id,
+          alias: problem.alias,
+          orderIndex: problem.orderIndex,
+          points: problem.points,
+          hasSolution: Boolean(problem.TrainingSolution),
+          solutionVisible: problem.TrainingSolution?.visible ?? false,
+          attachmentCount,
+          platform: problem.Problem.platform,
+          problemTitle: problem.Problem.title,
+        }
+
+        if (!isAdmin && !training.problemIdVisible) return summary
+
+        return {
+          ...summary,
+          problemId: problem.Problem.id,
+          platformProblemId: problem.Problem.problemId,
+          difficulty: problem.Problem.difficulty,
+          timeLimit: problem.Problem.timeLimit,
+          memoryLimit: problem.Problem.memoryLimit,
+        }
+      })
+    : []
+  const problemStatus = canSeeProblems
+    ? training.TrainingProblem.map(problem => {
+        const platform = problem.Problem.platform
+        const platformProblemId = problem.Problem.problemId
+        const best =
+          bestByProblem.get(problem.id) ||
+          bestByProblem.get(`${platform}:${platformProblemId}`)
+        let problemUrl: string | null = null
+
+        try {
+          problemUrl = platform === 'carits'
+            ? '__carits__'
+            : platform
+              ? getAdapter(platform as any).getProblemUrl(platformProblemId)
+              : null
+        } catch {
+          problemUrl = null
+        }
+
+        const showPlatform = !isStudent && showProblemId
+        return {
+          id: problem.id,
+          alias: problem.alias,
+          title: problem.Problem.title,
+          orderIndex: problem.orderIndex,
+          points: problem.points,
+          platform: showPlatform ? platform : null,
+          platformProblemId: showPlatform ? platformProblemId : null,
+          problemTableId: showPlatform ? problem.Problem.id : null,
+          platformLabel: showPlatform
+            ? platformLabelMap.get(platform as any) || platform || ''
+            : '',
+          problemUrl: showPlatform ? problemUrl : null,
+          hasSubmitted: Boolean(best),
+          bestScore: hideOiStatus ? null : best?.score ?? null,
+          bestResult: hideOiStatus ? null : best?.result ?? null,
+        }
+      })
+    : []
+
+  res.json({
+    success: true,
+    data: {
+      training: {
+        id: training.id,
+        teamId: training.teamId,
+        schoolId: training.schoolId,
+        title: training.title,
+        description: training.description,
+        format: training.format,
+        startTime: training.startTime.toISOString(),
+        endTime: training.endTime.toISOString(),
+        status: computedStatus,
+        createdBy: training.createdBy,
+        problemIdVisible: training.problemIdVisible,
+        solutionVisible: training.solutionVisible,
+        includeAdminInRanking: training.includeAdminInRanking,
+        type: training.type,
+        sourceTrainingId: training.sourceTrainingId,
+        problemCount: training._count.TrainingProblem,
+        participantCount: training._count.TrainingParticipant,
+        isAdmin,
+        createdAt: training.createdAt.toISOString(),
+      },
+      problems,
+      problemStatus,
+    },
+  })
+}, '获取训练概览失败'))
+
+/**
+ * GET /api/trainings/:id/solutions
+ * Return all visible solutions in one response so the browser never performs
+ * one request per problem.
+ */
+trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  const id = parseTrainingId(req.params.id)
+  const userId = req.user!.userId
+  const training = await prisma.training.findUnique({ where: { id } })
+
+  if (!training) {
+    return res.status(404).json({ success: false, message: '训练不存在' })
+  }
+  if (!await canAccessTraining(userId, training)) {
+    return res.status(403).json({ success: false, message: '无权限' })
+  }
+
+  const isAdmin = await canManageTraining(userId, training)
+  const showSolution =
+    isAdmin || training.solutionVisible ||
+    training.status === 'finished' || new Date() > training.endTime
+
+  if (!showSolution) {
+    return res.json({ success: true, data: {} })
+  }
+
+  const problems = await prisma.trainingProblem.findMany({
+    where: { trainingId: id },
+    select: {
+      id: true,
+      TrainingSolution: {
+        select: { content: true, visible: true },
+      },
+      Problem: {
+        select: {
+          solutionType: true,
+          solutionMarkdown: true,
+          solutionPdfUrl: true,
+          ProblemStatement: {
+            where: { type: 'solution', isVisible: true },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: {
+              content: true,
+              format: true,
+              language: true,
+              fileUrl: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { orderIndex: 'asc' },
+  })
+
+  const solutions: Record<string, {
+    content: string
+    visible: boolean
+    source: 'training' | 'problem'
+    solutionType?: string
+    solutionPdfUrl?: string | null
+    format?: string
+    language?: string | null
+    fileUrl?: string | null
+  }> = {}
+
+  for (const item of problems) {
+    if (item.TrainingSolution && (item.TrainingSolution.visible || isAdmin)) {
+      solutions[item.id] = {
+        content: item.TrainingSolution.content,
+        visible: item.TrainingSolution.visible,
+        source: 'training',
+      }
+      continue
+    }
+
+    if (item.Problem.solutionType !== 'none' && item.Problem.solutionMarkdown) {
+      solutions[item.id] = {
+        content: item.Problem.solutionMarkdown,
+        visible: true,
+        source: 'problem',
+        solutionType: item.Problem.solutionType,
+        solutionPdfUrl: item.Problem.solutionPdfUrl,
+      }
+      continue
+    }
+
+    const statement = item.Problem.ProblemStatement[0]
+    if (statement?.content) {
+      solutions[item.id] = {
+        content: statement.content,
+        visible: true,
+        source: 'problem',
+        format: statement.format,
+        language: statement.language,
+        fileUrl: statement.fileUrl,
+      }
+    }
+  }
+
+  res.json({ success: true, data: solutions })
+}, '查询题解失败'))
+
+/**
+ * GET /api/trainings/:id/attachments
+ * Return original-problem and training-specific attachments in one response.
+ */
+trainingMiscRouter.get('/trainings/:id/attachments', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  const id = parseTrainingId(req.params.id)
+  const userId = req.user!.userId
+  const training = await prisma.training.findUnique({ where: { id } })
+
+  if (!training) {
+    return res.status(404).json({ success: false, message: '训练不存在' })
+  }
+  if (!await canAccessTraining(userId, training)) {
+    return res.status(403).json({ success: false, message: '无权限' })
+  }
+
+  const notStarted = await requireTrainingStarted(training, userId)
+  if (notStarted) {
+    return res.status(403).json({ success: false, message: notStarted })
+  }
+
+  const problems = await prisma.trainingProblem.findMany({
+    where: { trainingId: id },
+    select: {
+      id: true,
+      TrainingAttachment: {
+        orderBy: { uploadedAt: 'desc' },
+        select: {
+          id: true,
+          fileName: true,
+          fileUrl: true,
+          fileSize: true,
+          uploadedBy: true,
+          uploadedAt: true,
+        },
+      },
+      Problem: {
+        select: {
+          ProblemAttachment: {
+            orderBy: { uploadedAt: 'desc' },
+            select: {
+              id: true,
+              fileName: true,
+              fileUrl: true,
+              fileSize: true,
+              uploadedAt: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { orderIndex: 'asc' },
+  })
+
+  const attachments = Object.fromEntries(problems.map(item => [
+    item.id,
+    [
+      ...item.TrainingAttachment.map(file => ({
+        ...file,
+        uploadedAt: file.uploadedAt.toISOString(),
+      })),
+      ...item.Problem.ProblemAttachment.map(file => ({
+        ...file,
+        uploadedBy: '',
+        uploadedAt: file.uploadedAt.toISOString(),
+      })),
+    ],
+  ]))
+
+  res.json({ success: true, data: attachments })
+}, '查询附件失败'))
 
 /**
  * GET /api/trainings/:id/problems/:problemId/solution

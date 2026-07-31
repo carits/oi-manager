@@ -13,6 +13,8 @@ import { TeamInviteModal } from './TeamInviteModal'
 import { TeamInviteListModal } from './TeamInviteListModal'
 import { TeamTransferModal } from './TeamTransferModal'
 import { TeamEditModal } from './TeamEditModal'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
+import { LoadError } from '@/components/ui/LoadError'
 import type { JoinRequestItem } from './TeamMemberList'
 import dynamic from 'next/dynamic'
 
@@ -47,13 +49,11 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   const [activeTab, setActiveTab] = useState<TabType>(
     VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'members'
   )
-  const [mounted, setMounted] = useState(false)
-
   // 获取用户ID
   const userId = user?.userId
 
   // 使用公共 hook 获取团队数据
-  const { team, loading, error, refetch, joinRequests: apiJoinRequests, fetchJoinRequests } = useTeamDetail(mounted ? teamId : null, true, sessionKey)
+  const { team, loading, error, refetch, joinRequests: apiJoinRequests, fetchJoinRequests } = useTeamDetail(teamId, true, sessionKey)
 
   // 使用公共 hook 计算权限
   const permission = useTeamPermission(team, userId, userType)
@@ -89,10 +89,6 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   // 移除成员确认弹框状态
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string; userType: UserType } | null>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
@@ -359,19 +355,22 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
     { key: 'tasks', label: '题单' }
   ]
 
-  if (!mounted || loading) {
+  if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-        加载中...
+      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <SkeletonRegion rows={8} label="正在获取团队详情" />
       </div>
     )
   }
 
   if (error || !team) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-        <p>{error || '团队不存在'}</p>
-        <button onClick={() => router.push(basePath)}>返回团队列表</button>
+      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <LoadError
+          message={error || '团队不存在'}
+          onRetry={refetch}
+          onBack={() => router.push(basePath)}
+        />
       </div>
     )
   }

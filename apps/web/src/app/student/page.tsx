@@ -1,9 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppShell } from '@/components/AppShell'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -11,24 +9,9 @@ import { Card } from '@/components/ui/Card'
 // 学生首页
 export default function StudentPage() {
   const { user } = useAuth()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <ProtectedRoute requiredRole="student">
-        <div style={{ minHeight: '100vh', background: 'var(--bg-page)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
-  }
 
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
       <AppShell>
         <PageHeader title="学生首页" description={`欢迎回来，${user?.username}`} />
 
@@ -74,6 +57,6 @@ export default function StudentPage() {
           </Card>
         </div>
       </AppShell>
-    </ProtectedRoute>
+    </>
   )
 }

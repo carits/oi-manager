@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
@@ -89,7 +88,7 @@ export default function TeamImportPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole={['teacher', 'school_principal']}>
+    <>
       <div style={{ padding: '1rem 0' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
           导入团队成员
@@ -100,7 +99,7 @@ export default function TeamImportPage() {
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-            加载中...
+            <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
           </div>
         ) : (
           <div style={{ maxWidth: '600px' }}>
@@ -243,6 +242,6 @@ export default function TeamImportPage() {
           </div>
         )}
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

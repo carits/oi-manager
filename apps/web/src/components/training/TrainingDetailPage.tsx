@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import apiClient from '@/lib/apiClient'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
-import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
+import { AsyncRegion, SkeletonRegion } from '@/components/ui/AsyncRegion'
+import { LoadError } from '@/components/ui/LoadError'
+import { useResource } from '@/hooks/useResource'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
-import { TrainingFormModal } from './TrainingFormModal'
 import { useAuth } from '@/components/AuthProvider'
 import type { Attachment, TabType } from './types'
 import { typeLabel, formatLabel as formatLabelFn } from './types'
@@ -19,11 +21,33 @@ import { useTrainingSubmissions } from './hooks/useTrainingSubmissions'
 import { useTrainingActions } from './hooks/useTrainingActions'
 
 import { TrainingProblemList } from './components/TrainingProblemList'
-import { TrainingProblemDetail } from './components/TrainingProblemDetail'
-import { TrainingRankTable } from './components/TrainingRankTable'
-import { TrainingSubmissionPanel } from './components/TrainingSubmissionPanel'
-import { TrainingSolutionPanel } from './components/TrainingSolutionPanel'
-import { TrainingAttachmentPanel } from './components/TrainingAttachmentPanel'
+
+const TrainingProblemDetail = dynamic(
+  () => import('./components/TrainingProblemDetail').then(module => module.TrainingProblemDetail),
+  { loading: () => <SkeletonRegion rows={8} /> },
+)
+const TrainingRankTable = dynamic(
+  () => import('./components/TrainingRankTable').then(module => module.TrainingRankTable),
+  { loading: () => <SkeletonRegion rows={6} /> },
+)
+const TrainingSubmissionPanel = dynamic(
+  () => import('./components/TrainingSubmissionPanel').then(module => module.TrainingSubmissionPanel),
+  { loading: () => <SkeletonRegion rows={6} /> },
+)
+const TrainingSolutionPanel = dynamic(
+  () => import('./components/TrainingSolutionPanel').then(module => module.TrainingSolutionPanel),
+  { loading: () => <SkeletonRegion rows={5} /> },
+)
+const TrainingAttachmentPanel = dynamic(
+  () => import('./components/TrainingAttachmentPanel').then(module => module.TrainingAttachmentPanel),
+  { loading: () => <SkeletonRegion rows={4} /> },
+)
+const SubmissionDetailModal = dynamic(
+  () => import('@/components/submission/SubmissionDetailModal').then(module => module.SubmissionDetailModal),
+)
+const TrainingFormModal = dynamic(
+  () => import('./TrainingFormModal').then(module => module.TrainingFormModal),
+)
 
 interface TrainingDetailPageProps {
   basePath: string
@@ -32,8 +56,9 @@ interface TrainingDetailPageProps {
 
 export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailPageProps) {
   const params = useParams()
+  const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, sessionKey } = useAuth()
   const trainingId = (params.tid || params.cid) as string
   const teamId = teamIdOverride || (params.id as string)
 
@@ -47,7 +72,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
 
   const {
     training, problems, selectedProblemId, setSelectedProblemId,
-    problemDetail, loading, error, refresh,
+    problemDetail, problemDetailState, retryProblemDetail,
+    loading, error, refresh, refreshError,
     selectedStatementId, setSelectedStatementId,
     noteContent, setNoteContent, noteSaving,
     noteLastSaved,
@@ -56,11 +82,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     recordContent, setRecordContent, recordSaving,
     recordLastSaved,
     recordEditMode, setRecordEditMode,
-    problemListData, loadProblemListData, clearProblemListData,
+    problemListState, loadProblemListData,
     saveNoteNow, saveRecordNow,
-  } = useTrainingDetail(trainingId)
+  } = useTrainingDetail(trainingId, activeTab, sessionKey)
 
-  const { rankingData } = useTrainingRank(trainingId, activeTab)
+  const { rankingData, rankingState, refreshRanking } = useTrainingRank(trainingId, activeTab, sessionKey)
 
   const sub = useTrainingSubmissions(trainingId, activeTab)
 
@@ -69,79 +95,21 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     selectedProblemId, problems, activeTab,
   )
 
-  // Solutions/attachments state (not extracted to hooks)
-  const [allSolutions, setAllSolutions] = useState<Record<string, {
+  const solutionsResource = useResource<Record<string, {
     content: string; visible: boolean; source?: 'training' | 'problem';
     solutionType?: string; solutionPdfUrl?: string
-  }>>({})
-  const [allAttachments, setAllAttachments] = useState<Record<string, Attachment[]>>({})
+  }>>(
+    activeTab === 'solutions' ? `/api/trainings/${trainingId}/solutions` : null,
+    { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
+  )
+  const attachmentsResource = useResource<Record<string, Attachment[]>>(
+    activeTab === 'attachments' ? `/api/trainings/${trainingId}/attachments` : null,
+    { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
+  )
 
   const isUpcoming = training?.status === 'upcoming'
   const hideContent = isUpcoming && !training.isAdmin
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
-
-  // Load problem list when tab changes
-  useEffect(() => {
-    if (activeTab !== 'problemList') {
-      clearProblemListData()
-      return
-    }
-    loadProblemListData()
-  }, [activeTab, trainingId, loadProblemListData, clearProblemListData])
-
-  // Load all solutions when tab changes
-  useEffect(() => {
-    if (activeTab !== 'solutions') {
-      setAllSolutions({})
-      return
-    }
-    if (problems.length === 0) return
-    const loadAllSolutions = async () => {
-      const solutions: Record<string, { content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string }> = {}
-      await Promise.all(problems.map(async (p) => {
-        try {
-          const res = await apiClient.get<{ id: string | null; content: string; visible: boolean; source?: 'training' | 'problem'; solutionType?: string; solutionPdfUrl?: string } | null>(`/api/trainings/${trainingId}/problems/${p.id}/solution`)
-          if (res.success && res.data) {
-            solutions[p.id] = {
-              content: res.data.content || '',
-              visible: res.data.visible ?? false,
-              source: res.data.source,
-              solutionType: res.data.solutionType,
-              solutionPdfUrl: res.data.solutionPdfUrl,
-            }
-          }
-        } catch (error) {
-          console.error('Failed to load solution for', p.id, error)
-        }
-      }))
-      setAllSolutions(solutions)
-    }
-    loadAllSolutions()
-  }, [activeTab, trainingId, problems])
-
-  // Load all attachments when tab changes
-  useEffect(() => {
-    if (activeTab !== 'attachments') {
-      setAllAttachments({})
-      return
-    }
-    if (problems.length === 0) return
-    const loadAllAttachments = async () => {
-      const attachments: Record<string, Attachment[]> = {}
-      await Promise.all(problems.map(async (p) => {
-        try {
-          const res = await apiClient.get<Attachment[]>(`/api/trainings/${trainingId}/problems/${p.id}/attachments`)
-          if (res.success && res.data) {
-            attachments[p.id] = res.data
-          }
-        } catch (error) {
-          console.error('Failed to load attachments for', p.id, error)
-        }
-      }))
-      setAllAttachments(attachments)
-    }
-    loadAllAttachments()
-  }, [activeTab, trainingId, problems])
 
   // Countdown timer + status boundary detection
   useEffect(() => {
@@ -212,20 +180,73 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
 
   // ========== Loading / Error ==========
 
+  const initialTitle = pathname.includes('/homeworks/')
+    ? '作业详情'
+    : pathname.includes('/contests/')
+      ? '比赛详情'
+      : '训练详情'
+  const initialTabs = ['题目列表', '题面', '评测记录', '题解', '附件', '排名']
+
   if (loading) {
-    return <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>加载中...</div>
+    return (
+      <div style={{ minHeight: 'calc(100vh - 72px)', background: 'var(--gray-50)' }}>
+        <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.9rem 1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', maxWidth: '1200px', margin: '0 auto' }}>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              style={{ background: 'none', border: 0, color: 'var(--text-secondary)', cursor: 'pointer' }}
+            >
+              ← 返回
+            </button>
+            <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
+            <h1 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{initialTitle}</h1>
+          </div>
+        </div>
+        <div style={{ background: 'white', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: '2rem', maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem' }}>
+            {initialTabs.map((tab, index) => (
+              <span
+                key={tab}
+                style={{
+                  padding: '1rem 0',
+                  color: index === 0 ? 'var(--primary)' : 'var(--text-secondary)',
+                  borderBottom: index === 0 ? '2px solid var(--primary)' : '2px solid transparent',
+                }}
+              >
+                {tab}
+              </span>
+            ))}
+          </div>
+        </div>
+        <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem', width: '100%' }}>
+          <SkeletonRegion rows={8} label="训练内容正在准备" />
+        </main>
+      </div>
+    )
   }
 
   if (error || !training) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-        <div style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error || '内容不存在'}</div>
-        <button
-          onClick={() => router.push(backUrl)}
-          style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-        >
-          返回
-        </button>
+      <div style={{ minHeight: 'calc(100vh - 72px)', background: 'var(--gray-50)' }}>
+        <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.9rem 1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', maxWidth: '1200px', margin: '0 auto' }}>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              style={{ background: 'none', border: 0, color: 'var(--text-secondary)', cursor: 'pointer' }}
+            >
+              ← 返回
+            </button>
+            <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
+            <h1 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{initialTitle}</h1>
+          </div>
+        </div>
+        <LoadError
+          message={error || '内容不存在'}
+          onRetry={refresh}
+          onBack={() => router.back()}
+        />
       </div>
     )
   }
@@ -354,6 +375,14 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
 
       {/* Main Content */}
       <div style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '1rem', boxSizing: 'border-box' }}>
+        {refreshError && activeTab !== 'problemList' && (
+          <LoadError
+            compact
+            message={refreshError.message}
+            requestId={refreshError.requestId}
+            onRetry={refresh}
+          />
+        )}
         {hideContent ? (
           <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
             <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
@@ -368,13 +397,22 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
         ) : (
         <>
         {activeTab === 'problemList' && (
-          <TrainingProblemList
-            problemListData={problemListData}
-            training={training}
-            basePath={basePath}
-            onSelectProblem={(id) => setSelectedProblemId(id)}
-            onSwitchToProblemsTab={() => setActiveTab('problems')}
-          />
+          <AsyncRegion
+            state={problemListState}
+            onRetry={loadProblemListData}
+            emptyText="暂无题目"
+            skeletonRows={6}
+          >
+            {(data) => (
+              <TrainingProblemList
+                problemListData={data}
+                training={training}
+                basePath={basePath}
+                onSelectProblem={(id) => setSelectedProblemId(id)}
+                onSwitchToProblemsTab={() => setActiveTab('problems')}
+              />
+            )}
+          </AsyncRegion>
         )}
 
         {activeTab === 'problems' && (
@@ -383,6 +421,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             selectedProblemId={selectedProblemId}
             setSelectedProblemId={setSelectedProblemId}
             problemDetail={problemDetail}
+            problemDetailState={problemDetailState}
+            retryProblemDetail={retryProblemDetail}
             selectedStatementId={selectedStatementId}
             setSelectedStatementId={setSelectedStatementId}
             training={training}
@@ -427,30 +467,42 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             resetFilters={sub.resetFilters}
             onViewSubmission={(id) => sub.setDetailSubmissionId(id)}
             onLanguageClick={(id) => sub.setDetailSubmissionId(id)}
+            loading={sub.loading}
+            error={sub.error}
+            onRetry={() => { void sub.retry() }}
           />
         )}
 
         {activeTab === 'solutions' && (
-          <TrainingSolutionPanel
-            training={training}
-            problems={problems}
-            allSolutions={allSolutions}
-          />
+          <AsyncRegion state={solutionsResource.state} onRetry={solutionsResource.retry}>
+            {(allSolutions) => (
+              <TrainingSolutionPanel
+                training={training}
+                problems={problems}
+                allSolutions={allSolutions}
+              />
+            )}
+          </AsyncRegion>
         )}
 
         {activeTab === 'attachments' && (
-          <TrainingAttachmentPanel
-            problems={problems}
-            allAttachments={allAttachments}
-            onDownload={actions.handleDownloadAttachment}
-          />
+          <AsyncRegion state={attachmentsResource.state} onRetry={attachmentsResource.retry}>
+            {(allAttachments) => (
+              <TrainingAttachmentPanel
+                problems={problems}
+                allAttachments={allAttachments}
+                onDownload={actions.handleDownloadAttachment}
+              />
+            )}
+          </AsyncRegion>
         )}
 
         {activeTab === 'ranking' && (
-          <TrainingRankTable rankingData={rankingData} currentUserId={user?.userId} />
-        )}
-        {activeTab === 'ranking' && !rankingData && (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}>加载中...</div>
+          <AsyncRegion state={rankingState} onRetry={refreshRanking}>
+            {(data) => (
+              <TrainingRankTable rankingData={data} currentUserId={user?.userId} />
+            )}
+          </AsyncRegion>
         )}
         </>
         )}

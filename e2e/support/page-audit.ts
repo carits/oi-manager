@@ -55,6 +55,7 @@ export async function waitForPageReady(page: Page) {
 export async function assertPageHealth(page: Page, audit: PageAudit) {
   const body = await page.locator('body').innerText()
   expect(body).not.toMatch(/404|This page could not be found/i)
+  expect(body).not.toContain('加载中')
   expect(audit.pageErrors).toEqual([])
   expect(audit.consoleErrors).toEqual([])
   expect(audit.failedResponses).toEqual([])

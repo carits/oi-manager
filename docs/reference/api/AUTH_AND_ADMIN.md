@@ -12,9 +12,11 @@ source_of_truth: auth, user and stats routes
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
 | `GET` | `/api/health` | 公开 | Server 健康检查 |
-| `POST` | `/api/auth/login` | 公开、限流 | 登录并签发 JWT |
+| `POST` | `/api/auth/login` | 公开、限流 | 登录并设置 HttpOnly 会话 Cookie，同时兼容返回 JWT |
 | `POST` | `/api/auth/register` | 公开、限流 | 个人学生注册 |
 | `GET` | `/api/auth/me` | 登录 | 当前用户资料与模式 |
+| `POST` | `/api/auth/session/migrate` | Bearer 登录 | 将旧浏览器会话迁移为 HttpOnly Cookie |
+| `POST` | `/api/auth/logout` | Cookie 或 Bearer | 清除浏览器会话 Cookie |
 | `PUT` | `/api/auth/profile` | 登录 | 更新当前资料 |
 | `POST` | `/api/auth/avatar` | 登录 | 上传当前头像 |
 | `PUT` | `/api/auth/password` | 登录、限流 | 修改当前密码 |

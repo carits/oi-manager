@@ -38,6 +38,7 @@ import { startCronTasks } from './lib/cron-tasks'
 import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
 import { STORAGE_ROOT } from './config/storage'
+import { verifyCookieOrigin } from './middleware/csrf'
 
 // 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
 const envFile = process.env.ENV_FILE ||
@@ -80,6 +81,7 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }))
 
 // 4. 请求追踪中间件
 app.use(requestLogger)
+app.use(verifyCookieOrigin)
 
 // 5. 全局 API 限流
 // 目的：防止 DDoS 攻击和恶意滥用

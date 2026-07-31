@@ -1,8 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import apiClient from '@/lib/apiClient'
+import { useState } from 'react'
+import Link from 'next/link'
+import { useAuth } from '@/components/AuthProvider'
+import { useResource } from '@/hooks/useResource'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
+import { LoadError } from '@/components/ui/LoadError'
 import { TrainingFormModal } from './TrainingFormModal'
 import { typeLabel } from './types'
 
@@ -60,44 +63,37 @@ function formatDateTime(iso: string) {
 }
 
 export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, mode = 'training' }: TeamTrainingListProps) {
-  const router = useRouter()
-  const [trainings, setTrainings] = useState<Training[]>([])
-  const [loading, setLoading] = useState(true)
+  const { sessionKey } = useAuth()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const endpoint = schoolId
+    ? `/api/schools/${schoolId}/contests?type=${mode}`
+    : `/api/teams/${teamId}/trainings?type=${mode}`
+  const resource = useResource<Training[]>(endpoint, {
+    sessionKey,
+    isEmpty: data => data.length === 0,
+    dedupingInterval: 30000,
+    refreshInterval: 30000,
+  })
+  const trainings =
+    resource.data ??
+    (resource.state.state === 'error' ? resource.state.previousData : undefined) ??
+    []
 
-  const fetchTrainings = useCallback(async () => {
-    try {
-      const url = schoolId
-        ? `/api/schools/${schoolId}/contests?type=${mode}`
-        : `/api/teams/${teamId}/trainings?type=${mode}`
-      const result = await apiClient.get<Training[]>(url)
-      if (result.success) {
-        setTrainings(result.data || [])
-      }
-    } catch (error) {
-      console.error('Failed to fetch trainings:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [teamId, schoolId, mode])
-
-  useEffect(() => {
-    fetchTrainings()
-  }, [fetchTrainings])
-
-  // Auto-refresh when upcoming/ongoing trainings exist
-  useEffect(() => {
-    const hasActive = trainings.some(t => t.status === 'upcoming' || t.status === 'ongoing')
-    if (!hasActive) return
-    const timer = setInterval(fetchTrainings, 30000)
-    return () => clearInterval(timer)
-  }, [trainings, fetchTrainings])
-
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)', fontSize: '0.85rem' }}>加载中...</div>
+  if (resource.state.state === 'pending') {
+    return <SkeletonRegion rows={6} label={`${typeLabel(mode)}列表正在准备`} />
   }
 
-  if (trainings.length === 0) {
+  if (resource.state.state === 'error' && !resource.state.previousData) {
+    return (
+      <LoadError
+        message={resource.state.error.message}
+        requestId={resource.state.error.requestId}
+        onRetry={resource.retry}
+      />
+    )
+  }
+
+  if (resource.state.state === 'empty') {
     return (
       <>
         <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--gray-400)' }}>
@@ -126,7 +122,7 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
           onClose={() => setShowCreateModal(false)}
           teamId={teamId}
           schoolId={schoolId}
-          onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
+          onSaved={() => { setShowCreateModal(false); void resource.retry() }}
           mode={mode}
         />
       </>
@@ -137,6 +133,14 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
 
   return (
     <>
+      {resource.state.state === 'error' && (
+        <LoadError
+          compact
+          message={resource.state.error.message}
+          requestId={resource.state.error.requestId}
+          onRetry={resource.retry}
+        />
+      )}
       {/* 工具栏 */}
       <div style={{
         display: 'flex',
@@ -201,27 +205,12 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
             const trainingHref = schoolId
               ? `${basePath}/${detailPath}/${training.id}`
               : `${basePath}/${teamId}/${detailPath}/${training.id}`
-            const openTraining = () => router.push(trainingHref)
             return (
               <tr
                 key={training.id}
-                role="link"
-                tabIndex={0}
-                aria-label={`打开${typeLabel(mode)}：${training.title}`}
-                onClick={openTraining}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    openTraining()
-                  }
-                }}
                 style={{
-                  cursor: 'pointer',
                   borderBottom: idx === trainings.length - 1 ? 'none' : '1px solid #f3f4f6',
-                  transition: 'background 0.1s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
               >
                 {/* 序号 */}
                 <td style={{ padding: '0.6rem 0.75rem', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', width: '32px' }}>
@@ -230,7 +219,12 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
 
                 {/* 训练名称 */}
                 <td style={{ padding: '0.6rem 0.75rem' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{training.title}</span>
+                  <Link
+                    href={trainingHref}
+                    style={{ fontWeight: 600, color: 'var(--primary)', textDecoration: 'none' }}
+                  >
+                    {training.title}
+                  </Link>
                 </td>
 
                 {/* 赛制 */}
@@ -243,7 +237,7 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
                     color: training.format === 'ioi' ? 'var(--info-text)' : 'var(--text-secondary)',
                     background: training.format === 'ioi' ? 'var(--info-light)' : 'var(--bg-muted)',
                     borderRadius: 'var(--radius-sm)',
-                    letterSpacing: '0.04em',
+                    letterSpacing: 0,
                   }}>
                     {FORMAT_MAP[training.format] || training.format.toUpperCase()}
                   </span>
@@ -287,7 +281,7 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
         onClose={() => setShowCreateModal(false)}
         teamId={teamId}
         schoolId={schoolId}
-        onSaved={() => { setShowCreateModal(false); fetchTrainings() }}
+        onSaved={() => { setShowCreateModal(false); void resource.retry() }}
         mode={mode}
       />
     </>

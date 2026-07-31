@@ -18,6 +18,7 @@ import { ojAccountsRouter } from '../../src/routes/oj-accounts'
 import { trainingsRouter } from '../../src/modules/training/training.routes'
 import { submissionsRouter } from '../../src/routes/submissions'
 import { problemsRouter } from '../../src/modules/problem/problem.routes'
+import { verifyCookieOrigin } from '../../src/middleware/csrf'
 
 /**
  * 创建测试用的 Express 应用
@@ -37,6 +38,7 @@ export function createTestApp() {
   }))
   app.use(express.json({ limit: '1mb' }))
   app.use(express.urlencoded({ extended: true, limit: '1mb' }))
+  app.use(verifyCookieOrigin)
 
   // 注册路由
   app.use('/api/auth', authRouter)

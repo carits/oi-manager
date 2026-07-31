@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -35,7 +34,7 @@ export default function AdminSchoolsPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
           <PageHeader title="学校管理">
@@ -127,6 +126,6 @@ export default function AdminSchoolsPage() {
           )}
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

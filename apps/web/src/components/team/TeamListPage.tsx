@@ -6,6 +6,8 @@ import { Modal } from '@/components/ui/Modal'
 import { Pagination } from '@/components/ui/Pagination'
 import { TeamCard, InvitationCard, Invitation } from '@/components/team'
 import { formStyles } from '@/lib/styles'
+import { LoadError } from '@/components/ui/LoadError'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 
 export interface TeamItem {
   id: string
@@ -30,6 +32,8 @@ interface TeamListPageProps {
   // 数据
   teams: TeamItem[]
   loading: boolean
+  error?: string | null
+  onRetry?: () => void
 
   // 分页
   page?: number
@@ -65,6 +69,8 @@ export function TeamListPage({
   basePath,
   teams,
   loading,
+  error,
+  onRetry,
   page = 1,
   pageSize = 12,
   total = 0,
@@ -180,9 +186,9 @@ export function TeamListPage({
 
       {/* 团队卡片列表 */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-          加载中...
-        </div>
+        <SkeletonRegion rows={6} label="正在获取团队列表" />
+      ) : error ? (
+        <LoadError message={error} onRetry={onRetry || (() => undefined)} />
       ) : teams.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
           {activeTab === 'mine' ? '您还没有加入任何团队' : '暂无团队数据'}

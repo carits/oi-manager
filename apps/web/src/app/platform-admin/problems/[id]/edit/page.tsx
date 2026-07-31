@@ -1,7 +1,6 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ProblemForm } from '@/components/problem/ProblemForm'
 
 export default function EditProblemPage() {
@@ -9,8 +8,8 @@ export default function EditProblemPage() {
   const problemId = params.id as string
 
   return (
-    <ProtectedRoute requiredRole="platform_admin">
+    <>
       <ProblemForm mode="edit" role="admin" problemId={problemId} />
-    </ProtectedRoute>
+    </>
   )
 }

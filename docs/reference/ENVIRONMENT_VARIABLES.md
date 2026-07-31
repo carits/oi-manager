@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 source_of_truth: process.env usage, environment examples, Playwright configuration
 ---
 
@@ -14,6 +14,9 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | 变量 | 必需 | 默认/环境 | 用途 |
 |------|------|-----------|------|
 | `NODE_ENV` | 否 | `development` | `development/test/production` |
+| `APP_ENV` | 否 | `development` | 业务环境；优化预览仍为 development |
+| `COOKIE_SECURE` | 否 | 按 `APP_ENV` | 正式 HTTPS 必须为 `true` |
+| `CSRF_TRUSTED_ORIGINS` | 否 | 开发本机来源 | Cookie 写请求允许的来源 |
 | `PORT` | 否 | `3002` | HTTP 与 Judge WebSocket 端口 |
 | `DATABASE_URL` | 是 | 无 | PostgreSQL 连接和 schema |
 | `JWT_SECRET` | 正式必需 | 开发有非正式回退 | JWT 签名 |
@@ -44,10 +47,12 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | 变量 | 必需 | 默认 | 用途 |
 |------|------|------|------|
 | `NODE_ENV` | 否 | Next 设置 | 运行阶段 |
+| `APP_ENV` | 否 | `development` | 服务端业务环境 |
+| `NEXT_PUBLIC_APP_ENV` | 否 | `development` | 浏览器可见的业务环境标识 |
 | `NEXT_PUBLIC_API_URL` | 否 | 空 | 浏览器 API 前缀；同域保持空 |
 | `BACKEND_URL` | 否 | `http://localhost:3002` | Next rewrite 和 Route Handler |
 | `NEXT_DIST_DIR` | 否 | dev `.next-dev` / build `.next` | 隔离构建目录 |
-| `E2E_BUILD` | 否 | `false` | 禁用正式 standalone 行为 |
+| `E2E_BUILD` | 否 | `false` | 标记隔离的 UI E2E 构建 |
 
 不要把仅服务端可见的密钥写成 `NEXT_PUBLIC_*`。
 

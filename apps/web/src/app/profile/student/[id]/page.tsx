@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { getAssetUrl } from '@/lib/assets'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 interface UserProfile {
   id: string
@@ -56,17 +57,7 @@ export default function StudentProfilePage() {
   }
 
   if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--gray-50)'
-      }}>
-        <div style={{ color: 'var(--gray-500)' }}>加载中...</div>
-      </div>
-    )
+    return <PageLoadingFrame title="学生资料" rows={6} />
   }
 
   if (error) {

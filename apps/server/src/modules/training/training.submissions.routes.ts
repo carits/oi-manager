@@ -16,6 +16,12 @@ import {
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
+import {
+  IdempotencyConflictError,
+  readIdempotencyKey,
+  requestFingerprint,
+  runIdempotent,
+} from '../../lib/idempotency'
 
 export const trainingSubmissionsRouter = Router()
 
@@ -33,6 +39,13 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
     }
 
     const method = submitMethod || 'robot'
+    const idempotencyKey = readIdempotencyKey(req)
+    const fingerprint = requestFingerprint({
+      trainingProblemId,
+      language,
+      code,
+      submitMethod: method,
+    })
 
     const training = await prisma.training.findUnique({ where: { id } })
     if (!training) {
@@ -64,8 +77,14 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       return res.status(400).json({ success: false, message: `${platform} 平台暂不支持在线提交` })
     }
 
-    const submission = await prisma.submission.create({
-      data: {
+    let submissionResult
+    try {
+      submissionResult = await runIdempotent(
+        `training-submit:${userId}:${id}`,
+        idempotencyKey,
+        fingerprint,
+        () => prisma.submission.create({
+          data: {
         userId,
         oj: trainingProblem.Problem.platform,
         problemId: trainingProblem.Problem.problemId,
@@ -86,8 +105,27 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
         } : {}),
         // isGlobalVisible: 训练提交全局可见，比赛提交赛中不可见（结束后自动更新）
         isGlobalVisible: training.type === 'contest' ? false : true,
-      },
-    })
+          },
+        }),
+      )
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        return res.status(409).json({
+          success: false,
+          code: 'IDEMPOTENCY_CONFLICT',
+          message: error.message,
+        })
+      }
+      throw error
+    }
+    const submission = submissionResult.value
+    if (submissionResult.replayed) {
+      return res.json({
+        success: true,
+        data: { submissionId: submission.id, replayed: true },
+        message: '已返回同一次提交的结果',
+      })
+    }
 
     const problemId = trainingProblem.Problem.problemId
 

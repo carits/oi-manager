@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 source_of_truth: package.json, docker-compose.yml, environment validation
 ---
 
@@ -36,6 +36,9 @@ Judge 客户端。
 
 ```dotenv
 NODE_ENV=development
+APP_ENV=development
+COOKIE_SECURE=false
+CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 PORT=3002
 DATABASE_URL=postgresql://oi:oi_password@127.0.0.1:5432/oi_manager?schema=public
 JWT_SECRET=replace-with-a-development-secret
@@ -65,6 +68,8 @@ LOG_LEVEL=info
 ```dotenv
 NEXT_PUBLIC_API_URL=
 BACKEND_URL=http://127.0.0.1:3002
+APP_ENV=development
+NEXT_PUBLIC_APP_ENV=development
 ```
 
 不要把这些 `.env` 文件提交到 Git。正式环境必须使用完全不同的随机密钥。
@@ -86,13 +91,14 @@ pnpm --filter server prisma:seed
 pnpm dev
 ```
 
-根命令会先构建 `packages/shared`，调用 `scripts/kill-ports.sh` 清理 `3000/3002`
-上的旧开发进程，再并行启动 Web、Server 和 Judge。需要保留已有进程时使用
-`pnpm dev:dirty`，但必须自行确认端口没有冲突。
+根命令会先构建 `packages/shared`，确认 `3001/3002` 没有未知进程，再并行启动
+Web HMR、Server 和 Judge。它不会清理或占用公网预览的 `3000`；发现端口冲突时会报告 PID
+并退出。后台管理开发进程使用 `pnpm restart`，该命令只停止仓库自己记录的进程组。
 
 访问：
 
-- Web：`http://localhost:3000`
+- Web HMR：`http://127.0.0.1:3001`
+- 优化预览：先执行 `pnpm preview:build && pnpm preview:start`，再访问 `http://localhost:3000`
 - API 健康检查：`http://localhost:3002/api/health`
 - go-judge：`http://localhost:5050`
 

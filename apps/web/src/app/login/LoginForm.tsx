@@ -6,10 +6,17 @@ import { useAuth } from '@/components/AuthProvider'
 import { getLastStudentMode } from '@/lib/auth'
 import type { LoginRole } from '@/lib/loginRole'
 import { ENV } from '@/config/env'
+import { getRoleHome } from '@/lib/roleAccess'
 
-export function LoginForm({ initialRole }: { initialRole: LoginRole }) {
+export function LoginForm({
+  initialRole,
+  nextPath,
+}: {
+  initialRole: LoginRole
+  nextPath?: string
+}) {
   const router = useRouter()
-  const { login, isAuthenticated, loading: authLoading, user } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
   const [role, setRole] = useState<LoginRole>(initialRole)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -18,20 +25,10 @@ export function LoginForm({ initialRole }: { initialRole: LoginRole }) {
 
   // 如果已登录，跳转到对应首页
   useEffect(() => {
-    if (!authLoading && isAuthenticated && user) {
-      if (user.role === 'super_admin') {
-        router.push('/admin/schools')
-      } else if (user.role === 'platform_admin') {
-        router.push('/platform-admin')
-      } else if (user.role === 'school_principal' || user.role === 'teacher') {
-        router.push('/teacher')
-      } else if (user.role === 'student') {
-        router.push('/student')
-      } else {
-        router.push('/login')
-      }
+    if (isAuthenticated && user) {
+      router.replace(nextPath || getRoleHome(user.role))
     }
-  }, [authLoading, isAuthenticated, router, user])
+  }, [isAuthenticated, nextPath, router, user])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,19 +53,6 @@ export function LoginForm({ initialRole }: { initialRole: LoginRole }) {
     { key: 'student', label: '学生端', role: 'student' },
     { key: 'admin', label: '管理员端', role: 'admin' },
   ]
-
-  if (authLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <p>加载中...</p>
-      </div>
-    )
-  }
 
   return (
     <main style={{

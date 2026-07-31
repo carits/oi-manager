@@ -534,7 +534,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        加载中...
+        <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
       </div>
     )
   }
@@ -1188,7 +1188,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 <div style={{ marginTop: '1.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>已上传附件</label>
                   {attachmentsLoading ? (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
                   ) : attachments.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无附件</div>
                   ) : (

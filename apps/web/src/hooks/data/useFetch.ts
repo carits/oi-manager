@@ -15,7 +15,11 @@ export function useFetch<T>(
   _options?: RequestInit
 ): UseFetchResult<T> {
   const enabled = !!url && !!sessionKey
-  const { data, error, isLoading, mutate } = useQuery<T>(enabled ? url : null)
+  const { data, error, isLoading, mutate } = useQuery<T>(
+    enabled ? url : null,
+    undefined,
+    sessionKey,
+  )
   return {
     data: data ?? null,
     loading: isLoading,

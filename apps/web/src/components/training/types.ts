@@ -58,6 +58,7 @@ export interface ProblemDetail {
   problemTitle?: string
   platform?: string
   platformProblemId?: string
+  noteContent?: string
 }
 
 export interface SubmissionRow {

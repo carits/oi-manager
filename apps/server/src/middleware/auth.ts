@@ -2,12 +2,14 @@ import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { JwtPayload, UserRole } from '@oi-manager/shared'
 import { getJwtSecret } from '../lib/jwtSecret'
+import { getSessionToken } from '../lib/sessionCookie'
 
 // 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
 declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload
+      authSource?: 'cookie' | 'bearer'
     }
   }
 }
@@ -18,16 +20,20 @@ export interface AuthRequest extends Request {
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
+  const bearerToken = authHeader?.startsWith('Bearer ')
+    ? authHeader.substring(7)
+    : null
+  const cookieToken = getSessionToken(req)
+  const token = bearerToken || cookieToken
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     return res.status(401).json({ success: false, message: '未授权，请先登录' })
   }
-
-  const token = authHeader.substring(7)
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
     req.user = decoded
+    req.authSource = bearerToken ? 'bearer' : 'cookie'
     next()
   } catch {
     return res.status(401).json({ success: false, message: 'Token 无效或已过期' })

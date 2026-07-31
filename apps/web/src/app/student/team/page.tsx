@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { TeamListPage, TeamItem, Invitation } from '@/components/team'
 import { useTeams, Team } from '@/hooks/data/useTeams'
 import { useAuth } from '@/components/AuthProvider'
@@ -15,11 +14,6 @@ export default function StudentTeamPage() {
   const toast = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // 分页状态
   const [page, setPage] = useState(1)
@@ -34,14 +28,14 @@ export default function StudentTeamPage() {
   }, [searchParams])
 
   // 构建查询参数 - 后端会从 JWT token 中获取 studentId
-  const queryParams = mounted ? {
+  const queryParams = {
     page,
     pageSize,
     schoolId: user?.schoolId,
     view: activeTab === 'mine' ? 'mine' : 'all'
-  } : null
+  }
 
-  const { data, loading, refetch } = useTeams(queryParams, sessionKey)
+  const { data, loading, error, refetch } = useTeams(queryParams, sessionKey)
 
   // 邀请相关状态
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -67,7 +61,7 @@ export default function StudentTeamPage() {
   // 获取邀请列表 - 后端会从 JWT token 中获取 studentId
   useEffect(() => {
     const fetchInvitations = async () => {
-      if (!mounted || !user?.userId) return
+      if (!user?.userId) return
       try {
         setLoadingInvitations(true)
         const data = await apiClient.get<any>(`/api/teams/student/${user.userId}`)
@@ -91,7 +85,7 @@ export default function StudentTeamPage() {
       }
     }
     fetchInvitations()
-  }, [mounted, user?.userId])
+  }, [user?.userId])
 
   // 接受邀请
   const handleAcceptInvitation = async (invitationId: string) => {
@@ -160,22 +154,14 @@ export default function StudentTeamPage() {
     }
   }
 
-  if (!mounted) {
-    return (
-      <ProtectedRoute requiredRole="student">
-        <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
-  }
-
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
       <TeamListPage
         basePath="/student/team"
         teams={teams}
         loading={loading}
+        error={error}
+        onRetry={refetch}
         page={page}
         pageSize={pageSize}
         total={data?.total || 0}
@@ -191,6 +177,6 @@ export default function StudentTeamPage() {
         onRejectInvitation={(id) => handleRejectInvitation(id)}
         showCreateButton={user?.studentMode === 'personal'}
       />
-    </ProtectedRoute>
+    </>
   )
 }

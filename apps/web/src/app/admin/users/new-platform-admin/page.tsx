@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 
@@ -54,7 +53,7 @@ export default function NewPlatformAdminPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
           <div style={{ marginBottom: '1.5rem' }}>
@@ -200,6 +199,6 @@ export default function NewPlatformAdminPage() {
           </form>
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

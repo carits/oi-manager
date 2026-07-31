@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
 import { useToast } from '@/components/ui/Toast'
+import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 
 interface School {
   id: string
@@ -215,15 +215,11 @@ export default function EditSchoolPage() {
   }
 
   if (loading) {
-    return (
-      <ProtectedRoute requiredRole="super_admin">
-        <div style={{ padding: '2rem', textAlign: 'center' }}>加载中...</div>
-      </ProtectedRoute>
-    )
+    return <PageLoadingFrame title="编辑学校" />
   }
 
   return (
-    <ProtectedRoute requiredRole="super_admin">
+    <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <main style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
           <div style={{ marginBottom: '1.5rem' }}>
@@ -507,6 +503,6 @@ export default function EditSchoolPage() {
           </div>
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

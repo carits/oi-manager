@@ -164,7 +164,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate }: H
   }
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center' }}>加载中...</div>
+    return <div style={{ padding: '2rem', textAlign: 'center' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
   }
 
   // 根据"包含已毕业"复选框过滤学生，然后取前10个

@@ -9,6 +9,7 @@ import { authenticate } from '../middleware/auth'
 import { LoginRequest, JwtPayload, UserRole } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
+import { clearSessionCookie, setSessionCookie } from '../lib/sessionCookie'
 import { loginLimiter, registerLimiter, passwordLimiter } from '../middleware/rateLimiter'
 import logger from '../lib/logger'
 import { updateRequestContext } from '../middleware/requestLogger'
@@ -65,6 +66,14 @@ const avatarUpload = multer({
 })
 
 export const authRouter = Router()
+
+function renewablePayload(payload: JwtPayload): JwtPayload {
+  const { iat: _issuedAt, exp: _expiresAt, ...claims } = payload as JwtPayload & {
+    iat?: number
+    exp?: number
+  }
+  return claims
+}
 
 // 登录
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
@@ -231,6 +240,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     }
 
     const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
+    setSessionCookie(res, token)
 
     // 记录登录成功
     await prisma.loginLog.create({
@@ -350,6 +360,7 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
         studentMode: 'personal'
       }
       const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
+      setSessionCookie(res, token)
       res.json({ success: true, data: { userId: user.id, token, studentMode: 'personal' } })
     } else {
       res.json({ success: true, data: { userId: user.id } })
@@ -443,6 +454,19 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
   } catch {
     res.status(401).json({ success: false, message: 'Token 无效' })
   }
+})
+
+// Upgrade an existing Bearer session to an HttpOnly cookie without forcing a new login.
+authRouter.post('/session/migrate', authenticate, async (req: Request, res: Response) => {
+  const payload = (req as any).user as JwtPayload
+  const token = jwt.sign(renewablePayload(payload), getJwtSecret(), { expiresIn: '7d' })
+  setSessionCookie(res, token)
+  res.json({ success: true })
+})
+
+authRouter.post('/logout', (_req: Request, res: Response) => {
+  clearSessionCookie(res)
+  res.json({ success: true })
 })
 
 // 更新当前用户资料
@@ -585,8 +609,9 @@ authRouter.post('/switch-mode', authenticate, async (req: Request, res: Response
       return res.status(400).json({ success: false, message: '无效的模式参数' })
     }
 
-    const newPayload: JwtPayload = { ...user, studentMode: mode }
+    const newPayload: JwtPayload = { ...renewablePayload(user), studentMode: mode }
     const token = jwt.sign(newPayload, getJwtSecret(), { expiresIn: '7d' })
+    setSessionCookie(res, token)
 
     logger.audit('switch_student_mode', {
       userId: user.userId,

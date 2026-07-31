@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import apiClient from '@/lib/apiClient'
 import TeamTrainingList from '@/components/training/TeamTrainingList'
 import { Empty } from '@/components/ui/Empty'
@@ -52,12 +51,12 @@ export default function TeacherHomeworksPage() {
   const activeTeam = teams.find(t => t.id === activeTeamId)
 
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
         <div style={{ padding: '2rem' }}>
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: '1.5rem' }}>作业</h1>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>加载中...</div>
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
           ) : error ? (
             <LoadError message={error} onRetry={loadTeams} />
           ) : teams.length === 0 ? (
@@ -96,6 +95,6 @@ export default function TeacherHomeworksPage() {
             </>
           )}
         </div>
-    </ProtectedRoute>
+    </>
   )
 }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { TeamListPage, TeamItem, Invitation } from '@/components/team'
 import { useTeams, Team } from '@/hooks/data/useTeams'
 import { useAuth } from '@/components/AuthProvider'
@@ -14,12 +13,6 @@ export default function TeamsPage() {
   const toast = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
   // 分页状态
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
@@ -33,14 +26,14 @@ export default function TeamsPage() {
   }, [searchParams])
 
   // 构建查询参数 - 后端会从 JWT token 中获取 teacherId
-  const queryParams = mounted ? {
+  const queryParams = {
     page,
     pageSize,
     schoolId: user?.schoolId,
     view: activeTab === 'mine' ? 'mine' : 'all'
-  } : null
+  }
 
-  const { data, loading, refetch } = useTeams(queryParams, sessionKey)
+  const { data, loading, error, refetch } = useTeams(queryParams, sessionKey)
 
   // 邀请相关状态
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -153,11 +146,13 @@ export default function TeamsPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole="teacher">
+    <>
       <TeamListPage
         basePath="/teacher/teams"
         teams={teams}
         loading={loading}
+        error={error}
+        onRetry={refetch}
         page={page}
         pageSize={pageSize}
         total={data?.total || 0}
@@ -177,6 +172,6 @@ export default function TeamsPage() {
         onCloseCreateModal={() => setCreateModalOpen(false)}
         creating={creating}
       />
-    </ProtectedRoute>
+    </>
   )
 }

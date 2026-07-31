@@ -274,3 +274,22 @@ input, textarea, select {
   margin: 1rem auto;
 }
 
+@keyframes resource-skeleton-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
+.resource-skeleton {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 10rem;
+  padding: 1.5rem;
+  align-content: start;
+}
+
+.resource-skeleton-line {
+  height: 1rem;
+  border-radius: 4px;
+  background: var(--gray-200);
+  animation: resource-skeleton-pulse 1.2s ease-in-out infinite;
+}

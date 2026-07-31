@@ -91,7 +91,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
   }
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>加载中...</div>
+    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
   }
 
   const getInitial = () => {

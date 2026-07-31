@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { getAssetUrl } from '@/lib/assets'
 import { useToast } from '@/components/ui/Toast'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 
 interface Team {
   id: string
@@ -28,17 +28,12 @@ export default function StudentTeamBrowsePage() {
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [searchKeyword, setSearchKeyword] = useState('')
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (user?.schoolId && mounted) {
+    if (user?.schoolId) {
       fetchTeams()
     }
-  }, [user?.schoolId, mounted])
+  }, [user?.schoolId])
 
   const fetchTeams = async () => {
     try {
@@ -81,18 +76,8 @@ export default function StudentTeamBrowsePage() {
   const pendingTeams = filteredTeams.filter(t => t.requestStatus === 'pending')
   const availableTeams = filteredTeams.filter(t => !t.memberStatus && !t.requestStatus)
 
-  if (!mounted || loading) {
-    return (
-      <ProtectedRoute requiredRole="student">
-        <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: '2rem', textAlign: 'center' }}>
-          加载中...
-        </div>
-      </ProtectedRoute>
-    )
-  }
-
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>浏览团队</h2>
@@ -128,6 +113,10 @@ export default function StudentTeamBrowsePage() {
           />
         </div>
 
+        {loading ? (
+          <SkeletonRegion rows={6} label="正在获取团队列表" />
+        ) : (
+          <>
         {/* 已加入的团队 */}
         {joinedTeams.length > 0 && (
           <div style={{ marginBottom: '2rem' }}>
@@ -338,7 +327,9 @@ export default function StudentTeamBrowsePage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
-    </ProtectedRoute>
+    </>
   )
 }

@@ -1,10 +1,30 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react'
-import { getToken, getRole, getUserId, clearAuth, setToken, setRole, setUserId, setSchoolId, setSchoolName, setStudentMode, setLastStudentMode } from '@/lib/auth'
-import { ENV } from '@/config/env'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { useSWRConfig } from 'swr'
+import apiClient, { AUTH_UNAUTHORIZED_EVENT } from '@/lib/apiClient'
+import {
+  clearAuth,
+  getToken,
+  setAdminId,
+  setLastStudentMode,
+  setRole,
+  setSchoolId,
+  setSchoolName,
+  setStudentId,
+  setStudentMode,
+  setTeacherId,
+  setUserId,
+} from '@/lib/auth'
 
-interface AuthUser {
+export interface AuthUser {
   userId: string
   username: string
   role: string
@@ -26,11 +46,14 @@ interface LoginResult {
   message?: string
 }
 
+type AuthStatus = 'authenticated' | 'anonymous' | 'degraded'
+
 interface AuthContextType {
   user: AuthUser | null
+  status: AuthStatus
   loading: boolean
   login: (username: string, password: string, role: string, mode?: 'campus' | 'personal') => Promise<LoginResult>
-  logout: () => void
+  logout: () => Promise<void>
   refreshUser: () => Promise<void>
   switchMode: (mode: 'campus' | 'personal') => Promise<void>
   isAuthenticated: boolean
@@ -39,154 +62,152 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  // 服务端和客户端第一次渲染必须一致，登录状态统一在挂载后验证。
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [loading, setLoading] = useState(true)
+function storeCompatibilityMetadata(user: AuthUser): void {
+  setRole(user.role)
+  setUserId(user.userId)
+  setSchoolId(user.schoolId || null)
+  setSchoolName(user.schoolName || null)
+  setTeacherId(user.teacherId || null)
+  setStudentId(user.studentId || null)
+  setAdminId(user.adminId || null)
+  setStudentMode(user.studentMode || null)
+  if (user.studentMode) setLastStudentMode(user.studentMode)
+}
 
-  // 基于登录身份生成 sessionKey，用于数据隔离
-  const sessionKey = useMemo(() => {
-    if (!user) return null
-    return `${user.role}:${user.userId}`
-  }, [user])
+export function AuthProvider({
+  children,
+  initialUser = null,
+}: {
+  children: ReactNode
+  initialUser?: AuthUser | null
+}) {
+  const { mutate: mutateCache } = useSWRConfig()
+  const [user, setUser] = useState<AuthUser | null>(initialUser)
+  const [status, setStatus] = useState<AuthStatus>(
+    initialUser ? 'authenticated' : 'anonymous',
+  )
 
-  const fetchUserData = async () => {
-    const token = getToken()
-    if (!token) return null
-
-    try {
-      const res = await fetch(`${ENV.API_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-
-      if (data.success) {
-        const userData = {
-          userId: data.data.userId,
-          username: data.data.username,
-          role: data.data.role,
-          avatar: data.data.avatar,
-          phone: data.data.phone,
-          email: data.data.email,
-          bio: data.data.bio,
-          profile: data.data.profile,
-          schoolId: data.data.schoolId,
-          schoolName: data.data.schoolName,
-          studentMode: data.data.studentMode
-        }
-        setUser(userData)
-        setSchoolId(data.data.schoolId || null)
-        setSchoolName(data.data.schoolName || null)
-        setStudentMode(data.data.studentMode || null)
-        if (data.data.studentMode) {
-          setLastStudentMode(data.data.studentMode)
-        }
-        return userData
-      } else {
-        // 只有在 401/403 等认证失败时才清除认证状态
-        // 其他错误（如服务器错误）保留认证状态，让用户可以重试
-        if (res.status === 401 || res.status === 403) {
-          clearAuth()
-        }
-        return null
-      }
-    } catch {
-      // 网络错误时不清除认证状态，保留 localStorage 中的 token
-      // 用户可能是网络波动，刷新后可以恢复
-      return null
-    }
-  }
+  const sessionKey = useMemo(
+    () => user ? `${user.role}:${user.userId}:${user.studentMode || ''}` : null,
+    [user],
+  )
 
   useEffect(() => {
-    const token = getToken()
-    const role = getRole()
-    const userId = getUserId()
+    if (initialUser) storeCompatibilityMetadata(initialUser)
+  }, [initialUser])
 
-    if (token && role && userId) {
-      fetchUserData().finally(() => setLoading(false))
-    } else {
-      setLoading(false)
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      if (!user) return
+      void mutateCache(() => true, undefined, { revalidate: false })
+      clearAuth()
+      setUser(null)
+      setStatus('anonymous')
+      const target = `${window.location.pathname}${window.location.search}`
+      window.location.assign(`/login?next=${encodeURIComponent(target)}`)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
+  }, [mutateCache, user])
 
-  const login = async (username: string, password: string, role: string, mode?: 'campus' | 'personal'): Promise<LoginResult> => {
-    try {
-      const res = await fetch(`${ENV.API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role, mode })
+  // One-time bridge for sessions created before HttpOnly cookies were introduced.
+  // It never blocks the login form or protected shell.
+  useEffect(() => {
+    if (initialUser || !getToken()) return
+
+    let active = true
+    apiClient.mutate('/api/auth/session/migrate', 'POST')
+      .then(result => {
+        if (!active || !result.ok) return
+        clearAuth()
+        window.location.reload()
+      })
+      .catch(() => {
+        // Keep the legacy token so the user can retry or log in normally.
       })
 
-      const data = await res.json()
-
-      if (data.success) {
-        const { token, userId, role: userRole, username: userName, avatar, schoolId, studentMode } = data.data
-        setToken(token)
-        setRole(userRole)
-        setUserId(userId)
-        setSchoolId(schoolId || null)
-        setStudentMode(studentMode || null)
-        if (studentMode) {
-          setLastStudentMode(studentMode)
-        }
-        setUser({ userId, username: userName, role: userRole, avatar, schoolId, studentMode: studentMode || undefined })
-        return { success: true }
-      }
-      return { success: false, message: data.message }
-    } catch (error) {
-      return { success: false, message: '网络错误，请稍后重试' }
+    return () => {
+      active = false
     }
+  }, [initialUser])
+
+  const login = async (
+    username: string,
+    password: string,
+    role: string,
+    mode?: 'campus' | 'personal',
+  ): Promise<LoginResult> => {
+    const result = await apiClient.mutate<AuthUser & { token?: string }>(
+      '/api/auth/login',
+      'POST',
+      { username, password, role, mode },
+    )
+
+    if (!result.ok) {
+      return { success: false, message: result.error.message }
+    }
+
+    const nextUser = result.data
+    setUser(nextUser)
+    setStatus('authenticated')
+    await mutateCache(() => true, undefined, { revalidate: false })
+    storeCompatibilityMetadata(nextUser)
+    return { success: true }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    const result = await apiClient.mutate('/api/auth/logout', 'POST')
+    if (!result.ok) {
+      setStatus('degraded')
+      return
+    }
+    await mutateCache(() => true, undefined, { revalidate: false })
     clearAuth()
     setUser(null)
-    window.location.href = '/login'
-  }
-
-  const switchMode = async (mode: 'campus' | 'personal') => {
-    const token = getToken()
-    if (!token) return
-
-    try {
-      const res = await fetch(`${ENV.API_URL}/api/auth/switch-mode`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ mode })
-      })
-      const data = await res.json()
-
-      if (data.success) {
-        setToken(data.data.token)
-        setStudentMode(data.data.studentMode)
-        setLastStudentMode(data.data.studentMode)
-        setUser(prev => prev ? { ...prev, studentMode: data.data.studentMode } : null)
-      }
-    } catch {
-      // 网络错误，不做任何变更
-    }
+    setStatus('anonymous')
+    window.location.assign('/login')
   }
 
   const refreshUser = async () => {
-    await fetchUserData()
+    try {
+      const nextUser = await apiClient.query<AuthUser>('/api/auth/me', { retry: false })
+      setUser(nextUser)
+      setStatus('authenticated')
+      storeCompatibilityMetadata(nextUser)
+    } catch {
+      setStatus('degraded')
+    }
+  }
+
+  const switchMode = async (mode: 'campus' | 'personal') => {
+    const result = await apiClient.mutate<{ studentMode: 'campus' | 'personal' }>(
+      '/api/auth/switch-mode',
+      'POST',
+      { mode },
+    )
+    if (!result.ok) return
+
+    await mutateCache(() => true, undefined, { revalidate: false })
+    setStudentMode(result.data.studentMode)
+    setLastStudentMode(result.data.studentMode)
+    setUser(current => current
+      ? { ...current, studentMode: result.data.studentMode }
+      : null)
+    window.location.assign('/student')
   }
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        logout,
-        refreshUser,
-        switchMode,
-        isAuthenticated: !!user,
-        sessionKey
-      }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      status,
+      loading: false,
+      login,
+      logout,
+      refreshUser,
+      switchMode,
+      isAuthenticated: Boolean(user),
+      sessionKey,
+    }}>
       {children}
     </AuthContext.Provider>
   )

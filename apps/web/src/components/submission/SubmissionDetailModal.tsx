@@ -8,6 +8,8 @@ import { JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
+import { LoadError } from '@/components/ui/LoadError'
+import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 
 interface SubmissionDetail {
   id: number
@@ -142,35 +144,40 @@ function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string, p
 export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole, trainingId, trainingFormat }: SubmissionDetailModalProps) {
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (isOpen && submissionId) {
       setLoading(true)
-
+      setDetail(null)
+      setError(null)
       const fetchDetail = async () => {
-        // 训练提交使用训练专用端点
-        const res = trainingId
-          ? await apiClient.get<SubmissionDetail>(`/api/trainings/${trainingId}/submissions/${submissionId}`)
-          : await apiClient.get<SubmissionDetail>(`/api/submissions/${submissionId}`)
+        setError(null)
+        try {
+          const data = trainingId
+            ? await apiClient.query<SubmissionDetail>(`/api/trainings/${trainingId}/submissions/${submissionId}`)
+            : await apiClient.query<SubmissionDetail>(`/api/submissions/${submissionId}`)
 
-        if (res.success && res.data) {
-          setDetail(res.data)
-          setLoading(false)
+          setDetail(data)
           // OI 赛中非管理员（hidden=true）或不再是 queuing 状态，停止轮询
-          if ((res.data.hidden || res.data.result !== 'queuing') && intervalRef.current) {
+          if ((data.hidden || (data.result !== 'queuing' && data.result !== 'judging')) && intervalRef.current) {
             clearInterval(intervalRef.current)
             intervalRef.current = null
           }
           // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
-          if (!trainingId && res.data.oj === 'codeforces' && (!res.data.code || res.data.code.length === 0) && res.data.submitMethod === 'archive') {
+          if (!trainingId && data.oj === 'codeforces' && (!data.code || data.code.length === 0) && data.submitMethod === 'archive') {
             apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`).then(fetchRes => {
               if (fetchRes.success && fetchRes.data?.code) {
                 setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
               }
             }).catch(() => {})
           }
+        } catch (loadError) {
+          setError(loadError instanceof Error ? loadError.message : '评测详情获取失败')
+        } finally {
+          setLoading(false)
         }
       }
 
@@ -315,13 +322,13 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={detail ? `#${detail.id} | ${detail.username}'s solution for [${getOjLabel(detail.oj)}-${detail.problemId}]` : '加载中...'}
+        title={detail ? `#${detail.id} | ${detail.username}'s solution for [${getOjLabel(detail.oj)}-${detail.problemId}]` : '评测详情'}
         width="900px"
       >
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          加载中...
-        </div>
+        <SkeletonRegion rows={6} label="评测详情正在准备" />
+      ) : error && !detail ? (
+        <LoadError message={error} onRetry={() => window.location.reload()} />
       ) : detail ? (
         <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '75vh', overflow: 'hidden' }}>
           {/* 提交信息表格 */}

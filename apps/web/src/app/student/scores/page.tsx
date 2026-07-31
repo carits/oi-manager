@@ -1,11 +1,9 @@
 'use client'
 
-import { ProtectedRoute } from '@/components/ProtectedRoute'
-
 // 成绩查看功能暂未开放
 export default function StudentScoresPage() {
   return (
-    <ProtectedRoute requiredRole="student">
+    <>
         <div style={{
           minHeight: '100vh',
           background: 'var(--gray-50)',
@@ -28,6 +26,6 @@ export default function StudentScoresPage() {
             </p>
           </div>
         </div>
-    </ProtectedRoute>
+    </>
   )
 }

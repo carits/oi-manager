@@ -1,29 +1,7 @@
-export function Loading({ tip = '加载中...' }: { tip?: string }) {
-  return (
-    <div style={{
-      minHeight: '200px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '1rem'
-    }}>
-      <div style={{
-        width: '40px',
-        height: '40px',
-        border: '3px solid var(--gray-200)',
-        borderTopColor: 'var(--primary)',
-        borderRadius: '50%',
-        animation: 'spin 1s linear infinite'
-      }} />
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-      <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>{tip}</p>
-    </div>
-  )
+import { SkeletonRegion } from './ui/AsyncRegion'
+
+export function Loading({ tip = '内容正在准备' }: { tip?: string }) {
+  return <SkeletonRegion rows={5} label={tip} />
 }
 
 export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: () => void }) {
