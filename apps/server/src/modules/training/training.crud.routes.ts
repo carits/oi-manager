@@ -18,6 +18,7 @@ import {
   canManageTraining,
   getTrainingAccessMode,
 } from './training.helpers'
+import { teamService } from '../team/team.service'
 
 export const trainingCrudRouter = Router()
 
@@ -29,6 +30,8 @@ trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(as
     const { teamId } = req.params
     const userId = req.user!.userId
     const typeFilter = req.query.type as string | undefined
+
+    await teamService.assertTeamScope(teamId, req.user!)
 
     if (!await isTeamMember(userId, teamId)) {
       return res.status(403).json({ success: false, message: '无权限查看该团队训练' })
@@ -94,6 +97,8 @@ trainingCrudRouter.post('/teams/:teamId/trainings', authenticate, asyncHandler(a
     const { teamId } = req.params
     const userId = req.user!.userId
     const { title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking, type } = req.body
+
+    await teamService.assertTeamScope(teamId, req.user!)
 
     if (!await isTeamAdmin(userId, teamId)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以创建训练' })

@@ -11,6 +11,7 @@ import type {
   MemberStatus,
   TeamMemberBase,
   TeamBase,
+  TeamScope,
   TeamOperationLogParams
 } from './team.types'
 
@@ -85,6 +86,7 @@ export class TeamRepository {
     return prisma.team.findMany({
       where: {
         schoolId,
+        scope: 'campus',
         isPublic: true
       },
       include: {
@@ -107,6 +109,7 @@ export class TeamRepository {
     name: string
     description?: string
     schoolId: string
+    scope: TeamScope
     isPublic: boolean
   }) {
     return prisma.team.create({
@@ -115,6 +118,7 @@ export class TeamRepository {
         name: data.name,
         description: data.description,
         schoolId: data.schoolId,
+        scope: data.scope,
         isPublic: data.isPublic
       },
       include: {
@@ -238,12 +242,13 @@ export class TeamRepository {
    * 根据用户ID查找成员关系
    * 注意：userId 是 teacher.id 或 student.id，不是 user.userId
    */
-  async findMembersByUser(userId: string, userType?: MemberType, status?: MemberStatus) {
+  async findMembersByUser(userId: string, userType?: MemberType, status?: MemberStatus, scope?: TeamScope) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         ...(userType && { userType }),
-        ...(status && { status })
+        ...(status && { status }),
+        ...(scope && { Team: { scope } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -292,9 +297,19 @@ export class TeamRepository {
   /**
    * 查找用户所属的团队ID列表
    */
-  async findUserTeamIds(userId: string, userType: MemberType, status: MemberStatus = 'active') {
+  async findUserTeamIds(
+    userId: string,
+    userType: MemberType,
+    status: MemberStatus = 'active',
+    scope?: TeamScope
+  ) {
     const memberships = await prisma.teamMember.findMany({
-      where: { userId, userType, status },
+      where: {
+        userId,
+        userType,
+        status,
+        ...(scope && { Team: { scope } })
+      },
       select: { teamId: true }
     })
     return memberships.map(m => m.teamId)
@@ -304,13 +319,14 @@ export class TeamRepository {
    * 查找用户收到的待处理邀请
    * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
-  async findUserPendingInvites(userId: string, userType: MemberType) {
+  async findUserPendingInvites(userId: string, userType: MemberType, scope?: TeamScope) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         status: 'pending',
-        invitedBy: { not: null }  // 只返回真正的邀请，排除申请记录
+        invitedBy: { not: null },
+        ...(scope && { Team: { scope } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -319,9 +335,15 @@ export class TeamRepository {
   /**
    * 查找用户作为管理员的团队
    */
-  async findUserAdminTeams(userId: string, userType: MemberType) {
+  async findUserAdminTeams(userId: string, userType: MemberType, scope?: TeamScope) {
     return prisma.teamMember.findMany({
-      where: { userId, userType, role: 'admin', status: 'active' },
+      where: {
+        userId,
+        userType,
+        role: 'admin',
+        status: 'active',
+        ...(scope && { Team: { scope } })
+      },
       orderBy: { joinedAt: 'desc' }
     })
   }
@@ -329,9 +351,15 @@ export class TeamRepository {
   /**
    * 查找用户作为普通成员的团队
    */
-  async findUserMemberTeams(userId: string, userType: MemberType) {
+  async findUserMemberTeams(userId: string, userType: MemberType, scope?: TeamScope) {
     return prisma.teamMember.findMany({
-      where: { userId, userType, role: 'member', status: 'active' },
+      where: {
+        userId,
+        userType,
+        role: 'member',
+        status: 'active',
+        ...(scope && { Team: { scope } })
+      },
       orderBy: { joinedAt: 'desc' }
     })
   }
@@ -340,14 +368,15 @@ export class TeamRepository {
    * 查找用户收到的管理员邀请（role=admin, status=pending, invitedBy不为空）
    * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
-  async findUserAdminInvites(userId: string, userType: MemberType) {
+  async findUserAdminInvites(userId: string, userType: MemberType, scope?: TeamScope) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         role: 'admin',
         status: 'pending',
-        invitedBy: { not: null }  // 只返回真正的邀请，排除申请记录
+        invitedBy: { not: null },
+        ...(scope && { Team: { scope } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -357,14 +386,15 @@ export class TeamRepository {
    * 查找用户收到的普通成员邀请（role=member, status=pending, invitedBy不为空）
    * 注意：invitedBy为空的是用户主动申请加入的记录，不应显示为邀请
    */
-  async findUserMemberInvites(userId: string, userType: MemberType) {
+  async findUserMemberInvites(userId: string, userType: MemberType, scope?: TeamScope) {
     return prisma.teamMember.findMany({
       where: {
         userId,
         userType,
         role: 'member',
         status: 'pending',
-        invitedBy: { not: null }  // 只返回真正的邀请，排除申请记录
+        invitedBy: { not: null },
+        ...(scope && { Team: { scope } })
       },
       orderBy: { joinedAt: 'desc' }
     })
@@ -671,7 +701,14 @@ export class TeamRepository {
   async findTeacher(id: string) {
     return prisma.teacher.findUnique({
       where: { id },
-      select: { id: true, name: true, avatar: true, title: true, schoolId: true }
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        title: true,
+        schoolId: true,
+        User: { select: { username: true, avatar: true } }
+      }
     })
   }
 
@@ -681,7 +718,15 @@ export class TeamRepository {
   async findStudent(id: string) {
     return prisma.student.findUnique({
       where: { id },
-      select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true, schoolId: true }
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        rating: true,
+        enrollmentYear: true,
+        schoolId: true,
+        User: { select: { username: true, avatar: true } }
+      }
     })
   }
 
@@ -711,7 +756,14 @@ export class TeamRepository {
   async findTeachers(ids: string[]) {
     return prisma.teacher.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, avatar: true, title: true, schoolId: true }
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        title: true,
+        schoolId: true,
+        User: { select: { username: true, avatar: true } }
+      }
     })
   }
 
@@ -721,7 +773,15 @@ export class TeamRepository {
   async findStudents(ids: string[]) {
     return prisma.student.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, avatar: true, rating: true, enrollmentYear: true, schoolId: true }
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        rating: true,
+        enrollmentYear: true,
+        schoolId: true,
+        User: { select: { username: true, avatar: true } }
+      }
     })
   }
 
@@ -730,6 +790,7 @@ export class TeamRepository {
    */
   async findAvailableMembers(params: {
     schoolId: string
+    scope: TeamScope
     excludeTeacherIds: string[]
     excludeStudentIds: string[]
     keyword?: string
@@ -738,6 +799,50 @@ export class TeamRepository {
     const result: { students: unknown[]; teachers: unknown[] } = {
       students: [],
       teachers: []
+    }
+
+    if (params.scope === 'personal') {
+      const excludedIds = [...params.excludeStudentIds, ...params.excludeTeacherIds]
+      const users = await prisma.user.findMany({
+        where: {
+          id: { notIn: excludedIds },
+          status: 'active',
+          ...(params.type === 'student' && { role: 'student' }),
+          ...(params.type === 'teacher' && { role: { in: ['teacher', 'school_principal'] } }),
+          ...(!params.type && { role: { in: ['student', 'teacher', 'school_principal'] } }),
+          ...(params.keyword && {
+            username: { contains: params.keyword, mode: 'insensitive' }
+          })
+        },
+        select: {
+          id: true,
+          username: true,
+          avatar: true,
+          Student: { select: { id: true } },
+          Teacher: { select: { id: true } }
+        },
+        take: 40
+      })
+
+      result.students = users
+        .filter(user => user.Student)
+        .slice(0, 20)
+        .map(user => ({
+          id: user.id,
+          name: user.username,
+          username: user.username,
+          avatar: user.avatar
+        }))
+      result.teachers = users
+        .filter(user => user.Teacher)
+        .slice(0, 20)
+        .map(user => ({
+          id: user.id,
+          name: user.username,
+          username: user.username,
+          avatar: user.avatar
+        }))
+      return result
     }
 
     // 搜索学生

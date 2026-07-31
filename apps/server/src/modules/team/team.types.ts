@@ -16,6 +16,9 @@ export type MemberRole = 'owner' | 'admin' | 'member'
 /** 成员状态 */
 export type MemberStatus = 'pending' | 'active'
 
+/** 团队所属的学生使用场景 */
+export type TeamScope = 'campus' | 'personal'
+
 // ==================== 数据库模型类型 ====================
 
 /** 团队成员基础信息 */
@@ -38,6 +41,7 @@ export interface TeamBase {
   description: string | null
   announcement: string | null
   schoolId: string
+  scope: TeamScope
   isPublic: boolean
   createdAt: Date
   updatedAt: Date
@@ -140,6 +144,7 @@ export interface TeamListItem {
   avatar: string | null
   description: string | null
   isPublic: boolean
+  scope: TeamScope
   createdAt: Date
   school: SchoolBase
   owner: {

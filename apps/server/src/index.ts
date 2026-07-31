@@ -28,6 +28,7 @@ import { trainingsRouter } from './modules/training/training.routes'
 import { adminDataRouter } from './routes/admin-data'
 import { migrationRouter } from './routes/migration'
 import { archivedProblemsRouter } from './routes/archived-problems'
+import { rankingRouter } from './modules/ranking/ranking.routes'
 import { startSubmissionPoller } from './lib/submission-poller'
 import { metrics } from './lib/metrics'
 import path from 'path'
@@ -122,6 +123,7 @@ app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/training
 app.use('/api/admin/data', adminDataRouter)  // 管理员数据维护 API
 app.use('/api/admin/migration', migrationRouter)  // 数据迁移 API
 app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
+app.use('/api/rankings', rankingRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '../../prisma'
-import type { MemberType, MemberDetails } from './team.types'
+import type { MemberType, MemberDetails, TeamScope } from './team.types'
 
 /**
  * 根据 userId 和 userType 获取用户名称
@@ -168,6 +168,33 @@ export async function getMemberDetailsBatch(
   return result
 }
 
+export async function getUserDisplayName(
+  userId: string,
+  userType: MemberType,
+  scope: TeamScope
+): Promise<string> {
+  if (scope === 'campus') return getUserName(userId, userType)
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { username: true }
+  })
+  return user?.username || '未知'
+}
+
+/**
+ * 个人模式只暴露平台用户名；校园模式保留实名。
+ */
+export function formatMemberForScope<T extends MemberDetails>(
+  member: T,
+  scope: TeamScope
+): T {
+  if (scope !== 'personal') return member
+  return {
+    ...member,
+    name: member.username || member.name
+  }
+}
+
 /**
  * 格式化团队创建数量限制错误消息
  */
@@ -214,10 +241,14 @@ export function transformTeamForFrontend(team: Record<string, unknown>): Record<
     const lowerKey = FIELD_MAPPINGS[key] || key
 
     // 如果是 TeamMember，特殊处理为 members
-    if (key === 'TeamMember' && Array.isArray(value)) {
+    if (team.scope === 'personal' && key === 'schoolId') {
+      continue
+    } else if (key === 'TeamMember' && Array.isArray(value)) {
       result.members = value
     } else if (key === 'School' && value && typeof value === 'object') {
-      result.school = value
+      result.school = team.scope === 'personal'
+        ? { id: 'personal', name: '个人模式' }
+        : value
     } else if (key === 'Student' && value && typeof value === 'object') {
       result.student = value
     } else if (key === 'Teacher' && value && typeof value === 'object') {
@@ -229,6 +260,10 @@ export function transformTeamForFrontend(team: Record<string, unknown>): Record<
     } else {
       result[lowerKey] = value
     }
+  }
+
+  if (team.scope === 'personal' && !result.school) {
+    result.school = { id: 'personal', name: '个人模式' }
   }
 
   return result

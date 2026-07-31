@@ -199,6 +199,7 @@ const routerPrefixes = {
   adminDataRouter: '/api/admin/data',
   migrationRouter: '/api/admin/migration',
   archivedProblemsRouter: '/api/archived-problems',
+  rankingRouter: '/api/rankings',
 }
 
 const endpointPattern =

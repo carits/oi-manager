@@ -5,23 +5,25 @@ import { useAuth } from '@/components/AuthProvider'
 import RankingsTab from '@/app/teacher/school/components/RankingsTab'
 import SolvedCountTab from '@/app/teacher/school/components/SolvedCountTab'
 import apiClient from '@/lib/apiClient'
+import PersonalRankingsTab from './PersonalRankingsTab'
 
 type TabType = 'rating' | 'solved'
 
 export default function StudentRatingPage() {
   const { user } = useAuth()
+  const isPersonalMode = user?.studentMode === 'personal'
   const [activeTab, setActiveTab] = useState<TabType>('rating')
   const [schoolInfo, setSchoolInfo] = useState<{ educationSystem?: string | null } | null>(null)
 
   useEffect(() => {
-    if (user?.schoolId) {
+    if (user?.schoolId && !isPersonalMode) {
       apiClient.get<{ educationSystem?: string | null }>(`/api/schools/${user.schoolId}`).then(res => {
         if (res.success && res.data) {
           setSchoolInfo({ educationSystem: res.data.educationSystem })
         }
       })
     }
-  }, [user?.schoolId])
+  }, [isPersonalMode, user?.schoolId])
 
   const tabs: { key: TabType; label: string }[] = [
     { key: 'rating', label: 'Rating 排名' },
@@ -31,7 +33,9 @@ export default function StudentRatingPage() {
   return (
     <>
       <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1.5rem' }}>校内排名</h1>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1.5rem' }}>
+          {isPersonalMode ? '个人模式排名' : '校内排名'}
+        </h1>
 
         <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--border)', marginBottom: '1.5rem' }}>
           {tabs.map(tab => (
@@ -56,7 +60,9 @@ export default function StudentRatingPage() {
           ))}
         </div>
 
-        {user?.schoolId ? (
+        {isPersonalMode ? (
+          <PersonalRankingsTab type={activeTab} />
+        ) : user?.schoolId ? (
           <>
             {activeTab === 'rating' && (
               <RankingsTab schoolId={user.schoolId} educationSystem={schoolInfo?.educationSystem} />

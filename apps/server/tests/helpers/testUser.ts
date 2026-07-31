@@ -294,9 +294,18 @@ export async function createTestTeam(options: {
   name?: string
   schoolId: string
   ownerId?: string
+  ownerType?: 'teacher' | 'student'
   isPublic?: boolean
+  scope?: 'campus' | 'personal'
 } = { schoolId: '' }) {
-  const { name, schoolId, ownerId, isPublic = true } = options
+  const {
+    name,
+    schoolId,
+    ownerId,
+    ownerType = 'teacher',
+    isPublic = true,
+    scope = 'campus'
+  } = options
   const uniqueName = name || `测试团队_${Date.now()}`
 
   const team = await prisma.team.create({
@@ -304,6 +313,7 @@ export async function createTestTeam(options: {
       id: `team_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: uniqueName,
       schoolId,
+      scope,
       isPublic
     }
   })
@@ -315,7 +325,7 @@ export async function createTestTeam(options: {
         id: crypto.randomUUID(),
         teamId: team.id,
         userId: ownerId,
-        userType: 'teacher',
+        userType: ownerType,
         role: 'owner',
         status: 'active',
         joinedAt: new Date()

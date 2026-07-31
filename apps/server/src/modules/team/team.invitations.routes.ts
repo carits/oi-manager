@@ -7,7 +7,7 @@ import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
-import { getUserName } from './team.utils'
+import { getUserDisplayName } from './team.utils'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
@@ -20,17 +20,18 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
   const user = (req as any).user!
   const userId = user.userId
   const userType = user.role === 'student' ? 'student' : 'teacher'
+  const scope = teamService.getScopeForUser(user)
 
-  const invitations = await teamRepository.findUserPendingInvites(userId, userType as MemberType)
+  const invitations = await teamRepository.findUserPendingInvites(userId, userType as MemberType, scope)
 
   const formattedInvitations = await Promise.all(
     invitations.map(async (invite) => {
       const ownerMember = await teamRepository.findOwner(invite.teamId)
-      const ownerName = ownerMember ? await getUserName(ownerMember.userId, ownerMember.userType as MemberType) : '未知'
+      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, scope) : '未知'
 
       let invitedByName = '未知'
       if (invite.invitedBy) {
-        invitedByName = await getUserName(invite.invitedBy, 'teacher')
+        invitedByName = await getUserDisplayName(invite.invitedBy, 'teacher', scope)
       }
 
       const team = await teamRepository.findById(invite.teamId)
@@ -60,8 +61,9 @@ teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (r
   const user = (req as any).user!
   const userId = user.userId
   const userType = user.role === 'student' ? 'student' : 'teacher'
+  const scope = teamService.getScopeForUser(user)
 
-  const memberRecords = await teamRepository.findUserAdminTeams(userId, userType as MemberType)
+  const memberRecords = await teamRepository.findUserAdminTeams(userId, userType as MemberType, scope)
 
   const teams = await Promise.all(
     memberRecords.map(async (record) => {
@@ -88,7 +90,7 @@ teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (
     return res.json({ success: true, data: [] })
   }
 
-  const memberRecords = await teamRepository.findUserMemberTeams(user.userId, 'teacher')
+  const memberRecords = await teamRepository.findUserMemberTeams(user.userId, 'teacher', 'campus')
 
   const teams = await Promise.all(
     memberRecords.map(async (record) => {
@@ -113,13 +115,14 @@ teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async
   const user = (req as any).user!
   const userId = user.userId
   const userType = user.role === 'student' ? 'student' : 'teacher'
+  const scope = teamService.getScopeForUser(user)
 
-  const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType)
+  const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType, scope)
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {
       const ownerMember = await teamRepository.findOwner(invite.teamId)
-      const ownerName = ownerMember ? await getUserName(ownerMember.userId, ownerMember.userType as MemberType) : '未知'
+      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, scope) : '未知'
       const team = await teamRepository.findById(invite.teamId)
 
       return {
@@ -156,6 +159,7 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/accept', authentica
     return res.status(400).json({ success: false, message: '邀请已处理' })
   }
 
+  await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.updateMemberStatus(invitationId, 'active')
   res.json({ success: true, message: '已加入团队' })
 }))
@@ -179,6 +183,7 @@ teamInvitationsRouter.post('/admin-invitations/:invitationId/reject', authentica
     return res.status(400).json({ success: false, message: '邀请已处理' })
   }
 
+  await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.deleteMember(invitationId)
   res.json({ success: true, message: '已拒绝邀请' })
 }))
@@ -192,12 +197,12 @@ teamInvitationsRouter.get('/member-invitations', authenticate, asyncHandler(asyn
     return res.json({ success: true, data: [] })
   }
 
-  const invitations = await teamRepository.findUserMemberInvites(user.userId, 'teacher')
+  const invitations = await teamRepository.findUserMemberInvites(user.userId, 'teacher', 'campus')
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {
       const ownerMember = await teamRepository.findOwner(invite.teamId)
-      const ownerName = ownerMember ? await getUserName(ownerMember.userId, ownerMember.userType as MemberType) : '未知'
+      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, 'campus') : '未知'
       const team = await teamRepository.findById(invite.teamId)
 
       return {
@@ -234,6 +239,7 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/accept', authentic
     return res.status(400).json({ success: false, message: '邀请已处理' })
   }
 
+  await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.updateMemberStatus(invitationId, 'active')
   res.json({ success: true, message: '已加入团队' })
 }))
@@ -256,6 +262,7 @@ teamInvitationsRouter.post('/member-invitations/:invitationId/reject', authentic
     return res.status(400).json({ success: false, message: '邀请已处理' })
   }
 
+  await teamService.assertTeamScope(invitation.teamId, user)
   await teamRepository.deleteMember(invitationId)
   res.json({ success: true, message: '已拒绝邀请' })
 }))
@@ -278,6 +285,8 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   if (invitation.invitedBy === null) {
     return res.status(400).json({ success: false, message: '这是申请记录，应使用申请审批接口' })
   }
+
+  await teamService.assertTeamScope(invitation.teamId, user)
 
   // 使用事务确保状态更新和日志记录原子性
   const callerType = user.role === 'student' ? 'student' : 'teacher'
@@ -327,6 +336,8 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   if (invitation.invitedBy === null) {
     return res.status(400).json({ success: false, message: '这是申请记录，应使用申请审批接口' })
   }
+
+  await teamService.assertTeamScope(invitation.teamId, user)
 
   // 使用事务确保删除和日志记录原子性
   const callerType = user.role === 'student' ? 'student' : 'teacher'

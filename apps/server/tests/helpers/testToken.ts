@@ -14,6 +14,7 @@ export function generateTestToken(payload: {
   studentId?: string
   adminId?: string
   schoolId?: string
+  studentMode?: 'campus' | 'personal'
 }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
 }
@@ -28,6 +29,7 @@ export function generateTokenFromUser(user: {
   teacherId?: string
   studentId?: string
   schoolId?: string
+  studentMode?: 'campus' | 'personal'
 }): string {
   const payload: JwtPayload = {
     userId: user.id,
@@ -35,7 +37,8 @@ export function generateTokenFromUser(user: {
     username: user.username,
     teacherId: user.teacherId,
     studentId: user.studentId,
-    schoolId: user.schoolId
+    schoolId: user.schoolId,
+    studentMode: user.studentMode
   }
   return generateTestToken(payload)
 }

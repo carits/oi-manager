@@ -7,7 +7,7 @@ source_of_truth: apps/server/src/index.ts, routes and modules
 
 # HTTP API
 
-基础路径为 `/api`，Judge WebSocket 为 `/ws/judge`。当前目录登记源码中的 242 个
+基础路径为 `/api`，Judge WebSocket 为 `/ws/judge`。当前目录登记源码中的 249 个
 HTTP 端点。
 
 | 文档 | 端点范围 |

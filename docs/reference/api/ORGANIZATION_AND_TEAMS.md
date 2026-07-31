@@ -30,8 +30,8 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `POST` | `/api/schools/current/teachers` | 本校负责人 | 创建教师 |
 | `PUT` | `/api/schools/current/teachers/:teacherId` | 本校负责人 | 更新教师 |
 | `GET` | `/api/schools/:id/stats` | 登录、学校范围 | 学校统计 |
-| `GET` | `/api/schools/:id/student-rankings` | 负责人/教师、学校范围 | 学生排名 |
-| `GET` | `/api/schools/:id/student-solved-rankings` | 负责人/教师、学校范围 | 解题排名 |
+| `GET` | `/api/schools/:id/student-rankings` | 校园模式、本校范围 | 校内学生 Rating 排名 |
+| `GET` | `/api/schools/:id/student-solved-rankings` | 校园模式、本校范围 | 校内学生解题排名 |
 | `GET` | `/api/schools/:id/students-by-grade` | 负责人/教师、学校范围 | 年级学生 |
 | `GET` | `/api/schools/:schoolId/contests` | 登录、学校范围 | 学校比赛 |
 | `POST` | `/api/schools/:schoolId/contests` | 负责人/教师、学校范围 | 创建学校比赛 |
@@ -67,6 +67,13 @@ source_of_truth: school, student, teacher, team and team-import routes
 里程碑写接口当前显式允许 `teacher`，没有把 `school_principal` 列入同一 authorize
 调用；调用方不要假设负责人必然继承这三个端点。
 
+## 个人模式排名（2）
+
+| 方法 | 路径 | 访问 | 用途 |
+|------|------|------|------|
+| `GET` | `/api/rankings/personal/rating` | 个人模式学生 | 平台级 Rating 排名，只返回用户名 |
+| `GET` | `/api/rankings/personal/solved` | 个人模式学生 | 平台级解题排名，只返回用户名 |
+
 ## 团队 CRUD 与成员（25）
 
 | 方法 | 路径 | 访问 | 用途 |
@@ -96,6 +103,10 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `DELETE` | `/api/teams/:teamId/problem-lists/:id` | 管理资源 | 移除题单 |
 | `GET` | `/api/teams/:teamId/trainings` | 登录、团队范围 | 团队任务 |
 | `POST` | `/api/teams/:teamId/trainings` | owner/admin/教师 | 创建团队任务 |
+
+团队具有服务端维护的 `scope=campus|personal`。校园团队按学校隔离；个人团队在平台
+范围内浏览和加入，并且成员响应只使用用户名。当前模式与团队作用域不一致时返回
+`403`，客户端传入的 `schoolId` 不能改变该边界。
 
 ## 邀请与申请（15）
 

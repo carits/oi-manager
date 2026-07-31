@@ -470,4 +470,179 @@ describe('Team Operations', () => {
       expect(res.status).toBe(403)
     })
   })
+
+  describe('Campus and personal scope isolation', () => {
+    it('creates personal teams and keeps both team scopes isolated', async () => {
+      const { school: schoolA } = await createTestSchoolWithPrincipal()
+      const { school: schoolB } = await createTestSchoolWithPrincipal()
+      const { user, studentId } = await createTestUser({
+        role: 'student',
+        schoolId: schoolA.id,
+        username: `personal_${shortId()}`
+      })
+      const { studentId: otherStudentId } = await createTestUser({
+        role: 'student',
+        schoolId: schoolB.id
+      })
+
+      const campusTeam = await createTestTeam({
+        schoolId: schoolA.id,
+        ownerId: studentId,
+        ownerType: 'student',
+        scope: 'campus',
+        name: 'Campus only'
+      })
+      const otherPersonalTeam = await createTestTeam({
+        schoolId: schoolB.id,
+        ownerId: otherStudentId,
+        ownerType: 'student',
+        scope: 'personal',
+        name: 'Personal global'
+      })
+
+      const personalToken = generateTestToken({
+        userId: user.id,
+        role: 'student',
+        username: user.username,
+        studentId,
+        schoolId: schoolA.id,
+        studentMode: 'personal'
+      })
+      const campusToken = generateTestToken({
+        userId: user.id,
+        role: 'student',
+        username: user.username,
+        studentId,
+        schoolId: schoolA.id,
+        studentMode: 'campus'
+      })
+
+      const createResponse = await request(app)
+        .post('/api/teams')
+        .set('Authorization', `Bearer ${personalToken}`)
+        .send({
+          id: `personal_team_${shortId()}`,
+          name: 'My personal team',
+          isPublic: true
+        })
+
+      expect(createResponse.status).toBe(200)
+      const createdTeam = await prisma.team.findUnique({
+        where: { id: createResponse.body.data.id }
+      })
+      expect(createdTeam?.scope).toBe('personal')
+
+      const personalList = await request(app)
+        .get('/api/teams?view=all')
+        .set('Authorization', `Bearer ${personalToken}`)
+
+      expect(personalList.status).toBe(200)
+      expect(personalList.body.data.data.map((team: any) => team.id)).toContain(otherPersonalTeam.id)
+      expect(personalList.body.data.data.map((team: any) => team.id)).not.toContain(campusTeam.id)
+      expect(personalList.body.data.data[0].school.name).toBe('个人模式')
+      expect(personalList.body.data.data[0].schoolId).toBeUndefined()
+
+      const campusDetail = await request(app)
+        .get(`/api/teams/${createResponse.body.data.id}`)
+        .set('Authorization', `Bearer ${campusToken}`)
+
+      expect(campusDetail.status).toBe(403)
+    })
+
+    it('uses usernames for personal teams instead of real names', async () => {
+      const { school } = await createTestSchoolWithPrincipal()
+      const username = `display_${shortId()}`
+      const { user, studentId } = await createTestUser({
+        role: 'student',
+        schoolId: school.id,
+        username
+      })
+      const team = await createTestTeam({
+        schoolId: school.id,
+        ownerId: studentId,
+        ownerType: 'student',
+        scope: 'personal'
+      })
+      const token = generateTestToken({
+        userId: user.id,
+        role: 'student',
+        username,
+        studentId,
+        schoolId: school.id,
+        studentMode: 'personal'
+      })
+
+      const response = await request(app)
+        .get(`/api/teams/${team.id}`)
+        .set('Authorization', `Bearer ${token}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.owner.name).toBe(username)
+      expect(response.body.data.owner.name).not.toBe('Test student')
+    })
+  })
+
+  describe('Personal rankings', () => {
+    it('returns a platform ranking with usernames only', async () => {
+      const { school: schoolA } = await createTestSchoolWithPrincipal()
+      const { school: schoolB } = await createTestSchoolWithPrincipal()
+      const usernameA = `rank_a_${shortId()}`
+      const usernameB = `rank_b_${shortId()}`
+      const studentA = await createTestUser({
+        role: 'student',
+        schoolId: schoolA.id,
+        username: usernameA,
+        rating: 1600
+      })
+      await createTestUser({
+        role: 'student',
+        schoolId: schoolB.id,
+        username: usernameB,
+        rating: 1500
+      })
+      const personalToken = generateTestToken({
+        userId: studentA.user.id,
+        role: 'student',
+        username: usernameA,
+        studentId: studentA.studentId,
+        schoolId: schoolA.id,
+        studentMode: 'personal'
+      })
+
+      const response = await request(app)
+        .get('/api/rankings/personal/rating?pageSize=200')
+        .set('Authorization', `Bearer ${personalToken}`)
+
+      expect(response.status).toBe(200)
+      const rows = response.body.data.filter((row: any) =>
+        row.username === usernameA || row.username === usernameB
+      )
+      expect(rows).toHaveLength(2)
+      expect(rows.every((row: any) => !('name' in row))).toBe(true)
+
+      const schoolResponse = await request(app)
+        .get(`/api/schools/${schoolA.id}/student-rankings`)
+        .set('Authorization', `Bearer ${personalToken}`)
+      expect(schoolResponse.status).toBe(403)
+    })
+
+    it('rejects the personal ranking in campus mode', async () => {
+      const { school } = await createTestSchoolWithPrincipal()
+      const student = await createTestUser({ role: 'student', schoolId: school.id })
+      const token = generateTestToken({
+        userId: student.user.id,
+        role: 'student',
+        username: student.user.username,
+        studentId: student.studentId,
+        schoolId: school.id,
+        studentMode: 'campus'
+      })
+
+      const response = await request(app)
+        .get('/api/rankings/personal/rating')
+        .set('Authorization', `Bearer ${token}`)
+
+      expect(response.status).toBe(403)
+    })
+  })
 })

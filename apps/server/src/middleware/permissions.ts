@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '../prisma'
-import { AuthRequest } from './auth'
+import { AuthRequest, isPersonalMode } from './auth'
 import logger from '../lib/logger'
 
 /**
@@ -315,10 +315,16 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
   // 获取团队信息
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { schoolId: true, isPublic: true }
+    select: { schoolId: true, scope: true, isPublic: true }
   })
   if (!team) {
     logPermissionDenied(req, 'view_team', 'team', teamId, '团队不存在')
+    return false
+  }
+
+  const expectedScope = isPersonalMode(req.user) ? 'personal' : 'campus'
+  if (team.scope !== expectedScope) {
+    logPermissionDenied(req, 'view_team', 'team', teamId, '团队不属于当前使用模式')
     return false
   }
 
@@ -327,7 +333,7 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
 
   // 公开团队：本校用户可查看
   if (team.isPublic) {
-    const hasAccess = userSchoolId === team.schoolId
+    const hasAccess = team.scope === 'personal' || userSchoolId === team.schoolId
     if (!hasAccess) {
       logPermissionDenied(req, 'view_team', 'team', teamId, '公开团队仅限本校用户查看')
     }
@@ -364,6 +370,16 @@ export async function canManageTeam(req: AuthRequest, teamId: string): Promise<b
 
   // 超管可以管理所有团队
   if (role === 'super_admin') return true
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { scope: true }
+  })
+  const expectedScope = isPersonalMode(req.user) ? 'personal' : 'campus'
+  if (!team || team.scope !== expectedScope) {
+    logPermissionDenied(req, 'manage_team', 'team', teamId, '团队不属于当前使用模式')
+    return false
+  }
 
   // 获取用户在团队中的角色
   const teacherId = await getUserTeacherId(req.user!.userId)

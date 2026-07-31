@@ -28,7 +28,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
-| `Team` | `id`, `name`, `schoolId`, `isPublic` | 团队 |
+| `Team` | `id`, `name`, `schoolId`, `scope`, `isPublic` | 校园或个人团队 |
 | `TeamMember` | `teamId`, `userId`, `userType`, `role`, `status` | 成员与团队角色 |
 | `TeamJoinRequest` | `teamId`, `userId`, `status`, `processedBy` | 加入申请 |
 | `TeamMemberExternalAccount` | `teamId`, `studentId`, `platform`, `platformUsername` | 成员外部账号 |

@@ -35,6 +35,7 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
   if (!isAdmin) {
     return res.status(403).json({ success: false, message: '无权查看' })
   }
+  const team = await teamService.assertTeamScope(id, user)
 
   // 查询所有待处理的申请（TeamMember status=pending, invitedBy=null）
   const pendingMembers = await prisma.teamMember.findMany({
@@ -59,7 +60,7 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
       createdAt: member.joinedAt,
       user: u ? {
         id: u.id,
-        name: profile?.name || u.username,
+        name: team.scope === 'personal' ? u.username : (profile?.name || u.username),
         username: u.username,
         avatar: u.avatar,
         userType: u.Teacher ? 'teacher' : 'student'
@@ -75,10 +76,16 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
 teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, asyncHandler(async (req, res) => {
   const { requestId } = req.params
   const user = (req as any).user!
+  const scope = teamService.getScopeForUser(user)
 
   // requestId 是 userId，查找 pending 的 TeamMember（invitedBy=null 表示申请）
   const member = await prisma.teamMember.findFirst({
-    where: { userId: requestId, status: 'pending', invitedBy: null }
+    where: {
+      userId: requestId,
+      status: 'pending',
+      invitedBy: null,
+      Team: { scope }
+    }
   })
 
   if (!member) {
@@ -112,9 +119,15 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
 teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncHandler(async (req, res) => {
   const { requestId } = req.params
   const user = (req as any).user!
+  const scope = teamService.getScopeForUser(user)
 
   const member = await prisma.teamMember.findFirst({
-    where: { userId: requestId, status: 'pending', invitedBy: null }
+    where: {
+      userId: requestId,
+      status: 'pending',
+      invitedBy: null,
+      Team: { scope }
+    }
   })
 
   if (!member) {

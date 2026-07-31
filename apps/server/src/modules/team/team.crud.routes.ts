@@ -72,6 +72,7 @@ function handleError(res: Response, error: unknown, defaultMessage: string = '�
       'NOT_OWNER': { status: 403, message: '只有团队所有者可以执行此操作' },
       'NOT_ADMIN': { status: 403, message: '只有团队所有者或管理员可以执行此操作' },
       'NOT_MEMBER': { status: 403, message: '您没有权限查看该团队' },
+      'TEAM_SCOPE_MISMATCH': { status: 403, message: '该团队不属于当前使用模式' },
       'NEW_OWNER_NOT_FOUND': { status: 404, message: '新所有者不存在' },
       'NEW_OWNER_NOT_SAME_SCHOOL': { status: 400, message: '新所有者必须是本校成员' },
       'NEW_OWNER_LIMIT_EXCEEDED': { status: 400, message: '新所有者创建的团队数量已达上限' },
@@ -98,6 +99,10 @@ teamCrudRouter.get('/school/:schoolId', authenticate, asyncHandler(async (req, r
   const { schoolId } = req.params
   const user = (req as any).user!
 
+  if (isPersonalMode(user)) {
+    return res.status(403).json({ success: false, message: '个人模式不能访问校园团队' })
+  }
+
   if (!await canAccessSchool(req as any, schoolId)) {
     return res.status(403).json({ success: false, message: '您没有权限查看该学校的团队列表' })
   }
@@ -115,7 +120,7 @@ teamCrudRouter.get('/student/:studentId', authenticate, asyncHandler(async (req,
     return res.status(403).json({ success: false, message: '您没有权限查看该学生的团队信息' })
   }
 
-  const result = await teamService.getStudentTeams(studentId)
+  const result = await teamService.getStudentTeams(studentId, (req as any).user!)
   res.json({ success: true, data: result })
 }))
 

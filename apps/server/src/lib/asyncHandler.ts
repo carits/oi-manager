@@ -32,6 +32,10 @@ export function asyncHandler(fn: AsyncHandler, errorMessage = '服务器错误')
         metadata: { method: req.method, error: e.message }
       })
       if (!res.headersSent) {
+        if (e?.message === 'TEAM_SCOPE_MISMATCH') {
+          res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
+          return
+        }
         res.status(500).json({ success: false, message: errorMessage })
       }
     })

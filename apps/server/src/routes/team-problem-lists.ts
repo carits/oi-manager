@@ -11,6 +11,7 @@ import { Router } from 'express'
 import { prisma } from '../prisma'
 import { authenticate, isPersonalMode } from '../middleware/auth'
 import type { AuthRequest } from '../middleware/auth'
+import { teamService } from '../modules/team/team.service'
 
 export const teamProblemListsRouter = Router()
 
@@ -48,6 +49,7 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
     const { teamId } = req.params
     const userId = req.user!.userId
     const role = req.user!.role
+    const team = await teamService.assertTeamScope(teamId, req.user!)
 
     // 权限：团队成员可查看（超管也能看）
     if (role !== 'super_admin' && role !== 'platform_admin') {
@@ -89,13 +91,17 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
           where: { id: item.ProblemList.ownerId },
           select: { name: true }
         })
-        ownerName = teacher?.name || '未知'
+        ownerName = team.scope === 'personal'
+          ? (await prisma.user.findUnique({ where: { id: item.ProblemList.ownerId }, select: { username: true } }))?.username || '未知'
+          : teacher?.name || '未知'
       } else if (item.ProblemList.ownerType === 'student') {
         const student = await prisma.student.findUnique({
           where: { id: item.ProblemList.ownerId },
           select: { name: true }
         })
-        ownerName = student?.name || '未知'
+        ownerName = team.scope === 'personal'
+          ? (await prisma.user.findUnique({ where: { id: item.ProblemList.ownerId }, select: { username: true } }))?.username || '未知'
+          : student?.name || '未知'
       }
 
       // 添加者名字
@@ -104,7 +110,8 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
         where: { id: item.addedBy },
         include: { Teacher: true, Student: true }
       })
-      if (addedByUser?.Teacher) addedByName = addedByUser.Teacher.name
+      if (team.scope === 'personal') addedByName = addedByUser?.username || '未知'
+      else if (addedByUser?.Teacher) addedByName = addedByUser.Teacher.name
       else if (addedByUser?.Student) addedByName = addedByUser.Student.name
 
       return {
@@ -130,6 +137,9 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
 
     res.json({ success: true, data })
   } catch (error) {
+    if (error instanceof Error && error.message === 'TEAM_SCOPE_MISMATCH') {
+      return res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
+    }
     res.status(500).json({ success: false, message: '获取团队题单列表失败' })
   }
 })
@@ -144,6 +154,7 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
     const { teamId } = req.params
     const { problemListId } = req.body
     const userId = req.user!.userId
+    await teamService.assertTeamScope(teamId, req.user!)
 
     // 校园模式：学生不能添加团队题单；个人模式可以
     if (req.user!.role === 'student' && !isPersonalMode(req.user)) {
@@ -191,6 +202,9 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
 
     res.json({ success: true, data: item })
   } catch (error) {
+    if (error instanceof Error && error.message === 'TEAM_SCOPE_MISMATCH') {
+      return res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
+    }
     res.status(500).json({ success: false, message: '添加团队题单失败' })
   }
 })
@@ -204,6 +218,7 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
     const { teamId, id } = req.params
     const userId = req.user!.userId
     const role = req.user!.role
+    await teamService.assertTeamScope(teamId, req.user!)
 
     // 校园模式：学生不能移除团队题单；个人模式可以
     if (role === 'student' && !isPersonalMode(req.user)) {
@@ -237,6 +252,9 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
 
     res.json({ success: true, message: '已移除' })
   } catch (error) {
+    if (error instanceof Error && error.message === 'TEAM_SCOPE_MISMATCH') {
+      return res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
+    }
     res.status(500).json({ success: false, message: '移除团队题单失败' })
   }
 })

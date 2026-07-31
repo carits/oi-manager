@@ -9,7 +9,8 @@ export interface Team {
   avatar?: string | null
   description: string | null
   announcement?: string | null
-  schoolId: string
+  schoolId?: string
+  scope: 'campus' | 'personal'
   ownerId: string
   isPublic: boolean
   createdAt: string

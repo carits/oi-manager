@@ -31,7 +31,7 @@ export default function StudentTeamPage() {
   const queryParams = {
     page,
     pageSize,
-    schoolId: user?.schoolId,
+    schoolId: user?.studentMode === 'campus' ? user?.schoolId : undefined,
     view: activeTab === 'mine' ? 'mine' : 'all'
   }
 
@@ -85,7 +85,7 @@ export default function StudentTeamPage() {
       }
     }
     fetchInvitations()
-  }, [user?.userId])
+  }, [sessionKey, user?.userId])
 
   // 接受邀请
   const handleAcceptInvitation = async (invitationId: string) => {

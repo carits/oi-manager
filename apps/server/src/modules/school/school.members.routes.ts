@@ -5,7 +5,7 @@
 
 import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
-import { authenticate, AuthRequest } from '../../middleware/auth.js'
+import { authenticate, AuthRequest, isPersonalMode } from '../../middleware/auth.js'
 import { prisma } from '../../prisma.js'
 import { canAccessSchool } from '../../middleware/permissions.js'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../../utils/validation.js'
@@ -68,6 +68,10 @@ schoolMembersRouter.get('/:id/teachers', authenticate, asyncHandler(async (req: 
 schoolMembersRouter.get('/:id/student-rankings', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params
 
+    if (isPersonalMode(req.user)) {
+      return res.status(403).json({ success: false, message: '个人模式不能访问校内排名' })
+    }
+
     // 资源级权限检查：只有本校用户可以查看
     if (!await canAccessSchool(req, id)) {
       return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生排名' })
@@ -112,6 +116,10 @@ schoolMembersRouter.get('/:id/student-rankings', authenticate, asyncHandler(asyn
 // ==================== 获取学校学生做题量排名 ====================
 schoolMembersRouter.get('/:id/student-solved-rankings', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params
+
+    if (isPersonalMode(req.user)) {
+      return res.status(403).json({ success: false, message: '个人模式不能访问校内排名' })
+    }
 
     if (!await canAccessSchool(req, id)) {
       return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生排名' })

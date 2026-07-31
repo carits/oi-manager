@@ -7,12 +7,13 @@ import logger from '../../lib/logger'
 import { paginatedResponse } from '../../lib/pagination'
 import type { JwtPayload } from '@oi-manager/shared'
 import { teamRepository, TeamRepository } from './team.repository'
-import { getUserName, getMemberDetails, getMemberDetailsBatch, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
-import { getUserType } from '../../middleware/auth'
+import { getUserName, getMemberDetails, getMemberDetailsBatch, formatMemberForScope, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
+import { getUserType, isPersonalMode } from '../../middleware/auth'
 import type {
   MemberType,
   MemberRole,
   MemberStatus,
+  TeamScope,
   TeamAdminCheck,
   MemberRoleCheck,
   InviteMembersResult,
@@ -34,6 +35,21 @@ export class TeamService {
 
   // ==================== 权限检查 ====================
 
+  getScopeForUser(user: JwtPayload): TeamScope {
+    return isPersonalMode(user) ? 'personal' : 'campus'
+  }
+
+  async assertTeamScope(teamId: string, user: JwtPayload) {
+    const team = await this.repo.findById(teamId)
+    if (!team) {
+      throw new Error('TEAM_NOT_FOUND')
+    }
+    if (team.scope !== this.getScopeForUser(user)) {
+      throw new Error('TEAM_SCOPE_MISMATCH')
+    }
+    return team
+  }
+
   /**
    * 检查用户在团队中的角色
    */
@@ -42,6 +58,11 @@ export class TeamService {
     const userType = getUserType(user.role)
 
     if (!userId) {
+      return { role: null, memberId: null }
+    }
+
+    const team = await this.repo.findById(teamId)
+    if (!team || team.scope !== this.getScopeForUser(user)) {
       return { role: null, memberId: null }
     }
 
@@ -102,6 +123,9 @@ export class TeamService {
    * 获取学校团队列表
    */
   async getSchoolTeams(schoolId: string, user: JwtPayload) {
+    if (this.getScopeForUser(user) !== 'campus') {
+      throw new Error('TEAM_SCOPE_MISMATCH')
+    }
     const teams = await this.repo.findBySchool(schoolId)
 
     // 批量加载所有者信息
@@ -165,18 +189,20 @@ export class TeamService {
   /**
    * 获取学生的团队列表
    */
-  async getStudentTeams(studentId: string) {
-    const memberRecords = await this.repo.findMembersByUser(studentId, 'student')
+  async getStudentTeams(studentId: string, user: JwtPayload) {
+    const scope = this.getScopeForUser(user)
+    const memberRecords = await this.repo.findMembersByUser(studentId, 'student', undefined, scope)
     logger.info('getStudentTeams_debug', { studentId, memberCount: memberRecords.length } as any)
 
     // 批量加载团队信息
     const teamIds = memberRecords.map(r => r.teamId)
     const teams = await Promise.all(teamIds.map(id => this.repo.findById(id)))
-    const teamMap = new Map(teams.filter(Boolean).map(t => [t!.id, t!]))
+    const scopedTeams = teams.filter(team => team?.scope === scope)
+    const teamMap = new Map(scopedTeams.map(t => [t!.id, t!]))
 
     // 批量加载所有者信息
     const ownerInfos: Array<{ teamId: string; userId: string; userType: string }> = []
-    for (const team of teams.filter(Boolean)) {
+    for (const team of scopedTeams) {
       const owner = team!.TeamMember.find(m => m.role === 'owner')
       if (owner) {
         ownerInfos.push({ teamId: team!.id, userId: owner.userId, userType: owner.userType })
@@ -191,8 +217,14 @@ export class TeamService {
       this.repo.findStudents(studentIds)
     ])
 
-    const teacherNameMap = new Map(teachers.map(t => [t.id, t.name]))
-    const studentNameMap = new Map(students.map(s => [s.id, s.name]))
+    const teacherNameMap = new Map(teachers.map(t => [
+      t.id,
+      scope === 'personal' ? t.User.username : t.name
+    ]))
+    const studentNameMap = new Map(students.map(s => [
+      s.id,
+      scope === 'personal' ? s.User.username : s.name
+    ]))
 
     // 分类：已加入、邀请（invitedBy != null）、申请（invitedBy == null）
     const joinedTeams: Record<string, unknown>[] = []
@@ -262,8 +294,12 @@ export class TeamService {
     const userId = user.userId
     const userType = getUserType(user.role)
 
-    const where: Record<string, unknown> = {}
-    if (schoolId) where.schoolId = schoolId
+    const scope = this.getScopeForUser(user)
+    const where: Record<string, unknown> = { scope }
+    if (scope === 'campus') {
+      const effectiveSchoolId = user.schoolId || schoolId
+      if (effectiveSchoolId) where.schoolId = effectiveSchoolId
+    }
 
     // 构建过滤条件
     if (view === 'mine') {
@@ -271,16 +307,16 @@ export class TeamService {
         return paginatedResponse([], 0, page, pageSize)
       }
 
-      const myTeamIds = await this.repo.findUserTeamIds(userId, userType)
+      const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope)
       where.id = { in: myTeamIds }
-    } else if (schoolId && !view) {
+    } else if (scope === 'campus' && schoolId && !view) {
       // 学校团队页面：显示该学校的所有团队
     } else {
       // 全部团队：只显示公有，且排除自己已加入的
       where.isPublic = true
 
       if (userId && userId !== 'undefined' && userId !== 'null') {
-        const myTeamIds = await this.repo.findUserTeamIds(userId, userType)
+        const myTeamIds = await this.repo.findUserTeamIds(userId, userType, 'active', scope)
         if (myTeamIds.length > 0) {
           where.id = { notIn: myTeamIds }
         }
@@ -306,8 +342,14 @@ export class TeamService {
       this.repo.findStudents(studentIds)
     ])
 
-    const teacherNameMap = new Map(teachers.map(t => [t.id, t.name]))
-    const studentNameMap = new Map(students.map(s => [s.id, s.name]))
+    const teacherNameMap = new Map(teachers.map(t => [
+      t.id,
+      scope === 'personal' ? t.User.username : t.name
+    ]))
+    const studentNameMap = new Map(students.map(s => [
+      s.id,
+      scope === 'personal' ? s.User.username : s.name
+    ]))
 
     // 组装结果
     const teamsWithOwner = allTeams.map(team => {
@@ -343,11 +385,8 @@ export class TeamService {
    * 获取团队详情
    */
   async getTeamDetail(teamId: string, user: JwtPayload) {
-    const team = await this.repo.findById(teamId)
-
-    if (!team) {
-      throw new Error('TEAM_NOT_FOUND')
-    }
+    const team = await this.assertTeamScope(teamId, user)
+    const scope = team.scope as TeamScope
 
     // 私有团队权限检查
     if (!team.isPublic) {
@@ -375,27 +414,31 @@ export class TeamService {
     ]
     const detailsMap = await getMemberDetailsBatch(allMembers)
 
-    const ownerInfo = owner ? (detailsMap.get(`teacher:${owner.userId}`) || detailsMap.get(`student:${owner.userId}`)) ?? null : null
+    const rawOwnerInfo = owner ? (detailsMap.get(`teacher:${owner.userId}`) || detailsMap.get(`student:${owner.userId}`)) ?? null : null
+    const ownerInfo = rawOwnerInfo ? formatMemberForScope(rawOwnerInfo, scope) : null
 
-    const adminsInfo = admins.map(a => detailsMap.get(`${a.userType}:${a.userId}`)).filter(Boolean)
+    const adminsInfo = admins
+      .map(a => detailsMap.get(`${a.userType}:${a.userId}`))
+      .filter((detail): detail is NonNullable<typeof detail> => Boolean(detail))
+      .map(detail => formatMemberForScope(detail, scope))
 
     const teachersInfo = members
       .filter(m => m.userType === 'teacher')
-      .map(m => { const d = detailsMap.get(`teacher:${m.userId}`); return d ? { ...d, joinedAt: m.joinedAt } : null })
+      .map(m => { const d = detailsMap.get(`teacher:${m.userId}`); return d ? { ...formatMemberForScope(d, scope), joinedAt: m.joinedAt } : null })
 
     const studentsInfo = members
       .filter(m => m.userType === 'student')
-      .map(m => { const d = detailsMap.get(`student:${m.userId}`); return d ? { ...d, joinedAt: m.joinedAt } : null })
+      .map(m => { const d = detailsMap.get(`student:${m.userId}`); return d ? { ...formatMemberForScope(d, scope), joinedAt: m.joinedAt } : null })
 
     const pendingRequestsInfo = pendingRequests.map(m => {
       const d = detailsMap.get(`${m.userType}:${m.userId}`)
-      return d ? { ...d, memberId: m.id, requestedAt: m.joinedAt } : null
+      return d ? { ...formatMemberForScope(d, scope), memberId: m.id, requestedAt: m.joinedAt } : null
     })
 
     return transformTeamForFrontend({
       ...team,
       owner: ownerInfo,
-      admins: adminsInfo.filter(Boolean),
+      admins: adminsInfo,
       teachers: teachersInfo.filter(Boolean),
       students: studentsInfo.filter(Boolean),
       pendingRequests: pendingRequestsInfo.filter(Boolean)
@@ -421,6 +464,7 @@ export class TeamService {
     let ownerType: MemberType
     let schoolId: string | null = null
     const maxTeams = fullUser.Teacher ? 50 : 5
+    const scope = this.getScopeForUser(user)
 
     // 检查用户类型并获取学校
     if (fullUser.Teacher) {
@@ -443,7 +487,12 @@ export class TeamService {
     const team = await this.repo.transaction(async (tx) => {
       // 在事务内检查数量限制
       const existingTeams = await tx.teamMember.count({
-        where: { userId: ownerId, userType: ownerType, role: 'owner' }
+        where: {
+          userId: ownerId,
+          userType: ownerType,
+          role: 'owner',
+          Team: { scope }
+        }
       })
       if (existingTeams >= maxTeams) {
         throw new Error('TEAM_LIMIT_EXCEEDED')
@@ -455,6 +504,7 @@ export class TeamService {
           name: dto.name,
           description: dto.description,
           schoolId,
+          scope,
           isPublic: dto.isPublic !== undefined ? dto.isPublic : true
         },
         include: {
@@ -484,6 +534,7 @@ export class TeamService {
    * 更新团队基本信息
    */
   async updateTeam(teamId: string, dto: UpdateTeamDTO, user: JwtPayload) {
+    const team = await this.assertTeamScope(teamId, user)
     const { isOwner, isAdmin } = await this.isTeamAdmin(teamId, user)
     if (!isAdmin) {
       throw new Error('NOT_ADMIN')
@@ -502,7 +553,12 @@ export class TeamService {
 
     // 获取所有者信息
     const ownerMember = await this.repo.findOwner(teamId)
-    const ownerName = ownerMember ? await getUserName(ownerMember.userId, ownerMember.userType as MemberType) : '未知'
+    const ownerDetails = ownerMember
+      ? await getMemberDetails(ownerMember.userId, ownerMember.userType as MemberType)
+      : null
+    const ownerName = ownerDetails
+      ? formatMemberForScope(ownerDetails, team.scope as TeamScope).name
+      : '未知'
 
     return transformTeamForFrontend({ ...updatedTeam, owner: { id: ownerMember?.userId || '', name: ownerName } })
   }
@@ -554,10 +610,7 @@ export class TeamService {
   async inviteMembers(teamId: string, dto: InviteMembersDTO, user: JwtPayload) {
     await this.assertTeamAdmin(teamId, user)
 
-    const team = await this.repo.findById(teamId)
-    if (!team) {
-      throw new Error('TEAM_NOT_FOUND')
-    }
+    const team = await this.assertTeamScope(teamId, user)
 
     const invitedBy = user.userId
 
@@ -597,13 +650,13 @@ export class TeamService {
         }
 
         if (foundUser.Student) {
-          if (foundUser.Student.schoolId !== team.schoolId) {
+          if (team.scope === 'campus' && foundUser.Student.schoolId !== team.schoolId) {
             result.notSameSchool.push(trimmedUsername)
             continue
           }
           targetMembers.push({ id: foundUser.Student.id, type: 'student' })
         } else if (foundUser.Teacher) {
-          if (foundUser.Teacher.schoolId !== team.schoolId) {
+          if (team.scope === 'campus' && foundUser.Teacher.schoolId !== team.schoolId) {
             result.notSameSchool.push(trimmedUsername)
             continue
           }
@@ -631,7 +684,7 @@ export class TeamService {
         ? await this.repo.findTeacher(memberId)
         : await this.repo.findStudent(memberId)
 
-      if (!memberUser || memberUser.schoolId !== team.schoolId) {
+      if (!memberUser || (team.scope === 'campus' && memberUser.schoolId !== team.schoolId)) {
         result.notSameSchool.push(memberId)
         continue
       }
@@ -676,10 +729,7 @@ export class TeamService {
   ): Promise<{ added: string[]; alreadyMember: string[]; notSameSchool: string[] }> {
     await this.assertTeamAdmin(teamId, user)
 
-    const team = await this.repo.findById(teamId)
-    if (!team) {
-      throw new Error('TEAM_NOT_FOUND')
-    }
+    const team = await this.assertTeamScope(teamId, user)
 
     const result = {
       added: [] as string[],
@@ -733,7 +783,7 @@ export class TeamService {
         ? studentMap.get(memberId)
         : teacherMap.get(memberId)
 
-      if (!memberUser || memberUser.schoolId !== team.schoolId) {
+      if (!memberUser || (team.scope === 'campus' && memberUser.schoolId !== team.schoolId)) {
         result.notSameSchool.push(memberId)
         continue
       }
@@ -819,11 +869,13 @@ export class TeamService {
     const callerType = getUserType(user.role)
     const maxTeams = dto.newOwnerType === 'teacher' ? 50 : 5
 
+    await this.assertTeamScope(teamId, user)
+
     await this.repo.transaction(async (tx) => {
       // 1. 获取团队信息
       const currentTeam = await tx.team.findUnique({
         where: { id: teamId },
-        select: { schoolId: true }
+        select: { schoolId: true, scope: true }
       })
       if (!currentTeam) {
         throw new Error('TEAM_NOT_FOUND')
@@ -847,13 +899,18 @@ export class TeamService {
       if (!newOwnerUser) {
         throw new Error('NEW_OWNER_NOT_FOUND')
       }
-      if (newOwnerUser.schoolId !== currentTeam.schoolId) {
+      if (currentTeam.scope === 'campus' && newOwnerUser.schoolId !== currentTeam.schoolId) {
         throw new Error('NEW_OWNER_NOT_SAME_SCHOOL')
       }
 
       // 4. 检查新所有者团队数量限制
       const existingTeams = await tx.teamMember.count({
-        where: { userId: dto.newOwnerId, userType: dto.newOwnerType, role: 'owner' }
+        where: {
+          userId: dto.newOwnerId,
+          userType: dto.newOwnerType,
+          role: 'owner',
+          Team: { scope: currentTeam.scope }
+        }
       })
       if (existingTeams >= maxTeams) {
         throw new Error('NEW_OWNER_LIMIT_EXCEEDED')
@@ -920,11 +977,7 @@ export class TeamService {
       throw new Error('IDENTITY_NOT_FOUND')
     }
 
-    const team = await this.repo.findById(teamId)
-
-    if (!team) {
-      throw new Error('TEAM_NOT_FOUND')
-    }
+    const team = await this.assertTeamScope(teamId, user)
 
     if (!team.isPublic) {
       throw new Error('PRIVATE_TEAM')
@@ -961,6 +1014,8 @@ export class TeamService {
     if (!userId) {
       throw new Error('IDENTITY_NOT_FOUND')
     }
+
+    await this.assertTeamScope(teamId, user)
 
     const member = await this.repo.findMember({ teamId, userId, userType })
 

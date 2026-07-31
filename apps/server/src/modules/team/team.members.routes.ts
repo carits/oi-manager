@@ -7,7 +7,7 @@ import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
-import { getUserName, getMemberDetailsBatch, getUserNames } from './team.utils'
+import { formatMemberForScope, getMemberDetailsBatch, getUserDisplayName, getUserNames } from './team.utils'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { validate, validateBody, validateParams } from '../../lib/zodValidate'
 import { addMembersSchema, memberIdSchema, setAdminSchema } from './schemas/team.schemas'
@@ -40,6 +40,7 @@ teamMembersRouter.get('/:id/available-members', authenticate, asyncHandler(async
 
   const result = await teamRepository.findAvailableMembers({
     schoolId: team.schoolId,
+    scope: team.scope as 'campus' | 'personal',
     excludeTeacherIds: existingTeacherIds,
     excludeStudentIds: existingStudentIds,
     keyword: keyword as string,
@@ -149,11 +150,25 @@ teamMembersRouter.get('/:id/pending-invites', authenticate, asyncHandler(async (
   }
 
   const pendingMembers = await teamRepository.findMembers(id, { status: 'pending' })
+  const team = await teamService.assertTeamScope(id, user)
+  const scope = team.scope as 'campus' | 'personal'
 
-  const [detailsMap, inviterNames] = await Promise.all([
+  const inviterIds = pendingMembers.filter(m => m.invitedBy).map(m => m.invitedBy!)
+  const [detailsMap, inviterNames, inviterUsers] = await Promise.all([
     getMemberDetailsBatch(pendingMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType }))),
-    getUserNames(pendingMembers.filter(m => m.invitedBy).map(m => m.invitedBy!), 'teacher'),
+    getUserNames(inviterIds, 'teacher'),
+    scope === 'personal'
+      ? prisma.user.findMany({
+          where: { id: { in: inviterIds } },
+          select: { id: true, username: true }
+        })
+      : Promise.resolve([])
   ])
+  if (scope === 'personal') {
+    for (const inviter of inviterUsers) {
+      inviterNames.set(inviter.id, inviter.username)
+    }
+  }
 
   const invites = pendingMembers.map(member => {
     const userDetails = detailsMap.get(`${member.userType}:${member.userId}`)
@@ -164,7 +179,7 @@ teamMembersRouter.get('/:id/pending-invites', authenticate, asyncHandler(async (
       role: member.role,
       invitedAt: member.joinedAt,
       invitedByName: member.invitedBy ? (inviterNames.get(member.invitedBy) || '未知') : '未知',
-      user: userDetails
+      user: formatMemberForScope(userDetails, scope)
     }
   })
 
@@ -175,6 +190,9 @@ teamMembersRouter.get('/:id/pending-invites', authenticate, asyncHandler(async (
 
 teamMembersRouter.get('/:id/admins', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params
+  const user = (req as any).user!
+  const team = await teamService.assertTeamScope(id, user)
+  const scope = team.scope as 'campus' | 'personal'
 
   const adminMembers = await teamRepository.findAdmins(id)
 
@@ -182,7 +200,7 @@ teamMembersRouter.get('/:id/admins', authenticate, asyncHandler(async (req, res)
 
   const admins = adminMembers.map(m => {
     const details = detailsMap.get(`${m.userType}:${m.userId}`)
-    return details ? { ...details, adminType: m.userType } : null
+    return details ? { ...formatMemberForScope(details, scope), adminType: m.userType } : null
   })
 
   res.json({ success: true, data: admins.filter(Boolean) })
@@ -256,7 +274,12 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
     return admin
   })
 
-  const memberName = await getUserName(existingMember.userId, existingMember.userType as MemberType)
+  const team = await teamService.assertTeamScope(id, user)
+  const memberName = await getUserDisplayName(
+    existingMember.userId,
+    existingMember.userType as MemberType,
+    team.scope as 'campus' | 'personal'
+  )
 
   res.json({ success: true, data: { ...result, memberName }, message: '已设置为管理员' })
 }))

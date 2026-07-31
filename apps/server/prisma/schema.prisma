@@ -649,6 +649,7 @@ model Team {
   description               String?
   announcement              String?
   schoolId                  String
+  scope                     String                      @default("campus")
   isPublic                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
@@ -663,8 +664,10 @@ model Team {
 
   @@index([createdAt])
   @@index([isPublic])
+  @@index([scope])
+  @@index([scope, isPublic])
   @@index([schoolId])
-  @@index([schoolId, isPublic])
+  @@index([schoolId, scope, isPublic])
 }
 
 model TeamJoinRequest {
