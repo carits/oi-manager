@@ -2,7 +2,7 @@
  * AI 翻译模块 — 类型定义
  *
  * 竞赛题面结构保护翻译器的核心类型。
- * 详见 docs/translate.md
+ * 详见 docs/architecture/modules/PROBLEMS_AND_OJ.md
  */
 
 // ===== 基础类型 =====

@@ -1,84 +1,75 @@
-# OI Manager V2 项目文档
+---
+status: current
+audience: development, operations
+last_verified: 2026-07-30
+source_of_truth: repository structure and active documentation
+---
 
-## 文档目录
+# OI Manager 文档
 
-### 快速上手
-- [项目概述](./PROJECT_OVERVIEW.md) - 项目定位和功能概览
-- [交接指南](./HANDOVER.md) - 新人 30 分钟上手指南
-- [运维手册](./RUNBOOK.md) - 本地开发和运维
+本目录是 OI Manager 的唯一正式文档入口。项目目前处于开发阶段：开发服务使用
+`3000/3002`，生产配置仅作为模板保留，尚未在当前服务器启用。
 
-### 系统设计
-- [系统全景图](./SYSTEM_MAP.md) - 路由、API、模型全貌
-- [认证与权限](./AUTH_AND_PERMISSION.md) - 角色和权限详解
-- [业务模块索引](./MODULE_INDEX.md) - 模块代码定位
-- [项目上下文](./context.md) - 长期上下文记录
+## 阅读路径
 
-### 数据与接口
-- [数据库模型](./database/DATABASE_MODELS.md) - 数据表结构和关系
-- [API 接口文档](./api/API_REFERENCE.md) - 接口概要（待完善）
-- [前端组件库](./components/COMPONENTS.md) - 组件文档
+### 首次开发
 
-### 运维与问题
-- [已知问题](./KNOWN_ISSUES.md) - 技术债务清单
-- [当前任务](./current-task.md) - 当前任务和进度
-- [变更日志](./change-log.md) - 变更记录
+1. [项目概览](guide/PROJECT_OVERVIEW.md)
+2. [开发环境启动](guide/DEVELOPMENT_SETUP.md)
+3. [项目导览](guide/PROJECT_TOUR.md)
+4. [开发工作流](development/WORKFLOW.md)
 
-## 快速导航
+### 理解系统
 
-### 核心功能
-- **用户管理**: 超管/平台管理员管理用户账号
-- **学校管理**: 创建学校、指定负责人、管理教师
-- **教师管理**: 教师信息管理、团队管理
-- **学生管理**: 学生信息管理、Rating 追踪
-- **团队管理**: 训练团队、成员管理、邀请机制
-- **比赛管理**: 创建比赛、导入成绩、资源管理
-- **题单管理**: 题目分配、进度追踪
+1. [系统架构](architecture/SYSTEM_OVERVIEW.md)
+2. [认证与权限](architecture/AUTHORIZATION.md)
+3. [数据模型](architecture/DATA_MODEL.md)
+4. [Judge 与提交](architecture/JUDGE_AND_SUBMISSIONS.md)
+5. [业务模块](architecture/modules/ORGANIZATION.md)
 
-### 技术栈
-- **前端**: Next.js 14 + React + TypeScript + SWR
-- **后端**: Express + TypeScript
-- **数据库**: PostgreSQL + Prisma ORM
-- **部署**: Docker + PM2 + Nginx
-- **包管理**: pnpm + monorepo
+### 测试
 
-## 文档状态
+1. [单元与集成测试](development/TESTING.md)
+2. [全 UI E2E](development/UI_E2E.md)
+3. [前端约定](development/FRONTEND.md)
 
-| 文档 | 状态 | 说明 |
-|------|------|------|
-| PROJECT_OVERVIEW.md | ✅ 完整 | 项目概述 |
-| HANDOVER.md | ✅ 完整 | 交接指南 |
-| RUNBOOK.md | ✅ 完整 | 运维手册 |
-| SYSTEM_MAP.md | ✅ 完整 | 系统全景图 |
-| AUTH_AND_PERMISSION.md | ✅ 完整 | 权限说明 |
-| MODULE_INDEX.md | ✅ 完整 | 模块索引 |
-| KNOWN_ISSUES.md | ✅ 完整 | 已知问题 |
-| DATABASE_MODELS.md | ✅ 完整 | 数据库模型 |
-| API_REFERENCE.md | 🔄 待完善 | 接口概要版 |
-| COMPONENTS.md | ✅ 完整 | 组件文档 |
+### 运维
 
-## 更新日志
+1. [环境边界](operations/ENVIRONMENTS.md)
+2. [运行手册](operations/RUNBOOK.md)
+3. [部署模板](operations/DEPLOYMENT.md)
+4. [故障排查](operations/TROUBLESHOOTING.md)
 
-### 2026-04-15
-- ✅ SQLite → PostgreSQL 迁移
-- ✅ Docker + PM2 + Nginx 部署配置
-- ✅ SWR 前端缓存层
-- ✅ 排名 SQL 聚合优化
-- ✅ 限流从 100/分钟调至 2000/分钟
+### 查阅接口
 
-### 2026-03-23
-- ✅ 文档一致性检查和修复
-- ✅ 更新数据库模型文档（添加 Admin 模型，修正团队模型）
-- ✅ 更新组件文档（添加缺失的 17 个组件）
-- ✅ 更新 API 文档（补充缺失的接口）
-- ✅ 清理不存在的文档引用
-- ✅ 后端安全与并发止损重构
-- ✅ 遗留直连 API 调用迁移完成
+- [页面路由](reference/WEB_ROUTES.md)
+- [数据库 Schema](reference/DATABASE_SCHEMA.md)
+- [字段契约](reference/FIELD_CONTRACTS.md)
+- [环境变量](reference/ENVIRONMENT_VARIABLES.md)
+- [HTTP API](reference/api/README.md)
 
-### 2026-03-18
-- ✅ 添加教师联系方式必填验证
-- ✅ 修复学校负责人教师管理页面操作按钮显示问题
-- ✅ 为平台管理员账号管理页面添加分页功能
-- ✅ 统一超管和平台管理员使用同一套账号管理代码
-- ✅ 支持 Markdown 和 LaTeX 渲染
-- ✅ 优化年级分布显示
-- ✅ 支持 5-4-3 和 6-3-3 学制动态计算年级
+## 文档分层
+
+| 目录 | 内容 | 是否描述当前行为 |
+|------|------|------------------|
+| `guide/` | 新人上手和项目概念 | 是 |
+| `architecture/` | 系统边界、数据流和业务规则 | 是 |
+| `development/` | 开发、测试和前端规范 | 是 |
+| `operations/` | 环境、启停、部署和排障 | 是 |
+| `reference/` | 路由、模型、接口和变量清单 | 是 |
+| `archive/` | 旧设计、调研、任务和历史快照 | 否 |
+
+活动文档均带有 `status`、`audience`、`last_verified` 和
+`source_of_truth` 元数据。历史文档中的命令、路径和状态不应直接用于当前环境。
+
+## 事实来源
+
+文档出现冲突时，按以下顺序判断：
+
+1. 当前源码、Prisma Schema 和环境校验代码。
+2. 根目录脚本、Docker Compose、Playwright 配置和 CI。
+3. 本目录内 `status: current` 或 `status: reference` 的文档。
+4. `archive/` 中的历史材料。
+
+运行 `pnpm docs:check` 可以检查链接、页面路由、Prisma 模型、API 目录和已知过时描述。
+
