@@ -112,7 +112,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/teacher/rankings` | 负责人/教师 | 排名 |
 | `/teacher/school` | 负责人/教师 | 学校信息 |
 | `/teacher/school/contests/[cid]` | 负责人/教师 | 学校比赛 |
-| `/teacher/school-teachers` | 负责人/教师 | 学校教师浏览 |
+| `/teacher/school-teachers` | 负责人/教师 | 兼容入口，服务端跳转至学校教师标签 |
 | `/teacher/scores` | 负责人/教师 | 成绩 |
 | `/teacher/security` | 负责人/教师 | 安全设置 |
 | `/teacher/students` | 负责人/教师 | 学生管理 |
