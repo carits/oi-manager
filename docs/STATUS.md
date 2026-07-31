@@ -32,12 +32,13 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 
 ## 最近验证
 
-以下数字是 2026-07-30 的验证快照，不作为永久常量：
+以下数字是 2026-07-31 的验证快照，不作为永久常量：
 
 - 根构建按 `shared → Prisma Client → server → web → judge` 顺序通过。
-- Vitest：Server 444、Web 8、Judge 2，共 454 个测试。
-- Chromium 全量 UI：122/122，通过三次连续运行。
-- 紧凑桌面视口与 Firefox 冒烟：58/58。
+- Vitest：Server 453、Web 23、Judge 2，共 478 个测试。
+- Playwright 全量 UI：183/183，通过三次连续运行。
+- UI 套件覆盖 Chromium `1440×900`、Chromium `1280×720`、Firefox 冒烟及
+  `1 Mbps`、`5 Mbps` 网络节流。
 - 页面清单：90 个 App Router 页面。
 - Prisma Schema：50 个模型。
 
@@ -54,6 +55,4 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - 当前服务器没有启用正式部署配置。
 - 外部 OJ 受登录状态、反爬策略和页面结构变化影响，真实连通性不作为 PR 门禁。
 - 浏览器会话使用同域 HttpOnly Cookie；Bearer Token 仅作脚本和旧会话迁移兼容。
-- `apps/server/.env.example` 和 `apps/judge/.env.example` 仍包含旧端口/数据库示例；
-  开发启动请使用 [开发环境启动](guide/DEVELOPMENT_SETUP.md) 中的配置。
 - 历史设计和调研仅供追溯，参见 [归档索引](archive/README.md)。
