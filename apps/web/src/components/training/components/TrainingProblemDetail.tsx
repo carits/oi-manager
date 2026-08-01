@@ -479,7 +479,7 @@ B 题：...
             width: '100%',
           }}
         >
-          📎 附件 ({selectedProblem?.attachmentCount ?? 0})
+          附件 ({selectedProblem?.attachmentCount ?? 0})
         </button>
       )}
     </div>
@@ -506,7 +506,7 @@ B 题：...
         {/* 右侧：编辑器面板 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'white', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)' }}>
           <div style={{ padding: '0.5rem 0.75rem', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)', fontWeight: 500, fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>{training.type === 'contest' ? '📝' : '✏️'}</span>
+            <span>{training.type === 'contest' ? '比赛记录' : '训练记录'}</span>
             <span>{training.type === 'contest' ? '比赛记录' : '思路记录'}</span>
             <div style={{ flex: 1 }} />
             {renderSaveButton()}
@@ -572,7 +572,7 @@ B 题：...
                 width: '100%',
               }}
             >
-              {training.type === 'contest' ? '📝 比赛记录' : '✏️ 写思路'}
+              {training.type === 'contest' ? '比赛记录' : '写思路'}
             </button>
           )}
           {renderActionButtons()}

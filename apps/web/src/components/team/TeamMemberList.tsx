@@ -15,7 +15,7 @@ export interface JoinRequestItem {
     name: string
     username?: string
     avatar?: string | null
-    userType: 'teacher' | 'student'
+    userType: UserType
   }
 }
 
@@ -63,7 +63,7 @@ export function TeamMemberList({
     name: team.owner.name || '未知',
     username: team.owner.username,
     avatar: team.owner.avatar,
-    userType: (team.owner.type || team.ownerType) as 'teacher' | 'student'
+    userType: (team.owner.type || team.ownerType) as UserType
   } : null
 
   // 管理员列表（排除所有者）
@@ -74,7 +74,7 @@ export function TeamMemberList({
       name: admin.name,
       username: admin.username,
       avatar: admin.avatar,
-      userType: (admin.adminType || admin.type) as 'teacher' | 'student'
+      userType: (admin.adminType || admin.type) as UserType
     }))
 
   // 普通成员列表（排除所有者和管理员）
@@ -84,7 +84,7 @@ export function TeamMemberList({
     username?: string
     avatar?: string | null
     joinedAt?: string | null
-    userType: 'teacher' | 'student'
+    userType: UserType
   }> = []
 
   // 添加普通教师成员
@@ -114,14 +114,14 @@ export function TeamMemberList({
         username: student.username,
         avatar: student.avatar,
         joinedAt: student.joinedAt,
-        userType: 'student'
+        userType: (student.type || (team.scope === 'personal' ? 'user' : 'student')) as UserType
       })
     }
   })
 
   // 渲染单个成员行（无角色标签）
   const renderMemberRow = (
-    member: { id: string; name: string; username?: string; avatar?: string | null; userType: 'teacher' | 'student'; joinedAt?: string | null },
+    member: { id: string; name: string; username?: string; avatar?: string | null; userType: UserType; joinedAt?: string | null },
     role: 'owner' | 'admin' | 'member'
   ) => {
     const canRemoveThis = canRemove && role !== 'owner' && (permission.isOwner || role === 'member')
@@ -140,8 +140,7 @@ export function TeamMemberList({
         }}
       >
         {/* 头像 */}
-        <Link
-          href={`/profile/${member.userType}/${member.id}`}
+        {member.userType === 'user' ? <span
           style={{
             width: '40px',
             height: '40px',
@@ -156,23 +155,25 @@ export function TeamMemberList({
             fontWeight: 600,
             fontSize: '1rem',
             flexShrink: 0,
-            cursor: 'pointer',
             textDecoration: 'none'
           }}
-        >
-          {!member.avatar && member.name.charAt(0)}
-        </Link>
+        >{!member.avatar && member.name.charAt(0)}</span> : <Link
+          href={`/profile/${member.userType}/${member.id}`}
+          style={{
+            width: '40px', height: '40px', borderRadius: '50%',
+            background: member.avatar ? `url(${getAssetUrl(member.avatar)}) center/cover` : 'var(--primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white',
+            fontWeight: 600, fontSize: '1rem', flexShrink: 0, textDecoration: 'none'
+          }}
+        >{!member.avatar && member.name.charAt(0)}</Link>}
 
         {/* 信息 */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Link
-              href={`/profile/${member.userType}/${member.id}`}
-              style={{ fontWeight: 500, cursor: 'pointer', color: 'var(--gray-900)', textDecoration: 'none' }}
-            >
-              {member.name}
-            </Link>
-            {member.username && (
+            {member.userType === 'user'
+              ? <span style={{ fontWeight: 500, color: 'var(--gray-900)' }}>{member.name}</span>
+              : <Link href={`/profile/${member.userType}/${member.id}`} style={{ fontWeight: 500, color: 'var(--gray-900)', textDecoration: 'none' }}>{member.name}</Link>}
+            {member.username && member.username !== member.name && (
               <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({member.username})</span>
             )}
             {/* 类型标签（教师/学生）紧贴名字 */}
@@ -181,11 +182,11 @@ export function TeamMemberList({
                 padding: '0.125rem 0.375rem',
                 borderRadius: '4px',
                 fontSize: '0.75rem',
-                background: member.userType === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
-                color: member.userType === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
+                background: member.userType === 'teacher' ? 'var(--blue-100)' : member.userType === 'student' ? 'var(--green-100)' : 'var(--gray-100)',
+                color: member.userType === 'teacher' ? 'var(--blue-700)' : member.userType === 'student' ? 'var(--green-700)' : 'var(--gray-700)'
               }}
             >
-              {member.userType === 'teacher' ? '教师' : '学生'}
+              {member.userType === 'teacher' ? '教师' : member.userType === 'student' ? '学生' : '用户'}
             </span>
           </div>
         </div>
@@ -276,10 +277,10 @@ export function TeamMemberList({
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.375rem',
                       borderRadius: '4px',
-                      background: request.user.userType === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
-                      color: request.user.userType === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
+                      background: request.user.userType === 'teacher' ? 'var(--blue-100)' : request.user.userType === 'student' ? 'var(--green-100)' : 'var(--gray-100)',
+                      color: request.user.userType === 'teacher' ? 'var(--blue-700)' : request.user.userType === 'student' ? 'var(--green-700)' : 'var(--gray-700)'
                     }}>
-                      {request.user.userType === 'teacher' ? '教师' : '学生'}
+                      {request.user.userType === 'teacher' ? '教师' : request.user.userType === 'student' ? '学生' : '用户'}
                     </span>
                   </div>
                   {request.message && (

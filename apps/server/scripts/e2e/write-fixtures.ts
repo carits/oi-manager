@@ -27,8 +27,10 @@ async function main() {
     problem,
     personalProblem,
     problemList,
+    personalProblemList,
     homework,
     contest,
+    personalContest,
     submission,
     personalSubmission,
   ] = await Promise.all([
@@ -44,8 +46,10 @@ async function main() {
     required('problem', prisma.problem.findFirst({ orderBy: { createdAt: 'asc' } })),
     required('personal problem', prisma.problem.findUnique({ where: { id: 'e2e-personal-problem' } })),
     required('problem list', prisma.problemList.findFirst({ orderBy: { createdAt: 'asc' } })),
+    required('personal problem list', prisma.problemList.findFirst({ where: { scope: 'personal' } })),
     required('homework', prisma.training.findFirst({ where: { type: 'homework' }, orderBy: { id: 'asc' } })),
-    required('contest', prisma.training.findFirst({ where: { type: 'contest' }, orderBy: { id: 'asc' } })),
+    required('contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'campus' }, orderBy: { id: 'asc' } })),
+    required('personal contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'personal' }, orderBy: { id: 'asc' } })),
     required('submission', prisma.submission.findFirst({ orderBy: { createdAt: 'asc' } })),
     required('personal submission', prisma.submission.findFirst({
       where: { userId: 'e2e-personal-student', submitScope: 'problem' },
@@ -67,8 +71,10 @@ async function main() {
     problem: problem.id,
     personalProblem: personalProblem.id,
     problemList: problemList.id,
+    personalProblemList: personalProblemList.id,
     homework: String(homework.id),
     contest: String(contest.id),
+    personalContest: String(personalContest.id),
     submission: String(submission.id),
     personalSubmission: String(personalSubmission.id),
   }

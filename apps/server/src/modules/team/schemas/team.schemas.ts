@@ -7,7 +7,7 @@ import { z } from 'zod'
 
 // ==================== 成员类型 ====================
 
-export const memberTypeSchema = z.enum(['teacher', 'student'])
+export const memberTypeSchema = z.enum(['teacher', 'student', 'user'])
 export const memberRoleSchema = z.enum(['owner', 'admin', 'member'])
 export const memberStatusSchema = z.enum(['pending', 'active'])
 

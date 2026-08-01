@@ -297,6 +297,9 @@ teamCrudRouter.post('/:id/transfer', authenticate, validateBody(transferTeamSche
         'NEW_OWNER_LIMIT_EXCEEDED': { status: 400, message: `该${req.body.newOwnerType === 'teacher' ? '教师' : '学生'}创建的团队数量已达上限（${req.body.newOwnerType === 'teacher' ? 50 : 5}个），无法转移` },
         'NEW_OWNER_NOT_MEMBER': { status: 400, message: '新所有者必须是团队成员' }
       }
+      if (error.message === 'NEW_OWNER_SCOPE_MISMATCH') {
+        return res.status(400).json({ success: false, message: '新所有者身份与团队作用域不匹配' })
+      }
       const errorInfo = errorMessages[error.message]
       if (errorInfo) {
         return res.status(errorInfo.status).json({ success: false, message: errorInfo.message })

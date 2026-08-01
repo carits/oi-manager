@@ -7,6 +7,7 @@ export interface AuthSession {
   role: string
   schoolId?: string
   studentMode?: string
+  workspaceMode?: 'work' | 'personal'
 }
 
 export async function loginAs(
@@ -19,7 +20,7 @@ export async function loginAs(
       username: account.username,
       password: account.password,
       role: account.loginRole,
-      mode: account.mode,
+      workspaceMode: account.workspaceMode,
     },
   })
 

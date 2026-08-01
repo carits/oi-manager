@@ -396,6 +396,7 @@ model ProblemList {
   schoolId           String?
   ownerId            String
   ownerType          String               @default("teacher")
+  scope              String               @default("campus")
   visibility         String               @default("private")
   sortOrder          Int                  @default(0)
   createdAt          DateTime             @default(now())
@@ -408,7 +409,19 @@ model ProblemList {
   @@index([createdAt])
   @@index([ownerId, ownerType])
   @@index([schoolId])
+  @@index([scope])
+  @@index([scope, ownerId])
   @@index([visibility])
+}
+
+model PersonalProfile {
+  userId    String   @id
+  rating    Int      @default(1200)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rating])
 }
 
 model ProblemListEntry {
@@ -551,7 +564,6 @@ model Student {
   Teacher                   Teacher?                    @relation(fields: [headTeacherId], references: [id])
   User                      User                        @relation(fields: [id], references: [id], onDelete: Cascade)
   School                    School                      @relation(fields: [schoolId], references: [id])
-  TeamJoinRequest           TeamJoinRequest[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
 
   @@index([enrollmentYear])
@@ -588,6 +600,7 @@ model Submission {
   judgeId           String?
   judgeStarted      DateTime?
   submitScope       String     @default("problem")
+  workspaceScope    String     @default("campus")
   trainingId        Int?
   trainingProblemId String?
   contestId         Int?
@@ -608,6 +621,8 @@ model Submission {
   @@index([sourceId])
   @@index([submitScope, contestId])
   @@index([submitScope])
+  @@index([workspaceScope])
+  @@index([workspaceScope, userId, createdAt])
   @@index([submitScope, trainingId])
   @@index([submitSource])
   @@index([trainingId])
@@ -648,13 +663,13 @@ model Team {
   avatar                    String?
   description               String?
   announcement              String?
-  schoolId                  String
+  schoolId                  String?
   scope                     String                      @default("campus")
   isPublic                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
   Contest                   Contest[]
-  School                    School                      @relation(fields: [schoolId], references: [id])
+  School                    School?                     @relation(fields: [schoolId], references: [id])
   TeamJoinRequest           TeamJoinRequest[]
   TeamMember                TeamMember[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
@@ -680,7 +695,7 @@ model TeamJoinRequest {
   processedAt DateTime?
   processedBy String?
   Team        Team      @relation(fields: [teamId], references: [id])
-  Student     Student   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  User        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
 }
@@ -695,6 +710,7 @@ model TeamMember {
   joinedAt  DateTime @default(now())
   invitedBy String?
   Team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId, userType])
   @@index([status])
@@ -831,6 +847,7 @@ model Training {
   problemIdVisible          Boolean                     @default(false)
   solutionVisible           Boolean                     @default(false)
   type                      String                      @default("training")
+  scope                     String                      @default("campus")
   schoolId                  String?
   sourceTrainingId          Int?
   ContestRecord             ContestRecord[]
@@ -843,6 +860,8 @@ model Training {
   TrainingUserProblemStatus TrainingUserProblemStatus[]
 
   @@index([schoolId])
+  @@index([scope])
+  @@index([scope, status])
   @@index([schoolId, status])
   @@index([startTime])
   @@index([status])
@@ -954,9 +973,12 @@ model User {
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
   Admin                     Admin?
+  PersonalProfile           PersonalProfile?
   ContestUserProblemStatus  ContestUserProblemStatus[]
   Student                   Student?
   Submission                Submission[]
+  TeamJoinRequest           TeamJoinRequest[]
+  TeamMember                TeamMember[]
   Teacher                   Teacher?
   TrainingUserProblemStatus TrainingUserProblemStatus[]
   School                    School                      @relation(fields: [schoolId], references: [id])

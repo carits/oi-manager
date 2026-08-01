@@ -458,8 +458,8 @@ export default function ImportPreview({
         }}>
           <span style={{ fontSize: '0.875rem' }}>
             {allResolved
-              ? `✅ 全部通过！${clearedMembers.length} 人可以导入`
-              : `⚠ 发现 ${conflictMembers.length} 个问题需要解决（${clearedMembers.length} 人已通过）`
+              ? `全部通过，${clearedMembers.length} 人可以导入`
+              : `发现 ${conflictMembers.length} 个问题需要解决（${clearedMembers.length} 人已通过）`
             }
           </span>
           {validated && clearedMembers.length > 0 && conflictMembers.length > 0 && (
@@ -537,7 +537,7 @@ export default function ImportPreview({
                     />
                     {member.username && !isValidUsername(member.username) && (
                       <span style={{ color: 'var(--error)', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                        ⚠ 格式错误
+                        格式错误
                       </span>
                     )}
                   </div>
@@ -660,7 +660,7 @@ export default function ImportPreview({
                             background: 'white', color: 'var(--error)', border: '1px solid var(--error)',
                             cursor: 'pointer', fontSize: '0.8rem'
                           }}>
-                            ✕ 从列表移除
+                            从列表移除
                           </button>
                         </div>
                       </div>
@@ -683,7 +683,7 @@ export default function ImportPreview({
           textAlign: 'center'
         }}>
           <div style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--success-text)', marginBottom: '0.5rem' }}>
-            ✅ 校验全部通过
+            校验全部通过
           </div>
           <p style={{ color: 'var(--success-text)', margin: 0 }}>
             共 {selectedMembers.length} 人准备导入，点击下方按钮执行导入

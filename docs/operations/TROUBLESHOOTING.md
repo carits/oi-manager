@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: runtime scripts, application health checks, Playwright configuration
 ---
 
@@ -43,6 +43,24 @@ pnpm --filter server exec prisma validate
 
 确认 `DATABASE_URL` 使用 PostgreSQL 和预期 schema。测试失败时不要创建或复制
 SQLite 文件；启动 PostgreSQL 并检查 `test/e2e` schema。
+
+## Prisma Client 与 Schema 不一致
+
+若数据库已有新字段，但日志出现 `PrismaClientValidationError`、`Unknown argument scope`
+或其他“字段不存在”错误，通常是运行中的 Prisma Client 仍由旧 Schema 生成。该问题会
+让相关接口返回 `500`，并不表示数据库中的字段或数据一定损坏。
+
+```bash
+cd /data/oi-manager-response-refactor
+pnpm --filter server prisma:generate
+pnpm run restart
+curl -fsS http://127.0.0.1:3002/api/health
+tail -n 200 /tmp/oi-dev.log
+```
+
+重新生成前先确认工作树中的 `apps/server/prisma/schema.prisma` 与目标数据库属于同一版本。
+不要用 `prisma db push` 处理单纯的 Client 过期；只有确认数据库 Schema 确实未同步时才执行
+数据库变更。当前启动与构建脚本已自动生成 Prisma Client，此步骤主要用于故障恢复。
 
 ## Judge 无法连接
 

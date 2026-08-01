@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-31
+last_verified: 2026-08-01
 source_of_truth: apps/web/src
 ---
 
@@ -16,7 +16,15 @@ source_of_truth: apps/web/src
 - 学校负责人继承教师页面。
 - 平台管理员不会通过 `super_admin` 判断获得超管页面。
 
-导航集中在 `config/navigation.ts`。学生导航根据 `studentMode` 选择校园或个人配置。
+导航集中在 `config/navigation.ts`。所有角色根据 `workspaceMode` 选择工作或个人配置。
+个人工作区与学生校园工作区使用轻量顶部导航；教师、学校负责人和管理员的工作区使用侧栏导航。角色 layout 始终只创建
+一个 `AppShell`，首页不再自行嵌套 Shell。
+
+页面仍有部分历史内联样式，整改基线见[设计系统](DESIGN_SYSTEM.md)。当前由 `AppShell`
+独占普通页面的宽度、边距和导航；迁移中的旧页面通过 `data-page-host` 兼容层去除第二层
+页面边距，新增和已迁移页面使用 `PageFrame`。
+训练详情等全宽工作区通过显式 layout variant 获得空间，不在业务组件内部重新创建整页
+Header、背景和最大宽度。
 
 ## 组件层次
 
@@ -72,11 +80,21 @@ interface ApiResponse<T> {
 图片、菜单、表格行和图标操作使用可聚焦的按钮或链接。图标按钮必须有
 `aria-label` 或 tooltip。
 
+统一基础控件包括 `PageFrame`、`PageHeader`、`Toolbar`、`Tabs`、
+`SegmentedControl`、`Table`、`FormField`、`StatusBadge`、`Empty`、`Pagination`
+和 `Modal`。样式由 CSS Modules 与全局 Token 组成；Lucide 提供通用操作图标。
+
+109 路由的目标、页面类型、筛选和交互契约见[UI 路由与交互矩阵](UX_ROUTE_MATRIX.md)。
+
 ## 数据缓存
 
-SWR/Hooks 的 key 包含接口、查询参数和 `sessionKey=role:userId:studentMode`。登出和学生
-模式切换会清除当前浏览器资源缓存；`sessionKey` 不能用于后端权限判断。写操作成功后只刷新
+SWR/Hooks 的 key 包含接口、查询参数和 `sessionKey=role:userId:workspaceMode`。登出和工作区
+切换会清除旧作用域的浏览器资源缓存；`sessionKey` 不能用于后端权限判断。写操作成功后只刷新
 受影响 key。
+
+`/personal/*` 是五种角色共用的个人路由，固定导航为首页、团队、题库、比赛、题单、评测记录和排名。
+`/account/*` 是两个工作区共享的账号资料、安全和平台绑定。个人 Shell 只展示用户名与“个人工作区”，
+不得渲染岗位、学校、职称或实名。
 
 ## 视口
 

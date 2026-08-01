@@ -16,8 +16,10 @@ export interface FixtureIds {
   problem: string
   personalProblem: string
   problemList: string
+  personalProblemList: string
   homework: string
   contest: string
+  personalContest: string
   submission: string
   personalSubmission: string
 }

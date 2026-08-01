@@ -7,8 +7,8 @@ import logger from '../../lib/logger'
 import { paginatedResponse } from '../../lib/pagination'
 import type { JwtPayload } from '@oi-manager/shared'
 import { teamRepository, TeamRepository } from './team.repository'
-import { getUserName, getMemberDetails, getMemberDetailsBatch, formatMemberForScope, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
-import { getUserType, isPersonalMode } from '../../middleware/auth'
+import { getUserName, getUserNames, getMemberDetails, getMemberDetailsBatch, formatMemberForScope, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
+import { getMembershipType, isPersonalMode } from '../../middleware/auth'
 import type {
   MemberType,
   MemberRole,
@@ -55,7 +55,7 @@ export class TeamService {
    */
   async getMemberRole(teamId: string, user: JwtPayload): Promise<MemberRoleCheck> {
     const userId = user.userId
-    const userType = getUserType(user.role)
+    const userType = getMembershipType(user)
 
     if (!userId) {
       return { role: null, memberId: null }
@@ -191,7 +191,8 @@ export class TeamService {
    */
   async getStudentTeams(studentId: string, user: JwtPayload) {
     const scope = this.getScopeForUser(user)
-    const memberRecords = await this.repo.findMembersByUser(studentId, 'student', undefined, scope)
+    const membershipType = getMembershipType(user)
+    const memberRecords = await this.repo.findMembersByUser(studentId, membershipType, undefined, scope)
     logger.info('getStudentTeams_debug', { studentId, memberCount: memberRecords.length } as any)
 
     // 批量加载团队信息
@@ -211,10 +212,12 @@ export class TeamService {
 
     const teacherIds = ownerInfos.filter(o => o.userType === 'teacher').map(o => o.userId)
     const studentIds = ownerInfos.filter(o => o.userType === 'student').map(o => o.userId)
+    const userIds = ownerInfos.filter(o => o.userType === 'user').map(o => o.userId)
 
-    const [teachers, students] = await Promise.all([
+    const [teachers, students, userNameMap] = await Promise.all([
       this.repo.findTeachers(teacherIds),
-      this.repo.findStudents(studentIds)
+      this.repo.findStudents(studentIds),
+      getUserNames(userIds, 'user')
     ])
 
     const teacherNameMap = new Map(teachers.map(t => [
@@ -239,7 +242,9 @@ export class TeamService {
       const ownerName = owner
         ? (owner.userType === 'teacher'
             ? teacherNameMap.get(owner.userId)
-            : studentNameMap.get(owner.userId)) || '未知'
+            : owner.userType === 'student'
+              ? studentNameMap.get(owner.userId)
+              : userNameMap.get(owner.userId)) || '未知'
         : '未知'
 
       const teamWithInfo = {
@@ -292,7 +297,7 @@ export class TeamService {
     const { schoolId, page, pageSize, skip, view, user } = params
 
     const userId = user.userId
-    const userType = getUserType(user.role)
+    const userType = getMembershipType(user)
 
     const scope = this.getScopeForUser(user)
     const where: Record<string, unknown> = { scope }
@@ -336,10 +341,12 @@ export class TeamService {
 
     const teacherIds = ownerInfos.filter(o => o.userType === 'teacher').map(o => o.userId)
     const studentIds = ownerInfos.filter(o => o.userType === 'student').map(o => o.userId)
+    const userIds = ownerInfos.filter(o => o.userType === 'user').map(o => o.userId)
 
-    const [teachers, students] = await Promise.all([
+    const [teachers, students, userNameMap] = await Promise.all([
       this.repo.findTeachers(teacherIds),
-      this.repo.findStudents(studentIds)
+      this.repo.findStudents(studentIds),
+      getUserNames(userIds, 'user')
     ])
 
     const teacherNameMap = new Map(teachers.map(t => [
@@ -357,7 +364,9 @@ export class TeamService {
       const ownerName = owner
         ? (owner.userType === 'teacher'
             ? teacherNameMap.get(owner.userId)
-            : studentNameMap.get(owner.userId)) || '未知'
+            : owner.userType === 'student'
+              ? studentNameMap.get(owner.userId)
+              : userNameMap.get(owner.userId)) || '未知'
         : '未知'
 
       const adminsCount = team.TeamMember.filter(m => m.role === 'admin').length
@@ -414,7 +423,7 @@ export class TeamService {
     ]
     const detailsMap = await getMemberDetailsBatch(allMembers)
 
-    const rawOwnerInfo = owner ? (detailsMap.get(`teacher:${owner.userId}`) || detailsMap.get(`student:${owner.userId}`)) ?? null : null
+    const rawOwnerInfo = owner ? detailsMap.get(`${owner.userType}:${owner.userId}`) ?? null : null
     const ownerInfo = rawOwnerInfo ? formatMemberForScope(rawOwnerInfo, scope) : null
 
     const adminsInfo = admins
@@ -430,6 +439,10 @@ export class TeamService {
       .filter(m => m.userType === 'student')
       .map(m => { const d = detailsMap.get(`student:${m.userId}`); return d ? { ...formatMemberForScope(d, scope), joinedAt: m.joinedAt } : null })
 
+    const usersInfo = members
+      .filter(m => m.userType === 'user')
+      .map(m => { const d = detailsMap.get(`user:${m.userId}`); return d ? { ...formatMemberForScope(d, scope), joinedAt: m.joinedAt } : null })
+
     const pendingRequestsInfo = pendingRequests.map(m => {
       const d = detailsMap.get(`${m.userType}:${m.userId}`)
       return d ? { ...formatMemberForScope(d, scope), memberId: m.id, requestedAt: m.joinedAt } : null
@@ -440,7 +453,7 @@ export class TeamService {
       owner: ownerInfo,
       admins: adminsInfo,
       teachers: teachersInfo.filter(Boolean),
-      students: studentsInfo.filter(Boolean),
+      students: [...studentsInfo, ...usersInfo].filter(Boolean),
       pendingRequests: pendingRequestsInfo.filter(Boolean)
     })
   }
@@ -463,11 +476,13 @@ export class TeamService {
     let ownerId: string
     let ownerType: MemberType
     let schoolId: string | null = null
-    const maxTeams = fullUser.Teacher ? 50 : 5
     const scope = this.getScopeForUser(user)
+    const maxTeams = scope === 'personal' ? 5 : fullUser.Teacher ? 50 : 5
 
-    // 检查用户类型并获取学校
-    if (fullUser.Teacher) {
+    if (scope === 'personal') {
+      ownerId = fullUser.id
+      ownerType = 'user'
+    } else if (fullUser.Teacher) {
       ownerId = fullUser.Teacher.id
       ownerType = 'teacher'
       schoolId = fullUser.Teacher.schoolId
@@ -479,7 +494,7 @@ export class TeamService {
       throw new Error('NOT_TEACHER_OR_STUDENT')
     }
 
-    if (!schoolId) {
+    if (scope === 'campus' && !schoolId) {
       throw new Error('NO_SCHOOL')
     }
 
@@ -587,7 +602,7 @@ export class TeamService {
 
     // 记录审计日志
     const callerId = user.userId
-    const callerType = getUserType(user.role)
+    const callerType = getMembershipType(user)
     await this.repo.logOperation({
       teamId,
       operatorId: callerId,
@@ -649,7 +664,13 @@ export class TeamService {
           continue
         }
 
-        if (foundUser.Student) {
+        if (team.scope === 'personal') {
+          if (foundUser.status !== 'active' || !foundUser.PersonalProfile) {
+            result.notFound.push(trimmedUsername)
+            continue
+          }
+          targetMembers.push({ id: foundUser.id, type: 'user' })
+        } else if (foundUser.Student) {
           if (team.scope === 'campus' && foundUser.Student.schoolId !== team.schoolId) {
             result.notSameSchool.push(trimmedUsername)
             continue
@@ -682,7 +703,9 @@ export class TeamService {
       // 检查成员是否属于本校
       const memberUser = memberType === 'teacher'
         ? await this.repo.findTeacher(memberId)
-        : await this.repo.findStudent(memberId)
+        : memberType === 'student'
+          ? await this.repo.findStudent(memberId)
+          : await this.repo.findUser(memberId)
 
       if (!memberUser || (team.scope === 'campus' && memberUser.schoolId !== team.schoolId)) {
         result.notSameSchool.push(memberId)
@@ -704,7 +727,7 @@ export class TeamService {
     // 记录邀请审计日志
     if (result.invited.length > 0) {
       const callerId = user.userId
-      const callerType = getUserType(user.role)
+      const callerType = getMembershipType(user)
       await this.repo.logOperation({
         teamId,
         operatorId: callerId,
@@ -740,6 +763,7 @@ export class TeamService {
     // 分离学生和教师
     const studentIds = members.filter(m => m.type === 'student').map(m => m.id)
     const teacherIds = members.filter(m => m.type === 'teacher').map(m => m.id)
+    const userIds = members.filter(m => m.type === 'user').map(m => m.id)
 
     // 批量检查已有成员
     const existingMembers = await this.repo.findMembersByTeam(teamId)
@@ -754,9 +778,13 @@ export class TeamService {
     const teachers = teacherIds.length > 0
       ? await this.repo.findTeachersByIds(teacherIds)
       : []
+    const users = userIds.length > 0
+      ? await this.repo.findUsersByIds(userIds)
+      : []
 
     const studentMap = new Map(students.map(s => [s.id, s]))
     const teacherMap = new Map(teachers.map(t => [t.id, t]))
+    const userMap = new Map(users.map(candidate => [candidate.id, candidate]))
 
     // 收集要创建的成员
     const membersToCreate: Array<{
@@ -781,7 +809,9 @@ export class TeamService {
       // 检查成员是否属于本校
       const memberUser = memberType === 'student'
         ? studentMap.get(memberId)
-        : teacherMap.get(memberId)
+        : memberType === 'teacher'
+          ? teacherMap.get(memberId)
+          : userMap.get(memberId)
 
       if (!memberUser || (team.scope === 'campus' && memberUser.schoolId !== team.schoolId)) {
         result.notSameSchool.push(memberId)
@@ -808,7 +838,7 @@ export class TeamService {
     // 记录审计日志
     if (result.added.length > 0) {
       const callerId = user.userId
-      const callerType = getUserType(user.role)
+      const callerType = getMembershipType(user)
       await this.repo.logOperation({
         teamId,
         operatorId: callerId,
@@ -848,7 +878,7 @@ export class TeamService {
 
     // 记录审计日志
     const callerId = user.userId
-    const callerType = getUserType(user.role)
+    const callerType = getMembershipType(user)
     await this.repo.logOperation({
       teamId,
       operatorId: callerId,
@@ -866,9 +896,7 @@ export class TeamService {
    */
   async transferTeam(teamId: string, dto: TransferTeamDTO, user: JwtPayload) {
     const callerId = user.userId
-    const callerType = getUserType(user.role)
-    const maxTeams = dto.newOwnerType === 'teacher' ? 50 : 5
-
+    const callerType = getMembershipType(user)
     await this.assertTeamScope(teamId, user)
 
     await this.repo.transaction(async (tx) => {
@@ -892,10 +920,26 @@ export class TeamService {
         throw new Error('NOT_OWNER')
       }
 
+      if (
+        (currentTeam.scope === 'personal' && dto.newOwnerType !== 'user') ||
+        (currentTeam.scope === 'campus' && dto.newOwnerType === 'user')
+      ) {
+        throw new Error('NEW_OWNER_SCOPE_MISMATCH')
+      }
+
       // 3. 验证新所有者是否存在且属于本校
       const newOwnerUser = dto.newOwnerType === 'teacher'
         ? await tx.teacher.findUnique({ where: { id: dto.newOwnerId }, select: { id: true, schoolId: true } })
-        : await tx.student.findUnique({ where: { id: dto.newOwnerId }, select: { id: true, schoolId: true } })
+        : dto.newOwnerType === 'student'
+          ? await tx.student.findUnique({ where: { id: dto.newOwnerId }, select: { id: true, schoolId: true } })
+          : await tx.user.findFirst({
+              where: {
+                id: dto.newOwnerId,
+                status: 'active',
+                PersonalProfile: { isNot: null }
+              },
+              select: { id: true, schoolId: true }
+            })
       if (!newOwnerUser) {
         throw new Error('NEW_OWNER_NOT_FOUND')
       }
@@ -912,6 +956,7 @@ export class TeamService {
           Team: { scope: currentTeam.scope }
         }
       })
+      const maxTeams = currentTeam.scope === 'personal' || dto.newOwnerType === 'student' ? 5 : 50
       if (existingTeams >= maxTeams) {
         throw new Error('NEW_OWNER_LIMIT_EXCEEDED')
       }
@@ -971,7 +1016,7 @@ export class TeamService {
    */
   async joinRequest(teamId: string, dto: JoinRequestDTO, user: JwtPayload) {
     const userId = user.userId
-    const userType = getUserType(user.role)
+    const userType = getMembershipType(user)
 
     if (!userId) {
       throw new Error('IDENTITY_NOT_FOUND')
@@ -1009,7 +1054,7 @@ export class TeamService {
    */
   async leaveTeam(teamId: string, user: JwtPayload) {
     const userId = user.userId
-    const userType = getUserType(user.role)
+    const userType = getMembershipType(user)
 
     if (!userId) {
       throw new Error('IDENTITY_NOT_FOUND')

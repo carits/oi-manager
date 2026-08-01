@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: school, student, teacher, team and team-import routes
 ---
 
@@ -67,19 +67,22 @@ source_of_truth: school, student, teacher, team and team-import routes
 里程碑写接口当前显式允许 `teacher`，没有把 `school_principal` 列入同一 authorize
 调用；调用方不要假设负责人必然继承这三个端点。
 
-## 个人模式排名（2）
+## 当前账号工作区（5）
 
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
-| `GET` | `/api/rankings/personal/rating` | 个人模式学生 | 平台级 Rating 排名，只返回用户名 |
-| `GET` | `/api/rankings/personal/solved` | 个人模式学生 | 平台级解题排名，只返回用户名 |
+| `GET` | `/api/me/homeworks` | 工作区、当前成员关系 | 当前账号校园作业 |
+| `GET` | `/api/me/contests` | 当前工作区、当前成员关系 | 当前账号比赛 |
+| `GET` | `/api/me/overview` | 个人工作区 | 邀请、比赛、最近提交和个人排名摘要 |
+| `GET` | `/api/rankings/personal/rating` | 任意角色个人工作区 | 平台级个人 Rating 排名，只返回用户名 |
+| `GET` | `/api/rankings/personal/solved` | 任意角色个人工作区 | 平台级个人解题排名，只返回用户名 |
 
 ## 团队 CRUD 与成员（25）
 
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
 | `GET` | `/api/teams` | 登录、角色范围 | 团队列表 |
-| `POST` | `/api/teams` | 教师/负责人/个人学生 | 创建团队 |
+| `POST` | `/api/teams` | 工作区教师/负责人，或任意角色个人工作区 | 创建当前作用域团队 |
 | `GET` | `/api/teams/:id` | 登录、可见性 | 团队详情 |
 | `PUT` | `/api/teams/:id` | owner/admin | 更新团队 |
 | `DELETE` | `/api/teams/:id` | owner | 删除团队 |
@@ -104,9 +107,10 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `GET` | `/api/teams/:teamId/trainings` | 登录、团队范围 | 团队任务 |
 | `POST` | `/api/teams/:teamId/trainings` | owner/admin/教师 | 创建团队任务 |
 
-团队具有服务端维护的 `scope=campus|personal`。校园团队按学校隔离；个人团队在平台
-范围内浏览和加入，并且成员响应只使用用户名。当前模式与团队作用域不一致时返回
-`403`，客户端传入的 `schoolId` 不能改变该边界。
+团队具有服务端维护的 `scope=campus|personal`。校园团队按学校隔离并必须有 `schoolId`；
+个人团队的 `schoolId` 为 `null`，所有角色统一以 `user` 成员身份在平台范围内浏览和加入，
+成员响应只使用用户名。当前模式与团队作用域不一致时返回 `403` 或详情型 `404`，客户端
+传入的 `schoolId` 或 `scope` 不能改变该边界。
 
 ## 邀请与申请（15）
 

@@ -13,7 +13,7 @@ for (const role of authRoles) {
         username: account.username,
         password: account.password,
         role: account.loginRole,
-        mode: account.mode,
+        workspaceMode: account.workspaceMode,
       },
     })
 

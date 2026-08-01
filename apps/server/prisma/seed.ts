@@ -657,6 +657,16 @@ async function main() {
   })
   console.log('创建个人模式测试学生: personal_student1 (密码: 123456，登录时选择学生端-个人)')
 
+  // 开发种子中的五类岗位账号都启用个人身份，便于验证双工作区矩阵。
+  const seededUsers = await prisma.user.findMany({ select: { id: true } })
+  for (const user of seededUsers) {
+    await prisma.personalProfile.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id },
+      update: {},
+    })
+  }
+
   console.log('Seeding completed!')
 }
 

@@ -1,18 +1,18 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-07-31
+last_verified: 2026-08-01
 source_of_truth: scripts, docker-compose.yml, runtime health endpoints
 ---
 
 # 运行手册
 
-当前服务器项目目录为 `/data/oi-manager`，运行的是开发环境。
+当前服务器项目目录为 `/data/oi-manager-response-refactor`，运行的是开发环境。
 
 ## 状态检查
 
 ```bash
-cd /data/oi-manager
+cd /data/oi-manager-response-refactor
 git status --short
 docker-compose ps
 lsof -nP -iTCP:3000 -sTCP:LISTEN
@@ -29,7 +29,7 @@ curl -I http://127.0.0.1:3000/login
 ## 启动与重启
 
 ```bash
-cd /data/oi-manager
+cd /data/oi-manager-response-refactor
 pnpm run restart
 pnpm preview:build
 pnpm preview:start
@@ -47,8 +47,12 @@ go-judge、`3001` HMR、`3002` Server 和 Judge。`preview:start` 独立持有 `
 ```bash
 pnpm install --frozen-lockfile
 docker-compose up -d db judge
-pnpm --filter server prisma:generate
+pnpm run restart
 ```
+
+`pnpm dev`、`pnpm dev:dirty`、根构建和 Server `prebuild` 都会自动执行
+`prisma generate`。日志出现 `PrismaClientValidationError` 或 `Unknown argument` 时，
+按[故障排查](TROUBLESHOOTING.md#prisma-client-与-schema-不一致)手动重新生成并受控重启。
 
 ## 停止
 
@@ -122,7 +126,7 @@ tar -C /data -czf /data/backups/oi-manager/storage_$(date +%Y%m%d_%H%M%S).tar.gz
 ```bash
 df -h
 du -xhd1 /data | sort -h
-du -xhd1 /data/oi-manager | sort -h
+du -xhd1 /data/oi-manager-response-refactor | sort -h
 docker system df
 ```
 

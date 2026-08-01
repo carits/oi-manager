@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import path from 'path'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getResourceScope } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
@@ -79,6 +79,7 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
         () => prisma.submission.create({
           data: {
         userId,
+        workspaceScope: getResourceScope(req.user),
         oj,
         problemId,
         problemInternalId: problem.id,
@@ -570,6 +571,17 @@ submitRouter.post('/rejudge', authenticate, async (req: any, res) => {
         success: false,
         message: '缺少 submissionId',
       })
+    }
+
+    const submission = await prisma.submission.findUnique({
+      where: { id: Number(submissionId) },
+      select: { userId: true, workspaceScope: true },
+    })
+    if (!submission || submission.workspaceScope !== getResourceScope(req.user)) {
+      return res.status(404).json({ success: false, message: '提交记录不存在' })
+    }
+    if (getResourceScope(req.user) === 'personal' && submission.userId !== req.user.userId) {
+      return res.status(404).json({ success: false, message: '提交记录不存在' })
     }
 
     const result = await rejudgeSubmission(Number(submissionId))

@@ -292,9 +292,9 @@ export async function createTestSchoolWithPrincipal(schoolName?: string) {
  */
 export async function createTestTeam(options: {
   name?: string
-  schoolId: string
+  schoolId: string | null
   ownerId?: string
-  ownerType?: 'teacher' | 'student'
+  ownerType?: 'teacher' | 'student' | 'user'
   isPublic?: boolean
   scope?: 'campus' | 'personal'
 } = { schoolId: '' }) {

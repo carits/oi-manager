@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
+import styles from '@/components/platformBindings.module.css'
 
 interface PlatformConfig {
   id: string
@@ -218,31 +219,12 @@ export default function AdminPlatformBindingsPage() {
             {platforms.map((platform) => {
               const status = getBindingStatus(platform.id)
               return (
-                <div
+                <button
+                  type="button"
                   key={platform.id}
                   onClick={() => handlePlatformClick(platform)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '1rem 1.5rem',
-                    background: 'white',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    opacity: platform.supported ? 1 : 0.6,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (platform.supported) {
-                      e.currentTarget.style.borderColor = 'var(--primary)'
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.1)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
+                  className={styles.platformCard}
+                  disabled={!platform.supported}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div
@@ -274,7 +256,7 @@ export default function AdminPlatformBindingsPage() {
                     </div>
                   </div>
                   <span style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>▶</span>
-                </div>
+                </button>
               )
             })}
           </div>

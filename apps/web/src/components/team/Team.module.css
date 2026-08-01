@@ -1,0 +1,25 @@
+.teamGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); }
+.teamCard { height: 100%; min-height: 178px; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); color: inherit; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition); }
+.teamCard:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.teamCardHeader { display: flex; align-items: center; gap: var(--space-3); }
+.teamAvatar { width: 44px; height: 44px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; color: var(--text-inverse); background: var(--primary); border-radius: var(--radius); font-size: var(--text-lg); font-weight: 650; }
+.teamAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.teamHeading { min-width: 0; flex: 1; }
+.teamName { margin: 0; overflow: hidden; color: var(--text-primary); font-size: var(--text-base); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.teamSchool { margin: 2px 0 0; overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.teamDescription { min-height: 42px; margin: 0; overflow: hidden; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.teamMeta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
+.metaItem { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: var(--text-xs); }
+.private { color: var(--warning-text); }
+.invitation { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4); background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: var(--radius-md); }
+.invitationMain { min-width: 0; display: grid; gap: var(--space-1); }
+.invitationTitle { margin: 0; color: var(--text-primary); font-size: var(--text-sm); font-weight: 650; }
+.invitationMeta { margin: 0; color: var(--text-muted); font-size: var(--text-xs); }
+.invitationActions { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
+.invitationSection { display: grid; gap: var(--space-3); }
+.sectionLabel { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--text-primary); font-size: var(--text-base); font-weight: 650; }
+.form { display: grid; gap: var(--space-4); }
+.visibilityOptions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.visibilityOption { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-secondary); font-size: var(--text-sm); cursor: pointer; }
+.visibilityOption:has(input:checked) { color: var(--primary-text); background: var(--primary-light); border-color: var(--primary); }
+.formActions { display: flex; justify-content: flex-end; gap: var(--space-2); }

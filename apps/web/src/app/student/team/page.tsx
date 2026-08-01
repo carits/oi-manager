@@ -31,7 +31,7 @@ export default function StudentTeamPage() {
   const queryParams = {
     page,
     pageSize,
-    schoolId: user?.studentMode === 'campus' ? user?.schoolId : undefined,
+    schoolId: user?.workspaceMode !== 'personal' ? user?.schoolId : undefined,
     view: activeTab === 'mine' ? 'mine' : 'all'
   }
 
@@ -175,7 +175,7 @@ export default function StudentTeamPage() {
         processingInvitation={processingInvitation}
         onAcceptInvitation={(id) => handleAcceptInvitation(id)}
         onRejectInvitation={(id) => handleRejectInvitation(id)}
-        showCreateButton={user?.studentMode === 'personal'}
+        showCreateButton={user?.workspaceMode === 'personal'}
       />
     </>
   )

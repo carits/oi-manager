@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 ---
 
@@ -51,7 +51,8 @@ interface LoginRequest {
   username: string
   password: string
   role: 'admin' | 'teacher' | 'student'
-  mode?: 'campus' | 'personal'
+  workspaceMode?: 'work' | 'personal'
+  mode?: 'campus' | 'personal' // deprecated compatibility
 }
 
 interface LoginResponse {
@@ -63,12 +64,16 @@ interface LoginResponse {
   teacherId?: string
   studentId?: string
   schoolId?: string
+  workspaceMode: 'work' | 'personal'
   studentMode?: 'campus' | 'personal'
 }
 ```
 
 `adminId/teacherId/studentId` 是扩展实体 ID；当前 schema 中通常与 User ID 对齐，
 调用方仍应根据字段语义使用。身份判断统一使用 `userId + role`。
+
+`workspaceMode` 是会话工作区，所有角色均支持。`role`、岗位扩展 ID 和学校关系在切换时
+保持不变；旧 `studentMode` 仅用于一个开发周期内兼容旧客户端。
 
 ## 分页
 

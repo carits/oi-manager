@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: repository structure and active documentation
 ---
 
@@ -32,6 +32,7 @@ source_of_truth: repository structure and active documentation
 1. [单元与集成测试](development/TESTING.md)
 2. [全 UI E2E](development/UI_E2E.md)
 3. [前端约定](development/FRONTEND.md)
+4. [UI 路由与交互矩阵](development/UX_ROUTE_MATRIX.md)
 
 ### 运维
 
@@ -72,4 +73,18 @@ source_of_truth: repository structure and active documentation
 4. `archive/` 中的历史材料。
 
 运行 `pnpm docs:check` 可以检查链接、页面路由、Prisma 模型、API 目录和已知过时描述。
+
+## 文档维护与任务记录
+
+每个仓库任务都必须在结束前完成文档影响检查，不能只在聊天、提交信息或终端输出中
+保留结果：
+
+- `CHANGELOG.md` 按日期记录任务结果、验证范围以及推送或部署状态。
+- `STATUS.md` 只维护当前能力、限制、运行状态和最近验证快照。
+- 对应的指南、架构、开发、运维或参考文档说明长期有效的行为和操作方法。
+- 被修改或重新核对的活动文档同步更新 `last_verified`。
+- 最后运行 `pnpm docs:check`。
+
+完整门禁和完成清单见[开发工作流](development/WORKFLOW.md)，项目级执行约束见根目录
+`AGENTS.md`。
 

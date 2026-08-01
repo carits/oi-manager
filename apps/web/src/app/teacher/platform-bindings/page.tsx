@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
+import styles from '@/components/platformBindings.module.css'
 
 // 平台配置
 const PLATFORMS = [
@@ -204,28 +205,11 @@ export default function TeacherPlatformBindingsPage() {
             {PLATFORMS.map((platform) => {
               const status = getBindingStatus(platform.id)
               return (
-                <div
+                <button
+                  type="button"
                   key={platform.id}
                   onClick={() => handlePlatformClick(platform.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '1rem 1.5rem',
-                    background: 'white',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--primary)'
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.1)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
+                  className={styles.platformCard}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div
@@ -250,7 +234,7 @@ export default function TeacherPlatformBindingsPage() {
                     </div>
                   </div>
                   <span style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>▶</span>
-                </div>
+                </button>
               )
             })}
           </div>

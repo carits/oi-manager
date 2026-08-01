@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 /**
  * 用户类型
  */
-export type UserType = 'teacher' | 'student'
+export type UserType = 'teacher' | 'student' | 'user'
 
 /**
  * 成员角色

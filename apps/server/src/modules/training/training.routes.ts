@@ -9,6 +9,8 @@
  */
 
 import { Router } from 'express'
+import { authenticate, getResourceScope } from '../../middleware/auth'
+import { prisma } from '../../prisma'
 import { trainingCrudRouter } from './training.crud.routes'
 import { trainingProblemsRouter } from './training.problems.routes'
 import { trainingNotesRouter } from './training.notes.routes'
@@ -18,6 +20,18 @@ import { trainingMiscRouter } from './training.misc.routes'
 import { trainingRecordRouter } from './training.record.routes'
 
 export const trainingsRouter = Router()
+
+// Every training detail endpoint passes through this scope boundary first.
+trainingsRouter.use('/trainings/:id', authenticate, async (req, res, next) => {
+  const id = Number.parseInt(req.params.id, 10)
+  if (!Number.isFinite(id) || !req.user) return next()
+
+  const training = await prisma.training.findUnique({ where: { id }, select: { scope: true } })
+  if (!training || training.scope !== getResourceScope(req.user)) {
+    return res.status(404).json({ success: false, message: '训练不存在' })
+  }
+  next()
+})
 
 trainingsRouter.use(trainingCrudRouter)
 trainingsRouter.use(trainingProblemsRouter)

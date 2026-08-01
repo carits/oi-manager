@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, getMembershipType } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
 import { getUserDisplayName } from './team.utils'
@@ -19,7 +19,7 @@ export const teamInvitationsRouter = Router()
 teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
 
   const invitations = await teamRepository.findUserPendingInvites(userId, userType as MemberType, scope)
@@ -31,7 +31,7 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
 
       let invitedByName = '未知'
       if (invite.invitedBy) {
-        invitedByName = await getUserDisplayName(invite.invitedBy, 'teacher', scope)
+        invitedByName = await getUserDisplayName(invite.invitedBy, scope === 'personal' ? 'user' : 'teacher', scope)
       }
 
       const team = await teamRepository.findById(invite.teamId)
@@ -60,7 +60,7 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
 teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
 
   const memberRecords = await teamRepository.findUserAdminTeams(userId, userType as MemberType, scope)
@@ -114,7 +114,7 @@ teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (
 teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async (req, res) => {
   const user = (req as any).user!
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = getMembershipType(user)
   const scope = teamService.getScopeForUser(user)
 
   const invitations = await teamRepository.findUserAdminInvites(userId, userType as MemberType, scope)
@@ -274,7 +274,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   const user = (req as any).user!
 
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = getMembershipType(user)
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
@@ -289,7 +289,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   await teamService.assertTeamScope(invitation.teamId, user)
 
   // 使用事务确保状态更新和日志记录原子性
-  const callerType = user.role === 'student' ? 'student' : 'teacher'
+  const callerType = getMembershipType(user)
   try {
     await prisma.$transaction(async (tx) => {
       const result = await tx.teamMember.updateMany({
@@ -325,7 +325,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   const user = (req as any).user!
 
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = getMembershipType(user)
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
@@ -340,7 +340,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   await teamService.assertTeamScope(invitation.teamId, user)
 
   // 使用事务确保删除和日志记录原子性
-  const callerType = user.role === 'student' ? 'student' : 'teacher'
+  const callerType = getMembershipType(user)
   try {
     await prisma.$transaction(async (tx) => {
       const result = await tx.teamMember.deleteMany({

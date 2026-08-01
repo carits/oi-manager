@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import { JwtPayload, UserRole } from '@oi-manager/shared'
+import { JwtPayload, UserRole, WorkspaceMode, ResourceScope } from '@oi-manager/shared'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 
@@ -32,6 +32,10 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
+    decoded.workspaceMode = getWorkspaceMode(decoded)
+    if (decoded.role === 'student' && !decoded.studentMode) {
+      decoded.studentMode = decoded.workspaceMode === 'personal' ? 'personal' : 'campus'
+    }
     req.user = decoded
     req.authSource = bearerToken ? 'bearer' : 'cookie'
     next()
@@ -86,10 +90,44 @@ export function getUserType(role: string): 'teacher' | 'student' {
   return role === 'student' ? 'student' : 'teacher'
 }
 
+export function getWorkspaceMode(user?: JwtPayload): WorkspaceMode {
+  if (user?.workspaceMode === 'personal') return 'personal'
+  if (user?.studentMode === 'personal') return 'personal'
+  return 'work'
+}
+
+export function getResourceScope(user?: JwtPayload): ResourceScope {
+  return getWorkspaceMode(user) === 'personal' ? 'personal' : 'campus'
+}
+
+export function getMembershipType(user: JwtPayload): 'teacher' | 'student' | 'user' {
+  return getWorkspaceMode(user) === 'personal' ? 'user' : getUserType(user.role)
+}
+
+export function requireWorkspace(mode: WorkspaceMode) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: '未授权' })
+    }
+    if (getWorkspaceMode(req.user) !== mode) {
+      return res.status(403).json({
+        success: false,
+        code: 'WORKSPACE_MODE_REQUIRED',
+        message: mode === 'personal' ? '请先切换到个人模式' : '请先切换到工作模式'
+      })
+    }
+    next()
+  }
+}
+
+export function isPersonalWorkspace(user?: JwtPayload): boolean {
+  return getWorkspaceMode(user) === 'personal'
+}
+
 /**
  * 检查用户是否为个人模式学生
  * 个人模式学生拥有更多权限（创建团队、题单等）
  */
 export function isPersonalMode(user?: JwtPayload): boolean {
-  return user?.role === 'student' && user?.studentMode === 'personal'
+  return isPersonalWorkspace(user)
 }

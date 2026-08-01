@@ -207,6 +207,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   // 获取路径前缀
   const getPathPrefix = () => {
+    if (user?.workspaceMode === 'personal') return '/personal'
     if (role === 'admin') return '/platform-admin'
     if (role === 'student') return '/student'
     return '/teacher'
@@ -651,7 +652,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
                 <span style={{ color: 'var(--gray-500)', fontWeight: 500 }}>{problem.problemId}</span>
-                <span style={{ fontSize: '1.25rem', fontWeight: 600 }}>{problem.title}</span>
+                <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{problem.title}</h1>
               </div>
               <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>
                 {problem.difficulty && (
@@ -828,7 +829,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               marginBottom: '-1px'
             }}
           >
-            ✏️ 写思路
+            写思路
           </button>
         </div>
 
@@ -1051,7 +1052,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '1.25rem' }}>📎</span>
+                        <span style={{ fontSize: '0.875rem' }}>附件</span>
                         <div>
                           <div style={{ fontWeight: 500 }}>{attachment.fileName}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
@@ -1114,8 +1115,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                       <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                         <td
                           onClick={() => {
-                            const prefix = role === 'admin' ? '/platform-admin' : role === 'student' ? '/student' : '/teacher'
-                            router.push(`${prefix}/submissions/${s.id}`)
+                            router.push(`${pathPrefix}/submissions/${s.id}`)
                           }}
                           style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
                         >#{s.id}</td>
@@ -1213,7 +1213,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         gap: '0.25rem'
                       }}
                     >
-                      {aiLoading === 'translate' ? '翻译中...' : alreadyTranslated ? '🌐 已翻译' : '🌐 翻译'}
+                      {aiLoading === 'translate' ? '翻译中...' : alreadyTranslated ? '已翻译' : '翻译'}
                     </button>
                     {alreadyTranslated && (
                       <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', textAlign: 'center' }}>
@@ -1306,7 +1306,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               fontSize: '0.875rem',
               color: 'var(--warning-text)',
             }}>
-              ⚠️ Codeforces Gym 题目暂不支持在线提交，请前往 Codeforces 网站提交
+              Codeforces Gym 题目暂不支持在线提交，请前往 Codeforces 网站提交
             </div>
           )}
 
@@ -1370,7 +1370,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               ) : (
                 <span
                   style={{ color: 'var(--warning)', cursor: 'pointer', textDecoration: 'underline' }}
-                  onClick={() => router.push(`${pathPrefix}/platform-bindings`)}
+                  onClick={() => router.push('/account/platform-bindings')}
                 >
                   未绑定，点击去绑定
                 </span>

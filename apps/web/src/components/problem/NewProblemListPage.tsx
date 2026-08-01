@@ -9,7 +9,11 @@ import { formStyles } from '@/lib/styles'
 export default function NewProblemListPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const pathPrefix = user?.role === 'student' ? '/student' : '/teacher'
+  const pathPrefix = user?.workspaceMode === 'personal'
+    ? '/personal'
+    : user?.role === 'student'
+      ? '/student'
+      : '/teacher'
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')

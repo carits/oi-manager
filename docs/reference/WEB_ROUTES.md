@@ -1,13 +1,13 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
 # 页面路由
 
-当前共有 90 个 `page.tsx`。动态参数：`[id]` 为资源 ID，`[cid]` 为作业/比赛 ID，
+当前共有 109 个 `page.tsx`。动态参数：`[id]` 为资源 ID，`[cid]` 为作业/比赛 ID，
 `[tid]` 为训练 ID。
 
 ## 公共入口（2）
@@ -59,7 +59,43 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/profile/student/[id]` | 已登录 | 学生公开资料 |
 | `/profile/teacher/[id]` | 已登录 | 教师公开资料 |
 
-## 学生（27）
+## 账号设置（3）
+
+账号设置在工作和个人工作区共享，不改变业务资源作用域。
+
+| 路径 | 身份 | 页面 |
+|------|------|------|
+| `/account/profile` | 全部已登录角色 | 账号资料 |
+| `/account/security` | 全部已登录角色 | 安全设置 |
+| `/account/platform-bindings` | 全部已登录角色 | 平台绑定 |
+
+## 个人工作区（16）
+
+五种数据库角色均可访问。个人页面只显示用户名与个人身份，不展示学校、实名、职称或后台岗位。
+
+| 路径 | 身份 | 页面 |
+|------|------|------|
+| `/personal` | 个人工作区 | 个人首页 |
+| `/personal/teams` | 个人工作区 | 团队列表与邀请 |
+| `/personal/teams/[id]` | 个人工作区、可见资源 | 团队详情 |
+| `/personal/teams/[id]/contests/[cid]` | 个人工作区、团队资源 | 团队比赛 |
+| `/personal/teams/[id]/trainings/[tid]` | 个人工作区、团队资源 | 团队训练 |
+| `/personal/problems` | 个人工作区 | 公共题库 |
+| `/personal/problems/[id]` | 个人工作区、公开题目 | 题目详情 |
+| `/personal/contests` | 个人工作区 | 个人团队比赛 |
+| `/personal/contests/[id]` | 个人工作区、可见资源 | 比赛详情 |
+| `/personal/problem-lists` | 个人工作区 | 个人题单 |
+| `/personal/problem-lists/new` | 个人工作区 | 创建题单 |
+| `/personal/problem-lists/[id]` | 个人工作区、可见资源 | 题单详情 |
+| `/personal/problem-lists/[id]/edit` | 个人工作区、所有者 | 编辑题单 |
+| `/personal/submissions` | 个人工作区 | 个人提交 |
+| `/personal/submissions/[id]` | 个人工作区、本人 | 提交详情 |
+| `/personal/rankings` | 个人工作区 | 个人 Rating 与解题排名 |
+
+## 学生与旧兼容入口（27）
+
+`/student` 是校园工作区。旧学生个人模式地址在个人会话中由服务端重定向至
+`/personal/*` 或 `/account/*`；不存在对应新能力的旧编辑地址回到最接近的可用页面。
 
 | 路径 | 模式 | 页面 |
 |------|------|------|

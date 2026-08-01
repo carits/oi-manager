@@ -22,6 +22,7 @@
     "test:ui:prepare": "pnpm --filter server exec tsx scripts/e2e/reset.ts",
     "test:ui": "pnpm test:ui:prepare && playwright test",
     "test:ui:smoke": "pnpm test:ui:prepare && playwright test --project=chromium-desktop --project=firefox-smoke --grep @smoke",
+    "test:ui:ux": "pnpm test:ui:prepare && playwright test e2e/tests/route-smoke.spec.ts --project=chromium-desktop --project=chromium-compact",
     "test:ui:headed": "pnpm test:ui:prepare && playwright test --project=chromium-desktop --headed",
     "test:ui:live": "playwright test --config=playwright.live.config.ts",
     "test:ui:report": "playwright show-report test-results/playwright-report",

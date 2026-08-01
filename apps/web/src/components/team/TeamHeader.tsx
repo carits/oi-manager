@@ -174,8 +174,7 @@ export function TeamHeader({
                   <span style={{ color: 'var(--gray-400)' }}> ({team.owner.username})</span>
                 )}
               </span>
-              <span>|</span>
-              <span>{team.school.name}</span>
+              {team.school && <><span>|</span><span>{team.school.name}</span></>}
             </div>
           </div>
 

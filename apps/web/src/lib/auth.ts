@@ -10,8 +10,11 @@ const STUDENT_ID_KEY = 'studentId'
 const ADMIN_ID_KEY = 'adminId'
 const STUDENT_MODE_KEY = 'studentMode'
 const LAST_STUDENT_MODE_KEY = 'lastStudentMode'
+const WORKSPACE_MODE_KEY = 'workspaceMode'
+const LAST_WORKSPACE_MODE_KEY = 'lastWorkspaceMode'
 
 export type StudentMode = 'campus' | 'personal'
+export type WorkspaceMode = 'work' | 'personal'
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
@@ -115,6 +118,7 @@ export function clearAuth(): void {
   localStorage.removeItem(STUDENT_ID_KEY)
   localStorage.removeItem(ADMIN_ID_KEY)
   localStorage.removeItem(STUDENT_MODE_KEY)
+  localStorage.removeItem(WORKSPACE_MODE_KEY)
   // 注意：不清除 LAST_STUDENT_MODE_KEY，以便下次登录时记住上次模式
 }
 
@@ -138,6 +142,64 @@ export function getLastStudentMode(): StudentMode | null {
 
 export function setLastStudentMode(mode: StudentMode): void {
   localStorage.setItem(LAST_STUDENT_MODE_KEY, mode)
+}
+
+export function getWorkspaceMode(): WorkspaceMode | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(WORKSPACE_MODE_KEY) as WorkspaceMode | null
+}
+
+export function setWorkspaceMode(mode: WorkspaceMode | null): void {
+  if (mode) localStorage.setItem(WORKSPACE_MODE_KEY, mode)
+  else localStorage.removeItem(WORKSPACE_MODE_KEY)
+}
+
+export function getLastWorkspaceMode(): WorkspaceMode | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(LAST_WORKSPACE_MODE_KEY) as WorkspaceMode | null
+}
+
+export function setLastWorkspaceMode(mode: WorkspaceMode): void {
+  localStorage.setItem(LAST_WORKSPACE_MODE_KEY, mode)
+}
+
+export function getAccountWorkspaceMode(username: string, role: string): WorkspaceMode | null {
+  if (typeof window === 'undefined' || !username.trim()) return null
+  return localStorage.getItem(`accountWorkspace:${role}:${username.trim().toLowerCase()}`) as WorkspaceMode | null
+}
+
+export function setAccountWorkspaceMode(username: string, role: string, mode: WorkspaceMode): void {
+  const normalizedUsername = username.trim().toLowerCase()
+  const aliases = role === 'super_admin'
+    ? ['super_admin', 'admin']
+    : role === 'platform_admin'
+      ? ['platform_admin', 'platform-admin', 'admin']
+      : role === 'school_principal'
+        ? ['school_principal', 'teacher']
+        : [role]
+  aliases.forEach(alias => localStorage.setItem(`accountWorkspace:${alias}:${normalizedUsername}`, mode))
+}
+
+function workspacePathKey(userId: string, role: string, mode: WorkspaceMode): string {
+  return `workspacePath:${role}:${userId}:${mode}`
+}
+
+export function getLastWorkspacePath(
+  userId: string,
+  role: string,
+  mode: WorkspaceMode,
+): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(workspacePathKey(userId, role, mode))
+}
+
+export function setLastWorkspacePath(
+  userId: string,
+  role: string,
+  mode: WorkspaceMode,
+  path: string,
+): void {
+  localStorage.setItem(workspacePathKey(userId, role, mode), path)
 }
 
 export function isAuthenticated(): boolean {

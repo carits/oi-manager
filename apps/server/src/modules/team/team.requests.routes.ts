@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, getMembershipType } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
 import { asyncHandler } from '../../lib/asyncHandler'
@@ -63,7 +63,7 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
         name: team.scope === 'personal' ? u.username : (profile?.name || u.username),
         username: u.username,
         avatar: u.avatar,
-        userType: u.Teacher ? 'teacher' : 'student'
+        userType: team.scope === 'personal' ? 'user' : u.Teacher ? 'teacher' : 'student'
       } : null
     }
   })
@@ -103,7 +103,7 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
   }
 
   const callerId = user.userId
-  const callerType = user.role === 'student' ? 'student' : 'teacher'
+  const callerType = getMembershipType(user)
   await teamRepository.logOperation({
     teamId: member.teamId,
     operatorId: callerId,
@@ -142,7 +142,7 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
   await prisma.teamMember.delete({ where: { id: member.id } })
 
   const callerId = user.userId
-  const callerType = user.role === 'student' ? 'student' : 'teacher'
+  const callerType = getMembershipType(user)
   await teamRepository.logOperation({
     teamId: member.teamId,
     operatorId: callerId,

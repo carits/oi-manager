@@ -27,23 +27,30 @@ export function ConfirmModal({
   loading = false
 }: ConfirmModalProps) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} width="400px">
-      <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '1rem' }}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      width="420px"
+      closeOnOverlay={!loading}
+      footer={(
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            {cancelText}
+          </Button>
+          <Button
+            variant={danger ? 'danger' : 'primary'}
+            onClick={onConfirm}
+            loading={loading}
+          >
+            {confirmText}
+          </Button>
+        </>
+      )}
+    >
+      <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', margin: 0 }}>
         {message}
       </p>
-
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-        <Button variant="secondary" onClick={onClose} disabled={loading}>
-          {cancelText}
-        </Button>
-        <Button
-          variant={danger ? 'danger' : 'primary'}
-          onClick={onConfirm}
-          disabled={loading}
-        >
-          {loading ? '处理中...' : confirmText}
-        </Button>
-      </div>
     </Modal>
   )
 }

@@ -1,0 +1,32 @@
+.dashboard { display: grid; gap: var(--space-5); }
+.metricGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.metric { min-width: 0; padding: var(--space-4); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.metricLabel { margin: 0; color: var(--text-secondary); font-size: var(--text-xs); font-weight: 600; }
+.metricValue { margin: var(--space-2) 0 0; color: var(--text-primary); font-size: 1.75rem; line-height: 1.1; font-weight: 700; }
+.metricHint { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--text-xs); }
+.dashboardGrid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr); gap: var(--space-4); align-items: start; }
+.section { min-width: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.sectionHeader { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-4); border-bottom: 1px solid var(--border); }
+.sectionTitle { margin: 0; color: var(--text-primary); font-size: var(--text-base); font-weight: 650; }
+.sectionLink { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 600; }
+.list { display: grid; }
+.listItem { min-height: 66px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); transition: background var(--transition-fast); }
+.listItem:last-child { border-bottom: 0; }
+.listItem:hover { background: var(--bg-hover); }
+.listMain { min-width: 0; }
+.listTitle { display: block; overflow: hidden; color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.listMeta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-top: 4px; color: var(--text-muted); font-size: var(--text-xs); }
+.listEnd { display: flex; align-items: center; gap: var(--space-2); }
+.actionList { display: grid; padding: var(--space-2); }
+.actionLink { min-height: 48px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: 0 var(--space-2); color: var(--text-primary); border-radius: var(--radius); transition: background var(--transition-fast); }
+.actionLink:hover { background: var(--bg-hover); }
+.actionIcon { width: 34px; height: 34px; display: grid; place-items: center; color: var(--primary-text); background: var(--primary-light); border-radius: var(--radius); }
+.actionText { min-width: 0; }
+.actionTitle { display: block; font-size: var(--text-sm); font-weight: 600; }
+.actionHint { display: block; margin-top: 2px; overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.inlineEmpty { min-height: 150px; display: grid; place-items: center; padding: var(--space-5); color: var(--text-muted); font-size: var(--text-sm); text-align: center; }
+.skeleton { min-height: 160px; }
+@media (max-width: 1320px) {
+  .metricGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dashboardGrid { grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.75fr); }
+}

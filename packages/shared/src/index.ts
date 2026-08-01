@@ -1,6 +1,9 @@
 // 用户角色
 export type UserRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
 
+export type WorkspaceMode = 'work' | 'personal'
+export type ResourceScope = 'campus' | 'personal'
+
 // 简化的角色类型（用于权限判断）
 export type SimpleRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
 
@@ -34,7 +37,9 @@ export interface JwtPayload {
   studentId?: string // 学生ID（student 角色才有）
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   schoolId?: string // 学校ID（教师或学生所属学校）
-  studentMode?: 'campus' | 'personal' // 学生模式（仅 student 角色有）
+  workspaceMode?: WorkspaceMode
+  /** @deprecated Use workspaceMode. Kept while old sessions are migrated. */
+  studentMode?: ResourceScope
 }
 
 // API 响应类型
@@ -56,6 +61,9 @@ export interface LoginRequest {
   username: string
   password: string
   role: UserRole | 'admin' | 'teacher' // 'admin'/'teacher' 是登录入口类型，非数据库角色
+  workspaceMode?: WorkspaceMode
+  /** @deprecated Use workspaceMode. */
+  mode?: ResourceScope
 }
 
 // 用户登录响应
@@ -68,7 +76,9 @@ export interface LoginResponse {
   studentId?: string
   adminId?: string
   schoolId?: string
-  studentMode?: 'campus' | 'personal'
+  workspaceMode: WorkspaceMode
+  /** @deprecated Use workspaceMode. */
+  studentMode?: ResourceScope
 }
 
 // ========== 学校管理 DTO ==========

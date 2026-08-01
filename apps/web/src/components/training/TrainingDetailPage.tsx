@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, usePathname, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import apiClient from '@/lib/apiClient'
 import { Modal } from '@/components/ui/Modal'
@@ -21,6 +21,13 @@ import { useTrainingSubmissions } from './hooks/useTrainingSubmissions'
 import { useTrainingActions } from './hooks/useTrainingActions'
 
 import { TrainingProblemList } from './components/TrainingProblemList'
+import { Bell, Edit3, FilePlus2, LockKeyhole, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { PageFrame } from '@/components/ui/PageFrame'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Tabs } from '@/components/ui/Tabs'
+import styles from './TrainingDetail.module.css'
 
 const TrainingProblemDetail = dynamic(
   () => import('./components/TrainingProblemDetail').then(module => module.TrainingProblemDetail),
@@ -58,17 +65,33 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   const params = useParams()
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
-  const trainingId = (params.tid || params.cid) as string
+  const trainingId = (params.tid || params.cid || params.id) as string
   const teamId = teamIdOverride || (params.id as string)
 
-  const [activeTab, setActiveTab] = useState<TabType>('problemList')
+  const validTabs: TabType[] = ['problemList', 'problems', 'submissions', 'solutions', 'attachments', 'ranking']
+  const requestedTab = searchParams.get('tab') as TabType | null
+  const [activeTab, setActiveTab] = useState<TabType>(requestedTab && validTabs.includes(requestedTab) ? requestedTab : 'problemList')
+  const [announcementExpanded, setAnnouncementExpanded] = useState(false)
   const [timeDisplay, setTimeDisplay] = useState('')
   const [showMakeupModal, setShowMakeupModal] = useState(false)
   const [makeupTitle, setMakeupTitle] = useState('')
   const [makeupStartTime, setMakeupStartTime] = useState('')
   const [makeupEndTime, setMakeupEndTime] = useState('')
   const [makeupLoading, setMakeupLoading] = useState(false)
+
+  useEffect(() => {
+    const nextTab = searchParams.get('tab') as TabType | null
+    setActiveTab(nextTab && validTabs.includes(nextTab) ? nextTab : 'problemList')
+  }, [searchParams])
+
+  const selectTab = (tab: TabType) => {
+    setActiveTab(tab)
+    const next = new URLSearchParams(searchParams.toString())
+    tab === 'problemList' ? next.delete('tab') : next.set('tab', tab)
+    router.replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false })
+  }
 
   const {
     training, problems, selectedProblemId, setSelectedProblemId,
@@ -185,69 +208,21 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     : pathname.includes('/contests/')
       ? '比赛详情'
       : '训练详情'
-  const initialTabs = ['题目列表', '题面', '评测记录', '题解', '附件', '排名']
+  const initialTabs: Array<{ value: TabType; label: string }> = [
+    { value: 'problemList', label: '题目列表' }, { value: 'problems', label: '题面' },
+    { value: 'submissions', label: '评测记录' }, { value: 'solutions', label: '题解' },
+    { value: 'attachments', label: '附件' }, { value: 'ranking', label: '排名' },
+  ]
 
   if (loading) {
     return (
-      <div style={{ minHeight: 'calc(100vh - 72px)', background: 'var(--gray-50)' }}>
-        <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.9rem 1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', maxWidth: '1200px', margin: '0 auto' }}>
-            <button
-              type="button"
-              onClick={() => router.back()}
-              style={{ background: 'none', border: 0, color: 'var(--text-secondary)', cursor: 'pointer' }}
-            >
-              ← 返回
-            </button>
-            <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
-            <h1 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{initialTitle}</h1>
-          </div>
-        </div>
-        <div style={{ background: 'white', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', gap: '2rem', maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem' }}>
-            {initialTabs.map((tab, index) => (
-              <span
-                key={tab}
-                style={{
-                  padding: '1rem 0',
-                  color: index === 0 ? 'var(--primary)' : 'var(--text-secondary)',
-                  borderBottom: index === 0 ? '2px solid var(--primary)' : '2px solid transparent',
-                }}
-              >
-                {tab}
-              </span>
-            ))}
-          </div>
-        </div>
-        <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem', width: '100%' }}>
-          <SkeletonRegion rows={8} label="训练内容正在准备" />
-        </main>
-      </div>
+      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'training'), href: basePath }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problemList" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="训练内容正在准备" /></PageFrame>
     )
   }
 
   if (error || !training) {
     return (
-      <div style={{ minHeight: 'calc(100vh - 72px)', background: 'var(--gray-50)' }}>
-        <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.9rem 1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', maxWidth: '1200px', margin: '0 auto' }}>
-            <button
-              type="button"
-              onClick={() => router.back()}
-              style={{ background: 'none', border: 0, color: 'var(--text-secondary)', cursor: 'pointer' }}
-            >
-              ← 返回
-            </button>
-            <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
-            <h1 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{initialTitle}</h1>
-          </div>
-        </div>
-        <LoadError
-          message={error || '内容不存在'}
-          onRetry={refresh}
-          onBack={() => router.back()}
-        />
-      </div>
+      <PageFrame><PageHeader title={initialTitle} breadcrumbs={[{ label: '活动', href: basePath }, { label: '详情' }]} /><LoadError message={error || '内容不存在'} onRetry={refresh} onBack={() => router.back()} /></PageFrame>
     )
   }
 
@@ -270,111 +245,30 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   // ========== Render ==========
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '0.75rem 1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button onClick={() => router.push(backUrl)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>← 返回</button>
-            <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
-            <h1 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>{training.title}</h1>
-            {training.sourceTrainingId && (
-              <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--info-light)', color: 'var(--info-text)' }}>补题练习</span>
-            )}
-            {training.sourceTrainingId && (
-              <button
-                onClick={() => {
-                  const sourcePath = training.type === 'homework'
-                    ? (basePath.startsWith('/student') ? `${basePath}/contests/${training.sourceTrainingId}` : `${basePath}/contests/${training.sourceTrainingId}`)
-                    : `${basePath}/${teamId}?tab=training`
-                  router.push(sourcePath)
-                }}
-                style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                查看原活动
-              </button>
-            )}
-            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-muted)' }}>{fmtLabel}</span>
-            <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: sc.bg, color: sc.color }}>
-              {training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ fontSize: '0.875rem', fontWeight: 500, fontFamily: 'monospace', color: training.status === 'ongoing' ? 'var(--primary)' : 'var(--gray-500)' }}>
-              {timeDisplay}
-            </div>
-            {training.isAdmin && (
-              <>
-                {training.status === 'finished' && (
-                  <button
-                    onClick={() => {
-                      setMakeupTitle(`${training.title} - 补题练习`)
-                      setMakeupStartTime(new Date().toISOString().slice(0, 16))
-                      const defaultEnd = new Date(Date.now() + 7 * 24 * 3600 * 1000)
-                      setMakeupEndTime(defaultEnd.toISOString().slice(0, 16))
-                      setShowMakeupModal(true)
-                    }}
-                    style={{ padding: '0.5rem 1rem', border: '1px solid var(--primary)', background: 'white', color: 'var(--primary)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
-                  >
-                    创建补题作业
-                  </button>
-                )}
-                <button
-                  onClick={() => actions.setShowEditModal(true)}
-                  style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
-                >
-                  编辑
-                </button>
-                <button
-                  onClick={() => actions.setShowDeleteConfirm(true)}
-                  style={{ padding: '0.5rem 1rem', border: '1px solid var(--error)', background: 'white', color: 'var(--error)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
-                >
-                  删除
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+    <div className={styles.page}>
+      <div className={styles.headerArea}>
+        <PageHeader
+          title={training.title}
+          description={`${tl} · ${fmtLabel} · ${new Date(training.startTime).toLocaleString('zh-CN')} 至 ${new Date(training.endTime).toLocaleString('zh-CN')}`}
+          breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
+          actions={<><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</>}
+        />
+        <div className={styles.metaRow}>{training.sourceTrainingId && <StatusBadge variant="info">补题练习</StatusBadge>}<StatusBadge variant="neutral">{fmtLabel}</StatusBadge><StatusBadge variant={training.status === 'ongoing' ? 'success' : training.status === 'upcoming' ? 'info' : 'neutral'}>{training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}</StatusBadge></div>
       </div>
 
       {/* Announcement */}
       {training.description && (
-        <div style={{ background: 'var(--warning-light)', borderBottom: '1px solid #fde68a', padding: '0.5rem 1.5rem', fontSize: '0.8rem', color: 'var(--warning-text)' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <strong>公告：</strong>{training.description}
-          </div>
+        <div className={styles.announcement}>
+          <div className={styles.announcementContent}><Bell size={18} aria-hidden="true" /><p className={styles.announcementText} data-expanded={announcementExpanded}><strong>公告：</strong>{training.description}</p></div>
+          <Button variant="text" size="sm" onClick={() => setAnnouncementExpanded(value => !value)}>{announcementExpanded ? '收起' : '展开'}</Button>
         </div>
       )}
 
       {/* Tab Bar */}
-      <div style={{ background: 'white', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', gap: 0 }}>
-          {(['problemList', 'problems', 'submissions', 'solutions', 'attachments', 'ranking'] as TabType[]).map(tab => {
-            const labels: Record<TabType, string> = {
-              problemList: '题目列表', problems: '题面', submissions: '评测记录',
-              solutions: '题解', attachments: '附件', ranking: '排名',
-            }
-            const isActive = activeTab === tab
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '0.6rem 1.25rem', border: 'none',
-                  borderBottom: isActive ? '2px solid var(--primary)' : '2px solid transparent',
-                  background: 'none', color: isActive ? 'var(--primary)' : 'var(--gray-500)',
-                  fontWeight: isActive ? 600 : 400, fontSize: '0.875rem', cursor: 'pointer',
-                }}
-              >
-                {labels[tab]}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <div className={styles.tabBar}><Tabs label={`${tl}内容`} value={activeTab} onChange={selectTab} items={[{ value: 'problemList', label: '题目列表' }, { value: 'problems', label: '题面' }, { value: 'submissions', label: '评测记录' }, { value: 'solutions', label: '题解' }, { value: 'attachments', label: '附件' }, { value: 'ranking', label: '排名' }]} /></div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '1rem', boxSizing: 'border-box' }}>
+      <div className={styles.content}>
         {refreshError && activeTab !== 'problemList' && (
           <LoadError
             compact
@@ -384,8 +278,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
           />
         )}
         {hideContent ? (
-          <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
+          <div className={styles.locked}>
+            <div className={styles.lockedInner}><LockKeyhole size={36} aria-hidden="true" />
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{tl}尚未开始</h2>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
               开始时间：{new Date(training.startTime).toLocaleString('zh-CN')}
@@ -393,6 +287,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               请等待管理员开启{tl}后再查看内容
             </p>
+            </div>
           </div>
         ) : (
         <>
@@ -409,7 +304,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
                 training={training}
                 basePath={basePath}
                 onSelectProblem={(id) => setSelectedProblemId(id)}
-                onSwitchToProblemsTab={() => setActiveTab('problems')}
+                onSwitchToProblemsTab={() => selectTab('problems')}
               />
             )}
           </AsyncRegion>
@@ -442,7 +337,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
             setRecordEditMode={setRecordEditMode}
             trainingStatus={training.status as 'upcoming' | 'ongoing' | 'finished'}
             onSubmitClick={() => actions.setShowSubmitModal(true)}
-            onGoToAttachments={() => setActiveTab('attachments')}
+            onGoToAttachments={() => selectTab('attachments')}
             saveNoteNow={saveNoteNow}
             saveRecordNow={saveRecordNow}
           />

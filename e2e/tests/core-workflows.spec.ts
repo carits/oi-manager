@@ -47,7 +47,7 @@ test.describe('core role workflows @smoke', () => {
     await expect(page.locator('body')).toContainText('E2E Active Homework')
     await page.goto(`/teacher/teams/${ids.team}/contests/${ids.contest}`)
     await expect(page.locator('body')).toContainText('E2E Finished Contest')
-    await page.getByRole('button', { name: /排名/ }).click()
+    await page.getByRole('tab', { name: /排名/ }).click()
     await expect(page.locator('body')).toContainText('E2E Campus Student')
 
     await context.close()

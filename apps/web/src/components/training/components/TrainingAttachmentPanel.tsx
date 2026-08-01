@@ -36,7 +36,7 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
             {atts.map(a => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--gray-100)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '1rem' }}>📎</span>
+                  <span style={{ fontSize: '0.875rem' }}>附件</span>
                   <span>{a.fileName}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>{formatFileSize(a.fileSize)}</span>
                 </div>

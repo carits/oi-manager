@@ -1,120 +1,41 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import apiClient from '@/lib/apiClient'
-import { Empty } from '@/components/ui/Empty'
-import { LoadError } from '@/components/ui/LoadError'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ArrowRight, CalendarClock, ListChecks } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
+import { useResource } from '@/hooks/useResource'
+import { AsyncRegion } from '@/components/ui/AsyncRegion'
+import { PageFrame } from '@/components/ui/PageFrame'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Tabs } from '@/components/ui/Tabs'
+import styles from '@/components/TrainingIndex.module.css'
 
-interface ContestItem {
-  id: number
-  title: string
-  description: string | null
-  startTime: string
-  endTime: string
-  status: string
-  format: string
-  teamId: string | null
-  schoolId: string | null
-  problemCount: number
-  source: 'team' | 'school'
-  createdAt: string
-}
-
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  upcoming: { label: '未开始', color: 'var(--info)' },
-  ongoing: { label: '进行中', color: 'var(--success)' },
-  finished: { label: '已结束', color: 'var(--text-muted)' },
-}
-
-function getRuntimeStatus(startTime: string, endTime: string) {
-  const now = new Date()
-  const start = new Date(startTime)
-  const end = new Date(endTime)
-  if (now < start) return 'upcoming'
-  if (now <= end) return 'ongoing'
-  return 'finished'
-}
-
-function formatTime(t: string) {
-  return new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
+interface ContestItem { id: number; title: string; startTime: string; endTime: string; status: string; problemCount: number; source: 'team' | 'school' }
+type StatusFilter = 'all' | 'ongoing' | 'upcoming' | 'finished'
+function runtimeStatus(item: ContestItem): Exclude<StatusFilter, 'all'> { const now = Date.now(); if (now < new Date(item.startTime).getTime()) return 'upcoming'; if (now <= new Date(item.endTime).getTime()) return 'ongoing'; return 'finished' }
+const statusMeta = { ongoing: { label: '进行中', variant: 'success' as const }, upcoming: { label: '即将开始', variant: 'info' as const }, finished: { label: '已结束', variant: 'neutral' as const } }
+const formatTime = (value: string) => new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 export default function StudentContestsPage() {
-  const [contests, setContests] = useState<ContestItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  const loadContests = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await apiClient.get<ContestItem[]>('/api/students/my-contests')
-      if (res.success) {
-        setContests(res.data || [])
-      } else {
-        setError(res.message || '比赛加载失败')
-      }
-    } catch {
-      setError('比赛加载失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadContests()
-  }, [loadContests])
+  const { sessionKey } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const rawStatus = searchParams.get('status') as StatusFilter | null
+  const activeStatus: StatusFilter = ['ongoing', 'upcoming', 'finished'].includes(rawStatus || '') ? rawStatus! : 'all'
+  const resource = useResource<ContestItem[]>('/api/students/my-contests', { sessionKey, dedupingInterval: 30000 })
+  const contests = resource.data || []
+  const visible = contests.filter(item => activeStatus === 'all' || runtimeStatus(item) === activeStatus).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+  const setStatus = (status: StatusFilter) => { const params = new URLSearchParams(searchParams.toString()); status === 'all' ? params.delete('status') : params.set('status', status); router.replace(`/student/contests${params.size ? `?${params}` : ''}`, { scroll: false }) }
 
   return (
-    <>
-        <div style={{ padding: '2rem' }}>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: '1.5rem' }}>比赛</h1>
-
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
-          ) : error ? (
-            <LoadError message={error} onRetry={loadContests} />
-          ) : contests.length === 0 ? (
-            <Empty text="暂无比赛" />
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-              {contests.map(c => {
-                const status = c.status || getRuntimeStatus(c.startTime, c.endTime)
-                const st = STATUS_MAP[status] || STATUS_MAP.upcoming
-                return (
-                  <a
-                    key={c.id}
-                    href={`/student/contests/${c.id}`}
-                    style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '1rem',
-                      background: 'var(--bg-card)',
-                      textDecoration: 'none',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.title}</span>
-                      <span style={{ fontSize: '0.75rem', color: st.color, fontWeight: 500 }}>{st.label}</span>
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {formatTime(c.startTime)} ~ {formatTime(c.endTime)}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.problemCount} 题</span>
-                      {c.source === 'school' && (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--info)', background: 'var(--info-light)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)' }}>校级</span>
-                      )}
-                    </div>
-                  </a>
-                )
-              })}
-            </div>
-          )}
-        </div>
-    </>
+    <PageFrame>
+      <PageHeader title="比赛" description="查看团队与学校范围内的比赛安排。" />
+      <Tabs label="比赛状态" value={activeStatus} onChange={setStatus} items={[{ value: 'all', label: '全部', count: contests.length }, { value: 'ongoing', label: '进行中' }, { value: 'upcoming', label: '即将开始' }, { value: 'finished', label: '已结束' }]} />
+      <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText="当前没有比赛" skeletonRows={5}>
+        {(_, refreshing) => visible.length === 0 ? <div className={styles.empty}>当前筛选下没有比赛</div> : <div className={styles.list} aria-busy={refreshing || undefined}>{visible.map(item => { const status = statusMeta[runtimeStatus(item)]; return <Link key={item.id} className={styles.item} href={`/student/contests/${item.id}`}><span className={styles.itemMain}><span className={styles.itemTitle}>{item.title}</span><span className={styles.itemMeta}><span><CalendarClock size={14} />{formatTime(item.startTime)} 至 {formatTime(item.endTime)}</span><span><ListChecks size={14} />{item.problemCount} 题</span>{item.source === 'school' && <span>校级</span>}</span></span><span className={styles.itemEnd}><StatusBadge variant={status.variant}>{status.label}</StatusBadge><ArrowRight size={17} /></span></Link> })}</div>}
+      </AsyncRegion>
+    </PageFrame>
   )
 }

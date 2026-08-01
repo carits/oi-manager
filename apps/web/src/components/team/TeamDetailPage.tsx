@@ -29,11 +29,11 @@ type TabType = 'members' | 'mock' | 'training' | 'tasks'
 interface TransferTarget {
   id: string
   name: string
-  memberType: 'teacher' | 'student'
+  memberType: UserType
 }
 
 export interface TeamDetailPageProps {
-  userType: 'teacher' | 'student'
+  userType: UserType
   basePath: string
   requiredRole: string | string[]
 }
@@ -252,7 +252,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
       ...(team?.admins || []).map(a => ({
         id: a.id,
         name: a.name,
-        memberType: (a.adminType || a.type) as 'teacher' | 'student'
+        memberType: (a.adminType || a.type) as UserType
       })),
       ...(team?.teachers || []).map(t => ({
         id: t.id,
@@ -262,7 +262,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
       ...(team?.students || []).map(s => ({
         id: s.id,
         name: s.name,
-        memberType: 'student' as const
+        memberType: (s.type || (team?.scope === 'personal' ? 'user' : 'student')) as UserType
       }))
     ]
 
@@ -343,7 +343,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         name: user?.name || '未知',
         username: user?.username,
         avatar: user?.avatar,
-        userType: (user?.userType || 'student') as 'student' | 'teacher'
+        userType: (user?.userType || (team?.scope === 'personal' ? 'user' : 'student')) as UserType
       }
     }
   })

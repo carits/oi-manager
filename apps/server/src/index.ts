@@ -29,6 +29,7 @@ import { adminDataRouter } from './routes/admin-data'
 import { migrationRouter } from './routes/migration'
 import { archivedProblemsRouter } from './routes/archived-problems'
 import { rankingRouter } from './modules/ranking/ranking.routes'
+import { meRouter } from './routes/me'
 import { startSubmissionPoller } from './lib/submission-poller'
 import { metrics } from './lib/metrics'
 import path from 'path'
@@ -40,6 +41,7 @@ import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
 import { STORAGE_ROOT } from './config/storage'
 import { verifyCookieOrigin } from './middleware/csrf'
+import { authenticate, requireWorkspace } from './middleware/auth'
 
 // 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
 const envFile = process.env.ENV_FILE ||
@@ -100,30 +102,31 @@ app.use('/public', express.static(path.join(STORAGE_ROOT, 'public')))
 // ==================== API 路由 ====================
 
 app.use('/api/auth', authRouter)
-app.use('/api/students', studentRouter)
+app.use('/api/students', authenticate, requireWorkspace('work'), studentRouter)
 app.use('/api/milestones', milestoneRouter)
 app.use('/api/teams', teamRouter)
-app.use('/api/schools', schoolRouter)
-app.use('/api/users', userRouter)
-app.use('/api/stats', statsRouter)
-app.use('/api/teachers', teacherRouter)
+app.use('/api/schools', authenticate, requireWorkspace('work'), schoolRouter)
+app.use('/api/users', authenticate, requireWorkspace('work'), userRouter)
+app.use('/api/stats', authenticate, requireWorkspace('work'), statsRouter)
+app.use('/api/teachers', authenticate, requireWorkspace('work'), teacherRouter)
 app.use('/api/problems', problemsRouter)
-app.use('/api/oj-fetcher', ojFetcherRouter)
+app.use('/api/oj-fetcher', authenticate, requireWorkspace('work'), ojFetcherRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/platform-bindings', platformBindingRouter)
-app.use('/api/team-import', teamImportRouter)
+app.use('/api/team-import', authenticate, requireWorkspace('work'), teamImportRouter)
 app.use('/api/submissions', submissionsRouter)
 app.use('/api/problem-lists', problemListsRouter)
-app.use('/api/schools', schoolProblemListsRouter)
+app.use('/api/schools', authenticate, requireWorkspace('work'), schoolProblemListsRouter)
 app.use('/api/teams', teamProblemListsRouter)
-app.use('/api/oj-accounts', ojAccountsRouter)
+app.use('/api/oj-accounts', authenticate, requireWorkspace('work'), ojAccountsRouter)
 app.use('/api/submit', submitRouter)
 app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
 app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
-app.use('/api/admin/data', adminDataRouter)  // 管理员数据维护 API
-app.use('/api/admin/migration', migrationRouter)  // 数据迁移 API
+app.use('/api/admin/data', authenticate, requireWorkspace('work'), adminDataRouter)  // 管理员数据维护 API
+app.use('/api/admin/migration', authenticate, requireWorkspace('work'), migrationRouter)  // 数据迁移 API
 app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
 app.use('/api/rankings', rankingRouter)
+app.use('/api/me', meRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

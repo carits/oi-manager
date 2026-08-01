@@ -1,16 +1,16 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
 # 数据库 Schema
 
-数据库 provider 为 PostgreSQL。下表登记全部 50 个 Prisma 模型；字段和约束的最终
+数据库 provider 为 PostgreSQL。下表登记全部 51 个 Prisma 模型；字段和约束的最终
 定义始终以 `apps/server/prisma/schema.prisma` 为准。
 
-## 身份与学校（9）
+## 身份与学校（10）
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
@@ -18,6 +18,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `User` | `id`, `username`, `passwordHash`, `role`, `schoolId`, `status` | 登录身份 |
 | `Teacher` | `id`, `name`, `schoolId`, `status` | 教师扩展 |
 | `Student` | `id`, `name`, `schoolId`, `headTeacherId`, `rating` | 学生扩展 |
+| `PersonalProfile` | `userId`, `rating`, timestamps | 全角色按需启用的个人身份与个人 Rating |
 | `School` | `id`, `name`, `currentPrincipalTeacherId`, `status` | 学校与当前负责人 |
 | `LoginLog` | `username`, `loginRole`, `userRole`, `result`, `ipAddress` | 登录审计 |
 | `PasswordResetLog` | `operatorId`, `targetUserId`, `resetMethod`, `result` | 密码重置审计 |
@@ -46,7 +47,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemNote` | `problemId`, `userId`, `content` | 用户题目笔记 |
 | `TestdataFile` | `problemId`, `filename`, `size`, `md5` | 测试数据 |
 | `UserArchivedProblem` | `userId`, `platform`, `problemId`, metadata | 用户归档题 |
-| `ProblemList` | `id`, `title`, `ownerId`, `ownerType`, `visibility` | 题单 |
+| `ProblemList` | `id`, `title`, `ownerId`, `ownerType`, `scope`, `visibility` | 校园或个人题单 |
 | `ProblemListSection` | `problemListId`, `title`, `sortOrder` | 题单章节 |
 | `ProblemListEntry` | `sectionId`, `problemId`, `sortOrder`, `alias` | 题单条目 |
 | `ProblemListShare` | `problemListId`, `targetType`, `targetId`, `permission` | 分享权限 |
@@ -57,7 +58,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
-| `Training` | `id`, `teamId`, `schoolId`, `type`, time fields | 训练/作业/比赛 |
+| `Training` | `id`, `teamId`, `schoolId`, `scope`, `type`, time fields | 校园或个人训练/作业/比赛 |
 | `TrainingProblem` | `trainingId`, `problemId`, `orderIndex`, `points` | 任务题目 |
 | `TrainingAttachment` | `trainingProblemId`, `fileName`, `fileUrl` | 任务附件 |
 | `TrainingParticipant` | `trainingId`, `userId`, `userType` | 参与者 |
@@ -76,7 +77,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
-| `Submission` | `id`, `userId`, `oj`, `problemId`, `result`, scope fields | 统一提交 |
+| `Submission` | `id`, `userId`, `oj`, `problemId`, `result`, `workspaceScope` | 按工作区隔离的统一提交 |
 | `OjAccount` | `platform`, `username`, encrypted password/cookie fields | 平台账号池 |
 | `OjFetchJob` | `platform`, `problemId`, `status`, attachment fields | 抓题任务 |
 | `OjPlatformConfig` | `platform`, encrypted `cookies`, timestamps | 全局平台配置 |

@@ -1,4 +1,6 @@
 :root {
+  color-scheme: light;
+
   /* 主色 */
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
@@ -79,6 +81,18 @@
   --text-lg: 1.125rem;
   --text-xl: 1.25rem;
   --text-2xl: 1.5rem;
+
+  /* Layout and interaction */
+  --shell-header-height: 64px;
+  --shell-sidebar-width: 232px;
+  --content-max-width: 1440px;
+  --content-reading-width: 1120px;
+  --control-height-sm: 32px;
+  --control-height: 38px;
+  --control-height-lg: 44px;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  --transition-fast: 120ms ease;
+  --transition: 180ms ease;
 }
 
 * {
@@ -92,6 +106,10 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 a {
@@ -108,6 +126,63 @@ button {
 
 input, textarea, select {
   font-family: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+::selection {
+  background: var(--primary-light);
+  color: var(--primary-text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Legacy page roots inherit the shell spacing while they are migrated. */
+[data-app-content] > main,
+[data-app-content] > div {
+  min-width: 0;
+}
+
+/* Transitional guard: legacy pages no longer add a second page gutter inside AppShell. */
+[data-page-host] > main[style*="padding: 2rem"],
+[data-page-host] > div[style*="padding: 2rem"][style*="max-width"],
+[data-page-host] > div[style*="padding: 1.5rem"][style*="max-width"] {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.teacher-page-content {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 基础动画 */

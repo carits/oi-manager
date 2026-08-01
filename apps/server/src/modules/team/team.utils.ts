@@ -10,6 +10,13 @@ import type { MemberType, MemberDetails, TeamScope } from './team.types'
  * 根据 userId 和 userType 获取用户名称
  */
 export async function getUserName(userId: string, userType: MemberType): Promise<string> {
+  if (userType === 'user') {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true }
+    })
+    return user?.username || '未知'
+  }
   if (userType === 'teacher') {
     const teacher = await prisma.teacher.findUnique({
       where: { id: userId },
@@ -35,6 +42,14 @@ export async function getUserNames(
 ): Promise<Map<string, string>> {
   if (userIds.length === 0) return new Map()
 
+  if (userType === 'user') {
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds }, status: 'active' },
+      select: { id: true, username: true }
+    })
+    return new Map(users.map(user => [user.id, user.username]))
+  }
+
   if (userType === 'teacher') {
     const teachers = await prisma.teacher.findMany({
       where: { id: { in: userIds } },
@@ -54,6 +69,20 @@ export async function getUserNames(
  * 获取成员详细信息
  */
 export async function getMemberDetails(userId: string, userType: MemberType): Promise<MemberDetails | null> {
+  if (userType === 'user') {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, avatar: true, status: true }
+    })
+    if (!user || user.status !== 'active') return null
+    return {
+      id: user.id,
+      name: user.username,
+      username: user.username,
+      avatar: user.avatar,
+      type: 'user'
+    }
+  }
   if (userType === 'teacher') {
     const teacher = await prisma.teacher.findUnique({
       where: { id: userId },
@@ -109,8 +138,25 @@ export async function getMemberDetailsBatch(
   const result = new Map<string, MemberDetails>()
 
   // 按类型分组
+  const userIds = members.filter(m => m.userType === 'user').map(m => m.userId)
   const teacherIds = members.filter(m => m.userType === 'teacher').map(m => m.userId)
   const studentIds = members.filter(m => m.userType === 'student').map(m => m.userId)
+
+  if (userIds.length > 0) {
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds }, status: 'active' },
+      select: { id: true, username: true, avatar: true }
+    })
+    for (const user of users) {
+      result.set(`user:${user.id}`, {
+        id: user.id,
+        name: user.username,
+        username: user.username,
+        avatar: user.avatar,
+        type: 'user'
+      })
+    }
+  }
 
   // 批量查询教师
   if (teacherIds.length > 0) {
@@ -245,10 +291,10 @@ export function transformTeamForFrontend(team: Record<string, unknown>): Record<
       continue
     } else if (key === 'TeamMember' && Array.isArray(value)) {
       result.members = value
+    } else if (key === 'School' && team.scope === 'personal') {
+      continue
     } else if (key === 'School' && value && typeof value === 'object') {
-      result.school = team.scope === 'personal'
-        ? { id: 'personal', name: '个人模式' }
-        : value
+      result.school = value
     } else if (key === 'Student' && value && typeof value === 'object') {
       result.student = value
     } else if (key === 'Teacher' && value && typeof value === 'object') {
@@ -260,10 +306,6 @@ export function transformTeamForFrontend(team: Record<string, unknown>): Record<
     } else {
       result[lowerKey] = value
     }
-  }
-
-  if (team.scope === 'personal' && !result.school) {
-    result.school = { id: 'personal', name: '个人模式' }
   }
 
   return result

@@ -365,9 +365,9 @@ export default function PlatformAdminProblemsPage() {
     const map: Record<string, { text: string; color: string }> = {
       pending: { text: '⏳ 等待中', color: 'var(--text-muted)' },
       fetching: { text: '🔄 拉取中', color: 'var(--primary)' },
-      success: { text: '✅ 成功', color: 'var(--success)' },
-      failed: { text: '❌ 失败', color: 'var(--error)' },
-      duplicate: { text: '⚠️ 已存在', color: 'var(--warning)' },
+      success: { text: '成功', color: 'var(--success)' },
+      failed: { text: '失败', color: 'var(--error)' },
+      duplicate: { text: '已存在', color: 'var(--warning)' },
     }
     const s = map[status] || { text: status, color: 'var(--text-secondary)' }
     return <span style={{ color: s.color }}>{s.text}</span>
@@ -377,9 +377,9 @@ export default function PlatformAdminProblemsPage() {
     if (!status) return <span style={{ color: 'var(--text-muted)' }}>-</span>
     const map: Record<string, { text: string; color: string }> = {
       pending: { text: '⏳ 待处理', color: 'var(--text-muted)' },
-      success: { text: '✅ 成功', color: 'var(--success)' },
-      failed: { text: '❌ 失败', color: 'var(--error)' },
-      skipped: { text: '⚠️ 跳过', color: 'var(--warning)' },
+      success: { text: '成功', color: 'var(--success)' },
+      failed: { text: '失败', color: 'var(--error)' },
+      skipped: { text: '跳过', color: 'var(--warning)' },
     }
     const s = map[status] || { text: status, color: 'var(--text-secondary)' }
     return <span style={{ color: s.color }}>{s.text}</span>
@@ -423,7 +423,7 @@ export default function PlatformAdminProblemsPage() {
                   <tr key={problem.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '0.75rem' }}>{problem.problemId}</td>
                     <td style={{ padding: '0.75rem' }}>
-                      <span onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={{ color: 'var(--primary)', cursor: 'pointer' }}>{problem.title}</span>
+                      <button type="button" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={{ color: 'var(--primary)', textAlign: 'left' }}>{problem.title}</button>
                     </td>
                     {showPlatform && <td style={{ padding: '0.75rem', color: 'var(--gray-500)' }}>{source}</td>}
                     <td style={{ padding: '0.75rem' }}>

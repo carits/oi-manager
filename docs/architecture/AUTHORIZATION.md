@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -29,6 +29,8 @@ interface JwtPayload {
   teacherId?: string
   studentId?: string
   schoolId?: string
+  workspaceMode: 'work' | 'personal'
+  /** @deprecated compatibility for old student sessions */
   studentMode?: 'campus' | 'personal'
 }
 ```
@@ -36,24 +38,25 @@ interface JwtPayload {
 HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回 `401`；
 已登录但角色或资源范围不足返回 `403`。
 
-## 学生模式
+## 工作区模式
 
-- `campus`：以学校和已加入团队的任务为主，不能创建团队或题单。
-- `personal`：可创建和管理自己的团队、题目和题单，并查看个人提交。
-- `POST /api/auth/switch-mode` 只允许学生调用，返回包含新 `studentMode` 的 JWT。
-- 模式是会话级权限上下文，不改变学生的 `schoolId` 或数据库角色。
+- `role` 是账号永久岗位；切换工作区不会修改角色、岗位扩展 ID 或学校关系。
+- `workspaceMode=work`：进入管理或校园工作台，业务资源使用 `resourceScope=campus`。
+- `workspaceMode=personal`：五种角色共用个人工作区，业务资源使用 `resourceScope=personal`。
+- `POST /api/auth/switch-workspace` 为所有已登录角色刷新 Cookie 和兼容 JWT；首次切入时事务性创建 `PersonalProfile`。
+- 旧 `studentMode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期，分别映射至 `workspaceMode` 和新切换接口。
+- 个人工作区只输出用户名、头像、公开简介和个人 Rating，不输出实名、学校、职称或后台岗位。
 
 ## 权限矩阵
 
-| 能力 | 超管 | 平台管理员 | 负责人 | 教师 | 校园学生 | 个人学生 |
-|------|:----:|:----------:|:------:|:----:|:--------:|:--------:|
+| 能力 | 超管工作区 | 平台管理员工作区 | 负责人工作区 | 教师工作区 | 学生校园工作区 | 任意角色个人工作区 |
+|------|:----------:|:------------------:|:------------:|:----------:|:----------------:|:------------------:|
 | 学校和负责人管理 | 是 | 否 | 本校部分 | 否 | 否 | 否 |
 | 平台用户管理 | 是 | 受限 | 否 | 否 | 否 | 否 |
 | OJ Cookie 配置 | 是 | 否 | 否 | 否 | 否 | 否 |
 | OJ 任务、账号池 | 是 | 是 | 受限导入 | 受限导入 | 否 | 否 |
 | 本校教师管理 | 是 | 否 | 是 | 否 | 否 | 否 |
-| 学生、团队和任务 | 全局 | 否 | 本校 | 自有/参与 | 参与 | 自有/参与 |
-| 私有题目和题单 | 是 | 是 | 是 | 是 | 查看/参与 | 是 |
+| 团队、比赛、题单和提交 | 管理范围 | 管理范围 | 本校/参与 | 自有/参与 | 参与 | 个人作用域内相同规则 |
 | 维护迁移 API | 开关开启时 | 否 | 否 | 否 | 否 | 否 |
 
 具体业务接口还会检查学校、团队、创建者、成员角色和可见性。前端隐藏按钮只是体验，
@@ -81,7 +84,7 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 ## 前端会话
 
-`AuthProvider` 根据 `role:userId` 计算 `sessionKey`，用于账号切换后让组件和缓存重新
+`AuthProvider` 根据 `role:userId:workspaceMode` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新
 挂载。它不是数据库字段、访问令牌或后端隔离机制。真正隔离由 JWT、权限中间件和
 资源查询条件完成。
 

@@ -31,14 +31,14 @@ trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(as
     const userId = req.user!.userId
     const typeFilter = req.query.type as string | undefined
 
-    await teamService.assertTeamScope(teamId, req.user!)
+    const team = await teamService.assertTeamScope(teamId, req.user!)
 
     if (!await isTeamMember(userId, teamId)) {
       return res.status(403).json({ success: false, message: '无权限查看该团队训练' })
     }
 
     const trainings = await prisma.training.findMany({
-      where: { teamId, ...(typeFilter ? { type: typeFilter } : {}) },
+      where: { teamId, scope: team.scope, ...(typeFilter ? { type: typeFilter } : {}) },
       include: {
         _count: { select: { TrainingProblem: true } },
         TrainingProblem: { select: { id: true } },
@@ -54,6 +54,7 @@ trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(as
         FROM "Submission"
         WHERE "trainingId" IN (${Prisma.join(trainingIds)})
           AND "submitScope" IN ('training', 'contest')
+          AND "workspaceScope" = ${team.scope}
         GROUP BY "trainingId"
       `
       for (const row of rows) {
@@ -98,7 +99,7 @@ trainingCrudRouter.post('/teams/:teamId/trainings', authenticate, asyncHandler(a
     const userId = req.user!.userId
     const { title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking, type } = req.body
 
-    await teamService.assertTeamScope(teamId, req.user!)
+    const team = await teamService.assertTeamScope(teamId, req.user!)
 
     if (!await isTeamAdmin(userId, teamId)) {
       return res.status(403).json({ success: false, message: '只有团队管理员可以创建训练' })
@@ -119,6 +120,8 @@ trainingCrudRouter.post('/teams/:teamId/trainings', authenticate, asyncHandler(a
     const training = await prisma.training.create({
       data: {
         teamId,
+        schoolId: null,
+        scope: team.scope,
         title,
         description: description || null,
         format: format || 'ioi',
@@ -210,6 +213,7 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
         solutionVisible: training.solutionVisible,
         includeAdminInRanking: training.includeAdminInRanking,
         type: training.type,
+        scope: training.scope,
         sourceTrainingId: training.sourceTrainingId,
         problemCount: training._count.TrainingProblem,
         participantCount: training._count.TrainingParticipant,
@@ -397,6 +401,7 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
       data: {
         teamId: training.teamId,
         schoolId: training.schoolId,
+        scope: training.scope,
         title: makeupTitle,
         description: training.description,
         format: training.format,

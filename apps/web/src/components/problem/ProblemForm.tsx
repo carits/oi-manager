@@ -8,6 +8,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { JudgeSettingsTab, JudgeSettingsTabHandle } from '@/components/problem/JudgeSettingsTab'
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
+import { Paperclip } from 'lucide-react'
 
 interface OjBinding {
   platform: string
@@ -1205,7 +1206,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <span style={{ fontSize: '1.25rem' }}>📎</span>
+                            <Paperclip aria-hidden="true" size={20} />
                             <div>
                               <div style={{ fontWeight: 500 }}>{attachment.fileName}</div>
                               <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>

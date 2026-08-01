@@ -469,7 +469,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                 zIndex: 10,
               }}
             >
-              {copied ? '已复制' : 'Copy Code'}
+              {copied ? '已复制' : '复制代码'}
             </button>
 
             {/* 代码区域 */}

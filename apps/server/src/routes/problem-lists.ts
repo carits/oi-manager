@@ -7,7 +7,13 @@
 
 import { Router } from 'express'
 import { prisma } from '../prisma'
-import { authenticate, isPersonalMode } from '../middleware/auth'
+import {
+  authenticate,
+  getMembershipType,
+  getResourceScope,
+  isPersonalMode,
+  isPersonalWorkspace,
+} from '../middleware/auth'
 import logger from '../lib/logger'
 import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
@@ -56,9 +62,10 @@ async function getProblemListPermission(
 ): Promise<Permission | null> {
   const list = await prisma.problemList.findUnique({
     where: { id: problemListId },
-    select: { ownerId: true }
+    select: { ownerId: true, scope: true }
   })
   if (!list) return null
+  if (list.scope !== getResourceScope(user)) return null
 
   // owner 全权
   if (list.ownerId === user.userId) return 'admin'
@@ -72,9 +79,7 @@ async function getProblemListPermission(
 
   for (const share of shares) {
     let matched = false
-    if (share.targetType === 'teacher' && share.targetId === user.userId) {
-      matched = true
-    } else if (share.targetType === 'student' && share.targetId === user.userId) {
+    if (share.targetType === getMembershipType(user) && share.targetId === user.userId) {
       matched = true
     }
 
@@ -85,7 +90,7 @@ async function getProblemListPermission(
 
   // 查学校收录：如果题单被收录到用户所在学校，给 view 权限
   // 校园模式下学生不能通过 SchoolProblemList 获得自动 view 权限
-  const userSchoolId = await getUserSchoolId(user)
+  const userSchoolId = isPersonalWorkspace(user) ? null : await getUserSchoolId(user)
   if (userSchoolId && user.role !== 'student') {
     const schoolLink = await prisma.schoolProblemList.findUnique({
       where: { schoolId_problemListId: { schoolId: userSchoolId, problemListId } }
@@ -97,7 +102,7 @@ async function getProblemListPermission(
 
   // 查团队收录：如果题单被收录到用户所在的团队，给 view 权限
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = getMembershipType(user)
   if (userId) {
     const teamIds = (await prisma.teamMember.findMany({
       where: {
@@ -171,10 +176,12 @@ problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     }
 
     const userId = req.user.userId
+    const scope = getResourceScope(req.user)
+    const memberType = getMembershipType(req.user)
     const { tab = 'all', keyword = '' } = req.query as Record<string, string>
     const { page, pageSize, skip } = parsePagination(req.query)
 
-    const where: any = {}
+    const where: any = { scope }
 
     if (tab === 'mine') {
       where.ownerId = userId
@@ -191,10 +198,8 @@ problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     if (tab !== 'mine') {
       const sharedListIds = await prisma.problemListShare.findMany({
         where: {
-          OR: [
-            { targetType: 'teacher', targetId: req.user.userId || '__none__' },
-            { targetType: 'student', targetId: req.user.userId || '__none__' },
-          ]
+          targetType: memberType,
+          targetId: req.user.userId || '__none__',
         },
         select: { problemListId: true }
       })
@@ -260,10 +265,8 @@ problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     const userShares = await prisma.problemListShare.findMany({
       where: {
         problemListId: { in: listIds },
-        OR: [
-          { targetType: 'teacher', targetId: req.user.userId || '__none__' },
-          { targetType: 'student', targetId: req.user.userId || '__none__' },
-        ]
+        targetType: memberType,
+        targetId: req.user.userId || '__none__',
       },
       select: { problemListId: true, permission: true }
     })
@@ -305,8 +308,11 @@ problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
       return
     }
 
-    const schoolId = await getUserSchoolId(req.user as NonNullable<Express.Request['user']>)
-    const ownerType: 'teacher' | 'student' = 'teacher'
+    const scope = getResourceScope(req.user)
+    const schoolId = scope === 'campus'
+      ? await getUserSchoolId(req.user as NonNullable<Express.Request['user']>)
+      : null
+    const ownerType = getMembershipType(req.user)
 
     const list = await prisma.problemList.create({
       data: {
@@ -314,6 +320,7 @@ problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
         title: title.trim(),
         description: description?.trim() || null,
         schoolId,
+        scope,
         ownerId: req.user.userId,
         ownerType,
         visibility: visibility || 'private',
@@ -364,7 +371,7 @@ problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       }
     })
 
-    if (!list) {
+    if (!list || list.scope !== getResourceScope(req.user)) {
       res.status(404).json({ success: false, message: '题单不存在' })
       return
     }
@@ -391,6 +398,11 @@ problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
         targetName = s?.name || share.targetId
         targetAvatar = s?.avatar || null
         targetUsername = s?.User?.username || ''
+      } else if (share.targetType === 'user') {
+        const u = await prisma.user.findUnique({ where: { id: share.targetId }, select: { username: true, avatar: true } })
+        targetName = u?.username || share.targetId
+        targetAvatar = u?.avatar || null
+        targetUsername = u?.username || ''
       } else {
         targetName = share.targetId
       }
@@ -398,7 +410,7 @@ problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     }))
 
     // 学生视角脱敏
-    const isStudent = req.user.role === 'student'
+    const isStudent = req.user.role === 'student' && !isPersonalWorkspace(req.user)
     const sanitizedList = isStudent ? {
       ...list,
       ProblemListSection: list.ProblemListSection.map((section: any) => ({
@@ -1077,6 +1089,11 @@ problemListsRouter.get('/:id/shares', authenticate, asyncHandler(async (req, res
         targetName = s?.name || share.targetId
         avatar = s?.avatar || null
         username = s?.User?.username || ''
+      } else if (share.targetType === 'user') {
+        const u = await prisma.user.findUnique({ where: { id: share.targetId }, select: { username: true, avatar: true } })
+        targetName = u?.username || share.targetId
+        avatar = u?.avatar || null
+        username = u?.username || ''
       } else {
         targetName = share.targetId
       }
@@ -1098,7 +1115,7 @@ problemListsRouter.get('/:id/share-candidates', authenticate, asyncHandler(async
     }
 
     const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list) {
+    if (!list || list.scope !== getResourceScope(req.user)) {
       res.status(404).json({ success: false, message: '题单不存在' })
       return
     }
@@ -1108,7 +1125,10 @@ problemListsRouter.get('/:id/share-candidates', authenticate, asyncHandler(async
       return
     }
 
-    const { type = 'teacher', keyword = '' } = req.query as { type?: string; keyword?: string }
+    const personal = isPersonalWorkspace(req.user)
+    const requestedType = typeof req.query.type === 'string' ? req.query.type : 'teacher'
+    const type = personal ? 'user' : requestedType
+    const keyword = typeof req.query.keyword === 'string' ? req.query.keyword : ''
     const schoolId = list.schoolId
 
     // 已分享的人
@@ -1118,6 +1138,30 @@ problemListsRouter.get('/:id/share-candidates', authenticate, asyncHandler(async
     })
     const excludeIds = new Set(existingShares.map(s => s.targetId))
     excludeIds.add(list.ownerId) // 排除 owner 自己
+
+    if (personal) {
+      const users = await prisma.user.findMany({
+        where: {
+          id: { notIn: [...excludeIds] },
+          status: 'active',
+          PersonalProfile: { isNot: null },
+          ...(keyword ? { username: { contains: keyword, mode: 'insensitive' } } : {}),
+        },
+        select: { id: true, username: true, avatar: true },
+        orderBy: { username: 'asc' },
+        take: 20,
+      })
+      return res.json({
+        success: true,
+        data: users.map(user => ({
+          id: user.id,
+          name: user.username,
+          type: 'user',
+          username: user.username,
+          avatar: user.avatar,
+        })),
+      })
+    }
 
     const where: any = { schoolId }
     if (keyword) {
@@ -1169,7 +1213,7 @@ problemListsRouter.post('/:id/shares', authenticate, asyncHandler(async (req, re
     }
 
     const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list) {
+    if (!list || list.scope !== getResourceScope(req.user)) {
       res.status(404).json({ success: false, message: '题单不存在' })
       return
     }
@@ -1180,8 +1224,9 @@ problemListsRouter.post('/:id/shares', authenticate, asyncHandler(async (req, re
     }
 
     const { targetType, targetId, permission } = req.body
-    if (!['teacher', 'student'].includes(targetType)) {
-      res.status(400).json({ success: false, message: '只能分享给教师或学生' })
+    const allowedTargetTypes = isPersonalWorkspace(req.user) ? ['user'] : ['teacher', 'student']
+    if (!allowedTargetTypes.includes(targetType)) {
+      res.status(400).json({ success: false, message: '分享对象与当前工作区不匹配' })
       return
     }
     if (!['view', 'edit'].includes(permission)) {
@@ -1226,7 +1271,7 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, asyncHandler(asy
     }
 
     const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list) {
+    if (!list || list.scope !== getResourceScope(req.user)) {
       res.status(404).json({ success: false, message: '题单不存在' })
       return
     }
@@ -1252,7 +1297,14 @@ problemListsRouter.post('/:id/publish-homework', authenticate, asyncHandler(asyn
     const userId = req.user.userId
     const userRole = req.user.role
 
-    // 校园模式下学生不能发布作业；个人模式也不允许（作业需要团队上下文）
+    // 作业属于校园工作区；个人团队使用比赛/训练能力。
+    if (isPersonalWorkspace(req.user)) {
+      return res.status(403).json({
+        success: false,
+        code: 'WORKSPACE_MODE_REQUIRED',
+        message: '个人工作区不能发布校园作业',
+      })
+    }
     if (userRole === 'student') {
       return res.status(403).json({ success: false, message: '学生不能发布作业' })
     }
@@ -1274,7 +1326,7 @@ problemListsRouter.post('/:id/publish-homework', authenticate, asyncHandler(asyn
 
     // 检查团队权限
     const team = await prisma.team.findUnique({ where: { id: teamId } })
-    if (!team) {
+    if (!team || team.scope !== getResourceScope(req.user)) {
       return res.status(404).json({ success: false, message: '团队不存在' })
     }
 
@@ -1324,6 +1376,7 @@ problemListsRouter.post('/:id/publish-homework', authenticate, asyncHandler(asyn
         description: `由题单「${problemList.title}」发布`,
         teamId,
         schoolId: team.schoolId,
+        scope: team.scope,
         type: 'homework',
         format: format || 'ioi',
         startTime: new Date(startTime),

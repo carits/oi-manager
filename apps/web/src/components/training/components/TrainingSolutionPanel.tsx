@@ -63,7 +63,7 @@ export function TrainingSolutionPanel({ training, problems, allSolutions }: Trai
                         rel="noopener noreferrer"
                         style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                       >
-                        <span>📄</span>
+                        <span>题解</span>
                         <span>查看 PDF 题解</span>
                       </a>
                     </div>

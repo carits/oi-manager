@@ -1,0 +1,24 @@
+.copyButton {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--border);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+
+.copyButton:hover,
+.copyButton:focus-visible {
+  opacity: 1;
+}
+
+.copied {
+  background: var(--success-light);
+  color: var(--success-text);
+}

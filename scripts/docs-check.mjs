@@ -153,6 +153,7 @@ compareSets('Prisma models', sourceModels, documentedModels)
 const routerPrefixes = {
   app: '',
   authRouter: '/api/auth',
+  meRouter: '/api/me',
   studentRouter: '/api/students',
   milestoneRouter: '/api/milestones',
   teamRouter: '/api/teams',

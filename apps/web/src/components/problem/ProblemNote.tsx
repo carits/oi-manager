@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
+import { Pencil } from 'lucide-react'
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
@@ -362,7 +363,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             alignItems: 'center',
             gap: '0.5rem'
           }}>
-            <span>✏️</span>
+            <Pencil aria-hidden="true" size={14} />
             <span>思路记录</span>
             <div style={{ flex: 1 }} />
             <button onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</button>

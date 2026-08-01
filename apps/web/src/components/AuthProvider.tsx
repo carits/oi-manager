@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useSWRConfig } from 'swr'
+import { usePathname } from 'next/navigation'
 import apiClient, { AUTH_UNAUTHORIZED_EVENT } from '@/lib/apiClient'
 import {
   clearAuth,
@@ -22,7 +23,14 @@ import {
   setStudentMode,
   setTeacherId,
   setUserId,
+  getLastWorkspacePath,
+  setLastWorkspaceMode,
+  setLastWorkspacePath,
+  setWorkspaceMode,
+  setAccountWorkspaceMode,
+  type WorkspaceMode,
 } from '@/lib/auth'
+import { getRoleHome } from '@/lib/roleAccess'
 
 export interface AuthUser {
   userId: string
@@ -38,6 +46,8 @@ export interface AuthUser {
   adminId?: string
   schoolId?: string
   schoolName?: string
+  workspaceMode?: WorkspaceMode
+  /** @deprecated Use workspaceMode. */
   studentMode?: 'campus' | 'personal'
 }
 
@@ -55,12 +65,18 @@ interface AuthContextType {
   login: (username: string, password: string, role: string, mode?: 'campus' | 'personal') => Promise<LoginResult>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
-  switchMode: (mode: 'campus' | 'personal') => Promise<void>
+  switchWorkspace: (mode: WorkspaceMode) => Promise<boolean>
+  /** @deprecated Use switchWorkspace. */
+  switchMode: (mode: 'campus' | 'personal') => Promise<boolean>
   isAuthenticated: boolean
   sessionKey: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+function normalizeWorkspaceMode(user: AuthUser): WorkspaceMode {
+  return user.workspaceMode || (user.studentMode === 'personal' ? 'personal' : 'work')
+}
 
 function storeCompatibilityMetadata(user: AuthUser): void {
   setRole(user.role)
@@ -70,8 +86,13 @@ function storeCompatibilityMetadata(user: AuthUser): void {
   setTeacherId(user.teacherId || null)
   setStudentId(user.studentId || null)
   setAdminId(user.adminId || null)
-  setStudentMode(user.studentMode || null)
-  if (user.studentMode) setLastStudentMode(user.studentMode)
+  const workspaceMode = normalizeWorkspaceMode(user)
+  setWorkspaceMode(workspaceMode)
+  setLastWorkspaceMode(workspaceMode)
+  setAccountWorkspaceMode(user.username, user.role, workspaceMode)
+  const legacyMode = workspaceMode === 'personal' ? 'personal' : 'campus'
+  setStudentMode(legacyMode)
+  setLastStudentMode(legacyMode)
 }
 
 export function AuthProvider({
@@ -82,19 +103,31 @@ export function AuthProvider({
   initialUser?: AuthUser | null
 }) {
   const { mutate: mutateCache } = useSWRConfig()
+  const pathname = usePathname()
   const [user, setUser] = useState<AuthUser | null>(initialUser)
   const [status, setStatus] = useState<AuthStatus>(
     initialUser ? 'authenticated' : 'anonymous',
   )
 
   const sessionKey = useMemo(
-    () => user ? `${user.role}:${user.userId}:${user.studentMode || ''}` : null,
+    () => user ? `${user.role}:${user.userId}:${normalizeWorkspaceMode(user)}` : null,
     [user],
   )
 
   useEffect(() => {
     if (initialUser) storeCompatibilityMetadata(initialUser)
   }, [initialUser])
+
+  useEffect(() => {
+    if (!user || !pathname) return
+    const mode = normalizeWorkspaceMode(user)
+    const belongsToWorkspace = mode === 'personal'
+      ? pathname === '/personal' || pathname.startsWith('/personal/')
+      : !pathname.startsWith('/personal/') && pathname !== '/personal'
+    if (belongsToWorkspace && !pathname.startsWith('/account/')) {
+      setLastWorkspacePath(user.userId, user.role, mode, pathname)
+    }
+  }, [pathname, user])
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -140,7 +173,13 @@ export function AuthProvider({
     const result = await apiClient.mutate<AuthUser & { token?: string }>(
       '/api/auth/login',
       'POST',
-      { username, password, role, mode },
+      {
+        username,
+        password,
+        role,
+        workspaceMode: mode === 'personal' ? 'personal' : 'work',
+        mode,
+      },
     )
 
     if (!result.ok) {
@@ -179,22 +218,46 @@ export function AuthProvider({
     }
   }
 
-  const switchMode = async (mode: 'campus' | 'personal') => {
-    const result = await apiClient.mutate<{ studentMode: 'campus' | 'personal' }>(
-      '/api/auth/switch-mode',
-      'POST',
-      { mode },
+  const switchWorkspace = async (mode: WorkspaceMode) => {
+    if (!user || normalizeWorkspaceMode(user) === mode) return true
+
+    const currentMode = normalizeWorkspaceMode(user)
+    setLastWorkspacePath(
+      user.userId,
+      user.role,
+      currentMode,
+      `${window.location.pathname}${window.location.search}`,
     )
-    if (!result.ok) return
+
+    const result = await apiClient.mutate<{
+      workspaceMode: WorkspaceMode
+      studentMode?: 'campus' | 'personal'
+    }>(
+      '/api/auth/switch-workspace',
+      'POST',
+      { workspaceMode: mode },
+    )
+    if (!result.ok) return false
 
     await mutateCache(() => true, undefined, { revalidate: false })
-    setStudentMode(result.data.studentMode)
-    setLastStudentMode(result.data.studentMode)
+    const nextMode = result.data.workspaceMode
+    const legacyMode = nextMode === 'personal' ? 'personal' : 'campus'
+    setWorkspaceMode(nextMode)
+    setLastWorkspaceMode(nextMode)
+    setAccountWorkspaceMode(user.username, user.role, nextMode)
+    setStudentMode(legacyMode)
+    setLastStudentMode(legacyMode)
     setUser(current => current
-      ? { ...current, studentMode: result.data.studentMode }
+      ? { ...current, workspaceMode: nextMode, studentMode: legacyMode }
       : null)
-    window.location.assign('/student')
+    const target = getLastWorkspacePath(user.userId, user.role, nextMode)
+      || (nextMode === 'personal' ? '/personal' : getRoleHome(user.role))
+    window.location.assign(target)
+    return true
   }
+
+  const switchMode = (mode: 'campus' | 'personal') =>
+    switchWorkspace(mode === 'personal' ? 'personal' : 'work')
 
   return (
     <AuthContext.Provider value={{
@@ -204,6 +267,7 @@ export function AuthProvider({
       login,
       logout,
       refreshUser,
+      switchWorkspace,
       switchMode,
       isAuthenticated: Boolean(user),
       sessionKey,

@@ -11,6 +11,7 @@ import 'katex/dist/katex.min.css'
 import { showToastNotification } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
+import styles from './MarkdownRenderer.module.css'
 
 // 复制按钮组件
 function CopyButton({ text }: { text: string }) {
@@ -25,23 +26,9 @@ function CopyButton({ text }: { text: string }) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      style={{
-        position: 'absolute',
-        top: '4px',
-        right: '4px',
-        padding: '2px 8px',
-        fontSize: '12px',
-        background: copied ? 'var(--success-light)' : 'var(--border)',
-        color: copied ? 'var(--success-text)' : 'var(--text-secondary)',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        opacity: 0.8,
-        transition: 'opacity 0.2s',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7' }}
+      className={`${styles.copyButton} ${copied ? styles.copied : ''}`}
     >
       {copied ? '已复制' : '复制'}
     </button>

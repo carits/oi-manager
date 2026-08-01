@@ -316,6 +316,56 @@ describe('Team Operations', () => {
       })
       expect(oldOwnerMember!.role).toBe('admin')
     })
+
+    it('transfers a personal team between generic user identities', async () => {
+      const owner = await createTestUser({ role: 'teacher' })
+      const nextOwner = await createTestUser({ role: 'platform_admin' })
+      await prisma.personalProfile.createMany({
+        data: [{ userId: owner.user.id }, { userId: nextOwner.user.id }],
+        skipDuplicates: true
+      })
+      const team = await createTestTeam({
+        schoolId: null,
+        ownerId: owner.user.id,
+        ownerType: 'user',
+        scope: 'personal'
+      })
+      await prisma.teamMember.create({
+        data: {
+          id: crypto.randomUUID(),
+          teamId: team.id,
+          userId: nextOwner.user.id,
+          userType: 'user',
+          role: 'member',
+          status: 'active'
+        }
+      })
+      const token = generateTestToken({
+        userId: owner.user.id,
+        role: 'teacher',
+        username: owner.user.username,
+        teacherId: owner.teacherId,
+        schoolId: owner.schoolId,
+        workspaceMode: 'personal'
+      })
+
+      const response = await request(app)
+        .post(`/api/teams/${team.id}/transfer`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ newOwnerId: nextOwner.user.id, newOwnerType: 'user' })
+
+      expect(response.status).toBe(200)
+      const transferred = await prisma.teamMember.findUnique({
+        where: {
+          teamId_userId_userType: {
+            teamId: team.id,
+            userId: nextOwner.user.id,
+            userType: 'user'
+          }
+        }
+      })
+      expect(transferred?.role).toBe('owner')
+    })
   })
 
   describe('Team Listing', () => {
@@ -480,9 +530,13 @@ describe('Team Operations', () => {
         schoolId: schoolA.id,
         username: `personal_${shortId()}`
       })
-      const { studentId: otherStudentId } = await createTestUser({
+      const { user: otherUser } = await createTestUser({
         role: 'student',
         schoolId: schoolB.id
+      })
+      await prisma.personalProfile.createMany({
+        data: [{ userId: user.id }, { userId: otherUser.id }],
+        skipDuplicates: true
       })
 
       const campusTeam = await createTestTeam({
@@ -493,9 +547,9 @@ describe('Team Operations', () => {
         name: 'Campus only'
       })
       const otherPersonalTeam = await createTestTeam({
-        schoolId: schoolB.id,
-        ownerId: otherStudentId,
-        ownerType: 'student',
+        schoolId: null,
+        ownerId: otherUser.id,
+        ownerType: 'user',
         scope: 'personal',
         name: 'Personal global'
       })
@@ -506,7 +560,7 @@ describe('Team Operations', () => {
         username: user.username,
         studentId,
         schoolId: schoolA.id,
-        studentMode: 'personal'
+        workspaceMode: 'personal'
       })
       const campusToken = generateTestToken({
         userId: user.id,
@@ -514,7 +568,7 @@ describe('Team Operations', () => {
         username: user.username,
         studentId,
         schoolId: schoolA.id,
-        studentMode: 'campus'
+        workspaceMode: 'work'
       })
 
       const createResponse = await request(app)
@@ -539,7 +593,7 @@ describe('Team Operations', () => {
       expect(personalList.status).toBe(200)
       expect(personalList.body.data.data.map((team: any) => team.id)).toContain(otherPersonalTeam.id)
       expect(personalList.body.data.data.map((team: any) => team.id)).not.toContain(campusTeam.id)
-      expect(personalList.body.data.data[0].school.name).toBe('个人模式')
+      expect(personalList.body.data.data[0].school).toBeUndefined()
       expect(personalList.body.data.data[0].schoolId).toBeUndefined()
 
       const campusDetail = await request(app)
@@ -557,10 +611,11 @@ describe('Team Operations', () => {
         schoolId: school.id,
         username
       })
+      await prisma.personalProfile.create({ data: { userId: user.id } })
       const team = await createTestTeam({
-        schoolId: school.id,
-        ownerId: studentId,
-        ownerType: 'student',
+        schoolId: null,
+        ownerId: user.id,
+        ownerType: 'user',
         scope: 'personal'
       })
       const token = generateTestToken({
@@ -569,7 +624,7 @@ describe('Team Operations', () => {
         username,
         studentId,
         schoolId: school.id,
-        studentMode: 'personal'
+        workspaceMode: 'personal'
       })
 
       const response = await request(app)
@@ -594,11 +649,18 @@ describe('Team Operations', () => {
         username: usernameA,
         rating: 1600
       })
-      await createTestUser({
+      const studentB = await createTestUser({
         role: 'student',
         schoolId: schoolB.id,
         username: usernameB,
         rating: 1500
+      })
+      await prisma.personalProfile.createMany({
+        data: [
+          { userId: studentA.user.id, rating: 1600 },
+          { userId: studentB.user.id, rating: 1500 }
+        ],
+        skipDuplicates: true
       })
       const personalToken = generateTestToken({
         userId: studentA.user.id,
@@ -606,7 +668,7 @@ describe('Team Operations', () => {
         username: usernameA,
         studentId: studentA.studentId,
         schoolId: schoolA.id,
-        studentMode: 'personal'
+        workspaceMode: 'personal'
       })
 
       const response = await request(app)
@@ -635,7 +697,7 @@ describe('Team Operations', () => {
         username: student.user.username,
         studentId: student.studentId,
         schoolId: school.id,
-        studentMode: 'campus'
+        workspaceMode: 'work'
       })
 
       const response = await request(app)

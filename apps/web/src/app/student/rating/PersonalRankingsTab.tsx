@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import apiClient, { ApiResponse } from '@/lib/apiClient'
+import { useAuth } from '@/components/AuthProvider'
 
 type RankingType = 'rating' | 'solved'
 
@@ -26,6 +27,7 @@ type PagedResponse = ApiResponse<PersonalRankingRow[]> & {
 }
 
 export default function PersonalRankingsTab({ type }: PersonalRankingsTabProps) {
+  const { user } = useAuth()
   const [rows, setRows] = useState<PersonalRankingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -78,13 +80,14 @@ export default function PersonalRankingsTab({ type }: PersonalRankingsTabProps) 
         error={error}
         onRetry={() => void fetchRankings()}
         emptyText={type === 'rating' ? '暂无个人 Rating 数据' : '暂无个人做题量数据'}
+        isCurrentRow={row => row.id === user?.userId || row.username === user?.username}
         columns={[
           {
             key: 'rank',
             label: '排名',
             render: (_, index) => startIndex + index + 1
           },
-          { key: 'username', label: '用户名' },
+          { key: 'username', label: '用户名', render: row => <span style={{ fontWeight: row.username === user?.username ? 700 : 500 }}>{row.username}{row.username === user?.username ? '（我）' : ''}</span> },
           {
             key: valueKey,
             label: valueLabel,

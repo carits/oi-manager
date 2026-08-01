@@ -1,20 +1,20 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
 # 数据模型
 
-当前数据库为 PostgreSQL，Prisma Schema 有 50 个模型。这里解释领域关系；逐模型
+当前数据库为 PostgreSQL，Prisma Schema 有 51 个模型。这里解释领域关系；逐模型
 字段目录见[数据库参考](../reference/DATABASE_SCHEMA.md)。
 
 ## 领域分组
 
 | 领域 | 模型数 | 主要模型 |
 |------|-------:|----------|
-| 身份与学校 | 9 | `User`, `Admin`, `Teacher`, `Student`, `School` |
+| 身份与学校 | 10 | `User`, `PersonalProfile`, `Admin`, `Teacher`, `Student`, `School` |
 | 团队与导入 | 7 | `Team`, `TeamMember`, `TeamJoinRequest`, import batch/item |
 | 题目与题单 | 12 | `Problem`, `ProblemStatement`, `ProblemList`, shares |
 | 训练与比赛 | 14 | `Training`, `TrainingProblem`, `Contest`, results/status |
@@ -29,6 +29,7 @@ erDiagram
   User ||--o| Admin : extends
   User ||--o| Teacher : extends
   User ||--o| Student : extends
+  User ||--o| PersonalProfile : enables
   School ||--o{ Teacher : employs
   School ||--o{ Student : enrolls
   School }o--|| Teacher : currentPrincipal
@@ -37,6 +38,9 @@ erDiagram
 `User.id` 同时作为 `Admin`、`Teacher` 或 `Student` 的扩展主键。用户密码字段是
 `passwordHash`。学校负责人字段是 `currentPrincipalTeacherId`，不存在独立
 `SchoolPrincipal` 模型。
+
+`PersonalProfile` 不复制教师、管理员或学生档案。它只表示账号已启用个人工作区，并保存
+独立于 `Student.rating` 的个人 Rating；首次切入个人工作区时按需创建。
 
 ## 团队与任务
 
@@ -52,14 +56,16 @@ erDiagram
   User ||--o{ TrainingParticipant : participates
 ```
 
-团队所有者、管理员、教师成员和学生成员通过 `TeamMember.role` 表达。邀请、申请和
+校园团队所有者、管理员、教师成员和学生成员通过 `TeamMember.role` 表达；个人团队
+统一使用 `userType=user` 并通过 `User` 关联，`schoolId` 必须为 `null`。邀请、申请和
 外部平台导入有独立记录，避免把临时状态塞进成员表。
 
 ## 题目、题单与提交
 
 - `Problem` 保存统一题目和 Judge 配置，`ProblemStatement`、附件和测试数据独立。
-- `ProblemList` 通过 section/entry 组织题目，通过 share、学校和团队关联控制可见性。
-- `Submission` 关联用户、题目和可选训练/比赛 scope，同时保存本地或外部 OJ 状态。
+- `ProblemList` 通过 section/entry 组织题目，通过 `scope`、share、学校和团队关联控制可见性。
+- `Training.scope` 继承团队作用域；学校任务固定为 `campus`。
+- `Submission.workspaceScope` 在服务端创建时从会话推导，客户端不能指定。
 - `TrainingUserProblemStatus` 与 `ContestUserProblemStatus` 保存用户级完成状态，
   不以临时内存排名作为事实来源。
 

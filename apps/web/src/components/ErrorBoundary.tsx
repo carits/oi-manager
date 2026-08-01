@@ -1,6 +1,7 @@
 'use client'
 
 import { Component, ReactNode } from 'react'
+import { AlertTriangle } from 'lucide-react'
 
 interface Props {
   children: ReactNode
@@ -34,10 +35,12 @@ export class ErrorBoundary extends Component<Props, State> {
           textAlign: 'center',
           color: 'var(--text-primary)',
         }}>
-          <div style={{
-            fontSize: '48px',
-            marginBottom: '16px',
-          }}>⚠️</div>
+          <AlertTriangle
+            aria-hidden="true"
+            size={44}
+            strokeWidth={1.5}
+            style={{ color: 'var(--warning)', marginBottom: '16px' }}
+          />
           <h2 style={{
             fontSize: 'var(--text-xl)',
             fontWeight: 600,

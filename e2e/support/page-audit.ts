@@ -52,7 +52,11 @@ export async function waitForPageReady(page: Page) {
   }).toBe(true)
 }
 
-export async function assertPageHealth(page: Page, audit: PageAudit) {
+export async function assertPageHealth(
+  page: Page,
+  audit: PageAudit,
+  { checkAccessibility = true }: { checkAccessibility?: boolean } = {},
+) {
   const body = await page.locator('body').innerText()
   expect(body).not.toMatch(/404|This page could not be found/i)
   expect(body).not.toContain('加载中')
@@ -68,18 +72,20 @@ export async function assertPageHealth(page: Page, audit: PageAudit) {
     overflow.viewport + 1,
   )
 
-  const criticalViolations = (await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa'])
-    .analyze())
-    .violations
-    .filter(violation => violation.impact === 'critical')
+  if (checkAccessibility) {
+    const criticalViolations = (await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze())
+      .violations
+      .filter(violation => violation.impact === 'critical')
 
-  expect(
-    criticalViolations.map(violation => ({
-      id: violation.id,
-      nodes: violation.nodes.map(node => node.target),
-    })),
-  ).toEqual([])
+    expect(
+      criticalViolations.map(violation => ({
+        id: violation.id,
+        nodes: violation.nodes.map(node => node.target),
+      })),
+    ).toEqual([])
+  }
 }
 
 export async function assertVisibleControlsFit(page: Page) {

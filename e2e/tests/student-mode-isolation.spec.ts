@@ -41,7 +41,7 @@ test.describe('student mode API isolation @smoke', () => {
     const personalTeam = (await personalDetail.json()).data
     expect(personalTeam.owner.name).toBe(accounts.personalStudent.username)
     expect(personalTeam.owner.name).not.toBe('E2E Personal Student')
-    expect(personalTeam.school.id).toBe('personal')
+    expect(personalTeam).not.toHaveProperty('school')
     expect(personalTeam).not.toHaveProperty('schoolId')
 
     expect((await request.get(`/api/teams/${ids.personalTeam}`, {
@@ -90,20 +90,21 @@ test.describe('student mode API isolation @smoke', () => {
   })
 })
 
-test.describe('personal student pages @smoke', () => {
+test.describe('personal workspace pages @smoke', () => {
   test.use({ storageState: accounts.personalStudent.storageState })
 
   test('core personal pages render without failed requests', async ({ browser }) => {
+    test.setTimeout(120_000)
     const context = await browser.newContext({ storageState: accounts.personalStudent.storageState })
     for (const route of [
-      '/student',
-      '/student/team',
-      `/student/team/${ids.personalTeam}`,
-      '/student/rating',
-      '/student/problems',
-      '/student/problem-lists',
-      '/student/contests',
-      '/student/submissions',
+      '/personal',
+      '/personal/teams',
+      `/personal/teams/${ids.personalTeam}`,
+      '/personal/rankings',
+      '/personal/problems',
+      '/personal/problem-lists',
+      '/personal/contests',
+      '/personal/submissions',
     ]) {
       const page = await context.newPage()
       const audit = watchPage(page)
@@ -116,34 +117,30 @@ test.describe('personal student pages @smoke', () => {
   })
 
   test('team and ranking pages show personal data and usernames', async ({ page }) => {
-    await page.goto('/student/team')
-    await expect(page.getByRole('heading', { name: '团队管理' })).toBeVisible()
+    await page.goto('/personal/teams')
+    await expect(page.getByRole('heading', { name: '团队' })).toBeVisible()
     await expect(page.getByText('E2E Personal Team')).toBeVisible()
     await expect(page.locator('main')).not.toContainText('E2E Training Team')
 
-    await page.goto(`/student/team/${ids.personalTeam}`)
+    await page.goto(`/personal/teams/${ids.personalTeam}`)
     await expect(page.getByText('E2E Personal Team')).toBeVisible()
-    await expect(page.getByRole('link', {
-      name: accounts.personalStudent.username,
-      exact: true,
-    })).toBeVisible()
+    await expect(page.getByText(accounts.personalStudent.username, { exact: true }).first()).toBeVisible()
     await expect(page.locator('main')).not.toContainText('E2E Personal Student')
 
-    await page.goto('/student/rating')
-    await expect(page.getByRole('heading', { name: '个人模式排名' })).toBeVisible()
-    await expect(page.locator('main').getByText(accounts.personalStudent.username, {
-      exact: true,
-    })).toBeVisible()
+    await page.goto('/personal/rankings')
+    await expect(page.getByRole('heading', { name: '个人排名' })).toBeVisible()
+    await expect(page.getByRole('cell', { name: new RegExp(accounts.personalStudent.username) })).toBeVisible()
     await expect(page.locator('main')).not.toContainText('E2E Personal Student')
   })
 
   test('mode switch replaces personal navigation and cached data', async ({ page }) => {
-    await page.goto('/student/team')
+    await page.goto('/personal/teams')
     await expect(page.getByText('E2E Personal Team')).toBeVisible()
 
-    await page.getByRole('button', { name: '个人模式 · 切换到校园' }).click()
+    const modeControl = page.getByRole('group', { name: '工作区' })
+    await modeControl.getByRole('button', { name: '校园', exact: true }).click()
     await page.waitForURL('/student')
-    await expect(page.getByRole('button', { name: '校园模式 · 切换到个人' })).toBeVisible()
+    await expect(page.getByRole('group', { name: '工作区' }).getByRole('button', { name: '校园', exact: true })).toHaveAttribute('aria-pressed', 'true')
 
     await page.goto('/student/team')
     await expect(page.getByText('E2E Training Team')).toBeVisible()

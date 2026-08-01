@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import { prisma } from '../../prisma'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, isPersonalWorkspace } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { generateCaritsProblemId, getOwnerInfo, canModifyProblem } from './problem.helpers'
@@ -20,9 +20,10 @@ export const problemCrudRouter = Router()
 problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId
     const role = (req as any).user.role
+    const personalWorkspace = isPersonalWorkspace((req as any).user)
 
     // 校园模式学生使用学校题单；个人模式学生可管理自己的题库。
-    if (role === 'student' && (req as any).user.studentMode !== 'personal') {
+    if (role === 'student' && !personalWorkspace) {
       return res.status(403).json({ success: false, message: '校园模式下学生不能访问题库' })
     }
 
@@ -32,7 +33,10 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     const where: any = {}
 
     // 根据角色和visibility参数构建查询条件
-    if (role === 'super_admin' || role === 'platform_admin') {
+    if (personalWorkspace) {
+      where.visibility = 'public'
+      where.status = 'published'
+    } else if (role === 'super_admin' || role === 'platform_admin') {
       // 管理员可以看到所有题目
       if (visibility === 'private') {
         where.visibility = 'private'
@@ -98,11 +102,15 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     const admins = ownerTypes.includes('admin')
       ? await prisma.admin.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } })
       : []
+    const personalOwners = personalWorkspace
+      ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, username: true } })
+      : []
 
     const ownerMap = new Map<string, string>()
     teachers.forEach(t => ownerMap.set(t.id, t.name))
     students.forEach(s => ownerMap.set(s.id, s.name))
     admins.forEach(a => ownerMap.set(a.id, a.name))
+    personalOwners.forEach(owner => ownerMap.set(owner.id, owner.username))
 
     const problemsWithOwner = problems.map(p => {
       // 从 ojBindings 中提取平台列表（兼容旧数据）
@@ -121,6 +129,7 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
       }
       return {
         ...p,
+        ...(personalWorkspace ? { ownerType: 'user' } : {}),
         ownerName: ownerMap.get(p.ownerId) || '未知',
         platforms
       }
@@ -136,6 +145,9 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     const userId = (req as any).user.userId
     const role = (req as any).user.role
+    if (isPersonalWorkspace((req as any).user)) {
+      return res.status(403).json({ success: false, code: 'WORKSPACE_MODE_REQUIRED', message: '请切回工作区后管理题目' })
+    }
     const {
       title,
       description,
@@ -284,7 +296,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     const userId = user.userId
 
     // 校园模式学生使用学校题单；个人模式学生可管理自己的题库。
-    if (role === 'student' && user.studentMode !== 'personal') {
+    if (role === 'student' && !isPersonalWorkspace(user)) {
       return res.status(403).json({ success: false, message: '校园模式下学生不能访问题库' })
     }
 
@@ -301,6 +313,10 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (isPersonalWorkspace(user) && problem.visibility !== 'public') {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
     // 可见性检查：私有题目只有管理员和题目所有者可以查看
     if (problem.visibility === 'private' && role !== 'super_admin' && role !== 'platform_admin') {
       const ownerInfo = await getOwnerInfo(userId, role)
@@ -311,7 +327,9 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
 
     // 获取所有者名称
     let ownerName = '未知'
-    if (problem.ownerType === 'teacher') {
+    if (isPersonalWorkspace(user)) {
+      ownerName = (await prisma.user.findUnique({ where: { id: problem.ownerId }, select: { username: true } }))?.username || '未知'
+    } else if (problem.ownerType === 'teacher') {
       const teacher = await prisma.teacher.findUnique({ where: { id: problem.ownerId }, select: { name: true } })
       ownerName = teacher?.name || '未知'
     } else if (problem.ownerType === 'student') {
@@ -352,6 +370,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       success: true,
       data: {
         ...problemData,
+        ...(isPersonalWorkspace(user) ? { ownerType: 'user' } : {}),
         ownerName,
         statements,
         solutions
@@ -361,6 +380,9 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
 
 // ==================== 更新题目 ====================
 problemCrudRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
+    if (isPersonalWorkspace((req as any).user)) {
+      return res.status(403).json({ success: false, code: 'WORKSPACE_MODE_REQUIRED', message: '请切回工作区后管理题目' })
+    }
     const { id } = req.params
     const user = (req as any).user
     const {
@@ -524,6 +546,9 @@ problemCrudRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
 
 // ==================== 删除题目 ====================
 problemCrudRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
+    if (isPersonalWorkspace((req as any).user)) {
+      return res.status(403).json({ success: false, code: 'WORKSPACE_MODE_REQUIRED', message: '请切回工作区后管理题目' })
+    }
     const { id } = req.params
     const user = (req as any).user
 

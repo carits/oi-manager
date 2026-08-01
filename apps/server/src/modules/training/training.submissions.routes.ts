@@ -86,6 +86,7 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
         () => prisma.submission.create({
           data: {
         userId,
+        workspaceScope: training.scope,
         oj: trainingProblem.Problem.platform,
         problemId: trainingProblem.Problem.problemId,
         language,

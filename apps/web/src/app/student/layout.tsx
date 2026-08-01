@@ -7,6 +7,7 @@ export default function StudentLayout({ children }: { children: ReactNode }) {
       allowedRoles={['student']}
       loginRole="student"
       homePath="/student"
+      requiredWorkspace="work"
     >
       {children}
     </RoleLayout>

@@ -18,10 +18,15 @@ export const teamProblemListsRouter = Router()
 /**
  * 判断用户是否可以管理团队题单（owner/admin 或教师成员）
  */
-async function canManageTeamProblemList(userId: string, teamId: string): Promise<{ canAdd: boolean, role: string | null }> {
+async function canManageTeamProblemList(
+  user: NonNullable<AuthRequest['user']>,
+  teamId: string,
+): Promise<{ canAdd: boolean, role: string | null }> {
+  const userId = user.userId
   // 超管直接通过
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (user?.role === 'super_admin') return { canAdd: true, role: 'super_admin' }
+  if (!isPersonalMode(user) && user.role === 'super_admin') {
+    return { canAdd: true, role: 'super_admin' }
+  }
 
   // 检查是否是团队成员
   const member = await prisma.teamMember.findFirst({
@@ -52,7 +57,7 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
     const team = await teamService.assertTeamScope(teamId, req.user!)
 
     // 权限：团队成员可查看（超管也能看）
-    if (role !== 'super_admin' && role !== 'platform_admin') {
+    if (isPersonalMode(req.user) || (role !== 'super_admin' && role !== 'platform_admin')) {
       const member = await prisma.teamMember.findFirst({
         where: { teamId, userId, status: 'active' }
       })
@@ -62,7 +67,7 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
     }
 
     const items = await prisma.teamProblemList.findMany({
-      where: { teamId },
+      where: { teamId, ProblemList: { scope: team.scope } },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: {
         ProblemList: {
@@ -72,6 +77,7 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
             description: true,
             ownerId: true,
             ownerType: true,
+            scope: true,
             _count: { select: { ProblemListSection: true } }
           }
         }
@@ -102,6 +108,11 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
         ownerName = team.scope === 'personal'
           ? (await prisma.user.findUnique({ where: { id: item.ProblemList.ownerId }, select: { username: true } }))?.username || '未知'
           : student?.name || '未知'
+      } else if (item.ProblemList.ownerType === 'user') {
+        ownerName = (await prisma.user.findUnique({
+          where: { id: item.ProblemList.ownerId },
+          select: { username: true },
+        }))?.username || '未知'
       }
 
       // 添加者名字
@@ -166,7 +177,7 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
     }
 
     // 权限检查
-    const { canAdd, role: teamRole } = await canManageTeamProblemList(userId, teamId)
+    const { canAdd, role: teamRole } = await canManageTeamProblemList(req.user!, teamId)
     if (!canAdd) {
       return res.status(403).json({ success: false, message: '只有团队管理员或教师成员可添加题单' })
     }
@@ -175,7 +186,8 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
     const list = await prisma.problemList.findUnique({
       where: { id: problemListId }
     })
-    if (!list) {
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } })
+    if (!list || !team || list.scope !== team.scope) {
       return res.status(404).json({ success: false, message: '题单不存在' })
     }
     if (list.ownerId !== userId) {
@@ -237,7 +249,7 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
     }
 
     // 权限：owner 可删所有，非 owner 只能删自己添加的
-    if (role !== 'super_admin') {
+    if (isPersonalMode(req.user) || role !== 'super_admin') {
       const member = await prisma.teamMember.findFirst({
         where: { teamId, userId, status: 'active' }
       })

@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect } from 'react'
-import { modalStyles } from '@/lib/styles'
+import React, { useEffect, useId, useRef } from 'react'
+import { X } from 'lucide-react'
+import styles from './primitives.module.css'
 
 export interface ModalProps {
   isOpen: boolean
@@ -10,42 +11,102 @@ export interface ModalProps {
   children: React.ReactNode
   footer?: React.ReactNode
   width?: string
+  closeOnOverlay?: boolean
 }
 
-export function Modal({ isOpen, onClose, title, children, footer, width = '600px' }: ModalProps) {
-  // ESC 键关闭
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+  width = '600px',
+  closeOnOverlay = true,
+}: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
+  const titleId = useId()
+
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    if (!isOpen) return
+    returnFocusRef.current = document.activeElement as HTMLElement
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const dialog = dialogRef.current
+    const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) || [])
+    requestAnimationFrame(() => (focusables()[0] || dialog)?.focus())
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const elements = focusables()
+      if (elements.length === 0) {
+        event.preventDefault()
+        dialog?.focus()
+        return
+      }
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    if (isOpen) {
-      document.addEventListener('keydown', handleEsc)
-      document.body.style.overflow = 'hidden'
-    }
+
+    document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.removeEventListener('keydown', handleEsc)
-      document.body.style.overflow = 'unset'
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+      returnFocusRef.current?.focus()
     }
   }, [isOpen, onClose])
 
   if (!isOpen) return null
 
   return (
-    <div style={modalStyles.overlay} onClick={onClose}>
+    <div
+      className={styles.modalOverlay}
+      onMouseDown={event => {
+        if (closeOnOverlay && event.target === event.currentTarget) onClose()
+      }}
+    >
       <div
-        style={{ ...modalStyles.content, maxWidth: width }}
-        onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        className={styles.modalContent}
+        style={{ '--modal-width': width } as React.CSSProperties}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : '对话框'}
+        tabIndex={-1}
       >
         {title && (
-          <div style={modalStyles.header}>
-            <h3 style={modalStyles.title}>{title}</h3>
-            <button onClick={onClose} style={modalStyles.closeButton}>
-              ×
+          <header className={styles.modalHeader}>
+            <h2 className={styles.modalTitle} id={titleId}>{title}</h2>
+            <button type="button" className={styles.modalClose} onClick={onClose} aria-label="关闭对话框" title="关闭">
+              <X size={19} aria-hidden="true" />
             </button>
-          </div>
+          </header>
         )}
-        <div>{children}</div>
-        {footer && <div style={modalStyles.footer}>{footer}</div>}
+        <div className={styles.modalBody}>{children}</div>
+        {footer && <footer className={styles.modalFooter}>{footer}</footer>}
       </div>
     </div>
   )

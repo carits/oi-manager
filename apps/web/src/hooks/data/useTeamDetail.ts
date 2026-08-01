@@ -10,6 +10,7 @@ export interface TeamMember {
   username?: string
   avatar?: string | null
   joinedAt?: string | null
+  type?: 'teacher' | 'student' | 'user'
 }
 
 export interface TeamAdmin {
@@ -28,9 +29,10 @@ export interface TeamDetail {
   description?: string | null
   announcement?: string | null
   isPublic: boolean
+  scope?: 'campus' | 'personal'
   ownerType?: string
   requestStatus?: string | null
-  school: { id: string; name: string }
+  school: { id: string; name: string } | null
   owner: { id: string; name: string; username?: string; avatar?: string | null; type?: string } | null
   admins: TeamAdmin[]
   students: TeamMember[]

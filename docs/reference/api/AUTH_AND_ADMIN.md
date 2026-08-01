@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: auth, user and stats routes
 ---
 
@@ -20,7 +20,8 @@ source_of_truth: auth, user and stats routes
 | `PUT` | `/api/auth/profile` | 登录 | 更新当前资料 |
 | `POST` | `/api/auth/avatar` | 登录 | 上传当前头像 |
 | `PUT` | `/api/auth/password` | 登录、限流 | 修改当前密码 |
-| `POST` | `/api/auth/switch-mode` | 学生 | 切换校园/个人模式并刷新 JWT |
+| `POST` | `/api/auth/switch-workspace` | 全部已登录角色 | 切换工作/个人工作区并刷新 Cookie 与兼容 JWT |
+| `POST` | `/api/auth/switch-mode` | 学生、已弃用 | 旧校园/个人模式兼容入口 |
 | `GET` | `/api/users` | 管理员、范围 | 分页查询用户 |
 | `GET` | `/api/users/:id` | 管理员、范围 | 管理端用户详情 |
 | `GET` | `/api/users/:userId/profile` | 登录 | 教师/学生资料 |
@@ -38,15 +39,18 @@ source_of_truth: auth, user and stats routes
   "username": "user",
   "password": "not-shown-in-docs",
   "role": "student",
-  "mode": "campus"
+  "workspaceMode": "work"
 }
 ```
 
-`role` 是登录入口类型，只接受 `admin | teacher | student`。`mode` 仅对学生生效；
-未传时默认为 `campus`。
+`role` 是登录入口类型，只接受 `admin | teacher | student`。`workspaceMode` 对所有角色生效，
+取值为 `work | personal`；新设备和未传值时默认为 `work`。旧 `mode` 只用于兼容学生客户端。
 
 成功响应的 `data` 包含 `token`、`userId`、数据库 `role`、角色扩展 ID、`schoolId`
-和可选 `studentMode`。登录日志记录结果、入口、角色、IP 和 User-Agent，不记录密码。
+、`workspaceMode` 和兼容 `studentMode`。登录日志记录结果、入口、角色、IP 和 User-Agent，不记录密码。
+
+切换工作区只改变 `workspaceMode`，数据库 `role`、`adminId/teacherId/studentId` 和 `schoolId`
+保持不变。首次进入个人工作区会创建 `PersonalProfile`；无效参数返回 `400`，切换失败不会清除原会话。
 
 ## 管理范围
 

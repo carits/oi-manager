@@ -146,24 +146,13 @@ schoolMembersRouter.get('/:id/student-solved-rankings', authenticate, asyncHandl
     const submissionAcRows = await prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
       SELECT DISTINCT "userId", "problemId" FROM "Submission"
       WHERE "userId" = ANY(${studentIds}::text[])
+        AND "workspaceScope" = 'campus'
         AND "result" IN ('accepted', 'Accepted', 'AC', 'ac')
-    `
-
-    // 批量查询 UserArchivedProblem 的 solved 题目
-    const archivedRows = await prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
-      SELECT "userId", "problemId" FROM "UserArchivedProblem"
-      WHERE "userId" = ANY(${studentIds}::text[])
-        AND "solvedAt" IS NOT NULL
     `
 
     // 按 userId 合并去重
     const solvedMap = new Map<string, Set<string>>()
     for (const row of submissionAcRows) {
-      let set = solvedMap.get(row.userId)
-      if (!set) { set = new Set(); solvedMap.set(row.userId, set) }
-      set.add(row.problemId)
-    }
-    for (const row of archivedRows) {
       let set = solvedMap.get(row.userId)
       if (!set) { set = new Set(); solvedMap.set(row.userId, set) }
       set.add(row.problemId)

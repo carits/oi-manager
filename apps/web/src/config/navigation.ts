@@ -18,6 +18,7 @@ export interface NavConfig {
 export const superAdminNav: NavConfig = {
   role: 'super_admin',
   items: [
+    { label: '概览', href: '/admin' },
     { label: '学校管理', href: '/admin/schools' },
     { label: '账号管理', href: '/admin/users' },
   ]
@@ -39,6 +40,7 @@ export const platformAdminNav: NavConfig = {
 export const schoolManagerNav: NavConfig = {
   role: 'school_principal',
   items: [
+    { label: '概览', href: '/teacher' },
     { label: '教师管理', href: '/teacher/teachers' },
     { label: '学生管理', href: '/teacher/students' },
     { label: '团队', href: '/teacher/teams' },
@@ -53,6 +55,7 @@ export const schoolManagerNav: NavConfig = {
 export const teacherNav: NavConfig = {
   role: 'teacher',
   items: [
+    { label: '概览', href: '/teacher' },
     { label: '学生管理', href: '/teacher/students' },
     { label: '团队', href: '/teacher/teams' },
     { label: '作业', href: '/teacher/homeworks' },
@@ -74,16 +77,17 @@ export const studentNav: NavConfig = {
   ]
 }
 
-// 学生导航（个人模式）
-export const studentPersonalNav: NavConfig = {
+// 所有角色共享的个人工作区导航
+export const personalNav: NavConfig = {
   role: 'student',
   items: [
-    { label: '我的团队', href: '/student/team' },
-    { label: '题库', href: '/student/problems' },
-    { label: '比赛', href: '/student/contests' },
-    { label: '题单', href: '/student/problem-lists' },
-    { label: '评测记录', href: '/student/submissions' },
-    { label: '排名', href: '/student/rating' },
+    { label: '首页', href: '/personal' },
+    { label: '团队', href: '/personal/teams' },
+    { label: '题库', href: '/personal/problems' },
+    { label: '比赛', href: '/personal/contests' },
+    { label: '题单', href: '/personal/problem-lists' },
+    { label: '评测记录', href: '/personal/submissions' },
+    { label: '排名', href: '/personal/rankings' },
   ]
 }
 
@@ -97,22 +101,21 @@ export const roleNavMap: Record<UserRole, NavConfig> = {
 }
 
 // 根据角色获取导航配置
-export function getNavConfig(role: UserRole | string, studentMode?: string): NavConfig {
+export function getNavConfig(role: UserRole | string, workspaceMode?: string): NavConfig {
   const validRole = role as UserRole
+  if (workspaceMode === 'personal') return { ...personalNav, role: validRole }
   if (validRole === 'super_admin') return superAdminNav
   if (validRole === 'platform_admin') return platformAdminNav
   if (validRole === 'school_principal') return schoolManagerNav
   if (validRole === 'teacher') return teacherNav
-  if (validRole === 'student') {
-    return studentMode === 'personal' ? studentPersonalNav : studentNav
-  }
+  if (validRole === 'student') return studentNav
   // 默认返回教师导航
   return teacherNav
 }
 
 // 根据路径获取当前激活的 nav item
-export function getActiveNavItem(href: string, role: UserRole | string, studentMode?: string): string {
-  const config = getNavConfig(role, studentMode)
+export function getActiveNavItem(href: string, role: UserRole | string, workspaceMode?: string): string {
+  const config = getNavConfig(role, workspaceMode)
   const pathname = href.split('?')[0]
 
   let bestMatch = ''

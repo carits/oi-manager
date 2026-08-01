@@ -6,6 +6,7 @@ import { prisma } from '../../src/prisma'
 
 // ESM imports for routes
 import { authRouter } from '../../src/routes/auth'
+import { meRouter } from '../../src/routes/me'
 import { studentRouter } from '../../src/routes/students'
 import { teamRouter } from '../../src/routes/teams'
 import { schoolRouter } from '../../src/modules/school/school.routes'
@@ -43,6 +44,7 @@ export function createTestApp() {
 
   // 注册路由
   app.use('/api/auth', authRouter)
+  app.use('/api/me', meRouter)
   app.use('/api/students', studentRouter)
   app.use('/api/teams', teamRouter)
   app.use('/api/schools', schoolRouter)

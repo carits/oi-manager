@@ -6,10 +6,7 @@ test.describe('login and permission boundaries @smoke @compact', () => {
 
   test('login role query selects the requested entry', async ({ page }) => {
     await page.goto('/login?role=student')
-    await expect(page.getByRole('button', { name: '学生端' })).toHaveCSS(
-      'background-color',
-      'rgb(37, 99, 235)',
-    )
+    await expect(page.getByRole('button', { name: '学生', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByLabel('用户名')).toBeVisible()
     await expect(page.getByLabel('密码')).toBeVisible()
   })

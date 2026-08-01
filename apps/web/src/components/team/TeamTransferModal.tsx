@@ -8,14 +8,14 @@ import apiClient from '@/lib/apiClient'
 interface TransferCandidate {
   id: string
   name: string
-  memberType: 'teacher' | 'student'
+  memberType: 'teacher' | 'student' | 'user'
 }
 
 interface TeamTransferModalProps {
   isOpen: boolean
   onClose: () => void
   teamId: string
-  selectedTarget: { id: string; memberType: 'teacher' | 'student'; name: string } | null
+  selectedTarget: { id: string; memberType: 'teacher' | 'student' | 'user'; name: string } | null
   candidates: TransferCandidate[]
   onSuccess: () => void
 }

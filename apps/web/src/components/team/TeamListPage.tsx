@@ -1,13 +1,21 @@
 'use client'
 
 import { useState } from 'react'
+import { Globe2, LockKeyhole, Mail, Plus } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
 import { Button } from '@/components/ui/Button'
+import { Empty } from '@/components/ui/Empty'
+import { FormField } from '@/components/ui/FormField'
 import { Modal } from '@/components/ui/Modal'
+import { PageFrame } from '@/components/ui/PageFrame'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Pagination } from '@/components/ui/Pagination'
-import { TeamCard, InvitationCard, Invitation } from '@/components/team'
-import { formStyles } from '@/lib/styles'
+import { Tabs } from '@/components/ui/Tabs'
+import { InvitationCard, type Invitation } from './InvitationCard'
+import { TeamCard } from './TeamCard'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
+import styles from './Team.module.css'
 
 export interface TeamItem {
   id: string
@@ -15,50 +23,33 @@ export interface TeamItem {
   avatar?: string | null
   description?: string | null
   isPublic?: boolean
-  school: { id: string; name: string }
-  owner?: { id: string; name: string } | null
-  _count?: {
-    members: number
-    teacherMembers?: number
-    admins?: number
-  }
-  requestStatus?: string | null // 用于学生端申请状态
+  school?: { id: string; name: string } | null
+  owner?: { id: string; name?: string; username?: string } | null
+  _count?: { members: number; teacherMembers?: number; admins?: number }
+  requestStatus?: string | null
 }
 
 interface TeamListPageProps {
-  // 基础配置
-  basePath: string // 团队详情页路径前缀
-
-  // 数据
+  basePath: string
   teams: TeamItem[]
   loading: boolean
   error?: string | null
   onRetry?: () => void
-
-  // 分页
   page?: number
   pageSize?: number
   total?: number
   totalPages?: number
   onPageChange?: (page: number) => void
   onPageSizeChange?: (pageSize: number) => void
-
-  // Tab 切换
   activeTab: 'mine' | 'all'
   onTabChange: (tab: 'mine' | 'all') => void
-
-  // 邀请
   invitations?: Invitation[]
   loadingInvitations?: boolean
   processingInvitation?: string | null
   onAcceptInvitation?: (id: string, type: 'admin' | 'member') => void
   onRejectInvitation?: (id: string, type: 'admin' | 'member') => void
-
-  // 创建团队
   showCreateButton?: boolean
   onCreateTeam?: (data: { name: string; description: string; isPublic: boolean; teamId: string }) => Promise<boolean>
-
-  // 创建团队弹窗
   createModalOpen?: boolean
   onOpenCreateModal?: () => void
   onCloseCreateModal?: () => void
@@ -66,279 +57,80 @@ interface TeamListPageProps {
 }
 
 export function TeamListPage({
-  basePath,
-  teams,
-  loading,
-  error,
-  onRetry,
-  page = 1,
-  pageSize = 12,
-  total = 0,
-  totalPages = 1,
-  onPageChange,
-  onPageSizeChange,
-  activeTab,
-  onTabChange,
-  invitations = [],
-  loadingInvitations = false,
-  processingInvitation = null,
-  onAcceptInvitation,
-  onRejectInvitation,
-  showCreateButton = true,
-  onCreateTeam,
-  createModalOpen = false,
-  onOpenCreateModal,
-  onCloseCreateModal,
-  creating = false
+  basePath, teams, loading, error, onRetry, page = 1, pageSize = 12, total = 0,
+  totalPages = 1, onPageChange, onPageSizeChange, activeTab, onTabChange,
+  invitations = [], loadingInvitations = false, processingInvitation = null,
+  onAcceptInvitation, onRejectInvitation, showCreateButton = true, onCreateTeam,
+  createModalOpen = false, onOpenCreateModal, onCloseCreateModal, creating = false,
 }: TeamListPageProps) {
-  // 创建团队表单状态
+  const { user } = useAuth()
   const [createName, setCreateName] = useState('')
   const [createDescription, setCreateDescription] = useState('')
   const [createIsPublic, setCreateIsPublic] = useState(true)
   const [createTeamId, setCreateTeamId] = useState('')
+  const studentView = basePath.startsWith('/student') || basePath.startsWith('/personal')
+  const personalMode = basePath.startsWith('/personal') || user?.workspaceMode === 'personal'
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!createName.trim() || !onCreateTeam) return
+  const closeCreate = () => {
+    setCreateName('')
+    setCreateDescription('')
+    setCreateIsPublic(true)
+    setCreateTeamId('')
+    onCloseCreateModal?.()
+  }
 
-    const success = await onCreateTeam({
-      name: createName.trim(),
-      description: createDescription.trim(),
-      isPublic: createIsPublic,
-      teamId: createTeamId.trim() || ''
-    })
-    if (success) {
-      setCreateName('')
-      setCreateDescription('')
-      setCreateIsPublic(true)
-      setCreateTeamId('')
-    }
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!createName.trim() || !createTeamId.trim() || !onCreateTeam) return
+    const success = await onCreateTeam({ name: createName.trim(), description: createDescription.trim(), isPublic: createIsPublic, teamId: createTeamId.trim() })
+    if (success) closeCreate()
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* 页面标题 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>团队管理</h1>
-        {showCreateButton && onCreateTeam && (
-          <Button onClick={() => {
-            setCreateName('')
-            setCreateDescription('')
-            setCreateIsPublic(true)
-            onOpenCreateModal?.()
-          }}>+ 创建团队</Button>
-        )}
-      </div>
+    <PageFrame>
+      <PageHeader
+        title="团队"
+        description={personalMode ? '个人模式团队与校园团队相互独立。' : studentView ? '查看已加入的团队或浏览可加入团队。' : '维护负责的团队、成员与训练内容。'}
+        actions={showCreateButton && onCreateTeam ? <Button icon={<Plus size={17} />} onClick={onOpenCreateModal}>创建团队</Button> : undefined}
+      />
 
-      {/* 邀请通知区域 */}
       {!loadingInvitations && invitations.length > 0 && onAcceptInvitation && onRejectInvitation && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.75rem', color: 'var(--gray-700)' }}>
-            📩 待处理邀请 ({invitations.length})
-          </h2>
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {invitations.map(invitation => (
-              <InvitationCard
-                key={invitation.id}
-                invitation={invitation}
-                onAccept={onAcceptInvitation}
-                onReject={onRejectInvitation}
-                processing={processingInvitation === invitation.id}
-              />
-            ))}
-          </div>
-        </div>
+        <section className={styles.invitationSection} aria-labelledby="pending-invitations">
+          <h2 className={styles.sectionLabel} id="pending-invitations"><Mail size={18} aria-hidden="true" />待处理邀请 ({invitations.length})</h2>
+          {invitations.map(invitation => <InvitationCard key={invitation.id} invitation={invitation} onAccept={onAcceptInvitation} onReject={onRejectInvitation} processing={processingInvitation === invitation.id} />)}
+        </section>
       )}
 
-      {/* Tab 切换 */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button
-          onClick={() => onTabChange('mine')}
-          style={{
-            padding: '0.5rem 1rem',
-            background: activeTab === 'mine' ? 'var(--primary)' : 'white',
-            color: activeTab === 'mine' ? 'white' : 'var(--gray-700)',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: activeTab === 'mine' ? 600 : 400
-          }}
-        >
-          我的团队
-        </button>
-        <button
-          onClick={() => onTabChange('all')}
-          style={{
-            padding: '0.5rem 1rem',
-            background: activeTab === 'all' ? 'var(--primary)' : 'white',
-            color: activeTab === 'all' ? 'white' : 'var(--gray-700)',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: activeTab === 'all' ? 600 : 400
-          }}
-        >
-          全部团队
-        </button>
-      </div>
+      <Tabs
+        label="团队范围"
+        value={activeTab}
+        onChange={onTabChange}
+        items={[{ value: 'mine', label: '我的团队' }, { value: 'all', label: studentView ? '浏览团队' : '全部团队' }]}
+      />
 
-      {/* 团队卡片列表 */}
-      {loading ? (
-        <SkeletonRegion rows={6} label="正在获取团队列表" />
-      ) : error ? (
-        <LoadError message={error} onRetry={onRetry || (() => undefined)} />
-      ) : teams.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-          {activeTab === 'mine' ? '您还没有加入任何团队' : '暂无团队数据'}
-        </div>
+      {loading ? <SkeletonRegion rows={6} label="团队列表正在准备" /> : error ? <LoadError message={error} onRetry={onRetry || (() => undefined)} /> : teams.length === 0 ? (
+        <Empty title={activeTab === 'mine' ? '还没有加入团队' : '没有可浏览的团队'} description={activeTab === 'mine' ? '收到邀请或加入团队后会显示在这里。' : '可以稍后重试或调整范围。'} />
       ) : (
         <>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '1rem'
-          }}>
-            {teams.map(team => {
-              // _count.members 已经是所有 active 成员的数量
-              const memberCount = team._count?.members || 0
-
-              return (
-                <TeamCard
-                  key={team.id}
-                  id={team.id}
-                  name={team.name}
-                  avatar={team.avatar}
-                  description={team.description}
-                  memberCount={memberCount}
-                  schoolName={team.school.name}
-                  ownerName={team.owner?.name}
-                  isPublic={team.isPublic}
-                  basePath={basePath}
-                />
-              )
-            })}
+          <div className={styles.teamGrid}>
+            {teams.map(team => <TeamCard key={team.id} id={team.id} name={team.name} avatar={team.avatar} description={team.description} memberCount={team._count?.members || 0} schoolName={team.school?.name || (personalMode ? '个人团队' : undefined)} ownerName={personalMode ? team.owner?.username || team.owner?.name : team.owner?.name || team.owner?.username} isPublic={team.isPublic} basePath={basePath} />)}
           </div>
-
-          {/* 分页 */}
-          {totalPages > 1 && onPageChange && (
-            <div style={{ marginTop: '1.5rem', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-              <Pagination
-                currentPage={page}
-                totalPages={totalPages}
-                total={total}
-                pageSize={pageSize}
-                onPageChange={onPageChange}
-                onPageSizeChange={onPageSizeChange}
-              />
-            </div>
-          )}
+          {totalPages > 1 && onPageChange && <Pagination currentPage={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />}
         </>
       )}
 
-      {/* 创建团队弹窗 */}
-      {createModalOpen && onCreateTeam && (
-        <Modal
-          isOpen={true}
-          onClose={() => {
-            setCreateName('')
-            setCreateDescription('')
-            setCreateIsPublic(true)
-            onCloseCreateModal?.()
-          }}
-          title="创建团队"
-          width="500px"
-        >
-          <form onSubmit={handleCreateSubmit} style={{ display: 'grid', gap: '1rem' }}>
-            <div style={formStyles.field}>
-              <label style={formStyles.label}>团队名称 *</label>
-              <input
-                type="text"
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                required
-                style={formStyles.input}
-                placeholder="请输入团队名称"
-              />
-            </div>
-
-            <div style={formStyles.field}>
-              <label style={formStyles.label}>团队描述</label>
-              <textarea
-                value={createDescription}
-                onChange={(e) => setCreateDescription(e.target.value)}
-                rows={3}
-                style={formStyles.textarea}
-                placeholder="请输入团队描述（选填）"
-              />
-            </div>
-
-            <div style={formStyles.field}>
-              <label style={formStyles.label}>团队ID *</label>
-              <input
-                type="text"
-                value={createTeamId}
-                onChange={(e) => {
-                  const val = e.target.value
-                  // 只允许英文、数字、下划线
-                  if (/^[a-zA-Z0-9_]*$/.test(val)) {
-                    setCreateTeamId(val)
-                  }
-                }}
-                required
-                style={formStyles.input}
-                placeholder="如 team_2024（必填，创建后不可修改）"
-                maxLength={50}
-              />
-              <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
-                只能包含英文字母、数字和下划线，用于外部平台统一标识
-              </p>
-            </div>
-
-            <div style={formStyles.field}>
-              <label style={formStyles.label}>团队类型</label>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="createIsPublic"
-                    checked={createIsPublic}
-                    onChange={() => setCreateIsPublic(true)}
-                  />
-                  <span>🌐 公有团队</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="createIsPublic"
-                    checked={!createIsPublic}
-                    onChange={() => setCreateIsPublic(false)}
-                  />
-                  <span>🔒 私有团队</span>
-                </label>
-              </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
-                公有团队：其他用户可以浏览并申请加入<br />
-                私有团队：只能通过邀请加入
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              <Button type="submit" disabled={creating || !createName.trim() || !createTeamId.trim()} style={{ flex: 1 }}>
-                {creating ? '创建中...' : '创建'}
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => {
-                setCreateName('')
-                setCreateDescription('')
-                onCloseCreateModal?.()
-              }} style={{ flex: 1 }}>
-                取消
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </div>
+      <Modal isOpen={createModalOpen && Boolean(onCreateTeam)} onClose={closeCreate} title="创建团队" width="520px" closeOnOverlay={!creating}>
+        <form className={styles.form} onSubmit={submit}>
+          <FormField label="团队名称" required><input value={createName} onChange={event => setCreateName(event.target.value)} required placeholder="例如：2026 暑期集训队" /></FormField>
+          <FormField label="团队标识" required hint="仅支持英文字母、数字和下划线，创建后不可修改。"><input value={createTeamId} onChange={event => { if (/^[a-zA-Z0-9_]*$/.test(event.target.value)) setCreateTeamId(event.target.value) }} required maxLength={50} placeholder="summer_2026" /></FormField>
+          <FormField label="团队说明"><textarea value={createDescription} onChange={event => setCreateDescription(event.target.value)} rows={3} placeholder="说明训练方向或加入要求" /></FormField>
+          <fieldset style={{ border: 0, padding: 0 }}><legend style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>加入方式</legend><div className={styles.visibilityOptions}>
+            <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={createIsPublic} onChange={() => setCreateIsPublic(true)} /><Globe2 size={18} /><span>公开<br /><small>其他用户可以申请加入</small></span></label>
+            <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={!createIsPublic} onChange={() => setCreateIsPublic(false)} /><LockKeyhole size={18} /><span>私有<br /><small>仅通过邀请加入</small></span></label>
+          </div></fieldset>
+          <div className={styles.formActions}><Button variant="secondary" onClick={closeCreate} disabled={creating}>取消</Button><Button type="submit" loading={creating} disabled={!createName.trim() || !createTeamId.trim()}>创建</Button></div>
+        </form>
+      </Modal>
+    </PageFrame>
   )
 }

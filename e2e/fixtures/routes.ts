@@ -31,6 +31,25 @@ export const routePatterns = [
   '/platform-admin/users',
   '/profile/student/[id]',
   '/profile/teacher/[id]',
+  '/account/platform-bindings',
+  '/account/profile',
+  '/account/security',
+  '/personal',
+  '/personal/contests',
+  '/personal/contests/[id]',
+  '/personal/problem-lists',
+  '/personal/problem-lists/[id]',
+  '/personal/problem-lists/[id]/edit',
+  '/personal/problem-lists/new',
+  '/personal/problems',
+  '/personal/problems/[id]',
+  '/personal/rankings',
+  '/personal/submissions',
+  '/personal/submissions/[id]',
+  '/personal/teams',
+  '/personal/teams/[id]',
+  '/personal/teams/[id]/contests/[cid]',
+  '/personal/teams/[id]/trainings/[tid]',
   '/student',
   '/student/contests',
   '/student/contests/[cid]',
@@ -102,6 +121,8 @@ export function routeOwner(pattern: RoutePattern): RouteOwner {
   if (pattern === '/' || pattern === '/login') return 'public'
   if (pattern === '/profile/student/[id]') return 'campusStudent'
   if (pattern === '/profile/teacher/[id]') return 'principal'
+  if (pattern.startsWith('/personal')) return 'personalStudent'
+  if (pattern.startsWith('/account')) return 'campusStudent'
   if (pattern === '/super_admin' || pattern.startsWith('/admin')) return 'superAdmin'
   if (pattern.startsWith('/platform-admin')) return 'platformAdmin'
   if (pattern.startsWith('/teacher')) return 'principal'
@@ -119,7 +140,12 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
 
   if (route.includes('/schools/[id]')) route = route.replace('[id]', ids.school)
   else if (route.includes('/users/[id]')) route = route.replace('[id]', ids.users.platformAdmin)
-  else if (route.includes('/student/problems/[id]')) route = route.replace('[id]', ids.personalProblem)
+  else if (route.includes('/personal/teams/[id]')) route = route.replace('[id]', ids.personalTeam)
+  else if (route.includes('/personal/problems/[id]')) route = route.replace('[id]', ids.problem)
+  else if (route.includes('/personal/problem-lists/[id]')) route = route.replace('[id]', ids.personalProblemList)
+  else if (route.includes('/personal/submissions/[id]')) route = route.replace('[id]', ids.personalSubmission)
+  else if (route.includes('/personal/contests/[id]')) route = route.replace('[id]', ids.personalContest)
+  else if (route.includes('/student/problems/[id]')) route = route.replace('[id]', ids.problem)
   else if (route.includes('/problems/[id]')) route = route.replace('[id]', ids.problem)
   else if (route.includes('/problem-lists/[id]')) route = route.replace('[id]', ids.problemList)
   else if (route.includes('/student/submissions/[id]')) route = route.replace('[id]', ids.personalSubmission)
@@ -131,32 +157,10 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   }
 
   route = route
-    .replace('[tid]', ids.homework)
-    .replace('[cid]', route.includes('/homeworks/') ? ids.homework : ids.contest)
+    .replace('[tid]', route.startsWith('/personal/') ? ids.personalContest : ids.homework)
+    .replace('[cid]', route.startsWith('/personal/') ? ids.personalContest : route.includes('/homeworks/') ? ids.homework : ids.contest)
 
   return route
 }
 
-export const compactPatterns = new Set<RoutePattern>([
-  '/login',
-  '/admin/schools',
-  '/platform-admin',
-  '/platform-admin/problems',
-  '/platform-admin/problems/[id]',
-  '/teacher',
-  '/teacher/students',
-  '/teacher/teams',
-  '/teacher/teams/[id]',
-  '/teacher/homeworks',
-  '/teacher/contests',
-  '/teacher/problem-lists',
-  '/teacher/rankings',
-  '/student',
-  '/student/team',
-  '/student/homeworks',
-  '/student/contests',
-  '/student/problem-lists',
-  '/student/problems',
-  '/student/submissions',
-  '/student/rating',
-])
+export const compactPatterns = new Set<RoutePattern>(routePatterns)

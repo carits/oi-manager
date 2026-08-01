@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, AuthRequest, isPersonalMode } from '../../middleware/auth'
+import { authenticate, AuthRequest, isPersonalWorkspace } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { prisma } from '../../prisma'
@@ -7,8 +7,12 @@ import { prisma } from '../../prisma'
 export const rankingRouter = Router()
 
 function requirePersonalMode(req: AuthRequest, res: any): boolean {
-  if (req.user?.role !== 'student' || !isPersonalMode(req.user)) {
-    res.status(403).json({ success: false, message: '该排名仅在个人模式下可用' })
+  if (!req.user || !isPersonalWorkspace(req.user)) {
+    res.status(403).json({
+      success: false,
+      code: 'WORKSPACE_MODE_REQUIRED',
+      message: '该排名仅在个人工作区可用',
+    })
     return false
   }
   return true
@@ -22,11 +26,11 @@ rankingRouter.get('/personal/rating', authenticate, asyncHandler(async (req: Aut
     maxPageSize: 200
   })
 
-  const [students, total] = await Promise.all([
-    prisma.student.findMany({
+  const [profiles, total] = await Promise.all([
+    prisma.personalProfile.findMany({
       where: { User: { status: 'active' } },
       select: {
-        id: true,
+        userId: true,
         rating: true,
         User: { select: { username: true, avatar: true } }
       },
@@ -34,14 +38,14 @@ rankingRouter.get('/personal/rating', authenticate, asyncHandler(async (req: Aut
       skip,
       take: pageSize
     }),
-    prisma.student.count({ where: { User: { status: 'active' } } })
+    prisma.personalProfile.count({ where: { User: { status: 'active' } } })
   ])
 
-  const data = students.map(student => ({
-    id: student.id,
-    username: student.User.username,
-    avatar: student.User.avatar,
-    rating: student.rating
+  const data = profiles.map(profile => ({
+    id: profile.userId,
+    username: profile.User.username,
+    avatar: profile.User.avatar,
+    rating: profile.rating
   }))
 
   res.json({ success: true, ...paginatedResponse(data, total, page, pageSize) })
@@ -55,27 +59,28 @@ rankingRouter.get('/personal/solved', authenticate, asyncHandler(async (req: Aut
     maxPageSize: 200
   })
 
-  const students = await prisma.student.findMany({
+  const profiles = await prisma.personalProfile.findMany({
     where: { User: { status: 'active' } },
     select: {
-      id: true,
+      userId: true,
       User: { select: { username: true, avatar: true } }
     }
   })
-  const studentIds = students.map(student => student.id)
+  const userIds = profiles.map(profile => profile.userId)
 
-  const [submissionRows, archivedRows] = studentIds.length > 0
+  const [submissionRows, archivedRows] = userIds.length > 0
     ? await Promise.all([
         prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
           SELECT DISTINCT "userId", "problemId"
           FROM "Submission"
-          WHERE "userId" = ANY(${studentIds}::text[])
+          WHERE "userId" = ANY(${userIds}::text[])
+            AND "workspaceScope" = 'personal'
             AND "result" IN ('accepted', 'Accepted', 'AC', 'ac')
         `,
         prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
           SELECT "userId", "problemId"
           FROM "UserArchivedProblem"
-          WHERE "userId" = ANY(${studentIds}::text[])
+          WHERE "userId" = ANY(${userIds}::text[])
             AND "solvedAt" IS NOT NULL
         `
       ])
@@ -88,12 +93,12 @@ rankingRouter.get('/personal/solved', authenticate, asyncHandler(async (req: Aut
     solvedByUser.set(row.userId, solved)
   }
 
-  const ranked = students
-    .map(student => ({
-      id: student.id,
-      username: student.User.username,
-      avatar: student.User.avatar,
-      solvedCount: solvedByUser.get(student.id)?.size || 0
+  const ranked = profiles
+    .map(profile => ({
+      id: profile.userId,
+      username: profile.User.username,
+      avatar: profile.User.avatar,
+      solvedCount: solvedByUser.get(profile.userId)?.size || 0
     }))
     .sort((left, right) =>
       right.solvedCount - left.solvedCount || left.username.localeCompare(right.username)

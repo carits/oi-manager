@@ -13,10 +13,38 @@ interface RoleLayoutProps {
   loginRole: 'admin' | 'platform-admin' | 'teacher' | 'student'
   homePath: string
   contentClassName?: string
+  requiredWorkspace?: 'work' | 'personal'
   roleOverrides?: Array<{
     prefix: string
     allowedRoles: string[]
   }>
+}
+
+function mapLegacyPersonalPath(requestedPath: string): string {
+  const [pathname, query = ''] = requestedPath.split('?')
+  const withQuery = (target: string) => query ? `${target}?${query}` : target
+
+  if (pathname === '/student/team/browse') return withQuery('/personal/teams')
+  if (pathname === '/student/problems/new') return withQuery('/personal/problems')
+
+  const legacyProblemTool = pathname.match(/^\/student\/problems\/([^/]+)\/(edit|note)$/)
+  if (legacyProblemTool) return withQuery(`/personal/problems/${legacyProblemTool[1]}`)
+
+  const mappings: Array<[string, string]> = [
+    ['/student/platform-bindings', '/account/platform-bindings'],
+    ['/student/problem-lists', '/personal/problem-lists'],
+    ['/student/submissions', '/personal/submissions'],
+    ['/student/problems', '/personal/problems'],
+    ['/student/contests', '/personal/contests'],
+    ['/student/rating', '/personal/rankings'],
+    ['/student/security', '/account/security'],
+    ['/student/profile', '/account/profile'],
+    ['/student/team', '/personal/teams'],
+  ]
+  const match = mappings.find(([source]) => pathname === source || pathname.startsWith(`${source}/`))
+  if (!match) return '/personal'
+  const target = `${match[1]}${pathname.slice(match[0].length)}`
+  return withQuery(target)
 }
 
 export async function RoleLayout({
@@ -25,6 +53,7 @@ export async function RoleLayout({
   loginRole,
   homePath,
   contentClassName,
+  requiredWorkspace,
   roleOverrides = [],
 }: RoleLayoutProps) {
   const requestedPath = headers().get('x-oi-request-path') || homePath
@@ -52,7 +81,16 @@ export async function RoleLayout({
   const effectiveAllowedRoles = matchingOverride?.allowedRoles || allowedRoles
 
   if (!effectiveAllowedRoles.includes(session.user.role)) {
-    redirect(getRoleHome(session.user.role))
+    redirect(getRoleHome(session.user.role, session.user.workspaceMode || 'work'))
+  }
+
+  const workspaceMode = session.user.workspaceMode
+    || (session.user.studentMode === 'personal' ? 'personal' : 'work')
+  if (requiredWorkspace && workspaceMode !== requiredWorkspace) {
+    if (workspaceMode === 'personal' && pathname.startsWith('/student')) {
+      redirect(mapLegacyPersonalPath(requestedPath))
+    }
+    redirect(getRoleHome(session.user.role, workspaceMode))
   }
 
   return (

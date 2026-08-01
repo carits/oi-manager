@@ -32,6 +32,8 @@ const ids = {
   personalProblem: 'e2e-personal-problem',
   problemList: 'e2e-problem-list',
   problemListSection: 'e2e-problem-list-section',
+  personalProblemList: 'e2e-personal-problem-list',
+  personalProblemListSection: 'e2e-personal-problem-list-section',
 }
 
 async function seedIdentityGraph(passwordHash: string) {
@@ -93,6 +95,16 @@ async function main() {
 
   const prisma = new PrismaClient()
   try {
+    await prisma.personalProfile.createMany({
+      data: [
+        ids.superAdmin,
+        ids.platformAdmin,
+        ids.principal,
+        ids.teacher,
+        ids.campusStudent,
+        ids.personalStudent,
+      ].map(userId => ({ userId })),
+    })
     await prisma.team.createMany({
       data: [
         {
@@ -113,7 +125,7 @@ async function main() {
           id: ids.personalTeam,
           name: 'E2E Personal Team',
           description: 'Personal-mode team for scope isolation checks',
-          schoolId: ids.school,
+          schoolId: null,
           scope: 'personal',
           isPublic: true,
         },
@@ -149,7 +161,7 @@ async function main() {
           id: 'e2e-member-personal-owner',
           teamId: ids.personalTeam,
           userId: ids.personalStudent,
-          userType: 'student',
+          userType: 'user',
           role: 'owner',
           invitedBy: ids.personalStudent,
         },
@@ -246,6 +258,35 @@ async function main() {
         visibility: 'public',
       },
     })
+    await prisma.problemList.create({
+      data: {
+        id: ids.personalProblemList,
+        title: 'E2E Personal Problem List',
+        description: 'Personal-scope list for all-role workspace checks',
+        schoolId: null,
+        scope: 'personal',
+        ownerId: ids.personalStudent,
+        ownerType: 'user',
+        visibility: 'private',
+      },
+    })
+    await prisma.problemListSection.create({
+      data: {
+        id: ids.personalProblemListSection,
+        problemListId: ids.personalProblemList,
+        title: 'Personal warmup',
+        sortOrder: 0,
+      },
+    })
+    await prisma.problemListEntry.create({
+      data: {
+        id: 'e2e-personal-list-entry',
+        sectionId: ids.personalProblemListSection,
+        problemId: ids.problem,
+        ojName: 'internal',
+        sortOrder: 0,
+      },
+    })
     await prisma.problemListSection.create({
       data: {
         id: ids.problemListSection,
@@ -324,6 +365,32 @@ async function main() {
         solutionVisible: true,
       },
     })
+    const personalContest = await prisma.training.create({
+      data: {
+        teamId: ids.personalTeam,
+        schoolId: null,
+        scope: 'personal',
+        title: 'E2E Personal Contest',
+        description: 'Personal workspace contest for the UI suite',
+        format: 'ioi',
+        startTime: new Date(now - 30 * 60 * 1000),
+        endTime: new Date(now + 2 * 60 * 60 * 1000),
+        status: 'ongoing',
+        createdBy: ids.personalStudent,
+        type: 'contest',
+        problemIdVisible: true,
+        solutionVisible: false,
+      },
+    })
+    await prisma.teamProblemList.create({
+      data: {
+        id: 'e2e-personal-team-list',
+        teamId: ids.personalTeam,
+        problemListId: ids.personalProblemList,
+        addedBy: ids.personalStudent,
+        addedByRole: 'user',
+      },
+    })
 
     await prisma.trainingProblem.createMany({
       data: [
@@ -351,6 +418,18 @@ async function main() {
           sourcePlatformSnapshot: 'internal',
           sourceProblemIdSnapshot: 'E2E-1000',
         },
+        {
+          id: 'e2e-personal-contest-problem',
+          trainingId: personalContest.id,
+          problemId: ids.problem,
+          alias: 'A',
+          orderIndex: 0,
+          points: 100,
+          titleSnapshot: 'E2E A Plus B',
+          statementSnapshot: 'Read two integers and print their sum.',
+          sourcePlatformSnapshot: 'carits',
+          sourceProblemIdSnapshot: 'E2E-1000',
+        },
       ],
     })
     await prisma.trainingParticipant.createMany({
@@ -366,6 +445,12 @@ async function main() {
           trainingId: contest.id,
           userId: ids.campusStudent,
           userType: 'student',
+        },
+        {
+          id: 'e2e-personal-contest-user',
+          trainingId: personalContest.id,
+          userId: ids.personalStudent,
+          userType: 'user',
         },
       ],
     })
@@ -415,6 +500,7 @@ async function main() {
     await prisma.submission.create({
       data: {
         userId: ids.personalStudent,
+        workspaceScope: 'personal',
         oj: 'carits',
         problemId: '1002',
         problemInternalId: ids.personalProblem,

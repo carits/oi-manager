@@ -98,19 +98,12 @@ export async function isTrainingAdmin(userId: string, trainingId: number): Promi
   // 复用现有权限逻辑
   const training = await prisma.training.findUnique({
     where: { id: trainingId },
-    select: { teamId: true }
+    select: { teamId: true, schoolId: true }
   })
   if (!training) return false
 
-  // 检查用户角色
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true }
-  })
-  if (user?.role === 'super_admin' || user?.role === 'platform_admin') return true
-
   // 检查团队管理员权限
-  return await isTeamAdmin(userId, training.teamId!)
+  return training.teamId ? isTeamAdmin(userId, training.teamId) : false
 }
 
 /**

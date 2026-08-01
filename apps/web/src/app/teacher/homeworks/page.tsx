@@ -1,100 +1,38 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import apiClient from '@/lib/apiClient'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@/components/AuthProvider'
+import { useResource } from '@/hooks/useResource'
 import TeamTrainingList from '@/components/training/TeamTrainingList'
-import { Empty } from '@/components/ui/Empty'
-import { LoadError } from '@/components/ui/LoadError'
+import { AsyncRegion } from '@/components/ui/AsyncRegion'
+import { PageFrame } from '@/components/ui/PageFrame'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Toolbar, ToolbarGroup } from '@/components/ui/Toolbar'
+import styles from '@/components/TrainingIndex.module.css'
 
-interface Team {
-  id: string
-  name: string
-  avatar: string | null
-}
+interface Team { id: string; name: string }
+interface TeamPayload { items?: Team[]; data?: Team[] }
+function normalizeTeams(payload: TeamPayload | Team[] | undefined) { return Array.isArray(payload) ? payload : payload?.items || payload?.data || [] }
 
 export default function TeacherHomeworksPage() {
-  const [teams, setTeams] = useState<Team[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
-
-  const loadTeams = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await apiClient.get('/api/teams?view=mine&pageSize=100')
-      if (res.success) {
-        const payload = res.data as any
-        const list: Team[] = Array.isArray(payload)
-          ? payload
-          : Array.isArray(payload?.items)
-            ? payload.items
-            : Array.isArray(payload?.data)
-              ? payload.data
-              : []
-        setTeams(list)
-        if (list.length > 0) setActiveTeamId(list[0].id)
-      } else {
-        setError(res.message || '团队加载失败')
-      }
-    } catch {
-      setError('团队加载失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadTeams()
-  }, [loadTeams])
-
-  const activeTeam = teams.find(t => t.id === activeTeamId)
+  const { sessionKey } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const resource = useResource<TeamPayload | Team[]>('/api/teams?view=mine&pageSize=100', { sessionKey, isEmpty: data => normalizeTeams(data).length === 0, dedupingInterval: 30000 })
+  const teams = normalizeTeams(resource.data)
+  const requestedTeam = searchParams.get('team')
+  const activeTeamId = teams.some(team => team.id === requestedTeam) ? requestedTeam! : teams[0]?.id
+  const setTeam = (teamId: string) => { const params = new URLSearchParams(searchParams.toString()); params.set('team', teamId); router.replace(`/teacher/homeworks?${params}`, { scroll: false }) }
 
   return (
-    <>
-        <div style={{ padding: '2rem' }}>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: '1.5rem' }}>作业</h1>
-
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
-          ) : error ? (
-            <LoadError message={error} onRetry={loadTeams} />
-          ) : teams.length === 0 ? (
-            <Empty text="暂无团队，请先创建团队" />
-          ) : (
-            <>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                {teams.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setActiveTeamId(t.id)}
-                    style={{
-                      padding: '0.4rem 0.8rem',
-                      borderRadius: 'var(--radius)',
-                      border: `1px solid ${t.id === activeTeamId ? 'var(--primary)' : 'var(--border)'}`,
-                      background: t.id === activeTeamId ? 'var(--primary-light)' : 'var(--bg-card)',
-                      color: t.id === activeTeamId ? 'var(--primary-text)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      fontSize: 'var(--text-sm)',
-                      fontWeight: t.id === activeTeamId ? 600 : 400,
-                    }}
-                  >
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-
-              {activeTeam && (
-                <TeamTrainingList
-                  teamId={activeTeam.id}
-                  basePath="/teacher/teams"
-                  isAdmin={true}
-                  mode="homework"
-                />
-              )}
-            </>
-          )}
-        </div>
-    </>
+    <PageFrame>
+      <PageHeader title="作业" description="选择团队后查看、创建和维护作业。" />
+      <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText="暂无团队，请先创建团队" skeletonRows={5}>
+        {() => <>
+          <Toolbar><ToolbarGroup><label htmlFor="homework-team" className={styles.summary}>团队范围</label><select id="homework-team" className={styles.scopeSelect} value={activeTeamId} onChange={event => setTeam(event.target.value)}>{teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}</select></ToolbarGroup><span className={styles.summary}>作业只显示在所选团队内</span></Toolbar>
+          {activeTeamId && <TeamTrainingList teamId={activeTeamId} basePath="/teacher/teams" isAdmin mode="homework" />}
+        </>}
+      </AsyncRegion>
+    </PageFrame>
   )
 }

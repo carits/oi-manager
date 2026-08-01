@@ -544,6 +544,7 @@ export async function syncLuoguSubmissionsForUser(
       await prisma.submission.create({
         data: {
           userId,
+          workspaceScope: 'personal',
           oj: 'luogu',
           ojRemoteId: sub.recordId,
           problemId: sub.problemId,
@@ -812,6 +813,7 @@ export async function syncFirstLuoguSubmission(
     const submission = await prisma.submission.create({
       data: {
         userId,
+        workspaceScope: 'personal',
         oj: 'luogu',
         ojRemoteId: latestSub.recordId,
         problemId: latestSub.problemId,
@@ -959,6 +961,7 @@ async function asyncSyncRemaining(
       await prisma.submission.create({
         data: {
           userId,
+          workspaceScope: 'personal',
           oj: 'luogu',
           ojRemoteId: recordId,
           problemId: subProblemId,

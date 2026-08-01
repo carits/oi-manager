@@ -5,5 +5,5 @@ import ProblemListPage from '@/components/problem/ProblemListPage'
 
 export default function StudentProblemListsPage() {
   const { user } = useAuth()
-  return <ProblemListPage canCreate={user?.studentMode === 'personal'} displayMode="card" />
+  return <ProblemListPage canCreate={user?.workspaceMode === 'personal'} displayMode="card" />
 }

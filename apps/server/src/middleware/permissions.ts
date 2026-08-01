@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '../prisma'
-import { AuthRequest, isPersonalMode } from './auth'
+import { AuthRequest, getMembershipType, isPersonalMode } from './auth'
 import logger from '../lib/logger'
 
 /**
@@ -85,7 +85,7 @@ export async function canAccessSchool(req: AuthRequest, schoolId: string): Promi
   const role = req.user!.role
 
   // 超管和平台管理员可以访问所有学校
-  if (role === 'super_admin' || role === 'platform_admin') return true
+  if (!isPersonalMode(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
 
   // 其他角色只能访问本校
   const userSchoolId = await getUserSchoolId(req.user!.userId)
@@ -141,7 +141,7 @@ export async function canViewStudent(req: AuthRequest, studentId: string): Promi
   const role = req.user!.role
 
   // 超管和平台管理员可以查看所有学生
-  if (role === 'super_admin' || role === 'platform_admin') return true
+  if (!isPersonalMode(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
 
   // 获取学生信息
   const student = await prisma.student.findUnique({
@@ -182,7 +182,7 @@ export async function canManageStudent(req: AuthRequest, studentId: string): Pro
   const role = req.user!.role
 
   // 超管和平台管理员可以管理所有学生
-  if (role === 'super_admin' || role === 'platform_admin') return true
+  if (!isPersonalMode(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
 
   // 获取学生信息
   const student = await prisma.student.findUnique({
@@ -233,7 +233,7 @@ export async function canViewTeacher(req: AuthRequest, teacherId: string): Promi
   const role = req.user!.role
 
   // 超管和平台管理员可以查看所有教师
-  if (role === 'super_admin' || role === 'platform_admin') return true
+  if (!isPersonalMode(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
 
   // 获取教师信息
   const teacher = await prisma.teacher.findUnique({
@@ -310,7 +310,7 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
   const role = req.user!.role
 
   // 超管和平台管理员可以查看所有团队
-  if (role === 'super_admin' || role === 'platform_admin') return true
+  const isWorkAdmin = !isPersonalMode(req.user) && (role === 'super_admin' || role === 'platform_admin')
 
   // 获取团队信息
   const team = await prisma.team.findUnique({
@@ -327,6 +327,8 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
     logPermissionDenied(req, 'view_team', 'team', teamId, '团队不属于当前使用模式')
     return false
   }
+
+  if (isWorkAdmin) return true
 
   // 检查学校归属
   const userSchoolId = await getUserSchoolId(req.user!.userId)
@@ -345,6 +347,7 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
     where: {
       teamId,
       OR: [
+        { userId: req.user!.userId, userType: getMembershipType(req.user!) },
         { userId: req.user!.userId },
         { userId: await getUserTeacherId(req.user!.userId), userType: 'teacher' },
         { userId: await getUserStudentId(req.user!.userId), userType: 'student' }
@@ -369,7 +372,7 @@ export async function canManageTeam(req: AuthRequest, teamId: string): Promise<b
   const role = req.user!.role
 
   // 超管可以管理所有团队
-  if (role === 'super_admin') return true
+  const isWorkSuperAdmin = !isPersonalMode(req.user) && role === 'super_admin'
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -381,6 +384,8 @@ export async function canManageTeam(req: AuthRequest, teamId: string): Promise<b
     return false
   }
 
+  if (isWorkSuperAdmin) return true
+
   // 获取用户在团队中的角色
   const teacherId = await getUserTeacherId(req.user!.userId)
   const studentId = await getUserStudentId(req.user!.userId)
@@ -389,6 +394,7 @@ export async function canManageTeam(req: AuthRequest, teamId: string): Promise<b
     where: {
       teamId,
       OR: [
+        { userId: req.user!.userId, userType: getMembershipType(req.user!) },
         ...(teacherId ? [{ userId: teacherId, userType: 'teacher' as const }] : []),
         ...(studentId ? [{ userId: studentId, userType: 'student' as const }] : [])
       ],

@@ -400,6 +400,10 @@ export class TeamImportService {
     if (!team) {
       throw new Error('团队不存在')
     }
+    if (!team.schoolId || team.scope === 'personal') {
+      throw new Error('个人团队不支持校园成员导入')
+    }
+    const teamSchoolId = team.schoolId
 
     const studentsToAdd: Array<{ id: string; type: 'student' }> = []
 
@@ -459,7 +463,7 @@ export class TeamImportService {
                 passwordHash,
                 role: 'student',
                 status: 'active',
-                schoolId: team.schoolId,
+                schoolId: teamSchoolId,
               },
             })
 
@@ -467,7 +471,7 @@ export class TeamImportService {
               data: {
                 id: newUser.id,
                 name: studentName,
-                schoolId: team.schoolId,
+                schoolId: teamSchoolId,
                 headTeacherId: operatorId,
               },
             })

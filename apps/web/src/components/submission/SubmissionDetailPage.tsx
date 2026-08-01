@@ -3,12 +3,19 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
+import { Check, CheckCircle2, ChevronDown, ChevronRight, Copy, XCircle } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { Empty } from '@/components/ui/Empty'
+import { PageFrame } from '@/components/ui/PageFrame'
+import { PageHeader } from '@/components/ui/PageHeader'
+import styles from './SubmissionDetail.module.css'
 import { getLanguageLabel } from '@/lib/judge-constants'
 import { getAvatarUrl } from '@/lib/assets'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
+import { useAuth } from '@/components/AuthProvider'
 
 interface CaseResult {
   caseId: number
@@ -129,6 +136,7 @@ function formatMemory(kb: number): string {
 }
 
 export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPageProps) {
+  const { user } = useAuth()
   const router = useRouter()
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -208,6 +216,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   }
 
   const getPathPrefix = () => {
+    if (user?.workspaceMode === 'personal') return '/personal'
     if (role === 'admin') return '/platform-admin'
     if (role === 'student') return '/student'
     return '/teacher'
@@ -215,31 +224,19 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
 
   if (loading) {
     return (
-      <SkeletonRegion rows={8} label="评测详情正在准备" />
+      <PageFrame width="workbench"><PageHeader title="提交详情" breadcrumbs={[{ label: '评测记录', href: `${getPathPrefix()}/submissions` }, { label: '详情' }]} /><SkeletonRegion rows={8} label="评测详情正在准备" /></PageFrame>
     )
   }
 
   if (error && !detail) {
     return (
-      <LoadError message={error} onRetry={() => window.location.reload()} />
+      <PageFrame><PageHeader title="提交详情" breadcrumbs={[{ label: '评测记录', href: `${getPathPrefix()}/submissions` }, { label: '详情' }]} /><LoadError message={error} onRetry={() => window.location.reload()} /></PageFrame>
     )
   }
 
   if (!detail) {
     return (
-      <>
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          提交记录不存在
-          <div style={{ marginTop: '1rem' }}>
-            <button
-              onClick={() => router.push(`${getPathPrefix()}/submissions`)}
-              style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              返回评测记录
-            </button>
-          </div>
-        </div>
-      </>
+      <PageFrame><PageHeader title="提交详情" breadcrumbs={[{ label: '评测记录', href: `${getPathPrefix()}/submissions` }, { label: '详情' }]} /><Empty title="提交记录不存在" description="记录可能已被删除，或当前账号没有查看权限。" action={<Button variant="secondary" onClick={() => router.push(`${getPathPrefix()}/submissions`)}>返回评测记录</Button>} /></PageFrame>
     )
   }
 
@@ -264,40 +261,14 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
         }
       `}</style>
 
-      <div style={{ padding: '1rem 1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Header bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <button
-            onClick={() => router.push(`${getPathPrefix()}/submissions`)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: '0.875rem', color: 'var(--text-secondary)', padding: '0.25rem 0',
-            }}
-          >
-            ← 返回列表
-          </button>
-          <span style={{ color: '#d1d5db' }}>|</span>
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>#{detail.id}</span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '1.25rem' }}>
+      <PageFrame width="workbench">
+        <PageHeader title={`提交 #${detail.id}`} description={`${ojLabel} · ${detail.problemId}${detail.problemTitle ? ` · ${detail.problemTitle}` : ''}`} breadcrumbs={[{ label: '评测记录', href: `${getPathPrefix()}/submissions` }, { label: `#${detail.id}` }]} />
+        <div className={styles.grid}>
           {/* Left column (9/12) */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className={styles.main}>
             {/* Status section header — Hydro style */}
-            <div style={{
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              overflow: 'hidden',
-              marginBottom: '1rem',
-            }}>
-              <div style={{
-                padding: '0.875rem 1rem',
-                background: 'var(--bg-muted)',
-                borderBottom: '1px solid #e5e7eb',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}>
+            <div className={styles.panel}>
+              <div className={`${styles.panelHeader} ${styles.statusHeader}`}>
                 {/* Status icon */}
                 {isQueuing ? (
                   <span style={{
@@ -309,9 +280,9 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     animation: 'spin 1s linear infinite',
                   }} />
                 ) : statusClass === 'pass' ? (
-                  <span style={{ color: statusColor, fontSize: '1.1rem', lineHeight: 1 }}>✓</span>
+                  <CheckCircle2 size={19} color={statusColor} aria-hidden="true" />
                 ) : (
-                  <span style={{ color: statusColor, fontSize: '1rem', lineHeight: 1 }}>✕</span>
+                  <XCircle size={18} color={statusColor} aria-hidden="true" />
                 )}
                 {/* Score */}
                 {detail.score !== null && detail.score !== undefined && (
@@ -362,10 +333,10 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     <thead>
                       <tr style={{ background: 'var(--bg-muted)' }}>
                         <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '60px' }}>#</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)' }}>Status</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>Score</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>Time</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>Memory</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)' }}>状态</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>得分</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>用时</th>
+                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>内存</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -493,36 +464,28 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
 
               {/* Summary bar — Hydro style horizontal dl */}
               {(detail.score !== null && detail.score !== undefined || detail.timeUsed || detail.memoryUsed) && (
-                <div style={{
-                  display: 'flex',
-                  gap: '2rem',
-                  padding: '0.625rem 1rem',
-                  borderTop: '1px solid #f3f4f6',
-                  background: 'var(--bg-muted)',
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-secondary)',
-                }}>
+                <div className={styles.summary}>
                   {detail.score !== null && detail.score !== undefined && (
                     <div>
-                      <span>Score: </span>
+                      <span>得分：</span>
                       <span style={{ fontWeight: 600, color: getScoreColor(detail.score) }}>{detail.score}</span>
                     </div>
                   )}
                   {detail.timeUsed !== null && detail.timeUsed !== undefined && (
                     <div>
-                      <span>Total Time: </span>
+                      <span>总用时：</span>
                       <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.timeUsed}ms</span>
                     </div>
                   )}
                   {peakTime !== null && (
                     <div>
-                      <span>Peak Time: </span>
+                      <span>单点峰值用时：</span>
                       <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{peakTime}ms</span>
                     </div>
                   )}
                   {detail.memoryUsed !== null && detail.memoryUsed !== undefined && (
                     <div>
-                      <span>Peak Memory: </span>
+                      <span>峰值内存：</span>
                       <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatMemory(detail.memoryUsed)}</span>
                     </div>
                   )}
@@ -531,52 +494,21 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
             </div>
 
             {/* Code section */}
-            <div style={{
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '0.625rem 1rem',
-                background: 'var(--bg-muted)',
-                borderBottom: '1px solid #e5e7eb',
-              }}>
-                <button
-                  onClick={() => setShowCode(!showCode)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}
-                >
-                  {showCode ? '▾ Source Code' : '▸ Source Code'}
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <Button variant="text" icon={showCode ? <ChevronDown size={16} /> : <ChevronRight size={16} />} onClick={() => setShowCode(!showCode)}>
+                  源代码
                   <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.8125rem' }}>
                     ({detail.codeLength}B)
                   </span>
-                </button>
+                </Button>
                 {showCode && detail.code && (
-                  <button
-                    onClick={handleCopy}
-                    style={{
-                      padding: '0.25rem 0.625rem',
-                      background: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
+                  <Button size="sm" variant="secondary" icon={copied ? <Check size={15} /> : <Copy size={15} />} onClick={handleCopy}>{copied ? '已复制' : '复制'}</Button>
                 )}
               </div>
               {showCode && (
                 detail.code ? (
-                <div style={{
-                  maxHeight: '500px',
-                  overflow: 'auto',
-                  background: 'var(--bg-muted)',
-                }}>
+                <div className={styles.codeArea}>
                   <pre style={{
                     margin: 0,
                     padding: '1rem',
@@ -604,27 +536,14 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
           </div>
 
           {/* Right column (3/12) — Information sidebar */}
-          <div style={{ width: '260px', flexShrink: 0 }}>
-            <div style={{
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                padding: '0.625rem 1rem',
-                background: 'var(--bg-muted)',
-                borderBottom: '1px solid #e5e7eb',
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                color: 'var(--text-primary)',
-              }}>
-                Information
-              </div>
+          <aside className={styles.sidebar}>
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}><h2 className={styles.panelTitle}>提交信息</h2></div>
 
               <div style={{ padding: '0.875rem 1rem', fontSize: '0.8125rem' }}>
                 {/* Submitter */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Submit By</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>提交人</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {detail.submitterAvatar ? (
                       <img
@@ -648,7 +567,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
 
                 {/* Problem */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Problem</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>题目</div>
                   <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                     [{ojLabel}-{detail.problemId}]
                     {detail.problemTitle ? ` ${detail.problemTitle}` : ''}
@@ -657,19 +576,19 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
 
                 {/* Language */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Language</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>语言</div>
                   <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{getLanguageLabel(detail.language)}</div>
                 </div>
 
                 {/* Code Length */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Code Length</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>代码长度</div>
                   <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.codeLength}B</div>
                 </div>
 
                 {/* Submit At */}
                 <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Submit At</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>提交时间</div>
                   <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                     {new Date(detail.submittedAt).toLocaleString('zh-CN')}
                   </div>
@@ -678,11 +597,11 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 {/* OJ Remote ID */}
                 {detail.ojRemoteId && (
                   <div>
-                    <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Remote ID</div>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>远端记录编号</div>
                     <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                       {detail.oj === 'carits' ? (
                         <a
-                          href={`${role === 'admin' ? '/platform-admin' : role === 'student' ? '/student' : '/teacher'}/submissions/${detail.ojRemoteId}`}
+                          href={`${getPathPrefix()}/submissions/${detail.ojRemoteId}`}
                           style={{ color: 'var(--primary)', textDecoration: 'none' }}
                         >
                           {detail.ojRemoteId}
@@ -713,9 +632,9 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 )}
               </div>
             </div>
-          </div>
+          </aside>
         </div>
-      </div>
+      </PageFrame>
     </>
   )
 }

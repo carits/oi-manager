@@ -32,8 +32,11 @@ export async function getTeamMember(userId: string, teamId: string) {
 
 /** 检查是否是团队管理员 */
 export async function isTeamAdmin(userId: string, teamId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (user?.role === 'super_admin') return true
+  const [user, team] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } }),
+  ])
+  if (team?.scope === 'campus' && user?.role === 'super_admin') return true
 
   const member = await prisma.teamMember.findFirst({
     where: { teamId, userId, status: 'active', role: { in: ['owner', 'admin'] } }
@@ -43,8 +46,14 @@ export async function isTeamAdmin(userId: string, teamId: string): Promise<boole
 
 /** 检查是否是团队成员 */
 export async function isTeamMember(userId: string, teamId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (user?.role === 'super_admin' || user?.role === 'platform_admin') return true
+  const [user, team] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } }),
+  ])
+  if (
+    team?.scope === 'campus'
+    && (user?.role === 'super_admin' || user?.role === 'platform_admin')
+  ) return true
 
   return !!(await getTeamMember(userId, teamId))
 }

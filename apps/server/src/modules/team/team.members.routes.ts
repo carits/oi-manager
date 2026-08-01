@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, getMembershipType } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
 import { formatMemberForScope, getMemberDetailsBatch, getUserDisplayName, getUserNames } from './team.utils'
@@ -37,12 +37,14 @@ teamMembersRouter.get('/:id/available-members', authenticate, asyncHandler(async
   const existingMembers = await teamRepository.findMembers(id)
   const existingTeacherIds = existingMembers.filter(m => m.userType === 'teacher').map(m => m.userId)
   const existingStudentIds = existingMembers.filter(m => m.userType === 'student').map(m => m.userId)
+  const existingUserIds = existingMembers.filter(m => m.userType === 'user').map(m => m.userId)
 
   const result = await teamRepository.findAvailableMembers({
     schoolId: team.schoolId,
     scope: team.scope as 'campus' | 'personal',
     excludeTeacherIds: existingTeacherIds,
     excludeStudentIds: existingStudentIds,
+    excludeUserIds: existingUserIds,
     keyword: keyword as string,
     type: type as MemberType
   })
@@ -83,7 +85,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
   }
 
   let member
-  if (memberType && (memberType === 'teacher' || memberType === 'student')) {
+  if (memberType && (memberType === 'teacher' || memberType === 'student' || memberType === 'user')) {
     member = await teamRepository.findMember({
       teamId: id,
       userId: memberId,
@@ -119,7 +121,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
   await prisma.$transaction(async (tx) => {
     await tx.teamMember.delete({ where: { id: member.id } })
 
-    const callerType = user.role === 'student' ? 'student' : 'teacher'
+    const callerType = getMembershipType(user)
     await tx.teamOperationLog.create({
       data: {
         id: crypto.randomUUID(),
@@ -220,7 +222,7 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
   }
 
   let existingMember
-  if (memberType && (memberType === 'teacher' || memberType === 'student')) {
+  if (memberType && (memberType === 'teacher' || memberType === 'student' || memberType === 'user')) {
     existingMember = await teamRepository.findMember({
       teamId: id,
       userId: memberId,
@@ -256,7 +258,7 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
     })
 
     const callerId = user.userId
-    const callerType = user.role === 'student' ? 'student' : 'teacher'
+    const callerType = getMembershipType(user)
     await tx.teamOperationLog.create({
       data: {
         id: crypto.randomUUID(),
@@ -297,7 +299,7 @@ teamMembersRouter.delete('/:id/admins/:adminId', authenticate, asyncHandler(asyn
   }
 
   let adminMember
-  if (adminType && (adminType === 'teacher' || adminType === 'student')) {
+  if (adminType && (adminType === 'teacher' || adminType === 'student' || adminType === 'user')) {
     adminMember = await teamRepository.findMember({
       teamId: id,
       userId: adminId,
@@ -325,7 +327,7 @@ teamMembersRouter.delete('/:id/admins/:adminId', authenticate, asyncHandler(asyn
     })
 
     const callerId = user.userId
-    const callerType = user.role === 'student' ? 'student' : 'teacher'
+    const callerType = getMembershipType(user)
     await tx.teamOperationLog.create({
       data: {
         id: crypto.randomUUID(),

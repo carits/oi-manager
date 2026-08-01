@@ -1,0 +1,24 @@
+.candidate {
+  width: 100%;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--gray-100);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.candidate:hover,
+.candidate:focus-visible {
+  background: var(--bg-muted);
+}
+
+.candidateSelected {
+  background: var(--info-light);
+}

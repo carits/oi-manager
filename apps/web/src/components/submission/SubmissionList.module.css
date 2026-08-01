@@ -1,0 +1,7 @@
+.filters { flex: 1; }
+.input, .select { height: var(--control-height); padding: 0 var(--space-3); color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); }
+.input { width: 132px; }
+.select { min-width: 126px; }
+.input:focus, .select:focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
+.link { color: var(--primary); font-weight: 600; }
+.link:hover { text-decoration: underline; }

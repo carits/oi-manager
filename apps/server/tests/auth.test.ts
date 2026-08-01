@@ -375,6 +375,66 @@ describe('Authentication Module', () => {
     })
   })
 
+  describe('POST /api/auth/switch-workspace', () => {
+    it.each([
+      ['super_admin', 'admin'],
+      ['platform_admin', 'admin'],
+      ['school_principal', 'teacher'],
+      ['teacher', 'teacher'],
+      ['student', 'student']
+    ] as const)('keeps the %s role while switching workspaces', async (role, loginRole) => {
+      const { user, password } = await createTestUser({ role })
+      const agent = request.agent(app)
+
+      const login = await agent
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: loginRole, workspaceMode: 'work' })
+
+      expect(login.status).toBe(200)
+      expect(login.body.data.role).toBe(role)
+      expect(login.body.data.workspaceMode).toBe('work')
+
+      const switched = await agent
+        .post('/api/auth/switch-workspace')
+        .send({ workspaceMode: 'personal' })
+
+      expect(switched.status).toBe(200)
+      expect(switched.body.data.workspaceMode).toBe('personal')
+      expect(switched.headers['set-cookie']?.[0]).toContain('oi_session=')
+
+      const me = await agent.get('/api/auth/me')
+      expect(me.status).toBe(200)
+      expect(me.body.data.role).toBe(role)
+      expect(me.body.data.workspaceMode).toBe('personal')
+
+      const profile = await prisma.personalProfile.findUnique({ where: { userId: user.id } })
+      expect(profile?.rating).toBe(1200)
+
+      const restored = await agent
+        .post('/api/auth/switch-workspace')
+        .send({ workspaceMode: 'work' })
+      expect(restored.status).toBe(200)
+      expect(restored.body.data.workspaceMode).toBe('work')
+    })
+
+    it('rejects an invalid workspace without changing the session', async () => {
+      const { user, password } = await createTestUser({ role: 'teacher' })
+      const agent = request.agent(app)
+
+      await agent
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: 'teacher', workspaceMode: 'work' })
+
+      const invalid = await agent
+        .post('/api/auth/switch-workspace')
+        .send({ workspaceMode: 'campus' })
+      expect(invalid.status).toBe(400)
+
+      const me = await agent.get('/api/auth/me')
+      expect(me.body.data.workspaceMode).toBe('work')
+    })
+  })
+
   describe('PUT /api/auth/password', () => {
     it('should change password successfully', async () => {
       const { user, password } = await createTestUser({ role: 'student' })

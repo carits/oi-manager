@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 source_of_truth: apps/server/src/modules/team, apps/server/src/modules/team-import
 ---
 
@@ -13,7 +13,7 @@ source_of_truth: apps/server/src/modules/team, apps/server/src/modules/team-impo
 |----------|------|
 | owner | 编辑团队、转让、删除、管理管理员和全部成员 |
 | admin | 管理允许范围内的成员、邀请、申请和内容 |
-| teacher/member | 查看参与内容；具体能力由用户角色和资源规则决定 |
+| member | 查看参与内容；具体能力由团队角色和资源规则决定 |
 
 系统角色与团队角色是两层权限。教师身份不会自动拥有所有团队，平台管理员也不会自动
 成为团队管理员。
@@ -34,10 +34,15 @@ stateDiagram-v2
 平台范围的数据空间，不进入学校团队列表，也不向客户端暴露学校归属。个人模式成员、
 所有者、邀请和申请只显示平台用户名，校园模式保留实名。
 
-个人模式学生可以创建个人团队；校园模式学生只能浏览、申请或接受校园团队邀请。
-所有列表、详情和写操作都由服务端从 JWT 的 `studentMode` 推导作用域，客户端参数不能
+任意数据库角色进入个人工作区后都以通用 `user` 成员身份创建、加入和管理个人团队，
+不会继承岗位管理能力或更高配额。校园模式学生只能浏览、申请或接受校园团队邀请。
+所有列表、详情和写操作都由服务端从 JWT 的 `workspaceMode` 推导作用域，客户端参数不能
 跨作用域读取或修改团队。创建者成为 owner，转让成功后原 owner 降级，任何时刻只允许
 一个有效 owner。
+
+个人团队的 `schoolId` 必须为 `null`，成员和加入申请关联 `User`；校园团队必须有学校，
+成员类型仍为 `teacher | student`。跨作用域详情返回 `404` 或既有兼容端点的 `403`，不得
+通过平台管理员或超级管理员岗位绕过个人团队成员规则。
 
 ## 成员进入
 

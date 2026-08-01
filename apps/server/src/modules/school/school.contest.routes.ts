@@ -6,7 +6,7 @@
 import { Router } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, requireWorkspace } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
@@ -17,6 +17,8 @@ import {
 } from '../training/training.helpers'
 
 export const schoolContestRouter = Router()
+
+schoolContestRouter.use(authenticate, requireWorkspace('work'))
 
 /**
  * GET /api/schools/:schoolId/contests
@@ -32,7 +34,7 @@ schoolContestRouter.get('/:schoolId/contests', authenticate, asyncHandler(async 
   }
 
   const trainings = await prisma.training.findMany({
-    where: { schoolId, ...(typeFilter ? { type: typeFilter } : { type: 'contest' }) },
+    where: { schoolId, scope: 'campus', ...(typeFilter ? { type: typeFilter } : { type: 'contest' }) },
     include: {
       _count: { select: { TrainingProblem: true } },
       TrainingProblem: { select: { id: true } },
@@ -48,6 +50,7 @@ schoolContestRouter.get('/:schoolId/contests', authenticate, asyncHandler(async 
       FROM "Submission"
       WHERE "trainingId" IN (${Prisma.join(trainingIds)})
         AND "submitScope" IN ('training', 'contest')
+        AND "workspaceScope" = 'campus'
       GROUP BY "trainingId"
     `
     for (const row of rows) {
@@ -112,6 +115,7 @@ schoolContestRouter.post('/:schoolId/contests', authenticate, asyncHandler(async
     data: {
       schoolId,
       teamId: null,
+      scope: 'campus',
       title,
       description: description || null,
       format: format || 'ioi',

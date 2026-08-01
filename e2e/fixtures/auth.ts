@@ -13,7 +13,7 @@ export interface AuthAccount {
   username: string
   password: string
   loginRole: 'admin' | 'teacher' | 'student'
-  mode?: 'campus' | 'personal'
+  workspaceMode?: 'work' | 'personal'
   storageState: string
 }
 
@@ -49,14 +49,14 @@ export const accounts: Record<AuthRole, AuthAccount> = {
     username: 'student1',
     password: accountPassword,
     loginRole: 'student',
-    mode: 'campus',
+    workspaceMode: 'work',
     storageState: path.join(authDir, 'campus-student.json'),
   },
   personalStudent: {
     username: 'personal_student1',
     password: accountPassword,
     loginRole: 'student',
-    mode: 'personal',
+    workspaceMode: 'personal',
     storageState: path.join(authDir, 'personal-student.json'),
   },
 }

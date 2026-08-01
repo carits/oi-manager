@@ -116,7 +116,7 @@ export function TeamEditModal({
                 checked={formData.isPublic}
                 onChange={() => setFormData({ ...formData, isPublic: true })}
               />
-              <span>🌐 公有团队</span>
+              <span>公开团队</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
               <input
@@ -125,7 +125,7 @@ export function TeamEditModal({
                 checked={!formData.isPublic}
                 onChange={() => setFormData({ ...formData, isPublic: false })}
               />
-              <span>🔒 私有团队</span>
+              <span>私有团队</span>
             </label>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>

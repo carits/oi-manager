@@ -5,6 +5,7 @@ import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { calculateStudentGrade, isStudentGraduated, type StudentForGrade } from '@/lib/grade'
 import apiClient from '@/lib/apiClient'
+import { useAuth } from '@/components/AuthProvider'
 
 interface RankingsTabProps {
   schoolId: string
@@ -21,6 +22,7 @@ interface RankingStudent extends StudentForGrade {
 }
 
 export default function RankingsTab({ schoolId, educationSystem }: RankingsTabProps) {
+  const { user } = useAuth()
   const [allStudents, setAllStudents] = useState<RankingStudent[]>([])
   const [loading, setLoading] = useState(true)
   const [includeGraduated, setIncludeGraduated] = useState(false)
@@ -88,6 +90,7 @@ export default function RankingsTab({ schoolId, educationSystem }: RankingsTabPr
         data={paginatedStudents}
         loading={loading}
         emptyText="暂无排名数据"
+        isCurrentRow={student => student.id === user?.studentId}
         columns={[
           {
             key: 'rank',

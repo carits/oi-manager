@@ -7,6 +7,7 @@ export default function PlatformAdminLayout({ children }: { children: ReactNode 
       allowedRoles={['super_admin', 'platform_admin']}
       loginRole="platform-admin"
       homePath="/platform-admin"
+      requiredWorkspace="work"
     >
       {children}
     </RoleLayout>

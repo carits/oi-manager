@@ -977,7 +977,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             <button type="button" onClick={autoConfigure} style={btnOutline}>⚡ 自动配置</button>
             <button type="button" onClick={addSubtask} style={btnOutline}>＋ 添加子任务</button>
             {subtasks.length > 0 && (
-              <button type="button" onClick={deleteAllSubtasks} style={btnDanger}>🗑️ 一键删除</button>
+              <button type="button" onClick={deleteAllSubtasks} style={btnDanger}>删除全部子任务</button>
             )}
             <span style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', alignSelf: 'center', marginLeft: 'auto' }}>
               全局 {globalTime} / {globalMemory} · {subtasks.reduce((sum, st) => sum + st.cases.length, 0)} 测试点 · {subtasks.length} 子任务
@@ -1066,7 +1066,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     ) : (
                       <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontSize: '0.8125rem', color: 'var(--gray-600)' }}>
                         <span>⏱ {st.time || globalTime}</span>
-                        <span>💾 {st.memory || globalMemory}</span>
+                        <span>内存 {st.memory || globalMemory}</span>
                         <button type="button" onClick={() => startEditSubtask(st)} style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>编辑</button>
                       </div>
                     )}

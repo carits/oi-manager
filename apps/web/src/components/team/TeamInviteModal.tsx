@@ -5,18 +5,19 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
+import { useAuth } from '@/components/AuthProvider'
 
 interface AvailableMember {
   id: string
   name: string
   username?: string
   avatar?: string | null
-  memberType: 'teacher' | 'student'
+  memberType: 'teacher' | 'student' | 'user'
 }
 
 interface SelectedMember {
   id: string
-  memberType: 'teacher' | 'student'
+  memberType: 'teacher' | 'student' | 'user'
 }
 
 interface TeamInviteModalProps {
@@ -28,6 +29,7 @@ interface TeamInviteModalProps {
 
 export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInviteModalProps) {
   const toast = useToast()
+  const { user } = useAuth()
   const [availableMembers, setAvailableMembers] = useState<AvailableMember[]>([])
   const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>([])
   const [usernameInput, setUsernameInput] = useState('')
@@ -47,11 +49,12 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
     try {
       const params = new URLSearchParams()
       if (keyword) params.set('keyword', keyword)
-      const result = await apiClient.get<{ teachers: any[]; students: any[] }>(`/api/teams/${teamId}/available-members?${params}`)
+      const result = await apiClient.get<{ teachers: any[]; students: any[]; users?: any[] }>(`/api/teams/${teamId}/available-members?${params}`)
       if (result.success && result.data) {
         const teachers = (result.data.teachers || []).map((t: any) => ({ ...t, memberType: 'teacher' as const }))
         const students = (result.data.students || []).map((s: any) => ({ ...s, memberType: 'student' as const }))
-        setAvailableMembers([...teachers, ...students])
+        const users = (result.data.users || []).map((candidate: any) => ({ ...candidate, memberType: 'user' as const }))
+        setAvailableMembers([...users, ...teachers, ...students])
       }
     } catch (error) {
       console.error('Failed to fetch available members:', error)
@@ -132,11 +135,11 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
                   }}
                 />
                 <span style={{ fontWeight: 500 }}>{member.name}</span>
-                {member.username && (
+                {member.username && member.username !== member.name && (
                   <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({member.username})</span>
                 )}
-                <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: member.memberType === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)', color: member.memberType === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)', borderRadius: '4px' }}>
-                  {member.memberType === 'teacher' ? '教师' : '学生'}
+                <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: member.memberType === 'teacher' ? 'var(--blue-100)' : member.memberType === 'student' ? 'var(--green-100)' : 'var(--gray-100)', color: member.memberType === 'teacher' ? 'var(--blue-700)' : member.memberType === 'student' ? 'var(--green-700)' : 'var(--gray-700)', borderRadius: '4px' }}>
+                  {member.memberType === 'teacher' ? '教师' : member.memberType === 'student' ? '学生' : '用户'}
                 </span>
               </label>
             ))
@@ -164,7 +167,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
           }}
         />
         <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
-          注：只能邀请本校成员
+          {user?.workspaceMode === 'personal' ? '仅可邀请已启用个人身份的用户' : '只能邀请本校成员'}
         </p>
       </div>
 

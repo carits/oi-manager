@@ -32,7 +32,7 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
   if (rankingData.hidden) {
     return (
       <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🔒</div>
+        <div style={{ fontSize: '0.875rem', marginBottom: '0.75rem' }}>排名暂不可见</div>
         <div style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>排名尚未公布</div>
         <div style={{ fontSize: '0.85rem' }}>OI 赛制比赛结束后公布排名</div>
       </div>

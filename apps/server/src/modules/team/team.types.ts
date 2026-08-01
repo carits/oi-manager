@@ -8,7 +8,7 @@ import type { UserRole, JwtPayload } from '@oi-manager/shared'
 // ==================== 基础类型 ====================
 
 /** 成员类型 */
-export type MemberType = 'teacher' | 'student'
+export type MemberType = 'teacher' | 'student' | 'user'
 
 /** 成员角色 */
 export type MemberRole = 'owner' | 'admin' | 'member'
@@ -40,7 +40,7 @@ export interface TeamBase {
   avatar: string | null
   description: string | null
   announcement: string | null
-  schoolId: string
+  schoolId: string | null
   scope: TeamScope
   isPublic: boolean
   createdAt: Date
@@ -299,7 +299,9 @@ export interface UserIdentity {
 /** 从 JWT Payload 提取用户身份 */
 export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
   const userId = user.userId
-  const userType = user.role === 'student' ? 'student' : 'teacher'
+  const userType = user.workspaceMode === 'personal' || user.studentMode === 'personal'
+    ? 'user'
+    : user.role === 'student' ? 'student' : 'teacher'
 
   if (!userId) return null
 
@@ -312,6 +314,8 @@ export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
 
 /** 获取用户身份（带类型保护） */
 export function getUserIdentity(user: JwtPayload): { id: string; type: MemberType } | null {
-  const type = user.role === 'student' ? 'student' : 'teacher'
+  const type = user.workspaceMode === 'personal' || user.studentMode === 'personal'
+    ? 'user'
+    : user.role === 'student' ? 'student' : 'teacher'
   return { id: user.userId, type }
 }

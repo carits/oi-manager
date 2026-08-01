@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import { prisma } from '../../prisma'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, getResourceScope } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import logger from '../../lib/logger'
@@ -38,6 +38,7 @@ problemSubmissionsRouter.get('/:id/submissions', authenticate, asyncHandler(asyn
       oj: problem.platform,
       problemId: problem.problemId,
       userId: (req as any).user?.userId,
+      workspaceScope: getResourceScope((req as any).user),
       submitScope: 'problem',  // 只显示题库提交，排除训练/比赛提交
     }
 

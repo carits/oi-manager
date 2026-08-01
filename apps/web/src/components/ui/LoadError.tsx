@@ -1,4 +1,5 @@
 interface LoadErrorProps {
+  title?: string
   message?: string
   requestId?: string
   compact?: boolean
@@ -7,6 +8,7 @@ interface LoadErrorProps {
 }
 
 export function LoadError({
+  title = '暂时无法显示内容',
   message = '数据加载失败，请稍后重试',
   requestId,
   compact = false,
@@ -22,6 +24,9 @@ export function LoadError({
         color: 'var(--error)',
       }}
     >
+      <h2 style={{ margin: '0 0 0.5rem', color: 'var(--text-primary)', fontSize: 'var(--text-lg)' }}>
+        {title}
+      </h2>
       <p style={{ marginBottom: '1rem' }}>{message}</p>
       {requestId && (
         <p style={{ margin: '-0.5rem 0 1rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>

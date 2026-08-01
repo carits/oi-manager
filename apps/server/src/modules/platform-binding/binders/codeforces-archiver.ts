@@ -175,6 +175,7 @@ export async function syncCfSubmissionsForUser(
       await prisma.submission.create({
         data: {
           userId,
+          workspaceScope: 'personal',
           oj: 'codeforces',
           ojRemoteId: sub.submissionId,
           problemId: sub.problemId,  // 外部题号

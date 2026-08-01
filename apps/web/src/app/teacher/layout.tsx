@@ -7,6 +7,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
       allowedRoles={['teacher', 'school_principal']}
       loginRole="teacher"
       homePath="/teacher"
+      requiredWorkspace="work"
       contentClassName="teacher-page-content"
     >
       {children}
