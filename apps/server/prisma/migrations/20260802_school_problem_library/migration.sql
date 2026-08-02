@@ -64,7 +64,7 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE "Problem" DROP CONSTRAINT "Problem_platform_problemId_key";
+DROP INDEX "Problem_platform_problemId_key";
 ALTER TABLE "Problem"
   ADD CONSTRAINT "Problem_ownerId_fkey"
   FOREIGN KEY ("ownerId") REFERENCES "User"(id) ON DELETE RESTRICT ON UPDATE CASCADE;
