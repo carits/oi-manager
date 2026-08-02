@@ -4,6 +4,12 @@ import { accounts } from '../fixtures/auth'
 test.describe('login and permission boundaries @smoke @compact', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
+  test('root opens the login form directly', async ({ page }) => {
+    await page.goto('/')
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.locator('form')).toBeVisible()
+  })
+
   test('login role query selects the requested entry', async ({ page }) => {
     await page.goto('/login?role=student')
     await expect(page.getByRole('button', { name: '学生', exact: true })).toHaveAttribute('aria-pressed', 'true')
