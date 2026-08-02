@@ -6,6 +6,7 @@ WEB_DIR="$ROOT_DIR/apps/web"
 CURRENT_DIR="$WEB_DIR/.next-current"
 CANDIDATE_DIR="$WEB_DIR/.next-candidate"
 PREVIOUS_DIR="$WEB_DIR/.next-previous"
+CANARY_PID_FILE="$ROOT_DIR/.run/oi-web-canary.pid"
 
 test -f "$CANDIDATE_DIR/BUILD_ID"
 
@@ -20,7 +21,11 @@ wait_for_preview() {
   return 1
 }
 
-"$ROOT_DIR/scripts/start-preview-canary.sh"
+if [ -f "$CANARY_PID_FILE" ] && kill -0 "$(cat "$CANARY_PID_FILE")" 2>/dev/null; then
+  echo "Reusing the running preview canary."
+else
+  "$ROOT_DIR/scripts/start-preview-canary.sh"
+fi
 cleanup_canary() {
   "$ROOT_DIR/scripts/stop-preview-canary.sh"
 }
