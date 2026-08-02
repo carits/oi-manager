@@ -110,6 +110,11 @@ describe('补题作业测试', () => {
         timeLimit: 1000,
         memoryLimit: 262144,
         ownerId: ownerUser.user.id,
+        visibility: 'public',
+        libraryScope: 'platform',
+        libraryKey: 'platform',
+        status: 'published',
+        publishedAt: new Date(),
       }
     })
 

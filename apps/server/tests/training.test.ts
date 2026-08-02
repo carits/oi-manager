@@ -371,7 +371,12 @@ describe('训练模块权限测试', () => {
           platform: 'carits',
           problemId: `P_E1_${Date.now()}`,
           title: '测试题目E1',
-          ownerId: ownerUser.user.id
+          ownerId: ownerUser.user.id,
+          visibility: 'public',
+          libraryScope: 'platform',
+          libraryKey: 'platform',
+          status: 'published',
+          publishedAt: new Date(),
         }
       })
 
@@ -395,7 +400,12 @@ describe('训练模块权限测试', () => {
           platform: 'carits',
           problemId: `P_E2_${Date.now()}`,
           title: '测试题目E2',
-          ownerId: adminUser.user.id
+          ownerId: adminUser.user.id,
+          visibility: 'public',
+          libraryScope: 'platform',
+          libraryKey: 'platform',
+          status: 'published',
+          publishedAt: new Date(),
         }
       })
 
@@ -419,7 +429,12 @@ describe('训练模块权限测试', () => {
           platform: 'carits',
           problemId: `P_E3_${Date.now()}`,
           title: '测试题目E3',
-          ownerId: memberUser.user.id
+          ownerId: memberUser.user.id,
+          visibility: 'public',
+          libraryScope: 'platform',
+          libraryKey: 'platform',
+          status: 'published',
+          publishedAt: new Date(),
         }
       })
 
@@ -442,7 +457,12 @@ describe('训练模块权限测试', () => {
           platform: 'carits',
           problemId: `P_E4_${Date.now()}`,
           title: '测试题目E4',
-          ownerId: outsiderUser.user.id
+          ownerId: outsiderUser.user.id,
+          visibility: 'public',
+          libraryScope: 'platform',
+          libraryKey: 'platform',
+          status: 'published',
+          publishedAt: new Date(),
         }
       })
 

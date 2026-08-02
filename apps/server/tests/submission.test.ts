@@ -83,7 +83,12 @@ describe('提交记录学校数据隔离', () => {
         platform: 'carits',
         problemId: `P${Date.now()}`,
         title: '测试题目',
-        ownerId: teacherA.user.id
+        ownerId: teacherA.user.id,
+        visibility: 'public',
+        libraryScope: 'platform',
+        libraryKey: 'platform',
+        status: 'published',
+        publishedAt: new Date(),
       }
     })
 
@@ -251,7 +256,12 @@ describe('提交详情权限', () => {
         platform: 'carits',
         problemId: `P${Date.now()}`,
         title: '测试题目',
-        ownerId: teacherA.user.id
+        ownerId: teacherA.user.id,
+        visibility: 'public',
+        libraryScope: 'platform',
+        libraryKey: 'platform',
+        status: 'published',
+        publishedAt: new Date(),
       }
     })
 
@@ -370,7 +380,12 @@ describe('训练提交隔离', () => {
         platform: 'carits',
         problemId: `P${Date.now()}`,
         title: '测试题目',
-        ownerId: ownerUser.user.id
+        ownerId: ownerUser.user.id,
+        visibility: 'public',
+        libraryScope: 'platform',
+        libraryKey: 'platform',
+        status: 'published',
+        publishedAt: new Date(),
       }
     })
 

@@ -5,6 +5,7 @@ import type { UserRole, JwtPayload } from '../../../../packages/shared/src'
 
 // 平台学校 ID（用于系统管理员）
 const PLATFORM_SCHOOL_ID = 'platform-school-00000000'
+const TEST_BCRYPT_ROUNDS = 4
 
 interface CreateTestUserOptions {
   role?: UserRole
@@ -44,7 +45,7 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
   const { role = 'student', username, password = 'test123456', schoolId, status = 'active', headTeacherId, rating = 1200 } = options
   const uniqueUsername = username || `t_${Math.random().toString(36).slice(2, 8)}`
 
-  const passwordHash = await bcrypt.hash(password, 10)
+  const passwordHash = await bcrypt.hash(password, TEST_BCRYPT_ROUNDS)
 
   // 确定用户的 schoolId
   let effectiveSchoolId = schoolId
@@ -247,7 +248,7 @@ export async function createTestSchoolWithPrincipal(schoolName?: string) {
 
   // 创建真正的负责人用户
   const username = `principal_${Math.random().toString(36).slice(2, 8)}`
-  const passwordHash = await bcrypt.hash('principal123456', 10)
+  const passwordHash = await bcrypt.hash('principal123456', TEST_BCRYPT_ROUNDS)
   const userId = crypto.randomUUID()
 
   const user = await prisma.user.create({

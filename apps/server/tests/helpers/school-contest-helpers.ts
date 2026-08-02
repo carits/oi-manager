@@ -92,6 +92,11 @@ export async function createTestContestProblem(options: {
       problemId: uniqueProblemId,
       title,
       ownerId,
+      visibility: 'public',
+      libraryScope: 'platform',
+      libraryKey: 'platform',
+      status: 'published',
+      publishedAt: new Date(),
     },
   })
 
