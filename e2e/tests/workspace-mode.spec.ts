@@ -93,7 +93,7 @@ test.describe('all-role workspace shell @smoke', () => {
       await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
       await navigationToggle.click()
       await expect(page.getByRole('navigation', { name: '个人工作区主导航' })).toBeVisible()
-      await expect(page.getByText('个人工作区', { exact: true })).toBeVisible()
+      await expect(page.getByRole('banner').getByText('个人工作区', { exact: true })).toBeVisible()
       await expect(page.getByText(account.username, { exact: true }).first()).toBeVisible()
       await expect(page.locator('main')).not.toContainText('E2E Principal')
       await expect(page.locator('main')).not.toContainText('E2E Teacher')
