@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-01
+last_verified: 2026-08-02
 source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -57,6 +57,18 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - 页面清单：109 个 App Router 页面，其中 16 个全角色个人工作区页、3 个共享账号页。
 - Prisma Schema：51 个模型。
 - HTTP 接口清单：253 个端点；文档检查随本轮新增路由、模型与端点同步。
+
+## 2026-08-02 远端部署快照
+
+- 开发服务器当前运行提交 `6fd4482`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
+  项目仍处开发阶段，不代表正式投产。
+- 数据库迁移 7/7，部署前备份为
+  `/data/backups/oi-manager/oi_manager_pre_workspace_20260801_232227.dump`。
+- `3200` 候选检查、`3000` 提升后检查、Server/Judge/Web 构建均通过；Judge 已完成令牌认证并注册。
+- 本机浏览器通过 SSH 隧道访问远端部署，教师与平台管理员均完成工作区双向切换；个人团队、排名、提交页面完成
+  数据/空状态收敛，身份只显示用户名，浏览器控制台无错误。
+- 公网 IP 经本机 VPN/系统代理可能出现 `502`；相同请求在服务器本机经 `3000` 与 `3002` 均正常。排障时应先
+  关闭代理或使用 SSH 隧道复核，再判断服务端故障。
 
 ## 安全边界
 

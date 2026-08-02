@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-01
+last_verified: 2026-08-02
 source_of_truth: Git history
 ---
 
@@ -9,6 +9,22 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在
 [历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-02
+
+### 远端部署与浏览器验收
+
+- 将 `6fd4482` 部署至开发服务器 `47.99.222.76`；部署前生成 PostgreSQL 完整备份
+  `/data/backups/oi-manager/oi_manager_pre_workspace_20260801_232227.dump`。
+- 在备份恢复出的临时数据库完整执行个人工作区迁移后，补齐既有 Prisma 迁移历史并应用
+  `20260801_universal_personal_workspace`；远端迁移状态为 7/7。
+- Server、Judge 和优化 Web 构建通过；候选版本先在 `3200` 验证登录页与 API 健康检查，再提升至公网
+  `3000`，切换后两项检查均返回 `200`。
+- 本机浏览器通过 SSH 隧道访问远端部署，实测 `teacher2` 的“校园 / 个人 / 校园”与
+  `platform_admin` 的“管理 / 个人 / 管理”往返；个人首页、团队、排名和评测记录状态正确，个人身份仅显示用户名，
+  浏览器控制台无错误。
+- 本机 VPN/系统代理访问公网 IP 的登录请求曾返回 `502`，而服务器本机经 `3000` 和直连 `3002` 的登录均返回
+  `200`；该现象记录为本机代理链路问题，不作为应用服务失败处理。
 
 ## 2026-08-01
 
