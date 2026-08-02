@@ -3,10 +3,11 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, School, ShieldCheck, Trophy, UserRound, Users, UsersRound, type LucideIcon } from 'lucide-react'
+import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserRound, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
 import { getAssetUrl } from '@/lib/assets'
+import { getSidebarNavigationOpen, setSidebarNavigationOpen } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import { SegmentedControl } from './ui/SegmentedControl'
 import { SessionUnavailable } from './SessionUnavailable'
@@ -36,32 +37,44 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const { user, logout, switchWorkspace } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [switchingMode, setSwitchingMode] = useState(false)
   const [modeError, setModeError] = useState('')
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  const storedWorkspaceMode = user?.workspaceMode || (user?.studentMode === 'personal' ? 'personal' : 'work')
+
+  useEffect(() => {
+    if (!user) return
+    setSidebarOpen(getSidebarNavigationOpen(user.userId, user.role, storedWorkspaceMode))
+    setShowUserMenu(false)
+  }, [storedWorkspaceMode, user?.role, user?.userId])
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) setShowUserMenu(false)
     }
-    const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setShowUserMenu(false) }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (showUserMenu) setShowUserMenu(false)
+      else if (sidebarOpen) setSidebarOpen(false)
+    }
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleEscape)
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [])
+  }, [showUserMenu, sidebarOpen])
 
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
   const role = user.role as UserRole
-  const workspaceMode = user.workspaceMode || (user.studentMode === 'personal' ? 'personal' : 'work')
-  const isPersonal = workspaceMode === 'personal'
+  const workspaceMode = storedWorkspaceMode
   const navConfig = getNavConfig(role, workspaceMode)
   const activeItem = getActiveNavItem(pathname, role, workspaceMode)
+  const isPersonal = workspaceMode === 'personal'
   const isStudent = role === 'student'
-  const useTopNavigation = isStudent || isPersonal
   const roleLabel = roleLabels[role] || '用户'
   const roleName = roleNames[role] || user.role
   const profile = user.profile as { name?: string } | undefined
@@ -72,22 +85,28 @@ export function AppShell({ children }: AppShellProps) {
       ? user.schoolName || '校园工作区'
       : roleLabel
 
+  const setNavigationOpen = (open: boolean) => {
+    setSidebarOpen(open)
+    setSidebarNavigationOpen(user.userId, user.role, workspaceMode, open)
+    if (!open) setShowUserMenu(false)
+  }
+
   const handleModeChange = async (mode: 'work' | 'personal') => {
     if (mode === workspaceMode || switchingMode) return
     setSwitchingMode(true)
     setModeError('')
     const success = await switchWorkspace(mode)
+    setSwitchingMode(false)
     if (!success) {
-      setSwitchingMode(false)
       setModeError('模式切换失败，请重试')
     }
   }
 
-  const navLinks = (variant: 'top' | 'sidebar') => navConfig.items.map(item => {
+  const navLinks = navConfig.items.map(item => {
     const Icon = getNavIcon(item.label)
     return (
-      <Link key={item.href} href={item.href} className={variant === 'top' ? styles.topNavLink : styles.sidebarLink} aria-current={activeItem === item.label ? 'page' : undefined}>
-        {variant === 'sidebar' && <Icon size={18} strokeWidth={1.8} aria-hidden="true" />}
+      <Link key={item.href} href={item.href} className={styles.sidebarLink} aria-current={activeItem === item.label ? 'page' : undefined}>
+        <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
         <span>{item.label}</span>
       </Link>
     )
@@ -95,7 +114,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const userMenu = (
     <div className={styles.userMenuRoot} ref={userMenuRef}>
-      <button type="button" className={styles.userButton} onClick={() => setShowUserMenu(current => !current)} aria-expanded={showUserMenu} aria-haspopup="menu" aria-label="打开用户菜单">
+      <button type="button" className={styles.accountCard} onClick={() => setShowUserMenu(current => !current)} aria-expanded={showUserMenu} aria-haspopup="menu" aria-label="打开账号菜单">
         {user.avatar ? <img className={styles.avatar} src={getAssetUrl(user.avatar)} alt="" /> : <span className={styles.avatarFallback} aria-hidden="true">{visibleName.charAt(0).toUpperCase() || '?'}</span>}
         <span className={styles.userText}><span className={styles.userName}>{visibleName}</span><span className={styles.userContext}>{userContext}</span></span>
         <ChevronDown className={styles.chevron} size={16} aria-hidden="true" />
@@ -113,40 +132,37 @@ export function AppShell({ children }: AppShellProps) {
   )
 
   return (
-    <div className={styles.shell} data-navigation={useTopNavigation ? 'top' : 'sidebar'}>
-      <header className={`${styles.header} ${useTopNavigation ? styles.studentHeader : styles.managementHeader}`}>
+    <div className={styles.shell}>
+      <header className={styles.header}>
         <div className={styles.headerInner}>
-          {useTopNavigation ? (
-            <div className={styles.headerStart}>
-              <div className={styles.studentBrandArea}><Link className={styles.brandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回工作区首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link></div>
-              <nav className={styles.topNav} aria-label={isPersonal ? '个人工作区导航' : '校园工作区导航'}>{navLinks('top')}</nav>
-            </div>
-          ) : (
-            <div className={styles.headerStart}>
-              <div className={styles.brandArea}><Link className={styles.brandLink} href={getRoleHome(role)} aria-label={`返回${roleName}首页`}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link></div>
-              <span className={styles.contextLabel}>{roleName}工作台</span>
-            </div>
-          )}
+          <div className={styles.headerStart}>
+            <button type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? '隐藏导航' : '显示导航'} title={sidebarOpen ? '隐藏导航' : '显示导航'}>
+              <Menu size={21} aria-hidden="true" />
+            </button>
+            <Link className={styles.brandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回工作区首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+            <span className={styles.contextLabel}>{isPersonal ? '个人工作区' : `${roleName}工作台`}</span>
+          </div>
           <div className={styles.headerEnd}>
             <div className={styles.modeArea}>
               <span className={styles.modeLabel}>工作区切换</span>
               <div className={styles.modeControl}>
                 <SegmentedControl label="工作区" value={workspaceMode} disabled={switchingMode} onChange={handleModeChange} items={[{ value: 'work', label: role === 'super_admin' || role === 'platform_admin' ? '管理' : '校园' }, { value: 'personal', label: '个人' }]} />
               </div>
-                {modeError && <span className={styles.modeError} role="status">{modeError}</span>}
+              {modeError && <span className={styles.modeError} role="status">{modeError}</span>}
             </div>
-            {userMenu}
           </div>
         </div>
       </header>
-      {useTopNavigation ? (
-        <main className={styles.main} data-app-content><div className={styles.mainInner} data-page-host data-layout={isWorkbenchPath(pathname) ? 'workbench' : 'default'}>{children}</div></main>
-      ) : (
-        <div className={styles.managementBody}>
-          <aside className={styles.sidebar}><nav className={styles.sidebarNav} aria-label={`${roleName}主导航`}>{navLinks('sidebar')}</nav><div className={styles.sidebarContext}>{user.schoolName || roleName}</div></aside>
-          <main className={styles.main} data-app-content><div className={styles.mainInner} data-page-host data-layout={isWorkbenchPath(pathname) ? 'workbench' : 'default'}>{children}</div></main>
+      {sidebarOpen && <button type="button" className={styles.sidebarBackdrop} onClick={() => setNavigationOpen(false)} aria-label="关闭导航" />}
+      <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`} aria-hidden={!sidebarOpen}>
+        <div className={styles.sidebarHeader}>
+          <span>{isPersonal ? '个人工作区' : roleName}</span>
+          <button type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></button>
         </div>
-      )}
+        <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`}>{navLinks}</nav>
+        <div className={styles.sidebarFooter}>{userMenu}</div>
+      </aside>
+      <main className={styles.main} data-app-content><div className={styles.mainInner} data-page-host data-layout={isWorkbenchPath(pathname) ? 'workbench' : 'default'}>{children}</div></main>
     </div>
   )
 }

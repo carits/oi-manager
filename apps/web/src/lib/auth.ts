@@ -184,6 +184,28 @@ function workspacePathKey(userId: string, role: string, mode: WorkspaceMode): st
   return `workspacePath:${role}:${userId}:${mode}`
 }
 
+function sidebarNavigationKey(userId: string, role: string, mode: WorkspaceMode): string {
+  return `sidebarNavigation:${role}:${userId}:${mode}`
+}
+
+export function getSidebarNavigationOpen(
+  userId: string,
+  role: string,
+  mode: WorkspaceMode,
+): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem(sidebarNavigationKey(userId, role, mode)) === 'open'
+}
+
+export function setSidebarNavigationOpen(
+  userId: string,
+  role: string,
+  mode: WorkspaceMode,
+  open: boolean,
+): void {
+  localStorage.setItem(sidebarNavigationKey(userId, role, mode), open ? 'open' : 'closed')
+}
+
 export function getLastWorkspacePath(
   userId: string,
   role: string,

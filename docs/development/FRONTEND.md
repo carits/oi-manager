@@ -16,9 +16,12 @@ source_of_truth: apps/web/src
 - 学校负责人继承教师页面。
 - 平台管理员不会通过 `super_admin` 判断获得超管页面。
 
-导航集中在 `config/navigation.ts`。所有角色根据 `workspaceMode` 选择工作或个人配置。
-个人工作区与学生校园工作区使用轻量顶部导航；教师、学校负责人和管理员的工作区使用侧栏导航。角色 layout 始终只创建
-一个 `AppShell`，首页不再自行嵌套 Shell。
+导航集中在 `config/navigation.ts`。所有角色根据 `workspaceMode` 选择工作或个人配置，且均使用
+`AppShell` 的左侧抽屉导航。角色 layout 始终只创建一个 `AppShell`，首页不再自行嵌套 Shell。
+
+导航默认隐藏，只能通过顶部菜单按钮主动打开；不会因悬停、路由切换、刷新或工作区切换自行显示。
+展开状态按 `userId + role + workspaceMode` 写入本机偏好。账号身份卡位于展开侧栏左下角，点击后向上
+打开资料、安全、平台绑定和退出菜单，顶部不重复展示头像。
 
 页面仍有部分历史内联样式，整改基线见[设计系统](DESIGN_SYSTEM.md)。当前由 `AppShell`
 独占普通页面的宽度、边距和导航；迁移中的旧页面通过 `data-page-host` 兼容层去除第二层

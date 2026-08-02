@@ -89,7 +89,10 @@ test.describe('all-role workspace shell @smoke', () => {
       await workspaceControl.getByRole('button', { name: '个人', exact: true }).click()
       await page.waitForURL(/\/personal(?:\?.*)?$/)
 
-      await expect(page.getByRole('navigation', { name: '个人工作区导航' })).toBeVisible()
+      const navigationToggle = page.getByRole('button', { name: '显示导航' })
+      await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
+      await navigationToggle.click()
+      await expect(page.getByRole('navigation', { name: '个人工作区主导航' })).toBeVisible()
       await expect(page.getByText('个人工作区', { exact: true })).toBeVisible()
       await expect(page.getByText(account.username, { exact: true }).first()).toBeVisible()
       await expect(page.locator('main')).not.toContainText('E2E Principal')
@@ -99,7 +102,7 @@ test.describe('all-role workspace shell @smoke', () => {
       for (const route of personalCoreRoutes) {
         await page.goto(route)
         await expect(page).toHaveURL(new RegExp(`${route.replaceAll('/', '\\/')}(?:\\?.*)?$`))
-        await expect(page.getByRole('navigation', { name: '个人工作区导航' })).toBeVisible()
+        await expect(page.getByRole('navigation', { name: '个人工作区主导航' })).toBeVisible()
         await expect(page.locator('main h1').first()).toBeVisible()
         await expect(page.locator('main')).not.toContainText('服务器错误')
         await expect(page.locator('main')).not.toContainText('页面不存在')
@@ -108,6 +111,33 @@ test.describe('all-role workspace shell @smoke', () => {
       await context.close()
     })
   }
+})
+
+test.describe('unified sidebar navigation @smoke', () => {
+  test('is hidden by default, keeps the account menu in its footer, and remembers a manual choice', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.teacher.storageState })
+    const page = await context.newPage()
+    await page.goto('/teacher')
+
+    const navigationToggle = page.getByRole('button', { name: '显示导航' })
+    await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('navigation', { name: '教师主导航' })).not.toBeVisible()
+
+    await navigationToggle.click()
+    const navigation = page.getByRole('navigation', { name: '教师主导航' })
+    await expect(navigation).toBeVisible()
+    await expect(page.getByRole('button', { name: '打开账号菜单' })).toBeVisible()
+
+    await page.getByRole('link', { name: '学生管理' }).click()
+    await expect(page).toHaveURL(/\/teacher\/students$/)
+    await expect(navigation).toBeVisible()
+
+    await page.reload()
+    await expect(page.getByRole('navigation', { name: '教师主导航' })).toBeVisible()
+    await page.getByRole('button', { name: '隐藏导航' }).first().click()
+    await expect(page.getByRole('navigation', { name: '教师主导航' })).not.toBeVisible()
+    await context.close()
+  })
 })
 
 test.describe('personal workspace isolation', () => {
