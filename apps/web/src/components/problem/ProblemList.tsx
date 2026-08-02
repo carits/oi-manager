@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Copy, Plus, RotateCcw, Search } from 'lucide-react'
+import { Copy, Eye, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
@@ -225,10 +225,17 @@ export function ProblemList({ role }: ProblemListProps) {
         emptyDescription={library === 'school' ? '新建题目，或从平台题库复制一份到本校。' : '当前筛选条件下没有平台题目。'}
         rowKey={problem => problem.id}
         onRowClick={problem => router.push(`${pathPrefix}/problems/${problem.id}`)}
-        actions={isTeacherWorkspace && library === 'platform'
-          ? problem => problem.permissions.canCopyToSchool
-            ? <Button size="sm" variant="secondary" icon={<Copy size={15} />} loading={copyingId === problem.id} onClick={() => void copyToSchool(problem)}>复制到校内</Button>
-            : null
+        actions={isTeacherWorkspace
+          ? problem => library === 'platform'
+            ? problem.permissions.canCopyToSchool
+              ? <Button size="sm" variant="secondary" icon={<Copy size={15} />} loading={copyingId === problem.id} onClick={() => void copyToSchool(problem)}>复制到校内</Button>
+              : null
+            : <>
+                <Button size="sm" variant="secondary" icon={<Eye size={15} />} onClick={() => router.push(`${pathPrefix}/problems/${problem.id}`)}>查看</Button>
+                {problem.permissions.canEdit && (
+                  <Button size="sm" variant="secondary" icon={<Pencil size={15} />} onClick={() => router.push(`${pathPrefix}/problems/${problem.id}/edit`)}>编辑</Button>
+                )}
+              </>
           : undefined}
         columns={[
           { key: 'platform', label: '来源', width: '140px', render: problem => (problem.platforms || [problem.platform]).filter(Boolean).map(value => OJ_PLATFORM_LABEL_MAP[value] || value).join(', ') || '-' },
