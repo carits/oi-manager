@@ -46,6 +46,7 @@ export const schoolManagerNav: NavConfig = {
     { label: '团队', href: '/teacher/teams' },
     { label: '作业', href: '/teacher/homeworks' },
     { label: '比赛', href: '/teacher/contests' },
+    { label: '题库', href: '/teacher/problems' },
     { label: '题单', href: '/teacher/problem-lists' },
     { label: '排名', href: '/teacher/rankings' },
   ]
@@ -60,6 +61,7 @@ export const teacherNav: NavConfig = {
     { label: '团队', href: '/teacher/teams' },
     { label: '作业', href: '/teacher/homeworks' },
     { label: '比赛', href: '/teacher/contests' },
+    { label: '题库', href: '/teacher/problems' },
     { label: '题单', href: '/teacher/problem-lists' },
     { label: '排名', href: '/teacher/rankings' },
   ]

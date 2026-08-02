@@ -80,8 +80,18 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
         ...students.map(s => s.id),
       ]
       where.userId = { in: schoolUserIds }
+    } else if (user.role === 'super_admin' || user.role === 'platform_admin') {
+      const schoolProblemIds = (await prisma.problem.findMany({
+        where: { libraryScope: 'school' },
+        select: { id: true },
+      })).map(problem => problem.id)
+      if (schoolProblemIds.length > 0) {
+        where.OR = [
+          { problemInternalId: null },
+          { problemInternalId: { notIn: schoolProblemIds } },
+        ]
+      }
     }
-    // super_admin 和 platform_admin 不加过滤，可以看到所有
 
     if (username) {
       where.User = { username: { contains: username } }
@@ -152,6 +162,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       for (const [oj, problemIds] of ojGroups) {
         const problems = await prisma.problem.findMany({
           where: {
+            libraryScope: 'platform',
             platform: oj,
             problemId: { in: problemIds },
           },
@@ -278,8 +289,14 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
     if (submission.problemInternalId) {
       const problem = await prisma.problem.findUnique({
         where: { id: submission.problemInternalId },
-        select: { title: true },
+        select: { title: true, libraryScope: true, schoolId: true },
       })
+      if (problem?.libraryScope === 'school' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
+        return res.status(404).json({ success: false, message: '提交记录不存在' })
+      }
+      if (problem?.libraryScope === 'school' && (user.role === 'teacher' || user.role === 'school_principal') && problem.schoolId !== user.schoolId) {
+        return res.status(404).json({ success: false, message: '提交记录不存在' })
+      }
       problemTitle = problem?.title || null
     }
 

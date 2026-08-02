@@ -169,7 +169,7 @@ export async function syncCfSubmissionsForUser(
 
     try {
       const problemRecord = await prisma.problem.findFirst({
-        where: { platform: 'codeforces', problemId: sub.problemId },
+        where: { libraryScope: 'platform', platform: 'codeforces', problemId: sub.problemId },
       })
 
       await prisma.submission.create({

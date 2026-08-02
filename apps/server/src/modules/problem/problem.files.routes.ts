@@ -12,7 +12,7 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { fileService } from '../../lib/storage'
 import { STORAGE_ROOT } from '../../config/storage'
-import { canModifyProblem } from './problem.helpers'
+import { canModifyProblem, canViewProblem } from './problem.access'
 import logger from '../../lib/logger'
 
 export const problemFilesRouter = Router()
@@ -81,6 +81,10 @@ problemFilesRouter.post('/:id/statement-pdf', authenticate, problemUpload.single
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      fs.unlinkSync(req.file.path)
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       fs.unlinkSync(req.file.path)
       return res.status(403).json({ success: false, message: '没有权限' })
@@ -91,10 +95,10 @@ problemFilesRouter.post('/:id/statement-pdf', authenticate, problemUpload.single
       category: 'pdf',
       ownerType: 'problem',
       ownerId: id,
-      isPublic: true
+      isPublic: false
     })
 
-    const pdfUrl = `/api/files/${result.id}/public`
+    const pdfUrl = `/api/files/${result.id}/download`
     await prisma.problem.update({
       where: { id },
       data: { statementPdfUrl: pdfUrl, statementType: 'pdf' }
@@ -126,6 +130,10 @@ problemFilesRouter.post('/:id/solution-pdf', authenticate, problemUpload.single(
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      fs.unlinkSync(req.file.path)
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       fs.unlinkSync(req.file.path)
       return res.status(403).json({ success: false, message: '没有权限' })
@@ -159,6 +167,11 @@ problemFilesRouter.post('/:id/solution-pdf', authenticate, problemUpload.single(
 problemFilesRouter.get('/:id/attachments', authenticate, asyncHandler(async (req, res) => {
     const { id } = req.params
 
+    const problem = await prisma.problem.findUnique({ where: { id } })
+    if (!problem || !canViewProblem((req as any).user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+
     const attachments = await prisma.problemAttachment.findMany({
       where: { problemId: id },
       orderBy: { uploadedAt: 'desc' }
@@ -183,6 +196,10 @@ problemFilesRouter.post('/:id/attachments', authenticate, attachmentUpload.singl
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      fs.unlinkSync(req.file.path)
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       fs.unlinkSync(req.file.path)
       return res.status(403).json({ success: false, message: '没有权限' })
@@ -228,6 +245,9 @@ problemFilesRouter.delete('/:id/attachments/:attachmentId', authenticate, asyncH
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       return res.status(403).json({ success: false, message: '没有权限' })
     }
@@ -270,6 +290,10 @@ problemFilesRouter.post('/:id/statements/pdf', authenticate, problemUpload.singl
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      fs.unlinkSync(req.file.path)
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       fs.unlinkSync(req.file.path)
       return res.status(403).json({ success: false, message: '没有权限' })
@@ -285,10 +309,10 @@ problemFilesRouter.post('/:id/statements/pdf', authenticate, problemUpload.singl
       category: 'pdf',
       ownerType: 'problem',
       ownerId: id,
-      isPublic: true
+      isPublic: false
     })
 
-    const fileUrl = `/api/files/${result.id}/public`
+    const fileUrl = `/api/files/${result.id}/download`
 
     let statement: any
     if (existingPdf) {
@@ -347,6 +371,9 @@ problemFilesRouter.put('/:id/statements/:statementId/visibility', authenticate, 
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       return res.status(403).json({ success: false, message: '没有权限' })
     }
@@ -385,6 +412,9 @@ problemFilesRouter.delete('/:id/statements/:statementId', authenticate, asyncHan
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
+    if (!canViewProblem(user, existingProblem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
     if (!canModifyProblem(user, existingProblem)) {
       return res.status(403).json({ success: false, message: '没有权限' })
     }

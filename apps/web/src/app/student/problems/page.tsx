@@ -1,11 +1,5 @@
-'use client'
-
-import { ProblemList } from '@/components/problem/ProblemList'
+import { redirect } from 'next/navigation'
 
 export default function StudentProblemsPage() {
-  return (
-    <>
-      <ProblemList role="student" />
-    </>
-  )
+  redirect('/student')
 }

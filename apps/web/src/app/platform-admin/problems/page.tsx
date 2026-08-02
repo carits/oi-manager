@@ -87,7 +87,7 @@ export default function PlatformAdminProblemsPage() {
 
   // 从URL参数获取当前tab，默认为 'fetch'
   const [activeTab, setActiveTab] = useState<'fetch' | 'public' | 'private'>(
-    (tabParam as 'fetch' | 'public' | 'private') || 'fetch'
+    tabParam === 'private' ? 'public' : (tabParam as 'fetch' | 'public') || 'fetch'
   )
 
   // 拉取队列状态
@@ -181,7 +181,7 @@ export default function PlatformAdminProblemsPage() {
     try {
       setPublicLoading(true)
       const params = new URLSearchParams({
-        visibility: 'public',
+        library: 'platform',
         page: publicPage.toString(),
         pageSize: publicPageSize.toString(),
       })
@@ -476,8 +476,7 @@ export default function PlatformAdminProblemsPage() {
         {/* Tab 切换 */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
           <button onClick={() => handleTabChange('fetch')} style={tabButtonStyle(activeTab === 'fetch')}>拉取队列</button>
-          <button onClick={() => handleTabChange('public')} style={tabButtonStyle(activeTab === 'public')}>公共题库</button>
-          <button onClick={() => handleTabChange('private')} style={tabButtonStyle(activeTab === 'private')}>私有题库</button>
+          <button onClick={() => handleTabChange('public')} style={tabButtonStyle(activeTab === 'public')}>平台题库</button>
         </div>
 
         {/* ==================== 拉取队列 Tab ==================== */}

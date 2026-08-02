@@ -1,15 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { useParams } from 'next/navigation'
-import { ProblemNote } from '@/components/problem/ProblemNote'
-
-export default function ProblemNotePage() {
-  const params = useParams()
-  const problemId = params.id as string
-
-  return (
-    <>
-      <ProblemNote role="student" problemId={problemId} />
-    </>
-  )
+export default function StudentProblemNotePage() {
+  redirect('/student')
 }

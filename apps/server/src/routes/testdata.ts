@@ -11,6 +11,8 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
+import { canModifyProblem, canViewProblem } from '../modules/problem/problem.access'
+import type { JwtPayload } from '@oi-manager/shared'
 
 export const testdataRouter = Router()
 
@@ -27,22 +29,11 @@ if (!fs.existsSync(TESTDATA_DIR)) {
  * - 题目 owner 有权限
  * - super_admin / platform_admin 有权限
  */
-async function canManageTestdata(userId: string, problemId: string): Promise<boolean> {
+async function canManageTestdata(user: JwtPayload, problemId: string): Promise<boolean> {
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
-    select: { ownerId: true },
   })
-  if (!problem) return false
-
-  // owner 直接有权限
-  if (problem.ownerId === userId) return true
-
-  // 检查是否为管理员
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  })
-  return user?.role === 'super_admin' || user?.role === 'platform_admin'
+  return !!problem && canModifyProblem(user, problem)
 }
 
 // 配置 multer 存储
@@ -96,9 +87,12 @@ testdataRouter.get('/problems/:id/testdata', authenticate, async (req: any, res)
         message: '题目不存在'
       })
     }
+    if (!canViewProblem(req.user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
 
     // 权限检查：只有 owner 或管理员可查看测试数据
-    if (!await canManageTestdata(userId, id)) {
+    if (!await canManageTestdata(req.user, id)) {
       return res.status(403).json({
         success: false,
         message: '只有题目所有者或管理员可查看测试数据'
@@ -183,10 +177,13 @@ testdataRouter.post(
           message: '题目不存在'
         })
       }
+      if (!canViewProblem(req.user, problem)) {
+        files.forEach(f => fs.unlinkSync(f.path))
+        return res.status(404).json({ success: false, message: '题目不存在' })
+      }
 
       // 权限检查：只有 owner 可以上传（ownerId 就是 userId）
-      const userId = req.user.userId
-      if (problem.ownerId !== userId) {
+      if (!canModifyProblem(req.user, problem)) {
         // 清理上传的文件
         files.forEach(f => fs.unlinkSync(f.path))
         return res.status(403).json({
@@ -296,10 +293,12 @@ testdataRouter.delete('/problems/:id/testdata/:fileId', authenticate, async (req
         message: '题目不存在'
       })
     }
+    if (!canViewProblem(req.user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
 
     // 权限检查：只有 owner 可以删除（ownerId 就是 userId）
-    const userId = req.user.userId
-    if (problem.ownerId !== userId) {
+    if (!canModifyProblem(req.user, problem)) {
       return res.status(403).json({
         success: false,
         message: '只有题目所有者可以删除测试数据'
@@ -357,7 +356,6 @@ testdataRouter.delete('/problems/:id/testdata/:fileId', authenticate, async (req
 testdataRouter.post('/problems/:id/testdata/auto', authenticate, async (req: any, res) => {
   try {
     const { id } = req.params
-    const userId = req.user.userId
 
     // 检查题目是否存在
     const problem = await prisma.problem.findUnique({
@@ -370,9 +368,12 @@ testdataRouter.post('/problems/:id/testdata/auto', authenticate, async (req: any
         message: '题目不存在'
       })
     }
+    if (!canViewProblem(req.user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
 
     // 权限检查：只有 owner 或管理员可查看测试数据
-    if (!await canManageTestdata(userId, id)) {
+    if (!await canManageTestdata(req.user, id)) {
       return res.status(403).json({
         success: false,
         message: '只有题目所有者或管理员可查看测试数据'
@@ -414,7 +415,6 @@ testdataRouter.post('/problems/:id/testdata/auto', authenticate, async (req: any
 testdataRouter.get('/problems/:id/testdata/download/:filename', authenticate, async (req: any, res) => {
   try {
     const { id, filename } = req.params
-    const userId = req.user.userId
 
     // 安全检查：防止路径穿越
     if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
@@ -422,6 +422,11 @@ testdataRouter.get('/problems/:id/testdata/download/:filename', authenticate, as
         success: false,
         message: '非法文件名'
       })
+    }
+
+    const problem = await prisma.problem.findUnique({ where: { id } })
+    if (!problem || !canViewProblem(req.user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
     // 检查文件记录是否存在
@@ -442,7 +447,7 @@ testdataRouter.get('/problems/:id/testdata/download/:filename', authenticate, as
     }
 
     // 权限检查：只有 owner 或管理员可下载测试数据
-    if (!await canManageTestdata(userId, id)) {
+    if (!await canManageTestdata(req.user, id)) {
       return res.status(403).json({
         success: false,
         message: '只有题目所有者或管理员可下载测试数据'

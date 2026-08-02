@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-01
+last_verified: 2026-08-02
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -55,6 +55,8 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 | 平台用户管理 | 是 | 受限 | 否 | 否 | 否 | 否 |
 | OJ Cookie 配置 | 是 | 否 | 否 | 否 | 否 | 否 |
 | OJ 任务、账号池 | 是 | 是 | 受限导入 | 受限导入 | 否 | 否 |
+| 平台题库 | 管理 | 管理 | 使用已发布题 | 使用已发布题 | 仅教学活动 | 使用已发布题 |
+| 校内题库 | 不可见 | 不可见 | 本校全部管理 | 本校已发布/自己草稿 | 仅授权教学活动 | 不可见 |
 | 本校教师管理 | 是 | 否 | 是 | 否 | 否 | 否 |
 | 团队、比赛、题单和提交 | 管理范围 | 管理范围 | 本校/参与 | 自有/参与 | 参与 | 个人作用域内相同规则 |
 | 维护迁移 API | 开关开启时 | 否 | 否 | 否 | 否 | 否 |
@@ -81,6 +83,14 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 - `/ws/judge` 在开发和正式环境都要求 `JUDGE_TOKEN`。
 - `ALLOW_UNAUTHENTICATED_JUDGE=true` 只用于显式 loopback 测试。
 - Token 不进入浏览器、HTTP 响应或普通日志。
+
+### 校内题库
+
+- 题目列表、详情、附件、测试数据、Judge 配置、AI 和提交共用服务端题目访问策略。
+- 学生访问原始题库列表返回 `403 TEACHER_ONLY`；指定题目或文件 ID 时返回 `404`。
+- 教师必须处于 `work` 工作区且具有学校关系。不满足时分别返回
+  `WORKSPACE_MODE_REQUIRED` 或 `SCHOOL_MEMBERSHIP_REQUIRED`。
+- 跨校题和学校题对平台/超级管理员都返回 `404`，平台岗位不是学校内容的旁路。
 
 ## 前端会话
 

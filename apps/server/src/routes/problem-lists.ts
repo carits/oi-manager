@@ -19,6 +19,8 @@ import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
 import { populateSnapshotData } from '../modules/training/training.helpers'
 import { v4 as uuidv4 } from 'uuid'
+import { findAccessibleProblem, findUsableProblemByExternalId } from '../modules/problem/problem.access'
+import { fileService } from '../lib/storage'
 
 export const problemListsRouter = Router()
 
@@ -43,6 +45,37 @@ type Permission = 'admin' | 'edit' | 'view'
 
 /** 权限优先级排序 */
 const PERM_ORDER: Record<string, number> = { admin: 3, edit: 2, view: 1 }
+
+const managedProblemFilePatterns = [
+  /\/api\/files\/([^/?#]+)\/(?:download|public)/g,
+  /\/api\/files\/download\/([^/?#]+)/g,
+]
+
+function extractManagedProblemFileId(value: string | null | undefined): string | null {
+  if (!value) return null
+  for (const pattern of managedProblemFilePatterns) {
+    pattern.lastIndex = 0
+    const match = pattern.exec(value)
+    if (match?.[1]) return match[1]
+  }
+  return null
+}
+
+function problemListFileUrl(listId: string, entryId: string, value: string | null | undefined) {
+  const fileId = extractManagedProblemFileId(value)
+  return fileId ? `/api/problem-lists/${listId}/entries/${entryId}/files/${fileId}` : value ?? null
+}
+
+function rewriteProblemListFileUrls(listId: string, entryId: string, content: string | null | undefined) {
+  if (!content) return content ?? null
+  let rewritten = content
+  for (const pattern of managedProblemFilePatterns) {
+    pattern.lastIndex = 0
+    rewritten = rewritten.replace(pattern, (_url, fileId: string) =>
+      `/api/problem-lists/${listId}/entries/${entryId}/files/${fileId}`)
+  }
+  return rewritten
+}
 
 /** 取两个权限中更高的 */
 function maxPerm(a: Permission | null, b: Permission | null): Permission | null {
@@ -423,6 +456,136 @@ problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     res.json({ success: true, data: { ...sanitizedList, Shares: isStudent ? [] : enrichedShares, _permission: perm || 'admin' } })
 }, '获取题单详情失败'))
 
+/**
+ * GET /api/problem-lists/:id/entries/:entryId/problem
+ * Read a published statement through an authorized problem-list context.
+ */
+problemListsRouter.get('/:id/entries/:entryId/problem', authenticate, asyncHandler(async (req, res) => {
+  const user = req.user!
+  const permission = await getProblemListPermission(req.params.id, user)
+  if (!permission) return res.status(404).json({ success: false, message: '资源不存在' })
+
+  const entry = await prisma.problemListEntry.findFirst({
+    where: { id: req.params.entryId, ProblemListSection: { problemListId: req.params.id } },
+    include: {
+      ProblemListSection: { select: { ProblemList: { select: { scope: true, schoolId: true } } } },
+      Problem: {
+        include: {
+          ProblemStatement: { where: { type: 'statement', isVisible: true }, orderBy: [{ format: 'asc' }, { language: 'asc' }] },
+          ProblemAttachment: { orderBy: { uploadedAt: 'asc' } },
+        },
+      },
+    },
+  })
+  if (!entry || entry.Problem.status !== 'published') {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+  const list = entry.ProblemListSection.ProblemList
+  if (entry.Problem.libraryScope === 'school' &&
+      (list.scope !== 'campus' || !list.schoolId || list.schoolId !== entry.Problem.schoolId)) {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+
+  const problem = entry.Problem
+  res.json({
+    success: true,
+    data: {
+      id: entry.id,
+      title: entry.alias || problem.title,
+      difficulty: problem.difficulty,
+      timeLimit: problem.timeLimit,
+      memoryLimit: problem.memoryLimit,
+      description: rewriteProblemListFileUrls(req.params.id, entry.id, problem.description),
+      statementType: problem.statementType,
+      statementPdfUrl: problemListFileUrl(req.params.id, entry.id, problem.statementPdfUrl),
+      statements: problem.ProblemStatement.map(statement => ({
+        id: statement.id,
+        format: statement.format,
+        language: statement.language,
+        content: rewriteProblemListFileUrls(req.params.id, entry.id, statement.content),
+        fileUrl: problemListFileUrl(req.params.id, entry.id, statement.fileUrl),
+      })),
+      attachments: problem.ProblemAttachment.map(attachment => ({
+        id: attachment.id,
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+        description: attachment.description,
+        fileUrl: problemListFileUrl(req.params.id, entry.id, attachment.fileUrl),
+      })),
+    },
+  })
+}, '获取题单题面失败'))
+
+/**
+ * GET /api/problem-lists/:id/entries/:entryId/files/:fileId
+ * Download only a file referenced by the authorized statement or attachment.
+ */
+problemListsRouter.get('/:id/entries/:entryId/files/:fileId', authenticate, asyncHandler(async (req, res) => {
+  const user = req.user!
+  const permission = await getProblemListPermission(req.params.id, user)
+  if (!permission) return res.status(404).json({ success: false, message: '资源不存在' })
+
+  const entry = await prisma.problemListEntry.findFirst({
+    where: { id: req.params.entryId, ProblemListSection: { problemListId: req.params.id } },
+    include: {
+      ProblemListSection: { select: { ProblemList: { select: { scope: true, schoolId: true } } } },
+      Problem: {
+        select: {
+          id: true,
+          status: true,
+          libraryScope: true,
+          schoolId: true,
+          description: true,
+          statementPdfUrl: true,
+          ProblemStatement: { where: { type: 'statement', isVisible: true }, select: { content: true, fileUrl: true } },
+          ProblemAttachment: { select: { fileUrl: true } },
+        },
+      },
+    },
+  })
+  const file = await fileService.getFile(req.params.fileId)
+  if (!entry || entry.Problem.status !== 'published' || !file || file.status !== 'active' ||
+      file.ownerType !== 'problem' || file.ownerId !== entry.Problem.id || file.category === 'testdata') {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+  const list = entry.ProblemListSection.ProblemList
+  if (entry.Problem.libraryScope === 'school' &&
+      (list.scope !== 'campus' || !list.schoolId || list.schoolId !== entry.Problem.schoolId)) {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+
+  const allowedIds = new Set<string>()
+  const allowUrl = (url: string | null | undefined) => {
+    const id = extractManagedProblemFileId(url)
+    if (id) allowedIds.add(id)
+  }
+  const allowContent = (content: string | null | undefined) => {
+    if (!content) return
+    for (const pattern of managedProblemFilePatterns) {
+      pattern.lastIndex = 0
+      for (const match of content.matchAll(pattern)) if (match[1]) allowedIds.add(match[1])
+    }
+  }
+  allowContent(entry.Problem.description)
+  allowUrl(entry.Problem.statementPdfUrl)
+  for (const statement of entry.Problem.ProblemStatement) {
+    allowContent(statement.content)
+    allowUrl(statement.fileUrl)
+  }
+  for (const attachment of entry.Problem.ProblemAttachment) allowUrl(attachment.fileUrl)
+  if (!allowedIds.has(req.params.fileId)) {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+
+  const download = await fileService.download(file.id)
+  const disposition = file.category === 'attachment' ? 'attachment' : 'inline'
+  res.setHeader('Content-Type', download.mimeType)
+  res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(download.originalName)}`)
+  res.setHeader('Content-Length', download.buffer.length)
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.send(download.buffer)
+}, '下载题单题目资源失败'))
+
 /** 学生视角题单详情脱敏：只保留 title 和 difficulty */
 function sanitizeProblemForStudent(problem: any): any {
   return {
@@ -731,13 +894,9 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
 
     // 如果前端直接传了 problemId（来自 resolve 的结果），跳过搜索直接使用
     if (directProblemId) {
-      const p = await prisma.problem.findUnique({ where: { id: directProblemId } })
+      const p = await findAccessibleProblem(req.user, directProblemId, 'use')
       if (!p) {
         res.status(404).json({ success: false, message: '题目不存在' })
-        return
-      }
-      if (p.visibility !== 'public' && p.ownerId !== req.user.userId) {
-        res.status(403).json({ success: false, message: '无权访问该题目' })
         return
       }
       problemId = p.id
@@ -745,8 +904,8 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
       found = true
     } else if (ojName === 'carits') {
       // Carits 平台：按 platform + problemId 查本地题库
-      const matched = await prisma.problem.findUnique({ where: { platform_problemId: { platform: 'carits', problemId: problemCode } } })
-      if (matched && (matched.visibility === 'public' || matched.ownerId === req.user.userId)) {
+      const matched = await findUsableProblemByExternalId(req.user, 'carits', problemCode)
+      if (matched) {
         problemId = matched.id
         problemTitle = matched.title
         found = true
@@ -756,11 +915,9 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
       }
     } else {
       // 外部 OJ：按 platform + problemId 直接查
-      const p = await prisma.problem.findUnique({
-        where: { platform_problemId: { platform: ojName, problemId: problemCode } }
-      })
+      const p = await findUsableProblemByExternalId(req.user, ojName, problemCode)
 
-      if (p && (p.visibility === 'public' || p.ownerId === req.user.userId)) {
+      if (p) {
         problemId = p.id
         problemTitle = p.title
         found = true
@@ -770,6 +927,16 @@ problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asy
         res.status(404).json({ success: false, message: '题库中未找到该题目' })
         return
       }
+    }
+
+    const [selectedProblem, targetList] = await Promise.all([
+      prisma.problem.findUnique({ where: { id: problemId! }, select: { libraryScope: true, schoolId: true } }),
+      prisma.problemList.findUnique({ where: { id: listId }, select: { scope: true, schoolId: true } }),
+    ])
+    if (!selectedProblem || !targetList || (selectedProblem.libraryScope === 'school'
+      && (targetList.scope !== 'campus' || targetList.schoolId !== selectedProblem.schoolId))) {
+      res.status(404).json({ success: false, message: '题目不存在' })
+      return
     }
 
     // 3. 检查是否已在章节中
@@ -882,17 +1049,15 @@ problemListsRouter.post('/:id/entries/resolve', authenticate, asyncHandler(async
 
       if (item.ojName === 'carits') {
         // Carits 平台：按 ID 或 problemId 查本地题库
-        let p = await prisma.problem.findUnique({ where: { id: item.problemCode } }).catch(() => null)
+        let p = await findAccessibleProblem(req.user, item.problemCode, 'use').catch(() => null)
         if (!p) {
-          p = await prisma.problem.findUnique({ where: { platform_problemId: { platform: 'carits', problemId: item.problemCode } } })
+          p = await findUsableProblemByExternalId(req.user, 'carits', item.problemCode)
         }
-        if (p && (p.visibility === 'public' || p.ownerId === req.user.userId)) matched = { id: p.id, title: p.title }
+        if (p) matched = { id: p.id, title: p.title }
       } else {
         // 外部 OJ：按 platform + problemId 直接查
-        const p = await prisma.problem.findUnique({
-          where: { platform_problemId: { platform: item.ojName, problemId: item.problemCode } }
-        })
-        if (p && (p.visibility === 'public' || p.ownerId === req.user.userId)) {
+        const p = await findUsableProblemByExternalId(req.user, item.ojName, item.problemCode)
+        if (p) {
           matched = { id: p.id, title: p.title }
         }
       }

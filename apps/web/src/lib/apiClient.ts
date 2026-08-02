@@ -39,6 +39,7 @@ export class ApiError extends Error {
   readonly code?: string
   readonly retryable: boolean
   readonly requestId?: string
+  readonly data?: unknown
 
   constructor(input: {
     kind: ApiErrorKind
@@ -47,6 +48,7 @@ export class ApiError extends Error {
     code?: string
     retryable?: boolean
     requestId?: string
+    data?: unknown
   }) {
     super(input.message)
     this.name = 'ApiError'
@@ -55,6 +57,7 @@ export class ApiError extends Error {
     this.code = input.code
     this.retryable = input.retryable ?? isRetryableStatus(input.status, input.kind)
     this.requestId = input.requestId
+    this.data = input.data
   }
 }
 
@@ -84,6 +87,7 @@ function apiErrorFromResponse<T>(response: ApiResponse<T>): ApiError {
     code: response.code,
     message: response.message || '请求失败',
     requestId: response.requestId,
+    data: response.data,
   })
 }
 

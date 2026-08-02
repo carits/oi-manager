@@ -1,21 +1,23 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-02
 source_of_truth: problem modules, problem-list, OJ and platform-binding routes
 ---
 
 # 题目与 OJ API
 
-## 题目（21）
+## 题目（23）
 
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
-| `GET` | `/api/problems` | 登录、角色/可见性 | 题目分页列表 |
-| `POST` | `/api/problems` | 管理员/教师/个人学生 | 创建题目 |
-| `GET` | `/api/problems/:id` | 登录、可见性 | 题目详情 |
-| `PUT` | `/api/problems/:id` | 所有者/管理员 | 更新题目 |
-| `DELETE` | `/api/problems/:id` | 所有者/管理员 | 删除题目 |
+| `GET` | `/api/problems` | 平台已发布题，或本校教师 | 按 `library=platform\|school` 分页列出题目 |
+| `POST` | `/api/problems` | 平台管理员，或工作区教师 | 在服务端确定的题库创建题目 |
+| `GET` | `/api/problems/library/creators` | 本校教师 | 校内题库创建人筛选项 |
+| `POST` | `/api/problems/:id/copy-to-school` | 工作区教师 | 将已发布平台题复制为本校草稿 |
+| `GET` | `/api/problems/:id` | 集中式题库可见性 | 题目详情，非管理者脱敏题解和 Judge 配置 |
+| `PUT` | `/api/problems/:id` | 作者/本校负责人/平台管理者 | 更新、发布或归档题目 |
+| `DELETE` | `/api/problems/:id` | 作者/本校负责人/平台管理者 | 软归档题目 |
 | `GET` | `/api/problems/:id/note` | 登录、本人 | 题目笔记 |
 | `PUT` | `/api/problems/:id/note` | 登录、本人 | 保存题目笔记 |
 | `GET` | `/api/problems/:id/attachments` | 登录、题目可见 | 附件列表 |
@@ -33,15 +35,19 @@ source_of_truth: problem modules, problem-list, OJ and platform-binding routes
 | `POST` | `/api/problems/:id/ai/format` | 题目管理者、AI 已配置 | 格式整理 |
 | `GET` | `/api/problems/:id/ai/usage` | 题目管理者 | AI 使用记录 |
 
+请求 `library=school` 时不接受客户端提供的 `schoolId`；学校从 JWT 关系推导。
+旧 `visibility=private|public` 查询仅兼容一个开发周期，新代码不得将其作为学校边界。
 测试数据接口在[文件与维护 API](FILES_AND_MAINTENANCE.md)。
 
-## 题单（19）
+## 题单（21）
 
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
 | `GET` | `/api/problem-lists` | 登录、可见性 | 题单列表 |
 | `POST` | `/api/problem-lists` | 教师/负责人/个人学生 | 创建题单 |
 | `GET` | `/api/problem-lists/:id` | 登录、可见性 | 题单详情 |
+| `GET` | `/api/problem-lists/:id/entries/:entryId/problem` | 登录、题单可见 | 通过题单上下文读取已发布题面 |
+| `GET` | `/api/problem-lists/:id/entries/:entryId/files/:fileId` | 登录、题单可见 | 读取题单题面已引用的私有文件 |
 | `PUT` | `/api/problem-lists/:id` | owner/write share | 更新题单 |
 | `DELETE` | `/api/problem-lists/:id` | owner | 删除题单 |
 | `POST` | `/api/problem-lists/:id/sections` | 可编辑 | 添加章节 |
@@ -82,7 +88,7 @@ source_of_truth: problem modules, problem-list, OJ and platform-binding routes
 |------|------|------|------|
 | `GET` | `/api/oj-fetcher/platforms` | 公开 | 支持平台列表 |
 | `GET` | `/api/oj-fetcher/:platform/:problemId` | 登录 | 抓取单题 |
-| `POST` | `/api/oj-fetcher/download-attachment` | 登录 | 下载题目附件 |
+| `POST` | `/api/oj-fetcher/download-attachment` | 题目管理者 | 下载并写入题目附件 |
 | `GET` | `/api/oj-fetcher/jobs` | 管理员 | 抓题任务列表 |
 | `POST` | `/api/oj-fetcher/jobs/batch` | 管理员 | 创建批量任务 |
 | `POST` | `/api/oj-fetcher/jobs/:id/retry` | 管理员 | 重试任务 |
@@ -90,7 +96,8 @@ source_of_truth: problem modules, problem-list, OJ and platform-binding routes
 | `GET` | `/api/oj-fetcher/platforms/:platform/config` | 超管 | 获取脱敏配置状态 |
 | `PUT` | `/api/oj-fetcher/platforms/:platform/config` | 超管 | 更新平台 Cookie |
 
-配置响应不得包含 Cookie 原文。教师使用单题抓取或受限导入，不具备全局任务权限。
+配置响应不得包含 Cookie 原文。全局抓题任务始终只写入平台题库。
+教师使用单题抓取或复制到学校的受限流程，不具备全局任务权限。
 
 ## OJ 账号池（8）
 

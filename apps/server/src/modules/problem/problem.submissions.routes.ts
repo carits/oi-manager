@@ -9,6 +9,7 @@ import { authenticate, getResourceScope } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import logger from '../../lib/logger'
+import { canViewProblem } from './problem.access'
 
 export const problemSubmissionsRouter = Router()
 
@@ -21,12 +22,9 @@ problemSubmissionsRouter.get('/:id/submissions', authenticate, asyncHandler(asyn
     const { page, pageSize, skip } = parsePagination(req.query, { defaultPageSize: 20, maxPageSize: 100 })
 
     // 查找题目
-    const problem = await prisma.problem.findUnique({
-      where: { id },
-      select: { platform: true, problemId: true },
-    })
+    const problem = await prisma.problem.findUnique({ where: { id } })
 
-    if (!problem) {
+    if (!problem || !canViewProblem((req as any).user, problem)) {
       return res.status(404).json({
         success: false,
         message: '题目不存在',

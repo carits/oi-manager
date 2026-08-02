@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-02
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -62,7 +62,13 @@ erDiagram
 
 ## 题目、题单与提交
 
-- `Problem` 保存统一题目和 Judge 配置，`ProblemStatement`、附件和测试数据独立。
+- `Problem.libraryScope` 区分 `platform | school`；学校题必须关联 `schoolId`，
+  平台题的 `schoolId` 必须为 `null`。
+- `Problem.libraryKey` 是 `platform` 或 `school:<schoolId>`，与 `platform + problemId`
+  组成命名空间唯一约束。`sourceProblemId` 记录平台题复制来源，但副本后续独立。
+- `Problem.status` 使用 `draft | published | archived`，`ownerId` 关联创建用户，
+  `ownerType` 和 `visibility` 只作为开发周期内的旧数据兼容字段。
+- `ProblemStatement`、附件和测试数据独立，但访问一律继承题目作用域。
 - `ProblemList` 通过 section/entry 组织题目，通过 `scope`、share、学校和团队关联控制可见性。
 - `Training.scope` 继承团队作用域；学校任务固定为 `campus`。
 - `Submission.workspaceScope` 在服务端创建时从会话推导，客户端不能指定。

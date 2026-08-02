@@ -7,7 +7,7 @@ import { Router } from 'express'
 import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { canModifyProblem } from './problem.helpers'
+import { canModifyProblem } from './problem.access'
 import logger from '../../lib/logger'
 
 export const problemJudgeRouter = Router()
@@ -18,20 +18,11 @@ export const problemJudgeRouter = Router()
  */
 problemJudgeRouter.get('/:id/judge-config', authenticate, asyncHandler(async (req, res) => {
     const { id } = req.params
+    const user = (req as any).user
 
-    const problem = await prisma.problem.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        platform: true,
-        problemType: true,
-        judgeConfig: true,
-        timeLimit: true,
-        memoryLimit: true
-      }
-    })
+    const problem = await prisma.problem.findUnique({ where: { id } })
 
-    if (!problem) {
+    if (!problem || !canModifyProblem(user, problem)) {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
@@ -69,12 +60,8 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
 
     const existingProblem = await prisma.problem.findUnique({ where: { id } })
 
-    if (!existingProblem) {
+    if (!existingProblem || !canModifyProblem(user, existingProblem)) {
       return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-
-    if (!canModifyProblem(user, existingProblem)) {
-      return res.status(403).json({ success: false, message: '没有权限编辑此题目' })
     }
 
     // 将配置序列化为 YAML

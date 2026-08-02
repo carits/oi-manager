@@ -18,6 +18,25 @@ import {
   populateSnapshotData,
   requireTrainingStarted,
 } from './training.helpers'
+import { findAccessibleProblem } from '../problem/problem.access'
+
+const managedProblemFilePattern = /\/api\/files\/([^/?#]+)\/(?:download|public)/g
+
+function contextualizeProblemContent(trainingId: number, trainingProblemId: string, content: string | null) {
+  if (!content) return content
+  managedProblemFilePattern.lastIndex = 0
+  return content.replace(managedProblemFilePattern, (_url, fileId: string) =>
+    `/api/trainings/${trainingId}/problems/${trainingProblemId}/files/${fileId}`)
+}
+
+function contextualizeProblemFile(trainingId: number, trainingProblemId: string, fileUrl: string | null) {
+  if (!fileUrl) return fileUrl
+  managedProblemFilePattern.lastIndex = 0
+  const match = managedProblemFilePattern.exec(fileUrl)
+  return match?.[1]
+    ? `/api/trainings/${trainingId}/problems/${trainingProblemId}/files/${match[1]}`
+    : fileUrl
+}
 
 export const trainingProblemsRouter = Router()
 
@@ -29,7 +48,10 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
     const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await prisma.training.findUnique({
+      where: { id },
+      include: { Team: { select: { schoolId: true, scope: true } } },
+    })
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -251,7 +273,10 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
     const userId = req.user!.userId
     const { problemId, alias, points } = req.body
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await prisma.training.findUnique({
+      where: { id },
+      include: { Team: { select: { schoolId: true, scope: true } } },
+    })
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -267,11 +292,17 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
     const aliasValue = alias || null
 
     // 检查题目是否存在
-    const problem = await prisma.problem.findUnique({
-      where: { id: problemId },
+    const accessibleProblem = await findAccessibleProblem(req.user!, problemId, 'use')
+    const problem = accessibleProblem ? await prisma.problem.findUnique({
+      where: { id: accessibleProblem.id },
       include: { ProblemStatement: { where: { isVisible: true } } },
-    })
+    }) : null
     if (!problem) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+    const trainingSchoolId = training.schoolId ||
+      (training.scope === 'campus' && training.Team?.scope === 'campus' ? training.Team.schoolId : null)
+    if (problem.libraryScope === 'school' && trainingSchoolId !== problem.schoolId) {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
@@ -511,8 +542,12 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
         difficulty: problem.difficulty,
         description: problem.description,
         statementType: problem.statementType,
-        statementPdfUrl: problem.statementPdfUrl,
-        statements: problem.ProblemStatement,
+        statementPdfUrl: contextualizeProblemFile(id, trainingProblem.id, problem.statementPdfUrl),
+        statements: problem.ProblemStatement.map(statement => ({
+          ...statement,
+          content: contextualizeProblemContent(id, trainingProblem.id, statement.content),
+          fileUrl: contextualizeProblemFile(id, trainingProblem.id, statement.fileUrl),
+        })),
         noteContent: note?.content ?? '',
         // 管理员额外信息
         ...(isAdmin && {

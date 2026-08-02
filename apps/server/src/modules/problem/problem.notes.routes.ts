@@ -9,6 +9,7 @@ import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { getOwnerInfo } from './problem.helpers'
+import { canViewProblem } from './problem.access'
 
 export const problemNotesRouter = Router()
 
@@ -17,6 +18,11 @@ problemNotesRouter.get('/:id/note', authenticate, asyncHandler(async (req, res) 
     const { id } = req.params
     const userId = (req as any).user.userId
     const role = (req as any).user.role
+
+    const problem = await prisma.problem.findUnique({ where: { id } })
+    if (!problem || !canViewProblem((req as any).user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
 
     const ownerInfo = await getOwnerInfo(userId, role)
     if (!ownerInfo) {
@@ -56,6 +62,11 @@ problemNotesRouter.put('/:id/note', authenticate, asyncHandler(async (req, res) 
     const userId = (req as any).user.userId
     const role = (req as any).user.role
     const { content } = req.body
+
+    const problem = await prisma.problem.findUnique({ where: { id } })
+    if (!problem || !canViewProblem((req as any).user, problem)) {
+      return res.status(404).json({ success: false, message: '题目不存在' })
+    }
 
     const ownerInfo = await getOwnerInfo(userId, role)
     if (!ownerInfo) {

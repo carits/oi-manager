@@ -7,8 +7,17 @@ import { Router, Request, Response } from 'express'
 import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
+import { canModifyProblem } from './problem.access'
 
 export const problemAiRouter = Router()
+
+problemAiRouter.use('/:id/ai', authenticate, asyncHandler(async (req, res, next) => {
+  const problem = await prisma.problem.findUnique({ where: { id: req.params.id } })
+  if (!problem || !canModifyProblem((req as any).user, problem)) {
+    return res.status(404).json({ success: false, message: '题目不存在' })
+  }
+  next()
+}))
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || ''
 

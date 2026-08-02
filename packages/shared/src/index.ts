@@ -3,6 +3,8 @@ export type UserRole = 'super_admin' | 'platform_admin' | 'school_principal' | '
 
 export type WorkspaceMode = 'work' | 'personal'
 export type ResourceScope = 'campus' | 'personal'
+export type ProblemLibraryScope = 'platform' | 'school'
+export type ProblemStatus = 'draft' | 'published' | 'archived'
 
 // 简化的角色类型（用于权限判断）
 export type SimpleRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'

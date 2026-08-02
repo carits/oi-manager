@@ -81,6 +81,10 @@ export async function createTestProblem(options: {
       title,
       ownerId,
       visibility: 'public',
+      libraryScope: 'platform',
+      libraryKey: 'platform',
+      status: 'published',
+      publishedAt: new Date(),
       statementType: 'none',
       solutionType: 'none',
     }

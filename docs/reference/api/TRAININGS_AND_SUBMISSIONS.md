@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-07-31
+last_verified: 2026-08-02
 source_of_truth: training modules, submit and submissions routes
 ---
 
@@ -9,7 +9,7 @@ source_of_truth: training modules, submit and submissions routes
 
 访问中的“资源”表示任务管理者、参与者或提交可见性检查。
 
-## 训练（23）
+## 训练（28）
 
 | 方法 | 路径 | 访问 | 用途 |
 |------|------|------|------|
@@ -26,6 +26,7 @@ source_of_truth: training modules, submit and submissions routes
 | `DELETE` | `/api/trainings/:id/problems/:problemId` | 教师/负责人、管理资源 | 移除题目 |
 | `GET` | `/api/trainings/:id/problems/:problemId/detail` | 登录、资源 | 任务题面与当前用户笔记工作区 |
 | `GET` | `/api/trainings/:id/problems/:problemId/attachments` | 登录、资源 | 任务题目附件 |
+| `GET` | `/api/trainings/:id/problems/:problemId/files/:fileId` | 登录、任务上下文 | 读取已授权题面或附件的私有文件 |
 | `GET` | `/api/trainings/:id/problems/:problemId/solution` | 登录、可见性 | 题解 |
 | `GET` | `/api/trainings/:id/solutions` | 登录、可见性 | 批量题解 |
 | `GET` | `/api/trainings/:id/attachments` | 登录、资源 | 批量附件 |
@@ -42,6 +43,7 @@ source_of_truth: training modules, submit and submissions routes
 
 团队任务的创建接口 `GET/POST /api/teams/:teamId/trainings` 记录在
 [学校与团队 API](ORGANIZATION_AND_TEAMS.md)。
+任务上下文文件接口不会赋予学生原始题库权限；切换题目、训练或文件 ID 都会失去授权。
 
 ## 全局提交（5）
 

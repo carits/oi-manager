@@ -41,7 +41,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/platform-admin` | 平台管理员 | 首页 |
 | `/platform-admin/oj-accounts` | 平台管理员 | OJ 账号池 |
 | `/platform-admin/platform-bindings` | 平台管理员 | 自身平台绑定 |
-| `/platform-admin/problems` | 平台管理员 | 题库 |
+| `/platform-admin/problems` | 平台管理员 | 平台题库与 OJ 抓题 |
 | `/platform-admin/problems/[id]` | 平台管理员 | 题目详情 |
 | `/platform-admin/problems/[id]/edit` | 平台管理员 | 编辑题目 |
 | `/platform-admin/problems/[id]/note` | 平台管理员 | 题目笔记 |
@@ -80,7 +80,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/teams/[id]` | 个人工作区、可见资源 | 团队详情 |
 | `/personal/teams/[id]/contests/[cid]` | 个人工作区、团队资源 | 团队比赛 |
 | `/personal/teams/[id]/trainings/[tid]` | 个人工作区、团队资源 | 团队训练 |
-| `/personal/problems` | 个人工作区 | 公共题库 |
+| `/personal/problems` | 个人工作区 | 已发布平台题 |
 | `/personal/problems/[id]` | 个人工作区、公开题目 | 题目详情 |
 | `/personal/contests` | 个人工作区 | 个人团队比赛 |
 | `/personal/contests/[id]` | 个人工作区、可见资源 | 比赛详情 |
@@ -108,11 +108,11 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/student/problem-lists` | 全部 | 题单列表 |
 | `/student/problem-lists/[id]` | 全部 | 题单详情 |
 | `/student/problem-lists/new` | 个人创建 | 创建题单 |
-| `/student/problems` | 个人 | 题库 |
-| `/student/problems/[id]` | 个人 | 题目详情 |
-| `/student/problems/[id]/edit` | 个人所有者 | 编辑题目 |
-| `/student/problems/[id]/note` | 个人 | 题目笔记 |
-| `/student/problems/new` | 个人 | 创建题目 |
+| `/student/problems` | 旧兼容入口 | 个人模式跳转 `/personal/problems`，校园模式回首页 |
+| `/student/problems/[id]` | 旧兼容入口 | 个人模式跳转个人题目详情 |
+| `/student/problems/[id]/edit` | 旧兼容入口 | 不再提供学生题库编辑 |
+| `/student/problems/[id]/note` | 旧兼容入口 | 个人模式跳转个人笔记 |
+| `/student/problems/new` | 旧兼容入口 | 不再提供学生题库创建 |
 | `/student/profile` | 全部 | 个人资料 |
 | `/student/rating` | 全部 | Rating |
 | `/student/school` | 校园 | 学校信息 |
@@ -139,9 +139,9 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/teacher/problem-lists` | 负责人/教师 | 题单列表 |
 | `/teacher/problem-lists/[id]` | 负责人/教师 | 题单详情 |
 | `/teacher/problem-lists/new` | 负责人/教师 | 创建题单 |
-| `/teacher/problems` | 负责人/教师 | 私有题库 |
+| `/teacher/problems` | 负责人/教师 | 独立的“校内题库 / 平台题库”标签 |
 | `/teacher/problems/[id]` | 负责人/教师 | 题目详情 |
-| `/teacher/problems/[id]/edit` | 所有者/管理员 | 编辑题目 |
+| `/teacher/problems/[id]/edit` | 作者/本校负责人 | 编辑学校题目 |
 | `/teacher/problems/[id]/note` | 负责人/教师 | 题目笔记 |
 | `/teacher/problems/new` | 负责人/教师 | 创建题目 |
 | `/teacher/profile` | 负责人/教师 | 个人资料 |

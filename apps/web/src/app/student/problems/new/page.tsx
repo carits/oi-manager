@@ -1,11 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { ProblemForm } from '@/components/problem/ProblemForm'
-
-export default function NewProblemPage() {
-  return (
-    <>
-      <ProblemForm mode="create" role="student" />
-    </>
-  )
+export default function StudentNewProblemPage() {
+  redirect('/student')
 }

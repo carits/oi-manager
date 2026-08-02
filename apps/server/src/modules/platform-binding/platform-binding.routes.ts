@@ -622,7 +622,7 @@ platformBindingRouter.post('/admin/cleanup-submissions', authenticate, async (re
       let fixed = 0
       for (const sub of submissions) {
         const problem = await prisma.problem.findFirst({
-          where: { platform: sub.oj, problemId: sub.problemId },
+          where: { libraryScope: 'platform', platform: sub.oj, problemId: sub.problemId },
         })
         if (problem) {
           await prisma.submission.update({
@@ -645,6 +645,7 @@ platformBindingRouter.post('/admin/cleanup-submissions', authenticate, async (re
       // 5b. 找到所有 Carits 测试题目
       const testProblemIds = await prisma.problem.findMany({
         where: {
+          libraryScope: 'platform',
           platform: 'carits',
           OR: [{ title: { contains: '测试' } }, { title: { contains: '兼容' } }],
         },
@@ -669,6 +670,7 @@ platformBindingRouter.post('/admin/cleanup-submissions', authenticate, async (re
       // 5c. 删除测试题目
       const testProblems = await prisma.problem.deleteMany({
         where: {
+          libraryScope: 'platform',
           platform: 'carits',
           OR: [{ title: { contains: '测试' } }, { title: { contains: '兼容' } }],
         },

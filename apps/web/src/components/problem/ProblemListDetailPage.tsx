@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { Modal } from '@/components/ui/Modal'
@@ -18,6 +19,11 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { Toolbar, ToolbarGroup } from '@/components/ui/Toolbar'
 import styles from './ProblemListDetail.module.css'
+
+const MarkdownRenderer = dynamic(
+  () => import('@/components/ui/MarkdownRenderer').then(module => module.MarkdownRenderer),
+  { loading: () => <SkeletonRegion rows={4} label="题面正在排版" /> },
+)
 
 // ==================== 类型定义 ====================
 
@@ -67,6 +73,18 @@ export interface ListDetail {
   Sections: SectionInfo[]
   Shares: ShareInfo[]
   _permission: string
+}
+
+interface ContextProblem {
+  id: string
+  title: string
+  difficulty: string | null
+  timeLimit: number | null
+  memoryLimit: number | null
+  description: string | null
+  statementPdfUrl: string | null
+  statements: Array<{ id: string; format: string; language: string | null; content: string | null; fileUrl: string | null }>
+  attachments: Array<{ id: string; fileName: string; fileSize: number; description: string | null; fileUrl: string | null }>
 }
 
 // ==================== 工具函数 ====================
@@ -148,6 +166,10 @@ export default function ProblemListDetailPage() {
   const [titleDraft, setTitleDraft] = useState('')
 
   const [showPublishModal, setShowPublishModal] = useState(false)
+  const [contextEntryId, setContextEntryId] = useState<string | null>(null)
+  const [contextProblem, setContextProblem] = useState<ContextProblem | null>(null)
+  const [contextLoading, setContextLoading] = useState(false)
+  const [contextError, setContextError] = useState<string | null>(null)
 
   const canEdit = detail?._permission === 'admin' || detail?._permission === 'edit'
   const isAdmin = detail?._permission === 'admin'
@@ -364,6 +386,28 @@ export default function ProblemListDetailPage() {
 
   const totalEntries = detail?.Sections.reduce((sum, s) => sum + s.Entries.length, 0) || 0
 
+  const openContextProblem = async (entryId: string) => {
+    setContextEntryId(entryId)
+    setContextProblem(null)
+    setContextError(null)
+    setContextLoading(true)
+    try {
+      const response = await apiClient.get<ContextProblem>(`/api/problem-lists/${listId}/entries/${entryId}/problem`)
+      if (response.success && response.data) setContextProblem(response.data)
+      else setContextError(response.message || '题面暂时不可用')
+    } catch (error: any) {
+      setContextError(error?.message || '题面暂时不可用')
+    } finally {
+      setContextLoading(false)
+    }
+  }
+
+  const closeContextProblem = () => {
+    setContextEntryId(null)
+    setContextProblem(null)
+    setContextError(null)
+  }
+
   // ==================== 渲染 ====================
 
   if (loading) return <PageFrame width="workbench"><PageHeader title="题单详情" breadcrumbs={[{ label: '题单', href: `${pathPrefix}/problem-lists` }, { label: '详情' }]} /><SkeletonRegion rows={7} label="题单详情正在准备" /></PageFrame>
@@ -457,7 +501,14 @@ export default function ProblemListDetailPage() {
                                   {entry.Problem.title}
                                 </Link>
                               ) : (
-                                <span style={{ fontSize: '0.85rem' }}>{entry.Problem.title}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openContextProblem(entry.id)}
+                                  style={{ color: 'var(--primary)', fontSize: '0.85rem', textAlign: 'left' }}
+                                  title={`查看「${entry.Problem.title}」题面`}
+                                >
+                                  {entry.Problem.title}
+                                </button>
                               )}
                             </td>
                             {!isStudentView && <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -614,6 +665,50 @@ export default function ProblemListDetailPage() {
       {showSharePanel && detail && (
         <SharePanelModal listId={listId} shares={detail.Shares} onClose={() => setShowSharePanel(false)} onUpdate={fetchDetail} />
       )}
+
+      <Modal
+        isOpen={!!contextEntryId}
+        onClose={closeContextProblem}
+        title={contextProblem?.title || '题目详情'}
+        width="960px"
+      >
+        {contextLoading ? (
+          <SkeletonRegion rows={7} label="题面正在准备" />
+        ) : contextError ? (
+          <Empty
+            title="无法显示题面"
+            description={contextError}
+            action={<Button onClick={() => contextEntryId && openContextProblem(contextEntryId)}>重试</Button>}
+          />
+        ) : contextProblem ? (
+          <div style={{ display: 'grid', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', color: 'var(--gray-500)', fontSize: '0.85rem' }}>
+              {contextProblem.difficulty && <span>难度：{contextProblem.difficulty}</span>}
+              {contextProblem.timeLimit && <span>时间限制：{contextProblem.timeLimit} ms</span>}
+              {contextProblem.memoryLimit && <span>内存限制：{contextProblem.memoryLimit} MB</span>}
+            </div>
+            {contextProblem.statements.find(item => item.content)?.content || contextProblem.description ? (
+              <MarkdownRenderer content={contextProblem.statements.find(item => item.content)?.content || contextProblem.description || ''} />
+            ) : contextProblem.statementPdfUrl ? (
+              <a href={getAssetUrl(contextProblem.statementPdfUrl)} target="_blank" rel="noreferrer">打开 PDF 题面</a>
+            ) : (
+              <Empty title="题面暂无文本内容" description="请联系教师补充题面。" />
+            )}
+            {contextProblem.attachments.length > 0 && (
+              <section>
+                <h3 style={{ fontSize: '1rem', margin: '0 0 0.75rem' }}>附件</h3>
+                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  {contextProblem.attachments.map(attachment => (
+                    <a key={attachment.id} href={getAssetUrl(attachment.fileUrl)} target="_blank" rel="noreferrer">
+                      {attachment.fileName}
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        ) : null}
+      </Modal>
 
       <ConfirmModal isOpen={!!deleteEntryConfirm} onClose={() => setDeleteEntryConfirm(null)}
         onConfirm={() => { if (deleteEntryConfirm) handleDeleteEntry(deleteEntryConfirm) }}

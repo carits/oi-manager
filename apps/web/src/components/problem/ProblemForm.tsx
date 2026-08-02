@@ -120,6 +120,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       const result = await apiClient.get<any>(`/api/problems/${problemId}`)
       if (result.success && result.data) {
         const p = result.data
+        if (!p.permissions?.canEdit) {
+          toast.error('你没有权限编辑这道题')
+          router.replace(`${pathPrefix}/problems/${problemId}`)
+          return
+        }
         setForm({
           title: p.title,
           platform: p.platform || '',
@@ -1040,23 +1045,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
             {activeTab === 'settings' && (
               <div>
-                {/* 管理员可选择可见性 */}
+                {/* 题库归属由服务端根据当前工作区和角色确定 */}
                 {role === 'admin' && (
                   <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>可见性</label>
-                    <select aria-label="选择"
-                      value={form.visibility}
-                      onChange={(e) => handleChange('visibility', e.target.value)}
-                      style={{
-                        padding: '0.5rem',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      <option value="private">私有（仅自己可见）</option>
-                      <option value="public">公共（所有人可见）</option>
-                    </select>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>题库归属</label>
+                    <p style={{ margin: 0, color: 'var(--gray-600)', fontSize: '0.875rem' }}>平台题库</p>
                   </div>
                 )}
 

@@ -13,6 +13,7 @@ import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
 import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
+import { Copy } from 'lucide-react'
 
 interface Statement {
   id: string
@@ -38,12 +39,19 @@ interface Problem {
   memoryLimit: number | null
   status: string
   visibility: string
+  libraryScope: 'platform' | 'school'
   ownerId: string
   ownerType: string
   ownerName: string
   ojBindings: string | null
   allowedLanguages: string | null  // JSON string: PlatformLanguage[]
   createdAt: string
+  permissions: {
+    canEdit: boolean
+    canPublish: boolean
+    canArchive: boolean
+    canCopyToSchool: boolean
+  }
   // 多版本字段
   statements: Statement[]
   solutions: Statement[]
@@ -193,6 +201,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [aiLoading, setAiLoading] = useState<'translate' | 'format' | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [copyingToSchool, setCopyingToSchool] = useState(false)
   const [aiUsage, setAiUsage] = useState<{
     isAdmin: boolean
     translations: { zh: boolean; en: boolean }
@@ -502,13 +511,31 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     }
   }
 
+  const copyToSchool = async () => {
+    if (!problem || copyingToSchool) return
+    setCopyingToSchool(true)
+    const result = await apiClient.mutate<{ problem: { id: string }; skippedFiles: string[] }>(
+      `/api/problems/${problem.id}/copy-to-school`,
+      'POST',
+    )
+    setCopyingToSchool(false)
+    if (result.ok) {
+      toast.success('已复制到校内题库，并保存为草稿')
+      router.push(`/teacher/problems/${result.data.problem.id}/edit`)
+      return
+    }
+    if (result.error.code === 'SCHOOL_PROBLEM_EXISTS') {
+      const existingId = (result.error.data as { id?: string } | undefined)?.id
+      toast.info('本校题库已经有这道题')
+      if (existingId) router.push(`/teacher/problems/${existingId}`)
+      return
+    }
+    toast.error(result.error.message)
+  }
+
   // 判断是否有编辑/删除权限
   const canModify = () => {
-    if (!problem || !user) return false
-    // 管理员可以修改所有题目
-    if (role === 'admin') return true
-    // 题目所有者可以修改（不限可见性）
-    return problem.ownerId === user.userId
+    return problem?.permissions.canEdit ?? false
   }
 
   const getDifficultyColor = (difficulty: string | null) => {
@@ -542,7 +569,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const getVisibleSolutions = (): Statement[] => {
     if (!problem) return []
     // 学生在公共题目上只能看到可见的题解
-    if (role === 'student' && problem.visibility === 'public' && !canModify()) {
+    if (!canModify()) {
       return problem.solutions.filter(s => s.isVisible)
     }
     if (canModify()) return problem.solutions
@@ -663,15 +690,28 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 <span style={{
                   padding: '0.125rem 0.5rem',
                   borderRadius: '4px',
-                  background: problem.visibility === 'public' ? 'var(--info-light)' : 'var(--gray-100)',
-                  color: problem.visibility === 'public' ? 'var(--primary-hover)' : 'var(--gray-600)'
+                  background: problem.libraryScope === 'platform' ? 'var(--info-light)' : 'var(--gray-100)',
+                  color: problem.libraryScope === 'platform' ? 'var(--primary-hover)' : 'var(--gray-600)'
                 }}>
-                  {problem.visibility === 'public' ? '公共' : '私有'}
+                  {problem.libraryScope === 'platform' ? '平台题库' : '校内题库'}
                 </span>
+                {problem.libraryScope === 'school' && (
+                  <span>{problem.status === 'published' ? '已发布' : problem.status === 'archived' ? '已归档' : '草稿'}</span>
+                )}
               </div>
             </div>
-            {canModify() && (
+            {(canModify() || problem.permissions.canCopyToSchool) && (
               <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {problem.permissions.canCopyToSchool && (
+                  <button
+                    onClick={() => void copyToSchool()}
+                    disabled={copyingToSchool}
+                    style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: copyingToSchool ? 'wait' : 'pointer', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
+                  >
+                    <Copy size={15} aria-hidden="true" />{copyingToSchool ? '复制中' : '复制到校内'}
+                  </button>
+                )}
+                {canModify() && <>
                 <button
                   onClick={() => router.push(`${pathPrefix}/problems/${problemId}/edit`)}
                   style={{
@@ -697,8 +737,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     color: 'var(--error)'
                   }}
                 >
-                  删除
+                  归档
                 </button>
+                </>}
               </div>
             )}
           </div>
@@ -977,7 +1018,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
               <div style={{ padding: '2rem' }}>
                 {/* 学生在公共题目上检查题解是否可见 */}
-                {!canModify() && problem.visibility === 'public' && currentSolution && !currentSolution.isVisible ? (
+                {!canModify() && currentSolution && !currentSolution.isVisible ? (
                   <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
                     题解暂未公开
                   </div>

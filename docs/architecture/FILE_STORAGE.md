@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-08-02
 source_of_truth: apps/server/src/config/storage.ts, apps/server/src/routes/files.ts
 ---
 
@@ -16,9 +16,9 @@ E2E 强制使用 `test-results/storage`，不得写入开发上传目录。
 STORAGE_ROOT/
 ├── public/
 │   ├── avatars/
-│   ├── problem-images/
 │   └── contest-assets/
 ├── private/
+│   ├── problem-images/
 │   ├── problem-pdfs/
 │   ├── problem-attachments/
 │   ├── contest-attachments/
@@ -35,8 +35,12 @@ STORAGE_ROOT/
 
 ## 访问
 
-- 公开文件可通过 `/uploads/public` 或兼容路径 `/public` 访问。
-- 私有和受保护文件必须通过 `/api/files/:id/download`，由后端检查身份和业务归属。
+- 头像等真正公开文件可通过 `/uploads/public` 或兼容路径 `/public` 访问。
+- 题目图片、PDF、附件和测试数据全部为私有文件，不生成可匿名访问的 `/public` URL。
+- 教师通过 `/api/files/:id/download` 按题库作用域鉴权。学生必须使用
+  `/api/trainings/:id/problems/:problemId/files/:fileId` 或
+  `/api/problem-lists/:id/entries/:entryId/files/:fileId` 教学上下文通道，同时校验教学资源、题目条目和文件引用。
+- 直接访问跨校文件、未授权学校题文件或私有静态路径统一返回 `404`。
 - 文件元数据保存在 `File`，题目附件和题面还有对应业务模型。
 - 删除采用业务记录更新和回收站策略，不允许把用户提供的路径直接拼进文件系统。
 
@@ -60,4 +64,6 @@ STORAGE_ROOT/
 - 回收站默认保留 7 天。
 - 后台清理可用 `DISABLE_BACKGROUND_JOBS=true` 在 E2E 中关闭。
 - 数据盘迁移必须保证 `STORAGE_ROOT`、测试数据路径和 PM2 工作目录同步更新。
+- 历史学校题文件使用 `pnpm --filter server migrate:school-problem-files`
+  迁入私有目录；必须先执行 `--dry-run`并备份数据库和存储根目录。
 

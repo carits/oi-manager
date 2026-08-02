@@ -30,6 +30,7 @@ export const STORAGE_DIRS = {
   },
   // 私有访问目录
   private: {
+    problemImages: 'private/problem-images',
     problemPdfs: 'private/problem-pdfs',         // 题面/题解 PDF
     problemAttachments: 'private/problem-attachments', // 题目附件
     contestAttachments: 'private/contest-attachments', // 比赛私有资源
@@ -116,7 +117,7 @@ export function getDirByCategory(category: FileCategory, isPublic: boolean = fal
     case 'avatar':
       return STORAGE_DIRS.public.avatars
     case 'image':
-      return STORAGE_DIRS.public.problemImages
+      return isPublic ? STORAGE_DIRS.public.problemImages : STORAGE_DIRS.private.problemImages
     case 'pdf':
       return STORAGE_DIRS.private.problemPdfs
     case 'attachment':

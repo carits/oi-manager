@@ -20,6 +20,8 @@ import { trainingsRouter } from '../../src/modules/training/training.routes'
 import { submissionsRouter } from '../../src/routes/submissions'
 import { problemsRouter } from '../../src/modules/problem/problem.routes'
 import { rankingRouter } from '../../src/modules/ranking/ranking.routes'
+import { testdataRouter } from '../../src/routes/testdata'
+import { filesRouter } from '../../src/routes/files'
 import { verifyCookieOrigin } from '../../src/middleware/csrf'
 
 /**
@@ -57,6 +59,8 @@ export function createTestApp() {
   app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
   app.use('/api/submissions', submissionsRouter)
   app.use('/api/problems', problemsRouter)
+  app.use('/api', testdataRouter)
+  app.use('/api/files', filesRouter)
   app.use('/api/rankings', rankingRouter)
 
   // 健康检查

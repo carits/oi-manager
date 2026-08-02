@@ -15,8 +15,42 @@ import {
   parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
+import { findAccessibleProblem, findUsableProblemByExternalId } from '../problem/problem.access'
+import { fileService } from '../../lib/storage'
 
 export const trainingMiscRouter = Router()
+
+const managedFilePatterns = [
+  /\/api\/files\/([^/?#]+)\/(?:download|public)/g,
+  /\/api\/files\/download\/([^/?#]+)/g,
+]
+
+function extractManagedFileId(fileUrl: string | null | undefined): string | null {
+  if (!fileUrl) return null
+  for (const pattern of managedFilePatterns) {
+    pattern.lastIndex = 0
+    const match = pattern.exec(fileUrl)
+    if (match?.[1]) return match[1]
+  }
+  return null
+}
+
+function trainingFileUrl(trainingId: number, trainingProblemId: string, fileUrl: string | null | undefined) {
+  const fileId = extractManagedFileId(fileUrl)
+  return fileId
+    ? `/api/trainings/${trainingId}/problems/${trainingProblemId}/files/${fileId}`
+    : fileUrl ?? null
+}
+
+function rewriteTrainingFileUrls(trainingId: number, trainingProblemId: string, content: string) {
+  let rewritten = content
+  for (const pattern of managedFilePatterns) {
+    pattern.lastIndex = 0
+    rewritten = rewritten.replace(pattern, (_url, fileId: string) =>
+      `/api/trainings/${trainingId}/problems/${trainingProblemId}/files/${fileId}`)
+  }
+  return rewritten
+}
 
 /**
  * GET /api/trainings/:id/overview
@@ -298,7 +332,7 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
   for (const item of problems) {
     if (item.TrainingSolution && (item.TrainingSolution.visible || isAdmin)) {
       solutions[item.id] = {
-        content: item.TrainingSolution.content,
+        content: rewriteTrainingFileUrls(id, item.id, item.TrainingSolution.content),
         visible: item.TrainingSolution.visible,
         source: 'training',
       }
@@ -307,11 +341,11 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
 
     if (item.Problem.solutionType !== 'none' && item.Problem.solutionMarkdown) {
       solutions[item.id] = {
-        content: item.Problem.solutionMarkdown,
+        content: rewriteTrainingFileUrls(id, item.id, item.Problem.solutionMarkdown),
         visible: true,
         source: 'problem',
         solutionType: item.Problem.solutionType,
-        solutionPdfUrl: item.Problem.solutionPdfUrl,
+        solutionPdfUrl: trainingFileUrl(id, item.id, item.Problem.solutionPdfUrl),
       }
       continue
     }
@@ -319,12 +353,12 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
     const statement = item.Problem.ProblemStatement[0]
     if (statement?.content) {
       solutions[item.id] = {
-        content: statement.content,
+        content: rewriteTrainingFileUrls(id, item.id, statement.content),
         visible: true,
         source: 'problem',
         format: statement.format,
         language: statement.language,
-        fileUrl: statement.fileUrl,
+        fileUrl: trainingFileUrl(id, item.id, statement.fileUrl),
       }
     }
   }
@@ -395,6 +429,7 @@ trainingMiscRouter.get('/trainings/:id/attachments', authenticate, asyncHandler(
       })),
       ...item.Problem.ProblemAttachment.map(file => ({
         ...file,
+        fileUrl: trainingFileUrl(id, item.id, file.fileUrl),
         uploadedBy: '',
         uploadedAt: file.uploadedAt.toISOString(),
       })),
@@ -523,13 +558,100 @@ trainingMiscRouter.get('/trainings/:id/problems/:problemId/attachments', authent
     const allAttachments = problemAttachments.map(a => ({
       id: a.id,
       fileName: a.fileName,
-      fileUrl: a.fileUrl,
+      fileUrl: trainingFileUrl(id, problemId, a.fileUrl),
       fileSize: a.fileSize,
       uploadedAt: a.uploadedAt.toISOString(),
     }))
 
     res.json({ success: true, data: allAttachments })
 }, '查询失败'))
+
+/**
+ * Download a problem asset only through an authorized training context.
+ * Raw school-library file URLs remain inaccessible to students.
+ */
+trainingMiscRouter.get('/trainings/:id/problems/:problemId/files/:fileId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  const id = parseTrainingId(req.params.id)
+  const { problemId: trainingProblemId, fileId } = req.params
+  const userId = req.user!.userId
+  const training = await prisma.training.findUnique({ where: { id } })
+
+  if (!training || !await canAccessTraining(userId, training)) {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+  const notStarted = await requireTrainingStarted(training, userId)
+  if (notStarted) {
+    return res.status(403).json({ success: false, message: notStarted })
+  }
+
+  const trainingProblem = await prisma.trainingProblem.findFirst({
+    where: { id: trainingProblemId, trainingId: id },
+    select: {
+      problemId: true,
+      Problem: {
+        select: {
+          description: true,
+          statementPdfUrl: true,
+          solutionMarkdown: true,
+          solutionPdfUrl: true,
+          ProblemAttachment: { select: { fileUrl: true } },
+          ProblemStatement: {
+            where: { isVisible: true },
+            select: { type: true, content: true, fileUrl: true },
+          },
+        },
+      },
+    },
+  })
+  const file = await fileService.getFile(fileId)
+  if (!trainingProblem || !file || file.status !== 'active' ||
+      file.ownerType !== 'problem' || file.ownerId !== trainingProblem.problemId ||
+      file.category === 'testdata') {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+
+  const isAdmin = await canManageTraining(userId, training)
+  const showSolution = isAdmin || training.solutionVisible ||
+    training.status === 'finished' || new Date() > training.endTime
+  const allowedIds = new Set<string>()
+  const allowUrl = (url: string | null | undefined) => {
+    const managedId = extractManagedFileId(url)
+    if (managedId) allowedIds.add(managedId)
+  }
+  const allowContent = (content: string | null | undefined) => {
+    if (!content) return
+    for (const pattern of managedFilePatterns) {
+      pattern.lastIndex = 0
+      for (const match of content.matchAll(pattern)) {
+        if (match[1]) allowedIds.add(match[1])
+      }
+    }
+  }
+
+  allowUrl(trainingProblem.Problem.statementPdfUrl)
+  allowContent(trainingProblem.Problem.description)
+  for (const attachment of trainingProblem.Problem.ProblemAttachment) allowUrl(attachment.fileUrl)
+  for (const statement of trainingProblem.Problem.ProblemStatement) {
+    if (statement.type === 'solution' && !showSolution) continue
+    allowUrl(statement.fileUrl)
+    allowContent(statement.content)
+  }
+  if (showSolution) {
+    allowUrl(trainingProblem.Problem.solutionPdfUrl)
+    allowContent(trainingProblem.Problem.solutionMarkdown)
+  }
+  if (!allowedIds.has(fileId)) {
+    return res.status(404).json({ success: false, message: '资源不存在' })
+  }
+
+  const download = await fileService.download(fileId)
+  const disposition = file.category === 'attachment' ? 'attachment' : 'inline'
+  res.setHeader('Content-Type', download.mimeType)
+  res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(download.originalName)}`)
+  res.setHeader('Content-Length', download.buffer.length)
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.send(download.buffer)
+}, '下载训练题目资源失败'))
 
 /**
  * POST /api/trainings/resolve-problems
@@ -562,17 +684,15 @@ trainingMiscRouter.post('/resolve-problems', authenticate, asyncHandler(async (r
 
       if (item.ojName === 'carits') {
         // Carits 平台：按 ID 或 problemId 查本地题库
-        let p = await prisma.problem.findUnique({ where: { id: item.problemCode } }).catch(() => null)
+        let p = await findAccessibleProblem(req.user!, item.problemCode, 'use').catch(() => null)
         if (!p) {
-          p = await prisma.problem.findUnique({ where: { platform_problemId: { platform: 'carits', problemId: item.problemCode } } })
+          p = await findUsableProblemByExternalId(req.user!, 'carits', item.problemCode)
         }
-        if (p && (p.visibility === 'public' || p.ownerId === req.user.userId)) matched = { id: p.id, title: p.title }
+        if (p) matched = { id: p.id, title: p.title }
       } else {
         // 外部 OJ：按 platform + problemId 直接查
-        const p = await prisma.problem.findUnique({
-          where: { platform_problemId: { platform: item.ojName, problemId: item.problemCode } }
-        })
-        if (p && (p.visibility === 'public' || p.ownerId === req.user.userId)) {
+        const p = await findUsableProblemByExternalId(req.user!, item.ojName, item.problemCode)
+        if (p) {
           matched = { id: p.id, title: p.title }
         }
       }

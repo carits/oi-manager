@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import path from 'path'
-import { authenticate, getResourceScope } from '../middleware/auth'
+import { authenticate, getResourceScope, isPersonalWorkspace } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
@@ -12,6 +12,7 @@ import {
   requestFingerprint,
   runIdempotent,
 } from '../lib/idempotency'
+import { findUsableProblemByExternalId } from '../modules/problem/problem.access'
 
 export const submitRouter = Router()
 
@@ -54,13 +55,11 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
       })
     }
 
-    // 检查题目是否存在
-    const problem = await prisma.problem.findFirst({
-      where: {
-        platform: oj,
-        problemId,
-      },
-    })
+    if (req.user.role === 'student' && !isPersonalWorkspace(req.user)) {
+      return res.status(403).json({ success: false, code: 'TEACHER_ONLY', message: '校园学生请从作业或比赛提交' })
+    }
+
+    const problem = await findUsableProblemByExternalId(req.user, oj, problemId)
 
     if (!problem) {
       return res.status(404).json({

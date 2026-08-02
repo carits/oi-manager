@@ -17,6 +17,8 @@ import {
   ALLOWED_EXTENSIONS
 } from '../config/storage'
 import type { StorageType, AccessLevel, FileCategory, OwnerType } from '../config/storage'
+import type { JwtPayload } from '@oi-manager/shared'
+import { canViewProblem } from '../modules/problem/problem.access'
 
 // ==================== 类型定义 ====================
 
@@ -396,7 +398,7 @@ class FileService {
   /**
    * 检查文件访问权限
    */
-  async checkAccess(userId: string, userRole: string, fileId: string): Promise<boolean> {
+  async checkAccess(user: JwtPayload, fileId: string): Promise<boolean> {
     const file = await prisma.file.findUnique({
       where: { id: fileId }
     })
@@ -410,24 +412,12 @@ class FileService {
       return true
     }
 
-    // 管理员可以访问所有文件
-    if (userRole === 'super_admin' || userRole === 'platform_admin') {
-      return true
-    }
-
     // 根据业务类型检查权限
     switch (file.ownerType) {
       case 'problem': {
         // 检查题目可见性和所有权
-        const problem = await prisma.problem.findUnique({
-          where: { id: file.ownerId },
-          select: { ownerId: true, visibility: true }
-        })
-        if (!problem) return false
-        // 公开题目允许访问
-        if (problem.visibility === 'public') return true
-        // 私有题目只有所有者可以访问
-        return problem.ownerId === userId
+        const problem = await prisma.problem.findUnique({ where: { id: file.ownerId } })
+        return !!problem && canViewProblem(user, problem)
       }
       case 'contest': {
         // 比赛资源：检查是否是团队成员
@@ -439,7 +429,7 @@ class FileService {
         // 团队成员允许访问
         if (contest.teamId) {
           const member = await prisma.teamMember.findFirst({
-            where: { teamId: contest.teamId, userId }
+            where: { teamId: contest.teamId, userId: user.userId }
           })
           return !!member
         }
@@ -448,13 +438,13 @@ class FileService {
       case 'team': {
         // 团队资源：检查是否是团队成员
         const member = await prisma.teamMember.findFirst({
-          where: { teamId: file.ownerId, userId }
+          where: { teamId: file.ownerId, userId: user.userId }
         })
         return !!member
       }
       case 'user': {
         // 用户资源：只有本人可以访问
-        return file.ownerId === userId
+        return file.ownerId === user.userId
       }
       default:
         return false

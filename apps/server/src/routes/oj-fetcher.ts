@@ -11,6 +11,7 @@ import { fileService } from '../lib/storage'
 import logger from '../lib/logger'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
 import { authenticate, authorize } from '../middleware/auth'
+import { canModifyProblem, canViewProblem } from '../modules/problem/problem.access'
 
 export const ojFetcherRouter = Router()
 const adminOnly = [authenticate, authorize('super_admin' as const, 'platform_admin' as const)]
@@ -401,6 +402,7 @@ async function processFetchQueue(platform: string) {
         // 检查该平台+题号组合是否已存在
         const existingProblem = await prisma.problem.findFirst({
           where: {
+            libraryScope: 'platform',
             platform,
             problemId: job.problemId,
           },
@@ -460,7 +462,11 @@ async function processFetchQueue(platform: string) {
               visibility: 'public',
               ownerType: 'admin',
               ownerId: adminUser.id,
+              libraryScope: 'platform',
+              libraryKey: 'platform',
+              schoolId: null,
               status: 'published',
+              publishedAt: new Date(),
             },
           })
           targetProblemId = newProblem.id
@@ -1094,11 +1100,14 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
       where: { id: problemId },
     })
 
-    if (!problem) {
+    if (!problem || !canViewProblem((req as any).user, problem)) {
       return res.status(404).json({
         success: false,
         message: '题目不存在',
       })
+    }
+    if (!canModifyProblem((req as any).user, problem)) {
+      return res.status(403).json({ success: false, message: '没有权限修改该题目' })
     }
 
     // 准备请求头（模拟浏览器请求）
@@ -1180,7 +1189,7 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
       ownerId: problemId,
       originalName: filename,
       mimeType: mimeType,
-      isPublic: isImage // 图片公开访问，附件私有访问
+      isPublic: isImage && problem.libraryScope === 'platform'
     })
 
     // 如果是附件（非图片），创建 ProblemAttachment 记录

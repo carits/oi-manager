@@ -1,15 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { useParams } from 'next/navigation'
-import { ProblemForm } from '@/components/problem/ProblemForm'
-
-export default function EditProblemPage() {
-  const params = useParams()
-  const problemId = params.id as string
-
-  return (
-    <>
-      <ProblemForm mode="edit" role="student" problemId={problemId} />
-    </>
-  )
+export default function StudentProblemEditPage() {
+  redirect('/student')
 }

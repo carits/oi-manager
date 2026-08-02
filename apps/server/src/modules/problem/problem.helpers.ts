@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../../prisma'
+export { canModifyProblem } from './problem.access'
 
 /**
  * 生成 Carits 平台题号（纯数字，从 1000 开始原子递增）
@@ -46,7 +47,3 @@ export async function getOwnerInfo(userId: string, role: string): Promise<{ owne
  * super_admin 和 platform_admin 可以管理所有题目
  * 其他用户只能管理自己创建的题目
  */
-export function canModifyProblem(user: any, problem: any): boolean {
-  if (user.role === 'super_admin' || user.role === 'platform_admin') return true
-  return problem.ownerId === user.userId
-}

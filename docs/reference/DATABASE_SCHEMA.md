@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-02
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -41,7 +41,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
-| `Problem` | `id`, `platform`, `problemId`, `title`, `visibility`, `ownerId` | 统一题目 |
+| `Problem` | `id`, `libraryScope`, `libraryKey`, `schoolId`, `platform`, `problemId`, `status`, `ownerId`, `sourceProblemId` | 平台/学校隔离的题库题目 |
 | `ProblemAttachment` | `problemId`, `fileName`, `fileUrl`, `fileSize` | 题目附件 |
 | `ProblemStatement` | `problemId`, `type`, `format`, `language`, content/file | 多题面 |
 | `ProblemNote` | `problemId`, `userId`, `content` | 用户题目笔记 |

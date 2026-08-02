@@ -538,7 +538,7 @@ export async function syncLuoguSubmissionsForUser(
       const submittedAt = detail?.submittedAt || sub.submittedAt
 
       const problemRecord = await prisma.problem.findFirst({
-        where: { platform: 'luogu', problemId: sub.problemId },
+        where: { libraryScope: 'platform', platform: 'luogu', problemId: sub.problemId },
       })
 
       await prisma.submission.create({
@@ -806,7 +806,7 @@ export async function syncFirstLuoguSubmission(
     const submittedAt = detail?.submittedAt || latestSub.submittedAt
 
     const problemRecord = await prisma.problem.findFirst({
-      where: { platform: 'luogu', problemId: latestSub.problemId },
+      where: { libraryScope: 'platform', platform: 'luogu', problemId: latestSub.problemId },
     })
 
     // 创建 Submission
@@ -954,7 +954,7 @@ async function asyncSyncRemaining(
       const subProblemId = record.problem?.pid || problemId
 
       const problemRecord = await prisma.problem.findFirst({
-        where: { platform: 'luogu', problemId: subProblemId },
+        where: { libraryScope: 'platform', platform: 'luogu', problemId: subProblemId },
       })
 
       // 创建 Submission
