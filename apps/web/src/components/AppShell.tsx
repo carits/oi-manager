@@ -132,7 +132,7 @@ export function AppShell({ children }: AppShellProps) {
   )
 
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${sidebarOpen ? styles.shellSidebarOpen : ''}`}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <div className={styles.headerStart}>
@@ -153,7 +153,6 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
       </header>
-      {sidebarOpen && <button type="button" className={styles.sidebarBackdrop} onClick={() => setNavigationOpen(false)} aria-label="关闭导航" />}
       <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`} aria-hidden={!sidebarOpen}>
         <div className={styles.sidebarHeader}>
           <span>{isPersonal ? '个人工作区' : roleName}</span>

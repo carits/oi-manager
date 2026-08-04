@@ -37,9 +37,10 @@ source_of_truth: repository structure and active documentation
 ### 运维
 
 1. [环境边界](operations/ENVIRONMENTS.md)
-2. [运行手册](operations/RUNBOOK.md)
-3. [部署模板](operations/DEPLOYMENT.md)
-4. [故障排查](operations/TROUBLESHOOTING.md)
+2. [远端环境区分说明](operations/REMOTE_ENVIRONMENT_MAP.md)
+3. [运行手册](operations/RUNBOOK.md)
+4. [部署模板](operations/DEPLOYMENT.md)
+5. [故障排查](operations/TROUBLESHOOTING.md)
 
 ### 查阅接口
 

@@ -1,5 +1,5 @@
-.shell { min-height: 100vh; background: var(--bg-page); }
-.header { position: sticky; top: 0; z-index: 100; height: var(--shell-header-height); background: var(--bg-card); border-bottom: 1px solid var(--border); }
+.shell { --active-sidebar-width: min(var(--shell-sidebar-width), calc(100vw - var(--space-6))); min-height: 100vh; overflow-x: hidden; background: var(--bg-page); }
+.header { position: sticky; top: 0; z-index: 100; height: var(--shell-header-height); background: var(--bg-card); border-bottom: 1px solid var(--border); transition: transform var(--transition); will-change: transform; }
 .headerInner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: 0 var(--space-6); margin: 0 auto; }
 .headerStart, .headerEnd { display: flex; align-items: center; min-width: 0; }
 .headerStart { gap: var(--space-3); }
@@ -15,8 +15,7 @@
 .modeControl button { min-width: 56px; min-height: 34px; }
 .modeControl button[aria-pressed='true'] { color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent), var(--shadow-xs); }
 .modeError { position: absolute; top: calc(100% + 4px); right: 0; color: var(--error-text); font-size: 11px; white-space: nowrap; }
-.sidebarBackdrop { position: fixed; inset: var(--shell-header-height) 0 0; z-index: 110; background: rgba(15, 23, 42, 0.26); cursor: default; }
-.sidebar { position: fixed; top: var(--shell-header-height); bottom: 0; left: 0; z-index: 120; width: min(var(--shell-sidebar-width), calc(100vw - var(--space-6))); display: flex; flex-direction: column; padding: var(--space-4) var(--space-3) var(--space-3); overflow: visible; visibility: hidden; pointer-events: none; background: var(--bg-sidebar); border-right: 1px solid var(--border); box-shadow: var(--shadow-lg); transform: translateX(-102%); transition: transform var(--transition); }
+.sidebar { position: fixed; top: var(--shell-header-height); bottom: 0; left: 0; z-index: 120; width: var(--active-sidebar-width); display: flex; flex-direction: column; padding: var(--space-4) var(--space-3) var(--space-3); overflow: visible; visibility: hidden; pointer-events: none; background: var(--bg-sidebar); border-right: 1px solid var(--border); box-shadow: var(--shadow-md); transform: translateX(-102%); transition: transform var(--transition), visibility var(--transition); }
 .sidebarOpen { visibility: visible; pointer-events: auto; transform: translateX(0); }
 .sidebarHeader { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-2) var(--space-3); color: var(--text-primary); border-bottom: 1px solid var(--border); font-size: var(--text-sm); font-weight: 650; }
 .sidebarClose { width: 34px; height: 34px; }
@@ -42,7 +41,8 @@
 .menuItem:hover { background: var(--bg-hover); }
 .menuDivider { height: 1px; margin: var(--space-1) 0; background: var(--border); }
 .logoutItem { color: var(--error-text); }
-.main { width: 100%; min-width: 0; padding: var(--space-6) var(--space-6) var(--space-10); }
+.main { width: 100%; min-width: 0; padding: var(--space-6) var(--space-6) var(--space-10); transition: transform var(--transition); will-change: transform; }
+.shellSidebarOpen .header, .shellSidebarOpen .main { transform: translateX(var(--active-sidebar-width)); }
 .mainInner { width: 100%; max-width: var(--content-max-width); min-width: 0; margin: 0 auto; }
 .mainInner[data-layout='workbench'] { max-width: none; }
 @media (max-width: 1320px) {
