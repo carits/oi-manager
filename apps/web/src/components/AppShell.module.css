@@ -9,6 +9,7 @@
 .navigationToggle:hover, .sidebarClose:hover { color: var(--text-primary); background: var(--bg-hover); }
 .brandLink { display: inline-flex; align-items: center; flex: 0 0 auto; border-radius: var(--radius-sm); }
 .logo { width: auto; height: 42px; display: block; object-fit: contain; }
+.shellSidebarOpen .brandLink { display: none; }
 .contextLabel { min-width: 0; overflow: hidden; color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .modeArea { position: relative; display: flex; align-items: center; gap: var(--space-2); }
 .modeLabel { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 650; white-space: nowrap; }
@@ -17,7 +18,8 @@
 .modeError { position: absolute; top: calc(100% + 4px); right: 0; color: var(--error-text); font-size: 11px; white-space: nowrap; }
 .sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 120; width: var(--active-sidebar-width); display: flex; flex-direction: column; padding: var(--space-4) var(--space-3) var(--space-3); overflow: visible; visibility: hidden; pointer-events: none; background: var(--bg-sidebar); border-right: 1px solid var(--border); box-shadow: var(--shadow-md); transform: translateX(-102%); transition: transform var(--transition), visibility var(--transition); }
 .sidebarOpen { visibility: visible; pointer-events: auto; transform: translateX(0); }
-.sidebarHeader { min-height: 40px; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding: 0 var(--space-2) var(--space-3); color: var(--text-primary); border-bottom: 1px solid var(--border); font-size: var(--text-sm); font-weight: 650; }
+.sidebarHeader { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-2) var(--space-3); color: var(--text-primary); border-bottom: 1px solid var(--border); font-size: var(--text-sm); font-weight: 650; }
+.sidebarBrandLink { display: inline-flex; align-items: center; min-width: 0; border-radius: var(--radius-sm); }
 .sidebarClose { width: 34px; height: 34px; }
 .sidebarNav { display: grid; gap: 3px; padding-top: var(--space-3); overflow-y: auto; }
 .sidebarLink { min-height: 40px; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); color: var(--text-secondary); border-radius: var(--radius); font-size: var(--text-sm); font-weight: 550; transition: color var(--transition-fast), background var(--transition-fast); }

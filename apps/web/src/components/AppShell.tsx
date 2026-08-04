@@ -154,6 +154,7 @@ export function AppShell({ children }: AppShellProps) {
       </header>
       <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`} aria-hidden={!sidebarOpen}>
         <div className={styles.sidebarHeader}>
+          <Link className={styles.sidebarBrandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回工作区首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           <button type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></button>
         </div>
         <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`}>{navLinks}</nav>
