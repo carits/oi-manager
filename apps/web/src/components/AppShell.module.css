@@ -15,7 +15,7 @@
 .modeControl button { min-width: 56px; min-height: 34px; }
 .modeControl button[aria-pressed='true'] { color: var(--primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent), var(--shadow-xs); }
 .modeError { position: absolute; top: calc(100% + 4px); right: 0; color: var(--error-text); font-size: 11px; white-space: nowrap; }
-.sidebar { position: fixed; top: var(--shell-header-height); bottom: 0; left: 0; z-index: 120; width: var(--active-sidebar-width); display: flex; flex-direction: column; padding: var(--space-4) var(--space-3) var(--space-3); overflow: visible; visibility: hidden; pointer-events: none; background: var(--bg-sidebar); border-right: 1px solid var(--border); box-shadow: var(--shadow-md); transform: translateX(-102%); transition: transform var(--transition), visibility var(--transition); }
+.sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 120; width: var(--active-sidebar-width); display: flex; flex-direction: column; padding: var(--space-4) var(--space-3) var(--space-3); overflow: visible; visibility: hidden; pointer-events: none; background: var(--bg-sidebar); border-right: 1px solid var(--border); box-shadow: var(--shadow-md); transform: translateX(-102%); transition: transform var(--transition), visibility var(--transition); }
 .sidebarOpen { visibility: visible; pointer-events: auto; transform: translateX(0); }
 .sidebarHeader { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-2) var(--space-3); color: var(--text-primary); border-bottom: 1px solid var(--border); font-size: var(--text-sm); font-weight: 650; }
 .sidebarClose { width: 34px; height: 34px; }
