@@ -33,8 +33,13 @@ export function Modal({
   closeOnOverlay = true,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const titleId = useId()
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!isOpen) return
@@ -44,12 +49,12 @@ export function Modal({
 
     const dialog = dialogRef.current
     const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) || [])
-    requestAnimationFrame(() => (focusables()[0] || dialog)?.focus())
+    const focusFrame = requestAnimationFrame(() => (focusables()[0] || dialog)?.focus())
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab') return
@@ -72,11 +77,14 @@ export function Modal({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => {
+      cancelAnimationFrame(focusFrame)
       document.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = previousOverflow
-      returnFocusRef.current?.focus()
+      if (returnFocusRef.current?.isConnected) {
+        returnFocusRef.current.focus()
+      }
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   if (!isOpen) return null
 
