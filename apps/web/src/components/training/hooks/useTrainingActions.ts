@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
+import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, Attachment } from '../types'
@@ -42,7 +43,7 @@ export function useTrainingActions(
     }
     setSubmitting(true)
     try {
-      submitKeyRef.current ||= crypto.randomUUID()
+      submitKeyRef.current ||= createClientUUID()
       const result = await apiClient.mutate<{ submissionId?: number }>(
         `/api/trainings/${trainingId}/submit`,
         'POST',

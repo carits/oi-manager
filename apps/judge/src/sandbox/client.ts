@@ -116,6 +116,14 @@ export async function compile(params: {
       if (result.files?.stderr) {
         error = result.files.stderr || error
       }
+      if (error.includes('g++: not found') || error.includes('gcc: not found') || error.includes('clang++: not found') || error.includes('clang: not found')) {
+        const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_compile_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+        if (!providedWorkDir) {
+          fs.mkdirSync(uniqueDir, { recursive: true })
+        }
+        const localResult = await localCompile({ language, code, workDir: uniqueDir })
+        return { ...localResult, workDir: uniqueDir }
+      }
       return { success: false, error }
     }
 
@@ -223,6 +231,7 @@ async function sandboxExecute(
     memoryLimit: number
     outputLimit?: number
     compileFileId?: string
+    workDir?: string
     filename?: string
     extraCopyIn?: Record<string, string>
     addressSpaceLimit?: boolean
@@ -233,9 +242,11 @@ async function sandboxExecute(
   try {
     // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
     const copyIn: Record<string, any> = {}
+    const executeFile = langConfig.execute_file || 'main'
     if (compileFileId) {
-      const executeFile = langConfig.execute_file || 'main'
       copyIn[executeFile] = { fileId: compileFileId }
+    } else if (params.workDir) {
+      copyIn[executeFile] = { src: path.join(params.workDir, executeFile) }
     }
 
     // 额外文件（user_extra_files 等）

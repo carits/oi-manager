@@ -106,6 +106,10 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
     workDir
   })
 
+  if (compileResult.workDir) {
+    workDir = compileResult.workDir
+  }
+
   if (!compileResult.success) {
     console.log(`[Judge] Compilation failed: ${compileResult.error}`)
     cleanupWorkDir(workDir)

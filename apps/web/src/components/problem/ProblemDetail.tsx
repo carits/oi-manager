@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Modal } from '@/components/ui/Modal'
 import apiClient from '@/lib/apiClient'
+import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
@@ -355,7 +356,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
     setSubmitLoading(true)
     try {
-      submitKeyRef.current ||= crypto.randomUUID()
+      submitKeyRef.current ||= createClientUUID()
       const result = await apiClient.mutate<{ submissionId?: number }>(
         '/api/submit',
         'POST',
