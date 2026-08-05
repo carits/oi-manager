@@ -1,6 +1,6 @@
 import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
-import { authenticate, AuthRequest, isAdmin, isSuperAdmin } from '../middleware/auth.js'
+import { authenticate, AuthRequest, isAdmin, isSuperAdmin, isPersonalWorkspace, requireWorkspace } from '../middleware/auth.js'
 import { prisma } from '../prisma.js'
 import { CreatePlatformAdminRequest, ResetUserPasswordRequest, GetUsersQueryParams } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation.js'
@@ -15,8 +15,30 @@ userRouter.get('/:userId/profile', authenticate, asyncHandler(async (req: AuthRe
     const { userId } = req.params
     const { userType } = req.query
 
-    if (!userType || !['teacher', 'student'].includes(userType as string)) {
+    if (!userType || !['teacher', 'student', 'user'].includes(userType as string)) {
       return res.status(400).json({ success: false, message: 'userType 参数无效' })
+    }
+
+    if (isPersonalWorkspace(req.user) || userType === 'user') {
+      const publicUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, avatar: true, bio: true, status: true }
+      })
+
+      if (!publicUser || publicUser.status !== 'active') {
+        return res.status(404).json({ success: false, message: 'User not found' })
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          id: publicUser.id,
+          username: publicUser.username,
+          avatar: publicUser.avatar,
+          bio: publicUser.bio,
+          userType: 'user'
+        }
+      })
     }
 
     let profileData: any = null

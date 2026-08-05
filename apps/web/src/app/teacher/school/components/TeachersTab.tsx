@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -12,6 +11,7 @@ import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
 import { formStyles } from '@/lib/styles'
 import apiClient from '@/lib/apiClient'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 interface School {
   id: string
@@ -39,7 +39,6 @@ interface TeachersTabProps {
 }
 
 export default function TeachersTab({ school, isPrincipal, showHeader = false, showActions = true }: TeachersTabProps) {
-  const router = useRouter()
   const toast = useToast()
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [loading, setLoading] = useState(true)
@@ -203,14 +202,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
           {
             key: 'name',
             label: '姓名',
-            render: (teacher) => (
-              <span
-                onClick={() => router.push(`/profile/teacher/${teacher.id}`)}
-                style={{ cursor: 'pointer', color: 'var(--primary)' }}
-              >
-                {teacher.name}
-              </span>
-            )
+            render: (teacher) => <UserIdentityLink id={teacher.id} userType="teacher" name={teacher.name} username={teacher.user?.username} showUsername={false} />
           },
           { key: 'user.username', label: '用户名' },
           {

@@ -16,19 +16,19 @@ import styles from './UserProfilePage.module.css'
 
 interface UserProfile {
   id: string
-  name: string
+  name?: string
   username: string
   avatar: string | null
   bio: string | null
-  userType: 'student' | 'teacher'
-  school: { id: string; name: string } | null
+  userType: 'student' | 'teacher' | 'user'
+  school?: { id: string; name: string } | null
 }
 
-export function UserProfilePage({ userType }: { userType: 'student' | 'teacher' }) {
+export function UserProfilePage({ userType }: { userType: 'student' | 'teacher' | 'user' }) {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
-  const roleLabel = userType === 'student' ? '学生' : '教师'
+  const roleLabel = userType === 'student' ? '学生' : userType === 'teacher' ? '教师' : '用户'
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +57,7 @@ export function UserProfilePage({ userType }: { userType: 'student' | 'teacher' 
     <PageFrame width="reading">
       <PageHeader
         title={`${roleLabel}资料`}
-        breadcrumbs={[{ label: '用户资料' }, { label: profile?.name || roleLabel }]}
+        breadcrumbs={[{ label: '用户资料' }, { label: profile?.name || profile?.username || roleLabel }]}
         actions={<Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => router.back()}>返回</Button>}
       />
       {error || !profile ? (
@@ -66,14 +66,14 @@ export function UserProfilePage({ userType }: { userType: 'student' | 'teacher' 
         <Card padding="none" className={styles.profileCard}>
           <div className={styles.identity}>
             {profile.avatar ? (
-              <img className={styles.avatar} src={getAssetUrl(profile.avatar)} alt={`${profile.name}的头像`} />
+              <img className={styles.avatar} src={getAssetUrl(profile.avatar)} alt={(profile.name || profile.username) + '的头像'} />
             ) : (
-              <div className={styles.initial} aria-hidden="true">{profile.name?.charAt(0)?.toUpperCase() || '?'}</div>
+              <div className={styles.initial} aria-hidden="true">{(profile.name || profile.username)?.charAt(0)?.toUpperCase() || '?'}</div>
             )}
             <div>
-              <h2 className={styles.name}>{profile.name}</h2>
-              <p className={styles.username}>@{profile.username}</p>
-              <Badge variant={userType === 'student' ? 'success' : 'info'}>{roleLabel}</Badge>
+              <h2 className={styles.name}>{profile.name || `@${profile.username}`}</h2>
+              {profile.name && <p className={styles.username}>@{profile.username}</p>}
+              <Badge variant={userType === 'student' ? 'success' : userType === 'teacher' ? 'info' : 'neutral'}>{roleLabel}</Badge>
             </div>
           </div>
           <div className={styles.details}>

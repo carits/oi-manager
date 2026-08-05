@@ -5,6 +5,7 @@ import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import apiClient, { ApiResponse } from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 type RankingType = 'rating' | 'solved'
 
@@ -87,7 +88,19 @@ export default function PersonalRankingsTab({ type }: PersonalRankingsTabProps) 
             label: '排名',
             render: (_, index) => startIndex + index + 1
           },
-          { key: 'username', label: '用户名', render: row => <span style={{ fontWeight: row.username === user?.username ? 700 : 500 }}>{row.username}{row.username === user?.username ? '（我）' : ''}</span> },
+          {
+            key: 'username',
+            label: '用户名',
+            render: row => (
+              <UserIdentityLink
+                id={row.id}
+                userType="user"
+                username={row.username}
+                currentSuffix={row.username === user?.username ? '（我）' : ''}
+                style={{ fontWeight: row.username === user?.username ? 700 : 500 }}
+              />
+            )
+          },
           {
             key: valueKey,
             label: valueLabel,

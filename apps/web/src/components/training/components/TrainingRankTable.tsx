@@ -1,5 +1,7 @@
 'use client'
 
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+
 function toExcelColumnName(index: number): string {
   let result = ''
   let i = index
@@ -75,8 +77,8 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
               <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: idx < 3 ? RANK_MEDAL_COLORS[idx] : 'var(--text-secondary)' }}>
                 {idx + 1}
               </td>
-              <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</td>
-              <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{row.username}</td>
+              <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}><UserIdentityLink id={row.userId} userType={row.userType} name={row.name} username={row.username} /></td>
+              <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}><UserIdentityLink id={row.userId} userType={row.userType} username={row.username} /></td>
               {isScoreBased ? (
                 <>
                   <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--success)' }}>{row.totalScore}</td>

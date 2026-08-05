@@ -5,6 +5,7 @@ import { JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP } from '@/lib/judge-constant
 import type { TrainingInfo, TrainingProblem, SubmissionRow } from '../types'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 const RESULT_COLORS: Record<string, { bg: string; text: string }> = {
   accepted: { bg: 'var(--success-light)', text: 'var(--success-text)' },
@@ -246,8 +247,8 @@ export function TrainingSubmissionPanel({
                 <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)', fontWeight: 500 }}>{toExcelColumnName(s.problemOrderIndex)}</td>
                 {training.isAdmin && (
                   <>
-                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{s.userName}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{s.username}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}><UserIdentityLink id={s.userId} userType={s.userType} name={s.userName} username={s.username} /></td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}><UserIdentityLink id={s.userId} userType={s.userType} username={s.username} /></td>
                   </>
                 )}
                 <td style={{ padding: '0.75rem 1rem', color: 'var(--text-primary)' }}>{getOjLabel(s.oj)}</td>

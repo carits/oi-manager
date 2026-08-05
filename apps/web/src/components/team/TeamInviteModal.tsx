@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 interface AvailableMember {
   id: string
@@ -134,10 +135,13 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
                     }
                   }}
                 />
-                <span style={{ fontWeight: 500 }}>{member.name}</span>
-                {member.username && member.username !== member.name && (
-                  <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({member.username})</span>
-                )}
+                <UserIdentityLink
+                  id={member.id}
+                  userType={member.memberType}
+                  name={member.name}
+                  username={member.username}
+                  showUsername
+                />
                 <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: member.memberType === 'teacher' ? 'var(--blue-100)' : member.memberType === 'student' ? 'var(--green-100)' : 'var(--gray-100)', color: member.memberType === 'teacher' ? 'var(--blue-700)' : member.memberType === 'student' ? 'var(--green-700)' : 'var(--gray-700)', borderRadius: '4px' }}>
                   {member.memberType === 'teacher' ? '教师' : member.memberType === 'student' ? '学生' : '用户'}
                 </span>

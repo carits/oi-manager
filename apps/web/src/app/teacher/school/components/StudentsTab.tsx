@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { useModal } from '@/hooks/form/useModal'
 import { useDelete } from '@/hooks/actions/useDelete'
 import { calculateStudentGrade } from '@/lib/grade'
 import apiClient from '@/lib/apiClient'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 interface StudentsTabProps {
   schoolId: string
@@ -50,7 +50,6 @@ interface Student {
 const MAX_STUDENTS_PER_PAGE = 30
 
 export default function StudentsTab({ schoolId, showHeader = false }: StudentsTabProps) {
-  const router = useRouter()
   const [allStudents, setAllStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -200,14 +199,7 @@ export default function StudentsTab({ schoolId, showHeader = false }: StudentsTa
                   {
                     key: 'name',
                     label: '姓名',
-                    render: (student) => (
-                      <span
-                        onClick={() => router.push(`/profile/student/${student.id}`)}
-                        style={{ cursor: 'pointer', color: 'var(--primary)' }}
-                      >
-                        {student.name}
-                      </span>
-                    )
+                    render: (student) => <UserIdentityLink id={student.id} userType="student" name={student.name} username={student.user?.username} showUsername={false} />
                   },
                   {
                     key: 'user.username',

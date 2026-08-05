@@ -121,7 +121,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       where,
       include: {
         User: {
-          select: { username: true },
+          select: { username: true, role: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -185,6 +185,8 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       }
       return {
         id: s.id,
+        userId: s.userId,
+        userType: isPersonalWorkspace(user) ? 'user' : (s.User.role === 'student' ? 'student' : (s.User.role === 'teacher' || s.User.role === 'school_principal' ? 'teacher' : 'user')),
         username: s.User.username,
         oj: s.oj,
         problemId: s.problemId,

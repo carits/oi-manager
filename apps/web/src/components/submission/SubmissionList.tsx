@@ -15,9 +15,10 @@ import { Pagination } from '@/components/ui/Pagination'
 import { StatusBadge, getResultVariant } from '@/components/ui/StatusBadge'
 import { Table } from '@/components/ui/Table'
 import { Toolbar, ToolbarGroup } from '@/components/ui/Toolbar'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import styles from './SubmissionList.module.css'
 
-interface Submission { id: number; username: string; oj: string; problemId: string; problemInternalId?: string; problemVisibility?: string | null; result: string; timeUsed: number | null; memoryUsed: number | null; codeLength: number | null; language: string; submittedAt: string }
+interface Submission { id: number; userId?: string; userType?: 'student' | 'teacher' | 'user'; username: string; oj: string; problemId: string; problemInternalId?: string; problemVisibility?: string | null; result: string; timeUsed: number | null; memoryUsed: number | null; codeLength: number | null; language: string; submittedAt: string }
 interface SubmissionPayload { submissions?: Submission[]; totalPages?: number; total?: number }
 interface SubmissionListProps { viewRole: 'teacher' | 'student' | 'admin' }
 
@@ -101,7 +102,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         onRowClick={item => router.push(`${pathPrefix}/submissions/${item.id}`)}
         columns={[
           { key: 'id', label: '提交', width: '86px', render: item => <span className={styles.link}>#{item.id}</span> },
-          ...(viewRole === 'student' ? [] : [{ key: 'username', label: '用户', width: '120px' }]),
+          ...(viewRole === 'student' ? [] : [{ key: 'username', label: '用户', width: '120px', render: (item: Submission) => <UserIdentityLink id={item.userId} userType={item.userType} username={item.username} /> }]),
           { key: 'oj', label: '平台', width: '110px', render: item => item.oj === 'carits' ? 'Carits' : OJ_PLATFORM_LABEL_MAP[item.oj] || item.oj.toUpperCase() },
           { key: 'problemId', label: '题目', render: problemCell },
           { key: 'result', label: '结果', width: '120px', render: item => <StatusBadge variant={getResultVariant(item.result)}>{JUDGE_RESULT_LABEL_MAP[item.result] || item.result}</StatusBadge> },

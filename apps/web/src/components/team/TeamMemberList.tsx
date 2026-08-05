@@ -1,10 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import type { TeamDetail } from '@/hooks/data/useTeamDetail'
 import type { TeamPermission, UserType } from '@/hooks/useTeamPermission'
 import { Button } from '@/components/ui/Button'
-import { getAssetUrl } from '@/lib/assets'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 export interface JoinRequestItem {
   id: string
@@ -140,43 +139,26 @@ export function TeamMemberList({
         }}
       >
         {/* 头像 */}
-        {member.userType === 'user' ? <span
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: member.avatar
-              ? `url(${getAssetUrl(member.avatar)}) center/cover`
-              : 'var(--primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: 600,
-            fontSize: '1rem',
-            flexShrink: 0,
-            textDecoration: 'none'
-          }}
-        >{!member.avatar && member.name.charAt(0)}</span> : <Link
-          href={`/profile/${member.userType}/${member.id}`}
-          style={{
-            width: '40px', height: '40px', borderRadius: '50%',
-            background: member.avatar ? `url(${getAssetUrl(member.avatar)}) center/cover` : 'var(--primary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white',
-            fontWeight: 600, fontSize: '1rem', flexShrink: 0, textDecoration: 'none'
-          }}
-        >{!member.avatar && member.name.charAt(0)}</Link>}
+        <UserIdentityLink
+          id={member.id}
+          userType={member.userType}
+          name={member.name}
+          username={member.username}
+          avatar={member.avatar}
+          avatarOnly
+          size={40}
+        />
 
-        {/* 信息 */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {member.userType === 'user'
-              ? <span style={{ fontWeight: 500, color: 'var(--gray-900)' }}>{member.name}</span>
-              : <Link href={`/profile/${member.userType}/${member.id}`} style={{ fontWeight: 500, color: 'var(--gray-900)', textDecoration: 'none' }}>{member.name}</Link>}
-            {member.username && member.username !== member.name && (
-              <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({member.username})</span>
-            )}
-            {/* 类型标签（教师/学生）紧贴名字 */}
+            <UserIdentityLink
+              id={member.id}
+              userType={member.userType}
+              name={member.name}
+              username={member.username}
+              showUsername
+              style={{ color: 'var(--gray-900)' }}
+            />
             <span
               style={{
                 padding: '0.125rem 0.375rem',
@@ -269,10 +251,13 @@ export function TeamMemberList({
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontWeight: 500 }}>{request.user.name}</span>
-                    {request.user.username && (
-                      <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({request.user.username})</span>
-                    )}
+                    <UserIdentityLink
+                      id={request.user.id}
+                      userType={request.user.userType}
+                      name={request.user.name}
+                      username={request.user.username}
+                      showUsername
+                    />
                     <span style={{
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.375rem',

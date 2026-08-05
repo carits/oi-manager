@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
-import { getAssetUrl } from '@/lib/assets'
+import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 
 interface PendingInvite {
   id: string
-  type: 'student' | 'teacher'
+  type: 'student' | 'teacher' | 'user'
   role: 'admin' | 'member'
   invitedAt: string
   invitedByName: string
@@ -108,35 +108,30 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    background: user.avatar
-                      ? `url(${getAssetUrl(user.avatar)}) center/cover`
-                      : 'var(--primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontWeight: 500
-                  }}
-                >
-                  {!user.avatar && (user.name || '?').charAt(0)}
-                </div>
+                <UserIdentityLink
+                  id={user.id}
+                  userType={inviteeType}
+                  name={user.name}
+                  username={user.username}
+                  avatar={user.avatar}
+                  avatarOnly
+                  size={40}
+                />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontWeight: 500 }}>{user.name}</span>
-                    {user.username && (
-                      <span style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>({user.username})</span>
-                    )}
+                    <UserIdentityLink
+                      id={user.id}
+                      userType={inviteeType}
+                      name={user.name}
+                      username={user.username}
+                      showUsername
+                    />
                     <span style={{
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.375rem',
                       borderRadius: '4px',
-                      background: inviteeType === 'teacher' ? 'var(--blue-100)' : 'var(--green-100)',
-                      color: inviteeType === 'teacher' ? 'var(--blue-700)' : 'var(--green-700)'
+                      background: inviteeType === 'teacher' ? 'var(--blue-100)' : inviteeType === 'student' ? 'var(--green-100)' : 'var(--gray-100)',
+                      color: inviteeType === 'teacher' ? 'var(--blue-700)' : inviteeType === 'student' ? 'var(--green-700)' : 'var(--gray-700)'
                     }}>
                       {inviteeType === 'teacher' ? '教师' : '学生'}
                     </span>
