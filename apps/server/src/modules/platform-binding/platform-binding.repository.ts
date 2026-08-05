@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Platform Binding Module - Repository Layer
  * 平台绑定模块数据访问层

@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Migration: Migrate submission scope fields
  * 将旧字段 submitSource/sourceId 迁移到新字段 submitScope/trainingId/contestId

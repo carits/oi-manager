@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Team Invitations Routes
  * 团队邀请处理路由（邀请列表、接受、拒绝）

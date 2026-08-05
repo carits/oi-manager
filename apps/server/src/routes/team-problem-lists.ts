@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 团队题单 API
  * @description 团队收录个人题单的管理接口

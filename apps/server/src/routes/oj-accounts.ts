@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * OJ 平台账号池管理 API
  * 用于 VJudge 代理提交的账号管理

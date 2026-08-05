@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Team Module - Repository Layer
  * 团队模块数据访问层

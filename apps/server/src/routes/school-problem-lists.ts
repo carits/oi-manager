@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 学校题单 API
  * @description 学校收录个人题单的管理接口

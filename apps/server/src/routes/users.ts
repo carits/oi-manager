@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { authenticate, AuthRequest, isAdmin, isSuperAdmin, isPersonalWorkspace, requireWorkspace } from '../middleware/auth.js'

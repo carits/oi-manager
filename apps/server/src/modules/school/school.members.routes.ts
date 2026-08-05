@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * School Members Routes
  * 学校成员路由：教师/学生列表、成员管理

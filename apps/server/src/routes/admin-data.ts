@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 管理员数据维护 API
  *

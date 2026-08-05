@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Team Module - Service Layer
  * 团队模块业务逻辑层

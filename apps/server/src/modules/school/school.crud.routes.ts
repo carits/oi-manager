@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * School CRUD Routes
  * 学校 CRUD 路由：列表、详情、创建、更新、删除、状态

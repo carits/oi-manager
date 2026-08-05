@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * OJ 题目拉取 API
  * @description 从外部 OJ 平台拉取题目信息的 API 路由

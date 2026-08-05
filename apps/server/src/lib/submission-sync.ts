@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 提交 AC 同步服务
  *

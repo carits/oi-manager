@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 团队导入模块 - 数据访问层
  */

@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 团队导入模块 - 业务逻辑层
  * 调用现有的服务接口，不重复实现

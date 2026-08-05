@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Problem Files Routes
  * 题目文件管理路由：PDF 上传、附件、题面/题解版本管理

@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { Router } from 'express'
 import path from 'path'
 import { authenticate, getResourceScope, isPersonalWorkspace } from '../middleware/auth'

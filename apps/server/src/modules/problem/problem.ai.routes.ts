@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * Problem AI Routes
  * AI 翻译/格式化接口

@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * School Principal Routes
  * 学校负责人路由：设置、创建、转移、日志

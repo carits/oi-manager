@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 /**
  * 题单管理 API
  * @description 飞书文档式权限的题单管理系统
