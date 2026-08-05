@@ -178,8 +178,8 @@ export async function execute(params: {
     }
   }
 
-  // 本地模式
-  if (useLocalMode) {
+  // Local execution is also required for binaries compiled by the host fallback.
+  if (useLocalMode || (providedWorkDir && !compileFileId)) {
     const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_exec_${Date.now()}_${Math.random().toString(36).slice(2)}`)
     if (!providedWorkDir) {
       fs.mkdirSync(uniqueDir, { recursive: true })
