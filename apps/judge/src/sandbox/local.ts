@@ -379,10 +379,21 @@ export async function localExecute(params: {
       stderr += data.toString()
     })
 
-    // File IO 模式不通过 stdin 管道传入输入
+    // File IO mode does not pass input through stdin.
+    // User programs may exit early; EPIPE must not crash the judge process.
+    execProcess.stdin.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'EPIPE') {
+        stderr += err.message
+      }
+    })
+
     if (!filename && stdin) {
-      execProcess.stdin.write(stdin)
-      execProcess.stdin.end()
+      execProcess.stdin.write(stdin, (err) => {
+        if (err && (err as NodeJS.ErrnoException).code !== 'EPIPE') {
+          stderr += (err as Error).message
+        }
+        execProcess.stdin.end()
+      })
     } else {
       execProcess.stdin.end()
     }
