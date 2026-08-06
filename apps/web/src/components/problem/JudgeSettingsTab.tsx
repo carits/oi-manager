@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react'
 import yaml from 'js-yaml'
 import apiClient from '@/lib/apiClient'
+import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
@@ -28,6 +29,7 @@ interface TestdataFile {
   filename: string
   size: number
   md5: string | null
+  sha256?: string | null
   uploadedAt: string
 }
 
@@ -227,6 +229,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   const [testdataPairs, setTestdataPairs] = useState<TestCasePair[]>([])
   const [uploading, setUploading] = useState(false)
   const [deletingFile, setDeletingFile] = useState<string | null>(null)
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
+  const [downloadingAll, setDownloadingAll] = useState(false)
 
   // 创建模式暂存区
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
@@ -501,35 +505,57 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   // ==================== 测试数据操作 ====================
 
+  const uploadTestdataFiles = async (files: File[], replace = false) => {
+    const formData = new FormData()
+    for (const file of files) formData.append('files', file)
+    if (replace) formData.append('replace', 'true')
+    return apiClient.postFile(`/api/problems/${problemId}/testdata`, formData, { timeout: 120000 })
+  }
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
+    const selectedFiles = Array.from(files)
 
     if (!problemId) {
-      // 创建模式：暂存到本地
-      const newFiles = Array.from(files)
+      // staged files before the problem exists
       setStagedFiles(prev => {
-        const updated = [...prev, ...newFiles]
+        const updated = [...prev, ...selectedFiles]
         setStagedPairs(detectPairs(updated))
         return updated
       })
-      toast.success(`已暂存 ${newFiles.length} 个文件，保存题目后将自动上传`)
+      toast.success(`\u5df2\u6682\u5b58 ${selectedFiles.length} \u4e2a\u6587\u4ef6\uff0c\u4fdd\u5b58\u9898\u76ee\u540e\u5c06\u81ea\u52a8\u4e0a\u4f20`)
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
     try {
       setUploading(true)
-      const formData = new FormData()
-      for (let i = 0; i < files.length; i++) formData.append('files', files[i])
-      const result = await apiClient.postFile(`/api/problems/${problemId}/testdata`, formData)
+      const result = await uploadTestdataFiles(selectedFiles)
       if (result.success) {
-        toast.success(`成功上传 ${files.length} 个文件`)
+        toast.success(`\u6210\u529f\u4e0a\u4f20 ${selectedFiles.length} \u4e2a\u6587\u4ef6`)
         fetchTestdata()
+      } else if (result.status === 409 && result.code === 'TESTDATA_CONFLICT') {
+        const data = result.data as { conflicts?: { filename: string }[] } | undefined
+        const names = data?.conflicts?.map(c => c.filename).filter(Boolean) || []
+        setConfirmState({
+          message: names.length
+            ? `\u5b58\u5728\u540c\u540d\u6d4b\u8bd5\u6570\u636e\u6587\u4ef6\uff1a${names.slice(0, 8).join(', ')}${names.length > 8 ? ' ...' : ''}\u3002\u662f\u5426\u66ff\u6362\uff1f`
+            : '\u5b58\u5728\u540c\u540d\u6d4b\u8bd5\u6570\u636e\u6587\u4ef6\uff0c\u662f\u5426\u66ff\u6362\uff1f',
+          action: async () => {
+            try {
+              setUploading(true)
+              const retry = await uploadTestdataFiles(selectedFiles, true)
+              if (retry.success) { toast.success(`\u6210\u529f\u66ff\u6362\u5e76\u4e0a\u4f20 ${selectedFiles.length} \u4e2a\u6587\u4ef6`); fetchTestdata() }
+              else toast.error(retry.message || '\u4e0a\u4f20\u5931\u8d25')
+            } catch { toast.error('\u4e0a\u4f20\u5931\u8d25') }
+            finally { setUploading(false) }
+          }
+        })
       } else {
-        toast.error(result.message || '上传失败')
+        toast.error(result.message || '\u4e0a\u4f20\u5931\u8d25')
       }
-    } catch { toast.error('上传失败') }
+    } catch { toast.error('\u4e0a\u4f20\u5931\u8d25') }
     finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -563,6 +589,30 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   }
 
   // ==================== 子任务操作 ====================
+
+
+  const handleDownloadAllTestdata = async () => {
+    if (!problemId) return
+    try {
+      setDownloadingAll(true)
+      const result = await apiClient.download(`/api/problems/${problemId}/testdata/export`, { timeout: 120000 })
+      const filename = filenameFromContentDisposition(result.contentDisposition, 'testdata.zip')
+      saveBlobDownload(result.blob, filename)
+    } catch { toast.error('\u4e0b\u8f7d\u5931\u8d25') }
+    finally { setDownloadingAll(false) }
+  }
+
+  const handleDownloadFile = async (file: TestdataFile) => {
+    if (!problemId) return
+    try {
+      setDownloadingFile(file.id)
+      const result = await apiClient.download(`/api/problems/${problemId}/testdata/files/${file.id}/download`, { timeout: 60000 })
+      const fallback = file.filename.split('/').pop() || file.filename
+      const filename = filenameFromContentDisposition(result.contentDisposition, fallback)
+      saveBlobDownload(result.blob, filename)
+    } catch { toast.error('\u4e0b\u8f7d\u5931\u8d25') }
+    finally { setDownloadingFile(null) }
+  }
 
   const getAssignedCases = useCallback((): Set<string> => {
     const assigned = new Set<string>()
@@ -1125,15 +1175,22 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       {/* ===== 测试数据 Tab ===== */}
       {activeTab === 'testdata' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
-              支持 .in, .out, .ans, .yaml 文件。同名配对的 .in 和 .out/.ans 文件将自动识别为测试点。
+              支持 .in, .out, .ans, .yaml, .zip 文件。同名配对的 .in 和 .out/.ans 文件将自动识别为测试点。
               {!problemId && <span style={{ color: 'var(--warning)', marginLeft: '0.5rem' }}>（创建模式：文件暂存本地，保存题目后自动上传）</span>}
             </p>
-            <label style={{ ...btnPrimary, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.7 : 1 }}>
-              {uploading ? '上传中...' : '上传文件'}
-              <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} accept=".in,.out,.ans,.txt,.yaml,.yml" style={{ display: 'none' }} disabled={uploading} />
-            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+              {problemId && testdataFiles.length > 0 && (
+                <button type="button" onClick={handleDownloadAllTestdata} disabled={downloadingAll} style={{ ...btnOutline, opacity: downloadingAll ? 0.7 : 1 }}>
+                  {downloadingAll ? '\u4e0b\u8f7d\u4e2d...' : '\u4e0b\u8f7d\u6570\u636e\u5305'}
+                </button>
+              )}
+              <label style={{ ...btnPrimary, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.7 : 1 }}>
+                {uploading ? '\u4e0a\u4f20\u4e2d...' : '\u4e0a\u4f20\u6587\u4ef6'}
+                <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" style={{ display: 'none' }} disabled={uploading} />
+              </label>
+            </div>
           </div>
 
           {/* 已识别测试点 */}
@@ -1167,7 +1224,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                         <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>文件名</th>
                         <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>大小</th>
                         <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>状态</th>
-                        <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '80px' }}>操作</th>
+                        <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '160px' }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1208,7 +1265,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                       <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)' }}>文件名</th>
                       <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '100px' }}>大小</th>
                       <th style={{ padding: '0.625rem 1rem', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '160px' }}>上传时间</th>
-                      <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '80px' }}>操作</th>
+                      <th style={{ padding: '0.625rem 1rem', textAlign: 'right', fontWeight: 500, borderBottom: '1px solid var(--border)', width: '160px' }}>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1222,10 +1279,16 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                         <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{formatFileSize(file.size)}</td>
                         <td style={{ padding: '0.5rem 1rem', color: 'var(--gray-500)' }}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</td>
                         <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>
-                          <button type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}
-                            style={{ ...btnDanger, opacity: deletingFile === file.id ? 0.5 : 1 }}>
-                            {deletingFile === file.id ? '...' : '删除'}
-                          </button>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                            <button type="button" onClick={() => handleDownloadFile(file)} disabled={downloadingFile === file.id}
+                              style={{ ...btnOutline, padding: '0.25rem 0.5rem', fontSize: '0.75rem', opacity: downloadingFile === file.id ? 0.5 : 1 }}>
+                              {downloadingFile === file.id ? '...' : '\u4e0b\u8f7d'}
+                            </button>
+                            <button type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}
+                              style={{ ...btnDanger, opacity: deletingFile === file.id ? 0.5 : 1 }}>
+                              {deletingFile === file.id ? '...' : '\u5220\u9664'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

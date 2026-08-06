@@ -840,6 +840,7 @@ model TestdataFile {
   filename   String
   size       Int
   md5        String?
+  sha256     String?
   uploadedAt DateTime @default(now())
   Problem    Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 

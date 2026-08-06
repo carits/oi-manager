@@ -1,0 +1,2 @@
+ALTER TABLE "TestdataFile"
+  ADD COLUMN IF NOT EXISTS "sha256" TEXT;
