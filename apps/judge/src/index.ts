@@ -21,13 +21,11 @@ console.log('========================================')
 // 检查沙箱服务
 async function checkSandbox() {
   console.log('[Judge] Checking sandbox service...')
-  const healthy = await sandbox.healthCheck()
+  const healthy = await sandbox.initializeSandbox()
   if (healthy) {
     console.log('[Judge] Sandbox service is available')
   } else {
-    console.warn('[Judge] WARNING: Sandbox service is not available!')
-    console.warn('[Judge] Please start go-judge before running judge service')
-    console.warn('[Judge] Download: https://github.com/criyle/go-judge/releases')
+    console.warn('[Judge] WARNING: Sandbox service is not available; using explicit local fallback')
   }
   return healthy
 }

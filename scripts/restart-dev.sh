@@ -27,7 +27,9 @@ ensure_compose_service() {
 }
 
 ensure_compose_service oi-postgres db
-ensure_compose_service oi-judge judge
+
+# Recreate judge when the custom sandbox image or compose settings change.
+COMPOSE_PROJECT_NAME=oi-manager docker-compose up -d --build judge
 
 database_ready=false
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -40,6 +42,21 @@ done
 
 if [ "$database_ready" != "true" ]; then
   echo "PostgreSQL did not become ready within 10 seconds." >&2
+  exit 1
+fi
+
+sandbox_ready=false
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  if curl --fail --silent --show-error http://127.0.0.1:5050/version >/dev/null 2>&1; then
+    sandbox_ready=true
+    break
+  fi
+  sleep 1
+done
+
+if [ "$sandbox_ready" != "true" ]; then
+  echo "go-judge did not become ready within 20 seconds." >&2
+  docker logs --tail 100 oi-judge >&2 || true
   exit 1
 fi
 

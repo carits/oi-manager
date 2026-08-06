@@ -17,6 +17,7 @@ import type { SandboxResult } from '../types'
 
 const SANDBOX_HOST = config.sandboxHost
 const NS_PER_MS = 1_000_000
+const ALLOW_LOCAL_FALLBACK = process.env.ALLOW_LOCAL_JUDGE_FALLBACK === 'true'
 
 function nsToMsCeil(ns: number): number {
   if (!Number.isFinite(ns) || ns <= 0) return 0
@@ -42,7 +43,8 @@ function buildLimits(timeLimitMs: number) {
 let useLocalMode = false
 
 /**
- * 检测沙箱是否可用
+ * Detect whether go-judge is available. Production does not silently fall back
+ * to local execution because local mode has no isolation and no memory metric.
  */
 export async function detectSandboxMode(): Promise<boolean> {
   try {
@@ -53,15 +55,28 @@ export async function detectSandboxMode(): Promise<boolean> {
       return true
     }
   } catch {
-    console.log('[Sandbox] go-judge not available, using local execution mode')
+    // handled below
+  }
+
+  if (ALLOW_LOCAL_FALLBACK) {
+    console.log('[Sandbox] go-judge not available, using explicit local execution fallback')
     console.log('[Sandbox] WARNING: Local mode has no process isolation, only for development!')
     useLocalMode = true
+  } else {
+    console.log('[Sandbox] go-judge not available and local fallback is disabled')
+    useLocalMode = false
   }
+
   return false
 }
 
-// 启动时检测
-detectSandboxMode()
+export async function initializeSandbox(): Promise<boolean> {
+  const available = await detectSandboxMode()
+  if (!available && !ALLOW_LOCAL_FALLBACK) {
+    throw new Error(`go-judge is unavailable at ${SANDBOX_HOST}; set ALLOW_LOCAL_JUDGE_FALLBACK=true only for development`)
+  }
+  return available
+}
 
 /**
  * 编译结果 — go-judge 模式返回 fileId，本地模式返回 workDir
@@ -142,12 +157,15 @@ export async function compile(params: {
         error = result.files.stderr || error
       }
       if (error.includes('g++: not found') || error.includes('gcc: not found') || error.includes('clang++: not found') || error.includes('clang: not found')) {
-        const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_compile_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-        if (!providedWorkDir) {
-          fs.mkdirSync(uniqueDir, { recursive: true })
+        if (ALLOW_LOCAL_FALLBACK) {
+          const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_compile_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+          if (!providedWorkDir) {
+            fs.mkdirSync(uniqueDir, { recursive: true })
+          }
+          const localResult = await localCompile({ language, code, workDir: uniqueDir })
+          return { ...localResult, workDir: uniqueDir }
         }
-        const localResult = await localCompile({ language, code, workDir: uniqueDir })
-        return { ...localResult, workDir: uniqueDir }
+        return { success: false, error: `go-judge compiler unavailable; check sandbox image: ${error}` }
       }
       return { success: false, error }
     }
@@ -207,8 +225,8 @@ export async function execute(params: {
     }
   }
 
-  // Local execution is also required for binaries compiled by the host fallback.
-  if (useLocalMode || (providedWorkDir && !compileFileId)) {
+  // Local execution is only allowed for explicit development fallback.
+  if ((useLocalMode || (providedWorkDir && !compileFileId)) && ALLOW_LOCAL_FALLBACK) {
     const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_exec_${Date.now()}_${Math.random().toString(36).slice(2)}`)
     if (!providedWorkDir) {
       fs.mkdirSync(uniqueDir, { recursive: true })
@@ -266,7 +284,7 @@ async function sandboxExecute(
     addressSpaceLimit?: boolean
   }
 ): Promise<SandboxResult> {
-  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn, addressSpaceLimit = true } = params
+  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn, addressSpaceLimit = false } = params
 
   try {
     // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
@@ -413,7 +431,11 @@ async function sandboxExecute(
     return {
       status: 'Runtime Error',
       time: 0,
-      memory: 0,
+      cpuTime: 0,
+      wallTime: 0,
+      memory: null,
+      timeoutReason: null,
+      metricSource: 'go-judge-cgroup',
       exitCode: 1,
       stderr: e.message
     }
@@ -521,8 +543,12 @@ export async function runPiped(params: {
       const c: any = { args: cmd.args }
       if (cmd.env) c.env = cmd.env
       if (cmd.copyIn) c.copyIn = cmd.copyIn
-      if (cmd.copyOut) c.copyOut = cmd.copyOut
-      if (cmd.copyOutOptional) c.copyOutOptional = cmd.copyOutOptional
+      if (cmd.copyOut || cmd.copyOutOptional) {
+        c.copyOut = [
+          ...(cmd.copyOut || []),
+          ...(cmd.copyOutOptional || []).map(name => `${name}?`),
+        ]
+      }
       if (cmd.cpuLimit) c.cpuLimit = cmd.cpuLimit
       if (cmd.memoryLimit) c.memoryLimit = cmd.memoryLimit
       if (cmd.strictMemoryLimit) c.strictMemoryLimit = cmd.strictMemoryLimit
@@ -579,11 +605,13 @@ async function runCommands(cmds: Array<{
   cpuRateLimit?: number
   memoryLimit?: number
   strictMemoryLimit?: boolean
+  addressSpaceLimit?: boolean
   procLimit?: number
   copyIn?: Record<string, { content: string } | { src: string } | { fileId: string }>
   copyOut?: string[]
   copyOutCached?: string[]
   copyOutOptional?: string[]
+  outputLimit?: number
 }>): Promise<Array<{
   status: string
   exitStatus: number
@@ -607,11 +635,17 @@ async function runCommands(cmds: Array<{
     if (params.cpuRateLimit) cmd.cpuRateLimit = params.cpuRateLimit
     if (params.memoryLimit) cmd.memoryLimit = params.memoryLimit
     if (params.strictMemoryLimit) cmd.strictMemoryLimit = params.strictMemoryLimit
+    if (params.addressSpaceLimit !== undefined) cmd.addressSpaceLimit = params.addressSpaceLimit
     if (params.procLimit) cmd.procLimit = params.procLimit
+    if (params.outputLimit) cmd.outputLimit = params.outputLimit
     if (params.copyIn) cmd.copyIn = params.copyIn
-    if (params.copyOut) cmd.copyOut = params.copyOut
+    if (params.copyOut || params.copyOutOptional) {
+      cmd.copyOut = [
+        ...(params.copyOut || []),
+        ...(params.copyOutOptional || []).map(name => `${name}?`),
+      ]
+    }
     if (params.copyOutCached) cmd.copyOutCached = params.copyOutCached
-    if (params.copyOutOptional) cmd.copyOutOptional = params.copyOutOptional
     return cmd
   })
 
@@ -627,16 +661,18 @@ async function runCommands(cmds: Array<{
  * 健康检查
  */
 export async function healthCheck(): Promise<boolean> {
-  if (useLocalMode) {
-    return true
-  }
-
   try {
     const res = await superagent.get(`${SANDBOX_HOST}/version`).timeout(5000)
-    return res.status === 200
+    if (res.status === 200) {
+      useLocalMode = false
+      return true
+    }
   } catch {
-    return false
+    // unavailable
   }
+
+  useLocalMode = ALLOW_LOCAL_FALLBACK
+  return false
 }
 
 /**
