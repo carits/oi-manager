@@ -106,7 +106,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           { key: 'oj', label: '平台', width: '110px', render: item => item.oj === 'carits' ? 'Carits' : OJ_PLATFORM_LABEL_MAP[item.oj] || item.oj.toUpperCase() },
           { key: 'problemId', label: '题目', render: problemCell },
           { key: 'result', label: '结果', width: '120px', render: item => <StatusBadge variant={getResultVariant(item.result)}>{JUDGE_RESULT_LABEL_MAP[item.result] || item.result}</StatusBadge> },
-          { key: 'timeUsed', label: '\u65f6\u95f4', width: '100px', render: item => item.timeUsed == null ? '\u2014' : `${item.timeUsed} ms` },
+          { key: 'timeUsed', label: '\u65f6\u95f4', width: '100px', render: item => item.timeUsed == null ? '\u2014' : `${item.timeUsed} MS` },
           { key: 'memoryUsed', label: '\u5185\u5b58', width: '100px', render: item => item.memoryUsed == null ? '\u2014' : `${(item.memoryUsed / 1024).toFixed(2)} MB` },
           { key: 'language', label: '语言', width: '100px', render: item => getLanguageLabel(item.language) },
           { key: 'submittedAt', label: '提交时间', width: '170px', render: item => new Date(item.submittedAt).toLocaleString('zh-CN') },
