@@ -1176,7 +1176,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>{s.timeUsed ?? '-'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.memoryUsed ?? '-'}</td>
+                        <td style={{ padding: '0.75rem 1rem' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>{s.codeLength ?? '-'}</td>
                         <td
                           onClick={() => setDetailSubmissionId(s.id)}
