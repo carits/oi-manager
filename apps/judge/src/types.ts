@@ -7,6 +7,12 @@
 
 export type ProblemType = 'default' | 'interactive' | 'objective' | 'submit_answer' | 'communication'
 export type SubtaskType = 'min' | 'max' | 'sum'
+export type MetricSource =
+  | 'go-judge-cgroup'
+  | 'local-unavailable'
+
+export type TimeoutReason = 'cpu' | 'wall' | 'unknown' | null
+
 export type JudgeResult =
   | 'Accepted'
   | 'Wrong Answer'
@@ -86,9 +92,14 @@ export interface JudgeCaseResult {
   caseId: number
   subtaskId?: number
   result: JudgeResult
-  time: number      // ms
-  memory: number    // KB
+  /** Backward compatible CPU time, ms */
+  time: number
+  cpuTime?: number
+  wallTime?: number
+  memory?: number | null    // KiB; null means unavailable
   score?: number
+  timeoutReason?: TimeoutReason
+  metricSource?: MetricSource
   message?: string
 }
 
@@ -103,10 +114,14 @@ export interface JudgeTaskResult {
   submissionId: string
   result: JudgeResult
   time: number
-  memory: number
+  cpuTime?: number
+  wallTime?: number
+  memory?: number | null
   score: number
   cases: JudgeCaseResult[]
   subtasks?: SubtaskResult[]
+  timeoutReason?: TimeoutReason
+  metricSource?: MetricSource
   message?: string
 }
 
@@ -132,8 +147,14 @@ export interface SandboxConfig {
 
 export interface SandboxResult {
   status: 'Accepted' | 'Time Limit Exceeded' | 'Memory Limit Exceeded' | 'Runtime Error' | 'Output Limit Exceeded' | 'Compilation Error'
-  time: number    // ms
-  memory: number  // KB
+  /** Backward compatible CPU time, ms */
+  time: number
+  cpuTime?: number
+  wallTime?: number
+  /** Peak memory in KiB; null means unavailable */
+  memory?: number | null
+  timeoutReason?: TimeoutReason
+  metricSource?: MetricSource
   exitCode: number
   stdout?: string
   stderr?: string

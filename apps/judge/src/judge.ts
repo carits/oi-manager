@@ -65,7 +65,9 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       submissionId,
       result: 'System Error',
       time: 0,
-      memory: 0,
+      cpuTime: 0,
+      wallTime: 0,
+      memory: null,
       score: 0,
       cases: [],
       message: `不允许的编程语言: ${language}。允许的语言: ${cfg.langs.join(', ')}`
@@ -209,8 +211,21 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
   // 结果
   const caseResults: JudgeCaseResult[] = []
-  let maxTime = 0
-  let maxMemory = 0
+  let maxCpuTime = 0
+  let maxWallTime = 0
+  let maxMemory: number | null = null
+  let timeoutReason: 'cpu' | 'wall' | 'unknown' | null = null
+  let metricSource: 'go-judge-cgroup' | 'local-unavailable' | undefined
+
+  const updateMaxMetrics = (caseResult: JudgeCaseResult) => {
+    maxCpuTime = Math.max(maxCpuTime, caseResult.cpuTime ?? caseResult.time ?? 0)
+    maxWallTime = Math.max(maxWallTime, caseResult.wallTime ?? caseResult.time ?? 0)
+    if (caseResult.memory !== null && caseResult.memory !== undefined) {
+      maxMemory = maxMemory === null ? caseResult.memory : Math.max(maxMemory, caseResult.memory)
+    }
+    if (!timeoutReason && caseResult.timeoutReason) timeoutReason = caseResult.timeoutReason
+    if (!metricSource && caseResult.metricSource) metricSource = caseResult.metricSource
+  }
 
   try {
     if (subtasks.length > 0) {
@@ -253,7 +268,9 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
             subtaskId: subtask.id,
             result: 'Skipped' as JudgeResult,
             time: 0,
-            memory: 0,
+            cpuTime: 0,
+            wallTime: 0,
+            memory: null,
             message: '跳过：依赖子任务未通过',
           }))
           caseResults.push(...skippedResults)
@@ -313,8 +330,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           subtaskCaseResults.push(caseResult)
           caseResults.push(caseResult)
 
-          maxTime = Math.max(maxTime, caseResult.time)
-          maxMemory = Math.max(maxMemory, caseResult.memory)
+          updateMaxMetrics(caseResult)
 
           // 检查是否可以提前终止
           if (subtaskType === 'min' && caseResult.result !== 'Accepted') {
@@ -348,7 +364,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       const totalScore = subtaskResults.reduce((sum, st) => sum + st.score, 0)
       const finalResult = calculateFinalResult(caseResults)
 
-      console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxTime}ms, score=${totalScore}, result=${finalResult}`)
+      console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxCpuTime}ms, wall=${maxWallTime}ms, score=${totalScore}, result=${finalResult}`)
 
       cleanupWorkDir(workDir)
       cleanupWorkDir(checkerWorkDirToCleanup)
@@ -363,8 +379,12 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       return {
         submissionId,
         result: finalResult,
-        time: maxTime,
+        time: maxCpuTime,
+        cpuTime: maxCpuTime,
+        wallTime: maxWallTime,
         memory: maxMemory,
+        timeoutReason,
+        metricSource,
         score: totalScore,
         cases: caseResults,
         subtasks: subtaskResults
@@ -395,15 +415,14 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         }
 
         caseResults.push(caseResult)
-        maxTime = Math.max(maxTime, caseResult.time)
-        maxMemory = Math.max(maxMemory, caseResult.memory)
+        updateMaxMetrics(caseResult)
       }
 
       // 无子任务时：总分 = Accepted 用例的分数之和
       const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
       const finalResult = calculateFinalResult(caseResults)
 
-      console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxTime}ms, score=${totalScore}, result=${finalResult}`)
+      console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxCpuTime}ms, wall=${maxWallTime}ms, score=${totalScore}, result=${finalResult}`)
 
       cleanupWorkDir(workDir)
       cleanupWorkDir(checkerWorkDirToCleanup)
@@ -417,8 +436,12 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       return {
         submissionId,
         result: finalResult,
-        time: maxTime,
+        time: maxCpuTime,
+        cpuTime: maxCpuTime,
+        wallTime: maxWallTime,
         memory: maxMemory,
+        timeoutReason,
+        metricSource,
         score: totalScore,
         cases: caseResults
       }
@@ -487,7 +510,11 @@ async function runTestCase(
       caseId: 0,
       result: 'System Error',
       time: 0,
-      memory: 0,
+      cpuTime: 0,
+      wallTime: 0,
+      memory: null,
+      timeoutReason: null,
+      metricSource: 'local-unavailable',
       message: `无法读取测试数据: ${e.message}`
     }
   }
@@ -510,7 +537,11 @@ async function runTestCase(
       caseId: 0,
       result: execResult.status as JudgeResult,
       time: execResult.time,
+      cpuTime: execResult.cpuTime,
+      wallTime: execResult.wallTime,
       memory: execResult.memory,
+      timeoutReason: execResult.timeoutReason,
+      metricSource: execResult.metricSource,
       message: execResult.stderr
     }
   }
@@ -522,7 +553,7 @@ async function runTestCase(
   if (checkerCtx.checkerFileId || checkerCtx.checkerWorkDir) {
     return await runCheckerInSandbox(
       checkerCtx, input, expectedOutput, userOutput,
-      testCase.score || 0, execResult.time, execResult.memory
+      testCase.score || 0, execResult.time, execResult.memory ?? 0
     )
   }
 
@@ -535,7 +566,11 @@ async function runTestCase(
       caseId: 0,
       result: 'Accepted',
       time: execResult.time,
+      cpuTime: execResult.cpuTime,
+      wallTime: execResult.wallTime,
       memory: execResult.memory,
+      timeoutReason: execResult.timeoutReason,
+      metricSource: execResult.metricSource,
       score: testCase.score
     }
   }
@@ -544,7 +579,11 @@ async function runTestCase(
     caseId: 0,
     result: 'Wrong Answer',
     time: execResult.time,
+    cpuTime: execResult.cpuTime,
+    wallTime: execResult.wallTime,
     memory: execResult.memory,
+    timeoutReason: execResult.timeoutReason,
+    metricSource: execResult.metricSource,
     message: checkResult.message
   }
 }
@@ -1238,7 +1277,7 @@ async function judgeInteractive(params: {
 
       caseResults.push(caseResult)
       maxTime = Math.max(maxTime, caseResult.time)
-      maxMemory = Math.max(maxMemory, caseResult.memory)
+      maxMemory = Math.max(maxMemory, caseResult.memory ?? 0)
     }
 
     // 计算最终结果和分数
@@ -1649,7 +1688,7 @@ async function judgeCommunication(params: {
 
       caseResults.push(caseResult)
       maxTime = Math.max(maxTime, caseResult.time)
-      maxMemory = Math.max(maxMemory, caseResult.memory)
+      maxMemory = Math.max(maxMemory, caseResult.memory ?? 0)
     }
 
     const finalResult = calculateFinalResult(caseResults)
@@ -1825,8 +1864,12 @@ async function runCommunicationCase(
       return {
         caseId: caseIndex,
         result: score === caseScore ? 'Accepted' : 'Wrong Answer',
-        time: maxTime,
-        memory: maxMemory,
+        time: managerResult.time,
+        cpuTime: managerResult.time,
+        wallTime: managerResult.time,
+        memory: Math.ceil((managerResult.memory || 0) / 1024),
+        timeoutReason: null,
+        metricSource: 'go-judge-cgroup',
         score,
         message
       }

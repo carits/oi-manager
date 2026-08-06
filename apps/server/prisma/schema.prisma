@@ -596,7 +596,10 @@ model Submission {
   codeLength        Int
   result            String     @default("queuing")
   timeUsed          Int?
+  wallTimeUsed      Int?
   memoryUsed        Int?
+  timeoutReason     String?
+  metricSource      String?
   submitMethod      String
   ojAccountId       String?
   ojRemoteId        String?

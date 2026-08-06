@@ -120,7 +120,7 @@ export async function runPipedLocal(params: {
       })
 
       processes.push(proc)
-      const startTime = Date.now()
+      const startTime = process.hrtime.bigint()
 
       // 收集 stdout/stderr
       let stdout = ''
@@ -164,7 +164,7 @@ export async function runPipedLocal(params: {
 
       // 监听进程结束
       proc.on('close', (code) => {
-        const elapsed = Date.now() - startTime
+        const elapsed = Number((process.hrtime.bigint() - startTime + 999_999n) / 1_000_000n)
         results[i].exitStatus = code || 0
         results[i].time = elapsed
         results[i].stdout = stdout
@@ -335,7 +335,11 @@ export async function localExecute(params: {
       return {
         status: 'Compilation Error',
         time: 0,
-        memory: 0,
+        cpuTime: 0,
+        wallTime: 0,
+        memory: null,
+        timeoutReason: null,
+        metricSource: 'local-unavailable',
         exitCode: 1,
         stderr: compileResult.error
       }
@@ -360,7 +364,7 @@ export async function localExecute(params: {
   }
 
   // 执行程序
-  const startTime = Date.now()
+  const startTime = process.hrtime.bigint()
 
   return new Promise((resolve) => {
     const execProcess = spawn('sh', ['-c', langConfig.execute], {
@@ -406,13 +410,17 @@ export async function localExecute(params: {
 
     execProcess.on('close', (code) => {
       clearTimeout(timer)
-      const elapsed = Date.now() - startTime
+      const elapsed = Number((process.hrtime.bigint() - startTime + 999_999n) / 1_000_000n)
 
       if (timedOut) {
         resolve({
           status: 'Time Limit Exceeded',
           time: elapsed,
-          memory: 0,
+          cpuTime: elapsed,
+          wallTime: elapsed,
+          memory: null,
+          timeoutReason: timedOut ? 'wall' : null,
+          metricSource: 'local-unavailable',
           exitCode: -1,
           stdout,
           stderr
@@ -424,7 +432,11 @@ export async function localExecute(params: {
         resolve({
           status: 'Runtime Error',
           time: elapsed,
-          memory: 0,
+          cpuTime: elapsed,
+          wallTime: elapsed,
+          memory: null,
+          timeoutReason: timedOut ? 'wall' : null,
+          metricSource: 'local-unavailable',
           exitCode: code || 1,
           stdout,
           stderr
@@ -445,7 +457,11 @@ export async function localExecute(params: {
       resolve({
         status: 'Accepted',
         time: elapsed,
-        memory: 0,
+        cpuTime: elapsed,
+        wallTime: elapsed,
+        memory: null,
+        timeoutReason: null,
+        metricSource: 'local-unavailable',
         exitCode: 0,
         stdout,
         stderr

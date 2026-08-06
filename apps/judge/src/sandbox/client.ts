@@ -16,6 +16,28 @@ import { localExecute, localCompile } from './local'
 import type { SandboxResult } from '../types'
 
 const SANDBOX_HOST = config.sandboxHost
+const NS_PER_MS = 1_000_000
+
+function nsToMsCeil(ns: number): number {
+  if (!Number.isFinite(ns) || ns <= 0) return 0
+  return Math.ceil(ns / NS_PER_MS)
+}
+
+function bytesToKiBCeil(bytes: number): number {
+  if (!Number.isFinite(bytes) || bytes <= 0) return 0
+  return Math.ceil(bytes / 1024)
+}
+
+function buildLimits(timeLimitMs: number) {
+  const cpuLimitMs = timeLimitMs
+  const wallLimitMs = Math.max(cpuLimitMs * 3, cpuLimitMs + 2000)
+  return {
+    cpuLimitMs,
+    wallLimitMs,
+    cpuLimitNs: cpuLimitMs * NS_PER_MS,
+    wallLimitNs: wallLimitMs * NS_PER_MS,
+  }
+}
 
 let useLocalMode = false
 
@@ -97,6 +119,7 @@ export async function compile(params: {
 
     // 编译并缓存编译产物，将 stderr 重定向到文件以获取编译错误信息
     const compileCommand = `${langConfig.compile} 2>stderr`
+    const compileLimits = buildLimits(langConfig.compile_time_limit || timeLimit)
     const result = await runCommand({
       args: ['sh', '-c', compileCommand],
       env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
@@ -104,7 +127,9 @@ export async function compile(params: {
       copyOut: ['stderr'],
       copyOutOptional: ['stderr'],
       copyOutCached: [langConfig.execute_file || 'main'],
-      cpuLimit: (langConfig.compile_time_limit || timeLimit) * 1000000,
+      cpuLimit: compileLimits.cpuLimitNs,
+      clockLimit: compileLimits.wallLimitNs,
+      cpuRateLimit: 1000,
       memoryLimit: (langConfig.compile_memory_limit || memoryLimit) * 1024,
       strictMemoryLimit: true,
       procLimit: 50
@@ -172,7 +197,11 @@ export async function execute(params: {
     return {
       status: 'Runtime Error',
       time: 0,
-      memory: 0,
+      cpuTime: 0,
+      wallTime: 0,
+      memory: null,
+      timeoutReason: null,
+      metricSource: 'go-judge-cgroup',
       exitCode: 1,
       stderr: `不支持的语言: ${language}`
     }
@@ -273,13 +302,16 @@ async function sandboxExecute(
       copyOutFiles = ['stdout', 'stderr']
     }
 
+    const limits = buildLimits(timeLimit)
     const result = await runCommand({
       args: ['sh', '-c', execCommand],
       env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
       copyIn: Object.keys(copyIn).length > 0 ? copyIn : undefined,
       copyOut: copyOutFiles,
       copyOutOptional: copyOutFiles,
-      cpuLimit: timeLimit * 1000000,
+      cpuLimit: limits.cpuLimitNs,
+      clockLimit: limits.wallLimitNs,
+      cpuRateLimit: 1000,
       memoryLimit: memoryLimit * 1024,
       strictMemoryLimit: true,
       addressSpaceLimit,
@@ -291,9 +323,11 @@ async function sandboxExecute(
     // File Error 状态只表示 copyOutOptional 文件不存在，不代表执行失败
     let status: SandboxResult['status'] = 'Accepted'
     const realStatus = (result.status === 'File Error') ? 'Accepted' : result.status
-    // TLE 时 go-judge 返回的 CPU 时间不准确，用 timeLimit 代替
-    let time = Math.round(result.time / 1000000)
-    let memory = Math.round(result.memory / 1024)
+    const cpuTime = nsToMsCeil(result.time)
+    const wallTime = nsToMsCeil(result.runTime)
+    let time = cpuTime
+    let memory = bytesToKiBCeil(result.memory)
+    let timeoutReason: 'cpu' | 'wall' | 'unknown' | null = null
 
     // 先获取 stdout/stderr，用于后续判断
     let stdout: string | undefined
@@ -317,9 +351,15 @@ async function sandboxExecute(
       stderr.includes('Out of memory')
     )) || false
 
-    if (realStatus === 'Time Limit Exceeded' || result.time > timeLimit * 1000000) {
+    if (realStatus === 'Time Limit Exceeded' || result.time > limits.cpuLimitNs || result.runTime > limits.wallLimitNs) {
       status = 'Time Limit Exceeded'
-      time = timeLimit
+      if (result.time >= limits.cpuLimitNs) {
+        timeoutReason = 'cpu'
+      } else if (result.runTime >= limits.wallLimitNs) {
+        timeoutReason = 'wall'
+      } else {
+        timeoutReason = 'unknown'
+      }
     } else if (realStatus === 'Memory Limit Exceeded') {
       status = 'Memory Limit Exceeded'
       memory = memoryLimit
@@ -360,7 +400,11 @@ async function sandboxExecute(
     return {
       status,
       time,
+      cpuTime: time,
+      wallTime,
       memory,
+      timeoutReason,
+      metricSource: 'go-judge-cgroup',
       exitCode: result.exitStatus,
       stdout,
       stderr
@@ -413,6 +457,8 @@ export async function runCommand(params: {
   stdout?: { fd: number } | { max: number }
   stderr?: { fd: number } | { max: number }
   cpuLimit?: number
+  clockLimit?: number
+  cpuRateLimit?: number
   memoryLimit?: number
   strictMemoryLimit?: boolean
   addressSpaceLimit?: boolean
@@ -529,6 +575,8 @@ async function runCommands(cmds: Array<{
   stdout?: { fd: number } | { max: number }
   stderr?: { fd: number } | { max: number }
   cpuLimit?: number
+  clockLimit?: number
+  cpuRateLimit?: number
   memoryLimit?: number
   strictMemoryLimit?: boolean
   procLimit?: number
@@ -555,6 +603,8 @@ async function runCommands(cmds: Array<{
     if (params.stdout) cmd.stdout = params.stdout
     if (params.stderr) cmd.stderr = params.stderr
     if (params.cpuLimit) cmd.cpuLimit = params.cpuLimit
+    if (params.clockLimit) cmd.clockLimit = params.clockLimit
+    if (params.cpuRateLimit) cmd.cpuRateLimit = params.cpuRateLimit
     if (params.memoryLimit) cmd.memoryLimit = params.memoryLimit
     if (params.strictMemoryLimit) cmd.strictMemoryLimit = params.strictMemoryLimit
     if (params.procLimit) cmd.procLimit = params.procLimit

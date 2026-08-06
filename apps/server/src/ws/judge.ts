@@ -507,11 +507,11 @@ function handleConfig(ws: WebSocket, payload: { concurrency?: number }) {
  * 处理评测结果
  */
 async function handleResult(ws: WebSocket, payload: any) {
-  const { submissionId, result, time, memory, score, cases, subtasks, message } = payload
+  const { submissionId, result, time, wallTime, memory, score, cases, subtasks, message, timeoutReason, metricSource } = payload
 
   logger.info('judge_ws_result', {
     action: 'judge_ws',
-    metadata: { submissionId, result, time, memory, score }
+    metadata: { submissionId, result, time, wallTime, memory, score, timeoutReason, metricSource }
   })
 
   // 更新数据库
@@ -519,7 +519,10 @@ async function handleResult(ws: WebSocket, payload: any) {
     const updateData = {
       result: normalizeResult(result),
       timeUsed: time,
-      memoryUsed: memory,
+      wallTimeUsed: wallTime ?? null,
+      memoryUsed: memory ?? null,
+      timeoutReason: timeoutReason ?? null,
+      metricSource: metricSource ?? null,
       score: score ?? null,
       cases: cases ? JSON.stringify(cases) : null,
       subtasks: subtasks ? JSON.stringify(subtasks) : null,
@@ -600,6 +603,9 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
       result: 'queuing',
       timeUsed: null,
       memoryUsed: null,
+      wallTimeUsed: null,
+      timeoutReason: null,
+      metricSource: null,
       score: null,
       cases: null,
       subtasks: null,

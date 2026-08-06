@@ -1,0 +1,5 @@
+ALTER TABLE "Submission"
+  ADD COLUMN IF NOT EXISTS "wallTimeUsed" INTEGER,
+  ADD COLUMN IF NOT EXISTS "timeoutReason" TEXT,
+  ADD COLUMN IF NOT EXISTS "metricSource" TEXT;
+
