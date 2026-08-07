@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-01
+last_verified: 2026-08-07
 source_of_truth: repository structure and active documentation
 ---
 
@@ -14,10 +14,11 @@ source_of_truth: repository structure and active documentation
 
 ### 首次开发
 
-1. [项目概览](guide/PROJECT_OVERVIEW.md)
-2. [开发环境启动](guide/DEVELOPMENT_SETUP.md)
-3. [项目导览](guide/PROJECT_TOUR.md)
-4. [开发工作流](development/WORKFLOW.md)
+1. [Codex handoff guide](guide/CODEX_ONBOARDING.md)
+2. [项目概览](guide/PROJECT_OVERVIEW.md)
+3. [开发环境启动](guide/DEVELOPMENT_SETUP.md)
+4. [项目导览](guide/PROJECT_TOUR.md)
+5. [开发工作流](development/WORKFLOW.md)
 
 ### 理解系统
 

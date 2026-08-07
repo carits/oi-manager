@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-01
+last_verified: 2026-08-07
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -58,6 +58,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 |------|------|------|
 | `/profile/student/[id]` | 已登录 | 学生公开资料 |
 | `/profile/teacher/[id]` | 已登录 | 教师公开资料 |
+| `/profile/user/[id]` | logged in, personal-safe profile | ordinary account public profile |
 
 ## 账号设置（3）
 

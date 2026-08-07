@@ -31,6 +31,7 @@ export const routePatterns = [
   '/platform-admin/users',
   '/profile/student/[id]',
   '/profile/teacher/[id]',
+  '/profile/user/[id]',
   '/account/platform-bindings',
   '/account/profile',
   '/account/security',
@@ -121,6 +122,7 @@ export function routeOwner(pattern: RoutePattern): RouteOwner {
   if (pattern === '/' || pattern === '/login') return 'public'
   if (pattern === '/profile/student/[id]') return 'campusStudent'
   if (pattern === '/profile/teacher/[id]') return 'principal'
+  if (pattern === '/profile/user/[id]') return 'personalStudent'
   if (pattern.startsWith('/personal')) return 'personalStudent'
   if (pattern.startsWith('/account')) return 'campusStudent'
   if (pattern === '/super_admin' || pattern.startsWith('/admin')) return 'superAdmin'
@@ -152,6 +154,7 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   else if (route.includes('/submissions/[id]')) route = route.replace('[id]', ids.submission)
   else if (route.includes('/profile/student/[id]')) route = route.replace('[id]', ids.users.campusStudent)
   else if (route.includes('/profile/teacher/[id]')) route = route.replace('[id]', ids.users.principal)
+  else if (route.includes('/profile/user/[id]')) route = route.replace('[id]', ids.users.personalStudent)
   else if (route.includes('/team/[id]') || route.includes('/teams/[id]')) {
     route = route.replace('[id]', ids.team)
   }

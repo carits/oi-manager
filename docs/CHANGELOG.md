@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-02
+last_verified: 2026-08-07
 source_of_truth: Git history
 ---
 
@@ -9,6 +9,14 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在
 [历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-07
+
+### Codex onboarding guide
+
+- Added docs/guide/CODEX_ONBOARDING.md with SSH access details, the remote working tree, runtime ports, test flow, deployment and push flow, documentation gate, safety boundaries, and recent high-risk modules for new Codex sessions.
+- Linked the guide from the documentation home page so future agents can find it from the formal docs entry point.
+- This is a documentation-only update; verification is pnpm docs:check plus Git diff checks before pushing to GitHub.
 
 ## 2026-08-02
 

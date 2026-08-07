@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-08-07
 source_of_truth: files, testdata, admin-data and migration routes
 ---
 
@@ -27,6 +27,8 @@ source_of_truth: files, testdata, admin-data and migration routes
 | `DELETE` | `/api/problems/:id/testdata/:fileId` | 题目管理者 | 删除测试数据 |
 | `POST` | `/api/problems/:id/testdata/auto` | 题目管理者 | 自动识别测试数据 |
 | `GET` | `/api/problems/:id/testdata/download/:filename` | 题目管理者 | 下载测试数据 |
+| `GET` | `/api/problems/:id/testdata/export` | problem manager | download all testdata as ZIP |
+| `GET` | `/api/problems/:id/testdata/files/:fileId/download` | problem manager | download one testdata file by file ID |
 
 ## 管理数据（7）
 
