@@ -46,8 +46,13 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       return res.status(403).json({ success: false, message: notStarted })
     }
 
-    // OI 赛制：赛中非管理员不显示排名
+    // 作业排名只给管理员查看，普通学生不公开作业排名。
     const isAdminUser = await canManageTraining(userId, training)
+    if (training.type === 'homework' && !isAdminUser) {
+      return res.status(403).json({ success: false, message: '只有管理员可以查看作业排名' })
+    }
+
+    // OI 赛制：赛中非管理员不显示排名
     const nowRank = Date.now()
     const rankStatus = training.status === 'finished' ? 'finished'
       : (training.status === 'ongoing' || nowRank >= training.startTime.getTime() && nowRank <= training.endTime.getTime()) ? 'ongoing'

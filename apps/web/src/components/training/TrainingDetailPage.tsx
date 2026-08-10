@@ -109,7 +109,9 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     saveNoteNow, saveRecordNow,
   } = useTrainingDetail(trainingId, activeTab, sessionKey)
 
-  const { rankingData, rankingState, refreshRanking } = useTrainingRank(trainingId, activeTab, sessionKey)
+  const canViewRanking = training ? training.type !== 'homework' || training.isAdmin : !pathname.includes('/homeworks/')
+  const rankingTab = canViewRanking ? activeTab : 'problemList'
+  const { rankingData, rankingState, refreshRanking } = useTrainingRank(trainingId, rankingTab, sessionKey)
 
   const sub = useTrainingSubmissions(trainingId, activeTab)
 
@@ -132,7 +134,24 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
 
   const isUpcoming = training?.status === 'upcoming'
   const hideContent = isUpcoming && !training.isAdmin
+  const tabItems = [
+    { value: 'problemList' as const, label: '题目列表' },
+    { value: 'problems' as const, label: '题面' },
+    { value: 'submissions' as const, label: '评测记录' },
+    { value: 'solutions' as const, label: '题解' },
+    { value: 'attachments' as const, label: '附件' },
+    ...(canViewRanking ? [{ value: 'ranking' as const, label: '排名' }] : []),
+  ]
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
+
+  useEffect(() => {
+    if (training && !canViewRanking && activeTab === 'ranking') {
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete('tab')
+      setActiveTab('problemList')
+      router.replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false })
+    }
+  }, [activeTab, canViewRanking, pathname, router, searchParams, training])
 
   // Countdown timer + status boundary detection
   useEffect(() => {
@@ -211,7 +230,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   const initialTabs: Array<{ value: TabType; label: string }> = [
     { value: 'problemList', label: '题目列表' }, { value: 'problems', label: '题面' },
     { value: 'submissions', label: '评测记录' }, { value: 'solutions', label: '题解' },
-    { value: 'attachments', label: '附件' }, { value: 'ranking', label: '排名' },
+    { value: 'attachments', label: '附件' },
+    ...(!pathname.includes('/homeworks/') ? [{ value: 'ranking' as TabType, label: '排名' }] : []),
   ]
 
   if (loading) {
@@ -265,7 +285,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
       )}
 
       {/* Tab Bar */}
-      <div className={styles.tabBar}><Tabs label={`${tl}内容`} value={activeTab} onChange={selectTab} items={[{ value: 'problemList', label: '题目列表' }, { value: 'problems', label: '题面' }, { value: 'submissions', label: '评测记录' }, { value: 'solutions', label: '题解' }, { value: 'attachments', label: '附件' }, { value: 'ranking', label: '排名' }]} /></div>
+      <div className={styles.tabBar}><Tabs label={`${tl}内容`} value={activeTab} onChange={selectTab} items={tabItems} /></div>
 
       {/* Main Content */}
       <div className={styles.content}>
@@ -392,7 +412,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
           </AsyncRegion>
         )}
 
-        {activeTab === 'ranking' && (
+        {activeTab === 'ranking' && canViewRanking && (
           <AsyncRegion state={rankingState} onRetry={refreshRanking}>
             {(data) => (
               <TrainingRankTable rankingData={data} currentUserId={user?.userId} />

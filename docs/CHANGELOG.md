@@ -12,6 +12,11 @@ source_of_truth: Git history
 
 ## 2026-08-10
 
+### Homework ranking visibility
+
+- Homework detail pages hide the ranking tab for non-manager users, including the initial loading tab skeleton.
+- Direct homework ranking API access now returns 403 unless the viewer can manage the homework.
+
 ### Contest list ordering
 
 - Team, school, student aggregate, personal aggregate, and card-style contest lists now sort display data by current status first: ongoing, upcoming, then finished.
