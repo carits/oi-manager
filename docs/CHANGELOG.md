@@ -12,6 +12,11 @@ source_of_truth: Git history
 
 ## 2026-08-10
 
+### Contest list ordering
+
+- Team and school contest/training list APIs now sort display data by current status first: ongoing, upcoming, then finished.
+- Items with the same status are ordered by the numeric level embedded in existing titles, then by start time and creation/id fallbacks, keeping legacy data stable until a dedicated level field exists.
+
 ### Contest remote submission ID privacy
 
 - Training and contest submission list/detail APIs now hide `ojRemoteId` from non-manager participants for every contest format and status.

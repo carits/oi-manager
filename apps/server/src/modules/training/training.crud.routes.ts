@@ -17,6 +17,8 @@ import {
   canAccessTraining,
   canManageTraining,
   getTrainingAccessMode,
+  getComputedTrainingStatus,
+  sortTrainingListForDisplay,
 } from './training.helpers'
 import { teamService } from '../team/team.service'
 
@@ -62,31 +64,28 @@ trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(as
       }
     }
 
+    const now = new Date()
+    const data = trainings.map(t => {
+      const computedStatus = getComputedTrainingStatus(t, now)
+      return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        format: t.format,
+        startTime: t.startTime.toISOString(),
+        endTime: t.endTime.toISOString(),
+        status: computedStatus,
+        createdBy: t.createdBy,
+        type: t.type,
+        problemCount: t._count.TrainingProblem,
+        participantCount: participantCounts.get(t.id) || 0,
+        createdAt: t.createdAt.toISOString(),
+      }
+    })
+
     res.json({
       success: true,
-      data: trainings.map(t => {
-        const now = new Date()
-        let computedStatus = t.status
-        if (t.status !== 'finished') {
-          if (now < t.startTime) computedStatus = 'upcoming'
-          else if (now >= t.startTime && now <= t.endTime) computedStatus = 'ongoing'
-          else computedStatus = 'finished'
-        }
-        return {
-          id: t.id,
-          title: t.title,
-          description: t.description,
-          format: t.format,
-          startTime: t.startTime.toISOString(),
-          endTime: t.endTime.toISOString(),
-          status: computedStatus,
-          createdBy: t.createdBy,
-          type: t.type,
-          problemCount: t._count.TrainingProblem,
-          participantCount: participantCounts.get(t.id) || 0,
-          createdAt: t.createdAt.toISOString(),
-        }
-      }),
+      data: sortTrainingListForDisplay(data),
     })
 }, '查询失败'))
 

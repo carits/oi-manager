@@ -85,6 +85,65 @@ export async function isSchoolMember(userId: string, schoolId: string): Promise<
 }
 
 /** 训练访问模式：team 或 school */
+export type TrainingListStatus = 'ongoing' | 'upcoming' | 'finished' | string
+
+export interface TrainingListSortItem {
+  id: number
+  title: string
+  status: TrainingListStatus
+  startTime: string | Date
+  createdAt?: string | Date
+}
+
+const TRAINING_STATUS_ORDER: Record<string, number> = {
+  ongoing: 0,
+  upcoming: 1,
+  finished: 2,
+}
+
+/** 计算训练/比赛当前状态，避免列表排序依赖过期 status 字段。 */
+export function getComputedTrainingStatus(training: { status: string; startTime: Date; endTime: Date }, now = new Date()): TrainingListStatus {
+  if (training.status === 'finished') return 'finished'
+  if (now < training.startTime) return 'upcoming'
+  if (now <= training.endTime) return 'ongoing'
+  return 'finished'
+}
+
+function extractTrainingLevel(title: string): number {
+  const match = title.match(/\d+/)
+  if (!match) return 0
+  const level = Number(match[0])
+  return Number.isFinite(level) ? level : 0
+}
+
+function timeValue(value: string | Date | undefined): number {
+  if (!value) return 0
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+/**
+ * 列表展示顺序：进行中优先，其次未开始，最后已结束；同状态按标题中的数字级别降序，
+ * 再按开始时间降序兜底。当前 Training 模型尚无显式 level 字段，数字标题是旧数据的兼容级别来源。
+ */
+export function sortTrainingListForDisplay<T extends TrainingListSortItem>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const statusDiff = (TRAINING_STATUS_ORDER[a.status] ?? 99) - (TRAINING_STATUS_ORDER[b.status] ?? 99)
+    if (statusDiff !== 0) return statusDiff
+
+    const levelDiff = extractTrainingLevel(b.title) - extractTrainingLevel(a.title)
+    if (levelDiff !== 0) return levelDiff
+
+    const startDiff = timeValue(b.startTime) - timeValue(a.startTime)
+    if (startDiff !== 0) return startDiff
+
+    const createdDiff = timeValue(b.createdAt) - timeValue(a.createdAt)
+    if (createdDiff !== 0) return createdDiff
+
+    return b.id - a.id
+  })
+}
+
 export type TrainingAccessMode = 'team' | 'school' | null
 
 /** 判断训练的访问模式（基于 teamId/schoolId） */
