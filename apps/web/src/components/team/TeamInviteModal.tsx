@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Search, UserPlus } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import styles from './Team.module.css'
 
 interface AvailableMember {
   id: string
@@ -28,6 +30,18 @@ interface TeamInviteModalProps {
   onSuccess: () => void
 }
 
+function memberTypeLabel(type: AvailableMember['memberType']) {
+  if (type === 'teacher') return '教师'
+  if (type === 'student') return '学生'
+  return '用户'
+}
+
+function memberTypeClass(type: AvailableMember['memberType']) {
+  if (type === 'teacher') return styles.typeTeacher
+  if (type === 'student') return styles.typeStudent
+  return styles.typeUser
+}
+
 export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInviteModalProps) {
   const toast = useToast()
   const { user } = useAuth()
@@ -36,6 +50,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
   const [usernameInput, setUsernameInput] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [inviting, setInviting] = useState(false)
+  const [loadingMembers, setLoadingMembers] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -48,6 +63,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
 
   const fetchAvailableMembers = async (keyword?: string) => {
     try {
+      setLoadingMembers(true)
       const params = new URLSearchParams()
       if (keyword) params.set('keyword', keyword)
       const result = await apiClient.get<{ teachers: any[]; students: any[]; users?: any[] }>(`/api/teams/${teamId}/available-members?${params}`)
@@ -59,6 +75,17 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
       }
     } catch (error) {
       console.error('Failed to fetch available members:', error)
+      setAvailableMembers([])
+    } finally {
+      setLoadingMembers(false)
+    }
+  }
+
+  const toggleMember = (member: AvailableMember, checked: boolean) => {
+    if (checked) {
+      setSelectedMembers(current => [...current, { id: member.id, memberType: member.memberType }])
+    } else {
+      setSelectedMembers(current => current.filter(item => !(item.id === member.id && item.memberType === member.memberType)))
     }
   }
 
@@ -68,10 +95,9 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
     try {
       setInviting(true)
       const members = selectedMembers.map(m => ({ id: m.id, type: m.memberType }))
-
       const result = await apiClient.post<any>(`/api/teams/${teamId}/members`, {
         members,
-        usernames: usernameInput.trim() ? usernameInput.split(',').map(s => s.trim()).filter(Boolean) : []
+        usernames: usernameInput.trim() ? usernameInput.split(',').map(s => s.trim()).filter(Boolean) : [],
       })
       if (result.success) {
         const successCount = result.data?.invited?.length || members.length
@@ -89,112 +115,85 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
     }
   }
 
+  const manualCount = usernameInput.split(',').map(item => item.trim()).filter(Boolean).length
+  const totalSelected = selectedMembers.length + manualCount
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="邀请成员" width="500px">
-      {/* 搜索 */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h4 style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>搜索成员</h4>
-        <input
-          type="text"
-          placeholder="搜索成员..."
-          value={searchKeyword}
-          onChange={(e) => {
-            setSearchKeyword(e.target.value)
-            fetchAvailableMembers(e.target.value)
-          }}
-          style={{
-            width: '100%',
-            padding: '0.5rem 0.75rem',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            marginBottom: '0.5rem'
-          }}
-        />
-        <div style={{ maxHeight: '280px', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '6px' }}>
-          {availableMembers.length > 0 ? (
-            availableMembers.map(member => (
-              <label
-                key={`${member.memberType}-${member.id}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.5rem 0.75rem',
-                  borderBottom: '1px solid var(--border)',
-                  cursor: 'pointer'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.some(m => m.id === member.id && m.memberType === member.memberType)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedMembers([...selectedMembers, { id: member.id, memberType: member.memberType }])
-                    } else {
-                      setSelectedMembers(selectedMembers.filter(m => !(m.id === member.id && m.memberType === member.memberType)))
-                    }
-                  }}
-                />
-                <UserIdentityLink
-                  id={member.id}
-                  userType={member.memberType}
-                  name={member.name}
-                  username={member.username}
-                  showUsername
-                />
-                <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.375rem', background: member.memberType === 'teacher' ? 'var(--blue-100)' : member.memberType === 'student' ? 'var(--green-100)' : 'var(--gray-100)', color: member.memberType === 'teacher' ? 'var(--blue-700)' : member.memberType === 'student' ? 'var(--green-700)' : 'var(--gray-700)', borderRadius: '4px' }}>
-                  {member.memberType === 'teacher' ? '教师' : member.memberType === 'student' ? '学生' : '用户'}
-                </span>
-              </label>
-            ))
-          ) : (
-            <p style={{ padding: '1rem', textAlign: 'center', color: 'var(--gray-500)' }}>
-              {searchKeyword ? '没有找到成员' : '暂无可邀请的成员'}
-            </p>
-          )}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="邀请成员"
+      width="640px"
+      footer={
+        <div className={styles.modalActionBar}>
+          <span>{totalSelected > 0 ? `已选择 ${totalSelected} 人` : '选择候选人或输入用户名后发送邀请'}</span>
+          <div className={styles.modalActions}>
+            <Button variant="secondary" onClick={onClose}>取消</Button>
+            <Button icon={<UserPlus size={16} />} onClick={handleInvite} disabled={totalSelected === 0 || inviting} loading={inviting}>发送邀请</Button>
+          </div>
         </div>
-      </div>
+      }
+    >
+      <div className={styles.inviteDialog}>
+        <section className={styles.inviteSearchSection}>
+          <label className={styles.fieldLabel} htmlFor="team-invite-search">搜索成员</label>
+          <div className={styles.searchInputWrap}>
+            <Search size={16} aria-hidden="true" />
+            <input
+              id="team-invite-search"
+              type="text"
+              placeholder="输入姓名或用户名"
+              value={searchKeyword}
+              onChange={(event) => {
+                const value = event.target.value
+                setSearchKeyword(value)
+                void fetchAvailableMembers(value)
+              }}
+            />
+          </div>
+          <div className={styles.candidateList}>
+            {loadingMembers ? (
+              <div className={styles.modalEmpty}>正在加载候选成员</div>
+            ) : availableMembers.length > 0 ? (
+              availableMembers.map(member => {
+                const checked = selectedMembers.some(item => item.id === member.id && item.memberType === member.memberType)
+                return (
+                  <label key={`${member.memberType}-${member.id}`} className={styles.candidateRow} data-selected={checked || undefined}>
+                    <input type="checkbox" checked={checked} onChange={(event) => toggleMember(member, event.target.checked)} />
+                    <UserIdentityLink
+                      id={member.id}
+                      userType={member.memberType}
+                      name={member.name}
+                      username={member.username}
+                      avatar={member.avatar}
+                      avatarOnly
+                      size={34}
+                    />
+                    <span className={styles.candidateMain}>
+                      <UserIdentityLink id={member.id} userType={member.memberType} name={member.name} username={member.username} showUsername />
+                    </span>
+                    <span className={`${styles.memberTag} ${memberTypeClass(member.memberType)}`}>{memberTypeLabel(member.memberType)}</span>
+                  </label>
+                )
+              })
+            ) : (
+              <div className={styles.modalEmpty}>{searchKeyword ? '没有找到成员' : '暂无可邀请的成员'}</div>
+            )}
+          </div>
+        </section>
 
-      {/* 用户名邀请 */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h4 style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>用户名邀请用户（逗号分割）</h4>
-        <input
-          type="text"
-          placeholder="user1, user2, user3"
-          value={usernameInput}
-          onChange={(e) => setUsernameInput(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '0.5rem 0.75rem',
-            border: '1px solid var(--border)',
-            borderRadius: '6px'
-          }}
-        />
-        <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
-          {user?.workspaceMode === 'personal' ? '仅可邀请已启用个人身份的用户' : '只能邀请本校成员'}
-        </p>
-      </div>
-
-      {/* 已选 */}
-      {selectedMembers.length > 0 && (
-        <div style={{ marginBottom: '1rem' }}>
-          <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>
-            已选: {selectedMembers.length} 名成员
-          </p>
-        </div>
-      )}
-
-      {/* 按钮 */}
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-        <Button variant="secondary" onClick={onClose}>
-          取消
-        </Button>
-        <Button
-          onClick={handleInvite}
-          disabled={(selectedMembers.length === 0 && !usernameInput.trim()) || inviting}
-        >
-          {inviting ? '发送中...' : '发送邀请'}
-        </Button>
+        <section className={styles.manualInviteSection}>
+          <label className={styles.fieldLabel} htmlFor="team-invite-usernames">按用户名批量邀请</label>
+          <input
+            id="team-invite-usernames"
+            className={styles.textInput}
+            type="text"
+            placeholder="user1, user2, user3"
+            value={usernameInput}
+            onChange={(event) => setUsernameInput(event.target.value)}
+          />
+          <p>{user?.workspaceMode === 'personal' ? '仅可邀请已启用个人身份的用户。' : '仅可邀请本校成员，多个用户名请用英文逗号分隔。'}</p>
+        </section>
       </div>
     </Modal>
   )

@@ -12,6 +12,11 @@ source_of_truth: Git history
 
 ## 2026-08-10
 
+### Team member management UI refresh
+
+- Refined team detail tabs, member management layout, join request review rows, and invite dialogs into a denser management-style UI.
+- Invitation and pending invite modals now use wider structured layouts with clearer search, selection, status, and footer actions.
+
 ### Homework ranking visibility
 
 - Homework detail pages hide the ranking tab for non-manager users, including the initial loading tab skeleton.

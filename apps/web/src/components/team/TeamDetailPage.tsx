@@ -17,6 +17,7 @@ import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import type { JoinRequestItem } from './TeamMemberList'
 import dynamic from 'next/dynamic'
+import styles from './Team.module.css'
 
 // TeamHeader 包含 react-markdown + katex (~3MB)，延迟加载（命名导出）
 const TeamHeader = dynamic(() => import('./TeamHeader').then(mod => mod.TeamHeader))
@@ -379,8 +380,8 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
   const showApplyButton = !permission.isMember && team.isPublic
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className={styles.teamDetailShell}>
+      <div className={styles.teamDetailInner}>
         {/* 团队头部 */}
         <TeamHeader
           team={{ ...team, avatar: teamAvatar || team.avatar }}
@@ -402,32 +403,13 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         />
 
         {/* Tab 导航 */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '0.5rem',
-            marginBottom: '1rem',
-            background: 'white',
-            padding: '0.5rem 1rem',
-            borderRadius: '8px',
-            border: '1px solid var(--border)'
-          }}
-        >
+        <div className={styles.teamDetailTabs}>
           {tabs.map(tab => (
             <button
               key={tab.key}
+              className={styles.teamDetailTab}
+              data-active={activeTab === tab.key}
               onClick={() => { setActiveTab(tab.key as TabType); router.push(`${basePath}/${teamId}?tab=${tab.key}`, { scroll: false }) }}
-              style={{
-                padding: '0.5rem 1rem',
-                background: activeTab === tab.key ? 'var(--primary)' : 'transparent',
-                color: activeTab === tab.key ? 'white' : 'var(--gray-700)',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 0.2s'
-              }}
             >
               {tab.label}
             </button>
@@ -435,15 +417,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailP
         </div>
 
         {/* Tab 内容 */}
-        <div
-          style={{
-            background: 'white',
-            borderRadius: '8px',
-            padding: '1.5rem',
-            border: '1px solid var(--border)',
-            minHeight: '400px'
-          }}
-        >
+        <div className={styles.teamDetailContent}>
           {/* 成员 Tab */}
           {activeTab === 'members' && (
             <TeamMemberList

@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { CalendarDays, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import styles from './Team.module.css'
 
 interface PendingInvite {
   id: string
@@ -28,18 +30,28 @@ interface TeamInviteListModalProps {
   teamId: string
 }
 
+function inviteeTypeLabel(type: PendingInvite['type']) {
+  if (type === 'teacher') return '教师'
+  if (type === 'student') return '学生'
+  return '用户'
+}
+
+function inviteeTypeClass(type: PendingInvite['type']) {
+  if (type === 'teacher') return styles.typeTeacher
+  if (type === 'student') return styles.typeStudent
+  return styles.typeUser
+}
+
 export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListModalProps) {
   const toast = useToast()
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [loading, setLoading] = useState(false)
-
-  // 取消邀请确认弹框状态
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<PendingInvite | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      fetchInviteList()
+      void fetchInviteList()
     }
   }, [isOpen])
 
@@ -69,7 +81,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
     try {
       const result = await apiClient.delete(`/api/teams/${teamId}/invites/${cancelTarget.id}`)
       if (result.success) {
-        fetchInviteList()
+        void fetchInviteList()
       } else {
         toast.error(result.message || '取消失败')
       }
@@ -84,110 +96,76 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
 
   return (
     <>
-    <Modal isOpen={isOpen} onClose={onClose} title="邀请列表" width="500px">
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-          <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
-        </div>
-      ) : pendingInvites.length > 0 ? (
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {pendingInvites.map(invite => {
-            const user = invite.user || { name: '未知用户', username: '' }
-            const inviteeType = invite.type
-            return (
-            <div
-              key={invite.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.75rem',
-                background: 'var(--gray-50)',
-                borderRadius: '8px',
-                border: '1px solid var(--border)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserIdentityLink
-                  id={user.id}
-                  userType={inviteeType}
-                  name={user.name}
-                  username={user.username}
-                  avatar={user.avatar}
-                  avatarOnly
-                  size={40}
-                />
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <UserIdentityLink
-                      id={user.id}
-                      userType={inviteeType}
-                      name={user.name}
-                      username={user.username}
-                      showUsername
-                    />
-                    <span style={{
-                      fontSize: '0.75rem',
-                      padding: '0.125rem 0.375rem',
-                      borderRadius: '4px',
-                      background: inviteeType === 'teacher' ? 'var(--blue-100)' : inviteeType === 'student' ? 'var(--green-100)' : 'var(--gray-100)',
-                      color: inviteeType === 'teacher' ? 'var(--blue-700)' : inviteeType === 'student' ? 'var(--green-700)' : 'var(--gray-700)'
-                    }}>
-                      {inviteeType === 'teacher' ? '教师' : '学生'}
-                    </span>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      padding: '0.125rem 0.375rem',
-                      borderRadius: '4px',
-                      background: 'var(--gray-100)',
-                      color: 'var(--gray-700)'
-                    }}>
-                      {invite.role === 'admin' ? '管理员' : '成员'}
-                    </span>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="邀请列表"
+        width="640px"
+        footer={
+          <div className={styles.modalActionBar}>
+            <span>{pendingInvites.length > 0 ? `待处理邀请 ${pendingInvites.length} 个` : '暂无待处理邀请'}</span>
+            <Button variant="secondary" onClick={onClose}>关闭</Button>
+          </div>
+        }
+      >
+        {loading ? (
+          <div className={styles.modalEmpty}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+        ) : pendingInvites.length > 0 ? (
+          <div className={styles.inviteList}>
+            {pendingInvites.map(invite => {
+              const user = invite.user || { id: '', name: '未知用户', username: '' }
+              const inviteeType = invite.type
+              return (
+                <div key={invite.id} className={styles.inviteRow}>
+                  <UserIdentityLink
+                    id={user.id}
+                    userType={inviteeType}
+                    name={user.name}
+                    username={user.username}
+                    avatar={user.avatar}
+                    avatarOnly
+                    size={38}
+                  />
+                  <div className={styles.inviteMain}>
+                    <div className={styles.memberNameLine}>
+                      <UserIdentityLink id={user.id} userType={inviteeType} name={user.name} username={user.username} showUsername />
+                      <span className={`${styles.memberTag} ${inviteeTypeClass(inviteeType)}`}>{inviteeTypeLabel(inviteeType)}</span>
+                      <span className={styles.roleTag}>{invite.role === 'admin' ? '管理员' : '成员'}</span>
+                    </div>
+                    <div className={styles.memberMeta}>
+                      <CalendarDays size={13} aria-hidden="true" /> 邀请人 {invite.invitedByName} · {new Date(invite.invitedAt).toLocaleDateString('zh-CN')}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>
-                    邀请人: {invite.invitedByName} · {new Date(invite.invitedAt).toLocaleDateString()}
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Trash2 size={15} />}
+                    onClick={() => handleCancelInvite(invite)}
+                    style={{ color: 'var(--danger)' }}
+                  >
+                    取消邀请
+                  </Button>
                 </div>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleCancelInvite(invite)}
-                style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
-              >
-                取消邀请
-              </Button>
-            </div>
-            )
+              )
             })}
-        </div>
-      ) : (
-        <p style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>
-          暂无待处理的邀请
-        </p>
-      )}
+          </div>
+        ) : (
+          <div className={styles.modalEmpty}>暂无待处理的邀请</div>
+        )}
+      </Modal>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-        <Button variant="secondary" onClick={onClose}>
-          关闭
-        </Button>
-      </div>
-    </Modal>
-
-    {/* 取消邀请确认弹框 */}
-    <ConfirmModal
-      isOpen={showCancelConfirm}
-      onClose={() => {
-        setShowCancelConfirm(false)
-        setCancelTarget(null)
-      }}
-      onConfirm={confirmCancelInvite}
-      title="取消邀请"
-      message={`确定要取消对 ${cancelTarget?.user?.name || '该用户'} 的邀请吗？`}
-      confirmText="确认取消"
-      danger
-    />
+      <ConfirmModal
+        isOpen={showCancelConfirm}
+        onClose={() => {
+          setShowCancelConfirm(false)
+          setCancelTarget(null)
+        }}
+        onConfirm={confirmCancelInvite}
+        title="取消邀请"
+        message={`确定要取消对 ${cancelTarget?.user?.name || '该用户'} 的邀请吗？`}
+        confirmText="确认取消"
+        danger
+      />
     </>
   )
 }

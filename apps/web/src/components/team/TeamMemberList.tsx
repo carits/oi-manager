@@ -1,9 +1,11 @@
 'use client'
 
+import { Check, Crown, Mail, ShieldCheck, UserPlus, Users, X } from 'lucide-react'
 import type { TeamDetail } from '@/hooks/data/useTeamDetail'
 import type { TeamPermission, UserType } from '@/hooks/useTeamPermission'
 import { Button } from '@/components/ui/Button'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import styles from './Team.module.css'
 
 export interface JoinRequestItem {
   id: string
@@ -24,14 +26,50 @@ export interface TeamMemberListProps {
   onRemoveMember?: (memberId: string, memberName: string, userType: UserType) => void
   onSetAdmin?: (memberId: string, memberName: string, userType: UserType) => void
   onTransferOwnership?: (memberId: string, memberName: string, userType: UserType) => void
-  // 邀请功能
   onInviteMembers?: () => void
   onViewInvites?: () => void
   pendingInviteCount?: number
-  // 申请管理
   joinRequests?: JoinRequestItem[]
   onApproveRequest?: (requestId: string) => void
   onRejectRequest?: (requestId: string) => void
+}
+
+interface MemberView {
+  id: string
+  name: string
+  username?: string
+  avatar?: string | null
+  joinedAt?: string | null
+  userType: UserType
+}
+
+function memberTypeLabel(userType: UserType) {
+  if (userType === 'teacher') return '教师'
+  if (userType === 'student') return '学生'
+  return '用户'
+}
+
+function memberTypeClass(userType: UserType) {
+  if (userType === 'teacher') return styles.typeTeacher
+  if (userType === 'student') return styles.typeStudent
+  return styles.typeUser
+}
+
+function roleLabel(role: 'owner' | 'admin' | 'member') {
+  if (role === 'owner') return '所有者'
+  if (role === 'admin') return '管理员'
+  return '成员'
+}
+
+function roleIcon(role: 'owner' | 'admin' | 'member') {
+  if (role === 'owner') return <Crown size={15} aria-hidden="true" />
+  if (role === 'admin') return <ShieldCheck size={15} aria-hidden="true" />
+  return <Users size={15} aria-hidden="true" />
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return ''
+  return new Date(value).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
 }
 
 export function TeamMemberList({
@@ -43,50 +81,35 @@ export function TeamMemberList({
   onInviteMembers,
   onViewInvites,
   pendingInviteCount,
-  joinRequests,
+  joinRequests = [],
   onApproveRequest,
-  onRejectRequest
+  onRejectRequest,
 }: TeamMemberListProps) {
   const canRemove = permission.canRemove
   const canTransfer = permission.canTransfer
-
-  // 获取所有者ID
   const ownerId = team.owner?.id
-
-  // 只有所有者才能设置管理员
   const canSetAdmin = permission.isOwner
 
-  // 所有者
-  const owner = team.owner ? {
+  const owner: MemberView | null = team.owner ? {
     id: team.owner.id,
     name: team.owner.name || '未知',
     username: team.owner.username,
     avatar: team.owner.avatar,
-    userType: (team.owner.type || team.ownerType) as UserType
+    userType: (team.owner.type || team.ownerType) as UserType,
   } : null
 
-  // 管理员列表（排除所有者）
-  const admins = (team.admins || [])
+  const admins: MemberView[] = (team.admins || [])
     .filter(admin => admin.id !== ownerId)
     .map(admin => ({
       id: admin.id,
       name: admin.name,
       username: admin.username,
       avatar: admin.avatar,
-      userType: (admin.adminType || admin.type) as UserType
+      userType: (admin.adminType || admin.type) as UserType,
     }))
 
-  // 普通成员列表（排除所有者和管理员）
-  const members: Array<{
-    id: string
-    name: string
-    username?: string
-    avatar?: string | null
-    joinedAt?: string | null
-    userType: UserType
-  }> = []
+  const members: MemberView[] = []
 
-  // 添加普通教师成员
   team.teachers?.forEach(teacher => {
     const isAdmin = team.admins?.some(a => a.id === teacher.id && (a.adminType === 'teacher' || a.type === 'teacher'))
     const isOwner = teacher.id === ownerId && (team.owner?.type === 'teacher' || team.ownerType === 'teacher')
@@ -97,12 +120,11 @@ export function TeamMemberList({
         username: teacher.username,
         avatar: teacher.avatar,
         joinedAt: teacher.joinedAt,
-        userType: 'teacher'
+        userType: 'teacher',
       })
     }
   })
 
-  // 添加普通学生成员
   team.students?.forEach(student => {
     const isAdmin = team.admins?.some(a => a.id === student.id && (a.adminType === 'student' || a.type === 'student'))
     const isOwner = student.id === ownerId && (team.owner?.type === 'student' || team.ownerType === 'student')
@@ -113,32 +135,21 @@ export function TeamMemberList({
         username: student.username,
         avatar: student.avatar,
         joinedAt: student.joinedAt,
-        userType: (student.type || (team.scope === 'personal' ? 'user' : 'student')) as UserType
+        userType: (student.type || (team.scope === 'personal' ? 'user' : 'student')) as UserType,
       })
     }
   })
 
-  // 渲染单个成员行（无角色标签）
-  const renderMemberRow = (
-    member: { id: string; name: string; username?: string; avatar?: string | null; userType: UserType; joinedAt?: string | null },
-    role: 'owner' | 'admin' | 'member'
-  ) => {
+  const totalPeople = (owner ? 1 : 0) + admins.length + members.length
+
+  const renderMemberRow = (member: MemberView, role: 'owner' | 'admin' | 'member') => {
     const canRemoveThis = canRemove && role !== 'owner' && (permission.isOwner || role === 'member')
-    const canSetAdminThis = canSetAdmin && (permission.isOwner || role === 'member')
+    const canSetAdminThis = canSetAdmin && role === 'member'
     const canTransferThis = canTransfer && role !== 'owner'
+    const joinedAt = formatDate(member.joinedAt)
 
     return (
-      <div
-        key={`${member.userType}-${member.id}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0.75rem 1rem',
-          borderBottom: '1px solid var(--border)',
-          gap: '0.75rem'
-        }}
-      >
-        {/* 头像 */}
+      <div key={`${member.userType}-${member.id}`} className={styles.memberRow}>
         <UserIdentityLink
           id={member.id}
           userType={member.userType}
@@ -148,61 +159,31 @@ export function TeamMemberList({
           avatarOnly
           size={40}
         />
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className={styles.memberMain}>
+          <div className={styles.memberNameLine}>
             <UserIdentityLink
               id={member.id}
               userType={member.userType}
               name={member.name}
               username={member.username}
               showUsername
-              style={{ color: 'var(--gray-900)' }}
+              style={{ color: 'var(--text-primary)' }}
             />
-            <span
-              style={{
-                padding: '0.125rem 0.375rem',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                background: member.userType === 'teacher' ? 'var(--blue-100)' : member.userType === 'student' ? 'var(--green-100)' : 'var(--gray-100)',
-                color: member.userType === 'teacher' ? 'var(--blue-700)' : member.userType === 'student' ? 'var(--green-700)' : 'var(--gray-700)'
-              }}
-            >
-              {member.userType === 'teacher' ? '教师' : member.userType === 'student' ? '学生' : '用户'}
-            </span>
+            <span className={`${styles.memberTag} ${memberTypeClass(member.userType)}`}>{memberTypeLabel(member.userType)}</span>
+            <span className={styles.roleTag}>{roleIcon(role)}{roleLabel(role)}</span>
           </div>
+          {joinedAt && <div className={styles.memberMeta}>加入于 {joinedAt}</div>}
         </div>
-
-        {/* 操作按钮 */}
-        {role !== 'owner' && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+        {role !== 'owner' && (canTransferThis || canSetAdminThis || canRemoveThis) && (
+          <div className={styles.memberActions}>
             {canTransferThis && onTransferOwnership && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onTransferOwnership(member.id, member.name, member.userType)}
-              >
-                转移所有权
-              </Button>
+              <Button variant="secondary" size="sm" onClick={() => onTransferOwnership(member.id, member.name, member.userType)}>转移所有权</Button>
             )}
-            {canSetAdminThis && role === 'member' && onSetAdmin && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onSetAdmin(member.id, member.name, member.userType)}
-              >
-                设为管理员
-              </Button>
+            {canSetAdminThis && onSetAdmin && (
+              <Button variant="secondary" size="sm" onClick={() => onSetAdmin(member.id, member.name, member.userType)}>设为管理员</Button>
             )}
             {canRemoveThis && onRemoveMember && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onRemoveMember(member.id, member.name, member.userType)}
-                style={{ color: 'var(--danger)' }}
-              >
-                移除
-              </Button>
+              <Button variant="outline" size="sm" onClick={() => onRemoveMember(member.id, member.name, member.userType)} style={{ color: 'var(--danger)' }}>移除</Button>
             )}
           </div>
         )}
@@ -210,47 +191,66 @@ export function TeamMemberList({
     )
   }
 
+  const renderSection = (title: string, count: number, rows: React.ReactNode) => (
+    <section className={styles.memberSection}>
+      <div className={styles.memberSectionHeader}>
+        <h3>{title}</h3>
+        <span>{count}</span>
+      </div>
+      <div className={styles.memberTable}>{rows}</div>
+    </section>
+  )
+
   return (
-    <div>
-      {/* 头部：标题和管理按钮 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+    <div className={styles.memberPanel}>
+      <div className={styles.memberToolbar}>
+        <div>
+          <h2 className={styles.memberTitle}>团队成员</h2>
+          <div className={styles.memberSummary}>
+            <span>共 {totalPeople} 人</span>
+            <span>所有者 {owner ? 1 : 0}</span>
+            <span>管理员 {admins.length}</span>
+            <span>成员 {members.length}</span>
+            {permission.canManageRequests && <span>待处理 {joinRequests.length}</span>}
+          </div>
+        </div>
         {permission.canInvite && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className={styles.memberToolbarActions}>
             {onViewInvites && (
-              <Button variant="secondary" size="sm" onClick={onViewInvites}>
-                邀请列表{pendingInviteCount !== undefined && pendingInviteCount > 0 && ` (${pendingInviteCount})`}
+              <Button variant="secondary" size="sm" icon={<Mail size={15} />} onClick={onViewInvites}>
+                邀请列表{pendingInviteCount !== undefined && pendingInviteCount > 0 ? ` (${pendingInviteCount})` : ''}
               </Button>
             )}
             {onInviteMembers && (
-              <Button variant="primary" size="sm" onClick={onInviteMembers}>
-                邀请成员
-              </Button>
+              <Button variant="primary" size="sm" icon={<UserPlus size={15} />} onClick={onInviteMembers}>邀请成员</Button>
             )}
           </div>
         )}
       </div>
 
-      {/* 待处理申请 */}
-      {joinRequests && joinRequests.length > 0 && permission.canManageRequests && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '0.875rem', color: 'var(--gray-500)', marginBottom: '0.5rem' }}>
-            待处理申请 ({joinRequests.length})
-          </h3>
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
+      {joinRequests.length > 0 && permission.canManageRequests && (
+        <section className={styles.requestPanel}>
+          <div className={styles.requestHeader}>
+            <div>
+              <h3>待处理申请</h3>
+              <p>审核想加入团队的用户，处理后会自动更新成员列表。</p>
+            </div>
+            <span>{joinRequests.length}</span>
+          </div>
+          <div className={styles.requestList}>
             {joinRequests.map(request => (
-              <div
-                key={request.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.75rem',
-                  background: 'var(--warning-light)',
-                  borderRadius: '6px'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div key={request.id} className={styles.requestRow}>
+                <UserIdentityLink
+                  id={request.user.id}
+                  userType={request.user.userType}
+                  name={request.user.name}
+                  username={request.user.username}
+                  avatar={request.user.avatar}
+                  avatarOnly
+                  size={38}
+                />
+                <div className={styles.requestMain}>
+                  <div className={styles.memberNameLine}>
                     <UserIdentityLink
                       id={request.user.id}
                       userType={request.user.userType}
@@ -258,106 +258,26 @@ export function TeamMemberList({
                       username={request.user.username}
                       showUsername
                     />
-                    <span style={{
-                      fontSize: '0.75rem',
-                      padding: '0.125rem 0.375rem',
-                      borderRadius: '4px',
-                      background: request.user.userType === 'teacher' ? 'var(--blue-100)' : request.user.userType === 'student' ? 'var(--green-100)' : 'var(--gray-100)',
-                      color: request.user.userType === 'teacher' ? 'var(--blue-700)' : request.user.userType === 'student' ? 'var(--green-700)' : 'var(--gray-700)'
-                    }}>
-                      {request.user.userType === 'teacher' ? '教师' : request.user.userType === 'student' ? '学生' : '用户'}
-                    </span>
+                    <span className={`${styles.memberTag} ${memberTypeClass(request.user.userType)}`}>{memberTypeLabel(request.user.userType)}</span>
                   </div>
-                  {request.message && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--gray-600)', marginTop: '0.25rem' }}>
-                      留言: {request.message}
-                    </div>
-                  )}
+                  <div className={styles.memberMeta}>{request.message ? `留言：${request.message}` : '没有留言'}</div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => onApproveRequest?.(request.id)}
-                  >
-                    同意
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onRejectRequest?.(request.id)}
-                  >
-                    拒绝
-                  </Button>
+                <div className={styles.requestActions}>
+                  <Button variant="primary" size="sm" icon={<Check size={15} />} onClick={() => onApproveRequest?.(request.id)}>同意</Button>
+                  <Button variant="outline" size="sm" icon={<X size={15} />} onClick={() => onRejectRequest?.(request.id)}>拒绝</Button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* 所有者分组 */}
-      {owner && (
-        <div style={{ marginBottom: '1rem' }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--gray-700)' }}>
-            所有者 (1)
-          </h3>
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              overflow: 'hidden'
-            }}
-          >
-            {renderMemberRow(owner, 'owner')}
-          </div>
-        </div>
-      )}
+      {owner && renderSection('所有者', 1, renderMemberRow(owner, 'owner'))}
+      {admins.length > 0 && renderSection('管理员', admins.length, admins.map(admin => renderMemberRow(admin, 'admin')))}
+      {members.length > 0 && renderSection('成员', members.length, members.map(member => renderMemberRow(member, 'member')))}
 
-      {/* 管理员分组 */}
-      {admins.length > 0 && (
-        <div style={{ marginBottom: '1rem' }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--gray-700)' }}>
-            管理员 ({admins.length})
-          </h3>
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              overflow: 'hidden'
-            }}
-          >
-            {admins.map(admin => renderMemberRow(admin, 'admin'))}
-          </div>
-        </div>
-      )}
-
-      {/* 成员分组 */}
-      {members.length > 0 && (
-        <div style={{ marginBottom: '1rem' }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--gray-700)' }}>
-            成员 ({members.length})
-          </h3>
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              overflow: 'hidden'
-            }}
-          >
-            {members.map(member => renderMemberRow(member, 'member'))}
-          </div>
-        </div>
-      )}
-
-      {/* 无成员提示 */}
       {!owner && admins.length === 0 && members.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-          暂无成员
-        </div>
+        <div className={styles.memberEmpty}>暂无成员</div>
       )}
     </div>
   )
