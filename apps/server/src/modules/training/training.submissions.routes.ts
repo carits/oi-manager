@@ -363,6 +363,8 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
       : (training.status === 'ongoing' || now >= training.startTime.getTime() && now <= training.endTime.getTime()) ? 'ongoing'
       : 'upcoming'
     const hideOiResults = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
+    // Contest/training remote IDs are operational identifiers. Only managers may see them.
+    const hideRemoteSubmissionId = !isAdminUser
 
     const paginated = paginatedResponse(
       submissions.map(s => ({
@@ -380,7 +382,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
         timeUsed: hideOiResults ? null : s.timeUsed,
         memoryUsed: hideOiResults ? null : s.memoryUsed,
         codeLength: s.codeLength,
-        ojRemoteId: hideOiResults ? null : s.ojRemoteId,
+        ojRemoteId: hideRemoteSubmissionId ? null : s.ojRemoteId,
         createdAt: s.createdAt.toISOString(),
       })),
       total,
@@ -473,6 +475,8 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
       : (training.status === 'ongoing' || nowDetail >= training.startTime.getTime() && nowDetail <= training.endTime.getTime()) ? 'ongoing'
       : 'upcoming'
     const hideOiDetail = training.format === 'oi' && detailStatus !== 'finished' && !isAdminUser
+    // Contest/training remote IDs are operational identifiers. Only managers may see them.
+    const hideRemoteSubmissionId = !isAdminUser
 
     // 返回格式与 SubmissionDetailModal 一致
     res.json({
@@ -492,7 +496,8 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
         language: submission.language,
         code: showCode ? submission.code : null,
         submitMethod: submission.submitMethod || 'code',
-        ojRemoteId: hideOiDetail ? null : submission.ojRemoteId,
+        ojRemoteId: hideRemoteSubmissionId ? null : submission.ojRemoteId,
+        hideRemoteId: hideRemoteSubmissionId,
         ojAccountUsername: null,
         submittedAt: submission.createdAt.toISOString(),
         errorMessage: null,

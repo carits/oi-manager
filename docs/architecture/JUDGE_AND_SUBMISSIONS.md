@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-07-30
+last_verified: 2026-08-10
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -13,6 +13,12 @@ source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 - 外部 OJ 提交：通过平台账号或用户绑定提交，并由同步/轮询逻辑更新结果。
 - 训练提交：额外关联 `trainingId`，按训练、作业或比赛权限控制可见性。
 - 全局提交：题库上下文中的个人提交，按题目所有权和角色决定可见性。
+
+## Contest Submission Visibility
+
+Training and contest submissions may store an operational remote submission ID in Submission.ojRemoteId. For training or contest APIs, this identifier is visible only to users who can manage the training or contest. Non-manager participants receive ojRemoteId: null and hideRemoteId: true in the submission detail response, and list responses also return ojRemoteId: null.
+
+This rule applies to all contest formats and statuses. It is separate from OI in-contest result hiding: OI may additionally hide score, result, time, memory, cases, and subtasks, while every contest format hides the remote ID from non-managers.
 
 ## WebSocket 连接
 

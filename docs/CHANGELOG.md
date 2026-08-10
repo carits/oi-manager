@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-07
+last_verified: 2026-08-10
 source_of_truth: Git history
 ---
 
@@ -9,6 +9,14 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在
 [历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-10
+
+### Contest remote submission ID privacy
+
+- Training and contest submission list/detail APIs now hide `ojRemoteId` from non-manager participants for every contest format and status.
+- `SubmissionDetailModal` respects the backend `hideRemoteId` flag, so participants do not see a remote submission ID or a misleading waiting-for-assignment state.
+- Verification: server build, web build, docs check, and Git diff check.
 
 ## 2026-08-07
 

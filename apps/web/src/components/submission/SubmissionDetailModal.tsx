@@ -26,6 +26,7 @@ interface SubmissionDetail {
   code: string | null
   submitMethod: string
   ojRemoteId: string | null
+  hideRemoteId?: boolean
   ojAccountUsername: string | null
   submittedAt: string
   errorMessage: string | null
@@ -402,7 +403,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>提交时间：</span>
               <span style={{ fontWeight: 500 }}>{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
             </div>
-            {!detail.hidden && (
+            {!detail.hidden && !detail.hideRemoteId && (
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
