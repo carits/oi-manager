@@ -36,6 +36,23 @@ const statusMeta = {
   finished: { label: '已结束', variant: 'neutral' as const },
 }
 
+const STATUS_ORDER: Record<Exclude<StatusFilter, 'all'>, number> = { ongoing: 0, upcoming: 1, finished: 2 }
+
+function titleLevel(title: string) {
+  const match = title.match(/\d+/)
+  if (!match) return 0
+  const level = Number(match[0])
+  return Number.isFinite(level) ? level : 0
+}
+
+function compareContests(a: ContestItem, b: ContestItem) {
+  const statusDiff = STATUS_ORDER[runtimeStatus(a)] - STATUS_ORDER[runtimeStatus(b)]
+  if (statusDiff !== 0) return statusDiff
+  const levelDiff = titleLevel(b.title) - titleLevel(a.title)
+  if (levelDiff !== 0) return levelDiff
+  return new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+}
+
 const formatTime = (value: string) => new Date(value).toLocaleString('zh-CN', {
   month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
 })
@@ -50,7 +67,7 @@ export default function PersonalContestsPage() {
   const contests = resource.data || []
   const visible = contests
     .filter(item => activeStatus === 'all' || runtimeStatus(item) === activeStatus)
-    .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime())
+    .sort(compareContests)
 
   const setStatus = (status: StatusFilter) => {
     const params = new URLSearchParams(searchParams.toString())

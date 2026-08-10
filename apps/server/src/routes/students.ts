@@ -8,6 +8,7 @@ import { generateTempPassword, hashPassword } from '../utils/password'
 import logger from '../lib/logger'
 import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
+import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../modules/training/training.helpers'
 
 export const studentRouter = Router()
 
@@ -226,14 +227,14 @@ studentRouter.get('/my-homeworks', authenticate, authorize('student'), asyncHand
       description: t.description,
       startTime: t.startTime,
       endTime: t.endTime,
-      status: t.status,
+      status: getComputedTrainingStatus(t),
       format: t.format,
       teamId: t.teamId,
       problemCount: t._count.TrainingProblem,
       createdAt: t.createdAt,
     }))
 
-    res.json({ success: true, data })
+    res.json({ success: true, data: sortTrainingListForDisplay(data) })
 }, '获取作业列表失败'))
 
 /**
@@ -287,7 +288,7 @@ studentRouter.get('/my-contests', authenticate, authorize('student'), asyncHandl
       description: t.description,
       startTime: t.startTime,
       endTime: t.endTime,
-      status: t.status,
+      status: getComputedTrainingStatus(t),
       format: t.format,
       teamId: t.teamId,
       schoolId: t.schoolId,
@@ -301,7 +302,7 @@ studentRouter.get('/my-contests', authenticate, authorize('student'), asyncHandl
       ...schoolTrainings.map(t => formatTraining(t, 'school')),
     ]
 
-    res.json({ success: true, data })
+    res.json({ success: true, data: sortTrainingListForDisplay(data) })
 }, '获取比赛列表失败'))
 
 // 获取学生详情 - 支持通过 id 或 userId 查询

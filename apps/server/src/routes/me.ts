@@ -7,6 +7,7 @@ import {
 } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { prisma } from '../prisma'
+import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../modules/training/training.helpers'
 
 export const meRouter = Router()
 
@@ -17,7 +18,7 @@ function formatTraining(training: any, source: 'team' | 'school') {
     description: training.description,
     startTime: training.startTime,
     endTime: training.endTime,
-    status: training.status,
+    status: getComputedTrainingStatus(training),
     format: training.format,
     teamId: training.teamId,
     schoolId: training.schoolId,
@@ -79,12 +80,14 @@ meRouter.get('/contests', authenticate, asyncHandler(async (req, res) => {
       : [],
   ])
 
+  const data = [
+    ...teamTrainings.map(training => formatTraining(training, 'team')),
+    ...schoolTrainings.map(training => formatTraining(training, 'school')),
+  ]
+
   res.json({
     success: true,
-    data: [
-      ...teamTrainings.map(training => formatTraining(training, 'team')),
-      ...schoolTrainings.map(training => formatTraining(training, 'school')),
-    ],
+    data: sortTrainingListForDisplay(data),
   })
 }))
 

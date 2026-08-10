@@ -14,7 +14,7 @@ source_of_truth: Git history
 
 ### Contest list ordering
 
-- Team and school contest/training list APIs now sort display data by current status first: ongoing, upcoming, then finished.
+- Team, school, student aggregate, personal aggregate, and card-style contest lists now sort display data by current status first: ongoing, upcoming, then finished.
 - Items with the same status are ordered by the numeric level embedded in existing titles, then by start time and creation/id fallbacks, keeping legacy data stable until a dedicated level field exists.
 
 ### Contest remote submission ID privacy
