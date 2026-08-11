@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, Edit3, GraduationCap, UsersRound } from 'lucide-react'
+import { Bell, Edit3, UsersRound } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
@@ -35,32 +35,6 @@ interface HomeTabProps {
   onEditSchool?: () => void
 }
 
-const systemNames: Record<string, string> = {
-  '6-3-3': '六三三学制',
-  '5-4-3': '五四三学制',
-  '6-3': '六三学制',
-  '5-4': '五四学制',
-  custom: '自定义学制'
-}
-
-function educationDetail(school: CampusSchool) {
-  const presets: Record<string, [number, number, number]> = {
-    '6-3-3': [6, 3, 3],
-    '5-4-3': [5, 4, 3],
-    '6-3': [6, 3, 0],
-    '5-4': [5, 4, 0]
-  }
-  const code = school.educationSystem || '6-3-3'
-  const years = code === 'custom'
-    ? [school.educationSystemDetail?.primaryYears || 0, school.educationSystemDetail?.middleYears || 0, school.educationSystemDetail?.highYears || 0]
-    : presets[code] || presets['6-3-3']
-
-  return [['小学', years[0]], ['初中', years[1]], ['高中', years[2]]]
-    .filter(([, value]) => value)
-    .map(([stage, value]) => `${stage} ${value} 年`)
-    .join(' · ')
-}
-
 export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool }: HomeTabProps) {
   const toast = useToast()
   const [editingAnnouncement, setEditingAnnouncement] = useState(false)
@@ -83,7 +57,6 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
   }
 
   const schoolType = [school.schoolNature, school.schoolType].filter(Boolean).join(' · ')
-  const educationName = systemNames[school.educationSystem || '6-3-3'] || '学制待设置'
 
   return (
     <div className={styles.page}>
@@ -98,7 +71,6 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
             <div className={styles.meta}>
               <span>{school.region?.replaceAll('/', ' · ') || '地区待设置'}</span>
               <span>{schoolType || '学校类型待设置'}</span>
-              <span className={styles.educationBadge}>{educationName}</span>
             </div>
           </div>
         </div>
@@ -140,10 +112,8 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
 
         <aside className={styles.sideColumn}>
           <section className={styles.section}>
-            <div className={styles.sectionTitle}><GraduationCap size={18} /><h2>学制与状态</h2></div>
+            <div className={styles.sectionTitle}><h2>学校状态</h2></div>
             <dl className={styles.infoList}>
-              <div><dt>学制</dt><dd>{educationName}</dd></div>
-              <div><dt>阶段</dt><dd>{educationDetail(school)}</dd></div>
               <div><dt>状态</dt><dd><span className={styles.status}>{school.status === 'inactive' ? '停用' : '正常'}</span></dd></div>
             </dl>
           </section>
