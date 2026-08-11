@@ -5,7 +5,7 @@ last_verified: 2026-08-10
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
-# Judge 与提交
+# 评测机与提交
 
 ## 提交类型
 
@@ -14,11 +14,11 @@ source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 - 训练提交：额外关联 `trainingId`，按训练、作业或比赛权限控制可见性。
 - 全局提交：题库上下文中的个人提交，按题目所有权和角色决定可见性。
 
-## Contest Submission Visibility
+## 比赛远程提交 ID 可见性
 
-Training and contest submissions may store an operational remote submission ID in Submission.ojRemoteId. For training or contest APIs, this identifier is visible only to users who can manage the training or contest. Non-manager participants receive ojRemoteId: null and hideRemoteId: true in the submission detail response, and list responses also return ojRemoteId: null.
+训练和比赛提交可能会在 `Submission.ojRemoteId` 保存运行用的远程提交 ID。训练或比赛 API 只向拥有对应管理权限的用户返回该标识。非管理参与者在提交详情中会收到 `ojRemoteId: null`、`hideRemoteId: true`，列表接口同样返回 `ojRemoteId: null`。
 
-This rule applies to all contest formats and statuses. It is separate from OI in-contest result hiding: OI may additionally hide score, result, time, memory, cases, and subtasks, while every contest format hides the remote ID from non-managers.
+此规则适用于所有比赛赛制和状态，并独立于 OI 赛中结果隐藏。OI 赛中还可能隐藏分数、结果、时间、内存、测试点和子任务；而每种比赛赛制都会向非管理者隐藏远程提交 ID。
 
 ## WebSocket 连接
 
@@ -73,4 +73,3 @@ Docker 服务需要 cgroup/privileged 能力才能可靠检测内存限制。测
 
 重点日志事件包括认证失败、注册、任务派发、心跳超时、任务恢复、编译失败和结果写入。
 日志可以记录 `judgeId/submissionId`，不得记录 Judge Token 或用户源码全文。
-

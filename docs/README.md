@@ -5,7 +5,7 @@ last_verified: 2026-08-07
 source_of_truth: repository structure and active documentation
 ---
 
-# OI Manager 文档
+# OI Manager 项目文档
 
 本目录是 OI Manager 的唯一正式文档入口。项目目前处于开发阶段：开发服务使用
 `3000/3002`，生产配置仅作为模板保留，尚未在当前服务器启用。
@@ -14,7 +14,7 @@ source_of_truth: repository structure and active documentation
 
 ### 首次开发
 
-1. [Codex handoff guide](guide/CODEX_ONBOARDING.md)
+1. [Codex 项目接手指南](guide/CODEX_ONBOARDING.md)
 2. [项目概览](guide/PROJECT_OVERVIEW.md)
 3. [开发环境启动](guide/DEVELOPMENT_SETUP.md)
 4. [项目导览](guide/PROJECT_TOUR.md)
@@ -25,7 +25,7 @@ source_of_truth: repository structure and active documentation
 1. [系统架构](architecture/SYSTEM_OVERVIEW.md)
 2. [认证与权限](architecture/AUTHORIZATION.md)
 3. [数据模型](architecture/DATA_MODEL.md)
-4. [Judge 与提交](architecture/JUDGE_AND_SUBMISSIONS.md)
+4. [评测机与提交](architecture/JUDGE_AND_SUBMISSIONS.md)
 5. [业务模块](architecture/modules/ORGANIZATION.md)
 
 ### 测试
@@ -46,7 +46,7 @@ source_of_truth: repository structure and active documentation
 ### 查阅接口
 
 - [页面路由](reference/WEB_ROUTES.md)
-- [数据库 Schema](reference/DATABASE_SCHEMA.md)
+- [数据库结构](reference/DATABASE_SCHEMA.md)
 - [字段契约](reference/FIELD_CONTRACTS.md)
 - [环境变量](reference/ENVIRONMENT_VARIABLES.md)
 - [HTTP API](reference/api/README.md)
@@ -89,4 +89,3 @@ source_of_truth: repository structure and active documentation
 
 完整门禁和完成清单见[开发工作流](development/WORKFLOW.md)，项目级执行约束见根目录
 `AGENTS.md`。
-

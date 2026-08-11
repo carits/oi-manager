@@ -12,43 +12,48 @@ source_of_truth: Git history
 
 ## 2026-08-11
 
-### Team module UI redesign completion
+### 文档中文化规范
 
-- Completed the team detail overview, announcement, create/edit, and transfer-owner dialogs in the compact management workspace style.
-- Team overview now groups avatar, identity, owner/scope/member metadata, and privileged actions consistently across teacher, student, and personal workspaces.
-- Personal teams continue to prefer username-only owner display and avoid exposing school/private identity fields in the team header.
-- Verification: `pnpm --filter web build`, documentation checks, preview build, and deployment health checks.
+- 当前生效文档中的说明性文字统一使用中文；命令、路径、环境变量、协议、代码标识符和第三方产品名称保留原写法。
+- 将 Codex 项目接手指南、评测机提交可见性说明和文档首页中的英文说明改为中文。
+
+### 团队模块 UI 重设计完成
+
+- 以紧凑管理工作区风格完成团队详情概览、公告、创建/编辑和转移所有权弹窗。
+- 团队概览在教师、学生和个人工作区中统一组织头像、身份、所有者/范围/成员信息和权限操作。
+- 个人团队继续优先显示用户名所有者，不在团队头部暴露学校和其他私密身份字段。
+- 已验证：`pnpm --filter web build`、文档检查、预览构建和部署健康检查。
 
 ## 2026-08-10
 
-### Team member management UI refresh
+### 团队成员管理界面更新
 
-- Refined team detail tabs, member management layout, join request review rows, and invite dialogs into a denser management-style UI.
-- Invitation and pending invite modals now use wider structured layouts with clearer search, selection, status, and footer actions.
+- 将团队详情标签、成员管理布局、加入申请审核行和邀请弹窗整理为更紧凑的管理界面。
+- 邀请与待处理邀请弹窗改为更宽的结构化布局，明确搜索、选择、状态和底部操作。
 
-### Homework ranking visibility
+### 作业排名可见性
 
-- Homework detail pages hide the ranking tab for non-manager users, including the initial loading tab skeleton.
-- Direct homework ranking API access now returns 403 unless the viewer can manage the homework.
+- 作业详情对非管理者隐藏排名标签，初始加载标签骨架也保持一致。
+- 直接访问作业排名 API 时，非管理者会收到 `403`。
 
-### Contest list ordering
+### 比赛列表排序
 
-- Team, school, student aggregate, personal aggregate, and card-style contest lists now sort display data by current status first: ongoing, upcoming, then finished.
-- Items with the same status are ordered by the numeric level embedded in existing titles, then by start time and creation/id fallbacks, keeping legacy data stable until a dedicated level field exists.
+- 团队、学校、学生汇总、个人汇总和卡片式比赛列表现在按状态排序：进行中、未开始、已结束。
+- 相同状态按既有标题中的数字级别、开始时间和创建时间/ID 兜底排序；在专用级别字段出现前保持旧数据稳定。
 
-### Contest remote submission ID privacy
+### 比赛远程提交 ID 隐私
 
-- Training and contest submission list/detail APIs now hide `ojRemoteId` from non-manager participants for every contest format and status.
-- `SubmissionDetailModal` respects the backend `hideRemoteId` flag, so participants do not see a remote submission ID or a misleading waiting-for-assignment state.
-- Verification: server build, web build, docs check, and Git diff check.
+- 训练和比赛的提交列表/详情 API 对每种赛制和状态都向非管理参与者隐藏 `ojRemoteId`。
+- `SubmissionDetailModal` 遵守后端 `hideRemoteId` 标志，参与者不会看到远程提交 ID 或误导性的“等待分配”状态。
+- 已验证：Server 构建、Web 构建、文档检查和 Git 差异检查。
 
 ## 2026-08-07
 
-### Codex onboarding guide
+### Codex 项目接手指南
 
-- Added docs/guide/CODEX_ONBOARDING.md with SSH access details, the remote working tree, runtime ports, test flow, deployment and push flow, documentation gate, safety boundaries, and recent high-risk modules for new Codex sessions.
-- Linked the guide from the documentation home page so future agents can find it from the formal docs entry point.
-- This is a documentation-only update; verification is pnpm docs:check plus Git diff checks before pushing to GitHub.
+- 新增 `docs/guide/CODEX_ONBOARDING.md`，记录 SSH 访问、远端工作树、运行端口、测试/部署/推送流程、文档门禁、安全边界和近期高风险模块，供新 Codex 会话使用。
+- 已从文档首页链接该指南，后续代理可从正式文档入口找到它。
+- 此项为仅文档更新，推送前已运行 `pnpm docs:check` 与 Git 差异检查。
 
 ## 2026-08-02
 
@@ -198,4 +203,3 @@ source_of_truth: Git history
 - 维护迁移接口增加超级管理员权限和默认关闭开关。
 - Judge WebSocket 增加强制 Token、双向心跳刷新和任务原子领取。
 - 修复登录构建、角色别名、API 错误解析和开发构建缓存冲突。
-
