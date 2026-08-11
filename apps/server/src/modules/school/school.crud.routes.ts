@@ -428,7 +428,7 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
       // 学校负责人只能编辑自己学校的基本信息
       const teacher = await prisma.teacher.findUnique({ where: { id: userId } })
       if (!teacher) {
-        return res.status(400).json({ success: false, message: '教师不存在' })
+        return res.status(403).json({ success: false, message: '只有本校负责人可以编辑学校信息' })
       }
 
       if (existing.currentPrincipalTeacherId !== teacher.id) {
