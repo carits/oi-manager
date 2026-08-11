@@ -267,13 +267,20 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   return (
     <div className={styles.page}>
       <div className={styles.headerArea}>
-        <PageHeader
-          title={training.title}
-          description={`${tl} · ${fmtLabel} · ${new Date(training.startTime).toLocaleString('zh-CN')} 至 ${new Date(training.endTime).toLocaleString('zh-CN')}`}
-          breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
-          actions={<><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</>}
-        />
-        <div className={styles.metaRow}>{training.sourceTrainingId && <StatusBadge variant="info">补题练习</StatusBadge>}<StatusBadge variant="neutral">{fmtLabel}</StatusBadge><StatusBadge variant={training.status === 'ongoing' ? 'success' : training.status === 'upcoming' ? 'info' : 'neutral'}>{training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}</StatusBadge></div>
+        <div className={styles.hero}>
+          <div className={styles.eyebrow}><span>{tl}工作台</span>{training.sourceTrainingId && <StatusBadge variant="info">补题练习</StatusBadge>}<StatusBadge variant={training.status === 'ongoing' ? 'success' : training.status === 'upcoming' ? 'info' : 'neutral'}>{training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}</StatusBadge></div>
+          <PageHeader
+            title={training.title}
+            breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
+            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
+          />
+          <div className={styles.stats}>
+            <div className={styles.stat}><span className={styles.statLabel}>赛制</span><span className={styles.statValue}>{fmtLabel}</span></div>
+            <div className={styles.stat}><span className={styles.statLabel}>题目</span><span className={styles.statValue}>{training.problemCount} 题</span></div>
+            <div className={styles.stat}><span className={styles.statLabel}>比赛状态</span><span className={`${styles.statValue} ${training.status === 'ongoing' ? styles.statValueLive : ''}`}>{training.status === 'upcoming' ? '等待开始' : training.status === 'ongoing' ? '正在进行' : '比赛结束'}</span></div>
+            <div className={styles.stat}><span className={styles.statLabel}>时间范围</span><span className={styles.statValue}>{new Date(training.startTime).toLocaleString('zh-CN')} 至 {new Date(training.endTime).toLocaleString('zh-CN')}</span></div>
+          </div>
+        </div>
       </div>
 
       {/* Announcement */}

@@ -1,0 +1,38 @@
+.surface { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.scroll { width: 100%; overflow-x: auto; }
+.table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: var(--text-sm); }
+.table th { padding: 12px 16px; color: var(--text-secondary); background: var(--bg-muted); border-bottom: 1px solid var(--border); text-align: left; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
+.table td { padding: 14px 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover td { background: color-mix(in srgb, var(--info-light) 34%, transparent); }
+.center { text-align: center !important; }
+.muted { color: var(--text-muted) !important; }
+.numeric { font-variant-numeric: tabular-nums; }
+.empty { padding: 52px 24px !important; color: var(--text-muted) !important; text-align: center; }
+.problemCode { display: inline-grid; min-width: 30px; min-height: 30px; place-items: center; padding: 0 7px; color: var(--primary); background: var(--info-light); border-radius: var(--radius-sm); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; }
+.titleButton { padding: 0; color: var(--text-primary); border: 0; background: transparent; cursor: pointer; font: inherit; font-weight: 700; text-align: left; }
+.titleButton:hover { color: var(--primary); }
+.source { display: inline-flex; max-width: 190px; overflow: hidden; color: var(--text-secondary); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.sourceLink { color: var(--primary); text-decoration: none; }
+.sourceLink:hover { text-decoration: underline; }
+.result { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
+.filterBar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg-muted) 54%, transparent); }
+.filterField { display: grid; gap: 5px; min-width: 112px; }
+.filterField label { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 600; }
+.filterField input, .filterField select { min-height: 34px; padding: 0 9px; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); font: inherit; font-size: var(--text-sm); }
+.filterAction { align-self: end; }
+.pager { display: flex; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-3); border-top: 1px solid var(--border); }
+.rankIntro { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border); }
+.rankSummary { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.summaryItem { display: inline-flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 9px; color: var(--text-secondary); background: var(--bg-muted); border-radius: 999px; font-size: var(--text-xs); }
+.summaryItem strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rankTable { min-width: 760px; }
+.rankRowCurrent td { background: var(--info-light) !important; }
+.rankCell { width: 52px; color: var(--text-secondary) !important; font-weight: 800; }
+.medal1 { color: #b77900 !important; } .medal2 { color: #667085 !important; } .medal3 { color: #a15c23 !important; }
+.scoreFull { color: var(--success-text) !important; background: color-mix(in srgb, var(--success-light) 58%, transparent); font-weight: 700; }
+.scorePartial { color: var(--warning-text) !important; background: color-mix(in srgb, var(--warning-light) 48%, transparent); font-weight: 700; }
+.scoreZero { color: var(--text-muted) !important; }
+.locked { display: grid; justify-items: center; gap: var(--space-2); padding: 72px var(--space-4); color: var(--text-muted); text-align: center; }
+.locked strong { color: var(--text-primary); }
+@media (max-width: 640px) { .filterBar { align-items: stretch; } .filterField { flex: 1 1 42%; } .filterAction { width: 100%; } .filterAction :global(button) { width: 100%; justify-content: center; } .rankIntro { align-items: flex-start; flex-direction: column; } }

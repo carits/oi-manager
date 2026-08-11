@@ -1,131 +1,24 @@
 'use client'
 
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import styles from '../TrainingWorkspace.module.css'
 
-function toExcelColumnName(index: number): string {
-  let result = ''
-  let i = index
-  while (i >= 0) {
-    result = String.fromCharCode(65 + (i % 26)) + result
-    i = Math.floor(i / 26) - 1
-  }
-  return result
-}
+function toExcelColumnName(index: number) { let result = ''; let i = index; while (i >= 0) { result = String.fromCharCode(65 + (i % 26)) + result; i = Math.floor(i / 26) - 1 } return result }
+function scoreClass(score: number, max: number) { if (score >= max) return styles.scoreFull; if (score > 0) return styles.scorePartial; return styles.scoreZero }
+const medalClass = [styles.medal1, styles.medal2, styles.medal3]
 
-function getScoreColor(score: number, max: number): string {
-  const ratio = max > 0 ? score / max : 0
-  if (ratio >= 1) return 'var(--success)'
-  if (ratio >= 0.5) return 'var(--warning)'
-  return 'var(--error)'
-}
-
-const RANK_MEDAL_COLORS = ['#ffd700', '#c0c0c0', '#cd7f32']
-
-interface TrainingRankTableProps {
-  rankingData: any
-  currentUserId?: string
-}
-
+interface TrainingRankTableProps { rankingData: any; currentUserId?: string }
 export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTableProps) {
-  if (!rankingData) {
-    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-400)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
-  }
-
-  if (rankingData.hidden) {
-    return (
-      <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: '0.875rem', marginBottom: '0.75rem' }}>排名暂不可见</div>
-        <div style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>排名尚未公布</div>
-        <div style={{ fontSize: '0.85rem' }}>OI 赛制比赛结束后公布排名</div>
-      </div>
-    )
-  }
-
+  if (!rankingData) return <div className={styles.surface}><div className={styles.locked}><span className="resource-skeleton-line" style={{ width: '8rem' }} aria-label="内容正在准备" /></div></div>
+  if (rankingData.hidden) return <div className={styles.surface}><div className={styles.locked}><strong>排名暂不可见</strong><span>OI 赛制比赛结束后公布排名</span></div></div>
   const isScoreBased = rankingData.format === 'ioi' || rankingData.format === 'oi'
-
-  return (
-    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
-        <thead>
-          <tr style={{ background: 'var(--bg-muted)' }}>
-            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '50px' }}>#</th>
-            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '120px' }}>姓名</th>
-            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '100px' }}>用户名</th>
-            {isScoreBased ? (
-              <>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '70px' }}>总分</th>
-                {rankingData.problems.map((p: any) => (
-                  <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
-                ))}
-              </>
-            ) : (
-              <>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '50px' }}>通过</th>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)', width: '70px' }}>罚时</th>
-                {rankingData.problems.map((p: any) => (
-                  <th key={p.id} style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)' }}>{toExcelColumnName(p.orderIndex ?? 0)}</th>
-                ))}
-              </>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rankingData.ranking.map((row: any, idx: number) => {
-            const isCurrentUser = row.userId === currentUserId
-            return (
-            <tr key={row.userId} style={{ borderBottom: '1px solid #f1f5f9', background: isCurrentUser ? 'var(--info-light)' : 'transparent' }}>
-              <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: idx < 3 ? RANK_MEDAL_COLORS[idx] : 'var(--text-secondary)' }}>
-                {idx + 1}
-              </td>
-              <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}><UserIdentityLink id={row.userId} userType={row.userType} name={row.name} username={row.username} /></td>
-              <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}><UserIdentityLink id={row.userId} userType={row.userType} username={row.username} /></td>
-              {isScoreBased ? (
-                <>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, fontSize: '0.95rem', color: 'var(--success)' }}>{row.totalScore}</td>
-                  {rankingData.problems.map((p: any) => {
-                    const pd = row.problems[p.id]
-                    const maxPts = p.points ?? 100
-                    const score = pd?.score ?? 0
-                    const isFull = score >= maxPts
-                    return (
-                      <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center', fontWeight: isFull ? 600 : 400, color: score > 0 ? getScoreColor(score, maxPts) : 'var(--border-hover)' }}>
-                        {score}
-                      </td>
-                    )
-                  })}
-                </>
-              ) : (
-                <>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 700, color: 'var(--success)' }}>{row.solvedCount}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{row.totalPenalty}</td>
-                  {rankingData.problems.map((p: any) => {
-                    const pd = row.problems[p.id]
-                    return (
-                      <td key={p.id} style={{ padding: '0.5rem 0.5rem', textAlign: 'center' }}>
-                        {pd?.solved ? (
-                          <span style={{ color: 'var(--success)', fontWeight: 600 }}>
-                            +{pd.attempts > 1 ? <span style={{ fontSize: '0.7rem', fontWeight: 400, color: 'var(--text-secondary)' }}>({pd.attempts - 1})</span> : ''}
-                          </span>
-                        ) : pd?.attempts > 0 ? (
-                          <span style={{ color: 'var(--error)', fontWeight: 500 }}>-{pd.attempts}</span>
-                        ) : (
-                          <span style={{ color: 'var(--border-hover)' }}>-</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </>
-              )}
-            </tr>
-          )
-          })}
-          {rankingData.ranking.length === 0 && (
-            <tr>
-              <td colSpan={20} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>暂无排名数据</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  )
+  const ranking = rankingData.ranking || []; const problems = rankingData.problems || []
+  const currentRank = currentUserId ? ranking.findIndex((row: any) => row.userId === currentUserId) + 1 : 0
+  return <div className={styles.surface}>
+    <div className={styles.rankIntro}><div><strong>实时排名</strong></div><div className={styles.rankSummary}><span className={styles.summaryItem}>参赛 <strong>{ranking.length}</strong> 人</span><span className={styles.summaryItem}>题目 <strong>{problems.length}</strong> 题</span>{currentRank > 0 && <span className={styles.summaryItem}>我的名次 <strong>#{currentRank}</strong></span>}</div></div>
+    <div className={styles.scroll}><table className={`${styles.table} ${styles.rankTable}`}><thead><tr><th className={styles.center}>#</th><th>姓名</th><th>用户名</th>{isScoreBased ? <><th className={styles.center}>总分</th>{problems.map((p: any) => <th className={styles.center} key={p.id}>{toExcelColumnName(p.orderIndex ?? 0)}</th>)}</> : <><th className={styles.center}>通过</th><th className={styles.center}>罚时</th>{problems.map((p: any) => <th className={styles.center} key={p.id}>{toExcelColumnName(p.orderIndex ?? 0)}</th>)}</>}</tr></thead><tbody>
+      {ranking.map((row: any, idx: number) => <tr key={row.userId} className={row.userId === currentUserId ? styles.rankRowCurrent : ''}><td className={`${styles.center} ${styles.rankCell} ${idx < 3 ? medalClass[idx] : ''}`}>{idx + 1}</td><td><UserIdentityLink id={row.userId} userType={row.userType} name={row.name} username={row.username} /></td><td className={styles.muted}><UserIdentityLink id={row.userId} userType={row.userType} username={row.username} /></td>{isScoreBased ? <><td className={`${styles.center} ${styles.numeric}`}><strong>{row.totalScore}</strong></td>{problems.map((p: any) => { const score = row.problems[p.id]?.score ?? 0; return <td className={`${styles.center} ${styles.numeric} ${scoreClass(score, p.points ?? 100)}`} key={p.id}>{score}</td> })}</> : <><td className={`${styles.center} ${styles.numeric}`}><strong>{row.solvedCount}</strong></td><td className={`${styles.center} ${styles.numeric} ${styles.muted}`}>{row.totalPenalty}</td>{problems.map((p: any) => { const pd = row.problems[p.id]; return <td className={`${styles.center} ${pd?.solved ? styles.scoreFull : pd?.attempts > 0 ? styles.scorePartial : styles.scoreZero}`} key={p.id}>{pd?.solved ? <>+{pd.attempts > 1 && <small>({pd.attempts - 1})</small>}</> : pd?.attempts > 0 ? `-${pd.attempts}` : '-'}</td> })}</>}</tr>)}
+      {ranking.length === 0 && <tr><td colSpan={Math.max(problems.length + 4, 4)} className={styles.empty}>暂无排名数据</td></tr>}
+    </tbody></table></div>
+  </div>
 }
