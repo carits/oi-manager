@@ -13,6 +13,30 @@ import { asyncHandler } from '../../lib/asyncHandler'
 
 export const schoolCrudRouter = Router()
 
+const EDUCATION_SYSTEMS = ['6-3-3', '5-4-3', '6-3', '5-4', 'custom'] as const
+
+function normalizeEducationSystem(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const normalized = value.replace(/\s+/g, '')
+  if (normalized === '3+3+3' || normalized === '3-3-3') return '6-3-3'
+  if (normalized === '4+4+3' || normalized === '4-4-3') return '5-4-3'
+  return EDUCATION_SYSTEMS.includes(normalized as typeof EDUCATION_SYSTEMS[number]) ? normalized : undefined
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+function maskPhone(phone: string | null) {
+  return phone && phone.length >= 7 ? `${phone.slice(0, 3)} **** ${phone.slice(-4)}` : phone
+}
+
+function maskEmail(email: string | null) {
+  if (!email) return null
+  const [local, domain] = email.split('@')
+  return !domain ? email : `${local.slice(0, 2)}***@${domain}`
+}
+
 // ==================== 获取学校列表 ====================
 // 性能优化：批量加载负责人信息，避免 N+1 查询
 schoolCrudRouter.get('/', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -157,10 +181,14 @@ schoolCrudRouter.get('/:id', authenticate, asyncHandler(async (req: AuthRequest,
 
         // 转换字段名以符合前端契约
     const { _count, Teacher_Teacher_schoolIdToSchool, ...schoolRest } = school
+    const canViewContact = role === 'super_admin' || role === 'platform_admin' || school.currentPrincipalTeacherId === req.user!.userId
     res.json({
       success: true,
       data: {
         ...schoolRest,
+        contactPhone: canViewContact ? school.contactPhone : maskPhone(school.contactPhone),
+        contactEmail: canViewContact ? school.contactEmail : maskEmail(school.contactEmail),
+        contactMasked: !canViewContact,
         _count: {
           teams: _count.Team,
           teachers: _count.Teacher_Teacher_schoolIdToSchool,
@@ -246,9 +274,9 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
       } else if (normalized === '443' || normalizedEducationSystem === '4+4+3' || normalizedEducationSystem === '4-4-3') {
         normalizedEducationSystem = '5-4-3'
       }
-      const validEducationSystems = ['6-3-3', '5-4-3']
+      const validEducationSystems = ['6-3-3', '5-4-3', '6-3', '5-4']
       if (!validEducationSystems.includes(normalizedEducationSystem)) {
-        return res.status(400).json({ success: false, message: '无效的学制，请选择 6-3-3 或 5-4-3' })
+        return res.status(400).json({ success: false, message: '无效的学制' })
       }
     }
 
@@ -326,7 +354,7 @@ schoolCrudRouter.post('/', authenticate, asyncHandler(async (req: AuthRequest, r
 // ==================== 更新学校 ====================
 schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params
-    const { name, announcement, region, schoolType, educationSystem, contactPerson, contactPhone, contactEmail, status, currentPrincipalTeacherId } = req.body
+    const { name, shortName, description, announcement, region, schoolType, schoolNature, educationSystem, educationSystemDetail, informaticsEnabled, informaticsStages, informaticsContests, informaticsTracks, contactPerson, contactPhone, contactEmail, status, currentPrincipalTeacherId } = req.body
     const userRole = req.user!.role
     const userId = req.user!.userId
 
@@ -337,22 +365,20 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
     }
 
     // 验证和规范化学制
-    let normalizedEducationSystem = educationSystem
+    let normalizedEducationSystem = normalizeEducationSystem(educationSystem)
     if (educationSystem && educationSystem !== '') {
-      // 移除所有空格
-      normalizedEducationSystem = educationSystem.replace(/\s+/g, '')
-
-      // 转换常见格式
-      if (normalizedEducationSystem === '3+3+3' || normalizedEducationSystem === '3-3-3') {
-        normalizedEducationSystem = '6-3-3'
-      } else if (normalizedEducationSystem === '4+4+3' || normalizedEducationSystem === '4-4-3') {
-        normalizedEducationSystem = '5-4-3'
+      if (!normalizedEducationSystem) {
+        return res.status(400).json({ success: false, message: '无效的学制' })
       }
-
-      const validEducationSystems = ['6-3-3', '5-4-3']
-      if (!validEducationSystems.includes(normalizedEducationSystem)) {
-        return res.status(400).json({ success: false, message: '无效的学制，请选择 6-3-3 或 5-4-3' })
+    }
+    if (normalizedEducationSystem === 'custom') {
+      const detail = educationSystemDetail as { primaryYears?: unknown; middleYears?: unknown; highYears?: unknown } | null
+      if (!detail || ![detail.primaryYears, detail.middleYears, detail.highYears].every(years => Number.isInteger(years) && Number(years) >= 0 && Number(years) <= 9) || Number(detail.primaryYears) + Number(detail.middleYears) + Number(detail.highYears) < 1) {
+        return res.status(400).json({ success: false, message: '请填写有效的自定义学制年数' })
       }
+    }
+    if ([informaticsStages, informaticsContests, informaticsTracks].some(value => value !== undefined && !isStringArray(value))) {
+      return res.status(400).json({ success: false, message: '培养配置格式无效' })
     }
 
     const existing = await prisma.school.findUnique({ where: { id } })
@@ -374,10 +400,18 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
         where: { id },
         data: {
           ...(name && { name }),
+          ...(shortName !== undefined && { shortName: shortName || null }),
+          ...(description !== undefined && { description: description || null }),
           ...(announcement !== undefined && { announcement: announcement || null }),
           ...(region !== undefined && { region: region || null }),
           ...(schoolType !== undefined && { schoolType: schoolType || null }),
+          ...(schoolNature !== undefined && { schoolNature: schoolNature || null }),
           ...(educationSystem !== undefined && { educationSystem: normalizedEducationSystem || '6-3-3' }),
+          ...(educationSystemDetail !== undefined && { educationSystemDetail: normalizedEducationSystem === 'custom' ? educationSystemDetail : null }),
+          ...(informaticsEnabled !== undefined && { informaticsEnabled: Boolean(informaticsEnabled) }),
+          ...(informaticsStages !== undefined && { informaticsStages }),
+          ...(informaticsContests !== undefined && { informaticsContests }),
+          ...(informaticsTracks !== undefined && { informaticsTracks }),
           ...(contactPerson !== undefined && { contactPerson: contactPerson || null }),
           ...(contactPhone !== undefined && { contactPhone: contactPhone || null }),
           ...(contactEmail !== undefined && { contactEmail: contactEmail || null }),
@@ -390,7 +424,7 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
         success: true,
         data: school
       })
-    } else if (userRole === 'school_principal') {
+    } else {
       // 学校负责人只能编辑自己学校的基本信息
       const teacher = await prisma.teacher.findUnique({ where: { id: userId } })
       if (!teacher) {
@@ -414,10 +448,18 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
         where: { id },
         data: {
           ...(name && { name }),
+          ...(shortName !== undefined && { shortName: shortName || null }),
+          ...(description !== undefined && { description: description || null }),
           ...(announcement !== undefined && { announcement: announcement || null }),
           ...(region !== undefined && { region: region || null }),
           ...(schoolType !== undefined && { schoolType: schoolType || null }),
+          ...(schoolNature !== undefined && { schoolNature: schoolNature || null }),
           ...(educationSystem !== undefined && { educationSystem: normalizedEducationSystem || '6-3-3' }),
+          ...(educationSystemDetail !== undefined && { educationSystemDetail: normalizedEducationSystem === 'custom' ? educationSystemDetail : null }),
+          ...(informaticsEnabled !== undefined && { informaticsEnabled: Boolean(informaticsEnabled) }),
+          ...(informaticsStages !== undefined && { informaticsStages }),
+          ...(informaticsContests !== undefined && { informaticsContests }),
+          ...(informaticsTracks !== undefined && { informaticsTracks }),
           ...(contactPerson !== undefined && { contactPerson: contactPerson || null }),
           ...(contactPhone !== undefined && { contactPhone: contactPhone || null }),
           ...(contactEmail !== undefined && { contactEmail: contactEmail || null })
@@ -428,8 +470,6 @@ schoolCrudRouter.put('/:id', authenticate, asyncHandler(async (req: AuthRequest,
         success: true,
         data: school
       })
-    } else {
-      return res.status(403).json({ success: false, message: '权限不足' })
     }
 }))
 

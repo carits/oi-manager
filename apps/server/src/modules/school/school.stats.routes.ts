@@ -24,21 +24,25 @@ schoolStatsRouter.get('/:id/stats', authenticate, asyncHandler(async (req: AuthR
     // 获取学校信息（包含学制和学校类型）
     const school = await prisma.school.findUnique({
       where: { id },
-      select: { educationSystem: true, schoolType: true }
+      select: { educationSystem: true, educationSystemDetail: true, schoolType: true }
     })
 
     if (!school) {
       return res.status(404).json({ success: false, message: '学校不存在' })
     }
 
-    // 获取学生平均 Rating 和入学信息
-    const students = await prisma.student.findMany({
+    const [students, teacherCount, teamCount, ongoingContestCount] = await Promise.all([
+      prisma.student.findMany({
       where: { schoolId: id },
       select: {
         rating: true,
         enrollmentYear: true
       }
-    })
+      }),
+      prisma.teacher.count({ where: { schoolId: id, status: 'active' } }),
+      prisma.team.count({ where: { schoolId: id } }),
+      prisma.training.count({ where: { schoolId: id, type: 'contest', startTime: { lte: new Date() }, endTime: { gte: new Date() } } })
+    ])
 
     const avgRating = students.length > 0
       ? Math.round(students.reduce((sum, s) => sum + s.rating, 0) / students.length)
@@ -52,6 +56,7 @@ schoolStatsRouter.get('/:id/stats', authenticate, asyncHandler(async (req: AuthR
       const grade = calculateGrade({
         enrollmentYear: student.enrollmentYear,
         educationSystem: school.educationSystem,
+        educationSystemDetail: school.educationSystemDetail as { primaryYears?: number; middleYears?: number; highYears?: number } | null,
         schoolType: school.schoolType
       })
 
@@ -64,6 +69,9 @@ schoolStatsRouter.get('/:id/stats', authenticate, asyncHandler(async (req: AuthR
       success: true,
       data: {
         avgRating,
+        teacherCount,
+        teamCount,
+        ongoingContestCount,
         gradeDistribution,
         schoolType: school.schoolType,
         educationSystem: school.educationSystem

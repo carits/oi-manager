@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
@@ -22,10 +21,17 @@ interface School {
   id: string
   name: string
   shortName: string | null
+  description: string | null
   announcement: string | null
   region: string | null
   schoolType: string | null
+  schoolNature: string | null
   educationSystem: string | null
+  educationSystemDetail: { primaryYears?: number; middleYears?: number; highYears?: number } | null
+  informaticsEnabled: boolean
+  informaticsStages: string[] | null
+  informaticsContests: string[] | null
+  informaticsTracks: string[] | null
   contactPerson: string | null
   contactPhone: string | null
   contactEmail: string | null
@@ -123,11 +129,7 @@ export default function SchoolPage() {
     <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-          <PageHeader title={school.name}>
-            {isPrincipal && (
-              <Button onClick={() => setShowEditSchoolModal(true)}>编辑学校信息</Button>
-            )}
-          </PageHeader>
+          <PageHeader title="校园" />
 
           {/* Tab 导航 */}
           <div
@@ -147,8 +149,8 @@ export default function SchoolPage() {
                 onClick={() => handleTabChange(tab.key as TabType)}
                 style={{
                   padding: '0.5rem 1rem',
-                  background: activeTab === tab.key ? 'var(--primary)' : 'transparent',
-                  color: activeTab === tab.key ? 'white' : 'var(--gray-700)',
+                  background: activeTab === tab.key ? 'var(--primary-50)' : 'transparent',
+                  color: activeTab === tab.key ? 'var(--primary)' : 'var(--gray-700)',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -163,9 +165,9 @@ export default function SchoolPage() {
           </div>
 
           {/* Tab 内容 */}
-          <div style={{ background: 'white', borderRadius: '0 0 8px 8px', padding: '1.5rem' }}>
+          <div style={activeTab === 'home' ? undefined : { background: 'white', borderRadius: '0 0 8px 8px', padding: '1.5rem' }}>
             {activeTab === 'home' && (
-              <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchSchool} />
+              <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchSchool} onEditSchool={() => setShowEditSchoolModal(true)} />
             )}
             {activeTab === 'teachers' && <TeachersTab school={school} isPrincipal={isPrincipal} showActions={false} />}
             {activeTab === 'students' && <StudentsTab schoolId={school.id} showHeader={true} />}

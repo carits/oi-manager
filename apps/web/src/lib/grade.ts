@@ -31,6 +31,7 @@ export interface StudentForGrade {
   enrollmentYear: number | null | undefined
   school?: {
     educationSystem?: string | null
+    educationSystemDetail?: { primaryYears?: number; middleYears?: number; highYears?: number } | null
     schoolType?: string | null
   } | null
 }
@@ -44,6 +45,7 @@ export function calculateStudentGrade(student: StudentForGrade): string {
   return calculateGradeNew({
     enrollmentYear: student.enrollmentYear,
     educationSystem: student.school?.educationSystem,
+    educationSystemDetail: student.school?.educationSystemDetail,
     schoolType: student.school?.schoolType
   })
 }
@@ -77,6 +79,7 @@ export function isStudentGraduated(student: StudentForGrade): boolean {
   return isStudentGraduatedBase({
     enrollmentYear: student.enrollmentYear,
     educationSystem: student.school?.educationSystem,
+    educationSystemDetail: student.school?.educationSystemDetail,
     schoolType: student.school?.schoolType
   })
 }

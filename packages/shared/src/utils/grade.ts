@@ -14,8 +14,15 @@
  */
 export interface CalculateGradeParams {
   enrollmentYear: number | null | undefined
-  educationSystem?: string | null  // '6-3-3' | '5-4-3'
+  educationSystem?: string | null
+  educationSystemDetail?: EducationSystemDetail | null
   schoolType?: string | null       // 学校类型，如 '小学'、'初中'、'初中+高中'
+}
+
+export interface EducationSystemDetail {
+  primaryYears?: number
+  middleYears?: number
+  highYears?: number
 }
 
 /**
@@ -23,10 +30,22 @@ export interface CalculateGradeParams {
  * @param educationSystem 学制字符串（如 "6-3-3" 或 "5-4-3"）
  * @returns [小学年限, 初中年限, 高中年限]
  */
-export function parseEducationSystem(educationSystem: string | null | undefined): [number, number, number] {
+export function parseEducationSystem(
+  educationSystem: string | null | undefined,
+  detail?: EducationSystemDetail | null
+): [number, number, number] {
+  if (educationSystem === 'custom' && detail) {
+    const years = [detail.primaryYears, detail.middleYears, detail.highYears]
+    if (years.every(year => Number.isInteger(year) && Number(year) >= 0) && years.some(Boolean)) {
+      return [Number(years[0]), Number(years[1]), Number(years[2])]
+    }
+  }
   if (!educationSystem) return [6, 3, 3]
 
   const parts = educationSystem.split('-').map(Number)
+  if (parts.length === 2 && parts.every(n => !isNaN(n) && n > 0)) {
+    return [parts[0], parts[1], 0]
+  }
   if (parts.length === 3 && parts.every(n => !isNaN(n) && n > 0)) {
     return [parts[0], parts[1], parts[2]]
   }
@@ -72,13 +91,14 @@ export function calculateGrade(params: CalculateGradeParams): string {
   const {
     enrollmentYear,
     educationSystem = '6-3-3',
+    educationSystemDetail = null,
     schoolType = null
   } = params
 
   if (!enrollmentYear) return '未设置'
 
   // 解析学制
-  const [primaryYears, middleYears, highYears] = parseEducationSystem(educationSystem)
+  const [primaryYears, middleYears, highYears] = parseEducationSystem(educationSystem, educationSystemDetail)
 
   // 根据学校类型确定入学阶段
   const enrollmentStage = getEnrollmentStage(schoolType)
@@ -232,10 +252,11 @@ export function calculateGradeByEducationSystem(
  */
 export function getAllGrades(
   schoolType: string | null | undefined,
-  educationSystem: string | null | undefined
+  educationSystem: string | null | undefined,
+  educationSystemDetail?: EducationSystemDetail | null
 ): string[] {
   const grades: string[] = []
-  const [primaryYears, middleYears, highYears] = parseEducationSystem(educationSystem)
+  const [primaryYears, middleYears, highYears] = parseEducationSystem(educationSystem, educationSystemDetail)
 
   // 确定要显示的学段（最高年级及之前都要显示）
   const showHigh = schoolType?.includes('高中')

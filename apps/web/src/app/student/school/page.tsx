@@ -20,10 +20,17 @@ interface School {
   id: string
   name: string
   shortName: string | null
+  description: string | null
   announcement: string | null
   region: string | null
   schoolType: string | null
+  schoolNature: string | null
   educationSystem: string | null
+  educationSystemDetail: { primaryYears?: number; middleYears?: number; highYears?: number } | null
+  informaticsEnabled: boolean
+  informaticsStages: string[] | null
+  informaticsContests: string[] | null
+  informaticsTracks: string[] | null
   contactPerson: string | null
   contactPhone: string | null
   contactEmail: string | null
@@ -103,7 +110,7 @@ export default function StudentSchoolPage() {
     <>
       <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
         <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-          <PageHeader title={school.name} />
+          <PageHeader title="校园" />
 
           {/* Tab 导航 */}
           <div
@@ -123,8 +130,8 @@ export default function StudentSchoolPage() {
                 onClick={() => handleTabChange(tab.key as TabType)}
                 style={{
                   padding: '0.5rem 1rem',
-                  background: activeTab === tab.key ? 'var(--primary)' : 'transparent',
-                  color: activeTab === tab.key ? 'white' : 'var(--gray-700)',
+                  background: activeTab === tab.key ? 'var(--primary-50)' : 'transparent',
+                  color: activeTab === tab.key ? 'var(--primary)' : 'var(--gray-700)',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -139,7 +146,7 @@ export default function StudentSchoolPage() {
           </div>
 
           {/* Tab 内容 - 复用教师端组件，但学生端不需要操作权限 */}
-          <div style={{ background: 'white', borderRadius: '0 0 8px 8px', padding: '1.5rem' }}>
+          <div style={activeTab === 'home' ? undefined : { background: 'white', borderRadius: '0 0 8px 8px', padding: '1.5rem' }}>
             {activeTab === 'home' && (
               <HomeTab school={school} isPrincipal={false} onAnnouncementUpdate={fetchSchool} />
             )}

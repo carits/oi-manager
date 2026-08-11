@@ -517,10 +517,18 @@ model ProblemStatement {
 model School {
   id                                                String                 @id
   name                                              String
+  shortName                                         String?
+  description                                       String?
   announcement                                      String?
   region                                            String?
   schoolType                                        String?
+  schoolNature                                      String?
   educationSystem                                   String?                @default("6-3-3")
+  educationSystemDetail                             Json?
+  informaticsEnabled                                Boolean                @default(false)
+  informaticsStages                                 Json?
+  informaticsContests                               Json?
+  informaticsTracks                                 Json?
   contactPerson                                     String?
   contactPhone                                      String?
   contactEmail                                      String?
