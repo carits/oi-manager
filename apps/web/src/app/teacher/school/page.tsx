@@ -1,85 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
-import HomeTab from './components/HomeTab'
-import TeachersTab from './components/TeachersTab'
-import StudentsTab from './components/StudentsTab'
-import RankingsTab from './components/RankingsTab'
-import TeamsTab from './components/TeamsTab'
-import ProblemListsTab from './components/ProblemListsTab'
-import ContestsTab from './components/ContestsTab'
+import HomeTab, { type CampusSchool } from './components/HomeTab'
 import EditSchoolModal from './components/EditSchoolModal'
 
-type TabType = 'home' | 'teachers' | 'students' | 'rankings' | 'teams' | 'problem-lists' | 'contests'
-
-interface School {
-  id: string
-  name: string
-  shortName: string | null
-  description: string | null
-  announcement: string | null
-  region: string | null
-  schoolType: string | null
-  schoolNature: string | null
-  educationSystem: string | null
-  educationSystemDetail: { primaryYears?: number; middleYears?: number; highYears?: number } | null
-  informaticsEnabled: boolean
-  informaticsStages: string[] | null
-  informaticsContests: string[] | null
-  informaticsTracks: string[] | null
-  contactPerson: string | null
-  contactPhone: string | null
-  contactEmail: string | null
-  currentPrincipalTeacherId: string | null
-  _count: {
-    teams: number
-    teachers: number
-    students: number
-  }
-}
-
 export default function SchoolPage() {
-  const { user, sessionKey } = useAuth()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<TabType>((searchParams.get('tab') as TabType) || 'home')
-  const [school, setSchool] = useState<School | null>(null)
+  const { user } = useAuth()
+  const [school, setSchool] = useState<CampusSchool | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPrincipal, setIsPrincipal] = useState(false)
   const [showEditSchoolModal, setShowEditSchoolModal] = useState(false)
 
-  useEffect(() => {
-    if (user?.schoolId) {
-      fetchSchool()
-      checkPrincipal()
-    } else {
-      setLoading(false)
-    }
-  }, [user?.schoolId])
-
-  useEffect(() => {
-    const tab = searchParams.get('tab') as TabType
-    if (tab && ['home', 'teachers', 'students', 'rankings', 'teams', 'problem-lists', 'contests'].includes(tab)) {
-      setActiveTab(tab)
-    }
-  }, [searchParams])
-
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab)
-    router.push(`/teacher/school?tab=${tab}`, { scroll: false })
-  }
-
   const fetchSchool = async () => {
+    if (!user?.schoolId) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const result = await apiClient.get<School>(`/api/schools/${user?.schoolId}`)
-      if (result.success) {
-        setSchool(result.data || null)
-      }
+      const result = await apiClient.get<CampusSchool>(`/api/schools/${user.schoolId}`)
+      if (result.success && result.data) setSchool(result.data)
     } catch (error) {
       console.error('Failed to fetch school:', error)
     } finally {
@@ -87,105 +30,31 @@ export default function SchoolPage() {
     }
   }
 
-  const checkPrincipal = async () => {
-    try {
-      const teacherResult = await apiClient.get<{ id: string }>('/api/teachers/me')
-      if (teacherResult.success && user?.schoolId) {
-        const schoolResult = await apiClient.get<School>(`/api/schools/${user.schoolId}`)
-        if (schoolResult.success && schoolResult.data) {
-          setIsPrincipal(teacherResult.data?.id === schoolResult.data.currentPrincipalTeacherId)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check principal:', error)
-    }
-  }
+  useEffect(() => { fetchSchool() }, [user?.schoolId])
 
-  if (loading) {
-    return <PageLoadingFrame title="学校" />
-  }
+  useEffect(() => {
+    if (!school?.currentPrincipalTeacherId) {
+      setIsPrincipal(false)
+      return
+    }
+
+    apiClient.get<{ id: string }>('/api/teachers/me')
+      .then(result => setIsPrincipal(Boolean(result.success && result.data?.id === school.currentPrincipalTeacherId)))
+      .catch(() => setIsPrincipal(false))
+  }, [school?.currentPrincipalTeacherId])
+
+  if (loading) return <PageLoadingFrame title="校园" />
 
   if (!school) {
-    return (
-      <>
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <p>未找到学校信息</p>
-        </div>
-      </>
-    )
+    return <div style={{ padding: '2rem', textAlign: 'center' }}><p>未找到学校信息</p></div>
   }
 
-  const tabs = [
-    { key: 'home', label: '主页' },
-    { key: 'teachers', label: '教师' },
-    { key: 'students', label: '学生' },
-    { key: 'rankings', label: 'Rating 排名' },
-    { key: 'teams', label: '团队' },
-    { key: 'problem-lists', label: '题单' },
-    { key: 'contests', label: '比赛' }
-  ]
-
   return (
-    <>
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-        <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-          <PageHeader title="校园" />
-
-          {/* Tab 导航 */}
-          <div
-            style={{
-              display: 'flex',
-              gap: '0.5rem',
-              marginBottom: '1.5rem',
-              borderBottom: '1px solid var(--border)',
-              background: 'white',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px 8px 0 0'
-            }}
-          >
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => handleTabChange(tab.key as TabType)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: activeTab === tab.key ? 'var(--primary-50)' : 'transparent',
-                  color: activeTab === tab.key ? 'var(--primary)' : 'var(--gray-700)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  transition: 'all 0.2s'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab 内容 */}
-          <div style={activeTab === 'home' ? undefined : { background: 'white', borderRadius: '0 0 8px 8px', padding: '1.5rem' }}>
-            {activeTab === 'home' && (
-              <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchSchool} onEditSchool={() => setShowEditSchoolModal(true)} />
-            )}
-            {activeTab === 'teachers' && <TeachersTab school={school} isPrincipal={isPrincipal} showActions={false} />}
-            {activeTab === 'students' && <StudentsTab schoolId={school.id} showHeader={true} />}
-            {activeTab === 'rankings' && <RankingsTab schoolId={school.id} educationSystem={school.educationSystem} />}
-            {activeTab === 'teams' && <TeamsTab schoolId={school.id} sessionKey={sessionKey} />}
-            {activeTab === 'problem-lists' && <ProblemListsTab schoolId={school.id} />}
-            {activeTab === 'contests' && <ContestsTab schoolId={school.id} />}
-          </div>
-        </div>
-
-        {showEditSchoolModal && (
-          <EditSchoolModal
-            school={school}
-            onClose={() => setShowEditSchoolModal(false)}
-            onSuccess={fetchSchool}
-          />
-        )}
-      </div>
-    </>
+    <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+      <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchSchool} onEditSchool={() => setShowEditSchoolModal(true)} />
+      {showEditSchoolModal && (
+        <EditSchoolModal school={school} onClose={() => setShowEditSchoolModal(false)} onSuccess={fetchSchool} />
+      )}
+    </div>
   )
 }
