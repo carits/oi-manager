@@ -21,6 +21,14 @@ function requirePersonalMode(req: AuthRequest, res: any): boolean {
 rankingRouter.get('/personal/rating', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   if (!requirePersonalMode(req, res)) return
 
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+  const where = {
+    User: {
+      status: 'active' as const,
+      ...(query ? { username: { contains: query, mode: 'insensitive' as const } } : {})
+    }
+  }
+
   const { page, pageSize, skip } = parsePagination(req.query, {
     defaultPageSize: 50,
     maxPageSize: 200
@@ -28,7 +36,7 @@ rankingRouter.get('/personal/rating', authenticate, asyncHandler(async (req: Aut
 
   const [profiles, total] = await Promise.all([
     prisma.personalProfile.findMany({
-      where: { User: { status: 'active' } },
+      where,
       select: {
         userId: true,
         rating: true,
@@ -38,7 +46,7 @@ rankingRouter.get('/personal/rating', authenticate, asyncHandler(async (req: Aut
       skip,
       take: pageSize
     }),
-    prisma.personalProfile.count({ where: { User: { status: 'active' } } })
+    prisma.personalProfile.count({ where })
   ])
 
   const data = profiles.map(profile => ({
@@ -54,13 +62,21 @@ rankingRouter.get('/personal/rating', authenticate, asyncHandler(async (req: Aut
 rankingRouter.get('/personal/solved', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   if (!requirePersonalMode(req, res)) return
 
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+  const where = {
+    User: {
+      status: 'active' as const,
+      ...(query ? { username: { contains: query, mode: 'insensitive' as const } } : {})
+    }
+  }
+
   const { page, pageSize } = parsePagination(req.query, {
     defaultPageSize: 50,
     maxPageSize: 200
   })
 
   const profiles = await prisma.personalProfile.findMany({
-    where: { User: { status: 'active' } },
+    where,
     select: {
       userId: true,
       User: { select: { username: true, avatar: true } }

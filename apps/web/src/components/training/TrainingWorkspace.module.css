@@ -26,8 +26,12 @@
 .rankSummary { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .summaryItem { display: inline-flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 9px; color: var(--text-secondary); background: var(--bg-muted); border-radius: 999px; font-size: var(--text-xs); }
 .summaryItem strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rankSearch { width: min(280px, calc(100% - var(--space-8))); min-height: 36px; display: flex; align-items: center; gap: var(--space-2); margin: var(--space-3) var(--space-4); padding: 0 var(--space-3); color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.rankSearch:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.rankSearch input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: var(--text-sm); }
 .rankTable { min-width: 760px; }
-.rankRowCurrent td { background: var(--info-light) !important; }
+.rankRowCurrent td { background: color-mix(in srgb, var(--primary-light) 46%, transparent) !important; }
+.rankRowCurrent td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
 .rankCell { width: 52px; color: var(--text-secondary) !important; font-weight: 800; }
 .medal1 { color: #b77900 !important; } .medal2 { color: #667085 !important; } .medal3 { color: #a15c23 !important; }
 .scoreFull { color: var(--success-text) !important; background: color-mix(in srgb, var(--success-light) 58%, transparent); font-weight: 700; }

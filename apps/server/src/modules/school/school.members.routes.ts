@@ -12,8 +12,73 @@ import { canAccessSchool } from '../../middleware/permissions.js'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../../utils/validation.js'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
+import { calculateGrade, getAllGrades, isStudentGraduated } from '@oi-manager/shared/utils/grade'
 
 export const schoolMembersRouter = Router()
+
+type RankingStudent = {
+  id: string
+  name: string
+  rating: number
+  enrollmentYear: number | null
+  User: { id: string; username: string; avatar: string | null }
+}
+
+type RankingSchool = {
+  educationSystem: string | null
+  educationSystemDetail: unknown
+  schoolType: string | null
+}
+
+function rankingSearch(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLocaleLowerCase() : ''
+}
+
+function matchesRankingSearch(student: RankingStudent, query: string) {
+  return !query || student.name.toLocaleLowerCase().includes(query) || student.User.username.toLocaleLowerCase().includes(query)
+}
+
+function normalizeEducationSystemDetail(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const detail = value as Record<string, unknown>
+  return {
+    primaryYears: typeof detail.primaryYears === 'number' ? detail.primaryYears : undefined,
+    middleYears: typeof detail.middleYears === 'number' ? detail.middleYears : undefined,
+    highYears: typeof detail.highYears === 'number' ? detail.highYears : undefined,
+  }
+}
+
+function rankingGrade(student: RankingStudent, school: RankingSchool) {
+  return calculateGrade({
+    enrollmentYear: student.enrollmentYear,
+    educationSystem: school.educationSystem,
+    educationSystemDetail: normalizeEducationSystemDetail(school.educationSystemDetail),
+    schoolType: school.schoolType,
+  })
+}
+
+function isGraduatedForSchool(student: RankingStudent, school: RankingSchool) {
+  return isStudentGraduated({
+    enrollmentYear: student.enrollmentYear,
+    educationSystem: school.educationSystem,
+    educationSystemDetail: normalizeEducationSystemDetail(school.educationSystemDetail),
+    schoolType: school.schoolType,
+  })
+}
+
+function rankingGradeOptions(rows: Array<{ grade: string; graduated: boolean }>, school: RankingSchool) {
+  const present = new Set(rows.filter(row => !row.graduated).map(row => row.grade))
+  const configured = getAllGrades(school.schoolType, school.educationSystem, normalizeEducationSystemDetail(school.educationSystemDetail))
+    .filter(grade => present.has(grade))
+  const gradeOrder = (grade: string) => {
+    if (grade === '未设置') return 99
+    const stage = grade.startsWith('高') ? 0 : grade.startsWith('初') ? 10 : grade.startsWith('小') ? 20 : grade.startsWith('幼') ? 30 : 90
+    const year = ['一', '二', '三', '四', '五', '六', '七', '八', '九'].indexOf(grade.charAt(1))
+    return stage + (year >= 0 ? 9 - year : 9)
+  }
+  const remaining = [...present].filter(grade => !configured.includes(grade)).sort((left, right) => gradeOrder(left) - gradeOrder(right) || left.localeCompare(right, 'zh-CN'))
+  return [...configured, ...remaining]
+}
 
 // ==================== 获取学校的所有教师 ====================
 // 必须放在 /:id 之前
@@ -78,39 +143,48 @@ schoolMembersRouter.get('/:id/student-rankings', authenticate, asyncHandler(asyn
       return res.status(403).json({ success: false, message: '您没有权限查看该学校的学生排名' })
     }
 
-    // 获取学校信息（用于年级计算）
     const school = await prisma.school.findUnique({
       where: { id },
-      select: { educationSystem: true, schoolType: true }
+      select: { educationSystem: true, educationSystemDetail: true, schoolType: true }
     })
 
-    const { page, pageSize, skip } = parsePagination(req.query, { defaultPageSize: 50, maxPageSize: 200 })
+    if (!school) return res.status(404).json({ success: false, message: '学校不存在' })
 
-    const [students, total] = await Promise.all([
-      prisma.student.findMany({
-        where: { schoolId: id },
-        include: {
-          User: { select: { username: true, avatar: true } }
-        },
-        orderBy: { rating: 'desc' },
-        skip,
-        take: pageSize,
-      }),
-      prisma.student.count({ where: { schoolId: id } })
-    ])
+    const { page, pageSize } = parsePagination(req.query, { defaultPageSize: 20, maxPageSize: 100 })
+    const query = rankingSearch(req.query.q)
+    const selectedGrade = typeof req.query.grade === 'string' ? req.query.grade : ''
+    const includeGraduated = req.query.includeGraduated === '1' || req.query.includeGraduated === 'true'
+    const students = await prisma.student.findMany({
+      where: { schoolId: id },
+      select: { id: true, name: true, rating: true, enrollmentYear: true, User: { select: { id: true, username: true, avatar: true } } }
+    })
 
-    // 将学校信息附加到每个学生
-    const studentsWithSchool = students.map(s => ({
-      ...s,
-      school: {
-        educationSystem: school?.educationSystem,
-        schoolType: school?.schoolType
+    const rows = students.map(student => {
+      const grade = rankingGrade(student, school)
+      return {
+        id: student.id,
+        userId: student.User.id,
+        name: student.name,
+        username: student.User.username,
+        avatar: student.User.avatar,
+        rating: student.rating,
+        grade,
+        graduated: isGraduatedForSchool(student, school),
       }
-    }))
+    })
+    const filtered = rows
+      .filter(row => matchesRankingSearch({ id: row.id, name: row.name, rating: row.rating, enrollmentYear: null, User: { id: row.userId, username: row.username, avatar: row.avatar } }, query))
+      .filter(row => includeGraduated || !row.graduated)
+      .filter(row => !selectedGrade || row.grade === selectedGrade)
+      .sort((left, right) => right.rating - left.rating || left.username.localeCompare(right.username, 'zh-CN'))
+    const total = filtered.length
+    const start = (page - 1) * pageSize
+    const data = filtered.slice(start, start + pageSize).map(({ graduated: _graduated, ...row }) => row)
 
     res.json({
       success: true,
-      ...paginatedResponse(studentsWithSchool, total, page, pageSize)
+      ...paginatedResponse(data, total, page, pageSize),
+      filters: { grades: rankingGradeOptions(rows, school) }
     })
 }))
 
@@ -128,17 +202,20 @@ schoolMembersRouter.get('/:id/student-solved-rankings', authenticate, asyncHandl
 
     const school = await prisma.school.findUnique({
       where: { id },
-      select: { educationSystem: true, schoolType: true }
+      select: { educationSystem: true, educationSystemDetail: true, schoolType: true }
     })
 
-    const { page, pageSize } = parsePagination(req.query, { defaultPageSize: 50, maxPageSize: 200 })
+    if (!school) return res.status(404).json({ success: false, message: '学校不存在' })
+
+    const { page, pageSize } = parsePagination(req.query, { defaultPageSize: 20, maxPageSize: 100 })
+    const query = rankingSearch(req.query.q)
+    const selectedGrade = typeof req.query.grade === 'string' ? req.query.grade : ''
+    const includeGraduated = req.query.includeGraduated === '1' || req.query.includeGraduated === 'true'
 
     // 获取学校所有学生
     const students = await prisma.student.findMany({
       where: { schoolId: id },
-      include: {
-        User: { select: { username: true, avatar: true } }
-      }
+      select: { id: true, name: true, rating: true, enrollmentYear: true, User: { select: { id: true, username: true, avatar: true } } }
     })
 
     const studentIds = students.map(s => s.id)
@@ -160,30 +237,32 @@ schoolMembersRouter.get('/:id/student-solved-rankings', authenticate, asyncHandl
     }
 
     // 附加 solvedCount 并排序
-    const studentsWithSolved = students.map(s => ({
-      ...s,
-      solvedCount: solvedMap.get(s.id)?.size || 0,
-      school: {
-        educationSystem: school?.educationSystem,
-        schoolType: school?.schoolType
+    const rows = students.map(student => {
+      const grade = rankingGrade(student, school)
+      return {
+        id: student.id,
+        userId: student.User.id,
+        name: student.name,
+        username: student.User.username,
+        avatar: student.User.avatar,
+        solvedCount: solvedMap.get(student.id)?.size || 0,
+        grade,
+        graduated: isGraduatedForSchool(student, school),
       }
-    }))
-
-    studentsWithSolved.sort((a, b) => b.solvedCount - a.solvedCount)
-
-    // 内存分页
-    const total = studentsWithSolved.length
-    const totalPages = Math.ceil(total / pageSize)
+    })
+    const filtered = rows
+      .filter(row => matchesRankingSearch({ id: row.id, name: row.name, rating: 0, enrollmentYear: null, User: { id: row.userId, username: row.username, avatar: row.avatar } }, query))
+      .filter(row => includeGraduated || !row.graduated)
+      .filter(row => !selectedGrade || row.grade === selectedGrade)
+      .sort((left, right) => right.solvedCount - left.solvedCount || left.username.localeCompare(right.username, 'zh-CN'))
+    const total = filtered.length
     const startIndex = (page - 1) * pageSize
-    const paginated = studentsWithSolved.slice(startIndex, startIndex + pageSize)
+    const data = filtered.slice(startIndex, startIndex + pageSize).map(({ graduated: _graduated, ...row }) => row)
 
     res.json({
       success: true,
-      data: paginated,
-      page,
-      pageSize,
-      total,
-      totalPages
+      ...paginatedResponse(data, total, page, pageSize),
+      filters: { grades: rankingGradeOptions(rows, school) }
     })
 }))
 

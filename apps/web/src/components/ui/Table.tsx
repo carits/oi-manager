@@ -38,6 +38,7 @@ export interface TableProps<T> {
   rowKey?: (item: T) => string
   caption?: string
   isCurrentRow?: (item: T) => boolean
+  variant?: 'default' | 'ranking'
 }
 
 export function Table<T extends { id?: string | number }>({
@@ -54,6 +55,7 @@ export function Table<T extends { id?: string | number }>({
   rowKey,
   caption,
   isCurrentRow,
+  variant = 'default',
 }: TableProps<T>) {
   if (loading) return <SkeletonRegion rows={5} label="表格内容正在准备" />
   if (error) return <LoadError message={error} onRetry={onRetry || (() => window.location.reload())} />
@@ -67,8 +69,8 @@ export function Table<T extends { id?: string | number }>({
   }
 
   return (
-    <div className={`${styles.tableShell} ${refreshing ? styles.tableRefreshing : ''}`} aria-busy={refreshing || undefined}>
-      <table className={styles.table}>
+    <div className={`${styles.tableShell} ${variant === 'ranking' ? styles.tableShellRanking : ''} ${refreshing ? styles.tableRefreshing : ''}`} aria-busy={refreshing || undefined}>
+      <table className={`${styles.table} ${variant === 'ranking' ? styles.tableRanking : ''}`}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
           <tr>
@@ -84,7 +86,7 @@ export function Table<T extends { id?: string | number }>({
           {data.map((item, rowIndex) => (
             <tr
               key={getKey(item, rowIndex)}
-              className={`${styles.tableRow} ${isCurrentRow?.(item) ? styles.tableRowCurrent : ''}`.trim()}
+              className={`${styles.tableRow} ${isCurrentRow?.(item) ? variant === 'ranking' ? styles.tableRowRankingCurrent : styles.tableRowCurrent : ''}`.trim()}
               data-clickable={Boolean(onRowClick)}
               tabIndex={onRowClick ? 0 : undefined}
               onClick={() => onRowClick?.(item)}

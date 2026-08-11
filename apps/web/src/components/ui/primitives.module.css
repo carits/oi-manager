@@ -322,10 +322,18 @@
   border-radius: var(--radius-md);
 }
 
+.tableShellRanking {
+  max-width: 960px;
+}
+
 .table {
   width: 100%;
   min-width: 680px;
   border-collapse: collapse;
+}
+
+.tableRanking {
+  min-width: 620px;
 }
 
 .table th {
@@ -371,6 +379,15 @@
 }
 
 .tableRowCurrent td:first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.tableRowRankingCurrent,
+.tableRowRankingCurrent:hover {
+  background: color-mix(in srgb, var(--primary-light) 46%, transparent);
+}
+
+.tableRowRankingCurrent td:first-child {
   box-shadow: inset 3px 0 0 var(--primary);
 }
 
