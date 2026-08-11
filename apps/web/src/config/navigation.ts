@@ -88,8 +88,8 @@ export const personalNav: NavConfig = {
     { label: '题库', href: '/personal/problems' },
     { label: '比赛', href: '/personal/contests' },
     { label: '题单', href: '/personal/problem-lists' },
-    { label: '评测记录', href: '/personal/submissions' },
     { label: '排名', href: '/personal/rankings' },
+    { label: '评测记录', href: '/personal/submissions' },
   ]
 }
 
