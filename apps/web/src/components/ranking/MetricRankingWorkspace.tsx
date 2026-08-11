@@ -176,15 +176,25 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
             label: scope === 'campus' ? '学生' : '用户名',
             width: '220px',
             render: row => (
-              <UserIdentityLink
-                id={scope === 'campus' ? row.userId || row.id : row.id}
-                userType={scope === 'campus' ? 'student' : 'user'}
-                name={scope === 'campus' ? row.name : undefined}
-                username={row.username}
-                avatar={row.avatar}
-                showUsername={scope === 'campus'}
-                currentSuffix={row.userId === currentUserId || row.id === currentUserId ? '（我）' : ''}
-              />
+              <span className={styles.identity}>
+                <UserIdentityLink
+                  id={scope === 'campus' ? row.userId || row.id : row.id}
+                  userType={scope === 'campus' ? 'student' : 'user'}
+                  name={scope === 'campus' ? row.name : undefined}
+                  username={row.username}
+                  avatar={row.avatar}
+                  avatarOnly
+                  size={32}
+                />
+                <UserIdentityLink
+                  id={scope === 'campus' ? row.userId || row.id : row.id}
+                  userType={scope === 'campus' ? 'student' : 'user'}
+                  name={scope === 'campus' ? row.name : undefined}
+                  username={row.username}
+                  showUsername={scope === 'campus'}
+                  currentSuffix={row.userId === currentUserId || row.id === currentUserId ? '（我）' : ''}
+                />
+              </span>
             )
           },
           {

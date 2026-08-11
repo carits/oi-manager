@@ -6,13 +6,15 @@
 import { prisma } from '../../prisma'
 
 /** Get participant names in a single query (replaces 3 separate queries) */
-export async function getParticipantNames(userIds: string[]): Promise<Map<string, { name: string; username: string }>> {
+export async function getParticipantNames(userIds: string[]): Promise<Map<string, { name: string; username: string; avatar: string | null; userType: 'teacher' | 'student' }>> {
   if (userIds.length === 0) return new Map()
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
     select: {
       id: true,
       username: true,
+      avatar: true,
+      role: true,
       Teacher: { select: { name: true } },
       Student: { select: { name: true } },
     },
@@ -20,6 +22,8 @@ export async function getParticipantNames(userIds: string[]): Promise<Map<string
   return new Map(users.map(u => [u.id, {
     name: u.Teacher?.name || u.Student?.name || '未知',
     username: u.username,
+    avatar: u.avatar,
+    userType: u.role === 'teacher' || u.role === 'school_principal' || u.role === 'platform_admin' || u.role === 'super_admin' ? 'teacher' : 'student',
   }]))
 }
 
