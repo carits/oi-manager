@@ -5,7 +5,7 @@ last_verified: 2026-07-30
 source_of_truth: apps/server/src/index.ts, routes and modules
 ---
 
-# HTTP API
+# HTTP 接口
 
 基础路径为 `/api`，Judge WebSocket 为 `/ws/judge`。当前目录登记源码中的 253 个
 HTTP 端点。
@@ -58,4 +58,3 @@ Authorization: Bearer <JWT>
 - Judge WebSocket 使用独立 Token，不使用浏览器 JWT。
 
 `pnpm docs:check` 从 Express 源码提取静态 method/path，与本目录中的表格比较。
-

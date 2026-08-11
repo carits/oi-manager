@@ -42,7 +42,7 @@ pnpm build
 根据[正式环境](ENVIRONMENTS.md)和[变量参考](../reference/ENVIRONMENT_VARIABLES.md)
 填写实际值。Server 与 Judge 的 `JUDGE_TOKEN` 必须完全一致。
 
-## Staging 验收
+## 预发布验收
 
 1. 使用正式构建产物启动 PM2，不复用开发 watch 进程。
 2. 验证 Web、API、`/ws/judge`、PostgreSQL 和 go-judge 健康。
@@ -55,7 +55,7 @@ pnpm build
 当前 Web 使用标准 `next build` / `next start` 组合。若未来切换为 standalone
 `server.js`，必须同时调整构建产物复制和 PM2 启动入口，并在 staging 验证。
 
-## Nginx
+## Nginx 反向代理
 
 配置将：
 

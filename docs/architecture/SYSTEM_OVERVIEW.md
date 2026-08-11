@@ -28,27 +28,27 @@ Docker Compose 只管理 PostgreSQL 和 go-judge。Web、Server、Judge 客户�
 
 ## 应用边界
 
-### Web
+### 前端
 
 - Next.js App Router，开发端口 `3000`。
 - 页面按角色目录组织，角色布局统一处理未登录和错误角色跳转。
 - 浏览器默认请求相对 `/api/*`，由 Next.js 转发到 Server。
 - API 客户端区分 JSON、文本和空响应，并保留真实 HTTP 状态。
 
-### Server
+### 服务端
 
 - Express，默认端口 `3002`。
 - `routes/` 保存横向或较早的路由，`modules/` 保存按领域拆分的业务模块。
 - Prisma 连接 PostgreSQL；生产、开发、单元测试、E2E 使用不同 schema 或数据库。
 - 同一 HTTP Server 承载 `/ws/judge` WebSocket。
 
-### Judge
+### 评测机
 
 - 独立进程，通过 `JUDGE_TOKEN` 与 Server 建立 WebSocket 会话。
 - 从 Server 接收已原子领取的任务，调用 go-judge 编译和运行。
 - 不直接为浏览器提供接口，也不直接决定业务权限。
 
-### Shared
+### 共享模块
 
 - `packages/shared/src/index.ts` 是 JWT、登录响应和公共 DTO 的类型来源。
 - 根构建必须先构建 Shared，禁止在各应用复制同名类型。
@@ -76,4 +76,3 @@ Server 启动后会运行提交轮询、文件清理等后台逻辑。E2E 使用
 - Judge 断线：正在评测的任务恢复为 `queuing`，客户端 5 秒后重连。
 - 外部 OJ 失败：返回平台错误码或保存任务失败状态，不影响本地 Judge。
 - 维护 API 关闭：返回 `404`，避免暴露维护能力的存在。
-

@@ -157,7 +157,7 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 - 不嵌套卡片，不使用装饰性渐变、光斑或大面积单一色主题。
 - 文本、按钮和固定格式控件在两个桌面验收视口都不能溢出或重叠。
 
-## Token
+## 设计令牌
 
 全局颜色、背景、文字、边框、圆角、阴影和间距定义在 `styles/globals.css`。组件优先
 使用 CSS 变量，例如：
@@ -192,4 +192,3 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 历史批量样式改造记录保存在
 [前端风格重构归档](../archive/plans/frontend-style-refactor.md)，其中的数量是历史快照，
 不是当前合规证明。
-

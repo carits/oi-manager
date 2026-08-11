@@ -9,7 +9,7 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 
 示例值只能是占位符。真实密钥、Cookie、账号和服务器密码不得进入仓库。
 
-## Server
+## 服务端
 
 | 变量 | 必需 | 默认/环境 | 用途 |
 |------|------|-----------|------|
@@ -42,7 +42,7 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `BROWSER_PROXY` | 可选 | 无 | 浏览器抓取代理 |
 | `BROWSER_PROXY_LIST` | 可选 | 无 | 多代理列表 |
 
-## Web
+## 前端
 
 | 变量 | 必需 | 默认 | 用途 |
 |------|------|------|------|
@@ -56,7 +56,7 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 
 不要把仅服务端可见的密钥写成 `NEXT_PUBLIC_*`。
 
-## Judge
+## 评测机
 
 | 变量 | 必需 | 默认 | 用途 |
 |------|------|------|------|
@@ -71,7 +71,7 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `LOG_LEVEL` | 否 | `info` | 日志级别 |
 | `ENV_FILE` | 否 | `.env` | 指定 dotenv 文件 |
 
-## E2E 与 Live
+## 端到端与在线验证
 
 | 变量 | 用途 |
 |------|------|
@@ -83,4 +83,3 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `E2E_LIVE_PASSWORD` | GitHub Secret |
 | `E2E_LIVE_ROLE` | 手动探针登录模式 |
 | `CI` | 开启重试、forbidOnly 等 CI 行为 |
-

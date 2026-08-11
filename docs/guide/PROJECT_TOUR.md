@@ -7,7 +7,7 @@ source_of_truth: repository entrypoints and package manifests
 
 # 项目导览
 
-## Monorepo
+## 多包仓库结构
 
 ```text
 oi-manager/
@@ -81,4 +81,3 @@ sequenceDiagram
 
 构建必须先生成 Shared 类型，再构建 Server、Web 和 Judge。不要直接编辑
 `packages/shared/src` 旁边的生成 JS/DTS 文件。
-
