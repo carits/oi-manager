@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-10
+last_verified: 2026-08-11
 source_of_truth: Git history
 ---
 
@@ -9,6 +9,15 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在
 [历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-11
+
+### Team module UI redesign completion
+
+- Completed the team detail overview, announcement, create/edit, and transfer-owner dialogs in the compact management workspace style.
+- Team overview now groups avatar, identity, owner/scope/member metadata, and privileged actions consistently across teacher, student, and personal workspaces.
+- Personal teams continue to prefer username-only owner display and avoid exposing school/private identity fields in the team header.
+- Verification: `pnpm --filter web build`, documentation checks, preview build, and deployment health checks.
 
 ## 2026-08-10
 

@@ -122,16 +122,30 @@ export function TeamListPage({
         </>
       )}
 
-      <Modal isOpen={createModalOpen && Boolean(onCreateTeam)} onClose={closeCreate} title="创建团队" width="520px" closeOnOverlay={!creating}>
-        <form className={styles.form} onSubmit={submit}>
+      <Modal
+        isOpen={createModalOpen && Boolean(onCreateTeam)}
+        onClose={closeCreate}
+        title="创建团队"
+        width="560px"
+        closeOnOverlay={!creating}
+        footer={(
+          <div className={styles.modalActionBar}>
+            <span>{canCreateTeam ? '准备创建团队' : '请填写团队名称和合法团队标识'}</span>
+            <div className={styles.modalActions}>
+              <Button variant="secondary" onClick={closeCreate} disabled={creating}>取消</Button>
+              <Button type="submit" form="create-team-form" loading={creating} disabled={!canCreateTeam}>创建团队</Button>
+            </div>
+          </div>
+        )}
+      >
+        <form id="create-team-form" className={styles.dialogForm} onSubmit={submit}>
           <FormField label="团队名称" required><input value={createName} onChange={event => setCreateName(event.target.value)} required placeholder="例如：2026 暑期集训队" /></FormField>
           <FormField label="团队标识" required hint="仅支持英文字母、数字和下划线，创建后不可修改。" error={createTeamIdInvalid ? '团队标识只能包含英文字母、数字和下划线。' : undefined}><input value={createTeamId} onChange={event => setCreateTeamId(event.target.value)} required maxLength={50} placeholder="summer_2026" /></FormField>
           <FormField label="团队说明"><textarea value={createDescription} onChange={event => setCreateDescription(event.target.value)} rows={3} placeholder="说明训练方向或加入要求" /></FormField>
-          <fieldset style={{ border: 0, padding: 0 }}><legend style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>加入方式</legend><div className={styles.visibilityOptions}>
+          <fieldset className={styles.dialogFieldset}><legend>加入方式</legend><div className={styles.visibilityOptions}>
             <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={createIsPublic} onChange={() => setCreateIsPublic(true)} /><Globe2 size={18} /><span>公开<br /><small>其他用户可以申请加入</small></span></label>
             <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={!createIsPublic} onChange={() => setCreateIsPublic(false)} /><LockKeyhole size={18} /><span>私有<br /><small>仅通过邀请加入</small></span></label>
           </div></fieldset>
-          <div className={styles.formActions}><Button variant="secondary" onClick={closeCreate} disabled={creating}>取消</Button><Button type="submit" loading={creating} disabled={!canCreateTeam}>创建</Button></div>
         </form>
       </Modal>
     </PageFrame>

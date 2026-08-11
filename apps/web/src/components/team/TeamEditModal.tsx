@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Globe2, LockKeyhole, Save } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
-import { formStyles } from '@/lib/styles'
+import styles from './Team.module.css'
 
 interface TeamEditFormData {
   name: string
@@ -22,21 +23,13 @@ interface TeamEditModalProps {
   onSuccess: () => void
 }
 
-export function TeamEditModal({
-  isOpen,
-  onClose,
-  teamId,
-  initialData,
-  onSuccess
-}: TeamEditModalProps) {
+export function TeamEditModal({ isOpen, onClose, teamId, initialData, onSuccess }: TeamEditModalProps) {
   const toast = useToast()
   const [formData, setFormData] = useState<TeamEditFormData>(initialData)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (isOpen) {
-      setFormData(initialData)
-    }
+    if (isOpen) setFormData(initialData)
   }, [isOpen, initialData])
 
   const handleSave = async () => {
@@ -50,7 +43,7 @@ export function TeamEditModal({
       const result = await apiClient.put(`/api/teams/${teamId}`, {
         name: formData.name.trim(),
         description: formData.description.trim() || null,
-        isPublic: formData.isPublic
+        isPublic: formData.isPublic,
       })
       if (result.success) {
         onClose()
@@ -67,81 +60,56 @@ export function TeamEditModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="编辑团队" width="500px">
-      <div style={{ display: 'grid', gap: '1rem' }}>
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>团队名称 *</label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            style={formStyles.input}
-            placeholder="请输入团队名称"
-          />
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="编辑团队"
+      width="560px"
+      closeOnOverlay={!saving}
+      footer={
+        <div className={styles.modalActionBar}>
+          <span>保存后会立即同步到团队页面。</span>
+          <div className={styles.modalActions}>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>取消</Button>
+            <Button icon={<Save size={16} />} onClick={handleSave} loading={saving}>保存</Button>
+          </div>
         </div>
+      }
+    >
+      <div className={styles.dialogForm}>
+        <label className={styles.dialogField}>
+          <span>团队名称 <strong>*</strong></span>
+          <input value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} placeholder="请输入团队名称" />
+        </label>
 
         {formData.teamId && (
-          <div style={formStyles.field}>
-            <label style={formStyles.label}>团队ID</label>
-            <input
-              type="text"
-              value={formData.teamId}
-              disabled
-              style={{ ...formStyles.input, background: 'var(--gray-50)', color: 'var(--gray-500)', cursor: 'not-allowed' }}
-            />
-            <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: '0.25rem' }}>
-              团队ID创建后不可修改
-            </p>
-          </div>
+          <label className={styles.dialogField}>
+            <span>团队标识</span>
+            <input value={formData.teamId} disabled />
+            <small>团队标识创建后不可修改。</small>
+          </label>
         )}
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>团队描述</label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={3}
-            style={formStyles.textarea}
-            placeholder="请输入团队描述（选填）"
-          />
-        </div>
+        <label className={styles.dialogField}>
+          <span>团队描述</span>
+          <textarea value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows={3} placeholder="说明训练方向或加入要求" />
+        </label>
 
-        <div style={formStyles.field}>
-          <label style={formStyles.label}>团队类型</label>
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="isPublic"
-                checked={formData.isPublic}
-                onChange={() => setFormData({ ...formData, isPublic: true })}
-              />
-              <span>公开团队</span>
+        <fieldset className={styles.dialogFieldset}>
+          <legend>加入方式</legend>
+          <div className={styles.visibilityOptions}>
+            <label className={styles.visibilityOption}>
+              <input type="radio" name="edit-team-visibility" checked={formData.isPublic} onChange={() => setFormData({ ...formData, isPublic: true })} />
+              <Globe2 size={18} aria-hidden="true" />
+              <span>公开<br /><small>其他用户可以申请加入</small></span>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="isPublic"
-                checked={!formData.isPublic}
-                onChange={() => setFormData({ ...formData, isPublic: false })}
-              />
-              <span>私有团队</span>
+            <label className={styles.visibilityOption}>
+              <input type="radio" name="edit-team-visibility" checked={!formData.isPublic} onChange={() => setFormData({ ...formData, isPublic: false })} />
+              <LockKeyhole size={18} aria-hidden="true" />
+              <span>私有<br /><small>仅通过邀请加入</small></span>
             </label>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
-            公有团队：其他用户可以浏览并申请加入<br />
-            私有团队：只能通过邀请加入
-          </p>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-        <Button variant="secondary" onClick={onClose}>
-          取消
-        </Button>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? '保存中...' : '保存'}
-        </Button>
+        </fieldset>
       </div>
     </Modal>
   )

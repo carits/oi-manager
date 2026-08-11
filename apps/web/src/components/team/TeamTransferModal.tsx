@@ -1,9 +1,11 @@
 'use client'
 
+import { AlertTriangle, Crown } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
+import styles from './Team.module.css'
 
 interface TransferCandidate {
   id: string
@@ -20,14 +22,7 @@ interface TeamTransferModalProps {
   onSuccess: () => void
 }
 
-export function TeamTransferModal({
-  isOpen,
-  onClose,
-  teamId,
-  selectedTarget,
-  candidates,
-  onSuccess
-}: TeamTransferModalProps) {
+export function TeamTransferModal({ isOpen, onClose, teamId, selectedTarget, onSuccess }: TeamTransferModalProps) {
   const toast = useToast()
 
   const handleTransfer = async () => {
@@ -39,7 +34,7 @@ export function TeamTransferModal({
     try {
       const result = await apiClient.post(`/api/teams/${teamId}/transfer`, {
         newOwnerId: selectedTarget.id,
-        newOwnerType: selectedTarget.memberType
+        newOwnerType: selectedTarget.memberType,
       })
       if (result.success) {
         toast.success('所有权转移成功')
@@ -55,21 +50,27 @@ export function TeamTransferModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="转移团队所有权" width="400px">
-      <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '1rem' }}>
-        确定要将团队所有权转移给 <strong>{selectedTarget?.name || '该用户'}</strong> 吗？
-      </p>
-      <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '1rem' }}>
-        转移后，您将成为普通成员，新所有者将拥有团队的完全控制权。
-      </p>
-
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-        <Button variant="secondary" onClick={onClose}>
-          取消
-        </Button>
-        <Button variant="danger" onClick={handleTransfer}>
-          确认转移
-        </Button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="转移团队所有权"
+      width="520px"
+      footer={
+        <div className={styles.modalActionBar}>
+          <span>这是高风险操作，请确认目标成员无误。</span>
+          <div className={styles.modalActions}>
+            <Button variant="secondary" onClick={onClose}>取消</Button>
+            <Button variant="danger" icon={<Crown size={16} />} onClick={handleTransfer}>确认转移</Button>
+          </div>
+        </div>
+      }
+    >
+      <div className={styles.dangerNotice}>
+        <AlertTriangle size={20} aria-hidden="true" />
+        <div>
+          <h3>即将转移给 {selectedTarget?.name || '该成员'}</h3>
+          <p>转移后，您将成为普通成员，新所有者将拥有团队编辑、成员管理和解散团队等完整权限。</p>
+        </div>
       </div>
     </Modal>
   )

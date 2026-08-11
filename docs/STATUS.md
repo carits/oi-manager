@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-10
+last_verified: 2026-08-11
 source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 

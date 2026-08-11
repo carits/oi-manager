@@ -5,13 +5,15 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { Camera, ChevronLeft, Crown, Edit3, LockKeyhole, Megaphone, School, ShieldCheck, Users } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import { TeamDetail } from '@/hooks/data/useTeamDetail'
-import { TeamPermission } from '@/hooks/useTeamPermission'
+import type { TeamDetail } from '@/hooks/data/useTeamDetail'
+import type { TeamPermission } from '@/hooks/useTeamPermission'
 import apiClient from '@/lib/apiClient'
 import { getAssetUrl } from '@/lib/assets'
+import styles from './Team.module.css'
 
 export interface TeamHeaderProps {
   team: TeamDetail
@@ -26,11 +28,9 @@ export interface TeamHeaderProps {
   onEditTeam: () => void
   onLeaveTeam: () => void
   onBack: () => void
-  // 学生端申请加入
   onApplyJoin?: () => void
   applyStatus?: string | null
   applying?: boolean
-  // 头像更新回调
   onAvatarUpdate?: (avatarUrl: string) => void
 }
 
@@ -50,23 +50,21 @@ export function TeamHeader({
   onApplyJoin,
   applyStatus,
   applying,
-  onAvatarUpdate
+  onAvatarUpdate,
 }: TeamHeaderProps) {
   const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
     if (!file) return
 
     setUploadingAvatar(true)
     try {
       const formData = new FormData()
       formData.append('avatar', file)
-
       const result = await apiClient.post<{ avatar: string }>(`/api/teams/${team.id}/avatar`, formData)
-
       if (result.success && result.data) {
         onAvatarUpdate?.(result.data.avatar)
       } else {
@@ -77,201 +75,114 @@ export function TeamHeader({
       toast.error('上传失败')
     } finally {
       setUploadingAvatar(false)
-      // 清空 input 以便可以重复选择同一文件
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
+  const memberCount = (team.teachers?.length || 0) + (team.students?.length || 0)
+  const adminCount = team.admins?.length || 0
+  const ownerName = team.scope === 'personal'
+    ? team.owner?.username || team.owner?.name || '-'
+    : team.owner?.name || team.owner?.username || '-'
+  const scopeLabel = team.scope === 'personal' ? '个人团队' : team.school?.name || '校园团队'
+  const visibilityLabel = team.isPublic ? '公开' : '私有'
+
   return (
     <>
-      {/* 返回按钮 */}
-      <div style={{ marginBottom: '1rem' }}>
-        <button
-          onClick={onBack}
-          style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}
-        >
-          ← 返回
-        </button>
-      </div>
+      <button type="button" className={styles.backLink} onClick={onBack}>
+        <ChevronLeft size={16} aria-hidden="true" />返回
+      </button>
 
-      {/* 团队头部信息 */}
-      <div
-        style={{
-          background: 'white',
-          borderRadius: '8px',
-          padding: '1.5rem',
-          marginBottom: '1.5rem',
-          border: '1px solid var(--border)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{ position: 'relative' }}>
+      <section className={styles.teamOverviewCard}>
+        <div className={styles.teamOverviewMain}>
+          <div className={styles.teamOverviewAvatarWrap}>
             <div
-              style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: 'var(--radius-lg)',
-                background: team.avatar
-                  ? `url(${getAssetUrl(team.avatar)}) center/cover`
-                  : 'var(--primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: 700,
-                fontSize: '2rem'
-              }}
+              className={styles.teamOverviewAvatar}
+              style={team.avatar ? { backgroundImage: `url(${getAssetUrl(team.avatar)})` } : undefined}
+              aria-label={team.name}
             >
               {!team.avatar && team.name.charAt(0)}
             </div>
-            {/* 头像上传按钮 - 仅所有者可见 */}
             {permission.isOwner && (
               <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarUpload}
-                  style={{ display: 'none' }}
-                />
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className={styles.hiddenInput} />
                 <button
+                  type="button"
+                  className={styles.avatarEditButton}
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingAvatar}
-                  style={{
-                    position: 'absolute',
-                    bottom: '-4px',
-                    right: '-4px',
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '50%',
-                    background: 'var(--primary)',
-                    color: 'white',
-                    border: '2px solid white',
-                    cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
-                    fontSize: '0.75rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: uploadingAvatar ? 0.7 : 1
-                  }}
                   title="更换头像"
+                  aria-label="更换团队头像"
                 >
-                  📷
+                  <Camera size={15} aria-hidden="true" />
                 </button>
               </>
             )}
           </div>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>{team.name}</h1>
-            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>
-              <span>类型: {team.isPublic ? '公有' : '私有'}</span>
-              <span>|</span>
-              <span>
-                所有者: {team.owner?.name || '-'}
-                {team.owner?.username && (
-                  <span style={{ color: 'var(--gray-400)' }}> ({team.owner.username})</span>
-                )}
-              </span>
-              {team.school && <><span>|</span><span>{team.school.name}</span></>}
-            </div>
-          </div>
 
-          {/* 操作按钮 */}
+          <div className={styles.teamOverviewInfo}>
+            <div className={styles.teamOverviewTitleLine}>
+              <h1>{team.name}</h1>
+              <span className={styles.roleTag}>{team.isPublic ? <Users size={14} aria-hidden="true" /> : <LockKeyhole size={14} aria-hidden="true" />}{visibilityLabel}</span>
+            </div>
+            <div className={styles.teamOverviewMeta}>
+              <span><Crown size={14} aria-hidden="true" />所有者 {ownerName}</span>
+              <span><School size={14} aria-hidden="true" />{scopeLabel}</span>
+              <span><Users size={14} aria-hidden="true" />成员 {memberCount}</span>
+              <span><ShieldCheck size={14} aria-hidden="true" />管理员 {adminCount}</span>
+            </div>
+            {team.description && <p className={styles.teamOverviewDescription}>{team.description}</p>}
+          </div>
+        </div>
+
+        <div className={styles.teamOverviewActions}>
           {permission.isMember ? (
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {permission.canEdit && (
-                <Button variant="secondary" onClick={onEditTeam}>
-                  编辑
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                onClick={onLeaveTeam}
-                style={{ color: permission.isOwner ? 'var(--danger)' : 'var(--gray-600)' }}
-              >
+            <>
+              {permission.canEdit && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={onEditTeam}>编辑</Button>}
+              <Button variant={permission.isOwner ? 'outline' : 'secondary'} onClick={onLeaveTeam} style={permission.isOwner ? { color: 'var(--danger)' } : undefined}>
                 {permission.isOwner ? '解散团队' : '退出团队'}
               </Button>
-            </div>
+            </>
           ) : onApplyJoin && team.isPublic ? (
-            // 非成员且是公有团队，显示申请加入按钮
-            <Button
-              onClick={onApplyJoin}
-              disabled={applyStatus === 'pending' || applying}
-              style={{ minWidth: '100px' }}
-            >
-              {applying ? '申请中...' : applyStatus === 'pending' ? '已申请' : '申请加入'}
+            <Button onClick={onApplyJoin} disabled={applyStatus === 'pending' || applying} loading={applying}>
+              {applyStatus === 'pending' ? '已申请' : '申请加入'}
             </Button>
           ) : null}
         </div>
+      </section>
 
-        {/* 团队描述 */}
-        {team.description && (
-          <p style={{ marginTop: '1rem', color: 'var(--gray-600)', fontSize: '0.875rem', lineHeight: 1.6 }}>
-            {team.description}
-          </p>
-        )}
-      </div>
-
-      {/* 公告区域 */}
-      <div
-        style={{
-          background: 'white',
-          borderRadius: '8px',
-          padding: '1.5rem',
-          marginBottom: '1.5rem',
-          border: '1px solid var(--border)'
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>公告</h2>
-          {permission.canEdit && !editingAnnouncement && (
-            <Button variant="secondary" size="sm" onClick={onStartEditAnnouncement}>
-              编辑
-            </Button>
-          )}
+      <section className={styles.announcementCard}>
+        <div className={styles.announcementHeader}>
+          <div>
+            <h2><Megaphone size={17} aria-hidden="true" />公告</h2>
+            <p>团队说明、训练安排或成员须知。</p>
+          </div>
+          {permission.canEdit && !editingAnnouncement && <Button variant="secondary" size="sm" onClick={onStartEditAnnouncement}>编辑公告</Button>}
         </div>
 
         {editingAnnouncement ? (
-          <div>
+          <div className={styles.announcementEditor}>
             <textarea
               value={announcementText}
-              onChange={(e) => onAnnouncementTextChange(e.target.value)}
+              onChange={(event) => onAnnouncementTextChange(event.target.value)}
               rows={6}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                resize: 'vertical',
-                fontFamily: 'inherit'
-              }}
               placeholder="支持 Markdown 格式..."
             />
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <Button onClick={onSaveAnnouncement} disabled={savingAnnouncement}>
-                {savingAnnouncement ? '保存中...' : '保存'}
-              </Button>
-              <Button variant="secondary" onClick={onCancelEditAnnouncement}>
-                取消
-              </Button>
+            <div className={styles.formActions}>
+              <Button onClick={onSaveAnnouncement} loading={savingAnnouncement}>保存</Button>
+              <Button variant="secondary" onClick={onCancelEditAnnouncement} disabled={savingAnnouncement}>取消</Button>
             </div>
           </div>
         ) : team.announcement ? (
-          <div className="markdown-content" style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-            >
+          <div className={`markdown-content ${styles.announcementContent}`}>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
               {team.announcement}
             </ReactMarkdown>
           </div>
         ) : (
-          <p style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>暂无公告</p>
+          <div className={styles.announcementEmpty}>暂无公告</div>
         )}
-      </div>
+      </section>
     </>
   )
 }
