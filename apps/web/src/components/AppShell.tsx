@@ -25,6 +25,7 @@ interface UserNotification {
   href?: string | null
   sourceType: string
   sourceId: string
+  actionable: boolean
   readAt?: string | null
   createdAt: string
 }
@@ -184,7 +185,10 @@ export function AppShell({ children }: AppShellProps) {
     const response = await apiClient.post(endpoint)
     setProcessingNotificationId(null)
     if (response.success) await loadNotifications()
-    else setNotificationError(response.message || '操作失败，请重试')
+    else if (response.message?.includes('不存在') || response.message?.includes('已处理')) {
+      setNotificationError('')
+      await loadNotifications()
+    } else setNotificationError(response.message || '操作失败，请重试')
   }
 
   const orgModuleByLabel: Record<string, string> = { '概览': 'overview', '校园': 'campus', '教师': 'teachers', '学生': 'students', '团队': 'teams', '作业': 'homeworks', '比赛': 'contests', '题库': 'problems', '题单': 'problem-lists', '排名': 'rankings' }
@@ -244,7 +248,7 @@ export function AppShell({ children }: AppShellProps) {
                     {notificationError && <p className={styles.notificationError} role="status">{notificationError}</p>}
                     {!notificationError && notifications.length === 0 && <p className={styles.notificationEmpty}>暂时没有新通知</p>}
                     {notifications.map(notification => {
-                      const isActionable = notification.type === 'team_invitation' || notification.type === 'team_join_request' || notification.type === 'organization_invitation'
+                      const isActionable = notification.actionable
                       const processing = processingNotificationId === notification.id
                       return <article key={notification.id} className={`${styles.notificationItem} ${!notification.readAt ? styles.notificationUnread : ''}`}>
                         <button type="button" className={styles.notificationContent} onClick={() => void handleNotificationClick(notification)}>
