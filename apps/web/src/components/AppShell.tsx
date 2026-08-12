@@ -130,7 +130,7 @@ export function AppShell({ children }: AppShellProps) {
   const profile = user.profile as { name?: string } | undefined
   const visibleName = isPersonal ? user.username : profile?.name || user.username
   const userContext = isPersonal
-    ? '个人工作区'
+    ? '个人'
     : isStudent
       ? user.schoolName || '校园工作区'
       : roleLabel
@@ -226,7 +226,7 @@ export function AppShell({ children }: AppShellProps) {
             <button type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? '隐藏导航' : '显示导航'} title={sidebarOpen ? '隐藏导航' : '显示导航'}>
               <Menu size={21} aria-hidden="true" />
             </button>
-            <Link className={styles.brandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回工作区首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+            <Link className={styles.brandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
           <div className={styles.headerEnd}>
             <div className={styles.notificationRoot} ref={notificationRef}>
@@ -263,16 +263,16 @@ export function AppShell({ children }: AppShellProps) {
                 </div>
               )}
             </div>
+            {(role === 'student' || role === 'teacher' || role === 'school_principal') && <WorkspaceSwitcher />}
           </div>
         </div>
       </header>
-      <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`} aria-hidden={!sidebarOpen}>
+      <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人' : roleName}主导航`} aria-hidden={!sidebarOpen}>
         <div className={styles.sidebarHeader}>
-          <Link className={styles.sidebarBrandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回工作区首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+          <Link className={styles.sidebarBrandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           <button type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></button>
         </div>
-        {(role === 'student' || role === 'teacher' || role === 'school_principal') && <WorkspaceSwitcher />}
-        <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`}>{navLinks}</nav>
+        <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人' : roleName}主导航`}>{navLinks}</nav>
         <div className={styles.sidebarFooter}>{userMenu}</div>
       </aside>
       <main className={styles.main} data-app-content><div className={styles.mainInner} data-page-host data-layout={isWorkbenchPath(pathname) ? 'workbench' : 'default'}>{children}</div></main>
