@@ -49,13 +49,55 @@ test.describe('core role workflows @smoke', () => {
     await expect(page.locator('body')).toContainText('E2E Finished Contest')
     await page.getByRole('tab', { name: /排名/ }).click()
     await expect(page.locator('body')).toContainText('E2E Campus Student')
-    const firstAcceptedCell = page.getByText('首 A', { exact: true })
-    await expect(firstAcceptedCell).toBeVisible()
-    const firstAcceptedTableCell = firstAcceptedCell.locator('xpath=ancestor::td')
-    await expect(firstAcceptedTableCell).toHaveAttribute('title', '本题首个通过')
-    await expect(firstAcceptedTableCell).toHaveCSS('background-color', 'rgb(22, 101, 52)')
+    await expect(page.getByText('首 A', { exact: true })).toHaveCount(0)
+
+    const firstAcceptedCells = page.locator('td[data-result="first-accepted"]')
+    await expect(firstAcceptedCells).toHaveCount(2)
+    await expect(firstAcceptedCells.first()).toHaveText(/^\d+\/\d+$/)
+    await expect(firstAcceptedCells.first()).toHaveAttribute('title', /首个通过.*第 \d+ 次提交.*第 \d+ 分钟通过/)
+    await expect(firstAcceptedCells.first()).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    await firstAcceptedCells.first().hover()
+    await expect(firstAcceptedCells.first()).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+
+    const acceptedCell = page.locator('td[data-result="accepted"]').first()
+    await expect(acceptedCell).toHaveText('2/50')
+    await expect(acceptedCell).toHaveCSS('background-color', 'rgb(232, 247, 233)')
+
+    const failedCell = page.locator('td[data-result="failed"]').first()
+    await expect(failedCell).toHaveText('2')
+    await expect(failedCell).toHaveCSS('background-color', 'rgb(251, 228, 228)')
+    await expect(page.locator('td[data-result="unsubmitted"]').first()).toHaveText('')
+
+    const problemColumnWidths = await page.locator('th[data-problem-column="true"]').evaluateAll(
+      cells => cells.map(cell => cell.getBoundingClientRect().width),
+    )
+    expect(Math.max(...problemColumnWidths)).toBeLessThanOrEqual(105)
 
     await context.close()
+
+    const mobileContext = await browser.newContext({
+      storageState: accounts.campusStudent.storageState,
+      viewport: { width: 390, height: 844 },
+    })
+    const mobilePage = await mobileContext.newPage()
+    await mobilePage.goto(`/student/team/${ids.team}/contests/${ids.contest}`)
+    await mobilePage.getByRole('tab', { name: /排名/ }).click()
+    const currentUserRow = mobilePage.locator('tbody tr').filter({ hasText: 'E2E Campus Student' })
+    await expect(currentUserRow).toBeVisible()
+    const currentFirstAcceptedCell = currentUserRow.locator('td[data-result="first-accepted"]')
+    await expect(currentFirstAcceptedCell).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    await currentUserRow.hover()
+    await expect(currentFirstAcceptedCell).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    const scrollMetrics = await mobilePage.getByTestId('training-ranking-scroll').evaluate(element => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }))
+    expect(scrollMetrics.scrollWidth).toBeGreaterThan(scrollMetrics.clientWidth)
+    const pageHasHorizontalOverflow = await mobilePage.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    )
+    expect(pageHasHorizontalOverflow).toBe(false)
+    await mobileContext.close()
   })
 
   test('regular teacher can use inherited team and student routes', async ({ browser }) => {

@@ -4,7 +4,8 @@
 .table th { padding: 12px 16px; color: var(--text-secondary); background: var(--bg-muted); border-bottom: 1px solid var(--border); text-align: left; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
 .table td { padding: 14px 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
-.table tbody tr:hover td { background: color-mix(in srgb, var(--info-light) 34%, transparent); }
+.table:not(.rankTable) tbody tr:hover td,
+.rankTable tbody tr:hover .rankMetaCell { background: color-mix(in srgb, var(--info-light) 34%, transparent); }
 .center { text-align: center !important; }
 .muted { color: var(--text-muted) !important; }
 .numeric { font-variant-numeric: tabular-nums; }
@@ -30,17 +31,26 @@
 .rankSearch:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
 .rankSearch input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: var(--text-sm); }
 .rankIdentity { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.rankTable { min-width: 760px; }
-.rankRowCurrent td { background: color-mix(in srgb, var(--primary-light) 46%, transparent) !important; }
-.rankRowCurrent td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.rankTable { table-layout: fixed; }
+.rankPositionColumn { width: 56px; }
+.rankParticipantColumn { min-width: 240px; }
+.rankPassedColumn { width: 80px; }
+.rankPenaltyColumn { width: 96px; }
+.rankProblemColumn { width: 104px; }
+.rankProblemHeader { width: 104px; }
+.rankParticipantCell { min-width: 240px; }
+.rankRowCurrent .rankMetaCell { background: color-mix(in srgb, var(--primary-light) 46%, transparent) !important; }
+.rankRowCurrent .rankMetaCell:first-child { box-shadow: inset 3px 0 0 var(--primary); }
 .rankCell { width: 52px; color: var(--text-secondary) !important; font-weight: 800; }
 .medal1 { color: #b77900 !important; } .medal2 { color: #667085 !important; } .medal3 { color: #a15c23 !important; }
 .scoreFull { color: var(--success-text) !important; background: color-mix(in srgb, var(--success-light) 58%, transparent); font-weight: 700; }
-.scoreFirstAccepted { color: #fff !important; background: var(--success-text) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success-text) 82%, #000); font-weight: 800; }
-.icpcSolved { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
-.firstAcceptedMark { padding: 1px 4px; color: #fff; background: rgba(255, 255, 255, .16); border-radius: 3px; font-size: 10px; font-weight: 800; line-height: 1.4; }
+.scoreFirstAccepted { color: #fff !important; background: #2f7d32 !important; font-weight: 800; }
 .scorePartial { color: var(--warning-text) !important; background: color-mix(in srgb, var(--warning-light) 48%, transparent); font-weight: 700; }
 .scoreZero { color: var(--text-muted) !important; }
+.icpcResultCell { width: 104px; padding: 14px 8px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
+.icpcAccepted { color: var(--success-text) !important; background: #e8f7e9 !important; }
+.icpcFailed { color: var(--error-text) !important; background: #fbe4e4 !important; }
+.icpcUnsubmitted { color: transparent !important; background: var(--bg-card) !important; }
 .locked { display: grid; justify-items: center; gap: var(--space-2); padding: 72px var(--space-4); color: var(--text-muted); text-align: center; }
 .locked strong { color: var(--text-primary); }
 @media (max-width: 640px) { .filterBar { align-items: stretch; } .filterField { flex: 1 1 42%; } .filterAction { width: 100%; } .filterAction :global(button) { width: 100%; justify-content: center; } .rankIntro { align-items: flex-start; flex-direction: column; } }

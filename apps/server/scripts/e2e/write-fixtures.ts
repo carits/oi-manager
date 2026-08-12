@@ -50,7 +50,10 @@ async function main() {
     required('homework', prisma.training.findFirst({ where: { type: 'homework' }, orderBy: { id: 'asc' } })),
     required('contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'campus' }, orderBy: { id: 'asc' } })),
     required('personal contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'personal' }, orderBy: { id: 'asc' } })),
-    required('submission', prisma.submission.findFirst({ orderBy: { createdAt: 'asc' } })),
+    required('submission', prisma.submission.findFirst({
+      where: { userId: 'e2e-campus-student', submitScope: 'training', result: 'accepted' },
+      orderBy: { createdAt: 'asc' },
+    })),
     required('personal submission', prisma.submission.findFirst({
       where: { userId: 'e2e-personal-student', submitScope: 'problem' },
     })),

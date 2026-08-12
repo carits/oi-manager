@@ -340,6 +340,7 @@ describe('训练路由兼容校级比赛', () => {
     it('TR5: ICPC 每题只标记最早有效通过者为首 A', async () => {
       const secondStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
       const thirdStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const failedStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
       const startTime = new Date(Date.now() - 60 * 60 * 1000)
       const icpcContest = await createTestSchoolContest({
         schoolId: schoolData.school.id,
@@ -359,6 +360,17 @@ describe('训练路由兼容校级比赛', () => {
         problemId: icpcProblem.id,
         alias: 'A',
         points: 100,
+      })
+      const unsubmittedProblem = await createTestContestProblem({
+        ownerId: teacherUser.teacherId!,
+        title: '未提交状态题目',
+      })
+      const unsubmittedTrainingProblem = await addProblemToContest({
+        trainingId: icpcContest.id,
+        problemId: unsubmittedProblem.id,
+        alias: 'B',
+        points: 100,
+        orderIndex: 2,
       })
 
       await createTestSubmission({
@@ -406,6 +418,15 @@ describe('训练路由兼容校级比赛', () => {
         score: 100,
         createdAt: new Date(startTime.getTime() + 30 * 60 * 1000),
       })
+      await createTestSubmission({
+        userId: failedStudent.user.id,
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.problemId,
+        trainingProblemId: icpcTrainingProblem.id,
+        result: 'wrong_answer',
+        score: 0,
+        createdAt: new Date(startTime.getTime() + 25 * 60 * 1000),
+      })
 
       const res = await createAuthenticatedRequest(app, studentToken)
         .get(`/api/trainings/${icpcContest.id}/ranking`)
@@ -415,18 +436,38 @@ describe('训练路由兼容校级比赛', () => {
       const firstAcceptedRow = res.body.data.ranking.find((row: any) => row.userId === secondStudent.user.id)
       const tiedAcceptedRow = res.body.data.ranking.find((row: any) => row.userId === thirdStudent.user.id)
       const laterAcceptedRow = res.body.data.ranking.find((row: any) => row.userId === studentUser.user.id)
+      const failedRow = res.body.data.ranking.find((row: any) => row.userId === failedStudent.user.id)
       const excludedAdminRow = res.body.data.ranking.find((row: any) => row.userId === teacherUser.user.id)
       expect(firstAcceptedRow.problems[icpcTrainingProblem.id]).toMatchObject({
         solved: true,
         attempts: 1,
+        acceptedAtMinutes: 20,
         isFirstAccepted: true,
       })
       expect(laterAcceptedRow.problems[icpcTrainingProblem.id]).toMatchObject({
         solved: true,
         attempts: 2,
+        acceptedAtMinutes: 30,
         isFirstAccepted: false,
       })
-      expect(tiedAcceptedRow.problems[icpcTrainingProblem.id].isFirstAccepted).toBe(false)
+      expect(tiedAcceptedRow.problems[icpcTrainingProblem.id]).toMatchObject({
+        solved: true,
+        attempts: 1,
+        acceptedAtMinutes: 20,
+        isFirstAccepted: false,
+      })
+      expect(failedRow.problems[icpcTrainingProblem.id]).toMatchObject({
+        solved: false,
+        attempts: 1,
+        acceptedAtMinutes: null,
+        isFirstAccepted: false,
+      })
+      expect(firstAcceptedRow.problems[unsubmittedTrainingProblem.id]).toMatchObject({
+        solved: false,
+        attempts: 0,
+        acceptedAtMinutes: null,
+        isFirstAccepted: false,
+      })
       expect(excludedAdminRow).toBeUndefined()
       const firstAcceptedCount = res.body.data.ranking.filter(
         (row: any) => row.problems[icpcTrainingProblem.id].isFirstAccepted,

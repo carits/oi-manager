@@ -30,6 +30,7 @@ export interface ICPCRankingEntry {
     solved: boolean
     attempts: number
     penalty: number
+    acceptedAtMinutes: number | null
     alias: string
     isFirstAccepted: boolean
   }>

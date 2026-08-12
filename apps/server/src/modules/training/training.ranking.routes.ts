@@ -198,14 +198,24 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         select: { id: true, userId: true, problemId: true, score: true, result: true, createdAt: true },
       })
 
-      const userStats = new Map<string, Map<string, { solved: boolean; penalty: number; attempts: number }>>()
+      const userStats = new Map<string, Map<string, {
+        solved: boolean
+        penalty: number
+        attempts: number
+        acceptedAtMinutes: number | null
+      }>>()
       const firstAcceptedUserByProblem = new Map<string, string>()
 
       for (const sub of submissions) {
         if (!userStats.has(sub.userId)) userStats.set(sub.userId, new Map())
         const problemStats = userStats.get(sub.userId)!
         if (!problemStats.has(sub.problemId)) {
-          problemStats.set(sub.problemId, { solved: false, penalty: 0, attempts: 0 })
+          problemStats.set(sub.problemId, {
+            solved: false,
+            penalty: 0,
+            attempts: 0,
+            acceptedAtMinutes: null,
+          })
         }
         const stat = problemStats.get(sub.problemId)!
 
@@ -216,6 +226,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         if (sub.result === 'accepted' || (sub.score ?? 0) >= (problems.find(p => p.Problem.problemId === sub.problemId)?.points ?? 100)) {
           stat.solved = true
           const timeDiff = (sub.createdAt.getTime() - trainingStartTime.getTime()) / 60000
+          stat.acceptedAtMinutes = Math.max(0, Math.floor(timeDiff))
           stat.penalty = timeDiff + (stat.attempts - 1) * 20
           if (!firstAcceptedUserByProblem.has(sub.problemId)) {
             firstAcceptedUserByProblem.set(sub.problemId, sub.userId)
@@ -229,7 +240,14 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       const ranking = Array.from(userStats.entries()).map(([uid, problemStats]) => {
         let solvedCount = 0
         let totalPenalty = 0
-        const problemDetails: Record<string, { solved: boolean; penalty: number; attempts: number; alias: string; isFirstAccepted: boolean }> = {}
+        const problemDetails: Record<string, {
+          solved: boolean
+          penalty: number
+          attempts: number
+          acceptedAtMinutes: number | null
+          alias: string
+          isFirstAccepted: boolean
+        }> = {}
 
         for (const p of problems) {
           // Submission.problemId = Problem.problemId (external ID), TrainingProblem.problemId = Problem.id (UUID)
@@ -238,6 +256,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           const solved = ps?.solved ?? false
           const penalty = ps?.penalty ?? 0
           const attempts = ps?.attempts ?? 0
+          const acceptedAtMinutes = ps?.acceptedAtMinutes ?? null
           if (solved) {
             solvedCount++
             totalPenalty += penalty
@@ -246,6 +265,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
             solved,
             penalty,
             attempts,
+            acceptedAtMinutes,
             alias: p.alias ?? '',
             isFirstAccepted: solved && firstAcceptedUserByProblem.get(p.Problem.problemId) === uid,
           }

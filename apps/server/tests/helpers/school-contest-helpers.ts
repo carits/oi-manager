@@ -111,12 +111,14 @@ export async function addProblemToContest(options: {
   problemId: string
   alias?: string
   points?: number
+  orderIndex?: number
 }) {
   const {
     trainingId,
     problemId,
     alias,
     points = 100,
+    orderIndex = 1,
   } = options
 
   const trainingProblem = await prisma.trainingProblem.create({
@@ -125,7 +127,7 @@ export async function addProblemToContest(options: {
       trainingId,
       problemId,
       alias,
-      orderIndex: 1,
+      orderIndex,
       points,
     },
   })
