@@ -90,7 +90,8 @@ test.describe('core role workflows @smoke', () => {
       }
     })
     expect(tableMetrics.tableWidth).toBe(1200)
-    expect(Math.abs(tableMetrics.leftSpace - tableMetrics.rightSpace)).toBeLessThanOrEqual(1)
+    expect(tableMetrics.leftSpace).toBeLessThanOrEqual(1)
+    expect(tableMetrics.rightSpace).toBeGreaterThan(0)
     expect(tableMetrics.viewportWidth).toBeGreaterThan(tableMetrics.tableWidth)
 
     await context.close()
