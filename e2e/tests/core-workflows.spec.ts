@@ -64,7 +64,7 @@ test.describe('core role workflows @smoke', () => {
     await expect(acceptedCell).toHaveCSS('background-color', 'rgb(232, 247, 233)')
 
     const failedCell = page.locator('td[data-result="failed"]').first()
-    await expect(failedCell).toHaveText('2')
+    await expect(failedCell).toHaveText('-2')
     await expect(failedCell).toHaveCSS('background-color', 'rgb(251, 228, 228)')
     await expect(page.locator('td[data-result="unsubmitted"]').first()).toHaveText('')
 

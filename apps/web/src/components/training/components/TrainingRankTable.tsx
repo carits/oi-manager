@@ -15,7 +15,7 @@ interface RankProblem {
 interface ICPCProblemResult {
   solved: boolean
   attempts: number
-  acceptedAtMinutes: number | null
+  acceptedAtMinutes?: number | null
   isFirstAccepted: boolean
 }
 
@@ -52,16 +52,19 @@ function describeICPCResult(label: string, result?: ICPCProblemResult) {
   if (!result.solved) {
     return {
       className: styles.icpcFailed,
-      text: String(result.attempts),
+      text: `-${result.attempts}`,
       description: `${label}：未通过，共 ${result.attempts} 次提交`,
       state: 'failed',
     }
   }
 
-  const minuteText = result.acceptedAtMinutes === null ? '?' : String(result.acceptedAtMinutes)
-  const acceptedDescription = result.acceptedAtMinutes === null
+  const acceptedAtMinutes = Number.isFinite(result.acceptedAtMinutes)
+    ? Math.max(0, Math.floor(result.acceptedAtMinutes as number))
+    : null
+  const minuteText = acceptedAtMinutes === null ? '?' : String(acceptedAtMinutes)
+  const acceptedDescription = acceptedAtMinutes === null
     ? `第 ${result.attempts} 次提交通过，通过时间未知`
-    : `第 ${result.attempts} 次提交，第 ${result.acceptedAtMinutes} 分钟通过`
+    : `第 ${result.attempts} 次提交，第 ${acceptedAtMinutes} 分钟通过`
   return {
     className: result.isFirstAccepted ? styles.scoreFirstAccepted : styles.icpcAccepted,
     text: `${result.attempts}/${minuteText}`,
