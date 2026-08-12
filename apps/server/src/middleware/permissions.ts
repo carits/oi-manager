@@ -53,6 +53,18 @@ export async function getUserSchoolId(userId: string): Promise<string | null> {
   return user?.Teacher?.schoolId || user?.Student?.schoolId || null
 }
 
+export async function getActiveSchoolId(req: AuthRequest): Promise<string | null> {
+  const organizationId = req.user?.organizationId
+  if (organizationId) {
+    const membership = await prisma.organizationMembership.findFirst({
+      where: { organizationId, userId: req.user!.userId, status: 'active' },
+      select: { Organization: { select: { School: { select: { id: true } } } } }
+    })
+    return membership?.Organization.School?.id || null
+  }
+  return getUserSchoolId(req.user!.userId)
+}
+
 /**
  * 获取用户的教师 ID
  */
@@ -88,7 +100,7 @@ export async function canAccessSchool(req: AuthRequest, schoolId: string): Promi
   if (!isPersonalMode(req.user) && (role === 'super_admin' || role === 'platform_admin')) return true
 
   // 其他角色只能访问本校
-  const userSchoolId = await getUserSchoolId(req.user!.userId)
+  const userSchoolId = await getActiveSchoolId(req)
   const hasAccess = userSchoolId === schoolId
 
   if (!hasAccess) {
@@ -113,7 +125,7 @@ export async function canManageSchool(req: AuthRequest, schoolId: string): Promi
 
   // 学校负责人只能管理本校
   if (role === 'school_principal') {
-    const userSchoolId = await getUserSchoolId(req.user!.userId)
+    const userSchoolId = await getActiveSchoolId(req)
     const hasAccess = userSchoolId === schoolId
 
     if (!hasAccess) {
@@ -163,7 +175,7 @@ export async function canViewStudent(req: AuthRequest, studentId: string): Promi
   }
 
   // 教师/学校负责人检查学校归属
-  const userSchoolId = await getUserSchoolId(req.user!.userId)
+  const userSchoolId = await getActiveSchoolId(req)
   const hasAccess = userSchoolId === student.schoolId
   if (!hasAccess) {
     logPermissionDenied(req, 'view_student', 'student', studentId, '不属于同一学校')
@@ -201,7 +213,7 @@ export async function canManageStudent(req: AuthRequest, studentId: string): Pro
   }
 
   // 检查学校归属
-  const userSchoolId = await getUserSchoolId(req.user!.userId)
+  const userSchoolId = await getActiveSchoolId(req)
   if (userSchoolId !== student.schoolId) {
     logPermissionDenied(req, 'manage_student', 'student', studentId, '不属于同一学校')
     return false
@@ -246,7 +258,7 @@ export async function canViewTeacher(req: AuthRequest, teacherId: string): Promi
   }
 
   // 检查学校归属
-  const userSchoolId = await getUserSchoolId(req.user!.userId)
+  const userSchoolId = await getActiveSchoolId(req)
   const hasAccess = userSchoolId === teacher.schoolId
   if (!hasAccess) {
     logPermissionDenied(req, 'view_teacher', 'teacher', teacherId, '不属于同一学校')
@@ -278,7 +290,7 @@ export async function canManageTeacher(req: AuthRequest, teacherId: string): Pro
 
   // 学校负责人检查
   if (role === 'school_principal') {
-    const userSchoolId = await getUserSchoolId(req.user!.userId)
+    const userSchoolId = await getActiveSchoolId(req)
     // 只能管理本校教师
     if (userSchoolId !== teacher.schoolId) {
       logPermissionDenied(req, 'manage_teacher', 'teacher', teacherId, '学校负责人只能管理本校教师')
@@ -331,7 +343,7 @@ export async function canViewTeam(req: AuthRequest, teamId: string): Promise<boo
   if (isWorkAdmin) return true
 
   // 检查学校归属
-  const userSchoolId = await getUserSchoolId(req.user!.userId)
+  const userSchoolId = await getActiveSchoolId(req)
 
   // 公开团队：本校用户可查看
   if (team.isPublic) {

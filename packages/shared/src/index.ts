@@ -39,9 +39,22 @@ export interface JwtPayload {
   studentId?: string // 学生ID（student 角色才有）
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   schoolId?: string // 学校ID（教师或学生所属学校）
+  organizationId?: string
   workspaceMode?: WorkspaceMode
   /** @deprecated Use workspaceMode. Kept while old sessions are migrated. */
   studentMode?: ResourceScope
+}
+
+export interface WorkspaceSummary {
+  type: 'organization' | 'personal'
+  organizationId?: string
+  organizationName?: string
+  organizationType?: string
+  schoolId?: string
+  memberRole?: string
+  relationType?: string
+  relationLabel?: string
+  availableModules: string[]
 }
 
 // API 响应类型

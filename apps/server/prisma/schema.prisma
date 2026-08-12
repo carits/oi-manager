@@ -536,6 +536,7 @@ model School {
   currentPrincipalTeacherId                         String
   createdAt                                         DateTime               @default(now())
   updatedAt                                         DateTime               @default(now())
+  organizationId                                    String?                @unique
   Admin                                             Admin[]
   PrincipalTransferLog                              PrincipalTransferLog[]
   Problem                                           Problem[]
@@ -546,6 +547,40 @@ model School {
   Team                                              Team[]
   Training                                          Training[]
   User                                              User[]
+  Organization                                      Organization?          @relation(fields: [organizationId], references: [id])
+}
+
+model Organization {
+  id          String                   @id
+  name        String
+  type        String                   @default("school")
+  status      String                   @default("active")
+  description String?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  School      School?
+  Membership  OrganizationMembership[]
+
+  @@index([type, status])
+}
+
+model OrganizationMembership {
+  id             String       @id
+  organizationId String
+  userId         String
+  memberRole     String
+  relationType   String
+  status         String       @default("active")
+  invitedBy      String?
+  joinedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, status])
 }
 
 model SchoolProblemList {
@@ -1011,6 +1046,7 @@ model User {
   UserArchivedProblem       UserArchivedProblem[]
   UserPlatformBinding       UserPlatformBinding[]
   UserNotification          UserNotification[]
+  OrganizationMembership    OrganizationMembership[]
 
   @@index([createdAt])
   @@index([role])

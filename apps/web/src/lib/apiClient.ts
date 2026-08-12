@@ -161,6 +161,8 @@ class ApiClient {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
       }
+      const organizationMatch = window.location.pathname.match(/^\/org\/([^/]+)/)
+      if (organizationMatch) headers['X-OI-Organization-ID'] = organizationMatch[1]
     }
 
     return headers

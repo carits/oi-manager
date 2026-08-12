@@ -1,0 +1,77 @@
+import crypto from 'crypto'
+import { Router } from 'express'
+import { asyncHandler } from '../lib/asyncHandler'
+import { authenticate, getWorkspaceMode } from '../middleware/auth'
+import { prisma } from '../prisma'
+import { notificationService } from '../modules/notification/notification.service'
+
+export const workspaceRouter = Router()
+
+const allModules = ['overview', 'campus', 'students', 'teachers', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
+
+function modulesForRole(role: string) {
+  if (role === 'school_principal') return allModules
+  if (role === 'teacher') return allModules.filter(item => item !== 'teachers')
+  return ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings']
+}
+
+function relationLabel(memberRole: string, relationType: string) {
+  if (memberRole === 'school_principal') return '学校负责人'
+  if (memberRole === 'teacher') return relationType === 'external_coach' ? '外聘教练' : '本校教师'
+  if (relationType === 'preselected') return '预选学生'
+  return '本校学生'
+}
+
+workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const rows = await prisma.organizationMembership.findMany({
+    where: { userId: req.user!.userId, status: 'active', Organization: { status: 'active' } },
+    include: { Organization: { include: { School: { select: { id: true, shortName: true } } } } },
+    orderBy: { joinedAt: 'asc' }
+  })
+  const organizations = rows.map(row => ({
+    type: 'organization' as const,
+    organizationId: row.organizationId,
+    organizationName: row.Organization.name,
+    organizationType: row.Organization.type,
+    schoolId: row.Organization.School?.id,
+    shortName: row.Organization.School?.shortName || null,
+    memberRole: row.memberRole,
+    relationType: row.relationType,
+    relationLabel: relationLabel(row.memberRole, row.relationType),
+    availableModules: modulesForRole(row.memberRole)
+  }))
+  res.json({ success: true, data: { workspaces: [...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }] } })
+}))
+
+workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {
+  if (getWorkspaceMode(req.user) !== 'work') return res.status(403).json({ success: false, message: '请先进入校园工作区' })
+  const organizationId = req.params.id
+  const sender = await prisma.organizationMembership.findFirst({ where: { organizationId, userId: req.user!.userId, status: 'active' } })
+  if (!sender || sender.memberRole !== 'school_principal') return res.status(403).json({ success: false, message: '只有学校负责人可以邀请成员' })
+  const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
+  const memberRole = req.body.memberRole === 'teacher' ? 'teacher' : 'student'
+  if (!username) return res.status(400).json({ success: false, message: '请输入用户名' })
+  const target = await prisma.user.findUnique({ where: { username }, select: { id: true, role: true } })
+  if (!target) return res.status(404).json({ success: false, message: '用户不存在' })
+  if ((memberRole === 'teacher' && !['teacher', 'school_principal'].includes(target.role)) || (memberRole === 'student' && target.role !== 'student')) {
+    return res.status(400).json({ success: false, message: '邀请身份必须与账号当前身份一致' })
+  }
+  const membership = await prisma.organizationMembership.upsert({
+    where: { organizationId_userId: { organizationId, userId: target.id } },
+    create: { id: crypto.randomUUID(), organizationId, userId: target.id, memberRole, relationType: memberRole === 'teacher' ? 'employee' : 'enrolled', status: 'pending', invitedBy: req.user!.userId },
+    update: { memberRole, relationType: memberRole === 'teacher' ? 'employee' : 'enrolled', status: 'pending', invitedBy: req.user!.userId, joinedAt: null }
+  })
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } })
+  await notificationService.create({ userId: target.id, scope: 'campus', type: 'organization_invitation', title: '收到学校邀请', body: `你受邀加入「${organization.name}」`, href: `organization:${organizationId}`, sourceType: 'organization_invitation', sourceId: membership.id })
+  res.json({ success: true, data: { id: membership.id } })
+}))
+
+workspaceRouter.post('/organization-invitations/:id/:action', authenticate, asyncHandler(async (req, res) => {
+  const accept = req.params.action === 'accept'
+  if (!accept && req.params.action !== 'reject') return res.status(400).json({ success: false, message: '无效操作' })
+  const invitation = await prisma.organizationMembership.findFirst({ where: { id: req.params.id, userId: req.user!.userId, status: 'pending' } })
+  if (!invitation) return res.status(404).json({ success: false, message: '邀请不存在或已处理' })
+  await prisma.organizationMembership.update({ where: { id: invitation.id }, data: { status: accept ? 'active' : 'rejected', joinedAt: accept ? new Date() : null } })
+  await notificationService.markSourceRead(req.user!.userId, 'campus', 'organization_invitation', invitation.id)
+  res.json({ success: true })
+}))

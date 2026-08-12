@@ -9,9 +9,10 @@ import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from 
 import { getAssetUrl } from '@/lib/assets'
 import { getSidebarNavigationOpen, setSidebarNavigationOpen } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
-import { SegmentedControl } from './ui/SegmentedControl'
 import { SessionUnavailable } from './SessionUnavailable'
 import { apiClient } from '@/lib/apiClient'
+import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
+import { workspaceModule } from '@/components/workspace/workspaceRouting'
 import styles from './AppShell.module.css'
 
 interface AppShellProps { children: ReactNode }
@@ -54,11 +55,9 @@ function isWorkbenchPath(pathname: string): boolean {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout, switchWorkspace } = useAuth()
+  const { user, logout } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [switchingMode, setSwitchingMode] = useState(false)
-  const [modeError, setModeError] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState<UserNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -124,6 +123,7 @@ export function AppShell({ children }: AppShellProps) {
   const navConfig = getNavConfig(role, workspaceMode)
   const activeItem = getActiveNavItem(pathname, role, workspaceMode)
   const isPersonal = workspaceMode === 'personal'
+  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const isStudent = role === 'student'
   const roleLabel = roleLabels[role] || '用户'
   const roleName = roleNames[role] || user.role
@@ -141,18 +141,8 @@ export function AppShell({ children }: AppShellProps) {
     if (!open) setShowUserMenu(false)
   }
 
-  const handleModeChange = async (mode: 'work' | 'personal') => {
-    if (mode === workspaceMode || switchingMode) return
-    setSwitchingMode(true)
-    setModeError('')
-    const success = await switchWorkspace(mode)
-    setSwitchingMode(false)
-    if (!success) {
-      setModeError('模式切换失败，请重试')
-    }
-  }
-
   const getTeamHref = (notification: UserNotification) => {
+    if (notification.href?.startsWith('organization:')) return `/org/${notification.href.replace('organization:', '')}/overview`
     const teamId = notification.href?.replace('team:', '')
     if (!teamId) return null
     if (isPersonal) return `/personal/teams/${teamId}`
@@ -186,7 +176,9 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleNotificationAction = async (notification: UserNotification, action: 'accept' | 'reject' | 'approve') => {
     setProcessingNotificationId(notification.id)
-    const endpoint = notification.type === 'team_invitation'
+    const endpoint = notification.type === 'organization_invitation'
+      ? `/api/workspaces/organization-invitations/${notification.sourceId}/${action === 'accept' ? 'accept' : 'reject'}`
+      : notification.type === 'team_invitation'
       ? `/api/teams/invitations/${notification.sourceId}/${action === 'accept' ? 'accept' : 'reject'}`
       : `/api/teams/join-requests/${notification.sourceId}/${action === 'approve' ? 'approve' : 'reject'}`
     const response = await apiClient.post(endpoint)
@@ -195,10 +187,12 @@ export function AppShell({ children }: AppShellProps) {
     else setNotificationError(response.message || '操作失败，请重试')
   }
 
+  const orgModuleByLabel: Record<string, string> = { '概览': 'overview', '校园': 'campus', '教师': 'teachers', '学生': 'students', '团队': 'teams', '作业': 'homeworks', '比赛': 'contests', '题库': 'problems', '题单': 'problem-lists', '排名': 'rankings' }
   const navLinks = navConfig.items.map(item => {
     const Icon = getNavIcon(item.label)
+    const href = organizationId && orgModuleByLabel[item.label] ? `/org/${organizationId}/${orgModuleByLabel[item.label]}` : item.href
     return (
-      <Link key={item.href} href={item.href} className={styles.sidebarLink} aria-current={activeItem === item.label ? 'page' : undefined}>
+      <Link key={item.href} href={href} className={styles.sidebarLink} aria-current={(organizationId ? orgModuleByLabel[item.label] === workspaceModule(pathname) : activeItem === item.label) ? 'page' : undefined}>
         <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
         <span>{item.label}</span>
       </Link>
@@ -250,7 +244,7 @@ export function AppShell({ children }: AppShellProps) {
                     {notificationError && <p className={styles.notificationError} role="status">{notificationError}</p>}
                     {!notificationError && notifications.length === 0 && <p className={styles.notificationEmpty}>暂时没有新通知</p>}
                     {notifications.map(notification => {
-                      const isActionable = notification.type === 'team_invitation' || notification.type === 'team_join_request'
+                      const isActionable = notification.type === 'team_invitation' || notification.type === 'team_join_request' || notification.type === 'organization_invitation'
                       const processing = processingNotificationId === notification.id
                       return <article key={notification.id} className={`${styles.notificationItem} ${!notification.readAt ? styles.notificationUnread : ''}`}>
                         <button type="button" className={styles.notificationContent} onClick={() => void handleNotificationClick(notification)}>
@@ -259,7 +253,7 @@ export function AppShell({ children }: AppShellProps) {
                           {!notification.readAt && <span className={styles.unreadDot} aria-label="未读" />}
                         </button>
                         {isActionable && <div className={styles.notificationActions}>
-                          {notification.type === 'team_invitation'
+                          {notification.type === 'team_invitation' || notification.type === 'organization_invitation'
                             ? <><button type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</button><button type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'accept')}>接受</button></>
                             : <><button type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</button><button type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'approve')}>同意</button></>}
                         </div>}
@@ -269,13 +263,6 @@ export function AppShell({ children }: AppShellProps) {
                 </div>
               )}
             </div>
-            <div className={styles.modeArea}>
-              <span className={styles.modeLabel}>工作区切换</span>
-              <div className={styles.modeControl}>
-                <SegmentedControl label="工作区" value={workspaceMode} disabled={switchingMode} onChange={handleModeChange} items={[{ value: 'work', label: role === 'super_admin' || role === 'platform_admin' ? '管理' : '校园' }, { value: 'personal', label: '个人' }]} />
-              </div>
-              {modeError && <span className={styles.modeError} role="status">{modeError}</span>}
-            </div>
           </div>
         </div>
       </header>
@@ -284,6 +271,7 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.sidebarBrandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回工作区首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           <button type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></button>
         </div>
+        {(role === 'student' || role === 'teacher' || role === 'school_principal') && <WorkspaceSwitcher />}
         <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人工作区' : roleName}主导航`}>{navLinks}</nav>
         <div className={styles.sidebarFooter}>{userMenu}</div>
       </aside>

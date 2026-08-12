@@ -202,6 +202,7 @@ const routerPrefixes = {
   archivedProblemsRouter: '/api/archived-problems',
   rankingRouter: '/api/rankings',
   notificationRouter: '/api/notifications',
+  workspaceRouter: '/api/workspaces',
 }
 
 const endpointPattern =

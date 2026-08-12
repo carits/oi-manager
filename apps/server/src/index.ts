@@ -31,6 +31,7 @@ import { archivedProblemsRouter } from './routes/archived-problems'
 import { rankingRouter } from './modules/ranking/ranking.routes'
 import { meRouter } from './routes/me'
 import { notificationRouter } from './modules/notification/notification.routes'
+import { workspaceRouter } from './routes/workspaces'
 import { startSubmissionPoller } from './lib/submission-poller'
 import { metrics } from './lib/metrics'
 import path from 'path'
@@ -129,6 +130,7 @@ app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目
 app.use('/api/rankings', rankingRouter)
 app.use('/api/me', meRouter)
 app.use('/api/notifications', authenticate, notificationRouter)
+app.use('/api/workspaces', workspaceRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

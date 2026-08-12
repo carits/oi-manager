@@ -7,10 +7,10 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 # 数据库 Schema
 
-数据库 provider 为 PostgreSQL。下表登记全部 52 个 Prisma 模型；字段和约束的最终
+数据库 provider 为 PostgreSQL。下表登记全部 54 个 Prisma 模型；字段和约束的最终
 定义始终以 `apps/server/prisma/schema.prisma` 为准。
 
-## 身份与学校（10）
+## 身份与学校（12）
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
@@ -20,6 +20,8 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `Student` | `id`, `name`, `schoolId`, `headTeacherId`, `rating` | 学生扩展 |
 | `PersonalProfile` | `userId`, `rating`, timestamps | 全角色按需启用的个人身份与个人 Rating |
 | `School` | `id`, `name`, `currentPrincipalTeacherId`, `status` | 学校与当前负责人 |
+| `Organization` | `id`, `name`, `type`, `status` | 统一组织工作区；首期由学校一一映射 |
+| `OrganizationMembership` | `organizationId`, `userId`, `memberRole`, `relationType`, `status` | 用户在组织内的有效成员关系与邀请状态 |
 | `LoginLog` | `username`, `loginRole`, `userRole`, `result`, `ipAddress` | 登录审计 |
 | `PasswordResetLog` | `operatorId`, `targetUserId`, `resetMethod`, `result` | 密码重置审计 |
 | `UserStatusLog` | `operatorId`, `targetUserId`, `oldStatus`, `newStatus` | 状态变更审计 |

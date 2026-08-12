@@ -77,6 +77,16 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `GET` | `/api/rankings/personal/rating` | 任意角色个人工作区 | 平台级个人 Rating 排名，只返回用户名 |
 | `GET` | `/api/rankings/personal/solved` | 任意角色个人工作区 | 平台级个人解题排名，只返回用户名 |
 
+## 组织工作区（4）
+
+首期组织仅映射学校。组织成员关系决定 `/org/:organizationId/*` 中的当前校园范围；个人工作区不属于组织。
+
+| 方法 | 路径 | 访问 | 用途 |
+|------|------|------|------|
+| `GET` | `/api/workspaces` | 登录 | 获取可进入的学校与个人工作区、关系和可用模块 |
+| `POST` | `/api/workspaces/organizations/:id/invitations` | 学校负责人 | 邀请已有账号加入本校工作区 |
+| `POST` | `/api/workspaces/organization-invitations/:id/:action` | 受邀用户 | `accept` 接受或 `reject` 拒绝学校工作区邀请 |
+
 ## 通知（3）
 
 | 方法 | 路径 | 访问 | 用途 |

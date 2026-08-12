@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -31,6 +32,7 @@ import {
   type WorkspaceMode,
 } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
+import type { WorkspaceSummary } from '@oi-manager/shared'
 
 export interface AuthUser {
   userId: string
@@ -51,6 +53,8 @@ export interface AuthUser {
   studentMode?: 'campus' | 'personal'
 }
 
+export type { WorkspaceSummary }
+
 interface LoginResult {
   success: boolean
   message?: string
@@ -65,9 +69,10 @@ interface AuthContextType {
   login: (username: string, password: string, role: string, mode?: 'campus' | 'personal') => Promise<LoginResult>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
-  switchWorkspace: (mode: WorkspaceMode) => Promise<boolean>
+  switchWorkspace: (mode: WorkspaceMode, targetPath?: string) => Promise<boolean>
   /** @deprecated Use switchWorkspace. */
   switchMode: (mode: 'campus' | 'personal') => Promise<boolean>
+  activateOrganization: (workspace: WorkspaceSummary) => void
   isAuthenticated: boolean
   sessionKey: string | null
 }
@@ -218,7 +223,7 @@ export function AuthProvider({
     }
   }
 
-  const switchWorkspace = async (mode: WorkspaceMode) => {
+  const switchWorkspace = async (mode: WorkspaceMode, targetPath?: string) => {
     if (!user || normalizeWorkspaceMode(user) === mode) return true
 
     const currentMode = normalizeWorkspaceMode(user)
@@ -250,7 +255,7 @@ export function AuthProvider({
     setUser(current => current
       ? { ...current, workspaceMode: nextMode, studentMode: legacyMode }
       : null)
-    const target = getLastWorkspacePath(user.userId, user.role, nextMode)
+    const target = targetPath || getLastWorkspacePath(user.userId, user.role, nextMode)
       || (nextMode === 'personal' ? '/personal' : getRoleHome(user.role))
     window.location.assign(target)
     return true
@@ -258,6 +263,13 @@ export function AuthProvider({
 
   const switchMode = (mode: 'campus' | 'personal') =>
     switchWorkspace(mode === 'personal' ? 'personal' : 'work')
+
+  const activateOrganization = useCallback((workspace: WorkspaceSummary) => {
+    if (workspace.type !== 'organization' || !workspace.schoolId) return
+    setUser(current => current && current.schoolId === workspace.schoolId
+      ? current
+      : current ? { ...current, schoolId: workspace.schoolId, schoolName: workspace.organizationName } : null)
+  }, [])
 
   return (
     <AuthContext.Provider value={{
@@ -269,6 +281,7 @@ export function AuthProvider({
       refreshUser,
       switchWorkspace,
       switchMode,
+      activateOrganization,
       isAuthenticated: Boolean(user),
       sessionKey,
     }}>

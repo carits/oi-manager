@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { JwtPayload, UserRole, WorkspaceMode, ResourceScope } from '@oi-manager/shared'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
+import { prisma } from '../prisma'
 
 // 全局类型扩展：让 Express Request.user 使用 JwtPayload 类型
 declare global {
@@ -18,7 +19,7 @@ export interface AuthRequest extends Request {
   user?: JwtPayload
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
   const bearerToken = authHeader?.startsWith('Bearer ')
     ? authHeader.substring(7)
@@ -33,6 +34,17 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
     decoded.workspaceMode = getWorkspaceMode(decoded)
+    const organizationId = req.get('x-oi-organization-id')
+    if (organizationId && decoded.workspaceMode === 'work') {
+      const membership = await prisma.organizationMembership.findFirst({
+        where: { organizationId, userId: decoded.userId, status: 'active', Organization: { status: 'active' } },
+        select: { Organization: { select: { School: { select: { id: true } } } } }
+      })
+      const schoolId = membership?.Organization.School?.id
+      if (!schoolId) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该工作区' })
+      decoded.organizationId = organizationId
+      decoded.schoolId = schoolId
+    }
     if (decoded.role === 'student' && !decoded.studentMode) {
       decoded.studentMode = decoded.workspaceMode === 'personal' ? 'personal' : 'campus'
     }
@@ -42,6 +54,10 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   } catch {
     return res.status(401).json({ success: false, message: 'Token 无效或已过期' })
   }
+}
+
+export function getActiveOrganizationId(user?: JwtPayload): string | undefined {
+  return getWorkspaceMode(user) === 'work' ? user?.organizationId : undefined
 }
 
 export function authorize(...roles: UserRole[]) {

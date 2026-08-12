@@ -7,7 +7,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 # 页面路由
 
-当前共有 109 个 `page.tsx`。动态参数：`[id]` 为资源 ID，`[cid]` 为作业/比赛 ID，
+当前共有 110 个 `page.tsx`。动态参数：`[id]` 为资源 ID，`[cid]` 为作业/比赛 ID，
 `[tid]` 为训练 ID。
 
 ## 公共入口（2）
@@ -93,6 +93,14 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/submissions/[id]` | 个人工作区、本人 | 提交详情 |
 | `/personal/rankings` | 个人工作区 | 个人 Rating 与解题排名 |
 
+## 组织工作区（1）
+
+学校工作区统一通过 URL 选择当前组织；服务端按组织成员关系验证访问范围。首期仅开放学校组织，页面组件复用现有校园业务页面。
+
+| 路径 | 身份 | 页面 |
+|------|------|------|
+| `/org/[organizationId]/[module]` | 有效学校成员 | 组织概览、校园、成员、团队、作业、比赛、题库、题单或排名 |
+
 ## 学生与旧兼容入口（27）
 
 `/student` 是校园工作区。旧学生个人模式地址在个人会话中由服务端重定向至
@@ -170,4 +178,3 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/teacher/teams/[id]/trainings/[tid]` | 管理者/成员 | 团队训练 |
 
 `pnpm docs:check` 会将本表中的反引号路径与实际 `page.tsx` 及 E2E route manifest 比较。
-
