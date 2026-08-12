@@ -77,6 +77,14 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `GET` | `/api/rankings/personal/rating` | 任意角色个人工作区 | 平台级个人 Rating 排名，只返回用户名 |
 | `GET` | `/api/rankings/personal/solved` | 任意角色个人工作区 | 平台级个人解题排名，只返回用户名 |
 
+## 通知（3）
+
+| 方法 | 路径 | 访问 | 用途 |
+|------|------|------|------|
+| `GET` | `/api/notifications` | 登录、当前工作区本人 | 获取最新 20 条通知与未读数量 |
+| `PATCH` | `/api/notifications/:id/read` | 登录、当前工作区本人 | 标记单条通知已读 |
+| `POST` | `/api/notifications/read-all` | 登录、当前工作区本人 | 标记当前工作区全部通知已读 |
+
 ## 团队 CRUD 与成员（25）
 
 | 方法 | 路径 | 访问 | 用途 |
@@ -151,4 +159,3 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `POST` | `/api/team-import/luogu/preview` | 教师/负责人 | 洛谷预览 |
 | `POST` | `/api/team-import/luogu/validate` | 教师/负责人 | 洛谷冲突校验 |
 | `POST` | `/api/team-import/luogu/import` | 教师/负责人、团队权限 | 洛谷导入 |
-

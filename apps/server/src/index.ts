@@ -30,6 +30,7 @@ import { migrationRouter } from './routes/migration'
 import { archivedProblemsRouter } from './routes/archived-problems'
 import { rankingRouter } from './modules/ranking/ranking.routes'
 import { meRouter } from './routes/me'
+import { notificationRouter } from './modules/notification/notification.routes'
 import { startSubmissionPoller } from './lib/submission-poller'
 import { metrics } from './lib/metrics'
 import path from 'path'
@@ -127,6 +128,7 @@ app.use('/api/admin/migration', authenticate, requireWorkspace('work'), migratio
 app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
 app.use('/api/rankings', rankingRouter)
 app.use('/api/me', meRouter)
+app.use('/api/notifications', authenticate, notificationRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

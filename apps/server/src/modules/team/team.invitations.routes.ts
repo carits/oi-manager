@@ -12,6 +12,7 @@ import { getUserDisplayName } from './team.utils'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
+import { notificationService } from '../notification/notification.service'
 
 export const teamInvitationsRouter = Router()
 
@@ -288,6 +289,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   }
 
   await teamService.assertTeamScope(invitation.teamId, user)
+  const team = await teamRepository.findById(invitation.teamId)
 
   // 使用事务确保状态更新和日志记录原子性
   const callerType = getMembershipType(user)
@@ -313,6 +315,19 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
         }
       })
     })
+    await notificationService.markSourceRead(userId, team!.scope as any, 'team_invitation', invitationId)
+    if (invitation.invitedBy) {
+      await notificationService.createInvitationResponse({
+        recipientId: invitation.invitedBy,
+        scope: team!.scope as any,
+        invitationId,
+        teamId: invitation.teamId,
+        teamName: team!.name,
+        memberId: invitation.userId,
+        memberType: invitation.userType as MemberType,
+        accepted: true
+      })
+    }
     res.json({ success: true, message: '已加入团队' })
   } catch (error) {
     if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
@@ -326,7 +341,6 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   const user = (req as any).user!
 
   const userId = user.userId
-  const userType = getMembershipType(user)
 
   const invitation = await teamRepository.findMemberById(invitationId)
 
@@ -339,6 +353,7 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   }
 
   await teamService.assertTeamScope(invitation.teamId, user)
+  const team = await teamRepository.findById(invitation.teamId)
 
   // 使用事务确保删除和日志记录原子性
   const callerType = getMembershipType(user)
@@ -363,6 +378,19 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
         }
       })
     })
+    await notificationService.markSourceRead(userId, team!.scope as any, 'team_invitation', invitationId)
+    if (invitation.invitedBy) {
+      await notificationService.createInvitationResponse({
+        recipientId: invitation.invitedBy,
+        scope: team!.scope as any,
+        invitationId,
+        teamId: invitation.teamId,
+        teamName: team!.name,
+        memberId: invitation.userId,
+        memberType: invitation.userType as MemberType,
+        accepted: false
+      })
+    }
     res.json({ success: true, message: '已拒绝邀请' })
   } catch (error) {
     if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {

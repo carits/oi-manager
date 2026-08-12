@@ -11,6 +11,7 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
 import logger from '../../lib/logger'
+import { notificationService } from '../notification/notification.service'
 
 export const teamRequestsRouter = Router()
 
@@ -112,6 +113,11 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
     targetId: member.userId,
     targetType: member.userType as MemberType
   })
+  const team = await teamRepository.findById(member.teamId)
+  if (team) {
+    await notificationService.markSourceRead(user.userId, scope, 'team_join_request', member.id)
+    await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: true })
+  }
 
   res.json({ success: true, message: '已同意加入请求' })
 }))
@@ -151,6 +157,11 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
     targetId: member.userId,
     targetType: member.userType as MemberType
   })
+  const team = await teamRepository.findById(member.teamId)
+  if (team) {
+    await notificationService.markSourceRead(user.userId, scope, 'team_join_request', member.id)
+    await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: false })
+  }
 
   res.json({ success: true, message: '已拒绝申请' })
 }))

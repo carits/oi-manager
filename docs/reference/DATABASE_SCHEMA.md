@@ -7,7 +7,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 # 数据库 Schema
 
-数据库 provider 为 PostgreSQL。下表登记全部 51 个 Prisma 模型；字段和约束的最终
+数据库 provider 为 PostgreSQL。下表登记全部 52 个 Prisma 模型；字段和约束的最终
 定义始终以 `apps/server/prisma/schema.prisma` 为准。
 
 ## 身份与学校（10）
@@ -25,7 +25,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `UserStatusLog` | `operatorId`, `targetUserId`, `oldStatus`, `newStatus` | 状态变更审计 |
 | `PrincipalTransferLog` | `schoolId`, `oldPrincipalTeacherId`, `newPrincipalTeacherId` | 负责人转移 |
 
-## 团队与导入（7）
+## 团队与导入（8）
 
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
@@ -36,6 +36,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TeamMemberImportBatch` | `teamId`, `operatorId`, `platform`, count fields | 导入批次 |
 | `TeamMemberImportItem` | `batchId`, source fields, match fields, `status` | 导入行 |
 | `TeamOperationLog` | `teamId`, `operatorId`, `action`, target fields | 团队审计 |
+| `UserNotification` | `userId`, `scope`, `type`, `sourceType`, `sourceId`, `readAt` | 当前工作区的用户通知 |
 
 ## 题目与题单（12）
 
@@ -97,4 +98,3 @@ source_of_truth: apps/server/prisma/schema.prisma
 - 修改模型后同步 Prisma Client、测试 fixture、本页和数据迁移策略。
 - 需要并发语义的功能必须在 PostgreSQL 上测试。
 - `pnpm docs:check` 会比较本页模型名与 Schema，缺失或多余都会失败。
-

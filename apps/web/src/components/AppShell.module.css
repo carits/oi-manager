@@ -3,7 +3,33 @@
 .headerInner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: 0 var(--space-6); margin: 0 auto; }
 .headerStart, .headerEnd { display: flex; align-items: center; min-width: 0; }
 .headerStart { gap: var(--space-3); }
-.headerEnd { flex: 0 0 auto; }
+.headerEnd { flex: 0 0 auto; gap: var(--space-2); }
+.notificationRoot { position: relative; }
+.notificationButton { position: relative; width: 38px; height: 38px; display: grid; place-items: center; color: var(--text-secondary); border-radius: var(--radius); transition: color var(--transition-fast), background var(--transition-fast); }
+.notificationButton:hover, .notificationButton[aria-expanded='true'] { color: var(--text-primary); background: var(--bg-hover); }
+.notificationBadge { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 4px; color: #fff; background: var(--error); border: 2px solid var(--bg-card); border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 1; }
+.notificationPanel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 140; width: min(360px, calc(100vw - 24px)); overflow: hidden; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.notificationHeader { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-4); border-bottom: 1px solid var(--border); }
+.notificationHeader strong { font-size: var(--text-sm); }
+.readAllButton { color: var(--primary); font-size: var(--text-xs); font-weight: 650; }
+.readAllButton:disabled { color: var(--text-muted); cursor: default; }
+.notificationList { max-height: min(560px, calc(100vh - 100px)); overflow-y: auto; }
+.notificationItem { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.notificationItem:last-child { border-bottom: 0; }
+.notificationUnread { background: color-mix(in srgb, var(--primary-light) 42%, transparent); }
+.notificationContent { width: 100%; display: flex; align-items: flex-start; gap: var(--space-3); color: var(--text-primary); text-align: left; }
+.notificationIcon { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 auto; color: var(--primary); background: var(--primary-light); border-radius: var(--radius); }
+.notificationText { min-width: 0; display: grid; gap: 3px; flex: 1; }
+.notificationText strong { font-size: var(--text-sm); font-weight: 650; }
+.notificationText span, .notificationText time { overflow: hidden; color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.notificationText time { color: var(--text-muted); }
+.unreadDot { width: 7px; height: 7px; flex: 0 0 auto; margin-top: 5px; background: var(--primary); border-radius: 50%; }
+.notificationActions { display: flex; justify-content: flex-end; gap: var(--space-2); margin: var(--space-3) 0 0 44px; }
+.notificationActions button { min-height: 30px; padding: 0 var(--space-3); border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 650; }
+.secondaryAction { color: var(--text-secondary); border: 1px solid var(--border); background: var(--bg-card); }
+.primaryAction { color: var(--text-inverse); background: var(--primary); }
+.notificationEmpty, .notificationError { margin: 0; padding: var(--space-6) var(--space-4); color: var(--text-muted); font-size: var(--text-sm); text-align: center; }
+.notificationError { color: var(--error-text); }
 .navigationToggle, .sidebarClose { display: grid; place-items: center; flex: 0 0 auto; color: var(--text-secondary); border-radius: var(--radius); transition: color var(--transition-fast), background var(--transition-fast); }
 .navigationToggle { width: 40px; height: 40px; }
 .navigationToggle:hover, .sidebarClose:hover { color: var(--text-primary); background: var(--bg-hover); }

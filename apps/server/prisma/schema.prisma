@@ -1010,11 +1010,31 @@ model User {
   School                    School                      @relation(fields: [schoolId], references: [id])
   UserArchivedProblem       UserArchivedProblem[]
   UserPlatformBinding       UserPlatformBinding[]
+  UserNotification          UserNotification[]
 
   @@index([createdAt])
   @@index([role])
   @@index([schoolId])
   @@index([status])
+}
+
+model UserNotification {
+  id         String   @id
+  userId     String
+  scope      String
+  type       String
+  title      String
+  body       String
+  href       String?
+  sourceType String
+  sourceId   String
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+  User       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scope, sourceType, sourceId])
+  @@index([userId, scope, readAt, createdAt])
+  @@index([userId, scope, createdAt])
 }
 
 model UserArchivedProblem {

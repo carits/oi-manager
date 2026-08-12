@@ -10,6 +10,7 @@ import type { JwtPayload } from '@oi-manager/shared'
 import { teamRepository, TeamRepository } from './team.repository'
 import { getUserName, getUserNames, getMemberDetails, getMemberDetailsBatch, formatMemberForScope, formatTeamLimitMessage, formatNewOwnerLimitMessage, transformTeamForFrontend, transformTeamsForFrontend } from './team.utils'
 import { getMembershipType, isPersonalMode } from '../../middleware/auth'
+import { notificationService } from '../notification/notification.service'
 import type {
   MemberType,
   MemberRole,
@@ -714,13 +715,22 @@ export class TeamService {
       }
 
       // 创建邀请
-      await this.repo.createMember({
+      const invitation = await this.repo.createMember({
         teamId,
         userId: memberId,
         userType: memberType,
         role: dto.role === 'admin' ? 'admin' : 'member',
         status: 'pending',
         invitedBy
+      })
+      await notificationService.createTeamInvitation({
+        recipientId: memberId,
+        scope: team.scope as TeamScope,
+        invitationId: invitation.id,
+        teamId,
+        teamName: team.name,
+        inviterId: invitedBy,
+        inviterType: getMembershipType(user) as MemberType
       })
       result.invited.push(memberId)
     }
@@ -1041,13 +1051,28 @@ export class TeamService {
     }
 
     // 统一创建 pending 状态的 TeamMember 记录（不再区分教师/学生）
-    return this.repo.createMember({
+    const request = await this.repo.createMember({
       teamId,
       userId,
       userType,
       role: 'member',
       status: 'pending'
     })
+    const administrators = await this.repo.findMembers(teamId, { status: 'active' })
+    const recipientIds = administrators
+      .filter(member => member.role === 'owner' || member.role === 'admin')
+      .map(member => member.userId)
+      .filter(id => id !== userId)
+    await notificationService.createTeamJoinRequest({
+      recipientIds,
+      scope: team.scope as TeamScope,
+      requestId: request.id,
+      teamId,
+      teamName: team.name,
+      applicantId: userId,
+      applicantType: userType as MemberType
+    })
+    return request
   }
 
   /**
