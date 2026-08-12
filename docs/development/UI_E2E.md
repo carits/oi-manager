@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-12
 source_of_truth: playwright.config.ts and e2e directory
 ---
 
@@ -63,12 +63,25 @@ pnpm test:ui
 pnpm test:ui:headed
 pnpm test:ui:live
 pnpm test:ui:report
+pnpm routes:audit
 ```
 
 - `smoke`：Chromium 和 Firefox 的登录、权限、导航与角色核心流程。
 - `test:ui`：109 个页面、1440×900、1280×720、核心 CRUD、文件、Judge 和安全边界。
 - `headed`：本地可视调试。
 - `live`：手动真实 OJ/Judge 探针，不作为合并门禁。
+- `routes:audit`：扫描前端跳转表达式，生成 `test-results/navigation-static-report.json`；不存在静态路径、缺失动态标识和已知禁止父路径会阻断。
+
+## 真实点击巡检
+
+`e2e/tests/internal-link-audit.spec.ts` 不只盘点路由目录。它使用负责人、教师、校园学生和个人学生的固定会话，从各自模块页实际点击可见内部链接，并继续检查已发现详情页的包屑与返回链接。
+
+```bash
+pnpm test:ui:prepare
+pnpm exec playwright test e2e/tests/internal-link-audit.spec.ts --project=chromium-desktop --workers=1 --grep principal
+```
+
+按角色分别运行可避免完整巡检超过单次执行时间。失败时必须保留来源页面、控件文本、原始 `href`、最终 URL、截图和 Trace。路由或按钮改动不得只以静态扫描或构建通过作为验收。
 
 ## 页面规则
 
@@ -90,4 +103,3 @@ pnpm test:ui:report
 
 PR 运行冒烟；`main` 推送和每日定时任务运行 Chromium 全量与紧凑视口。真实连通性
 只在手动 workflow 中使用 Secrets，且不保存可能含凭据的 trace。
-

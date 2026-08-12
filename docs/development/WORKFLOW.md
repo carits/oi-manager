@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-12
 source_of_truth: AGENTS.md, package.json and workspace package manifests
 ---
 
@@ -23,6 +23,7 @@ source_of_truth: AGENTS.md, package.json and workspace package manifests
 | `pnpm test:ui:smoke` | Chromium/Firefox UI 冒烟 |
 | `pnpm test:ui` | 全量 Playwright |
 | `pnpm docs:check` | 文档、路由、模型和 API 清单检查 |
+| `pnpm routes:audit` | 扫描前端跳转表达式并阻断已知不存在路径、缺失动态标识 |
 | `pnpm ui:state-check` | 拒绝整页等待文案、mounted 门和页面级重复鉴权 |
 
 ## 修改流程
@@ -35,6 +36,8 @@ source_of_truth: AGENTS.md, package.json and workspace package manifests
 6. 根据风险补单元测试或 E2E，再运行受影响构建。
 7. 按“任务文档门禁”同步活动文档、当前状态和变更记录。
 8. 运行 `pnpm docs:check`，再提交、推送或部署。
+
+涉及路由、按钮、菜单、通知、返回链接或工作区切换时，除构建外必须运行 `pnpm routes:audit`，并使用 E2E 固定身份实际点击受影响入口。不要通过 Prisma、SQL 或临时脚本直接修改默认数据库来制造验收数据；应补受权限保护的 API 和 API/E2E 测试。
 
 ## 任务文档门禁
 

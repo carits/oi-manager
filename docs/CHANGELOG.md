@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-11
+last_verified: 2026-08-12
 source_of_truth: Git history
 ---
 
@@ -9,6 +9,16 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在
 [历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-12
+
+### 路由巡检与 Codex 执行手册
+
+- 修复学校比赛详情的包屑、加载态、错误态和删除后返回地址，避免生成不存在的 `/teacher/school/contests` 或 `/student/school/contests` 父路径。
+- 修复个人比赛详情误把比赛 ID 当作团队 ID 的包屑跳转问题，统一返回 `/personal/contests`。
+- 新增 `pnpm routes:audit` 静态跳转巡检和 `internal-link-audit.spec.ts` 实际点击巡检；四种固定 E2E 身份分别验证负责人、教师、校园学生和个人学生的可见内部链接与详情页返回链路。
+- 重写 Codex 接手指南，明确服务器工作树、禁止直接操作数据库、E2E schema 隔离、路由/按钮真实点击门禁、部署步骤和文档交付要求。
+- 已实际验证：Web 单测与构建、`pnpm docs:check`、`pnpm routes:audit`、四种身份的 Chromium 内部链接巡检、GitHub `main` 推送，以及 `3000` 健康检查。
 
 ## 2026-08-11
 

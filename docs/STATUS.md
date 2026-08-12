@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-11
+last_verified: 2026-08-12
 source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -38,6 +38,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 ## 最近验证
 
 以下数字是最近一次相关验证快照，不作为永久常量：
+
+- 2026-08-12 新增路由静态巡检：当前识别 112 个页面路由，阻断问题为 0；其余手写跳转会保留在机器可读报告中，需逐步迁移到统一路由函数。
+- 2026-08-12 负责人、普通教师、校园学生和个人学生分别完成 Chromium 可见内部链接实际点击巡检；覆盖模块页和动态详情页返回链路，未出现 404、500、未处理控制台异常或页面错误。
 
 - 根构建按 `shared → Prisma Client → server → web → judge` 顺序通过。
 - 2026-08-02 Server Vitest 完整主跑 472/472 通过；校内题库新增 8 项隔离测试，覆盖
