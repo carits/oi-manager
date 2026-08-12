@@ -419,6 +419,7 @@
 
 .tableActionHeader { background: var(--bg-muted); }
 .tableActionCell { background: var(--bg-card); }
+.tableActionCell:has(.actionMenuOpen) { z-index: 5; }
 .tableRow:hover .tableActionCell { background: var(--bg-hover); }
 .tableRowCurrent .tableActionCell,
 .tableRowCurrent:hover .tableActionCell { background: var(--primary-light); }

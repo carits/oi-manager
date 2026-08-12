@@ -25,7 +25,7 @@ export function ActionMenu({ children }: { children: ReactNode }) {
     document.addEventListener('mousedown', close); document.addEventListener('keydown', escape)
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape) }
   }, [])
-  return <div className={styles.actionMenu} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && <ActionMenuContext.Provider value={() => setOpen(false)}><div className={styles.actionPanel} role="menu">{children}</div></ActionMenuContext.Provider>}</div>
+  return <div className={`${styles.actionMenu} ${open ? styles.actionMenuOpen : ''}`} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && <ActionMenuContext.Provider value={() => setOpen(false)}><div className={styles.actionPanel} role="menu">{children}</div></ActionMenuContext.Provider>}</div>
 }
 
 export function ActionMenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
