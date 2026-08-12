@@ -34,6 +34,10 @@ function rankingSearch(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLocaleLowerCase() : ''
 }
 
+function listSearch(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 function matchesRankingSearch(student: RankingStudent, query: string) {
   return !query || student.name.toLocaleLowerCase().includes(query) || student.User.username.toLocaleLowerCase().includes(query)
 }
@@ -85,15 +89,30 @@ function rankingGradeOptions(rows: Array<{ grade: string; graduated: boolean }>,
 schoolMembersRouter.get('/:id/teachers', authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params
     const { page, pageSize, skip } = parsePagination(req.query, { defaultPageSize: 20 })
+    const q = listSearch(req.query.q)
+    const role = req.query.role === 'principal' || req.query.role === 'teacher' ? req.query.role : ''
+    const status = req.query.status === 'active' || req.query.status === 'disabled' ? req.query.status : ''
 
     // 资源级权限检查：只有本校用户可以查看
     if (!await canAccessSchool(req, id)) {
       return res.status(403).json({ success: false, message: '您没有权限查看该学校的教师列表' })
     }
 
+    const school = await prisma.school.findUnique({ where: { id }, select: { currentPrincipalTeacherId: true } })
+    const roleWhere = role === 'principal'
+      ? { id: school?.currentPrincipalTeacherId || '__no_principal__' }
+      : role === 'teacher' && school?.currentPrincipalTeacherId
+        ? { id: { not: school.currentPrincipalTeacherId } }
+        : {}
+    const where = {
+      schoolId: id,
+      ...roleWhere,
+      ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { User: { username: { contains: q, mode: 'insensitive' as const } } }] } : {}),
+      ...(status ? { User: { status } } : {})
+    }
     const [teachers, total] = await Promise.all([
       prisma.teacher.findMany({
-        where: { schoolId: id },
+        where,
         select: {
           id: true,
           name: true,
@@ -107,7 +126,8 @@ schoolMembersRouter.get('/:id/teachers', authenticate, asyncHandler(async (req: 
               role: true,
               status: true,
               phone: true,
-              email: true
+              email: true,
+              avatar: true
             }
           }
         },
@@ -115,7 +135,7 @@ schoolMembersRouter.get('/:id/teachers', authenticate, asyncHandler(async (req: 
         skip,
         take: pageSize
       }),
-      prisma.teacher.count({ where: { schoolId: id } })
+      prisma.teacher.count({ where })
     ])
 
     // 转换字段名：User -> user（符合前端契约）

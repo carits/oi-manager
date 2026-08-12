@@ -9,14 +9,25 @@ import logger from '../lib/logger'
 import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../lib/pagination'
 import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../modules/training/training.helpers'
+import { calculateGrade, getAllGrades } from '@oi-manager/shared/utils/grade'
 
 export const studentRouter = Router()
+
+function normalizeEducationSystemDetail(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const detail = value as Record<string, unknown>
+  return {
+    primaryYears: typeof detail.primaryYears === 'number' ? detail.primaryYears : undefined,
+    middleYears: typeof detail.middleYears === 'number' ? detail.middleYears : undefined,
+    highYears: typeof detail.highYears === 'number' ? detail.highYears : undefined,
+  }
+}
 
 // 获取学生列表 (老师、学校负责人和管理员)
 // 性能优化：使用数据库级分页和排序，避免全量查询后在内存中处理
 studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
-    const { headTeacherId, teamId, schoolId, username } = req.query
-    const { page, pageSize, skip } = parsePagination(req.query)
+    const { headTeacherId, teamId, schoolId, username, q, grade, status } = req.query
+    const { page, pageSize } = parsePagination(req.query)
 
     // 获取当前登录教师信息
     const userId = req.user!.userId
@@ -46,20 +57,17 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     if (schoolId) where.schoolId = schoolId as string
 
     // 如果有用户名查询，模糊匹配用户名
-    if (username) {
-      where.User = {
-        username: { contains: username as string }
-      }
+    const search = typeof q === 'string' ? q.trim() : typeof username === 'string' ? username.trim() : ''
+    if (search) {
+      where.OR = [{ name: { contains: search, mode: 'insensitive' } }, { User: { username: { contains: search, mode: 'insensitive' } } }]
+    }
+    if (status === 'active' || status === 'disabled') {
+      where.User = { ...(where.User as object || {}), status }
     }
 
-    // 获取总数
-    const total = await prisma.student.count({ where })
-
-    // 性能优化：使用数据库级分页和排序
+    // 年级由学校学制计算，筛选后再分页，保持和校园排行榜一致。
     const students = await prisma.student.findMany({
       where,
-      skip,
-      take: pageSize,
       orderBy: [
         { enrollmentYear: 'desc' }
       ],
@@ -69,6 +77,7 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
             id: true,
             name: true,
             educationSystem: true,
+            educationSystemDetail: true,
             schoolType: true
           }
         },
@@ -93,6 +102,7 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
           id: School.id,
           name: School.name,
           educationSystem: School.educationSystem,
+          educationSystemDetail: School.educationSystemDetail,
           schoolType: School.schoolType
         } : null,
         headTeacher: Teacher ? {
@@ -102,9 +112,23 @@ studentRouter.get('/', authenticate, asyncHandler(async (req, res) => {
       }
     })
 
+    const filteredStudents = typeof grade === 'string' && grade
+      ? formattedStudents.filter(student => calculateGrade({
+          enrollmentYear: student.enrollmentYear,
+          educationSystem: student.school?.educationSystem,
+          educationSystemDetail: normalizeEducationSystemDetail(student.school?.educationSystemDetail),
+          schoolType: student.school?.schoolType
+        }) === grade)
+      : formattedStudents
+    const total = filteredStudents.length
+    const start = (page - 1) * pageSize
+    const school = formattedStudents[0]?.school
+    const gradeOptions = school
+      ? getAllGrades(school.schoolType, school.educationSystem, normalizeEducationSystemDetail(school.educationSystemDetail)).filter(Boolean)
+      : []
     res.json({
       success: true,
-      data: paginatedResponse(formattedStudents, total, page, pageSize)
+      data: { ...paginatedResponse(filteredStudents.slice(start, start + pageSize), total, page, pageSize), filters: { grades: gradeOptions } }
     })
 }, '服务器错误'))
 

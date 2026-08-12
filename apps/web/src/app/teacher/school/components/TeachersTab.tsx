@@ -11,7 +11,8 @@ import { useModal } from '@/hooks/form/useModal'
 import { useForm } from '@/hooks/form/useForm'
 import { formStyles } from '@/lib/styles'
 import apiClient from '@/lib/apiClient'
-import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { Badge } from '@/components/ui/Badge'
+import { ActionMenu, ActionMenuItem, IdentityCell, ManagementToolbar, managementListStyles } from '@/components/management/ManagementList'
 
 interface School {
   id: string
@@ -28,6 +29,7 @@ interface Teacher {
   user: {
     username: string
     status: string
+    avatar?: string | null
   }
 }
 
@@ -51,6 +53,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   const transferModal = useModal()
   const [selectedNewPrincipal, setSelectedNewPrincipal] = useState('')
   const [transferring, setTransferring] = useState(false)
+  const [filters, setFilters] = useState({ q: '', role: '', status: '' })
 
   // ConfirmModal 状态
   const [confirmState, setConfirmState] = useState<{
@@ -63,13 +66,13 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
   useEffect(() => {
     fetchTeachers()
-  }, [school.id, pagination.page, pagination.pageSize])
+  }, [school.id, pagination.page, pagination.pageSize, filters])
 
   const fetchTeachers = async () => {
     setLoading(true)
     try {
       const result = await apiClient.get<{ data: Teacher[]; total: number }>(
-        `/api/schools/${school.id}/teachers?page=${pagination.page}&pageSize=${pagination.pageSize}`
+        `/api/schools/${school.id}/teachers?${new URLSearchParams({ page: String(pagination.page), pageSize: String(pagination.pageSize), ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) })}`
       )
       if (result.success) {
         setTeachers(result.data?.data || [])
@@ -181,18 +184,19 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
     setPagination(prev => ({ ...prev, page: 1, pageSize }))
   }
 
+  const updateFilter = (key: keyof typeof filters, value: string) => {
+    setFilters(current => ({ ...current, [key]: value }))
+    setPagination(current => ({ ...current, page: 1 }))
+  }
+
   return (
-    <div>
-      {showActions && isPrincipal && (
-        <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
-          <Button onClick={() => addModal.open()}>+ 添加教师</Button>
-          {transferableTeachers.length > 0 && (
-            <Button variant="secondary" onClick={() => transferModal.open()}>
-              转移负责人
-            </Button>
-          )}
-        </div>
-      )}
+    <div className={managementListStyles.page}>
+      {showActions && isPrincipal && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>{transferableTeachers.length > 0 && <Button variant="secondary" onClick={() => transferModal.open()}>转移负责人</Button>}<Button onClick={() => addModal.open()}>添加教师</Button></div>}
+      <ManagementToolbar total={total} noun="教师">
+        <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索教师" />
+        <select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="principal">学校负责人</option><option value="teacher">教师</option></select>
+        <select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></select>
+      </ManagementToolbar>
 
       <Table
         data={teachers}
@@ -200,26 +204,22 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
         emptyText="暂无教师数据"
         columns={[
           {
-            key: 'name',
-            label: '姓名',
-            render: (teacher) => <UserIdentityLink id={teacher.id} userType="teacher" name={teacher.name} username={teacher.user?.username} showUsername={false} />
+            key: 'name', label: '教师', width: '30%',
+            render: (teacher) => <IdentityCell name={teacher.name} username={teacher.user?.username} avatar={teacher.user?.avatar} />
           },
-          { key: 'user.username', label: '用户名' },
           {
-            key: 'role',
-            label: '角色',
+            key: 'role', label: '身份', width: '18%',
             render: (teacher) =>
               teacher.id === school.currentPrincipalTeacherId ? '学校负责人' : '教师'
           },
           {
-            key: 'contact',
-            label: '联系方式',
+            key: 'contact', label: '联系方式', width: '26%',
             render: (teacher) => {
-              const contacts = []
-              if (teacher.email) contacts.push(teacher.email)
-              if (teacher.phone) contacts.push(teacher.phone)
-              return contacts.length > 0 ? contacts.join(' / ') : '-'
+              const phone = teacher.phone ? teacher.phone.replace(/^(\d{3})\d+(\d{4})$/, '$1 **** $2') : ''
+              return <span className={managementListStyles.contact}><span>{teacher.email || '-'}</span>{phone && <span className={managementListStyles.contactSecondary}>{phone}</span>}</span>
             }
+          },
+          { key: 'status', label: '状态', width: '14%', render: teacher => <Badge variant={teacher.user.status === 'active' ? 'success' : 'neutral'} dot>{teacher.user.status === 'active' ? '正常' : '已禁用'}</Badge>
           }
         ]}
         actions={
@@ -229,20 +229,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
                   <Button variant="text" onClick={() => addModal.open(teacher)}>
                     编辑
                   </Button>
-                  {teacher.id !== school.currentPrincipalTeacherId && (
-                    <>
-                      <Button variant="text" onClick={() => handleToggleStatus(teacher)}>
-                        {teacher.user.status === 'active' ? '禁用' : '启用'}
-                      </Button>
-                      <Button
-                        variant="text"
-                        style={{ color: 'var(--error)' }}
-                        onClick={() => handleDelete(teacher.id)}
-                      >
-                        删除
-                      </Button>
-                    </>
-                  )}
+                  {teacher.id !== school.currentPrincipalTeacherId && <ActionMenu><ActionMenuItem onClick={() => handleToggleStatus(teacher)}>{teacher.user.status === 'active' ? '禁用账号' : '启用账号'}</ActionMenuItem><ActionMenuItem danger onClick={() => handleDelete(teacher.id)}>删除教师</ActionMenuItem></ActionMenu>}
                 </>
               )
             : undefined

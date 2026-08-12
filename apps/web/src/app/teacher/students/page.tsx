@@ -17,6 +17,8 @@ import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { calculateStudentGrade } from '@/lib/grade'
 import { formStyles } from '@/lib/styles'
+import { Badge } from '@/components/ui/Badge'
+import { ActionMenu, ActionMenuItem, IdentityCell, ManagementToolbar, managementListStyles } from '@/components/management/ManagementList'
 
 interface Teacher {
   id: string
@@ -37,6 +39,7 @@ export default function StudentsPage() {
     pageSize: 20
   })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [filters, setFilters] = useState({ q: '', grade: '', headTeacherId: '', status: '' })
 
   const isPrincipal = user?.role === 'school_principal'
 
@@ -45,14 +48,14 @@ export default function StudentsPage() {
   const filterParams = useMemo(() => {
     const baseParams = user?.schoolId ? { schoolId: user.schoolId } : {}
     if (isPrincipal) {
-      return { ...baseParams, ...pagination }
+      return { ...baseParams, ...filters, ...pagination }
     }
     // 普通教师只看自己的学生，如果没有获取到 currentTeacherId 则不查询
     if (!currentTeacherId) {
-      return { ...baseParams, headTeacherId: '__loading__', ...pagination }
+      return { ...baseParams, ...filters, headTeacherId: '__loading__', ...pagination }
     }
-    return { ...baseParams, headTeacherId: currentTeacherId, ...pagination }
-  }, [user?.schoolId, isPrincipal, currentTeacherId, pagination])
+    return { ...baseParams, ...filters, headTeacherId: currentTeacherId, ...pagination }
+  }, [user?.schoolId, isPrincipal, currentTeacherId, pagination, filters])
 
   const { data, loading, refetch } = useStudents(filterParams, sessionKey)
   const modal = useModal<Student>()
@@ -113,7 +116,7 @@ export default function StudentsPage() {
     const fetchTeachers = async () => {
       if (!user?.schoolId) return
       try {
-        const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/schools/${user.schoolId}/teachers`)
+        const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/schools/${user.schoolId}/teachers?pageSize=100`)
         if (result.success && result.data) {
           setTeachers(result.data.data)
         }
@@ -139,6 +142,13 @@ export default function StudentsPage() {
   const handlePageSizeChange = (pageSize: number) => {
     setPagination(prev => ({ ...prev, page: 1, pageSize }))
   }
+
+  const updateFilter = (key: keyof typeof filters, value: string) => {
+    setFilters(current => ({ ...current, [key]: value }))
+    setPagination(current => ({ ...current, page: 1 }))
+  }
+
+  const gradeOptions = data?.filters?.grades || []
 
   // 转移主教练
   const handleConfirmTransfer = async () => {
@@ -169,57 +179,41 @@ export default function StudentsPage() {
 
   return (
     <>
-      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <PageHeader title="学生管理">
+      <div className={managementListStyles.page}>
+        <PageHeader title="学生" description="管理本校学生信息">
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <Button variant="secondary" onClick={() => router.push('/teacher/students/import')}>
-              导入团队
+              导入学生
             </Button>
-            <Button onClick={() => modal.open()}>+ 添加学生</Button>
+            <Button onClick={() => modal.open()}>添加学生</Button>
           </div>
         </PageHeader>
 
+        <ManagementToolbar total={total} noun="学生">
+          <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索学生" />
+          <select className={managementListStyles.select} value={filters.grade} onChange={event => updateFilter('grade', event.target.value)} aria-label="年级筛选"><option value="">年级：全部</option>{gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}</select>
+          {isPrincipal && <select className={managementListStyles.select} value={filters.headTeacherId} onChange={event => updateFilter('headTeacherId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select>}
+          <select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></select>
+        </ManagementToolbar>
         <Table
           data={students}
           loading={loading}
           emptyText="暂无学生数据"
           columns={[
             {
-              key: 'name',
-              label: '姓名'
+              key: 'name', label: '学生', width: '28%',
+              render: (student) => <IdentityCell name={student.name} username={student.user?.username} avatar={student.user?.avatar} />
             },
             {
-              key: 'user.username',
-              label: '用户名',
-              render: (student) => student.user?.username || '-'
+              key: 'rating', label: 'Rating', width: '12%',
+              render: (student) => <span className={managementListStyles.rating}>{student.rating}</span>
             },
             {
-              key: 'rating',
-              label: 'Rating',
-              render: (student) => (
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color:
-                      student.rating >= 1500
-                        ? 'var(--success)'
-                        : student.rating >= 1200
-                        ? 'var(--warning)'
-                        : 'var(--gray-600)'
-                  }}
-                >
-                  {student.rating}
-                </span>
-              )
-            },
-            {
-              key: 'enrollmentYear',
-              label: '年级',
+              key: 'enrollmentYear', label: '年级', width: '12%',
               render: (student) => calculateStudentGrade(student)
             },
             {
-              key: 'headTeacher',
-              label: '主教练',
+              key: 'headTeacher', label: '主教练', width: '17%',
               render: (student) => {
                 if (transferringStudent?.id === student.id) {
                   return (
@@ -259,39 +253,19 @@ export default function StudentsPage() {
                 }
                 return student.headTeacher?.name || '-'
               }
-            }
+            },
+            { key: 'status', label: '状态', width: '12%', render: student => <Badge variant={student.user?.status === 'disabled' ? 'neutral' : 'success'} dot>{student.user?.status === 'disabled' ? '已禁用' : '正常'}</Badge> }
           ]}
           actions={(student) => (
             <>
               <Button variant="text" onClick={() => modal.open(student)}>
                 编辑
               </Button>
-              <Button
-                variant="text"
-                style={{ color: student.user?.status === 'disabled' ? 'var(--success)' : 'var(--warning)' }}
-                disabled={togglingId === student.id}
-                onClick={() => toggleAccountStatus(student.id, student.user?.status || 'active')}
-              >
-                {togglingId === student.id ? '处理中...' : student.user?.status === 'disabled' ? '启用' : '禁用'}
-              </Button>
-              {(isPrincipal || student.headTeacherId === currentTeacherId) && (
-                <Button
-                  variant="text"
-                  onClick={() => {
-                    setTransferringStudent(student)
-                    setSelectedTeacherId(student.headTeacherId || '')
-                  }}
-                >
-                  转移
-                </Button>
-              )}
-              <Button
-                variant="text"
-                style={{ color: 'var(--error)' }}
-                onClick={() => deleteItem(student.id, '确定要删除该学生吗？')}
-              >
-                删除
-              </Button>
+              <ActionMenu>
+                <ActionMenuItem onClick={() => toggleAccountStatus(student.id, student.user?.status || 'active')}>{togglingId === student.id ? '处理中...' : student.user?.status === 'disabled' ? '启用账号' : '禁用账号'}</ActionMenuItem>
+                {(isPrincipal || student.headTeacherId === currentTeacherId) && <ActionMenuItem onClick={() => { setTransferringStudent(student); setSelectedTeacherId(student.headTeacherId || '') }}>转移主教练</ActionMenuItem>}
+                <ActionMenuItem danger onClick={() => deleteItem(student.id, '确定要删除该学生吗？')}>删除学生</ActionMenuItem>
+              </ActionMenu>
             </>
           )}
         />

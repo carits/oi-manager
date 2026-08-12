@@ -5,6 +5,8 @@ import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import TeachersTab from '../school/components/TeachersTab'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
+import { PageHeader } from '@/components/ui/PageHeader'
+import styles from '@/components/management/ManagementList.module.css'
 
 interface School {
   id: string
@@ -55,30 +57,24 @@ export default function TeachersPage() {
   }
 
   if (loading) {
-    return <PageLoadingFrame title="教师管理" />
+    return <PageLoadingFrame title="教师" />
   }
 
   if (!school) {
     return (
-      <>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>教师管理</h2>
-        </div>
+      <div className={styles.page}>
+        <PageHeader title="教师" description="管理本校教师账号与身份" />
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <p>未找到学校信息</p>
         </div>
-      </>
+      </div>
     )
   }
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>教师管理</h2>
-      </div>
-      <div style={{ background: 'white', borderRadius: '8px', padding: '1.5rem', border: '1px solid var(--border)' }}>
-        <TeachersTab school={school} isPrincipal={isPrincipal} showActions={true} />
-      </div>
-    </>
+    <div className={styles.page}>
+      <PageHeader title="教师" description="管理本校教师账号与身份" />
+      <TeachersTab school={school} isPrincipal={isPrincipal} showActions={true} />
+    </div>
   )
 }

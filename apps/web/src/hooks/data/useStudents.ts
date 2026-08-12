@@ -16,11 +16,17 @@ export interface Student {
   user?: {
     username: string
     status: string
+    avatar?: string | null
   } | null
   school?: {
     id: string
     name: string
     educationSystem?: string | null
+    educationSystemDetail?: {
+      primaryYears?: number
+      middleYears?: number
+      highYears?: number
+    } | null
     schoolType?: string | null
   } | null
   teams?: Array<{
@@ -35,6 +41,10 @@ export interface Student {
   } | null
 }
 
-export function useStudents(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<ListResponse<Student>> {
-  return useList<Student>('/api/students', filters, sessionKey)
+export interface StudentListResponse extends ListResponse<Student> {
+  filters?: { grades: string[] }
+}
+
+export function useStudents(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<StudentListResponse> {
+  return useList<Student>('/api/students', filters, sessionKey) as UseFetchResult<StudentListResponse>
 }
