@@ -28,6 +28,7 @@
     "test:ui:report": "playwright show-report test-results/playwright-report",
     "docs:check": "node scripts/docs-check.mjs",
     "ui:state-check": "node scripts/ui-state-check.mjs",
+    "routes:audit": "node scripts/audit-web-navigation.mjs",
     "start:production": "pm2 start ecosystem.config.js --update-env",
     "lint": "pnpm -r lint",
     "install:all": "pnpm install"

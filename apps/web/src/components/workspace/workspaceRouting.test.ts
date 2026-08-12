@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { notificationTeamHref, workspaceHref } from './workspaceRouting'
+import { canNavigate, fallbackHref, isProhibitedPath, listHref, moduleHref, notificationHref, notificationTeamHref, resourceHref, workspaceHref } from './workspaceRouting'
 
 describe('workspaceHref', () => {
   const personalWorkspace = { type: 'personal' } as never
@@ -28,5 +28,33 @@ describe('workspaceHref', () => {
     expect(notificationTeamHref('work', 'teacher', 'organization:org_1')).toBe('/org/org_1/overview')
     expect(notificationTeamHref('work', 'teacher', 'team:')).toBeNull()
     expect(notificationTeamHref('work', 'teacher', undefined)).toBeNull()
+  })
+
+  it('校级比赛只生成真实详情页和真实列表页', () => {
+    const teacher = { workspaceMode: 'work', role: 'teacher', schoolScoped: true } as const
+    const student = { workspaceMode: 'work', role: 'student', schoolScoped: true } as const
+    expect(resourceHref('contest', teacher, 18)).toBe('/teacher/school/contests/18')
+    expect(resourceHref('contest', student, 18)).toBe('/student/school/contests/18')
+    expect(listHref('contest', teacher)).toBe('/teacher/contests')
+    expect(listHref('contest', student)).toBe('/student/contests')
+    expect(isProhibitedPath('/teacher/school/contests')).toBe(true)
+    expect(isProhibitedPath('/student/school/contests')).toBe(true)
+  })
+
+  it('缺失资源标识时不生成跳转地址', () => {
+    expect(canNavigate('')).toBe(false)
+    expect(canNavigate(undefined)).toBe(false)
+    expect(resourceHref('contest', { workspaceMode: 'work', role: 'teacher', schoolScoped: true }, null)).toBeNull()
+  })
+  it('keeps unified navigation aliases safe', () => {
+    const workspace = { type: 'personal' } as never
+    expect(fallbackHref({ workspaceMode: 'work', role: 'student' })).toBe('/student')
+    expect(fallbackHref({ workspaceMode: 'personal', role: 'student' })).toBe('/personal')
+    expect(moduleHref(workspace, 'contests')).toBe(workspaceHref(workspace, 'contests'))
+    expect(notificationHref('work', 'teacher', 'team:team_1')).toBe(notificationTeamHref('work', 'teacher', 'team:team_1'))
+  })
+
+  it('does not treat a personal contest id as a team id', () => {
+    expect(listHref('contest', { workspaceMode: 'personal', role: 'student' })).toBe('/personal/contests')
   })
 })

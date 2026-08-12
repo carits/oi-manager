@@ -17,6 +17,7 @@ export default function ContestsTab({ schoolId }: ContestsTabProps) {
       basePath="/teacher/school"
       isAdmin={isAdmin}
       mode="contest"
+      schoolRole="teacher"
     />
   )
 }

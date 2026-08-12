@@ -14,6 +14,7 @@ import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { useAuth } from '@/components/AuthProvider'
 import type { Attachment, TabType } from './types'
 import { typeLabel, formatLabel as formatLabelFn } from './types'
+import { listHref, resourceHref } from '@/components/workspace/workspaceRouting'
 
 import { useTrainingDetail } from './hooks/useTrainingDetail'
 import { useTrainingRank } from './hooks/useTrainingRank'
@@ -68,7 +69,13 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
   const trainingId = (params.tid || params.cid || params.id) as string
-  const teamId = teamIdOverride || (params.id as string)
+  const isTeamScopedPath = pathname.includes('/teams/') || pathname.includes('/team/')
+  const teamId = teamIdOverride || (isTeamScopedPath ? (params.id as string) : undefined)
+  const navigationContext = {
+    workspaceMode: pathname.startsWith('/personal/') ? 'personal' as const : 'work' as const,
+    role: pathname.startsWith('/student/') ? 'student' : 'teacher',
+    schoolScoped: !pathname.startsWith('/personal/') && !isTeamScopedPath,
+  }
 
   const validTabs: TabType[] = ['problemList', 'problems', 'submissions', 'solutions', 'attachments', 'ranking']
   const requestedTab = searchParams.get('tab') as TabType | null
@@ -233,16 +240,21 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     { value: 'attachments', label: '附件' },
     ...(!pathname.includes('/homeworks/') ? [{ value: 'ranking' as TabType, label: '排名' }] : []),
   ]
+  const initialListHref = pathname.includes('/homeworks/')
+    ? listHref('homework', navigationContext)
+    : pathname.includes('/contests/')
+      ? listHref('contest', navigationContext)
+      : basePath
 
   if (loading) {
     return (
-      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'training'), href: basePath }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problemList" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="训练内容正在准备" /></PageFrame>
+      <PageFrame width="workbench"><PageHeader title={initialTitle} breadcrumbs={[{ label: typeLabel(pathname.includes('/homeworks/') ? 'homework' : pathname.includes('/contests/') ? 'contest' : 'training'), href: initialListHref }, { label: '详情' }]} /><div className={styles.tabBar}><Tabs label="详情分区" value="problemList" onChange={() => undefined} items={initialTabs} /></div><SkeletonRegion rows={8} label="训练内容正在准备" /></PageFrame>
     )
   }
 
   if (error || !training) {
     return (
-      <PageFrame><PageHeader title={initialTitle} breadcrumbs={[{ label: '活动', href: basePath }, { label: '详情' }]} /><LoadError message={error || '内容不存在'} onRetry={refresh} onBack={() => router.back()} /></PageFrame>
+      <PageFrame><PageHeader title={initialTitle} breadcrumbs={[{ label: '活动', href: initialListHref }, { label: '详情' }]} /><LoadError message={error || '内容不存在'} onRetry={refresh} onBack={() => router.back()} /></PageFrame>
     )
   }
 
@@ -254,7 +266,13 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
     training.type === 'contest' ? 'mock' :
     training.type === 'homework' ? 'homeworks' :
     'training'
-  const backUrl = teamId ? `${basePath}/${teamId}?tab=${backTab}` : training.type === 'homework' ? `${basePath}/homeworks` : training.type === 'contest' ? `${basePath}/contests` : `${basePath}?tab=training`
+  const backUrl = teamId
+    ? `${basePath}/${teamId}?tab=${backTab}`
+    : training.type === 'homework'
+      ? listHref('homework', navigationContext)
+      : training.type === 'contest'
+        ? listHref('contest', navigationContext)
+        : `${basePath}?tab=training`
   const statusColors: Record<string, { bg: string; color: string }> = {
     upcoming: { bg: 'var(--info-light)', color: 'var(--info-text)' },
     ongoing: { bg: 'var(--success-light)', color: 'var(--success-text)' },
@@ -632,7 +650,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
                   })
                   if (res.success && (res.data as { id?: number })?.id) {
                     setShowMakeupModal(false)
-                    router.push(`${basePath}/homeworks/${(res.data as { id: number }).id}`)
+                    const homeworkHref = resourceHref('homework', navigationContext, (res.data as { id: number }).id)
+                    if (homeworkHref) router.push(homeworkHref)
                   } else {
                     alert(res.message || '创建失败')
                   }

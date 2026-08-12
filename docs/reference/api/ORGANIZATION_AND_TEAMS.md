@@ -37,6 +37,7 @@ source_of_truth: school, student, teacher, team and team-import routes
 | `POST` | `/api/schools/:schoolId/contests` | 负责人/教师、学校范围 | 创建学校比赛 |
 | `PUT` | `/api/schools/:schoolId/contests/:id` | 负责人/教师、管理资源 | 更新学校比赛 |
 | `DELETE` | `/api/schools/:schoolId/contests/:id` | 负责人/教师、管理资源 | 删除学校比赛 |
+| `POST` | `/api/schools/:schoolId/contests/demo-data` | 负责人/教师、仅测试环境 | 生成比赛演示数据 |
 | `GET` | `/api/schools/:schoolId/problem-lists` | 登录、学校范围 | 学校题单 |
 | `POST` | `/api/schools/:schoolId/problem-lists` | 负责人/教师、学校范围 | 挂载学校题单 |
 | `DELETE` | `/api/schools/:schoolId/problem-lists/:id` | 负责人/教师、管理资源 | 移除学校题单 |

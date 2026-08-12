@@ -5,6 +5,7 @@ import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, Attachment } from '../types'
+import { listHref } from '@/components/workspace/workspaceRouting'
 
 export function useTrainingActions(
   trainingId: string,
@@ -86,7 +87,9 @@ export function useTrainingActions(
       const res = await apiClient.delete(`/api/trainings/${training.id}`)
       if (res.success) {
         toast.success('训练已删除')
-        router.push(`${basePath}?tab=contest`)
+        const schoolRole = window.location.pathname.startsWith('/student/') ? 'student' : 'teacher'
+        const listKind = training.type === 'homework' ? 'homework' : training.type === 'contest' ? 'contest' : 'training'
+        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspaceMode: 'work', role: schoolRole, schoolScoped: true }))
         return true
       } else {
         toast.error(res.message || '删除失败')

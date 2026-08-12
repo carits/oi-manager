@@ -85,6 +85,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/problems/[id]` | 个人工作区、公开题目 | 题目详情 |
 | `/personal/contests` | 个人工作区 | 个人团队比赛 |
 | `/personal/contests/[id]` | 个人工作区、可见资源 | 比赛详情 |
+| `/personal/campus` | 个人工作区 | 兼容入口，返回个人首页 |
 | `/personal/problem-lists` | 个人工作区 | 个人题单 |
 | `/personal/problem-lists/new` | 个人工作区 | 创建题单 |
 | `/personal/problem-lists/[id]` | 个人工作区、可见资源 | 题单详情 |
