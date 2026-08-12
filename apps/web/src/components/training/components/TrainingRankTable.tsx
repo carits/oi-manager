@@ -22,12 +22,13 @@ interface ICPCProblemResult {
 type RankingFormat = 'oi' | 'ioi' | 'icpc'
 
 const RANK_COLUMN_WIDTH = 52
-const PARTICIPANT_COLUMN_WIDTH = 224
 const SCORE_COLUMN_WIDTH = 92
 const ICPC_PASSED_COLUMN_WIDTH = 72
 const ICPC_PENALTY_COLUMN_WIDTH = 84
-const PROBLEM_COLUMN_WIDTH = 88
-const MOBILE_FIXED_COLUMNS_REDUCTION = 56
+const MOBILE_RANK_COLUMN_WIDTH = 44
+const MOBILE_PARTICIPANT_COLUMN_WIDTH = 176
+const MOBILE_PROBLEM_COLUMN_WIDTH = 88
+const DESKTOP_TABLE_MAX_WIDTH = 1200
 
 function toExcelColumnName(index: number) {
   let result = ''
@@ -93,11 +94,20 @@ function describeICPCResult(label: string, result?: ICPCProblemResult) {
 
 const medalClass = [styles.medal1, styles.medal2, styles.medal3]
 
-function rankingTableWidth(format: RankingFormat, problemCount: number) {
+function rankingColumnWidths(format: RankingFormat, problemCount: number) {
+  const participantWidth = problemCount <= 3 ? 272 : problemCount <= 5 ? 256 : problemCount <= 8 ? 240 : 224
+  const minimumProblemWidth = problemCount <= 3 ? 112 : problemCount <= 5 ? 104 : 88
   const summaryWidth = format === 'icpc'
     ? ICPC_PASSED_COLUMN_WIDTH + ICPC_PENALTY_COLUMN_WIDTH
     : SCORE_COLUMN_WIDTH
-  return RANK_COLUMN_WIDTH + PARTICIPANT_COLUMN_WIDTH + summaryWidth + problemCount * PROBLEM_COLUMN_WIDTH
+  return {
+    participantWidth,
+    tableMinWidth: RANK_COLUMN_WIDTH + participantWidth + summaryWidth + problemCount * minimumProblemWidth,
+    mobileTableWidth: MOBILE_RANK_COLUMN_WIDTH
+      + MOBILE_PARTICIPANT_COLUMN_WIDTH
+      + summaryWidth
+      + problemCount * MOBILE_PROBLEM_COLUMN_WIDTH,
+  }
 }
 
 interface TrainingRankTableProps {
@@ -134,10 +144,12 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
   }
 
   const columnCount = problems.length + (isScoreBased ? 3 : 4)
-  const tableWidth = rankingTableWidth(format, problems.length)
+  const columnWidths = rankingColumnWidths(format, problems.length)
   const tableStyle = {
-    '--rank-table-width': `${tableWidth}px`,
-    '--rank-mobile-table-width': `${tableWidth - MOBILE_FIXED_COLUMNS_REDUCTION}px`,
+    '--rank-table-max-width': `${DESKTOP_TABLE_MAX_WIDTH}px`,
+    '--rank-table-min-width': `${columnWidths.tableMinWidth}px`,
+    '--rank-mobile-table-width': `${columnWidths.mobileTableWidth}px`,
+    '--rank-participant-width': `${columnWidths.participantWidth}px`,
   } as CSSProperties
 
   return (

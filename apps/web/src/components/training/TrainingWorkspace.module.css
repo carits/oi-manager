@@ -27,25 +27,24 @@
 .rankSummary { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; color: var(--text-secondary); font-size: var(--text-xs); }
 .rankSummary strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .rankToolbar { display: flex; justify-content: center; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
-.rankSearch { width: min(280px, 100%); min-height: 36px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.rankSearch { width: min(360px, 100%); min-height: 36px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .rankSearch:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
 .rankSearch input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: var(--text-sm); }
 .rankIdentity { display: flex; align-items: center; gap: var(--space-2); min-width: 0; width: 100%; }
 .rankIdentityText { display: grid; min-width: 0; max-width: calc(100% - 40px); gap: 2px; }
 .rankUsername { overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-.rankTable { width: var(--rank-table-width); min-width: var(--rank-table-width); table-layout: fixed; margin-inline: auto; }
+.rankTable { width: min(var(--rank-table-max-width), calc(100% - 64px)); min-width: var(--rank-table-min-width); table-layout: fixed; margin-inline: auto; }
 .rankTable th { height: 52px; padding: 8px; }
 .rankTable td { height: 64px; padding: 8px 12px; }
 .rankPositionColumn { width: 52px; }
-.rankParticipantColumn { width: 224px; }
+.rankParticipantColumn { width: var(--rank-participant-width); }
 .rankScoreColumn { width: 92px; }
 .rankPassedColumn { width: 72px; }
 .rankPenaltyColumn { width: 84px; }
-.rankProblemColumn { width: 88px; }
-.rankProblemHeader { width: 88px; padding-inline: 6px !important; }
+.rankProblemHeader { padding-inline: 6px !important; }
 .rankProblemLabel { display: block; color: var(--text-primary); line-height: 1.15; }
 .rankProblemPoints { display: block; margin-top: 3px; color: var(--text-muted); font-size: 10px; font-weight: 500; line-height: 1; }
-.rankParticipantCell { width: 224px; max-width: 224px; }
+.rankParticipantCell { width: var(--rank-participant-width); max-width: var(--rank-participant-width); }
 .rankStickyPosition { position: sticky; left: 0; z-index: 2; }
 .rankStickyParticipant { position: sticky; left: 52px; z-index: 2; box-shadow: 1px 0 0 var(--border); }
 .rankTable thead .rankStickyPosition,
@@ -57,7 +56,7 @@
 .rankCell { width: 52px; color: var(--text-secondary) !important; font-weight: 800; }
 .medal1 { color: #b77900 !important; } .medal2 { color: #667085 !important; } .medal3 { color: #a15c23 !important; }
 .scoreFirstAccepted { color: #fff !important; background: #2f7d32 !important; font-weight: 800; }
-.rankScoreCell { width: 88px; padding: 8px !important; }
+.rankScoreCell { padding: 8px !important; }
 .oiTotalScore { color: var(--text-primary) !important; font-size: var(--text-base); }
 .oiScoreFull { color: var(--success-text) !important; font-weight: 800; }
 .oiScorePartial { color: var(--warning-text) !important; font-weight: 700; }
@@ -66,7 +65,7 @@
 .ioiScoreFull { color: var(--success-text) !important; background: #e8f7e9 !important; font-weight: 800; }
 .ioiScorePartial { color: var(--warning-text) !important; background: color-mix(in srgb, var(--warning-light) 50%, var(--bg-card)); font-weight: 700; }
 .ioiScoreZero { color: var(--text-muted) !important; background: var(--bg-card) !important; }
-.icpcResultCell { width: 88px; padding: 8px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
+.icpcResultCell { padding: 8px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
 .icpcAccepted { color: var(--success-text) !important; background: #e8f7e9 !important; }
 .icpcFailed { color: var(--error-text) !important; background: #fbe4e4 !important; }
 .icpcUnsubmitted { color: transparent !important; background: var(--bg-card) !important; }
@@ -83,6 +82,10 @@
   .rankTable { width: var(--rank-mobile-table-width); min-width: var(--rank-mobile-table-width); }
   .rankPositionColumn { width: 44px; }
   .rankParticipantColumn { width: 176px; }
+  .rankProblemColumn,
+  .rankProblemHeader,
+  .rankScoreCell,
+  .icpcResultCell { width: 88px; }
   .rankParticipantCell { width: 176px; max-width: 176px; }
   .rankStickyParticipant { left: 44px; }
 }

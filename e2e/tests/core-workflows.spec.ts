@@ -70,14 +70,14 @@ test.describe('core role workflows @smoke', () => {
 
     const participantColumnWidth = await page.getByRole('columnheader', { name: '参赛者' })
       .evaluate(cell => cell.getBoundingClientRect().width)
-    expect(participantColumnWidth).toBeGreaterThanOrEqual(223)
-    expect(participantColumnWidth).toBeLessThanOrEqual(225)
+    expect(participantColumnWidth).toBeGreaterThanOrEqual(271)
+    expect(participantColumnWidth).toBeLessThanOrEqual(273)
 
     const problemColumnWidths = await page.locator('th[data-problem-column="true"]').evaluateAll(
       cells => cells.map(cell => cell.getBoundingClientRect().width),
     )
-    expect(Math.min(...problemColumnWidths)).toBeGreaterThanOrEqual(87)
-    expect(Math.max(...problemColumnWidths)).toBeLessThanOrEqual(89)
+    expect(Math.min(...problemColumnWidths)).toBeGreaterThanOrEqual(239)
+    expect(Math.max(...problemColumnWidths)).toBeLessThanOrEqual(241)
 
     const tableMetrics = await page.getByRole('table', { name: '比赛排名' }).evaluate(element => {
       const table = element.getBoundingClientRect()
@@ -89,7 +89,7 @@ test.describe('core role workflows @smoke', () => {
         viewportWidth,
       }
     })
-    expect(tableMetrics.tableWidth).toBe(696)
+    expect(tableMetrics.tableWidth).toBe(1200)
     expect(Math.abs(tableMetrics.leftSpace - tableMetrics.rightSpace)).toBeLessThanOrEqual(1)
     expect(tableMetrics.viewportWidth).toBeGreaterThan(tableMetrics.tableWidth)
 
@@ -188,14 +188,14 @@ test.describe('core role workflows @smoke', () => {
       const table = page.getByRole('table', { name: '比赛排名' })
       await expect(table).toHaveAttribute('data-ranking-format', format)
       await expect(page.getByRole('columnheader', { name: /A.*100 分/ })).toBeVisible()
-      await expect(page.getByRole('columnheader', { name: '参赛者' })).toHaveCSS('width', '224px')
+      await expect(page.getByRole('columnheader', { name: '参赛者' })).toHaveCSS('width', '272px')
 
       const widths = await page.locator('th[data-problem-column="true"]').evaluateAll(
         cells => cells.map(cell => cell.getBoundingClientRect().width),
       )
-      expect(Math.min(...widths)).toBeGreaterThanOrEqual(87)
-      expect(Math.max(...widths)).toBeLessThanOrEqual(89)
-      await expect(table).toHaveCSS('width', '632px')
+      expect(Math.min(...widths)).toBeGreaterThanOrEqual(260)
+      expect(Math.max(...widths)).toBeLessThanOrEqual(263)
+      await expect(table).toHaveCSS('width', '1200px')
 
       const full = page.locator('td[data-score-state="full"]')
       const partial = page.locator('td[data-score-state="partial"]')
