@@ -53,7 +53,7 @@ test.describe('core role workflows @smoke', () => {
     await expect(firstAcceptedCell).toBeVisible()
     const firstAcceptedTableCell = firstAcceptedCell.locator('xpath=ancestor::td')
     await expect(firstAcceptedTableCell).toHaveAttribute('title', '本题首个通过')
-    await expect(firstAcceptedTableCell).toHaveCSS('background-color', 'rgb(255, 228, 230)')
+    await expect(firstAcceptedTableCell).toHaveCSS('background-color', 'rgb(22, 101, 52)')
 
     await context.close()
   })
