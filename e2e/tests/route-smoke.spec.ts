@@ -66,7 +66,7 @@ for (const owner of owners) {
         if (compactPatterns.has(pattern)) await assertVisibleControlsFit(page)
 
         if (owner !== 'public') {
-          await expect(page.locator('[data-navigation]')).toHaveCount(1)
+          await expect(page.locator('#app-sidebar')).toHaveCount(1)
           await expect(page.locator('h1, h2').first()).toBeVisible()
         }
 

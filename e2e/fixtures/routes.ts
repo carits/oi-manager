@@ -36,6 +36,7 @@ export const routePatterns = [
   '/account/profile',
   '/account/security',
   '/personal',
+  '/personal/campus',
   '/personal/contests',
   '/personal/contests/[id]',
   '/personal/problem-lists',

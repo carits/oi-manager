@@ -12,7 +12,7 @@ import { getRoleHome } from '@/lib/roleAccess'
 import { SessionUnavailable } from './SessionUnavailable'
 import { apiClient } from '@/lib/apiClient'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import { workspaceModule } from '@/components/workspace/workspaceRouting'
+import { notificationTeamHref, workspaceModule } from '@/components/workspace/workspaceRouting'
 import styles from './AppShell.module.css'
 
 interface AppShellProps { children: ReactNode }
@@ -142,14 +142,6 @@ export function AppShell({ children }: AppShellProps) {
     if (!open) setShowUserMenu(false)
   }
 
-  const getTeamHref = (notification: UserNotification) => {
-    if (notification.href?.startsWith('organization:')) return `/org/${notification.href.replace('organization:', '')}/overview`
-    const teamId = notification.href?.replace('team:', '')
-    if (!teamId) return null
-    if (isPersonal) return `/personal/teams/${teamId}`
-    return isStudent ? `/student/team/${teamId}` : `/teacher/teams/${teamId}`
-  }
-
   const markRead = async (notificationId: string) => {
     const response = await apiClient.patch(`/api/notifications/${notificationId}/read`)
     if (response.success) {
@@ -168,7 +160,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleNotificationClick = async (notification: UserNotification) => {
     await markRead(notification.id)
-    const href = getTeamHref(notification)
+    const href = notificationTeamHref(workspaceMode, role, notification.href)
     if (href) {
       setShowNotifications(false)
       router.push(href)

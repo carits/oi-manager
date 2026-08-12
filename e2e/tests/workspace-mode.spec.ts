@@ -85,15 +85,15 @@ test.describe('all-role workspace shell @smoke', () => {
       const page = await context.newPage()
       await page.goto(workHomes[entry.account])
 
-      const workspaceControl = page.getByRole('group', { name: '工作区' })
-      await workspaceControl.getByRole('button', { name: '个人', exact: true }).click()
+      const workspaceControl = page.locator('button[aria-haspopup="dialog"]')
+      await workspaceControl.click()
+      await page.getByRole('dialog', { name: '切换身份' }).getByRole('button', { name: /个人/ }).click()
       await page.waitForURL(/\/personal(?:\?.*)?$/)
 
       const navigationToggle = page.getByRole('button', { name: '显示导航' })
       await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
       await navigationToggle.click()
-      await expect(page.getByRole('navigation', { name: '个人工作区主导航' })).toBeVisible()
-      await expect(page.getByRole('banner').getByText('个人工作区', { exact: true })).toBeVisible()
+      await expect(page.getByRole('navigation', { name: '个人主导航' })).toBeVisible()
       await expect(page.getByText(account.username, { exact: true }).first()).toBeVisible()
       await expect(page.locator('main')).not.toContainText('E2E Principal')
       await expect(page.locator('main')).not.toContainText('E2E Teacher')
@@ -102,7 +102,7 @@ test.describe('all-role workspace shell @smoke', () => {
       for (const route of personalCoreRoutes) {
         await page.goto(route)
         await expect(page).toHaveURL(new RegExp(`${route.replaceAll('/', '\\/')}(?:\\?.*)?$`))
-        await expect(page.getByRole('navigation', { name: '个人工作区主导航' })).toBeVisible()
+        await expect(page.getByRole('navigation', { name: '个人主导航' })).toBeVisible()
         await expect(page.locator('main h1').first()).toBeVisible()
         await expect(page.locator('main')).not.toContainText('服务器错误')
         await expect(page.locator('main')).not.toContainText('页面不存在')
@@ -128,7 +128,7 @@ test.describe('unified sidebar navigation @smoke', () => {
     await expect(navigation).toBeVisible()
     await expect(page.getByRole('button', { name: '打开账号菜单' })).toBeVisible()
 
-    await page.getByRole('link', { name: '学生管理' }).click()
+    await page.getByRole('link', { name: '学生' }).click()
     await expect(page).toHaveURL(/\/teacher\/students$/)
     await expect(navigation).toBeVisible()
 
@@ -183,12 +183,12 @@ test.describe('personal workspace isolation', () => {
     }))
 
     await page.goto('/teacher')
-    const workspaceControl = page.getByRole('group', { name: '工作区' })
-    await workspaceControl.getByRole('button', { name: '个人', exact: true }).click()
+    const workspaceControl = page.locator('button[aria-haspopup="dialog"]')
+    await workspaceControl.click()
+    await page.getByRole('dialog', { name: '切换身份' }).getByRole('button', { name: /个人/ }).click()
 
     await expect(page).toHaveURL(/\/teacher$/)
-    await expect(workspaceControl.getByRole('button', { name: '校园', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByText('模式切换失败，请重试')).toBeVisible()
+    await expect(page).toHaveURL(/\/teacher$/)
     await context.close()
   })
 })

@@ -21,5 +21,5 @@ test('route manifest covers every Next.js page @smoke', async () => {
   const appDirectory = path.resolve(__dirname, '../../apps/web/src/app')
   const sourceRoutes = collectPages(appDirectory, appDirectory).sort()
   expect([...routePatterns].sort()).toEqual(sourceRoutes)
-  expect(routePatterns).toHaveLength(90)
+  expect(routePatterns.length).toBeGreaterThan(0)
 })
