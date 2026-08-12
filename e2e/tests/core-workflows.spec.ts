@@ -49,6 +49,11 @@ test.describe('core role workflows @smoke', () => {
     await expect(page.locator('body')).toContainText('E2E Finished Contest')
     await page.getByRole('tab', { name: /排名/ }).click()
     await expect(page.locator('body')).toContainText('E2E Campus Student')
+    const firstAcceptedCell = page.getByText('首 A', { exact: true })
+    await expect(firstAcceptedCell).toBeVisible()
+    const firstAcceptedTableCell = firstAcceptedCell.locator('xpath=ancestor::td')
+    await expect(firstAcceptedTableCell).toHaveAttribute('title', '本题首个通过')
+    await expect(firstAcceptedTableCell).toHaveCSS('background-color', 'rgb(255, 228, 230)')
 
     await context.close()
   })

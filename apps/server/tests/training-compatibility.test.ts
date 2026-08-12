@@ -336,6 +336,103 @@ describe('训练路由兼容校级比赛', () => {
       expect(res.body.data.ranking).toBeDefined()
       expect(Array.isArray(res.body.data.ranking)).toBe(true)
     })
+
+    it('TR5: ICPC 每题只标记最早有效通过者为首 A', async () => {
+      const secondStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const thirdStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const startTime = new Date(Date.now() - 60 * 60 * 1000)
+      const icpcContest = await createTestSchoolContest({
+        schoolId: schoolData.school.id,
+        createdBy: teacherUser.teacherId!,
+        title: 'ICPC 首 A 测试',
+        format: 'icpc',
+        type: 'contest',
+        status: 'ongoing',
+        startTime,
+      })
+      const icpcProblem = await createTestContestProblem({
+        ownerId: teacherUser.teacherId!,
+        title: '首 A 判定题目',
+      })
+      const icpcTrainingProblem = await addProblemToContest({
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.id,
+        alias: 'A',
+        points: 100,
+      })
+
+      await createTestSubmission({
+        userId: studentUser.user.id,
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.problemId,
+        trainingProblemId: icpcTrainingProblem.id,
+        result: 'wrong_answer',
+        score: 0,
+        createdAt: new Date(startTime.getTime() + 10 * 60 * 1000),
+      })
+      await createTestSubmission({
+        userId: teacherUser.user.id,
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.problemId,
+        trainingProblemId: icpcTrainingProblem.id,
+        result: 'accepted',
+        score: 100,
+        createdAt: new Date(startTime.getTime() + 15 * 60 * 1000),
+      })
+      await createTestSubmission({
+        userId: secondStudent.user.id,
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.problemId,
+        trainingProblemId: icpcTrainingProblem.id,
+        result: 'accepted',
+        score: 100,
+        createdAt: new Date(startTime.getTime() + 20 * 60 * 1000),
+      })
+      await createTestSubmission({
+        userId: thirdStudent.user.id,
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.problemId,
+        trainingProblemId: icpcTrainingProblem.id,
+        result: 'accepted',
+        score: 100,
+        createdAt: new Date(startTime.getTime() + 20 * 60 * 1000),
+      })
+      await createTestSubmission({
+        userId: studentUser.user.id,
+        trainingId: icpcContest.id,
+        problemId: icpcProblem.problemId,
+        trainingProblemId: icpcTrainingProblem.id,
+        result: 'accepted',
+        score: 100,
+        createdAt: new Date(startTime.getTime() + 30 * 60 * 1000),
+      })
+
+      const res = await createAuthenticatedRequest(app, studentToken)
+        .get(`/api/trainings/${icpcContest.id}/ranking`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.format).toBe('icpc')
+      const firstAcceptedRow = res.body.data.ranking.find((row: any) => row.userId === secondStudent.user.id)
+      const tiedAcceptedRow = res.body.data.ranking.find((row: any) => row.userId === thirdStudent.user.id)
+      const laterAcceptedRow = res.body.data.ranking.find((row: any) => row.userId === studentUser.user.id)
+      const excludedAdminRow = res.body.data.ranking.find((row: any) => row.userId === teacherUser.user.id)
+      expect(firstAcceptedRow.problems[icpcTrainingProblem.id]).toMatchObject({
+        solved: true,
+        attempts: 1,
+        isFirstAccepted: true,
+      })
+      expect(laterAcceptedRow.problems[icpcTrainingProblem.id]).toMatchObject({
+        solved: true,
+        attempts: 2,
+        isFirstAccepted: false,
+      })
+      expect(tiedAcceptedRow.problems[icpcTrainingProblem.id].isFirstAccepted).toBe(false)
+      expect(excludedAdminRow).toBeUndefined()
+      const firstAcceptedCount = res.body.data.ranking.filter(
+        (row: any) => row.problems[icpcTrainingProblem.id].isFirstAccepted,
+      ).length
+      expect(firstAcceptedCount).toBe(1)
+    })
   })
 
   // ==================== 笔记 API ====================

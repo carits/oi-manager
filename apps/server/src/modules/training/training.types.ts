@@ -24,7 +24,13 @@ export interface ICPCRankingEntry {
   userId: string
   name: string
   username: string
-  solved: number
-  penalty: number
-  problems: Record<string, { solved: boolean; attempts: number; time: number; alias: string }>
+  solvedCount: number
+  totalPenalty: number
+  problems: Record<string, {
+    solved: boolean
+    attempts: number
+    penalty: number
+    alias: string
+    isFirstAccepted: boolean
+  }>
 }

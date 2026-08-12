@@ -20,6 +20,15 @@ source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 
 此规则适用于所有比赛赛制和状态，并独立于 OI 赛中结果隐藏。OI 赛中还可能隐藏分数、结果、时间、内存、测试点和子任务；而每种比赛赛制都会向非管理者隐藏远程提交 ID。
 
+## ICPC 首 A 判定
+
+ICPC 榜单按题目分别标记首 A。判定以当前评测结果为准：在计入该榜单的提交中，最早获得 `accepted` 或达到题目满分的用户取得该题首 A；先前的错误提交只影响该用户罚时，不影响首 A 的通过时刻。
+
+- `includeAdminInRanking=false` 时，团队所有者/管理员以及校级比赛创建者/学校负责人不会进入榜单，也不会抢占首 A。
+- 提交先按 `createdAt` 排序；同一毫秒内按递增的提交 ID 稳定决胜。
+- 重新评测改变通过结果后，查询榜单时会根据当前有效结果重新计算首 A。
+- 排名接口在对应题目数据中返回 `isFirstAccepted`；Web 只使用该字段展示首 A，不在浏览器内自行比较提交时间。
+
 ## WebSocket 连接
 
 Judge 连接 `ws://<server>/ws/judge`，流程如下：

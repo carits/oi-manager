@@ -149,6 +149,7 @@ export async function createTestSubmission(options: {
   submitScope?: 'contest' | 'training'
   oj?: string
   cases?: string
+  createdAt?: Date
 }) {
   const {
     userId,
@@ -162,6 +163,7 @@ export async function createTestSubmission(options: {
     submitScope = 'contest',
     oj = 'carits',
     cases,
+    createdAt,
   } = options
 
   const submission = await prisma.submission.create({
@@ -183,7 +185,7 @@ export async function createTestSubmission(options: {
       isGlobalVisible: submitScope === 'contest' ? false : true,
       ojRemoteId: null,
       cases: cases ?? JSON.stringify([{ status: 'accepted', time: 100, memory: 1024 }]),
-      createdAt: new Date(),
+      createdAt: createdAt ?? new Date(),
     },
   })
 

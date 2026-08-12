@@ -61,22 +61,34 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       return res.json({ success: true, data: { format: 'oi', problems: [], ranking: [], hidden: true } })
     }
 
-    // Get admin user IDs to exclude from ranking (unless includeAdminInRanking is true)
-    // TeamMember.userId 存储 Teacher.id 或 Student.id
-    // 由于 Teacher.id = Student.id = User.id（共享主键），可以直接使用
+    // 收集不计入排名的管理者；他们的提交也不能参与 ICPC 首 A 判定。
     let adminUserIds: string[] = []
-    if (!training.includeAdminInRanking && training.teamId) {
-      const adminMembers = await prisma.teamMember.findMany({
-        where: {
-          teamId: training.teamId,
-          status: 'active',
-          role: { in: ['owner', 'admin'] },
-        },
-        select: { userId: true, userType: true },
-      })
+    if (!training.includeAdminInRanking) {
+      if (training.teamId) {
+        const adminMembers = await prisma.teamMember.findMany({
+          where: {
+            teamId: training.teamId,
+            status: 'active',
+            role: { in: ['owner', 'admin'] },
+          },
+          select: { userId: true },
+        })
 
-      // TeamMember.userId 本身就是 User.id（共享主键设计）
-      adminUserIds = adminMembers.map(m => m.userId)
+        // TeamMember.userId 本身就是 User.id（共享主键设计）
+        adminUserIds = adminMembers.map(m => m.userId)
+      } else if (training.schoolId) {
+        const schoolAdmins = await prisma.user.findMany({
+          where: {
+            OR: [
+              { id: training.createdBy },
+              { role: 'school_principal', schoolId: training.schoolId },
+              { role: { in: ['super_admin', 'platform_admin'] } },
+            ],
+          },
+          select: { id: true },
+        })
+        adminUserIds = schoolAdmins.map(user => user.id)
+      }
     }
 
     const problems = training.TrainingProblem
@@ -181,11 +193,13 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
             { cases: { not: null } },
           ],
         },
-        orderBy: { createdAt: 'asc' },
+        // 同一毫秒内按提交 ID 稳定排序，保证首 A 归属不会因数据库返回顺序变化。
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         select: { id: true, userId: true, problemId: true, score: true, result: true, createdAt: true },
       })
 
       const userStats = new Map<string, Map<string, { solved: boolean; penalty: number; attempts: number }>>()
+      const firstAcceptedUserByProblem = new Map<string, string>()
 
       for (const sub of submissions) {
         if (!userStats.has(sub.userId)) userStats.set(sub.userId, new Map())
@@ -203,6 +217,9 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           stat.solved = true
           const timeDiff = (sub.createdAt.getTime() - trainingStartTime.getTime()) / 60000
           stat.penalty = timeDiff + (stat.attempts - 1) * 20
+          if (!firstAcceptedUserByProblem.has(sub.problemId)) {
+            firstAcceptedUserByProblem.set(sub.problemId, sub.userId)
+          }
         }
       }
 
@@ -212,7 +229,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       const ranking = Array.from(userStats.entries()).map(([uid, problemStats]) => {
         let solvedCount = 0
         let totalPenalty = 0
-        const problemDetails: Record<string, { solved: boolean; penalty: number; attempts: number; alias: string }> = {}
+        const problemDetails: Record<string, { solved: boolean; penalty: number; attempts: number; alias: string; isFirstAccepted: boolean }> = {}
 
         for (const p of problems) {
           // Submission.problemId = Problem.problemId (external ID), TrainingProblem.problemId = Problem.id (UUID)
@@ -225,7 +242,13 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
             solvedCount++
             totalPenalty += penalty
           }
-          problemDetails[p.id] = { solved, penalty, attempts, alias: p.alias ?? '' }
+          problemDetails[p.id] = {
+            solved,
+            penalty,
+            attempts,
+            alias: p.alias ?? '',
+            isFirstAccepted: solved && firstAcceptedUserByProblem.get(p.Problem.problemId) === uid,
+          }
         }
 
         return {
