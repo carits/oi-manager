@@ -190,6 +190,41 @@ describe('校级比赛 CRUD API', () => {
     })
   })
 
+  describe('演示数据 API: POST /api/schools/:schoolId/contests/demo-data', () => {
+    it('D1: 仅比赛管理员在明确确认后可以生成，并且提交接口能返回演示提交', async () => {
+      await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+
+      const denied = await createAuthenticatedRequest(app, studentToken)
+        .post(`/api/schools/${schoolData.school.id}/contests/demo-data`)
+        .send({ confirmation: '生成比赛演示数据' })
+      expect(denied.status).toBe(403)
+
+      const missingConfirmation = await createAuthenticatedRequest(app, principalToken)
+        .post(`/api/schools/${schoolData.school.id}/contests/demo-data`)
+        .send({})
+      expect(missingConfirmation.status).toBe(400)
+
+      const created = await createAuthenticatedRequest(app, principalToken)
+        .post(`/api/schools/${schoolData.school.id}/contests/demo-data`)
+        .send({ confirmation: '生成比赛演示数据' })
+      expect(created.status).toBe(200)
+      expect(created.body.data.contestIds).toHaveLength(9)
+      expect(created.body.data.submissionCount).toBeGreaterThan(0)
+
+      const submissions = await createAuthenticatedRequest(app, principalToken)
+        .get('/api/trainings/9804/submissions')
+      expect(submissions.status).toBe(200)
+      expect(submissions.body.data.total).toBeGreaterThan(0)
+
+      const repeated = await createAuthenticatedRequest(app, principalToken)
+        .post(`/api/schools/${schoolData.school.id}/contests/demo-data`)
+        .send({ confirmation: '生成比赛演示数据' })
+      expect(repeated.status).toBe(200)
+      expect(repeated.body.data.submissionCount).toBe(created.body.data.submissionCount)
+    })
+  })
+
   // ==================== 创建 API ====================
   describe('创建 API: POST /api/schools/:schoolId/contests', () => {
     const futureStart = () => new Date(Date.now() + 86400000).toISOString()

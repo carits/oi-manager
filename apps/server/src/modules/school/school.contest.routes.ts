@@ -3,6 +3,7 @@
  * 校级比赛 CRUD 路由
  */
 
+import crypto from 'crypto'
 import { Router } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
@@ -21,6 +22,68 @@ import {
 export const schoolContestRouter = Router()
 
 schoolContestRouter.use(authenticate, requireWorkspace('work'))
+
+const demoContestIds = [9801, 9802, 9803, 9804, 9805, 9806, 9807, 9808, 9809]
+const demoContestSeeds = [
+  ['oi', 'ongoing', '[演示] OI 模拟赛 - 正在进行', -1, 5], ['oi', 'finished', '[演示] OI 模拟赛 - 已结束', -72, -48], ['oi', 'upcoming', '[演示] OI 模拟赛 - 即将开始', 48, 54],
+  ['ioi', 'ongoing', '[演示] IOI 选拔赛 - 正在进行', -2, 4], ['ioi', 'finished', '[演示] IOI 选拔赛 - 已结束', -96, -72], ['ioi', 'upcoming', '[演示] IOI 选拔赛 - 即将开始', 72, 78],
+  ['icpc', 'ongoing', '[演示] ICPC 校队赛 - 正在进行', -3, 2], ['icpc', 'finished', '[演示] ICPC 校队赛 - 已结束', -120, -115], ['icpc', 'upcoming', '[演示] ICPC 校队赛 - 即将开始', 96, 101],
+] as const
+
+const demoTime = (offsetHours: number) => new Date(Date.now() + offsetHours * 3600 * 1000)
+const demoCases = (result: string, score: number, timeUsed: number, memoryUsed: number) => JSON.stringify([{ caseId: 1, result, score, timeUsed, memoryUsed }])
+
+async function createDemoContestData(schoolId: string, createdBy: string) {
+  const existing = await prisma.training.findMany({ where: { id: { in: demoContestIds } }, select: { id: true, title: true } })
+  const unsafe = existing.find(item => !item.title.startsWith('[演示]'))
+  if (unsafe) throw new Error(`演示编号 ${unsafe.id} 已被普通比赛占用`)
+  const otherSchoolDemo = await prisma.training.findFirst({ where: { id: { in: demoContestIds }, schoolId: { not: schoolId } }, select: { id: true } })
+  if (otherSchoolDemo) throw new Error('这组演示比赛已属于另一所学校')
+  const students = await prisma.user.findMany({ where: { schoolId, role: 'student', status: 'active' }, orderBy: { username: 'asc' }, take: 3, select: { id: true, username: true } })
+  if (students.length < 3) throw new Error('至少需要三名本校学生才能生成演示数据')
+  let problems = await prisma.problem.findMany({ where: { schoolId, status: { in: ['published', 'draft'] } }, orderBy: { createdAt: 'desc' }, take: 3, select: { id: true, problemId: true } })
+  for (let index = problems.length; index < 3; index += 1) {
+    const problemId = `DEMO-CONTEST-${index + 1}`
+    problems.push(await prisma.problem.upsert({
+      where: { libraryKey_platform_problemId: { libraryKey: schoolId, platform: 'carits', problemId } },
+      create: { id: crypto.randomUUID(), platform: 'carits', problemId, title: `演示题目 ${String.fromCharCode(65 + index)}`, description: '比赛界面演示题目。', ownerId: createdBy, ownerType: 'teacher', libraryScope: 'school', libraryKey: schoolId, schoolId, status: 'published', visibility: 'school', timeLimit: 1000, memoryLimit: 256 },
+      update: { status: 'published' }, select: { id: true, problemId: true },
+    }))
+  }
+  await prisma.submission.deleteMany({ where: { sourceId: { startsWith: 'demo-contest:' } } })
+  for (const [index, [format, status, title, startOffset, endOffset]] of demoContestSeeds.entries()) {
+    const id = demoContestIds[index]
+    const training = await prisma.training.upsert({
+      where: { id },
+      create: { id, title, description: '用于查看比赛、提交记录和排名效果的演示数据。', format, type: 'contest', scope: 'campus', schoolId, createdBy, startTime: demoTime(startOffset), endTime: demoTime(endOffset), status, problemIdVisible: true, solutionVisible: status === 'finished' },
+      update: { title, description: '用于查看比赛、提交记录和排名效果的演示数据。', format, type: 'contest', scope: 'campus', schoolId, createdBy, startTime: demoTime(startOffset), endTime: demoTime(endOffset), status, problemIdVisible: true, solutionVisible: status === 'finished' },
+    })
+    const trainingProblems = await Promise.all(problems.map((problem, problemIndex) => prisma.trainingProblem.upsert({
+      where: { trainingId_orderIndex: { trainingId: id, orderIndex: problemIndex } },
+      create: { id: `demo-training-${id}-problem-${problemIndex}`, trainingId: id, problemId: problem.id, alias: String.fromCharCode(65 + problemIndex), orderIndex: problemIndex, points: 100 },
+      update: { problemId: problem.id, alias: String.fromCharCode(65 + problemIndex), points: 100 }, select: { id: true },
+    })))
+    if (status === 'upcoming') continue
+    for (const [studentIndex, student] of students.entries()) for (const [problemIndex, trainingProblem] of trainingProblems.entries()) {
+      const accepted = format === 'icpc' ? (studentIndex + problemIndex) % 3 !== 2 : (studentIndex * 2 + problemIndex) % 4 !== 3
+      const score = accepted ? (format === 'ioi' && studentIndex === 1 && problemIndex === 1 ? 60 : 100) : 0
+      const timeUsed = 32 + studentIndex * 19 + problemIndex * 7
+      const memoryUsed = 768 + studentIndex * 256 + problemIndex * 128
+      const createdAt = new Date(demoTime(startOffset).getTime() + (20 + studentIndex * 24 + problemIndex * 11) * 60000)
+      await prisma.submission.create({ data: { userId: student.id, oj: 'carits', problemId: problems[problemIndex].problemId, language: 'cpp', code: '// 比赛演示提交', codeLength: 30, result: accepted ? 'accepted' : 'wrong_answer', score, timeUsed, wallTimeUsed: timeUsed + 3, memoryUsed, cases: demoCases(accepted ? 'accepted' : 'wrong_answer', score, timeUsed, memoryUsed), metricSource: 'demo', submitMethod: 'demo', submitSource: 'contest', submitScope: 'contest', workspaceScope: 'campus', sourceId: `demo-contest:${id}`, trainingId: id, trainingProblemId: trainingProblem.id, contestId: id, contestProblemId: trainingProblem.id, isGlobalVisible: true, createdAt, updatedAt: createdAt } })
+    }
+  }
+  return { contestIds: demoContestIds, submissionCount: await prisma.submission.count({ where: { sourceId: { startsWith: 'demo-contest:' }, cases: { not: null } } }) }
+}
+
+schoolContestRouter.post('/:schoolId/contests/demo-data', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  if (process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production') return res.status(404).json({ success: false, message: '接口不存在' })
+  const { schoolId } = req.params
+  if (req.body.confirmation !== '生成比赛演示数据') return res.status(400).json({ success: false, message: '请提供明确确认' })
+  if (!await isSchoolContestAdmin(req.user!.userId, schoolId)) return res.status(403).json({ success: false, message: '只有本校比赛管理员可以生成演示数据' })
+  const data = await createDemoContestData(schoolId, req.user!.userId)
+  res.json({ success: true, data })
+}, '生成演示数据失败'))
 
 /**
  * GET /api/schools/:schoolId/contests
