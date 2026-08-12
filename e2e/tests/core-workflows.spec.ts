@@ -68,10 +68,30 @@ test.describe('core role workflows @smoke', () => {
     await expect(failedCell).toHaveCSS('background-color', 'rgb(251, 228, 228)')
     await expect(page.locator('td[data-result="unsubmitted"]').first()).toHaveText('')
 
+    const participantColumnWidth = await page.getByRole('columnheader', { name: '参赛者' })
+      .evaluate(cell => cell.getBoundingClientRect().width)
+    expect(participantColumnWidth).toBeGreaterThanOrEqual(223)
+    expect(participantColumnWidth).toBeLessThanOrEqual(225)
+
     const problemColumnWidths = await page.locator('th[data-problem-column="true"]').evaluateAll(
       cells => cells.map(cell => cell.getBoundingClientRect().width),
     )
-    expect(Math.max(...problemColumnWidths)).toBeLessThanOrEqual(105)
+    expect(Math.min(...problemColumnWidths)).toBeGreaterThanOrEqual(87)
+    expect(Math.max(...problemColumnWidths)).toBeLessThanOrEqual(89)
+
+    const tableMetrics = await page.getByRole('table', { name: '比赛排名' }).evaluate(element => {
+      const table = element.getBoundingClientRect()
+      const viewportWidth = element.parentElement?.getBoundingClientRect().width ?? 0
+      return {
+        tableWidth: table.width,
+        leftSpace: table.left - (element.parentElement?.getBoundingClientRect().left ?? 0),
+        rightSpace: (element.parentElement?.getBoundingClientRect().right ?? 0) - table.right,
+        viewportWidth,
+      }
+    })
+    expect(tableMetrics.tableWidth).toBe(696)
+    expect(Math.abs(tableMetrics.leftSpace - tableMetrics.rightSpace)).toBeLessThanOrEqual(1)
+    expect(tableMetrics.viewportWidth).toBeGreaterThan(tableMetrics.tableWidth)
 
     await context.close()
 
@@ -80,8 +100,8 @@ test.describe('core role workflows @smoke', () => {
       viewport: { width: 390, height: 844 },
     })
     const mobilePage = await mobileContext.newPage()
-    await mobilePage.goto(`/student/team/${ids.team}/contests/${ids.contest}`)
-    await mobilePage.getByRole('tab', { name: /排名/ }).click()
+    await mobilePage.goto(`/student/team/${ids.team}/contests/${ids.contest}?tab=ranking`)
+    await expect(mobilePage.getByRole('table', { name: '比赛排名' })).toBeVisible()
     const currentUserRow = mobilePage.locator('tbody tr').filter({ hasText: 'E2E Campus Student' })
     await expect(currentUserRow).toBeVisible()
     const currentFirstAcceptedCell = currentUserRow.locator('td[data-result="first-accepted"]')
@@ -91,8 +111,27 @@ test.describe('core role workflows @smoke', () => {
     const scrollMetrics = await mobilePage.getByTestId('training-ranking-scroll').evaluate(element => ({
       clientWidth: element.clientWidth,
       scrollWidth: element.scrollWidth,
+      rankWidth: element.querySelector('th:nth-child(1)')?.getBoundingClientRect().width ?? 0,
+      participantWidth: element.querySelector('th:nth-child(2)')?.getBoundingClientRect().width ?? 0,
     }))
     expect(scrollMetrics.scrollWidth).toBeGreaterThan(scrollMetrics.clientWidth)
+    expect(scrollMetrics.rankWidth).toBe(44)
+    expect(scrollMetrics.participantWidth).toBe(176)
+    expect(scrollMetrics.clientWidth - scrollMetrics.rankWidth - scrollMetrics.participantWidth)
+      .toBeGreaterThanOrEqual(88)
+    const stickyMetrics = await mobilePage.getByTestId('training-ranking-scroll').evaluate(element => {
+      element.scrollLeft = 160
+      const containerLeft = element.getBoundingClientRect().left
+      const rankHeader = element.querySelector('th:nth-child(1)')?.getBoundingClientRect()
+      const participantHeader = element.querySelector('th:nth-child(2)')?.getBoundingClientRect()
+      return {
+        containerLeft,
+        rankLeft: rankHeader?.left ?? 0,
+        participantLeft: participantHeader?.left ?? 0,
+      }
+    })
+    expect(Math.abs(stickyMetrics.rankLeft - stickyMetrics.containerLeft)).toBeLessThanOrEqual(1)
+    expect(Math.abs(stickyMetrics.participantLeft - stickyMetrics.containerLeft - 44)).toBeLessThanOrEqual(1)
     const pageHasHorizontalOverflow = await mobilePage.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     )
@@ -110,6 +149,68 @@ test.describe('core role workflows @smoke', () => {
     await expect(page.locator('body')).toContainText('E2E Personal Student')
 
     await context.close()
+  })
+
+  test('OI and IOI rankings use distinct compact score presentations', async ({ browser }) => {
+    const scoreRanking = {
+      problems: [
+        { id: 'score-a', alias: 'A', orderIndex: 0, points: 100 },
+        { id: 'score-b', alias: 'B', orderIndex: 1, points: 100 },
+        { id: 'score-c', alias: 'C', orderIndex: 2, points: 100 },
+      ],
+      ranking: [
+        {
+          userId: ids.users.campusStudent,
+          userType: 'student',
+          name: 'E2E Campus Student',
+          username: 'student1',
+          avatar: null,
+          totalScore: 150,
+          problems: {
+            'score-a': { score: 100 },
+            'score-b': { score: 50 },
+            'score-c': { score: 0 },
+          },
+        },
+      ],
+    }
+
+    for (const format of ['oi', 'ioi'] as const) {
+      const context = await browser.newContext({ storageState: accounts.principal.storageState })
+      const page = await context.newPage()
+      await page.route(`**/api/trainings/${ids.contest}/ranking`, route => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { format, ...scoreRanking } }),
+      }))
+      await page.goto(`/teacher/teams/${ids.team}/contests/${ids.contest}?tab=ranking`)
+
+      const table = page.getByRole('table', { name: '比赛排名' })
+      await expect(table).toHaveAttribute('data-ranking-format', format)
+      await expect(page.getByRole('columnheader', { name: /A.*100 分/ })).toBeVisible()
+      await expect(page.getByRole('columnheader', { name: '参赛者' })).toHaveCSS('width', '224px')
+
+      const widths = await page.locator('th[data-problem-column="true"]').evaluateAll(
+        cells => cells.map(cell => cell.getBoundingClientRect().width),
+      )
+      expect(Math.min(...widths)).toBeGreaterThanOrEqual(87)
+      expect(Math.max(...widths)).toBeLessThanOrEqual(89)
+      await expect(table).toHaveCSS('width', '632px')
+
+      const full = page.locator('td[data-score-state="full"]')
+      const partial = page.locator('td[data-score-state="partial"]')
+      const zero = page.locator('td[data-score-state="zero"]')
+      if (format === 'oi') {
+        await expect(full).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+        await expect(partial).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+      } else {
+        await expect(full).toHaveCSS('background-color', 'rgb(232, 247, 233)')
+        await expect(partial).not.toHaveCSS('background-color', 'rgb(255, 255, 255)')
+      }
+      await expect(zero).toHaveCSS('color', 'rgb(148, 163, 184)')
+
+      await context.close()
+    }
   })
 
   test('student can browse team work and the accepted submission', async ({ browser }) => {
