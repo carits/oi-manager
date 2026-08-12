@@ -11,7 +11,10 @@ export function workspaceModule(pathname: string) {
 }
 
 export function workspaceHref(workspace: WorkspaceSummary, module: string) {
-  if (workspace.type === 'personal') return module === 'overview' ? '/personal' : `/personal/${module === 'homeworks' ? 'contests' : module}`
+  if (workspace.type === 'personal') {
+    const personalModules = new Set(['teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'])
+    return personalModules.has(module) ? `/personal/${module}` : '/personal'
+  }
   const target = workspace.availableModules.includes(module) ? module : 'overview'
   return `/org/${workspace.organizationId}/${target}`
 }
