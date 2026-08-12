@@ -9,6 +9,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PasswordResetModal } from '@/components/ui/PasswordResetModal'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
+import { ActionMenu, ActionMenuItem } from '@/components/management/ManagementList'
 
 interface UserManagementProps {
   // API 配置
@@ -318,29 +319,11 @@ export function UserManagement({
                 编辑
               </Button>
             )}
-            {canResetPassword && (
-              <Button variant="text" onClick={() => handleResetPassword(user)}>
-                重置密码
-              </Button>
-            )}
-            {canToggleStatus && (
-              <Button
-                variant="text"
-                onClick={() => handleToggleStatus(user)}
-                style={{ color: (user.status || user.user?.status) === 'active' ? 'var(--error)' : 'var(--success)' }}
-              >
-                {(user.status || user.user?.status) === 'active' ? '禁用' : '启用'}
-              </Button>
-            )}
-            {canDelete && onDeleteClick && (
-              <Button
-                variant="text"
-                onClick={() => onDeleteClick(user)}
-                style={{ color: 'var(--error)' }}
-              >
-                删除
-              </Button>
-            )}
+            {(canResetPassword || canToggleStatus || (canDelete && onDeleteClick)) && <ActionMenu>
+              {canResetPassword && <ActionMenuItem onClick={() => handleResetPassword(user)}>重置密码</ActionMenuItem>}
+              {canToggleStatus && <ActionMenuItem danger={(user.status || user.user?.status) === 'active'} onClick={() => handleToggleStatus(user)}>{(user.status || user.user?.status) === 'active' ? '禁用账号' : '启用账号'}</ActionMenuItem>}
+              {canDelete && onDeleteClick && <ActionMenuItem danger onClick={() => onDeleteClick(user)}>删除</ActionMenuItem>}
+            </ActionMenu>}
           </>
         )}
       />

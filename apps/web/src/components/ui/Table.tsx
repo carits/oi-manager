@@ -79,7 +79,7 @@ export function Table<T extends { id?: string | number }>({
                 {column.label}
               </th>
             ))}
-            {actions && <th style={{ width: 136, textAlign: 'right' }} scope="col">操作</th>}
+            {actions && <th className={styles.tableActionHeader} style={{ width: 156 }} scope="col">操作</th>}
           </tr>
         </thead>
         <tbody>
@@ -98,7 +98,7 @@ export function Table<T extends { id?: string | number }>({
                 </td>
               ))}
               {actions && (
-                <td onClick={event => event.stopPropagation()}>
+                <td className={styles.tableActionCell} onClick={event => event.stopPropagation()}>
                   <div className={styles.tableActions}>{actions(item)}</div>
                 </td>
               )}

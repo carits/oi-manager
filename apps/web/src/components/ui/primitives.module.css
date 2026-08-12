@@ -400,12 +400,30 @@
 }
 
 .tableActions {
+  min-width: 156px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   gap: var(--space-1);
   white-space: nowrap;
 }
+
+.tableActionHeader,
+.tableActionCell {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  text-align: center !important;
+  box-shadow: inset 1px 0 0 var(--border);
+}
+
+.tableActionHeader { background: var(--bg-muted); }
+.tableActionCell { background: var(--bg-card); }
+.tableRow:hover .tableActionCell { background: var(--bg-hover); }
+.tableRowCurrent .tableActionCell,
+.tableRowCurrent:hover .tableActionCell { background: var(--primary-light); }
+.tableRowRankingCurrent .tableActionCell,
+.tableRowRankingCurrent:hover .tableActionCell { background: color-mix(in srgb, var(--primary-light) 46%, var(--bg-card)); }
 
 .formField {
   display: grid;

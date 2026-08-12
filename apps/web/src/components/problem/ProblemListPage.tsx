@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Edit3, Plus, Search, Trash2 } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
 import { Button } from '@/components/ui/Button'
+import { ActionMenu, ActionMenuItem } from '@/components/management/ManagementList'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -96,7 +97,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
               { key: 'count', label: '题目数', align: 'center', width: '96px', render: list => list._count?.Entries ?? 0 },
               { key: 'updatedAt', label: '更新时间', width: '120px', render: list => formatDate(list.updatedAt) },
             ]}
-            actions={list => <>{(list._permission === 'admin' || list._permission === 'edit') && <Button size="sm" variant="ghost" iconOnly icon={<Edit3 size={16} />} aria-label={`编辑题单 ${list.title}`} onClick={() => router.push(`${pathPrefix}/problem-lists/${list.id}`)} />}{list._permission === 'admin' && <Button size="sm" variant="ghost" iconOnly icon={<Trash2 size={16} />} aria-label={`删除题单 ${list.title}`} onClick={() => setDeleteConfirm(list.id)} />}</>}
+            actions={list => <>{(list._permission === 'admin' || list._permission === 'edit') && <Button size="sm" variant="text" onClick={() => router.push(`${pathPrefix}/problem-lists/${list.id}`)}>编辑</Button>}{list._permission === 'admin' && <ActionMenu><ActionMenuItem danger onClick={() => setDeleteConfirm(list.id)}>删除题单</ActionMenuItem></ActionMenu>}</>}
           />
         )}
       </AsyncRegion>

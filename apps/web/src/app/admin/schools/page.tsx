@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Pagination } from '@/components/ui/Pagination'
 import { useSchools, School } from '@/hooks/data/useSchools'
 import { useAuth } from '@/components/AuthProvider'
+import { ActionMenu, ActionMenuItem } from '@/components/management/ManagementList'
 import Link from 'next/link'
 
 export default function AdminSchoolsPage() {
@@ -100,12 +101,7 @@ export default function AdminSchoolsPage() {
                   >
                     查看
                   </Link>
-                  <Link
-                    href={`/admin/schools/${school.id}/edit`}
-                    style={{ color: 'var(--primary)', textDecoration: 'none' }}
-                  >
-                    编辑
-                  </Link>
+                  <ActionMenu><ActionMenuItem onClick={() => router.push(`/admin/schools/${school.id}/edit`)}>编辑学校</ActionMenuItem></ActionMenu>
                 </>
               )}
             />

@@ -8,6 +8,7 @@ import { useDelete } from '@/hooks/actions/useDelete'
 import { calculateStudentGrade } from '@/lib/grade'
 import apiClient from '@/lib/apiClient'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
+import { ActionMenu, ActionMenuItem } from '@/components/management/ManagementList'
 
 interface StudentsTabProps {
   schoolId: string
@@ -236,13 +237,7 @@ export default function StudentsTab({ schoolId, showHeader = false }: StudentsTa
                     ? (student) => (
                         <>
                           <Button variant="text" onClick={() => modal.open(student)}>编辑</Button>
-                          <Button
-                            variant="text"
-                            style={{ color: 'var(--error)' }}
-                            onClick={() => deleteItem(student.id, '确定要删除该学生吗？')}
-                          >
-                            删除
-                          </Button>
+                          <ActionMenu><ActionMenuItem danger onClick={() => deleteItem(student.id, '确定要删除该学生吗？')}>删除学生</ActionMenuItem></ActionMenu>
                         </>
                       )
                     : undefined

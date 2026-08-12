@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react'
-import { MoreHorizontal } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getAssetUrl } from '@/lib/assets'
 import styles from './ManagementList.module.css'
@@ -25,7 +25,7 @@ export function ActionMenu({ children }: { children: ReactNode }) {
     document.addEventListener('mousedown', close); document.addEventListener('keydown', escape)
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape) }
   }, [])
-  return <div className={styles.actionMenu} ref={rootRef}><Button variant="text" size="sm" icon={<MoreHorizontal size={18} />} iconOnly aria-label="更多操作" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)} />{open && <ActionMenuContext.Provider value={() => setOpen(false)}><div className={styles.actionPanel} role="menu">{children}</div></ActionMenuContext.Provider>}</div>
+  return <div className={styles.actionMenu} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && <ActionMenuContext.Provider value={() => setOpen(false)}><div className={styles.actionPanel} role="menu">{children}</div></ActionMenuContext.Provider>}</div>
 }
 
 export function ActionMenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
