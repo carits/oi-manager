@@ -79,10 +79,10 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
   const user = (req as any).user!
   const scope = teamService.getScopeForUser(user)
 
-  // requestId 是 userId，查找 pending 的 TeamMember（invitedBy=null 表示申请）
+  // 铃铛传 TeamMember.id；旧成员页面仍传申请人的 userId，二者都兼容。
   const member = await prisma.teamMember.findFirst({
     where: {
-      userId: requestId,
+      OR: [{ id: requestId }, { userId: requestId }],
       status: 'pending',
       invitedBy: null,
       Team: { scope }
@@ -115,7 +115,7 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
   })
   const team = await teamRepository.findById(member.teamId)
   if (team) {
-    await notificationService.markSourceRead(user.userId, scope, 'team_join_request', member.id)
+    await notificationService.markSourceReadForScope(scope, 'team_join_request', member.id)
     await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: true })
   }
 
@@ -129,7 +129,7 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
 
   const member = await prisma.teamMember.findFirst({
     where: {
-      userId: requestId,
+      OR: [{ id: requestId }, { userId: requestId }],
       status: 'pending',
       invitedBy: null,
       Team: { scope }
@@ -159,7 +159,7 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
   })
   const team = await teamRepository.findById(member.teamId)
   if (team) {
-    await notificationService.markSourceRead(user.userId, scope, 'team_join_request', member.id)
+    await notificationService.markSourceReadForScope(scope, 'team_join_request', member.id)
     await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: false })
   }
 

@@ -84,5 +84,9 @@ export const notificationService = {
 
   async markSourceRead(userId: string, scope: TeamScope, sourceType: string, sourceId: string) {
     return prisma.userNotification.updateMany({ where: { userId, scope, sourceType, sourceId, readAt: null }, data: { readAt: new Date() } })
+  },
+
+  async markSourceReadForScope(scope: TeamScope, sourceType: string, sourceId: string) {
+    return prisma.userNotification.updateMany({ where: { scope, sourceType, sourceId, readAt: null }, data: { readAt: new Date() } })
   }
 }
