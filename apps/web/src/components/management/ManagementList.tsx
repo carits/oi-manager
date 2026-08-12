@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getAssetUrl } from '@/lib/assets'
@@ -18,14 +19,26 @@ export function IdentityCell({ name, username, avatar }: { name: string; usernam
 
 export function ActionMenu({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0, placement: 'bottom' as 'top' | 'bottom' })
   const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const updatePosition = () => {
+    const trigger = rootRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const panelHeight = menuRef.current?.offsetHeight || 148
+    const placement = window.innerHeight - rect.bottom < panelHeight + 12 && rect.top > panelHeight + 12 ? 'top' : 'bottom'
+    setPosition({ top: placement === 'top' ? rect.top - panelHeight - 6 : rect.bottom + 6, left: Math.max(8, rect.right - 156), placement })
+  }
+  useLayoutEffect(() => { if (open) updatePosition() }, [open])
   useEffect(() => {
-    const close = (event: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false) }
+    const close = (event: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) setOpen(false) }
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', close); document.addEventListener('keydown', escape)
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape) }
+    const reposition = () => updatePosition()
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', escape); window.addEventListener('resize', reposition); window.addEventListener('scroll', reposition, true)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); window.removeEventListener('resize', reposition); window.removeEventListener('scroll', reposition, true) }
   }, [])
-  return <div className={`${styles.actionMenu} ${open ? styles.actionMenuOpen : ''}`} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && <ActionMenuContext.Provider value={() => setOpen(false)}><div className={styles.actionPanel} role="menu">{children}</div></ActionMenuContext.Provider>}</div>
+  return <div className={styles.actionMenu} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && createPortal(<ActionMenuContext.Provider value={() => setOpen(false)}><div ref={menuRef} className={styles.actionPanel} data-placement={position.placement} style={{ top: position.top, left: position.left }} role="menu">{children}</div></ActionMenuContext.Provider>, document.body)}</div>
 }
 
 export function ActionMenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
