@@ -18,6 +18,8 @@ source_of_truth: training modules, submit and submissions routes
 | `PUT` | `/api/trainings/:id` | 教师/负责人、管理资源 | 更新任务 |
 | `DELETE` | `/api/trainings/:id` | 教师/负责人、管理资源 | 删除任务 |
 | `PUT` | `/api/trainings/:id/end-time` | 教师/负责人、管理资源 | 修改截止时间 |
+| `POST` | `/api/trainings/:id/start` | 教师/负责人、管理资源 | 立即开始未开始比赛 |
+| `POST` | `/api/trainings/:id/finish` | 教师/负责人、管理资源 | 提前结束已开始比赛并公开比赛提交 |
 | `POST` | `/api/trainings/:id/create-makeup-homework` | 教师/负责人 | 创建补题作业 |
 | `GET` | `/api/trainings/:id/problems` | 登录、资源 | 题目列表 |
 | `POST` | `/api/trainings/:id/problems` | 教师/负责人、管理资源 | 添加题目 |
@@ -77,4 +79,3 @@ source_of_truth: training modules, submit and submissions routes
 十分钟内返回同一提交；同一键对应不同请求体返回 `409 IDEMPOTENCY_CONFLICT`。
 当前开发服务器使用单进程内存登记，进程重启后登记失效，正式多实例部署前需要
 替换为共享持久化存储。
-

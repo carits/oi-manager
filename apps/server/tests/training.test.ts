@@ -321,6 +321,59 @@ describe('训练模块权限测试', () => {
     })
   })
 
+  describe('提前结束比赛权限', () => {
+    it('比赛管理员可以结束已开始的比赛并公开提交', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/trainings/${training.id}/finish`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.status).toBe('finished')
+      expect(new Date(res.body.data.endTime).getTime()).toBeLessThanOrEqual(Date.now())
+    })
+
+    it('普通成员不能提前结束比赛', async () => {
+      const res = await createAuthenticatedRequest(app, memberToken)
+        .post(`/api/trainings/${training.id}/finish`)
+
+      expect(res.status).toBe(403)
+      expect(res.body.success).toBe(false)
+    })
+  })
+
+  describe('立即开始比赛权限', () => {
+    it('比赛管理员可以立即开始未开始的比赛', async () => {
+      const upcoming = await prisma.training.create({
+        data: {
+          teamId: team.id,
+          title: '待开始比赛',
+          format: 'ioi',
+          type: 'contest',
+          startTime: new Date(Date.now() + 3600000),
+          endTime: new Date(Date.now() + 7200000),
+          status: 'upcoming',
+          createdBy: ownerUser.user.id,
+        },
+      })
+
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/trainings/${upcoming.id}/start`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.status).toBe('ongoing')
+      expect(new Date(res.body.data.startTime).getTime()).toBeLessThanOrEqual(Date.now())
+    })
+
+    it('普通成员不能立即开始比赛', async () => {
+      const res = await createAuthenticatedRequest(app, memberToken)
+        .post(`/api/trainings/${training.id}/start`)
+
+      expect(res.status).toBe(403)
+      expect(res.body.success).toBe(false)
+    })
+  })
+
   // ==================== D. 训练删除权限 ====================
   describe('训练删除权限', () => {
     it('D1: owner 可以删除训练', async () => {

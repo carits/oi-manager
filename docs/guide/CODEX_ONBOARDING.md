@@ -125,6 +125,22 @@ pnpm test:ui:prepare
 
 它不应接触默认 schema 或公网预览数据。严禁把测试脚本改成连接默认数据库。
 
+## API 演示数据
+
+需要在公网预览中展示比赛、题目、题解、附件和真实评测记录时，使用唯一允许的脚本：
+
+```bash
+DEMO_TEACHER_USERNAME=<教师用户名> \
+DEMO_TEACHER_PASSWORD=<教师密码> \
+DEMO_STUDENT_PASSWORD=<演示学生密码> \
+node scripts/create-api-demo-contests.mjs
+```
+
+脚本只调用 `/api` 的登录、学生、团队、题目、附件、测试数据、比赛、开始/结束和提交接口。
+禁止用 Prisma、SQL、`psql`、迁移脚本或任何数据库客户端补写演示数据。它使用固定“演示”前缀
+并会优先复用已存在资源；重新执行只补齐缺失成员、题目关联和提交。登录接口有频率限制，脚本会
+自动等待，不能通过并发登录规避。
+
 ## 部署与回滚
 
 仅 Web 改动的公网预览发布：

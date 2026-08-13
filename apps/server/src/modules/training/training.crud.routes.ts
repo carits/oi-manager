@@ -325,6 +325,77 @@ trainingCrudRouter.put('/trainings/:id/end-time', authenticate, asyncHandler(asy
 }, '更新失败'))
 
 /**
+ * POST /api/trainings/:id/start
+ * 比赛管理员立即开始未开始的比赛。
+ */
+trainingCrudRouter.post('/trainings/:id/start', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+    const id = parseTrainingId(req.params.id)
+    const userId = req.user!.userId
+    const training = await prisma.training.findUnique({ where: { id } })
+
+    if (!training) {
+      return res.status(404).json({ success: false, message: '训练不存在' })
+    }
+    if (!await canManageTraining(userId, training)) {
+      return res.status(403).json({ success: false, message: '只有管理员可以立即开始比赛' })
+    }
+    if (training.status === 'finished' || new Date() >= training.endTime) {
+      return res.status(400).json({ success: false, message: '比赛已经结束，不能开始' })
+    }
+    if (training.status === 'ongoing' || new Date() >= training.startTime) {
+      return res.json({ success: true, data: training, message: '比赛已经开始' })
+    }
+
+    const started = await prisma.training.update({
+      where: { id },
+      data: { status: 'ongoing', startTime: new Date() },
+    })
+    logger.info('training_started_early', { action: 'trainings', metadata: { trainingId: id, userId } })
+    res.json({ success: true, data: started, message: '比赛已开始' })
+}, '开始比赛失败'))
+
+/**
+ * POST /api/trainings/:id/finish
+ * 比赛管理员提前结束已开始的比赛，并公开比赛提交。
+ */
+trainingCrudRouter.post('/trainings/:id/finish', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+    const id = parseTrainingId(req.params.id)
+    const userId = req.user!.userId
+    const training = await prisma.training.findUnique({ where: { id } })
+
+    if (!training) {
+      return res.status(404).json({ success: false, message: '训练不存在' })
+    }
+    if (!await canManageTraining(userId, training)) {
+      return res.status(403).json({ success: false, message: '只有管理员可以提前结束比赛' })
+    }
+    if (training.status === 'finished' || new Date() >= training.endTime) {
+      return res.json({ success: true, data: training, message: '比赛已经结束' })
+    }
+    if (new Date() < training.startTime) {
+      return res.status(400).json({ success: false, message: '比赛尚未开始，不能提前结束' })
+    }
+
+    const finishedAt = new Date()
+    const updated = await prisma.$transaction(async (tx) => {
+      const finished = await tx.training.update({
+        where: { id },
+        data: { status: 'finished', endTime: finishedAt },
+      })
+      if (training.type === 'contest') {
+        await tx.submission.updateMany({
+          where: { submitScope: 'contest', contestId: id, isGlobalVisible: false },
+          data: { isGlobalVisible: true },
+        })
+      }
+      return finished
+    })
+
+    logger.info('training_finished_early', { action: 'trainings', metadata: { trainingId: id, userId } })
+    res.json({ success: true, data: updated, message: '比赛已结束' })
+}, '结束比赛失败'))
+
+/**
  * DELETE /api/trainings/:id
  * 删除训练
  */
