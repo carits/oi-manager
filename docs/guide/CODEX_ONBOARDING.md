@@ -162,6 +162,18 @@ DEMO_SCENARIO_KEY=<仅服务器环境保存的演示密钥> \
 node scripts/create-api-live-contest-v2.mjs
 ```
 
+需要展示更长、更复杂的赛时数据时，使用 V3 脚本。它会创建 OI、IOI、ICPC 三场均进行中的
+20 小时比赛，每场 8 题、8 名学生和复杂提交时间线；同样只调用 API：
+
+```bash
+DEMO_TEACHER_USERNAME=<教师用户名> \
+DEMO_TEACHER_PASSWORD=<教师密码> \
+DEMO_PLATFORM_ADMIN_USERNAME=<平台管理员用户名> \
+DEMO_PLATFORM_ADMIN_PASSWORD=<平台管理员密码> \
+DEMO_SCENARIO_KEY=<仅服务器环境保存的演示密钥> \
+node scripts/create-api-live-contest-v3.mjs
+```
+
 ## 部署与回滚
 
 仅 Web 改动的公网预览发布：

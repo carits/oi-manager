@@ -23,8 +23,51 @@ const partial: Record<string, string> = {
   E: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){int a=0;for(char c:s)if(string("aeiou").find(c)!=string::npos)++a;cout<<a<<"\\n";}}',
 }
 const wrong = '#include <bits/stdc++.h>\nusing namespace std;int main(){cout<<0<<"\\n";}'
+const V3_PREFIX = '赛时演示 V3'
+const V3_TEAM_ID = 'live_contest_v3_team'
+const V3_USERNAMES = Array.from({ length: 8 }, (_, index) => 'live_v3_' + String(index + 1).padStart(2, '0'))
+const v3Full: Record<string, string> = {
+  A: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b;if(cin>>a>>b)cout<<a+b<<"\\n";}',
+  B: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b,c;if(cin>>a>>b>>c)cout<<max(a,max(b,c))<<"\\n";}',
+  C: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long n;if(cin>>n)cout<<(n%2?"odd":"even")<<"\\n";}',
+  D: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long n;if(cin>>n)cout<<n*(n+1)/2<<"\\n";}',
+  E: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){int ans=0;for(char c:s){c=tolower((unsigned char)c);ans+=string("aeiou").find(c)!=string::npos;}cout<<ans<<"\\n";}}',
+  F: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b;if(cin>>a>>b)cout<<llabs(a-b)<<"\\n";}',
+  G: '#include <bits/stdc++.h>\nusing namespace std;int main(){int n,x,ans=0;if(cin>>n)while(n--&&cin>>x)ans+=x%2==0;cout<<ans<<"\\n";}',
+  H: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){reverse(s.begin(),s.end());cout<<s<<"\\n";}}',
+}
+const v3Partial: Record<string, string> = {
+  A: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b;if(cin>>a>>b)cout<<(a<0||b<0?0:a+b)<<"\\n";}',
+  B: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b,c;if(cin>>a>>b>>c)cout<<max(0LL,max(a,max(b,c)))<<"\\n";}',
+  C: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long n;if(cin>>n)cout<<(n<0?"even":(n%2?"odd":"even"))<<"\\n";}',
+  D: '#include <bits/stdc++.h>\nusing namespace std;int main(){int n;if(cin>>n)cout<<n*(n+1)/2<<"\\n";}',
+  E: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){int ans=0;for(char c:s)ans+=string("aeiou").find(c)!=string::npos;cout<<ans<<"\\n";}}',
+  F: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b;if(cin>>a>>b)cout<<(a>b?a-b:b-a)<<"\\n";}',
+  G: '#include <bits/stdc++.h>\nusing namespace std;int main(){int n,x,ans=0;if(cin>>n)while(n--&&cin>>x)ans+=x>0&&x%2==0;cout<<ans<<"\\n";}',
+  H: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){for(char& c:s)c=tolower((unsigned char)c);reverse(s.begin(),s.end());cout<<s<<"\\n";}}',
+}
 type Kind = 'full' | 'partial' | 'wrong'
 type Event = { user: number; alias: string; minute: number; kind: Kind; id?: string }
+function v3Events(): Event[] {
+  const events: Event[] = []
+  for (let user = 0; user < 8; user += 1) {
+    for (let problem = 0; problem < 8; problem += 1) {
+      const alias = String.fromCharCode(65 + problem)
+      const minute = 32 + user * 34 + problem * 17
+      const pattern = (user * 3 + problem * 5) % 8
+      if (pattern === 0) events.push({ user, alias, minute, kind: 'wrong', id: String(user) + '-' + alias + '-wrong-only' })
+      else if (pattern <= 2) {
+        events.push({ user, alias, minute, kind: 'partial', id: String(user) + '-' + alias + '-partial' })
+        events.push({ user, alias, minute: minute + 41, kind: 'full', id: String(user) + '-' + alias + '-upgrade' })
+      } else if (pattern <= 4) {
+        events.push({ user, alias, minute, kind: 'wrong', id: String(user) + '-' + alias + '-wrong' })
+        events.push({ user, alias, minute: minute + 28, kind: 'full', id: String(user) + '-' + alias + '-accepted' })
+      } else events.push({ user, alias, minute, kind: 'full', id: String(user) + '-' + alias + '-accepted' })
+      if (pattern >= 5 && (user + problem) % 3 === 0) events.push({ user, alias, minute: minute + 67, kind: 'wrong', id: String(user) + '-' + alias + '-after-accepted' })
+    }
+  }
+  return events
+}
 const scoreEvents: Event[] = [
   {user:0,alias:'A',minute:10,kind:'partial'},{user:0,alias:'A',minute:35,kind:'full'},{user:0,alias:'A',minute:50,kind:'wrong'},{user:0,alias:'B',minute:45,kind:'partial'},{user:0,alias:'D',minute:75,kind:'full'},
   {user:1,alias:'A',minute:15,kind:'wrong'},{user:1,alias:'A',minute:28,kind:'full'},{user:1,alias:'C',minute:40,kind:'partial'},{user:1,alias:'E',minute:80,kind:'full'},{user:1,alias:'C',minute:90,kind:'wrong'},
@@ -90,3 +133,69 @@ demoScenarioRouter.post('/v2/events', authenticate, asyncHandler(async (req: Aut
   }
   res.json({success:true,data:{created,existing,prefix:PREFIX}})
 }, '写入演示提交失败'))
+
+async function v3Resources() {
+  const users = await prisma.user.findMany({ where: { username: { in: V3_USERNAMES } }, select: { id: true, username: true } })
+  const trainings = await prisma.training.findMany({ where: { teamId: V3_TEAM_ID, title: { startsWith: V3_PREFIX }, type: 'contest', scope: 'campus' } })
+  if (users.length !== 8 || trainings.length !== 3) throw new Error('赛时演示 V3 资源不完整，请先运行 API 创建脚本')
+  return { users: V3_USERNAMES.map(name => users.find(user => user.username === name)!), trainings }
+}
+
+demoScenarioRouter.post('/v3/prepare', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  if (!allowed(req, res)) return
+  const { trainings } = await v3Resources()
+  const now = Date.now()
+  await prisma.training.updateMany({
+    where: { id: { in: trainings.map(item => item.id) } },
+    data: { status: 'ongoing', startTime: new Date(now - 6 * 60 * 60 * 1000), endTime: new Date(now + 14 * 60 * 60 * 1000), updatedAt: new Date() }
+  })
+  const refreshed = await prisma.training.findMany({ where: { id: { in: trainings.map(item => item.id) } } })
+  let normalized = 0
+  for (const training of refreshed) {
+    for (const event of v3Events()) {
+      const sourceId = 'demo-v3:' + training.id + ':' + event.id
+      const result = await prisma.submission.updateMany({
+        where: { sourceId },
+        data: { createdAt: new Date(training.startTime.getTime() + event.minute * 60000), updatedAt: new Date() }
+      })
+      normalized += result.count
+    }
+  }
+  res.json({ success: true, data: { prepared: refreshed.length, durationHours: 20, normalized, prefix: V3_PREFIX } })
+}, '准备赛时演示 V3 失败'))
+
+demoScenarioRouter.post('/v3/events', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  if (!allowed(req, res)) return
+  const { users, trainings } = await v3Resources()
+  const events = v3Events()
+  let created = 0
+  let existing = 0
+  for (const training of trainings) {
+    const problems = await prisma.trainingProblem.findMany({
+      where: { trainingId: training.id },
+      include: { Problem: { select: { id: true, platform: true, problemId: true } } },
+      orderBy: { orderIndex: 'asc' }
+    })
+    if (problems.length !== 8) throw new Error(training.title + ' 题目配置不完整')
+    const aliases = new Map(problems.map(problem => [problem.alias!, problem]))
+    for (const event of events) {
+      const sourceId = 'demo-v3:' + training.id + ':' + event.id
+      if (await prisma.submission.findFirst({ where: { sourceId }, select: { id: true } })) { existing += 1; continue }
+      const trainingProblem = aliases.get(event.alias)
+      if (!trainingProblem) throw new Error(training.title + ' 缺少题目 ' + event.alias)
+      const code = event.kind === 'full' ? v3Full[event.alias] : event.kind === 'partial' ? v3Partial[event.alias] : wrong
+      await createQueuedTrainingSubmission({
+        userId: users[event.user].id,
+        training,
+        trainingProblem,
+        language: 'cpp',
+        code,
+        submitMethod: 'demo_scenario',
+        createdAt: new Date(training.startTime.getTime() + event.minute * 60000),
+        sourceId
+      })
+      created += 1
+    }
+  }
+  res.json({ success: true, data: { created, existing, perContest: events.length, prefix: V3_PREFIX } })
+}, '写入赛时演示 V3 提交失败'))
