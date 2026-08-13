@@ -218,6 +218,7 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         problemSourceHidden: hideProblemIdentity,
         alias: p.alias,
         title: p.Problem.title,
+        problemTitle: p.Problem.title,
         orderIndex: p.orderIndex,
         ...(hideProblemIdentity ? {} : {
           platform: platform || null,

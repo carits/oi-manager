@@ -220,6 +220,7 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           problemSourceHidden: hideProblemIdentity,
           alias: problem.alias,
           title: problem.Problem.title,
+          problemTitle: problem.Problem.title,
           orderIndex: problem.orderIndex,
           ...(showPlatform ? {
             platform,

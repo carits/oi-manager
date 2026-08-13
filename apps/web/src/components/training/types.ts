@@ -105,6 +105,7 @@ export interface ProblemListEntry {
   id: string
   alias: string | null
   title: string
+  problemTitle?: string
   orderIndex: number
   points: number | null
   platform: string | null
