@@ -220,7 +220,9 @@ async function ensureContests(teacherToken, team, problems) {
 async function createSubmissions(teacherToken, contest, students) {
   await request('/trainings/' + contest.id + '/start', { token: teacherToken, method: 'POST' })
   const old = await request('/trainings/' + contest.id + '/submissions?page=1&pageSize=200', { token: teacherToken }).catch(() => null)
-  const existing = new Set(items(old).map(item => item.userId + ':' + item.trainingProblemId))
+  const previous = items(old)
+  const existing = new Set(previous.map(item => item.userId + ':' + item.trainingProblemId))
+  const wrongExisting = new Set(previous.filter(item => item.result !== 'accepted').map(item => item.userId + ':' + item.trainingProblemId))
   const data = await request('/trainings/' + contest.id + '/problems', { token: teacherToken })
   const problems = items(data)
   if (problems.length !== problemSpecs.length) {
@@ -229,14 +231,15 @@ async function createSubmissions(teacherToken, contest, students) {
   for (const [studentIndex, student] of students.entries()) {
     for (const [problemIndex, problem] of problems.entries()) {
       const key = student.id + ':' + problem.id
-      if (existing.has(key)) continue
-      if (contest.format === 'icpc' && studentIndex === 0 && problemIndex < 2) {
+      // 每场都保留可见的错误记录；ICPC 的错误还会计入负次数。
+      if ((studentIndex + problemIndex) % 3 === 0 && !wrongExisting.has(key)) {
         await request('/trainings/' + contest.id + '/submit', {
           token: student.token,
           method: 'POST',
           body: { trainingProblemId: problem.id, language: 'cpp', code: '#include <bits/stdc++.h>\nint main(){return 0;}\n' },
         })
       }
+      if (existing.has(key)) continue
       await request('/trainings/' + contest.id + '/submit', {
         token: student.token,
         method: 'POST',
@@ -266,7 +269,8 @@ async function main() {
   await ensureMembers(teacherToken, team, students)
   const problems = await ensureProblems(teacherToken)
   const all = await ensureContests(teacherToken, team, problems)
-  const active = all.filter(item => item.state !== '未开始')
+  // 已结束比赛不重新开启；首次创建时“已结束”比赛仍是 upcoming，会先完成提交再结束。
+  const active = all.filter(item => item.state !== '未开始' && item.status !== 'finished')
   for (const contest of active) await createSubmissions(teacherToken, contest, students)
   await waitForJudge(teacherToken, active.map(item => item.id))
   for (const contest of all.filter(item => item.state === '已结束')) {
