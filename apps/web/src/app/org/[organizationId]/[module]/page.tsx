@@ -26,16 +26,20 @@ export default function OrgPage() {
   const { module } = useParams<{ module: string }>()
   const { user, activateOrganization } = useAuth()
   const { organizationId } = useParams<{ organizationId: string }>()
+  const [workspaceRole, setWorkspaceRole] = useState<'school_principal' | 'teacher' | 'student' | null>(null)
   const [ready, setReady] = useState(false)
   useEffect(() => {
     setReady(false)
     void apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces').then(result => {
       const workspace = result.data?.workspaces.find(item => item.organizationId === organizationId)
-      if (result.success && workspace?.type === 'organization') activateOrganization(workspace)
+      if (result.success && workspace?.type === 'organization') {
+        activateOrganization(workspace)
+        setWorkspaceRole(workspace.memberRole as 'school_principal' | 'teacher' | 'student')
+      }
       setReady(true)
     })
   }, [activateOrganization, organizationId])
-  const student = user?.role === 'student'
+  const student = (workspaceRole || user?.organizationRole) === 'student'
   if (!ready) return null
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return student ? <StudentSchool /> : <TeacherSchool />

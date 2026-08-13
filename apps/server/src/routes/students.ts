@@ -390,6 +390,11 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
     if (!finalSchoolId) {
       return res.status(400).json({ success: false, message: '学生必须关联学校，请确保您已归属学校' })
     }
+    const school = await prisma.school.findUnique({ where: { id: finalSchoolId }, select: { organizationId: true } })
+    const organizationId = school?.organizationId
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: '学校尚未完成身份空间初始化，暂时无法创建学生' })
+    }
 
     // 权限检查：教师只能为本校创建学生（超管/平台管理员/学校负责人可以为任意学校创建）
     const currentUser = await prisma.user.findUnique({ where: { id: userId } })
@@ -428,6 +433,35 @@ studentRouter.post('/', authenticate, authorize('teacher', 'school_principal'), 
           email,
           avatar
         }
+      })
+
+      // 学生档案与身份空间必须同时创建，否则会出现“已属于学校但无法切换到校园”的状态。
+      await tx.organizationMembership.upsert({
+        where: { organizationId_userId: { organizationId, userId: newUser.id } },
+        create: {
+          id: crypto.randomUUID(),
+          organizationId,
+          userId: newUser.id,
+          memberRole: 'student',
+          relationType: 'enrolled',
+          status: 'active',
+          joinedAt: new Date()
+        },
+        update: {
+          memberRole: 'student',
+          relationType: 'enrolled',
+          status: 'active',
+          joinedAt: new Date()
+        }
+      })
+      const membership = await tx.organizationMembership.findUniqueOrThrow({
+        where: { organizationId_userId: { organizationId, userId: newUser.id } },
+        select: { id: true }
+      })
+      await tx.organizationStudentProfile.upsert({
+        where: { membershipId: membership.id },
+        create: { id: crypto.randomUUID(), membershipId: membership.id, name: name || username, gender, enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null, targetContest, tags: tags ? JSON.stringify(tags) : null, notes, avatar, status: 'active' },
+        update: { name: name || username, gender, enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null, targetContest, tags: tags ? JSON.stringify(tags) : null, notes, avatar, status: 'active' }
       })
 
       // 创建学生
@@ -486,6 +520,11 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
     if (!finalSchoolId) {
       return res.status(400).json({ success: false, message: '学生必须关联学校' })
     }
+    const school = await prisma.school.findUnique({ where: { id: finalSchoolId }, select: { organizationId: true } })
+    const organizationId = school?.organizationId
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: '学校尚未完成身份空间初始化，暂时无法更新学生' })
+    }
 
     // 使用事务更新学生及相关数据，确保原子性
     logger.info('student_update_password_field_received', { action: 'student_update', metadata: { passwordProvided: !!password, passwordLength: password?.length || 0 } })
@@ -505,7 +544,35 @@ studentRouter.put('/:id', authenticate, authorize('teacher', 'school_principal')
 
       await tx.user.update({
         where: { id: existingStudent.id },
-        data: userUpdateData
+        data: { ...userUpdateData, schoolId: finalSchoolId }
+      })
+
+      await tx.organizationMembership.upsert({
+        where: { organizationId_userId: { organizationId, userId: existingStudent.id } },
+        create: {
+          id: crypto.randomUUID(),
+          organizationId,
+          userId: existingStudent.id,
+          memberRole: 'student',
+          relationType: 'enrolled',
+          status: 'active',
+          joinedAt: new Date()
+        },
+        update: {
+          memberRole: 'student',
+          relationType: 'enrolled',
+          status: 'active',
+          joinedAt: new Date()
+        }
+      })
+      const membership = await tx.organizationMembership.findUniqueOrThrow({
+        where: { organizationId_userId: { organizationId, userId: existingStudent.id } },
+        select: { id: true }
+      })
+      await tx.organizationStudentProfile.upsert({
+        where: { membershipId: membership.id },
+        create: { id: crypto.randomUUID(), membershipId: membership.id, name: name || existingStudent.name, gender, enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null, targetContest, tags: tags ? JSON.stringify(tags) : null, notes, avatar, rating: rating ? Number(rating) : 1200, status: 'active' },
+        update: { name: name || existingStudent.name, gender, enrollmentYear: enrollmentYear ? Number(enrollmentYear) : null, targetContest, tags: tags ? JSON.stringify(tags) : null, notes, avatar, ...(rating ? { rating: Number(rating) } : {}) }
       })
 
       // 更新学生

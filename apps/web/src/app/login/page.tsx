@@ -1,5 +1,4 @@
 import { LoginForm } from './LoginForm'
-import { normalizeLoginRole } from '@/lib/loginRole'
 import { redirect } from 'next/navigation'
 import { getRoleHome } from '@/lib/roleAccess'
 import { getServerSession } from '@/lib/serverSession'
@@ -17,9 +16,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect(getRoleHome(session.user.role))
   }
 
-  const rawRole = Array.isArray(searchParams?.role)
-    ? searchParams?.role[0]
-    : searchParams?.role
   const rawNext = Array.isArray(searchParams?.next)
     ? searchParams?.next[0]
     : searchParams?.next
@@ -27,5 +23,5 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? rawNext
     : undefined
 
-  return <LoginForm initialRole={normalizeLoginRole(rawRole)} nextPath={nextPath} />
+  return <LoginForm nextPath={nextPath} />
 }

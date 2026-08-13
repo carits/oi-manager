@@ -17,8 +17,7 @@ describe('Authentication Module', () => {
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password,
-          role: 'student'
+          password
         })
 
       expect(res.status).toBe(200)
@@ -80,7 +79,7 @@ describe('Authentication Module', () => {
       expect(res.body.message).toContain('禁用')
     })
 
-    it('should fail when teacher tries to login as student', async () => {
+    it('should ignore legacy login role and use the account identity', async () => {
       const { user, password } = await createTestUser({ role: 'teacher' })
 
       const res = await request(app)
@@ -91,12 +90,12 @@ describe('Authentication Module', () => {
           role: 'student'
         })
 
-      expect(res.status).toBe(401)
-      expect(res.body.success).toBe(false)
-      expect(res.body.message).toContain('教师端')
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.next).toBe('/identity')
     })
 
-    it('should fail when student tries to login as admin', async () => {
+    it('should allow a student to use the same unified login request', async () => {
       const { user, password } = await createTestUser({ role: 'student' })
 
       const res = await request(app)
@@ -107,20 +106,18 @@ describe('Authentication Module', () => {
           role: 'admin'
         })
 
-      expect(res.status).toBe(401)
-      expect(res.body.success).toBe(false)
-      expect(res.body.message).toContain('学生端')
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
     })
 
-    it('should allow school_principal to login as teacher', async () => {
+    it('should allow a school principal to login without selecting a terminal', async () => {
       const { user, password } = await createTestUser({ role: 'school_principal' })
 
       const res = await request(app)
         .post('/api/auth/login')
         .send({
           username: user.username,
-          password,
-          role: 'teacher'
+          password
         })
 
       expect(res.status).toBe(200)

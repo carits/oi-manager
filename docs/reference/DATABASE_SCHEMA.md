@@ -15,13 +15,15 @@ source_of_truth: apps/server/prisma/schema.prisma
 | 模型 | 关键字段 | 用途 |
 |------|----------|------|
 | `Admin` | `id`, `name`, `schoolId` | 超管/平台管理员扩展 |
-| `User` | `id`, `username`, `passwordHash`, `role`, `schoolId`, `status` | 登录身份 |
+| `User` | `id`, `username`, `passwordHash`, `role`, `status` | 全局登录账号；`role` 仅保留平台权限，旧 `schoolId` 仅作兼容 |
 | `Teacher` | `id`, `name`, `schoolId`, `status` | 教师扩展 |
 | `Student` | `id`, `name`, `schoolId`, `headTeacherId`, `rating` | 学生扩展 |
 | `PersonalProfile` | `userId`, `rating`, timestamps | 全角色按需启用的个人身份与个人 Rating |
 | `School` | `id`, `name`, `currentPrincipalTeacherId`, `status` | 学校与当前负责人 |
 | `Organization` | `id`, `name`, `type`, `status` | 统一组织工作区；首期由学校一一映射 |
 | `OrganizationMembership` | `organizationId`, `userId`, `memberRole`, `relationType`, `status` | 用户在组织内的有效成员关系与邀请状态 |
+| `OrganizationStudentProfile` | `membershipId`, `name`, `enrollmentYear`, `headTeacherMembershipId`, `rating` | 学生在单个校园内的独立档案 |
+| `OrganizationTeacherProfile` | `membershipId`, `name`, `title`, `status` | 教师在单个校园内的独立档案 |
 | `LoginLog` | `username`, `loginRole`, `userRole`, `result`, `ipAddress` | 登录审计 |
 | `PasswordResetLog` | `operatorId`, `targetUserId`, `resetMethod`, `result` | 密码重置审计 |
 | `UserStatusLog` | `operatorId`, `targetUserId`, `oldStatus`, `newStatus` | 状态变更审计 |

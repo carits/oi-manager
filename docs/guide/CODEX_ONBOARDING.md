@@ -7,6 +7,13 @@ source_of_truth: AGENTS.md, package.json, Playwright configuration, remote runti
 
 # Codex 项目接手指南
 
+## 统一登录与多校园身份
+
+登录页只使用用户名和密码，不再选择学生端、教师端或管理员端。成功登录后进入 `/identity`：
+平台管理员可选择平台管理、校园身份和个人；其他账号可选择其所有校园身份和个人。
+
+校园归属以 `OrganizationMembership` 为唯一事实来源。同一账号可加入多个校园，且可在不同校园拥有不同身份；学生和教师资料保存在组织内档案。旧 `User.schoolId`、`Student.schoolId`、`Teacher.schoolId` 仍只为兼容历史资源保留，新代码不得用它们决定校园权限或身份列表。
+
 本文是 OI Manager 的 Codex 执行手册。新会话开始时先读本文，再按任务读取对应模块文档。`docs/archive/` 只用于追溯历史，不可作为当前操作依据。
 
 ## 硬性规则

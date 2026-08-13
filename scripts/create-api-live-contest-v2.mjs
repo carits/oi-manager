@@ -61,6 +61,22 @@ async function ensureStudents(teacherToken) {
   for (const student of output) student.token = await throttledLogin(student.username, studentPassword, 'student')
   return output
 }
+async function ensureCampusMemberships(teacherToken, members) {
+  const workspaces = (await request('/workspaces', { token: teacherToken })).workspaces || []
+  const campus = workspaces.find(item => item.type === 'organization' && item.memberRole === 'school_principal')
+  if (!campus) throw new Error('当前教师没有可邀请学生进入的校园身份')
+
+  for (const student of members) {
+    const studentWorkspaces = (await request('/workspaces', { token: student.token })).workspaces || []
+    if (studentWorkspaces.some(item => item.type === 'organization' && item.organizationId === campus.organizationId)) continue
+    const invitation = await request('/organizations/' + campus.organizationId + '/invitations', {
+      token: teacherToken,
+      method: 'POST',
+      body: { username: student.username, memberRole: 'student' }
+    })
+    await request('/organization-invitations/' + invitation.id + '/accept', { token: student.token, method: 'POST' })
+  }
+}
 async function ensureTeam(teacherToken) {
   const current = list(await request('/teams?view=mine&page=1&pageSize=100', { token: teacherToken }))
   return current.find(item => item.id === 'live_contest_v2_team') || request('/teams', { token: teacherToken, method: 'POST', body: { id: 'live_contest_v2_team', name: '赛时演示 V2 队', description: '用于验证 OI、IOI、ICPC 的赛时可见性和真实评测时间线。', isPublic: false } })
@@ -120,6 +136,7 @@ async function main() {
   const teacherToken=await throttledLogin(teacherName,teacherPassword,'teacher')
   const adminToken=await throttledLogin(adminName,adminPassword,'admin')
   const team=await ensureTeam(teacherToken); const members=await ensureStudents(teacherToken)
+  await ensureCampusMemberships(teacherToken,members)
   await ensureMembers(teacherToken,team,members); const problems=await ensureProblems(teacherToken); const all=await ensureContests(teacherToken,team,problems)
   const headers={'x-demo-scenario-key':scenarioKey}
   await request('/admin/demo-scenario/v2/prepare',{token:adminToken,method:'POST',headers})

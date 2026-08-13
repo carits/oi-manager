@@ -577,10 +577,50 @@ model OrganizationMembership {
   updatedAt      DateTime     @updatedAt
   Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  StudentProfile OrganizationStudentProfile?
+  TeacherProfile OrganizationTeacherProfile?
 
   @@unique([organizationId, userId])
   @@index([userId, status])
   @@index([organizationId, status])
+}
+
+model OrganizationStudentProfile {
+  id                      String                 @id
+  membershipId            String                 @unique
+  name                    String
+  gender                  String?
+  enrollmentYear          Int?
+  targetContest           String?
+  headTeacherMembershipId String?
+  tags                    String?
+  notes                   String?
+  avatar                  String?
+  rating                  Int                    @default(1200)
+  status                  String                 @default("active")
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  Membership              OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([headTeacherMembershipId])
+  @@index([status])
+}
+
+model OrganizationTeacherProfile {
+  id           String                 @id
+  membershipId String                 @unique
+  name         String
+  email        String?
+  phone        String?
+  avatar       String?
+  bio          String?
+  title        String?
+  status       String                 @default("active")
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  Membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }
 
 model SchoolProblemList {
@@ -1023,8 +1063,10 @@ model User {
   id                        String                      @id
   username                  String                      @unique
   passwordHash              String
-  role                      String
-  schoolId                  String
+  // 平台角色仅表达平台级权限；校园身份由 OrganizationMembership 决定。
+  role                      String                    @default("user")
+  // 兼容旧资源的临时字段，不得再作为校园归属或权限判断依据。
+  schoolId                  String?
   status                    String                      @default("active")
   avatar                    String?
   phone                     String?
@@ -1042,7 +1084,7 @@ model User {
   TeamMember                TeamMember[]
   Teacher                   Teacher?
   TrainingUserProblemStatus TrainingUserProblemStatus[]
-  School                    School                      @relation(fields: [schoolId], references: [id])
+  School                    School?                     @relation(fields: [schoolId], references: [id])
   UserArchivedProblem       UserArchivedProblem[]
   UserPlatformBinding       UserPlatformBinding[]
   UserNotification          UserNotification[]

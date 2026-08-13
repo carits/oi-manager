@@ -6,6 +6,7 @@ export type RouteOwner = AuthRole | 'public'
 export const routePatterns = [
   '/',
   '/login',
+  '/identity',
   '/super_admin',
   '/admin',
   '/admin/platform-bindings',

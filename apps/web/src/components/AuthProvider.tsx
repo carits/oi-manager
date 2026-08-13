@@ -48,6 +48,8 @@ export interface AuthUser {
   adminId?: string
   schoolId?: string
   schoolName?: string
+  /** 当前 URL 所在校园的成员身份；校园身份不再从全局账号角色推断。 */
+  organizationRole?: 'school_principal' | 'teacher' | 'student'
   workspaceMode?: WorkspaceMode
   /** @deprecated Use workspaceMode. */
   studentMode?: 'campus' | 'personal'
@@ -66,7 +68,7 @@ interface AuthContextType {
   user: AuthUser | null
   status: AuthStatus
   loading: boolean
-  login: (username: string, password: string, role: string, mode?: 'campus' | 'personal') => Promise<LoginResult>
+  login: (username: string, password: string) => Promise<LoginResult>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   switchWorkspace: (mode: WorkspaceMode, targetPath?: string) => Promise<boolean>
@@ -115,7 +117,7 @@ export function AuthProvider({
   )
 
   const sessionKey = useMemo(
-    () => user ? `${user.role}:${user.userId}:${normalizeWorkspaceMode(user)}` : null,
+    () => user ? `${user.role}:${user.organizationRole || 'none'}:${user.userId}:${normalizeWorkspaceMode(user)}` : null,
     [user],
   )
 
@@ -172,19 +174,11 @@ export function AuthProvider({
   const login = async (
     username: string,
     password: string,
-    role: string,
-    mode?: 'campus' | 'personal',
   ): Promise<LoginResult> => {
     const result = await apiClient.mutate<AuthUser & { token?: string }>(
       '/api/auth/login',
       'POST',
-      {
-        username,
-        password,
-        role,
-        workspaceMode: mode === 'personal' ? 'personal' : 'work',
-        mode,
-      },
+      { username, password, workspaceMode: 'work' },
     )
 
     if (!result.ok) {
@@ -266,9 +260,14 @@ export function AuthProvider({
 
   const activateOrganization = useCallback((workspace: WorkspaceSummary) => {
     if (workspace.type !== 'organization' || !workspace.schoolId) return
-    setUser(current => current && current.schoolId === workspace.schoolId
+    setUser(current => current && current.schoolId === workspace.schoolId && current.organizationRole === workspace.memberRole
       ? current
-      : current ? { ...current, schoolId: workspace.schoolId, schoolName: workspace.organizationName } : null)
+      : current ? {
+        ...current,
+        schoolId: workspace.schoolId,
+        schoolName: workspace.organizationName,
+        organizationRole: workspace.memberRole as 'school_principal' | 'teacher' | 'student',
+      } : null)
   }, [])
 
   return (

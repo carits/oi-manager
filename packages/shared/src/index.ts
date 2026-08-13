@@ -46,7 +46,7 @@ export interface JwtPayload {
 }
 
 export interface WorkspaceSummary {
-  type: 'organization' | 'personal'
+  type: 'organization' | 'personal' | 'platform'
   organizationId?: string
   organizationName?: string
   organizationType?: string

@@ -119,12 +119,14 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
-  const role = user.role as UserRole
+  const accountRole = user.role as UserRole
   const workspaceMode = storedWorkspaceMode
+  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+  // 校园导航必须使用当前组织成员身份，同一账号在另一校园可以是另一种身份。
+  const role = (organizationId && user.organizationRole ? user.organizationRole : accountRole) as UserRole
   const navConfig = getNavConfig(role, workspaceMode)
   const activeItem = getActiveNavItem(pathname, role, workspaceMode)
   const isPersonal = workspaceMode === 'personal'
-  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const isStudent = role === 'student'
   const roleLabel = roleLabels[role] || '用户'
   const roleName = roleNames[role] || user.role
@@ -259,7 +261,7 @@ export function AppShell({ children }: AppShellProps) {
                 </div>
               )}
             </div>
-            {(role === 'student' || role === 'teacher' || role === 'school_principal') && <WorkspaceSwitcher />}
+            <WorkspaceSwitcher />
           </div>
         </div>
       </header>

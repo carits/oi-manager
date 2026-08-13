@@ -115,7 +115,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     const { username, password, role, mode, workspaceMode } = req.body as {
       username: string
       password: string
-      role: 'admin' | 'teacher' | 'student'
+      role?: 'admin' | 'teacher' | 'student'
       mode?: 'campus' | 'personal'
       workspaceMode?: WorkspaceMode
     }
@@ -202,56 +202,6 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: '该账号已被禁用，请联系管理员' })
     }
 
-    // 验证角色
-    // 管理员端: super_admin, platform_admin
-    // 教师端: school_principal, teacher
-    // 学生端: student
-    const adminRoles = ['super_admin', 'platform_admin']
-    const teacherRoles = ['school_principal', 'teacher']
-
-    // 检查角色匹配
-    let roleMatched = false
-    if (role === 'admin' && adminRoles.includes(user.role)) {
-      roleMatched = true
-    } else if (role === 'teacher' && teacherRoles.includes(user.role)) {
-      roleMatched = true
-    } else if (role === 'student' && user.role === 'student') {
-      roleMatched = true
-    }
-
-    if (!roleMatched) {
-      // 记录登录失败 - 角色不匹配
-      await prisma.loginLog.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId: user.id,
-          username,
-          loginRole: role || 'unknown',
-          userRole: user.role,
-          result: 'failed_role_mismatch',
-          failureReason: `用户角色 ${user.role} 与登录端 ${role} 不匹配`,
-          ipAddress: clientIp,
-          userAgent
-        }
-      })
-      logger.security('login_failed_role_mismatch', {
-        action: 'login',
-        userId: user.id,
-        target: username,
-        metadata: { userRole: user.role, loginRole: role, ip: clientIp }
-      })
-
-      if (adminRoles.includes(user.role)) {
-        return res.status(401).json({ success: false, message: '请选择管理员端登录' })
-      } else if (teacherRoles.includes(user.role)) {
-        return res.status(401).json({ success: false, message: '请选择教师端登录' })
-      } else if (user.role === 'student') {
-        return res.status(401).json({ success: false, message: '请选择学生端登录' })
-      } else {
-        return res.status(401).json({ success: false, message: '角色选择错误' })
-      }
-    }
-
     // 生成 token
     const payload: JwtPayload = {
       userId: user.id,
@@ -264,19 +214,19 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     if (user.Admin) {
       payload.adminId = user.Admin.id
       // 系统管理员也有 schoolId（绑定到平台学校）
-      payload.schoolId = user.schoolId
+      if (user.schoolId) payload.schoolId = user.schoolId
     }
 
     // 如果是教师或学校负责人，添加 teacherId
     if (user.Teacher) {
       payload.teacherId = user.Teacher.id
-      payload.schoolId = user.schoolId
+      if (user.schoolId) payload.schoolId = user.schoolId
     }
 
     // 如果是学生，添加 studentId
     if (user.Student) {
       payload.studentId = user.Student.id
-      payload.schoolId = user.schoolId
+      if (user.schoolId) payload.schoolId = user.schoolId
       payload.studentMode = payload.workspaceMode === 'personal' ? 'personal' : 'campus'
     }
 
@@ -297,7 +247,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         id: crypto.randomUUID(),
         userId: user.id,
         username,
-        loginRole: role || 'unknown',
+        loginRole: 'unified',
         userRole: user.role,
         result: 'success',
         ipAddress: clientIp,
@@ -311,7 +261,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     logger.audit('login_success', {
       userId: user.id,
       target: username,
-      metadata: { userRole: user.role, loginRole: role, ip: clientIp }
+      metadata: { userRole: user.role, loginMode: 'unified', ip: clientIp }
     })
 
     res.json({
@@ -327,7 +277,8 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         studentId: user.Student?.id,
         schoolId: user.schoolId, // 所有用户都有 schoolId
         workspaceMode: payload.workspaceMode,
-        studentMode: payload.studentMode
+        studentMode: payload.studentMode,
+        next: '/identity'
       }
     })
   } catch (error) {
@@ -462,9 +413,33 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       }
     }
 
-    // 构建 profile 对象（只返回基本字段，不含关联对象）
+    const organizationId = (req as any).user?.organizationId as string | undefined
+    const membership = organizationId
+      ? await prisma.organizationMembership.findFirst({
+        where: { organizationId, userId, status: 'active' },
+        include: { StudentProfile: true, TeacherProfile: true }
+      })
+      : null
+
+    // 构建 profile 对象（校园上下文优先读取组织档案）
     let profileData = null
-    if (user.Student) {
+    if (membership?.StudentProfile) {
+      profileData = {
+        id: membership.StudentProfile.id,
+        name: membership.StudentProfile.name,
+        avatar: membership.StudentProfile.avatar,
+        rating: membership.StudentProfile.rating,
+        enrollmentYear: membership.StudentProfile.enrollmentYear
+      }
+    } else if (membership?.TeacherProfile) {
+      profileData = {
+        id: membership.TeacherProfile.id,
+        name: membership.TeacherProfile.name,
+        avatar: membership.TeacherProfile.avatar,
+        bio: membership.TeacherProfile.bio,
+        title: membership.TeacherProfile.title
+      }
+    } else if (user.Student) {
       profileData = {
         id: user.Student.id,
         name: user.Student.name,
@@ -493,7 +468,8 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       data: {
         userId: user.id,
         username: user.username,
-        role: user.role,
+        // 组织页面返回成员身份；个人与平台请求仍返回全局账号权限。
+        role: organizationId && membership ? membership.memberRole : user.role,
         avatar: user.avatar,
         phone: user.phone,
         email: user.email,

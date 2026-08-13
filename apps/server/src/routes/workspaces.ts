@@ -8,6 +8,7 @@ import { notificationService } from '../modules/notification/notification.servic
 export const workspaceRouter = Router()
 
 const allModules = ['overview', 'campus', 'students', 'teachers', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
+const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
 
 function modulesForRole(role: string) {
   if (role === 'school_principal') return allModules
@@ -22,7 +23,38 @@ function relationLabel(memberRole: string, relationType: string) {
   return '本校学生'
 }
 
+async function ensureLegacySchoolMembership(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, schoolId: true }
+  })
+  if (!user?.schoolId || !['student', 'teacher', 'school_principal'].includes(user.role)) return
+
+  const school = await prisma.school.findUnique({
+    where: { id: user.schoolId },
+    select: { organizationId: true }
+  })
+  if (!school?.organizationId) return
+
+  const memberRole = user.role
+  await prisma.organizationMembership.upsert({
+    where: { organizationId_userId: { organizationId: school.organizationId, userId } },
+    create: {
+      id: crypto.randomUUID(),
+      organizationId: school.organizationId,
+      userId,
+      memberRole,
+      relationType: memberRole === 'student' ? 'enrolled' : 'employee',
+      status: 'active',
+      joinedAt: new Date()
+    },
+    // 历史校园账号已有明确学校归属，补齐切换器关系时不能覆盖仍待处理的正式邀请。
+    update: {}
+  })
+}
+
 workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  await ensureLegacySchoolMembership(req.user!.userId)
   const rows = await prisma.organizationMembership.findMany({
     where: { userId: req.user!.userId, status: 'active', Organization: { status: 'active' } },
     include: { Organization: { include: { School: { select: { id: true, shortName: true } } } } },
@@ -40,7 +72,10 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     relationLabel: relationLabel(row.memberRole, row.relationType),
     availableModules: modulesForRole(row.memberRole)
   }))
-  res.json({ success: true, data: { workspaces: [...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }] } })
+  const platform = ['super_admin', 'platform_admin'].includes(req.user!.role)
+    ? [{ type: 'platform' as const, organizationName: '平台管理', memberRole: 'platform_admin', relationLabel: '平台管理员', availableModules: platformModules }]
+    : []
+  res.json({ success: true, data: { workspaces: [...platform, ...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }] } })
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {
@@ -51,10 +86,17 @@ workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandle
   const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
   const memberRole = req.body.memberRole === 'teacher' ? 'teacher' : 'student'
   if (!username) return res.status(400).json({ success: false, message: '请输入用户名' })
-  const target = await prisma.user.findUnique({ where: { username }, select: { id: true, role: true } })
+  const target = await prisma.user.findUnique({ where: { username }, select: { id: true, username: true } })
   if (!target) return res.status(404).json({ success: false, message: '用户不存在' })
-  if ((memberRole === 'teacher' && !['teacher', 'school_principal'].includes(target.role)) || (memberRole === 'student' && target.role !== 'student')) {
-    return res.status(400).json({ success: false, message: '邀请身份必须与账号当前身份一致' })
+  const existing = await prisma.organizationMembership.findUnique({
+    where: { organizationId_userId: { organizationId, userId: target.id } },
+    select: { status: true, memberRole: true }
+  })
+  if (existing?.status === 'active') {
+    return res.status(409).json({ success: false, message: `该账号已是本校园${relationLabel(existing.memberRole, 'enrolled')}` })
+  }
+  if (existing?.status === 'pending') {
+    return res.status(409).json({ success: false, message: '该账号已有待处理的校园邀请' })
   }
   const membership = await prisma.organizationMembership.upsert({
     where: { organizationId_userId: { organizationId, userId: target.id } },
@@ -71,7 +113,24 @@ workspaceRouter.post('/organization-invitations/:id/:action', authenticate, asyn
   if (!accept && req.params.action !== 'reject') return res.status(400).json({ success: false, message: '无效操作' })
   const invitation = await prisma.organizationMembership.findFirst({ where: { id: req.params.id, userId: req.user!.userId, status: 'pending' } })
   if (!invitation) return res.status(404).json({ success: false, message: '邀请不存在或已处理' })
-  await prisma.organizationMembership.update({ where: { id: invitation.id }, data: { status: accept ? 'active' : 'rejected', joinedAt: accept ? new Date() : null } })
+  await prisma.$transaction(async tx => {
+    await tx.organizationMembership.update({ where: { id: invitation.id }, data: { status: accept ? 'active' : 'rejected', joinedAt: accept ? new Date() : null } })
+    if (!accept) return
+    const user = await tx.user.findUniqueOrThrow({ where: { id: req.user!.userId }, select: { username: true, avatar: true, email: true, phone: true, bio: true } })
+    if (invitation.memberRole === 'student') {
+      await tx.organizationStudentProfile.upsert({
+        where: { membershipId: invitation.id },
+        create: { id: crypto.randomUUID(), membershipId: invitation.id, name: user.username, avatar: user.avatar, status: 'active' },
+        update: { status: 'active' }
+      })
+    } else {
+      await tx.organizationTeacherProfile.upsert({
+        where: { membershipId: invitation.id },
+        create: { id: crypto.randomUUID(), membershipId: invitation.id, name: user.username, avatar: user.avatar, email: user.email, phone: user.phone, bio: user.bio, status: 'active' },
+        update: { status: 'active' }
+      })
+    }
+  })
   await notificationService.markSourceRead(req.user!.userId, 'campus', 'organization_invitation', invitation.id)
   res.json({ success: true })
 }))

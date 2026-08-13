@@ -38,12 +38,17 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     if (organizationId && decoded.workspaceMode === 'work') {
       const membership = await prisma.organizationMembership.findFirst({
         where: { organizationId, userId: decoded.userId, status: 'active', Organization: { status: 'active' } },
-        select: { Organization: { select: { School: { select: { id: true } } } } }
+        select: {
+          memberRole: true,
+          Organization: { select: { School: { select: { id: true } } } }
+        }
       })
       const schoolId = membership?.Organization.School?.id
       if (!schoolId) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该工作区' })
       decoded.organizationId = organizationId
       decoded.schoolId = schoolId
+      // 校园权限只取当前成员关系：同一账号在不同校园可拥有不同身份。
+      decoded.role = membership.memberRole as UserRole
     }
     if (decoded.role === 'student' && !decoded.studentMode) {
       decoded.studentMode = decoded.workspaceMode === 'personal' ? 'personal' : 'campus'

@@ -6,10 +6,6 @@
 .heading { text-align: center; }
 .title { margin: 0; color: var(--text-primary); font-size: var(--text-xl); font-weight: 650; }
 .subtitle { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--text-sm); }
-.roleSelector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); padding: 3px; background: var(--gray-100); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.roleButton { min-height: 36px; padding: 0 var(--space-2); color: var(--text-secondary); border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 600; }
-.roleButton:hover { color: var(--text-primary); }
-.roleButton[aria-pressed='true'] { color: var(--primary-text); background: var(--bg-card); box-shadow: var(--shadow-xs); }
 .form { display: grid; gap: var(--space-4); }
 .error { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; padding: var(--space-3); color: var(--error-text); background: var(--error-light); border-radius: var(--radius); font-size: var(--text-sm); }
 .devHint { margin: 0; color: var(--text-muted); font-size: var(--text-xs); text-align: center; }
