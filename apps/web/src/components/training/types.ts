@@ -25,8 +25,9 @@ export interface TrainingInfo {
 
 export interface TrainingProblem {
   id: string
-  alias: string | null
-  orderIndex: number
+  problemIdentityHidden?: boolean
+  alias?: string | null
+  orderIndex?: number
   points: number | null
   hasSolution: boolean
   solutionVisible: boolean
@@ -41,7 +42,8 @@ export interface TrainingProblem {
 }
 
 export interface ProblemDetail {
-  alias: string | null
+  problemIdentityHidden?: boolean
+  alias?: string | null
   points: number | null
   timeLimit: number | null
   memoryLimit: number | null
@@ -67,10 +69,11 @@ export interface SubmissionRow {
   userName: string
   username: string
   userType: string
-  problemAlias: string
-  problemOrderIndex: number
-  trainingProblemId: string
-  oj: string
+  problemIdentityHidden?: boolean
+  problemAlias?: string
+  problemOrderIndex?: number
+  trainingProblemId?: string
+  oj?: string
   language: string
   result: string | null
   displayResult?: 'pending' | 'queuing' | string  // OI 赛中非管理员显示的脱敏结果
@@ -106,6 +109,7 @@ export interface ProblemListEntry {
   hasSubmitted?: boolean  // 是否已提交（OI 赛中用于显示"已提交"标记）
   bestScore: number | null
   bestResult: string | null
+  problemIdentityHidden?: boolean
 }
 
 export type TabType = 'problems' | 'problemList' | 'submissions' | 'solutions' | 'attachments' | 'ranking'

@@ -14,8 +14,9 @@ import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 interface SubmissionDetail {
   id: number
   username: string
-  oj: string
-  problemId: string
+  oj?: string
+  problemId?: string
+  problemIdentityHidden?: boolean
   result: string | null
   displayResult?: 'pending' | 'queuing' | string  // OI 赛中非管理员显示的脱敏结果
   hidden?: boolean  // OI 赛中非管理员标记
@@ -323,7 +324,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={detail ? `#${detail.id} | ${detail.username}'s solution for [${getOjLabel(detail.oj)}-${detail.problemId}]` : '评测详情'}
+        title={detail ? (detail.problemIdentityHidden ? `#${detail.id} | ${detail.username} 的比赛提交` : `#${detail.id} | ${detail.username}'s solution for [${getOjLabel(detail.oj || '')}-${detail.problemId || ''}]`) : '评测详情'}
         width="900px"
       >
       {loading ? (
@@ -403,13 +404,13 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>提交时间：</span>
               <span style={{ fontWeight: 500 }}>{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
             </div>
-            {!detail.hidden && !detail.hideRemoteId && (
+            {!detail.hidden && !detail.problemIdentityHidden && !detail.hideRemoteId && (
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
-                getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole, detail.problemId) ? (
+                getRemoteSubmitUrl(detail.oj || '', detail.ojRemoteId, viewRole, detail.problemId) ? (
                   <a
-                    href={getRemoteSubmitUrl(detail.oj, detail.ojRemoteId, viewRole, detail.problemId)!}
+                    href={getRemoteSubmitUrl(detail.oj || '', detail.ojRemoteId, viewRole, detail.problemId)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: 'var(--primary)', textDecoration: 'none' }}

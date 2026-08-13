@@ -30,6 +30,7 @@ interface TrainingSolutionPanelProps {
 export function TrainingSolutionPanel({ training, problems, allSolutions }: TrainingSolutionPanelProps) {
   const trainingFinished = training.status === 'finished' || new Date() > new Date(training.endTime)
   const hideSolution = !training.solutionVisible && !trainingFinished && !training.isAdmin
+  const hideProblemIdentity = !training.problemIdVisible && !trainingFinished && !training.isAdmin
 
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>
@@ -47,7 +48,7 @@ export function TrainingSolutionPanel({ training, problems, allSolutions }: Trai
             return (
               <div key={p.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{toExcelColumnName(p.orderIndex)}. {p.alias || p.problemTitle || '未命名'}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{hideProblemIdentity ? '比赛题目' : `${toExcelColumnName(p.orderIndex ?? 0)}. ${p.alias || p.problemTitle || '未命名'}`}</span>
                   {sol?.source === 'problem' && (
                     <span style={{ fontSize: '0.75rem', background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'var(--gray-500)' }}>
                       原题目题解

@@ -15,10 +15,20 @@ export type TrainingRuntimeStatus = 'upcoming' | 'ongoing' | 'finished'
 export interface TrainingForVisibility {
   id: number
   format: string
+  type?: string
   status: string
+  problemIdVisible?: boolean
   startTime: Date
   endTime: Date
-  teamId: string
+  teamId: string | null
+}
+
+/** 题号赛后显示时，由 API 而不是页面统一隐藏比赛原题身份。 */
+export function shouldHideTrainingProblemIdentity(training: TrainingForVisibility, isAdmin: boolean): boolean {
+  return training.type === 'contest'
+    && !isAdmin
+    && !training.problemIdVisible
+    && getTrainingRuntimeStatus(training) !== 'finished'
 }
 
 /** Submission 类型定义（用于脱敏） */

@@ -19,6 +19,7 @@ import {
   requireTrainingStarted,
 } from './training.helpers'
 import { findAccessibleProblem } from '../problem/problem.access'
+import { getTrainingRuntimeStatus, shouldHideTrainingProblemIdentity } from './training.visibility'
 
 const managedProblemFilePattern = /\/api\/files\/([^/?#]+)\/(?:download|public)/g
 
@@ -91,6 +92,7 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
       orderBy: { orderIndex: 'asc' },
     })
 
+    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
     res.json({
       success: true,
       data: problems.map(p => {
@@ -98,21 +100,21 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
         const attachmentCount = (p.Problem?._count?.ProblemAttachment ?? 0) + p._count.TrainingAttachment
         const base: any = {
           id: p.id,
-          alias: p.alias,
-          orderIndex: p.orderIndex,
           points: p.points,
           hasSolution: !!p.TrainingSolution,
           solutionVisible: p.TrainingSolution?.visible ?? false,
           attachmentCount,
+          problemIdentityHidden: hideProblemIdentity,
         }
 
-        // 判断题号是否可见：只由 problemIdVisible 和管理员身份控制，不自动赛后公开
-        const showProblemId = isAdmin || training.problemIdVisible
+        if (hideProblemIdentity) return base
 
         // 管理员可看到完整信息
         if (isAdmin) {
           return {
             ...base,
+            alias: p.alias,
+            orderIndex: p.orderIndex,
             problemId: p.Problem.id,
             problemTitle: p.Problem.title,
             platform: p.Problem.platform,
@@ -127,15 +129,15 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
         // problemTitle（题目标题）始终返回，只有 platformProblemId（来源题号）受控制
         return {
           ...base,
+          alias: p.alias,
+          orderIndex: p.orderIndex,
           platform: p.Problem.platform,
           problemTitle: p.Problem.title,
-          ...(showProblemId && {
-            problemId: p.Problem.id,
-            platformProblemId: p.Problem.problemId,
-            difficulty: p.Problem.difficulty,
-            timeLimit: p.Problem.timeLimit,
-            memoryLimit: p.Problem.memoryLimit,
-          }),
+          problemId: p.Problem.id,
+          platformProblemId: p.Problem.problemId,
+          difficulty: p.Problem.difficulty,
+          timeLimit: p.Problem.timeLimit,
+          memoryLimit: p.Problem.memoryLimit,
         }
       }),
     })
@@ -209,14 +211,10 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
 
     // OI 赛制可见性检查
     const isAdminUser = await canManageTraining(userId, training)
-    const now = Date.now()
-    const computedStatus = training.status === 'finished' ? 'finished'
-      : (now >= training.startTime.getTime() && now <= training.endTime.getTime()) ? 'ongoing'
-      : 'upcoming'
+    const computedStatus = getTrainingRuntimeStatus(training)
     const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
 
-    // OI 赛中是否显示平台信息：只由 problemIdVisible 和管理员身份控制，不自动赛后公开
-    const showProblemId = isAdminUser || training.problemIdVisible
+    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdminUser)
 
     // 构建结果
     const result = problems.map(p => {
@@ -237,24 +235,20 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         // 平台不支持生成链接，忽略
       }
 
-      // 管理员或 problemIdVisible 可看到完整信息
-      const shouldShowPlatformInfo = isAdminUser || showProblemId
-
-      // 学生视角：不返回 problemTableId、platform、platformProblemId、problemUrl
-      const isStudent = req.user!.role === 'student'
-      const studentSafePlatformInfo = !isStudent && shouldShowPlatformInfo
-
       return {
         id: p.id,
-        alias: p.alias,
-        title: p.Problem.title,
-        orderIndex: p.orderIndex,
         points: p.points,
-        platform: studentSafePlatformInfo ? (platform || null) : null,
-        platformProblemId: studentSafePlatformInfo ? (platformProblemId || null) : null,
-        problemTableId: !isStudent && shouldShowPlatformInfo ? p.Problem.id : null,
-        platformLabel: studentSafePlatformInfo ? (platformLabelMap.get(platform as any) || platform || '') : '',
-        problemUrl: studentSafePlatformInfo ? problemUrl : null,
+        problemIdentityHidden: hideProblemIdentity,
+        ...(hideProblemIdentity ? {} : {
+          alias: p.alias,
+          title: p.Problem.title,
+          orderIndex: p.orderIndex,
+          platform: platform || null,
+          platformProblemId: platformProblemId || null,
+          problemTableId: p.Problem.id,
+          platformLabel: platformLabelMap.get(platform as any) || platform || '',
+          problemUrl,
+        }),
         hasSubmitted: Boolean(best),
         bestScore: hideOiStatus ? null : (best?.score ?? null),
         bestResult: hideOiStatus ? null : (best?.result ?? null),
@@ -530,12 +524,14 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
       select: { content: true },
     })
 
-    // 返回题面内容（不暴露标题和来源给非管理员）
+    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
+    // 返回题面内容；赛中“题号赛后显示”时不返回任何原题识别字段。
     const problem = trainingProblem.Problem
     res.json({
       success: true,
       data: {
-        alias: trainingProblem.alias,
+        problemIdentityHidden: hideProblemIdentity,
+        ...(hideProblemIdentity ? {} : { alias: trainingProblem.alias }),
         points: trainingProblem.points,
         timeLimit: problem.timeLimit,
         memoryLimit: problem.memoryLimit,

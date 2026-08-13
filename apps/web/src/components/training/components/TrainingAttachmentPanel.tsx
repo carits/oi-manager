@@ -32,7 +32,7 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
         if (atts.length === 0) return null
         return (
           <div key={p.id} style={{ marginBottom: '1rem' }}>
-            <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{toExcelColumnName(p.orderIndex)}. {p.alias || p.problemTitle || '未命名'}</div>
+            <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{p.problemIdentityHidden ? '比赛题目' : `${toExcelColumnName(p.orderIndex ?? 0)}. ${p.alias || p.problemTitle || '未命名'}`}</div>
             {atts.map(a => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--gray-100)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

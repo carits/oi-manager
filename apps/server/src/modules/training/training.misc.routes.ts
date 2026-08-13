@@ -17,6 +17,7 @@ import {
 } from './training.helpers'
 import { findAccessibleProblem, findUsableProblemByExternalId } from '../problem/problem.access'
 import { fileService } from '../../lib/storage'
+import { shouldHideTrainingProblemIdentity } from './training.visibility'
 
 export const trainingMiscRouter = Router()
 
@@ -161,7 +162,7 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
     ['carits', 'Carits'],
   ])
   const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdmin
-  const showProblemId = isAdmin || training.problemIdVisible
+  const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
   const isStudent = req.user!.role === 'student'
 
   const problems = canSeeProblems
@@ -171,20 +172,21 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           problem._count.TrainingAttachment
         const summary = {
           id: problem.id,
-          alias: problem.alias,
-          orderIndex: problem.orderIndex,
           points: problem.points,
           hasSolution: Boolean(problem.TrainingSolution),
           solutionVisible: problem.TrainingSolution?.visible ?? false,
           attachmentCount,
-          platform: problem.Problem.platform,
-          problemTitle: problem.Problem.title,
+          problemIdentityHidden: hideProblemIdentity,
         }
 
-        if (!isAdmin && !training.problemIdVisible) return summary
+        if (hideProblemIdentity) return summary
 
         return {
           ...summary,
+          alias: problem.alias,
+          orderIndex: problem.orderIndex,
+          platform: problem.Problem.platform,
+          problemTitle: problem.Problem.title,
           problemId: problem.Problem.id,
           platformProblemId: problem.Problem.problemId,
           difficulty: problem.Problem.difficulty,
@@ -212,20 +214,23 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           problemUrl = null
         }
 
-        const showPlatform = !isStudent && showProblemId
+        const showPlatform = isAdmin || (!isStudent && !hideProblemIdentity)
         return {
           id: problem.id,
-          alias: problem.alias,
-          title: problem.Problem.title,
-          orderIndex: problem.orderIndex,
           points: problem.points,
-          platform: showPlatform ? platform : null,
-          platformProblemId: showPlatform ? platformProblemId : null,
-          problemTableId: showPlatform ? problem.Problem.id : null,
-          platformLabel: showPlatform
-            ? platformLabelMap.get(platform as any) || platform || ''
-            : '',
-          problemUrl: showPlatform ? problemUrl : null,
+          problemIdentityHidden: hideProblemIdentity,
+          ...(hideProblemIdentity ? {} : {
+            alias: problem.alias,
+            title: problem.Problem.title,
+            orderIndex: problem.orderIndex,
+          }),
+          ...(showPlatform ? {
+            platform,
+            platformProblemId,
+            problemTableId: problem.Problem.id,
+            platformLabel: platformLabelMap.get(platform as any) || platform || '',
+            problemUrl,
+          } : {}),
           hasSubmitted: Boolean(best),
           bestScore: hideOiStatus ? null : best?.score ?? null,
           bestResult: hideOiStatus ? null : best?.result ?? null,
@@ -420,15 +425,19 @@ trainingMiscRouter.get('/trainings/:id/attachments', authenticate, asyncHandler(
     orderBy: { orderIndex: 'asc' },
   })
 
+  const isAdmin = await canManageTraining(userId, training)
+  const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
   const attachments = Object.fromEntries(problems.map(item => [
     item.id,
     [
-      ...item.TrainingAttachment.map(file => ({
+      ...item.TrainingAttachment.map((file, index) => ({
         ...file,
+        ...(hideProblemIdentity ? { fileName: `比赛附件 ${index + 1}` } : {}),
         uploadedAt: file.uploadedAt.toISOString(),
       })),
-      ...item.Problem.ProblemAttachment.map(file => ({
+      ...item.Problem.ProblemAttachment.map((file, index) => ({
         ...file,
+        ...(hideProblemIdentity ? { fileName: `比赛附件 ${item.TrainingAttachment.length + index + 1}` } : {}),
         fileUrl: trainingFileUrl(id, item.id, file.fileUrl),
         uploadedBy: '',
         uploadedAt: file.uploadedAt.toISOString(),

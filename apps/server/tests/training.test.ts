@@ -722,6 +722,81 @@ describe('OI 赛制可见性测试', () => {
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
     })
+
+    it('OI-C2: 题号赛后显示时，学生赛中所有题目和提交出口均不返回原题身份', async () => {
+      const problem = await prisma.problem.create({
+        data: {
+          id: `oi_hidden_problem_${Date.now()}`,
+          platform: 'carits',
+          problemId: `OI_HIDDEN_${Date.now()}`,
+          title: '不应在赛中显示的原题标题',
+          ownerId: ownerUser.user.id,
+          visibility: 'public',
+          libraryScope: 'platform',
+          libraryKey: 'platform',
+          status: 'published',
+          publishedAt: new Date(),
+        },
+      })
+      const trainingProblem = await prisma.trainingProblem.create({
+        data: {
+          id: `oi_hidden_tp_${Date.now()}`,
+          trainingId: oiTraining.id,
+          problemId: problem.id,
+          alias: 'A',
+          orderIndex: 0,
+          points: 100,
+        },
+      })
+      const submission = await prisma.submission.create({
+        data: {
+          userId: studentUser.user.id,
+          oj: 'carits',
+          problemId: problem.problemId,
+          language: 'cpp',
+          code: 'int main(){}',
+          codeLength: 12,
+          result: 'accepted',
+          score: 100,
+          timeUsed: 1,
+          memoryUsed: 1024,
+          submitMethod: 'code',
+          submitScope: 'contest',
+          trainingId: oiTraining.id,
+          trainingProblemId: trainingProblem.id,
+          contestId: oiTraining.id,
+          cases: '[]',
+        },
+      })
+
+      const paths = [
+        `/api/trainings/${oiTraining.id}/overview`,
+        `/api/trainings/${oiTraining.id}/problems`,
+        `/api/trainings/${oiTraining.id}/problem-status`,
+        `/api/trainings/${oiTraining.id}/submissions`,
+        `/api/trainings/${oiTraining.id}/submissions/${submission.id}`,
+      ]
+      for (const path of paths) {
+        const response = await createAuthenticatedRequest(app, studentToken).get(path)
+        expect(response.status).toBe(200)
+        const body = JSON.stringify(response.body.data)
+        expect(body).not.toContain(problem.problemId)
+        expect(body).not.toContain('不应在赛中显示的原题标题')
+        expect(body).not.toContain('"alias":"A"')
+        expect(body).not.toContain('"platform":"carits"')
+      }
+
+      const managerResponse = await createAuthenticatedRequest(app, ownerToken)
+        .get(`/api/trainings/${oiTraining.id}/submissions/${submission.id}`)
+      expect(managerResponse.body.data.problemId).toBe('A')
+      expect(managerResponse.body.data.oj).toBe('carits')
+
+      await prisma.training.update({ where: { id: oiTraining.id }, data: { status: 'finished', endTime: new Date(Date.now() - 1) } })
+      const afterContest = await createAuthenticatedRequest(app, studentToken)
+        .get(`/api/trainings/${oiTraining.id}/submissions/${submission.id}`)
+      expect(afterContest.body.data.problemId).toBe('A')
+      expect(afterContest.body.data.oj).toBe('carits')
+    })
   })
 })
 

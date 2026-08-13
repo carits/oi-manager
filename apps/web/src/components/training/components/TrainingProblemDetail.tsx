@@ -90,6 +90,9 @@ export function TrainingProblemDetail({
   saveRecordNow,
 }: TrainingProblemDetailProps) {
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
+  const hideProblemIdentity = !training.isAdmin
+    && !training.problemIdVisible
+    && trainingStatus !== 'finished'
 
   // ========== 题面内容渲染（两种布局共用） ==========
 
@@ -198,7 +201,7 @@ export function TrainingProblemDetail({
             minWidth: '28px',
           }}
         >
-          {toExcelColumnName(p.orderIndex)}
+          {p.problemIdentityHidden ? '题目' : toExcelColumnName(p.orderIndex ?? 0)}
         </button>
       ))}
       {problems.length === 0 && (
@@ -213,7 +216,7 @@ export function TrainingProblemDetail({
     if (!problemDetail) return null
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.alias || problemDetail.problemTitle || '未命名'}</span>
+        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.problemIdentityHidden ? '比赛题目' : problemDetail.alias || problemDetail.problemTitle || '未命名'}</span>
         {problemDetail.points != null && <span>分值: {problemDetail.points}</span>}
         {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}s</span>}
         {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}
@@ -245,7 +248,17 @@ export function TrainingProblemDetail({
             <textarea
               value={recordContent}
               onChange={e => setRecordContent(e.target.value)}
-              placeholder={`在这里记录你的比赛心得...
+              placeholder={hideProblemIdentity ? `在这里记录你的比赛心得...
+
+例如：
+## 比赛策略
+这场比赛我打算先做熟悉的题目。
+
+## 解题思路
+记录关键思路、边界和复盘内容。
+
+## 赛后总结
+这次比赛暴露了...` : `在这里记录你的比赛心得...
 
 例如：
 ## 比赛策略
