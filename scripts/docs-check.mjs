@@ -203,6 +203,7 @@ const routerPrefixes = {
   rankingRouter: '/api/rankings',
   notificationRouter: '/api/notifications',
   workspaceRouter: '/api/workspaces',
+  demoScenarioRouter: '/api/admin/demo-scenario',
 }
 
 const endpointPattern =

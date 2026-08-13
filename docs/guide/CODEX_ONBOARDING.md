@@ -141,6 +141,20 @@ node scripts/create-api-demo-contests.mjs
 并会优先复用已存在资源；重新执行只补齐缺失成员、题目关联和提交。登录接口有频率限制，脚本会
 自动等待，不能通过并发登录规避。
 
+赛时可见性、部分分和 ICPC 时间线使用独立的 V2 脚本。它仍然只调用 API；脚本本身不包含
+密码、演示密钥、Prisma 或 SQL。服务器必须同时满足开发环境、`ENABLE_DEMO_SCENARIO_API=true`、
+平台管理员身份和独立演示密钥，受保护接口也只接受内置的 V2 场景，不能传入任意用户、比赛或时间。
+
+```bash
+DEMO_TEACHER_USERNAME=<教师用户名> \
+DEMO_TEACHER_PASSWORD=<教师密码> \
+DEMO_STUDENT_PASSWORD=<演示学生密码> \
+DEMO_PLATFORM_ADMIN_USERNAME=<平台管理员用户名> \
+DEMO_PLATFORM_ADMIN_PASSWORD=<平台管理员密码> \
+DEMO_SCENARIO_KEY=<仅服务器环境保存的演示密钥> \
+node scripts/create-api-live-contest-v2.mjs
+```
+
 ## 部署与回滚
 
 仅 Web 改动的公网预览发布：

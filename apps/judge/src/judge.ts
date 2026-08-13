@@ -327,6 +327,10 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           )
           caseResult.caseId = caseIndex
           caseResult.subtaskId = subtask.id
+          // A subtask case inherits its subtask score unless it has an explicit score.
+          if (caseResult.result === 'Accepted') {
+            caseResult.score = testCase.score ?? subtask.score ?? 0
+          }
           subtaskCaseResults.push(caseResult)
           caseResults.push(caseResult)
 

@@ -56,3 +56,14 @@ source_of_truth: files, testdata, admin-data and migration routes
 开关关闭时返回 `404`，角色不足返回 `403`，未登录返回 `401`。只在维护窗口临时设置
 `ENABLE_MAINTENANCE_API=true`，完成后立即关闭并重启 Server。
 
+## 开发赛时演示（2）
+
+以下接口只存在于开发预览，均要求 `APP_ENV=development`、
+`ENABLE_DEMO_SCENARIO_API=true`、平台管理员或超级管理员身份，以及独立的
+`X-Demo-Scenario-Key`。开关、密钥或身份任一不满足时不暴露接口；接口固定操作
+“赛时演示 V2”资源，不能接收任意比赛、用户或时间参数。
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| `POST` | `/api/admin/demo-scenario/v2/prepare` | 准备 V2 进行中与待结束比赛的固定赛时窗口 |
+| `POST` | `/api/admin/demo-scenario/v2/events` | 按内置且幂等的事件编号写入真实评测队列 |

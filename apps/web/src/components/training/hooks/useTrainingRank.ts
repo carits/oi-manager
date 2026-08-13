@@ -10,7 +10,8 @@ export function useTrainingRank(
       ? `/api/trainings/${trainingId}/ranking`
       : null,
     {
-      dedupingInterval: 30000,
+      dedupingInterval: 5000,
+      refreshInterval: 5000,
       isEmpty: () => false,
       sessionKey,
     },

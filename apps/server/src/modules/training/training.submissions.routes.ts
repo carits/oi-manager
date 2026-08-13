@@ -22,6 +22,7 @@ import {
   requestFingerprint,
   runIdempotent,
 } from '../../lib/idempotency'
+import { createQueuedTrainingSubmission } from './training.submission.service'
 
 export const trainingSubmissionsRouter = Router()
 
@@ -83,31 +84,7 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
         `training-submit:${userId}:${id}`,
         idempotencyKey,
         fingerprint,
-        () => prisma.submission.create({
-          data: {
-        userId,
-        workspaceScope: training.scope,
-        oj: trainingProblem.Problem.platform,
-        problemId: trainingProblem.Problem.problemId,
-        language,
-        code,
-        codeLength: Buffer.byteLength(code, 'utf8'),
-        result: 'queuing',
-        submitMethod: method,
-        problemInternalId: trainingProblem.Problem.id,
-        // 新字段：submitScope 为核心
-        submitScope: training.type === 'contest' ? 'contest' : 'training',
-        trainingId: id,
-        trainingProblemId: trainingProblem.id,
-        // 比赛提交额外设置 contestId/contestProblemId
-        ...(training.type === 'contest' ? {
-          contestId: id,
-          contestProblemId: trainingProblem.id,
-        } : {}),
-        // isGlobalVisible: 训练提交全局可见，比赛提交赛中不可见（结束后自动更新）
-        isGlobalVisible: training.type === 'contest' ? false : true,
-          },
-        }),
+        () => createQueuedTrainingSubmission({ userId, training, trainingProblem, language, code, submitMethod: method }),
       )
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
@@ -132,12 +109,6 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
 
     // Carits 平台：本地评测（新模式：入队后由 Consumer 自动消费）
     if (platform === 'carits') {
-      // 更新 ojRemoteId（Carits 平台：远程提交ID就是本地评测ID）
-      await prisma.submission.update({
-        where: { id: submission.id },
-        data: { ojRemoteId: submission.id.toString() }
-      })
-
       logger.info('carits_training_submission_queued', {
         action: 'training_submit',
         metadata: { submissionId: submission.id, trainingId: id }

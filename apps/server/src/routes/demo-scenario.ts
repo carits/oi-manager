@@ -1,0 +1,92 @@
+import { Router } from 'express'
+import { prisma } from '../prisma'
+import { authenticate, isAdmin, type AuthRequest } from '../middleware/auth'
+import { asyncHandler } from '../lib/asyncHandler'
+import { createQueuedTrainingSubmission } from '../modules/training/training.submission.service'
+
+export const demoScenarioRouter = Router()
+const PREFIX = '赛时演示 V2'
+const TEAM_ID = 'live_contest_v2_team'
+const USERNAMES = ['live_v2_01', 'live_v2_02', 'live_v2_03', 'live_v2_04', 'live_v2_05']
+const full: Record<string, string> = {
+  A: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b;if(cin>>a>>b)cout<<a+b<<"\\n";}',
+  B: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b,c;if(cin>>a>>b>>c)cout<<max(a,max(b,c))<<"\\n";}',
+  C: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long n;if(cin>>n)cout<<(n%2?"odd":"even")<<"\\n";}',
+  D: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long n;if(cin>>n)cout<<n*(n+1)/2<<"\\n";}',
+  E: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){int a=0;for(char c:s){c=tolower((unsigned char)c);if(string("aeiou").find(c)!=string::npos)++a;}cout<<a<<"\\n";}}',
+}
+const partial: Record<string, string> = {
+  A: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b;if(cin>>a>>b)cout<<(a<0||b<0?0:a+b)<<"\\n";}',
+  B: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long a,b,c;if(cin>>a>>b>>c)cout<<max(0LL,max(a,max(b,c)))<<"\\n";}',
+  C: '#include <bits/stdc++.h>\nusing namespace std;int main(){long long n;if(cin>>n)cout<<(n<0?"even":(n%2?"odd":"even"))<<"\\n";}',
+  D: '#include <bits/stdc++.h>\nusing namespace std;int main(){int n;if(cin>>n)cout<<n*(n+1)/2<<"\\n";}',
+  E: '#include <bits/stdc++.h>\nusing namespace std;int main(){string s;if(cin>>s){int a=0;for(char c:s)if(string("aeiou").find(c)!=string::npos)++a;cout<<a<<"\\n";}}',
+}
+const wrong = '#include <bits/stdc++.h>\nusing namespace std;int main(){cout<<0<<"\\n";}'
+type Kind = 'full' | 'partial' | 'wrong'
+type Event = { user: number; alias: string; minute: number; kind: Kind; id?: string }
+const scoreEvents: Event[] = [
+  {user:0,alias:'A',minute:10,kind:'partial'},{user:0,alias:'A',minute:35,kind:'full'},{user:0,alias:'A',minute:50,kind:'wrong'},{user:0,alias:'B',minute:45,kind:'partial'},{user:0,alias:'D',minute:75,kind:'full'},
+  {user:1,alias:'A',minute:15,kind:'wrong'},{user:1,alias:'A',minute:28,kind:'full'},{user:1,alias:'C',minute:40,kind:'partial'},{user:1,alias:'E',minute:80,kind:'full'},{user:1,alias:'C',minute:90,kind:'wrong'},
+  {user:2,alias:'B',minute:20,kind:'partial'},{user:2,alias:'B',minute:60,kind:'full'},{user:2,alias:'C',minute:70,kind:'wrong'},{user:2,alias:'D',minute:95,kind:'partial'},
+  {user:3,alias:'A',minute:12,kind:'wrong'},{user:3,alias:'C',minute:55,kind:'partial'},{user:3,alias:'E',minute:85,kind:'partial'},{user:3,alias:'B',minute:100,kind:'wrong'},
+  {user:4,alias:'B',minute:30,kind:'full'},{user:4,alias:'D',minute:50,kind:'wrong'},{user:4,alias:'E',minute:65,kind:'partial'},{user:4,alias:'A',minute:110,kind:'wrong'},
+]
+const icpcEvents: Event[] = [
+  {user:0,alias:'A',minute:5,kind:'wrong'},{user:0,alias:'A',minute:20,kind:'full'},{user:0,alias:'B',minute:32,kind:'full'},{user:0,alias:'A',minute:40,kind:'wrong'},{user:0,alias:'C',minute:45,kind:'wrong'},{user:0,alias:'D',minute:75,kind:'full'},
+  {user:1,alias:'A',minute:28,kind:'full'},{user:1,alias:'B',minute:16,kind:'wrong'},{user:1,alias:'B',minute:44,kind:'full'},{user:1,alias:'C',minute:54,kind:'partial'},{user:1,alias:'E',minute:88,kind:'full'},{user:1,alias:'E',minute:100,kind:'wrong'},
+  {user:2,alias:'A',minute:12,kind:'wrong'},{user:2,alias:'B',minute:50,kind:'full'},{user:2,alias:'C',minute:33,kind:'partial'},{user:2,alias:'D',minute:61,kind:'wrong'},{user:2,alias:'D',minute:95,kind:'full'},
+  {user:3,alias:'A',minute:38,kind:'full'},{user:3,alias:'B',minute:24,kind:'wrong'},{user:3,alias:'C',minute:65,kind:'partial'},{user:3,alias:'E',minute:105,kind:'wrong'},
+  {user:3,alias:'D',minute:70,kind:'partial',id:'extra-partial-d'},
+  {user:4,alias:'A',minute:15,kind:'wrong'},{user:4,alias:'A',minute:65,kind:'full'},{user:4,alias:'B',minute:57,kind:'partial'},{user:4,alias:'D',minute:110,kind:'full'},{user:4,alias:'E',minute:125,kind:'full'},
+]
+function eventKey(event: Event, index: number) { return event.id || String(index) }
+function allowed(req: AuthRequest, res: any) {
+  if (process.env.APP_ENV !== 'development' || process.env.ENABLE_DEMO_SCENARIO_API !== 'true' || !process.env.DEMO_SCENARIO_KEY || req.header('x-demo-scenario-key') !== process.env.DEMO_SCENARIO_KEY) { res.status(404).json({success:false,message:'接口不存在'}); return false }
+  if (!req.user || !isAdmin(req.user.role)) { res.status(403).json({success:false,message:'仅平台管理员可执行演示场景'}); return false }
+  return true
+}
+async function resources() {
+  const users = await prisma.user.findMany({where:{username:{in:USERNAMES}},select:{id:true,username:true}})
+  const trainings = await prisma.training.findMany({where:{teamId:TEAM_ID,title:{startsWith:PREFIX},type:'contest',scope:'campus'}})
+  if (users.length !== 5 || trainings.length !== 9) throw new Error('赛时演示 V2 资源不完整，请先运行 API 创建脚本')
+  return { users: USERNAMES.map(name => users.find(user => user.username === name)!), trainings }
+}
+demoScenarioRouter.post('/v2/prepare', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  if (!allowed(req,res)) return
+  const { trainings } = await resources(); const now=Date.now()
+  const active = trainings.filter(item => item.title.endsWith('进行中') || item.title.endsWith('已结束'))
+  const existing = await prisma.submission.count({ where: { sourceId: { startsWith: 'demo-v2:' } } })
+  if (existing === 0) {
+    await prisma.training.updateMany({where:{id:{in:active.map(item=>item.id)}},data:{status:'ongoing',startTime:new Date(now-130*60000),endTime:new Date(now+130*60000),updatedAt:new Date()}})
+  }
+  // Existing V2 events are normalized from their immutable event definition.
+  // This repairs an interrupted run without exposing a generic time-edit API.
+  let normalized = 0
+  for (const training of active) {
+    const events = training.format === 'icpc' ? icpcEvents : scoreEvents
+    for (const [index, event] of events.entries()) {
+      const sourceId = 'demo-v2:'+training.id+':'+eventKey(event,index)
+      const result = await prisma.submission.updateMany({ where: { sourceId }, data: { createdAt: new Date(training.startTime.getTime()+event.minute*60000), updatedAt: new Date() } })
+      normalized += result.count
+    }
+  }
+  res.json({success:true,data:{prepared:active.length,normalized,prefix:PREFIX}})
+}, '准备演示比赛失败'))
+demoScenarioRouter.post('/v2/events', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  if (!allowed(req,res)) return
+  const { users, trainings } = await resources(); let created=0, existing=0
+  for (const training of trainings.filter(item => item.title.endsWith('进行中') || item.title.endsWith('已结束'))) {
+    const problems = await prisma.trainingProblem.findMany({where:{trainingId:training.id},include:{Problem:{select:{id:true,platform:true,problemId:true}}},orderBy:{orderIndex:'asc'}})
+    if (problems.length !== 5) throw new Error(training.title+' 题目配置不完整')
+    const aliases = new Map(problems.map(problem => [problem.alias!,problem]))
+    for (const [index,event] of (training.format === 'icpc' ? icpcEvents : scoreEvents).entries()) {
+      const sourceId = 'demo-v2:'+training.id+':'+eventKey(event,index)
+      if (await prisma.submission.findFirst({where:{sourceId},select:{id:true}})) { existing++; continue }
+      const trainingProblem = aliases.get(event.alias); if (!trainingProblem) throw new Error(training.title+' 缺少题目 '+event.alias)
+      await createQueuedTrainingSubmission({userId:users[event.user].id,training,trainingProblem,language:'cpp',code:event.kind==='full'?full[event.alias]:event.kind==='partial'?partial[event.alias]:wrong,submitMethod:'demo_scenario',createdAt:new Date(training.startTime.getTime()+event.minute*60000),sourceId})
+      created++
+    }
+  }
+  res.json({success:true,data:{created,existing,prefix:PREFIX}})
+}, '写入演示提交失败'))
