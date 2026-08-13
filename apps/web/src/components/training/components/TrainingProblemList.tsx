@@ -21,8 +21,10 @@ function toExcelColumnName(index: number) {
 }
 
 function sourceText(problem: ProblemListEntry) {
-  const platform = problem.platform === 'carits' ? 'Carits' : problem.platformLabel || OJ_PLATFORM_LABEL_MAP[problem.platform || ''] || problem.platform || ''
-  return [platform, problem.platformProblemId].filter(Boolean).join(' ')
+  if (!problem.platform || !problem.platformProblemId || problem.platform === 'all') return ''
+  const platform = problem.platform === 'carits' ? 'Carits' : OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platformLabel || problem.platform
+  if (!platform || platform === '全部平台') return ''
+  return `${platform} ${problem.platformProblemId}`
 }
 
 function scoreClass(score: number, max: number) {
@@ -65,11 +67,11 @@ export function TrainingProblemList({ problemListData, training, basePath, onSel
     if (problem.problemUrl) return <a className={styles.problemSourceLink} href={problem.problemUrl} target="_blank" rel="noopener noreferrer">{text}</a>
     return <span className={styles.problemSource}>{text}</span>
   }
-  return <div className={styles.surface}><div className={styles.scroll}><table className={`${styles.table} ${styles.problemListTable}`}><thead><tr><th>题目</th><th className={styles.problemPointsColumn}>分值</th><th className={styles.problemStatusColumn}>我的状态</th><th className={styles.problemActionColumn}><span className="sr-only">操作</span></th></tr></thead><tbody>
+  return <div className={styles.surface}><div className={styles.scroll}><table className={`${styles.table} ${styles.problemListTable}`}><thead><tr><th className={styles.problemStatusColumn}>我的状态</th><th>题目</th><th className={styles.problemPointsColumn}>分值</th><th className={styles.problemActionColumn}><span className="sr-only">操作</span></th></tr></thead><tbody>
     {problemListData.length === 0 && <tr><td colSpan={4} className={styles.empty}>暂无题目</td></tr>}
     {problemListData.map(problem => {
-      const title = problem.alias || problem.title || '未命名题目'
-      return <tr key={problem.id}><td className={styles.problemIdentityCell}><button type="button" className={styles.problemIdentityButton} onClick={() => openProblem(problem.id)} title={title}><span className={styles.problemCode}>{toExcelColumnName(problem.orderIndex)}</span><span className={styles.problemIdentityText}><span className={styles.problemTitle}>{title}</span>{renderSource(problem)}</span></button></td><td className={`${styles.problemPointsColumn} ${styles.numeric}`}>{problem.points == null ? '' : problem.points}</td><td className={styles.problemStatusColumn}>{renderStatus(problem, training)}</td><td className={styles.problemActionColumn}><button type="button" className={styles.problemOpenButton} title="进入题面" aria-label={`进入题目 ${toExcelColumnName(problem.orderIndex)}`} onClick={() => openProblem(problem.id)}><ArrowRight size={17} aria-hidden="true" /></button></td></tr>
+      const title = problem.title || problem.alias || '未命名题目'
+      return <tr key={problem.id}><td className={styles.problemStatusColumn}>{renderStatus(problem, training)}</td><td className={styles.problemIdentityCell}><button type="button" className={styles.problemIdentityButton} onClick={() => openProblem(problem.id)} title={title}><span className={styles.problemCode}>{toExcelColumnName(problem.orderIndex)}</span><span className={styles.problemIdentityText}><span className={styles.problemTitle}>{title}</span>{renderSource(problem)}</span></button></td><td className={`${styles.problemPointsColumn} ${styles.numeric}`}>{problem.points == null ? '' : problem.points}</td><td className={styles.problemActionColumn}><button type="button" className={styles.problemOpenButton} title="进入题面" aria-label={`进入题目 ${toExcelColumnName(problem.orderIndex)}`} onClick={() => openProblem(problem.id)}><ArrowRight size={17} aria-hidden="true" /></button></td></tr>
     })}
   </tbody></table></div></div>
 }
