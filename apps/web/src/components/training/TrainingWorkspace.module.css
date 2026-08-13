@@ -115,3 +115,11 @@
   .problemListTable { min-width: 600px; }
   .problemIdentityCell { min-width: 320px; }
 }
+
+/* OI 赛中只确认提交已收到，避免重复的状态徽标抢占表格注意力。 */
+.submissionHidden { color: var(--text-muted); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
+.filterBar > select,
+.filterInput { min-height: 36px; padding: 0 10px; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); font: inherit; font-size: var(--text-sm); }
+.filterBar > select { min-width: 132px; }
+.filterInput { width: 184px; }
+@media (max-width: 640px) { .filterInput { width: 100%; } }
