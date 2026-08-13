@@ -201,7 +201,7 @@ export function TrainingProblemDetail({
             minWidth: '28px',
           }}
         >
-          {p.problemIdentityHidden ? '题目' : toExcelColumnName(p.orderIndex ?? 0)}
+          {toExcelColumnName(p.orderIndex ?? 0)}
         </button>
       ))}
       {problems.length === 0 && (
@@ -216,7 +216,7 @@ export function TrainingProblemDetail({
     if (!problemDetail) return null
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.problemIdentityHidden ? '比赛题目' : problemDetail.alias || problemDetail.problemTitle || '未命名'}</span>
+        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.alias || problemDetail.problemTitle || '未命名题目'}</span>
         {problemDetail.points != null && <span>分值: {problemDetail.points}</span>}
         {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}s</span>}
         {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}

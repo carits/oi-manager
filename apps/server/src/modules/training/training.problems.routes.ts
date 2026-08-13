@@ -19,7 +19,8 @@ import {
   requireTrainingStarted,
 } from './training.helpers'
 import { findAccessibleProblem } from '../problem/problem.access'
-import { getTrainingRuntimeStatus, shouldHideTrainingProblemIdentity } from './training.visibility'
+import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
+import { buildContestProblemStatus } from './training.problem-status'
 
 const managedProblemFilePattern = /\/api\/files\/([^/?#]+)\/(?:download|public)/g
 
@@ -92,7 +93,7 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
       orderBy: { orderIndex: 'asc' },
     })
 
-    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
+    const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
     res.json({
       success: true,
       data: problems.map(p => {
@@ -104,40 +105,22 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
           hasSolution: !!p.TrainingSolution,
           solutionVisible: p.TrainingSolution?.visible ?? false,
           attachmentCount,
-          problemIdentityHidden: hideProblemIdentity,
+          problemSourceHidden: hideProblemIdentity,
         }
 
-        if (hideProblemIdentity) return base
-
-        // 管理员可看到完整信息
-        if (isAdmin) {
-          return {
-            ...base,
-            alias: p.alias,
-            orderIndex: p.orderIndex,
-            problemId: p.Problem.id,
-            problemTitle: p.Problem.title,
-            platform: p.Problem.platform,
-            platformProblemId: p.Problem.problemId,
-            difficulty: p.Problem.difficulty,
-            timeLimit: p.Problem.timeLimit,
-            memoryLimit: p.Problem.memoryLimit,
-          }
-        }
-
-        // 普通成员：根据 problemIdVisible 决定是否显示题号
-        // problemTitle（题目标题）始终返回，只有 platformProblemId（来源题号）受控制
         return {
           ...base,
           alias: p.alias,
           orderIndex: p.orderIndex,
-          platform: p.Problem.platform,
-          problemTitle: p.Problem.title,
           problemId: p.Problem.id,
-          platformProblemId: p.Problem.problemId,
+          problemTitle: p.Problem.title,
           difficulty: p.Problem.difficulty,
           timeLimit: p.Problem.timeLimit,
           memoryLimit: p.Problem.memoryLimit,
+          ...(hideProblemIdentity ? {} : {
+            platform: p.Problem.platform,
+            platformProblemId: p.Problem.problemId,
+          }),
         }
       }),
     })
@@ -189,18 +172,12 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       orderBy: { createdAt: 'asc' },
     })
 
-    // 按题目聚合最佳成绩（key 为 platform problemId）
-    const bestByProblem = new Map<string, { score: number; result: string }>()
-    for (const sub of submissions) {
-      const existing = bestByProblem.get(sub.problemId)
-      const score = sub.score ?? 0
-      if (!existing || score > existing.score) {
-        bestByProblem.set(sub.problemId, { score, result: sub.result })
-      }
-      // 如果分数相同但结果是 accepted，优先取 accepted
-      if (existing && score === existing.score && sub.result === 'accepted' && existing.result !== 'accepted') {
-        bestByProblem.set(sub.problemId, { score, result: sub.result })
-      }
+    // Group submissions by source problem ID so each format can expose one stable display status.
+    const submissionsByProblem = new Map<string, typeof submissions>()
+    for (const submission of submissions) {
+      const list = submissionsByProblem.get(submission.problemId) || []
+      list.push(submission)
+      submissionsByProblem.set(submission.problemId, list)
     }
 
     // 平台名称映射（含 Carits 内部平台）
@@ -214,13 +191,13 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
     const computedStatus = getTrainingRuntimeStatus(training)
     const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
 
-    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdminUser)
+    const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdminUser)
 
     // 构建结果
     const result = problems.map(p => {
       const platform = p.Problem.platform
       const platformProblemId = p.Problem.problemId
-      const best = bestByProblem.get(platformProblemId)
+      const status = buildContestProblemStatus(training.format, submissionsByProblem.get(platformProblemId) || [])
 
       // 生成原题链接
       let problemUrl: string | null = null
@@ -238,20 +215,23 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       return {
         id: p.id,
         points: p.points,
-        problemIdentityHidden: hideProblemIdentity,
+        problemSourceHidden: hideProblemIdentity,
+        alias: p.alias,
+        title: p.Problem.title,
+        orderIndex: p.orderIndex,
         ...(hideProblemIdentity ? {} : {
-          alias: p.alias,
-          title: p.Problem.title,
-          orderIndex: p.orderIndex,
           platform: platform || null,
           platformProblemId: platformProblemId || null,
           problemTableId: p.Problem.id,
           platformLabel: platformLabelMap.get(platform as any) || platform || '',
           problemUrl,
         }),
-        hasSubmitted: Boolean(best),
-        bestScore: hideOiStatus ? null : (best?.score ?? null),
-        bestResult: hideOiStatus ? null : (best?.result ?? null),
+        hasSubmitted: status.hasSubmitted,
+        bestScore: hideOiStatus ? null : status.bestScore,
+        bestResult: hideOiStatus ? null : status.bestResult,
+        latestResult: hideOiStatus ? null : status.latestResult,
+        hasAccepted: status.hasAccepted,
+        displayStatus: hideOiStatus ? (status.hasSubmitted ? 'submitted' : null) : status.displayStatus,
       }
     })
 
@@ -524,14 +504,16 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
       select: { content: true },
     })
 
-    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
+    const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
     // 返回题面内容；赛中“题号赛后显示”时不返回任何原题识别字段。
     const problem = trainingProblem.Problem
     res.json({
       success: true,
       data: {
-        problemIdentityHidden: hideProblemIdentity,
-        ...(hideProblemIdentity ? {} : { alias: trainingProblem.alias }),
+        problemSourceHidden: hideProblemIdentity,
+        alias: trainingProblem.alias,
+        problemTitle: problem.title,
+        orderIndex: trainingProblem.orderIndex,
         points: trainingProblem.points,
         timeLimit: problem.timeLimit,
         memoryLimit: problem.memoryLimit,

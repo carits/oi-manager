@@ -89,3 +89,31 @@
   .rankParticipantCell { width: 176px; max-width: 176px; }
   .rankStickyParticipant { left: 44px; }
 }
+
+.problemListTable { min-width: 664px; table-layout: fixed; }
+.problemListTable th { height: 44px; }
+.problemListTable td { height: 64px; padding-block: 10px; }
+.problemIdentityCell { min-width: 360px; }
+.problemIdentityButton { display: flex; align-items: center; width: 100%; min-width: 0; gap: 12px; padding: 0; border: 0; color: var(--text-primary); background: transparent; cursor: pointer; text-align: left; }
+.problemIdentityButton:hover .problemTitle { color: var(--primary); }
+.problemIdentityText { display: grid; min-width: 0; gap: 3px; }
+.problemTitle { overflow: hidden; color: var(--text-primary); font-weight: 700; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.problemSource, .problemSourceLink { overflow: hidden; color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.problemSourceLink { color: var(--text-secondary); text-decoration: none; }
+.problemSourceLink:hover { color: var(--primary); text-decoration: underline; }
+.problemPointsColumn { width: 88px; text-align: center !important; }
+.problemStatusColumn { width: 160px; }
+.problemActionColumn { width: 56px; padding-inline: 10px !important; text-align: center !important; }
+.problemOpenButton { display: inline-grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text-secondary); background: transparent; cursor: pointer; }
+.problemOpenButton:hover { border-color: var(--border); color: var(--primary); background: var(--bg-muted); }
+.problemStatus { display: inline-flex; align-items: center; min-height: 25px; padding: 0 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
+.problemScore { font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+.problemStatusAccepted { color: var(--success-text) !important; background: var(--success-light); }
+.problemStatusSubmitted { color: var(--info-text) !important; background: var(--info-light); }
+.problemStatusFailed { color: var(--error-text) !important; background: var(--error-light); }
+.problemStatusPartial { color: var(--warning-text) !important; }
+.problemStatusMuted { color: var(--text-muted) !important; }
+@media (max-width: 640px) {
+  .problemListTable { min-width: 600px; }
+  .problemIdentityCell { min-width: 320px; }
+}

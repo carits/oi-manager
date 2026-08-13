@@ -448,7 +448,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, trainingI
             {/* 可见性设置 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题号显示</label>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题目来源显示</label>
                 <select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>

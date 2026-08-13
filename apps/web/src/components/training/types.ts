@@ -25,6 +25,8 @@ export interface TrainingInfo {
 
 export interface TrainingProblem {
   id: string
+  problemSourceHidden?: boolean
+  /** @deprecated compatibility with older API payloads */
   problemIdentityHidden?: boolean
   alias?: string | null
   orderIndex?: number
@@ -42,6 +44,8 @@ export interface TrainingProblem {
 }
 
 export interface ProblemDetail {
+  problemSourceHidden?: boolean
+  /** @deprecated compatibility with older API payloads */
   problemIdentityHidden?: boolean
   alias?: string | null
   points: number | null
@@ -69,6 +73,8 @@ export interface SubmissionRow {
   userName: string
   username: string
   userType: string
+  problemSourceHidden?: boolean
+  /** @deprecated compatibility with older API payloads */
   problemIdentityHidden?: boolean
   problemAlias?: string
   problemOrderIndex?: number
@@ -109,6 +115,11 @@ export interface ProblemListEntry {
   hasSubmitted?: boolean  // 是否已提交（OI 赛中用于显示"已提交"标记）
   bestScore: number | null
   bestResult: string | null
+  latestResult?: string | null
+  hasAccepted?: boolean
+  displayStatus?: string | null
+  problemSourceHidden?: boolean
+  /** @deprecated compatibility with older API payloads */
   problemIdentityHidden?: boolean
 }
 

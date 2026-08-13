@@ -1,27 +1,75 @@
 'use client'
 
+import { ArrowRight } from 'lucide-react'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import type { TrainingInfo, ProblemListEntry } from '../types'
 import styles from '../TrainingWorkspace.module.css'
 
-const RESULT_SHORT_MAP: Record<string, string> = { accepted: 'AC', wa: 'WA', tle: 'TLE', mle: 'MLE', re: 'RE', ce: 'CE', pe: 'PE', ole: 'OLE', pending_review: 'Pending', queuing: 'Queuing', judging: 'Judging', remote_unavailable: 'Err', judge_failed: 'Err', unknown_error: 'Err', submit_failed: 'Err' }
-function toExcelColumnName(index: number) { let result = ''; let i = index; while (i >= 0) { result = String.fromCharCode(65 + (i % 26)) + result; i = Math.floor(i / 26) - 1 } return result }
-function scoreColor(score: number, max: number) { if (score >= max) return 'var(--success-text)'; if (score > 0) return 'var(--warning-text)'; return 'var(--text-muted)' }
+const RESULT_LABEL_MAP: Record<string, string> = {
+  accepted: 'Accepted', submitted: 'Submitted', queuing: 'Submitted', judging: 'Judging',
+  wa: 'Wrong Answer', tle: 'Time Limit Exceeded', mle: 'Memory Limit Exceeded',
+  re: 'Runtime Error', ce: 'Compilation Error', pe: 'Presentation Error',
+  ole: 'Output Limit Exceeded', pending_review: 'Judging', remote_unavailable: 'Judge Error',
+  judge_failed: 'Judge Error', unknown_error: 'Judge Error', submit_failed: 'Submit Failed',
+}
 
-interface TrainingProblemListProps { problemListData: ProblemListEntry[]; training: TrainingInfo; basePath: string; onSelectProblem: (id: string) => void; onSwitchToProblemsTab: () => void }
-export function TrainingProblemList({ problemListData, training, basePath, onSelectProblem, onSwitchToProblemsTab }: TrainingProblemListProps) {
-  const runtimeFinished = training.runtimeStatus === 'finished' || training.status === 'finished' || new Date() > new Date(training.endTime)
-  const hideOiResults = training.format === 'oi' && !training.isAdmin && !runtimeFinished
-  const hideProblemIdentity = !training.problemIdVisible && !runtimeFinished && !training.isAdmin
-  const source = (p: ProblemListEntry) => {
-    const text = p.platform === 'carits' ? `Carits ${p.platformProblemId}` : `${p.platformLabel || OJ_PLATFORM_LABEL_MAP[p.platform || ''] || p.platform || ''} ${p.platformProblemId || ''}`.trim()
-    if (p.platform === 'carits') return <a className={styles.sourceLink} href={`${basePath.split('/team')[0]}/problems/${p.problemTableId}`} target="_blank" rel="noopener noreferrer">{text}</a>
-    if (p.platform && p.problemUrl) return <a className={styles.sourceLink} href={p.problemUrl} target="_blank" rel="noopener noreferrer">{text}</a>
-    return text ? <span className={styles.source}>{text}</span> : <span className={styles.muted}>-</span>
+function toExcelColumnName(index: number) {
+  let result = ''
+  let i = index
+  while (i >= 0) { result = String.fromCharCode(65 + (i % 26)) + result; i = Math.floor(i / 26) - 1 }
+  return result
+}
+
+function sourceText(problem: ProblemListEntry) {
+  const platform = problem.platform === 'carits' ? 'Carits' : problem.platformLabel || OJ_PLATFORM_LABEL_MAP[problem.platform || ''] || problem.platform || ''
+  return [platform, problem.platformProblemId].filter(Boolean).join(' ')
+}
+
+function scoreClass(score: number, max: number) {
+  if (score >= max) return styles.problemStatusAccepted
+  if (score > 0) return styles.problemStatusPartial
+  return styles.problemStatusMuted
+}
+
+function renderStatus(problem: ProblemListEntry, training: TrainingInfo) {
+  if (!problem.hasSubmitted) return null
+  if (training.format === 'oi') {
+    if (training.runtimeStatus !== 'finished' && !training.isAdmin) return <span className={`${styles.problemStatus} ${styles.problemStatusSubmitted}`}>Submitted</span>
+    const score = problem.bestScore ?? 0; const max = problem.points ?? 100
+    return <span className={`${styles.problemScore} ${scoreClass(score, max)}`}>{score} / {max}</span>
   }
-  return <div className={styles.surface}><div className={styles.scroll}><table className={styles.table}><thead><tr><th>状态</th>{hideProblemIdentity ? <th>比赛题目</th> : <><th>题号</th><th>来源</th><th>标题</th></>}</tr></thead><tbody>
-    {problemListData.length === 0 && <tr><td colSpan={hideProblemIdentity ? 2 : 4} className={styles.empty}>暂无题目</td></tr>}
-    {problemListData.map(p => { const accepted = p.bestResult === 'accepted'; const submitted = p.hasSubmitted || p.bestResult != null; const max = p.points ?? 100; const status = hideOiResults ? (p.hasSubmitted ? <span className={styles.result} style={{ background: 'var(--info-light)', color: 'var(--info-text)' }}>已提交</span> : <span className={styles.muted}>-</span>) : training.format === 'icpc' ? (submitted ? <span className={styles.result} style={{ background: accepted ? 'var(--success-light)' : 'var(--error-light)', color: accepted ? 'var(--success-text)' : 'var(--error-text)' }}>{RESULT_SHORT_MAP[p.bestResult || ''] || p.bestResult}</span> : <span className={styles.muted}>-</span>) : (submitted ? <strong style={{ color: scoreColor(p.bestScore ?? 0, max) }}>{accepted ? '✓ ' : ''}{p.bestScore}</strong> : <span className={styles.muted}>-</span>)
-      return <tr key={p.id}><td>{status}</td>{hideProblemIdentity ? <td><button type="button" className={styles.titleButton} onClick={() => { onSelectProblem(p.id); onSwitchToProblemsTab() }}>查看题目</button></td> : <><td><span className={styles.problemCode}>{toExcelColumnName(p.orderIndex)}</span></td><td>{source(p)}</td><td><button type="button" className={styles.titleButton} onClick={() => { onSelectProblem(p.id); onSwitchToProblemsTab() }}>{p.alias || p.title || '未命名'}</button></td></>}</tr> })}
+  if (training.format === 'ioi') {
+    const status = problem.displayStatus || problem.latestResult || problem.bestResult
+    if (status === 'judging' || status === 'queuing') return <span className={`${styles.problemStatus} ${styles.problemStatusSubmitted}`}>Judging</span>
+    const score = problem.bestScore ?? 0; const max = problem.points ?? 100
+    return <span className={`${styles.problemScore} ${scoreClass(score, max)}`}>{score} / {max}</span>
+  }
+  const status = problem.displayStatus || (problem.hasAccepted ? 'accepted' : problem.latestResult || problem.bestResult || 'submitted')
+  const label = RESULT_LABEL_MAP[status] || status
+  const tone = status === 'accepted' ? styles.problemStatusAccepted : status === 'submitted' || status === 'queuing' || status === 'judging' ? styles.problemStatusSubmitted : styles.problemStatusFailed
+  return <span className={`${styles.problemStatus} ${tone}`}>{label}</span>
+}
+
+interface TrainingProblemListProps {
+  problemListData: ProblemListEntry[]; training: TrainingInfo; basePath: string
+  onSelectProblem: (id: string) => void; onSwitchToProblemsTab: () => void
+}
+
+export function TrainingProblemList({ problemListData, training, basePath, onSelectProblem, onSwitchToProblemsTab }: TrainingProblemListProps) {
+  const openProblem = (id: string) => { onSelectProblem(id); onSwitchToProblemsTab() }
+  const renderSource = (problem: ProblemListEntry) => {
+    if (problem.problemSourceHidden || problem.problemIdentityHidden) return null
+    const text = sourceText(problem)
+    if (!text) return null
+    if (problem.platform === 'carits' && problem.problemTableId) return <a className={styles.problemSourceLink} href={`${basePath.split('/team')[0]}/problems/${problem.problemTableId}`} target="_blank" rel="noopener noreferrer">{text}</a>
+    if (problem.problemUrl) return <a className={styles.problemSourceLink} href={problem.problemUrl} target="_blank" rel="noopener noreferrer">{text}</a>
+    return <span className={styles.problemSource}>{text}</span>
+  }
+  return <div className={styles.surface}><div className={styles.scroll}><table className={`${styles.table} ${styles.problemListTable}`}><thead><tr><th>题目</th><th className={styles.problemPointsColumn}>分值</th><th className={styles.problemStatusColumn}>我的状态</th><th className={styles.problemActionColumn}><span className="sr-only">操作</span></th></tr></thead><tbody>
+    {problemListData.length === 0 && <tr><td colSpan={4} className={styles.empty}>暂无题目</td></tr>}
+    {problemListData.map(problem => {
+      const title = problem.alias || problem.title || '未命名题目'
+      return <tr key={problem.id}><td className={styles.problemIdentityCell}><button type="button" className={styles.problemIdentityButton} onClick={() => openProblem(problem.id)} title={title}><span className={styles.problemCode}>{toExcelColumnName(problem.orderIndex)}</span><span className={styles.problemIdentityText}><span className={styles.problemTitle}>{title}</span>{renderSource(problem)}</span></button></td><td className={`${styles.problemPointsColumn} ${styles.numeric}`}>{problem.points == null ? '' : problem.points}</td><td className={styles.problemStatusColumn}>{renderStatus(problem, training)}</td><td className={styles.problemActionColumn}><button type="button" className={styles.problemOpenButton} title="进入题面" aria-label={`进入题目 ${toExcelColumnName(problem.orderIndex)}`} onClick={() => openProblem(problem.id)}><ArrowRight size={17} aria-hidden="true" /></button></td></tr>
+    })}
   </tbody></table></div></div>
 }

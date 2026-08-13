@@ -23,7 +23,7 @@ import {
   runIdempotent,
 } from '../../lib/idempotency'
 import { createQueuedTrainingSubmission } from './training.submission.service'
-import { getTrainingRuntimeStatus, shouldHideTrainingProblemIdentity } from './training.visibility'
+import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 
 export const trainingSubmissionsRouter = Router()
 
@@ -333,7 +333,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     const now = Date.now()
     const computedStatus = getTrainingRuntimeStatus(training)
     const hideOiResults = training.format === 'oi' && computedStatus !== 'finished' && !isAdminUser
-    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdminUser)
+    const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdminUser)
     // Contest/training remote IDs are operational identifiers. Only managers may see them.
     const hideRemoteSubmissionId = !isAdminUser
 
@@ -343,13 +343,11 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
         userId: s.userId,
         userName: nameMap.get(s.userId) || '未知',
         username: usernameMap.get(s.userId) || '未知',
-        problemIdentityHidden: hideProblemIdentity,
-        ...(hideProblemIdentity ? {} : {
-          problemAlias: aliasMap.get(s.problemId) || s.problemId,
-          problemOrderIndex: orderIndexMap.get(s.problemId) ?? 0,
-          trainingProblemId: s.problemId,
-          oj: s.oj,
-        }),
+        problemSourceHidden: hideProblemIdentity,
+        problemAlias: aliasMap.get(s.problemId) || s.problemId,
+        problemOrderIndex: orderIndexMap.get(s.problemId) ?? 0,
+        trainingProblemId: s.problemId,
+        ...(hideProblemIdentity ? {} : { oj: s.oj }),
         language: s.language,
         result: hideOiResults ? 'submitted' : s.result,
         score: hideOiResults ? null : s.score,
@@ -446,7 +444,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
     // OI 赛制：赛中非管理员隐藏评测详情
     const detailStatus = getTrainingRuntimeStatus(training)
     const hideOiDetail = training.format === 'oi' && detailStatus !== 'finished' && !isAdminUser
-    const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdminUser)
+    const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdminUser)
     // Contest/training remote IDs are operational identifiers. Only managers may see them.
     const hideRemoteSubmissionId = !isAdminUser
 
@@ -456,8 +454,9 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
       data: {
         id: submission.id,
         username: submitter?.username || '未知',
-        problemIdentityHidden: hideProblemIdentity,
-        ...(hideProblemIdentity ? {} : { oj: ojPlatform, problemId: problemAlias }),
+        problemSourceHidden: hideProblemIdentity,
+        problemId: problemAlias,
+        ...(hideProblemIdentity ? {} : { oj: ojPlatform }),
         result: hideOiDetail ? 'submitted' : submission.result,
         timeUsed: hideOiDetail ? null : submission.timeUsed,
         memoryUsed: hideOiDetail ? null : submission.memoryUsed,

@@ -24,7 +24,7 @@ export interface TrainingForVisibility {
 }
 
 /** 题号赛后显示时，由 API 而不是页面统一隐藏比赛原题身份。 */
-export function shouldHideTrainingProblemIdentity(training: TrainingForVisibility, isAdmin: boolean): boolean {
+export function shouldHideTrainingProblemSource(training: TrainingForVisibility, isAdmin: boolean): boolean {
   return training.type === 'contest'
     && !isAdmin
     && !training.problemIdVisible

@@ -17,7 +17,8 @@ import {
 } from './training.helpers'
 import { findAccessibleProblem, findUsableProblemByExternalId } from '../problem/problem.access'
 import { fileService } from '../../lib/storage'
-import { shouldHideTrainingProblemIdentity } from './training.visibility'
+import { shouldHideTrainingProblemSource } from './training.visibility'
+import { buildContestProblemStatus } from './training.problem-status'
 
 export const trainingMiscRouter = Router()
 
@@ -162,8 +163,7 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
     ['carits', 'Carits'],
   ])
   const hideOiStatus = training.format === 'oi' && computedStatus !== 'finished' && !isAdmin
-  const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
-  const isStudent = req.user!.role === 'student'
+  const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
 
   const problems = canSeeProblems
     ? training.TrainingProblem.map(problem => {
@@ -176,22 +176,20 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           hasSolution: Boolean(problem.TrainingSolution),
           solutionVisible: problem.TrainingSolution?.visible ?? false,
           attachmentCount,
-          problemIdentityHidden: hideProblemIdentity,
-        }
-
-        if (hideProblemIdentity) return summary
-
-        return {
-          ...summary,
+          problemSourceHidden: hideProblemIdentity,
           alias: problem.alias,
           orderIndex: problem.orderIndex,
-          platform: problem.Problem.platform,
           problemTitle: problem.Problem.title,
           problemId: problem.Problem.id,
-          platformProblemId: problem.Problem.problemId,
           difficulty: problem.Problem.difficulty,
           timeLimit: problem.Problem.timeLimit,
           memoryLimit: problem.Problem.memoryLimit,
+        }
+
+        return hideProblemIdentity ? summary : {
+          ...summary,
+          platform: problem.Problem.platform,
+          platformProblemId: problem.Problem.problemId,
         }
       })
     : []
@@ -199,9 +197,10 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
     ? training.TrainingProblem.map(problem => {
         const platform = problem.Problem.platform
         const platformProblemId = problem.Problem.problemId
-        const best =
-          bestByProblem.get(problem.id) ||
-          bestByProblem.get(`${platform}:${platformProblemId}`)
+        const matchingSubmissions = submissions.filter(submission =>
+          submission.problemId === problem.id || submission.problemId === platformProblemId || submission.problemId === `${platform}:${platformProblemId}`,
+        )
+        const status = buildContestProblemStatus(training.format, matchingSubmissions)
         let problemUrl: string | null = null
 
         try {
@@ -214,16 +213,14 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           problemUrl = null
         }
 
-        const showPlatform = isAdmin || (!isStudent && !hideProblemIdentity)
+        const showPlatform = !hideProblemIdentity
         return {
           id: problem.id,
           points: problem.points,
-          problemIdentityHidden: hideProblemIdentity,
-          ...(hideProblemIdentity ? {} : {
-            alias: problem.alias,
-            title: problem.Problem.title,
-            orderIndex: problem.orderIndex,
-          }),
+          problemSourceHidden: hideProblemIdentity,
+          alias: problem.alias,
+          title: problem.Problem.title,
+          orderIndex: problem.orderIndex,
           ...(showPlatform ? {
             platform,
             platformProblemId,
@@ -231,9 +228,12 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
             platformLabel: platformLabelMap.get(platform as any) || platform || '',
             problemUrl,
           } : {}),
-          hasSubmitted: Boolean(best),
-          bestScore: hideOiStatus ? null : best?.score ?? null,
-          bestResult: hideOiStatus ? null : best?.result ?? null,
+          hasSubmitted: status.hasSubmitted,
+          bestScore: hideOiStatus ? null : status.bestScore,
+          bestResult: hideOiStatus ? null : status.bestResult,
+          latestResult: hideOiStatus ? null : status.latestResult,
+          hasAccepted: status.hasAccepted,
+          displayStatus: hideOiStatus ? (status.hasSubmitted ? 'submitted' : null) : status.displayStatus,
         }
       })
     : []
@@ -426,7 +426,7 @@ trainingMiscRouter.get('/trainings/:id/attachments', authenticate, asyncHandler(
   })
 
   const isAdmin = await canManageTraining(userId, training)
-  const hideProblemIdentity = shouldHideTrainingProblemIdentity(training, isAdmin)
+  const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
   const attachments = Object.fromEntries(problems.map(item => [
     item.id,
     [
