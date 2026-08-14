@@ -62,3 +62,15 @@
 .panel:has(a[href*="/contests/"]) .title { font-weight: 600; }
 .panel:has(a[href*="/contests/"]) .format { border-radius: 4px; font-weight: 500; }
 .panel:has(a[href*="/contests/"]) .liveCount { border-radius: 4px; font-weight: 500; }
+/* 比赛列表的状态通过细色条和文字表达，不使用卡片特效。 */
+.panel:has(a[href*="/contests/"]) .card,
+.panel:has(a[href*="/contests/"]) .cardOngoing,
+.panel:has(a[href*="/contests/"]) .cardFinished {
+  background: #ffffff;
+  box-shadow: none;
+}
+.panel:has(a[href*="/contests/"]) .fact,
+.panel:has(a[href*="/contests/"]) .facts { border-color: #e2e2e2; }
+.panel:has(a[href*="/contests/"]) .statusRail[data-status="upcoming"] { background: #2f5fd0; }
+.panel:has(a[href*="/contests/"]) .statusRail[data-status="ongoing"] { background: #26843b; }
+.panel:has(a[href*="/contests/"]) .statusRail[data-status="finished"] { background: #b8b8b8; }

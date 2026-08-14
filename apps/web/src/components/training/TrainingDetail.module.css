@@ -68,3 +68,17 @@
 .page:has(a[href*="/contests"]) .locked { box-shadow: none; }
 .page:has(a[href*="/contests"]) .tabBar { background: #ffffff; backdrop-filter: none; }
 .page:has(a[href*="/contests"]) .statValue { font-weight: 600; }
+/* 比赛详情内仅做视觉去装饰：白底、细线、无玻璃与无阴影。 */
+.page:has(a[href*="/contests"]) .headerArea,
+.page:has(a[href*="/contests"]) .announcement,
+.page:has(a[href*="/contests"]) .tabBar {
+  border-color: #e2e2e2;
+  background: #ffffff;
+  box-shadow: none;
+}
+.page:has(a[href*="/contests"]) .announcement { border-left-color: #b36b00; }
+.page:has(a[href*="/contests"]) .countdown {
+  color: #555555;
+  background: transparent;
+  border-radius: 4px;
+}

@@ -128,3 +128,29 @@
 .result { border-radius: var(--contest-result-radius, var(--radius-full)); font-weight: var(--contest-result-weight, 700); }
 .table th { background: var(--contest-table-header-bg, var(--bg-muted)); color: var(--contest-table-header-text, var(--text-secondary)); font-weight: var(--contest-table-header-weight, 700); }
 .table td { border-color: var(--contest-table-border, var(--border)); }
+/* 比赛详情内的评测与排名：保留状态文字，移除数据胶囊的视觉重量。 */
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .result {
+  background: transparent !important;
+  border-radius: 4px;
+  box-shadow: none !important;
+  font-weight: 500;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table th {
+  color: #555555 !important;
+  background: #f7f7f7 !important;
+  font-weight: 500;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table td {
+  color: #333333;
+  border-bottom-color: #ececec;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table tbody tr:hover td,
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .rankTable tbody tr:hover .rankMetaCell {
+  background: #fafafa;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .problemCode {
+  color: #333333;
+  background: transparent;
+  border-radius: 0;
+  font-weight: 600;
+}
