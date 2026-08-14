@@ -123,3 +123,8 @@
 .filterBar > select { min-width: 132px; }
 .filterInput { width: 184px; }
 @media (max-width: 640px) { .filterInput { width: 100%; } }
+
+/* 变量仅由比赛详情页注入；其他活动保持现有默认视觉。 */
+.result { border-radius: var(--contest-result-radius, var(--radius-full)); font-weight: var(--contest-result-weight, 700); }
+.table th { background: var(--contest-table-header-bg, var(--bg-muted)); color: var(--contest-table-header-text, var(--text-secondary)); font-weight: var(--contest-table-header-weight, 700); }
+.table td { border-color: var(--contest-table-border, var(--border)); }
