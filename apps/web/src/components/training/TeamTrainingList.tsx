@@ -30,7 +30,7 @@ export default function TeamTrainingList({ teamId, schoolId, basePath, isAdmin, 
   if (resource.state.state === 'pending') return <SkeletonRegion rows={5} label={`${label}列表正在准备`} />
   if (resource.state.state === 'error' && !resource.state.previousData) return <LoadError message={resource.state.error.message} requestId={resource.state.error.requestId} onRetry={resource.retry} />
   const ordered = sortTrainings(trainings); const ongoingCount = trainings.filter(t => t.status === 'ongoing').length; const detailPath = mode === 'contest' ? 'contests' : mode === 'homework' ? 'homeworks' : 'trainings'
-  return <div className={styles.panel}>
+  return <div className={styles.panel} data-activity-kind={mode}>
     {resource.state.state === 'error' && <LoadError compact message={resource.state.error.message} requestId={resource.state.error.requestId} onRetry={resource.retry} />}
     <div className={styles.toolbar}><div className={styles.summary}><strong>{label}安排</strong><span>共 {trainings.length} 场</span>{ongoingCount > 0 && <span className={styles.liveCount}>进行中 {ongoingCount}</span>}</div>{isAdmin && <div className={styles.createButton}><Button onClick={() => setShowCreateModal(true)}>创建{label}</Button></div>}</div>
     {ordered.length === 0 ? <div className={styles.empty}><strong>暂无{label}</strong><span>{isAdmin ? `可通过右上角创建新的${label}` : `当前没有可参与的${label}`}</span></div> : <div className={styles.list}>{ordered.map(training => {

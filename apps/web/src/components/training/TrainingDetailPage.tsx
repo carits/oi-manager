@@ -283,7 +283,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
   // ========== Render ==========
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-activity-kind={training.type}>
       <div className={styles.headerArea}>
         <div className={styles.hero}>
           <div className={styles.eyebrow}><span>{tl}工作台</span>{training.sourceTrainingId && <StatusBadge variant="info">补题练习</StatusBadge>}<StatusBadge variant={training.status === 'ongoing' ? 'success' : training.status === 'upcoming' ? 'info' : 'neutral'}>{training.status === 'upcoming' ? '未开始' : training.status === 'ongoing' ? '进行中' : '已结束'}</StatusBadge></div>

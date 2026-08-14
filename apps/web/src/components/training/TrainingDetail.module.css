@@ -27,8 +27,8 @@
 @media (max-width: 760px) { .hero { padding: var(--space-4); } .heroTop { flex-direction: column; } .actions { width: 100%; justify-content: flex-start; } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat:nth-child(2) { border-right: 0; } .stat:nth-child(-n + 2) { border-bottom: 1px solid var(--border); } .metaRow { padding: 0 var(--space-4) var(--space-4); } .tabBar { top: var(--shell-header-height); overflow-x: auto; } }
 @media (max-width: 460px) { .stats { grid-template-columns: 1fr; } .stat, .stat:nth-child(2) { border-right: 0; border-bottom: 1px solid var(--border); } .stat:last-child { border-bottom: 0; } .announcement { gap: var(--space-2); } }
 
-/* 仅比赛详情：利用既有比赛面包屑作为视觉作用域，不改变结构或内容。 */
-.page:has(a[href*="/contests"]) {
+/* scoped contest visual theme */
+.page[data-activity-kind='contest'] {
   --primary: #2f5fd0;
   --primary-hover: #244ea9;
   --primary-light: #eef3ff;
@@ -46,8 +46,8 @@
   --info-light: #eef3ff;
   --info-text: #244ea9;
   --bg-card: #ffffff;
-  --bg-muted: #fafafa;
-  --bg-hover: #f7f7f7;
+  --bg-muted: #f7f7f7;
+  --bg-hover: #fafafa;
   --text-primary: #222222;
   --text-secondary: #555555;
   --text-muted: #888888;
@@ -58,27 +58,10 @@
   --shadow: none;
   --shadow-md: none;
   --shadow-lg: none;
-  --contest-result-radius: 4px;
-  --contest-result-weight: 500;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
 }
-.page:has(a[href*="/contests"]) .headerArea,
-.page:has(a[href*="/contests"]) .announcement,
-.page:has(a[href*="/contests"]) .tabBar,
-.page:has(a[href*="/contests"]) .locked { box-shadow: none; }
-.page:has(a[href*="/contests"]) .tabBar { background: #ffffff; backdrop-filter: none; }
-.page:has(a[href*="/contests"]) .statValue { font-weight: 600; }
-/* 比赛详情内仅做视觉去装饰：白底、细线、无玻璃与无阴影。 */
-.page:has(a[href*="/contests"]) .headerArea,
-.page:has(a[href*="/contests"]) .announcement,
-.page:has(a[href*="/contests"]) .tabBar {
-  border-color: #e2e2e2;
-  background: #ffffff;
-  box-shadow: none;
-}
-.page:has(a[href*="/contests"]) .announcement { border-left-color: #b36b00; }
-.page:has(a[href*="/contests"]) .countdown {
-  color: #555555;
-  background: transparent;
-  border-radius: 4px;
-}
+.page[data-activity-kind='contest'] .headerArea,
+.page[data-activity-kind='contest'] .announcement,
+.page[data-activity-kind='contest'] .tabBar,
+.page[data-activity-kind='contest'] .locked { box-shadow: none; }
+.page[data-activity-kind='contest'] .tabBar { background: #ffffff; backdrop-filter: none; }

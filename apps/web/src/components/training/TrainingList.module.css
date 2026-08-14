@@ -34,8 +34,8 @@
 @media (max-width: 760px) { .toolbar { align-items: flex-start; } .card { grid-template-columns: 4px minmax(0, 1fr); } .main { padding: var(--space-4); } .facts { grid-column: 2; grid-template-columns: repeat(3, 1fr); min-width: 0; border-top: 1px solid var(--border); border-left: 0; } .fact { padding: var(--space-3) var(--space-2); } }
 @media (max-width: 460px) { .toolbar { flex-direction: column; } .createButton { width: 100%; } .createButton :global(button) { width: 100%; justify-content: center; } .meta { gap: var(--space-2); } }
 
-/* 仅比赛列表：由现有比赛详情链接限定，不影响训练与作业列表。 */
-.panel:has(a[href*="/contests/"]) {
+/* scoped contest list visual theme */
+.panel[data-activity-kind='contest'] {
   --primary: #2f5fd0;
   --primary-hover: #244ea9;
   --primary-light: #eef3ff;
@@ -43,34 +43,30 @@
   --success: #26843b;
   --success-light: #edf7ef;
   --success-text: #25733a;
-  --info: #2f5fd0;
-  --info-light: #eef3ff;
-  --info-text: #244ea9;
+  --warning: #b36b00;
+  --warning-light: #fff6e5;
+  --warning-text: #8d5700;
+  --error: #c53a32;
+  --error-light: #fdf0ef;
+  --error-text: #a02f29;
   --bg-card: #ffffff;
-  --bg-muted: #fafafa;
+  --bg-muted: #f7f7f7;
+  --bg-hover: #fafafa;
   --text-primary: #222222;
   --text-secondary: #555555;
   --text-muted: #888888;
   --border: #e2e2e2;
   --border-hover: #d4d4d4;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: none;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
 }
-.panel:has(a[href*="/contests/"]) .card { box-shadow: none; transition: border-color .12s ease, background-color .12s ease; }
-.panel:has(a[href*="/contests/"]) .card:hover { border-color: var(--border-hover); box-shadow: none; transform: none; }
-.panel:has(a[href*="/contests/"]) .cardOngoing { background: var(--bg-card); }
-.panel:has(a[href*="/contests/"]) .cardFinished { opacity: 1; }
-.panel:has(a[href*="/contests/"]) .title { font-weight: 600; }
-.panel:has(a[href*="/contests/"]) .format { border-radius: 4px; font-weight: 500; }
-.panel:has(a[href*="/contests/"]) .liveCount { border-radius: 4px; font-weight: 500; }
-/* 比赛列表的状态通过细色条和文字表达，不使用卡片特效。 */
-.panel:has(a[href*="/contests/"]) .card,
-.panel:has(a[href*="/contests/"]) .cardOngoing,
-.panel:has(a[href*="/contests/"]) .cardFinished {
-  background: #ffffff;
-  box-shadow: none;
-}
-.panel:has(a[href*="/contests/"]) .fact,
-.panel:has(a[href*="/contests/"]) .facts { border-color: #e2e2e2; }
-.panel:has(a[href*="/contests/"]) .statusRail[data-status="upcoming"] { background: #2f5fd0; }
-.panel:has(a[href*="/contests/"]) .statusRail[data-status="ongoing"] { background: #26843b; }
-.panel:has(a[href*="/contests/"]) .statusRail[data-status="finished"] { background: #b8b8b8; }
+.panel[data-activity-kind='contest'] .card { box-shadow: none; transition: border-color 120ms ease, background-color 120ms ease; }
+.panel[data-activity-kind='contest'] .card:hover { border-color: #d4d4d4; box-shadow: none; transform: none; }
+.panel[data-activity-kind='contest'] .cardOngoing { background: #ffffff; }
+.panel[data-activity-kind='contest'] .cardFinished { opacity: 1; }
+.panel[data-activity-kind='contest'] .format,
+.panel[data-activity-kind='contest'] .liveCount { border-radius: 4px; font-weight: 500; }
