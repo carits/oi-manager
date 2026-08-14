@@ -124,16 +124,33 @@
 .filterInput { width: 184px; }
 @media (max-width: 640px) { .filterInput { width: 100%; } }
 
-/* ancestor attribute comes from the contest detail root */
-:global([data-activity-kind='contest']) .surface { border-color: #e2e2e2; box-shadow: none; }
-:global([data-activity-kind='contest']) .table th { color: #555555 !important; background: #f7f7f7 !important; font-weight: 500; }
-:global([data-activity-kind='contest']) .table td { color: #333333; border-bottom-color: #ececec; }
-:global([data-activity-kind='contest']) .table tbody tr:hover td,
-:global([data-activity-kind='contest']) .rankTable tbody tr:hover .rankMetaCell { background: #fafafa; }
-:global([data-activity-kind='contest']) .result { background: transparent !important; border-radius: 4px; box-shadow: none !important; font-weight: 500; }
-:global([data-activity-kind='contest']) .problemCode { color: #333333; background: transparent; border-radius: 0; font-weight: 600; }
-:global([data-activity-kind='contest']) .scoreFirstAccepted { background: #2f7d32 !important; }
-:global([data-activity-kind='contest']) .icpcAccepted,
-:global([data-activity-kind='contest']) .ioiScoreFull { background: #edf7ef !important; }
-:global([data-activity-kind='contest']) .icpcFailed { background: #fdf0ef !important; }
-:global([data-activity-kind='contest']) .ioiScorePartial { background: #fff6e5 !important; }
+/* 变量仅由比赛详情页注入；其他活动保持现有默认视觉。 */
+.result { border-radius: var(--contest-result-radius, var(--radius-full)); font-weight: var(--contest-result-weight, 700); }
+.table th { background: var(--contest-table-header-bg, var(--bg-muted)); color: var(--contest-table-header-text, var(--text-secondary)); font-weight: var(--contest-table-header-weight, 700); }
+.table td { border-color: var(--contest-table-border, var(--border)); }
+/* 比赛详情内的评测与排名：保留状态文字，移除数据胶囊的视觉重量。 */
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .result {
+  background: transparent !important;
+  border-radius: 4px;
+  box-shadow: none !important;
+  font-weight: 500;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table th {
+  color: #555555 !important;
+  background: #f7f7f7 !important;
+  font-weight: 500;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table td {
+  color: #333333;
+  border-bottom-color: #ececec;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table tbody tr:hover td,
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .rankTable tbody tr:hover .rankMetaCell {
+  background: #fafafa;
+}
+:global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .problemCode {
+  color: #333333;
+  background: transparent;
+  border-radius: 0;
+  font-weight: 600;
+}
