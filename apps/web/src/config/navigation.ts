@@ -42,6 +42,7 @@ export const schoolManagerNav: NavConfig = {
   items: [
     { label: '概览', href: '/teacher' },
     { label: '校园', href: '/teacher/school' },
+    { label: '组织钱包', href: '/teacher/wallet' },
     { label: '教师', href: '/teacher/teachers' },
     { label: '学生', href: '/teacher/students' },
     { label: '团队', href: '/teacher/teams' },
@@ -59,6 +60,7 @@ export const teacherNav: NavConfig = {
   items: [
     { label: '概览', href: '/teacher' },
     { label: '校园', href: '/teacher/school' },
+    { label: '组织钱包', href: '/teacher/wallet' },
     { label: '学生', href: '/teacher/students' },
     { label: '团队', href: '/teacher/teams' },
     { label: '作业', href: '/teacher/homeworks' },

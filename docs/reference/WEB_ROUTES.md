@@ -166,6 +166,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/teacher/problems/new` | 负责人/教师 | 创建题目 |
 | `/teacher/profile` | 负责人/教师 | 个人资料 |
 | `/teacher/rankings` | 负责人/教师 | 排名 |
+| `/teacher/wallet` | 学校负责人、教师 | 组织钱包重定向 |
 | `/teacher/school` | 负责人/教师 | 学校信息 |
 | `/teacher/school/contests/[cid]` | 负责人/教师 | 学校比赛 |
 | `/teacher/school-teachers` | 负责人/教师 | 兼容入口，服务端跳转至学校教师标签 |
