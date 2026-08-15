@@ -1,6 +1,7 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import TeacherHome from '@/app/teacher/page'
 import StudentHome from '@/app/student/page'
 import TeacherSchool from '@/app/teacher/school/page'
@@ -18,17 +19,17 @@ import TeacherProblemListsPage from '@/app/teacher/problem-lists/page'
 import StudentProblemListsPage from '@/app/student/problem-lists/page'
 import TeacherRankingsPage from '@/app/teacher/rankings/page'
 import StudentRankingsPage from '@/app/student/rating/page'
-import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
-import { PlannedFeaturePage } from '@/components/feature/PlannedFeaturePage'
+import { WalletPage } from '@/components/wallet/WalletPage'
 
 export default function OrgPage() {
-  const { module } = useParams<{ module: string }>()
+  const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
+  const router = useRouter()
   const { user, activateOrganization } = useAuth()
-  const { organizationId } = useParams<{ organizationId: string }>()
   const [workspaceRole, setWorkspaceRole] = useState<'school_principal' | 'teacher' | 'student' | null>(null)
   const [ready, setReady] = useState(false)
+
   useEffect(() => {
     setReady(false)
     void apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces').then(result => {
@@ -40,8 +41,16 @@ export default function OrgPage() {
       setReady(true)
     })
   }, [activateOrganization, organizationId])
+
   const student = (workspaceRole || user?.organizationRole) === 'student'
-  if (!ready) return null
+
+  useEffect(() => {
+    if (!ready) return
+    if (module === 'carits') router.replace('/org/' + organizationId + '/wallet')
+    if (module === 'contributions') router.replace('/org/' + organizationId + '/rankings?tab=contribution')
+  }, [module, organizationId, ready, router])
+
+  if (!ready || module === 'carits' || module === 'contributions') return null
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return student ? <StudentSchool /> : <TeacherSchool />
   if (module === 'students' && !student) return <StudentsPage />
@@ -51,8 +60,7 @@ export default function OrgPage() {
   if (module === 'contests') return student ? <StudentContestsPage /> : <TeacherContestsPage />
   if (module === 'problems' && !student) return <TeacherProblemsPage />
   if (module === 'problem-lists') return student ? <StudentProblemListsPage /> : <TeacherProblemListsPage />
-  if (module === 'carits') return <PlannedFeaturePage feature="carits" endpoint={`/api/carits/organizations/${organizationId}`} scope="校园" />
-  if (module === 'contributions') return <PlannedFeaturePage feature="contributions" endpoint={`/api/contributions/organizations/${organizationId}`} scope="校园" />
+  if (module === 'wallet' && !student) return <WalletPage scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />
   if (module === 'rankings') return student ? <StudentRankingsPage /> : <TeacherRankingsPage />
   return student ? <StudentHome /> : <TeacherHome />
 }

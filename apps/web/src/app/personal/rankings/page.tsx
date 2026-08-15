@@ -7,12 +7,12 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import styles from '@/components/ranking/RankingPage.module.css'
 
-type RankingTab = 'rating' | 'solved'
+type RankingTab = 'rating' | 'solved' | 'contribution'
 
 export default function PersonalRankingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const activeTab: RankingTab = searchParams.get('tab') === 'solved' ? 'solved' : 'rating'
+  const activeTab: RankingTab = searchParams.get('tab') === 'solved' ? 'solved' : searchParams.get('tab') === 'contribution' ? 'contribution' : 'rating'
 
   const setTab = (tab: RankingTab) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -24,7 +24,7 @@ export default function PersonalRankingsPage() {
     <PageFrame>
       <div className={styles.content}>
         <PageHeader title="个人排行榜" description="仅展示个人工作区的公开用户名资料。" />
-        <SegmentedControl label="排名指标" value={activeTab} onChange={setTab} items={[{ value: 'rating', label: 'Rating' }, { value: 'solved', label: '做题量' }]} />
+        <SegmentedControl label="排名指标" value={activeTab} onChange={setTab} items={[{ value: 'rating', label: 'Rating' }, { value: 'solved', label: '做题量' }, { value: 'contribution', label: '贡献' }]} />
         <PersonalRankingsTab type={activeTab} />
       </div>
     </PageFrame>

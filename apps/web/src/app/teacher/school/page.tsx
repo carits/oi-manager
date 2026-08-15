@@ -51,7 +51,7 @@ export default function SchoolPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
-      <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchSchool} onEditSchool={() => setShowEditSchoolModal(true)} />
+      <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchSchool} onEditSchool={() => setShowEditSchoolModal(true)} canViewWallet={user?.organizationRole === 'teacher' || user?.organizationRole === 'school_principal'} />
       {showEditSchoolModal && (
         <EditSchoolModal school={school} onClose={() => setShowEditSchoolModal(false)} onSuccess={fetchSchool} />
       )}

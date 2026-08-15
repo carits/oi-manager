@@ -1,5 +1,5 @@
-import { PlannedFeaturePage } from '@/components/feature/PlannedFeaturePage'
+import { redirect } from 'next/navigation'
 
-export default function PlatformContributionsPage() {
-  return <PlannedFeaturePage feature="contributions" endpoint="/api/contributions/platform" scope="平台管理" />
+export default function PlatformAuditRedirectPage() {
+  redirect('/platform-admin')
 }

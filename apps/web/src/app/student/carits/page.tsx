@@ -1,5 +1,5 @@
-import { PlannedFeaturePage } from '@/components/feature/PlannedFeaturePage'
+import { redirect } from 'next/navigation'
 
-export default function StudentCaritsPage() {
-  return <PlannedFeaturePage feature="carits" endpoint="/api/carits/me" scope="校园" />
+export default function LegacyRedirectPage() {
+  redirect('/account/wallet')
 }

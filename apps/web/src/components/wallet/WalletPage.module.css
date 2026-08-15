@@ -1,0 +1,14 @@
+.wallet { overflow: hidden; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.summary { display: flex; align-items: center; gap: var(--space-3); padding: 22px; border-bottom: 1px solid var(--border); }
+.icon { display: grid; width: 44px; height: 44px; place-items: center; color: var(--primary); background: var(--primary-50); border-radius: var(--radius-sm); }
+.currency { display: block; color: var(--text-primary); font-weight: 700; }
+.summary strong { display: block; margin-top: 3px; color: var(--text-primary); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.empty, .error { margin: 0; padding: 34px 22px; color: var(--text-muted); text-align: center; }
+.error { color: var(--danger-text); }
+.recordsHeader { display: flex; align-items: center; gap: 8px; padding: 18px 22px; color: var(--text-primary); }
+.recordsHeader h2 { margin: 0; font-size: var(--text-base); }
+.tableWrap { overflow-x: auto; border-top: 1px solid var(--border); }
+.tableWrap table { width: 100%; min-width: 620px; border-collapse: collapse; }
+.tableWrap th, .tableWrap td { padding: 13px 18px; border-bottom: 1px solid var(--border); text-align: left; font-size: var(--text-sm); white-space: nowrap; }
+.tableWrap th { color: var(--text-secondary); background: var(--gray-50); font-weight: 600; }
+.tableWrap tbody tr:last-child td { border-bottom: 0; }

@@ -1,5 +1,5 @@
-import { PlannedFeaturePage } from '@/components/feature/PlannedFeaturePage'
+import { redirect } from 'next/navigation'
 
-export default function StudentContributionsPage() {
-  return <PlannedFeaturePage feature="contributions" endpoint="/api/contributions/me/summary" scope="校园" />
+export default function LegacyRedirectPage() {
+  redirect('/student/rating?tab=contribution')
 }

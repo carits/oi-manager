@@ -70,6 +70,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | 路径 | 身份 | 页面 |
 |------|------|------|
 | `/account/profile` | 全部已登录角色 | 账号资料 |
+| `/account/wallet` | 全部已登录角色 | 我的钱包（仅真实资产记录） |
 | `/account/security` | 全部已登录角色 | 安全设置 |
 | `/account/platform-bindings` | 全部已登录角色 | 平台绑定 |
 

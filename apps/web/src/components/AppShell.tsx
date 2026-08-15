@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Activity, Bell, BookOpen, Check, ChevronDown, CircleDollarSign, ClipboardList, GraduationCap, HandHeart, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserPlus, UserRound, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
+import { Activity, Bell, BookOpen, Check, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserPlus, UserRound, WalletCards, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
 import { getAssetUrl } from '@/lib/assets'
@@ -39,6 +39,7 @@ const accountPaths = {
   profile: '/account/profile',
   security: '/account/security',
   binding: '/account/platform-bindings',
+  wallet: '/account/wallet',
 }
 
 const labelIcons: Record<string, LucideIcon> = {
@@ -46,7 +47,7 @@ const labelIcons: Record<string, LucideIcon> = {
   '学生管理': Users, '学生': Users, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
   '题库管理': Library, '排名': Activity, '评测记录': BookOpen, '提交管理': BookOpen,
-  'Carits币': CircleDollarSign, '贡献': HandHeart,
+
 }
 
 function getNavIcon(label: string): LucideIcon { return labelIcons[label] || Home }
@@ -186,7 +187,7 @@ export function AppShell({ children }: AppShellProps) {
     } else setNotificationError(response.message || '操作失败，请重试')
   }
 
-  const orgModuleByLabel: Record<string, string> = { '概览': 'overview', '校园': 'campus', '教师': 'teachers', '学生': 'students', '团队': 'teams', '作业': 'homeworks', '比赛': 'contests', '题库': 'problems', '题单': 'problem-lists', '排名': 'rankings', 'Carits币': 'carits', '贡献': 'contributions' }
+  const orgModuleByLabel: Record<string, string> = { '概览': 'overview', '校园': 'campus', '教师': 'teachers', '学生': 'students', '团队': 'teams', '作业': 'homeworks', '比赛': 'contests', '题库': 'problems', '题单': 'problem-lists', '排名': 'rankings' }
   const navLinks = navConfig.items.map(item => {
     const Icon = getNavIcon(item.label)
     const href = organizationId && orgModuleByLabel[item.label] ? `/org/${organizationId}/${orgModuleByLabel[item.label]}` : item.href
@@ -209,6 +210,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className={styles.userMenu} role="menu">
           <Link className={styles.menuItem} href={accountPaths.profile} role="menuitem" onClick={() => setShowUserMenu(false)}><UserRound size={17} aria-hidden="true" />个人信息</Link>
           <Link className={styles.menuItem} href={accountPaths.security} role="menuitem" onClick={() => setShowUserMenu(false)}><ShieldCheck size={17} aria-hidden="true" />账号安全</Link>
+          <Link className={styles.menuItem} href={accountPaths.wallet} role="menuitem" onClick={() => setShowUserMenu(false)}><WalletCards size={17} aria-hidden="true" />我的钱包</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
           <div className={styles.menuDivider} />
           <button className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</button>

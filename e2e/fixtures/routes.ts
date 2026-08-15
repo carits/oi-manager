@@ -36,6 +36,7 @@ export const routePatterns = [
   '/profile/teacher/[id]',
   '/profile/user/[id]',
   '/account/platform-bindings',
+  '/account/wallet',
   '/account/profile',
   '/account/security',
   '/personal',

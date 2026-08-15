@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Bell, Edit3, UsersRound } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -33,9 +35,12 @@ interface HomeTabProps {
   isPrincipal: boolean
   onAnnouncementUpdate: () => void
   onEditSchool?: () => void
+  canViewWallet?: boolean
 }
 
-export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool }: HomeTabProps) {
+export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool, canViewWallet = false }: HomeTabProps) {
+  const pathname = usePathname()
+  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const toast = useToast()
   const [editingAnnouncement, setEditingAnnouncement] = useState(false)
   const [announcement, setAnnouncement] = useState(school.announcement || '')
@@ -117,6 +122,11 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
               <div><dt>状态</dt><dd><span className={styles.status}>{school.status === 'inactive' ? '停用' : '正常'}</span></dd></div>
             </dl>
           </section>
+
+          {canViewWallet && organizationId && <section className={styles.section}>
+            <div className={styles.sectionTitle}><h2>组织钱包</h2></div>
+            <Link href={'/org/' + organizationId + '/wallet'}>查看资产与消费记录</Link>
+          </section>}
 
           <section className={styles.section}>
             <div className={styles.sectionTitle}><UsersRound size={18} /><h2>联系信息</h2></div>

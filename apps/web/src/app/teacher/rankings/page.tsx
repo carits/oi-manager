@@ -8,15 +8,16 @@ import { Empty } from '@/components/ui/Empty'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { MetricRankingWorkspace } from '@/components/ranking/MetricRankingWorkspace'
 import styles from '@/components/ranking/RankingPage.module.css'
 
-type TabType = 'rating' | 'solved'
+type TabType = 'rating' | 'solved' | 'contribution'
 
 export default function TeacherRankingsPage() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const activeTab: TabType = searchParams.get('tab') === 'solved' ? 'solved' : 'rating'
+  const activeTab: TabType = searchParams.get('tab') === 'solved' ? 'solved' : searchParams.get('tab') === 'contribution' ? 'contribution' : 'rating'
 
   const setTab = (tab: TabType) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -29,10 +30,10 @@ export default function TeacherRankingsPage() {
   return (
     <PageFrame>
       <div className={styles.content}>
-        <PageHeader title="校内排行榜" description="查看本校学生的 Rating 与做题量排名。" />
-        <SegmentedControl label="排名指标" value={activeTab} onChange={setTab} items={[{ value: 'rating', label: 'Rating' }, { value: 'solved', label: '做题量' }]} />
+        <PageHeader title="校内排行榜" description="查看本校学生的 Rating、做题量与贡献排名。" />
+        <SegmentedControl label="排名指标" value={activeTab} onChange={setTab} items={[{ value: 'rating', label: 'Rating' }, { value: 'solved', label: '做题量' }, { value: 'contribution', label: '贡献' }]} />
         {user?.schoolId
-          ? activeTab === 'rating' ? <RankingsTab schoolId={user.schoolId} /> : <SolvedCountTab schoolId={user.schoolId} />
+          ? activeTab === 'rating' ? <RankingsTab schoolId={user.schoolId} /> : activeTab === 'solved' ? <SolvedCountTab schoolId={user.schoolId} /> : <MetricRankingWorkspace scope="campus" metric="contribution" schoolId={user.schoolId} />
           : <Empty title="尚未绑定学校" description="绑定学校后才能查看校内排名。" />}
       </div>
     </PageFrame>

@@ -10,7 +10,7 @@ import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import apiClient, { type ApiResponse } from '@/lib/apiClient'
 import styles from './MetricRankingWorkspace.module.css'
 
-export type RankingMetric = 'rating' | 'solved'
+export type RankingMetric = 'rating' | 'solved' | 'contribution'
 type RankingScope = 'campus' | 'personal'
 
 interface RankingRow {
@@ -22,6 +22,7 @@ interface RankingRow {
   grade?: string
   rating?: number
   solvedCount?: number
+  contributionScore?: number
 }
 
 interface RankingResponse extends ApiResponse<RankingRow[]> {
@@ -39,11 +40,11 @@ interface MetricRankingWorkspaceProps {
 }
 
 function metricLabel(metric: RankingMetric) {
-  return metric === 'rating' ? 'Rating' : '做题量'
+  return metric === 'rating' ? 'Rating' : metric === 'solved' ? '做题量' : '贡献'
 }
 
 function metricValue(row: RankingRow, metric: RankingMetric) {
-  return metric === 'rating' ? row.rating ?? 0 : row.solvedCount ?? 0
+  return metric === 'rating' ? row.rating ?? 0 : metric === 'solved' ? row.solvedCount ?? 0 : row.contributionScore ?? 0
 }
 
 function rankClass(index: number) {
@@ -59,8 +60,9 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
   const router = useRouter()
   const searchParams = useSearchParams()
   const query = searchParams.get('q') || ''
-  const grade = scope === 'campus' ? searchParams.get('grade') || '' : ''
-  const includeGraduated = scope === 'campus' && searchParams.get('includeGraduated') === '1'
+  const isContribution = metric === 'contribution'
+  const grade = scope === 'campus' && !isContribution ? searchParams.get('grade') || '' : ''
+  const includeGraduated = scope === 'campus' && !isContribution && searchParams.get('includeGraduated') === '1'
   const page = Math.max(Number(searchParams.get('page')) || 1, 1)
   const pageSize = Math.max(Number(searchParams.get('pageSize')) || 20, 1)
   const [searchValue, setSearchValue] = useState(query)
@@ -95,13 +97,18 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
     setError(null)
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
     if (query) params.set('q', query)
-    if (scope === 'campus') {
+    if (scope === 'campus' && !isContribution) {
       if (grade) params.set('grade', grade)
       if (includeGraduated) params.set('includeGraduated', '1')
     }
-    const endpoint = scope === 'campus'
-      ? `/api/schools/${schoolId}/${metric === 'rating' ? 'student-rankings' : 'student-solved-rankings'}?${params}`
-      : `/api/rankings/personal/${metric}?${params}`
+    const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+    const endpoint = isContribution
+      ? scope === 'campus' && organizationId
+        ? `/api/contributions/organizations/${organizationId}/rankings?${params}`
+        : `/api/contributions/rankings/users?${params}`
+      : scope === 'campus'
+        ? `/api/schools/${schoolId}/${metric === 'rating' ? 'student-rankings' : 'student-solved-rankings'}?${params}`
+        : `/api/rankings/personal/${metric}?${params}`
     const result = await apiClient.get<RankingRow[]>(endpoint, { signal }) as RankingResponse
     if (!result.success) {
       setRows([])
@@ -109,8 +116,10 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
       setLoading(false)
       return
     }
-    setRows(result.data || [])
-    setTotal(result.total || 0)
+    const payload = result.data as RankingRow[] | { items?: RankingRow[] } | undefined
+    const nextRows = Array.isArray(payload) ? payload : payload?.items || []
+    setRows(nextRows)
+    setTotal(result.total || nextRows.length)
     setTotalPages(result.totalPages || 1)
     setGrades(result.filters?.grades || [])
     setLoading(false)
@@ -135,7 +144,7 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
             <span className="sr-only">搜索{scope === 'campus' ? '姓名或用户名' : '用户名'}</span>
             <input value={searchValue} onChange={event => setSearchValue(event.target.value)} placeholder={scope === 'campus' ? '搜索姓名或用户名' : '搜索用户名'} />
           </label>
-          {scope === 'campus' && (
+          {scope === 'campus' && !isContribution && (
             <label className={styles.selectField}>
               <span className="sr-only">按年级筛选</span>
               <select value={grade} onChange={event => updateQuery({ grade: event.target.value || null })}>
@@ -144,7 +153,7 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
               </select>
             </label>
           )}
-          {scope === 'campus' && (
+          {scope === 'campus' && !isContribution && (
             <label className={styles.checkboxField}>
               <input type="checkbox" checked={includeGraduated} onChange={event => updateQuery({ includeGraduated: event.target.checked ? '1' : null })} />
               <span>包含已毕业学生</span>
@@ -160,7 +169,7 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
         loading={loading}
         error={error}
         onRetry={() => void fetchRankings()}
-        emptyText={query || grade ? '没有符合筛选条件的排名数据' : `暂无${valueLabel}排名数据`}
+        emptyText={query || grade ? '没有符合筛选条件的排名数据' : isContribution ? '暂无贡献记录' : `暂无${valueLabel}排名数据`}
         caption={`${scope === 'campus' ? '校内' : '个人'}${valueLabel}排行榜`}
         isCurrentRow={row => row.userId === currentUserId || row.id === currentUserId}
         columns={[
@@ -173,7 +182,7 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
           },
           {
             key: 'identity',
-            label: scope === 'campus' ? '学生' : '用户名',
+            label: scope === 'campus' ? (isContribution ? '成员' : '学生') : '用户名',
             width: '220px',
             render: row => (
               <span className={styles.identity}>
@@ -204,7 +213,7 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
             align: 'right',
             render: row => <strong className={metric === 'rating' ? styles.ratingValue : styles.solvedValue}>{metricValue(row, metric)}</strong>
           },
-          ...(scope === 'campus' ? [{
+          ...(scope === 'campus' && !isContribution ? [{
             key: 'grade',
             label: '年级',
             width: '140px',

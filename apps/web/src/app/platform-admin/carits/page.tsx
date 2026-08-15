@@ -1,5 +1,5 @@
-import { PlannedFeaturePage } from '@/components/feature/PlannedFeaturePage'
+import { redirect } from 'next/navigation'
 
-export default function PlatformCaritsPage() {
-  return <PlannedFeaturePage feature="carits" endpoint="/api/carits/platform" scope="平台管理" />
+export default function PlatformAuditRedirectPage() {
+  redirect('/platform-admin')
 }
