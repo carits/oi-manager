@@ -6,8 +6,6 @@ import TeacherHome from '@/app/teacher/page'
 import StudentHome from '@/app/student/page'
 import TeacherSchool from '@/app/teacher/school/page'
 import StudentSchool from '@/app/student/school/page'
-import StudentsPage from '@/app/teacher/students/page'
-import TeachersPage from '@/app/teacher/teachers/page'
 import TeamPage from '@/app/teacher/teams/page'
 import StudentTeamPage from '@/app/student/team/page'
 import TeacherHomeworkPage from '@/app/teacher/homeworks/page'
@@ -18,10 +16,10 @@ import TeacherProblemsPage from '@/app/teacher/problems/page'
 import TeacherProblemListsPage from '@/app/teacher/problem-lists/page'
 import StudentProblemListsPage from '@/app/student/problem-lists/page'
 import TeacherRankingsPage from '@/app/teacher/rankings/page'
+import CampusManagementPage from '@/app/teacher/management/page'
 import StudentRankingsPage from '@/app/student/rating/page'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
-import { WalletPage } from '@/components/wallet/WalletPage'
 
 export default function OrgPage() {
   const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
@@ -46,21 +44,25 @@ export default function OrgPage() {
 
   useEffect(() => {
     if (!ready) return
-    if (module === 'carits') router.replace('/org/' + organizationId + '/wallet')
-    if (module === 'contributions') router.replace('/org/' + organizationId + '/rankings?tab=contribution')
+    const legacyTarget: Record<string, string> = {
+      carits: '/org/' + organizationId + '/management?tab=wallet',
+      contributions: '/org/' + organizationId + '/rankings?tab=contribution',
+      students: '/org/' + organizationId + '/management?tab=students',
+      teachers: '/org/' + organizationId + '/management?tab=teachers',
+      wallet: '/org/' + organizationId + '/management?tab=wallet',
+    }
+    if (legacyTarget[module]) router.replace(legacyTarget[module])
   }, [module, organizationId, ready, router])
 
-  if (!ready || module === 'carits' || module === 'contributions') return null
+  if (!ready || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return student ? <StudentSchool /> : <TeacherSchool />
-  if (module === 'students' && !student) return <StudentsPage />
-  if (module === 'teachers' && !student) return <TeachersPage />
+  if (module === 'management' && !student) return <CampusManagementPage />
   if (module === 'teams') return student ? <StudentTeamPage /> : <TeamPage />
   if (module === 'homeworks') return student ? <StudentHomeworkPage /> : <TeacherHomeworkPage />
   if (module === 'contests') return student ? <StudentContestsPage /> : <TeacherContestsPage />
   if (module === 'problems' && !student) return <TeacherProblemsPage />
   if (module === 'problem-lists') return student ? <StudentProblemListsPage /> : <TeacherProblemListsPage />
-  if (module === 'wallet' && !student) return <WalletPage scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />
   if (module === 'rankings') return student ? <StudentRankingsPage /> : <TeacherRankingsPage />
   return student ? <StudentHome /> : <TeacherHome />
 }

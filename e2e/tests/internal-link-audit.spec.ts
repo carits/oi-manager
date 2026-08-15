@@ -3,8 +3,8 @@ import { accounts, type AuthRole } from '../fixtures/auth'
 import { assertPageHealth, waitForPageReady, watchPage } from '../support/page-audit'
 
 const entries: Array<{ role: AuthRole; roots: string[] }> = [
-  { role: 'principal', roots: ['/teacher', '/teacher/school', '/teacher/students', '/teacher/teachers', '/teacher/teams', '/teacher/homeworks', '/teacher/contests', '/teacher/problems', '/teacher/problem-lists', '/teacher/rankings'] },
-  { role: 'teacher', roots: ['/teacher', '/teacher/school', '/teacher/students', '/teacher/teams', '/teacher/homeworks', '/teacher/contests', '/teacher/problems', '/teacher/problem-lists', '/teacher/rankings'] },
+  { role: 'principal', roots: ['/teacher', '/teacher/school', '/teacher/management', '/teacher/students', '/teacher/teachers', '/teacher/teams', '/teacher/homeworks', '/teacher/contests', '/teacher/problems', '/teacher/problem-lists', '/teacher/rankings'] },
+  { role: 'teacher', roots: ['/teacher', '/teacher/school', '/teacher/management', '/teacher/students', '/teacher/teams', '/teacher/homeworks', '/teacher/contests', '/teacher/problems', '/teacher/problem-lists', '/teacher/rankings'] },
   { role: 'campusStudent', roots: ['/student', '/student/school', '/student/team', '/student/homeworks', '/student/contests', '/student/problem-lists', '/student/rating', '/student/submissions'] },
   { role: 'personalStudent', roots: ['/personal', '/personal/teams', '/personal/problems', '/personal/contests', '/personal/problem-lists', '/personal/rankings', '/personal/submissions'] },
 ]

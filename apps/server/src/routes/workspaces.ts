@@ -7,13 +7,13 @@ import { notificationService } from '../modules/notification/notification.servic
 
 export const workspaceRouter = Router()
 
-const allModules = ['overview', 'campus', 'students', 'teachers', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings', 'carits', 'contributions']
-const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts', 'carits', 'contributions']
+const allModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
+const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
 
 function modulesForRole(role: string) {
   if (role === 'school_principal') return allModules
-  if (role === 'teacher') return allModules.filter(item => item !== 'teachers')
-  return ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings', 'carits', 'contributions']
+  if (role === 'teacher') return allModules.filter(item => item !== 'problems')
+  return ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings']
 }
 
 function relationLabel(memberRole: string, relationType: string) {
@@ -44,7 +44,7 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const platform = ['super_admin', 'platform_admin'].includes(req.user!.role)
     ? [{ type: 'platform' as const, organizationName: '平台管理', memberRole: 'platform_admin', relationLabel: '平台管理员', availableModules: platformModules }]
     : []
-  res.json({ success: true, data: { workspaces: [...platform, ...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions', 'carits', 'contributions'] }] } })
+  res.json({ success: true, data: { workspaces: [...platform, ...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }] } })
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {

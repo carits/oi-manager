@@ -7,23 +7,18 @@ export const personalWorkspaceModules = new Set([
   'problem-lists',
   'rankings',
   'submissions',
-  'carits',
-  'contributions',
 ])
 
 export const organizationModules = new Set([
   'overview',
   'campus',
-  'teachers',
-  'students',
+  'management',
   'teams',
   'homeworks',
   'contests',
   'problems',
   'problem-lists',
   'rankings',
-  'carits',
-  'contributions',
 ])
 
 export type NavigationContext = {
@@ -83,8 +78,8 @@ export function isProhibitedPath(pathname: string) {
 }
 
 const moduleByLegacyPath: Array<[string, string]> = [
-  ['/teacher/students', 'students'], ['/teacher/teachers', 'teachers'], ['/teacher/teams', 'teams'], ['/teacher/homeworks', 'homeworks'], ['/teacher/contests', 'contests'], ['/teacher/problems', 'problems'], ['/teacher/problem-lists', 'problem-lists'], ['/teacher/rankings', 'rankings'], ['/teacher/carits', 'carits'], ['/teacher/contributions', 'contributions'], ['/teacher/school', 'campus'], ['/teacher', 'overview'],
-  ['/student/homeworks', 'homeworks'], ['/student/contests', 'contests'], ['/student/team', 'teams'], ['/student/problem-lists', 'problem-lists'], ['/student/rating', 'rankings'], ['/student/carits', 'carits'], ['/student/contributions', 'contributions'], ['/student/school', 'campus'], ['/student', 'overview'],
+  ['/teacher/management', 'management'], ['/teacher/students', 'management'], ['/teacher/teachers', 'management'], ['/teacher/wallet', 'management'], ['/teacher/teams', 'teams'], ['/teacher/homeworks', 'homeworks'], ['/teacher/contests', 'contests'], ['/teacher/problems', 'problems'], ['/teacher/problem-lists', 'problem-lists'], ['/teacher/rankings', 'rankings'], ['/teacher/carits', 'management'], ['/teacher/contributions', 'rankings'], ['/teacher/school', 'campus'], ['/teacher', 'overview'],
+  ['/student/homeworks', 'homeworks'], ['/student/contests', 'contests'], ['/student/team', 'teams'], ['/student/problem-lists', 'problem-lists'], ['/student/rating', 'rankings'], ['/student/carits', 'overview'], ['/student/contributions', 'rankings'], ['/student/school', 'campus'], ['/student', 'overview'],
 ]
 
 export function workspaceModule(pathname: string) {

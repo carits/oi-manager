@@ -25,6 +25,7 @@ const smokePatterns = new Set([
   '/platform-admin',
   '/platform-admin/problems',
   '/teacher',
+  '/teacher/management',
   '/teacher/students',
   '/teacher/teams',
   '/teacher/homeworks',

@@ -166,13 +166,14 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/teacher/problems/new` | 负责人/教师 | 创建题目 |
 | `/teacher/profile` | 负责人/教师 | 个人资料 |
 | `/teacher/rankings` | 负责人/教师 | 排名 |
-| `/teacher/wallet` | 学校负责人、教师 | 组织钱包重定向 |
+| `/teacher/management` | 负责人/教师 | 校园管理（学生、教师、校园资产） |
+| `/teacher/wallet` | 学校负责人、教师 | 校园资产兼容重定向 |
 | `/teacher/school` | 负责人/教师 | 学校信息 |
 | `/teacher/school/contests/[cid]` | 负责人/教师 | 学校比赛 |
 | `/teacher/school-teachers` | 负责人/教师 | 兼容入口，服务端跳转至学校教师标签 |
 | `/teacher/scores` | 负责人/教师 | 成绩 |
 | `/teacher/security` | 负责人/教师 | 安全设置 |
-| `/teacher/students` | 负责人/教师 | 学生管理 |
+| `/teacher/students` | 负责人/教师 | 学生管理兼容重定向 |
 | `/teacher/students/import` | 负责人/教师 | 学生导入入口 |
 | `/teacher/students/import/bind` | 负责人/教师 | 绑定已有学生 |
 | `/teacher/students/import/input` | 负责人/教师 | 导入输入 |
@@ -180,7 +181,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/teacher/students/import/result` | 负责人/教师 | 导入结果 |
 | `/teacher/submissions` | 负责人/教师 | 提交列表 |
 | `/teacher/submissions/[id]` | 负责人/教师 | 提交详情 |
-| `/teacher/teachers` | 学校负责人 | 教师管理 |
+| `/teacher/teachers` | 学校负责人 | 教师管理兼容重定向 |
 | `/teacher/team-import/luogu` | 负责人/教师 | 洛谷团队导入 |
 | `/teacher/team-import/vjudge` | 负责人/教师 | VJudge 团队导入 |
 | `/teacher/teams` | 负责人/教师 | 团队列表 |

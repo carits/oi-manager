@@ -103,6 +103,7 @@ export const routePatterns = [
   '/teacher/problems/new',
   '/teacher/profile',
   '/teacher/rankings',
+  '/teacher/management',
   '/teacher/wallet',
   '/teacher/school',
   '/teacher/school/contests/[cid]',

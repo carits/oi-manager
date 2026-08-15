@@ -44,7 +44,7 @@ const accountPaths = {
 
 const labelIcons: Record<string, LucideIcon> = {
   '首页': Home, '概览': Home, '校园': School, '学校管理': School, '教师管理': GraduationCap, '教师': GraduationCap,
-  '学生管理': Users, '学生': Users, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
+  '学生管理': Users, '学生': Users, '管理': ShieldCheck, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
   '题库管理': Library, '排名': Activity, '评测记录': BookOpen, '提交管理': BookOpen,
 
