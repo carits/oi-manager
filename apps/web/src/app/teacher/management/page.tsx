@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -18,7 +18,6 @@ type Tab = 'students' | 'teachers' | 'wallet'
 
 export default function CampusManagementPage() {
   const { user } = useAuth()
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const params = useParams<{ organizationId?: string }>()
@@ -27,7 +26,8 @@ export default function CampusManagementPage() {
   const role = user?.organizationRole || user?.role
   const isPrincipal = role === 'school_principal'
   const requestedTab = searchParams.get('tab')
-  const activeTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'wallet' ? 'wallet' : 'students'
+  const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'wallet' ? 'wallet' : 'students'
+  const [activeTab, setActiveTab] = useState<Tab>(resolvedTab)
 
   useEffect(() => {
     if (params.organizationId) return
@@ -45,10 +45,14 @@ export default function CampusManagementPage() {
     { value: 'wallet', label: '校园资产' },
   ], [isPrincipal])
 
+  useEffect(() => { setActiveTab(resolvedTab) }, [resolvedTab])
+
   const setTab = (tab: string) => {
+    const nextTab = tab as Tab
+    setActiveTab(nextTab)
     const next = new URLSearchParams(searchParams.toString())
-    tab === 'students' ? next.delete('tab') : next.set('tab', tab)
-    router.replace(pathname + (next.size ? '?' + next : ''), { scroll: false })
+    nextTab === 'students' ? next.delete('tab') : next.set('tab', nextTab)
+    window.history.replaceState(null, '', pathname + (next.size ? '?' + next : ''))
   }
 
   if (role === 'student') return <Empty title="无权访问管理" description="学生不能访问校园管理内容。" />

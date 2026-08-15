@@ -1,13 +1,17 @@
 import { Router } from 'express'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { prisma } from '../../prisma'
-import { hasOrganizationWalletAccess, isPlatformAdministrator } from '../featureAvailability'
+import { isPlatformAdministrator } from '../featureAvailability'
 
 export const caritsRouter = Router()
 
-function requireOrganization(req: any, res: any) {
+async function requireOrganization(req: any, res: any) {
   const organizationId = String(req.params.organizationId || '')
-  if (!hasOrganizationWalletAccess(req.user, organizationId)) {
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { organizationId, userId: req.user!.userId, status: 'active', memberRole: { in: ['school_principal', 'teacher'] } },
+    select: { id: true },
+  })
+  if (!membership) {
     res.status(403).json({ success: false, message: '无权访问该校园的 Carits币信息' })
     return false
   }
@@ -50,13 +54,13 @@ caritsRouter.get('/me/transactions', asyncHandler(async (req, res) => {
 }))
 
 caritsRouter.get('/organizations/:organizationId', asyncHandler(async (req, res) => {
-  if (!requireOrganization(req, res)) return
+  if (!(await requireOrganization(req, res))) return
   const account = await prisma.caritsAccount.findUnique({ where: { organizationId: req.params.organizationId }, select: { id: true, balance: true, createdAt: true, updatedAt: true } })
   res.json({ success: true, data: { currency: 'Carits币', ...serializeAccount(account) } })
 }))
 
 caritsRouter.get('/organizations/:organizationId/transactions', asyncHandler(async (req, res) => {
-  if (!requireOrganization(req, res)) return
+  if (!(await requireOrganization(req, res))) return
   const account = await prisma.caritsAccount.findUnique({ where: { organizationId: req.params.organizationId }, select: { id: true, balance: true, createdAt: true, updatedAt: true } })
   res.json({ success: true, data: { currency: 'Carits币', ...serializeAccount(account), items: await transactionsFor(account?.id) } })
 }))
