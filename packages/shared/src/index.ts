@@ -40,6 +40,7 @@ export interface JwtPayload {
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   schoolId?: string // 学校ID（教师或学生所属学校）
   organizationId?: string
+  organizationMembershipId?: string
   workspaceMode?: WorkspaceMode
   /** @deprecated Use workspaceMode. Kept while old sessions are migrated. */
   studentMode?: ResourceScope

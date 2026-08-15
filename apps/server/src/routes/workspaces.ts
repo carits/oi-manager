@@ -7,13 +7,13 @@ import { notificationService } from '../modules/notification/notification.servic
 
 export const workspaceRouter = Router()
 
-const allModules = ['overview', 'campus', 'students', 'teachers', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
-const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
+const allModules = ['overview', 'campus', 'students', 'teachers', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings', 'carits', 'contributions']
+const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts', 'carits', 'contributions']
 
 function modulesForRole(role: string) {
   if (role === 'school_principal') return allModules
   if (role === 'teacher') return allModules.filter(item => item !== 'teachers')
-  return ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings']
+  return ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings', 'carits', 'contributions']
 }
 
 function relationLabel(memberRole: string, relationType: string) {
@@ -23,38 +23,7 @@ function relationLabel(memberRole: string, relationType: string) {
   return '本校学生'
 }
 
-async function ensureLegacySchoolMembership(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, role: true, schoolId: true }
-  })
-  if (!user?.schoolId || !['student', 'teacher', 'school_principal'].includes(user.role)) return
-
-  const school = await prisma.school.findUnique({
-    where: { id: user.schoolId },
-    select: { organizationId: true }
-  })
-  if (!school?.organizationId) return
-
-  const memberRole = user.role
-  await prisma.organizationMembership.upsert({
-    where: { organizationId_userId: { organizationId: school.organizationId, userId } },
-    create: {
-      id: crypto.randomUUID(),
-      organizationId: school.organizationId,
-      userId,
-      memberRole,
-      relationType: memberRole === 'student' ? 'enrolled' : 'employee',
-      status: 'active',
-      joinedAt: new Date()
-    },
-    // 历史校园账号已有明确学校归属，补齐切换器关系时不能覆盖仍待处理的正式邀请。
-    update: {}
-  })
-}
-
 workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
-  await ensureLegacySchoolMembership(req.user!.userId)
   const rows = await prisma.organizationMembership.findMany({
     where: { userId: req.user!.userId, status: 'active', Organization: { status: 'active' } },
     include: { Organization: { include: { School: { select: { id: true, shortName: true } } } } },
@@ -75,7 +44,7 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const platform = ['super_admin', 'platform_admin'].includes(req.user!.role)
     ? [{ type: 'platform' as const, organizationName: '平台管理', memberRole: 'platform_admin', relationLabel: '平台管理员', availableModules: platformModules }]
     : []
-  res.json({ success: true, data: { workspaces: [...platform, ...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }] } })
+  res.json({ success: true, data: { workspaces: [...platform, ...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions', 'carits', 'contributions'] }] } })
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {

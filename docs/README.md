@@ -27,6 +27,7 @@ source_of_truth: repository structure and active documentation
 3. [数据模型](architecture/DATA_MODEL.md)
 4. [评测机与提交](architecture/JUDGE_AND_SUBMISSIONS.md)
 5. [业务模块](architecture/modules/ORGANIZATION.md)
+6. [Carits币与贡献 V1](architecture/CARITS_AND_CONTRIBUTION.md)
 
 ### 测试
 

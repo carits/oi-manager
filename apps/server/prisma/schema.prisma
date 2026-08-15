@@ -560,6 +560,10 @@ model Organization {
   updatedAt   DateTime                 @updatedAt
   School      School?
   Membership  OrganizationMembership[]
+  CaritsAccount CaritsAccount? @relation("CaritsAccountOrganization")
+  CaritsTransactions CaritsTransaction[] @relation("CaritsTransactionOrganization")
+  ContributionAttributions OrganizationContributionAttribution[]
+  ContributionProjects ContributionProject[]
 
   @@index([type, status])
 }
@@ -622,6 +626,119 @@ model OrganizationTeacherProfile {
 
   @@index([status])
 }
+
+enum CaritsAccountOwnerType {
+  USER
+  ORGANIZATION
+  SYSTEM
+}
+
+model CaritsAccount {
+  id             String                  @id
+  ownerType      CaritsAccountOwnerType
+  userId         String?                 @unique
+  organizationId String?                 @unique
+  systemKey      String?                 @unique
+  balance        BigInt                  @default(0)
+  status         String                  @default("active")
+  version        Int                     @default(0)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  User           User?                   @relation("CaritsAccountUser", fields: [userId], references: [id], onDelete: Restrict)
+  Organization   Organization?           @relation("CaritsAccountOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  LedgerEntries  CaritsLedgerEntry[]
+
+  @@index([ownerType, status])
+}
+
+model CaritsTransaction {
+  id             String                  @id
+  type           String
+  status         String                  @default("draft")
+  idempotencyKey String                  @unique
+  referenceType  String?
+  referenceId    String?
+  operatorUserId String?
+  organizationId String?
+  metadata       Json?
+  createdAt      DateTime                @default(now())
+  postedAt       DateTime?
+  Operator       User?                   @relation("CaritsTransactionOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  Organization   Organization?           @relation("CaritsTransactionOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  Entries        CaritsLedgerEntry[]
+
+  @@index([referenceType, referenceId])
+  @@index([organizationId, createdAt])
+}
+
+model CaritsLedgerEntry {
+  id             String             @id
+  transactionId  String
+  accountId      String
+  amount         BigInt
+  balanceAfter   BigInt
+  createdAt      DateTime           @default(now())
+  Transaction    CaritsTransaction  @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  Account        CaritsAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId, createdAt])
+  @@index([transactionId])
+}
+
+model ContributionEvent {
+  id            String    @id
+  actorUserId   String
+  type          String
+  sourceType    String
+  sourceId      String
+  score         Int
+  ruleCode      String
+  ruleVersion   Int
+  dedupeKey     String    @unique
+  status        String    @default("pending")
+  evidence      Json?
+  occurredAt    DateTime
+  acceptedAt    DateTime?
+  revokedAt     DateTime?
+  revokeReason  String?
+  createdAt     DateTime  @default(now())
+  Actor         User      @relation("ContributionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  Attribution   OrganizationContributionAttribution?
+
+  @@index([actorUserId, status, acceptedAt])
+  @@index([sourceType, sourceId])
+  @@index([status, acceptedAt])
+}
+
+model OrganizationContributionAttribution {
+  id             String             @id
+  contributionId String             @unique
+  organizationId String
+  reason         String
+  evidence       Json?
+  createdAt      DateTime           @default(now())
+  Contribution   ContributionEvent  @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  Organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+}
+
+model ContributionProject {
+  id             String       @id
+  organizationId String
+  name           String
+  description    String?
+  resourceType   String?
+  resourceId     String?
+  status         String       @default("active")
+  createdByMembershipId String
+  createdAt      DateTime     @default(now())
+  archivedAt     DateTime?
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+}
+
 
 model SchoolProblemList {
   id            String      @id
@@ -1089,6 +1206,9 @@ model User {
   UserPlatformBinding       UserPlatformBinding[]
   UserNotification          UserNotification[]
   OrganizationMembership    OrganizationMembership[]
+  CaritsAccount             CaritsAccount?            @relation("CaritsAccountUser")
+  CaritsTransactions        CaritsTransaction[]       @relation("CaritsTransactionOperator")
+  ContributionEvents        ContributionEvent[]       @relation("ContributionActor")
 
   @@index([createdAt])
   @@index([role])

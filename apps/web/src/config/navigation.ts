@@ -33,6 +33,8 @@ export const platformAdminNav: NavConfig = {
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '评测记录', href: '/platform-admin/submissions' },
     { label: '提交管理', href: '/platform-admin/oj-accounts' },
+    { label: 'Carits币', href: '/platform-admin/carits' },
+    { label: '贡献', href: '/platform-admin/contributions' },
   ]
 }
 
@@ -50,6 +52,8 @@ export const schoolManagerNav: NavConfig = {
     { label: '题库', href: '/teacher/problems' },
     { label: '题单', href: '/teacher/problem-lists' },
     { label: '排名', href: '/teacher/rankings' },
+    { label: 'Carits币', href: '/teacher/carits' },
+    { label: '贡献', href: '/teacher/contributions' },
   ]
 }
 
@@ -66,6 +70,8 @@ export const teacherNav: NavConfig = {
     { label: '题库', href: '/teacher/problems' },
     { label: '题单', href: '/teacher/problem-lists' },
     { label: '排名', href: '/teacher/rankings' },
+    { label: 'Carits币', href: '/teacher/carits' },
+    { label: '贡献', href: '/teacher/contributions' },
   ]
 }
 
@@ -78,6 +84,8 @@ export const studentNav: NavConfig = {
     { label: '作业', href: '/student/homeworks' },
     { label: '比赛', href: '/student/contests' },
     { label: '题单', href: '/student/problem-lists' },
+    { label: 'Carits币', href: '/student/carits' },
+    { label: '贡献', href: '/student/contributions' },
     { label: '排名', href: '/student/rating' },
   ]
 }
@@ -93,6 +101,8 @@ export const personalNav: NavConfig = {
     { label: '题单', href: '/personal/problem-lists' },
     { label: '排名', href: '/personal/rankings' },
     { label: '评测记录', href: '/personal/submissions' },
+    { label: 'Carits币', href: '/personal/carits' },
+    { label: '贡献', href: '/personal/contributions' },
   ]
 }
 

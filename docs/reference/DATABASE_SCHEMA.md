@@ -7,7 +7,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 # 数据库 Schema
 
-数据库 provider 为 PostgreSQL。下表登记全部 54 个 Prisma 模型；字段和约束的最终
+数据库 provider 为 PostgreSQL。下表登记全部 60 个 Prisma 模型；字段和约束的最终
 定义始终以 `apps/server/prisma/schema.prisma` 为准。
 
 ## 身份与学校（12）
@@ -48,6 +48,17 @@ source_of_truth: apps/server/prisma/schema.prisma
 |------|----------|------|
 | `Problem` | `id`, `libraryScope`, `libraryKey`, `schoolId`, `platform`, `problemId`, `status`, `ownerId`, `sourceProblemId` | 平台/学校隔离的题库题目 |
 | `ProblemAttachment` | `problemId`, `fileName`, `fileUrl`, `fileSize` | 题目附件 |
+## Carits币与贡献（6）
+
+| 模型 | 关键字段 | 用途 |
+|------|----------|------|
+| `CaritsAccount` | `ownerType`, `userId`, `organizationId`, `systemKey`, `balance` | 个人、组织或系统账户；V1 不创建账户 |
+| `CaritsTransaction` | `type`, `status`, `idempotencyKey`, `referenceType` | 未来账本交易与业务审计 |
+| `CaritsLedgerEntry` | `transactionId`, `accountId`, `amount`, `balanceAfter` | 不可变账本分录 |
+| `ContributionEvent` | `actorUserId`, `ruleCode`, `score`, `evidence`, `status` | 未来可验证贡献事实 |
+| `OrganizationContributionAttribution` | `contributionId`, `organizationId`, `reason` | 单条贡献的组织归因证据 |
+| `ContributionProject` | `organizationId`, `name`, `status` | 预留组织型贡献项目 |
+
 | `ProblemStatement` | `problemId`, `type`, `format`, `language`, content/file | 多题面 |
 | `ProblemNote` | `problemId`, `userId`, `content` | 用户题目笔记 |
 | `TestdataFile` | `problemId`, `filename`, `size`, `md5` | 测试数据 |

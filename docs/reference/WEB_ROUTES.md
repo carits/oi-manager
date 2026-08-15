@@ -50,6 +50,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/platform-admin/submissions` | 平台管理员 | 提交列表 |
 | `/platform-admin/submissions/[id]` | 平台管理员 | 提交详情 |
 | `/platform-admin/users` | 平台管理员 | 用户管理 |
+| `/platform-admin/carits` | 平台管理员 | Carits币只读审计入口（暂未开放） |
+| `/platform-admin/contributions` | 平台管理员 | 贡献只读审计入口（暂未开放） |
 
 ## 资料页（2）
 
@@ -94,12 +96,18 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/submissions` | 个人工作区 | 个人提交 |
 | `/personal/submissions/[id]` | 个人工作区、本人 | 提交详情 |
 | `/personal/rankings` | 个人工作区 | 个人 Rating 与解题排名 |
+| `/personal/carits` | 个人工作区 | Carits币功能说明（暂未开放） |
+| `/personal/contributions` | 个人工作区 | 贡献功能说明（暂未开放） |
 
 ## 组织工作区（1）
 
 学校工作区统一通过 URL 选择当前组织；服务端按组织成员关系验证访问范围。首期仅开放学校组织，页面组件复用现有校园业务页面。
 
 | 路径 | 身份 | 页面 |
+| `/teacher/carits` | 旧校园兼容入口 | Carits币功能说明（暂未开放） |
+| `/teacher/contributions` | 旧校园兼容入口 | 贡献功能说明（暂未开放） |
+| `/student/carits` | 旧校园兼容入口 | Carits币功能说明（暂未开放） |
+| `/student/contributions` | 旧校园兼容入口 | 贡献功能说明（暂未开放） |
 |------|------|------|
 | `/org/[organizationId]/[module]` | 有效学校成员 | 组织概览、校园、成员、团队、作业、比赛、题库、题单或排名 |
 

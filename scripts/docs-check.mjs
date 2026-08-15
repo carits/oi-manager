@@ -200,6 +200,8 @@ const routerPrefixes = {
   adminDataRouter: '/api/admin/data',
   migrationRouter: '/api/admin/migration',
   archivedProblemsRouter: '/api/archived-problems',
+  caritsRouter: '/api/carits',
+  contributionRouter: '/api/contributions',
   rankingRouter: '/api/rankings',
   notificationRouter: '/api/notifications',
   workspaceRouter: '/api/workspaces',

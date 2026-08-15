@@ -31,6 +31,8 @@ import { archivedProblemsRouter } from './routes/archived-problems'
 import { rankingRouter } from './modules/ranking/ranking.routes'
 import { meRouter } from './routes/me'
 import { notificationRouter } from './modules/notification/notification.routes'
+import { caritsRouter } from './modules/carits/carits.routes'
+import { contributionRouter } from './modules/contribution/contribution.routes'
 import { workspaceRouter } from './routes/workspaces'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { startSubmissionPoller } from './lib/submission-poller'
@@ -131,6 +133,8 @@ app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目
 app.use('/api/rankings', rankingRouter)
 app.use('/api/me', meRouter)
 app.use('/api/notifications', authenticate, notificationRouter)
+app.use('/api/carits', authenticate, caritsRouter)
+app.use('/api/contributions', authenticate, contributionRouter)
 app.use('/api/workspaces', workspaceRouter)
 app.use('/api/admin/demo-scenario', demoScenarioRouter)
 

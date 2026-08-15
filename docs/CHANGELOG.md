@@ -1,14 +1,26 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-13
+last_verified: 2026-08-15
 source_of_truth: Git history
 ---
 
 # 变更记录
 
-本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在
-[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-15
+
+### Carits币与贡献 V1
+
+- 新增个人、校园和平台管理端的 Carits币、贡献入口。当前均明确显示“暂未开放”，不会展示
+  余额、流水、贡献值、排行榜或写入操作。
+- 新增 Carits 账户、交易、不可变分录与贡献事件、组织归因、贡献项目的数据基础模型和迁移；
+  不创建任何账户、初始余额、交易、分录或贡献事件。
+- 组织上下文由 URL 对应的有效成员关系解析，服务端请求上下文包含成员关系 ID；工作区读取
+  不再根据旧 `schoolId` 自动补写成员关系。
+- 个人和组织只读接口统一返回 `featureStatus: "planned"` 与中文说明。未来公开贡献榜仅允许
+  返回用户名、头像、贡献值和名次。
+
 
 ## 2026-08-13
 

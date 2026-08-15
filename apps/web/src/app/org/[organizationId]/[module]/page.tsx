@@ -21,6 +21,7 @@ import StudentRankingsPage from '@/app/student/rating/page'
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
+import { PlannedFeaturePage } from '@/components/feature/PlannedFeaturePage'
 
 export default function OrgPage() {
   const { module } = useParams<{ module: string }>()
@@ -50,6 +51,8 @@ export default function OrgPage() {
   if (module === 'contests') return student ? <StudentContestsPage /> : <TeacherContestsPage />
   if (module === 'problems' && !student) return <TeacherProblemsPage />
   if (module === 'problem-lists') return student ? <StudentProblemListsPage /> : <TeacherProblemListsPage />
+  if (module === 'carits') return <PlannedFeaturePage feature="carits" endpoint={`/api/carits/organizations/${organizationId}`} scope="校园" />
+  if (module === 'contributions') return <PlannedFeaturePage feature="contributions" endpoint={`/api/contributions/organizations/${organizationId}`} scope="校园" />
   if (module === 'rankings') return student ? <StudentRankingsPage /> : <TeacherRankingsPage />
   return student ? <StudentHome /> : <TeacherHome />
 }

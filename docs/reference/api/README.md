@@ -12,6 +12,7 @@ HTTP 端点。
 
 | 文档 | 端点范围 |
 |------|----------|
+| [Carits币与贡献](CARITS_AND_CONTRIBUTION.md) | carits、contributions（只读计划状态） |
 | [认证与管理员](AUTH_AND_ADMIN.md) | health、auth、users、stats |
 | [学校与团队](ORGANIZATION_AND_TEAMS.md) | schools、teachers、students、teams、import、milestones |
 | [题目与 OJ](PROBLEMS_AND_OJ.md) | problems、problem-lists、bindings、OJ、archive |
