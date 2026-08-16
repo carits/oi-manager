@@ -55,6 +55,7 @@ export interface WorkspaceSummary {
   memberRole?: string
   relationType?: string
   relationLabel?: string
+  organizationMembershipId?: string
   availableModules: string[]
 }
 

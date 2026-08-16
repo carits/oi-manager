@@ -421,7 +421,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         id: membership.TeacherProfile.id,
         name: membership.TeacherProfile.name,
         avatar: membership.TeacherProfile.avatar,
-        bio: membership.TeacherProfile.bio,
+        organizationRole: membership?.memberRole,
         title: membership.TeacherProfile.title
       }
     } else if (user.Student) {
@@ -459,6 +459,9 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         phone: user.phone,
         email: user.email,
         bio: user.bio,
+        organizationId: organizationId || undefined,
+        organizationMembershipId: membership?.id,
+        organizationRole: membership?.memberRole,
         profile: profileData,
         adminId: user.Admin?.id,
         teacherId: user.Teacher?.id,

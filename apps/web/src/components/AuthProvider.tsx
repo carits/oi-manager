@@ -36,6 +36,8 @@ import type { WorkspaceSummary } from '@oi-manager/shared'
 
 export interface AuthUser {
   userId: string
+  organizationId?: string
+  organizationMembershipId?: string
   username: string
   role: string
   avatar?: string | null
@@ -117,7 +119,7 @@ export function AuthProvider({
   )
 
   const sessionKey = useMemo(
-    () => user ? `${user.role}:${user.organizationRole || 'none'}:${user.userId}:${normalizeWorkspaceMode(user)}` : null,
+    () => user ? `${user.role}:${user.organizationId || 'none'}:${user.organizationRole || 'none'}:${user.userId}:${normalizeWorkspaceMode(user)}` : null,
     [user],
   )
 
@@ -239,17 +241,17 @@ export function AuthProvider({
     switchWorkspace(mode === 'personal' ? 'personal' : 'work')
 
   const activateOrganization = useCallback((workspace: WorkspaceSummary) => {
-    if (workspace.type !== 'organization' || !workspace.schoolId) return
-    setUser(current => current && current.schoolId === workspace.schoolId && current.organizationRole === workspace.memberRole
+    if (workspace.type !== 'organization' || !workspace.organizationId) return
+    setUser(current => current && current.organizationId === workspace.organizationId && current.organizationRole === workspace.memberRole
       ? current
       : current ? {
         ...current,
-        schoolId: workspace.schoolId,
+        organizationId: workspace.organizationId,
+        organizationMembershipId: workspace.organizationMembershipId,
         schoolName: workspace.organizationName,
         organizationRole: workspace.memberRole as 'school_principal' | 'teacher' | 'student',
       } : null)
   }, [])
-
   return (
     <AuthContext.Provider value={{
       user,

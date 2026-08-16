@@ -30,6 +30,7 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     orderBy: { joinedAt: 'asc' }
   })
   const organizations = rows.map(row => ({
+    organizationMembershipId: row.id,
     type: 'organization' as const,
     organizationId: row.organizationId,
     organizationName: row.Organization.name,
