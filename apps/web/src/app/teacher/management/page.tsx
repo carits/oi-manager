@@ -65,7 +65,7 @@ export default function CampusManagementPage() {
         <SegmentedControl label="管理内容" value={activeTab} onChange={setTab} items={items} />
         {activeTab === 'students' && <StudentsManagementContent />}
         {activeTab === 'teachers' && isPrincipal && <TeachersManagementContent />}
-        {activeTab === 'wallet' && organizationId && <WalletPage scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />}
+        {activeTab === 'wallet' && organizationId && <WalletPage embedded scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />}
         {activeTab === 'wallet' && !organizationId && <Empty title="未找到校园" description="当前账号没有可访问的校园资产。" />}
       </div>
     </PageFrame>

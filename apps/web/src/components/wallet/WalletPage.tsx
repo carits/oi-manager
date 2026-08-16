@@ -23,7 +23,7 @@ interface WalletData {
   items: WalletEntry[]
 }
 
-export function WalletPage({ scope, endpoint }: { scope: 'personal' | 'organization'; endpoint: string }) {
+export function WalletPage({ scope, endpoint, embedded = false }: { scope: 'personal' | 'organization'; endpoint: string; embedded?: boolean }) {
   const [data, setData] = useState<WalletData | null>(null)
   const [error, setError] = useState('')
 
@@ -38,10 +38,7 @@ export function WalletPage({ scope, endpoint }: { scope: 'personal' | 'organizat
   }, [endpoint])
 
   const entries = data?.items || []
-  return (
-    <PageFrame width="reading">
-      <PageHeader title={scope === 'personal' ? '我的钱包' : '校园资产'} description={scope === 'personal' ? '查看个人 Carits币资产及其来源。' : '查看当前校园的 Carits币资产与消费记录。'} />
-      <section className={styles.wallet} aria-label="Carits币钱包">
+  const content = <section className={styles.wallet} aria-label="Carits币钱包">
         <div className={styles.summary}>
           <span className={styles.icon}><CircleDollarSign size={24} aria-hidden="true" /></span>
           <div><span className={styles.currency}>Carits币</span>{data?.accountStatus === 'active' && <strong>{data.balance}</strong>}</div>
@@ -58,6 +55,5 @@ export function WalletPage({ scope, endpoint }: { scope: 'personal' | 'organizat
           </div>
         )}
       </section>
-    </PageFrame>
-  )
+  return embedded ? content : <PageFrame width="reading"><PageHeader title={scope === 'personal' ? '我的钱包' : '校园资产'} description={scope === 'personal' ? '查看个人 Carits币资产及其来源。' : '查看当前校园的 Carits币资产与消费记录。'} />{content}</PageFrame>
 }

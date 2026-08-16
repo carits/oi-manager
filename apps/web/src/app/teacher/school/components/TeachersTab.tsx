@@ -199,7 +199,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       {showActions && isPrincipal && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>{!organizationId && transferableTeachers.length > 0 && <Button variant='secondary' onClick={() => transferModal.open()}>转移负责人</Button>}<Button onClick={() => addModal.open()}>添加教师</Button></div>}
       <ManagementToolbar total={total} noun="教师">
         <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索教师" />
-        <select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="principal">学校负责人</option><option value="teacher">教师</option></select>
+        <select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="school_principal">学校负责人</option><option value="teacher">教师</option></select>
         <select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></select>
       </ManagementToolbar>
 
