@@ -34,7 +34,8 @@ organizationMemberRouter.get('/students', authenticate, authorize('teacher', 'sc
   const { page, pageSize } = parsePagination(req.query)
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : ''
   const status = req.query.status === 'active' || req.query.status === 'disabled' ? req.query.status : undefined
-  const headTeacherMembershipId = typeof req.query.headTeacherMembershipId === 'string' && req.query.headTeacherMembershipId ? req.query.headTeacherMembershipId : undefined
+  const requestedHeadTeacherMembershipId = typeof req.query.headTeacherMembershipId === 'string' && req.query.headTeacherMembershipId ? req.query.headTeacherMembershipId : undefined
+  const headTeacherMembershipId = req.user!.role === 'teacher' ? req.user!.organizationMembershipId : requestedHeadTeacherMembershipId
   const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { School: { select: { id: true, schoolType: true, educationSystem: true, educationSystemDetail: true } } } })
   if (!organization?.School) return res.status(404).json({ success: false, message: '???????' })
   const school = organization.School
