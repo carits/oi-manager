@@ -36,9 +36,11 @@ interface HomeTabProps {
   onAnnouncementUpdate: () => void
   onEditSchool?: () => void
   canViewWallet?: boolean
+  announcementEndpoint?: string
+  walletHref?: string
 }
 
-export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool, canViewWallet = false }: HomeTabProps) {
+export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onEditSchool, canViewWallet = false, announcementEndpoint, walletHref }: HomeTabProps) {
   const pathname = usePathname()
   const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const toast = useToast()
@@ -49,7 +51,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
   const saveAnnouncement = async () => {
     setSaving(true)
     try {
-      const result = await apiClient.put(`/api/schools/${school.id}/announcement`, { announcement })
+      const result = await apiClient.put(announcementEndpoint || `/api/schools/${school.id}/announcement`, { announcement })
       if (!result.success) throw new Error(result.message)
       setEditingAnnouncement(false)
       onAnnouncementUpdate()
@@ -125,7 +127,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
 
           {canViewWallet && organizationId && <section className={styles.section}>
             <div className={styles.sectionTitle}><h2>组织钱包</h2></div>
-            <Link href={'/org/' + organizationId + '/wallet'}>查看资产与消费记录</Link>
+            <Link href={walletHref || ('/org/' + organizationId + '/wallet')}>查看资产与消费记录</Link>
           </section>}
 
           <section className={styles.section}>

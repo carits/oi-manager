@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import TeacherHome from '@/app/teacher/page'
 import StudentHome from '@/app/student/page'
-import TeacherSchool from '@/app/teacher/school/page'
-import StudentSchool from '@/app/student/school/page'
+import OrganizationCampusPage from '@/components/campus/OrganizationCampusPage'
 import TeamPage from '@/app/teacher/teams/page'
 import StudentTeamPage from '@/app/student/team/page'
 import TeacherHomeworkPage from '@/app/teacher/homeworks/page'
@@ -56,7 +55,7 @@ export default function OrgPage() {
 
   if (!ready || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
-  if (module === 'campus') return student ? <StudentSchool /> : <TeacherSchool />
+  if (module === 'campus') return <OrganizationCampusPage />
   if (module === 'management' && !student) return <CampusManagementPage />
   if (module === 'teams') return student ? <StudentTeamPage /> : <TeamPage />
   if (module === 'homeworks') return student ? <StudentHomeworkPage /> : <TeacherHomeworkPage />

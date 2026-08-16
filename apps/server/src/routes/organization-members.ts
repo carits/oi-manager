@@ -28,6 +28,64 @@ function normalizeEducationSystemDetail(value: unknown) {
   }
 }
 
+organizationMemberRouter.get('/campus', authenticate, asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { School: { select: { id: true, name: true, shortName: true, description: true, announcement: true, region: true, schoolType: true, schoolNature: true, educationSystem: true, educationSystemDetail: true, contactPerson: true, contactPhone: true, contactEmail: true, status: true, currentPrincipalTeacherId: true, currentPrincipalMembershipId: true } } },
+  })
+  if (!organization?.School) return res.status(404).json({ success: false, message: '未找到校园资料' })
+  const school = organization.School
+  const principal = school.currentPrincipalMembershipId
+    ? await prisma.organizationTeacherProfile.findUnique({ where: { membershipId: school.currentPrincipalMembershipId }, select: { name: true, title: true } })
+    : null
+  const canViewContact = req.user?.role === 'school_principal'
+  res.json({ success: true, data: {
+    ...school,
+    principal,
+    contactPhone: canViewContact ? school.contactPhone : maskContact(school.contactPhone),
+    contactEmail: canViewContact ? school.contactEmail : maskEmail(school.contactEmail),
+    contactMasked: !canViewContact,
+  } })
+}, '查看校园资料'))
+
+organizationMemberRouter.put('/campus', authenticate, authorize('school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { School: { select: { id: true } } } })
+  if (!organization?.School) return res.status(404).json({ success: false, message: '未找到校园资料' })
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
+  if (!name) return res.status(400).json({ success: false, message: '请填写校园名称' })
+  const text = (key: string) => req.body[key] === undefined ? undefined : typeof req.body[key] === 'string' ? req.body[key].trim() || null : null
+  const educationSystem = ['6-3-3', '5-4-3', '6-3', '5-4', 'custom'].includes(req.body.educationSystem) ? req.body.educationSystem : undefined
+  await prisma.school.update({ where: { id: organization.School.id }, data: {
+    name, shortName: text('shortName'), description: text('description'), region: text('region'), schoolType: text('schoolType'), schoolNature: text('schoolNature'), contactPerson: text('contactPerson'), contactPhone: text('contactPhone'), contactEmail: text('contactEmail'),
+    educationSystem, educationSystemDetail: req.body.educationSystem === 'custom' ? req.body.educationSystemDetail : educationSystem ? null : undefined,
+  } })
+  res.json({ success: true })
+}, '编辑校园资料'))
+
+organizationMemberRouter.put('/campus/announcement', authenticate, authorize('school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { School: { select: { id: true } } } })
+  if (!organization?.School) return res.status(404).json({ success: false, message: '未找到校园资料' })
+  await prisma.school.update({ where: { id: organization.School.id }, data: { announcement: typeof req.body.announcement === 'string' ? req.body.announcement.trim() || null : null } })
+  res.json({ success: true })
+}, '编辑校园公告'))
+
+function maskContact(value: string | null) {
+  if (!value) return null
+  return value.length > 7 ? value.slice(0, 3) + ' **** ' + value.slice(-4) : '已隐藏'
+}
+
+function maskEmail(value: string | null) {
+  if (!value) return null
+  const [name, domain] = value.split('@')
+  return domain ? (name.slice(0, 2) || '*') + '***@' + domain : '已隐藏'
+}
+
 organizationMemberRouter.get('/students', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
   const organizationId = requireOrganizationContext(req, res)
   if (!organizationId) return

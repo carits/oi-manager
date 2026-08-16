@@ -14,6 +14,7 @@ interface EditSchoolModalProps {
   school: CampusSchool
   onClose: () => void
   onSuccess: () => void
+  endpoint?: string
 }
 
 const educationOptions = [
@@ -37,7 +38,7 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
   )
 }
 
-export default function EditSchoolModal({ school, onClose, onSuccess }: EditSchoolModalProps) {
+export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }: EditSchoolModalProps) {
   const toast = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [province, setProvince] = useState('')
@@ -72,7 +73,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess }: EditScho
       setSubmitting(true)
       try {
         const region = [province, city, district].filter(Boolean).join('/')
-        const result = await apiClient.put(`/api/schools/${school.id}`, {
+        const result = await apiClient.put(endpoint || `/api/schools/${school.id}`, {
           name: values.name,
           shortName: values.shortName || null,
           description: values.description || null,
