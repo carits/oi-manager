@@ -1,6 +1,5 @@
 import { LoginForm } from './LoginForm'
 import { redirect } from 'next/navigation'
-import { getRoleHome } from '@/lib/roleAccess'
 import { getServerSession } from '@/lib/serverSession'
 
 interface LoginPageProps {
@@ -13,7 +12,7 @@ interface LoginPageProps {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await getServerSession()
   if (session.state === 'authenticated') {
-    redirect(getRoleHome(session.user.role))
+    redirect('/identity')
   }
 
   const rawNext = Array.isArray(searchParams?.next)

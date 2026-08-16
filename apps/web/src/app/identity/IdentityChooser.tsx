@@ -16,30 +16,21 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
 
   useEffect(() => {
     void apiClient.get<Payload>('/api/workspaces').then(result => {
-      if (!result.success || !result.data) { setError(result.message || '身份列表加载失败'); return }
+      if (!result.success || !result.data) {
+        setError(result.message || '身份列表加载失败')
+        return
+      }
       const items = result.data.workspaces
       setWorkspaces(items)
       if (items.length === 1) window.location.replace(workspaceHref(items[0], 'overview'))
     })
   }, [])
 
-  const enter = async (workspace: WorkspaceSummary) => {
-    const key = workspace.organizationId || workspace.type
-    setEntering(key)
-    setError('')
-    const workspaceMode = workspace.type === 'personal' ? 'personal' : 'work'
-    const result = await apiClient.mutate<{ workspaceMode: 'work' | 'personal' }>(
-      '/api/auth/switch-workspace',
-      'POST',
-      { workspaceMode },
-    )
-    if (!result.ok) {
-      setEntering(null)
-      setError(result.error.message || '身份切换失败，请重试')
-      return
-    }
+  const enter = (workspace: WorkspaceSummary) => {
+    setEntering(workspace.organizationId || workspace.type)
     window.location.assign(workspaceHref(workspace, 'overview'))
   }
+
   return <main className={styles.page}>
     <section className={styles.panel} aria-labelledby="identity-title">
       <img className={styles.logo} src="/logo.png" alt="Carits" />
@@ -50,7 +41,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
         const Icon = workspace.type === 'platform' ? ShieldCheck : workspace.type === 'personal' ? UserRound : Building2
         const title = workspace.type === 'platform' ? '平台管理' : workspace.type === 'personal' ? '个人' : workspace.organizationName || '校园'
         const subtitle = workspace.type === 'platform' ? '平台管理员' : workspace.type === 'personal' ? user.username : workspace.relationLabel || '校园身份'
-        return <button key={workspace.organizationId || workspace.type} type="button" className={styles.item} onClick={() => void enter(workspace)} disabled={entering !== null}><span className={styles.icon}><Icon size={20} /></span><span><strong>{title}</strong><small>{subtitle}</small></span><ChevronRight size={18} /></button>
+        return <button key={workspace.organizationId || workspace.type} type="button" className={styles.item} onClick={() => enter(workspace)} disabled={entering !== null}><span className={styles.icon}><Icon size={20} /></span><span><strong>{title}</strong><small>{subtitle}</small></span><ChevronRight size={18} /></button>
       })}</div>}
     </section>
   </main>
