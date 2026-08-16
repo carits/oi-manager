@@ -94,6 +94,9 @@ model ContestProblemScore {
   contestId      String
   problemId      String
   studentId      String
+  studentProfileId String?
+  studentNameSnapshot String?
+  usernameSnapshot String?
   score          Float?
   note           String?
   createdAt      DateTime       @default(now())
@@ -101,8 +104,10 @@ model ContestProblemScore {
   Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  OrganizationStudentProfile OrganizationStudentProfile? @relation("ContestProblemScoreStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
 
   @@unique([contestId, problemId, studentId])
+  @@index([studentProfileId])
 }
 
 model ContestRecord {
@@ -139,6 +144,9 @@ model ContestResult {
   id           String   @id
   contestId    String
   studentId    String
+  studentProfileId String?
+  studentNameSnapshot String?
+  usernameSnapshot String?
   rank         Int?
   score        Float?
   ratingBefore Int
@@ -149,10 +157,12 @@ model ContestResult {
   updatedAt    DateTime @default(now())
   Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
   Student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  OrganizationStudentProfile OrganizationStudentProfile? @relation("ContestResultStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
 
   @@unique([contestId, studentId])
   @@index([createdAt])
   @@index([studentId])
+  @@index([studentProfileId])
 }
 
 model ContestUserProblemStatus {
@@ -227,6 +237,10 @@ model Milestone {
   id            String   @id
   studentId     String
   teacherId     String
+  studentMembershipId String?
+  teacherMembershipId String?
+  studentNameSnapshot String?
+  teacherNameSnapshot String?
   title         String
   description   String?
   milestoneDate DateTime
@@ -235,10 +249,14 @@ model Milestone {
   updatedAt     DateTime @default(now())
   Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   Teacher       Teacher  @relation(fields: [teacherId], references: [id])
+  StudentMembership OrganizationMembership? @relation("MilestoneStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Restrict)
+  TeacherMembership OrganizationMembership? @relation("MilestoneTeacherMembership", fields: [teacherMembershipId], references: [id], onDelete: Restrict)
 
   @@index([milestoneDate])
   @@index([studentId])
   @@index([teacherId])
+  @@index([studentMembershipId])
+  @@index([teacherMembershipId])
 }
 
 model OjAccount {
@@ -334,14 +352,22 @@ model PrincipalTransferLog {
   organizationId        String?
   oldPrincipalTeacherId String?
   newPrincipalTeacherId String
+  oldPrincipalMembershipId String?
+  newPrincipalMembershipId String?
+  oldPrincipalNameSnapshot String?
+  newPrincipalNameSnapshot String?
   result                String
   message               String?
   createdAt             DateTime @default(now())
   operatorId            String
   School                School   @relation(fields: [schoolId], references: [id])
   Organization          Organization? @relation(fields: [organizationId], references: [id])
+  OldPrincipalMembership OrganizationMembership? @relation("FormerPrincipalMembership", fields: [oldPrincipalMembershipId], references: [id], onDelete: Restrict)
+  NewPrincipalMembership OrganizationMembership? @relation("NewPrincipalMembership", fields: [newPrincipalMembershipId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@index([oldPrincipalMembershipId])
+  @@index([newPrincipalMembershipId])
 }
 
 model Problem {
@@ -602,10 +628,14 @@ model OrganizationMembership {
   joinedAt       DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
   StudentProfile OrganizationStudentProfile?
   TeacherProfile OrganizationTeacherProfile?
+  StudentMilestones Milestone[] @relation("MilestoneStudentMembership")
+  TeacherMilestones Milestone[] @relation("MilestoneTeacherMembership")
+  FormerPrincipalTransfers PrincipalTransferLog[] @relation("FormerPrincipalMembership")
+  NewPrincipalTransfers PrincipalTransferLog[] @relation("NewPrincipalMembership")
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -627,7 +657,10 @@ model OrganizationStudentProfile {
   status                  String                 @default("active")
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
-  Membership              OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  Membership              OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  ContestProblemScores ContestProblemScore[] @relation("ContestProblemScoreStudentProfile")
+  ContestResults ContestResult[] @relation("ContestResultStudentProfile")
+  ExternalAccounts TeamMemberExternalAccount[] @relation("ExternalAccountStudentProfile")
 
   @@index([headTeacherMembershipId])
   @@index([status])
@@ -645,7 +678,7 @@ model OrganizationTeacherProfile {
   status       String                 @default("active")
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
-  Membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  Membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
 
   @@index([status])
 }
@@ -968,6 +1001,8 @@ model TeamMemberExternalAccount {
   id               String   @id
   teamId           String
   studentId        String?
+  studentProfileId String?
+  studentNameSnapshot String?
   platform         String
   platformUsername String
   displayName      String?
@@ -976,11 +1011,13 @@ model TeamMemberExternalAccount {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now())
   Student          Student? @relation(fields: [studentId], references: [id])
+  OrganizationStudentProfile OrganizationStudentProfile? @relation("ExternalAccountStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
   Team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, platform, platformUsername])
   @@index([platform, platformUsername])
   @@index([studentId])
+  @@index([studentProfileId])
 }
 
 model TeamMemberImportBatch {
@@ -1014,8 +1051,10 @@ model TeamMemberImportItem {
   matchType             String
   matchStatus           String                @default("pending")
   matchedStudentId      String?
+  matchedStudentProfileId String?
   matchedStudentName    String?
   createdStudentId      String?
+  createdStudentProfileId String?
   action                String?
   userChoice            String?
   errorMessage          String?
@@ -1025,6 +1064,8 @@ model TeamMemberImportItem {
 
   @@index([batchId])
   @@index([matchType])
+  @@index([matchedStudentProfileId])
+  @@index([createdStudentProfileId])
 }
 
 model TeamOperationLog {

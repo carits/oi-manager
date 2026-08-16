@@ -19,7 +19,9 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "migrate:school-problem-files": "tsx scripts/migrate-school-problem-files.ts",
     "migrate:organization-model:check": "tsx scripts/migrate-organization-model.ts",
-    "migrate:organization-model:apply": "tsx scripts/migrate-organization-model.ts --apply"
+    "migrate:organization-model:apply": "tsx scripts/migrate-organization-model.ts --apply",
+    "migrate:organization-history:check": "tsx scripts/migrate-organization-history.ts",
+    "migrate:organization-history:apply": "tsx scripts/migrate-organization-history.ts --apply"
   },
   "dependencies": {
     "@oi-manager/shared": "workspace:*",
