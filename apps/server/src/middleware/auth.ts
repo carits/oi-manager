@@ -33,7 +33,6 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
-    decoded.workspaceMode = getWorkspaceMode(decoded)
     const organizationId = req.get('x-oi-organization-id')
     if (organizationId) {
       const membership = await prisma.organizationMembership.findFirst({
@@ -41,18 +40,13 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         select: {
           id: true,
           memberRole: true,
-          Organization: { select: { School: { select: { id: true } } } }
         }
       })
       if (!membership) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
-      const schoolId = membership.Organization.School?.id
       decoded.organizationId = organizationId
       decoded.organizationMembershipId = membership.id
       // 校园权限只取当前成员关系：同一账号在不同校园可拥有不同身份。
       decoded.role = membership.memberRole as UserRole
-    }
-    if (decoded.role === 'student' && !decoded.studentMode) {
-      decoded.studentMode = decoded.workspaceMode === 'personal' ? 'personal' : 'campus'
     }
     req.user = decoded
     req.authSource = bearerToken ? 'bearer' : 'cookie'
@@ -63,7 +57,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 }
 
 export function getActiveOrganizationId(user?: JwtPayload): string | undefined {
-  return getWorkspaceMode(user) === 'work' ? user?.organizationId : undefined
+  return user?.organizationId
 }
 
 export function authorize(...roles: UserRole[]) {
@@ -113,9 +107,9 @@ export function getUserType(role: string): 'teacher' | 'student' {
 }
 
 export function getWorkspaceMode(user?: JwtPayload): WorkspaceMode {
-  if (user?.workspaceMode === 'personal') return 'personal'
-  if (user?.studentMode === 'personal') return 'personal'
-  return 'work'
+  // Context is URL/header-derived: an authenticated organization membership means campus;
+  // every request without an organization context is personal.
+  return user?.organizationId ? 'work' : 'personal'
 }
 
 export function getResourceScope(user?: JwtPayload): ResourceScope {

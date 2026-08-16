@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { Router } from 'express'
 import { asyncHandler } from '../lib/asyncHandler'
-import { authenticate, getWorkspaceMode } from '../middleware/auth'
+import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { notificationService } from '../modules/notification/notification.service'
 
@@ -48,8 +48,8 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {
-  if (getWorkspaceMode(req.user) !== 'work') return res.status(403).json({ success: false, message: '请先进入校园工作区' })
   const organizationId = req.params.id
+  if (req.user!.organizationId !== organizationId) return res.status(403).json({ success: false, message: 'organization context is required' })
   const sender = await prisma.organizationMembership.findFirst({ where: { organizationId, userId: req.user!.userId, status: 'active' } })
   if (!sender || sender.memberRole !== 'school_principal') return res.status(403).json({ success: false, message: '只有学校负责人可以邀请成员' })
   const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
