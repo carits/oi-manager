@@ -12,6 +12,7 @@ import { schoolRouter } from './modules/school/school.routes'
 import { userRouter } from './routes/users'
 import { statsRouter } from './routes/stats'
 import { teacherRouter } from './routes/teachers'
+import { organizationMemberRouter } from './routes/organization-members'
 import { problemsRouter } from './modules/problem/problem.routes'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { filesRouter } from './routes/files'
@@ -107,6 +108,7 @@ app.use('/public', express.static(path.join(STORAGE_ROOT, 'public')))
 // ==================== API 路由 ====================
 
 app.use('/api/auth', authRouter)
+app.use('/api/organizations/:organizationId/members', authenticate, requireWorkspace('work'), organizationMemberRouter)
 app.use('/api/students', authenticate, requireWorkspace('work'), studentRouter)
 app.use('/api/milestones', milestoneRouter)
 app.use('/api/teams', teamRouter)
