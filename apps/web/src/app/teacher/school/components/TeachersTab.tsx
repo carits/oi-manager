@@ -26,6 +26,9 @@ interface Teacher {
   title: string | null
   email: string | null
   phone: string | null
+  membershipId?: string
+  memberRole?: string
+  status?: string
   user: {
     username: string
     status: string
@@ -38,9 +41,11 @@ interface TeachersTabProps {
   isPrincipal: boolean
   showHeader?: boolean
   showActions?: boolean
+  organizationId?: string
 }
 
-export default function TeachersTab({ school, isPrincipal, showHeader = false, showActions = true }: TeachersTabProps) {
+export default function TeachersTab({ school, isPrincipal, showHeader = false, showActions = true, organizationId }: TeachersTabProps) {
+  const teachersEndpoint = organizationId ? '/api/organizations/' + organizationId + '/members/teachers' : '/api/schools/' + school.id + '/teachers'
   const toast = useToast()
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,13 +71,13 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
   useEffect(() => {
     fetchTeachers()
-  }, [school.id, pagination.page, pagination.pageSize, filters])
+  }, [teachersEndpoint, pagination.page, pagination.pageSize, filters])
 
   const fetchTeachers = async () => {
     setLoading(true)
     try {
       const result = await apiClient.get<{ data: Teacher[]; total: number }>(
-        `/api/schools/${school.id}/teachers?${new URLSearchParams({ page: String(pagination.page), pageSize: String(pagination.pageSize), ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) })}`
+        teachersEndpoint + '?' + new URLSearchParams({ page: String(pagination.page), pageSize: String(pagination.pageSize), ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) })
       )
       if (result.success) {
         setTeachers(result.data?.data || [])
@@ -93,7 +98,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       danger: true,
       onConfirm: async () => {
         try {
-          const result = await apiClient.delete(`/api/teachers/${id}`)
+          const result = await apiClient.delete(organizationId ? teachersEndpoint + '/' + id : '/api/teachers/' + id)
           if (result.success) {
             toast.success('删除成功')
             fetchTeachers()
@@ -110,7 +115,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   }
 
   const handleToggleStatus = async (teacher: Teacher) => {
-    const newStatus = teacher.user.status === 'active' ? 'disabled' : 'active'
+    const newStatus = (teacher.status || teacher.user.status) === 'active' ? 'disabled' : 'active'
     const action = newStatus === 'active' ? '启用' : '禁用'
 
     setConfirmState({
@@ -120,7 +125,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       danger: newStatus === 'disabled',
       onConfirm: async () => {
         try {
-          const result = await apiClient.put(`/api/teachers/${teacher.id}/status`, { status: newStatus })
+          const result = await apiClient.put(organizationId ? teachersEndpoint + '/' + teacher.id + '/status' : '/api/teachers/' + teacher.id + '/status', { status: newStatus })
           if (result.success) {
             toast.success(`${action}成功`)
             fetchTeachers()
@@ -171,7 +176,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
   }
 
   const transferableTeachers = teachers.filter(
-    (t) => t.id !== school.currentPrincipalTeacherId && t.user.status === 'active'
+    (t) => (organizationId ? t.memberRole !== 'school_principal' : t.id !== school.currentPrincipalTeacherId) && (t.status || t.user.status) === 'active'
   )
 
   const totalPages = Math.ceil(total / pagination.pageSize)
@@ -191,7 +196,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
   return (
     <div className={managementListStyles.page}>
-      {showActions && isPrincipal && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>{transferableTeachers.length > 0 && <Button variant="secondary" onClick={() => transferModal.open()}>转移负责人</Button>}<Button onClick={() => addModal.open()}>添加教师</Button></div>}
+      {showActions && isPrincipal && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>{!organizationId && transferableTeachers.length > 0 && <Button variant='secondary' onClick={() => transferModal.open()}>转移负责人</Button>}<Button onClick={() => addModal.open()}>添加教师</Button></div>}
       <ManagementToolbar total={total} noun="教师">
         <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索教师" />
         <select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="principal">学校负责人</option><option value="teacher">教师</option></select>
@@ -210,7 +215,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
           {
             key: 'role', label: '身份', width: '18%',
             render: (teacher) =>
-              teacher.id === school.currentPrincipalTeacherId ? '学校负责人' : '教师'
+ organizationId ? (teacher.memberRole === 'school_principal' ? '学校负责人' : '教师') : (teacher.id === school.currentPrincipalTeacherId ? '学校负责人' : '教师')
           },
           {
             key: 'contact', label: '联系方式', width: '26%',
@@ -219,7 +224,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
               return <span className={managementListStyles.contact}><span>{teacher.email || '-'}</span>{phone && <span className={managementListStyles.contactSecondary}>{phone}</span>}</span>
             }
           },
-          { key: 'status', label: '状态', width: '14%', render: teacher => <Badge variant={teacher.user.status === 'active' ? 'success' : 'neutral'} dot>{teacher.user.status === 'active' ? '正常' : '已禁用'}</Badge>
+ { key: 'status', label: '状态', width: '14%', render: teacher => <Badge variant={(teacher.status || teacher.user.status) === 'active' ? 'success' : 'neutral'} dot>{(teacher.status || teacher.user.status) === 'active' ? '正常' : '已禁用'}</Badge>
           }
         ]}
         actions={
@@ -229,7 +234,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
                   <Button variant="text" onClick={() => addModal.open(teacher)}>
                     编辑
                   </Button>
-                  {teacher.id !== school.currentPrincipalTeacherId && <ActionMenu><ActionMenuItem onClick={() => handleToggleStatus(teacher)}>{teacher.user.status === 'active' ? '禁用账号' : '启用账号'}</ActionMenuItem><ActionMenuItem danger onClick={() => handleDelete(teacher.id)}>删除教师</ActionMenuItem></ActionMenu>}
+ {(organizationId ? teacher.memberRole !== 'school_principal' : teacher.id !== school.currentPrincipalTeacherId) && <ActionMenu><ActionMenuItem onClick={() => handleToggleStatus(teacher)}>{(teacher.status || teacher.user.status) === 'active' ? '禁用账号' : '启用账号'}</ActionMenuItem><ActionMenuItem danger onClick={() => handleDelete(teacher.id)}>删除教师</ActionMenuItem></ActionMenu>}
                 </>
               )
             : undefined
@@ -254,6 +259,8 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
         <TeacherFormModal
           teacher={addModal.data}
           schoolId={school.id}
+          organizationId={organizationId}
+          teachersEndpoint={teachersEndpoint}
           onClose={addModal.close}
           onSuccess={() => {
             addModal.close()
@@ -308,11 +315,15 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 }
 
 function TeacherFormModal({
+  organizationId,
+  teachersEndpoint,
   teacher,
   schoolId,
   onClose,
   onSuccess
 }: {
+  organizationId?: string
+  teachersEndpoint: string
   teacher: Teacher | null
   schoolId: string
   onClose: () => void
@@ -354,8 +365,8 @@ function TeacherFormModal({
         }
 
         const result = teacher
-          ? await apiClient.put(`/api/schools/current/teachers/${teacher.id}`, body)
-          : await apiClient.post('/api/schools/current/teachers', body)
+          ? await apiClient.put(teachersEndpoint + '/' + teacher.id, body)
+          : await apiClient.post(teachersEndpoint, body)
 
         if (result.success) {
           onSuccess()

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import TeachersTab from '@/app/teacher/school/components/TeachersTab'
@@ -17,18 +17,25 @@ interface School {
 
 export default function TeachersManagementContent() {
   const { user } = useAuth()
+  const { organizationId } = useParams<{ organizationId?: string }>()
   const [school, setSchool] = useState<School | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPrincipal, setIsPrincipal] = useState(false)
 
   useEffect(() => {
+    if (organizationId) {
+      setSchool({ id: organizationId, name: '', currentPrincipalTeacherId: null })
+      setIsPrincipal(user?.organizationRole === 'school_principal')
+      setLoading(false)
+      return
+    }
     if (user?.schoolId) {
       fetchSchool()
       checkPrincipal()
     } else {
       setLoading(false)
     }
-  }, [user?.schoolId])
+  }, [organizationId, user?.schoolId, user?.organizationRole])
 
   const fetchSchool = async () => {
     try {
@@ -75,7 +82,7 @@ export default function TeachersManagementContent() {
   return (
     <div className={styles.page}>
       <PageHeader title="教师" description="管理本校教师账号与身份" />
-      <TeachersTab school={school} isPrincipal={isPrincipal} showActions={true} />
+      <TeachersTab school={school} isPrincipal={isPrincipal} showActions={true} organizationId={organizationId} />
     </div>
   )
 }
