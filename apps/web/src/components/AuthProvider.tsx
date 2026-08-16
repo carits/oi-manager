@@ -73,9 +73,6 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<LoginResult>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
-  switchWorkspace: (mode: WorkspaceMode, targetPath?: string) => Promise<boolean>
-  /** @deprecated Use switchWorkspace. */
-  switchMode: (mode: 'campus' | 'personal') => Promise<boolean>
   activateOrganization: (workspace: WorkspaceSummary) => void
   isAuthenticated: boolean
   sessionKey: string | null
@@ -199,46 +196,6 @@ export function AuthProvider({
     }
   }
 
-  const switchWorkspace = async (mode: WorkspaceMode, targetPath?: string) => {
-    if (!user || normalizeWorkspaceMode(user) === mode) return true
-
-    const currentMode = normalizeWorkspaceMode(user)
-    setLastWorkspacePath(
-      user.userId,
-      user.role,
-      currentMode,
-      `${window.location.pathname}${window.location.search}`,
-    )
-
-    const result = await apiClient.mutate<{
-      workspaceMode: WorkspaceMode
-      studentMode?: 'campus' | 'personal'
-    }>(
-      '/api/auth/switch-workspace',
-      'POST',
-      { workspaceMode: mode },
-    )
-    if (!result.ok) return false
-
-    await mutateCache(() => true, undefined, { revalidate: false })
-    const nextMode = result.data.workspaceMode
-    const legacyMode = nextMode === 'personal' ? 'personal' : 'campus'
-    setWorkspaceMode(nextMode)
-    setLastWorkspaceMode(nextMode)
-    setAccountWorkspaceMode(user.username, user.role, nextMode)
-    setStudentMode(legacyMode)
-    setLastStudentMode(legacyMode)
-    setUser(current => current
-      ? { ...current, workspaceMode: nextMode, studentMode: legacyMode }
-      : null)
-    const target = targetPath || getLastWorkspacePath(user.userId, user.role, nextMode)
-      || (nextMode === 'personal' ? '/personal' : getRoleHome(user.role))
-    window.location.assign(target)
-    return true
-  }
-
-  const switchMode = (mode: 'campus' | 'personal') =>
-    switchWorkspace(mode === 'personal' ? 'personal' : 'work')
 
   const activateOrganization = useCallback((workspace: WorkspaceSummary) => {
     if (workspace.type !== 'organization' || !workspace.organizationId) return
@@ -262,8 +219,6 @@ export function AuthProvider({
       login,
       logout,
       refreshUser,
-      switchWorkspace,
-      switchMode,
       activateOrganization,
       isAuthenticated: Boolean(user),
       sessionKey,

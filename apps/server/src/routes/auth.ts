@@ -7,7 +7,7 @@ import path from 'path'
 import fs from 'fs'
 import { prisma } from '../prisma'
 import { authenticate, getWorkspaceMode } from '../middleware/auth'
-import { LoginRequest, JwtPayload, UserRole, WorkspaceMode } from '@oi-manager/shared'
+import { LoginRequest, JwtPayload, UserRole } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { clearSessionCookie, setSessionCookie } from '../lib/sessionCookie'
@@ -76,40 +76,6 @@ function renewablePayload(payload: JwtPayload): JwtPayload {
   return claims
 }
 
-function normalizeRequestedWorkspace(
-  workspaceMode?: WorkspaceMode,
-  legacyMode?: 'campus' | 'personal'
-): WorkspaceMode {
-  if (workspaceMode === 'personal' || legacyMode === 'personal') return 'personal'
-  return 'work'
-}
-
-async function issueWorkspaceSession(
-  user: JwtPayload,
-  workspaceMode: WorkspaceMode,
-  res: Response
-) {
-  if (workspaceMode === 'personal') {
-    await prisma.personalProfile.upsert({
-      where: { userId: user.userId },
-      create: { userId: user.userId },
-      update: {}
-    })
-  }
-
-  const newPayload: JwtPayload = {
-    ...renewablePayload(user),
-    workspaceMode,
-    ...(user.role === 'student'
-      ? { studentMode: workspaceMode === 'personal' ? 'personal' : 'campus' }
-      : { studentMode: undefined })
-  }
-  const token = jwt.sign(newPayload, getJwtSecret(), { expiresIn: '7d' })
-  setSessionCookie(res, token)
-  return { token, payload: newPayload }
-}
-
-// 登录
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body as { username: string; password: string }
@@ -619,53 +585,6 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
   }
 })
 
-authRouter.post('/switch-workspace', authenticate, async (req: Request, res: Response) => {
-  try {
-    const { workspaceMode } = req.body as { workspaceMode: WorkspaceMode }
-    const user = (req as any).user as JwtPayload
-
-    if (workspaceMode !== 'work' && workspaceMode !== 'personal') {
-      return res.status(400).json({ success: false, message: '无效的工作区参数' })
-    }
-
-    const previousMode = getWorkspaceMode(user)
-    const { token, payload } = await issueWorkspaceSession(user, workspaceMode, res)
-
-    logger.audit('switch_workspace', {
-      userId: user.userId,
-      action: 'switch_workspace',
-      metadata: { from: previousMode, to: workspaceMode, role: user.role }
-    })
-
-    res.json({
-      success: true,
-      data: { token, workspaceMode, studentMode: payload.studentMode }
-    })
-  } catch (error) {
-    logger.error('switch_workspace_error', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
-
-// Deprecated compatibility alias for clients that still send campus/personal.
-authRouter.post('/switch-mode', authenticate, async (req: Request, res: Response) => {
-  try {
-    const { mode } = req.body as { mode: 'campus' | 'personal' }
-    if (mode !== 'campus' && mode !== 'personal') {
-      return res.status(400).json({ success: false, message: '无效的模式参数' })
-    }
-    const user = (req as any).user as JwtPayload
-    const workspaceMode: WorkspaceMode = mode === 'personal' ? 'personal' : 'work'
-    const { token, payload } = await issueWorkspaceSession(user, workspaceMode, res)
-    res.json({
-      success: true,
-      data: { token, workspaceMode, studentMode: payload.studentMode || mode }
-    })
-  } catch (error) {
-    logger.error('switch_mode_compatibility_error', error)
-    res.status(500).json({ success: false, message: '服务器错误' })
-  }
-})
 
 // 修改密码
 authRouter.put('/password', passwordLimiter, authenticate, async (req: Request, res: Response) => {
