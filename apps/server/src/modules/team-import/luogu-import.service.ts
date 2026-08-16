@@ -91,7 +91,7 @@ export class LuoguImportService {
   async importMembers(
     userId: string,
     teacherId: string,
-    schoolId: string,
+    organizationId: string,
     request: LuoguImportRequest,
     user: any
   ): Promise<LuoguImportResult> {
@@ -109,7 +109,7 @@ export class LuoguImportService {
         data: {
           id: request.teamId || request.luoguTeamId || `luogu-${Date.now()}`,
           name: request.teamName || `洛谷导入团队-${Date.now()}`,
-          schoolId,
+          organizationId,
           isPublic: request.visibility === 'public',
           announcement: request.announcement || null,
           createdAt: new Date(),
@@ -133,7 +133,7 @@ export class LuoguImportService {
     } else if (request.teamId) {
       const team = await prisma.team.findUnique({ where: { id: request.teamId } })
       if (!team) throw new Error('团队不存在')
-      if (team.schoolId !== schoolId) throw new Error('只能导入到本校团队')
+      if (team.organizationId !== organizationId) throw new Error('只能导入到本校团队')
       teamName = team.name
     }
 
@@ -178,26 +178,34 @@ export class LuoguImportService {
 
           const student = await prisma.$transaction(async (tx) => {
             const newUser = await tx.user.create({
+              data: { id: uuidv4(), username: systemUsername, passwordHash, role: "user", status: "active" },
+            })
+            const membership = await tx.organizationMembership.create({
               data: {
                 id: uuidv4(),
-                username: systemUsername,
-                passwordHash,
-                role: 'student',
-                status: 'active',
-                schoolId
-              }
+                organizationId,
+                userId: newUser.id,
+                memberRole: "student",
+                relationType: "enrolled",
+                status: "active",
+                joinedAt: new Date(),
+              },
             })
-
-            return tx.student.create({
+            const headTeacher = await tx.organizationMembership.findFirst({
+              where: { organizationId, userId: teacherId, status: "active", memberRole: { in: ["teacher", "school_principal"] } },
+              select: { id: true },
+            })
+            const profile = await tx.organizationStudentProfile.create({
               data: {
-                id: newUser.id,
+                id: uuidv4(),
+                membershipId: membership.id,
                 name: studentName,
                 gender: member.gender || null,
-                schoolId,
                 enrollmentYear: member.enrollmentYear || null,
-                headTeacherId: teacherId
-              }
+                headTeacherMembershipId: headTeacher?.id || null,
+              },
             })
+            return { id: newUser.id, profileId: profile.id }
           })
 
           // 绑定洛谷账号

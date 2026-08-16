@@ -14,5 +14,5 @@ replacement: docs/architecture/modules/TEAMS.md
 - [并发冲突规则](TEAM_CONFLICT_RULES.md)
 
 当前行为以[团队模块](../../../architecture/modules/TEAMS.md)和
-[学校与团队 API](../../../reference/api/ORGANIZATION_AND_TEAMS.md)为准。
+[学校与团队 API](../../../reference/api/README.md)为准。
 

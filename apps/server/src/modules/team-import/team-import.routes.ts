@@ -13,6 +13,7 @@ import type { ImportPlatform } from './team-import.types'
 export const teamImportRouter = Router()
 const service = new TeamImportService()
 
+
 // ==================== VJudge 导入相关路由 ====================
 
 /**
@@ -77,11 +78,11 @@ teamImportRouter.post('/vjudge/preview', authenticate, async (req: Request, res:
       })
     }
 
-    const schoolId = user.schoolId
-    if (!schoolId) {
+    const organizationId = user.organizationId
+    if (!organizationId) {
       return res.status(400).json({
         success: false,
-        message: '用户未关联学校'
+        message: '缺少有效组织上下文'
       })
     }
 
@@ -133,12 +134,12 @@ teamImportRouter.post('/vjudge/validate', authenticate, async (req: Request, res
       return res.status(400).json({ success: false, message: '缺少成员列表' })
     }
 
-    const schoolId = user.schoolId
-    if (!schoolId) {
-      return res.status(400).json({ success: false, message: '用户未关联学校' })
+    const organizationId = user.organizationId
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: '缺少有效组织上下文' })
     }
 
-    const results = await vjudgeImportService.validateMembers(schoolId, members)
+    const results = await vjudgeImportService.validateMembers(organizationId, members)
 
     res.json({ success: true, data: results })
   } catch (err) {
@@ -176,9 +177,9 @@ teamImportRouter.post('/vjudge/import', authenticate, async (req: Request, res: 
     // createTeam 参数由前端传入，不再需要验证
 
     const teacherId = user.userId
-    const schoolId = user.schoolId
+    const organizationId = user.organizationId
 
-    if (!teacherId || !schoolId) {
+    if (!teacherId || !organizationId) {
       return res.status(400).json({
         success: false,
         message: '教师信息不完整'
@@ -188,7 +189,7 @@ teamImportRouter.post('/vjudge/import', authenticate, async (req: Request, res: 
     const result = await vjudgeImportService.importMembers(
       user.userId,
       teacherId,
-      schoolId,
+      organizationId,
       { teamId, createTeam, visibility, teamName, vjudgeGroupId, members, announcement, description, avatarUrl },
       user
     )
@@ -283,12 +284,12 @@ teamImportRouter.post('/luogu/validate', authenticate, async (req: Request, res:
       return res.status(400).json({ success: false, message: '缺少成员列表' })
     }
 
-    const schoolId = user.schoolId
-    if (!schoolId) {
-      return res.status(400).json({ success: false, message: '用户未关联学校' })
+    const organizationId = user.organizationId
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: '缺少有效组织上下文' })
     }
 
-    const results = await memberMatchService.checkConflicts(schoolId, members)
+    const results = await memberMatchService.checkConflicts(organizationId, members)
 
     res.json({ success: true, data: results })
   } catch (err) {
@@ -318,16 +319,16 @@ teamImportRouter.post('/luogu/import', authenticate, async (req: Request, res: R
     }
 
     const teacherId = user.userId
-    const schoolId = user.schoolId
+    const organizationId = user.organizationId
 
-    if (!teacherId || !schoolId) {
+    if (!teacherId || !organizationId) {
       return res.status(400).json({ success: false, message: '教师信息不完整' })
     }
 
     const result = await luoguImportService.importMembers(
       user.userId,
       teacherId,
-      schoolId,
+      organizationId,
       { teamId, createTeam, visibility, teamName, luoguTeamId, announcement, members },
       user
     )
@@ -435,8 +436,8 @@ teamImportRouter.post('/start', authenticate, async (req: Request, res: Response
     }
 
     const teacherId = user.userId
-    const schoolId = user.schoolId
-    if (!teacherId || !schoolId) {
+    const organizationId = user.organizationId
+    if (!teacherId || !organizationId) {
       return res.status(400).json({
         success: false,
         message: '教师信息不完整',
@@ -451,7 +452,7 @@ teamImportRouter.post('/start', authenticate, async (req: Request, res: Response
 
     const result = await service.createBatch({
       operatorId: teacherId,
-      schoolId,
+      organizationId,
       platform: platform as ImportPlatform,
       createTeam: createTeamValue,
       visibility: visibility || 'public',

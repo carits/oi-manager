@@ -1,19 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 
 export default function NewProblemListPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const pathPrefix = user?.workspaceMode === 'personal'
-    ? '/personal'
-    : user?.role === 'student'
-      ? '/student'
-      : '/teacher'
+  const pathname = usePathname()
+  const pathPrefix = currentWorkspacePrefix(pathname, '/personal')
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')

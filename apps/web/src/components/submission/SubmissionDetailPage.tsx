@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { Check, CheckCircle2, ChevronDown, ChevronRight, Copy, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -16,6 +16,7 @@ import 'highlight.js/styles/github.css'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { useAuth } from '@/components/AuthProvider'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 
 interface CaseResult {
   caseId: number
@@ -137,6 +138,7 @@ function formatMemory(kb: number): string {
 
 export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPageProps) {
   const { user } = useAuth()
+  const pathname = usePathname()
   const router = useRouter()
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -216,10 +218,10 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   }
 
   const getPathPrefix = () => {
-    if (user?.workspaceMode === 'personal') return '/personal'
-    if (role === 'admin') return '/platform-admin'
-    if (role === 'student') return '/student'
-    return '/teacher'
+    if (pathname === '/personal' || pathname.startsWith('/personal/')) return '/personal'
+    const workspacePrefix = currentWorkspacePrefix(pathname, '')
+    if (workspacePrefix) return workspacePrefix
+    return currentWorkspacePrefix(pathname, '/personal')
   }
 
   if (loading) {

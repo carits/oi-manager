@@ -76,18 +76,18 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
 
         // TeamMember.userId 本身就是 User.id（共享主键设计）
         adminUserIds = adminMembers.map(m => m.userId)
-      } else if (training.schoolId) {
-        const schoolAdmins = await prisma.user.findMany({
-          where: {
-            OR: [
-              { id: training.createdBy },
-              { role: 'school_principal', schoolId: training.schoolId },
-              { role: { in: ['super_admin', 'platform_admin'] } },
-            ],
-          },
-          select: { id: true },
-        })
-        adminUserIds = schoolAdmins.map(user => user.id)
+      } else if (training.organizationId) {
+        const [organizationAdmins, platformAdmins] = await Promise.all([
+          prisma.organizationMembership.findMany({
+            where: { organizationId: training.organizationId, status: 'active', memberRole: 'school_principal' },
+            select: { userId: true },
+          }),
+          prisma.user.findMany({
+            where: { role: { in: ['super_admin', 'platform_admin'] } },
+            select: { id: true },
+          }),
+        ])
+        adminUserIds = [...new Set([training.createdBy, ...organizationAdmins.map(member => member.userId), ...platformAdmins.map(user => user.id)])]
       }
     }
 
@@ -141,7 +141,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
 
       // Get participant names (single query instead of 3)
       const participantIds = [...userScores.keys()]
-      const nameMap = await getParticipantNames(participantIds)
+      const nameMap = await getParticipantNames(participantIds, training.organizationId || undefined)
 
       const ranking = Array.from(userScores.entries()).map(([uid, problemScores]) => {
         let totalScore = 0
@@ -235,7 +235,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       }
 
       const participantIds = [...userStats.keys()]
-      const nameMap = await getParticipantNames(participantIds)
+      const nameMap = await getParticipantNames(participantIds, training.organizationId || undefined)
 
       const ranking = Array.from(userStats.entries()).map(([uid, problemStats]) => {
         let solvedCount = 0

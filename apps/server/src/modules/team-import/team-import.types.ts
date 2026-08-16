@@ -266,7 +266,7 @@ export type SuggestedAction =
 export interface MatchResult {
   lineNumber: number
   matchType: MatchType
-  matchedStudentId?: string  // 新字段，指向 User.id
+  matchedStudentProfileId?: string  // 组织学生档案 ID
   matchedStudentName?: string
   suggestedAction: SuggestedAction
   canAutoProcess: boolean
@@ -316,6 +316,7 @@ export interface ImportResultItem {
   action: string
   result: 'success' | 'skipped' | 'error'
   studentId?: string
+  studentProfileId?: string
   studentName?: string
   inviteId?: string
   errorMessage?: string

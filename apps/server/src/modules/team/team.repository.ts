@@ -30,14 +30,7 @@ export class TeamRepository {
     return prisma.team.findUnique({
       where: { id },
       include: {
-        School: {
-          select: {
-            id: true,
-            name: true,
-            educationSystem: true,
-            schoolType: true
-          }
-        },
+        Organization: { select: { id: true, name: true } },
         TeamMember: {
           where: { status: 'active' }
         }
@@ -56,7 +49,7 @@ export class TeamRepository {
     return prisma.team.findMany({
       where: params.where,
       include: {
-        School: { select: { id: true, name: true } },
+        Organization: { select: { id: true, name: true } },
         TeamMember: {
           where: { status: 'active' },
           select: {
@@ -83,15 +76,15 @@ export class TeamRepository {
   /**
    * 查找学校的公开团队
    */
-  async findBySchool(schoolId: string) {
+  async findByOrganization(organizationId: string) {
     return prisma.team.findMany({
       where: {
-        schoolId,
+        organizationId,
         scope: 'campus',
         isPublic: true
       },
       include: {
-        School: { select: { id: true, name: true } },
+        Organization: { select: { id: true, name: true } },
         TeamMember: {
           where: { status: 'active', role: 'owner' },
           select: { id: true, userId: true, userType: true, role: true }
@@ -109,7 +102,7 @@ export class TeamRepository {
   async create(data: {
     name: string
     description?: string
-    schoolId: string
+    organizationId: string
     scope: TeamScope
     isPublic: boolean
   }) {
@@ -118,12 +111,12 @@ export class TeamRepository {
         id: crypto.randomUUID(),
         name: data.name,
         description: data.description,
-        schoolId: data.schoolId,
+        organizationId: data.organizationId,
         scope: data.scope,
         isPublic: data.isPublic
       },
       include: {
-        School: { select: { id: true, name: true } }
+        Organization: { select: { id: true, name: true } }
       }
     })
   }
@@ -142,7 +135,7 @@ export class TeamRepository {
       where: { id },
       data,
       include: {
-        School: { select: { id: true, name: true } }
+        Organization: { select: { id: true, name: true } }
       }
     })
   }
@@ -218,24 +211,6 @@ export class TeamRepository {
   async findMembersByTeam(teamId: string) {
     return prisma.teamMember.findMany({
       where: { teamId }
-    })
-  }
-
-  /**
-   * 批量查询学生
-   */
-  async findStudentsByIds(ids: string[]) {
-    return prisma.student.findMany({
-      where: { id: { in: ids } }
-    })
-  }
-
-  /**
-   * 批量查询教师
-   */
-  async findTeachersByIds(ids: string[]) {
-    return prisma.teacher.findMany({
-      where: { id: { in: ids } }
     })
   }
 
@@ -697,47 +672,12 @@ export class TeamRepository {
   // ==================== 用户查询 ====================
 
   /**
-   * 查找教师
-   */
-  async findTeacher(id: string) {
-    return prisma.teacher.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        avatar: true,
-        title: true,
-        schoolId: true,
-        User: { select: { username: true, avatar: true } }
-      }
-    })
-  }
-
-  /**
-   * 查找学生
-   */
-  async findStudent(id: string) {
-    return prisma.student.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        avatar: true,
-        rating: true,
-        enrollmentYear: true,
-        schoolId: true,
-        User: { select: { username: true, avatar: true } }
-      }
-    })
-  }
-
-  /**
    * 查找用户
    */
   async findUser(id: string) {
     return prisma.user.findUnique({
       where: { id },
-      include: { Teacher: true, Student: true, PersonalProfile: true }
+      include: { PersonalProfile: true, OrganizationMembership: { where: { status: 'active' }, include: { StudentProfile: true, TeacherProfile: true } } }
     })
   }
 
@@ -752,45 +692,10 @@ export class TeamRepository {
   }
 
   /**
-   * 批量查找教师
-   */
-  async findTeachers(ids: string[]) {
-    return prisma.teacher.findMany({
-      where: { id: { in: ids } },
-      select: {
-        id: true,
-        name: true,
-        avatar: true,
-        title: true,
-        schoolId: true,
-        User: { select: { username: true, avatar: true } }
-      }
-    })
-  }
-
-  /**
-   * 批量查找学生
-   */
-  async findStudents(ids: string[]) {
-    return prisma.student.findMany({
-      where: { id: { in: ids } },
-      select: {
-        id: true,
-        name: true,
-        avatar: true,
-        rating: true,
-        enrollmentYear: true,
-        schoolId: true,
-        User: { select: { username: true, avatar: true } }
-      }
-    })
-  }
-
-  /**
    * 查找可邀请的成员
    */
   async findAvailableMembers(params: {
-    schoolId?: string | null
+    organizationId?: string | null
     scope: TeamScope
     excludeTeacherIds: string[]
     excludeStudentIds: string[]
@@ -834,60 +739,31 @@ export class TeamRepository {
       return result
     }
 
-    if (!params.schoolId) return result
+    if (!params.organizationId) return result
 
     // 搜索学生
     if (!params.type || params.type === 'student') {
-      const students = await prisma.student.findMany({
+      const students = await prisma.organizationStudentProfile.findMany({
         where: {
-          schoolId: params.schoolId,
-          id: { notIn: params.excludeStudentIds },
-          ...(params.keyword && { name: { contains: params.keyword } })
+          Membership: { organizationId: params.organizationId, status: 'active', userId: { notIn: params.excludeStudentIds } },
+          ...(params.keyword && { OR: [{ name: { contains: params.keyword } }, { Membership: { User: { username: { contains: params.keyword, mode: 'insensitive' } } } }] })
         },
-        select: { id: true, name: true, avatar: true },
+        select: { name: true, avatar: true, Membership: { select: { userId: true, User: { select: { username: true, avatar: true } } } } },
         take: 20
       })
-      const studentIds = students.filter(s => s.id).map(s => s.id!)
-      const studentUsers = studentIds.length > 0
-        ? await prisma.user.findMany({ where: { id: { in: studentIds } }, select: { id: true, username: true, avatar: true } })
-        : []
-      const studentUserMap = new Map(studentUsers.map(u => [u.id, u]))
-      result.students = students.map(s => {
-        const user = s.id ? studentUserMap.get(s.id) : undefined
-        return {
-          id: s.id,
-          name: s.name,
-          avatar: user?.avatar || s.avatar,
-          username: user?.username || ''
-        }
-      })
+      result.students = students.map(profile => ({ id: profile.Membership.userId, name: profile.name, avatar: profile.Membership.User.avatar || profile.avatar, username: profile.Membership.User.username }))
     }
 
-    // 搜索教师
     if (!params.type || params.type === 'teacher') {
-      const teachers = await prisma.teacher.findMany({
+      const teachers = await prisma.organizationTeacherProfile.findMany({
         where: {
-          schoolId: params.schoolId,
-          id: { notIn: params.excludeTeacherIds },
-          ...(params.keyword && { name: { contains: params.keyword } })
+          Membership: { organizationId: params.organizationId, status: 'active', userId: { notIn: params.excludeTeacherIds } },
+          ...(params.keyword && { OR: [{ name: { contains: params.keyword } }, { Membership: { User: { username: { contains: params.keyword, mode: 'insensitive' } } } }] })
         },
-        select: { id: true, name: true, avatar: true },
+        select: { name: true, avatar: true, Membership: { select: { userId: true, User: { select: { username: true, avatar: true } } } } },
         take: 20
       })
-      const teacherIds = teachers.map(t => t.id)
-      const teacherUsers = teacherIds.length > 0
-        ? await prisma.user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, username: true, avatar: true } })
-        : []
-      const teacherUserMap = new Map(teacherUsers.map(u => [u.id, u]))
-      result.teachers = teachers.map(t => {
-        const user = teacherUserMap.get(t.id)
-        return {
-          id: t.id,
-          name: t.name,
-          avatar: user?.avatar || t.avatar,
-          username: user?.username || ''
-        }
-      })
+      result.teachers = teachers.map(profile => ({ id: profile.Membership.userId, name: profile.name, avatar: profile.Membership.User.avatar || profile.avatar, username: profile.Membership.User.username }))
     }
 
     return result
@@ -899,14 +775,14 @@ export class TeamRepository {
   async findUserByUsername(username: string) {
     return prisma.user.findUnique({
       where: { username },
-      include: { Student: true, Teacher: true, PersonalProfile: true }
+      select: { id: true, status: true, username: true, PersonalProfile: { select: { rating: true } } }
     })
   }
 
   async findUsersByIds(ids: string[]) {
     return prisma.user.findMany({
       where: { id: { in: ids }, status: 'active', PersonalProfile: { isNot: null } },
-      select: { id: true, schoolId: true, username: true }
+      select: { id: true, username: true }
     })
   }
 }

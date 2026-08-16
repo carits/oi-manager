@@ -87,9 +87,10 @@ export function useTrainingActions(
       const res = await apiClient.delete(`/api/trainings/${training.id}`)
       if (res.success) {
         toast.success('训练已删除')
-        const schoolRole = window.location.pathname.startsWith('/student/') ? 'student' : 'teacher'
         const listKind = training.type === 'homework' ? 'homework' : training.type === 'contest' ? 'contest' : 'training'
-        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspaceMode: 'work', role: schoolRole, schoolScoped: true }))
+        const organizationId = window.location.pathname.match(/^\/org\/([^/]+)/)?.[1]
+        const workspace = window.location.pathname.startsWith('/personal/') ? 'personal' as const : 'organization' as const
+        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspace, organizationId, role: 'teacher' }))
         return true
       } else {
         toast.error(res.message || '删除失败')

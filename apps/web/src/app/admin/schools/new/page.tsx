@@ -111,7 +111,7 @@ export default function NewSchoolPage() {
       // 组合省市区
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
-      const result = await apiClient.post('/api/schools', {
+      const result = await apiClient.post('/api/platform/organizations', {
         ...formData,
         region: region || null,
         password: formData.password || formData.username

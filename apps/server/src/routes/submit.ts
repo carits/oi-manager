@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { Router } from 'express'
 import path from 'path'
-import { authenticate, getResourceScope, isPersonalWorkspace } from '../middleware/auth'
+import { authenticate, getResourceScope, isPersonalContext } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { submitToHdu } from '../lib/hdu-submit'
@@ -56,7 +56,7 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
       })
     }
 
-    if (req.user.role === 'student' && !isPersonalWorkspace(req.user)) {
+    if (req.user.role === 'student' && !isPersonalContext(req.user)) {
       return res.status(403).json({ success: false, code: 'TEACHER_ONLY', message: '校园学生请从作业或比赛提交' })
     }
 

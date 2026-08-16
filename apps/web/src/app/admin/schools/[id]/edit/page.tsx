@@ -75,7 +75,7 @@ export default function EditSchoolPage() {
 
     setPrincipalSaving(true)
     try {
-      const result = await apiClient.post<any>(`/api/schools/${schoolId}/principal`, {
+      const result = await apiClient.post<any>(`/api/platform/organizations/${schoolId}/principal`, {
         username: principalData.username,
         password: principalData.password || principalData.username,
         teacherName: principalData.teacherName,
@@ -122,7 +122,7 @@ export default function EditSchoolPage() {
 
   const fetchTeachers = async () => {
     try {
-      const result = await apiClient.get<{ data: Teacher[] }>(`/api/schools/${schoolId}/teachers`)
+      const result = await apiClient.get<{ data: Teacher[] }>(`/api/platform/organizations/${schoolId}/teachers`)
       if (result.success) {
         setTeachers(result.data?.data || [])
       }
@@ -133,7 +133,7 @@ export default function EditSchoolPage() {
 
   const fetchSchool = async () => {
     try {
-      const result = await apiClient.get<School>(`/api/schools/${schoolId}`)
+      const result = await apiClient.get<School>(`/api/platform/organizations/${schoolId}`)
       if (result.success) {
         const schoolData = result.data
         if (schoolData) {
@@ -175,7 +175,7 @@ export default function EditSchoolPage() {
       const region = [selectedProvince, selectedCity, selectedDistrict].filter(Boolean).join('/')
 
       // 更新学校基本信息
-      const result = await apiClient.put<any>(`/api/schools/${schoolId}`, {
+      const result = await apiClient.put<any>(`/api/platform/organizations/${schoolId}`, {
         ...formData,
         region
       })
@@ -187,7 +187,7 @@ export default function EditSchoolPage() {
 
       // 如果选择了负责人且与当前不同，更新负责人
       if (selectedTeacherId && selectedTeacherId !== principal?.id) {
-        const principalResult = await apiClient.put<any>(`/api/schools/${schoolId}/principal`, { teacherId: selectedTeacherId })
+        const principalResult = await apiClient.put<any>(`/api/platform/organizations/${schoolId}/principal`, { membershipId: selectedTeacherId })
         if (!principalResult.success) {
           toast.error(principalResult.message || '负责人更新失败')
           setSaving(false)

@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Pencil } from 'lucide-react'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
@@ -58,15 +59,11 @@ interface ProblemNoteProps {
 
 export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const toast = useToast()
 
   // 获取路径前缀
-  const getPathPrefix = () => {
-    if (role === 'admin') return '/platform-admin'
-    if (role === 'student') return '/student'
-    return '/teacher'
-  }
-  const pathPrefix = getPathPrefix()
+  const pathPrefix = currentWorkspacePrefix(pathname, role === 'admin' ? '/platform-admin' : '/personal')
 
   const [problem, setProblem] = useState<Problem | null>(null)
   const [noteContent, setNoteContent] = useState('')

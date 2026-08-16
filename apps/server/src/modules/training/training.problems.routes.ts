@@ -52,7 +52,7 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
 
     const training = await prisma.training.findUnique({
       where: { id },
-      include: { Team: { select: { schoolId: true, scope: true } } },
+      include: { Team: { select: { organizationId: true, scope: true } } },
     })
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
@@ -250,7 +250,7 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
 
     const training = await prisma.training.findUnique({
       where: { id },
-      include: { Team: { select: { schoolId: true, scope: true } } },
+      include: { Team: { select: { organizationId: true, scope: true } } },
     })
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
@@ -275,9 +275,9 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
     if (!problem) {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
-    const trainingSchoolId = training.schoolId ||
-      (training.scope === 'campus' && training.Team?.scope === 'campus' ? training.Team.schoolId : null)
-    if (problem.libraryScope === 'school' && trainingSchoolId !== problem.schoolId) {
+    const trainingSchoolId = training.organizationId ||
+      (training.scope === 'campus' && training.Team?.scope === 'campus' ? training.Team.organizationId : null)
+    if (problem.libraryScope === 'organization' && trainingSchoolId !== problem.organizationId) {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 

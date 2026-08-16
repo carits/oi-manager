@@ -108,7 +108,7 @@ export async function isTrainingAdmin(userId: string, trainingId: number): Promi
   // 复用现有权限逻辑
   const training = await prisma.training.findUnique({
     where: { id: trainingId },
-    select: { teamId: true, schoolId: true }
+    select: { teamId: true, organizationId: true }
   })
   if (!training) return false
 

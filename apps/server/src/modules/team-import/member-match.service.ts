@@ -15,127 +15,44 @@ import type { ConflictInfo, MemberInput, MemberValidateResult } from './team-imp
 export class MemberMatchService {
   /**
    * 批量检测成员冲突
-   * @param schoolId 当前学校 ID
+   * @param organizationId 当前组织 ID
    * @param members  待导入成员列表
    */
   async checkConflicts(
-    schoolId: string,
+    organizationId: string,
     members: MemberInput[]
   ): Promise<MemberValidateResult[]> {
     if (!members.length) return []
-
-    // ── 批量查询，减少数据库调用 ──
-
-    const usernames = members.map(m => m.username).filter(Boolean)
-
-    // 批量查询 User 表（按用户名匹配），包含 Student 和 School
-    const matchedUsers = await prisma.user.findMany({
-      where: { username: { in: usernames } },
-      include: {
-        Student: {
-          include: {
-            School: { select: { name: true, educationSystem: true, schoolType: true } }
-          }
-        }
-      }
-    })
-    const userMap = new Map(matchedUsers.map(u => [u.username, u]))
-
-    // 批量查询 Student 表（按姓名 + 本校匹配）
-    const names = [...new Set(members.map(m => m.studentName).filter(Boolean))]
-    const matchedStudents = await prisma.student.findMany({
-      where: {
-        name: { in: names },
-        schoolId
-      },
-      include: {
-        School: { select: { name: true, educationSystem: true, schoolType: true } },
-        User: { select: { username: true } }
-      }
-    })
-
-    // 按姓名分组
-    const studentByNameMap = new Map<string, typeof matchedStudents>()
-    for (const s of matchedStudents) {
-      const existing = studentByNameMap.get(s.name) || []
-      existing.push(s)
-      studentByNameMap.set(s.name, existing)
-    }
-
-    // ── 逐个检测冲突 ──
-    const results: MemberValidateResult[] = []
-
-    for (const member of members) {
-      const conflicts: ConflictInfo[] = []
-
-      // 检查 1：用户名冲突（本校 or 外校）
-      const matchedUser = userMap.get(member.username)
-      if (matchedUser) {
-        const student = matchedUser.Student
-        if (student && student.schoolId === schoolId) {
-          // 本校用户名冲突
-          const grade = this.calculateGrade(student)
-          conflicts.push({
-            type: 'username_same_school',
-            message: `本校已有用户 "${member.username}"（${student.name}${grade ? '，' + grade : ''}）`,
-            matchedStudentId: student.id,
-            matchedStudentName: student.name,
-            matchedStudentGrade: grade,
-            matchedUsername: member.username
-          })
-        } else if (student) {
-          // 外校用户名冲突
-          const grade = this.calculateGrade(student)
-          conflicts.push({
-            type: 'username_diff_school',
-            message: `外校已有用户 "${member.username}"（${student.name}${grade ? '，' + grade : ''}，${student.School?.name || '未知学校'}）`,
-            matchedStudentId: student.id,
-            matchedStudentName: student.name,
-            matchedStudentGrade: grade,
-            matchedSchoolName: student.School?.name,
-            matchedUsername: member.username
-          })
-        } else if (matchedUser.role !== 'student') {
-          // 用户名被教师/管理员占用
-          conflicts.push({
-            type: 'username_diff_school',
-            message: `用户名 "${member.username}" 已被${matchedUser.role === 'teacher' ? '教师' : '管理员'}使用`,
-            matchedUsername: member.username
-          })
-        }
-      }
-
-      // 检查 2：本校姓名冲突
-      const sameNameStudents = studentByNameMap.get(member.studentName)
-      if (sameNameStudents) {
-        for (const s of sameNameStudents) {
-          // 跳过已通过用户名冲突检测的同一学生（避免重复）
-          if (conflicts.some(c => c.type === 'username_same_school' && c.matchedStudentId === s.id)) {
-            continue
-          }
-          const grade = this.calculateGrade(s)
-          conflicts.push({
-            type: 'name_same_school',
-            message: `本校已有学生 "${s.name}"${s.User ? `（用户名：${s.User.username}）` : ''}${grade ? '，' + grade : ''}`,
-            matchedStudentId: s.id,
-            matchedStudentName: s.name,
-            matchedStudentGrade: grade,
-            matchedUsername: s.User?.username
-          })
-        }
-      }
-
-      results.push({
-        username: member.username,
-        nickname: member.nickname,
-        studentName: member.studentName,
-        gender: member.gender,
-        conflicts,
-        status: conflicts.length > 0 ? 'conflict' : 'clear'
+    const usernames = members.map(member => member.username).filter(Boolean)
+    const names = [...new Set(members.map(member => member.studentName).filter(Boolean))]
+    const [profiles, namedProfiles] = await Promise.all([
+      prisma.organizationStudentProfile.findMany({
+        where: { Membership: { organizationId, status: 'active', User: { username: { in: usernames } } } },
+        include: { Membership: { include: { User: { select: { username: true } }, Organization: { include: { School: { select: { educationSystem: true, schoolType: true } } } } } } }
+      }),
+      prisma.organizationStudentProfile.findMany({
+        where: { name: { in: names }, Membership: { organizationId, status: 'active' } },
+        include: { Membership: { include: { User: { select: { username: true } }, Organization: { include: { School: { select: { educationSystem: true, schoolType: true } } } } } } }
       })
-    }
+    ])
+    const byUsername = new Map(profiles.map(profile => [profile.Membership.User.username, profile]))
+    const byName = new Map<string, typeof namedProfiles>()
+    for (const profile of namedProfiles) byName.set(profile.name, [...(byName.get(profile.name) || []), profile])
 
-    return results
+    return members.map(member => {
+      const conflicts: ConflictInfo[] = []
+      const sameUser = byUsername.get(member.username)
+      if (sameUser) {
+        const grade = this.calculateGrade({ enrollmentYear: sameUser.enrollmentYear, School: sameUser.Membership.Organization.School })
+        conflicts.push({ type: 'username_same_school', message: '当前校园已有用户 "' + member.username + '"（' + sameUser.name + (grade ? '，' + grade : '') + '）', matchedStudentId: sameUser.Membership.userId, matchedStudentName: sameUser.name, matchedStudentGrade: grade, matchedUsername: member.username })
+      }
+      for (const profile of byName.get(member.studentName) || []) {
+        if (profile.Membership.userId === sameUser?.Membership.userId) continue
+        const grade = this.calculateGrade({ enrollmentYear: profile.enrollmentYear, School: profile.Membership.Organization.School })
+        conflicts.push({ type: 'name_same_school', message: '当前校园已有学生 "' + profile.name + '"（用户名：' + profile.Membership.User.username + '）' + (grade ? '，' + grade : ''), matchedStudentId: profile.Membership.userId, matchedStudentName: profile.name, matchedStudentGrade: grade, matchedUsername: profile.Membership.User.username })
+      }
+      return { username: member.username, nickname: member.nickname, studentName: member.studentName, gender: member.gender, conflicts, status: conflicts.length ? 'conflict' : 'clear' }
+    })
   }
 
   /**

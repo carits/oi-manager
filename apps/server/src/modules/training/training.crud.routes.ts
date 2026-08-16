@@ -119,7 +119,7 @@ trainingCrudRouter.post('/teams/:teamId/trainings', authenticate, asyncHandler(a
     const training = await prisma.training.create({
       data: {
         teamId,
-        schoolId: null,
+        organizationId: null,
         scope: team.scope,
         title,
         description: description || null,
@@ -200,7 +200,7 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
       data: {
         id: training.id,
         teamId: training.teamId,
-        schoolId: training.schoolId,
+        organizationId: training.organizationId,
         title: training.title,
         description: training.description,
         format: training.format,
@@ -470,7 +470,7 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
     const makeupTraining = await prisma.training.create({
       data: {
         teamId: training.teamId,
-        schoolId: training.schoolId,
+        organizationId: training.organizationId,
         scope: training.scope,
         title: makeupTitle,
         description: training.description,
@@ -529,7 +529,7 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
         endTime: makeupTraining.endTime.toISOString(),
         format: makeupTraining.format,
         teamId: makeupTraining.teamId,
-        schoolId: makeupTraining.schoolId,
+        organizationId: makeupTraining.organizationId,
         problemCount: training.TrainingProblem.length,
       },
     })

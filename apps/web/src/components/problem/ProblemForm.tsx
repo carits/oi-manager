@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -9,6 +9,7 @@ import { JudgeSettingsTab, JudgeSettingsTabHandle } from '@/components/problem/J
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
 import { Paperclip } from 'lucide-react'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 
 interface OjBinding {
   platform: string
@@ -43,6 +44,7 @@ interface ProblemFormProps {
 
 export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const toast = useToast()
   const [saving, setSaving] = useState(false)
@@ -66,12 +68,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const [pendingSaveData, setPendingSaveData] = useState<{ createdId: string } | null>(null)
 
   // 获取路径前缀
-  const getPathPrefix = () => {
-    if (role === 'admin') return '/platform-admin'
-    if (role === 'student') return '/student'
-    return '/teacher'
-  }
-  const pathPrefix = getPathPrefix()
+  const pathPrefix = currentWorkspacePrefix(pathname, role === 'admin' ? '/platform-admin' : '/personal')
 
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType

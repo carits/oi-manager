@@ -60,21 +60,23 @@ const TrainingFormModal = dynamic(
 interface TrainingDetailPageProps {
   basePath: string
   teamIdOverride?: string
+  trainingIdOverride?: string
 }
 
-export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailPageProps) {
+export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverride }: TrainingDetailPageProps) {
   const params = useParams()
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
-  const trainingId = (params.tid || params.cid || params.id) as string
+  const trainingId = trainingIdOverride || (params.tid || params.cid || params.id) as string
   const isTeamScopedPath = pathname.includes('/teams/') || pathname.includes('/team/')
   const teamId = teamIdOverride || (isTeamScopedPath ? (params.id as string) : undefined)
+  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const navigationContext = {
-    workspaceMode: pathname.startsWith('/personal/') ? 'personal' as const : 'work' as const,
-    role: pathname.startsWith('/student/') ? 'student' : 'teacher',
-    schoolScoped: !pathname.startsWith('/personal/') && !isTeamScopedPath,
+    workspace: pathname.startsWith('/personal/') ? 'personal' as const : 'organization' as const,
+    organizationId,
+    role: user?.organizationRole || 'teacher',
   }
 
   const validTabs: TabType[] = ['problemList', 'problems', 'submissions', 'solutions', 'attachments', 'ranking']
@@ -453,7 +455,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride }: TrainingDetailP
         isOpen={sub.detailSubmissionId !== null}
         onClose={() => sub.setDetailSubmissionId(null)}
         submissionId={sub.detailSubmissionId}
-        viewRole={basePath.startsWith('/student') ? 'student' : basePath.startsWith('/platform-admin') ? 'admin' : 'teacher'}
+        viewRole={basePath.startsWith('/personal') ? 'student' : basePath.startsWith('/platform-admin') ? 'admin' : 'teacher'}
         trainingId={parseInt(trainingId)}
         trainingFormat={training.format}
       />

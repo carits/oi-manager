@@ -66,16 +66,18 @@ export function AppShell({ children }: AppShellProps) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [notificationError, setNotificationError] = useState('')
   const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null)
+  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const userMenuRef = useRef<HTMLDivElement>(null)
   const notificationRef = useRef<HTMLDivElement>(null)
 
-  const storedWorkspaceMode = user?.workspaceMode || (user?.studentMode === 'personal' ? 'personal' : 'work')
+  // Workspace context is URL-derived; it must not come from a persisted mode.
+  const contextKind = pathname === '/personal' || pathname.startsWith('/personal/') ? 'personal' : 'organization'
 
   useEffect(() => {
     if (!user) return
-    setSidebarOpen(getSidebarNavigationOpen(user.userId, user.role, storedWorkspaceMode))
+    setSidebarOpen(getSidebarNavigationOpen(user.userId, user.role, organizationId || contextKind))
     setShowUserMenu(false)
-  }, [storedWorkspaceMode, user?.role, user?.userId])
+  }, [organizationId, contextKind, user?.role, user?.userId])
 
   const loadNotifications = async () => {
     const response = await apiClient.get<NotificationPayload>('/api/notifications')
@@ -98,7 +100,7 @@ export function AppShell({ children }: AppShellProps) {
       window.clearInterval(timer)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [storedWorkspaceMode, user?.userId])
+  }, [contextKind, user?.userId])
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -122,13 +124,16 @@ export function AppShell({ children }: AppShellProps) {
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
   const accountRole = user.role as UserRole
-  const workspaceMode = storedWorkspaceMode
-  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+  const context = contextKind
   // 校园导航必须使用当前组织成员身份，同一账号在另一校园可以是另一种身份。
   const role = (organizationId && user.organizationRole ? user.organizationRole : accountRole) as UserRole
-  const navConfig = getNavConfig(role, workspaceMode)
-  const activeItem = getActiveNavItem(pathname, role, workspaceMode)
-  const isPersonal = workspaceMode === 'personal'
+  const navConfig = getNavConfig(role, context)
+  const resolvedNavConfig = organizationId ? {
+    ...navConfig,
+    items: navConfig.items.map(item => ({ ...item, href: `/org/${organizationId}/${item.href}` })),
+  } : navConfig
+  const activeItem = getActiveNavItem(pathname, role, context)
+  const isPersonal = context === 'personal'
   const isStudent = role === 'student'
   const roleLabel = roleLabels[role] || '用户'
   const roleName = roleNames[role] || user.role
@@ -137,12 +142,12 @@ export function AppShell({ children }: AppShellProps) {
   const userContext = isPersonal
     ? '个人'
     : isStudent
-      ? user.schoolName || '校园工作区'
+      ? user.organizationName || '校园'
       : roleLabel
 
   const setNavigationOpen = (open: boolean) => {
     setSidebarOpen(open)
-    setSidebarNavigationOpen(user.userId, user.role, workspaceMode, open)
+    setSidebarNavigationOpen(user.userId, user.role, organizationId || context, open)
     if (!open) setShowUserMenu(false)
   }
 
@@ -164,7 +169,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleNotificationClick = async (notification: UserNotification) => {
     await markRead(notification.id)
-    const href = notificationTeamHref(workspaceMode, role, notification.href)
+    const href = notificationTeamHref(context, organizationId, notification.href)
     if (href) {
       setShowNotifications(false)
       router.push(href)
@@ -227,7 +232,7 @@ export function AppShell({ children }: AppShellProps) {
             <button type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? '隐藏导航' : '显示导航'} title={sidebarOpen ? '隐藏导航' : '显示导航'}>
               <Menu size={21} aria-hidden="true" />
             </button>
-            <Link className={styles.brandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+            <Link className={styles.brandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
           <div className={styles.headerEnd}>
             <div className={styles.notificationRoot} ref={notificationRef}>
@@ -270,7 +275,7 @@ export function AppShell({ children }: AppShellProps) {
       </header>
       <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人' : roleName}主导航`} aria-hidden={!sidebarOpen}>
         <div className={styles.sidebarHeader}>
-          <Link className={styles.sidebarBrandLink} href={getRoleHome(role, workspaceMode)} aria-label="返回首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+          <Link className={styles.sidebarBrandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           <button type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></button>
         </div>
         <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人' : roleName}主导航`}>{navLinks}</nav>

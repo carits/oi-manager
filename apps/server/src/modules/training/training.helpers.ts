@@ -5,26 +5,37 @@
 
 import { prisma } from '../../prisma'
 
-/** Get participant names in a single query (replaces 3 separate queries) */
-export async function getParticipantNames(userIds: string[]): Promise<Map<string, { name: string; username: string; avatar: string | null; userType: 'teacher' | 'student' }>> {
+/** 按比赛所属组织解析参赛者展示名；不读取旧 Student/Teacher 档案。 */
+export async function getParticipantNames(
+  userIds: string[],
+  organizationId?: string
+): Promise<Map<string, { name: string; username: string; avatar: string | null; userType: 'teacher' | 'student' }>> {
   if (userIds.length === 0) return new Map()
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
-    select: {
-      id: true,
-      username: true,
-      avatar: true,
-      role: true,
-      Teacher: { select: { name: true } },
-      Student: { select: { name: true } },
-    },
+    select: { id: true, username: true, avatar: true, role: true }
   })
-  return new Map(users.map(u => [u.id, {
-    name: u.Teacher?.name || u.Student?.name || '未知',
-    username: u.username,
-    avatar: u.avatar,
-    userType: u.role === 'teacher' || u.role === 'school_principal' || u.role === 'platform_admin' || u.role === 'super_admin' ? 'teacher' : 'student',
-  }]))
+  const userMap = new Map(users.map((user) => [user.id, user]))
+  if (!organizationId) {
+    return new Map(users.map((user) => [user.id, { name: user.username, username: user.username, avatar: user.avatar, userType: 'student' as const }]))
+  }
+  const memberships = await prisma.organizationMembership.findMany({
+    where: { organizationId, userId: { in: userIds }, status: 'active' },
+    select: {
+      userId: true, memberRole: true,
+      StudentProfile: { select: { name: true, avatar: true } },
+      TeacherProfile: { select: { name: true, avatar: true } }
+    }
+  })
+  const result = new Map<string, { name: string; username: string; avatar: string | null; userType: 'teacher' | 'student' }>()
+  for (const membership of memberships) {
+    const user = userMap.get(membership.userId)
+    if (!user) continue
+    const isTeacher = membership.memberRole === 'teacher' || membership.memberRole === 'school_principal'
+    const profile = isTeacher ? membership.TeacherProfile : membership.StudentProfile
+    result.set(user.id, { name: profile?.name || user.username, username: user.username, avatar: user.avatar || profile?.avatar || null, userType: isTeacher ? 'teacher' : 'student' })
+  }
+  return result
 }
 
 /** 获取用户在团队中的成员信息 */
@@ -62,33 +73,31 @@ export async function isTeamMember(userId: string, teamId: string): Promise<bool
   return !!(await getTeamMember(userId, teamId))
 }
 
-/** 检查是否是学校比赛管理员（可创建/管理校级比赛） */
-export async function isSchoolContestAdmin(userId: string, schoolId: string, trainingCreatedBy?: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true } })
+/** 检查是否是组织比赛管理员（可创建/管理校园比赛）。 */
+export async function isOrganizationContestAdmin(userId: string, organizationId: string, trainingCreatedBy?: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
   if (!user) return false
   if (user.role === 'super_admin') return true
-  // 学校负责人可以管理本校所有校级比赛
-  if (user.role === 'school_principal' && user.schoolId === schoolId) return true
-  // 普通教师可以创建校级比赛，只能管理自己创建的比赛
-  if ((user.role === 'teacher' || user.role === 'school_principal') && user.schoolId === schoolId) {
-    // 创建权限：只要是本校教师即可
-    if (!trainingCreatedBy) return true
-    // 管理权限：只能管理自己创建的，或者自己是学校负责人
-    if (user.role === 'school_principal') return true
-    return trainingCreatedBy === userId
-  }
-  return false
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { organizationId, userId, status: 'active' },
+    select: { memberRole: true },
+  })
+  if (!membership || !['teacher', 'school_principal'].includes(membership.memberRole)) return false
+  return !trainingCreatedBy || membership.memberRole === 'school_principal' || trainingCreatedBy === userId
 }
 
-/** 检查是否是学校成员（可查看/参加校级比赛） */
-export async function isSchoolMember(userId: string, schoolId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true } })
+/** 检查是否是组织成员（可查看/参加校园比赛）。 */
+export async function isOrganizationMember(userId: string, organizationId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
   if (!user) return false
   if (user.role === 'super_admin' || user.role === 'platform_admin') return true
-  return user.schoolId === schoolId
+  return Boolean(await prisma.organizationMembership.findFirst({
+    where: { organizationId, userId, status: 'active' },
+    select: { id: true },
+  }))
 }
 
-/** 训练访问模式：team 或 school */
+/** 训练访问模式：team 或 organization */
 export type TrainingListStatus = 'ongoing' | 'upcoming' | 'finished' | string
 
 export interface TrainingListSortItem {
@@ -148,25 +157,25 @@ export function sortTrainingListForDisplay<T extends TrainingListSortItem>(items
   })
 }
 
-export type TrainingAccessMode = 'team' | 'school' | null
+export type TrainingAccessMode = 'team' | 'organization' | null
 
-/** 判断训练的访问模式（基于 teamId/schoolId） */
-export function getTrainingAccessMode(training: { teamId: string | null; schoolId: string | null }): TrainingAccessMode {
+/** 判断训练的访问模式（基于 teamId/organizationId） */
+export function getTrainingAccessMode(training: { teamId: string | null; organizationId: string | null }): TrainingAccessMode {
   if (training.teamId) return 'team'
-  if (training.schoolId) return 'school'
+  if (training.organizationId) return 'organization'
   return null
 }
 
 /** 检查用户是否有权限访问训练（统一入口） */
 export async function canAccessTraining(
   userId: string,
-  training: { teamId: string | null; schoolId: string | null },
+  training: { teamId: string | null; organizationId: string | null },
 ): Promise<boolean> {
   const mode = getTrainingAccessMode(training)
   if (mode === 'team') {
     return isTeamMember(userId, training.teamId!)
-  } else if (mode === 'school') {
-    return isSchoolMember(userId, training.schoolId!)
+  } else if (mode === 'organization') {
+    return isOrganizationMember(userId, training.organizationId!)
   }
   return false // 无归属的训练拒绝访问
 }
@@ -174,13 +183,13 @@ export async function canAccessTraining(
 /** 检查用户是否有权限管理训练（统一入口） */
 export async function canManageTraining(
   userId: string,
-  training: { teamId: string | null; schoolId: string | null; createdBy: string },
+  training: { teamId: string | null; organizationId: string | null; createdBy: string },
 ): Promise<boolean> {
   const mode = getTrainingAccessMode(training)
   if (mode === 'team') {
     return isTeamAdmin(userId, training.teamId!)
-  } else if (mode === 'school') {
-    return isSchoolContestAdmin(userId, training.schoolId!, training.createdBy)
+  } else if (mode === 'organization') {
+    return isOrganizationContestAdmin(userId, training.organizationId!, training.createdBy)
   }
   return false
 }
@@ -231,7 +240,7 @@ export function parseTrainingId(raw: string): number {
 
 /** 检查训练是否已开始（非管理员在 upcoming 时拒绝访问） */
 export async function requireTrainingStarted(
-  training: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; schoolId: string | null; createdBy: string },
+  training: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; organizationId: string | null; createdBy: string },
   userId: string,
 ): Promise<string | null> {
   let status = training.status
@@ -247,8 +256,8 @@ export async function requireTrainingStarted(
   const mode = getTrainingAccessMode(training)
   if (mode === 'team' && training.teamId) {
     if (await isTeamAdmin(userId, training.teamId)) return null
-  } else if (mode === 'school' && training.schoolId) {
-    if (await isSchoolContestAdmin(userId, training.schoolId, training.createdBy)) return null
+  } else if (mode === 'organization' && training.organizationId) {
+    if (await isOrganizationContestAdmin(userId, training.organizationId, training.createdBy)) return null
   }
   return '训练尚未开始'
 }

@@ -205,6 +205,8 @@ const routerPrefixes = {
   rankingRouter: '/api/rankings',
   notificationRouter: '/api/notifications',
   workspaceRouter: '/api/workspaces',
+  organizationMemberRouter: '/api/organizations/:organizationId/members',
+  platformOrganizationRouter: '/api/platform/organizations',
   demoScenarioRouter: '/api/admin/demo-scenario',
 }
 

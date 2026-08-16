@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
+import { usePathname } from 'next/navigation'
+import { isPersonalPath } from '@/lib/workspacePath'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import styles from './Team.module.css'
 
@@ -44,6 +46,7 @@ function memberTypeClass(type: AvailableMember['memberType']) {
 
 export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInviteModalProps) {
   const toast = useToast()
+  const pathname = usePathname()
   const { user } = useAuth()
   const [availableMembers, setAvailableMembers] = useState<AvailableMember[]>([])
   const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>([])
@@ -192,7 +195,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
             value={usernameInput}
             onChange={(event) => setUsernameInput(event.target.value)}
           />
-          <p>{user?.workspaceMode === 'personal' ? '仅可邀请已启用个人身份的用户。' : '仅可邀请本校成员，多个用户名请用英文逗号分隔。'}</p>
+          <p>{isPersonalPath(pathname) ? '仅可邀请已启用个人身份的用户。' : '仅可邀请本校成员，多个用户名请用英文逗号分隔。'}</p>
         </section>
       </div>
     </Modal>

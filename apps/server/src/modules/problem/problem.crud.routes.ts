@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { Router } from 'express'
 import { prisma } from '../../prisma'
-import { authenticate, getWorkspaceMode, isPersonalWorkspace } from '../../middleware/auth'
+import { authenticate, isPersonalContext } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { generateCaritsProblemId } from './problem.helpers'
@@ -32,33 +32,28 @@ function parsePlatforms(problem: { platform: string; ojBindings: string | null }
   return problem.platform ? [problem.platform] : []
 }
 
-function ownerDisplay(owner: { username: string; Teacher: { name: string } | null; Admin: { name: string } | null }, usernameOnly = false) {
-  return usernameOnly ? owner.username : owner.Teacher?.name || owner.Admin?.name || owner.username
-}
+function ownerDisplay(owner: { username: string }) { return owner.username }
 
 function resolveRequestedLibrary(req: any): 'platform' | 'school' {
   if (req.query.library === 'platform' || req.query.visibility === 'public') return 'platform'
   if (req.query.library === 'school' || req.query.visibility === 'private') return 'school'
-  return isPersonalWorkspace(req.user) || isPlatformManager(req.user.role) ? 'platform' : 'school'
+  return isPersonalContext(req.user) || isPlatformManager(req.user.role) ? 'platform' : 'school'
 }
 
 problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const user = req.user!
-  const personalWorkspace = isPersonalWorkspace(user)
+  const personalWorkspace = isPersonalContext(user)
   const library = resolveRequestedLibrary(req)
 
   if (user.role === 'student' && !personalWorkspace) {
     return res.status(403).json({ success: false, code: 'TEACHER_ONLY', message: '校内题库仅对教师开放' })
   }
   if (library === 'school') {
-    if (getWorkspaceMode(user) !== 'work') {
-      return res.status(403).json({ success: false, code: 'WORKSPACE_MODE_REQUIRED', message: '请先切换到工作模式' })
-    }
     if (!isSchoolStaff(user.role)) {
       return res.status(403).json({ success: false, code: 'TEACHER_ONLY', message: '校内题库仅对教师开放' })
     }
-    if (!user.schoolId) {
-      return res.status(403).json({ success: false, code: 'SCHOOL_MEMBERSHIP_REQUIRED', message: '当前账号未关联学校' })
+    if (!user.organizationId) {
+      return res.status(403).json({ success: false, code: 'ORGANIZATION_REQUIRED', message: 'Current identity is not assigned to an organization' })
     }
   }
 
@@ -71,7 +66,7 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
       }
     : {
         libraryScope: 'school',
-        schoolId: user.schoolId,
+        organizationId: user.organizationId,
         ...(user.role === 'school_principal' ? {} : { OR: [{ status: 'published' }, { ownerId: user.userId }] }),
         status: { not: 'archived' },
       }
@@ -89,7 +84,7 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const [problems, total] = await Promise.all([
     prisma.problem.findMany({
       where,
-      include: { Owner: { select: { username: true, Teacher: { select: { name: true } }, Admin: { select: { name: true } } } } },
+      include: { Owner: { select: { username: true } } },
       orderBy: { createdAt: 'desc' },
       skip,
       take: pageSize,
@@ -99,7 +94,7 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 
   const data = problems.map(({ Owner, ...problem }) => ({
     ...problem,
-    ownerName: ownerDisplay(Owner, personalWorkspace),
+    ownerName: ownerDisplay(Owner),
     platforms: parsePlatforms(problem),
     permissions: problemPermissions(user, problem),
   }))
@@ -109,14 +104,11 @@ problemCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
 
 problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   const user = req.user!
-  if (getWorkspaceMode(user) !== 'work') {
-    return res.status(403).json({ success: false, code: 'WORKSPACE_MODE_REQUIRED', message: '请先切换到工作模式' })
-  }
   if (!isSchoolStaff(user.role) && !isPlatformManager(user.role)) {
     return res.status(403).json({ success: false, code: 'TEACHER_ONLY', message: '只有教师或平台管理员可以创建题目' })
   }
-  if (isSchoolStaff(user.role) && !user.schoolId) {
-    return res.status(403).json({ success: false, code: 'SCHOOL_MEMBERSHIP_REQUIRED', message: '当前账号未关联学校' })
+  if (isSchoolStaff(user.role) && !user.organizationId) {
+    return res.status(403).json({ success: false, code: 'ORGANIZATION_REQUIRED', message: 'Current identity is not assigned to an organization' })
   }
 
   const {
@@ -142,8 +134,8 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
   }
 
   const libraryScope = isSchoolStaff(user.role) ? 'school' : 'platform'
-  const libraryKey = problemLibraryKey(libraryScope, user.schoolId)
-  const schoolId = libraryScope === 'school' ? user.schoolId! : null
+  const libraryKey = problemLibraryKey(libraryScope, user.organizationId)
+  const organizationId = libraryScope === 'school' ? user.organizationId! : null
   let platform = 'carits'
   let problemId = await generateCaritsProblemId()
   if (Array.isArray(ojBindings) && ojBindings.length > 0) {
@@ -180,7 +172,7 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
       ownerType: libraryScope === 'school' ? 'teacher' : 'admin',
       libraryScope,
       libraryKey,
-      schoolId,
+      organizationId,
       visibility: libraryScope === 'school' ? 'private' : 'public',
       status,
       publishedAt: status === 'published' ? new Date() : null,
@@ -222,7 +214,7 @@ problemCrudRouter.post('/', authenticate, asyncHandler(async (req, res) => {
     userId: user.userId,
     action: 'create_problem',
     target: `${libraryKey}:${platform}-${problemId}`,
-    metadata: { libraryScope, schoolId, status },
+    metadata: { libraryScope, organizationId, status },
   })
   res.status(201).json({ success: true, data: { ...problem, permissions: problemPermissions(user, problem) } })
 }))
@@ -233,11 +225,11 @@ problemCrudRouter.post('/:id/copy-to-school', authenticate, asyncHandler(async (
   if (!source || !canCopyProblemToSchool(user, source)) {
     return res.status(404).json({ success: false, message: '题目不存在' })
   }
-  if (!user.schoolId) {
-    return res.status(403).json({ success: false, code: 'SCHOOL_MEMBERSHIP_REQUIRED', message: '当前账号未关联学校' })
+  if (!user.organizationId) {
+    return res.status(403).json({ success: false, code: 'ORGANIZATION_REQUIRED', message: '当前账号未关联学校' })
   }
 
-  const result = await copyPlatformProblemToSchool(source.id, user.userId, user.schoolId)
+  const result = await copyPlatformProblemToSchool(source.id, user.userId, user.organizationId)
   if (!result) return res.status(404).json({ success: false, message: '题目不存在' })
   if (result.existing) {
     return res.status(409).json({
@@ -252,26 +244,23 @@ problemCrudRouter.post('/:id/copy-to-school', authenticate, asyncHandler(async (
     userId: user.userId,
     action: 'copy_problem_to_school',
     target: result.created!.id,
-    metadata: { sourceProblemId: source.id, schoolId: user.schoolId, skippedFileCount: result.skippedFiles.length },
+    metadata: { sourceProblemId: source.id, organizationId: user.organizationId, skippedFileCount: result.skippedFiles.length },
   })
   res.status(201).json({ success: true, data: { problem: result.created, skippedFiles: result.skippedFiles } })
 }))
 
 problemCrudRouter.get('/library/creators', authenticate, asyncHandler(async (req, res) => {
   const user = req.user!
-  if (getWorkspaceMode(user) !== 'work') {
-    return res.status(403).json({ success: false, code: 'WORKSPACE_MODE_REQUIRED', message: '请先切换到工作模式' })
-  }
   if (!isSchoolStaff(user.role)) {
     return res.status(403).json({ success: false, code: 'TEACHER_ONLY', message: '校内题库仅对教师开放' })
   }
-  if (!user.schoolId) {
+  if (!user.organizationId) {
     return res.status(403).json({ success: false, code: 'SCHOOL_MEMBERSHIP_REQUIRED', message: '当前账号未关联学校' })
   }
 
   const visibleProblemWhere: any = {
     libraryScope: 'school',
-    schoolId: user.schoolId,
+    organizationId: user.organizationId,
     status: { not: 'archived' },
     ...(user.role === 'school_principal' ? {} : { OR: [{ status: 'published' }, { ownerId: user.userId }] }),
   }
@@ -282,13 +271,13 @@ problemCrudRouter.get('/library/creators', authenticate, asyncHandler(async (req
   })
   const users = await prisma.user.findMany({
     where: { id: { in: owners.map(owner => owner.ownerId) } },
-    select: { id: true, username: true, Teacher: { select: { name: true } } },
+    select: { id: true, username: true },
   })
   const countByOwner = new Map(owners.map(owner => [owner.ownerId, owner._count._all]))
   res.json({
     success: true,
     data: users
-      .map(owner => ({ id: owner.id, name: owner.Teacher?.name || owner.username, count: countByOwner.get(owner.id) || 0 }))
+      .map(owner => ({ id: owner.id, name: owner.username, count: countByOwner.get(owner.id) || 0 }))
       .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN')),
   })
 }))
@@ -298,7 +287,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const problem = await prisma.problem.findUnique({
     where: { id: req.params.id },
     include: {
-      Owner: { select: { username: true, Teacher: { select: { name: true } }, Admin: { select: { name: true } } } },
+      Owner: { select: { username: true } },
       ProblemStatement: { orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }] },
     },
   })
@@ -318,7 +307,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       judgeConfig: canEdit ? data.judgeConfig : null,
       solutionMarkdown: canEdit || data.solutionVisible ? data.solutionMarkdown : null,
       solutionPdfUrl: canEdit || data.solutionVisible ? data.solutionPdfUrl : null,
-      ownerName: ownerDisplay(Owner, isPersonalWorkspace(user)),
+      ownerName: ownerDisplay(Owner),
       statements,
       solutions,
       platforms: parsePlatforms(data),
@@ -435,7 +424,7 @@ problemCrudRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
     userId: user.userId,
     action: 'update_problem',
     target: existing.id,
-    metadata: { schoolId: existing.schoolId, status: problem.status },
+    metadata: { organizationId: existing.organizationId, status: problem.status },
   })
   res.json({ success: true, data: { ...problem, permissions: problemPermissions(user, problem) } })
 }))
@@ -455,7 +444,7 @@ problemCrudRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => 
     userId: user.userId,
     action: 'archive_problem',
     target: existing.id,
-    metadata: { schoolId: existing.schoolId, libraryScope: existing.libraryScope },
+    metadata: { organizationId: existing.organizationId, libraryScope: existing.libraryScope },
   })
   res.json({ success: true, message: '题目已归档' })
 }))

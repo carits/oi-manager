@@ -465,7 +465,7 @@ async function processFetchQueue(platform: string) {
               ownerId: adminUser.id,
               libraryScope: 'platform',
               libraryKey: 'platform',
-              schoolId: null,
+              organizationId: null,
               status: 'published',
               publishedAt: new Date(),
             },

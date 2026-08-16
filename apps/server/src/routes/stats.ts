@@ -21,9 +21,9 @@ statsRouter.get('/global', authenticate, async (req: AuthRequest, res: Response)
       disabledUsers,
       recentRegistrations
     ] = await Promise.all([
-      prisma.school.count(),
-      prisma.teacher.count(),
-      prisma.student.count(),
+      prisma.organization.count({ where: { type: 'school', status: 'active' } }),
+      prisma.organizationMembership.count({ where: { status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } }),
+      prisma.organizationMembership.count({ where: { status: 'active', memberRole: 'student' } }),
       prisma.user.count({ where: { status: 'active' } }),
       prisma.user.count({ where: { status: 'disabled' } }),
       prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } })
@@ -53,37 +53,41 @@ statsRouter.get('/schools', authenticate, async (req: AuthRequest, res: Response
       return res.status(403).json({ success: false, message: '权限不足' })
     }
 
-    const schools = await prisma.school.findMany({
+    const organizations = await prisma.organization.findMany({
+      where: { type: 'school' },
       include: {
+        School: { select: { region: true, schoolType: true, status: true } },
         _count: {
           select: {
             Team: true,
-            Teacher_Teacher_schoolIdToSchool: true,
-            Student: true
-          }
-        }
+            Membership: { where: { status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } },
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     })
-
-    const schoolStats = schools.map(school => ({
-      id: school.id,
-      name: school.name,
-      region: school.region,
-      schoolType: school.schoolType,
-      status: school.status,
-      teamCount: school._count.Team,
-      teacherCount: school._count.Teacher_Teacher_schoolIdToSchool,
-      studentCount: school._count.Student,
-      createdAt: school.createdAt.toISOString()
-    }))
-
+    const studentCounts = await prisma.organizationMembership.groupBy({
+      by: ['organizationId'],
+      where: { organizationId: { in: organizations.map(org => org.id) }, status: 'active', memberRole: 'student' },
+      _count: { _all: true },
+    })
+    const studentsByOrganization = new Map(studentCounts.map(row => [row.organizationId, row._count._all]))
     res.json({
       success: true,
-      data: schoolStats
+      data: organizations.map(org => ({
+        id: org.id,
+        name: org.name,
+        region: org.School?.region ?? null,
+        schoolType: org.School?.schoolType ?? null,
+        status: org.School?.status ?? org.status,
+        teamCount: org._count.Team,
+        teacherCount: org._count.Membership,
+        studentCount: studentsByOrganization.get(org.id) ?? 0,
+        createdAt: org.createdAt.toISOString(),
+      })),
     })
   } catch (error) {
-    console.error('Get school stats error:', error)
+    console.error('Get organization stats error:', error)
     res.status(500).json({ success: false, message: '服务器错误' })
   }
 })

@@ -15,7 +15,7 @@ export interface TeamCardProps {
   basePath?: string
 }
 
-export function TeamCard({ id, name, avatar, description, memberCount, schoolName, ownerName, isPublic, basePath = '/teacher/teams' }: TeamCardProps) {
+export function TeamCard({ id, name, avatar, description, memberCount, schoolName, ownerName, isPublic, basePath = '/personal/teams' }: TeamCardProps) {
   return (
     <Link href={`${basePath}/${id}`} className={styles.teamCard}>
       <div className={styles.teamCardHeader}>

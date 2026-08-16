@@ -1,7 +1,6 @@
 // 用户角色
-export type UserRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+export type UserRole = 'user' | 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
 
-export type WorkspaceMode = 'work' | 'personal'
 export type ResourceScope = 'campus' | 'personal'
 export type ProblemLibraryScope = 'platform' | 'school'
 export type ProblemStatus = 'draft' | 'published' | 'archived'
@@ -35,15 +34,9 @@ export interface JwtPayload {
   userId: string
   role: UserRole
   username: string
-  teacherId?: string // 教师ID（teacher/school_principal 角色才有）
-  studentId?: string // 学生ID（student 角色才有）
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
-  schoolId?: string // 学校ID（教师或学生所属学校）
   organizationId?: string
   organizationMembershipId?: string
-  workspaceMode?: WorkspaceMode
-  /** @deprecated Use workspaceMode. Kept while old sessions are migrated. */
-  studentMode?: ResourceScope
 }
 
 export interface WorkspaceSummary {
@@ -51,7 +44,6 @@ export interface WorkspaceSummary {
   organizationId?: string
   organizationName?: string
   organizationType?: string
-  schoolId?: string
   memberRole?: string
   relationType?: string
   relationLabel?: string
@@ -77,10 +69,6 @@ export interface PaginationParams {
 export interface LoginRequest {
   username: string
   password: string
-  role: UserRole | 'admin' | 'teacher' // 'admin'/'teacher' 是登录入口类型，非数据库角色
-  workspaceMode?: WorkspaceMode
-  /** @deprecated Use workspaceMode. */
-  mode?: ResourceScope
 }
 
 // 用户登录响应
@@ -89,13 +77,7 @@ export interface LoginResponse {
   userId: string
   role: UserRole
   username: string
-  teacherId?: string
-  studentId?: string
   adminId?: string
-  schoolId?: string
-  workspaceMode: WorkspaceMode
-  /** @deprecated Use workspaceMode. */
-  studentMode?: ResourceScope
 }
 
 // ========== 学校管理 DTO ==========
@@ -204,7 +186,6 @@ export interface ResetUserPasswordRequest {
 export interface GetUsersQueryParams {
   role?: UserRole
   status?: 'active' | 'disabled'
-  schoolId?: string
   keyword?: string
   page?: number
   pageSize?: number
@@ -225,8 +206,7 @@ export interface UserDetailResponse {
   profile?: {
     id: string
     name: string
-    schoolId?: string
-    schoolName?: string
+      schoolName?: string
     teamId?: string
     teamName?: string
   }

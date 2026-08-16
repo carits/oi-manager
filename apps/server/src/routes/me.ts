@@ -3,7 +3,8 @@ import {
   authenticate,
   getMembershipType,
   getResourceScope,
-  requireWorkspace,
+  requireOrganizationContext,
+  requirePersonalContext,
 } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { prisma } from '../prisma'
@@ -21,7 +22,7 @@ function formatTraining(training: any, source: 'team' | 'school') {
     status: getComputedTrainingStatus(training),
     format: training.format,
     teamId: training.teamId,
-    schoolId: training.schoolId,
+    organizationId: training.organizationId,
     problemCount: training._count.TrainingProblem,
     source,
     createdAt: training.createdAt,
@@ -44,7 +45,7 @@ async function getCurrentTeamIds(user: NonNullable<Express.Request['user']>) {
 meRouter.get(
   '/homeworks',
   authenticate,
-  requireWorkspace('work'),
+  requireOrganizationContext,
   asyncHandler(async (req, res) => {
     const teamIds = await getCurrentTeamIds(req.user!)
     if (teamIds.length === 0) return res.json({ success: true, data: [] })
@@ -71,9 +72,9 @@ meRouter.get('/contests', authenticate, asyncHandler(async (req, res) => {
           include: { _count: { select: { TrainingProblem: true } } },
         })
       : [],
-    scope === 'campus' && user.schoolId
+    scope === 'campus' && user.organizationId
       ? prisma.training.findMany({
-          where: { schoolId: user.schoolId, teamId: null, type: 'contest', scope: 'campus' },
+          where: { organizationId: user.organizationId, teamId: null, type: 'contest', scope: 'campus' },
           orderBy: { startTime: 'desc' },
           include: { _count: { select: { TrainingProblem: true } } },
         })
@@ -94,7 +95,7 @@ meRouter.get('/contests', authenticate, asyncHandler(async (req, res) => {
 meRouter.get(
   '/overview',
   authenticate,
-  requireWorkspace('personal'),
+  requirePersonalContext,
   asyncHandler(async (req, res) => {
     const user = req.user!
     const teamIds = await getCurrentTeamIds(user)

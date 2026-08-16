@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate, getResourceScope, isPersonalWorkspace } from '../middleware/auth'
+import { authenticate, getResourceScope, isPersonalContext } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { fetchAndStoreCfCode } from '../lib/cf-code-fetcher'
@@ -50,36 +50,13 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     }
 
     // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有
-    if (isPersonalWorkspace(user) || user.role === 'student') {
+    if (isPersonalContext(user) || user.role === 'student') {
       // 学生只能看到自己的提交
       where.userId = user.userId
     } else if (user.role === 'teacher' || user.role === 'school_principal') {
-      // 教师可以看到本校所有教师和学生的提交
-      const schoolId = user.schoolId
-      if (!schoolId) {
-        // 没有学校关联的教师，返回空列表
-        return res.json({
-          success: true,
-          data: { submissions: [], page: pageNum, totalPages: 0, total: 0 },
-        })
-      }
-
-      // 查找本校所有教师和学生的 userId
-      const [teachers, students] = await Promise.all([
-        prisma.teacher.findMany({
-          where: { schoolId },
-          select: { id: true },
-        }),
-        prisma.student.findMany({
-          where: { schoolId },
-          select: { id: true },
-        }),
-      ])
-      const schoolUserIds = [
-        ...teachers.map(t => t.id),
-        ...students.map(s => s.id),
-      ]
-      where.userId = { in: schoolUserIds }
+      if (!user.organizationId) return res.json({ success: true, data: { submissions: [], page: pageNum, totalPages: 0, total: 0 } })
+      const members = await prisma.organizationMembership.findMany({ where: { organizationId: user.organizationId, status: 'active' }, select: { userId: true } })
+      where.userId = { in: members.map(member => member.userId) }
     } else if (user.role === 'super_admin' || user.role === 'platform_admin') {
       const schoolProblemIds = (await prisma.problem.findMany({
         where: { libraryScope: 'school' },
@@ -186,7 +163,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       return {
         id: s.id,
         userId: s.userId,
-        userType: isPersonalWorkspace(user) ? 'user' : (s.User.role === 'student' ? 'student' : (s.User.role === 'teacher' || s.User.role === 'school_principal' ? 'teacher' : 'user')),
+        userType: isPersonalContext(user) ? 'user' : (s.User.role === 'student' ? 'student' : (s.User.role === 'teacher' || s.User.role === 'school_principal' ? 'teacher' : 'user')),
         username: s.User.username,
         oj: s.oj,
         problemId: s.problemId,
@@ -244,8 +221,6 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
             username: true,
             avatar: true,
             role: true,
-            Teacher: { select: { name: true, schoolId: true } },
-            Student: { select: { name: true, schoolId: true } },
           },
         },
         OjAccount: {
@@ -263,7 +238,7 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
 
     // 权限检查：学生只能看自己的，教师看本校，管理员看所有
     // 训练/比赛提交出现在全局评测记录中是正常机制，不做 submitScope 限制
-    if (isPersonalWorkspace(user)) {
+    if (isPersonalContext(user)) {
       // 个人工作区的提交详情只对提交者可见，隐藏资源是否存在。
       if (submission.userId !== user.userId) {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
@@ -274,15 +249,9 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
         return res.status(403).json({ success: false, message: '无权查看该提交记录' })
       }
     } else if (user.role === 'teacher' || user.role === 'school_principal') {
-      // 教师只能查看本学校的提交
-      const userSchoolId = user.schoolId
-      const submitterSchoolId = submission.User.Teacher?.schoolId || submission.User.Student?.schoolId
-      if (!userSchoolId || userSchoolId !== submitterSchoolId) {
-        return res.status(403).json({
-          success: false,
-          message: '无权查看该提交记录',
-        })
-      }
+      if (!user.organizationId) return res.status(403).json({ success: false, message: '无权查看该提交记录' })
+      const submitterMembership = await prisma.organizationMembership.findFirst({ where: { organizationId: user.organizationId, userId: submission.userId, status: 'active' }, select: { id: true } })
+      if (!submitterMembership) return res.status(403).json({ success: false, message: '无权查看该提交记录' })
     }
     // super_admin 和 platform_admin 不加过滤，可以查看所有
 
@@ -291,12 +260,12 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
     if (submission.problemInternalId) {
       const problem = await prisma.problem.findUnique({
         where: { id: submission.problemInternalId },
-        select: { title: true, libraryScope: true, schoolId: true },
+        select: { title: true, libraryScope: true, organizationId: true },
       })
       if (problem?.libraryScope === 'school' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
       }
-      if (problem?.libraryScope === 'school' && (user.role === 'teacher' || user.role === 'school_principal') && problem.schoolId !== user.schoolId) {
+      if (problem?.libraryScope === 'school' && (user.role === 'teacher' || user.role === 'school_principal') && problem.organizationId !== user.organizationId) {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
       }
       problemTitle = problem?.title || null
@@ -304,9 +273,7 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
 
     // 解析提交者显示名和头像
     const submitter = submission.User
-    const submitterName = isPersonalWorkspace(user)
-      ? submitter.username
-      : submitter.Teacher?.name || submitter.Student?.name || submitter.username
+    const submitterName = submitter.username
 
     // 解析 cases JSON
     let cases = null
@@ -393,7 +360,7 @@ submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
     if (
       !submission
       || submission.workspaceScope !== getResourceScope((req as any).user)
-      || (isPersonalWorkspace((req as any).user) && submission.userId !== (req as any).user.userId)
+      || (isPersonalContext((req as any).user) && submission.userId !== (req as any).user.userId)
     ) {
       return res.status(404).json({ success: false, message: '提交记录不存在' })
     }

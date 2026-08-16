@@ -1,61 +1,274 @@
 ---
 status: reference
-audience: development
-last_verified: 2026-07-30
-source_of_truth: apps/server/src/index.ts, routes and modules
+audience: development, testing
+last_verified: 2026-08-16
+source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
-# HTTP 接口
+# HTTP 接口清单
 
-基础路径为 `/api`，Judge WebSocket 为 `/ws/judge`。当前目录登记源码中的 253 个
-HTTP 端点。
+本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
-| 文档 | 端点范围 |
-|------|----------|
-| [Carits币与贡献](CARITS_AND_CONTRIBUTION.md) | carits、contributions（只读计划状态） |
-| [认证与管理员](AUTH_AND_ADMIN.md) | health、auth、users、stats |
-| [学校与团队](ORGANIZATION_AND_TEAMS.md) | schools、teachers、students、teams、import、milestones |
-| [题目与 OJ](PROBLEMS_AND_OJ.md) | problems、problem-lists、bindings、OJ、archive |
-| [训练与提交](TRAININGS_AND_SUBMISSIONS.md) | trainings、submit、submissions |
-| [文件与维护](FILES_AND_MAINTENANCE.md) | files、testdata、admin data、migration |
-
-## 认证
-
-除表中标为“公开”的端点外，请求使用：
-
-```http
-Authorization: Bearer <JWT>
-```
-
-访问列中的“资源”表示除登录外还检查学校、团队、所有者、成员、参与者或可见性。
-“管理员”表示 `super_admin | platform_admin`，“教师”表示接口列出的
-`teacher/school_principal`，两者不能互相替代。
-
-## 通用响应
-
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
-
-```json
-{
-  "success": false,
-  "message": "错误信息",
-  "code": "OPTIONAL_CODE"
-}
-```
-
-分页、状态码和字段规则见[字段契约](../FIELD_CONTRACTS.md)。
-
-## 敏感端点
-
-- OJ Cookie 配置：仅超级管理员，响应不得包含原文。
-- `/api/admin/migration/*`：仅超级管理员且维护开关开启；关闭时 `404`。
-- `/api/admin/data/*`：超级管理员和平台管理员。
-- `/api/oj-accounts/*`：超级管理员和平台管理员。
-- Judge WebSocket 使用独立 Token，不使用浏览器 JWT。
-
-`pnpm docs:check` 从 Express 源码提取静态 method/path，与本目录中的表格比较。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `DELETE` | `/api/archived-problems` | 见对应路由实现 |
+| `DELETE` | `/api/archived-problems/:id` | 见对应路由实现 |
+| `DELETE` | `/api/files/:id` | 见对应路由实现 |
+| `DELETE` | `/api/oj-accounts/:id` | 见对应路由实现 |
+| `DELETE` | `/api/oj-fetcher/jobs/:id` | 见对应路由实现 |
+| `DELETE` | `/api/organizations/:organizationId/members/students/:profileId` | 见对应路由实现 |
+| `DELETE` | `/api/organizations/:organizationId/members/teachers/:profileId` | 见对应路由实现 |
+| `DELETE` | `/api/platform-bindings/:platform` | 见对应路由实现 |
+| `DELETE` | `/api/problem-lists/:id` | 见对应路由实现 |
+| `DELETE` | `/api/problem-lists/:id/shares/:shareId` | 见对应路由实现 |
+| `DELETE` | `/api/problem-lists/entries/:entryId` | 见对应路由实现 |
+| `DELETE` | `/api/problem-lists/sections/:sectionId` | 见对应路由实现 |
+| `DELETE` | `/api/problems/:id` | 见对应路由实现 |
+| `DELETE` | `/api/problems/:id/attachments/:attachmentId` | 见对应路由实现 |
+| `DELETE` | `/api/problems/:id/statements/:statementId` | 见对应路由实现 |
+| `DELETE` | `/api/problems/:id/testdata/:fileId` | 见对应路由实现 |
+| `DELETE` | `/api/teams/:id` | 见对应路由实现 |
+| `DELETE` | `/api/teams/:id/admins/:adminId` | 见对应路由实现 |
+| `DELETE` | `/api/teams/:id/invites/:inviteId` | 见对应路由实现 |
+| `DELETE` | `/api/teams/:id/members/:memberId` | 见对应路由实现 |
+| `DELETE` | `/api/teams/:teamId/problem-lists/:id` | 见对应路由实现 |
+| `DELETE` | `/api/trainings/:id` | 见对应路由实现 |
+| `DELETE` | `/api/trainings/:id/problems/:problemId` | 见对应路由实现 |
+| `GET` | `/api/admin/data/submission-stats` | 见对应路由实现 |
+| `GET` | `/api/archived-problems` | 见对应路由实现 |
+| `GET` | `/api/archived-problems/:id` | 见对应路由实现 |
+| `GET` | `/api/archived-problems/stats/summary` | 见对应路由实现 |
+| `GET` | `/api/auth/me` | 见对应路由实现 |
+| `GET` | `/api/carits/me` | 见对应路由实现 |
+| `GET` | `/api/carits/me/transactions` | 见对应路由实现 |
+| `GET` | `/api/carits/organizations/:organizationId` | 见对应路由实现 |
+| `GET` | `/api/carits/organizations/:organizationId/transactions` | 见对应路由实现 |
+| `GET` | `/api/carits/platform` | 见对应路由实现 |
+| `GET` | `/api/contributions/me/events` | 见对应路由实现 |
+| `GET` | `/api/contributions/me/summary` | 见对应路由实现 |
+| `GET` | `/api/contributions/organizations/:organizationId/events` | 见对应路由实现 |
+| `GET` | `/api/contributions/organizations/:organizationId/rankings` | 见对应路由实现 |
+| `GET` | `/api/contributions/platform` | 见对应路由实现 |
+| `GET` | `/api/contributions/rankings/users` | 见对应路由实现 |
+| `GET` | `/api/files/:id` | 见对应路由实现 |
+| `GET` | `/api/files/:id/download` | 见对应路由实现 |
+| `GET` | `/api/files/:id/public` | 见对应路由实现 |
+| `GET` | `/api/files/by-owner/:ownerType/:ownerId` | 见对应路由实现 |
+| `GET` | `/api/health` | 见对应路由实现 |
+| `GET` | `/api/me/contests` | 见对应路由实现 |
+| `GET` | `/api/me/homeworks` | 见对应路由实现 |
+| `GET` | `/api/me/overview` | 见对应路由实现 |
+| `GET` | `/api/notifications` | 见对应路由实现 |
+| `GET` | `/api/oj-accounts` | 见对应路由实现 |
+| `GET` | `/api/oj-accounts/stats` | 见对应路由实现 |
+| `GET` | `/api/oj-fetcher/:platform/:problemId` | 见对应路由实现 |
+| `GET` | `/api/oj-fetcher/jobs` | 见对应路由实现 |
+| `GET` | `/api/oj-fetcher/platforms` | 见对应路由实现 |
+| `GET` | `/api/oj-fetcher/platforms/:platform/config` | 见对应路由实现 |
+| `GET` | `/api/organizations/:organizationId/members/activities/contests` | 见对应路由实现 |
+| `GET` | `/api/organizations/:organizationId/members/activities/homeworks` | 见对应路由实现 |
+| `GET` | `/api/organizations/:organizationId/members/campus` | 见对应路由实现 |
+| `GET` | `/api/organizations/:organizationId/members/students` | 见对应路由实现 |
+| `GET` | `/api/organizations/:organizationId/members/teachers` | 见对应路由实现 |
+| `GET` | `/api/platform-bindings` | 见对应路由实现 |
+| `GET` | `/api/platform-bindings/:platform` | 见对应路由实现 |
+| `GET` | `/api/platform-bindings/:platform/config-schema` | 见对应路由实现 |
+| `GET` | `/api/platform-bindings/platforms` | 见对应路由实现 |
+| `GET` | `/api/platform/organizations` | 见对应路由实现 |
+| `GET` | `/api/platform/organizations/:organizationId` | 见对应路由实现 |
+| `GET` | `/api/platform/organizations/:organizationId/students` | 见对应路由实现 |
+| `GET` | `/api/platform/organizations/:organizationId/teachers` | 见对应路由实现 |
+| `GET` | `/api/problem-lists` | 见对应路由实现 |
+| `GET` | `/api/problem-lists/:id` | 见对应路由实现 |
+| `GET` | `/api/problem-lists/:id/entries/:entryId/files/:fileId` | 见对应路由实现 |
+| `GET` | `/api/problem-lists/:id/entries/:entryId/problem` | 见对应路由实现 |
+| `GET` | `/api/problem-lists/:id/share-candidates` | 见对应路由实现 |
+| `GET` | `/api/problem-lists/:id/shares` | 见对应路由实现 |
+| `GET` | `/api/problems` | 见对应路由实现 |
+| `GET` | `/api/problems/:id` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/ai/usage` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/attachments` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/judge-config` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/note` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/submissions` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/testdata` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/testdata/download/:filename` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/testdata/export` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/testdata/files/:fileId/download` | 见对应路由实现 |
+| `GET` | `/api/problems/library/creators` | 见对应路由实现 |
+| `GET` | `/api/rankings/organizations/:organizationId/:metric` | 见对应路由实现 |
+| `GET` | `/api/rankings/personal/rating` | 见对应路由实现 |
+| `GET` | `/api/rankings/personal/solved` | 见对应路由实现 |
+| `GET` | `/api/stats/global` | 见对应路由实现 |
+| `GET` | `/api/stats/schools` | 见对应路由实现 |
+| `GET` | `/api/submissions` | 见对应路由实现 |
+| `GET` | `/api/submissions/:id` | 见对应路由实现 |
+| `GET` | `/api/team-import/:batchId/preview` | 见对应路由实现 |
+| `GET` | `/api/team-import/:batchId/result` | 见对应路由实现 |
+| `GET` | `/api/team-import/history/:teamId` | 见对应路由实现 |
+| `GET` | `/api/team-import/luogu/groups` | 见对应路由实现 |
+| `GET` | `/api/team-import/platforms` | 见对应路由实现 |
+| `GET` | `/api/team-import/teams` | 见对应路由实现 |
+| `GET` | `/api/team-import/vjudge/groups` | 见对应路由实现 |
+| `GET` | `/api/teams` | 见对应路由实现 |
+| `GET` | `/api/teams/:id` | 见对应路由实现 |
+| `GET` | `/api/teams/:id/admins` | 见对应路由实现 |
+| `GET` | `/api/teams/:id/available-members` | 见对应路由实现 |
+| `GET` | `/api/teams/:id/join-requests` | 见对应路由实现 |
+| `GET` | `/api/teams/:id/pending-invites` | 见对应路由实现 |
+| `GET` | `/api/teams/:teamId/problem-lists` | 见对应路由实现 |
+| `GET` | `/api/teams/:teamId/trainings` | 见对应路由实现 |
+| `GET` | `/api/teams/admin-invitations` | 见对应路由实现 |
+| `GET` | `/api/teams/check-team-id` | 见对应路由实现 |
+| `GET` | `/api/teams/invitations` | 见对应路由实现 |
+| `GET` | `/api/teams/member-invitations` | 见对应路由实现 |
+| `GET` | `/api/teams/mine` | 见对应路由实现 |
+| `GET` | `/api/teams/my-admin-teams` | 见对应路由实现 |
+| `GET` | `/api/teams/my-member-teams` | 见对应路由实现 |
+| `GET` | `/api/teams/organization/:organizationId` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/attachments` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/overview` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problem-status` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problems` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problems/:problemId/attachments` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problems/:problemId/detail` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problems/:problemId/files/:fileId` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problems/:problemId/note` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/problems/:problemId/solution` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/ranking` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/record` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/solutions` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/submissions` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/submissions/:submissionId` | 见对应路由实现 |
+| `GET` | `/api/users` | 见对应路由实现 |
+| `GET` | `/api/users/:id` | 见对应路由实现 |
+| `GET` | `/api/users/:userId/profile` | 见对应路由实现 |
+| `GET` | `/api/workspaces` | 见对应路由实现 |
+| `PATCH` | `/api/notifications/:id/read` | 见对应路由实现 |
+| `POST` | `/api/admin/data/backfill-training-participants` | 见对应路由实现 |
+| `POST` | `/api/admin/data/clean-training-submissions` | 见对应路由实现 |
+| `POST` | `/api/admin/data/fix-carits-remote-id` | 见对应路由实现 |
+| `POST` | `/api/admin/data/fix-hdu-memory` | 见对应路由实现 |
+| `POST` | `/api/admin/data/fix-submission-visibility` | 见对应路由实现 |
+| `POST` | `/api/admin/data/reset-user-password` | 见对应路由实现 |
+| `POST` | `/api/admin/demo-scenario/v2/events` | 见对应路由实现 |
+| `POST` | `/api/admin/demo-scenario/v2/prepare` | 见对应路由实现 |
+| `POST` | `/api/admin/demo-scenario/v3/events` | 见对应路由实现 |
+| `POST` | `/api/admin/demo-scenario/v3/prepare` | 见对应路由实现 |
+| `POST` | `/api/admin/migration/migrate-problem-status` | 见对应路由实现 |
+| `POST` | `/api/admin/migration/migrate-submission-scope` | 见对应路由实现 |
+| `POST` | `/api/archived-problems` | 见对应路由实现 |
+| `POST` | `/api/auth/avatar` | 见对应路由实现 |
+| `POST` | `/api/auth/login` | 见对应路由实现 |
+| `POST` | `/api/auth/logout` | 见对应路由实现 |
+| `POST` | `/api/auth/register` | 见对应路由实现 |
+| `POST` | `/api/auth/session/migrate` | 见对应路由实现 |
+| `POST` | `/api/files/upload` | 见对应路由实现 |
+| `POST` | `/api/notifications/read-all` | 见对应路由实现 |
+| `POST` | `/api/oj-accounts` | 见对应路由实现 |
+| `POST` | `/api/oj-accounts/:id/login` | 见对应路由实现 |
+| `POST` | `/api/oj-accounts/:id/verify` | 见对应路由实现 |
+| `POST` | `/api/oj-accounts/batch-verify` | 见对应路由实现 |
+| `POST` | `/api/oj-fetcher/download-attachment` | 见对应路由实现 |
+| `POST` | `/api/oj-fetcher/jobs/:id/retry` | 见对应路由实现 |
+| `POST` | `/api/oj-fetcher/jobs/batch` | 见对应路由实现 |
+| `POST` | `/api/organizations/:organizationId/members/activities/contests` | 见对应路由实现 |
+| `POST` | `/api/organizations/:organizationId/members/principal-transfer` | 见对应路由实现 |
+| `POST` | `/api/organizations/:organizationId/members/students` | 见对应路由实现 |
+| `POST` | `/api/organizations/:organizationId/members/teachers` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/:platform/bind` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/:platform/refresh` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/admin/cleanup-submissions` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/codeforces/sync-archive` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/codeforces/sync-submissions` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/luogu/sync-archive` | 见对应路由实现 |
+| `POST` | `/api/platform-bindings/luogu/sync-submissions` | 见对应路由实现 |
+| `POST` | `/api/platform/organizations` | 见对应路由实现 |
+| `POST` | `/api/platform/organizations/:organizationId/principal` | 见对应路由实现 |
+| `POST` | `/api/problem-lists` | 见对应路由实现 |
+| `POST` | `/api/problem-lists/:id/entries/resolve` | 见对应路由实现 |
+| `POST` | `/api/problem-lists/:id/publish-homework` | 见对应路由实现 |
+| `POST` | `/api/problem-lists/:id/sections` | 见对应路由实现 |
+| `POST` | `/api/problem-lists/:id/shares` | 见对应路由实现 |
+| `POST` | `/api/problem-lists/sections/:sectionId/entries/single` | 见对应路由实现 |
+| `POST` | `/api/problems` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/ai/format` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/ai/translate` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/attachments` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/copy-to-school` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/solution-pdf` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/statement-pdf` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/statements/pdf` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/testdata` | 见对应路由实现 |
+| `POST` | `/api/problems/:id/testdata/auto` | 见对应路由实现 |
+| `POST` | `/api/resolve-problems` | 见对应路由实现 |
+| `POST` | `/api/submissions/:id/refetch-code` | 见对应路由实现 |
+| `POST` | `/api/submit` | 见对应路由实现 |
+| `POST` | `/api/submit/rejudge` | 见对应路由实现 |
+| `POST` | `/api/team-import/:batchId/confirm` | 见对应路由实现 |
+| `POST` | `/api/team-import/luogu/import` | 见对应路由实现 |
+| `POST` | `/api/team-import/luogu/preview` | 见对应路由实现 |
+| `POST` | `/api/team-import/luogu/validate` | 见对应路由实现 |
+| `POST` | `/api/team-import/start` | 见对应路由实现 |
+| `POST` | `/api/team-import/vjudge/import` | 见对应路由实现 |
+| `POST` | `/api/team-import/vjudge/preview` | 见对应路由实现 |
+| `POST` | `/api/team-import/vjudge/validate` | 见对应路由实现 |
+| `POST` | `/api/teams` | 见对应路由实现 |
+| `POST` | `/api/teams/:id/admins` | 见对应路由实现 |
+| `POST` | `/api/teams/:id/avatar` | 见对应路由实现 |
+| `POST` | `/api/teams/:id/join-request` | 见对应路由实现 |
+| `POST` | `/api/teams/:id/leave` | 见对应路由实现 |
+| `POST` | `/api/teams/:id/members` | 见对应路由实现 |
+| `POST` | `/api/teams/:id/transfer` | 见对应路由实现 |
+| `POST` | `/api/teams/:teamId/problem-lists` | 见对应路由实现 |
+| `POST` | `/api/teams/:teamId/trainings` | 见对应路由实现 |
+| `POST` | `/api/teams/admin-invitations/:invitationId/accept` | 见对应路由实现 |
+| `POST` | `/api/teams/admin-invitations/:invitationId/reject` | 见对应路由实现 |
+| `POST` | `/api/teams/invitations/:invitationId/accept` | 见对应路由实现 |
+| `POST` | `/api/teams/invitations/:invitationId/reject` | 见对应路由实现 |
+| `POST` | `/api/teams/join-requests/:requestId/approve` | 见对应路由实现 |
+| `POST` | `/api/teams/join-requests/:requestId/reject` | 见对应路由实现 |
+| `POST` | `/api/teams/member-invitations/:invitationId/accept` | 见对应路由实现 |
+| `POST` | `/api/teams/member-invitations/:invitationId/reject` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/create-makeup-homework` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/finish` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/problems` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/rejudge` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/start` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/submit` | 见对应路由实现 |
+| `POST` | `/api/users/:id/reset-password` | 见对应路由实现 |
+| `POST` | `/api/users/platform-admin` | 见对应路由实现 |
+| `POST` | `/api/workspaces/organization-invitations/:id/:action` | 见对应路由实现 |
+| `POST` | `/api/workspaces/organizations/:id/invitations` | 见对应路由实现 |
+| `PUT` | `/api/archived-problems/:id` | 见对应路由实现 |
+| `PUT` | `/api/auth/password` | 见对应路由实现 |
+| `PUT` | `/api/auth/profile` | 见对应路由实现 |
+| `PUT` | `/api/oj-accounts/:id` | 见对应路由实现 |
+| `PUT` | `/api/oj-fetcher/platforms/:platform/config` | 见对应路由实现 |
+| `PUT` | `/api/organizations/:organizationId/members/campus` | 见对应路由实现 |
+| `PUT` | `/api/organizations/:organizationId/members/campus/announcement` | 见对应路由实现 |
+| `PUT` | `/api/organizations/:organizationId/members/students/:profileId` | 见对应路由实现 |
+| `PUT` | `/api/organizations/:organizationId/members/students/:profileId/status` | 见对应路由实现 |
+| `PUT` | `/api/organizations/:organizationId/members/teachers/:profileId` | 见对应路由实现 |
+| `PUT` | `/api/organizations/:organizationId/members/teachers/:profileId/status` | 见对应路由实现 |
+| `PUT` | `/api/platform/organizations/:organizationId` | 见对应路由实现 |
+| `PUT` | `/api/platform/organizations/:organizationId/principal` | 见对应路由实现 |
+| `PUT` | `/api/problem-lists/:id` | 见对应路由实现 |
+| `PUT` | `/api/problem-lists/:id/sections/reorder` | 见对应路由实现 |
+| `PUT` | `/api/problem-lists/entries/:entryId` | 见对应路由实现 |
+| `PUT` | `/api/problem-lists/sections/:sectionId` | 见对应路由实现 |
+| `PUT` | `/api/problem-lists/sections/:sectionId/entries/reorder` | 见对应路由实现 |
+| `PUT` | `/api/problems/:id` | 见对应路由实现 |
+| `PUT` | `/api/problems/:id/judge-config` | 见对应路由实现 |
+| `PUT` | `/api/problems/:id/note` | 见对应路由实现 |
+| `PUT` | `/api/problems/:id/statements/:statementId/visibility` | 见对应路由实现 |
+| `PUT` | `/api/teams/:id` | 见对应路由实现 |
+| `PUT` | `/api/teams/:id/announcement` | 见对应路由实现 |
+| `PUT` | `/api/trainings/:id` | 见对应路由实现 |
+| `PUT` | `/api/trainings/:id/end-time` | 见对应路由实现 |
+| `PUT` | `/api/trainings/:id/problems/:problemId` | 见对应路由实现 |
+| `PUT` | `/api/trainings/:id/problems/:problemId/note` | 见对应路由实现 |
+| `PUT` | `/api/trainings/:id/problems/reorder` | 见对应路由实现 |
+| `PUT` | `/api/trainings/:id/record` | 见对应路由实现 |
+| `PUT` | `/api/users/:id/status` | 见对应路由实现 |

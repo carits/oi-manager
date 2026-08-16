@@ -137,7 +137,7 @@ function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string, p
     }
   }
   if (oj === 'carits' && viewRole) {
-    const prefix = viewRole === 'admin' ? '/platform-admin' : viewRole === 'student' ? '/student' : '/teacher'
+    const prefix = viewRole === 'admin' ? '/platform-admin' : '/personal'
     return `${prefix}/submissions/${ojRemoteId}`
   }
   return null

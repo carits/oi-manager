@@ -28,22 +28,21 @@ teamInvitationsRouter.get('/invitations', authenticate, asyncHandler(async (req,
 
   const formattedInvitations = await Promise.all(
     invitations.map(async (invite) => {
+      const team = await teamRepository.findById(invite.teamId)
       const ownerMember = await teamRepository.findOwner(invite.teamId)
-      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, scope) : '未知'
+      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, scope, team?.organizationId || undefined) : '未知'
 
       let invitedByName = '未知'
       if (invite.invitedBy) {
-        invitedByName = await getUserDisplayName(invite.invitedBy, scope === 'personal' ? 'user' : 'teacher', scope)
+        invitedByName = await getUserDisplayName(invite.invitedBy, scope === 'personal' ? 'user' : 'teacher', scope, team?.organizationId || undefined)
       }
-
-      const team = await teamRepository.findById(invite.teamId)
 
       return {
         id: invite.id,
         teamId: invite.teamId,
         teamName: team?.name || '',
         teamAvatar: team?.avatar,
-        schoolName: team?.School?.name || '',
+        schoolName: team?.Organization?.name || '',
         memberCount: team?.TeamMember?.length || 0,
         ownerName,
         invitedBy: invitedByName,
@@ -76,7 +75,7 @@ teamInvitationsRouter.get('/my-admin-teams', authenticate, asyncHandler(async (r
         avatar: team.avatar,
         description: team.description,
         isPublic: team.isPublic,
-        school: team.School
+        school: team.Organization
       } : null
     })
   )
@@ -103,7 +102,7 @@ teamInvitationsRouter.get('/my-member-teams', authenticate, asyncHandler(async (
         avatar: team.avatar,
         description: team.description,
         isPublic: team.isPublic,
-        school: team.School
+        school: team.Organization
       } : null
     })
   )
@@ -123,15 +122,15 @@ teamInvitationsRouter.get('/admin-invitations', authenticate, asyncHandler(async
 
   const invitationsWithOwner = await Promise.all(
     invitations.map(async (invite) => {
-      const ownerMember = await teamRepository.findOwner(invite.teamId)
-      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, scope) : '未知'
       const team = await teamRepository.findById(invite.teamId)
+      const ownerMember = await teamRepository.findOwner(invite.teamId)
+      const ownerName = ownerMember ? await getUserDisplayName(ownerMember.userId, ownerMember.userType as MemberType, scope, team?.organizationId || undefined) : '未知'
 
       return {
         id: invite.id,
         teamId: invite.teamId,
         teamName: team?.name || '',
-        schoolName: team?.School?.name || '',
+        schoolName: team?.Organization?.name || '',
         memberCount: team?.TeamMember?.length || 0,
         ownerName,
         invitedAt: invite.joinedAt
@@ -211,7 +210,7 @@ teamInvitationsRouter.get('/member-invitations', authenticate, asyncHandler(asyn
         id: invite.id,
         teamId: invite.teamId,
         teamName: team?.name || '',
-        schoolName: team?.School?.name || '',
+        schoolName: team?.Organization?.name || '',
         memberCount: team?.TeamMember?.length || 0,
         ownerName,
         invitedAt: invite.joinedAt,
@@ -325,7 +324,8 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
         teamName: team!.name,
         memberId: invitation.userId,
         memberType: invitation.userType as MemberType,
-        accepted: true
+        accepted: true,
+        organizationId: team!.organizationId || undefined
       })
     }
     res.json({ success: true, message: '已加入团队' })
@@ -388,7 +388,8 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
         teamName: team!.name,
         memberId: invitation.userId,
         memberType: invitation.userType as MemberType,
-        accepted: false
+        accepted: false,
+        organizationId: team!.organizationId || undefined
       })
     }
     res.json({ success: true, message: '已拒绝邀请' })

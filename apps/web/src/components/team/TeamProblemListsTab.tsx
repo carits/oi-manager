@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
+import { usePathname } from 'next/navigation'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import apiClient from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -47,6 +49,8 @@ interface TeamProblemListsTabProps {
 
 export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwner, userId }: TeamProblemListsTabProps) {
   const { user } = useAuth()
+  const pathname = usePathname()
+  const problemListsPrefix = currentWorkspacePrefix(pathname, '/personal/problem-lists', '/problem-lists')
   const isStudent = user?.role === 'student'
   const effectiveCanManage = canManage && !isStudent
   const toast = useToast()
@@ -147,7 +151,6 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
           {items.map(item => {
             const canRemove = !isStudent && (isOwner || item.addedBy === (userId || user?.userId))
-            const pathPrefix = isStudent ? '/student/problem-lists' : '/teacher/problem-lists'
             return (
               <div
                 key={item.id}
@@ -163,7 +166,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Link
-                    href={`${pathPrefix}/${item.problemListId}`}
+                    href={`${problemListsPrefix}/${item.problemListId}`}
                     style={{ fontWeight: 600, color: 'var(--primary)', textDecoration: 'none', fontSize: '0.95rem' }}
                   >
                     {item.problemList.title}
@@ -214,7 +217,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
           ) : myLists.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
               <p>你还没有创建题单</p>
-              <Link href="/teacher/problem-lists/new" style={{ color: 'var(--primary)' }}>去创建</Link>
+              <Link href={`${problemListsPrefix}/new`} style={{ color: 'var(--primary)' }}>去创建</Link>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

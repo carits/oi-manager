@@ -13,7 +13,7 @@ export class TeamImportRepository {
    */
   async createTeam(params: {
     name: string
-    schoolId: string
+    organizationId: string
     leaderId: string
     isPublic: boolean
   }) {
@@ -23,7 +23,8 @@ export class TeamImportRepository {
         data: {
           id: uuidv4(),
           name: params.name,
-          schoolId: params.schoolId,
+          organizationId: params.organizationId,
+          scope: 'campus',
           isPublic: params.isPublic,
         },
       })
@@ -66,7 +67,7 @@ export class TeamImportRepository {
     return prisma.team.findUnique({
       where: { id: teamId },
       include: {
-        School: true,
+        Organization: { include: { School: true } },
       },
     })
   }
@@ -85,9 +86,7 @@ export class TeamImportRepository {
       },
       include: {
         Team: {
-          include: {
-            School: true,
-          },
+          include: { Organization: { include: { School: true } } },
         },
       },
     })
@@ -95,8 +94,8 @@ export class TeamImportRepository {
     return adminMembers.map((m) => ({
       id: m.Team.id,
       name: m.Team.name,
-      schoolId: m.Team.schoolId,
-      schoolName: m.Team.School?.name,
+      organizationId: m.Team.organizationId,
+      schoolName: m.Team.Organization?.School?.name,
     }))
   }
 
@@ -159,7 +158,7 @@ export class TeamImportRepository {
         candidateDisplayName: row.candidateDisplayName,
         matchType: match?.matchType || 'invalid',
         matchStatus: 'pending',
-        matchedStudentId: match?.matchedStudentId || null,
+        matchedStudentProfileId: match?.matchedStudentProfileId || null,
         matchedStudentName: match?.matchedStudentName || null,
         action: match?.suggestedAction || null,
       }
@@ -180,7 +179,7 @@ export class TeamImportRepository {
       include: {
         Team: {
           include: {
-            School: true,
+            Organization: true,
           },
         },
       },
@@ -232,7 +231,7 @@ export class TeamImportRepository {
     data: {
       matchStatus: string
       processedAt: Date
-      createdStudentId?: string
+      createdStudentProfileId?: string
       errorMessage?: string
     }
   ) {
@@ -245,33 +244,19 @@ export class TeamImportRepository {
   /**
    * 按学生姓名查找学生
    */
-  async findStudentByName(schoolId: string, name: string) {
-    // SQLite 不支持 mode: 'insensitive'，使用精确匹配
-    return prisma.student.findFirst({
-      where: {
-        schoolId,
-        name,
-      },
+  async findStudentByName(organizationId: string, name: string) {
+    return prisma.organizationStudentProfile.findFirst({
+      where: { name, status: "active", Membership: { organizationId, status: "active", memberRole: "student" } },
+      include: { Membership: { include: { User: true } } },
     })
   }
 
   /**
    * 查找学生的平台绑定
    */
-  async findStudentPlatformBinding(studentId: string, platform: string) {
-    // 学生目前没有直接的平台绑定，使用 UserPlatformBinding
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-    })
-    if (!student) return null
-
+  async findStudentPlatformBinding(userId: string, platform: string) {
     return prisma.userPlatformBinding.findUnique({
-      where: {
-        userId_platform: {
-          userId: student.id,
-          platform,
-        },
-      },
+      where: { userId_platform: { userId, platform } },
     })
   }
 
@@ -288,7 +273,7 @@ export class TeamImportRepository {
         },
       },
       include: {
-        Student: true,
+        OrganizationStudentProfile: { include: { Membership: { include: { User: true } } } },
       },
     })
   }
@@ -305,10 +290,10 @@ export class TeamImportRepository {
       include: {
         Team: {
           include: {
-            School: true,
+            Organization: true,
           },
         },
-        Student: true,
+        OrganizationStudentProfile: { include: { Membership: { include: { User: true } } } },
       },
     })
   }
@@ -318,25 +303,19 @@ export class TeamImportRepository {
    */
   async getTeamStudentMembers(teamId: string) {
     const members = await prisma.teamMember.findMany({
-      where: {
-        teamId,
-        userType: 'student',
-        status: 'active',
-      },
-      include: {
-        Team: true,
-      },
+      where: { teamId, userType: "student", status: "active" },
+      include: { Team: { select: { organizationId: true } } },
     })
+    const organizationId = members[0]?.Team.organizationId
+    if (!organizationId) return []
 
-    // 获取学生详情
-    const studentIds = members.map((m) => m.userId)
-    const students = await prisma.student.findMany({
-      where: { id: { in: studentIds } },
+    const profiles = await prisma.organizationStudentProfile.findMany({
+      where: { Membership: { organizationId, userId: { in: members.map((member) => member.userId) } } },
+      include: { Membership: { select: { userId: true } } },
     })
-
-    return members.map((m) => ({
-      ...m,
-      student: students.find((s) => s.id === m.userId),
+    return members.map((member) => ({
+      ...member,
+      student: profiles.find((profile) => profile.Membership.userId === member.userId),
     }))
   }
 
@@ -345,7 +324,8 @@ export class TeamImportRepository {
    */
   async createExternalAccount(params: {
     teamId: string
-    studentId?: string
+    studentProfileId?: string
+    studentNameSnapshot?: string
     platform: string
     platformUsername: string
     displayName?: string
@@ -355,11 +335,12 @@ export class TeamImportRepository {
       data: {
         id: crypto.randomUUID(),
         teamId: params.teamId,
-        studentId: params.studentId || null,
+        studentProfileId: params.studentProfileId || null,
+        studentNameSnapshot: params.studentNameSnapshot || null,
         platform: params.platform,
         platformUsername: params.platformUsername,
         displayName: params.displayName || null,
-        status: params.status || 'pending',
+        status: params.status || "pending",
       },
     })
   }
@@ -367,11 +348,8 @@ export class TeamImportRepository {
   /**
    * 更新外部账号关联
    */
-  async updateExternalAccount(id: string, data: { studentId?: string; status?: string }) {
-    return prisma.teamMemberExternalAccount.update({
-      where: { id },
-      data,
-    })
+  async updateExternalAccount(id: string, data: { studentProfileId?: string; studentNameSnapshot?: string; status?: string }) {
+    return prisma.teamMemberExternalAccount.update({ where: { id }, data })
   }
 
   /**
@@ -421,36 +399,20 @@ export class TeamImportRepository {
    */
   async createStudentWithUser(params: {
     name: string
-    schoolId: string
-    headTeacherId: string
+    organizationId: string
+    headTeacherMembershipId?: string | null
     username: string
     passwordHash: string
   }) {
     return prisma.$transaction(async (tx) => {
-      // 创建用户
-      const userId = uuidv4()
-      const user = await tx.user.create({
-        data: {
-          id: userId,
-          username: params.username,
-          passwordHash: params.passwordHash,
-          role: 'student',
-          status: 'active',
-          schoolId: params.schoolId,
-        },
+      const user = await tx.user.create({ data: { id: uuidv4(), username: params.username, passwordHash: params.passwordHash, role: 'user', status: 'active' } })
+      const membership = await tx.organizationMembership.create({
+        data: { id: uuidv4(), userId: user.id, organizationId: params.organizationId, memberRole: 'student', relationType: 'school_student', status: 'active' }
       })
-
-      // 创建学生
-      const student = await tx.student.create({
-        data: {
-          id: user.id,
-          name: params.name,
-          schoolId: params.schoolId,
-          headTeacherId: params.headTeacherId,
-        },
+      const student = await tx.organizationStudentProfile.create({
+        data: { id: uuidv4(), membershipId: membership.id, name: params.name, headTeacherMembershipId: params.headTeacherMembershipId || null }
       })
-
-      return { user, student }
+      return { user, membership, student }
     })
   }
 

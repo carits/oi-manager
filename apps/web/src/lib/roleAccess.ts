@@ -5,8 +5,8 @@ export type AppRole =
   | 'teacher'
   | 'student'
 
-export function getRoleHome(role?: string, workspaceMode: 'work' | 'personal' = 'work'): string {
-  if (workspaceMode === 'personal') return '/personal'
+export function getRoleHome(role?: string, context: 'organization' | 'personal' | 'platform' = 'organization'): string {
+  if (context === 'personal') return '/personal'
   switch (role) {
     case 'super_admin':
       return '/admin/schools'
@@ -14,9 +14,8 @@ export function getRoleHome(role?: string, workspaceMode: 'work' | 'personal' = 
       return '/platform-admin'
     case 'school_principal':
     case 'teacher':
-      return '/teacher'
     case 'student':
-      return '/student'
+      return '/identity'
     default:
       return '/login'
   }

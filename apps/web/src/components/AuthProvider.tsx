@@ -12,31 +12,14 @@ import {
 import { useSWRConfig } from 'swr'
 import { usePathname } from 'next/navigation'
 import apiClient, { AUTH_UNAUTHORIZED_EVENT } from '@/lib/apiClient'
-import {
-  clearAuth,
-  getToken,
-  setAdminId,
-  setLastStudentMode,
-  setRole,
-  setSchoolId,
-  setSchoolName,
-  setStudentId,
-  setStudentMode,
-  setTeacherId,
-  setUserId,
-  getLastWorkspacePath,
-  setLastWorkspaceMode,
-  setLastWorkspacePath,
-  setWorkspaceMode,
-  setAccountWorkspaceMode,
-  type WorkspaceMode,
-} from '@/lib/auth'
+import { clearAuth, setAdminId, setRole, setUserId } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import type { WorkspaceSummary } from '@oi-manager/shared'
 
 export interface AuthUser {
   userId: string
   organizationId?: string
+  organizationName?: string
   organizationMembershipId?: string
   username: string
   role: string
@@ -45,16 +28,9 @@ export interface AuthUser {
   email?: string | null
   bio?: string | null
   profile?: unknown
-  teacherId?: string
-  studentId?: string
   adminId?: string
-  schoolId?: string
-  schoolName?: string
   /** 当前 URL 所在校园的成员身份；校园身份不再从全局账号角色推断。 */
   organizationRole?: 'school_principal' | 'teacher' | 'student'
-  workspaceMode?: WorkspaceMode
-  /** @deprecated Use workspaceMode. */
-  studentMode?: 'campus' | 'personal'
 }
 
 export type { WorkspaceSummary }
@@ -80,25 +56,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-function normalizeWorkspaceMode(user: AuthUser): WorkspaceMode {
-  return user.workspaceMode || (user.studentMode === 'personal' ? 'personal' : 'work')
-}
-
-function storeCompatibilityMetadata(user: AuthUser): void {
+function storeAccountMetadata(user: AuthUser): void {
   setRole(user.role)
   setUserId(user.userId)
-  setSchoolId(user.schoolId || null)
-  setSchoolName(user.schoolName || null)
-  setTeacherId(user.teacherId || null)
-  setStudentId(user.studentId || null)
   setAdminId(user.adminId || null)
-  const workspaceMode = normalizeWorkspaceMode(user)
-  setWorkspaceMode(workspaceMode)
-  setLastWorkspaceMode(workspaceMode)
-  setAccountWorkspaceMode(user.username, user.role, workspaceMode)
-  const legacyMode = workspaceMode === 'personal' ? 'personal' : 'campus'
-  setStudentMode(legacyMode)
-  setLastStudentMode(legacyMode)
 }
 
 export function AuthProvider({
@@ -116,24 +77,13 @@ export function AuthProvider({
   )
 
   const sessionKey = useMemo(
-    () => user ? `${user.role}:${user.organizationId || 'none'}:${user.organizationRole || 'none'}:${user.userId}:${normalizeWorkspaceMode(user)}` : null,
+    () => user ? `${user.role}:${user.organizationId || 'personal'}:${user.organizationRole || 'user'}:${user.userId}` : null,
     [user],
   )
 
   useEffect(() => {
-    if (initialUser) storeCompatibilityMetadata(initialUser)
+    if (initialUser) storeAccountMetadata(initialUser)
   }, [initialUser])
-
-  useEffect(() => {
-    if (!user || !pathname) return
-    const mode = normalizeWorkspaceMode(user)
-    const belongsToWorkspace = mode === 'personal'
-      ? pathname === '/personal' || pathname.startsWith('/personal/')
-      : !pathname.startsWith('/personal/') && pathname !== '/personal'
-    if (belongsToWorkspace && !pathname.startsWith('/account/')) {
-      setLastWorkspacePath(user.userId, user.role, mode, pathname)
-    }
-  }, [pathname, user])
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -168,7 +118,7 @@ export function AuthProvider({
     setUser(nextUser)
     setStatus('authenticated')
     await mutateCache(() => true, undefined, { revalidate: false })
-    storeCompatibilityMetadata(nextUser)
+    storeAccountMetadata(nextUser)
     return { success: true }
   }
 
@@ -190,7 +140,7 @@ export function AuthProvider({
       const nextUser = await apiClient.query<AuthUser>('/api/auth/me', { retry: false })
       setUser(nextUser)
       setStatus('authenticated')
-      storeCompatibilityMetadata(nextUser)
+      storeAccountMetadata(nextUser)
     } catch {
       setStatus('degraded')
     }
@@ -204,10 +154,8 @@ export function AuthProvider({
       : current ? {
         ...current,
         organizationId: workspace.organizationId,
+        organizationName: workspace.organizationName,
         organizationMembershipId: workspace.organizationMembershipId,
-        // Compatibility projection only; organization membership remains authoritative.
-        schoolId: workspace.schoolId,
-        schoolName: workspace.organizationName,
         organizationRole: workspace.memberRole as 'school_principal' | 'teacher' | 'student',
       } : null)
   }, [])

@@ -7,8 +7,7 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
-import { authenticate, isPersonalMode } from '../../middleware/auth'
-import { canAccessSchool, canViewStudent } from '../../middleware/permissions'
+import { authenticate, isPersonalContextForTeams } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
 import { asyncHandler } from '../../lib/asyncHandler'
@@ -95,32 +94,26 @@ function handleError(res: Response, error: unknown, defaultMessage: string = '�
 
 // ==================== 学校团队列表 ====================
 
-teamCrudRouter.get('/school/:schoolId', authenticate, asyncHandler(async (req, res) => {
-  const { schoolId } = req.params
+teamCrudRouter.get('/organization/:organizationId', authenticate, asyncHandler(async (req, res) => {
+  const { organizationId } = req.params
   const user = (req as any).user!
 
-  if (isPersonalMode(user)) {
+  if (isPersonalContextForTeams(user)) {
     return res.status(403).json({ success: false, message: '个人模式不能访问校园团队' })
   }
 
-  if (!await canAccessSchool(req as any, schoolId)) {
-    return res.status(403).json({ success: false, message: '您没有权限查看该学校的团队列表' })
+  if (user.organizationId !== organizationId) {
+    return res.status(403).json({ success: false, message: '您没有权限查看该校园的团队列表' })
   }
 
-  const teams = await teamService.getSchoolTeams(schoolId, user)
+  const teams = await teamService.getOrganizationTeams(organizationId, user)
   res.json({ success: true, data: teams })
 }))
 
-// ==================== 学生团队列表 ====================
-
-teamCrudRouter.get('/student/:studentId', authenticate, asyncHandler(async (req, res) => {
-  const { studentId } = req.params
-
-  if (!await canViewStudent(req as any, studentId)) {
-    return res.status(403).json({ success: false, message: '您没有权限查看该学生的团队信息' })
-  }
-
-  const result = await teamService.getStudentTeams(studentId, (req as any).user!)
+// 当前身份的团队与待处理邀请。用户 ID 只从会话读取。
+teamCrudRouter.get('/mine', authenticate, asyncHandler(async (req, res) => {
+  const user = (req as any).user!
+  const result = await teamService.getStudentTeams(user.userId, user)
   res.json({ success: true, data: result })
 }))
 
@@ -129,12 +122,12 @@ teamCrudRouter.get('/student/:studentId', authenticate, asyncHandler(async (req,
 teamCrudRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
 
-  const { schoolId, view } = req.query
+  const { organizationId, view } = req.query
   const { page, pageSize, skip } = parsePagination(req.query, { defaultPageSize: 12 })
   const user = (req as any).user!
 
   const result = await teamService.getTeamList({
-    schoolId: schoolId as string,
+    organizationId: organizationId as string,
     page,
     pageSize,
     skip,
@@ -186,7 +179,7 @@ teamCrudRouter.post('/', authenticate, validateBody(createTeamSchema), asyncHand
   const user = (req as any).user!
 
   // 校园模式：学生不能创建团队；个人模式可以
-  if (user.role === 'student' && !isPersonalMode(user)) {
+  if (user.role === 'student' && !isPersonalContextForTeams(user)) {
     return res.status(403).json({ success: false, message: '校园模式下学生不能创建团队' })
   }
 

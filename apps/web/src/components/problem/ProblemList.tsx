@@ -75,6 +75,8 @@ const difficultyBadge = (difficulty?: string | null) => {
 export function ProblemList({ role }: ProblemListProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+  const newProblemHref = organizationId ? `/org/${organizationId}/problems/new` : '/platform-admin/problems/new'
   const searchParams = useSearchParams()
   const { sessionKey } = useAuth()
   const toast = useToast()
@@ -90,7 +92,7 @@ export function ProblemList({ role }: ProblemListProps) {
   const ownerId = library === 'school' ? searchParams.get('ownerId') || '' : ''
   const [searchInput, setSearchInput] = useState(keyword)
   const [copyingId, setCopyingId] = useState<string | null>(null)
-  const pathPrefix = role === 'admin' ? '/platform-admin' : role === 'student' ? '/personal' : '/teacher'
+  const pathPrefix = organizationId ? `/org/${organizationId}` : role === 'admin' ? '/platform-admin' : '/personal'
 
   useEffect(() => setSearchInput(keyword), [keyword])
 
@@ -141,13 +143,13 @@ export function ProblemList({ role }: ProblemListProps) {
       } else {
         toast.success('已复制到校内题库，并保存为草稿')
       }
-      router.push(`/teacher/problems/${result.data.problem.id}/edit`)
+      router.push(`${pathPrefix}/problems/${result.data.problem.id}/edit`)
       return
     }
     const existingId = (result.error.data as { id?: string } | undefined)?.id
     if (result.error.code === 'SCHOOL_PROBLEM_EXISTS') {
       toast.info('本校题库已经有这道题')
-      if (existingId) router.push(`/teacher/problems/${existingId}`)
+      if (existingId) router.push(`${pathPrefix}/problems/${existingId}`)
       return
     }
     toast.error(result.error.message)
@@ -168,7 +170,7 @@ export function ProblemList({ role }: ProblemListProps) {
             ? '浏览平台已发布题目，复制后可在本校独立修改。'
             : '浏览平台已发布题目。'}
         actions={isTeacherWorkspace && library === 'school'
-          ? <Button icon={<Plus size={17} />} onClick={() => router.push('/teacher/problems/new')}>新建题目</Button>
+          ? <Button icon={<Plus size={17} />} onClick={() => router.push(newProblemHref)}>新建题目</Button>
           : undefined}
       />
 

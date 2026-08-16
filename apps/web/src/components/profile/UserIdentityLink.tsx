@@ -2,8 +2,9 @@
 
 import type { CSSProperties } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@/components/AuthProvider'
+import { usePathname } from 'next/navigation'
 import { getAssetUrl } from '@/lib/assets'
+import { isPersonalPath } from '@/lib/workspacePath'
 
 export type ProfileUserType = 'teacher' | 'student' | 'user'
 
@@ -47,8 +48,8 @@ export function UserIdentityLink({
   size = 40,
   style,
 }: UserIdentityLinkProps) {
-  const { user } = useAuth()
-  const personalMode = user?.workspaceMode === 'personal' || user?.studentMode === 'personal'
+  const pathname = usePathname()
+  const personalMode = isPersonalPath(pathname)
   const normalizedType = normalizeUserType(userType, personalMode)
   const label = displayName(name, username, personalMode)
   const href = id && normalizedType ? profileHref(id, normalizedType) : null

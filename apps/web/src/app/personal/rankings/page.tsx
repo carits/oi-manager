@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import PersonalRankingsTab from '@/app/student/rating/PersonalRankingsTab'
+import PersonalRankingsTab from '@/components/organization-pages/student/rating/PersonalRankingsTab'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'

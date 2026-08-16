@@ -10,6 +10,7 @@ import { teamRepository } from './team.repository'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
+import { getMemberDetailsBatch } from './team.utils'
 import logger from '../../lib/logger'
 import { notificationService } from '../notification/notification.service'
 
@@ -44,28 +45,23 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
     orderBy: { joinedAt: 'desc' }
   })
 
-  // 批量获取用户详情
-  const userIds = pendingMembers.map(m => m.userId)
-  const users = await prisma.user.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, username: true, avatar: true, Teacher: { select: { id: true, name: true, schoolId: true } }, Student: { select: { id: true, name: true, schoolId: true } } }
-  })
-  const userMap = new Map(users.map(u => [u.id, u]))
-
+  const details = await getMemberDetailsBatch(
+    pendingMembers.map(member => ({ userId: member.userId, userType: member.userType as MemberType })),
+    team.organizationId || undefined,
+  )
   const requests = pendingMembers.map(member => {
-    const u = userMap.get(member.userId)
-    const profile = u?.Teacher || u?.Student
+    const detail = details.get(`${member.userType}:${member.userId}`)
     return {
-      id: member.userId,
+      id: member.id,
       message: null,
       createdAt: member.joinedAt,
-      user: u ? {
-        id: u.id,
-        name: team.scope === 'personal' ? u.username : (profile?.name || u.username),
-        username: u.username,
-        avatar: u.avatar,
-        userType: team.scope === 'personal' ? 'user' : u.Teacher ? 'teacher' : 'student'
-      } : null
+      user: detail ? {
+        id: member.userId,
+        name: team.scope === 'personal' ? detail.username : detail.name,
+        username: detail.username,
+        avatar: detail.avatar,
+        userType: team.scope === 'personal' ? 'user' : member.userType,
+      } : null,
     }
   })
 
@@ -116,7 +112,7 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
   const team = await teamRepository.findById(member.teamId)
   if (team) {
     await notificationService.markSourceReadForScope(scope, 'team_join_request', member.id)
-    await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: true })
+    await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: true, organizationId: team.organizationId || undefined })
   }
 
   res.json({ success: true, message: '已同意加入请求' })
@@ -160,7 +156,7 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
   const team = await teamRepository.findById(member.teamId)
   if (team) {
     await notificationService.markSourceReadForScope(scope, 'team_join_request', member.id)
-    await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: false })
+    await notificationService.createJoinDecision({ recipientId: member.userId, scope, requestId: member.id, teamId: member.teamId, teamName: team.name, approved: false, organizationId: team.organizationId || undefined })
   }
 
   res.json({ success: true, message: '已拒绝申请' })

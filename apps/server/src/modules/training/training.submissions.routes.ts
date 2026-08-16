@@ -319,15 +319,21 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
       trainingProblems.map(tp => [tp.Problem.problemId, tp.orderIndex] as [string, number])
     )
 
-    // Get submitter names and usernames
+    // 参赛者展示名只从比赛所属组织成员档案读取；个人比赛只使用用户名。
     const userIds = [...new Set(submissions.map(s => s.userId))]
-    const [teachers, students, users] = await Promise.all([
-      prisma.teacher.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
-      prisma.student.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
-      prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } }),
-    ])
-    const nameMap = new Map<string, string>([...teachers.map(t => [t.id, t.name] as [string, string]), ...students.map(s => [s.id, s.name] as [string, string])])
+    const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } })
     const usernameMap = new Map<string, string>(users.map(u => [u.id, u.username] as [string, string]))
+    const organizationId = training.organizationId || undefined
+    const memberships = organizationId ? await prisma.organizationMembership.findMany({
+      where: { organizationId, userId: { in: userIds }, status: 'active' },
+      select: { userId: true, memberRole: true, StudentProfile: { select: { name: true } }, TeacherProfile: { select: { name: true } } }
+    }) : []
+    const nameMap = new Map<string, string>(memberships.map((membership) => [
+      membership.userId,
+      (membership.memberRole === 'teacher' || membership.memberRole === 'school_principal'
+        ? membership.TeacherProfile?.name
+        : membership.StudentProfile?.name) || usernameMap.get(membership.userId) || '未知'
+    ] as [string, string]))
 
     // OI 赛制：赛中非管理员隐藏评测结果
     const now = Date.now()

@@ -245,7 +245,7 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
       training: {
         id: training.id,
         teamId: training.teamId,
-        schoolId: training.schoolId,
+        organizationId: training.organizationId,
         title: training.title,
         description: training.description,
         format: training.format,
@@ -578,7 +578,7 @@ trainingMiscRouter.get('/trainings/:id/problems/:problemId/attachments', authent
 
 /**
  * Download a problem asset only through an authorized training context.
- * Raw school-library file URLs remain inaccessible to students.
+ * Raw organization-library file URLs remain inaccessible to students.
  */
 trainingMiscRouter.get('/trainings/:id/problems/:problemId/files/:fileId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   const id = parseTrainingId(req.params.id)

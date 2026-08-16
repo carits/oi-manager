@@ -10,7 +10,7 @@ import crypto from 'crypto'
 
 import { Router } from 'express'
 import { prisma } from '../prisma'
-import { authenticate, isPersonalMode } from '../middleware/auth'
+import { authenticate, isPersonalContextForTeams } from '../middleware/auth'
 import type { AuthRequest } from '../middleware/auth'
 import { teamService } from '../modules/team/team.service'
 
@@ -25,7 +25,7 @@ async function canManageTeamProblemList(
 ): Promise<{ canAdd: boolean, role: string | null }> {
   const userId = user.userId
   // 超管直接通过
-  if (!isPersonalMode(user) && user.role === 'super_admin') {
+  if (!isPersonalContextForTeams(user) && user.role === 'super_admin') {
     return { canAdd: true, role: 'super_admin' }
   }
 
@@ -58,7 +58,7 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
     const team = await teamService.assertTeamScope(teamId, req.user!)
 
     // 权限：团队成员可查看（超管也能看）
-    if (isPersonalMode(req.user) || (role !== 'super_admin' && role !== 'platform_admin')) {
+    if (isPersonalContextForTeams(req.user) || (role !== 'super_admin' && role !== 'platform_admin')) {
       const member = await prisma.teamMember.findFirst({
         where: { teamId, userId, status: 'active' }
       })
@@ -91,40 +91,32 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
         where: { ProblemListSection: { problemListId: item.problemListId } }
       })
 
-      // owner 名字
-      let ownerName = '未知'
-      if (item.ProblemList.ownerType === 'teacher') {
-        const teacher = await prisma.teacher.findUnique({
-          where: { id: item.ProblemList.ownerId },
-          select: { name: true }
+      // 所有题单所有者与添加者均使用全局 userId；校园显示名从团队所在组织档案读取。
+      const [ownerUser, addedByUser] = await Promise.all([
+        prisma.user.findUnique({ where: { id: item.ProblemList.ownerId }, select: { username: true } }),
+        prisma.user.findUnique({ where: { id: item.addedBy }, select: { username: true } }),
+      ])
+      let ownerName = ownerUser?.username || '未知'
+      let addedByName = addedByUser?.username || '未知'
+      if (team.scope === 'campus' && team.organizationId) {
+        const memberships = await prisma.organizationMembership.findMany({
+          where: {
+            organizationId: team.organizationId,
+            userId: { in: [item.ProblemList.ownerId, item.addedBy] },
+          },
+          select: {
+            userId: true,
+            TeacherProfile: { select: { name: true } },
+            StudentProfile: { select: { name: true } },
+          },
         })
-        ownerName = team.scope === 'personal'
-          ? (await prisma.user.findUnique({ where: { id: item.ProblemList.ownerId }, select: { username: true } }))?.username || '未知'
-          : teacher?.name || '未知'
-      } else if (item.ProblemList.ownerType === 'student') {
-        const student = await prisma.student.findUnique({
-          where: { id: item.ProblemList.ownerId },
-          select: { name: true }
-        })
-        ownerName = team.scope === 'personal'
-          ? (await prisma.user.findUnique({ where: { id: item.ProblemList.ownerId }, select: { username: true } }))?.username || '未知'
-          : student?.name || '未知'
-      } else if (item.ProblemList.ownerType === 'user') {
-        ownerName = (await prisma.user.findUnique({
-          where: { id: item.ProblemList.ownerId },
-          select: { username: true },
-        }))?.username || '未知'
+        const displayName = (userId: string, fallback: string) => {
+          const member = memberships.find(entry => entry.userId === userId)
+          return member?.TeacherProfile?.name || member?.StudentProfile?.name || fallback
+        }
+        ownerName = displayName(item.ProblemList.ownerId, ownerName)
+        addedByName = displayName(item.addedBy, addedByName)
       }
-
-      // 添加者名字
-      let addedByName = '未知'
-      const addedByUser = await prisma.user.findUnique({
-        where: { id: item.addedBy },
-        include: { Teacher: true, Student: true }
-      })
-      if (team.scope === 'personal') addedByName = addedByUser?.username || '未知'
-      else if (addedByUser?.Teacher) addedByName = addedByUser.Teacher.name
-      else if (addedByUser?.Student) addedByName = addedByUser.Student.name
 
       return {
         id: item.id,
@@ -169,7 +161,7 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
     await teamService.assertTeamScope(teamId, req.user!)
 
     // 校园模式：学生不能添加团队题单；个人模式可以
-    if (req.user!.role === 'student' && !isPersonalMode(req.user)) {
+    if (req.user!.role === 'student' && !isPersonalContextForTeams(req.user)) {
       return res.status(403).json({ success: false, message: '校园模式下学生不能添加团队题单' })
     }
 
@@ -234,7 +226,7 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
     await teamService.assertTeamScope(teamId, req.user!)
 
     // 校园模式：学生不能移除团队题单；个人模式可以
-    if (role === 'student' && !isPersonalMode(req.user)) {
+    if (role === 'student' && !isPersonalContextForTeams(req.user)) {
       return res.status(403).json({ success: false, message: '校园模式下学生不能移除团队题单' })
     }
 
@@ -250,7 +242,7 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
     }
 
     // 权限：owner 可删所有，非 owner 只能删自己添加的
-    if (isPersonalMode(req.user) || role !== 'super_admin') {
+    if (isPersonalContextForTeams(req.user) || role !== 'super_admin') {
       const member = await prisma.teamMember.findFirst({
         where: { teamId, userId, status: 'active' }
       })

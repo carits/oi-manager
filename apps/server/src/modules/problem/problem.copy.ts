@@ -73,7 +73,7 @@ async function cloneContentAssets(
   return rewritten
 }
 
-export async function copyPlatformProblemToSchool(sourceId: string, userId: string, schoolId: string) {
+export async function copyPlatformProblemToSchool(sourceId: string, userId: string, organizationId: string) {
   const source = await prisma.problem.findUnique({
     where: { id: sourceId },
     include: {
@@ -84,7 +84,7 @@ export async function copyPlatformProblemToSchool(sourceId: string, userId: stri
   })
   if (!source || source.libraryScope !== 'platform' || source.status !== 'published') return null
 
-  const libraryKey = problemLibraryKey('school', schoolId)
+  const libraryKey = problemLibraryKey('school', organizationId)
   const existing = await prisma.problem.findUnique({
     where: { libraryKey_platform_problemId: { libraryKey, platform: source.platform, problemId: source.problemId } },
   })
@@ -112,7 +112,7 @@ export async function copyPlatformProblemToSchool(sourceId: string, userId: stri
       ownerId: userId,
       libraryScope: 'school',
       libraryKey,
-      schoolId,
+      organizationId,
       sourceProblemId: source.id,
       status: 'draft',
       allowedLanguages: source.allowedLanguages,

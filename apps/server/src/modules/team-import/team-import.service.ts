@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../../prisma'
 import { teamService } from '../team/team.service'
 import { teamRepository } from '../team/team.repository'
+import { TeamImportRepository } from './team-import.repository'
 import type {
   ImportPlatform,
   PlatformInfo,
@@ -20,6 +21,8 @@ import type {
   ImportResult,
   ImportResultItem,
 } from './team-import.types'
+
+const importRepository = new TeamImportRepository()
 
 export class TeamImportService {
   /**
@@ -69,7 +72,7 @@ export class TeamImportService {
       include: {
         Team: {
           include: {
-            School: true,
+            Organization: { include: { School: true } },
           },
         },
       },
@@ -78,8 +81,8 @@ export class TeamImportService {
     return adminMembers.map((m) => ({
       id: m.Team.id,
       name: m.Team.name,
-      schoolId: m.Team.schoolId,
-      schoolName: m.Team.School?.name,
+      organizationId: m.Team.organizationId,
+      schoolName: m.Team.Organization?.School?.name,
     }))
   }
 
@@ -157,7 +160,7 @@ export class TeamImportService {
    */
   async createBatch(params: {
     operatorId: string
-    schoolId: string
+    organizationId: string
     platform: ImportPlatform
     createTeam: 'yes' | 'no'
     visibility?: 'public' | 'private'
@@ -200,7 +203,7 @@ export class TeamImportService {
     })
 
     // 执行匹配
-    const matchResults = await this.matchRows(teamId, params.schoolId, params.platform, validRows)
+    const matchResults = await this.matchRows(teamId, params.organizationId, params.platform, validRows)
 
     // 创建导入明细
     const data = parsedRows.map((row, index) => {
@@ -215,7 +218,7 @@ export class TeamImportService {
         candidateDisplayName: row.candidateDisplayName,
         matchType: match?.matchType || 'invalid',
         matchStatus: 'pending',
-        matchedStudentId: match?.matchedStudentId || null,
+        matchedStudentProfileId: match?.matchedStudentProfileId || null,
         matchedStudentName: match?.matchedStudentName || null,
         action: match?.suggestedAction || null,
       }
@@ -235,7 +238,7 @@ export class TeamImportService {
    */
   private async matchRows(
     teamId: string | null,
-    schoolId: string,
+    organizationId: string,
     platform: string,
     rows: ParsedRow[]
   ): Promise<MatchResult[]> {
@@ -249,20 +252,21 @@ export class TeamImportService {
         canAutoProcess: true,
       }
 
-      // 如果有姓名，尝试按姓名匹配学生
       if (row.rawStudentName) {
-        const studentByName = await prisma.student.findFirst({
+        const studentByName = await prisma.organizationStudentProfile.findFirst({
           where: {
-            schoolId,
             name: row.rawStudentName,
+            status: "active",
+            Membership: { organizationId, status: "active", memberRole: "student" },
           },
+          include: { Membership: { select: { userId: true } } },
         })
 
         if (studentByName) {
-          result.matchType = 'same_name'
-          result.matchedStudentId = studentByName.id
+          result.matchType = "same_name"
+          result.matchedStudentProfileId = studentByName.id
           result.matchedStudentName = studentByName.name
-          result.suggestedAction = 'invite'
+          result.suggestedAction = "invite"
           result.canAutoProcess = false
           results.push(result)
           continue
@@ -288,7 +292,7 @@ export class TeamImportService {
       include: {
         Team: {
           include: {
-            School: true,
+            Organization: { include: { School: true } },
           },
         },
       },
@@ -315,7 +319,7 @@ export class TeamImportService {
     const matchResults: MatchResult[] = items.map((item) => ({
       lineNumber: item.lineNumber,
       matchType: item.matchType as MatchType,
-      matchedStudentId: item.matchedStudentId || undefined,
+      matchedStudentProfileId: item.matchedStudentProfileId || undefined,
       matchedStudentName: item.matchedStudentName || undefined,
       suggestedAction: this.getSuggestedAction(item.matchType),
       canAutoProcess: item.matchType !== 'conflict' && item.matchType !== 'invalid',
@@ -401,10 +405,10 @@ export class TeamImportService {
     if (!team) {
       throw new Error('团队不存在')
     }
-    if (!team.schoolId || team.scope === 'personal') {
+    if (!team.organizationId || team.scope === 'personal') {
       throw new Error('个人团队不支持校园成员导入')
     }
-    const teamSchoolId = team.schoolId
+    const teamOrganizationId = team.organizationId
 
     const studentsToAdd: Array<{ id: string; type: 'student' }> = []
 
@@ -428,9 +432,10 @@ export class TeamImportService {
       }
 
       try {
-        if (item.matchType === 'same_name' && item.matchedStudentId) {
+        if (item.matchType === 'same_name' && item.matchedStudentProfileId) {
           // 已有学生，直接加入团队
-          studentsToAdd.push({ id: item.matchedStudentId, type: 'student' })
+          const matchedProfile = await prisma.organizationStudentProfile.findUniqueOrThrow({ where: { id: item.matchedStudentProfileId }, select: { Membership: { select: { userId: true } } } })
+          studentsToAdd.push({ id: matchedProfile.Membership.userId, type: 'student' })
           invitedCount++
 
           await prisma.teamMemberImportItem.update({
@@ -443,7 +448,7 @@ export class TeamImportService {
             matchType: 'same_name',
             action: 'invite',
             result: 'success',
-            studentId: item.matchedStudentId,
+            studentId: matchedProfile.Membership.userId,
             studentName: item.matchedStudentName || undefined,
           })
         } else if (item.matchType === 'new_member') {
@@ -456,30 +461,15 @@ export class TeamImportService {
           const passwordHash = await bcrypt.hash(tempPassword, 10)
 
           // 创建学生（调用现有的创建逻辑）
-          const student = await prisma.$transaction(async (tx) => {
-            const newUser = await tx.user.create({
-              data: {
-                id: uuidv4(),
-                username: tempUsername,
-                passwordHash,
-                role: 'student',
-                status: 'active',
-                schoolId: teamSchoolId,
-              },
-            })
-
-            return tx.student.create({
-              data: {
-                id: newUser.id,
-                name: studentName,
-                schoolId: teamSchoolId,
-                headTeacherId: operatorId,
-              },
-            })
+          const student = await importRepository.createStudentWithUser({
+            name: studentName,
+            organizationId: teamOrganizationId!,
+            username: tempUsername,
+            passwordHash,
           })
 
           // 添加到团队
-          studentsToAdd.push({ id: student.id, type: 'student' })
+          studentsToAdd.push({ id: student.user.id, type: 'student' })
           createdCount++
           invitedCount++
 
@@ -487,7 +477,7 @@ export class TeamImportService {
             where: { id: item.id },
             data: {
               matchStatus: 'created',
-              createdStudentId: student.id,
+              createdStudentProfileId: student.student.id,
               processedAt: new Date(),
             },
           })
@@ -497,7 +487,7 @@ export class TeamImportService {
             matchType: 'new_member',
             action: 'create_and_invite',
             result: 'success',
-            studentId: student.id,
+            studentId: student.user.id,
             studentName,
           })
         }
@@ -580,7 +570,7 @@ export class TeamImportService {
           : item.matchStatus === 'skipped'
           ? 'skipped'
           : 'error',
-      studentId: item.createdStudentId || item.matchedStudentId || undefined,
+      studentProfileId: item.createdStudentProfileId || item.matchedStudentProfileId || undefined,
       studentName: item.matchedStudentName || undefined,
       errorMessage: item.errorMessage || undefined,
     }))
@@ -589,7 +579,7 @@ export class TeamImportService {
       batchId,
       totalProcessed: items.length,
       invitedCount: batch.successCount,
-      createdCount: items.filter((i) => i.matchStatus === 'created' && i.createdStudentId).length,
+      createdCount: items.filter((i) => i.matchStatus === 'created' && i.createdStudentProfileId).length,
       linkedCount: 0,
       skippedCount: batch.skipCount,
       errorCount: batch.errorCount,

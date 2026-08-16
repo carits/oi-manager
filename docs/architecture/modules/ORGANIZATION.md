@@ -47,6 +47,6 @@ source_of_truth: school, user, teacher and student routes
 - 教师、学生扩展表 ID 与 User ID 对齐。
 - 删除或禁用前必须检查负责人、团队、任务和提交等关联。
 
-接口目录见[认证与管理员](../../reference/api/AUTH_AND_ADMIN.md)和
-[学校与团队](../../reference/api/ORGANIZATION_AND_TEAMS.md)。
+接口目录见[认证与管理员](../../reference/api/README.md)和
+[学校与团队](../../reference/api/README.md)。
 

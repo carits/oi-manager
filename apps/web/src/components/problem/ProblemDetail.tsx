@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -176,6 +177,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
+  const pathname = usePathname()
   const toast = useToast()
   type TabType = 'statement' | 'solution' | 'attachments' | 'records'
   const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'records']
@@ -217,10 +219,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   // 获取路径前缀
   const getPathPrefix = () => {
-    if (user?.workspaceMode === 'personal') return '/personal'
+    if (pathname === '/personal' || pathname.startsWith('/personal/')) return '/personal'
+    const workspacePrefix = currentWorkspacePrefix(pathname, '')
+    if (workspacePrefix) return workspacePrefix
     if (role === 'admin') return '/platform-admin'
-    if (role === 'student') return '/student'
-    return '/teacher'
+    return currentWorkspacePrefix(pathname, '/personal')
   }
   const pathPrefix = getPathPrefix()
 
@@ -522,13 +525,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     setCopyingToSchool(false)
     if (result.ok) {
       toast.success('已复制到校内题库，并保存为草稿')
-      router.push(`/teacher/problems/${result.data.problem.id}/edit`)
+      router.push(`${pathPrefix}/problems/${result.data.problem.id}/edit`)
       return
     }
     if (result.error.code === 'SCHOOL_PROBLEM_EXISTS') {
       const existingId = (result.error.data as { id?: string } | undefined)?.id
       toast.info('本校题库已经有这道题')
-      if (existingId) router.push(`/teacher/problems/${existingId}`)
+      if (existingId) router.push(`${pathPrefix}/problems/${existingId}`)
       return
     }
     toast.error(result.error.message)

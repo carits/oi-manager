@@ -5,8 +5,8 @@ import { useParams } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
-import HomeTab, { type CampusSchool } from '@/app/teacher/school/components/HomeTab'
-import EditSchoolModal from '@/app/teacher/school/components/EditSchoolModal'
+import HomeTab, { type CampusSchool } from '@/components/organization-pages/teacher/school/components/HomeTab'
+import EditSchoolModal from '@/components/organization-pages/teacher/school/components/EditSchoolModal'
 
 export default function OrganizationCampusPage() {
   const { organizationId } = useParams<{ organizationId: string }>()

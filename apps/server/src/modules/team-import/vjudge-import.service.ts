@@ -212,10 +212,10 @@ export class VjudgeImportService {
    * 校验成员冲突（调用通用匹配服务）
    */
   async validateMembers(
-    schoolId: string,
+    organizationId: string,
     members: MemberInput[]
   ) {
-    return memberMatchService.checkConflicts(schoolId, members)
+    return memberMatchService.checkConflicts(organizationId, members)
   }
 
   /**
@@ -269,7 +269,7 @@ export class VjudgeImportService {
   async importMembers(
     userId: string,
     teacherId: string,
-    schoolId: string,
+    organizationId: string,
     request: VjudgeImportRequest,
     user: any
   ): Promise<VjudgeImportResult> {
@@ -301,7 +301,7 @@ export class VjudgeImportService {
         data: {
           id: request.teamId || request.vjudgeGroupId || `vjudge-${Date.now()}`,
           name: request.teamName || `VJudge导入团队-${Date.now()}`,
-          schoolId,
+          organizationId,
           isPublic: request.visibility === 'public',
           announcement: request.announcement || null,
           description: request.description || null,
@@ -327,7 +327,7 @@ export class VjudgeImportService {
     } else if (request.teamId) {
       const team = await prisma.team.findUnique({ where: { id: request.teamId } })
       if (!team) throw new Error('团队不存在')
-      if (team.schoolId !== schoolId) throw new Error('只能导入到本校团队')
+      if (team.organizationId !== organizationId) throw new Error('只能导入到本校团队')
       teamName = team.name
     }
 
@@ -373,27 +373,11 @@ export class VjudgeImportService {
           const passwordHash = await bcrypt.hash(tempPassword, 10)
 
           const student = await prisma.$transaction(async (tx) => {
-            const newUser = await tx.user.create({
-              data: {
-                id: uuidv4(),
-                username: systemUsername,
-                passwordHash,
-                role: 'student',
-                status: 'active',
-                schoolId
-              }
-            })
-
-            return tx.student.create({
-              data: {
-                id: newUser.id,
-                name: studentName,
-                gender: member.gender || null,
-                schoolId,
-                enrollmentYear: member.enrollmentYear || null,
-                headTeacherId: teacherId
-              }
-            })
+            const newUser = await tx.user.create({ data: { id: uuidv4(), username: systemUsername, passwordHash, role: "user", status: "active" } })
+            const membership = await tx.organizationMembership.create({ data: { id: uuidv4(), organizationId, userId: newUser.id, memberRole: "student", relationType: "enrolled", status: "active", joinedAt: new Date() } })
+            const headTeacher = await tx.organizationMembership.findFirst({ where: { organizationId, userId: teacherId, status: "active", memberRole: { in: ["teacher", "school_principal"] } }, select: { id: true } })
+            const profile = await tx.organizationStudentProfile.create({ data: { id: uuidv4(), membershipId: membership.id, name: studentName, gender: member.gender || null, enrollmentYear: member.enrollmentYear || null, headTeacherMembershipId: headTeacher?.id || null } })
+            return { id: newUser.id, profileId: profile.id }
           })
 
           // 绑定 VJudge 账号

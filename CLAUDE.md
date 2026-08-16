@@ -16,7 +16,7 @@
 
 Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新字段，先加 `@default` 再 push，永远不需要重置。
 
-**自动备份已配置**：每天凌晨3点自动备份到 `backups/`，保留7天。恢复命令：`gunzip -c backups/oi_manager_时间戳.sql.gz | docker exec -i oi-postgres psql -U oi -d oi_manager`
+**自动备份已配置**：cron 每小时整点执行 `scripts/backup-db.sh`，备份到 `/data/oi-manager/backups/`，保留 7 天。恢复命令：`gunzip -c /data/oi-manager/backups/oi_manager_时间戳.sql.gz | docker exec -i oi-postgres psql -U oi -d oi_manager`
 
 ### 禁止直接操作数据库（必须走 API）
 
@@ -42,17 +42,23 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 2. 在 API 中实现权限校验和业务逻辑
 3. 脚本通过 HTTP 调用 API 执行操作
 
-**现有违规脚本**（已标记为废弃，仅供参考）：
-- `scripts/fix-*.ts` — 数据修复脚本
-- `scripts/migrate-*.ts` — 数据迁移脚本
-- `scripts/generate-icpc-test-data.ts` — 测试数据生成
-- `scripts/clean-icpc-test-data.ts` — 测试数据清理
+**现有违规脚本**（位于 `apps/server/scripts/`，已标记为废弃，仅供参考）：
+- `fix-*.ts` — 数据修复脚本
+- `migrate-*.ts`（组织模型迁移除外，见下）— 历史数据迁移脚本
+- `generate-icpc-test-data.ts` / `clean-icpc-test-data.ts` — 测试数据生成/清理
+
+**唯一受认可的例外**：组织模型迁移受控任务（`apps/server/scripts/migrate-organization-model.ts`、
+`migrate-organization-history.ts`）。它们以 `check`（只读审计）/`apply`（幂等写入）两步运行，
+走 Prisma 业务 API、不用原生 SQL 改业务数据，是文档钦定的迁移机制，详见 `docs/组织模型迁移.md`。
 
 ---
 
 ## 一、启动时默认加载的项目文档
 
 ### 1. 必读文档（优先加载）
+@AGENTS.md
+@docs/guide/CODEX_ONBOARDING.md
+@docs/development/WORKFLOW.md
 @docs/README.md
 @docs/STATUS.md
 @docs/guide/PROJECT_OVERVIEW.md
@@ -118,7 +124,8 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 - 若需结构性优化，先说明原因、范围、风险，再实施
 
 ### 4. 涉及以下高风险区域时必须格外谨慎
-- 登录态 / JWT / userId / teacherId / studentId / schoolId 相关逻辑
+- 登录态 / JWT / 统一身份选择 / 组织上下文（`OrganizationMembership`、`X-OI-Organization-ID` 请求头）
+- 旧 `schoolId`、`teacherId`、`studentId` 兼容逻辑（仅历史资源保留，不得用于新业务权限判断）
 - “我的数据”类接口（如 `view=mine`）
 - 会话切换、缓存失效、旧请求覆盖新状态
 - 数据库结构、Prisma schema、迁移脚本
@@ -245,12 +252,12 @@ Schema 变更只用 `prisma db push`（安全增量更新）。如果需要新�
 
 ```typescript
 // 错误 ❌ - 导致 500
-include: { teacher: true, student: true }
+include: { user: true, organization: true }
 select: { school: true }
-_count: { select: { teams: true } }
+_count: { select: { memberships: true } }
 
 // 正确 ✅
-include: { Teacher: true, Student: true }
+include: { User: true, Organization: true }
 select: { School: true }
 _count: { select: { Team: true } }
 ```
@@ -259,50 +266,38 @@ _count: { select: { Team: true } }
 
 ```typescript
 // 错误 ❌ - 返回 undefined
-const name = user.teacher?.name
+const name = membership.user?.username
 
 // 正确 ✅
-const name = user.Teacher?.name
+const name = membership.User?.username
 ```
 
 **不直接返回原始 Prisma 对象**：
 
 ```typescript
 // 错误 ❌ - 暴露大写关联字段，前端期望小写
-res.json({ success: true, data: { profile: user.Teacher } })
+res.json({ success: true, data: { profile: membership.StudentProfile } })
 
 // 正确 ✅ - 转换后返回
-const profileData = { id: user.Teacher.id, name: user.Teacher.name }
+const profile = membership.StudentProfile
+const profileData = profile ? { id: profile.id, name: profile.name, rating: profile.rating } : null
 res.json({ success: true, data: { profile: profileData } })
 ```
 
 详细规范见：`docs/reference/FIELD_CONTRACTS.md`
 
-### Teacher/Student/Admin ID 规范（必须遵守）
+### ID 与组织模型规范（必须遵守）
 
-**核心事实**：`Teacher.id` = `Student.id` = `Admin.id` = `User.id`（共享主键）
+**共享主键**：`Admin.id` = `User.id`。旧 `Student`、`Teacher` 模型已删除，档案统一存放在
+`OrganizationStudentProfile` / `OrganizationTeacherProfile`，校园身份归属由 `OrganizationMembership` 决定。
 
-**禁止使用的字段**：
-- ❌ `teacher.userId` - Teacher 模型没有这个字段
-- ❌ `student.userId` - Student 模型没有这个字段
-- ❌ `admin.userId` - Admin 模型没有这个字段
+**组织模型红线**（详见 `docs/组织档案统一迁移说明.md` 与 `docs/组织模型迁移.md`）：
 
-**正确做法**：
-```typescript
-// ✅ Teacher.id 就是 User.id
-const userId = teacher.id
-
-// ✅ Student.id 就是 User.id
-const userId = student.id
-
-// ✅ Admin.id 就是 User.id
-const userId = admin.id
-```
-
-**TeamMember.userId 说明**：
-- 存储 `Teacher.id` 或 `Student.id`
-- 由于共享主键，`TeamMember.userId` = `User.id`
-- 可以直接用于过滤 `Submission.userId`
+1. 新业务禁止读取或写入 `User.schoolId` 等旧校园字段；校园上下文只用 `organizationId` + `OrganizationMembership`
+2. 校园角色由服务端按 URL 中的组织 ID 和有效成员关系每次解析；JWT 不保存学校、角色、工作区或模式字段
+3. 前端 `apiClient` 从 `/org/:organizationId/...` URL 自动注入 `X-OI-Organization-ID` 请求头
+4. 旧 `/teacher/*`、`/student/*` 页面与 `/api/schools`、`/api/teachers`、`/api/students` 接口均返回 410，不得恢复或新增依赖
+5. `TeamMember.userId` 直接引用 `User.id`（外键到 `User`），配合 `userType` 区分成员类型，可直接用于过滤 `Submission.userId`
 
 ---
 
@@ -311,7 +306,7 @@ const userId = admin.id
 ```
 apps/server/src/
 ├── index.ts           # 后端入口文件（Express 应用配置、路由注册）
-├── prisma.ts          # Prisma 客户端导出
+├── prisma.ts          # Prisma 客户端导出（单例，测试依赖 setup-env.ts 先行设置 DATABASE_URL）
 │
 ├── config/            # 配置文件
 │   ├── env.ts         # 环境变量校验
@@ -321,50 +316,49 @@ apps/server/src/
 │   ├── logger.ts      # 统一日志模块（结构化日志）
 │   ├── jwtSecret.ts   # JWT Secret 统一获取
 │   ├── auth.ts        # 认证工具函数（密码哈希等）
-│   ├── grade.ts       # 年级计算工具
-│   ├── regionData.ts  # 区域数据
-│   ├── api.ts         # API 辅助函数
 │   ├── pagination.ts  # 分页解析 + 响应生成
 │   ├── asyncHandler.ts # 异步路由错误处理
 │   ├── zodValidate.ts # zod 校验中间件
-│   └── storage.ts     # 文件存储服务
+│   ├── storage.ts     # 文件存储服务
+│   └── ai-translate/  # AI 翻译模块（protect/splitter/restore/validate 流水线、glossary 等）
 │
 ├── middleware/        # Express 中间件
-│   ├── auth.ts        # 认证中间件（authenticate, authorize）
-│   ├── permissions.ts # 权限检查函数（canManageStudent 等）
+│   ├── auth.ts        # 认证中间件（authenticate、authorize、组织上下文解析）
+│   ├── permissions.ts # 权限检查函数
 │   ├── rateLimiter.ts # 速率限制中间件
 │   └── requestLogger.ts # 请求追踪中间件（requestId）
 │
 ├── modules/           # 业务模块（分层架构）
-│   └── team/          # 团队模块
-│       ├── team.types.ts      # 类型定义
-│       ├── team.utils.ts      # 工具函数
-│       ├── team.repository.ts # 数据访问层
-│       ├── team.service.ts    # 业务逻辑层
-│       ├── team.routes.ts     # 路由挂载入口
-│       ├── team.crud.routes.ts    # 团队 CRUD 路由
-│       ├── team.members.routes.ts # 成员管理路由
-│       ├── team.invitations.routes.ts # 邀请处理路由
-│       ├── team.requests.routes.ts    # 申请处理路由
-│       └── schemas/
-│           └── team.schemas.ts # zod 校验 schema
+│   ├── team/          # 团队模块（types/utils/repository/service/routes + crud/members/invitations/requests 分路由）
+│   ├── training/      # 训练 / 比赛 / 作业（共用 Training 表，type 区分）
+│   ├── problem/       # 题目模块（crud / copy / access 等）
+│   ├── ranking/       # 排名
+│   ├── notification/  # 站内通知
+│   ├── platform-binding/ # OJ 平台账号绑定
+│   ├── team-import/   # 团队成员导入（洛谷等）
+│   ├── carits/        # Carits 钱包与账本
+│   ├── contribution/  # 贡献值与贡献排行
+│   └── school/        # 仅剩 410 兼容桩（旧校园接口已停用）
 │
-├── oj-adapters/       # OJ 平台适配器
-│   ├── index.ts       # 适配器注册和导出
-│   ├── types.ts       # 类型定义（OjPlatform, OjProblem 等）
-│   └── luogu.ts       # 洛谷适配器
+├── oj-adapters/       # OJ 平台适配器（index / types / luogu 等）
+│
+├── ws/                # WebSocket（Judge 等）
+├── utils/             # 通用工具
 │
 └── routes/            # API 路由
-    ├── auth.ts        # 认证相关（登录、注册、/me）
+    ├── auth.ts        # 统一登录 / 登出 / 会话
+    ├── organization-members.ts # /api/organizations/:organizationId/members（校园成员、学生/教师档案）
+    ├── me.ts          # 当前账号信息
+    ├── workspaces.ts  # 工作区列表与切换
     ├── users.ts       # 用户管理
-    ├── schools.ts     # 学校管理
-    ├── teachers.ts    # 教师管理
-    ├── students.ts    # 学生管理
-    ├── teams.ts       # 团队管理（重导出到 modules/team）
-    ├── problems.ts    # 题目管理
-    ├── oj-fetcher.ts  # OJ 拉取队列
+    ├── stats.ts       # 统计数据
     ├── milestones.ts  # 里程碑
-    └── stats.ts       # 统计数据
+    ├── teams.ts       # 团队管理（重导出到 modules/team）
+    ├── problem-lists.ts / school-problem-lists.ts / team-problem-lists.ts  # 题单
+    ├── problems.ts / testdata.ts / submit.ts / submissions.ts / archived-problems.ts  # 题目、提交与评测
+    ├── oj-fetcher.ts / oj-accounts.ts / files.ts  # 外部 OJ 与文件
+    ├── admin-data.ts / migration.ts / demo-scenario.ts  # 管理员数据维护、受控迁移、演示场景
+    └── teachers.ts / students.ts  # 410 兼容桩（档案统一由组织成员接口管理）
 ```
 
 ### 模块分层规范
@@ -383,22 +377,25 @@ apps/server/src/
 
 ```
 apps/web/src/
+├── middleware.ts      # 旧 /teacher、/student 路径直接返回 410；为每个请求注入 x-oi-request-path
+│
 ├── app/               # 页面路由（Next.js App Router）
-│   ├── admin/         # 超级管理员页面
-│   ├── platform-admin/ # 平台管理员页面
-│   ├── teacher/       # 教师端页面
-│   ├── student/       # 学生端页面
-│   ├── profile/       # 公开资料页面
-│   └── login/         # 登录页面
+│   ├── login/         # 统一登录页（仅用户名 + 密码，不再选择端）
+│   ├── identity/      # 登录后身份选择页（平台管理 / 校园身份 / 个人）
+│   ├── org/[organizationId]/[module]/  # 校园组织空间（动态模块页 + [...segments] 子页）
+│   ├── personal/      # 个人空间（teams、problems、contests、problem-lists、submissions、
+│   │                  #   rankings、carits、contributions、campus）
+│   ├── platform-admin/  # 平台管理员页面
+│   ├── admin/、super_admin/  # 学校管理与系统管理页面
+│   ├── account/、profile/    # 账号设置与公开资料页
+│   └── api/           # Next.js API 代理层
 │
 ├── components/        # React 组件
 │   ├── ui/            # 通用 UI 组件（Button, Modal, Table, Card, Badge 等）
-│   ├── business/      # 业务组件（RegionSelector 等）
-│   ├── team/          # 团队相关组件
-│   ├── training/      # 训练相关组件（TeamTrainingList, TrainingDetailPage 等）
-│   ├── problem/       # 题目相关组件（ProblemDetail, ProblemForm, JudgeSettingsTab 等）
-│   ├── submission/    # 评测记录组件（SubmissionList, SubmissionDetailPage 等）
-│   ├── profile/       # 个人资料组件
+│   ├── workspace/     # 工作区切换器 + workspaceRouting.ts（统一路由函数，唯一跳转来源）
+│   ├── campus/、organization-pages/、management/  # 校园组织页面与管理组件
+│   ├── team/、training/、problem/、submission/、ranking/  # 业务组件
+│   ├── team-import/、wallet/、profile/、business/、feature/  # 其他业务组件
 │   ├── AppShell.tsx   # 应用外壳（导航布局）
 │   ├── AuthProvider.tsx # 认证状态管理
 │   └── Providers.tsx  # 全局 Provider 封装
@@ -409,12 +406,11 @@ apps/web/src/
 │   └── actions/       # 操作 Hooks（useDelete, useToggleStatus）
 │
 ├── lib/               # 工具函数
-│   ├── apiClient.ts   # 统一 API 客户端（所有 API 调用必须使用）
-│   ├── api.ts         # API 类定义
+│   ├── apiClient.ts   # 统一 API 客户端（所有 API 调用必须使用；从 /org/:id URL 注入 X-OI-Organization-ID）
+│   ├── workspacePath.ts # 工作区路径工具
+│   ├── roleAccess.ts / serverSession.ts  # 角色访问与会话
 │   ├── auth.ts        # 认证工具函数
 │   ├── assets.ts      # 资源 URL 辅助
-│   ├── grade.ts       # 年级计算
-│   ├── regionData.ts  # 区域数据
 │   ├── tokens.ts      # 设计 token 常量（与 CSS 变量一一对应）
 │   └── styles.ts      # 样式预设（表单、表格、卡片等场景样式）
 │
@@ -430,6 +426,10 @@ apps/web/src/
 2. **状态管理**：使用 `AuthProvider` 管理全局登录状态
 3. **样式**：使用内联样式 + CSS 变量，遵守设计 token 规范（见下方）
 4. **路由**：使用 Next.js App Router（`app/` 目录）
+5. **业务跳转**：必须使用 `components/workspace/workspaceRouting.ts` 的
+   `moduleHref` / `resourceHref` / `listHref` / `canNavigate` / `fallbackHref` / `notificationHref`，
+   禁止手写身份前缀再拼接详情地址；路由或按钮变更需运行 `pnpm routes:audit` 并按
+   `docs/guide/CODEX_ONBOARDING.md` 执行对应角色实际点击巡检
 
 ### 设计 Token 规范（必须遵守）
 
@@ -466,7 +466,7 @@ apps/web/src/
 
 ### 处理流程
 
-不允许"整篇直接发给模型翻译"，，必须走保护流水线：
+不允许"整篇直接发给模型翻译"，必须走保护流水线：
 
 1. `protect()` — 提取危险片段 → 占位符
 2. `splitter()` — 按段落分块（不切在代码/公式中间）
@@ -510,42 +510,28 @@ apps/web/src/
 **禁止事项**：
 - 禁止在测试代码中直接修改 `process.env.DATABASE_URL`（由 setup-env.ts 统一管理）
 - 禁止在测试文件中单独 new PrismaClient（必须从 `src/prisma.ts` 导入单例）
-- 禁止在 `afterEach`/`afterAll` 中清理 `Problem` 表（题目是共享公共数据）
+- 禁止在 `afterEach` 之外写批量 DELETE / TRUNCATE SQL
 
 ### 2. 测试文件结构
 
 ```
 apps/server/tests/
 ├── setup-env.ts          # 环境变量设置（第一个加载）
-├── setup.ts              # 数据库连接、afterEach 清理
+├── setup.ts              # 数据库连接、afterEach 清理、平台 fixture
 ├── vitest.config.ts      # vitest 配置
-├── helpers/
-│   ├── testRequest.ts    # Express 测试应用 + 认证请求
-│   ├── testUser.ts       # 测试用户/学校/团队创建
-│   ├── testToken.ts      # JWT Token 生成
-│   └── problemListHelpers.ts  # 题单测试辅助
+├── helpers/              # testRequest / testUser / testToken / problemListHelpers 等
 ├── auth.test.ts
 ├── permissions.test.ts
-├── teams.test.ts
-├── transactions.test.ts
-├── regression.test.ts
+├── problem-library-isolation.test.ts
 ├── problem-lists.test.ts
 └── ai-translate/         # 翻译模块测试
 ```
 
 ### 3. afterEach 数据清理规则
 
-`setup.ts` 的 `afterEach` 会在每个测试后清理 `test` schema 中的数据，清理范围：
-
-**会清理的表**（测试自己创建的数据）：
-- ProblemListEntry, ProblemListSection, ProblemListShare, ProblemList
-- TeamOperationLog, LoginLog, TaskItem
-- ContestProblemScore, ContestResult, ContestProblem, ContestResource, Contest
-- TeamMember, TeamJoinRequest, Team, Milestone
-- Student, Teacher, PrincipalTransferLog, Admin, School, User
-
-**不会清理的表**（共享公共数据）：
-- Problem — 题目数据是全局共享的，不在测试中删除
+`setup.ts` 的 `afterEach` 会对 `test` schema 中除 `_prisma_migrations` 外的**所有表**
+执行 `TRUNCATE ... CASCADE`，随后重建平台固定 fixture。测试数据不跨用例共享；
+需要 `Problem` 等基础数据时，在每个用例内用 helper（如 `createTestProblem`，自动生成唯一 ID）自行创建。
 
 ### 4. 编写新测试的规范
 

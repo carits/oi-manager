@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { useRouter, useParams } from 'next/navigation'
+import { usePathname, useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
+import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
@@ -134,15 +135,10 @@ let tempIdCounter = 0
 export default function ProblemListDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const pathname = usePathname()
   const { user } = useAuth()
   const listId = params.id as string
-  const pathPrefix = user?.workspaceMode === 'personal'
-    ? '/personal'
-    : user?.role === 'student'
-      ? '/student'
-      : user?.role === 'platform_admin'
-        ? '/platform-admin'
-        : '/teacher'
+  const pathPrefix = currentWorkspacePrefix(pathname, user?.role === 'platform_admin' ? '/platform-admin' : '/personal')
 
   const [detail, setDetail] = useState<ListDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -173,7 +169,7 @@ export default function ProblemListDetailPage() {
 
   const canEdit = detail?._permission === 'admin' || detail?._permission === 'edit'
   const isAdmin = detail?._permission === 'admin'
-  const isStudentView = user?.role === 'student' && user.workspaceMode !== 'personal'
+  const isStudentView = user?.role === 'student' && !isPersonalPath(pathname)
 
   useEffect(() => { fetchDetail() }, [listId])
 

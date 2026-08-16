@@ -20,7 +20,7 @@ export const createTeamSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, '团队ID只能包含英文字母、数字和下划线'),
   name: z.string().min(1, '团队名称不能为空').max(100, '团队名称最多100字符'),
   description: z.string().max(500, '团队描述最多500字符').optional(),
-  schoolId: z.string().min(1, '学校ID不能为空').optional(),
+  organizationId: z.string().min(1, '校园组织ID不能为空').optional(),
   isPublic: z.boolean().optional().default(true)
 })
 
@@ -77,7 +77,7 @@ export const joinRequestSchema = z.object({
 export const teamListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
-  schoolId: z.string().optional(),
+  organizationId: z.string().optional(),
   keyword: z.string().optional(),
   isPublic: z.coerce.boolean().optional()
 })

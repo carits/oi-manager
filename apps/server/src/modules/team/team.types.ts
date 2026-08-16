@@ -40,7 +40,7 @@ export interface TeamBase {
   avatar: string | null
   description: string | null
   announcement: string | null
-  schoolId: string | null
+  organizationId: string | null
   scope: TeamScope
   isPublic: boolean
   createdAt: Date
@@ -105,7 +105,7 @@ export interface RemoveMemberQuery {
 
 /** 团队列表查询参数 */
 export interface TeamListQuery {
-  schoolId?: string
+  organizationId?: string
   page?: number
   pageSize?: number
   view?: string
@@ -293,13 +293,13 @@ export const TeamErrorMessages: Record<TeamErrorCode, { status: number; message:
 export interface UserIdentity {
   userId: string
   userType: MemberType
-  schoolId: string | null
+  organizationId: string | null
 }
 
 /** 从 JWT Payload 提取用户身份 */
 export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
   const userId = user.userId
-  const userType = user.workspaceMode === 'personal' || user.studentMode === 'personal'
+  const userType = !user.organizationId
     ? 'user'
     : user.role === 'student' ? 'student' : 'teacher'
 
@@ -308,13 +308,13 @@ export function extractUserIdentity(user: JwtPayload): UserIdentity | null {
   return {
     userId,
     userType,
-    schoolId: user.schoolId || null
+    organizationId: user.organizationId || null
   }
 }
 
 /** 获取用户身份（带类型保护） */
 export function getUserIdentity(user: JwtPayload): { id: string; type: MemberType } | null {
-  const type = user.workspaceMode === 'personal' || user.studentMode === 'personal'
+  const type = !user.organizationId
     ? 'user'
     : user.role === 'student' ? 'student' : 'teacher'
   return { id: user.userId, type }

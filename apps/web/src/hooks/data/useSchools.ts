@@ -21,5 +21,5 @@ export interface School {
 }
 
 export function useSchools(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<ListResponse<School>> {
-  return useList<School>('/api/schools', filters, sessionKey)
+  return useList<School>('/api/platform/organizations', filters, sessionKey)
 }

@@ -37,15 +37,16 @@ export interface TeamDetailPageProps {
   userType: UserType
   basePath: string
   requiredRole: string | string[]
+  teamIdOverride?: string
 }
 
-export function TeamDetailPage({ userType, basePath, requiredRole }: TeamDetailPageProps) {
+export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverride }: TeamDetailPageProps) {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
   const toast = useToast()
-  const teamId = params.id as string
+  const teamId = teamIdOverride || (params.id as string)
   const VALID_TABS = ['members', 'mock', 'training', 'tasks'] as const
   const [activeTab, setActiveTab] = useState<TabType>(
     VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'members'

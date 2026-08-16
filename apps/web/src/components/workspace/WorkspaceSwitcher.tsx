@@ -46,7 +46,7 @@ export function WorkspaceSwitcher() {
     window.location.assign(workspaceHref(workspace, module))
   }
 
-  const title = current?.type === 'platform' ? '平台管理' : current?.type === 'personal' ? '个人' : current?.organizationName || user?.schoolName || '选择身份'
+  const title = current?.type === 'platform' ? '平台管理' : current?.type === 'personal' ? '个人' : current?.organizationName || user?.organizationName || '选择身份'
   const subtitle = current?.type === 'platform' ? '平台管理员' : current?.type === 'personal' ? user?.username : current?.relationLabel || '校园身份'
   const shouldSearch = workspaces.filter(item => item.type === 'organization').length > 5
 

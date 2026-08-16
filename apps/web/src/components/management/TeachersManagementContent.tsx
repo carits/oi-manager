@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
-import TeachersTab from '@/app/teacher/school/components/TeachersTab'
+import TeachersTab from '@/components/organization-pages/teacher/school/components/TeachersTab'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import styles from '@/components/management/ManagementList.module.css'
@@ -12,7 +12,6 @@ import styles from '@/components/management/ManagementList.module.css'
 interface School {
   id: string
   name: string
-  currentPrincipalTeacherId: string | null
 }
 
 export default function TeachersManagementContent() {
@@ -23,46 +22,11 @@ export default function TeachersManagementContent() {
   const [isPrincipal, setIsPrincipal] = useState(false)
 
   useEffect(() => {
-    if (organizationId) {
-      setSchool({ id: organizationId, name: '', currentPrincipalTeacherId: null })
-      setIsPrincipal(user?.organizationRole === 'school_principal')
-      setLoading(false)
-      return
-    }
-    if (user?.schoolId) {
-      fetchSchool()
-      checkPrincipal()
-    } else {
-      setLoading(false)
-    }
-  }, [organizationId, user?.schoolId, user?.organizationRole])
-
-  const fetchSchool = async () => {
-    try {
-      const result = await apiClient.get<School>(`/api/schools/${user?.schoolId}`)
-      if (result.success) {
-        setSchool(result.data ?? null)
-      }
-    } catch (error) {
-      console.error('Failed to fetch school:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const checkPrincipal = async () => {
-    try {
-      const teacherResult = await apiClient.get<{ id: string }>('/api/teachers/me')
-      if (teacherResult.success && user?.schoolId) {
-        const schoolResult = await apiClient.get<School>(`/api/schools/${user.schoolId}`)
-        if (schoolResult.success && schoolResult.data) {
-          setIsPrincipal((teacherResult.data as any).id === schoolResult.data.currentPrincipalTeacherId)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check principal:', error)
-    }
-  }
+    if (!organizationId) { setLoading(false); return }
+    setSchool({ id: organizationId, name: '' })
+    setIsPrincipal(user?.organizationRole === 'school_principal')
+    setLoading(false)
+  }, [organizationId, user?.organizationRole])
 
   if (loading) {
     return <PageLoadingFrame title="教师" />

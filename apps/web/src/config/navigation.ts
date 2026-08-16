@@ -40,15 +40,15 @@ export const platformAdminNav: NavConfig = {
 export const schoolManagerNav: NavConfig = {
   role: 'school_principal',
   items: [
-    { label: '概览', href: '/teacher' },
-    { label: '校园', href: '/teacher/school' },
-    { label: '管理', href: '/teacher/management' },
-    { label: '团队', href: '/teacher/teams' },
-    { label: '作业', href: '/teacher/homeworks' },
-    { label: '比赛', href: '/teacher/contests' },
-    { label: '题库', href: '/teacher/problems' },
-    { label: '题单', href: '/teacher/problem-lists' },
-    { label: '排名', href: '/teacher/rankings' },
+    { label: '概览', href: 'overview' },
+    { label: '校园', href: 'campus' },
+    { label: '管理', href: 'management' },
+    { label: '团队', href: 'teams' },
+    { label: '作业', href: 'homeworks' },
+    { label: '比赛', href: 'contests' },
+    { label: '题库', href: 'problems' },
+    { label: '题单', href: 'problem-lists' },
+    { label: '排名', href: 'rankings' },
   ]
 }
 
@@ -56,15 +56,15 @@ export const schoolManagerNav: NavConfig = {
 export const teacherNav: NavConfig = {
   role: 'teacher',
   items: [
-    { label: '概览', href: '/teacher' },
-    { label: '校园', href: '/teacher/school' },
-    { label: '管理', href: '/teacher/management' },
-    { label: '团队', href: '/teacher/teams' },
-    { label: '作业', href: '/teacher/homeworks' },
-    { label: '比赛', href: '/teacher/contests' },
-    { label: '题库', href: '/teacher/problems' },
-    { label: '题单', href: '/teacher/problem-lists' },
-    { label: '排名', href: '/teacher/rankings' },
+    { label: '概览', href: 'overview' },
+    { label: '校园', href: 'campus' },
+    { label: '管理', href: 'management' },
+    { label: '团队', href: 'teams' },
+    { label: '作业', href: 'homeworks' },
+    { label: '比赛', href: 'contests' },
+    { label: '题库', href: 'problems' },
+    { label: '题单', href: 'problem-lists' },
+    { label: '排名', href: 'rankings' },
   ]
 }
 
@@ -72,12 +72,12 @@ export const teacherNav: NavConfig = {
 export const studentNav: NavConfig = {
   role: 'student',
   items: [
-    { label: '校园', href: '/student/school' },
-    { label: '团队', href: '/student/team' },
-    { label: '作业', href: '/student/homeworks' },
-    { label: '比赛', href: '/student/contests' },
-    { label: '题单', href: '/student/problem-lists' },
-    { label: '排名', href: '/student/rating' },
+    { label: '校园', href: 'campus' },
+    { label: '团队', href: 'teams' },
+    { label: '作业', href: 'homeworks' },
+    { label: '比赛', href: 'contests' },
+    { label: '题单', href: 'problem-lists' },
+    { label: '排名', href: 'rankings' },
   ]
 }
 
@@ -105,9 +105,9 @@ export const roleNavMap: Record<UserRole, NavConfig> = {
 }
 
 // 根据角色获取导航配置
-export function getNavConfig(role: UserRole | string, workspaceMode?: string): NavConfig {
+export function getNavConfig(role: UserRole | string, context?: string): NavConfig {
   const validRole = role as UserRole
-  if (workspaceMode === 'personal') return { ...personalNav, role: validRole }
+  if (context === 'personal') return { ...personalNav, role: validRole }
   if (validRole === 'super_admin') return superAdminNav
   if (validRole === 'platform_admin') return platformAdminNav
   if (validRole === 'school_principal') return schoolManagerNav
@@ -118,9 +118,11 @@ export function getNavConfig(role: UserRole | string, workspaceMode?: string): N
 }
 
 // 根据路径获取当前激活的 nav item
-export function getActiveNavItem(href: string, role: UserRole | string, workspaceMode?: string): string {
-  const config = getNavConfig(role, workspaceMode)
+export function getActiveNavItem(href: string, role: UserRole | string, context?: string): string {
+  const config = getNavConfig(role, context)
   const pathname = href.split('?')[0]
+  const organizationModule = context !== 'personal' ? pathname.match(/^\/org\/[^/]+\/([^/]+)/)?.[1] : null
+  if (organizationModule) return config.items.find(item => item.href === organizationModule)?.label || ''
 
   let bestMatch = ''
   let bestMatchLength = 0

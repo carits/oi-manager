@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
@@ -35,14 +36,9 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
+  const pathname = usePathname()
   const toast = useToast()
-  const pathPrefix = user?.workspaceMode === 'personal'
-    ? '/personal'
-    : user?.role === 'student'
-      ? '/student'
-      : user?.role === 'platform_admin'
-        ? '/platform-admin'
-        : '/teacher'
+  const pathPrefix = currentWorkspacePrefix(pathname, user?.role === 'platform_admin' ? '/platform-admin' : '/personal')
   const activeTab: 'mine' | 'shared' = searchParams.get('tab') === 'shared' ? 'shared' : 'mine'
   const keyword = searchParams.get('keyword') || ''
   const [searchInput, setSearchInput] = useState(keyword)

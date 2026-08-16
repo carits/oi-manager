@@ -27,8 +27,8 @@ export const notificationService = {
     })
   },
 
-  async createTeamInvitation(input: { recipientId: string; scope: TeamScope; invitationId: string; teamId: string; teamName: string; inviterId: string; inviterType: MemberType }) {
-    const inviterName = await getUserDisplayName(input.inviterId, input.inviterType, input.scope)
+  async createTeamInvitation(input: { recipientId: string; scope: TeamScope; invitationId: string; teamId: string; teamName: string; inviterId: string; inviterType: MemberType; organizationId?: string }) {
+    const inviterName = await getUserDisplayName(input.inviterId, input.inviterType, input.scope, input.organizationId)
     return this.create({
       userId: input.recipientId,
       scope: input.scope,
@@ -41,8 +41,8 @@ export const notificationService = {
     })
   },
 
-  async createTeamJoinRequest(input: { recipientIds: string[]; scope: TeamScope; requestId: string; teamId: string; teamName: string; applicantId: string; applicantType: MemberType }) {
-    const applicantName = await getUserDisplayName(input.applicantId, input.applicantType, input.scope)
+  async createTeamJoinRequest(input: { recipientIds: string[]; scope: TeamScope; requestId: string; teamId: string; teamName: string; applicantId: string; applicantType: MemberType; organizationId?: string }) {
+    const applicantName = await getUserDisplayName(input.applicantId, input.applicantType, input.scope, input.organizationId)
     await Promise.all(input.recipientIds.map(userId => this.create({
       userId,
       scope: input.scope,
@@ -55,7 +55,7 @@ export const notificationService = {
     })))
   },
 
-  async createJoinDecision(input: { recipientId: string; scope: TeamScope; requestId: string; teamId: string; teamName: string; approved: boolean }) {
+  async createJoinDecision(input: { recipientId: string; scope: TeamScope; requestId: string; teamId: string; teamName: string; approved: boolean; organizationId?: string }) {
     return this.create({
       userId: input.recipientId,
       scope: input.scope,
@@ -68,8 +68,8 @@ export const notificationService = {
     })
   },
 
-  async createInvitationResponse(input: { recipientId: string; scope: TeamScope; invitationId: string; teamId: string; teamName: string; memberId: string; memberType: MemberType; accepted: boolean }) {
-    const memberName = await getUserDisplayName(input.memberId, input.memberType, input.scope)
+  async createInvitationResponse(input: { recipientId: string; scope: TeamScope; invitationId: string; teamId: string; teamName: string; memberId: string; memberType: MemberType; accepted: boolean; organizationId?: string }) {
+    const memberName = await getUserDisplayName(input.memberId, input.memberType, input.scope, input.organizationId)
     return this.create({
       userId: input.recipientId,
       scope: input.scope,

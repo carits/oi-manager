@@ -36,7 +36,6 @@ interface RankingResponse extends ApiResponse<RankingRow[]> {
 interface MetricRankingWorkspaceProps {
   scope: RankingScope
   metric: RankingMetric
-  schoolId?: string
 }
 
 function metricLabel(metric: RankingMetric) {
@@ -54,7 +53,7 @@ function rankClass(index: number) {
   return undefined
 }
 
-export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankingWorkspaceProps) {
+export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspaceProps) {
   const { user } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
@@ -92,7 +91,8 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
   }, [query, searchValue, updateQuery])
 
   const fetchRankings = useCallback(async (signal?: AbortSignal) => {
-    if (scope === 'campus' && !schoolId) return
+    const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+    if (scope === 'campus' && !organizationId) return
     setLoading(true)
     setError(null)
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
@@ -101,13 +101,12 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
       if (grade) params.set('grade', grade)
       if (includeGraduated) params.set('includeGraduated', '1')
     }
-    const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
     const endpoint = isContribution
       ? scope === 'campus' && organizationId
         ? `/api/contributions/organizations/${organizationId}/rankings?${params}`
         : `/api/contributions/rankings/users?${params}`
       : scope === 'campus'
-        ? `/api/schools/${schoolId}/${metric === 'rating' ? 'student-rankings' : 'student-solved-rankings'}?${params}`
+        ? `/api/rankings/organizations/${organizationId}/${metric}?${params}`
         : `/api/rankings/personal/${metric}?${params}`
     const result = await apiClient.get<RankingRow[]>(endpoint, { signal }) as RankingResponse
     if (!result.success) {
@@ -123,7 +122,7 @@ export function MetricRankingWorkspace({ scope, metric, schoolId }: MetricRankin
     setTotalPages(result.totalPages || 1)
     setGrades(result.filters?.grades || [])
     setLoading(false)
-  }, [grade, includeGraduated, metric, page, pageSize, query, schoolId, scope])
+  }, [grade, includeGraduated, metric, page, pageSize, query, pathname, scope])
 
   useEffect(() => {
     const controller = new AbortController()

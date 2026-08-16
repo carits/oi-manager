@@ -6,7 +6,7 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import { prisma } from '../prisma'
-import { authenticate, getWorkspaceMode } from '../middleware/auth'
+import { authenticate } from '../middleware/auth'
 import { LoginRequest, JwtPayload, UserRole } from '@oi-manager/shared'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
@@ -85,11 +85,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     // 查找用户
     const user = await prisma.user.findUnique({
       where: { username },
-      include: {
-        Student: true,
-        Teacher: true,
-        Admin: true
-      }
+
     })
 
     if (!user) {
@@ -169,26 +165,6 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       username: user.username
     }
 
-    // 如果是管理员，添加 adminId
-    if (user.Admin) {
-      payload.adminId = user.Admin.id
-      // 系统管理员也有 schoolId（绑定到平台学校）
-      if (user.schoolId) payload.schoolId = user.schoolId
-    }
-
-    // 如果是教师或学校负责人，添加 teacherId
-    if (user.Teacher) {
-      payload.teacherId = user.Teacher.id
-      if (user.schoolId) payload.schoolId = user.schoolId
-    }
-
-    // 如果是学生，添加 studentId
-    if (user.Student) {
-      payload.studentId = user.Student.id
-      if (user.schoolId) payload.schoolId = user.schoolId
-      payload.studentMode = payload.workspaceMode === 'personal' ? 'personal' : 'campus'
-    }
-
     await prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} })
 
     const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
@@ -225,10 +201,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         role: user.role,
         username: user.username,
         avatar: user.avatar,
-        adminId: user.Admin?.id,
-        teacherId: user.Teacher?.id,
-        studentId: user.Student?.id,
-        schoolId: user.schoolId, // 所有用户都有 schoolId
+
         next: '/identity'
       }
     })
@@ -238,91 +211,24 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   }
 })
 
-// 注册 (仅限学生角色)
+// 注册只创建全局个人账号；加入校园必须经过组织邀请或管理流程。
 authRouter.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password, role, name, schoolId, headTeacherId } = req.body as {
-      username: string
-      password: string
-      role?: string
-      name: string
-      schoolId?: string
-      headTeacherId?: string
-    }
-
-    // 限制只能注册学生角色
-    if (role && role !== 'student') {
-      return res.status(400).json({ success: false, message: '开放注册仅限学生角色，其他角色请联系管理员创建' })
-    }
-
-    // 验证用户名
+    const { username, password } = req.body as { username: string; password: string }
     const usernameValidation = validateUsername(username)
-    if (!usernameValidation.valid) {
-      return res.status(400).json({ success: false, message: usernameValidation.message })
-    }
-
-    // 验证密码
+    if (!usernameValidation.valid) return res.status(400).json({ success: false, message: usernameValidation.message })
     const passwordValidation = validatePassword(password)
-    if (!passwordValidation.valid) {
-      return res.status(400).json({ success: false, message: passwordValidation.message })
-    }
-
-    // 检查用户是否存在
+    if (!passwordValidation.valid) return res.status(400).json({ success: false, message: passwordValidation.message })
     const existing = await prisma.user.findUnique({ where: { username } })
-    if (existing) {
-      return res.status(400).json({ success: false, message: '用户名已存在' })
-    }
+    if (existing) return res.status(400).json({ success: false, message: '用户名已存在' })
 
-    // 学生注册：schoolId 可选，不提供时默认为平台学校（个人模式）
-    const effectiveSchoolId = schoolId || 'platform-school-00000000'
-
-    // 如果未指定 schoolId，则为个人模式注册
-    const isPersonalRegistration = !schoolId
-
-    // 密码加密
-    const passwordHash = await bcrypt.hash(password, 10)
-
-    // 创建用户（强制为学生角色，必须有 schoolId）
-    const userId = crypto.randomUUID()
-    const user = await prisma.user.create({
-      data: {
-        id: userId,
-        username,
-        passwordHash,
-        role: 'student',
-        schoolId: effectiveSchoolId, // 所有用户必须绑定学校
-        Student: {
-          create: {
-            name,
-            schoolId: effectiveSchoolId,
-            ...(headTeacherId ? { headTeacherId } : {})
-          }
-        }
-      }
-    })
-
-    // 个人模式注册时，自动生成带 studentMode=personal 的 token
-    if (isPersonalRegistration) {
-      const payload: JwtPayload = {
-        userId: user.id,
-        role: 'student',
-        username: user.username,
-        studentId: user.id,
-        schoolId: effectiveSchoolId,
-        workspaceMode: 'personal',
-        studentMode: 'personal'
-      }
-      const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
-      setSessionCookie(res, token)
-      await prisma.personalProfile.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id },
-        update: {}
-      })
-      res.json({ success: true, data: { userId: user.id, token, workspaceMode: 'personal', studentMode: 'personal' } })
-    } else {
-      res.json({ success: true, data: { userId: user.id } })
-    }
+    const user = await prisma.user.create({ data: {
+      id: crypto.randomUUID(), username, passwordHash: await bcrypt.hash(password, 10), role: 'user',
+    } })
+    await prisma.personalProfile.create({ data: { userId: user.id } })
+    const token = jwt.sign({ userId: user.id, role: 'user', username: user.username }, getJwtSecret(), { expiresIn: '7d' })
+    setSessionCookie(res, token)
+    res.status(201).json({ success: true, data: { userId: user.id, token, next: '/personal' } })
   } catch (error) {
     logger.error('register_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -336,11 +242,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        Student: true,
-        Teacher: true,
-        Admin: true
-      }
+
     })
 
     if (!user) {
@@ -352,18 +254,6 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: '该账号已被禁用' })
     }
 
-    // 如果是教师，获取学校信息
-    let schoolInfo = null
-    if (user.schoolId) {
-      const school = await prisma.school.findUnique({
-        where: { id: user.schoolId },
-        select: { id: true, name: true }
-      })
-      if (school) {
-        schoolInfo = school
-      }
-    }
-
     const organizationId = (req as any).user?.organizationId as string | undefined
     const membership = organizationId
       ? await prisma.organizationMembership.findFirst({
@@ -372,7 +262,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       })
       : null
 
-    // 构建 profile 对象（校园上下文优先读取组织档案）
+    // 个人请求不读取组织档案；组织请求只读取当前成员关系。
     let profileData = null
     if (membership?.StudentProfile) {
       profileData = {
@@ -390,28 +280,8 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         organizationRole: membership?.memberRole,
         title: membership.TeacherProfile.title
       }
-    } else if (user.Student) {
-      profileData = {
-        id: user.Student.id,
-        name: user.Student.name,
-        gender: user.Student.gender,
-        avatar: user.Student.avatar,
-        rating: user.Student.rating,
-        enrollmentYear: user.Student.enrollmentYear
-      }
-    } else if (user.Teacher) {
-      profileData = {
-        id: user.Teacher.id,
-        name: user.Teacher.name,
-        avatar: user.Teacher.avatar,
-        bio: user.Teacher.bio,
-        title: user.Teacher.title
-      }
-    } else if (user.Admin) {
-      profileData = {
-        id: user.Admin.id,
-        name: user.Admin.name
-      }
+    } else if (['platform_admin', 'super_admin'].includes(user.role)) {
+      profileData = { id: user.id, name: user.username }
     }
 
     res.json({
@@ -429,13 +299,6 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         organizationMembershipId: membership?.id,
         organizationRole: membership?.memberRole,
         profile: profileData,
-        adminId: user.Admin?.id,
-        teacherId: user.Teacher?.id,
-        studentId: user.Student?.id,
-        schoolId: user.schoolId, // 所有用户都有 schoolId
-        schoolName: schoolInfo?.name,
-        workspaceMode: getWorkspaceMode((req as any).user),
-        studentMode: (req as any).user?.studentMode
       }
     })
   } catch {
@@ -446,10 +309,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
 // Upgrade an existing Bearer session to an HttpOnly cookie without forcing a new login.
 authRouter.post('/session/migrate', authenticate, async (req: Request, res: Response) => {
   const payload = (req as any).user as JwtPayload
-  const token = jwt.sign({
-    ...renewablePayload(payload),
-    workspaceMode: getWorkspaceMode(payload)
-  }, getJwtSecret(), { expiresIn: '7d' })
+  const token = jwt.sign(renewablePayload(payload), getJwtSecret(), { expiresIn: '7d' })
   setSessionCookie(res, token)
   res.json({ success: true })
 })
@@ -492,17 +352,13 @@ authRouter.put('/profile', authenticate, async (req: Request, res: Response) => 
       }
     })
 
-    // 根据角色更新对应的profile表
-    if (decoded.role === 'student') {
-      await prisma.student.update({
-        where: { id: decoded.userId },
-        data: { name }
-      })
-    } else if (decoded.role === 'teacher' || decoded.role === 'school_principal') {
-      await prisma.teacher.update({
-        where: { id: decoded.userId },
-        data: { name, bio }
-      })
+    if (decoded.organizationMembershipId && typeof name === 'string') {
+      const membership = await prisma.organizationMembership.findFirst({ where: { id: decoded.organizationMembershipId, userId: decoded.userId, status: 'active' }, select: { memberRole: true } })
+      if (membership?.memberRole === 'student') {
+        await prisma.organizationStudentProfile.updateMany({ where: { membershipId: decoded.organizationMembershipId }, data: { name } })
+      } else if (membership) {
+        await prisma.organizationTeacherProfile.updateMany({ where: { membershipId: decoded.organizationMembershipId }, data: { name, bio } })
+      }
     }
 
     res.json({
@@ -549,17 +405,13 @@ authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), async (r
       data: { avatar: avatarUrl }
     })
 
-    // 同步更新 Teacher 或 Student 表的头像
-    if (decoded.role === 'teacher' || decoded.role === 'school_principal') {
-      await prisma.teacher.update({
-        where: { id: decoded.userId },
-        data: { avatar: avatarUrl }
-      })
-    } else if (decoded.role === 'student') {
-      await prisma.student.update({
-        where: { id: decoded.userId },
-        data: { avatar: avatarUrl }
-      })
+    if (decoded.organizationMembershipId) {
+      const membership = await prisma.organizationMembership.findFirst({ where: { id: decoded.organizationMembershipId, userId: decoded.userId, status: 'active' }, select: { memberRole: true } })
+      if (membership?.memberRole === 'student') {
+        await prisma.organizationStudentProfile.updateMany({ where: { membershipId: decoded.organizationMembershipId }, data: { avatar: avatarUrl } })
+      } else if (membership) {
+        await prisma.organizationTeacherProfile.updateMany({ where: { membershipId: decoded.organizationMembershipId }, data: { avatar: avatarUrl } })
+      }
     }
 
     logger.audit('avatar_uploaded', {

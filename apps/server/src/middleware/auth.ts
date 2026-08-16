@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import { JwtPayload, UserRole, WorkspaceMode, ResourceScope } from '@oi-manager/shared'
+import { JwtPayload, UserRole, ResourceScope } from '@oi-manager/shared'
 import { getJwtSecret } from '../lib/jwtSecret'
 import { getSessionToken } from '../lib/sessionCookie'
 import { prisma } from '../prisma'
@@ -106,44 +106,30 @@ export function getUserType(role: string): 'teacher' | 'student' {
   return role === 'student' ? 'student' : 'teacher'
 }
 
-export function getWorkspaceMode(user?: JwtPayload): WorkspaceMode {
-  // Context is URL/header-derived: an authenticated organization membership means campus;
-  // every request without an organization context is personal.
-  return user?.organizationId ? 'work' : 'personal'
+export function isPersonalContext(user?: JwtPayload): boolean {
+  return !user?.organizationId
 }
 
 export function getResourceScope(user?: JwtPayload): ResourceScope {
-  return getWorkspaceMode(user) === 'personal' ? 'personal' : 'campus'
+  return isPersonalContext(user) ? 'personal' : 'campus'
 }
 
 export function getMembershipType(user: JwtPayload): 'teacher' | 'student' | 'user' {
-  return getWorkspaceMode(user) === 'personal' ? 'user' : getUserType(user.role)
+  return isPersonalContext(user) ? 'user' : getUserType(user.role)
 }
 
-export function requireWorkspace(mode: WorkspaceMode) {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: '未授权' })
-    }
-    if (getWorkspaceMode(req.user) !== mode) {
-      return res.status(403).json({
-        success: false,
-        code: 'WORKSPACE_MODE_REQUIRED',
-        message: mode === 'personal' ? '请先切换到个人模式' : '请先切换到工作模式'
-      })
-    }
-    next()
-  }
+export function requireOrganizationContext(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ success: false, message: '未授权' })
+  if (!req.user.organizationId) return res.status(403).json({ success: false, code: 'ORGANIZATION_REQUIRED', message: '请从校园身份进入' })
+  next()
 }
 
-export function isPersonalWorkspace(user?: JwtPayload): boolean {
-  return getWorkspaceMode(user) === 'personal'
+export function requirePersonalContext(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ success: false, message: '未授权' })
+  if (req.user.organizationId) return res.status(403).json({ success: false, code: 'PERSONAL_CONTEXT_REQUIRED', message: '请从个人身份进入' })
+  next()
 }
 
-/**
- * 检查用户是否为个人模式学生
- * 个人模式学生拥有更多权限（创建团队、题单等）
- */
-export function isPersonalMode(user?: JwtPayload): boolean {
-  return isPersonalWorkspace(user)
+export function isPersonalContextForTeams(user?: JwtPayload): boolean {
+  return isPersonalContext(user)
 }

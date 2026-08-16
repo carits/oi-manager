@@ -15,7 +15,7 @@ describe('role access', () => {
   it('uses canonical role home paths', () => {
     expect(getRoleHome('super_admin')).toBe('/admin/schools')
     expect(getRoleHome('platform_admin')).toBe('/platform-admin')
-    expect(getRoleHome('school_principal')).toBe('/teacher')
-    expect(getRoleHome('student')).toBe('/student')
+    expect(getRoleHome('school_principal')).toBe('/identity')
+    expect(getRoleHome('student')).toBe('/identity')
   })
 })

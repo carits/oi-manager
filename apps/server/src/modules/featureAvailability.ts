@@ -3,7 +3,7 @@ import type { JwtPayload } from '@oi-manager/shared'
 export function hasOrganizationContext(user: JwtPayload | undefined, organizationId: string) {
   return Boolean(
     user
-    && user.workspaceMode === 'work'
+    && Boolean(user.organizationId)
     && user.organizationId === organizationId
     && user.organizationMembershipId,
   )

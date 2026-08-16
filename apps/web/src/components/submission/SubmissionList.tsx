@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { useResource } from '@/hooks/useResource'
 import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { SUBMISSION_OJ_OPTIONS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
@@ -38,13 +39,8 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
-  const pathPrefix = user?.workspaceMode === 'personal'
-    ? '/personal'
-    : viewRole === 'admin'
-      ? '/platform-admin'
-      : viewRole === 'student'
-        ? '/student'
-        : '/teacher'
+  const pathname = usePathname()
+  const pathPrefix = currentWorkspacePrefix(pathname, viewRole === 'admin' ? '/platform-admin' : '/personal')
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const pageSize = 20
   const [draft, setDraft] = useState<Record<FilterField, string>>(() => Object.fromEntries(fields.map(field => [field, searchParams.get(field) || ''])) as Record<FilterField, string>)

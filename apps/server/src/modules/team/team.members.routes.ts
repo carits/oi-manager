@@ -41,7 +41,7 @@ teamMembersRouter.get('/:id/available-members', authenticate, asyncHandler(async
   const existingUserIds = existingMembers.filter(m => m.userType === 'user').map(m => m.userId)
 
   const result = await teamRepository.findAvailableMembers({
-    schoolId: team.schoolId,
+    organizationId: team.organizationId,
     scope: team.scope as 'campus' | 'personal',
     excludeTeacherIds: existingTeacherIds,
     excludeStudentIds: existingStudentIds,
@@ -158,8 +158,8 @@ teamMembersRouter.get('/:id/pending-invites', authenticate, asyncHandler(async (
 
   const inviterIds = pendingMembers.filter(m => m.invitedBy).map(m => m.invitedBy!)
   const [detailsMap, inviterNames, inviterUsers] = await Promise.all([
-    getMemberDetailsBatch(pendingMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType }))),
-    getUserNames(inviterIds, 'teacher'),
+    getMemberDetailsBatch(pendingMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType })), team.organizationId || undefined),
+    getUserNames(inviterIds, 'teacher', team.organizationId || undefined),
     scope === 'personal'
       ? prisma.user.findMany({
           where: { id: { in: inviterIds } },
@@ -199,7 +199,7 @@ teamMembersRouter.get('/:id/admins', authenticate, asyncHandler(async (req, res)
 
   const adminMembers = await teamRepository.findAdmins(id)
 
-  const detailsMap = await getMemberDetailsBatch(adminMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType })))
+  const detailsMap = await getMemberDetailsBatch(adminMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType })), team.organizationId || undefined)
 
   const admins = adminMembers.map(m => {
     const details = detailsMap.get(`${m.userType}:${m.userId}`)

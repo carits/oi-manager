@@ -90,7 +90,7 @@ export default function AdminSchoolDetailPage() {
 
   const fetchSchool = async () => {
     try {
-      const result = await apiClient.get<School>(`/api/schools/${schoolId}`)
+      const result = await apiClient.get<School>(`/api/platform/organizations/${schoolId}`)
       if (result.success) {
         setSchool(result.data || null)
       }
@@ -103,7 +103,7 @@ export default function AdminSchoolDetailPage() {
 
   const fetchStudents = async () => {
     try {
-      const result = await apiClient.get<{ data: Student[]; total: number }>(`/api/students?schoolId=${schoolId}&page=${studentPage}&pageSize=${pageSize}`)
+      const result = await apiClient.get<{ data: Student[]; total: number }>(`/api/platform/organizations/${schoolId}/students?page=${studentPage}&pageSize=${pageSize}`)
       if (result.success) {
         setStudents(result.data?.data || [])
         setStudentTotal(result.data?.total || 0)
@@ -115,7 +115,7 @@ export default function AdminSchoolDetailPage() {
 
   const fetchTeachers = async () => {
     try {
-      const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/schools/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`)
+      const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/platform/organizations/${schoolId}/teachers?page=${teacherPage}&pageSize=${pageSize}`)
       if (result.success) {
         setTeachers(result.data?.data || [])
         setTeacherTotal(result.data?.total || 0)

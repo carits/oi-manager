@@ -35,7 +35,6 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     organizationId: row.organizationId,
     organizationName: row.Organization.name,
     organizationType: row.Organization.type,
-    schoolId: row.Organization.School?.id,
     shortName: row.Organization.School?.shortName || null,
     memberRole: row.memberRole,
     relationType: row.relationType,

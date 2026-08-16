@@ -6,18 +6,19 @@ import compression from 'compression'
 import { MulterError } from 'multer'
 import { authRouter } from './routes/auth'
 import { studentRouter } from './routes/students'
+import { schoolRouter } from './modules/school/school.routes'
+import { teacherRouter } from './routes/teachers'
+import { teamImportRouter } from './modules/team-import/team-import.routes'
 import { milestoneRouter } from './routes/milestones'
 import { teamRouter } from './routes/teams'
-import { schoolRouter } from './modules/school/school.routes'
 import { userRouter } from './routes/users'
 import { statsRouter } from './routes/stats'
-import { teacherRouter } from './routes/teachers'
 import { organizationMemberRouter } from './routes/organization-members'
+import { platformOrganizationRouter } from './routes/platform-organizations'
 import { problemsRouter } from './modules/problem/problem.routes'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { filesRouter } from './routes/files'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
-import { teamImportRouter } from './modules/team-import/team-import.routes'
 import { submissionsRouter } from './routes/submissions'
 import { problemListsRouter } from './routes/problem-lists'
 import { schoolProblemListsRouter } from './routes/school-problem-lists'
@@ -47,7 +48,7 @@ import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
 import { STORAGE_ROOT } from './config/storage'
 import { verifyCookieOrigin } from './middleware/csrf'
-import { authenticate, requireWorkspace } from './middleware/auth'
+import { authenticate } from './middleware/auth'
 
 // 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
 const envFile = process.env.ENV_FILE ||
@@ -108,29 +109,29 @@ app.use('/public', express.static(path.join(STORAGE_ROOT, 'public')))
 // ==================== API 路由 ====================
 
 app.use('/api/auth', authRouter)
-app.use('/api/organizations/:organizationId/members', authenticate, requireWorkspace('work'), organizationMemberRouter)
-app.use('/api/students', authenticate, requireWorkspace('work'), studentRouter)
+app.use('/api/organizations/:organizationId/members', authenticate, organizationMemberRouter)
+app.use('/api/platform/organizations', platformOrganizationRouter)
 app.use('/api/milestones', milestoneRouter)
 app.use('/api/teams', teamRouter)
-app.use('/api/schools', authenticate, requireWorkspace('work'), schoolRouter)
+app.use('/api/schools', authenticate, schoolRouter)
 app.use('/api/users', authenticate, userRouter)
-app.use('/api/stats', authenticate, requireWorkspace('work'), statsRouter)
-app.use('/api/teachers', authenticate, requireWorkspace('work'), teacherRouter)
+app.use('/api/stats', authenticate, statsRouter)
+app.use('/api/teachers', authenticate, teacherRouter)
 app.use('/api/problems', problemsRouter)
-app.use('/api/oj-fetcher', authenticate, requireWorkspace('work'), ojFetcherRouter)
+app.use('/api/oj-fetcher', authenticate, ojFetcherRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/platform-bindings', platformBindingRouter)
-app.use('/api/team-import', authenticate, requireWorkspace('work'), teamImportRouter)
+app.use('/api/team-import', authenticate, teamImportRouter)
 app.use('/api/submissions', submissionsRouter)
 app.use('/api/problem-lists', problemListsRouter)
-app.use('/api/schools', authenticate, requireWorkspace('work'), schoolProblemListsRouter)
+app.use('/api/schools', authenticate, schoolProblemListsRouter)
 app.use('/api/teams', teamProblemListsRouter)
-app.use('/api/oj-accounts', authenticate, requireWorkspace('work'), ojAccountsRouter)
+app.use('/api/oj-accounts', authenticate, ojAccountsRouter)
 app.use('/api/submit', submitRouter)
 app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
 app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
-app.use('/api/admin/data', authenticate, requireWorkspace('work'), adminDataRouter)  // 管理员数据维护 API
-app.use('/api/admin/migration', authenticate, requireWorkspace('work'), migrationRouter)  // 数据迁移 API
+app.use('/api/admin/data', authenticate, adminDataRouter)  // 管理员数据维护 API
+app.use('/api/admin/migration', authenticate, migrationRouter)  // 数据迁移 API
 app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
 app.use('/api/rankings', rankingRouter)
 app.use('/api/me', meRouter)

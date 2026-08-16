@@ -7,19 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Admin {
-  name      String
-  schoolId  String
-  organizationId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
-  id        String   @id
-  User      User     @relation(fields: [id], references: [id], onDelete: Cascade)
-  School    School   @relation(fields: [schoolId], references: [id])
-  Organization Organization? @relation(fields: [organizationId], references: [id])
-
-  @@index([organizationId])
-}
 
 model AiUsageLog {
   id          String   @id
@@ -93,20 +80,18 @@ model ContestProblemScore {
   id             String         @id
   contestId      String
   problemId      String
-  studentId      String
-  studentProfileId String?
-  studentNameSnapshot String?
-  usernameSnapshot String?
+  studentProfileId String
+  studentNameSnapshot String
+  usernameSnapshot String
   score          Float?
   note           String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @default(now())
   Contest        Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
   ContestProblem ContestProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  Student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  OrganizationStudentProfile OrganizationStudentProfile? @relation("ContestProblemScoreStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
+  OrganizationStudentProfile OrganizationStudentProfile @relation("ContestProblemScoreStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
 
-  @@unique([contestId, problemId, studentId])
+  @@unique([contestId, problemId, studentProfileId])
   @@index([studentProfileId])
 }
 
@@ -143,10 +128,9 @@ model ContestResource {
 model ContestResult {
   id           String   @id
   contestId    String
-  studentId    String
-  studentProfileId String?
-  studentNameSnapshot String?
-  usernameSnapshot String?
+  studentProfileId String
+  studentNameSnapshot String
+  usernameSnapshot String
   rank         Int?
   score        Float?
   ratingBefore Int
@@ -156,12 +140,10 @@ model ContestResult {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @default(now())
   Contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  Student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  OrganizationStudentProfile OrganizationStudentProfile? @relation("ContestResultStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
+  OrganizationStudentProfile OrganizationStudentProfile @relation("ContestResultStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
 
-  @@unique([contestId, studentId])
+  @@unique([contestId, studentProfileId])
   @@index([createdAt])
-  @@index([studentId])
   @@index([studentProfileId])
 }
 
@@ -235,26 +217,20 @@ model LoginLog {
 
 model Milestone {
   id            String   @id
-  studentId     String
-  teacherId     String
-  studentMembershipId String?
-  teacherMembershipId String?
-  studentNameSnapshot String?
-  teacherNameSnapshot String?
+  studentMembershipId String
+  teacherMembershipId String
+  studentNameSnapshot String
+  teacherNameSnapshot String
   title         String
   description   String?
   milestoneDate DateTime
   type          String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now())
-  Student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  Teacher       Teacher  @relation(fields: [teacherId], references: [id])
-  StudentMembership OrganizationMembership? @relation("MilestoneStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Restrict)
-  TeacherMembership OrganizationMembership? @relation("MilestoneTeacherMembership", fields: [teacherMembershipId], references: [id], onDelete: Restrict)
+  StudentMembership OrganizationMembership @relation("MilestoneStudentMembership", fields: [studentMembershipId], references: [id], onDelete: Restrict)
+  TeacherMembership OrganizationMembership @relation("MilestoneTeacherMembership", fields: [teacherMembershipId], references: [id], onDelete: Restrict)
 
   @@index([milestoneDate])
-  @@index([studentId])
-  @@index([teacherId])
   @@index([studentMembershipId])
   @@index([teacherMembershipId])
 }
@@ -348,22 +324,18 @@ model PasswordResetLog {
 
 model PrincipalTransferLog {
   id                    String   @id
-  schoolId              String
-  organizationId        String?
-  oldPrincipalTeacherId String?
-  newPrincipalTeacherId String
+  organizationId        String
   oldPrincipalMembershipId String?
-  newPrincipalMembershipId String?
+  newPrincipalMembershipId String
   oldPrincipalNameSnapshot String?
-  newPrincipalNameSnapshot String?
+  newPrincipalNameSnapshot String
   result                String
   message               String?
   createdAt             DateTime @default(now())
   operatorId            String
-  School                School   @relation(fields: [schoolId], references: [id])
-  Organization          Organization? @relation(fields: [organizationId], references: [id])
+  Organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   OldPrincipalMembership OrganizationMembership? @relation("FormerPrincipalMembership", fields: [oldPrincipalMembershipId], references: [id], onDelete: Restrict)
-  NewPrincipalMembership OrganizationMembership? @relation("NewPrincipalMembership", fields: [newPrincipalMembershipId], references: [id], onDelete: Restrict)
+  NewPrincipalMembership OrganizationMembership @relation("NewPrincipalMembership", fields: [newPrincipalMembershipId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
   @@index([oldPrincipalMembershipId])
@@ -392,7 +364,6 @@ model Problem {
   ownerId           String
   libraryScope      String              @default("platform")
   libraryKey        String              @default("platform")
-  schoolId          String?
   organizationId    String?
   sourceProblemId   String?
   status            String              @default("draft")
@@ -408,7 +379,6 @@ model Problem {
   TestdataFile      TestdataFile[]
   TrainingProblem   TrainingProblem[]
   Owner             User                @relation("ProblemOwner", fields: [ownerId], references: [id])
-  School            School?             @relation(fields: [schoolId], references: [id])
   Organization       Organization?        @relation(fields: [organizationId], references: [id])
   SourceProblem     Problem?            @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
   CopiedProblems    Problem[]           @relation("ProblemCopies")
@@ -417,7 +387,6 @@ model Problem {
   @@index([createdAt])
   @@index([libraryScope, status])
   @@index([ownerId, ownerType])
-  @@index([schoolId, status])
   @@index([organizationId, status])
   @@index([sourceProblemId])
   @@index([visibility])
@@ -442,7 +411,6 @@ model ProblemList {
   title              String
   description        String?
   coverUrl           String?
-  schoolId           String?
   organizationId      String?
   ownerId            String
   ownerType          String               @default("teacher")
@@ -459,7 +427,6 @@ model ProblemList {
 
   @@index([createdAt])
   @@index([ownerId, ownerType])
-  @@index([schoolId])
   @@index([organizationId])
   @@index([scope])
   @@index([scope, ownerId])
@@ -573,22 +540,10 @@ model School {
   contactPhone                                      String?
   contactEmail                                      String?
   status                                            String                 @default("active")
-  currentPrincipalTeacherId                         String
-  // ?????????????????? ID ??????????
   currentPrincipalMembershipId                       String?                @unique
   createdAt                                         DateTime               @default(now())
   updatedAt                                         DateTime               @default(now())
   organizationId                                    String?                @unique
-  Admin                                             Admin[]
-  PrincipalTransferLog                              PrincipalTransferLog[]
-  Problem                                           Problem[]
-  Teacher_School_currentPrincipalTeacherIdToTeacher Teacher                @relation("School_currentPrincipalTeacherIdToTeacher", fields: [currentPrincipalTeacherId], references: [id])
-  SchoolProblemList                                 SchoolProblemList[]
-  Student                                           Student[]
-  Teacher_Teacher_schoolIdToSchool                  Teacher[]              @relation("Teacher_schoolIdToSchool")
-  Team                                              Team[]
-  Training                                          Training[]
-  User                                              User[]
   Organization                                      Organization?          @relation(fields: [organizationId], references: [id])
 }
 
@@ -606,7 +561,6 @@ model Organization {
   CaritsTransactions CaritsTransaction[] @relation("CaritsTransactionOrganization")
   ContributionAttributions OrganizationContributionAttribution[]
   ContributionProjects ContributionProject[]
-  Admin Admin[]
   PrincipalTransferLog PrincipalTransferLog[]
   Problem Problem[]
   ProblemList ProblemList[]
@@ -798,52 +752,21 @@ model ContributionProject {
 
 model SchoolProblemList {
   id            String      @id
-  schoolId      String
-  organizationId String?
+  organizationId String
   problemListId String
   addedBy       String
   addedByRole   String
   sortOrder     Int         @default(0)
   createdAt     DateTime    @default(now())
   ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
-  School        School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  Organization   Organization? @relation(fields: [organizationId], references: [id])
+  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([schoolId, problemListId])
+  @@unique([organizationId, problemListId])
   @@index([addedBy])
   @@index([problemListId])
-  @@index([schoolId])
   @@index([organizationId])
 }
 
-model Student {
-  id                        String                      @id
-  name                      String
-  gender                    String?
-  schoolId                  String
-  enrollmentYear            Int?
-  targetContest             String?
-  headTeacherId             String?
-  tags                      String?
-  notes                     String?
-  avatar                    String?
-  rating                    Int                         @default(1200)
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime                    @default(now())
-  ContestProblemScore       ContestProblemScore[]
-  ContestResult             ContestResult[]
-  Milestone                 Milestone[]
-  Teacher                   Teacher?                    @relation(fields: [headTeacherId], references: [id])
-  User                      User                        @relation(fields: [id], references: [id], onDelete: Cascade)
-  School                    School                      @relation(fields: [schoolId], references: [id])
-  TeamMemberExternalAccount TeamMemberExternalAccount[]
-
-  @@index([enrollmentYear])
-  @@index([headTeacherId])
-  @@index([rating])
-  @@index([schoolId, headTeacherId])
-  @@index([schoolId])
-}
 
 model Submission {
   id                Int        @id @default(autoincrement())
@@ -909,28 +832,6 @@ model Submission {
   @@index([userId, trainingProblemId])
 }
 
-model Teacher {
-  id                                               String      @id
-  name                                             String
-  email                                            String?
-  phone                                            String?
-  avatar                                           String?
-  bio                                              String?
-  title                                            String?
-  status                                           String      @default("active")
-  schoolId                                         String
-  createdAt                                        DateTime    @default(now())
-  updatedAt                                        DateTime    @default(now())
-  Milestone                                        Milestone[]
-  School_School_currentPrincipalTeacherIdToTeacher School[]    @relation("School_currentPrincipalTeacherIdToTeacher")
-  Student                                          Student[]
-  User                                             User        @relation(fields: [id], references: [id], onDelete: Cascade)
-  School_Teacher_schoolIdToSchool                  School      @relation("Teacher_schoolIdToSchool", fields: [schoolId], references: [id])
-
-  @@index([createdAt])
-  @@index([schoolId])
-  @@index([status])
-}
 
 model Team {
   id                        String                      @id
@@ -938,14 +839,12 @@ model Team {
   avatar                    String?
   description               String?
   announcement              String?
-  schoolId                  String?
   organizationId            String?
   scope                     String                      @default("campus")
   isPublic                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
   Contest                   Contest[]
-  School                    School?                     @relation(fields: [schoolId], references: [id])
   Organization               Organization?               @relation(fields: [organizationId], references: [id])
   TeamJoinRequest           TeamJoinRequest[]
   TeamMember                TeamMember[]
@@ -958,9 +857,7 @@ model Team {
   @@index([isPublic])
   @@index([scope])
   @@index([scope, isPublic])
-  @@index([schoolId])
   @@index([organizationId])
-  @@index([schoolId, scope, isPublic])
 }
 
 model TeamJoinRequest {
@@ -1000,7 +897,6 @@ model TeamMember {
 model TeamMemberExternalAccount {
   id               String   @id
   teamId           String
-  studentId        String?
   studentProfileId String?
   studentNameSnapshot String?
   platform         String
@@ -1010,13 +906,11 @@ model TeamMemberExternalAccount {
   inviteId         String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now())
-  Student          Student? @relation(fields: [studentId], references: [id])
   OrganizationStudentProfile OrganizationStudentProfile? @relation("ExternalAccountStudentProfile", fields: [studentProfileId], references: [id], onDelete: Restrict)
   Team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, platform, platformUsername])
   @@index([platform, platformUsername])
-  @@index([studentId])
   @@index([studentProfileId])
 }
 
@@ -1050,10 +944,8 @@ model TeamMemberImportItem {
   candidateDisplayName  String?
   matchType             String
   matchStatus           String                @default("pending")
-  matchedStudentId      String?
   matchedStudentProfileId String?
   matchedStudentName    String?
-  createdStudentId      String?
   createdStudentProfileId String?
   action                String?
   userChoice            String?
@@ -1135,24 +1027,20 @@ model Training {
   solutionVisible           Boolean                     @default(false)
   type                      String                      @default("training")
   scope                     String                      @default("campus")
-  schoolId                  String?
   organizationId            String?
   sourceTrainingId          Int?
   ContestRecord             ContestRecord[]
   ContestUserProblemStatus  ContestUserProblemStatus[]
   Submission                Submission[]
-  School                    School?                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   Organization               Organization?               @relation(fields: [organizationId], references: [id])
   Team                      Team?                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   TrainingParticipant       TrainingParticipant[]
   TrainingProblem           TrainingProblem[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
 
-  @@index([schoolId])
   @@index([organizationId])
   @@index([scope])
   @@index([scope, status])
-  @@index([schoolId, status])
   @@index([startTime])
   @@index([status])
   @@index([teamId])
@@ -1255,8 +1143,6 @@ model User {
   passwordHash              String
   // 平台角色仅表达平台级权限；校园身份由 OrganizationMembership 决定。
   role                      String                    @default("user")
-  // 兼容旧资源的临时字段，不得再作为校园归属或权限判断依据。
-  schoolId                  String?
   status                    String                      @default("active")
   avatar                    String?
   phone                     String?
@@ -1264,17 +1150,13 @@ model User {
   bio                       String?
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
-  Admin                     Admin?
   PersonalProfile           PersonalProfile?
   Problem                   Problem[]                   @relation("ProblemOwner")
   ContestUserProblemStatus  ContestUserProblemStatus[]
-  Student                   Student?
   Submission                Submission[]
   TeamJoinRequest           TeamJoinRequest[]
   TeamMember                TeamMember[]
-  Teacher                   Teacher?
   TrainingUserProblemStatus TrainingUserProblemStatus[]
-  School                    School?                     @relation(fields: [schoolId], references: [id])
   UserArchivedProblem       UserArchivedProblem[]
   UserPlatformBinding       UserPlatformBinding[]
   UserNotification          UserNotification[]
@@ -1285,7 +1167,6 @@ model User {
 
   @@index([createdAt])
   @@index([role])
-  @@index([schoolId])
   @@index([status])
 }
 

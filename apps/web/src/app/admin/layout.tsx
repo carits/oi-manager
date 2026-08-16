@@ -7,7 +7,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       allowedRoles={['super_admin']}
       loginRole="admin"
       homePath="/admin"
-      requiredWorkspace="work"
+      requiredContext="platform"
       roleOverrides={[
         {
           prefix: '/admin/profile',
