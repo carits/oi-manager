@@ -8,10 +8,13 @@ export interface Student {
   userId: string | null
   name: string
   gender: string | null
-  schoolId: string | null
-  headTeacherId: string | null
+  schoolId?: string | null
+  membershipId?: string
+  headTeacherId?: string | null
+  headTeacherMembershipId?: string | null
   enrollmentYear: number | null
   rating: number
+  status?: string
   createdAt: string
   user?: {
     username: string
@@ -45,6 +48,6 @@ export interface StudentListResponse extends ListResponse<Student> {
   filters?: { grades: string[] }
 }
 
-export function useStudents(filters?: Record<string, any>, sessionKey?: string | null): UseFetchResult<StudentListResponse> {
-  return useList<Student>('/api/students', filters, sessionKey) as UseFetchResult<StudentListResponse>
+export function useStudents(filters?: Record<string, any>, sessionKey?: string | null, endpoint = '/api/students'): UseFetchResult<StudentListResponse> {
+  return useList<Student>(endpoint, filters, sessionKey) as UseFetchResult<StudentListResponse>
 }

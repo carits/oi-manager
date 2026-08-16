@@ -48,7 +48,10 @@ organizationMemberRouter.get('/students', authenticate, authorize('teacher', 'sc
     orderBy: [{ enrollmentYear: 'desc' }, { name: 'asc' }],
     include: { Membership: { include: { User: { select: { id: true, username: true, avatar: true, status: true } } } } },
   })
-  const rows = profiles.map(profile => ({ id: profile.id, membershipId: profile.membershipId, userId: profile.Membership.userId, name: profile.name, gender: profile.gender, enrollmentYear: profile.enrollmentYear, rating: profile.rating, status: profile.status, headTeacherMembershipId: profile.headTeacherMembershipId, user: profile.Membership.User }))
+  const teacherMembershipIds = [...new Set(profiles.map(profile => profile.headTeacherMembershipId).filter((id): id is string => Boolean(id)))]
+  const teacherProfiles = teacherMembershipIds.length ? await prisma.organizationTeacherProfile.findMany({ where: { membershipId: { in: teacherMembershipIds } }, select: { membershipId: true, name: true } }) : []
+  const teacherNames = new Map(teacherProfiles.map(profile => [profile.membershipId, profile.name]))
+  const rows = profiles.map(profile => ({ id: profile.id, membershipId: profile.membershipId, userId: profile.Membership.userId, name: profile.name, gender: profile.gender, enrollmentYear: profile.enrollmentYear, rating: profile.rating, status: profile.status, headTeacherMembershipId: profile.headTeacherMembershipId, headTeacher: profile.headTeacherMembershipId ? { id: profile.headTeacherMembershipId, name: teacherNames.get(profile.headTeacherMembershipId) || '-' } : null, user: profile.Membership.User }))
   const grade = typeof req.query.grade === 'string' && req.query.grade ? req.query.grade : undefined
   const filtered = grade ? rows.filter(profile => calculateGrade({ enrollmentYear: profile.enrollmentYear, educationSystem: school.educationSystem, educationSystemDetail: normalizeEducationSystemDetail(school.educationSystemDetail), schoolType: school.schoolType }) === grade) : rows
   const start = (page - 1) * pageSize
@@ -135,7 +138,7 @@ organizationMemberRouter.put('/students/:profileId/status', authenticate, author
   const access = await canManageStudentProfile(req, req.params.profileId)
   if (!access.profile) return res.status(404).json({ success: false, message: '???????' })
   if (!access.allowed) return res.status(403).json({ success: false, message: '???????' })
-  await prisma.$transaction([prisma.organizationStudentProfile.update({ where: { id: access.profile.id }, data: { status } }), prisma.user.update({ where: { id: access.profile.Membership.userId }, data: { status } })])
+  await prisma.organizationStudentProfile.update({ where: { id: access.profile.id }, data: { status } })
   res.json({ success: true })
 }, '????????'))
 
@@ -194,7 +197,7 @@ organizationMemberRouter.put('/teachers/:profileId/status', authenticate, author
   const profile = await prisma.organizationTeacherProfile.findUnique({ where: { id: req.params.profileId }, include: { Membership: true } })
   if (!profile || profile.Membership.organizationId !== organizationId || profile.Membership.status !== 'active') return res.status(404).json({ success: false, message: '???????' })
   if (profile.Membership.id === req.user!.organizationMembershipId) return res.status(400).json({ success: false, message: '?????????' })
-  await prisma.$transaction([prisma.organizationTeacherProfile.update({ where: { id: profile.id }, data: { status } }), prisma.user.update({ where: { id: profile.Membership.userId }, data: { status } })])
+  await prisma.organizationTeacherProfile.update({ where: { id: profile.id }, data: { status } })
   res.json({ success: true })
 }, '????????'))
 

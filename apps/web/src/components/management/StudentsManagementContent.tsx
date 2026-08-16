@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Button } from '@/components/ui/Button'
@@ -28,7 +28,10 @@ interface Teacher {
 
 export default function StudentsManagementContent() {
   const router = useRouter()
+  const { organizationId } = useParams<{ organizationId?: string }>()
   const { user, sessionKey } = useAuth()
+  const studentsEndpoint = organizationId ? '/api/organizations/' + organizationId + '/members/students' : '/api/students'
+  const teachersEndpoint = organizationId ? '/api/organizations/' + organizationId + '/members/teachers' : (user?.schoolId ? '/api/schools/' + user.schoolId + '/teachers' : null)
   const toast = useToast()
   const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null)
@@ -40,27 +43,30 @@ export default function StudentsManagementContent() {
     pageSize: 20
   })
   const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [filters, setFilters] = useState({ q: '', grade: '', headTeacherId: '', status: '' })
+  const [filters, setFilters] = useState({ q: '', grade: '', headTeacherMembershipId: '', status: '' })
 
-  const isPrincipal = user?.role === 'school_principal'
+  const isPrincipal = organizationId ? user?.organizationRole === 'school_principal' : user?.role === 'school_principal'
 
   // 普通教师只查询自己的学生，学校负责人查询全校
   // 注意：普通教师需要等 currentTeacherId 获取到后才能查询
   const filterParams = useMemo(() => {
-    const baseParams = user?.schoolId ? { schoolId: user.schoolId } : {}
+    const baseParams = organizationId ? {} : user?.schoolId ? { schoolId: user.schoolId } : {}
+    if (organizationId && !isPrincipal) {
+      return { ...filters, ...pagination }
+    }
     if (isPrincipal) {
       return { ...baseParams, ...filters, ...pagination }
     }
     // 普通教师只看自己的学生，如果没有获取到 currentTeacherId 则不查询
     if (!currentTeacherId) {
-      return { ...baseParams, ...filters, headTeacherId: '__loading__', ...pagination }
+      return { ...baseParams, ...filters, headTeacherMembershipId: '__loading__', ...pagination }
     }
-    return { ...baseParams, ...filters, headTeacherId: currentTeacherId, ...pagination }
-  }, [user?.schoolId, isPrincipal, currentTeacherId, pagination, filters])
+    return { ...baseParams, ...filters, ...(organizationId ? {} : { headTeacherId: currentTeacherId }), ...pagination }
+  }, [user?.schoolId, organizationId, isPrincipal, currentTeacherId, pagination, filters])
 
-  const { data, loading, refetch } = useStudents(filterParams, sessionKey)
+  const { data, loading, refetch } = useStudents(filterParams, sessionKey, studentsEndpoint)
   const modal = useModal<Student>()
-  const { deleteItem } = useDelete('/api/students', refetch)
+  const { deleteItem } = useDelete(studentsEndpoint, refetch)
 
   // 禁用/启用账号
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -73,7 +79,8 @@ export default function StudentsManagementContent() {
       action: async () => {
         setTogglingId(studentId)
         try {
-          const res = await apiClient.put(`/api/students/${studentId}/account-status`, { status: newStatus })
+          const endpoint = organizationId ? studentsEndpoint + '/' + studentId + '/status' : '/api/students/' + studentId + '/account-status'
+          const res = await apiClient.put(endpoint, { status: newStatus })
           if (res.success) {
             toast.success(`${action}成功`)
             refetch()
@@ -100,6 +107,7 @@ export default function StudentsManagementContent() {
   // 获取当前教师ID
   useEffect(() => {
     const fetchCurrentTeacher = async () => {
+    if (organizationId) return
       try {
         const result = await apiClient.get<{ id: string }>('/api/teachers/me')
         if (result.success && result.data) {
@@ -110,14 +118,16 @@ export default function StudentsManagementContent() {
       }
     }
     fetchCurrentTeacher()
-  }, [])
+  }, [organizationId])
 
   // 获取教师列表（用于转移主教练）
   useEffect(() => {
     const fetchTeachers = async () => {
-      if (!user?.schoolId) return
+      if (organizationId && !isPrincipal) return
+      if (!user?.schoolId && !organizationId) return
       try {
-        const result = await apiClient.get<{ data: Teacher[]; total: number }>(`/api/schools/${user.schoolId}/teachers?pageSize=100`)
+        if (!teachersEndpoint) return
+        const result = await apiClient.get<{ data: Teacher[]; total: number }>(teachersEndpoint + '?pageSize=100')
         if (result.success && result.data) {
           setTeachers(result.data.data)
         }
@@ -125,10 +135,10 @@ export default function StudentsManagementContent() {
         console.error('Failed to fetch teachers:', error)
       }
     }
-    if (user?.schoolId) {
+    if (user?.schoolId || organizationId) {
       fetchTeachers()
     }
-  }, [user?.schoolId])
+  }, [user?.schoolId, organizationId, isPrincipal, teachersEndpoint])
 
   // 学生列表直接使用后端返回的数据（后端已根据 headTeacherId 筛选）
   const students = data?.data || []
@@ -159,11 +169,11 @@ export default function StudentsManagementContent() {
     }
 
     try {
-      const result = await apiClient.put(`/api/students/${transferringStudent.id}`, {
+      const result = await apiClient.put(organizationId ? studentsEndpoint + '/' + transferringStudent.id : '/api/students/' + transferringStudent.id, {
         name: transferringStudent.name,
         gender: transferringStudent.gender,
         enrollmentYear: transferringStudent.enrollmentYear,
-        headTeacherId: selectedTeacherId
+        ...(organizationId ? { headTeacherMembershipId: selectedTeacherId } : { headTeacherId: selectedTeacherId })
       })
       if (result.success) {
         toast.success('转移成功')
@@ -183,7 +193,7 @@ export default function StudentsManagementContent() {
       <div className={managementListStyles.page}>
         <PageHeader title="学生" description="管理本校学生信息">
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Button variant="secondary" onClick={() => router.push('/teacher/students/import')}>
+            <Button variant="secondary" onClick={() => router.push(organizationId ? `/org/${organizationId}/management?tab=students` : '/teacher/students/import')}>
               导入学生
             </Button>
             <Button onClick={() => modal.open()}>添加学生</Button>
@@ -193,7 +203,7 @@ export default function StudentsManagementContent() {
         <ManagementToolbar total={total} noun="学生">
           <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索学生" />
           <select className={managementListStyles.select} value={filters.grade} onChange={event => updateFilter('grade', event.target.value)} aria-label="年级筛选"><option value="">年级：全部</option>{gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}</select>
-          {isPrincipal && <select className={managementListStyles.select} value={filters.headTeacherId} onChange={event => updateFilter('headTeacherId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select>}
+          {isPrincipal && <select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select>}
           <select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></select>
         </ManagementToolbar>
         <Table
@@ -255,7 +265,7 @@ export default function StudentsManagementContent() {
                 return student.headTeacher?.name || '-'
               }
             },
-            { key: 'status', label: '状态', width: '12%', render: student => <Badge variant={student.user?.status === 'disabled' ? 'neutral' : 'success'} dot>{student.user?.status === 'disabled' ? '已禁用' : '正常'}</Badge> }
+            { key: 'status', label: '状态', width: '12%', render: student => <Badge variant={(student.status || student.user?.status) === 'disabled' ? 'neutral' : 'success'} dot>{(student.status || student.user?.status) === 'disabled' ? '已禁用' : '正常'}</Badge> }
           ]}
           actions={(student) => (
             <>
@@ -263,8 +273,8 @@ export default function StudentsManagementContent() {
                 编辑
               </Button>
               <ActionMenu>
-                <ActionMenuItem onClick={() => toggleAccountStatus(student.id, student.user?.status || 'active')}>{togglingId === student.id ? '处理中...' : student.user?.status === 'disabled' ? '启用账号' : '禁用账号'}</ActionMenuItem>
-                {(isPrincipal || student.headTeacherId === currentTeacherId) && <ActionMenuItem onClick={() => { setTransferringStudent(student); setSelectedTeacherId(student.headTeacherId || '') }}>转移主教练</ActionMenuItem>}
+                <ActionMenuItem onClick={() => toggleAccountStatus(student.id, student.status || student.user?.status || 'active')}>{togglingId === student.id ? '处理中...' : (student.status || student.user?.status) === 'disabled' ? '启用账号' : '禁用账号'}</ActionMenuItem>
+                {(isPrincipal || (!organizationId && student.headTeacherId === currentTeacherId)) && <ActionMenuItem onClick={() => { setTransferringStudent(student); setSelectedTeacherId(student.headTeacherMembershipId || student.headTeacherId || '') }}>转移主教练</ActionMenuItem>}
                 <ActionMenuItem danger onClick={() => deleteItem(student.id, '确定要删除该学生吗？')}>删除学生</ActionMenuItem>
               </ActionMenu>
             </>
@@ -288,6 +298,8 @@ export default function StudentsManagementContent() {
         {modal.isOpen && (
           <StudentFormModal
             student={modal.data}
+            studentsEndpoint={studentsEndpoint}
+            organizationId={organizationId}
             onClose={modal.close}
             onSuccess={() => {
               modal.close()
@@ -335,10 +347,14 @@ export default function StudentsManagementContent() {
 // 学生表单弹窗组件
 function StudentFormModal({
   student,
+  studentsEndpoint,
+  organizationId,
   onClose,
   onSuccess
 }: {
   student: Student | null
+  studentsEndpoint: string
+  organizationId?: string
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -362,13 +378,12 @@ function StudentFormModal({
           enrollmentYear: values.enrollmentYear ? parseInt(values.enrollmentYear) : null,
           username: values.username,
           password: values.password || undefined,
-          schoolId: student?.schoolId || undefined,
-          headTeacherId: student?.headTeacherId || undefined
+          ...(organizationId ? { headTeacherMembershipId: student?.headTeacherMembershipId || undefined } : { schoolId: student?.schoolId || undefined, headTeacherId: student?.headTeacherId || undefined })
         }
 
         const result = student
-          ? await apiClient.put(`/api/students/${student.id}`, body)
-          : await apiClient.post('/api/students', body)
+          ? await apiClient.put(`${studentsEndpoint}/${student.id}`, body)
+          : await apiClient.post(studentsEndpoint, body)
 
         if (result.success) {
           onSuccess()
