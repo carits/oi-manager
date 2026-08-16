@@ -112,13 +112,7 @@ async function issueWorkspaceSession(
 // 登录
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password, role, mode, workspaceMode } = req.body as {
-      username: string
-      password: string
-      role?: 'admin' | 'teacher' | 'student'
-      mode?: 'campus' | 'personal'
-      workspaceMode?: WorkspaceMode
-    }
+    const { username, password } = req.body as { username: string; password: string }
     const clientIp = getClientIp(req)
     const userAgent = getUserAgent(req)
 
@@ -138,7 +132,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         data: {
           id: crypto.randomUUID(),
           username,
-          loginRole: role || 'unknown',
+          loginRole: 'unified',
           result: 'failed_user_not_found',
           failureReason: '用户名不存在',
           ipAddress: clientIp,
@@ -148,7 +142,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       logger.security('login_failed_user_not_found', {
         action: 'login',
         target: username,
-        metadata: { loginRole: role, ip: clientIp }
+        metadata: { ip: clientIp }
       })
       return res.status(401).json({ success: false, message: '用户名或密码错误' })
     }
@@ -161,7 +155,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         data: {
           id: crypto.randomUUID(),
           username,
-          loginRole: role || 'unknown',
+          loginRole: 'unified',
           userRole: user.role,
           result: 'failed_wrong_password',
           failureReason: '密码错误',
@@ -172,7 +166,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       logger.security('login_failed_wrong_password', {
         action: 'login',
         target: username,
-        metadata: { loginRole: role, userRole: user.role, ip: clientIp }
+        metadata: { userRole: user.role, ip: clientIp }
       })
       return res.status(401).json({ success: false, message: '用户名或密码错误' })
     }
@@ -185,7 +179,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
           id: crypto.randomUUID(),
           userId: user.id,
           username,
-          loginRole: role || 'unknown',
+          loginRole: 'unified',
           userRole: user.role,
           result: 'failed_account_disabled',
           failureReason: '账号已被禁用',
@@ -206,8 +200,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
     const payload: JwtPayload = {
       userId: user.id,
       role: user.role as UserRole,
-      username: user.username,
-      workspaceMode: normalizeRequestedWorkspace(workspaceMode, mode)
+      username: user.username
     }
 
     // 如果是管理员，添加 adminId
@@ -230,13 +223,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       payload.studentMode = payload.workspaceMode === 'personal' ? 'personal' : 'campus'
     }
 
-    if (payload.workspaceMode === 'personal') {
-      await prisma.personalProfile.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id },
-        update: {}
-      })
-    }
+    await prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} })
 
     const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' })
     setSessionCookie(res, token)
@@ -276,8 +263,6 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         teacherId: user.Teacher?.id,
         studentId: user.Student?.id,
         schoolId: user.schoolId, // 所有用户都有 schoolId
-        workspaceMode: payload.workspaceMode,
-        studentMode: payload.studentMode,
         next: '/identity'
       }
     })

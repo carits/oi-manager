@@ -150,26 +150,6 @@ export function AuthProvider({
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
   }, [mutateCache, user])
 
-  // One-time bridge for sessions created before HttpOnly cookies were introduced.
-  // It never blocks the login form or protected shell.
-  useEffect(() => {
-    if (initialUser || !getToken()) return
-
-    let active = true
-    apiClient.mutate('/api/auth/session/migrate', 'POST')
-      .then(result => {
-        if (!active || !result.ok) return
-        clearAuth()
-        window.location.reload()
-      })
-      .catch(() => {
-        // Keep the legacy token so the user can retry or log in normally.
-      })
-
-    return () => {
-      active = false
-    }
-  }, [initialUser])
 
   const login = async (
     username: string,
@@ -178,7 +158,7 @@ export function AuthProvider({
     const result = await apiClient.mutate<AuthUser & { token?: string }>(
       '/api/auth/login',
       'POST',
-      { username, password, workspaceMode: 'work' },
+      { username, password },
     )
 
     if (!result.ok) {
