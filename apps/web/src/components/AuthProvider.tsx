@@ -248,6 +248,8 @@ export function AuthProvider({
         ...current,
         organizationId: workspace.organizationId,
         organizationMembershipId: workspace.organizationMembershipId,
+        // Compatibility projection only; organization membership remains authoritative.
+        schoolId: workspace.schoolId,
         schoolName: workspace.organizationName,
         organizationRole: workspace.memberRole as 'school_principal' | 'teacher' | 'student',
       } : null)
