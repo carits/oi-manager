@@ -35,7 +35,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
     decoded.workspaceMode = getWorkspaceMode(decoded)
     const organizationId = req.get('x-oi-organization-id')
-    if (organizationId && decoded.workspaceMode === 'work') {
+    if (organizationId) {
       const membership = await prisma.organizationMembership.findFirst({
         where: { organizationId, userId: decoded.userId, status: 'active', Organization: { status: 'active' } },
         select: {
@@ -44,10 +44,9 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
           Organization: { select: { School: { select: { id: true } } } }
         }
       })
-      const schoolId = membership?.Organization.School?.id
-      if (!schoolId) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该工作区' })
+      if (!membership) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
+      const schoolId = membership.Organization.School?.id
       decoded.organizationId = organizationId
-      decoded.schoolId = schoolId
       decoded.organizationMembershipId = membership.id
       // 校园权限只取当前成员关系：同一账号在不同校园可拥有不同身份。
       decoded.role = membership.memberRole as UserRole

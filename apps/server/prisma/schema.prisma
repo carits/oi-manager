@@ -10,11 +10,15 @@ datasource db {
 model Admin {
   name      String
   schoolId  String
+  organizationId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
   id        String   @id
   User      User     @relation(fields: [id], references: [id], onDelete: Cascade)
   School    School   @relation(fields: [schoolId], references: [id])
+  Organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 model AiUsageLog {
@@ -327,6 +331,7 @@ model PasswordResetLog {
 model PrincipalTransferLog {
   id                    String   @id
   schoolId              String
+  organizationId        String?
   oldPrincipalTeacherId String?
   newPrincipalTeacherId String
   result                String
@@ -334,6 +339,9 @@ model PrincipalTransferLog {
   createdAt             DateTime @default(now())
   operatorId            String
   School                School   @relation(fields: [schoolId], references: [id])
+  Organization          Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
 
 model Problem {
@@ -359,6 +367,7 @@ model Problem {
   libraryScope      String              @default("platform")
   libraryKey        String              @default("platform")
   schoolId          String?
+  organizationId    String?
   sourceProblemId   String?
   status            String              @default("draft")
   publishedAt       DateTime?
@@ -374,6 +383,7 @@ model Problem {
   TrainingProblem   TrainingProblem[]
   Owner             User                @relation("ProblemOwner", fields: [ownerId], references: [id])
   School            School?             @relation(fields: [schoolId], references: [id])
+  Organization       Organization?        @relation(fields: [organizationId], references: [id])
   SourceProblem     Problem?            @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
   CopiedProblems    Problem[]           @relation("ProblemCopies")
 
@@ -382,6 +392,7 @@ model Problem {
   @@index([libraryScope, status])
   @@index([ownerId, ownerType])
   @@index([schoolId, status])
+  @@index([organizationId, status])
   @@index([sourceProblemId])
   @@index([visibility])
   @@index([visibility, status])
@@ -406,6 +417,7 @@ model ProblemList {
   description        String?
   coverUrl           String?
   schoolId           String?
+  organizationId      String?
   ownerId            String
   ownerType          String               @default("teacher")
   scope              String               @default("campus")
@@ -417,10 +429,12 @@ model ProblemList {
   ProblemListShare   ProblemListShare[]
   SchoolProblemList  SchoolProblemList[]
   TeamProblemList    TeamProblemList[]
+  Organization       Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([createdAt])
   @@index([ownerId, ownerType])
   @@index([schoolId])
+  @@index([organizationId])
   @@index([scope])
   @@index([scope, ownerId])
   @@index([visibility])
@@ -564,6 +578,13 @@ model Organization {
   CaritsTransactions CaritsTransaction[] @relation("CaritsTransactionOrganization")
   ContributionAttributions OrganizationContributionAttribution[]
   ContributionProjects ContributionProject[]
+  Admin Admin[]
+  PrincipalTransferLog PrincipalTransferLog[]
+  Problem Problem[]
+  ProblemList ProblemList[]
+  SchoolProblemList SchoolProblemList[]
+  Team Team[]
+  Training Training[]
 
   @@index([type, status])
 }
@@ -743,6 +764,7 @@ model ContributionProject {
 model SchoolProblemList {
   id            String      @id
   schoolId      String
+  organizationId String?
   problemListId String
   addedBy       String
   addedByRole   String
@@ -750,11 +772,13 @@ model SchoolProblemList {
   createdAt     DateTime    @default(now())
   ProblemList   ProblemList @relation(fields: [problemListId], references: [id], onDelete: Cascade)
   School        School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  Organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@unique([schoolId, problemListId])
   @@index([addedBy])
   @@index([problemListId])
   @@index([schoolId])
+  @@index([organizationId])
 }
 
 model Student {
@@ -880,12 +904,14 @@ model Team {
   description               String?
   announcement              String?
   schoolId                  String?
+  organizationId            String?
   scope                     String                      @default("campus")
   isPublic                  Boolean                     @default(true)
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime                    @default(now())
   Contest                   Contest[]
   School                    School?                     @relation(fields: [schoolId], references: [id])
+  Organization               Organization?               @relation(fields: [organizationId], references: [id])
   TeamJoinRequest           TeamJoinRequest[]
   TeamMember                TeamMember[]
   TeamMemberExternalAccount TeamMemberExternalAccount[]
@@ -898,6 +924,7 @@ model Team {
   @@index([scope])
   @@index([scope, isPublic])
   @@index([schoolId])
+  @@index([organizationId])
   @@index([schoolId, scope, isPublic])
 }
 
@@ -1066,17 +1093,20 @@ model Training {
   type                      String                      @default("training")
   scope                     String                      @default("campus")
   schoolId                  String?
+  organizationId            String?
   sourceTrainingId          Int?
   ContestRecord             ContestRecord[]
   ContestUserProblemStatus  ContestUserProblemStatus[]
   Submission                Submission[]
   School                    School?                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  Organization               Organization?               @relation(fields: [organizationId], references: [id])
   Team                      Team?                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   TrainingParticipant       TrainingParticipant[]
   TrainingProblem           TrainingProblem[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
 
   @@index([schoolId])
+  @@index([organizationId])
   @@index([scope])
   @@index([scope, status])
   @@index([schoolId, status])
