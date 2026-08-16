@@ -147,3 +147,62 @@ organizationMemberRouter.delete('/students/:profileId', authenticate, authorize(
   await prisma.$transaction([prisma.organizationStudentProfile.update({ where: { id: access.profile.id }, data: { status: 'archived' } }), prisma.organizationMembership.update({ where: { id: access.profile.membershipId }, data: { status: 'archived' } })])
   res.json({ success: true, message: '???????????' })
 }, '????????'))
+
+
+async function principalAccess(req: AuthRequest, organizationId: string) {
+  return req.user?.organizationId === organizationId && req.user.role === 'school_principal'
+}
+
+organizationMemberRouter.post('/teachers', authenticate, authorize('school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId || !await principalAccess(req, organizationId)) return
+  const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
+  const password = typeof req.body.password === 'string' ? req.body.password : ''
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
+  if (!username || !password || !name) return res.status(400).json({ success: false, message: '?????????????' })
+  if (password.length < 6) return res.status(400).json({ success: false, message: '?????? 6 ?' })
+  const existing = await prisma.user.findUnique({ where: { username }, select: { id: true } })
+  if (existing) return res.status(409).json({ success: false, message: '??????' })
+  const data = await prisma.$transaction(async tx => {
+    const user = await tx.user.create({ data: { id: crypto.randomUUID(), username, passwordHash: await bcrypt.hash(password, 10), role: 'user', avatar: req.body.avatar || null, email: req.body.email || null, phone: req.body.phone || null } })
+    const membership = await tx.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId, userId: user.id, memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date() } })
+    const profile = await tx.organizationTeacherProfile.create({ data: { id: crypto.randomUUID(), membershipId: membership.id, name, email: req.body.email || null, phone: req.body.phone || null, title: req.body.title || null, avatar: req.body.avatar || null, bio: req.body.bio || null } })
+    return { id: profile.id, membershipId: membership.id, userId: user.id }
+  })
+  res.status(201).json({ success: true, data })
+}, '????????'))
+
+organizationMemberRouter.put('/teachers/:profileId', authenticate, authorize('school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId || !await principalAccess(req, organizationId)) return
+  const profile = await prisma.organizationTeacherProfile.findUnique({ where: { id: req.params.profileId }, include: { Membership: true } })
+  if (!profile || profile.Membership.organizationId !== organizationId || profile.Membership.status !== 'active') return res.status(404).json({ success: false, message: '???????' })
+  if (typeof req.body.password === 'string' && req.body.password && req.body.password.length < 6) return res.status(400).json({ success: false, message: '?????? 6 ?' })
+  await prisma.$transaction(async tx => {
+    if (typeof req.body.password === 'string' && req.body.password) await tx.user.update({ where: { id: profile.Membership.userId }, data: { passwordHash: await bcrypt.hash(req.body.password, 10) } })
+    await tx.organizationTeacherProfile.update({ where: { id: profile.id }, data: { name: typeof req.body.name === 'string' ? req.body.name.trim() || profile.name : undefined, email: req.body.email === undefined ? undefined : req.body.email || null, phone: req.body.phone === undefined ? undefined : req.body.phone || null, title: req.body.title === undefined ? undefined : req.body.title || null, avatar: req.body.avatar === undefined ? undefined : req.body.avatar || null, bio: req.body.bio === undefined ? undefined : req.body.bio || null } })
+  })
+  res.json({ success: true })
+}, '????????'))
+
+organizationMemberRouter.put('/teachers/:profileId/status', authenticate, authorize('school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId || !await principalAccess(req, organizationId)) return
+  const status = req.body.status
+  if (status !== 'active' && status !== 'disabled') return res.status(400).json({ success: false, message: '??????' })
+  const profile = await prisma.organizationTeacherProfile.findUnique({ where: { id: req.params.profileId }, include: { Membership: true } })
+  if (!profile || profile.Membership.organizationId !== organizationId || profile.Membership.status !== 'active') return res.status(404).json({ success: false, message: '???????' })
+  if (profile.Membership.id === req.user!.organizationMembershipId) return res.status(400).json({ success: false, message: '?????????' })
+  await prisma.$transaction([prisma.organizationTeacherProfile.update({ where: { id: profile.id }, data: { status } }), prisma.user.update({ where: { id: profile.Membership.userId }, data: { status } })])
+  res.json({ success: true })
+}, '????????'))
+
+organizationMemberRouter.delete('/teachers/:profileId', authenticate, authorize('school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId || !await principalAccess(req, organizationId)) return
+  const profile = await prisma.organizationTeacherProfile.findUnique({ where: { id: req.params.profileId }, include: { Membership: true } })
+  if (!profile || profile.Membership.organizationId !== organizationId || profile.Membership.status !== 'active') return res.status(404).json({ success: false, message: '???????' })
+  if (profile.Membership.memberRole === 'school_principal') return res.status(400).json({ success: false, message: '????????????????' })
+  await prisma.$transaction([prisma.organizationTeacherProfile.update({ where: { id: profile.id }, data: { status: 'archived' } }), prisma.organizationMembership.update({ where: { id: profile.membershipId }, data: { status: 'archived' } })])
+  res.json({ success: true, message: '???????????' })
+}, '????????'))
