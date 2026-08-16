@@ -24,19 +24,19 @@ function fail(code: string, entity: string, id: string, detail: string) {
 
 async function inspect() {
   const schools = await prisma.school.findMany({
-    select: { id: true, name: true, organizationId: true, currentPrincipalTeacherId: true },
+    select: { id: true, name: true, organizationId: true, currentPrincipalTeacherId: true, currentPrincipalMembershipId: true },
   })
   const schoolIds = new Set(schools.map((row) => row.id))
   const [students, teachers, teams, trainings, problems, lists, schoolLists, admins, principalLogs] = await Promise.all([
     prisma.student.findMany({ select: { id: true, schoolId: true, name: true, headTeacherId: true, enrollmentYear: true, targetContest: true, tags: true, notes: true, avatar: true, rating: true } }),
     prisma.teacher.findMany({ select: { id: true, schoolId: true, name: true, email: true, phone: true, avatar: true, bio: true, title: true, status: true } }),
-    prisma.team.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
-    prisma.training.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
-    prisma.problem.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
-    prisma.problemList.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
-    prisma.schoolProblemList.findMany({ select: { id: true, schoolId: true } }),
-    prisma.admin.findMany({ select: { id: true, schoolId: true } }),
-    prisma.principalTransferLog.findMany({ select: { id: true, schoolId: true } }),
+    prisma.team.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true, organizationId: true } }),
+    prisma.training.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true, organizationId: true } }),
+    prisma.problem.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true, organizationId: true } }),
+    prisma.problemList.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true, organizationId: true } }),
+    prisma.schoolProblemList.findMany({ select: { id: true, schoolId: true, organizationId: true } }),
+    prisma.admin.findMany({ select: { id: true, schoolId: true, organizationId: true } }),
+    prisma.principalTransferLog.findMany({ select: { id: true, schoolId: true, organizationId: true } }),
   ])
   count('学校', schools.length)
   for (const school of schools) if (!school.organizationId) fail('SCHOOL_ORGANIZATION_MISSING', 'School', school.id, '学校尚未关联组织')
@@ -56,13 +56,21 @@ async function inspect() {
   for (const school of schools) {
     if (!teacherKeys.has(school.id + ':' + school.currentPrincipalTeacherId)) fail('PRINCIPAL_UNMAPPABLE', 'School', school.id, '负责人不是本校教师')
   }
-  const resources: Array<[string, Array<{ id: string; schoolId: string | null }>]> = [
+  const organizationBySchool = new Map(schools.filter((school) => school.organizationId).map((school) => [school.id, school.organizationId!]))
+  const resources: Array<[string, Array<{ id: string; schoolId: string | null; organizationId: string | null }>]> = [
     ['Team', teams], ['Training', trainings], ['Problem', problems], ['ProblemList', lists],
     ['SchoolProblemList', schoolLists], ['Admin', admins], ['PrincipalTransferLog', principalLogs],
   ]
   for (const [entity, rows] of resources) {
     count(entity, rows.length)
-    for (const row of rows) if (!row.schoolId || !schoolIds.has(row.schoolId)) fail('RESOURCE_SCHOOL_UNMAPPABLE', entity, row.id, '资源学校不存在')
+    for (const row of rows) {
+      if (!row.schoolId || !schoolIds.has(row.schoolId)) {
+        fail('RESOURCE_SCHOOL_UNMAPPABLE', entity, row.id, 'resource school is missing')
+        continue
+      }
+      const expectedOrganizationId = organizationBySchool.get(row.schoolId)
+      if (expectedOrganizationId && row.organizationId && row.organizationId !== expectedOrganizationId) fail('RESOURCE_ORGANIZATION_CONFLICT', entity, row.id, 'resource organization differs from school organization')
+    }
   }
   return { schools, students, teachers }
 }
@@ -101,6 +109,12 @@ async function writeCanonical(input: Awaited<ReturnType<typeof inspect>>) {
     teacherMemberships.set(teacher.schoolId + ':' + teacher.id, membership.id)
     count('已迁移教师档案')
   }
+  for (const school of input.schools) {
+    const membershipId = teacherMemberships.get(school.id + ':' + school.currentPrincipalTeacherId)
+    if (!membershipId) throw new Error('principal membership missing: ' + school.id)
+    await prisma.school.update({ where: { id: school.id }, data: { currentPrincipalMembershipId: membershipId } })
+    count('migrated principal memberships')
+  }
   for (const student of input.students) {
     const organizationId = organizationBySchool.get(student.schoolId)
     if (!organizationId) throw new Error('学生缺少组织映射: ' + student.id)
@@ -116,6 +130,34 @@ async function writeCanonical(input: Awaited<ReturnType<typeof inspect>>) {
     })
     count('已迁移学生档案')
   }
+
+  const resourceRows = await Promise.all([
+    prisma.team.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
+    prisma.training.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
+    prisma.problem.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
+    prisma.problemList.findMany({ where: { schoolId: { not: null } }, select: { id: true, schoolId: true } }),
+    prisma.schoolProblemList.findMany({ select: { id: true, schoolId: true } }),
+    prisma.admin.findMany({ select: { id: true, schoolId: true } }),
+    prisma.principalTransferLog.findMany({ select: { id: true, schoolId: true } }),
+  ])
+  const writers = [
+    (id: string, organizationId: string) => prisma.team.update({ where: { id }, data: { organizationId } }),
+    (id: string, organizationId: string) => prisma.training.update({ where: { id }, data: { organizationId } }),
+    (id: string, organizationId: string) => prisma.problem.update({ where: { id }, data: { organizationId } }),
+    (id: string, organizationId: string) => prisma.problemList.update({ where: { id }, data: { organizationId } }),
+    (id: string, organizationId: string) => prisma.schoolProblemList.update({ where: { id }, data: { organizationId } }),
+    (id: string, organizationId: string) => prisma.admin.update({ where: { id }, data: { organizationId } }),
+    (id: string, organizationId: string) => prisma.principalTransferLog.update({ where: { id }, data: { organizationId } }),
+  ]
+  const names = ['Team', 'Training', 'Problem', 'ProblemList', 'SchoolProblemList', 'Admin', 'PrincipalTransferLog']
+  for (let index = 0; index < resourceRows.length; index += 1) for (const row of resourceRows[index]) {
+    if (!row.schoolId) throw new Error(names[index] + ' missing school: ' + row.id)
+    const organizationId = organizationBySchool.get(row.schoolId)
+    if (!organizationId) throw new Error(names[index] + ' missing organization mapping: ' + row.id)
+    await writers[index](row.id, organizationId)
+    count('migrated resource organization links')
+  }
+
 }
 
 async function main() {
