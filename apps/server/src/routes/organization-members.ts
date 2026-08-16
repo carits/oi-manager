@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
 import { Router, type Response } from 'express'
 import { asyncHandler } from '../lib/asyncHandler'
 import { authenticate, authorize, type AuthRequest } from '../middleware/auth'
@@ -67,4 +69,81 @@ organizationMemberRouter.get('/teachers', authenticate, authorize('school_princi
   const start = (page - 1) * pageSize
   const rows = profiles.map(profile => ({ id: profile.id, membershipId: profile.membershipId, userId: profile.Membership.userId, name: profile.name, title: profile.title, email: profile.email, phone: profile.phone, status: profile.status, memberRole: profile.Membership.memberRole, user: profile.Membership.User }))
   res.json({ success: true, data: paginatedResponse(rows.slice(start, start + pageSize), rows.length, page, pageSize) })
+}, '????????'))
+
+
+async function canManageStudentProfile(req: AuthRequest, profileId: string) {
+  const profile = await prisma.organizationStudentProfile.findUnique({ where: { id: profileId }, include: { Membership: true } })
+  if (!profile || profile.Membership.organizationId !== req.user?.organizationId || profile.Membership.status !== 'active') return { profile: null, allowed: false }
+  if (req.user?.role === 'school_principal') return { profile, allowed: true }
+  return { profile, allowed: profile.headTeacherMembershipId === req.user?.organizationMembershipId }
+}
+
+organizationMemberRouter.post('/students', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
+  const password = typeof req.body.password === 'string' ? req.body.password : ''
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
+  if (!username || !password || !name) return res.status(400).json({ success: false, message: '?????????????' })
+  if (password.length < 6) return res.status(400).json({ success: false, message: '?????? 6 ?' })
+  const headTeacherMembershipId = req.user!.role === 'school_principal' && typeof req.body.headTeacherMembershipId === 'string'
+    ? req.body.headTeacherMembershipId
+    : req.user!.organizationMembershipId
+  if (headTeacherMembershipId) {
+    const teacher = await prisma.organizationMembership.findFirst({ where: { id: headTeacherMembershipId, organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } })
+    if (!teacher) return res.status(400).json({ success: false, message: '??????????' })
+  }
+  const existing = await prisma.user.findUnique({ where: { username }, select: { id: true } })
+  if (existing) return res.status(409).json({ success: false, message: '??????' })
+  const data = await prisma.$transaction(async tx => {
+    const user = await tx.user.create({ data: { id: crypto.randomUUID(), username, passwordHash: await bcrypt.hash(password, 10), role: 'user', avatar: req.body.avatar || null } })
+    const membership = await tx.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId, userId: user.id, memberRole: 'student', relationType: 'enrolled', status: 'active', joinedAt: new Date() } })
+    const profile = await tx.organizationStudentProfile.create({ data: { id: crypto.randomUUID(), membershipId: membership.id, name, gender: req.body.gender || null, enrollmentYear: req.body.enrollmentYear ? Number(req.body.enrollmentYear) : null, targetContest: req.body.targetContest || null, headTeacherMembershipId: headTeacherMembershipId || null, tags: req.body.tags ? JSON.stringify(req.body.tags) : null, notes: req.body.notes || null, avatar: req.body.avatar || null } })
+    return { id: profile.id, membershipId: membership.id, userId: user.id }
+  })
+  res.status(201).json({ success: true, data })
+}, '????????'))
+
+organizationMemberRouter.put('/students/:profileId', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const access = await canManageStudentProfile(req, req.params.profileId)
+  if (!access.profile) return res.status(404).json({ success: false, message: '???????' })
+  if (!access.allowed) return res.status(403).json({ success: false, message: '??????????????????' })
+  const requestedTeacher = req.user!.role === 'school_principal' && typeof req.body.headTeacherMembershipId === 'string' ? req.body.headTeacherMembershipId : undefined
+  if (requestedTeacher !== undefined && requestedTeacher) {
+    const teacher = await prisma.organizationMembership.findFirst({ where: { id: requestedTeacher, organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } })
+    if (!teacher) return res.status(400).json({ success: false, message: '??????????' })
+  }
+  await prisma.$transaction(async tx => {
+    if (typeof req.body.password === 'string' && req.body.password) {
+      if (req.body.password.length < 6) throw new Error('PASSWORD_TOO_SHORT')
+      await tx.user.update({ where: { id: access.profile.Membership.userId }, data: { passwordHash: await bcrypt.hash(req.body.password, 10) } })
+    }
+    await tx.organizationStudentProfile.update({ where: { id: access.profile.id }, data: { name: typeof req.body.name === 'string' ? req.body.name.trim() || access.profile.name : undefined, gender: req.body.gender === undefined ? undefined : req.body.gender || null, enrollmentYear: req.body.enrollmentYear === undefined ? undefined : req.body.enrollmentYear ? Number(req.body.enrollmentYear) : null, targetContest: req.body.targetContest === undefined ? undefined : req.body.targetContest || null, headTeacherMembershipId: requestedTeacher, tags: req.body.tags === undefined ? undefined : req.body.tags ? JSON.stringify(req.body.tags) : null, notes: req.body.notes === undefined ? undefined : req.body.notes || null, avatar: req.body.avatar === undefined ? undefined : req.body.avatar || null } })
+  })
+  res.json({ success: true })
+}, '????????'))
+
+organizationMemberRouter.put('/students/:profileId/status', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const status = req.body.status
+  if (status !== 'active' && status !== 'disabled') return res.status(400).json({ success: false, message: '??????' })
+  const access = await canManageStudentProfile(req, req.params.profileId)
+  if (!access.profile) return res.status(404).json({ success: false, message: '???????' })
+  if (!access.allowed) return res.status(403).json({ success: false, message: '???????' })
+  await prisma.$transaction([prisma.organizationStudentProfile.update({ where: { id: access.profile.id }, data: { status } }), prisma.user.update({ where: { id: access.profile.Membership.userId }, data: { status } })])
+  res.json({ success: true })
+}, '????????'))
+
+organizationMemberRouter.delete('/students/:profileId', authenticate, authorize('teacher', 'school_principal'), asyncHandler(async (req, res) => {
+  const organizationId = requireOrganizationContext(req, res)
+  if (!organizationId) return
+  const access = await canManageStudentProfile(req, req.params.profileId)
+  if (!access.profile) return res.status(404).json({ success: false, message: '???????' })
+  if (!access.allowed) return res.status(403).json({ success: false, message: '???????' })
+  await prisma.$transaction([prisma.organizationStudentProfile.update({ where: { id: access.profile.id }, data: { status: 'archived' } }), prisma.organizationMembership.update({ where: { id: access.profile.membershipId }, data: { status: 'archived' } })])
+  res.json({ success: true, message: '???????????' })
 }, '????????'))
