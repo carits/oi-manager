@@ -6,6 +6,8 @@ import { useAuth } from '@/components/AuthProvider'
 import { TeamDetailPage } from '@/components/team/TeamDetailPage'
 import { TrainingDetailPage } from '@/components/training/TrainingDetailPage'
 import { ProblemDetail } from '@/components/problem/ProblemDetail'
+import { ProblemForm } from '@/components/problem/ProblemForm'
+import { ProblemNote } from '@/components/problem/ProblemNote'
 import { SubmissionDetailPage } from '@/components/submission/SubmissionDetailPage'
 import ProblemListDetailPage from '@/components/problem/ProblemListDetailPage'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
@@ -22,7 +24,11 @@ export default function OrganizationResourcePage() {
     const supported =
       (module === 'teams' && (parts.length === 1 || (parts.length === 3 && ['contests', 'trainings', 'homeworks'].includes(parts[1])))) ||
       ((module === 'contests' || module === 'homeworks') && parts.length === 1) ||
-      ((module === 'problems' || module === 'submissions' || module === 'problem-lists') && parts.length === 1)
+      (module === 'problems' && (
+        parts.length === 1 ||
+        (parts.length === 2 && ['edit', 'note'].includes(parts[1]))
+      )) ||
+      ((module === 'submissions' || module === 'problem-lists') && parts.length === 1)
     if (!supported) router.replace(`${prefix}/${module}`)
   }, [module, parts, prefix, router])
 
@@ -34,6 +40,15 @@ export default function OrganizationResourcePage() {
   }
   if ((module === 'contests' || module === 'homeworks') && parts.length === 1) {
     return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />
+  }
+  if (module === 'problems' && parts.length === 1 && parts[0] === 'new') {
+    return <ProblemForm mode="create" role={userType} />
+  }
+  if (module === 'problems' && parts.length === 2 && parts[1] === 'edit') {
+    return <ProblemForm mode="edit" role={userType} problemId={parts[0]} />
+  }
+  if (module === 'problems' && parts.length === 2 && parts[1] === 'note') {
+    return <ProblemNote role={userType} problemId={parts[0]} />
   }
   if (module === 'problems' && parts.length === 1) return <ProblemDetail role={userType} problemId={parts[0]} />
   if (module === 'submissions' && parts.length === 1) return <SubmissionDetailPage role={userType} submissionId={parts[0]} />
