@@ -273,3 +273,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/trainings/:id/problems/reorder` | 见对应路由实现 |
 | `PUT` | `/api/trainings/:id/record` | 见对应路由实现 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
+| `GET` | `/api/problems/:id/checker` | 题目 Checker 文件列表 |
+| `GET` | `/api/problems/:id/checker/:fileName/download` | 下载 Checker 源码 |
+| `POST` | `/api/problems/:id/checker` | 上传 Checker 源码 |
+| `DELETE` | `/api/problems/:id/checker/:checkerId` | 删除 Checker 源码 |

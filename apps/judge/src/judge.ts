@@ -28,11 +28,19 @@ import type {
   JudgeMode
 } from './types'
 
+function readCheckerDependencies(testdataPath: string): Record<string, string> {
+  const dependencies: Record<string, string> = {}
+  const header = path.join(testdataPath, 'testlib.h')
+  if (fs.existsSync(header)) dependencies['testlib.h'] = fs.readFileSync(header, 'utf-8')
+  return dependencies
+}
+
 /**
  * 执行评测任务
  */
 
 function resolveJudgeMode(input: ProblemConfig): JudgeMode {
+  
   if (input.mode === 'oi' || input.mode === 'acm') return input.mode
   return input.subtasks && input.subtasks.length > 0 ? 'oi' : 'acm'
 }
@@ -225,6 +233,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       code: checkerCode,
       timeLimit: 15000,
       memoryLimit: 524288,
+      extraCopyIn: readCheckerDependencies(testdataPath),
     })
 
     if (checkerCompileResult.success) {
@@ -237,7 +246,18 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       checkerWorkDirToCleanup = checkerCompileResult.workDir
     } else {
       console.log(`[Judge] Checker compilation failed: ${checkerCompileResult.error}`)
-      console.log(`[Judge] Falling back to JS default checker`)
+      cleanupWorkDir(workDir)
+      return {
+        submissionId,
+        result: 'System Error',
+        time: 0,
+        cpuTime: 0,
+        wallTime: 0,
+        memory: 0,
+        score: 0,
+        cases: [],
+        message: `Checker compile failed: ${checkerCompileResult.error || 'unknown error'}`
+      }
     }
   } else if (!needsSandboxChecker) {
     console.log(`[Judge] Using JS checker: ${checkerType}`)

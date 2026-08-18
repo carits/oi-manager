@@ -40,6 +40,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PrincipalTransferLog` | 以 Prisma schema 为准 |
 | `Problem` | 以 Prisma schema 为准 |
 | `ProblemAttachment` | 以 Prisma schema 为准 |
+| `ProblemChecker` | Lemon SPJ 源码与头文件记录 |
 | `ProblemList` | 以 Prisma schema 为准 |
 | `ProblemListEntry` | 以 Prisma schema 为准 |
 | `ProblemListSection` | 以 Prisma schema 为准 |

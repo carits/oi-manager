@@ -377,6 +377,7 @@ model Problem {
   ProblemNote       ProblemNote[]
   ProblemStatement  ProblemStatement[]
   TestdataFile      TestdataFile[]
+  ProblemChecker    ProblemChecker[]
   TrainingProblem   TrainingProblem[]
   Owner             User                @relation("ProblemOwner", fields: [ownerId], references: [id])
   Organization       Organization?        @relation(fields: [organizationId], references: [id])
@@ -403,6 +404,19 @@ model ProblemAttachment {
   uploadedAt  DateTime @default(now())
   Problem     Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
+  @@index([problemId])
+}
+
+model ProblemChecker {
+  id         String   @id
+  problemId  String
+  fileName   String
+  fileSize   Int
+  fileUrl    String
+  language   String?
+  uploadedAt DateTime @default(now())
+  Problem    Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  @@unique([problemId, fileName])
   @@index([problemId])
 }
 

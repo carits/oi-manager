@@ -9,8 +9,65 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { canModifyProblem } from './problem.access'
 import logger from '../../lib/logger'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
+import crypto from 'crypto'
 
 export const problemJudgeRouter = Router()
+
+const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
+const checkerUpload = multer({ dest: path.join(TESTDATA_ROOT, 'tmp-checkers'), limits: { fileSize: 2 * 1024 * 1024 } })
+const checkerExtensions = new Set(['.cpp', '.cc', '.cxx', '.h', '.hpp', '.txt'])
+
+async function getCheckerProblem(id: string, user: any) {
+  const problem = await prisma.problem.findUnique({ where: { id } })
+  if (!problem || !canModifyProblem(user, problem)) return null
+  return problem
+}
+
+problemJudgeRouter.get('/:id/checker', authenticate, asyncHandler(async (req, res) => {
+  const problem = await getCheckerProblem(req.params.id, (req as any).user)
+  if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
+  const files = await prisma.problemChecker.findMany({ where: { problemId: problem.id }, orderBy: { uploadedAt: 'asc' } })
+  res.json({ success: true, data: files })
+}))
+
+problemJudgeRouter.get('/:id/checker/:fileName/download', authenticate, asyncHandler(async (req, res) => {
+  const problem = await getCheckerProblem(req.params.id, (req as any).user)
+  if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
+  const fileName = path.basename(req.params.fileName)
+  const file = await prisma.problemChecker.findFirst({ where: { problemId: problem.id, fileName } })
+  if (!file) return res.status(404).json({ success: false, message: '文件不存在' })
+  const target = path.join(TESTDATA_ROOT, problem.id, fileName)
+  if (!fs.existsSync(target)) return res.status(404).json({ success: false, message: '文件不存在' })
+  res.download(target, fileName)
+}))
+
+problemJudgeRouter.post('/:id/checker', authenticate, checkerUpload.single('file'), asyncHandler(async (req, res) => {
+  const problem = await getCheckerProblem(req.params.id, (req as any).user)
+  if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
+  const upload = req.file
+  if (!upload) return res.status(400).json({ success: false, message: '请选择文件' })
+  const fileName = path.basename(upload.originalname)
+  if (!checkerExtensions.has(path.extname(fileName).toLowerCase())) { fs.rmSync(upload.path, { force: true }); return res.status(400).json({ success: false, message: '不支持的文件类型' }) }
+  const dir = path.join(TESTDATA_ROOT, problem.id)
+  fs.mkdirSync(dir, { recursive: true })
+  const target = path.join(dir, fileName)
+  fs.renameSync(upload.path, target)
+  const file = await prisma.problemChecker.upsert({ where: { problemId_fileName: { problemId: problem.id, fileName } }, update: { fileSize: upload.size, fileUrl: target, language: path.extname(fileName).slice(1) }, create: { id: crypto.randomUUID(), problemId: problem.id, fileName, fileSize: upload.size, fileUrl: target, language: path.extname(fileName).slice(1) } })
+  res.json({ success: true, data: file })
+}))
+
+problemJudgeRouter.delete('/:id/checker/:checkerId', authenticate, asyncHandler(async (req, res) => {
+  const problem = await getCheckerProblem(req.params.id, (req as any).user)
+  if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
+  const file = await prisma.problemChecker.findFirst({ where: { id: req.params.checkerId, problemId: problem.id } })
+  if (!file) return res.status(404).json({ success: false, message: '文件不存在' })
+  await prisma.problemChecker.delete({ where: { id: file.id } })
+  fs.rmSync(path.join(TESTDATA_ROOT, problem.id, file.fileName), { force: true })
+  res.json({ success: true })
+}))
 
 /**
  * GET /api/problems/:id/judge-config

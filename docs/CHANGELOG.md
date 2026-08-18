@@ -303,3 +303,5 @@ source_of_truth: Git history
 - 评测设置支持 ACM / OI 双赛制：ACM 题目按测试点串行评测，首个失败后返回 Skipped，最终分数为 0 或 100；OI 题目保留子任务、依赖和部分分语义。
 - 服务端保存评测配置时归一化并持久化 mode，未指定模式的历史配置按是否存在子任务兼容推断。
 - Judge、Web、Server 构建及文档检查通过；部署状态以本次提交后的健康检查为准。
+
+- 2026-08-18: Added Lemon SPJ checker support, secure checker file storage APIs, and subset contest configuration.

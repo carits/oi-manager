@@ -102,8 +102,9 @@ export async function compile(params: {
   timeLimit: number   // ms
   memoryLimit: number // KB
   workDir?: string    // 可选（仅本地模式使用）
+  extraCopyIn?: Record<string, string>
 }): Promise<CompileResult> {
-  const { language, code, timeLimit, memoryLimit, workDir: providedWorkDir } = params
+  const { language, code, timeLimit, memoryLimit, workDir: providedWorkDir, extraCopyIn } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -122,6 +123,11 @@ export async function compile(params: {
       fs.mkdirSync(uniqueDir, { recursive: true })
     }
 
+    if (extraCopyIn) for (const [name, content] of Object.entries(extraCopyIn)) {
+      const target = path.join(uniqueDir, name)
+      fs.mkdirSync(path.dirname(target), { recursive: true })
+      fs.writeFileSync(target, content, 'utf8')
+    }
     const result = await localCompile({ language, code, workDir: uniqueDir })
     return { ...result, workDir: uniqueDir }
   }
@@ -131,6 +137,7 @@ export async function compile(params: {
     const copyIn: Record<string, any> = {
       [langConfig.code_file]: { content: code }
     }
+    if (extraCopyIn) for (const [name, content] of Object.entries(extraCopyIn)) copyIn[name] = { content }
 
     // 编译并缓存编译产物，将 stderr 重定向到文件以获取编译错误信息
     const compileCommand = `${langConfig.compile} 2>stderr`

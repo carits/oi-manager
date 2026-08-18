@@ -32,6 +32,7 @@ interface TestdataFile {
   sha256?: string | null
   uploadedAt: string
 }
+interface CheckerFile { id: string; fileName: string; fileSize: number; fileUrl: string; uploadedAt: string }
 
 interface TestCasePair {
   input: string
@@ -233,6 +234,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   const [deletingFile, setDeletingFile] = useState<string | null>(null)
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
   const [downloadingAll, setDownloadingAll] = useState(false)
+  const [checkerFiles, setCheckerFiles] = useState<CheckerFile[]>([])
+  const [checkerUploading, setCheckerUploading] = useState(false)
+  const checkerInputRef = useRef<HTMLInputElement>(null)
 
   // 创建模式暂存区
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
@@ -268,6 +272,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         else if (checkerCategory === 'custom' && checkerFile) {
           config.checker = checkerLang === 'auto' ? checkerFile : { file: checkerFile, lang: checkerLang }
         }
+      } else if (checkerType === 'lemon') {
+        config.checker_type = 'lemon'
+        config.checker = checkerFile || 'checker.cpp'
       } else if (checkerType === 'other') {
         config.checker_type = checkerPreset || 'syzoj'
         if (checkerFile) config.checker = checkerLang === 'auto' ? checkerFile : { file: checkerFile, lang: checkerLang }
@@ -343,6 +350,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (problemId) {
       fetchJudgeConfig()
       fetchTestdata()
+      fetchCheckerFiles()
     }
   }, [problemId])
 
@@ -452,6 +460,27 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     } catch (error) {
       console.error('Failed to fetch testdata:', error)
     }
+  }
+
+  const fetchCheckerFiles = async () => {
+    if (!problemId) return
+    try { const result = await apiClient.get<any>(`/api/problems/${problemId}/checker`); if (result.success) setCheckerFiles(result.data || []) } catch (error) { console.error("Failed to fetch checker files:", error) }
+  }
+
+  const handleCheckerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    if (!files.length || !problemId) return
+    try {
+      setCheckerUploading(true)
+      for (const file of files) { const form = new FormData(); form.append("file", file); const result = await apiClient.postFile(`/api/problems/${problemId}/checker`, form, { timeout: 120000 }); if (!result.success) throw new Error(result.message || "上传失败") }
+      await fetchCheckerFiles(); toast.success("Checker 文件已上传")
+      const cpp = files.find(file => /\.(cpp|cc|cxx)$/i.test(file.name)); if (cpp) setCheckerFile(cpp.name)
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Checker 上传失败") }
+    finally { setCheckerUploading(false); if (checkerInputRef.current) checkerInputRef.current.value = "" }
+  }
+
+  const handleCheckerDelete = async (file: CheckerFile) => {
+    setConfirmState({ message: `确定要删除 ${file.fileName} 吗？`, action: async () => { try { const result = await apiClient.delete(`/api/problems/${problemId}/checker/${file.id}`); if (result.success) { setCheckerFiles(prev => prev.filter(item => item.id !== file.id)); if (checkerFile === file.fileName) setCheckerFile(""); toast.success("Checker 文件已删除") } else toast.error(result.message || "删除失败") } catch { toast.error("删除失败") } } })
   }
 
   // ==================== 保存配置 ====================
@@ -860,7 +889,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               <div style={sectionTitle}>比较器 (Checker)</div>
 
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                {[{ v: 'default', l: '默认' }, { v: 'testlib', l: 'testlib' }, { v: 'other', l: '其他' }].map(o => (
+                {[{ v: 'default', l: '默认' }, { v: 'testlib', l: 'testlib' }, { v: 'lemon', l: 'Lemon' }, { v: 'other', l: '其他' }].map(o => (
                   <button type="button" key={o.v} onClick={() => { setCheckerType(o.v); if (o.v === 'testlib') setCheckerCategory('preset') }}
                     style={{
                       padding: '0.375rem 0.75rem', fontSize: '0.8125rem', borderRadius: '6px',
@@ -1195,6 +1224,21 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               <p style={{ fontSize: '0.8125rem' }}>上传测试数据后点击「自动配置」，或手动「添加子任务」</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===== 测试数据 Tab ===== */}
+      {activeTab === 'basic' && problemId && (
+        <div style={cardStyle}>
+          <div style={sectionTitle}>Checker 文件</div>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <label style={{ ...btnPrimary, cursor: checkerUploading ? 'not-allowed' : 'pointer' }}>
+              {checkerUploading ? '上传中...' : '上传 Checker'}
+              <input ref={checkerInputRef} type="file" multiple accept=".cpp,.cc,.cxx,.h,.hpp,.txt" onChange={handleCheckerUpload} style={{ display: 'none' }} disabled={checkerUploading} />
+            </label>
+            <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>支持 checker.cpp 与 testlib.h</span>
+          </div>
+          {checkerFiles.map(file => <div key={file.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}><code>{file.fileName}</code><button type="button" onClick={() => handleCheckerDelete(file)} style={btnDanger}>删除</button></div>)}
         </div>
       )}
 
