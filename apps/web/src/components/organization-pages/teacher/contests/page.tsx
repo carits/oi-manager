@@ -36,7 +36,7 @@ export default function TeacherContestsPage() {
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText='暂无可管理的比赛范围' skeletonRows={5}>
         {() => <>
           <Toolbar><ToolbarGroup><label htmlFor='contest-scope' className={styles.summary}>比赛范围</label><select id='contest-scope' className={styles.scopeSelect} value={activeScope} onChange={event => setScope(event.target.value)}>{scopeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></ToolbarGroup><span className={styles.summary}>不同范围的数据彼此独立</span></Toolbar>
-          {scopeType === 'organization' && scopeId ? <TeamTrainingList organizationId={scopeId} basePath={pathPrefix + '/contests'} isAdmin mode='contest' /> : scopeType === 'team' && scopeId ? <TeamTrainingList teamId={scopeId} basePath={pathPrefix + '/teams'} isAdmin mode='contest' /> : null}
+          {scopeType === 'organization' && scopeId ? <TeamTrainingList organizationId={scopeId} basePath={pathPrefix} isAdmin mode='contest' /> : scopeType === 'team' && scopeId ? <TeamTrainingList teamId={scopeId} basePath={pathPrefix + '/teams'} isAdmin mode='contest' /> : null}
         </>}
       </AsyncRegion>
     </PageFrame>
