@@ -107,18 +107,26 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       const aggregated: Array<{
         userId: string
         problemId: string
-        totalScore: number
+        maxScore: number
         lastSubmitAt: Date
       }> = await prisma.$queryRaw`
         SELECT
           "userId",
           "problemId",
-          COALESCE(SUM(score), 0) as "totalScore",
+          MAX(score) as "maxScore",
           MAX("createdAt") as "lastSubmitAt"
         FROM "Submission"
         WHERE "submitScope" = ${submitScopeValue}
           AND "trainingId" = ${id}
           AND "cases" IS NOT NULL
+          AND score = (
+            SELECT MAX(s2.score) FROM "Submission" s2
+            WHERE s2."userId" = "Submission"."userId"
+              AND s2."problemId" = "Submission"."problemId"
+              AND s2."submitScope" = ${submitScopeValue}
+              AND s2."trainingId" = ${id}
+              AND s2."cases" IS NOT NULL
+          )
           ${adminFilter}
         GROUP BY "userId", "problemId"
       `
@@ -127,7 +135,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
       const userScores = new Map<string, Map<string, { maxScore: number; lastSubmitAt: Date }>>()
       for (const row of aggregated) {
         if (!userScores.has(row.userId)) userScores.set(row.userId, new Map())
-        const score = Number(row.totalScore) || 0
+        const score = Number(row.maxScore) || 0
         userScores.get(row.userId)!.set(row.problemId, { maxScore: score, lastSubmitAt: new Date(row.lastSubmitAt) })
       }
 
