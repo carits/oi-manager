@@ -1,9 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-10
+last_verified: 2026-08-18
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
+
+## 题目级双赛制评测
+
+题目评测配置通过 YAML 的 `mode` 字段选择赛制：`acm` 为通过制，`oi` 为分数制。未设置该字段时，含有子任务的历史配置按 OI 解释，其余按 ACM 解释。
+
+ACM 模式按测试点串行执行；首个非 Accepted 结果后，尚未开始的测试点返回 `Skipped`，题目总分为全通过 100 分，否则 0 分。编译失败不产生测试点，System Error 终止整题。
+
+OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前阶段不启用题目级测试点并发。
 
 # 评测机与提交
 

@@ -52,7 +52,10 @@ export interface CompilableSource {
   file?: string
 }
 
+export type JudgeMode = 'acm' | 'oi'
+
 export interface ProblemConfig {
+  mode?: JudgeMode
   type?: ProblemType
   time?: string          // "1s", "1000ms"
   memory?: string        // "256MB"

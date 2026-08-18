@@ -50,6 +50,7 @@ interface SubtaskConfig {
 }
 
 interface JudgeConfig {
+  mode?: 'acm' | 'oi'
   type?: string
   checker_type?: string
   filename?: string
@@ -196,6 +197,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   // 基础配置
   const [problemType, setProblemType] = useState('default')
+  const [judgeMode, setJudgeMode] = useState<'acm' | 'oi'>('acm')
   const [checkerType, setCheckerType] = useState('default')
   const [ignoreTrailingSpace, setIgnoreTrailingSpace] = useState(true)
   const [fileioPrefix, setFileioPrefix] = useState('')
@@ -256,7 +258,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
   const buildConfig = (subtasksOverride?: SubtaskConfig[]): Record<string, any> => {
     const st = subtasksOverride ?? subtasks
-    const config: Record<string, any> = { type: problemType }
+    const config: Record<string, any> = { mode: judgeMode, type: problemType }
 
     if (problemType === 'default') {
       if (checkerType === 'strict') config.checker_type = 'strict'
@@ -297,7 +299,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     if (judgeExtraFiles.length > 0) config.judge_extra_files = judgeExtraFiles
     if (langs.length > 0) config.langs = langs
 
-    if (st.length > 0) {
+    if (judgeMode === 'oi' && st.length > 0) {
       config.subtasks = st.map(s => {
         const obj: Record<string, any> = { id: s.id, score: s.score, type: s.type }
         if (s.if && s.if.length > 0) obj.if = s.if
@@ -323,7 +325,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     checkerFile, checkerLang, checkerCategory, checkerPreset,
     interactorFile, interactorLang, managerFile, managerLang,
     numProcesses, submitAnswerMulti, submitAnswerFilename,
-    userExtraFiles, judgeExtraFiles, langs,
+    userExtraFiles, judgeExtraFiles, langs, judgeMode,
     globalTime, globalMemory, subtasks,
   ])
 
@@ -352,6 +354,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         const { config, problemType: pt, timeLimit: tl, memoryLimit: ml } = result.data
 
         if (pt) setProblemType(pt)
+        const resolvedMode = config?.mode === 'oi' || (config?.mode !== 'acm' && config?.subtasks?.length) ? 'oi' : 'acm'
+        setJudgeMode(resolvedMode)
 
         // 同步时间/内存到父组件（ProblemForm 的表单字段）
         if (tl != null && tl > 0) onTimeLimitChange(String(tl))
@@ -777,7 +781,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
       {/* ===== Tab 切换 ===== */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: '1.25rem' }}>
-        {([['basic', '基础配置'], ['subtasks', '子任务'], ['testdata', '测试数据']] as const).map(([key, label]) => (
+        {([['basic', '基础配置'], ...(judgeMode === 'oi' ? [['subtasks', '子任务'] as const] : []), ['testdata', '测试数据']] as const).map(([key, label]) => (
           <button type="button" key={key} onClick={() => setActiveTab(key)}
             style={{
               padding: '0.625rem 1.25rem',
@@ -805,6 +809,28 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       {/* ===== 基础配置 Tab ===== */}
       {activeTab === 'basic' && (
         <div>
+          {/* 评测赛制 */}
+          <div style={cardStyle}>
+            <div style={sectionTitle}>评测赛制</div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {([['acm', 'ACM 赛制'], ['oi', 'OI 赛制']] as const).map(([mode, label]) => (
+                <button type="button" key={mode} onClick={() => {
+                  setJudgeMode(mode)
+                  if (mode === 'oi' && subtasks.length === 0) {
+                    const cases = problemId ? testdataPairs : stagedPairs
+                    setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
+                    setExpandedSubtasks(new Set([1]))
+                  }
+                }} style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem', borderRadius: '6px', border: judgeMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)', background: judgeMode === mode ? 'rgba(59, 130, 246, 0.08)' : 'white', color: judgeMode === mode ? 'var(--primary)' : 'var(--gray-600)', fontWeight: judgeMode === mode ? 600 : 400, cursor: 'pointer' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', margin: '0.625rem 0 0' }}>
+              {judgeMode === 'acm' ? '任一测试点未通过即停止评测，最终得分为 0 或 100。' : '按子任务、依赖关系和评分方式计算部分分。'}
+            </p>
+          </div>
+
           {/* 题目类型 */}
           <div style={cardStyle}>
             <div style={sectionTitle}>题目类型</div>
@@ -1020,7 +1046,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       )}
 
       {/* ===== 子任务 Tab ===== */}
-      {activeTab === 'subtasks' && (
+      {judgeMode === 'oi' && activeTab === 'subtasks' && (
         <div>
           {/* 操作栏 */}
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>

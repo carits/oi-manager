@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-13
+last_verified: 2026-08-18
 source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -37,6 +37,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   和缓存按作用域隔离，个人身份只显示用户名。
 - 外部 OJ 题目抓取、平台绑定、账号池、提交同步和 AI 翻译。
 - Carits 本地提交、评测队列、Judge WebSocket、详情和重新评测。
+- 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
 - 隔离的 PostgreSQL 单元测试与 Playwright 全 UI 测试。
 
 ## 最近验证
@@ -103,6 +104,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - 正式环境必须设置严格 CORS、独立 JWT/Judge/加密密钥。
 
 ## 当前限制
+- 交互题、通信题和提交答案题目前沿用各自的测试点执行流程，赛制统一计分已覆盖，尚未提供 ACM 失败后的提前停止优化。
 
 - 当前服务器没有启用正式部署配置。
 - 外部 OJ 受登录状态、反爬策略和页面结构变化影响，真实连通性不作为 PR 门禁。

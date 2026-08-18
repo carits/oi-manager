@@ -24,12 +24,45 @@ import type {
   TestCaseConfig,
   SubtaskConfig,
   SubtaskResult,
-  SubtaskType
+  SubtaskType,
+  JudgeMode
 } from './types'
 
 /**
  * 执行评测任务
  */
+
+function resolveJudgeMode(input: ProblemConfig): JudgeMode {
+  if (input.mode === 'oi' || input.mode === 'acm') return input.mode
+  return input.subtasks && input.subtasks.length > 0 ? 'oi' : 'acm'
+}
+
+function normalizeJudgeConfig(input: ProblemConfig): ProblemConfig {
+  const config = { ...input } as ProblemConfig & { subtasks?: SubtaskConfig[] }
+  const mode = resolveJudgeMode(config)
+  config.mode = mode
+  if (mode === 'acm' && !config.cases?.length && config.subtasks?.length) {
+    const seen = new Set<string>()
+    config.cases = config.subtasks
+      .flatMap(subtask => subtask.cases || [])
+      .filter(testCase => {
+        const key = `${testCase.input}\0${testCase.output}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+  }
+  if (mode === 'acm') {
+    delete config.subtasks
+    if (config.cases) config.cases = config.cases.map(testCase => ({ ...testCase, score: undefined }))
+  }
+  return config
+}
+
+function acmScore(result: JudgeResult): number {
+  return result === 'Accepted' ? 100 : 0
+}
+
 export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   const { submissionId, code, language, config: problemConfig, testdataPath } = request
 
@@ -39,8 +72,9 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   console.log(`[Judge] testdataPath: ${testdataPath}`)
   console.log(`[Judge] code length: ${code?.length || 0}`)
 
-  // 解析评测配置
-  const cfg = problemConfig || {}
+  const rawConfig = problemConfig || {}
+  const cfg = normalizeJudgeConfig(rawConfig)
+  const judgeMode = cfg.mode || 'acm'
   const timeLimit = parseTime((cfg as any).time || (cfg as any).timeLimit || '1s')
   const memoryLimit = parseMemory((cfg as any).memory || (cfg as any).memoryLimit || '256MB')
   let checkerType = (cfg as any).checker_type || 'default'
@@ -394,8 +428,13 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         subtasks: subtaskResults
       }
     } else {
-      // 无子任务：直接逐个评测
+      // 无子任务：直接逐个评测。ACM 首个失败后跳过剩余测试点。
+      let acmStopped = false
       for (let i = 0; i < allCases.length; i++) {
+        if (judgeMode === 'acm' && acmStopped) {
+          caseResults.push({ caseId: i, result: 'Skipped', time: 0, cpuTime: 0, wallTime: 0, memory: null, message: '跳过：ACM 赛制已确定失败' })
+          continue
+        }
         const testCase = allCases[i]
         const caseTimeLimit = testCase.time ? parseTime(testCase.time) : timeLimit
         const caseMemoryLimit = testCase.memory ? parseMemory(testCase.memory) : memoryLimit
@@ -420,11 +459,12 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
         caseResults.push(caseResult)
         updateMaxMetrics(caseResult)
+        if (judgeMode === 'acm' && caseResult.result !== 'Accepted') acmStopped = true
       }
 
-      // 无子任务时：总分 = Accepted 用例的分数之和
-      const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
       const finalResult = calculateFinalResult(caseResults)
+      const totalScore = judgeMode === 'acm' ? acmScore(finalResult) : caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
+      if (judgeMode === 'acm') caseResults.forEach(caseResult => { if (caseResult.result !== 'Skipped') caseResult.score = caseResult.result === 'Accepted' ? 100 : 0 })
 
       console.log(`[Judge] Total: ${caseResults.length} cases, time=${maxCpuTime}ms, wall=${maxWallTime}ms, score=${totalScore}, result=${finalResult}`)
 
@@ -1284,9 +1324,10 @@ async function judgeInteractive(params: {
       maxMemory = Math.max(maxMemory, caseResult.memory ?? 0)
     }
 
-    // 计算最终结果和分数
+    // ACM 通过制统一 0/100 分。
     const finalResult = calculateFinalResult(caseResults)
-    const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
+    const totalScore = acmScore(finalResult)
+    caseResults.forEach(caseResult => { caseResult.score = caseResult.result === 'Accepted' ? 100 : 0 })
 
     cleanupWorkDir(userWorkDir)
     cleanupWorkDir(interactorWorkDir)
@@ -1696,7 +1737,8 @@ async function judgeCommunication(params: {
     }
 
     const finalResult = calculateFinalResult(caseResults)
-    const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
+    const totalScore = acmScore(finalResult)
+    caseResults.forEach(caseResult => { caseResult.score = caseResult.result === 'Accepted' ? 100 : 0 })
 
     cleanupWorkDir(userWorkDir)
     cleanupWorkDir(managerWorkDir)
@@ -2028,7 +2070,8 @@ async function judgeSubmitAnswer(params: {
     }
 
     const finalResult = calculateFinalResult(caseResults)
-    const totalScore = caseResults.reduce((sum, c) => sum + (c.score || 0), 0)
+    const totalScore = acmScore(finalResult)
+    caseResults.forEach(caseResult => { caseResult.score = caseResult.result === 'Accepted' ? 100 : 0 })
 
     cleanupWorkDir(checkerWorkDirToCleanup)
     if (checkerCtx.checkerFileId) sandbox.deleteFile(checkerCtx.checkerFileId).catch(() => {})

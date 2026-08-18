@@ -64,12 +64,14 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
-    // 将配置序列化为 YAML
     let judgeConfigYaml = null
     if (config) {
+      const mode = config.mode || (Array.isArray(config.subtasks) && config.subtasks.length > 0 ? 'oi' : 'acm')
+      if (mode !== 'acm' && mode !== 'oi') return res.status(400).json({ success: false, message: '无效的评测模式，必须是 acm 或 oi' })
       const yaml = await import('js-yaml')
-      judgeConfigYaml = yaml.dump(config, { lineWidth: -1 })
-      logger.info('judge_config_saving', { action: 'saveJudgeConfig', metadata: { subtasksCount: config.subtasks?.length ?? 0 } })
+      const normalized = { ...config, mode }
+      judgeConfigYaml = yaml.dump(normalized, { lineWidth: -1 })
+      logger.info('judge_config_saving', { action: 'saveJudgeConfig', metadata: { mode, subtasksCount: normalized.subtasks?.length ?? 0 } })
     }
 
     const updateData: any = {}
