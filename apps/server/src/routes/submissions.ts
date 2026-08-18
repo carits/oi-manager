@@ -3,10 +3,11 @@
  */
 
 import { Router } from 'express'
-import { authenticate, getResourceScope, isPersonalContext } from '../middleware/auth'
+import { authenticate, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { fetchAndStoreCfCode } from '../lib/cf-code-fetcher'
+import { canManageTraining } from '../modules/training/training.helpers'
 
 export const submissionsRouter = Router()
 
@@ -52,8 +53,8 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有
     if (isPersonalContext(user) || user.role === 'student') {
       // 学生只能看到自己的提交
-      where.userId = user.userId
-    } else if (user.role === 'teacher' || user.role === 'school_principal') {
+    } else if (user.role === teacher || user.role === school_principal) {
+    } else if (!hasContestManagerAccess && (user.role === 'teacher' || user.role === 'school_principal')) {
       if (!user.organizationId) return res.json({ success: true, data: { submissions: [], page: pageNum, totalPages: 0, total: 0 } })
       const members = await prisma.organizationMembership.findMany({ where: { organizationId: user.organizationId, status: 'active' }, select: { userId: true } })
       where.userId = { in: members.map(member => member.userId) }
@@ -229,7 +230,13 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       },
     })
 
-    if (!submission || submission.workspaceScope !== getResourceScope(user)) {
+    let hasContestManagerAccess = false
+    if (submission?.trainingId) {
+      const training = await prisma.training.findUnique({ where: { id: submission.trainingId }, select: { id: true, teamId: true, organizationId: true, createdBy: true } })
+      if (training) hasContestManagerAccess = await canManageTraining(user.userId, training)
+    }
+    const adminUser = isAdmin(user.role)
+    if (!submission || (!adminUser && !hasContestManagerAccess && submission.workspaceScope !== getResourceScope(user))) {
       return res.status(404).json({
         success: false,
         message: '提交记录不存在',
@@ -238,7 +245,7 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
 
     // 权限检查：学生只能看自己的，教师看本校，管理员看所有
     // 训练/比赛提交出现在全局评测记录中是正常机制，不做 submitScope 限制
-    if (isPersonalContext(user)) {
+    if (!adminUser && !hasContestManagerAccess && isPersonalContext(user)) {
       // 个人工作区的提交详情只对提交者可见，隐藏资源是否存在。
       if (submission.userId !== user.userId) {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
