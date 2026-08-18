@@ -1,13 +1,22 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-15
+last_verified: 2026-08-18
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-18
+
+### 认证工作区兼容与校园 ID 契约
+
+- 登录、会话读取和工作区切换统一使用 `workspaceMode: "work" | "personal"`；登录接口继续接收旧 `mode`，旧 JWT 缺失工作区字段时按 `work` 处理。
+- 新增 `POST /api/auth/switch-workspace`，会刷新 HttpOnly 会话 Cookie；首次进入个人工作区时按需创建 `PersonalProfile`。
+- 修复认证响应把 `Organization.id` 错当作 `schoolId` 的问题。`schoolId` 现在只返回对应的 `School.id`，组织上下文继续由 `organizationId` 表示。
+- 本轮复跑认证接口测试 `36/36` 通过。旧 `teams.test.ts` 仍有 14 项失败，原因是测试仍直接依赖已迁移的学校/成员模型和旧权限契约，尚未迁移；该问题不由本次认证变更引入。
+
 ## 2026-08-15
 
 ### Carits币与贡献 V1

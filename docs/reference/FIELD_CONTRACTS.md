@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-18
 source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 ---
 
@@ -50,7 +50,6 @@ source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 interface LoginRequest {
   username: string
   password: string
-  role: 'admin' | 'teacher' | 'student'
   workspaceMode?: 'work' | 'personal'
   mode?: 'campus' | 'personal' // deprecated compatibility
 }
@@ -74,6 +73,22 @@ interface LoginResponse {
 
 `workspaceMode` 是会话工作区，所有角色均支持。`role`、岗位扩展 ID 和学校关系在切换时
 保持不变；旧 `studentMode` 仅用于一个开发周期内兼容旧客户端。
+
+`schoolId` 始终是 `School.id`，仅在当前组织关联学校时出现；`organizationId` 是
+`Organization.id`，用于成员关系与 `X-OI-Organization-ID`。调用方不得用组织 ID 填充
+`schoolId`。
+
+## 工作区切换
+
+`POST /api/auth/switch-workspace` 需要已认证会话，请求体如下：
+
+```ts
+{ workspaceMode: 'work' | 'personal' }
+```
+
+旧客户端可传 `mode: 'campus' | 'personal'`。成功响应返回刷新后的 `token`、`role` 和
+`workspaceMode`，并同时设置 HttpOnly 会话 Cookie。切入 `personal` 会按需创建
+`PersonalProfile`。
 
 ## 分页
 
@@ -118,4 +133,3 @@ Prisma 关联字段因历史 schema 可能使用大写名称。路由层不要�
 - 可空值使用 `null`，不要在同一字段混用空字符串。
 - 空列表使用 `[]`，错误不能伪装为空列表。
 - 未返回的敏感字段应省略，不使用掩码值替代真实业务字段，除非接口明确叫 masked。
-

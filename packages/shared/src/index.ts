@@ -37,6 +37,11 @@ export interface JwtPayload {
   adminId?: string // 管理员ID（super_admin/platform_admin 角色才有）
   organizationId?: string
   organizationMembershipId?: string
+  workspaceMode?: 'work' | 'personal'
+  studentMode?: 'campus' | 'personal'
+  teacherId?: string
+  studentId?: string
+  schoolId?: string
 }
 
 export interface WorkspaceSummary {
@@ -69,6 +74,8 @@ export interface PaginationParams {
 export interface LoginRequest {
   username: string
   password: string
+  workspaceMode?: 'work' | 'personal'
+  mode?: 'campus' | 'personal'
 }
 
 // 用户登录响应
@@ -77,6 +84,7 @@ export interface LoginResponse {
   userId: string
   role: UserRole
   username: string
+  workspaceMode: 'work' | 'personal'
   adminId?: string
 }
 

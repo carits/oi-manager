@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-02
+last_verified: 2026-08-18
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -9,14 +9,11 @@ source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 
 ## 登录入口
 
-| 登录模式 | 可登录数据库角色 | 登录后首页 |
-|----------|------------------|------------|
-| `admin` / `platform-admin` 页面别名 | `super_admin`, `platform_admin` | `/admin` 或 `/platform-admin` |
-| `teacher` | `school_principal`, `teacher` | `/teacher` |
-| `student` | `student` | `/student` |
+登录 API 使用唯一的用户名和密码入口。`POST /api/auth/login` 接收 `workspaceMode`；缺省或旧
+`mode: "campus"` 等价于 `work`，`mode: "personal"` 保持兼容。非法模式返回 `400`。
 
-前端把 `platform-admin` 规范化为管理员登录模式；后端登录 API 接受
-`admin | teacher | student`。错误角色登录返回认证失败，不会自动提升权限。
+成功登录响应中的岗位来自首个有效组织成员关系；无有效成员关系时才使用全局账号角色。这样同一账号
+在不同校园的成员岗位不会由过时的全局角色覆盖。
 
 ## JWT
 
@@ -46,6 +43,9 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 - `POST /api/auth/switch-workspace` 为所有已登录角色刷新 Cookie 和兼容 JWT；首次切入时事务性创建 `PersonalProfile`。
 - 旧 `studentMode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期，分别映射至 `workspaceMode` 和新切换接口。
 - 个人工作区只输出用户名、头像、公开简介和个人 Rating，不输出实名、学校、职称或后台岗位。
+
+`organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；
+`schoolId` 是 `School.id`，仅在组织具有关联学校时返回。二者不能互换。
 
 ## 权限矩阵
 

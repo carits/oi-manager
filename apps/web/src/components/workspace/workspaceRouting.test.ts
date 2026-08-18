@@ -1,4 +1,5 @@
 import { canNavigate, fallbackHref, listHref, notificationTeamHref, resourceHref, workspaceHref } from './workspaceRouting'
+import { describe, expect, it } from 'vitest'
 
 describe('组织路由能力', () => {
   const organization = { workspace: 'organization' as const, organizationId: 'org_1', role: 'student' }

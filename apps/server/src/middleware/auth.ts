@@ -33,6 +33,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
+    decoded.workspaceMode = decoded.workspaceMode === 'personal' ? 'personal' : 'work'
     const organizationId = req.get('x-oi-organization-id')
     if (organizationId) {
       const membership = await prisma.organizationMembership.findFirst({

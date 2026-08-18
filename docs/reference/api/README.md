@@ -164,6 +164,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/auth/logout` | 见对应路由实现 |
 | `POST` | `/api/auth/register` | 见对应路由实现 |
 | `POST` | `/api/auth/session/migrate` | 见对应路由实现 |
+| `POST` | `/api/auth/switch-workspace` | 见对应路由实现 |
 | `POST` | `/api/files/upload` | 见对应路由实现 |
 | `POST` | `/api/notifications/read-all` | 见对应路由实现 |
 | `POST` | `/api/oj-accounts` | 见对应路由实现 |

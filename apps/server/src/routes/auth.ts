@@ -68,6 +68,22 @@ const avatarUpload = multer({
 
 export const authRouter = Router()
 
+type WorkspaceMode = 'work' | 'personal'
+
+function parseWorkspaceMode(value: unknown): WorkspaceMode | null {
+  if (value === undefined || value === null || value === '' || value === 'campus' || value === 'work') return 'work'
+  return value === 'personal' ? 'personal' : null
+}
+
+async function resolveSchoolId(organizationId?: string): Promise<string | undefined> {
+  if (!organizationId) return undefined
+  const school = await prisma.school.findUnique({
+    where: { organizationId },
+    select: { id: true }
+  })
+  return school?.id
+}
+
 function renewablePayload(payload: JwtPayload): JwtPayload {
   const { iat: _issuedAt, exp: _expiresAt, ...claims } = payload as JwtPayload & {
     iat?: number
@@ -78,7 +94,9 @@ function renewablePayload(payload: JwtPayload): JwtPayload {
 
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body as { username: string; password: string }
+    const { username, password, workspaceMode: requestedWorkspaceMode, mode } = req.body as { username: string; password: string; workspaceMode?: unknown; mode?: unknown }
+    const workspaceMode = parseWorkspaceMode(requestedWorkspaceMode ?? mode)
+    if (!workspaceMode) return res.status(400).json({ success: false, message: '无效的工作区模式' })
     const clientIp = getClientIp(req)
     const userAgent = getUserAgent(req)
 
@@ -158,11 +176,16 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: '该账号已被禁用，请联系管理员' })
     }
 
+    const primaryMembership = await prisma.organizationMembership.findFirst({ where: { userId: user.id, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true, organizationId: true } })
+    const responseRole = primaryMembership?.memberRole || user.role
+    const schoolId = await resolveSchoolId(primaryMembership?.organizationId)
+
     // 生成 token
     const payload: JwtPayload = {
       userId: user.id,
-      role: user.role as UserRole,
-      username: user.username
+      role: responseRole as UserRole,
+      username: user.username,
+      workspaceMode
     }
 
     await prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} })
@@ -198,8 +221,10 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       data: {
         token,
         userId: user.id,
-        role: user.role,
+        role: responseRole,
         username: user.username,
+        workspaceMode,
+        schoolId,
         avatar: user.avatar,
 
         next: '/identity'
@@ -214,7 +239,8 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
 // 注册只创建全局个人账号；加入校园必须经过组织邀请或管理流程。
 authRouter.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body as { username: string; password: string }
+    const { username, password, role: requestedRole } = req.body as { username: string; password: string; role?: string }
+    if (requestedRole && requestedRole !== 'student') return res.status(400).json({ success: false, message: '仅支持注册学生账号' })
     const usernameValidation = validateUsername(username)
     if (!usernameValidation.valid) return res.status(400).json({ success: false, message: usernameValidation.message })
     const passwordValidation = validatePassword(password)
@@ -226,9 +252,9 @@ authRouter.post('/register', registerLimiter, async (req: Request, res: Response
       id: crypto.randomUUID(), username, passwordHash: await bcrypt.hash(password, 10), role: 'user',
     } })
     await prisma.personalProfile.create({ data: { userId: user.id } })
-    const token = jwt.sign({ userId: user.id, role: 'user', username: user.username }, getJwtSecret(), { expiresIn: '7d' })
+    const token = jwt.sign({ userId: user.id, role: 'user', username: user.username, workspaceMode: 'personal' }, getJwtSecret(), { expiresIn: '7d' })
     setSessionCookie(res, token)
-    res.status(201).json({ success: true, data: { userId: user.id, token, next: '/personal' } })
+    res.status(200).json({ success: true, data: { userId: user.id, token, workspaceMode: 'personal', next: '/personal' } })
   } catch (error) {
     logger.error('register_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -254,13 +280,12 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: '该账号已被禁用' })
     }
 
-    const organizationId = (req as any).user?.organizationId as string | undefined
-    const membership = organizationId
-      ? await prisma.organizationMembership.findFirst({
-        where: { organizationId, userId, status: 'active' },
-        include: { StudentProfile: true, TeacherProfile: true }
-      })
-      : null
+    const requestedOrganizationId = (req as any).user?.organizationId as string | undefined
+    const membership = requestedOrganizationId
+      ? await prisma.organizationMembership.findFirst({ where: { organizationId: requestedOrganizationId, userId, status: 'active' }, include: { StudentProfile: true, TeacherProfile: true } })
+      : await prisma.organizationMembership.findFirst({ where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' }, include: { StudentProfile: true, TeacherProfile: true } })
+    const organizationId = requestedOrganizationId || membership?.organizationId
+    const schoolId = await resolveSchoolId(organizationId)
 
     // 个人请求不读取组织档案；组织请求只读取当前成员关系。
     let profileData = null
@@ -290,7 +315,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         userId: user.id,
         username: user.username,
         // 组织页面返回成员身份；个人与平台请求仍返回全局账号权限。
-        role: organizationId && membership ? membership.memberRole : user.role,
+        role: membership ? membership.memberRole : user.role,
         avatar: user.avatar,
         phone: user.phone,
         email: user.email,
@@ -298,11 +323,32 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         organizationId: organizationId || undefined,
         organizationMembershipId: membership?.id,
         organizationRole: membership?.memberRole,
+        schoolId,
+        workspaceMode: (req as any).user.workspaceMode === 'personal' ? 'personal' : 'work',
         profile: profileData,
       }
     })
   } catch {
     res.status(401).json({ success: false, message: 'Token 无效' })
+  }
+})
+
+
+authRouter.post('/switch-workspace', authenticate, async (req: Request, res: Response) => {
+  const requestedMode = req.body?.workspaceMode ?? req.body?.mode
+  const workspaceMode = requestedMode === 'work' || requestedMode === 'personal' ? requestedMode : null
+  if (!workspaceMode) return res.status(400).json({ success: false, message: '无效的工作区模式' })
+  try {
+    const payload = (req as any).user as JwtPayload
+    if (workspaceMode === 'personal') await prisma.personalProfile.upsert({ where: { userId: payload.userId }, create: { userId: payload.userId }, update: {} })
+    const membership = await prisma.organizationMembership.findFirst({ where: { userId: payload.userId, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true } })
+    const compatibleRole = membership?.memberRole || payload.role
+    const token = jwt.sign({ ...renewablePayload(payload), role: compatibleRole, workspaceMode }, getJwtSecret(), { expiresIn: '7d' })
+    setSessionCookie(res, token)
+    return res.json({ success: true, data: { token, workspaceMode, role: compatibleRole } })
+  } catch (error) {
+    logger.error('switch_workspace_error', error)
+    return res.status(500).json({ success: false, message: '服务器错误' })
   }
 })
 
