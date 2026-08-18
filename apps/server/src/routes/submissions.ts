@@ -53,8 +53,8 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有
     if (isPersonalContext(user) || user.role === 'student') {
       // 学生只能看到自己的提交
-    } else if (user.role === teacher || user.role === school_principal) {
-    } else if (!hasContestManagerAccess && (user.role === 'teacher' || user.role === 'school_principal')) {
+      where.userId = user.userId
+    } else if (user.role === 'teacher' || user.role === 'school_principal') {
       if (!user.organizationId) return res.json({ success: true, data: { submissions: [], page: pageNum, totalPages: 0, total: 0 } })
       const members = await prisma.organizationMembership.findMany({ where: { organizationId: user.organizationId, status: 'active' }, select: { userId: true } })
       where.userId = { in: members.map(member => member.userId) }
