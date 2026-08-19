@@ -889,7 +889,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               <div style={sectionTitle}>比较器 (Checker)</div>
 
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                {[{ v: 'default', l: '默认' }, { v: 'testlib', l: 'testlib' }, { v: 'lemon', l: 'Lemon' }, { v: 'other', l: '其他' }].map(o => (
+                {[{ v: 'default', l: '默认' }, { v: 'testlib', l: 'testlib' }, ...(judgeMode === 'oi' ? [{ v: 'lemon', l: 'Lemon' }] : []), { v: 'other', l: '其他' }].map(o => (
                   <button type="button" key={o.v} onClick={() => { setCheckerType(o.v); if (o.v === 'testlib') setCheckerCategory('preset') }}
                     style={{
                       padding: '0.375rem 0.75rem', fontSize: '0.8125rem', borderRadius: '6px',

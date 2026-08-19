@@ -89,6 +89,14 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   const filename = (cfg as any).filename || undefined
   const ignoreTrailingSpace = (cfg as any).ignore_trailing_space !== false // 默认 true
 
+  // Lemon 的 score/message 协议用于 OI 部分分；ACM 只接受布尔判定型 checker。
+  if (judgeMode === 'acm' && String(checkerType).toLowerCase() === 'lemon') {
+    return {
+      submissionId, result: 'System Error', time: 0, cpuTime: 0, wallTime: 0, memory: 0, score: 0, cases: [],
+      message: 'ACM 赛制不支持 Lemon checker，请使用 testlib 或其他判定型 checker'
+    }
+  }
+
   // 如果 checker_type 为 default 且 ignore_trailing_space 为 false，使用 strict checker
   if (checkerType === 'default' && !ignoreTrailingSpace) {
     checkerType = 'strict'

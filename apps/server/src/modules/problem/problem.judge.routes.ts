@@ -125,6 +125,10 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
     if (config) {
       const mode = config.mode || (Array.isArray(config.subtasks) && config.subtasks.length > 0 ? 'oi' : 'acm')
       if (mode !== 'acm' && mode !== 'oi') return res.status(400).json({ success: false, message: '无效的评测模式，必须是 acm 或 oi' })
+      const checkerType = String(config.checker_type || 'default').toLowerCase()
+      if (mode === 'acm' && checkerType === 'lemon') {
+        return res.status(400).json({ success: false, message: 'ACM 赛制不支持 Lemon checker，请使用 testlib 或其他判定型 checker' })
+      }
       const yaml = await import('js-yaml')
       const normalized = { ...config, mode }
       judgeConfigYaml = yaml.dump(normalized, { lineWidth: -1 })
