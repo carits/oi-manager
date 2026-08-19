@@ -1,0 +1,29 @@
+[Unit]
+Description=OI Manager judge client
+Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_DEPLOYMENT.md
+Wants=network-online.target
+After=network-online.target docker.service oi-manager-server.service
+Requires=oi-manager-server.service
+StartLimitIntervalSec=60s
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=ecs-user
+Group=ecs-user
+WorkingDirectory=/data/oi-manager-response-refactor/apps/judge
+Environment=NODE_ENV=production
+Environment=HOME=/home/ecs-user
+EnvironmentFile=/data/oi-manager-response-refactor/apps/judge/.env
+ExecStart=/usr/bin/node /data/oi-manager-response-refactor/apps/judge/dist/index.js
+Restart=on-failure
+RestartSec=5s
+MemoryMax=768M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/data/oi-manager-response-refactor
+
+[Install]
+WantedBy=multi-user.target

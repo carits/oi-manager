@@ -1,8 +1,8 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-18
-source_of_truth: package.json, docker-compose.yml, Prisma schema, Playwright configuration
+last_verified: 2026-08-19
+source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
 # 当前状态

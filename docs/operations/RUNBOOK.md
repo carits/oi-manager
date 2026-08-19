@@ -1,8 +1,9 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-01
-source_of_truth: scripts, docker-compose.yml, runtime health endpoints
+last_verified: 2026-08-19
+source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints
+
 ---
 
 # 运行手册

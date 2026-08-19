@@ -1,13 +1,22 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-18
+last_verified: 2026-08-19
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-19
+
+### Host reboot recovery and systemd service ownership
+
+- Confirmed the post-reboot outage was caused by the obsolete `pm2-root.service` pointing at a missing `/nix/store` executable; PostgreSQL and go-judge were healthy.
+- Added tracked systemd units for API, judge client, and published web preview with restart policies, memory ceilings, and journald evidence.
+- Added a no-build installer and recovery runbook; the current artifact state was restored without changing the database.
+- Fixed Node 24 workspace subpath resolution by mapping shared package exports to `.js`; the API now starts with the existing development-preview environment because the old env file does not contain production-only `CORS_ORIGINS` and `ACCOUNT_ENCRYPT_KEY`.
+
 ## 2026-08-18
 
 ### 认证工作区兼容与校园 ID 契约

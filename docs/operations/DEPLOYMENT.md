@@ -1,8 +1,9 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-07-30
-source_of_truth: production env examples, ecosystem.config.js, nginx configuration
+last_verified: 2026-08-19
+source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, ecosystem.config.js, nginx configuration
+
 ---
 
 # 正式部署模板
