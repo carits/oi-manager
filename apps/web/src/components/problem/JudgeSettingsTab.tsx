@@ -57,7 +57,7 @@ interface JudgeConfig {
   filename?: string
   time?: string
   memory?: string
-  checker?: { file: string; lang?: string } | null
+  checker?: string | { file: string; lang?: string } | null
   interactor?: { file: string; lang?: string } | null
   manager?: { file: string; lang?: string } | null
   num_processes?: number
@@ -423,7 +423,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             const loaded = config.subtasks.map((st: any) => ({
               id: st.id || 0, score: st.score || 0, type: st.type || 'min',
               if: st.if || [], time: st.time, memory: st.memory,
-              cases: (st.cases || []).map((c: any) => ({ input: c.input, output: c.output })),
+              cases: (st.cases || []).map((c: any) => ({ input: c.input, output: c.output, ...(c.score !== undefined && { score: c.score }) })),
             }))
             setSubtasks(loaded)
             // 自动展开已加载的子任务，让用户看到配置已恢复
@@ -845,6 +845,13 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               {([['acm', 'ACM 赛制'], ['oi', 'OI 赛制']] as const).map(([mode, label]) => (
                 <button type="button" key={mode} onClick={() => {
                   setJudgeMode(mode)
+                  // Lemon supports partial scores and is intentionally OI-only.
+                  // Clear it when switching to ACM so an invalid combination cannot be saved.
+                  if (mode === 'acm' && checkerType === 'lemon') {
+                    setCheckerType('default')
+                    setCheckerFile('')
+                    setCheckerCategory('preset')
+                  }
                   if (mode === 'oi' && subtasks.length === 0) {
                     const cases = problemId ? testdataPairs : stagedPairs
                     setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
