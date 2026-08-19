@@ -13,7 +13,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'gcc main.c -o main -O2 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
   'c11': {
@@ -21,7 +21,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'gcc main.c -o main -O2 -std=c11 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
   'cpp': {
@@ -29,7 +29,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'g++ main.cpp -o main -O2 -std=c++17 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
   'cpp11': {
@@ -37,7 +37,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'g++ main.cpp -o main -O2 -std=c++11 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
   'cpp14': {
@@ -45,7 +45,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'g++ main.cpp -o main -O2 -std=c++14 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
   'cpp17': {
@@ -53,7 +53,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'g++ main.cpp -o main -O2 -std=c++17 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
   'cpp20': {
@@ -61,7 +61,7 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     execute_file: 'main',
     compile: 'g++ main.cpp -o main -O2 -std=c++20 -Wall',
     execute: './main',
-    compile_time_limit: 10000,
+    compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
 }

@@ -163,6 +163,10 @@ export async function compile(params: {
       if (result.files?.stderr) {
         error = result.files.stderr || error
       }
+      if (error === '编译失败' && result.status) {
+        const details = result.fileError?.map(item => item.message).filter(Boolean).join('; ')
+        error = details ? result.status + ': ' + details : result.status
+      }
       if (error.includes('g++: not found') || error.includes('gcc: not found') || error.includes('clang++: not found') || error.includes('clang: not found')) {
         if (ALLOW_LOCAL_FALLBACK) {
           const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_compile_${Date.now()}_${Math.random().toString(36).slice(2)}`)

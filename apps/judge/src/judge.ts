@@ -30,7 +30,7 @@ import type {
 
 function readCheckerDependencies(testdataPath: string): Record<string, string> {
   const dependencies: Record<string, string> = {}
-  const header = path.join(testdataPath, 'testlib.h')
+  const header = path.join(config.checkerIncludeDir, 'testlib.h')
   if (fs.existsSync(header)) dependencies['testlib.h'] = fs.readFileSync(header, 'utf-8')
   return dependencies
 }
@@ -145,7 +145,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   const compileResult = await sandbox.compile({
     language,
     code,
-    timeLimit: 15000,
+    timeLimit: 60000,
     memoryLimit: 524288,
     workDir
   })
@@ -231,7 +231,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
     const checkerCompileResult = await sandbox.compile({
       language: checkerLang || 'cpp17',
       code: checkerCode,
-      timeLimit: 15000,
+      timeLimit: 60000,
       memoryLimit: 524288,
       extraCopyIn: readCheckerDependencies(testdataPath),
     })
@@ -694,8 +694,7 @@ async function runCheckerInSandbox(
       copyIn['answer'] = { content: expectedOutput }
       break
     case 'lemon':
-      // lemon: checker input user_output answer score message
-      execCommand += ' input usrout answer'
+      execCommand += ' input usrout answer ' + Math.max(1, Math.round(caseScore || 100)) + ' score message'
       copyOut.push('score', 'message')
       break
     case 'hustoj':
@@ -836,7 +835,8 @@ function parseCheckerResult(
       if (result.code !== 0) {
         return { caseId: 0, result: 'System Error', time: execTime, memory: execMemory, message: `Checker 返回非零退出码: ${result.code}` }
       }
-      const accepted = score === caseScore
+      const checkerFullScore = Math.max(1, Math.round(caseScore || 100))
+      const accepted = score === checkerFullScore
       return { caseId: 0, result: accepted ? 'Accepted' : 'Wrong Answer', time: execTime, memory: execMemory, score, message }
     }
     case 'hustoj':
@@ -1230,7 +1230,7 @@ async function judgeInteractive(params: {
   const userCompileResult = await sandbox.compile({
     language,
     code,
-    timeLimit: 15000,
+    timeLimit: 60000,
     memoryLimit: 524288,
     workDir: userWorkDir
   })
@@ -1258,7 +1258,7 @@ async function judgeInteractive(params: {
   const interactorCompileResult = await sandbox.compile({
     language: interactorLang || 'cpp17',
     code: interactorCode,
-    timeLimit: 15000,
+    timeLimit: 60000,
     memoryLimit: 524288,
     workDir: interactorWorkDir
   })
@@ -1647,7 +1647,7 @@ async function judgeCommunication(params: {
   const userCompileResult = await sandbox.compile({
     language,
     code,
-    timeLimit: 15000,
+    timeLimit: 60000,
     memoryLimit: 524288,
     workDir: userWorkDir
   })
@@ -1675,7 +1675,7 @@ async function judgeCommunication(params: {
   const managerCompileResult = await sandbox.compile({
     language: managerLang || 'cpp17',
     code: managerCode,
-    timeLimit: 15000,
+    timeLimit: 60000,
     memoryLimit: 524288,
     workDir: managerWorkDir
   })
@@ -2017,7 +2017,7 @@ async function judgeSubmitAnswer(params: {
       const checkerCompileResult = await sandbox.compile({
         language: checkerLang || 'cpp17',
         code: checkerCode,
-        timeLimit: 15000,
+        timeLimit: 60000,
         memoryLimit: 524288,
       })
       if (checkerCompileResult.success) {

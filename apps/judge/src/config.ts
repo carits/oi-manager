@@ -44,6 +44,7 @@ export const config = {
 
   // 测试数据目录
   testdataDir: process.env.TESTDATA_DIR || path.join(process.cwd(), '../server/testdata'),
+  checkerIncludeDir: process.env.CHECKER_INCLUDE_DIR || path.join(process.cwd(), 'checker-includes'),
 
   // 评测超时
   judgeTimeout: parseInt(process.env.JUDGE_TIMEOUT || '60000', 10), // 60s
