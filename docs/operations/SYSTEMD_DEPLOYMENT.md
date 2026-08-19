@@ -5,35 +5,30 @@ last_verified: 2026-08-19
 source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.sh
 ---
 
-# Systemd recovery deployment
+# systemd 恢复部署
 
-The server uses three independent systemd services for the application processes:
+当前开发服务器使用三个独立的 systemd 服务管理应用进程：
 
-- `oi-manager-server.service` runs the existing production API artifact on port `3002`.
-- `oi-manager-judge.service` runs the existing judge client artifact and reconnects to the API.
-- `oi-manager-web.service` serves the published `.next-current` preview artifact on port `3000`.
+- `oi-manager-server.service`：运行现有 API 构建产物，监听 `3002`。
+- `oi-manager-judge.service`：运行 Judge 客户端并自动重连 API。
+- `oi-manager-web.service`：运行已发布的 `.next-current` 预览产物，监听 `3000`。
 
-PostgreSQL and go-judge remain managed by Docker Compose. PM2/Nix is not a runtime dependency.
-Each application service runs as `ecs-user`, writes logs to journald, restarts after failure, and has a memory ceiling appropriate for the 3.7 GiB host.
+PostgreSQL 与 go-judge 继续由 Docker Compose 管理。应用运行不再依赖 PM2 或 Nix。三个应用服务均以
+`ecs-user` 运行，日志进入 journald，异常退出后自动重启，并按当前 3.7 GiB 主机容量设置内存上限。
 
-## Install or repair after a reboot
+## 安装或修复
 
-Run on the host after confirming that the published artifacts exist:
+先确认构建产物存在，再在服务器执行：
 
 ```bash
 cd /data/oi-manager-response-refactor
 sudo bash scripts/install-systemd-services.sh
 ```
 
-The installer copies the tracked unit files, reloads systemd, enables all three services, and restarts them in dependency order. It does not run a build or alter the database.
+安装脚本会复制仓库内的 unit 文件、停用已失效的 `pm2-root.service`、重载 systemd、启用三个
+应用服务并按依赖顺序重启。脚本不会构建代码，也不会修改数据库。
 
-Once the services are healthy, retire the obsolete Nix-backed PM2 unit so it cannot produce a misleading boot failure:
-
-```bash
-sudo systemctl disable --now pm2-root.service || true
-```
-
-## Verification
+## 验证
 
 ```bash
 systemctl --no-pager --full status oi-manager-server oi-manager-judge oi-manager-web
@@ -46,6 +41,25 @@ docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Heal
 
 For failure evidence use `journalctl -u <unit> -b`, `journalctl -k -b`, and `journalctl -b -1`. Do not include environment files, tokens, cookies, or source code in incident reports.
 
-## Rollback
+## 2026-08-19 异常重启记录
 
-Stop only the affected service, restore the previously published artifact or unit file, run `systemctl daemon-reload`, then restart the service and repeat the verification commands. Do not use `docker compose down -v`, because that removes database volumes.
+- 旧启动周期在 `2026-08-19 14:02:17 +08:00` 非正常结束，新启动周期从
+  `2026-08-19 14:17:43 +08:00` 开始。
+- 新启动时 `/dev/vdb` 报告 `recovering journal` 并清理 orphaned inode，EFI 分区报告
+  `Fs was not properly unmounted`，说明上一次没有正常卸载文件系统。
+- 事故窗口没有 OOM、kernel panic、磁盘 I/O error 或正常 shutdown 记录；选手程序的
+  `main` 段错误属于评测沙箱内失败，不能据此认定其导致 ECS 重启。
+- 服务器内部证据只能确认异常掉电或强制 reset，无法区分控制台强制重启与阿里云基础设施事件；
+  最终归因需要检查阿里云控制台 `14:02–14:18` 的 ECS 实例事件和操作审计。
+- 重启后业务未自动恢复是独立问题：旧 `pm2-root.service` 写死了已经不存在的 Nix 路径并返回
+  `203/EXEC`。现已改为仓库内可追踪的 systemd units。
+
+完整时间线、证据边界、已完成处置和后续待办见
+[`INCIDENT-2026-08-19-REBOOT.md`](INCIDENT-2026-08-19-REBOOT.md)。该事故文档保持
+`status: open`，直到云平台审计、独立监控、日志持久化、受控重启演练、评测沙箱资源治理、
+SSH 暴露面复核及备份恢复演练全部完成或明确关闭。
+
+## 回滚
+
+只停止受影响的服务，恢复上一份已发布构建产物或 unit 文件，执行 `systemctl daemon-reload`，
+再重启服务并重复上述验证。不要执行 `docker compose down -v`，否则会删除数据库卷。
