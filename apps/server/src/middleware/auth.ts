@@ -46,8 +46,11 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       if (!membership) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
       decoded.organizationId = organizationId
       decoded.organizationMembershipId = membership.id
-      // 校园权限只取当前成员关系：同一账号在不同校园可拥有不同身份。
-      decoded.role = membership.memberRole as UserRole
+      // 平台管理员/超级管理员是全局身份，进入学校上下文时仍须保留管理员权限。
+      // 普通账号才根据当前校园成员关系切换为老师/学生身份。
+      if (decoded.role !== 'super_admin' && decoded.role !== 'platform_admin') {
+        decoded.role = membership.memberRole as UserRole
+      }
     }
     req.user = decoded
     req.authSource = bearerToken ? 'bearer' : 'cookie'

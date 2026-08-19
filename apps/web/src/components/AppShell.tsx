@@ -46,7 +46,7 @@ const labelIcons: Record<string, LucideIcon> = {
   '首页': Home, '概览': Home, '校园': School, '学校管理': School, '教师管理': GraduationCap, '教师': GraduationCap,
   '学生管理': Users, '学生': Users, '管理': ShieldCheck, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
-  '题库管理': Library, '排名': Activity, '评测记录': BookOpen, '提交管理': BookOpen,
+  '题库管理': Library, '排名': Activity, '评测记录': BookOpen, 'OJ账号': Link2, '平台绑定': Link2,
 
 }
 
@@ -125,8 +125,9 @@ export function AppShell({ children }: AppShellProps) {
 
   const accountRole = user.role as UserRole
   const context = contextKind
-  // 校园导航必须使用当前组织成员身份，同一账号在另一校园可以是另一种身份。
-  const role = (organizationId && user.organizationRole ? user.organizationRole : accountRole) as UserRole
+  const isGlobalAdmin = accountRole === 'super_admin' || accountRole === 'platform_admin'
+  // 全局管理员进入学校上下文时仍使用管理员导航；普通账号才切换到校园成员身份。
+  const role = (organizationId && user.organizationRole && !isGlobalAdmin ? user.organizationRole : accountRole) as UserRole
   const navConfig = getNavConfig(role, context)
   const resolvedNavConfig = organizationId ? {
     ...navConfig,

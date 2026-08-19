@@ -315,7 +315,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         userId: user.id,
         username: user.username,
         // 组织页面返回成员身份；个人与平台请求仍返回全局账号权限。
-        role: membership ? membership.memberRole : user.role,
+        role: ['super_admin', 'platform_admin'].includes(user.role) ? user.role : (membership ? membership.memberRole : user.role),
         avatar: user.avatar,
         phone: user.phone,
         email: user.email,
@@ -340,9 +340,12 @@ authRouter.post('/switch-workspace', authenticate, async (req: Request, res: Res
   if (!workspaceMode) return res.status(400).json({ success: false, message: '无效的工作区模式' })
   try {
     const payload = (req as any).user as JwtPayload
+    if (workspaceMode === 'personal' && ['super_admin', 'platform_admin'].includes(payload.role)) {
+      return res.status(403).json({ success: false, message: '管理员不具备个人工作区' })
+    }
     if (workspaceMode === 'personal') await prisma.personalProfile.upsert({ where: { userId: payload.userId }, create: { userId: payload.userId }, update: {} })
     const membership = await prisma.organizationMembership.findFirst({ where: { userId: payload.userId, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true } })
-    const compatibleRole = membership?.memberRole || payload.role
+    const compatibleRole = ['super_admin', 'platform_admin'].includes(payload.role) ? payload.role : (membership?.memberRole || payload.role)
     const token = jwt.sign({ ...renewablePayload(payload), role: compatibleRole, workspaceMode }, getJwtSecret(), { expiresIn: '7d' })
     setSessionCookie(res, token)
     return res.json({ success: true, data: { token, workspaceMode, role: compatibleRole } })

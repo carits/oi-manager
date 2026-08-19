@@ -44,7 +44,10 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
   const platform = ['super_admin', 'platform_admin'].includes(req.user!.role)
     ? [{ type: 'platform' as const, organizationName: '平台管理', memberRole: 'platform_admin', relationLabel: '平台管理员', availableModules: platformModules }]
     : []
-  res.json({ success: true, data: { workspaces: [...platform, ...organizations, { type: 'personal', availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }] } })
+  const personal = ['super_admin', 'platform_admin'].includes(req.user!.role)
+    ? []
+    : [{ type: 'personal' as const, availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }]
+  res.json({ success: true, data: { workspaces: [...platform, ...organizations, ...personal] } })
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {

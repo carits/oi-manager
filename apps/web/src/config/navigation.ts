@@ -21,6 +21,10 @@ export const superAdminNav: NavConfig = {
     { label: '概览', href: '/admin' },
     { label: '学校管理', href: '/admin/schools' },
     { label: '账号管理', href: '/admin/users' },
+    { label: '题库管理', href: '/platform-admin/problems' },
+    { label: '评测记录', href: '/platform-admin/submissions' },
+    { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
+    { label: '平台绑定', href: '/admin/platform-bindings' },
   ]
 }
 
@@ -32,7 +36,8 @@ export const platformAdminNav: NavConfig = {
     { label: '账号管理', href: '/platform-admin/users' },
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '评测记录', href: '/platform-admin/submissions' },
-    { label: '提交管理', href: '/platform-admin/oj-accounts' },
+    { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
+    { label: '平台绑定', href: '/platform-admin/platform-bindings' },
   ]
 }
 
@@ -107,9 +112,10 @@ export const roleNavMap: Record<UserRole, NavConfig> = {
 // 根据角色获取导航配置
 export function getNavConfig(role: UserRole | string, context?: string): NavConfig {
   const validRole = role as UserRole
-  if (context === 'personal') return { ...personalNav, role: validRole }
+  // 全局管理员没有个人工作区，始终使用平台管理导航。
   if (validRole === 'super_admin') return superAdminNav
   if (validRole === 'platform_admin') return platformAdminNav
+  if (context === 'personal') return { ...personalNav, role: validRole }
   if (validRole === 'school_principal') return schoolManagerNav
   if (validRole === 'teacher') return teacherNav
   if (validRole === 'student') return studentNav

@@ -46,9 +46,11 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     // 全局评测记录显示 isGlobalVisible 的提交
     // 包括题库提交、训练提交、已结束的比赛提交等
     // 训练/比赛模块与全局评测记录是独立功能，不产生强制关联
+    const adminUser = isAdmin(user.role)
     const where: any = {
       isGlobalVisible: true,
-      workspaceScope,
+      // 全局管理员在个人区也可以查看所有用户、所有工作区的评测记录。
+      ...(adminUser ? {} : { workspaceScope }),
     }
 
     // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有
@@ -59,17 +61,6 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       if (!user.organizationId) return res.json({ success: true, data: { submissions: [], page: pageNum, totalPages: 0, total: 0 } })
       const members = await prisma.organizationMembership.findMany({ where: { organizationId: user.organizationId, status: 'active' }, select: { userId: true } })
       where.userId = { in: members.map(member => member.userId) }
-    } else if (user.role === 'super_admin' || user.role === 'platform_admin') {
-      const schoolProblemIds = (await prisma.problem.findMany({
-        where: { libraryScope: 'school' },
-        select: { id: true },
-      })).map(problem => problem.id)
-      if (schoolProblemIds.length > 0) {
-        where.OR = [
-          { problemInternalId: null },
-          { problemInternalId: { notIn: schoolProblemIds } },
-        ]
-      }
     }
 
     if (username) {
@@ -275,9 +266,6 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
         where: { id: submission.problemInternalId },
         select: { title: true, libraryScope: true, organizationId: true, judgeConfig: true },
       })
-      if (problem?.libraryScope === 'school' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
-        return res.status(404).json({ success: false, message: '提交记录不存在' })
-      }
       if (problem?.libraryScope === 'school' && (user.role === 'teacher' || user.role === 'school_principal') && problem.organizationId !== user.organizationId) {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
       }
