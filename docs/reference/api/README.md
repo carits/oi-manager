@@ -152,6 +152,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/admin/data/fix-hdu-memory` | 见对应路由实现 |
 | `POST` | `/api/admin/data/fix-submission-visibility` | 见对应路由实现 |
 | `POST` | `/api/admin/data/reset-user-password` | 见对应路由实现 |
+| `POST` | `/api/admin/data/rejudge-all-carits` | 见对应路由实现 |
+| `POST` | `/api/admin/data/rejudge-legacy-carits` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v2/events` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v2/prepare` | 见对应路由实现 |
 | `POST` | `/api/admin/demo-scenario/v3/events` | 见对应路由实现 |

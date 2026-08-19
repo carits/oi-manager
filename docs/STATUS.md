@@ -39,6 +39,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   `studentMode`。`schoolId` 仅代表 `School.id`，组织请求上下文使用 `organizationId`。
 - 外部 OJ 题目抓取、平台绑定、账号池、提交同步和 AI 翻译。
 - Carits 本地提交、评测队列、Judge WebSocket、详情和重新评测。
+- 超级管理员和平台管理员的评测记录页提供全平台全量视图，包含所有用户、个人区、校园区和比赛提交，支持总数、范围提示和 20/50/100 条分页浏览。
 - 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
 - 隔离的 PostgreSQL 单元测试与 Playwright 全 UI 测试。
 

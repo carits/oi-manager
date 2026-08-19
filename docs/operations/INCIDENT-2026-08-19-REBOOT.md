@@ -1,8 +1,10 @@
 ---
-status: open
+status: current
 audience: operations, development
 incident_date: 2026-08-19
+last_verified: 2026-08-19
 last_updated: 2026-08-19
+source_of_truth: journald, systemd units, deployment logs, cloud audit records
 severity: service interruption
 ---
 

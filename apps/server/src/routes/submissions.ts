@@ -32,6 +32,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       problemId,
       result,
       language,
+      scope: requestedScope,
       page = '1',
       pageSize = '20',
     } = req.query as Record<string, string>
@@ -49,6 +50,12 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     const where: any = {
       ...(adminUser ? {} : { isGlobalVisible: true, workspaceScope }),
     }
+
+    const listScope = adminUser && requestedScope === 'all'
+      ? 'all'
+      : adminUser
+        ? 'all'
+        : workspaceScope
 
     // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有。
     // 管理员没有 organizationId，但不能因此被当作个人区普通用户。
@@ -180,6 +187,7 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
         page: pageNum,
         totalPages: Math.ceil(total / pageSizeNum),
         total,
+        scope: listScope,
       },
     })
   } catch (e: any) {

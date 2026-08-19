@@ -101,6 +101,7 @@ describe('administrator entry without User.schoolId', () => {
         .set('Authorization', 'Bearer ' + token)
 
       expect(response.status).toBe(200)
+      expect(response.body.data.scope).toBe('all')
       expect(response.body.data.submissions.map((submission: { id: number }) => submission.id))
         .toEqual(expect.arrayContaining([visibleSubmission.id, hiddenSubmission.id]))
     },

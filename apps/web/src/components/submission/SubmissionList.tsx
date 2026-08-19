@@ -20,7 +20,7 @@ import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import styles from './SubmissionList.module.css'
 
 interface Submission { id: number; userId?: string; userType?: 'student' | 'teacher' | 'user'; username: string; oj: string; problemId: string; problemInternalId?: string; problemVisibility?: string | null; result: string; timeUsed: number | null; memoryUsed: number | null; codeLength: number | null; language: string; submittedAt: string }
-interface SubmissionPayload { submissions?: Submission[]; totalPages?: number; total?: number }
+interface SubmissionPayload { submissions?: Submission[]; totalPages?: number; total?: number; scope?: 'all' | 'personal' | 'campus' }
 interface SubmissionListProps { viewRole: 'teacher' | 'student' | 'admin' }
 
 const fields = ['username', 'oj', 'problemId', 'result', 'language'] as const
@@ -42,7 +42,11 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const pathname = usePathname()
   const pathPrefix = currentWorkspacePrefix(pathname, viewRole === 'admin' ? '/platform-admin' : '/personal')
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
-  const pageSize = 20
+  const pageSizeOptions = [20, 50, 100]
+  const requestedPageSize = Number(searchParams.get('pageSize'))
+  const pageSize = viewRole === 'admin' && pageSizeOptions.includes(requestedPageSize)
+    ? requestedPageSize
+    : 20
   const [draft, setDraft] = useState<Record<FilterField, string>>(() => Object.fromEntries(fields.map(field => [field, searchParams.get(field) || ''])) as Record<FilterField, string>)
 
   useEffect(() => {
@@ -53,10 +57,14 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   fields.forEach(field => { const value = searchParams.get(field); if (value) query.set(field, value) })
   query.set('page', String(page))
   query.set('pageSize', String(pageSize))
+  if (viewRole === 'admin') query.set('scope', 'all')
   const resource = useResource<SubmissionPayload>(`/api/submissions?${query}`, { sessionKey, isEmpty: data => (data.submissions || []).length === 0, dedupingInterval: 10000 })
   const submissions = resource.data?.submissions || []
   const total = resource.data?.total || 0
   const totalPages = resource.data?.totalPages || 1
+  const isGlobalAdminView = viewRole === 'admin' && (resource.data?.scope === 'all' || resource.data?.scope == null)
+  const displayStart = total > 0 ? (page - 1) * pageSize + 1 : 0
+  const displayEnd = total > 0 ? Math.min(page * pageSize, total) : 0
 
   const navigate = (next: URLSearchParams) => router.replace(`${pathPrefix}/submissions${next.size ? `?${next}` : ''}`, { scroll: false })
   const applyFilters = () => {
@@ -66,6 +74,13 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   }
   const reset = () => { setDraft({ username: '', oj: '', problemId: '', result: '', language: '' }); navigate(new URLSearchParams()) }
   const setPage = (nextPage: number) => { const next = new URLSearchParams(searchParams.toString()); nextPage <= 1 ? next.delete('page') : next.set('page', String(nextPage)); navigate(next) }
+  const setPageSize = (nextPageSize: number) => {
+    if (!pageSizeOptions.includes(nextPageSize)) return
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete('page')
+    nextPageSize === 20 ? next.delete('pageSize') : next.set('pageSize', String(nextPageSize))
+    navigate(next)
+  }
 
   const problemCell = (submission: Submission) => {
     const canOpenLocal = submission.problemInternalId && ['public', 'private'].includes(submission.problemVisibility || '')
@@ -76,7 +91,8 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
   return (
     <PageFrame>
-      <PageHeader title="评测记录" description="按用户、题目、结果和语言定位提交。" />
+      <PageHeader title="评测记录" description={isGlobalAdminView ? '查看全平台所有用户、个人区、校园区和比赛提交。' : '按用户、题目、结果和语言定位提交。'} />
+      {isGlobalAdminView && <div className={styles.scopeSummary} role="status"><strong>管理员全量视图</strong><span>全平台所有用户、个人区、校园区和比赛提交</span>{total > 0 && <span>当前显示第 {displayStart}–{displayEnd} 条，共 {total} 条</span>}</div>}
       <Toolbar>
         <ToolbarGroup className={styles.filters}>
           {viewRole !== 'student' && <input className={styles.input} aria-label="用户名" placeholder="用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />}
@@ -108,7 +124,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           { key: 'submittedAt', label: '提交时间', width: '170px', render: item => new Date(item.submittedAt).toLocaleString('zh-CN') },
         ]}
       />
-      {total > 0 && <Pagination currentPage={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />}
+      {total > 0 && <Pagination currentPage={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={viewRole === 'admin' ? setPageSize : undefined} pageSizeOptions={pageSizeOptions} />}
     </PageFrame>
   )
 }

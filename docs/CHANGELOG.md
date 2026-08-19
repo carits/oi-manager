@@ -10,6 +10,11 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-19
 
+### Administrator full submission visibility
+
+- 修复超级管理员和平台管理员评测记录页的全量展示：列表接口返回 `scope=all` 元数据，管理员页面明确显示全平台记录范围、总数和当前分页范围，并支持切换每页 20/50/100 条。
+- 验证管理员接口能返回隐藏提交和全量总数；普通用户继续遵守原有工作区和权限过滤。
+
 ### Host reboot recovery and systemd service ownership
 
 - Confirmed the post-reboot outage was caused by the obsolete `pm2-root.service` pointing at a missing `/nix/store` executable; PostgreSQL and go-judge were healthy.

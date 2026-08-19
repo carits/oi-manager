@@ -17,6 +17,8 @@ export const routePatterns = [
   '/admin/schools/[id]/edit',
   '/admin/schools/new',
   '/admin/security',
+  '/admin/submissions',
+  '/admin/submissions/[id]',
   '/admin/users',
   '/admin/users/[id]',
   '/admin/users/new-platform-admin',

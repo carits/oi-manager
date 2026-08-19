@@ -24,6 +24,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/admin/schools/[id]/edit` | 见页面权限布局 | 当前页面 |
 | `/admin/schools/new` | 见页面权限布局 | 当前页面 |
 | `/admin/security` | 见页面权限布局 | 当前页面 |
+| `/admin/submissions` | 见页面权限布局 | 当前页面 |
+| `/admin/submissions/[id]` | 见页面权限布局 | 当前页面 |
 | `/admin/users` | 见页面权限布局 | 当前页面 |
 | `/admin/users/[id]` | 见页面权限布局 | 当前页面 |
 | `/admin/users/new-platform-admin` | 见页面权限布局 | 当前页面 |

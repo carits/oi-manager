@@ -1,4 +1,6 @@
 .filters { flex: 1; }
+.scopeSummary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); color: var(--text-secondary); background: var(--bg-muted, var(--bg-card)); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); }
+.scopeSummary strong { color: var(--primary); }
 .input, .select { height: var(--control-height); padding: 0 var(--space-3); color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); }
 .input { width: 132px; }
 .select { min-width: 126px; }
