@@ -51,11 +51,9 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
       ...(adminUser ? {} : { isGlobalVisible: true, workspaceScope }),
     }
 
-    const listScope = adminUser && requestedScope === 'all'
-      ? 'all'
-      : adminUser
-        ? 'all'
-        : workspaceScope
+    // 管理员始终是全平台视图；scope 仅作为前端展示元数据，不参与权限降级。
+    // 即使旧页面未传 scope=all，也不能意外按个人/校园范围过滤。
+    const listScope = adminUser ? 'all' : workspaceScope
 
     // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有。
     // 管理员没有 organizationId，但不能因此被当作个人区普通用户。

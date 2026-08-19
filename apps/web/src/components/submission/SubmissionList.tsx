@@ -40,11 +40,15 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
   const pathname = usePathname()
-  const pathPrefix = currentWorkspacePrefix(pathname, viewRole === 'admin' ? '/platform-admin' : '/personal')
+  // 管理员权限以当前会话的全局角色为准，不能被旧入口或个人区路径降级。
+  const isGlobalAdmin = user?.role === 'super_admin' || user?.role === 'platform_admin'
+  const isAdminView = viewRole === 'admin' || isGlobalAdmin
+  const adminHome = user?.role === 'super_admin' ? '/admin' : '/platform-admin'
+  const pathPrefix = currentWorkspacePrefix(pathname, isAdminView ? adminHome : '/personal')
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const pageSizeOptions = [20, 50, 100]
   const requestedPageSize = Number(searchParams.get('pageSize'))
-  const pageSize = viewRole === 'admin' && pageSizeOptions.includes(requestedPageSize)
+  const pageSize = isAdminView && pageSizeOptions.includes(requestedPageSize)
     ? requestedPageSize
     : 20
   const [draft, setDraft] = useState<Record<FilterField, string>>(() => Object.fromEntries(fields.map(field => [field, searchParams.get(field) || ''])) as Record<FilterField, string>)
@@ -57,12 +61,12 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   fields.forEach(field => { const value = searchParams.get(field); if (value) query.set(field, value) })
   query.set('page', String(page))
   query.set('pageSize', String(pageSize))
-  if (viewRole === 'admin') query.set('scope', 'all')
+  if (isAdminView) query.set('scope', 'all')
   const resource = useResource<SubmissionPayload>(`/api/submissions?${query}`, { sessionKey, isEmpty: data => (data.submissions || []).length === 0, dedupingInterval: 10000 })
   const submissions = resource.data?.submissions || []
   const total = resource.data?.total || 0
   const totalPages = resource.data?.totalPages || 1
-  const isGlobalAdminView = viewRole === 'admin' && (resource.data?.scope === 'all' || resource.data?.scope == null)
+  const isGlobalAdminView = isAdminView && (resource.data?.scope === 'all' || resource.data?.scope == null)
   const displayStart = total > 0 ? (page - 1) * pageSize + 1 : 0
   const displayEnd = total > 0 ? Math.min(page * pageSize, total) : 0
 
@@ -95,7 +99,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
       {isGlobalAdminView && <div className={styles.scopeSummary} role="status"><strong>管理员全量视图</strong><span>全平台所有用户、个人区、校园区和比赛提交</span>{total > 0 && <span>当前显示第 {displayStart}–{displayEnd} 条，共 {total} 条</span>}</div>}
       <Toolbar>
         <ToolbarGroup className={styles.filters}>
-          {viewRole !== 'student' && <input className={styles.input} aria-label="用户名" placeholder="用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />}
+          {(viewRole !== 'student' || isGlobalAdmin) && <input className={styles.input} aria-label="用户名" placeholder="用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />}
           <select className={styles.select} aria-label="OJ 平台" value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>{SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
           <input className={styles.input} aria-label="题号" placeholder="题号" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
           <select className={styles.select} aria-label="评测结果" value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>{JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
@@ -124,7 +128,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
           { key: 'submittedAt', label: '提交时间', width: '170px', render: item => new Date(item.submittedAt).toLocaleString('zh-CN') },
         ]}
       />
-      {total > 0 && <Pagination currentPage={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={viewRole === 'admin' ? setPageSize : undefined} pageSizeOptions={pageSizeOptions} />}
+      {total > 0 && <Pagination currentPage={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={isAdminView ? setPageSize : undefined} pageSizeOptions={pageSizeOptions} />}
     </PageFrame>
   )
 }
