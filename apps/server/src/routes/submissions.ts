@@ -8,6 +8,7 @@ import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { fetchAndStoreCfCode } from '../lib/cf-code-fetcher'
 import { canManageTraining } from '../modules/training/training.helpers'
+import { resolveJudgePresentationConfig } from '../lib/judge-mode'
 
 export const submissionsRouter = Router()
 
@@ -264,10 +265,15 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
 
     // 获取题目标题
     let problemTitle: string | null = null
+    let problemJudgeConfig: string | null = null
+    let problemAlias: string | null = null
+    let problemOrderIndex: number | null = null
+    let trainingProblemId: string | null = submission.trainingProblemId || null
+    let contestFormat: string | null = null
     if (submission.problemInternalId) {
       const problem = await prisma.problem.findUnique({
         where: { id: submission.problemInternalId },
-        select: { title: true, libraryScope: true, organizationId: true },
+        select: { title: true, libraryScope: true, organizationId: true, judgeConfig: true },
       })
       if (problem?.libraryScope === 'school' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
@@ -276,7 +282,29 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
         return res.status(404).json({ success: false, message: '提交记录不存在' })
       }
       problemTitle = problem?.title || null
+      problemJudgeConfig = problem?.judgeConfig || null
     }
+    if (submission.trainingId) {
+      const training = await prisma.training.findUnique({ where: { id: submission.trainingId }, select: { format: true } })
+      contestFormat = training?.format || null
+      const trainingProblem = submission.trainingProblemId
+        ? await prisma.trainingProblem.findFirst({
+            where: { id: submission.trainingProblemId, trainingId: submission.trainingId },
+            select: { id: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
+          })
+        : await prisma.trainingProblem.findFirst({
+            where: { trainingId: submission.trainingId, Problem: { problemId: submission.problemId } },
+            select: { id: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
+          })
+      if (trainingProblem) {
+        trainingProblemId = trainingProblem.id
+        problemAlias = trainingProblem.alias
+        problemOrderIndex = trainingProblem.orderIndex
+        problemJudgeConfig = trainingProblem.judgeConfigSnapshot || trainingProblem.Problem.judgeConfig || problemJudgeConfig
+        problemTitle = problemTitle || trainingProblem.Problem.title || null
+      }
+    }
+    const judgePresentation = resolveJudgePresentationConfig(problemJudgeConfig)
 
     // 解析提交者显示名和头像
     const submitter = submission.User
@@ -329,6 +357,13 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
         ojAccountUsername: submission.OjAccount?.username,
         submittedAt: submission.createdAt.toISOString(),
         errorMessage: submission.errorMessage,
+        judgeMode: judgePresentation.mode,
+        judgeConfig: problemJudgeConfig ? { mode: judgePresentation.mode } : undefined,
+        trainingId: submission.trainingId,
+        trainingProblemId,
+        problemAlias,
+        problemOrderIndex,
+        contestFormat,
       },
     })
   } catch (e: any) {

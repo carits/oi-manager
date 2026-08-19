@@ -56,6 +56,13 @@ interface SubmissionDetail {
   ojRemoteId: string | null
   submittedAt: string
   errorMessage: string | null
+  judgeMode: 'acm' | 'oi'
+  judgeConfig?: { mode: 'acm' | 'oi' }
+  trainingId?: number | null
+  trainingProblemId?: string | null
+  problemAlias?: string | null
+  problemOrderIndex?: number | null
+  contestFormat?: string | null
 }
 
 interface SubmissionDetailPageProps {
@@ -253,6 +260,8 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   const passedCount = cases.filter(c => c.result === 'Accepted').length
   const peakTime = cases.length > 0 ? Math.max(...cases.map(c => c.time || 0)) : null
   const peakMemory = cases.length > 0 ? Math.max(...cases.map(c => c.memory || 0)) : null
+  const isOiJudge = detail.judgeMode === 'oi'
+  const failedCaseIndex = cases.findIndex(c => c.result !== 'Accepted' && c.result !== 'accepted' && c.result !== 'Skipped')
 
   return (
     <>
@@ -287,7 +296,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   <XCircle size={18} color={statusColor} aria-hidden="true" />
                 )}
                 {/* Score */}
-                {detail.score !== null && detail.score !== undefined && (
+                {isOiJudge && detail.score !== null && detail.score !== undefined && (
                   <span style={{
                     color: getScoreColor(detail.score),
                     fontWeight: 700,
@@ -300,6 +309,11 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 <span style={{ color: statusColor, fontWeight: 600, fontSize: '0.9375rem' }}>
                   {resultLabel}
                 </span>
+                {!isOiJudge && failedCaseIndex >= 0 && (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginLeft: '0.5rem' }}>
+                    测试点 #{failedCaseIndex + 1}
+                  </span>
+                )}
                 {/* Progress */}
                 {isQueuing && detail.cases && detail.cases.length > 0 && (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginLeft: '0.25rem' }}>
@@ -336,7 +350,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                       <tr style={{ background: 'var(--bg-muted)' }}>
                         <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '60px' }}>#</th>
                         <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)' }}>状态</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>得分</th>
+                        {isOiJudge && <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>得分</th>}
                         <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>用时</th>
                         <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>内存</th>
                       </tr>
@@ -344,7 +358,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     <tbody>
                       {(() => {
                         const subtasks = detail.subtasks
-                        if (subtasks && subtasks.length > 0) {
+                        if (isOiJudge && subtasks && subtasks.length > 0) {
                           // 按子任务分组显示
                           const rows: React.ReactNode[] = []
                           let caseIdx = 0
@@ -393,7 +407,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                       <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{c.message}</span>
                                     )}
                                   </td>
-                                  <td style={{
+                                  {isOiJudge && <td style={{
                                     padding: '0.5rem 0.625rem',
                                     textAlign: 'right',
                                     color: c.score !== undefined && c.score !== null
@@ -402,7 +416,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                     fontWeight: 600,
                                   }}>
                                     {c.score !== undefined && c.score !== null ? c.score : '-'}
-                                  </td>
+                                  </td>}
                                   <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
                                     {c.time ? `${c.time}ms` : '-'}
                                   </td>
@@ -439,7 +453,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                   <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{c.message}</span>
                                 )}
                               </td>
-                              <td style={{
+                              {isOiJudge && <td style={{
                                 padding: '0.5rem 0.625rem',
                                 textAlign: 'right',
                                 color: c.score !== undefined && c.score !== null
@@ -448,7 +462,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                                 fontWeight: 600,
                               }}>
                                 {c.score !== undefined && c.score !== null ? c.score : '-'}
-                              </td>
+                              </td>}
                               <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
                                 {c.time ? `${c.time}ms` : '-'}
                               </td>
@@ -467,7 +481,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
               {/* Summary bar — Hydro style horizontal dl */}
               {(detail.score !== null && detail.score !== undefined || detail.timeUsed || detail.memoryUsed) && (
                 <div className={styles.summary}>
-                  {detail.score !== null && detail.score !== undefined && (
+                  {isOiJudge && detail.score !== null && detail.score !== undefined && (
                     <div>
                       <span>得分：</span>
                       <span style={{ fontWeight: 600, color: getScoreColor(detail.score) }}>{detail.score}</span>
@@ -603,7 +617,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                     <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                       {detail.oj === 'carits' ? (
                         <a
-                          href={`${getPathPrefix()}/submissions/${detail.ojRemoteId}`}
+                          href={`${getPathPrefix()}/submissions/${detail.id}`}
                           style={{ color: 'var(--primary)', textDecoration: 'none' }}
                         >
                           {detail.ojRemoteId}

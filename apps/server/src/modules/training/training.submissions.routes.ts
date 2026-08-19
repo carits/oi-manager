@@ -24,6 +24,7 @@ import {
 } from '../../lib/idempotency'
 import { createQueuedTrainingSubmission } from './training.submission.service'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
+import { resolveJudgePresentationConfig } from '../../lib/judge-mode'
 
 export const trainingSubmissionsRouter = Router()
 
@@ -320,7 +321,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     // 获取题目别名和 orderIndex（通过 problemId 关联 TrainingProblem）
     const trainingProblems = await prisma.trainingProblem.findMany({
       where: { trainingId: id },
-      select: { alias: true, orderIndex: true, Problem: { select: { problemId: true } } },
+      select: { alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { problemId: true, judgeConfig: true } } },
     })
     const aliasMap = new Map<string, string>(
       trainingProblems.map(tp => [tp.Problem.problemId, tp.alias] as [string, string])
@@ -446,10 +447,12 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
     // 获取题目别名
     const trainingProblem = await prisma.trainingProblem.findFirst({
       where: { trainingId: id, Problem: { problemId: submission.problemId } },
-      include: { Problem: { select: { platform: true } } },
+      include: { Problem: { select: { platform: true, judgeConfig: true } } },
     })
     const problemAlias = trainingProblem?.alias || submission.problemId
     const ojPlatform = trainingProblem?.Problem?.platform || submission.oj || 'carits'
+    const judgeConfigText = trainingProblem?.judgeConfigSnapshot || trainingProblem?.Problem?.judgeConfig || null
+    const judgePresentation = resolveJudgePresentationConfig(judgeConfigText)
 
     // Get submitter's username
     const submitter = await prisma.user.findUnique({
@@ -488,6 +491,13 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
         ojAccountUsername: null,
         submittedAt: submission.createdAt.toISOString(),
         errorMessage: null,
+        judgeMode: judgePresentation.mode,
+        judgeConfig: judgeConfigText ? { mode: judgePresentation.mode } : undefined,
+        trainingId: id,
+        trainingProblemId: trainingProblem?.id || null,
+        problemAlias,
+        problemOrderIndex: trainingProblem?.orderIndex ?? null,
+        contestFormat: training.format,
         score: hideOiDetail ? null : submission.score,
         cases: hideOiDetail ? null : cases,
         subtasks: hideOiDetail ? null : subtasks,

@@ -458,6 +458,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         viewRole={basePath.startsWith('/personal') ? 'student' : basePath.startsWith('/platform-admin') ? 'admin' : 'teacher'}
         trainingId={parseInt(trainingId)}
         trainingFormat={training.format}
+        submissionPathPrefix={pathname.match(/^\/(?:org\/[^/]+|personal|platform-admin)/)?.[0] || (basePath.startsWith('/personal') ? '/personal' : basePath.startsWith('/platform-admin') ? '/platform-admin' : undefined)}
       />
 
       {/* Submit Code Modal */}

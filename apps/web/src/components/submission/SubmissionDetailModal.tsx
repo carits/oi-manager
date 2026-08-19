@@ -36,6 +36,12 @@ interface SubmissionDetail {
   cases?: any[] | null
   subtasks?: any[] | null
   trainingProblemId?: string
+  judgeMode?: 'acm' | 'oi'
+  judgeConfig?: { mode: 'acm' | 'oi' }
+  trainingId?: number | null
+  problemAlias?: string | null
+  problemOrderIndex?: number | null
+  contestFormat?: string | null
 }
 
 interface SubmissionDetailModalProps {
@@ -45,6 +51,7 @@ interface SubmissionDetailModalProps {
   viewRole?: 'teacher' | 'student' | 'admin'
   trainingId?: number // 可选：用于训练模块的提交详情
   trainingFormat?: 'oi' | 'ioi' | 'icpc' // 可选：训练赛制，ICPC时不显示分数
+  submissionPathPrefix?: string
 }
 
 // 转圈动画组件
@@ -123,7 +130,7 @@ function getCaseStatusClass(result: string): 'pass' | 'fail' | 'skip' {
   return 'fail'
 }
 
-function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string, problemId?: string): string | null {
+function getRemoteSubmitUrl(oj: string, localSubmissionId: number, ojRemoteId: string, viewRole?: string, problemId?: string, submissionPathPrefix?: string): string | null {
   if (oj === 'hdu') {
     return `https://acm.hdu.edu.cn/status.php?first=${ojRemoteId}`
   }
@@ -137,13 +144,13 @@ function getRemoteSubmitUrl(oj: string, ojRemoteId: string, viewRole?: string, p
     }
   }
   if (oj === 'carits' && viewRole) {
-    const prefix = viewRole === 'admin' ? '/platform-admin' : '/personal'
-    return `${prefix}/submissions/${ojRemoteId}`
+    const prefix = submissionPathPrefix || (viewRole === 'admin' ? '/platform-admin' : '/personal')
+    return `${prefix}/submissions/${localSubmissionId}`
   }
   return null
 }
 
-export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole, trainingId, trainingFormat }: SubmissionDetailModalProps) {
+export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole, trainingId, trainingFormat, submissionPathPrefix }: SubmissionDetailModalProps) {
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -348,7 +355,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>评测结果</div>
               {getResultBadge(detail.result, detail.score, detail.hidden, detail.displayResult)}
             </div>
-            {trainingFormat !== 'icpc' && !detail.hidden && (
+            {detail.judgeMode === 'oi' && !detail.hidden && (
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>分数</div>
               <div style={{
@@ -408,9 +415,9 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
               {detail.ojRemoteId ? (
-                getRemoteSubmitUrl(detail.oj || '', detail.ojRemoteId, viewRole, detail.problemId) ? (
+                getRemoteSubmitUrl(detail.oj || '', detail.id, detail.ojRemoteId, viewRole, detail.problemId, submissionPathPrefix) ? (
                   <a
-                    href={getRemoteSubmitUrl(detail.oj || '', detail.ojRemoteId, viewRole, detail.problemId)!}
+                    href={getRemoteSubmitUrl(detail.oj || '', detail.id, detail.ojRemoteId, viewRole, detail.problemId, submissionPathPrefix)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: 'var(--primary)', textDecoration: 'none' }}
