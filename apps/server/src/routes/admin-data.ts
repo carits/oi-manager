@@ -60,6 +60,52 @@ adminDataRouter.post('/rejudge-all-carits', async (req, res) => {
 })
 
 /**
+ * POST /api/admin/data/rejudge-legacy-carits
+ * 修复并重测缺少 problemInternalId 的旧训练提交。
+ */
+adminDataRouter.post('/rejudge-legacy-carits', async (req, res) => {
+  try {
+    const legacy = await prisma.submission.findMany({
+      where: { oj: 'carits', problemInternalId: null, trainingProblemId: { not: null } },
+      select: { id: true, trainingProblemId: true },
+    })
+    const trainingProblemIds = [...new Set(legacy.map(s => s.trainingProblemId).filter((id): id is string => Boolean(id)))]
+    const trainingProblems = await prisma.trainingProblem.findMany({
+      where: { id: { in: trainingProblemIds } },
+      select: { id: true, problemId: true },
+    })
+    const problemByTrainingProblem = new Map(trainingProblems.map(p => [p.id, p.problemId]))
+    let requeued = 0
+    for (const submission of legacy) {
+      const problemInternalId = submission.trainingProblemId ? problemByTrainingProblem.get(submission.trainingProblemId) : undefined
+      if (!problemInternalId) continue
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          problemInternalId,
+          result: 'queuing',
+          timeUsed: null,
+          memoryUsed: null,
+          wallTimeUsed: null,
+          timeoutReason: null,
+          metricSource: null,
+          score: null,
+          cases: null,
+          subtasks: null,
+          errorMessage: null,
+          judgeId: null,
+          judgeStarted: null,
+        },
+      })
+      requeued++
+    }
+    res.json({ success: true, data: { found: legacy.length, requeued, message: `已修复并重新加入 ${requeued} 条旧 Carits 提交` } })
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+/**
  * GET /api/admin/data/submission-stats
  * 查询提交统计（只读）
  */
