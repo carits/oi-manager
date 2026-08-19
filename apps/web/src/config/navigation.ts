@@ -21,6 +21,7 @@ export const superAdminNav: NavConfig = {
     { label: '概览', href: '/admin' },
     { label: '学校管理', href: '/admin/schools' },
     { label: '账号管理', href: '/admin/users' },
+    { label: '评测记录', href: '/admin/submissions' },
   ]
 }
 

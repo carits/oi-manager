@@ -11,6 +11,7 @@ export function currentWorkspacePrefix(pathname: string, fallback = '/personal',
   if (isPersonalPath(pathname)) return fallback
   const organizationId = organizationIdFromPath(pathname)
   if (organizationId) return `/org/${organizationId}${organizationModule}`
-  if (pathname.startsWith('/platform-admin/')) return '/platform-admin'
+  if (pathname === '/platform-admin' || pathname.startsWith('/platform-admin/')) return '/platform-admin'
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return '/admin'
   return fallback
 }

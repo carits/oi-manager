@@ -42,19 +42,17 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     const pageSizeNum = Math.min(parseInt(pageSize) || 20, 100)
     const skip = (pageNum - 1) * pageSizeNum
 
-    // 构建查询条件
-    // 全局评测记录显示 isGlobalVisible 的提交
-    // 包括题库提交、训练提交、已结束的比赛提交等
-    // 训练/比赛模块与全局评测记录是独立功能，不产生强制关联
+    // 普通用户只查询已进入全局评测记录的当前工作区提交。
+    // 平台管理员和超级管理员需要审核全站评测，因此查询全部用户、
+    // 全部工作区以及进行中比赛暂未全局公开的提交。
     const adminUser = isAdmin(user.role)
     const where: any = {
-      isGlobalVisible: true,
-      // 全局管理员在个人区也可以查看所有用户、所有工作区的评测记录。
-      ...(adminUser ? {} : { workspaceScope }),
+      ...(adminUser ? {} : { isGlobalVisible: true, workspaceScope }),
     }
 
-    // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有
-    if (isPersonalContext(user) || user.role === 'student') {
+    // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有。
+    // 管理员没有 organizationId，但不能因此被当作个人区普通用户。
+    if (!adminUser && (isPersonalContext(user) || user.role === 'student')) {
       // 学生只能看到自己的提交
       where.userId = user.userId
     } else if (user.role === 'teacher' || user.role === 'school_principal') {

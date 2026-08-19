@@ -47,4 +47,62 @@ describe('administrator entry without User.schoolId', () => {
     expect(me.status).toBe(200)
     expect(me.body.data.role).toBe('platform_admin')
   })
+
+  it.each(['platform_admin', 'super_admin'] as const)(
+    'lets %s list every submission, including records hidden from the global user feed',
+    async role => {
+      const admin = await createAdmin(role)
+      const firstUserId = crypto.randomUUID()
+      const secondUserId = crypto.randomUUID()
+      await prisma.user.createMany({
+        data: [
+          { id: firstUserId, username: 'submitter_' + firstUserId.slice(0, 8), passwordHash: 'test', role: 'student', status: 'active' },
+          { id: secondUserId, username: 'submitter_' + secondUserId.slice(0, 8), passwordHash: 'test', role: 'student', status: 'active' },
+        ],
+      })
+      const visibleSubmission = await prisma.submission.create({
+        data: {
+          userId: firstUserId,
+          oj: 'carits',
+          problemId: 'ADMIN-VISIBLE',
+          language: 'cpp',
+          code: 'int main(){}',
+          codeLength: 12,
+          submitMethod: 'standard',
+          result: 'accepted',
+          submitScope: 'problem',
+          workspaceScope: 'personal',
+          isGlobalVisible: true,
+        },
+      })
+      const hiddenSubmission = await prisma.submission.create({
+        data: {
+          userId: secondUserId,
+          oj: 'carits',
+          problemId: 'ADMIN-HIDDEN',
+          language: 'cpp',
+          code: 'int main(){}',
+          codeLength: 12,
+          submitMethod: 'standard',
+          result: 'judging',
+          submitScope: 'contest',
+          workspaceScope: 'campus',
+          isGlobalVisible: false,
+        },
+      })
+      const token = jwt.sign(
+        { userId: admin.id, username: admin.username, role, workspaceMode: 'work' },
+        getJwtSecret(),
+        { expiresIn: '1h' },
+      )
+
+      const response = await request(app)
+        .get('/api/submissions?pageSize=100')
+        .set('Authorization', 'Bearer ' + token)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.submissions.map((submission: { id: number }) => submission.id))
+        .toEqual(expect.arrayContaining([visibleSubmission.id, hiddenSubmission.id]))
+    },
+  )
 })
