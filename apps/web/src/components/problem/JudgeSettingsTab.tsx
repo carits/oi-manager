@@ -1241,9 +1241,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
             <label style={{ ...btnPrimary, cursor: checkerUploading ? 'not-allowed' : 'pointer' }}>
               {checkerUploading ? '上传中...' : '上传 Checker'}
-              <input ref={checkerInputRef} type="file" multiple accept=".cpp,.cc,.cxx,.h,.hpp,.txt" onChange={handleCheckerUpload} style={{ display: 'none' }} disabled={checkerUploading} />
+              <input ref={checkerInputRef} type="file" multiple accept=".cpp,.cc,.cxx" onChange={handleCheckerUpload} style={{ display: 'none' }} disabled={checkerUploading} />
             </label>
-            <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>支持 checker.cpp 与 testlib.h</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>上传 Checker C++ 源文件；系统已内置 testlib.h。</span>
           </div>
           {checkerFiles.map(file => <div key={file.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}><code>{file.fileName}</code><button type="button" onClick={() => handleCheckerDelete(file)} style={btnDanger}>删除</button></div>)}
         </div>

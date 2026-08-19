@@ -18,7 +18,7 @@ export const problemJudgeRouter = Router()
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const checkerUpload = multer({ dest: path.join(TESTDATA_ROOT, 'tmp-checkers'), limits: { fileSize: 2 * 1024 * 1024 } })
-const checkerExtensions = new Set(['.cpp', '.cc', '.cxx', '.h', '.hpp', '.txt'])
+const checkerExtensions = new Set(['.cpp', '.cc', '.cxx'])
 
 async function getCheckerProblem(id: string, user: any) {
   const problem = await prisma.problem.findUnique({ where: { id } })
@@ -50,7 +50,10 @@ problemJudgeRouter.post('/:id/checker', authenticate, checkerUpload.single('file
   const upload = req.file
   if (!upload) return res.status(400).json({ success: false, message: '请选择文件' })
   const fileName = path.basename(upload.originalname)
-  if (!checkerExtensions.has(path.extname(fileName).toLowerCase())) { fs.rmSync(upload.path, { force: true }); return res.status(400).json({ success: false, message: '不支持的文件类型' }) }
+  if (!checkerExtensions.has(path.extname(fileName).toLowerCase())) {
+    fs.rmSync(upload.path, { force: true })
+    return res.status(400).json({ success: false, message: 'Checker only supports .cpp, .cc, and .cxx source files; testlib.h is provided by the system' })
+  }
   const dir = path.join(TESTDATA_ROOT, problem.id)
   fs.mkdirSync(dir, { recursive: true })
   const target = path.join(dir, fileName)
