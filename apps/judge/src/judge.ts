@@ -2118,8 +2118,6 @@ async function judgeSubmitAnswer(params: {
 
     const finalResult = calculateFinalResult(caseResults)
     const totalScore = acmScore(finalResult)
-    caseResults.forEach(caseResult => { caseResult.score = caseResult.result === 'Accepted' ? 100 : 0 })
-
     cleanupWorkDir(checkerWorkDirToCleanup)
     if (checkerCtx.checkerFileId) sandbox.deleteFile(checkerCtx.checkerFileId).catch(() => {})
 
