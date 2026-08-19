@@ -23,6 +23,43 @@ adminDataRouter.use((req: any, res, next) => {
 })
 
 /**
+ * POST /api/admin/data/rejudge-all-carits
+ * 将数据库中所有可重测的 Carits 提交重新加入评测队列。
+ */
+adminDataRouter.post('/rejudge-all-carits', async (req, res) => {
+  try {
+    const result = await prisma.submission.updateMany({
+      where: {
+        oj: 'carits',
+        problemInternalId: { not: null },
+        result: { not: 'queuing' },
+      },
+      data: {
+        result: 'queuing',
+        timeUsed: null,
+        memoryUsed: null,
+        wallTimeUsed: null,
+        timeoutReason: null,
+        metricSource: null,
+        score: null,
+        cases: null,
+        subtasks: null,
+        errorMessage: null,
+        judgeId: null,
+        judgeStarted: null,
+      },
+    })
+
+    res.json({
+      success: true,
+      data: { requeued: result.count, message: `已将 ${result.count} 条 Carits 提交重新加入评测队列` },
+    })
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+/**
  * GET /api/admin/data/submission-stats
  * 查询提交统计（只读）
  */
