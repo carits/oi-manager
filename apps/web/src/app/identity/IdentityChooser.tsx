@@ -5,6 +5,7 @@ import { Building2, ChevronRight, ShieldCheck, UserRound } from 'lucide-react'
 import type { AuthUser, WorkspaceSummary } from '@/components/AuthProvider'
 import { apiClient } from '@/lib/apiClient'
 import { workspaceHref } from '@/components/workspace/workspaceRouting'
+import { getRoleHome } from '@/lib/roleAccess'
 import styles from './identity.module.css'
 
 type Payload = { workspaces: WorkspaceSummary[] }
@@ -15,6 +16,10 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
   const [entering, setEntering] = useState<string | null>(null)
 
   useEffect(() => {
+    if (user.role === 'super_admin' || user.role === 'platform_admin') {
+      window.location.replace(getRoleHome(user.role, 'organization'))
+      return
+    }
     void apiClient.get<Payload>('/api/workspaces').then(result => {
       if (!result.success || !result.data) {
         setError(result.message || '身份列表加载失败')

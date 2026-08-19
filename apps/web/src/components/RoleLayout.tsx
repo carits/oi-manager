@@ -5,6 +5,7 @@ import { AuthProvider } from './AuthProvider'
 import { RoleShell } from './RoleShell'
 import { SessionUnavailable } from './SessionUnavailable'
 import { getServerSession } from '@/lib/serverSession'
+import { getRoleHome } from '@/lib/roleAccess'
 
 interface RoleLayoutProps {
   children: ReactNode
@@ -53,6 +54,9 @@ export async function RoleLayout({
   const effectiveAllowedRoles = matchingOverride?.allowedRoles || allowedRoles
 
   if (!effectiveAllowedRoles.includes(session.user.role)) {
+    if (session.user.role === 'super_admin' || session.user.role === 'platform_admin') {
+      redirect(getRoleHome(session.user.role, 'organization'))
+    }
     redirect('/identity')
   }
 

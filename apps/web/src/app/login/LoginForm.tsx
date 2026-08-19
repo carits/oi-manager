@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
 import { ENV } from '@/config/env'
+import { getRoleHome } from '@/lib/roleAccess'
 import styles from './login.module.css'
 
 export function LoginForm({ nextPath }: { nextPath?: string }) {
@@ -18,7 +19,10 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (isAuthenticated && user) router.replace(nextPath || '/identity')
+    if (isAuthenticated && user) {
+      const isGlobalAdmin = user.role === 'super_admin' || user.role === 'platform_admin'
+      router.replace(isGlobalAdmin ? getRoleHome(user.role, 'organization') : (nextPath || '/identity'))
+    }
   }, [isAuthenticated, nextPath, router, user])
 
   const handleLogin = async (event: React.FormEvent) => {

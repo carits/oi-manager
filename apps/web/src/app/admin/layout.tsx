@@ -8,16 +8,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       loginRole="admin"
       homePath="/admin"
       requiredContext="platform"
-      roleOverrides={[
-        {
-          prefix: '/admin/profile',
-          allowedRoles: ['super_admin', 'platform_admin'],
-        },
-        {
-          prefix: '/admin/security',
-          allowedRoles: ['super_admin', 'platform_admin'],
-        },
-      ]}
     >
       {children}
     </RoleLayout>

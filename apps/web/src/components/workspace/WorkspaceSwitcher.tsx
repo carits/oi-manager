@@ -11,6 +11,7 @@ type Payload = { workspaces: WorkspaceSummary[] }
 
 export function WorkspaceSwitcher() {
   const { user } = useAuth()
+  const isGlobalAdmin = user?.role === 'super_admin' || user?.role === 'platform_admin'
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
@@ -45,6 +46,10 @@ export function WorkspaceSwitcher() {
     setOpen(false)
     window.location.assign(workspaceHref(workspace, module))
   }
+
+  if (isGlobalAdmin) return null
+
+  if (isGlobalAdmin) return null
 
   const title = current?.type === 'platform' ? '平台管理' : current?.type === 'personal' ? '个人' : current?.organizationName || user?.organizationName || '选择身份'
   const subtitle = current?.type === 'platform' ? '平台管理员' : current?.type === 'personal' ? user?.username : current?.relationLabel || '校园身份'

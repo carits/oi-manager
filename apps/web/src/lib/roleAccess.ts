@@ -9,7 +9,7 @@ export function getRoleHome(role?: string, context: 'organization' | 'personal' 
   if (context === 'personal') return '/personal'
   switch (role) {
     case 'super_admin':
-      return '/admin/schools'
+      return '/admin'
     case 'platform_admin':
       return '/platform-admin'
     case 'school_principal':

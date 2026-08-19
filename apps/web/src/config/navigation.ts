@@ -21,10 +21,6 @@ export const superAdminNav: NavConfig = {
     { label: '概览', href: '/admin' },
     { label: '学校管理', href: '/admin/schools' },
     { label: '账号管理', href: '/admin/users' },
-    { label: '题库管理', href: '/platform-admin/problems' },
-    { label: '评测记录', href: '/platform-admin/submissions' },
-    { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
-    { label: '平台绑定', href: '/admin/platform-bindings' },
   ]
 }
 
@@ -37,7 +33,6 @@ export const platformAdminNav: NavConfig = {
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '评测记录', href: '/platform-admin/submissions' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
-    { label: '平台绑定', href: '/platform-admin/platform-bindings' },
   ]
 }
 

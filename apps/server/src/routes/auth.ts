@@ -176,8 +176,13 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: '该账号已被禁用，请联系管理员' })
     }
 
-    const primaryMembership = await prisma.organizationMembership.findFirst({ where: { userId: user.id, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true, organizationId: true } })
-    const responseRole = primaryMembership?.memberRole || user.role
+    const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+    const primaryMembership = isGlobalAdmin
+      ? undefined
+      : await prisma.organizationMembership.findFirst({ where: { userId: user.id, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true, organizationId: true } })
+    // Preserve global administrator role over organization membership.
+    const responseRole = user.role
+    const effectiveWorkspaceMode = isGlobalAdmin ? 'work' : workspaceMode
     const schoolId = await resolveSchoolId(primaryMembership?.organizationId)
 
     // 生成 token
@@ -185,7 +190,7 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
       userId: user.id,
       role: responseRole as UserRole,
       username: user.username,
-      workspaceMode
+      workspaceMode: effectiveWorkspaceMode
     }
 
     await prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} })
@@ -223,11 +228,11 @@ authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
         userId: user.id,
         role: responseRole,
         username: user.username,
-        workspaceMode,
+        workspaceMode: effectiveWorkspaceMode,
         schoolId,
         avatar: user.avatar,
 
-        next: '/identity'
+        next: isGlobalAdmin ? (user.role === 'super_admin' ? '/admin' : '/platform-admin') : '/identity'
       }
     })
   } catch (error) {
@@ -280,10 +285,13 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: '该账号已被禁用' })
     }
 
-    const requestedOrganizationId = (req as any).user?.organizationId as string | undefined
-    const membership = requestedOrganizationId
-      ? await prisma.organizationMembership.findFirst({ where: { organizationId: requestedOrganizationId, userId, status: 'active' }, include: { StudentProfile: true, TeacherProfile: true } })
-      : await prisma.organizationMembership.findFirst({ where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' }, include: { StudentProfile: true, TeacherProfile: true } })
+    const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+    const requestedOrganizationId = isGlobalAdmin ? undefined : (req as any).user?.organizationId as string | undefined
+    const membership = isGlobalAdmin
+      ? null
+      : requestedOrganizationId
+        ? await prisma.organizationMembership.findFirst({ where: { organizationId: requestedOrganizationId, userId, status: 'active' }, include: { StudentProfile: true, TeacherProfile: true } })
+        : await prisma.organizationMembership.findFirst({ where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' }, include: { StudentProfile: true, TeacherProfile: true } })
     const organizationId = requestedOrganizationId || membership?.organizationId
     const schoolId = await resolveSchoolId(organizationId)
 
@@ -324,7 +332,7 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response) => {
         organizationMembershipId: membership?.id,
         organizationRole: membership?.memberRole,
         schoolId,
-        workspaceMode: (req as any).user.workspaceMode === 'personal' ? 'personal' : 'work',
+        workspaceMode: isGlobalAdmin ? 'work' : ((req as any).user.workspaceMode === 'personal' ? 'personal' : 'work'),
         profile: profileData,
       }
     })

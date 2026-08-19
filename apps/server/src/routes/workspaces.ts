@@ -24,6 +24,21 @@ function relationLabel(memberRole: string, relationType: string) {
 }
 
 workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
+  const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(req.user!.role)
+  if (isGlobalAdmin) {
+    return res.json({
+      success: true,
+      data: {
+        workspaces: [{
+          type: 'platform' as const,
+          organizationName: req.user!.role === 'super_admin' ? '\u8d85\u7ea7\u7ba1\u7406\u5458' : '\u5e73\u53f0\u7ba1\u7406',
+          memberRole: 'platform_admin',
+          relationLabel: req.user!.role === 'super_admin' ? '\u8d85\u7ea7\u7ba1\u7406\u5458' : '\u5e73\u53f0\u7ba1\u7406\u5458',
+          availableModules: platformModules,
+        }],
+      },
+    })
+  }
   const rows = await prisma.organizationMembership.findMany({
     where: { userId: req.user!.userId, status: 'active', Organization: { status: 'active' } },
     include: { Organization: { include: { School: { select: { id: true, shortName: true } } } } },
@@ -41,13 +56,8 @@ workspaceRouter.get('/', authenticate, asyncHandler(async (req, res) => {
     relationLabel: relationLabel(row.memberRole, row.relationType),
     availableModules: modulesForRole(row.memberRole)
   }))
-  const platform = ['super_admin', 'platform_admin'].includes(req.user!.role)
-    ? [{ type: 'platform' as const, organizationName: '平台管理', memberRole: 'platform_admin', relationLabel: '平台管理员', availableModules: platformModules }]
-    : []
-  const personal = ['super_admin', 'platform_admin'].includes(req.user!.role)
-    ? []
-    : [{ type: 'personal' as const, availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }]
-  res.json({ success: true, data: { workspaces: [...platform, ...organizations, ...personal] } })
+  const personal = { type: 'personal' as const, availableModules: ['overview', 'teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'] }
+  res.json({ success: true, data: { workspaces: [...organizations, personal] } })
 }))
 
 workspaceRouter.post('/organizations/:id/invitations', authenticate, asyncHandler(async (req, res) => {
