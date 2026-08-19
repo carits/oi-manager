@@ -218,6 +218,22 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
     }
   }
 
+  // Configured sandbox checkers are mandatory; never silently fall back.
+  if (!['default', 'strict'].includes(checkerType) && !checkerCode) {
+    cleanupWorkDir(workDir)
+    return {
+      submissionId,
+      result: 'System Error',
+      time: 0,
+      cpuTime: 0,
+      wallTime: 0,
+      memory: 0,
+      score: 0,
+      cases: [],
+      message: 'Checker 配置无效或源码不可读: ' + String((cfg as any).checker || checkerType)
+    }
+  }
+
   // 编译自定义 Checker（如果配置了 checker 源码且 checker 类型需要沙箱执行）
   const needsSandboxChecker = !['default', 'strict'].includes(checkerType) && checkerCode
   let checkerCtx: CheckerContext = {
@@ -2019,6 +2035,7 @@ async function judgeSubmitAnswer(params: {
         code: checkerCode,
         timeLimit: 60000,
         memoryLimit: 524288,
+        extraCopyIn: readCheckerDependencies(testdataPath),
       })
       if (checkerCompileResult.success) {
         checkerCtx = {
@@ -2027,6 +2044,16 @@ async function judgeSubmitAnswer(params: {
           checkerWorkDir: checkerCompileResult.workDir,
         }
         checkerWorkDirToCleanup = checkerCompileResult.workDir
+      } else {
+        return {
+          submissionId,
+          result: 'System Error',
+          time: 0,
+          memory: 0,
+          score: 0,
+          cases: [],
+          message: 'Checker compile failed: ' + (checkerCompileResult.error || 'unknown error')
+        }
       }
     }
   }
