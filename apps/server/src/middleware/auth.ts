@@ -34,6 +34,21 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload
     decoded.workspaceMode = decoded.workspaceMode === 'personal' ? 'personal' : 'work'
+
+    // 角色以数据库中的全局账号为准，兼容管理员在旧版本生成的 teacher/student token。
+    // 组织成员关系只用于普通账号切换校园身份，不能覆盖全局管理员权限。
+    const account = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { role: true, status: true }
+    })
+    if (!account || account.status === 'disabled') {
+      return res.status(401).json({ success: false, message: '账号不存在或已被禁用' })
+    }
+    if (account.role === 'super_admin' || account.role === 'platform_admin') {
+      decoded.role = account.role as UserRole
+      decoded.workspaceMode = 'work'
+    }
+
     const organizationId = req.get('x-oi-organization-id')
     if (organizationId) {
       const membership = await prisma.organizationMembership.findFirst({
