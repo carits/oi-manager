@@ -640,6 +640,15 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                         >
                           {detail.ojRemoteId}
                         </a>
+                      ) : detail.oj === 'luogu' ? (
+                        <a
+                          href={`https://www.luogu.com.cn/record/${detail.ojRemoteId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                        >
+                          {detail.ojRemoteId}
+                        </a>
                       ) : (
                         detail.ojRemoteId
                       )}
