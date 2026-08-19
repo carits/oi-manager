@@ -258,7 +258,17 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
       ],
     }
     if (filterUserId) where.userId = filterUserId
-    if (filterProblemId) where.problemId = filterProblemId
+    if (filterProblemId) {
+      // The contest UI filters by TrainingProblem.id (the stable row behind the
+      // displayed A/B/C sequence), while Submission.problemId stores the source
+      // problem identifier. Resolve the row id before building the submission
+      // query, and keep accepting source problem identifiers for older clients.
+      const trainingProblem = await prisma.trainingProblem.findFirst({
+        where: { id: filterProblemId, trainingId: id },
+        select: { Problem: { select: { problemId: true } } },
+      })
+      where.problemId = trainingProblem?.Problem.problemId ?? filterProblemId
+    }
     if (filterResult) where.result = filterResult
     if (filterLanguage) where.language = filterLanguage
 

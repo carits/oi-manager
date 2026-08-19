@@ -937,6 +937,51 @@ describe('赛制行为', () => {
       expect(res.status).toBe(200)
       expect(res.body.data.hidden).toBeFalsy()
     })
+
+    it('IOI-3: 评测记录可按比赛题目序号筛选', async () => {
+      const ioiContest = await createTestSchoolContest({
+        schoolId: schoolData.school.id,
+        createdBy: teacherUser.user.id,
+        format: 'ioi',
+      })
+      const problemA = await createTestContestProblem({ ownerId: teacherUser.user.id })
+      const problemB = await createTestContestProblem({ ownerId: teacherUser.user.id })
+      const tpA = await addProblemToContest({
+        trainingId: ioiContest.id,
+        problemId: problemA.id,
+        alias: 'A',
+        orderIndex: 0,
+      })
+      const tpB = await addProblemToContest({
+        trainingId: ioiContest.id,
+        problemId: problemB.id,
+        alias: 'B',
+        orderIndex: 1,
+      })
+      const submissionA = await createTestSubmission({
+        userId: studentUser.user.id,
+        trainingId: ioiContest.id,
+        problemId: problemA.problemId,
+        trainingProblemId: tpA.id,
+      })
+      const submissionB = await createTestSubmission({
+        userId: studentUser.user.id,
+        trainingId: ioiContest.id,
+        problemId: problemB.problemId,
+        trainingProblemId: tpB.id,
+      })
+
+      const res = await createAuthenticatedRequest(app, studentToken)
+        .get(`/api/trainings/${ioiContest.id}/submissions`)
+        .query({ problemId: tpB.id })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.total).toBe(1)
+      expect(res.body.data.submissions).toHaveLength(1)
+      expect(res.body.data.submissions[0].id).toBe(submissionB.id)
+      expect(res.body.data.submissions[0].problemOrderIndex).toBe(1)
+      expect(res.body.data.submissions.some((submission: any) => submission.id === submissionA.id)).toBe(false)
+    })
   })
 
   describe('ICPC 赛制', () => {
