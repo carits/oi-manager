@@ -88,7 +88,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 
 ## 2026-08-21 远端部署快照
 
-- 开发服务器当前运行提交 `113f884`，公网优化预览构建为 `mr1BJwJo7HV2aQdSMWmLA`（Web 代码未变），公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
+- 开发服务器当前运行提交 `7b9f1fa`，公网优化预览构建为 `mr1BJwJo7HV2aQdSMWmLA`（Web 代码未变），公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
   项目仍处开发阶段，不代表正式投产。
 - 数据库迁移 8/8；校内题库迁移前的 PostgreSQL 完整备份为
   `/data/backups/oi-manager/oi_manager_pre_school_library_20260802_145336.dump`，已通过
