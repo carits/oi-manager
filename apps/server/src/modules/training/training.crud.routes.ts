@@ -166,7 +166,7 @@ trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: 
     // 计算当前状态
     const now = new Date()
     let computedStatus = training.status
-    if (training.status !== 'finished') {
+    {
       if (now < training.startTime) computedStatus = 'upcoming'
       else if (now >= training.startTime && now <= training.endTime) computedStatus = 'ongoing'
       else computedStatus = 'finished'

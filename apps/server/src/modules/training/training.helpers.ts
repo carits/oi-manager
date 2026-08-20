@@ -116,7 +116,6 @@ const TRAINING_STATUS_ORDER: Record<string, number> = {
 
 /** 计算训练/比赛当前状态，避免列表排序依赖过期 status 字段。 */
 export function getComputedTrainingStatus(training: { status: string; startTime: Date; endTime: Date }, now = new Date()): TrainingListStatus {
-  if (training.status === 'finished') return 'finished'
   if (now < training.startTime) return 'upcoming'
   if (now <= training.endTime) return 'ongoing'
   return 'finished'

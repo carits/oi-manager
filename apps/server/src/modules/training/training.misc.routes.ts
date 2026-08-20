@@ -97,13 +97,11 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
 
   const now = new Date()
   const computedStatus =
-    training.status === 'finished'
-      ? 'finished'
-      : now < training.startTime
-        ? 'upcoming'
-        : now <= training.endTime
-          ? 'ongoing'
-          : 'finished'
+    now < training.startTime
+      ? 'upcoming'
+      : now <= training.endTime
+        ? 'ongoing'
+        : 'finished'
   if (computedStatus !== training.status) {
     await prisma.training.update({
       where: { id },
