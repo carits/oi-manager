@@ -95,6 +95,8 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
   `WORKSPACE_MODE_REQUIRED` 或 `SCHOOL_MEMBERSHIP_REQUIRED`。
 - 跨校题和学校题对平台/超级管理员都返回 `404`，平台岗位不是学校内容的旁路。
 
+平台题库的管理权限不要求 `organizationId`：平台/超级管理员在独立平台工作区可以管理平台草稿、题面、评测配置和 Checker；学校题仍必须匹配当前组织和学校岗位。
+
 ## 前端会话
 
 `AuthProvider` 根据 `role:userId:workspaceMode` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新

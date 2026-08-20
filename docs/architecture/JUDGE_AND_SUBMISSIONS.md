@@ -96,3 +96,5 @@ Docker 服务需要 cgroup/privileged 能力才能可靠检测内存限制。测
 
 重点日志事件包括认证失败、注册、任务派发、心跳超时、任务恢复、编译失败和结果写入。
 日志可以记录 `judgeId/submissionId`，不得记录 Judge Token 或用户源码全文。
+
+Checker 上传仅接受 C/C++ 源文件，`testlib.h` 由系统提供；下载接口只返回受鉴权的 API 地址，不返回服务器绝对路径，且题目目录必须位于 `TESTDATA_DIR` 下。

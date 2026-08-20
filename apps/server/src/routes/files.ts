@@ -18,6 +18,9 @@ import { canModifyProblem, canViewProblem } from '../modules/problem/problem.acc
 
 export const filesRouter = Router()
 
+const ALLOWED_UPLOAD_CATEGORIES = new Set(['pdf', 'attachment', 'avatar', 'image', 'testdata'])
+const ALLOWED_OWNER_TYPES = new Set(['problem', 'contest', 'user', 'team', 'attachment'])
+
 // ==================== Multer 配置 ====================
 
 // 临时上传目录
@@ -70,6 +73,15 @@ filesRouter.post('/upload', authenticate, upload.single('file'), async (req, res
         success: false,
         message: '缺少必要参数: category, ownerType, ownerId'
       })
+    }
+
+    // Runtime validation is required here: these values arrive from multipart
+    // form data and TypeScript casts do not protect the database. In
+    // particular, an admin must not be able to create arbitrary owner types
+    // that bypass the storage access switch.
+    if (!ALLOWED_UPLOAD_CATEGORIES.has(String(category)) || !ALLOWED_OWNER_TYPES.has(String(ownerType))) {
+      fs.unlinkSync(req.file.path)
+      return res.status(400).json({ success: false, message: '文件类别或业务归属类型无效' })
     }
 
     // 验证上传权限：用户必须有权限操作指定的 ownerType/ownerId

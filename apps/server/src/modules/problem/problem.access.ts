@@ -24,9 +24,10 @@ export function problemLibraryKey(scope: ProblemLibraryScope, organizationId?: s
 
 export function canViewProblem(user: JwtPayload, problem: ProblemAccessRecord): boolean {
   if (problem.libraryScope === 'platform') {
+    if (isPlatformManager(user.role)) return true
     if (!isOrganizationContext(user)) return problem.status === 'published'
     if (user.role === 'student') return false
-    return isPlatformManager(user.role) || problem.status === 'published'
+    return problem.status === 'published'
   }
   if (!isOrganizationContext(user) || !isSchoolStaff(user.role) || problem.organizationId !== user.organizationId) return false
   return user.role === 'school_principal' || problem.ownerId === user.userId || problem.status === 'published'
@@ -39,8 +40,11 @@ export function canUseProblem(user: JwtPayload, problem: ProblemAccessRecord): b
 }
 
 export function canModifyProblem(user: JwtPayload, problem: ProblemAccessRecord): boolean {
-  if (!isOrganizationContext(user)) return false
+  // Platform managers operate in the platform workspace, which intentionally
+  // has no organizationId. Requiring a school context here made platform
+  // drafts, judge configs, files and checkers impossible to edit.
   if (problem.libraryScope === 'platform') return isPlatformManager(user.role)
+  if (!isOrganizationContext(user)) return false
   if (!isSchoolStaff(user.role) || problem.organizationId !== user.organizationId) return false
   return user.role === 'school_principal' || problem.ownerId === user.userId
 }

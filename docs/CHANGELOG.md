@@ -14,6 +14,7 @@ source_of_truth: Git history
 - 修复 OI/IOI 排行榜按 `cases` 筛选导致的漏记；修复 ACM 排行榜对 Queuing/Judging 的失败次数误计；统一补充 `judging` 标准结果。
 - 补充旧校园 JWT 的 `schoolId → School.organizationId` 兼容解析并继续校验活动成员关系；迁移测试夹具到当前组织模型。
 - 验证：Server 构建通过；提交详情、OI 无 cases 排名、ACM 进行中状态定向测试通过；历史全量套件仍有旧契约项未迁移。已推送 `cf00977` 并部署预览构建 `zQiyJOVrDFBVDsAmPOtaH`，3000/3002 健康检查通过。
+- 修复平台题库管理权限：平台/超级管理员在无组织上下文的平台工作区可管理平台草稿、评测配置和 Checker，学校题仍保持组织隔离；通用文件上传增加运行时白名单，Checker 路径与绝对路径泄露风险已收紧。待本轮重新部署。
 
 ## 2026-08-19
 

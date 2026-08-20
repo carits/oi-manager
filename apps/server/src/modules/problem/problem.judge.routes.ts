@@ -20,6 +20,15 @@ const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'test
 const checkerUpload = multer({ dest: path.join(TESTDATA_ROOT, 'tmp-checkers'), limits: { fileSize: 2 * 1024 * 1024 } })
 const checkerExtensions = new Set(['.cpp', '.cc', '.cxx'])
 
+function checkerDirectory(problemId: string): string {
+  const root = path.resolve(TESTDATA_ROOT)
+  const directory = path.resolve(root, problemId)
+  if (directory !== root && !directory.startsWith(`${root}${path.sep}`)) {
+    throw new Error('Invalid checker directory')
+  }
+  return directory
+}
+
 async function getCheckerProblem(id: string, user: any) {
   const problem = await prisma.problem.findUnique({ where: { id } })
   if (!problem || !canModifyProblem(user, problem)) return null
@@ -39,7 +48,7 @@ problemJudgeRouter.get('/:id/checker/:fileName/download', authenticate, asyncHan
   const fileName = path.basename(req.params.fileName)
   const file = await prisma.problemChecker.findFirst({ where: { problemId: problem.id, fileName } })
   if (!file) return res.status(404).json({ success: false, message: '文件不存在' })
-  const target = path.join(TESTDATA_ROOT, problem.id, fileName)
+  const target = path.join(checkerDirectory(problem.id), fileName)
   if (!fs.existsSync(target)) return res.status(404).json({ success: false, message: '文件不存在' })
   res.download(target, fileName)
 }))
@@ -54,11 +63,12 @@ problemJudgeRouter.post('/:id/checker', authenticate, checkerUpload.single('file
     fs.rmSync(upload.path, { force: true })
     return res.status(400).json({ success: false, message: 'Checker only supports .cpp, .cc, and .cxx source files; testlib.h is provided by the system' })
   }
-  const dir = path.join(TESTDATA_ROOT, problem.id)
+  const dir = checkerDirectory(problem.id)
   fs.mkdirSync(dir, { recursive: true })
   const target = path.join(dir, fileName)
   fs.renameSync(upload.path, target)
-  const file = await prisma.problemChecker.upsert({ where: { problemId_fileName: { problemId: problem.id, fileName } }, update: { fileSize: upload.size, fileUrl: target, language: path.extname(fileName).slice(1) }, create: { id: crypto.randomUUID(), problemId: problem.id, fileName, fileSize: upload.size, fileUrl: target, language: path.extname(fileName).slice(1) } })
+  const downloadUrl = `/api/problems/${encodeURIComponent(problem.id)}/checker/${encodeURIComponent(fileName)}/download`
+  const file = await prisma.problemChecker.upsert({ where: { problemId_fileName: { problemId: problem.id, fileName } }, update: { fileSize: upload.size, fileUrl: downloadUrl, language: path.extname(fileName).slice(1) }, create: { id: crypto.randomUUID(), problemId: problem.id, fileName, fileSize: upload.size, fileUrl: downloadUrl, language: path.extname(fileName).slice(1) } })
   res.json({ success: true, data: file })
 }))
 
@@ -68,7 +78,7 @@ problemJudgeRouter.delete('/:id/checker/:checkerId', authenticate, asyncHandler(
   const file = await prisma.problemChecker.findFirst({ where: { id: req.params.checkerId, problemId: problem.id } })
   if (!file) return res.status(404).json({ success: false, message: '文件不存在' })
   await prisma.problemChecker.delete({ where: { id: file.id } })
-  fs.rmSync(path.join(TESTDATA_ROOT, problem.id, file.fileName), { force: true })
+  fs.rmSync(path.join(checkerDirectory(problem.id), file.fileName), { force: true })
   res.json({ success: true })
 }))
 

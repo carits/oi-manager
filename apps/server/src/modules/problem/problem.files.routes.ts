@@ -280,6 +280,11 @@ problemFilesRouter.post('/:id/statements/pdf', authenticate, problemUpload.singl
     const user = (req as any).user
     const { type = 'statement' } = req.body // type: 'statement' | 'solution'
 
+    if (type !== 'statement' && type !== 'solution') {
+      if (req.file?.path) fs.unlinkSync(req.file.path)
+      return res.status(400).json({ success: false, message: 'type 必须是 statement 或 solution' })
+    }
+
     if (!req.file) {
       return res.status(400).json({ success: false, message: '请上传 PDF 文件' })
     }
