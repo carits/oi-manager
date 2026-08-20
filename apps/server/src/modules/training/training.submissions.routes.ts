@@ -253,11 +253,9 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     const where: any = {
       submitScope: training.type === 'contest' ? 'contest' : 'training',
       trainingId: id,
-      OR: [
-        { result: 'queuing' },
-        { result: 'judging' },
-        { cases: { not: null } },
-      ],
+      // 评测记录使用全局统一的 result 状态集合。不要用 cases 是否存在
+      // 作为可见条件，否则 OLE/CE/系统错误等没有测试点详情的结果会被漏掉。
+      result: { not: null },
     }
     if (filterUserId) where.userId = filterUserId
     if (filterProblemId) {
