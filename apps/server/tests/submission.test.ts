@@ -485,6 +485,49 @@ describe('训练提交隔离', () => {
     expect(hasTrainingSubmission).toBe(true)
   })
 
+  it('TI2.1: 没有测试点明细的终态提交仍可查看详情', async () => {
+    const relation = await prisma.trainingProblem.findUniqueOrThrow({
+      where: { id: trainingProblem.id },
+      include: { Problem: true },
+    })
+    const submission = await prisma.submission.create({
+      data: {
+        userId: studentUser.user.id,
+        problemId: relation.Problem.problemId,
+        oj: 'carits',
+        language: 'cpp',
+        code: 'int main() { while (true) {} }',
+        codeLength: 31,
+        submitMethod: 'standard',
+        result: 'ole',
+        score: 0,
+        errorMessage: 'output limit exceeded',
+        submitScope: 'training',
+        submitSource: 'training',
+        trainingId: training.id,
+        trainingProblemId: trainingProblem.id,
+        cases: null,
+        isGlobalVisible: false,
+      },
+    })
+
+    const listRes = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/trainings/${training.id}/submissions`)
+    expect(listRes.status, JSON.stringify(listRes.body)).toBe(200)
+    const listItem = listRes.body.data.submissions.find((item: any) => item.id === submission.id)
+    expect(listItem).toMatchObject({ result: 'ole', trainingProblemId: trainingProblem.id })
+
+    const detailRes = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/trainings/${training.id}/submissions/${submission.id}`)
+    expect(detailRes.status).toBe(200)
+    expect(detailRes.body.data).toMatchObject({
+      result: 'ole',
+      errorMessage: 'output limit exceeded',
+      trainingProblemId: trainingProblem.id,
+      cases: null,
+    })
+  })
+
   it('TI3: 全局提交列表排除训练提交', async () => {
     const res = await createAuthenticatedRequest(app, studentToken)
       .get('/api/submissions')

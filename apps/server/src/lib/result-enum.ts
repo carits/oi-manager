@@ -18,6 +18,7 @@ export type ResultEnum =
   | 'unknown_error'
   | 'submit_failed'
   | 'queuing'
+  | 'judging'
 
 /** 标准结果值列表（与前端 JUDGE_RESULT_OPTIONS 一致） */
 export const STANDARD_RESULTS: readonly ResultEnum[] = [
@@ -34,6 +35,7 @@ export const STANDARD_RESULTS: readonly ResultEnum[] = [
   'unknown_error',
   'submit_failed',
   'queuing',
+  'judging',
 ]
 
 /**
@@ -68,7 +70,6 @@ export function normalizeResult(result: string): ResultEnum {
     'output_limit_exceeded': 'ole',
     'presentation_error': 'pe',
     'waiting': 'queuing',
-    'judging': 'queuing',
     'pending': 'queuing',
     'submitted': 'queuing',
     'pending_review': 'queuing',

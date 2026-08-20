@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-18
+last_verified: 2026-08-21
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -12,8 +12,8 @@ source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 登录 API 使用唯一的用户名和密码入口。`POST /api/auth/login` 接收 `workspaceMode`；缺省或旧
 `mode: "campus"` 等价于 `work`，`mode: "personal"` 保持兼容。非法模式返回 `400`。
 
-成功登录响应中的岗位来自首个有效组织成员关系；无有效成员关系时才使用全局账号角色。这样同一账号
-在不同校园的成员岗位不会由过时的全局角色覆盖。
+成功登录响应中的岗位使用数据库全局角色；普通账号的组织成员关系只用于当前校园工作区的成员身份。
+`super_admin` 和 `platform_admin` 永远保留全局角色，不会被学校成员关系覆盖。
 
 ## JWT
 
@@ -40,8 +40,11 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 - `role` 是账号永久岗位；切换工作区不会修改角色、岗位扩展 ID 或学校关系。
 - `workspaceMode=work`：进入管理或校园工作台，业务资源使用 `resourceScope=campus`。
 - `workspaceMode=personal`：五种角色共用个人工作区，业务资源使用 `resourceScope=personal`。
+- 管理员工作区是严格独立的：超级管理员只进入 `/admin`，平台管理员只进入 `/platform-admin`；管理员不创建或切换个人/校园工作区。
 - `POST /api/auth/switch-workspace` 为所有已登录角色刷新 Cookie 和兼容 JWT；首次切入时事务性创建 `PersonalProfile`。
 - 旧 `studentMode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期，分别映射至 `workspaceMode` 和新切换接口。
+- 旧校园 JWT 仅携带 `schoolId` 时，服务端在 `workspaceMode=work` 且请求没有组织头的情况下，会通过
+  `School.organizationId` 解析组织，再重新校验活动成员关系；不能仅凭旧字段绕过组织权限。
 - 个人工作区只输出用户名、头像、公开简介和个人 Rating，不输出实名、学校、职称或后台岗位。
 
 `organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；

@@ -237,6 +237,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/trainings/:id/create-makeup-homework` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/finish` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/problems` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/rejudge/preview` | 见对应路由实现 |
+| `GET` | `/api/trainings/:id/submission-users` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/rejudge` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/start` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/submit` | 见对应路由实现 |

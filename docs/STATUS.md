@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-19
+last_verified: 2026-08-21
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
@@ -41,6 +41,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - Carits 本地提交、评测队列、Judge WebSocket、详情和重新评测。
 - 超级管理员和平台管理员的评测记录页提供全平台全量视图，包含所有用户、个人区、校园区和比赛提交，支持总数、范围提示和 20/50/100 条分页浏览。
 - 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
+- 比赛提交列表、详情和排行榜已统一纳入 OLE/CE/RE 等无测试点明细终态；Queuing/Judging 可查询，ACM 不把进行中记录计入失败次数。
 - 隔离的 PostgreSQL 单元测试与 Playwright 全 UI 测试。
 
 ## 最近验证
@@ -82,9 +83,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - Prisma Schema：51 个模型。
 - HTTP 接口清单：258 个端点；文档检查随本轮新增路由、模型与端点同步。
 
-## 2026-08-02 远端部署快照
+## 2026-08-21 远端部署快照
 
-- 开发服务器当前运行提交 `f887f1d`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
+- 开发服务器当前运行提交 `cf00977`，公网优化预览构建为 `zQiyJOVrDFBVDsAmPOtaH`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
   项目仍处开发阶段，不代表正式投产。
 - 数据库迁移 8/8；校内题库迁移前的 PostgreSQL 完整备份为
   `/data/backups/oi-manager/oi_manager_pre_school_library_20260802_145336.dump`，已通过
@@ -110,6 +111,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - 正式环境必须设置严格 CORS、独立 JWT/Judge/加密密钥。
 
 ## 当前限制
+- 2026-08-21 定向回归已覆盖无 cases 终态详情、OI 排名和 ACM 进行中状态；旧全量套件仍有部分测试夹具待继续迁移，不能标记为全量通过。
 - 交互题、通信题和提交答案题目前沿用各自的测试点执行流程，赛制统一计分已覆盖，尚未提供 ACM 失败后的提前停止优化。
 
 - 当前服务器没有启用正式部署配置。

@@ -49,7 +49,25 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       decoded.workspaceMode = 'work'
     }
 
-    const organizationId = req.get('x-oi-organization-id')
+    let organizationId = req.get('x-oi-organization-id')
+    // Compatibility for campus JWTs issued before organizationId became the
+    // request context key. schoolId is a School.id, so it must be resolved via
+    // School.organizationId and still pass the active-membership check below.
+    if (
+      !organizationId
+      && decoded.workspaceMode === 'work'
+      && decoded.schoolId
+      && decoded.role !== 'super_admin'
+      && decoded.role !== 'platform_admin'
+    ) {
+      const legacySchool = await prisma.school.findUnique({
+        where: { id: decoded.schoolId },
+        select: { organizationId: true, status: true },
+      })
+      if (legacySchool?.status === 'active' && legacySchool.organizationId) {
+        organizationId = legacySchool.organizationId
+      }
+    }
     if (organizationId) {
       const membership = await prisma.organizationMembership.findFirst({
         where: { organizationId, userId: decoded.userId, status: 'active', Organization: { status: 'active' } },

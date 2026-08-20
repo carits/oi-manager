@@ -22,7 +22,7 @@ interface CreateTestSchoolContestOptions {
 
 /**
  * 创建测试校级比赛
- * 注意：校级比赛 teamId=null，schoolId 有值
+ * 注意：校级比赛 teamId=null，通过 School.organizationId 归属校园组织
  */
 export async function createTestSchoolContest(options: CreateTestSchoolContestOptions) {
   const {
@@ -43,10 +43,15 @@ export async function createTestSchoolContest(options: CreateTestSchoolContestOp
   const now = Date.now()
   const defaultStartTime = startTime ?? new Date(now - 3600000) // 1小时前开始
   const defaultEndTime = endTime ?? new Date(now + 3600000) // 1小时后结束
+  const school = await prisma.school.findUniqueOrThrow({
+    where: { id: schoolId },
+    select: { organizationId: true },
+  })
+  if (!school.organizationId) throw new Error(`Test school ${schoolId} has no organization`)
 
   const training = await prisma.training.create({
     data: {
-      schoolId,
+      organizationId: school.organizationId,
       teamId: null, // 校级比赛 teamId 必须为 null
       title,
       description,

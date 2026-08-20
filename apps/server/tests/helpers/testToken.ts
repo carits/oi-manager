@@ -17,7 +17,7 @@ export function generateTestToken(payload: {
   workspaceMode?: 'work' | 'personal'
   studentMode?: 'campus' | 'personal'
 }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
+  return jwt.sign({ workspaceMode: 'work', ...payload }, JWT_SECRET, { expiresIn: '1h' })
 }
 
 /**

@@ -8,6 +8,13 @@ source_of_truth: Git history
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-21
+
+- 修复比赛提交状态一致性：训练提交详情不再因缺失 `cases` 把 OLE/CE/RE 等终态误报 404；列表返回稳定的 `TrainingProblem.id`，并保留评测错误信息。
+- 修复 OI/IOI 排行榜按 `cases` 筛选导致的漏记；修复 ACM 排行榜对 Queuing/Judging 的失败次数误计；统一补充 `judging` 标准结果。
+- 补充旧校园 JWT 的 `schoolId → School.organizationId` 兼容解析并继续校验活动成员关系；迁移测试夹具到当前组织模型。
+- 验证：Server 构建通过；提交详情、OI 无 cases 排名、ACM 进行中状态定向测试通过；历史全量套件仍有旧契约项未迁移。已推送 `cf00977` 并部署预览构建 `zQiyJOVrDFBVDsAmPOtaH`，3000/3002 健康检查通过。
+
 ## 2026-08-19
 
 ### Administrator full submission visibility

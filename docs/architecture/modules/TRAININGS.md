@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-21
 source_of_truth: apps/server/src/modules/training and school contest routes
 ---
 
@@ -48,3 +48,9 @@ source_of_truth: apps/server/src/modules/training and school contest routes
 - 排名和成绩：按角色隐藏不应公开的用户、源码或内部字段。
 - 重新评测：教师/负责人或平台级管理员，具体由提交 scope 决定。
 
+### 提交结果一致性
+
+- 比赛提交列表、提交详情和排行榜都按 `result` 识别记录；不能以 `cases` 非空作为记录存在条件。
+- ACM 榜单对 `queuing`/`judging` 显示已提交但不增加失败次数；终态 OLE/CE/RE 等按一次未通过尝试处理。
+- OI/IOI 榜单使用终态记录的分数（缺失分数按 0），不因缺少测试点 JSON 而漏掉提交。
+- 历史校园 JWT 若只有 `schoolId`，服务端在工作区为 `work` 时解析学校组织并验证活动成员关系。

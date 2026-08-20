@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-18
+last_verified: 2026-08-21
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -21,6 +21,10 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 - 外部 OJ 提交：通过平台账号或用户绑定提交，并由同步/轮询逻辑更新结果。
 - 训练提交：额外关联 `trainingId`，按训练、作业或比赛权限控制可见性。
 - 全局提交：题库上下文中的个人提交，按题目所有权和角色决定可见性。
+
+训练提交列表、详情和排行榜使用同一套 `Submission.result` 状态事实，不以 `cases` 是否存在作为“已评测”
+的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
+可显示为进行中。比赛题目标识统一返回 `TrainingProblem.id`，源题号仅用于兼容旧记录。
 
 ## 比赛远程提交 ID 可见性
 

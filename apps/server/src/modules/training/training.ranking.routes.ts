@@ -9,6 +9,7 @@ import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
+import { isAcceptedResult } from '../../lib/result-enum'
 import {
   canAccessTraining,
   canManageTraining,
@@ -118,14 +119,16 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         FROM "Submission"
         WHERE "submitScope" = ${submitScopeValue}
           AND "trainingId" = ${id}
-          AND "cases" IS NOT NULL
-          AND score = (
-            SELECT MAX(s2.score) FROM "Submission" s2
+          AND result NOT IN ('queuing', 'judging', 'pending_review')
+          AND result <> ''
+          AND COALESCE(score, 0) = (
+            SELECT MAX(COALESCE(s2.score, 0)) FROM "Submission" s2
             WHERE s2."userId" = "Submission"."userId"
               AND s2."problemId" = "Submission"."problemId"
               AND s2."submitScope" = ${submitScopeValue}
               AND s2."trainingId" = ${id}
-              AND s2."cases" IS NOT NULL
+              AND s2.result NOT IN ('queuing', 'judging', 'pending_review')
+              AND s2.result <> ''
           )
           ${adminFilter}
         GROUP BY "userId", "problemId"
@@ -188,10 +191,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           submitScope: submitScopeValue,
           trainingId: id,
           ...adminFilterWhere,
-          OR: [
-            { result: 'queuing' },
-            { cases: { not: null } },
-          ],
+          result: { not: '' },
         },
         // 同一毫秒内按提交 ID 稳定排序，保证首 A 归属不会因数据库返回顺序变化。
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -203,6 +203,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         penalty: number
         attempts: number
         acceptedAtMinutes: number | null
+        submitted: boolean
       }>>()
       const firstAcceptedUserByProblem = new Map<string, string>()
 
@@ -215,15 +216,19 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
             penalty: 0,
             attempts: 0,
             acceptedAtMinutes: null,
+            submitted: false,
           })
         }
         const stat = problemStats.get(sub.problemId)!
 
         if (stat.solved) continue
 
+        stat.submitted = true
+        if (sub.result === 'queuing' || sub.result === 'judging' || sub.result === 'pending_review') continue
+
         stat.attempts++
         // Submission.problemId stores Problem.problemId (external ID like '1005'), not Problem.id (UUID)
-        if (sub.result === 'accepted' || (sub.score ?? 0) >= (problems.find(p => p.Problem.problemId === sub.problemId)?.points ?? 100)) {
+        if (isAcceptedResult(sub.result) || (sub.score ?? 0) >= (problems.find(p => p.Problem.problemId === sub.problemId)?.points ?? 100)) {
           stat.solved = true
           const timeDiff = (sub.createdAt.getTime() - trainingStartTime.getTime()) / 60000
           stat.acceptedAtMinutes = Math.max(0, Math.floor(timeDiff))
@@ -269,7 +274,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
             acceptedAtMinutes,
             alias: p.alias ?? '',
             isFirstAccepted: solved && firstAcceptedUserByProblem.get(p.Problem.problemId) === uid,
-            submitted: attempts > 0,
+            submitted: ps?.submitted ?? false,
           }
         }
 

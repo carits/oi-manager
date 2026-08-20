@@ -320,14 +320,15 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     // 获取题目别名和 orderIndex（通过 problemId 关联 TrainingProblem）
     const trainingProblems = await prisma.trainingProblem.findMany({
       where: { trainingId: id },
-      select: { alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { problemId: true, judgeConfig: true } } },
+      select: { id: true, problemId: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { problemId: true, judgeConfig: true } } },
     })
-    const aliasMap = new Map<string, string>(
-      trainingProblems.map(tp => [tp.Problem.problemId, tp.alias] as [string, string])
-    )
-    const orderIndexMap = new Map<string, number>(
-      trainingProblems.map(tp => [tp.Problem.problemId, tp.orderIndex] as [string, number])
-    )
+    // New submissions store Problem.problemId while a small amount of legacy data
+    // stores Problem.id. Resolve both to the stable TrainingProblem row.
+    const trainingProblemByProblemId = new Map<string, typeof trainingProblems[number]>()
+    for (const trainingProblem of trainingProblems) {
+      trainingProblemByProblemId.set(trainingProblem.Problem.problemId, trainingProblem)
+      trainingProblemByProblemId.set(trainingProblem.problemId, trainingProblem)
+    }
 
     // 参赛者展示名只从比赛所属组织成员档案读取；个人比赛只使用用户名。
     const userIds = [...new Set(submissions.map(s => s.userId))]
@@ -354,15 +355,17 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
     const hideRemoteSubmissionId = !isAdminUser
 
     const paginated = paginatedResponse(
-      submissions.map(s => ({
+      submissions.map(s => {
+        const trainingProblem = trainingProblemByProblemId.get(s.problemId)
+        return ({
         id: s.id,
         userId: s.userId,
         userName: nameMap.get(s.userId) || '未知',
         username: usernameMap.get(s.userId) || '未知',
         problemSourceHidden: hideProblemIdentity,
-        problemAlias: aliasMap.get(s.problemId) || s.problemId,
-        problemOrderIndex: orderIndexMap.get(s.problemId) ?? 0,
-        trainingProblemId: s.problemId,
+        problemAlias: trainingProblem?.alias || s.problemId,
+        problemOrderIndex: trainingProblem?.orderIndex ?? 0,
+        trainingProblemId: s.trainingProblemId || trainingProblem?.id || null,
         ...(hideProblemIdentity ? {} : { oj: s.oj }),
         language: s.language,
         result: hideOiResults ? 'submitted' : s.result,
@@ -372,7 +375,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
         codeLength: s.codeLength,
         ojRemoteId: hideRemoteSubmissionId ? null : s.ojRemoteId,
         createdAt: s.createdAt.toISOString(),
-      })),
+      })}),
       total,
       pageNum,
       pageSizeNum
@@ -417,12 +420,8 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
       where: { id: parseInt(submissionId) },
     })
 
-    if (!submission || submission.trainingId !== id) {
-      return res.status(404).json({ success: false, message: '提交不存在' })
-    }
-
-    // 过滤未经过正规评测流程的假数据
-    if (submission.result !== 'queuing' && !submission.cases) {
+    const expectedSubmitScope = training.type === 'contest' ? 'contest' : 'training'
+    if (!submission || submission.trainingId !== id || submission.submitScope !== expectedSubmitScope) {
       return res.status(404).json({ success: false, message: '提交不存在' })
     }
 
@@ -444,10 +443,21 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
     }
 
     // 获取题目别名
-    const trainingProblem = await prisma.trainingProblem.findFirst({
-      where: { trainingId: id, Problem: { problemId: submission.problemId } },
-      include: { Problem: { select: { platform: true, judgeConfig: true } } },
-    })
+    const trainingProblem = submission.trainingProblemId
+      ? await prisma.trainingProblem.findFirst({
+          where: { id: submission.trainingProblemId, trainingId: id },
+          include: { Problem: { select: { platform: true, judgeConfig: true } } },
+        })
+      : await prisma.trainingProblem.findFirst({
+          where: {
+            trainingId: id,
+            OR: [
+              { problemId: submission.problemId },
+              { Problem: { problemId: submission.problemId } },
+            ],
+          },
+          include: { Problem: { select: { platform: true, judgeConfig: true } } },
+        })
     const problemAlias = trainingProblem?.alias || submission.problemId
     const ojPlatform = trainingProblem?.Problem?.platform || submission.oj || 'carits'
     const judgeConfigText = trainingProblem?.judgeConfigSnapshot || trainingProblem?.Problem?.judgeConfig || null
@@ -489,18 +499,17 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
         hideRemoteId: hideRemoteSubmissionId,
         ojAccountUsername: null,
         submittedAt: submission.createdAt.toISOString(),
-        errorMessage: null,
+        errorMessage: hideOiDetail ? null : submission.errorMessage,
         judgeMode: judgePresentation.mode,
         judgeConfig: judgeConfigText ? { mode: judgePresentation.mode } : undefined,
         trainingId: id,
-        trainingProblemId: trainingProblem?.id || null,
+        trainingProblemId: trainingProblem?.id || submission.trainingProblemId || null,
         problemAlias,
         problemOrderIndex: trainingProblem?.orderIndex ?? null,
         contestFormat: training.format,
         score: hideOiDetail ? null : submission.score,
         cases: hideOiDetail ? null : cases,
         subtasks: hideOiDetail ? null : subtasks,
-        ...(hideProblemIdentity ? {} : { trainingProblemId: submission.problemId }),
       },
     })
 }, '查询失败'))

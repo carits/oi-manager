@@ -474,6 +474,56 @@ describe('训练路由兼容校级比赛', () => {
       ).length
       expect(firstAcceptedCount).toBe(1)
     })
+
+    it('TR6: IOI 排名包含没有测试点明细的已完成提交', async () => {
+      const noCasesStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const submission = await createTestSubmission({
+        userId: noCasesStudent.user.id,
+        trainingId: schoolContest.id,
+        problemId: contestProblem.problemId,
+        trainingProblemId: trainingProblem.id,
+        result: 'ole',
+        score: 0,
+      })
+      await prisma.submission.update({ where: { id: submission.id }, data: { cases: null } })
+
+      const res = await createAuthenticatedRequest(app, studentToken)
+        .get(`/api/trainings/${schoolContest.id}/ranking`)
+
+      expect(res.status).toBe(200)
+      const row = res.body.data.ranking.find((item: any) => item.userId === noCasesStudent.user.id)
+      expect(row).toBeDefined()
+      expect(row.problems[trainingProblem.id]).toMatchObject({ score: 0, submitted: true })
+    })
+
+    it('TR7: ICPC 排队和评测中提交可打开但不计失败次数', async () => {
+      const pendingStudent = await createTestUser({ role: 'student', schoolId: schoolData.school.id })
+      const icpcContest = await createTestSchoolContest({
+        schoolId: schoolData.school.id,
+        createdBy: teacherUser.teacherId!,
+        title: 'ICPC 评测中状态测试',
+        format: 'icpc',
+        type: 'contest',
+        status: 'ongoing',
+        startTime: new Date(Date.now() - 60 * 60 * 1000),
+      })
+      const problem = await createTestContestProblem({ ownerId: teacherUser.teacherId!, title: '等待评测题目' })
+      const trainingProblemRow = await addProblemToContest({ trainingId: icpcContest.id, problemId: problem.id, alias: 'A', points: 100 })
+      await createTestSubmission({
+        userId: pendingStudent.user.id,
+        trainingId: icpcContest.id,
+        problemId: problem.problemId,
+        trainingProblemId: trainingProblemRow.id,
+        result: 'judging',
+        score: 0,
+      })
+
+      const res = await createAuthenticatedRequest(app, studentToken)
+        .get(`/api/trainings/${icpcContest.id}/ranking`)
+
+      const row = res.body.data.ranking.find((item: any) => item.userId === pendingStudent.user.id)
+      expect(row.problems[trainingProblemRow.id]).toMatchObject({ submitted: true, attempts: 0, solved: false })
+    })
   })
 
   // ==================== 笔记 API ====================
