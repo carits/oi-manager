@@ -23,6 +23,7 @@ import { useTrainingActions } from './hooks/useTrainingActions'
 
 import { TrainingProblemList } from './components/TrainingProblemList'
 import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
+import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
 import { Bell, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -93,6 +94,13 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const [showRejudgeModal, setShowRejudgeModal] = useState(false)
   const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string; displayName?: string }>>([])
   const [rejudgeUsersLoading, setRejudgeUsersLoading] = useState(false)
+  const [rankingSubmissionContext, setRankingSubmissionContext] = useState<{
+    userId: string
+    userName?: string
+    username?: string
+    trainingProblemId: string
+    problemAlias: string
+  } | null>(null)
 
   const loadRejudgeUsers = useCallback(async () => {
     setRejudgeUsersLoading(true)
@@ -454,7 +462,12 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         {activeTab === 'ranking' && canViewRanking && (
           <AsyncRegion state={rankingState} onRetry={refreshRanking}>
             {(data) => (
-              <TrainingRankTable rankingData={data} currentUserId={user?.userId} />
+              <TrainingRankTable
+                rankingData={data}
+                currentUserId={user?.userId}
+                canViewOtherSubmissions={training.isAdmin}
+                onOpenSubmissions={setRankingSubmissionContext}
+              />
             )}
           </AsyncRegion>
         )}
@@ -472,6 +485,18 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         usersLoading={rejudgeUsersLoading}
         onLoadUsers={loadRejudgeUsers}
         onSuccess={async () => { await sub.retry(); refreshRanking(); refresh() }}
+      />
+      <TrainingRankingSubmissionsModal
+        isOpen={rankingSubmissionContext !== null}
+        onClose={() => setRankingSubmissionContext(null)}
+        trainingId={trainingId}
+        training={training}
+        userId={rankingSubmissionContext?.userId || ''}
+        userName={rankingSubmissionContext?.userName}
+        username={rankingSubmissionContext?.username}
+        trainingProblemId={rankingSubmissionContext?.trainingProblemId || ''}
+        problemAlias={rankingSubmissionContext?.problemAlias || ''}
+        onViewSubmission={id => sub.setDetailSubmissionId(id)}
       />
       {/* Submission Detail Modal */}
       <SubmissionDetailModal

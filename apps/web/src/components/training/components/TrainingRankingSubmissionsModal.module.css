@@ -1,0 +1,27 @@
+.content { display: grid; gap: 16px; min-width: 0; }
+.context { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; color: var(--text-secondary); background: var(--bg-muted); border: 1px solid var(--border); border-radius: var(--radius-md); font-size: var(--text-sm); }
+.context strong { color: var(--text-primary); }
+.context span { padding-left: 10px; border-left: 1px solid var(--border); }
+.tableWrap { max-width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.table { width: 100%; min-width: 760px; border-collapse: collapse; }
+.table th { height: 40px; padding: 0 12px; color: var(--text-secondary); background: var(--bg-muted); border-bottom: 1px solid var(--border); font-size: var(--text-xs); font-weight: 650; text-align: left; white-space: nowrap; }
+.table td { padding: 12px; color: var(--text-primary); border-bottom: 1px solid var(--border); font-size: var(--text-sm); white-space: nowrap; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.row { cursor: pointer; transition: background var(--transition-fast); }
+.row:hover { background: var(--bg-hover); }
+.link { display: inline-flex; align-items: center; gap: 5px; padding: 0; color: var(--primary); font: inherit; font-weight: 650; }
+.link:hover { text-decoration: underline; }
+.result { display: inline-flex; padding: 3px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 650; }
+.accepted { color: var(--success-text); background: var(--success-light); }
+.pending { color: var(--info-text); background: var(--info-light); }
+.failed { color: var(--error-text); background: var(--error-light); }
+.warning { color: var(--warning-text); background: var(--warning-light); }
+.neutral { color: var(--text-secondary); background: var(--bg-muted); }
+.numeric { font-variant-numeric: tabular-nums; }
+.time { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.loading, .empty { display: grid; place-items: center; gap: 8px; min-height: 180px; color: var(--text-secondary); font-size: var(--text-sm); }
+.loading { display: flex; }
+.spin { animation: spin 1s linear infinite; }
+.footer { display: flex; justify-content: flex-end; gap: 10px; width: 100%; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .context { align-items: flex-start; flex-direction: column; gap: 5px; } .context span { padding-left: 0; border-left: 0; } }

@@ -145,7 +145,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
 
       const ranking = Array.from(userScores.entries()).map(([uid, problemScores]) => {
         let totalScore = 0
-        const problemDetails: Record<string, { score: number; alias: string }> = {}
+        const problemDetails: Record<string, { score: number; alias: string; submitted: boolean }> = {}
         let lastSubmitAt = new Date(0)
 
         for (const p of problems) {
@@ -155,7 +155,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           const ps = problemScores.get(externalProblemId)
           const score = ps?.maxScore ?? 0
           totalScore += score
-          problemDetails[p.id] = { score, alias: p.alias ?? '' }
+          problemDetails[p.id] = { score, alias: p.alias ?? '', submitted: Boolean(ps) }
           if (ps && ps.lastSubmitAt > lastSubmitAt) lastSubmitAt = ps.lastSubmitAt
         }
 
@@ -247,6 +247,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           acceptedAtMinutes: number | null
           alias: string
           isFirstAccepted: boolean
+          submitted: boolean
         }> = {}
 
         for (const p of problems) {
@@ -268,6 +269,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
             acceptedAtMinutes,
             alias: p.alias ?? '',
             isFirstAccepted: solved && firstAcceptedUserByProblem.get(p.Problem.problemId) === uid,
+            submitted: attempts > 0,
           }
         }
 

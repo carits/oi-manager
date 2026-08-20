@@ -15,6 +15,7 @@ interface RankProblem {
 interface ICPCProblemResult {
   solved: boolean
   attempts: number
+  submitted?: boolean
   acceptedAtMinutes?: number | null
   isFirstAccepted: boolean
 }
@@ -113,9 +114,19 @@ function rankingColumnWidths(format: RankingFormat, problemCount: number) {
 interface TrainingRankTableProps {
   rankingData: any
   currentUserId?: string
+  canViewOtherSubmissions?: boolean
+  onOpenSubmissions?: (context: RankingSubmissionContext) => void
 }
 
-export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTableProps) {
+export interface RankingSubmissionContext {
+  userId: string
+  userName?: string
+  username?: string
+  trainingProblemId: string
+  problemAlias: string
+}
+
+export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubmissions = false, onOpenSubmissions }: TrainingRankTableProps) {
   const [query, setQuery] = useState('')
   const ranking = rankingData?.ranking || []
   const problems: RankProblem[] = rankingData?.problems || []
@@ -241,15 +252,23 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
                   <>
                     <td className={`${styles.center} ${styles.numeric} ${format === 'ioi' ? styles.ioiTotalScore : styles.oiTotalScore}`}><strong>{row.totalScore}</strong></td>
                     {problems.map(problem => {
-                      const score = row.problems[problem.id]?.score ?? 0
+                      const problemResult = row.problems[problem.id]
+                      const score = problemResult?.score ?? 0
                       const maxScore = problem.points ?? 100
+                      const canOpen = Boolean(onOpenSubmissions && problemResult?.submitted && (canViewOtherSubmissions || row.userId === currentUserId))
+                      const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, trainingProblemId: problem.id, problemAlias: problemLabel(problem) }) }
                       return (
                         <td
-                          aria-label={`${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分`}
-                          className={`${styles.center} ${styles.numeric} ${styles.rankScoreCell} ${scoreClass(format, score, maxScore)}`}
+                          aria-label={canOpen ? `${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分，点击查看提交记录` : `${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分`}
                           data-score-state={score >= maxScore ? 'full' : score > 0 ? 'partial' : 'zero'}
+                          data-clickable={canOpen || undefined}
+                          onClick={open}
+                          onKeyDown={event => { if (canOpen && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); open() } }}
+                          role={canOpen ? 'button' : undefined}
+                          tabIndex={canOpen ? 0 : undefined}
+                          title={canOpen ? `${problemLabel(problem)}：${score} / ${maxScore} 分，点击查看提交记录` : `${problemLabel(problem)}：${score} / ${maxScore} 分`}
+                          className={`${styles.center} ${styles.numeric} ${styles.rankScoreCell} ${scoreClass(format, score, maxScore)} ${canOpen ? styles.rankInteractiveCell : ''}`}
                           key={problem.id}
-                          title={`${problemLabel(problem)}：${score} / ${maxScore} 分`}
                         >
                           {score}
                         </td>
@@ -261,15 +280,23 @@ export function TrainingRankTable({ rankingData, currentUserId }: TrainingRankTa
                     <td className={`${styles.center} ${styles.numeric}`}><strong>{row.solvedCount}</strong></td>
                     <td className={`${styles.center} ${styles.numeric} ${styles.muted}`}>{row.totalPenalty}</td>
                     {problems.map(problem => {
-                      const presentation = describeICPCResult(problemLabel(problem), row.problems[problem.id])
+                      const problemResult = row.problems[problem.id]
+                      const presentation = describeICPCResult(problemLabel(problem), problemResult)
+                      const canOpen = Boolean(onOpenSubmissions && problemResult?.submitted && (canViewOtherSubmissions || row.userId === currentUserId))
+                      const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, trainingProblemId: problem.id, problemAlias: problemLabel(problem) }) }
                       return (
                         <td
-                          aria-label={presentation.description}
-                          className={`${styles.center} ${styles.numeric} ${styles.icpcResultCell} ${presentation.className}`}
+                          aria-label={canOpen ? `${presentation.description}，点击查看提交记录` : presentation.description}
+                          className={`${styles.center} ${styles.numeric} ${styles.icpcResultCell} ${presentation.className} ${canOpen ? styles.rankInteractiveCell : ''}`}
                           data-problem-column="true"
                           data-result={presentation.state}
+                          data-clickable={canOpen || undefined}
+                          onClick={open}
+                          onKeyDown={event => { if (canOpen && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); open() } }}
+                          role={canOpen ? 'button' : undefined}
+                          tabIndex={canOpen ? 0 : undefined}
+                          title={canOpen ? `${presentation.description}，点击查看提交记录` : presentation.description}
                           key={problem.id}
-                          title={presentation.description}
                         >
                           {presentation.text}
                         </td>
