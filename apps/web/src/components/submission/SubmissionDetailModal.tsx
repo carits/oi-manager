@@ -339,7 +339,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
       ) : error && !detail ? (
         <LoadError message={error} onRetry={() => window.location.reload()} />
       ) : detail ? (
-        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '75vh', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
           {/* 提交信息表格 */}
           <div style={{
             display: 'grid',
@@ -458,9 +458,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             position: 'relative',
             border: '1px solid #e5e7eb',
             borderRadius: '8px',
-            overflow: 'hidden',
-            flex: 1,
-            minHeight: 0,
+            overflow: 'visible',
           }}>
             {/* Copy Code 按钮 */}
             <button
@@ -483,8 +481,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
             {/* 代码区域 */}
             <div style={{
-              maxHeight: '60vh',
-              overflow: 'auto',
+              overflow: 'visible',
               background: 'var(--bg-muted)',
             }}>
               <pre style={{
@@ -492,6 +489,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                 padding: '1rem',
                 fontSize: '0.875rem',
                 lineHeight: 1.6,
+                overflowX: 'auto',
               }}>
                 <code
                   dangerouslySetInnerHTML={{ __html: getHighlightedCode() }}
