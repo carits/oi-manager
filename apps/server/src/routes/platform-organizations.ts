@@ -8,7 +8,10 @@ import { prisma } from '../prisma'
 
 export const platformOrganizationRouter = Router()
 
-const platformOnly = [authenticate, authorize('super_admin', 'platform_admin')]
+// School and principal lifecycle is a global governance operation. Platform
+// admins manage platform problems/OJ operations, but must not create, edit or
+// enumerate school organizations through this route.
+const superAdminOnly = [authenticate, authorize('super_admin')]
 
 function schoolSelect() {
   return {
@@ -43,7 +46,7 @@ async function serializeSchool(school: Awaited<ReturnType<typeof prisma.school.f
   }
 }
 
-platformOrganizationRouter.get('/', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.get('/', ...superAdminOnly, asyncHandler(async (req, res) => {
   const { page, pageSize, skip } = parsePagination(req.query)
   const where = { Organization: { type: 'school' } }
   const [schools, total] = await Promise.all([
@@ -54,14 +57,14 @@ platformOrganizationRouter.get('/', ...platformOnly, asyncHandler(async (req, re
   res.json({ success: true, data: { ...paginatedResponse(rows, total, page, pageSize) } })
 }))
 
-platformOrganizationRouter.get('/:organizationId', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.get('/:organizationId', ...superAdminOnly, asyncHandler(async (req, res) => {
   const school = await prisma.school.findFirst({ where: { organizationId: req.params.organizationId, Organization: { type: 'school' } } })
   const data = await serializeSchool(school)
   if (!data) return res.status(404).json({ success: false, message: '学校不存在' })
   res.json({ success: true, data })
 }))
 
-platformOrganizationRouter.post('/', ...platformOnly, asyncHandler(async (req: AuthRequest, res) => {
+platformOrganizationRouter.post('/', ...superAdminOnly, asyncHandler(async (req: AuthRequest, res) => {
   const name = typeof req.body.name === 'string' ? req.body.name.trim() : ''
   const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
   const teacherName = typeof req.body.teacherName === 'string' ? req.body.teacherName.trim() : ''
@@ -91,7 +94,7 @@ platformOrganizationRouter.post('/', ...platformOnly, asyncHandler(async (req: A
   res.status(201).json({ success: true, data: { organizationId: created } })
 }))
 
-platformOrganizationRouter.post('/:organizationId/principal', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.post('/:organizationId/principal', ...superAdminOnly, asyncHandler(async (req, res) => {
   const school = await prisma.school.findFirst({ where: { organizationId: req.params.organizationId, Organization: { type: 'school' } } })
   const username = typeof req.body.username === 'string' ? req.body.username.trim() : ''
   const name = typeof req.body.teacherName === 'string' ? req.body.teacherName.trim() : ''
@@ -112,7 +115,7 @@ platformOrganizationRouter.post('/:organizationId/principal', ...platformOnly, a
   res.status(201).json({ success: true, data: { teacher: principal } })
 }))
 
-platformOrganizationRouter.put('/:organizationId', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.put('/:organizationId', ...superAdminOnly, asyncHandler(async (req, res) => {
   const school = await prisma.school.findFirst({ where: { organizationId: req.params.organizationId, Organization: { type: 'school' } } })
   if (!school) return res.status(404).json({ success: false, message: '学校不存在' })
   const text = (key: string) => req.body[key] === undefined ? undefined : typeof req.body[key] === 'string' ? req.body[key].trim() || null : null
@@ -124,7 +127,7 @@ platformOrganizationRouter.put('/:organizationId', ...platformOnly, asyncHandler
   res.json({ success: true })
 }))
 
-platformOrganizationRouter.get('/:organizationId/students', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.get('/:organizationId/students', ...superAdminOnly, asyncHandler(async (req, res) => {
   const { page, pageSize, skip } = parsePagination(req.query)
   const where = { Membership: { organizationId: req.params.organizationId, status: 'active' } }
   const [profiles, total] = await Promise.all([
@@ -137,7 +140,7 @@ platformOrganizationRouter.get('/:organizationId/students', ...platformOnly, asy
   res.json({ success: true, data: paginatedResponse(profiles.map(profile => ({ id: profile.id, name: profile.name, enrollmentYear: profile.enrollmentYear, rating: profile.rating, user: profile.Membership.User, headTeacher: profile.headTeacherMembershipId ? { name: names.get(profile.headTeacherMembershipId) || '-' } : null })), total, page, pageSize) })
 }))
 
-platformOrganizationRouter.get('/:organizationId/teachers', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.get('/:organizationId/teachers', ...superAdminOnly, asyncHandler(async (req, res) => {
   const { page, pageSize, skip } = parsePagination(req.query)
   const where = { Membership: { organizationId: req.params.organizationId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } } }
   const [profiles, total] = await Promise.all([
@@ -147,7 +150,7 @@ platformOrganizationRouter.get('/:organizationId/teachers', ...platformOnly, asy
   res.json({ success: true, data: paginatedResponse(profiles.map(profile => ({ id: profile.membershipId, name: profile.name, title: profile.title, email: profile.email, phone: profile.phone, user: { ...profile.Membership.User, role: profile.Membership.memberRole } })), total, page, pageSize) })
 }))
 
-platformOrganizationRouter.put('/:organizationId/principal', ...platformOnly, asyncHandler(async (req, res) => {
+platformOrganizationRouter.put('/:organizationId/principal', ...superAdminOnly, asyncHandler(async (req, res) => {
   const membershipId = typeof req.body.membershipId === 'string' ? req.body.membershipId : ''
   const school = await prisma.school.findFirst({ where: { organizationId: req.params.organizationId, Organization: { type: 'school' } } })
   if (!school) return res.status(404).json({ success: false, message: '学校不存在' })

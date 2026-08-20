@@ -97,6 +97,10 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 平台题库的管理权限不要求 `organizationId`：平台/超级管理员在独立平台工作区可以管理平台草稿、题面、评测配置和 Checker；学校题仍必须匹配当前组织和学校岗位。
 
+### 学校组织生命周期
+
+学校列表、创建/编辑学校、负责人和校园成员总览接口仅允许 `super_admin`；`platform_admin` 不得通过 API 旁路进入学校管理。
+
 ## 前端会话
 
 `AuthProvider` 根据 `role:userId:workspaceMode` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新
