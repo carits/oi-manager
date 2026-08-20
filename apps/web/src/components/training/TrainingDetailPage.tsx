@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import apiClient from '@/lib/apiClient'
@@ -22,7 +22,8 @@ import { useTrainingSubmissions } from './hooks/useTrainingSubmissions'
 import { useTrainingActions } from './hooks/useTrainingActions'
 
 import { TrainingProblemList } from './components/TrainingProblemList'
-import { Bell, Edit3, FilePlus2, LockKeyhole, Trash2 } from 'lucide-react'
+import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
+import { Bell, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -90,30 +91,16 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const [makeupEndTime, setMakeupEndTime] = useState('')
   const [makeupLoading, setMakeupLoading] = useState(false)
   const [showRejudgeModal, setShowRejudgeModal] = useState(false)
-  const [rejudgeScope, setRejudgeScope] = useState<'all' | 'problem' | 'user_problem'>('all')
-  const [rejudgeProblem, setRejudgeProblem] = useState('')
-  const [rejudgeUser, setRejudgeUser] = useState('')
-  const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string }>>([])
-  const [rejudgeLoading, setRejudgeLoading] = useState(false)
-  const [rejudgeMessage, setRejudgeMessage] = useState('')
+  const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string; displayName?: string }>>([])
+  const [rejudgeUsersLoading, setRejudgeUsersLoading] = useState(false)
 
-  const loadRejudgeUsers = async () => {
+  const loadRejudgeUsers = useCallback(async () => {
+    setRejudgeUsersLoading(true)
     try {
-      const data = await apiClient.query<{ users: Array<{ id: string; username: string }> }>('/api/trainings/' + trainingId + '/submission-users')
+      const data = await apiClient.query<{ users: Array<{ id: string; username: string; displayName?: string }> }>('/api/trainings/' + trainingId + '/submission-users')
       setRejudgeUsers(data.users)
-    } catch (error) { setRejudgeMessage(error instanceof Error ? error.message : '用户列表获取失败') }
-  }
-
-  const executeRejudge = async () => {
-    if ((rejudgeScope !== 'all' && !rejudgeProblem) || (rejudgeScope === 'user_problem' && !rejudgeUser)) return
-    setRejudgeLoading(true); setRejudgeMessage('')
-    const scope = rejudgeScope === 'all' ? { type: 'all' } : rejudgeScope === 'problem' ? { type: 'problem', trainingProblemId: rejudgeProblem } : { type: 'user_problem', trainingProblemId: rejudgeProblem, userId: rejudgeUser }
-    const result = await apiClient.mutate<{ resetCount: number; skippedCount: number }>('/api/trainings/' + trainingId + '/rejudge', 'POST', { scope })
-    setRejudgeLoading(false)
-    if (!result.ok) { setRejudgeMessage(result.error.message); return }
-    setRejudgeMessage('已重置 ' + result.data.resetCount + ' 条提交，跳过 ' + result.data.skippedCount + ' 条进行中的提交')
-    await sub.retry(); refreshRanking()
-  }
+    } catch { setRejudgeUsers([]) } finally { setRejudgeUsersLoading(false) }
+  }, [trainingId])
 
   useEffect(() => {
     const nextTab = searchParams.get('tab') as TabType | null
@@ -317,7 +304,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           <PageHeader
             title={training.title}
             breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
-            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" onClick={() => { setShowRejudgeModal(true); void loadRejudgeUsers() }}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
+            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
           />
           <div className={styles.stats}>
             <div className={styles.stat}><span className={styles.statLabel}>赛制</span><span className={styles.statValue}>{fmtLabel}</span></div>
@@ -475,13 +462,17 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         )}
       </div>
 
-      <Modal isOpen={showRejudgeModal} onClose={() => setShowRejudgeModal(false)} title="重新评测比赛" footer={<><Button variant="text" onClick={() => setShowRejudgeModal(false)}>取消</Button><Button variant="danger" disabled={rejudgeLoading || (rejudgeScope !== 'all' && !rejudgeProblem) || (rejudgeScope === 'user_problem' && !rejudgeUser)} onClick={() => void executeRejudge()}>{rejudgeLoading ? '正在重测…' : '确认重测'}</Button></>}>
-        <p>选择重测范围。排队或正在评测中的提交会自动跳过。</p>
-        <select value={rejudgeScope} onChange={e => setRejudgeScope(e.target.value as typeof rejudgeScope)}><option value="all">全部比赛</option><option value="problem">指定题目</option><option value="user_problem">指定用户 + 题目</option></select>
-        {rejudgeScope !== 'all' && <select value={rejudgeProblem} onChange={e => setRejudgeProblem(e.target.value)}><option value="">选择题目</option>{problems.map(problem => <option key={problem.id} value={problem.id}>{problem.alias || problem.problemTitle || problem.id}</option>)}</select>}
-        {rejudgeScope === 'user_problem' && <select value={rejudgeUser} onChange={e => setRejudgeUser(e.target.value)}><option value="">选择用户</option>{rejudgeUsers.map(user => <option key={user.id} value={user.id}>{user.username}</option>)}</select>}
-        {rejudgeMessage && <p>{rejudgeMessage}</p>}
-      </Modal>
+      <TrainingRejudgeModal
+        isOpen={showRejudgeModal}
+        onClose={() => setShowRejudgeModal(false)}
+        trainingTitle={training.title}
+        trainingId={trainingId}
+        problems={problems}
+        users={rejudgeUsers}
+        usersLoading={rejudgeUsersLoading}
+        onLoadUsers={loadRejudgeUsers}
+        onSuccess={async () => { await sub.retry(); refreshRanking(); refresh() }}
+      />
       {/* Submission Detail Modal */}
       <SubmissionDetailModal
         isOpen={sub.detailSubmissionId !== null}
