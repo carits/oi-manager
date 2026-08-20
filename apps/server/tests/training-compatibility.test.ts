@@ -122,7 +122,8 @@ describe('训练路由兼容校级比赛', () => {
       const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: teacherUser.teacherId! })
       const teamTraining = await prisma.training.create({
         data: {
-          schoolId: null,
+          organizationId: null,
+          scope: 'campus',
           teamId: team.id,
           title: '团队训练',
           format: 'ioi',
@@ -197,7 +198,8 @@ describe('训练路由兼容校级比赛', () => {
       const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: teacherUser.teacherId! })
       const teamTraining = await prisma.training.create({
         data: {
-          schoolId: null,
+          organizationId: null,
+          scope: 'campus',
           teamId: team.id,
           title: '团队训练',
           format: 'ioi',
@@ -280,7 +282,8 @@ describe('训练路由兼容校级比赛', () => {
       const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: teacherUser.teacherId! })
       const teamContest = await prisma.training.create({
         data: {
-          schoolId: null,
+          organizationId: null,
+          scope: 'campus',
           teamId: team.id,
           title: '团队比赛',
           format: 'ioi',
@@ -711,7 +714,8 @@ describe('团队比赛回归测试', () => {
     // 创建团队训练
     teamTraining = await prisma.training.create({
       data: {
-        schoolId: null,
+        organizationId: null,
+        scope: 'campus',
         teamId: team.id,
         title: '回归测试团队训练',
         format: 'ioi',
@@ -727,7 +731,8 @@ describe('团队比赛回归测试', () => {
     // 创建团队比赛
     teamContest = await prisma.training.create({
       data: {
-        schoolId: null,
+        organizationId: null,
+        scope: 'campus',
         teamId: team.id,
         title: '回归测试团队比赛',
         format: 'ioi',
@@ -764,7 +769,7 @@ describe('团队比赛回归测试', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.data.teamId).toBe(team.id)
-    expect(res.body.data.schoolId).toBeNull()
+    expect(res.body.data.organizationId).toBeNull()
   })
 
   it('RG3: 团队比赛详情正常', async () => {
@@ -827,10 +832,7 @@ describe('团队比赛回归测试', () => {
     // 团队比赛不应出现在校级比赛列表中
     const schoolContestList = await createAuthenticatedRequest(app, ownerToken)
       .get(`/api/schools/${schoolData.school.id}/contests`)
-    expect(schoolContestList.status).toBe(200)
-    expect(schoolContestList.body.success).toBe(true)
-    const schoolContestIds = schoolContestList.body.data.map((c: any) => c.id)
-    expect(schoolContestIds).not.toContain(teamContest.id)
-    expect(schoolContestIds).toContain(schoolContest.id)
+    expect(schoolContestList.status).toBe(410)
+    expect(schoolContestList.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
   })
 })

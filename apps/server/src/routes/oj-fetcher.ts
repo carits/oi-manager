@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import net from 'net'
+import dns from 'dns/promises'
 /**
  * OJ 题目拉取 API
  * @description 从外部 OJ 平台拉取题目信息的 API 路由
@@ -31,6 +32,8 @@ const authenticatedUsers = [
 
 const MAX_REMOTE_ATTACHMENT_BYTES = 50 * 1024 * 1024
 const MAX_REMOTE_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_BATCH_PROBLEM_IDS = 200
+const MAX_COOKIE_CONFIG_BYTES = 64 * 1024
 
 export function isPrivateRemoteHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, '')
@@ -53,6 +56,20 @@ export function validateRemoteUrl(rawUrl: string): URL {
   try { url = new URL(rawUrl) } catch { throw new Error('远程 URL 无效') }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('仅支持 HTTP(S) 远程 URL')
   if (isPrivateRemoteHost(url.hostname)) throw new Error('禁止访问内网或本机地址')
+  return url
+}
+
+/**
+ * Validate both the URL text and the resolved destination. Hostname-only
+ * checks are insufficient because a public DNS name can resolve to a private
+ * address (including numeric IPv4 aliases), which would reintroduce SSRF.
+ */
+export async function validateRemoteUrlAsync(rawUrl: string): Promise<URL> {
+  const url = validateRemoteUrl(rawUrl)
+  const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true })
+  if (addresses.length === 0 || addresses.some(({ address }) => isPrivateRemoteHost(address))) {
+    throw new Error('禁止访问解析到内网或本机地址的远程 URL')
+  }
   return url
 }
 
@@ -101,6 +118,10 @@ ojFetcherRouter.get('/platforms/:platform/config', ...superAdminOnly, async (req
   try {
     const { platform } = req.params
 
+    if (!isKnownPlatform(platform)) {
+      return res.status(400).json({ success: false, message: `不支持的 OJ 平台: ${platform}` })
+    }
+
     const config = await prisma.ojPlatformConfig.findUnique({
       where: { platform },
     })
@@ -142,6 +163,10 @@ ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, async (req
     const { platform } = req.params
     const { cookies } = req.body
 
+    if (!isKnownPlatform(platform)) {
+      return res.status(400).json({ success: false, message: `不支持的 OJ 平台: ${platform}` })
+    }
+
     if (
       cookies != null &&
       (typeof cookies !== 'object' || Array.isArray(cookies) ||
@@ -161,6 +186,9 @@ ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, async (req
     const cookiesJson = Object.keys(normalizedCookies).length > 0
       ? JSON.stringify(normalizedCookies)
       : null
+    if (cookiesJson && Buffer.byteLength(cookiesJson, 'utf8') > MAX_COOKIE_CONFIG_BYTES) {
+      return res.status(400).json({ success: false, message: 'Cookie 配置过大' })
+    }
 
     const config = await prisma.ojPlatformConfig.upsert({
       where: { platform },
@@ -260,6 +288,13 @@ ojFetcherRouter.post('/jobs/batch', ...adminOnly, async (req: Request, res: Resp
       return res.status(400).json({
         success: false,
         message: `不支持的 OJ 平台: ${platform}`,
+      })
+    }
+
+    if (problemIds.length > MAX_BATCH_PROBLEM_IDS || problemIds.some((id) => typeof id !== 'string')) {
+      return res.status(400).json({
+        success: false,
+        message: `题目数量不能超过 ${MAX_BATCH_PROBLEM_IDS}，且题号必须是字符串`,
       })
     }
 
@@ -743,7 +778,7 @@ async function downloadAttachmentInternal(
   }
 
   let downloadUrl = url
-  let parsedDownloadUrl = validateRemoteUrl(downloadUrl)
+  let parsedDownloadUrl = await validateRemoteUrlAsync(downloadUrl)
   let response = await fetch(downloadUrl, { headers: headersForRemoteUrl(headers, parsedDownloadUrl, platform), redirect: 'manual' })
 
   // 处理重定向
@@ -753,7 +788,7 @@ async function downloadAttachmentInternal(
     const location = response.headers.get('location')
     if (location && !visitedUrls.has(location)) {
       visitedUrls.add(location)
-      parsedDownloadUrl = validateRemoteUrl(new URL(location, downloadUrl).toString())
+        parsedDownloadUrl = await validateRemoteUrlAsync(new URL(location, downloadUrl).toString())
       downloadUrl = parsedDownloadUrl.toString()
       response = await fetch(downloadUrl, {
         headers: headersForRemoteUrl(headers, parsedDownloadUrl, platform),
@@ -932,7 +967,7 @@ async function downloadAndUploadImage(
     }
 
     // 下载图片；禁止本机/内网地址，且仅对可信 OJ 域名携带 Cookie。
-    let parsedImageUrl = validateRemoteUrl(fullUrl)
+    let parsedImageUrl = await validateRemoteUrlAsync(fullUrl)
     let response = await fetch(fullUrl, { headers: headersForRemoteUrl(headers, parsedImageUrl, 'luogu'), redirect: 'manual' })
 
     // 处理重定向
@@ -940,7 +975,7 @@ async function downloadAndUploadImage(
     while ((response.status === 301 || response.status === 302) && redirectCount < 5) {
       const location = response.headers.get('location')
       if (location) {
-        parsedImageUrl = validateRemoteUrl(new URL(location, fullUrl).toString())
+        parsedImageUrl = await validateRemoteUrlAsync(new URL(location, fullUrl).toString())
         fullUrl = parsedImageUrl.toString()
         // 重定向时使用目标域名的 Referer
         try {
@@ -1196,7 +1231,7 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
 
     // 洛谷附件下载会重定向到 OSS，需要手动处理
     let downloadUrl = url
-    let parsedDownloadUrl = validateRemoteUrl(downloadUrl)
+    let parsedDownloadUrl = await validateRemoteUrlAsync(downloadUrl)
     let response = await fetch(downloadUrl, {
       headers: headersForRemoteUrl(headers, parsedDownloadUrl, 'luogu'),
       redirect: 'manual'  // 手动处理重定向
@@ -1218,7 +1253,7 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
         }
         visitedUrls.add(location)
         logger.info('oj_fetcher_redirect_followed', { action: 'oj_fetch', metadata: { statusCode: response.status, location } })
-        parsedDownloadUrl = validateRemoteUrl(new URL(location, downloadUrl).toString())
+      parsedDownloadUrl = await validateRemoteUrlAsync(new URL(location, downloadUrl).toString())
         downloadUrl = parsedDownloadUrl.toString()
         // 继续使用 manual 模式处理重定向
         response = await fetch(downloadUrl, {

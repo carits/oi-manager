@@ -15,6 +15,7 @@
     "preview:canary:stop": "bash scripts/stop-preview-canary.sh",
     "preview:promote": "bash scripts/promote-preview.sh",
     "preview:rollback": "bash scripts/rollback-preview.sh",
+    "start": "bash scripts/restart-dev.sh",
     "restart": "bash scripts/restart-dev.sh",
     "stop": "bash scripts/stop-dev.sh",
     "build": "pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate && pnpm --filter server build && pnpm --filter web build && pnpm --filter @oi-manager/judge build",

@@ -9,6 +9,17 @@ LOG_FILE="${DEV_LOG_FILE:-/tmp/oi-dev.log}"
 cd "$ROOT_DIR"
 mkdir -p "$RUN_DIR"
 
+# pnpm's lifecycle `restart` runs `stop`, `restart`, then `start`. The
+# restart script already starts the services, so the trailing `start` phase
+# must be idempotent instead of launching a second process group.
+if [ "${npm_lifecycle_event:-}" = "start" ]; then
+  if curl --fail --silent --show-error http://127.0.0.1:3002/api/health >/dev/null 2>&1 \
+    && curl --fail --silent --show-error http://127.0.0.1:3001 >/dev/null 2>&1; then
+    echo "Development services are already healthy; start phase is a no-op."
+    exit 0
+  fi
+fi
+
 "$ROOT_DIR/scripts/stop-dev.sh"
 
 ensure_compose_service() {

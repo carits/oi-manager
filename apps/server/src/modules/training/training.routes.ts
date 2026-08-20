@@ -9,7 +9,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate, getResourceScope } from '../../middleware/auth'
+import { authenticate, getResourceScope, isAdmin } from '../../middleware/auth'
 import { prisma } from '../../prisma'
 import { trainingCrudRouter } from './training.crud.routes'
 import { trainingProblemsRouter } from './training.problems.routes'
@@ -27,7 +27,9 @@ trainingsRouter.use('/trainings/:id', authenticate, async (req, res, next) => {
   if (!Number.isFinite(id) || !req.user) return next()
 
   const training = await prisma.training.findUnique({ where: { id }, select: { scope: true } })
-  if (!training || training.scope !== getResourceScope(req.user)) {
+  // Global administrators can inspect both campus and personal/team scopes;
+  // regular users remain constrained to the active workspace scope.
+  if (!training || (!isAdmin(req.user.role) && training.scope !== getResourceScope(req.user))) {
     return res.status(404).json({ success: false, message: '训练不存在' })
   }
   next()

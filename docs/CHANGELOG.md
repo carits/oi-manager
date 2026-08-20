@@ -10,6 +10,11 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-21
 
+- 修复 `pnpm restart` 的生命周期行为：补齐根 `start` 脚本并让重启后的 `start` 阶段幂等，避免服务已健康启动却因缺少 `start/server.js` 返回失败。
+- 加固外部 OJ 下载的 SSRF 防护：URL 校验会解析 DNS 并拒绝解析到回环、内网、链路本地或元数据地址的主机，覆盖数字 IPv4 别名和重定向目标；安全测试 3/3 通过。
+- Fixed training route scope prefiltering for global administrators: super admins and platform admins can inspect campus/team contests without an active organization context, while regular users remain scope-isolated. Migrated compatibility fixtures; `training-compatibility.test.ts` now passes 37/37.
+- Hardened OJ fetch configuration and batch jobs: platform names must be allowlisted, cookie configuration is capped at 64 KiB, and batches are capped at 200 string problem IDs.
+
 - 修复比赛提交状态一致性：训练提交详情不再因缺失 `cases` 把 OLE/CE/RE 等终态误报 404；列表返回稳定的 `TrainingProblem.id`，并保留评测错误信息。
 - 修复 OI/IOI 排行榜按 `cases` 筛选导致的漏记；修复 ACM 排行榜对 Queuing/Judging 的失败次数误计；统一补充 `judging` 标准结果。
 - 补充旧校园 JWT 的 `schoolId → School.organizationId` 兼容解析并继续校验活动成员关系；迁移测试夹具到当前组织模型。

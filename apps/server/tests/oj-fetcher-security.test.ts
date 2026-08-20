@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPrivateRemoteHost, validateRemoteUrl } from '../src/routes/oj-fetcher'
+import { isPrivateRemoteHost, validateRemoteUrl, validateRemoteUrlAsync } from '../src/routes/oj-fetcher'
 
 describe('OJ remote download safety', () => {
   it('blocks loopback, link-local and private addresses', () => {
@@ -12,5 +12,9 @@ describe('OJ remote download safety', () => {
     expect(validateRemoteUrl('https://luogu.com.cn/problem/P1000').hostname).toBe('luogu.com.cn')
     expect(() => validateRemoteUrl('file:///etc/passwd')).toThrow()
     expect(() => validateRemoteUrl('http://127.0.0.1:8080/admin')).toThrow()
+  })
+
+  it('rejects public-looking hostnames that resolve to loopback', async () => {
+    await expect(validateRemoteUrlAsync('http://2130706433/metadata')).rejects.toThrow()
   })
 })

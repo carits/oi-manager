@@ -41,6 +41,7 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 - `workspaceMode=work`：进入管理或校园工作台，业务资源使用 `resourceScope=campus`。
 - `workspaceMode=personal`：五种角色共用个人工作区，业务资源使用 `resourceScope=personal`。
 - 管理员工作区是严格独立的：超级管理员只进入 `/admin`，平台管理员只进入 `/platform-admin`；管理员不创建或切换个人/校园工作区。
+- 全局管理员查看训练/比赛时不受当前工作区 scope 预过滤限制；仍由 `canAccessTraining`、组织关系和比赛管理权限决定最终可见范围。普通账号继续只能访问当前 `resourceScope` 的资源。
 - `POST /api/auth/switch-workspace` 为所有已登录角色刷新 Cookie 和兼容 JWT；首次切入时事务性创建 `PersonalProfile`。
 - 旧 `studentMode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期，分别映射至 `workspaceMode` 和新切换接口。
 - 旧校园 JWT 仅携带 `schoolId` 时，服务端在 `workspaceMode=work` 且请求没有组织头的情况下，会通过
