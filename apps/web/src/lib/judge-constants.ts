@@ -23,7 +23,8 @@ export const JUDGE_RESULT_OPTIONS: readonly SelectOption[] = [
   { value: 'judge_failed', label: 'Judge Failed' },
   { value: 'unknown_error', label: 'Unknown Error' },
   { value: 'submit_failed', label: 'Submit Failed' },
-  { value: 'queuing', label: 'Queuing && Judging' },
+  { value: 'queuing', label: 'Queuing' },
+  { value: 'judging', label: 'Judging' },
 ] as const
 
 /** 编程语言选项 */

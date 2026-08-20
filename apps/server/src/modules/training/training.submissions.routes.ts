@@ -255,6 +255,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
       trainingId: id,
       OR: [
         { result: 'queuing' },
+        { result: 'judging' },
         { cases: { not: null } },
       ],
     }
