@@ -26,18 +26,28 @@ export default function OrgPage() {
   const { user, activateOrganization } = useAuth()
   const [workspaceRole, setWorkspaceRole] = useState<'school_principal' | 'teacher' | 'student' | null>(null)
   const [ready, setReady] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     setReady(false)
+    setLoadError(null)
     void apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces').then(result => {
       const workspace = result.data?.workspaces.find(item => item.organizationId === organizationId)
       if (result.success && workspace?.type === 'organization') {
         activateOrganization(workspace)
         setWorkspaceRole(workspace.memberRole as 'school_principal' | 'teacher' | 'student')
+      } else if (user?.organizationId === organizationId && user.organizationRole) {
+        setWorkspaceRole(user.organizationRole)
+      } else {
+        setLoadError(result.message || '当前账号没有该校园的有效成员关系')
       }
       setReady(true)
+    }).catch(() => {
+      if (user?.organizationId === organizationId && user.organizationRole) setWorkspaceRole(user.organizationRole)
+      else setLoadError('校园工作区暂时无法加载，请刷新后重试')
+      setReady(true)
     })
-  }, [activateOrganization, organizationId])
+  }, [activateOrganization, organizationId, user?.organizationId, user?.organizationRole])
 
   const student = (workspaceRole || user?.organizationRole) === 'student'
 
@@ -54,6 +64,7 @@ export default function OrgPage() {
   }, [module, organizationId, ready, router])
 
   if (!ready || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
+  if (loadError && !workspaceRole) return <main style={{ maxWidth: 720, margin: '0 auto', padding: '4rem 1.5rem' }}><h1>校园工作区无法打开</h1><p>{loadError}</p></main>
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return <OrganizationCampusPage />
   if (module === 'management' && !student) return <CampusManagementPage />
