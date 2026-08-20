@@ -110,14 +110,14 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
 
         return {
           ...base,
-          alias: p.alias,
           orderIndex: p.orderIndex,
-          problemId: p.Problem.id,
-          problemTitle: p.Problem.title,
           difficulty: p.Problem.difficulty,
           timeLimit: p.Problem.timeLimit,
           memoryLimit: p.Problem.memoryLimit,
           ...(hideProblemIdentity ? {} : {
+            alias: p.alias,
+            problemId: p.Problem.id,
+            problemTitle: p.Problem.title,
             platform: p.Problem.platform,
             platformProblemId: p.Problem.problemId,
           }),
@@ -216,10 +216,12 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
         id: p.id,
         points: p.points,
         problemSourceHidden: hideProblemIdentity,
-        alias: p.alias,
-        title: p.Problem.title,
-        problemTitle: p.Problem.title,
         orderIndex: p.orderIndex,
+        ...(hideProblemIdentity ? {} : {
+          alias: p.alias,
+          title: p.Problem.title,
+          problemTitle: p.Problem.title,
+        }),
         ...(hideProblemIdentity ? {} : {
           platform: platform || null,
           platformProblemId: platformProblemId || null,
@@ -512,8 +514,6 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
       success: true,
       data: {
         problemSourceHidden: hideProblemIdentity,
-        alias: trainingProblem.alias,
-        problemTitle: problem.title,
         orderIndex: trainingProblem.orderIndex,
         points: trainingProblem.points,
         timeLimit: problem.timeLimit,
@@ -528,6 +528,10 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
           fileUrl: contextualizeProblemFile(id, trainingProblem.id, statement.fileUrl),
         })),
         noteContent: note?.content ?? '',
+        ...(!hideProblemIdentity && {
+          alias: trainingProblem.alias,
+          problemTitle: problem.title,
+        }),
         // 管理员额外信息
         ...(isAdmin && {
           problemTitle: problem.title,

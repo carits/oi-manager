@@ -5,7 +5,7 @@ last_verified: 2026-08-21
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-21: global-admin training scope prefilter fixed; OJ configuration/batch input bounds and DNS-level SSRF protection enforced; training compatibility regression is 37/37; `pnpm restart` now exits successfully with an idempotent lifecycle start phase.
+- 2026-08-21: global-admin training scope prefilter fixed; OI in-contest problem identity leakage removed; OJ configuration/batch input bounds and DNS-level SSRF protection enforced; training compatibility regression is 37/37; `pnpm restart` now exits successfully with an idempotent lifecycle start phase.
 
 # 当前状态
 

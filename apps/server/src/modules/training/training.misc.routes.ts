@@ -175,10 +175,7 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           solutionVisible: problem.TrainingSolution?.visible ?? false,
           attachmentCount,
           problemSourceHidden: hideProblemIdentity,
-          alias: problem.alias,
           orderIndex: problem.orderIndex,
-          problemTitle: problem.Problem.title,
-          problemId: problem.Problem.id,
           difficulty: problem.Problem.difficulty,
           timeLimit: problem.Problem.timeLimit,
           memoryLimit: problem.Problem.memoryLimit,
@@ -186,6 +183,9 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
 
         return hideProblemIdentity ? summary : {
           ...summary,
+          alias: problem.alias,
+          problemTitle: problem.Problem.title,
+          problemId: problem.Problem.id,
           platform: problem.Problem.platform,
           platformProblemId: problem.Problem.problemId,
         }
@@ -216,10 +216,12 @@ trainingMiscRouter.get('/trainings/:id/overview', authenticate, asyncHandler(asy
           id: problem.id,
           points: problem.points,
           problemSourceHidden: hideProblemIdentity,
-          alias: problem.alias,
-          title: problem.Problem.title,
-          problemTitle: problem.Problem.title,
           orderIndex: problem.orderIndex,
+          ...(showPlatform ? {
+            alias: problem.alias,
+            title: problem.Problem.title,
+            problemTitle: problem.Problem.title,
+          } : {}),
           ...(showPlatform ? {
             platform,
             platformProblemId,
