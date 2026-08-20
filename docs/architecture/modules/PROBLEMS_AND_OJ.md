@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-02
+last_verified: 2026-08-21
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -50,6 +50,8 @@ Carits 本地题和外部 OJ 题共用 `Problem`。题面、PDF、附件、测�
 - Cookie 配置：仅超级管理员，响应脱敏。
 - 全局抓题任务：超级管理员和平台管理员。
 - 教师导入：先获取平台题，再复制到本校，不获得全局任务管理权。
+- 外部附件和题面图片下载只允许 HTTP(S) 公网地址，阻断本机/内网目标和不安全重定向；仅可信 OJ 域名会携带平台 Cookie，并限制响应体大小。
+- 平台/超级管理员在平台工作区可管理平台草稿、评测配置和 Checker；学校题仍由组织权限隔离。
 
 ## 平台绑定、账号池与 AI
 

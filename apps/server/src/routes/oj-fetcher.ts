@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import net from 'net'
 /**
  * OJ 题目拉取 API
  * @description 从外部 OJ 平台拉取题目信息的 API 路由
@@ -27,6 +28,68 @@ const authenticatedUsers = [
     'student' as const,
   ),
 ]
+
+const MAX_REMOTE_ATTACHMENT_BYTES = 50 * 1024 * 1024
+const MAX_REMOTE_IMAGE_BYTES = 10 * 1024 * 1024
+
+export function isPrivateRemoteHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '')
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === 'metadata.google.internal') return true
+  if (net.isIP(host) === 4) {
+    const octets = host.split('.').map(Number)
+    return octets[0] === 10 || octets[0] === 127 || octets[0] === 0
+      || (octets[0] === 169 && octets[1] === 254)
+      || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+      || (octets[0] === 192 && octets[1] === 168)
+  }
+  if (net.isIP(host) === 6) {
+    return host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')
+  }
+  return false
+}
+
+export function validateRemoteUrl(rawUrl: string): URL {
+  let url: URL
+  try { url = new URL(rawUrl) } catch { throw new Error('远程 URL 无效') }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('仅支持 HTTP(S) 远程 URL')
+  if (isPrivateRemoteHost(url.hostname)) throw new Error('禁止访问内网或本机地址')
+  return url
+}
+
+function isTrustedOjHost(hostname: string, platform: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '')
+  if (platform === 'luogu') return host === 'luogu.com.cn' || host.endsWith('.luogu.com.cn')
+  if (platform === 'codeforces') return host === 'codeforces.com' || host.endsWith('.codeforces.com')
+  return false
+}
+
+function headersForRemoteUrl(headers: Record<string, string>, url: URL, platform: string): Record<string, string> {
+  if (isTrustedOjHost(url.hostname, platform)) return headers
+  const safeHeaders = { ...headers }
+  delete safeHeaders.Cookie
+  return safeHeaders
+}
+
+async function readRemoteBody(response: globalThis.Response, maxBytes: number): Promise<Buffer> {
+  const declaredSize = Number(response.headers.get('content-length') || 0)
+  if (declaredSize > maxBytes) throw new Error('远程文件超过大小限制')
+  if (!response.body) return Buffer.alloc(0)
+  const reader = response.body.getReader()
+  const chunks: Buffer[] = []
+  let total = 0
+  while (true) {
+    const next = await reader.read()
+    if (next.done) break
+    const chunk = Buffer.from(next.value)
+    total += chunk.length
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw new Error('远程文件超过大小限制')
+    }
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks, total)
+}
 
 // ==================== 平台配置 API ====================
 
@@ -680,7 +743,8 @@ async function downloadAttachmentInternal(
   }
 
   let downloadUrl = url
-  let response = await fetch(downloadUrl, { headers, redirect: 'manual' })
+  let parsedDownloadUrl = validateRemoteUrl(downloadUrl)
+  let response = await fetch(downloadUrl, { headers: headersForRemoteUrl(headers, parsedDownloadUrl, platform), redirect: 'manual' })
 
   // 处理重定向
   const visitedUrls = new Set<string>([downloadUrl])
@@ -689,9 +753,10 @@ async function downloadAttachmentInternal(
     const location = response.headers.get('location')
     if (location && !visitedUrls.has(location)) {
       visitedUrls.add(location)
-      downloadUrl = location
+      parsedDownloadUrl = validateRemoteUrl(new URL(location, downloadUrl).toString())
+      downloadUrl = parsedDownloadUrl.toString()
       response = await fetch(downloadUrl, {
-        headers: downloadUrl.includes('luogu') || downloadUrl.includes(platform) ? headers : undefined,
+        headers: headersForRemoteUrl(headers, parsedDownloadUrl, platform),
         redirect: 'manual',
       })
       redirectCount++
@@ -705,8 +770,7 @@ async function downloadAttachmentInternal(
   }
 
   // 获取文件内容
-  const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+  const buffer = await readRemoteBody(response, MAX_REMOTE_ATTACHMENT_BYTES)
 
   // 如果传入的 filename 没有扩展名，尝试从 Content-Disposition 获取真实文件名
   if (!path.extname(filename)) {
@@ -867,22 +931,24 @@ async function downloadAndUploadImage(
       headers['Cookie'] = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ')
     }
 
-    // 下载图片
-    let response = await fetch(fullUrl, { headers, redirect: 'manual' })
+    // 下载图片；禁止本机/内网地址，且仅对可信 OJ 域名携带 Cookie。
+    let parsedImageUrl = validateRemoteUrl(fullUrl)
+    let response = await fetch(fullUrl, { headers: headersForRemoteUrl(headers, parsedImageUrl, 'luogu'), redirect: 'manual' })
 
     // 处理重定向
     let redirectCount = 0
     while ((response.status === 301 || response.status === 302) && redirectCount < 5) {
       const location = response.headers.get('location')
       if (location) {
-        fullUrl = location
+        parsedImageUrl = validateRemoteUrl(new URL(location, fullUrl).toString())
+        fullUrl = parsedImageUrl.toString()
         // 重定向时使用目标域名的 Referer
         try {
           const redirectParsed = new URL(location)
           headers['Referer'] = `${redirectParsed.protocol}//${redirectParsed.host}/`
         } catch { /* keep existing referer */ }
         response = await fetch(fullUrl, {
-          headers,
+          headers: headersForRemoteUrl(headers, parsedImageUrl, 'luogu'),
           redirect: 'manual',
         })
         redirectCount++
@@ -897,8 +963,7 @@ async function downloadAndUploadImage(
     }
 
     // 获取图片内容
-    const arrayBuffer = await response.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer = await readRemoteBody(response, MAX_REMOTE_IMAGE_BYTES)
 
     // 从 URL 或 Content-Type 推断扩展名
     let ext = path.extname(new URL(fullUrl).pathname).toLowerCase()
@@ -1131,8 +1196,9 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
 
     // 洛谷附件下载会重定向到 OSS，需要手动处理
     let downloadUrl = url
+    let parsedDownloadUrl = validateRemoteUrl(downloadUrl)
     let response = await fetch(downloadUrl, {
-      headers,
+      headers: headersForRemoteUrl(headers, parsedDownloadUrl, 'luogu'),
       redirect: 'manual'  // 手动处理重定向
     })
 
@@ -1152,10 +1218,11 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
         }
         visitedUrls.add(location)
         logger.info('oj_fetcher_redirect_followed', { action: 'oj_fetch', metadata: { statusCode: response.status, location } })
-        downloadUrl = location
+        parsedDownloadUrl = validateRemoteUrl(new URL(location, downloadUrl).toString())
+        downloadUrl = parsedDownloadUrl.toString()
         // 继续使用 manual 模式处理重定向
         response = await fetch(downloadUrl, {
-          headers: location.includes('luogu.com.cn') ? headers : undefined,
+          headers: headersForRemoteUrl(headers, parsedDownloadUrl, 'luogu'),
           redirect: 'manual'
         })
         redirectCount++
@@ -1175,8 +1242,7 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
     }
 
     // 获取文件内容
-    const arrayBuffer = await response.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer = await readRemoteBody(response, MAX_REMOTE_ATTACHMENT_BYTES)
 
     // 判断文件类型
     const ext = path.extname(filename).toLowerCase()
