@@ -618,6 +618,11 @@ textarea.formControl {
   background: rgba(15, 23, 42, 0.5);
 }
 
+.modalOverlayPage {
+  display: block;
+  overflow-y: auto;
+}
+
 .modalContent {
   width: min(100%, var(--modal-width, 600px));
   max-height: min(90vh, 880px);
@@ -628,6 +633,15 @@ textarea.formControl {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
+}
+
+.modalOverlayPage .modalContent {
+  max-height: none;
+  margin: 5vh auto;
+}
+
+.modalOverlayPage .modalBody {
+  overflow: visible;
 }
 
 .modalHeader {

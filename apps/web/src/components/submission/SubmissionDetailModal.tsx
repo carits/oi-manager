@@ -333,6 +333,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
         onClose={onClose}
         title={detail ? (detail.problemIdentityHidden ? `#${detail.id} | ${detail.username} 的比赛提交` : `#${detail.id} | ${detail.username}'s solution for [${getOjLabel(detail.oj || '')}-${detail.problemId || ''}]`) : '评测详情'}
         width="900px"
+        scrollMode="page"
       >
       {loading ? (
         <SkeletonRegion rows={6} label="评测详情正在准备" />

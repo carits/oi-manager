@@ -12,6 +12,7 @@ export interface ModalProps {
   footer?: React.ReactNode
   width?: string
   closeOnOverlay?: boolean
+  scrollMode?: 'contained' | 'page'
 }
 
 const focusableSelector = [
@@ -31,6 +32,7 @@ export function Modal({
   footer,
   width = '600px',
   closeOnOverlay = true,
+  scrollMode = 'contained',
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
@@ -44,8 +46,9 @@ export function Modal({
   useEffect(() => {
     if (!isOpen) return
     returnFocusRef.current = document.activeElement as HTMLElement
+    const shouldLockBody = scrollMode !== 'page'
     const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    if (shouldLockBody) document.body.style.overflow = 'hidden'
 
     const dialog = dialogRef.current
     const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) || [])
@@ -79,18 +82,18 @@ export function Modal({
     return () => {
       cancelAnimationFrame(focusFrame)
       document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
+      if (shouldLockBody) document.body.style.overflow = previousOverflow
       if (returnFocusRef.current?.isConnected) {
         returnFocusRef.current.focus()
       }
     }
-  }, [isOpen])
+  }, [isOpen, scrollMode])
 
   if (!isOpen) return null
 
   return (
     <div
-      className={styles.modalOverlay}
+      className={`${styles.modalOverlay} ${scrollMode === 'page' ? styles.modalOverlayPage : ''}`}
       onMouseDown={event => {
         if (closeOnOverlay && event.target === event.currentTarget) onClose()
       }}
