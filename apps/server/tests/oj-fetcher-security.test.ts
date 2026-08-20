@@ -3,7 +3,7 @@ import { isPrivateRemoteHost, validateRemoteUrl, validateRemoteUrlAsync } from '
 
 describe('OJ remote download safety', () => {
   it('blocks loopback, link-local and private addresses', () => {
-    for (const host of ['127.0.0.1', '10.0.0.8', '172.16.0.1', '192.168.1.8', '169.254.169.254', 'localhost', '::1']) {
+    for (const host of ['127.0.0.1', '10.0.0.8', '172.16.0.1', '192.168.1.8', '169.254.169.254', 'localhost', '::1', '::ffff:127.0.0.1']) {
       expect(isPrivateRemoteHost(host)).toBe(true)
     }
   })

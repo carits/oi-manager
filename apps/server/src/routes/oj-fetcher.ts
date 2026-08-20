@@ -46,7 +46,10 @@ export function isPrivateRemoteHost(hostname: string): boolean {
       || (octets[0] === 192 && octets[1] === 168)
   }
   if (net.isIP(host) === 6) {
-    return host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')
+    if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')) return true
+    // Node may expose IPv4 destinations as IPv4-mapped IPv6 addresses.
+    if (host.startsWith('::ffff:')) return isPrivateRemoteHost(host.slice('::ffff:'.length))
+    return false
   }
   return false
 }
