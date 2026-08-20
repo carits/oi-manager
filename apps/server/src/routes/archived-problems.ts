@@ -55,6 +55,24 @@ archivedProblemsRouter.get('/', authenticate, async (req: Request, res: Response
 })
 
 /**
+ * GET /api/archived-problems/stats/summary
+ * 获取归档统计信息（必须在动态 :id 路由之前注册）
+ */
+archivedProblemsRouter.get('/stats/summary', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId
+    const [total, byPlatform] = await Promise.all([
+      prisma.userArchivedProblem.count({ where: { userId } }),
+      prisma.userArchivedProblem.groupBy({ by: ['platform'], where: { userId }, _count: { id: true } }),
+    ])
+    res.json({ success: true, data: { total, byPlatform: byPlatform.map((p: { platform: string; _count: { id: number } }) => ({ platform: p.platform, count: p._count.id })) } })
+  } catch (error) {
+    logger.error('archived_problems_stats_error', error as Error)
+    res.status(500).json({ success: false, message: '获取统计失败' })
+  }
+})
+
+/**
  * GET /api/archived-problems/:id
  * 获取单个归档题目详情
  */
@@ -240,38 +258,5 @@ archivedProblemsRouter.delete('/', authenticate, async (req: Request, res: Respo
   } catch (error) {
     logger.error('archived_problems_bulk_delete_error', error as Error)
     res.status(500).json({ success: false, message: '批量删除失败' })
-  }
-})
-
-/**
- * GET /api/archived-problems/stats
- * 获取归档统计信息
- */
-archivedProblemsRouter.get('/stats/summary', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-
-    const [total, byPlatform] = await Promise.all([
-      prisma.userArchivedProblem.count({ where: { userId } }),
-      prisma.userArchivedProblem.groupBy({
-        by: ['platform'],
-        where: { userId },
-        _count: { id: true },
-      }),
-    ])
-
-    res.json({
-      success: true,
-      data: {
-        total,
-        byPlatform: byPlatform.map((p: { platform: string; _count: { id: number } }) => ({
-          platform: p.platform,
-          count: p._count.id,
-        })),
-      },
-    })
-  } catch (error) {
-    logger.error('archived_problems_stats_error', error as Error)
-    res.status(500).json({ success: false, message: '获取统计失败' })
   }
 })

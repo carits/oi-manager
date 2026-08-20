@@ -10,6 +10,7 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-21
 
+- 修复个人归档题目统计接口被 `/:id` 动态路由遮蔽的问题；`GET /api/archived-problems/stats/summary` 现在正常返回统计数据，并新增回归测试。
 - 修复 OI 赛中题目身份泄露：overview、题目列表、题目状态和题面接口在隐藏阶段不再返回原题标题、别名、内部题目 ID 或平台字段；管理员与比赛结束后的展示保持不变。
 - 修复 `pnpm restart` 的生命周期行为：补齐根 `start` 脚本并让重启后的 `start` 阶段幂等，避免服务已健康启动却因缺少 `start/server.js` 返回失败。
 - 加固外部 OJ 下载的 SSRF 防护：URL 校验会解析 DNS 并拒绝解析到回环、内网、链路本地或元数据地址的主机，覆盖数字 IPv4 别名和重定向目标；安全测试 3/3 通过。
