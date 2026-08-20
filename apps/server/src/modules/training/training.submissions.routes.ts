@@ -529,7 +529,7 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
         submitScope: training.type === 'contest' ? 'contest' : 'training',
         trainingId: id,
         oj: 'carits',
-        result: { in: ['accepted', 'wa', 'tle', 're', 'mle', 'ce', 'ole', 'Accepted', 'WrongAnswer', 'TimeLimitExceeded', 'RuntimeError', 'MemoryLimitExceeded', 'CompileError', 'OutputLimitExceeded'] },
+        result: { in: ['accepted', 'wa', 'tle', 're', 'mle', 'ce', 'ole', 'unknown_error', 'Accepted', 'WrongAnswer', 'TimeLimitExceeded', 'RuntimeError', 'MemoryLimitExceeded', 'CompileError', 'OutputLimitExceeded', 'SystemError'] },
       },
       data: {
         result: 'queuing',
