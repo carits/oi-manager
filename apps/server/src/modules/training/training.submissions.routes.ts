@@ -507,6 +507,36 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
 }, '查询失败'))
 
 /**
+ * GET /api/trainings/:id/submission-users
+ */
+trainingSubmissionsRouter.get('/trainings/:id/submission-users', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+    const id = parseTrainingId(req.params.id)
+    const training = await prisma.training.findUnique({ where: { id } })
+    if (!training || !await canManageTraining(req.user!.userId, training)) return res.status(403).json({ success: false, message: '无权限' })
+    const users = await prisma.user.findMany({ where: { Submission: { some: { trainingId: id, oj: 'carits' } } }, select: { id: true, username: true }, orderBy: { username: 'asc' } })
+    res.json({ success: true, data: { users: users.map(user => ({ ...user, displayName: user.username })) } })
+}, '查询用户失败'))
+
+/**
+ * GET /api/trainings/:id/rejudge/preview
+ */
+trainingSubmissionsRouter.get('/trainings/:id/rejudge/preview', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+    const id = parseTrainingId(req.params.id)
+    const training = await prisma.training.findUnique({ where: { id } })
+    if (!training || !await canManageTraining(req.user!.userId, training)) return res.status(403).json({ success: false, message: '无权限' })
+    const scopeType = String(req.query.scopeType || 'all')
+    const where: any = { trainingId: id, oj: 'carits', submitScope: training.type === 'contest' ? 'contest' : 'training' }
+    if (scopeType === 'problem' || scopeType === 'user_problem') {
+      const tp = await prisma.trainingProblem.findFirst({ where: { id: String(req.query.trainingProblemId), trainingId: id }, select: { id: true, Problem: { select: { problemId: true } } } })
+      if (!tp) return res.status(404).json({ success: false, message: '题目不属于当前比赛' })
+      where.OR = [{ trainingProblemId: tp.id }, { problemId: tp.Problem.problemId }]
+    }
+    if (scopeType === 'user_problem') where.userId = String(req.query.userId)
+    const [matchedCount, inProgressCount] = await Promise.all([prisma.submission.count({ where: { ...where, result: { notIn: ['queuing', 'judging'] } } }), prisma.submission.count({ where: { ...where, result: { in: ['queuing', 'judging'] } } })])
+    res.json({ success: true, data: { matchedCount, inProgressCount } })
+}, '预览失败'))
+
+/**
  * POST /api/trainings/:id/rejudge
  * 重新评测指定训练的所有提交（仅限 carits 本地评测）
  */
@@ -520,32 +550,29 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
     }
 
     if (!await canManageTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '仅团队管理员可执行重新评测' })
+      return res.status(403).json({ success: false, message: '仅比赛管理员可执行重新评测' })
     }
 
-    // 重置该训练下所有 carits 提交为 queuing
-    const { count } = await prisma.submission.updateMany({
-      where: {
-        submitScope: training.type === 'contest' ? 'contest' : 'training',
-        trainingId: id,
-        oj: 'carits',
-        result: { in: ['accepted', 'wa', 'tle', 're', 'mle', 'ce', 'ole', 'unknown_error', 'Accepted', 'WrongAnswer', 'TimeLimitExceeded', 'RuntimeError', 'MemoryLimitExceeded', 'CompileError', 'OutputLimitExceeded', 'SystemError'] },
-      },
-      data: {
-        result: 'queuing',
-        score: null,
-        timeUsed: null,
-        memoryUsed: null,
-        cases: null,
-        subtasks: null,
-        errorMessage: null,
-      },
-    })
+    const scope = req.body?.scope || { type: 'all' }
+    const scopeType = scope.type
+    if (!['all', 'problem', 'user_problem'].includes(scopeType)) return res.status(400).json({ success: false, message: '无效的重测范围' })
+    if ((scopeType === 'problem' || scopeType === 'user_problem') && !scope.trainingProblemId) return res.status(400).json({ success: false, message: '请选择题目' })
+    if (scopeType === 'user_problem' && !scope.userId) return res.status(400).json({ success: false, message: '请选择用户' })
+    const trainingProblem = scope.trainingProblemId ? await prisma.trainingProblem.findFirst({ where: { id: scope.trainingProblemId, trainingId: id }, select: { id: true, Problem: { select: { problemId: true } } } }) : null
+    if (scopeType !== 'all' && !trainingProblem) return res.status(404).json({ success: false, message: '题目不属于当前比赛' })
+    const baseWhere: any = { submitScope: training.type === 'contest' ? 'contest' : 'training', trainingId: id, oj: 'carits' }
+    if (trainingProblem) baseWhere.OR = [{ trainingProblemId: trainingProblem.id }, { problemId: trainingProblem.Problem.problemId }]
+    if (scopeType === 'user_problem') baseWhere.userId = scope.userId
+    const [skippedCount, updateResult] = await Promise.all([
+      prisma.submission.count({ where: { ...baseWhere, result: { in: ['queuing', 'judging'] } } }),
+      prisma.submission.updateMany({ where: { ...baseWhere, result: { notIn: ['queuing', 'judging'] } }, data: { result: 'queuing', score: null, timeUsed: null, wallTimeUsed: null, timeoutReason: null, metricSource: null, cases: null, subtasks: null, errorMessage: null, judgeStarted: null } }),
+    ])
+    const count = updateResult.count
 
     logger.info('training_rejudge', {
       action: 'training_rejudge',
-      metadata: { trainingId: id, resetCount: count },
+      metadata: { trainingId: id, scope: scopeType, resetCount: count, skippedCount },
     })
 
-    res.json({ success: true, data: { resetCount: count, message: `已重置 ${count} 条提交，等待重新评测` } })
+    res.json({ success: true, data: { scope: scopeType, resetCount: count, skippedCount, message: '已重置 ' + count + ' 条提交，' + skippedCount + ' 条正在评测中的提交已跳过' } })
 }, '重新评测失败'))
