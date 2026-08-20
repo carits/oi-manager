@@ -68,7 +68,7 @@
 .icpcResultCell { padding: 8px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rankInteractiveCell { cursor: pointer; outline: none; }
 .rankInteractiveCell:hover,
-.rankInteractiveCell:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); }
+.rankInteractiveCell:focus-visible { filter: brightness(0.97); }
 .icpcAccepted { color: var(--success-text) !important; background: #e8f7e9 !important; }
 .icpcFailed { color: var(--error-text) !important; background: #fbe4e4 !important; }
 .icpcUnsubmitted { color: transparent !important; background: var(--bg-card) !important; }
