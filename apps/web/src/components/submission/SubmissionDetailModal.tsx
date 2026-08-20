@@ -489,7 +489,9 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                 padding: '1rem',
                 fontSize: '0.875rem',
                 lineHeight: 1.6,
-                overflowX: 'auto',
+                overflow: 'visible',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
               }}>
                 <code
                   dangerouslySetInnerHTML={{ __html: getHighlightedCode() }}
