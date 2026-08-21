@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-16
+last_verified: 2026-08-21
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -38,6 +38,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/carits` | 见页面权限布局 | 当前页面 |
 | `/personal/contests` | 见页面权限布局 | 当前页面 |
 | `/personal/contests/[id]` | 见页面权限布局 | 当前页面 |
+| `/personal/contests/[id]/statements` | 活动管理员 | 活动多题面矩阵管理 |
 | `/personal/contributions` | 见页面权限布局 | 当前页面 |
 | `/personal/problem-lists` | 见页面权限布局 | 当前页面 |
 | `/personal/problem-lists/[id]` | 见页面权限布局 | 当前页面 |
@@ -51,7 +52,9 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/teams` | 见页面权限布局 | 当前页面 |
 | `/personal/teams/[id]` | 见页面权限布局 | 当前页面 |
 | `/personal/teams/[id]/contests/[cid]` | 见页面权限布局 | 当前页面 |
+| `/personal/teams/[id]/contests/[cid]/statements` | 活动管理员 | 团队比赛题面矩阵管理 |
 | `/personal/teams/[id]/trainings/[tid]` | 见页面权限布局 | 当前页面 |
+| `/personal/teams/[id]/trainings/[tid]/statements` | 活动管理员 | 团队训练题面矩阵管理 |
 | `/platform-admin` | 见页面权限布局 | 当前页面 |
 | `/platform-admin/carits` | 见页面权限布局 | 当前页面 |
 | `/platform-admin/contributions` | 见页面权限布局 | 当前页面 |

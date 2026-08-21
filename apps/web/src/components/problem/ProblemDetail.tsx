@@ -17,6 +17,7 @@ import { TranslateModal } from './TranslateModal'
 import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
 import { Copy } from 'lucide-react'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
+import { StatementVersionWorkspace } from './StatementVersionWorkspace'
 
 interface Statement {
   id: string
@@ -854,7 +855,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 fontWeight: activeTab === 'my-content' ? 600 : 400,
               }}
             >
-              我的版本
+              我的题解
             </button>
             <button
               onClick={() => handleTabChange('records')}
@@ -908,91 +909,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             }}>
           {/* 题面 Tab */}
           {activeTab === 'statement' && (
-            <>
-              {/* 左上角版本选择 */}
-              {visibleStatements.length > 1 && (
-                <div style={{
-                  padding: '0.75rem 1rem',
-                  borderBottom: '1px solid var(--border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <select aria-label="选择"
-                    value={selectedStatementId || ''}
-                    onChange={(e) => {
-                      const id = e.target.value
-                      setSelectedStatementId(id)
-                      // 持久化用户选择（format-language key）
-                      if (problem) {
-                        const stmt = problem.statements.find(s => s.id === id)
-                        if (stmt) {
-                          localStorage.setItem(`problem-stmt-pref-${problem.id}`, `${stmt.format}-${stmt.language || 'unknown'}`)
-                        }
-                      }
-                    }}
-                    style={{
-                      padding: '0.375rem 0.75rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '4px',
-                      fontSize: '0.875rem',
-                      background: 'white'
-                    }}
-                  >
-                    {visibleStatements.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.format === 'pdf' ? 'PDF' : `${s.language ? LANGUAGE_LABELS[s.language] : '未知'}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div style={{ padding: '2rem' }}>
-                {currentStatement ? (
-                  currentStatement.format === 'pdf' && currentStatement.fileUrl ? (
-                    currentStatement.fileUrl.startsWith('/') ? (
-                      <iframe
-                        src={getPdfUrl(currentStatement.fileUrl) || ''}
-                        style={{ width: '100%', height: '600px', border: 'none' }}
-                      />
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
-                        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem' }}>
-                          题面为外部 PDF 文件，请在新窗口中查看
-                        </p>
-                        <a
-                          href={currentStatement.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-block',
-                            padding: '0.5rem 1.5rem',
-                            backgroundColor: 'var(--primary)',
-                            color: 'var(--text-inverse)',
-                            borderRadius: 'var(--radius)',
-                            textDecoration: 'none',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          打开 PDF 题面
-                        </a>
-                      </div>
-                    )
-                  ) : currentStatement.content ? (
-                    <MarkdownRenderer content={currentStatement.content} />
-                  ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
-                      暂无题面内容
-                    </div>
-                  )
-                ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
-                    暂无题面内容
-                  </div>
-                )}
-              </div>
-            </>
+            <StatementVersionWorkspace problemId={problemId} />
           )}
 
           {/* 题解 Tab */}

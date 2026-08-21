@@ -26,7 +26,7 @@ import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
 import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
 import { UserProblemContentPanel } from '@/components/problem/UserProblemContentPanel'
-import { Bell, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
+import { Bell, BookOpenCheck, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -316,7 +316,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           <PageHeader
             title={training.title}
             breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
-            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
+            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面管理</Button>}{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
           />
           <div className={styles.stats}>
             <div className={styles.stat}><span className={styles.statLabel}>赛制</span><span className={styles.statValue}>{fmtLabel}</span></div>

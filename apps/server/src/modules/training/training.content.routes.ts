@@ -96,25 +96,19 @@ trainingContentRouter.post('/trainings/:id/problems/:trainingProblemId/my-conten
   }
   const problemId = loaded.trainingProblem.problemId
   const userId = req.user!.userId
-  const existing = await prisma.userProblemContent.findUnique({
-    where: { problemId_userId_kind: { problemId, userId, kind: contentKind } },
-  })
+  const existing = await prisma.userProblemContent.findFirst({ where: { problemId, userId, kind: contentKind, deletedAt: null } })
   const uploaded = await fileService.uploadFromMulter(req.file, {
     category: 'pdf', ownerType: 'user', ownerId: userId, isPublic: false,
   })
-  const saved = await prisma.userProblemContent.upsert({
-    where: { problemId_userId_kind: { problemId, userId, kind: contentKind } },
-    create: {
-      id: crypto.randomUUID(), problemId, userId, kind: contentKind,
-      title: contentKind === 'statement' ? String(req.body?.title || '').trim() || null : null,
-      format: 'pdf', language: req.body?.language || null, fileId: uploaded.id,
-    },
-    update: {
+  const saved = existing ? await prisma.userProblemContent.update({ where: { id: existing.id }, data: {
       title: contentKind === 'statement' ? String(req.body?.title || '').trim() || null : null,
       format: 'pdf', language: req.body?.language || null, content: null, fileId: uploaded.id,
       revision: { increment: 1 },
-    },
-  })
+    } }) : await prisma.userProblemContent.create({ data: {
+      id: crypto.randomUUID(), problemId, userId, kind: contentKind,
+      title: contentKind === 'statement' ? String(req.body?.title || '').trim() || null : null,
+      format: 'pdf', language: req.body?.language || null, fileId: uploaded.id,
+    } })
   if (existing?.fileId && existing.fileId !== uploaded.id) await fileService.softDelete(existing.fileId)
   res.json({ success: true, data: { id: saved.id, revision: saved.revision } })
 }))
@@ -123,9 +117,7 @@ trainingContentRouter.put('/trainings/:id/problems/:trainingProblemId/my-content
   const loaded = await requireAccess(req, res)
   const contentKind = kind(req.params.kind)
   if (!loaded || !contentKind) return
-  const content = await prisma.userProblemContent.findUnique({
-    where: { problemId_userId_kind: { problemId: loaded.trainingProblem.problemId, userId: req.user!.userId, kind: contentKind } },
-  })
+  const content = await prisma.userProblemContent.findFirst({ where: { problemId: loaded.trainingProblem.problemId, userId: req.user!.userId, kind: contentKind, deletedAt: null } })
   if (!content) return res.status(404).json({ success: false, message: '请先保存个人内容' })
   try {
     await replaceContentShares(content.id, req.user!.userId, Array.isArray(req.body?.shareKeys) ? req.body.shareKeys : [])
@@ -139,15 +131,9 @@ trainingContentRouter.delete('/trainings/:id/problems/:trainingProblemId/my-cont
   const loaded = await requireAccess(req, res)
   const contentKind = kind(req.params.kind)
   if (!loaded || !contentKind) return
-  const content = await prisma.userProblemContent.findUnique({
-    where: {
-      problemId_userId_kind: {
-        problemId: loaded.trainingProblem.problemId,
-        userId: req.user!.userId,
-        kind: contentKind,
-      },
-    },
-  })
+  const content = await prisma.userProblemContent.findFirst({ where: {
+    problemId: loaded.trainingProblem.problemId, userId: req.user!.userId, kind: contentKind, deletedAt: null,
+  } })
   if (!content) return res.status(404).json({ success: false, message: '个人内容不存在' })
   await prisma.userProblemContent.delete({ where: { id: content.id } })
   if (content.fileId) await fileService.softDelete(content.fileId)

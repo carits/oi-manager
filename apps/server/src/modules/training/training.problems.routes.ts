@@ -543,19 +543,28 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     })
 
     const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
-    const statementSnapshot = await latestContentSnapshot(trainingProblem.id, 'statement')
+    const [statementSet, legacyStatementSnapshot] = await Promise.all([
+      prisma.trainingProblemStatementSet.findFirst({
+        where: { trainingProblemId: trainingProblem.id }, orderBy: { revision: 'desc' },
+        include: { Snapshot: { orderBy: [{ isDefault: 'desc' }, { orderIndex: 'asc' }] } },
+      }),
+      latestContentSnapshot(trainingProblem.id, 'statement'),
+    ])
+    const defaultStatement = statementSet?.Snapshot.find(item => item.isDefault) || statementSet?.Snapshot[0]
     // 返回题面内容；赛中“题号赛后显示”时不返回任何原题识别字段。
     const problem = trainingProblem.Problem
-    const snapshotStatement = statementSnapshot ? [{
-      id: statementSnapshot.id,
-      type: 'statement',
-      format: statementSnapshot.format,
-      language: statementSnapshot.language,
-      content: contextualizeProblemContent(id, trainingProblem.id, statementSnapshot.content),
-      fileUrl: statementSnapshot.snapshotFileId
-        ? `/api/trainings/${id}/problems/${trainingProblem.id}/content-snapshot/statement/file`
-        : null,
-      isVisible: true,
+    const snapshotStatement = statementSet ? statementSet.Snapshot.map(statement => ({
+      id: statement.id, type: 'statement', name: statement.name,
+      format: statement.format, language: statement.language,
+      content: contextualizeProblemContent(id, trainingProblem.id, statement.content),
+      fileUrl: statement.snapshotFileId ? `/api/trainings/${id}/problems/${trainingProblem.id}/statement-versions/${statement.id}/file` : null,
+      isVisible: true, isDefault: statement.isDefault, authorUsername: statement.authorUsernameSnapshot || 'System',
+    })) : legacyStatementSnapshot ? [{
+      id: legacyStatementSnapshot.id, type: 'statement', name: legacyStatementSnapshot.title || '官方题面',
+      format: legacyStatementSnapshot.format, language: legacyStatementSnapshot.language,
+      content: contextualizeProblemContent(id, trainingProblem.id, legacyStatementSnapshot.content),
+      fileUrl: legacyStatementSnapshot.snapshotFileId ? `/api/trainings/${id}/problems/${trainingProblem.id}/content-snapshot/statement/file` : null,
+      isVisible: true, isDefault: true, authorUsername: legacyStatementSnapshot.authorUsernameSnapshot || 'System',
     }] : null
     res.json({
       success: true,
@@ -566,9 +575,11 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
         timeLimit: trainingProblem.timeLimitSnapshot ?? problem.timeLimit,
         memoryLimit: trainingProblem.memoryLimitSnapshot ?? problem.memoryLimit,
         difficulty: problem.difficulty,
-        description: statementSnapshot?.content ?? problem.description,
-        statementType: statementSnapshot?.format ?? problem.statementType,
-        statementPdfUrl: statementSnapshot?.snapshotFileId
+        description: defaultStatement?.content ?? legacyStatementSnapshot?.content ?? problem.description,
+        statementType: defaultStatement?.format ?? legacyStatementSnapshot?.format ?? problem.statementType,
+        statementPdfUrl: defaultStatement?.snapshotFileId
+          ? `/api/trainings/${id}/problems/${trainingProblem.id}/statement-versions/${defaultStatement.id}/file`
+          : legacyStatementSnapshot?.snapshotFileId
           ? `/api/trainings/${id}/problems/${trainingProblem.id}/content-snapshot/statement/file`
           : contextualizeProblemFile(id, trainingProblem.id, problem.statementPdfUrl),
         statements: snapshotStatement || problem.ProblemStatement.map(statement => ({
@@ -577,18 +588,18 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
           fileUrl: contextualizeProblemFile(id, trainingProblem.id, statement.fileUrl),
         })),
         noteContent: note?.content ?? '',
-        contentRevision: statementSnapshot?.revision ?? null,
-        contentSource: statementSnapshot?.sourceType ?? 'canonical',
-        ...(isAdmin && statementSnapshot?.authorUsernameSnapshot
-          ? { authorUsername: statementSnapshot.authorUsernameSnapshot }
+        contentRevision: statementSet?.revision ?? legacyStatementSnapshot?.revision ?? null,
+        contentSource: defaultStatement?.sourceType ?? legacyStatementSnapshot?.sourceType ?? 'canonical',
+        ...(isAdmin && (defaultStatement?.authorUsernameSnapshot || legacyStatementSnapshot?.authorUsernameSnapshot)
+          ? { authorUsername: defaultStatement?.authorUsernameSnapshot || legacyStatementSnapshot?.authorUsernameSnapshot }
           : {}),
         ...(!hideProblemIdentity && {
           alias: trainingProblem.alias,
-          problemTitle: statementSnapshot?.title || trainingProblem.titleSnapshot || problem.title,
+          problemTitle: defaultStatement?.title || legacyStatementSnapshot?.title || trainingProblem.titleSnapshot || problem.title,
         }),
         // 管理员额外信息
         ...(isAdmin && {
-          problemTitle: statementSnapshot?.title || trainingProblem.titleSnapshot || problem.title,
+          problemTitle: defaultStatement?.title || legacyStatementSnapshot?.title || trainingProblem.titleSnapshot || problem.title,
           platform: problem.platform,
           platformProblemId: problem.problemId,
         }),

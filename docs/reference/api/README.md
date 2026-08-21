@@ -11,6 +11,19 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
+| `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
+| `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |
+| `GET` | `/api/problems/:id/statement-versions/:versionId/file` | 读取个人 PDF 题面 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/statement-versions` | 读取活动当前可见题面快照集合 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/statement-versions/:snapshotId/file` | 读取活动 PDF 题面快照 |
+| `GET` | `/api/trainings/:id/statement-management` | 读取活动多题面管理矩阵 |
+| `PATCH` | `/api/problems/:id/statement-versions/:versionId` | 重命名或切换个人题面可见性 |
+| `POST` | `/api/problems/:id/statement-versions` | 从官方、用户版本或空白创建独立题面 |
+| `POST` | `/api/problems/:id/statement-versions/:versionId/pdf` | 上传或替换个人 PDF 题面 |
+| `POST` | `/api/trainings/:id/problems/:trainingProblemId/statement-versions` | 从活动快照创建个人题面版本 |
+| `PUT` | `/api/problems/:id/statement-versions/:versionId/content` | 更新个人 Markdown 题面内容 |
+| `PUT` | `/api/trainings/:id/statement-management` | 保存活动多题面选择和唯一默认项 |
 | `DELETE` | `/api/archived-problems` | 见对应路由实现 |
 | `DELETE` | `/api/archived-problems/:id` | 见对应路由实现 |
 | `DELETE` | `/api/files/:id` | 见对应路由实现 |

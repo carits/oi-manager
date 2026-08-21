@@ -29,7 +29,7 @@ interface Props {
 export function UserProblemContentPanel({ problemId, apiBase }: Props) {
   const toast = useToast()
   const base = apiBase || `/api/problems/${problemId}`
-  const [kind, setKind] = useState<Kind>('statement')
+  const [kind] = useState<Kind>('solution')
   const [format, setFormat] = useState<Format>('markdown')
   const [title, setTitle] = useState('')
   const [language, setLanguage] = useState('zh')
@@ -106,21 +106,12 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
 
   const current = items.find(item => item.kind === kind)
   const toggleShare = (key: string) => setShareKeys(keys => keys.includes(key) ? keys.filter(item => item !== key) : [...keys, key])
-  const tabStyle = (active: boolean) => ({
-    padding: '0.55rem 1rem', border: '1px solid', borderColor: active ? 'var(--primary)' : 'var(--border)',
-    borderRadius: '6px', background: active ? 'var(--info-light)' : 'white', color: active ? 'var(--primary)' : 'var(--gray-600)',
-    cursor: 'pointer', fontWeight: active ? 600 : 400,
-  })
-
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)', textAlign: 'center' }}>正在加载个人版本…</div>
 
   return (
     <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button style={tabStyle(kind === 'statement')} onClick={() => setKind('statement')}>我的题面</button>
-          <button style={tabStyle(kind === 'solution')} onClick={() => setKind('solution')}>我的题解</button>
-        </div>
+        <strong>我的题解</strong>
         {current && <span style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>Revision {current.revision} · {new Date(current.updatedAt).toLocaleString('zh-CN')}</span>}
       </div>
 

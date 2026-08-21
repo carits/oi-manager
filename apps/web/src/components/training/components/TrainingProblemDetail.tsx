@@ -4,6 +4,8 @@ import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import type { ResourceState } from '@/lib/resource'
+import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, ProblemDetail } from '../types'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
@@ -93,6 +95,7 @@ export function TrainingProblemDetail({
   saveNoteNow,
   saveRecordNow,
 }: TrainingProblemDetailProps) {
+  const toast = useToast()
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
   const hideProblemIdentity = !training.isAdmin
     && !training.problemIdVisible
@@ -157,30 +160,38 @@ export function TrainingProblemDetail({
 
   const renderStatementSelector = () => {
     const visibleStatements = (problemDetail?.statements || []).filter(s => true)
-    if (visibleStatements.length <= 1) return null
+    if (visibleStatements.length === 0) return null
+    const current = selectedStatementId
+      ? visibleStatements.find(statement => statement.id === selectedStatementId)
+      : visibleStatements.find(statement => statement.isDefault) || visibleStatements[0]
     return (
-      <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <select aria-label="选择"
-          value={selectedStatementId || ''}
-          onChange={(e) => {
-            const id = e.target.value
-            setSelectedStatementId(id)
-            if (selectedProblemId) {
-              const stmt = visibleStatements.find(s => s.id === id)
-              if (stmt) {
-                localStorage.setItem(`training-stmt-pref-${selectedProblemId}`, `${stmt.format}-${stmt.language || 'unknown'}`)
-              }
-            }
-          }}
-          style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', background: 'white' }}
-        >
-          {visibleStatements.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.format === 'pdf' ? 'PDF' : `${s.language ? STATEMENT_LANGUAGE_LABELS[s.language] || s.language : '未知'}`}
-            </option>
-          ))}
-        </select>
-      </div>
+      <aside style={{ width: '240px', flexShrink: 0, padding: '0.75rem', borderRight: '1px solid var(--border)', background: 'var(--gray-50)' }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.45rem' }}>比赛题面</div>
+        {visibleStatements.map(statement => (
+          <button key={statement.id} onClick={() => {
+            setSelectedStatementId(statement.id)
+            if (selectedProblemId) localStorage.setItem(`training-stmt-pref-${training.id}-${selectedProblemId}`, statement.id)
+          }} style={{
+            width: '100%', padding: '0.6rem', marginBottom: '0.3rem', border: 'none', borderRadius: '6px', textAlign: 'left',
+            background: selectedStatementId === statement.id ? 'var(--info-light)' : 'transparent', cursor: 'pointer',
+          }}>
+            <strong style={{ display: 'block' }}>{statement.name || (statement.language ? STATEMENT_LANGUAGE_LABELS[statement.language] || statement.language : '题面')}</strong>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
+          </button>
+        ))}
+        <button onClick={async () => {
+          if (!selectedProblemId || !current) return
+          const name = window.prompt('个人题面名称', `${current.name || '活动题面'} - 我的版本`)
+          if (!name?.trim()) return
+          const response = await apiClient.post(`/api/trainings/${training.id}/problems/${selectedProblemId}/statement-versions`, {
+            name, visibility: 'private', source: { type: 'snapshot', id: current.id },
+          })
+          if (response.success) toast.success('个人题面已创建，可在题目页继续编辑')
+          else toast.error(response.message || '创建个人题面失败')
+        }} style={{ width: '100%', marginTop: '0.6rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>
+          基于当前题面创建个人版本
+        </button>
+      </aside>
     )
   }
 
@@ -509,7 +520,7 @@ B 题：...
             width: '100%',
           }}
         >
-          管理活动内容版本
+          管理活动题解
         </button>
       )}
       {trainingStatus === 'upcoming' && (
@@ -550,9 +561,11 @@ B 题：...
             {renderProblemButtons(true)}
             {renderProblemInfo()}
           </div>
-          {renderStatementSelector()}
-          <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
-            {renderStatementContent()}
+          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+            {renderStatementSelector()}
+            <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
+              {renderStatementContent()}
+            </div>
           </div>
         </div>
 
@@ -594,9 +607,11 @@ B 题：...
               <div style={{ padding: '0.5rem 1rem', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                 {renderProblemInfo()}
               </div>
-              {renderStatementSelector()}
-              <div style={{ padding: '1.5rem' }}>
-                {renderStatementContent()}
+              <div style={{ display: 'flex', minHeight: '560px' }}>
+                {renderStatementSelector()}
+                <div style={{ flex: 1, minWidth: 0, padding: '1.5rem' }}>
+                  {renderStatementContent()}
+                </div>
               </div>
             </>
           ) : (

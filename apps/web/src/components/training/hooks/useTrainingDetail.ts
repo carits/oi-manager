@@ -117,15 +117,13 @@ export function useTrainingDetail(
 
     const visibleStatements = problemDetail.statements || []
     if (visibleStatements.length > 0) {
-      const savedKey = localStorage.getItem(`training-stmt-pref-${selectedProblemId}`)
+      const savedKey = localStorage.getItem(`training-stmt-pref-${trainingId}-${selectedProblemId}`)
       const savedStatement = savedKey
-        ? visibleStatements.find(
-            statement =>
-              `${statement.format}-${statement.language || 'unknown'}` === savedKey,
-          )
+        ? visibleStatements.find(statement => statement.id === savedKey)
         : null
       const preferredStatement =
         savedStatement ||
+        visibleStatements.find(statement => statement.isDefault) ||
         visibleStatements.find(
           statement => statement.format === 'markdown' && statement.language === 'zh',
         ) ||

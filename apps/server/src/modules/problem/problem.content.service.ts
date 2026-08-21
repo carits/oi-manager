@@ -48,13 +48,13 @@ export async function listContentOptions(
       ProblemStatement: { orderBy: { createdAt: 'asc' } },
       UserProblemContent: {
         where: {
+          deletedAt: null,
           OR: [
             { userId: managerUserId },
-            { Share: { some: { shareKey: 'platform' } } },
-            ...(organizationId ? [{ Share: { some: { shareKey: `organization:${organizationId}` } } }] : []),
+            { visibility: 'public' },
           ],
         },
-        include: { Share: true, User: { select: { username: true } } },
+        include: { User: { select: { username: true } } },
         orderBy: { updatedAt: 'desc' },
       },
     },
@@ -132,7 +132,7 @@ export async function listContentOptions(
       sourceType: 'user',
       sourceId: item.id,
       sourceRevision: item.revision,
-      title: item.title,
+      title: item.kind === 'statement' ? (item.name || item.title) : item.title,
       format: item.format,
       language: item.language,
       content: item.content,
@@ -140,7 +140,7 @@ export async function listContentOptions(
       fileName: await fileName(item.fileId),
       authorUserId: item.userId,
       authorUsername: item.User.username,
-      shareKeys: item.Share.map(share => share.shareKey),
+      shareKeys: item.visibility === 'public' ? ['platform'] : [],
     }
     if (item.kind === 'statement') statements.push(option)
     else if (item.kind === 'solution') solutions.push(option)
@@ -249,14 +249,32 @@ export async function createInitialContentSnapshots(input: {
   statementOptionKey?: string
   solutionOptionKey?: string
 }) {
-  const existing = await prisma.trainingProblemContentSnapshot.count({ where: { trainingProblemId: input.trainingProblemId } })
-  if (existing > 0) return
+  const [existing, statementSetCount] = await Promise.all([
+    prisma.trainingProblemContentSnapshot.count({ where: { trainingProblemId: input.trainingProblemId } }),
+    prisma.trainingProblemStatementSet.count({ where: { trainingProblemId: input.trainingProblemId } }),
+  ])
+  if (existing > 0 && statementSetCount > 0) return
   const options = await listContentOptions(input.problemId, input.selectedBy, input.organizationId)
   const statement = input.statementOptionKey && options.statement.some(option => option.key === input.statementOptionKey)
     ? input.statementOptionKey : options.statement[0].key
   const solution = input.solutionOptionKey && options.solution.some(option => option.key === input.solutionOptionKey)
     ? input.solutionOptionKey : (options.solution.find(option => option.key !== 'none')?.key || 'none')
-  await selectTrainingProblemContent({ ...input, statementOptionKey: statement, solutionOptionKey: solution })
+  if (existing === 0) await selectTrainingProblemContent({ ...input, statementOptionKey: statement, solutionOptionKey: solution })
+  if (statementSetCount === 0) {
+    const selected = options.statement.find(option => option.key === statement)!
+    const prepared = await prepareSnapshot(input.trainingProblemId, selected)
+    await prisma.trainingProblemStatementSet.create({ data: {
+      id: crypto.randomUUID(), trainingProblemId: input.trainingProblemId, revision: 1, selectedBy: input.selectedBy,
+      Snapshot: { create: {
+        id: crypto.randomUUID(), sourceType: selected.sourceType, sourceContentId: selected.sourceId,
+        name: selected.title || selected.fileName || '官方题面', title: selected.title,
+        language: selected.language, format: selected.format, content: selected.content,
+        snapshotFileId: prepared.snapshotFileId, fileName: prepared.snapshotFileName,
+        authorUserId: selected.authorUserId, authorUsernameSnapshot: selected.authorUsername,
+        isDefault: true, orderIndex: 0,
+      } },
+    } })
+  }
 }
 
 export async function latestContentSnapshot(trainingProblemId: string, kind: ContentKind) {

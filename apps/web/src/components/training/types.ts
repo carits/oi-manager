@@ -60,6 +60,9 @@ export interface ProblemDetail {
     language: string | null
     content: string | null
     fileUrl: string | null
+    name?: string
+    authorUsername?: string
+    isDefault?: boolean
   }>
   problemTitle?: string
   platform?: string

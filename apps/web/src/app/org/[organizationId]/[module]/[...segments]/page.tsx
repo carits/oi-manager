@@ -11,6 +11,7 @@ import { ProblemNote } from '@/components/problem/ProblemNote'
 import { SubmissionDetailPage } from '@/components/submission/SubmissionDetailPage'
 import ProblemListDetailPage from '@/components/problem/ProblemListDetailPage'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
+import { TrainingStatementManagementPage } from '@/components/training/TrainingStatementManagementPage'
 
 export default function OrganizationResourcePage() {
   const { organizationId, module, segments } = useParams<{ organizationId: string; module: string; segments: string[] }>()
@@ -22,8 +23,8 @@ export default function OrganizationResourcePage() {
 
   useEffect(() => {
     const supported =
-      (module === 'teams' && (parts.length === 1 || (parts.length === 3 && ['contests', 'trainings', 'homeworks'].includes(parts[1])))) ||
-      ((module === 'contests' || module === 'homeworks') && parts.length === 1) ||
+      (module === 'teams' && (parts.length === 1 || ((parts.length === 3 || parts.length === 4) && ['contests', 'trainings', 'homeworks'].includes(parts[1])))) ||
+      ((module === 'contests' || module === 'homeworks') && (parts.length === 1 || (parts.length === 2 && parts[1] === 'statements'))) ||
       (module === 'problems' && (
         parts.length === 1 ||
         (parts.length === 2 && ['edit', 'note'].includes(parts[1]))
@@ -37,6 +38,12 @@ export default function OrganizationResourcePage() {
   }
   if (module === 'teams' && parts.length === 3 && ['contests', 'trainings', 'homeworks'].includes(parts[1])) {
     return <TrainingDetailPage basePath={`${prefix}/teams`} trainingIdOverride={parts[2]} />
+  }
+  if (module === 'teams' && parts.length === 4 && ['contests', 'trainings', 'homeworks'].includes(parts[1]) && parts[3] === 'statements') {
+    return <TrainingStatementManagementPage trainingId={parts[2]} />
+  }
+  if ((module === 'contests' || module === 'homeworks') && parts.length === 2 && parts[1] === 'statements') {
+    return <TrainingStatementManagementPage trainingId={parts[0]} />
   }
   if ((module === 'contests' || module === 'homeworks') && parts.length === 1) {
     return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />

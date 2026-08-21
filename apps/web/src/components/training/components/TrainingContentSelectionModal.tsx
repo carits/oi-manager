@@ -128,7 +128,7 @@ export function TrainingContentSelectionModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`内容版本 · ${problemLabel}`}
+      title={`活动题解 · ${problemLabel}`}
       width="min(720px, calc(100vw - 2rem))"
       footer={(
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
@@ -142,10 +142,9 @@ export function TrainingContentSelectionModal({
       {loading || !data ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>正在加载可用版本…</div> : (
         <div style={{ display: 'grid', gap: '1rem' }}>
           <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            此处只管理当前题目的活动展示内容。更换后会创建新快照，所有参与者看到统一版本，旧版本继续保留。
+            此处只管理当前题目的题解版本。题面请前往独立的“题面管理”页面统一配置。
           </p>
           {([
-            { kind: 'statement' as const, label: '活动题面', value: statementKey, setValue: setStatementKey, options: data.statement, revision: data.currentSelection.statementRevision },
             { kind: 'solution' as const, label: '活动题解', value: solutionKey, setValue: setSolutionKey, options: data.solution, revision: data.currentSelection.solutionRevision },
           ]).map(item => (
             <section key={item.kind} style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: '10px', background: 'var(--gray-50)' }}>

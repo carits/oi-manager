@@ -64,11 +64,12 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `TrainingParticipant` | 以 Prisma schema 为准 |
 | `TrainingProblem` | 以 Prisma schema 为准 |
 | `TrainingProblemContentSnapshot` | 活动题面/题解不可变 revision 快照；当前版本取最大 revision |
+| `TrainingProblemStatementSet` | 活动一道题的一次多题面选择 revision |
+| `TrainingProblemStatementSnapshot` | 选择集合内不可变的题面副本、顺序和默认标记 |
 | `TrainingSolution` | 以 Prisma schema 为准 |
 | `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
 | `User` | 以 Prisma schema 为准 |
-| `UserProblemContent` | 每位用户在每道题下的一份当前题面或题解 |
-| `UserProblemContentShare` | 个人内容对平台或指定校园的活动选用授权 |
+| `UserProblemContent` | 用户独立题面版本与兼容题解；题面按名称软删除并使用 private/public 可见性 |
 | `UserArchivedProblem` | 以 Prisma schema 为准 |
 | `UserNotification` | 以 Prisma schema 为准 |
 | `UserPlatformBinding` | 以 Prisma schema 为准 |

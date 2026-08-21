@@ -537,38 +537,32 @@ model ProblemStatement {
 }
 
 model UserProblemContent {
-  id        String   @id
-  problemId String
-  userId    String
-  kind      String
-  title     String?
-  format    String
-  language  String?
-  content   String?  @db.Text
-  fileId    String?
-  revision  Int      @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Share     UserProblemContentShare[]
+  id                   String   @id
+  problemId            String
+  userId               String
+  kind                 String
+  name                 String?
+  nameKey              String?
+  title                String?
+  format               String
+  language             String?
+  content              String?  @db.Text
+  fileId               String?
+  visibility           String   @default("private")
+  sourceType           String   @default("blank")
+  sourceId             String?
+  sourceNameSnapshot   String?
+  sourceAuthorSnapshot String?
+  revision             Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  deletedAt            DateTime?
+  Problem              Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  User                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([problemId, userId, kind])
-  @@index([problemId, kind])
+  @@index([problemId, kind, visibility, deletedAt])
+  @@index([problemId, userId, kind, nameKey])
   @@index([userId, updatedAt])
-}
-
-model UserProblemContentShare {
-  contentId     String
-  shareKey      String
-  scope         String
-  organizationId String?
-  createdAt     DateTime @default(now())
-  Content       UserProblemContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
-
-  @@id([contentId, shareKey])
-  @@index([shareKey])
-  @@index([organizationId])
 }
 
 model School {
@@ -1149,12 +1143,49 @@ model TrainingProblem {
   Training                  Training                    @relation(fields: [trainingId], references: [id], onDelete: Cascade)
   TrainingSolution          TrainingSolution?
   ContentSnapshot           TrainingProblemContentSnapshot[]
+  StatementSet              TrainingProblemStatementSet[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
 
   @@unique([trainingId, alias])
   @@unique([trainingId, orderIndex])
   @@index([problemId])
   @@index([trainingId])
+}
+
+model TrainingProblemStatementSet {
+  id                String   @id
+  trainingProblemId String
+  revision          Int
+  selectedBy        String
+  selectedAt        DateTime @default(now())
+  TrainingProblem   TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
+  Snapshot          TrainingProblemStatementSnapshot[]
+
+  @@unique([trainingProblemId, revision])
+  @@index([trainingProblemId, revision])
+}
+
+model TrainingProblemStatementSnapshot {
+  id                     String   @id
+  statementSetId         String
+  sourceType             String
+  sourceContentId        String?
+  name                   String
+  title                  String?
+  language               String?
+  format                 String
+  content                String?  @db.Text
+  snapshotFileId         String?
+  fileName               String?
+  authorUserId           String?
+  authorUsernameSnapshot String?
+  isDefault              Boolean  @default(false)
+  orderIndex             Int
+  StatementSet           TrainingProblemStatementSet @relation(fields: [statementSetId], references: [id], onDelete: Cascade)
+
+  @@unique([statementSetId, orderIndex])
+  @@index([statementSetId, isDefault])
+  @@index([sourceContentId])
 }
 
 model TrainingProblemContentSnapshot {

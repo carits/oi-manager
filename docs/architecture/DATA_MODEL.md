@@ -69,12 +69,13 @@ erDiagram
 - `Problem.status` 使用 `draft | published | archived`，`ownerId` 关联创建用户，
   `ownerType` 和 `visibility` 只作为开发周期内的旧数据兼容字段。
 - `ProblemStatement`、附件和测试数据独立，但访问一律继承题目作用域。
-- `UserProblemContent` 允许每个用户在每道题下分别维护一份当前题面和一份当前题解，
-  唯一键为 `problemId + userId + kind`；每次替换递增 `revision`。`UserProblemContentShare`
-  记录 `platform` 或 `organization:<id>` 授权，缺少共享记录时只有作者可选用。
-- `TrainingProblemContentSnapshot` 保存活动实际展示的题面/题解。每个
-  `trainingProblemId + kind` 按 revision 追加不可变记录，当前版本取最大 revision；用户
-  PDF 被选用时复制到活动专属文件，撤销共享、编辑或删除原内容不会改变历史活动。
+- `UserProblemContent` 的题面记录是可独立命名的多版本对象；同一用户同题可有多份不同
+  `nameKey` 的活跃题面，使用 `private | public` 可见性和 `deletedAt` 软删除。题面可以从官方、
+  自有、他人公开版本或空白复制，复制后不再依赖来源。题解暂时继续保持每人每题一份。
+- `TrainingProblemStatementSet` 为活动题目保存一次多题面选择 revision，所属的
+  `TrainingProblemStatementSnapshot` 保存每份题面的内容/PDF、显示顺序和唯一默认标记。
+  来源后续编辑、转私有或删除均不影响活动快照。旧 `TrainingProblemContentSnapshot` 继续
+  承担题解快照及历史兼容读取。
 - `ProblemList` 通过 section/entry 组织题目，通过 `scope`、share、学校和团队关联控制可见性。
 - `Training.scope` 继承团队作用域；学校任务固定为 `campus`。
 - `Submission.workspaceScope` 在服务端创建时从会话推导，客户端不能指定。
