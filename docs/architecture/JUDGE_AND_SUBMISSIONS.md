@@ -17,10 +17,16 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 
 ## 提交类型
 
-- Carits 本地提交：创建 `oj=carits`、`result=queuing` 的 `Submission`，由 Judge 消费。
-- 外部 OJ 提交：通过平台账号或用户绑定提交，并由同步/轮询逻辑更新结果。
+- 本地代码提交：`oj/problemId` 只记录题目来源，`submitMethod=local` 选择本站 Judge；Carits、
+  Codeforces、洛谷、HDU 等来源题统一走该路径。
+- 远程归档：平台绑定同步创建 `submitMethod=archive` 的只读历史记录。归档可展示，但不进入
+  本地 Judge、比赛排名、最佳成绩或重新评测。
 - 训练提交：额外关联 `trainingId`，按训练、作业或比赛权限控制可见性。
 - 全局提交：题库上下文中的个人提交，按题目所有权和角色决定可见性。
+
+代码提交要求题目已有本地 `judgeConfig` 和测试数据记录；任一缺失时接口返回
+`409 LOCAL_JUDGE_NOT_CONFIGURED`，不会回退为远程评测。旧客户端传入的 `robot` 或
+`myAccount` 会兼容规范为 `local`，`archive` 必须使用独立同步接口。
 
 训练提交列表、详情和排行榜使用同一套 `Submission.result` 状态事实，不以 `cases` 是否存在作为“已评测”
 的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
@@ -70,14 +76,19 @@ Judge 连接 `ws://<server>/ws/judge`，流程如下：
 ```sql
 SELECT id
 FROM "Submission"
-WHERE result = 'queuing' AND oj = 'carits'
+WHERE result = 'queuing'
+  AND "problemInternalId" IS NOT NULL
+  AND (
+    "submitMethod" IN ('local', 'demo_scenario')
+    OR (oj = 'carits' AND "submitMethod" <> 'archive')
+  )
 ORDER BY "createdAt"
 FOR UPDATE SKIP LOCKED
 LIMIT 1;
 ```
 
 同一事务把任务更新为 `judging` 并记录 `judgeId/judgeStarted`。多个 Judge 不会领取
-同一任务。
+同一任务。比赛提交优先使用 `TrainingProblem.judgeConfigSnapshot`，否则使用当前题目配置。
 
 ## 状态恢复
 

@@ -462,13 +462,13 @@ B 题：...
           color: 'white',
           border: 'none',
           borderRadius: '6px',
-          cursor: trainingStatus === 'ongoing' && (selectedProblem?.platform === 'carits' || selectedProblem?.platform === 'hdu') ? 'pointer' : 'not-allowed',
+          cursor: trainingStatus === 'ongoing' ? 'pointer' : 'not-allowed',
           fontSize: '0.85rem',
           fontWeight: 500,
           width: '100%',
-          opacity: trainingStatus === 'ongoing' && (selectedProblem?.platform === 'carits' || selectedProblem?.platform === 'hdu') ? 1 : 0.5,
+          opacity: trainingStatus === 'ongoing' ? 1 : 0.5,
         }}
-        disabled={trainingStatus !== 'ongoing' || (selectedProblem?.platform !== 'carits' && selectedProblem?.platform !== 'hdu')}
+        disabled={trainingStatus !== 'ongoing'}
       >
         ▶ 提交代码
       </button>

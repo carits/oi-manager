@@ -28,6 +28,16 @@ import { resolveJudgePresentationConfig } from '../../lib/judge-mode'
 
 export const trainingSubmissionsRouter = Router()
 
+const localJudgeSubmissionWhere = () => ({
+  problemInternalId: { not: null },
+  submitMethod: { not: 'archive' },
+  OR: [
+    { submitMethod: { in: ['local', 'demo_scenario'] } },
+    // Include legacy Carits code submissions created before submitMethod=local.
+    { oj: 'carits' },
+  ],
+})
+
 /**
  * POST /api/trainings/:id/submit
  * 提交代码
@@ -41,7 +51,15 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       return res.status(400).json({ success: false, message: '缺少必要参数' })
     }
 
-    const method = submitMethod || 'robot'
+    if (submitMethod === 'archive') {
+      return res.status(400).json({
+        success: false,
+        code: 'USE_ARCHIVE_SYNC',
+        message: '远程归档不计入比赛提交，请在题目页使用同步归档功能',
+      })
+    }
+    // Legacy robot/myAccount payloads remain accepted, but always run locally.
+    const method = 'local'
     const idempotencyKey = readIdempotencyKey(req)
     const fingerprint = requestFingerprint({
       trainingProblemId,
@@ -74,10 +92,15 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
-    // 只允许支持机器人提交的平台（carits 本地评测、hdu 机器人提交）
     const platform = trainingProblem.Problem.platform
-    if (platform !== 'carits' && platform !== 'hdu') {
-      return res.status(400).json({ success: false, message: `${platform} 平台暂不支持在线提交` })
+    const judgeConfig = trainingProblem.judgeConfigSnapshot || trainingProblem.Problem.judgeConfig
+    const testdataCount = await prisma.testdataFile.count({ where: { problemId: trainingProblem.Problem.id } })
+    if (!judgeConfig?.trim() || testdataCount === 0) {
+      return res.status(409).json({
+        success: false,
+        code: 'LOCAL_JUDGE_NOT_CONFIGURED',
+        message: '该题尚未配置完整的本地评测配置和测试数据，请联系比赛管理员',
+      })
     }
 
     let submissionResult
@@ -109,121 +132,11 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
 
     const problemId = trainingProblem.Problem.problemId
 
-    // Carits 平台：本地评测（新模式：入队后由 Consumer 自动消费）
-    if (platform === 'carits') {
-      logger.info('carits_training_submission_queued', {
-        action: 'training_submit',
-        metadata: { submissionId: submission.id, trainingId: id }
-      })
-    }
-    // HDU 平台：机器人提交（复用 submit.ts 的逻辑）
-    else if (platform === 'hdu' && method === 'robot') {
-      const { submitToHdu } = await import('../../lib/hdu-submit')
-
-      // 查询可用 HDU 账号
-      const accounts = await prisma.ojAccount.findMany({
-        where: {
-          platform: 'hdu',
-          enabled: true,
-          password: { not: null },
-          passwordIV: { not: null },
-          OR: [{ status: 'active' }, { status: 'unverified' }],
-        },
-        orderBy: { priority: 'desc' },
-      })
-
-      if (accounts.length === 0) {
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: { result: 'submit_failed', errorMessage: '没有可用的 HDU 账号' },
-        })
-        return res.json({ success: false, message: '没有可用的 HDU 账号' })
-      }
-
-      // 过滤冷却期/冻结账号
-      const nowMs = Date.now()
-      const available = accounts.filter(a => {
-        if (a.consecutiveFailures >= a.maxConsecutiveFailures) return false
-        if (a.lastLoginFailureAt) {
-          const elapsed = nowMs - new Date(a.lastLoginFailureAt).getTime()
-          if (elapsed < a.loginFailureCooldownMinutes * 60 * 1000) return false
-        }
-        if (a.lastSubmitAt) {
-          const elapsed = nowMs - new Date(a.lastSubmitAt).getTime()
-          if (elapsed < a.minSubmitIntervalSeconds * 1000) return false
-        }
-        return true
-      })
-
-      if (available.length === 0) {
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: { result: 'submit_failed', errorMessage: '所有 HDU 账号都在冷却中，请稍后再试' },
-        })
-        return res.json({ success: false, message: '所有 HDU 账号都在冷却中，请稍后再试' })
-      }
-
-      const account = available[Math.floor(Math.random() * available.length)]
-
-      logger.info('hdu_account_selected', {
-        action: 'training_submit',
-        metadata: { submissionId: submission.id, selectedAccount: account.username, availableAccounts: available.length },
-      })
-
-      const result = await submitToHdu(
-        {
-          id: account.id,
-          username: account.username,
-          password: account.password!,
-          passwordIV: account.passwordIV!,
-          cookie: account.cookie,
-          lastLoginAt: account.lastLoginAt,
-          lastLoginFailureAt: account.lastLoginFailureAt,
-          lastSubmitAt: account.lastSubmitAt,
-          consecutiveFailures: account.consecutiveFailures,
-          cookieValidMinutes: account.cookieValidMinutes,
-          renewLoginThresholdMinutes: account.renewLoginThresholdMinutes,
-          loginFailureCooldownMinutes: account.loginFailureCooldownMinutes,
-          minSubmitIntervalSeconds: account.minSubmitIntervalSeconds,
-          maxConsecutiveFailures: account.maxConsecutiveFailures,
-          submitMaxRetries: account.submitMaxRetries,
-        },
-        problemId,
-        language,
-        code,
-      )
-
-      if (result.success) {
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: { ojAccountId: account.id, ojRemoteId: result.ojRemoteId },
-        })
-        logger.info('hdu_submit_success', {
-          action: 'training_submit',
-          metadata: { submissionId: submission.id, ojRemoteId: result.ojRemoteId },
-        })
-      } else {
-        await prisma.submission.update({
-          where: { id: submission.id },
-          data: { result: 'submit_failed', errorMessage: result.message },
-        })
-        logger.warn('hdu_submit_failed', {
-          action: 'training_submit',
-          metadata: { submissionId: submission.id, message: result.message },
-        })
-        return res.json({ success: false, message: result.message })
-      }
-    }
-    // 其他外部 OJ 或非机器人提交：标记为待审核
-    else {
-      await prisma.submission.update({
-        where: { id: submission.id },
-        data: { result: 'pending_review' },
-      })
-    }
-
-    logger.info('training_submission_created', { action: 'trainings', metadata: { submissionId: submission.id, trainingId: id } })
-    res.json({ success: true, data: { submissionId: submission.id } })
+    logger.info('local_training_submission_queued', {
+      action: 'training_submit',
+      metadata: { submissionId: submission.id, trainingId: id, sourcePlatform: platform, problemId },
+    })
+    res.json({ success: true, data: { submissionId: submission.id }, message: '已加入本地评测队列' })
 }, '提交失败'))
 
 /**
@@ -521,7 +434,11 @@ trainingSubmissionsRouter.get('/trainings/:id/submission-users', authenticate, a
     const id = parseTrainingId(req.params.id)
     const training = await prisma.training.findUnique({ where: { id } })
     if (!training || !await canManageTraining(req.user!.userId, training)) return res.status(403).json({ success: false, message: '无权限' })
-    const users = await prisma.user.findMany({ where: { Submission: { some: { trainingId: id, oj: 'carits' } } }, select: { id: true, username: true }, orderBy: { username: 'asc' } })
+    const users = await prisma.user.findMany({
+      where: { Submission: { some: { trainingId: id, ...localJudgeSubmissionWhere() } } },
+      select: { id: true, username: true },
+      orderBy: { username: 'asc' },
+    })
     res.json({ success: true, data: { users: users.map(user => ({ ...user, displayName: user.username })) } })
 }, '查询用户失败'))
 
@@ -533,11 +450,15 @@ trainingSubmissionsRouter.get('/trainings/:id/rejudge/preview', authenticate, as
     const training = await prisma.training.findUnique({ where: { id } })
     if (!training || !await canManageTraining(req.user!.userId, training)) return res.status(403).json({ success: false, message: '无权限' })
     const scopeType = String(req.query.scopeType || 'all')
-    const where: any = { trainingId: id, oj: 'carits', submitScope: training.type === 'contest' ? 'contest' : 'training' }
+    const where: any = {
+      trainingId: id,
+      submitScope: training.type === 'contest' ? 'contest' : 'training',
+      AND: [localJudgeSubmissionWhere()],
+    }
     if (scopeType === 'problem' || scopeType === 'user_problem') {
       const tp = await prisma.trainingProblem.findFirst({ where: { id: String(req.query.trainingProblemId), trainingId: id }, select: { id: true, Problem: { select: { problemId: true } } } })
       if (!tp) return res.status(404).json({ success: false, message: '题目不属于当前比赛' })
-      where.OR = [{ trainingProblemId: tp.id }, { problemId: tp.Problem.problemId }]
+      where.AND.push({ OR: [{ trainingProblemId: tp.id }, { problemId: tp.Problem.problemId }] })
     }
     if (scopeType === 'user_problem') where.userId = String(req.query.userId)
     const [matchedCount, inProgressCount] = await Promise.all([prisma.submission.count({ where: { ...where, result: { notIn: ['queuing', 'judging'] } } }), prisma.submission.count({ where: { ...where, result: { in: ['queuing', 'judging'] } } })])
@@ -546,7 +467,7 @@ trainingSubmissionsRouter.get('/trainings/:id/rejudge/preview', authenticate, as
 
 /**
  * POST /api/trainings/:id/rejudge
- * 重新评测指定训练的所有提交（仅限 carits 本地评测）
+ * 重新评测指定训练的所有本地评测提交。
  */
 trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHandler(async (req: AuthRequest, res) => {
     const id = parseTrainingId(req.params.id)
@@ -568,12 +489,33 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
     if (scopeType === 'user_problem' && !scope.userId) return res.status(400).json({ success: false, message: '请选择用户' })
     const trainingProblem = scope.trainingProblemId ? await prisma.trainingProblem.findFirst({ where: { id: scope.trainingProblemId, trainingId: id }, select: { id: true, Problem: { select: { problemId: true } } } }) : null
     if (scopeType !== 'all' && !trainingProblem) return res.status(404).json({ success: false, message: '题目不属于当前比赛' })
-    const baseWhere: any = { submitScope: training.type === 'contest' ? 'contest' : 'training', trainingId: id, oj: 'carits' }
-    if (trainingProblem) baseWhere.OR = [{ trainingProblemId: trainingProblem.id }, { problemId: trainingProblem.Problem.problemId }]
+    const baseWhere: any = {
+      submitScope: training.type === 'contest' ? 'contest' : 'training',
+      trainingId: id,
+      AND: [localJudgeSubmissionWhere()],
+    }
+    if (trainingProblem) baseWhere.AND.push({ OR: [{ trainingProblemId: trainingProblem.id }, { problemId: trainingProblem.Problem.problemId }] })
     if (scopeType === 'user_problem') baseWhere.userId = scope.userId
     const [skippedCount, updateResult] = await Promise.all([
       prisma.submission.count({ where: { ...baseWhere, result: { in: ['queuing', 'judging'] } } }),
-      prisma.submission.updateMany({ where: { ...baseWhere, result: { notIn: ['queuing', 'judging'] } }, data: { result: 'queuing', score: null, timeUsed: null, wallTimeUsed: null, timeoutReason: null, metricSource: null, cases: null, subtasks: null, errorMessage: null, judgeStarted: null } }),
+      prisma.submission.updateMany({
+        where: { ...baseWhere, result: { notIn: ['queuing', 'judging'] } },
+        data: {
+          result: 'queuing',
+          submitMethod: 'local',
+          score: null,
+          timeUsed: null,
+          wallTimeUsed: null,
+          memoryUsed: null,
+          timeoutReason: null,
+          metricSource: null,
+          cases: null,
+          subtasks: null,
+          errorMessage: null,
+          judgeStarted: null,
+          judgeId: null,
+        },
+      }),
     ])
     const count = updateResult.count
 

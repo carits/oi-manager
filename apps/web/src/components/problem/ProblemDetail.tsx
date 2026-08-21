@@ -188,7 +188,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   )
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [showSubmitPanel, setShowSubmitPanel] = useState(false)
-  const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
+  const [submitMethod, setSubmitMethod] = useState<'local' | 'archive'>('local')
   const [submitCode, setSubmitCode] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
   const submitKeyRef = useRef<string | null>(null)
@@ -231,11 +231,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     fetchProblem()
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
     fetchAiUsage()
+    setSubmitMethod('local')
   }, [problemId])
 
-  // 当 submitMethod 变为 myAccount 或 archive 时，获取平台绑定状态
+  // Archive is a separate remote-history import and is never a code submit.
   useEffect(() => {
-    if (problem?.platform && problem.platform !== 'carits' && (submitMethod === 'myAccount' || submitMethod === 'archive')) {
+    if (problem?.platform && submitMethod === 'archive') {
       setPlatformBinding(null) // 先重置状态
       apiClient.get(`/api/platform-bindings/${problem.platform}`).then(res => {
         if (res.success && res.data) {
@@ -368,7 +369,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           oj: problem.platform,
           language: submitLanguage,
           code: submitCode,
-          submitMethod,
+          submitMethod: 'local',
         },
         { headers: { 'Idempotency-Key': submitKeyRef.current } },
       )
@@ -1135,6 +1136,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测ID</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>用户名</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测结果</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>类型</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(MS)</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
                     <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>代码长度(B)</th>
@@ -1145,13 +1147,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 <tbody>
                   {problemSubmissionsLoading ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                         <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
                       </td>
                     </tr>
                   ) : problemSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                         暂无提交记录
                       </td>
                     </tr>
@@ -1177,6 +1179,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                           }}>
                             {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
                           </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                          {s.submitMethod === 'archive' ? '远程归档' : '本地评测'}
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>{s.timeUsed ?? '-'}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
@@ -1341,35 +1346,20 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           title={`${OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} ${problem.problemId}`}
           width="750px"
         >
-          {/* Gym 题提示 */}
-          {problem.platform === 'codeforces' && !problem.problemId.match(/^\d+[A-Z]\d*$/) && (
-            <div style={{
-              padding: '0.75rem',
-              background: 'var(--warning-light)',
-              borderRadius: '6px',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-              color: 'var(--warning-text)',
-            }}>
-              Codeforces Gym 题目暂不支持在线提交，请前往 Codeforces 网站提交
-            </div>
-          )}
+          <div style={{
+            padding: '0.65rem 0.8rem', background: 'var(--gray-50)', borderRadius: '6px',
+            marginBottom: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)',
+          }}>
+            本站提交的代码统一使用本地测试数据评测；远程归档仅同步历史记录，不参与本站成绩。
+          </div>
 
-          {/* 非 Carits 平台：提交方式选择 */}
-          {problem.platform !== 'carits' && (
+          {/* Only platforms with archive connectors expose the archive action. */}
+          {['codeforces', 'luogu'].includes(problem.platform) && (
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
               {([
-                { key: 'robot', label: '机器人账号' },
-                { key: 'myAccount', label: '我的账号' },
-                { key: 'archive', label: '归档' },
+                { key: 'local', label: '本地评测' },
+                { key: 'archive', label: '同步归档' },
               ] as const)
-                .filter(m => {
-                  // Gym 题不显示"我的账号"选项
-                  if (m.key === 'myAccount' && problem.platform === 'codeforces' && !problem.problemId.match(/^\d+[A-Z]\d*$/)) {
-                    return false
-                  }
-                  return true
-                })
                 .map(m => (
                   <button
                     key={m.key}
@@ -1392,8 +1382,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             </div>
           )}
 
-          {/* 我的账号/归档时显示平台账号绑定 */}
-          {problem.platform !== 'carits' && (submitMethod === 'myAccount' || submitMethod === 'archive') && (
+          {/* Archive requires a bound source-platform account. */}
+          {submitMethod === 'archive' && (
             <div style={{
               fontSize: '0.875rem',
               color: 'var(--gray-500)',
@@ -1481,10 +1471,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           {/* 提交按钮 */}
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
-              {submitMethod === 'robot' ? '机器人账号提交已启用' :
-               submitMethod === 'myAccount' ?
-                 (platformBinding?.bound ? '使用绑定账号提交' : '请先绑定平台账号') :
-               '归档：同步已 AC 题目'}
+              {submitMethod === 'local' ? '本地评测' : '远程归档：只同步展示，不参与评测或计分'}
             </span>
             {submitMethod === 'archive' ? (
               <button
@@ -1507,19 +1494,16 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             ) : (
               <button
                 onClick={handleSubmitCode}
-                disabled={
-                  submitLoading ||
-                  (submitMethod === 'myAccount' && !platformBinding?.bound)
-                }
+                disabled={submitLoading || !submitCode.trim()}
                 style={{
                   padding: '0.625rem 2rem',
-                  background: (submitMethod === 'robot' || (submitMethod === 'myAccount' && platformBinding?.bound)) ? 'var(--primary)' : 'var(--gray-300)',
-                  color: (submitMethod === 'robot' || (submitMethod === 'myAccount' && platformBinding?.bound)) ? 'white' : 'var(--gray-500)',
+                  background: !submitLoading && submitCode.trim() ? 'var(--primary)' : 'var(--gray-300)',
+                  color: !submitLoading && submitCode.trim() ? 'white' : 'var(--gray-500)',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '0.875rem',
                   fontWeight: 500,
-                  cursor: (submitMethod === 'robot' || (submitMethod === 'myAccount' && platformBinding?.bound)) ? 'pointer' : 'not-allowed',
+                  cursor: !submitLoading && submitCode.trim() ? 'pointer' : 'not-allowed',
                   opacity: submitLoading ? 0.7 : 1,
                 }}
               >

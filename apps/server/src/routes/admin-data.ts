@@ -22,17 +22,18 @@ adminDataRouter.use((req: any, res, next) => {
   next()
 })
 
-/**
- * POST /api/admin/data/rejudge-all-carits
- * 将数据库中所有可重测的 Carits 提交重新加入评测队列。
- */
-adminDataRouter.post('/rejudge-all-carits', async (req, res) => {
+/** Requeue every completed local-judge submission, regardless of source OJ. */
+const rejudgeAllLocal = async (_req: any, res: any) => {
   try {
     const result = await prisma.submission.updateMany({
       where: {
-        oj: 'carits',
         problemInternalId: { not: null },
-        result: { not: 'queuing' },
+        submitMethod: { not: 'archive' },
+        OR: [
+          { submitMethod: { in: ['local', 'demo_scenario'] } },
+          { oj: 'carits' },
+        ],
+        result: { notIn: ['queuing', 'judging'] },
       },
       data: {
         result: 'queuing',
@@ -52,12 +53,16 @@ adminDataRouter.post('/rejudge-all-carits', async (req, res) => {
 
     res.json({
       success: true,
-      data: { requeued: result.count, message: `已将 ${result.count} 条 Carits 提交重新加入评测队列` },
+      data: { requeued: result.count, message: `已将 ${result.count} 条本地提交重新加入评测队列` },
     })
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message })
   }
-})
+}
+
+adminDataRouter.post('/rejudge-all-local', rejudgeAllLocal)
+// Compatibility alias for existing administrator clients.
+adminDataRouter.post('/rejudge-all-carits', rejudgeAllLocal)
 
 /**
  * POST /api/admin/data/rejudge-legacy-carits

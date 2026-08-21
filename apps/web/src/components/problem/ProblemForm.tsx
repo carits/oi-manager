@@ -671,8 +671,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               }}>
               题解
             </button>
-            {(form.platform === 'carits' || mode === 'create') && (
-              <button type="button" onClick={() => handleTabChange('judge_settings')}
+            <button type="button" onClick={() => handleTabChange('judge_settings')}
                 style={{
                   padding: '0.75rem 1rem',
                   background: 'transparent',
@@ -683,8 +682,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                   color: activeTab === 'judge_settings' ? 'var(--primary)' : 'var(--gray-500)'
                 }}>
                 评测设置
-              </button>
-            )}
+            </button>
             <button type="button" onClick={() => handleTabChange('settings')}
               style={{
                 padding: '0.75rem 1rem',

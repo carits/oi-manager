@@ -523,47 +523,13 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           })()}
           width="750px"
         >
-          {/* Submit method selection for non-Carits platforms */}
-          {selectedProblem?.platform && selectedProblem.platform !== 'carits' && (
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              {([
-                { key: 'robot' as const, label: '机器人账号' },
-                { key: 'myAccount' as const, label: '我的账号' },
-                { key: 'archive' as const, label: '归档' },
-              ]).map(m => (
-                <button
-                  key={m.key}
-                  onClick={() => actions.setSubmitMethod(m.key)}
-                  style={{
-                    padding: '0.5rem 1rem', fontSize: '0.875rem', border: '1px solid',
-                    borderColor: actions.submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
-                    borderRadius: '6px',
-                    background: actions.submitMethod === m.key ? 'var(--info-light)' : 'white',
-                    color: actions.submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
-                    cursor: 'pointer',
-                    fontWeight: actions.submitMethod === m.key ? 600 : 400,
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <div style={{
+            fontSize: '0.875rem', color: 'var(--gray-500)', padding: '0.65rem 0.8rem',
+            background: 'var(--gray-50)', borderRadius: '6px', marginBottom: '1rem',
+          }}>
+            代码将使用本站测试数据进行本地评测。远程提交记录可在题目页同步归档，且不计入本场比赛。
+          </div>
 
-          {/* Platform account binding hint for myAccount/archive */}
-          {selectedProblem?.platform && selectedProblem.platform !== 'carits' && (actions.submitMethod === 'myAccount' || actions.submitMethod === 'archive') && (
-            <div style={{
-              fontSize: '0.875rem', color: 'var(--gray-500)', padding: '0.5rem 0.75rem',
-              background: 'var(--gray-50)', borderRadius: '6px', marginBottom: '1rem',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <span>平台账号</span>
-              <span style={{ color: 'var(--warning)' }}>未绑定</span>
-            </div>
-          )}
-
-          {/* Language selection - 归档模式下隐藏 */}
-          {actions.submitMethod !== 'archive' && (
           <div style={{ marginBottom: '1rem' }}>
             <select aria-label="选择"
               value={actions.submitLanguage}
@@ -578,10 +544,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               ))}
             </select>
           </div>
-          )}
 
-          {/* Code input - 归档模式下隐藏 */}
-          {actions.submitMethod !== 'archive' && (
           <textarea
             placeholder="在此输入代码..."
             value={actions.submitCode}
@@ -595,26 +558,21 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               color: 'var(--text-primary)',
             }}
           />
-          )}
 
           {/* Submit button */}
           <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
-              {selectedProblem?.platform === 'carits'
-                ? '本地评测'
-                : actions.submitMethod === 'robot'
-                  ? `${OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || ''} 机器人提交已启用`
-                  : '暂未开放此提交方式'}
+              本地评测 · 题目来源：{OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || selectedProblem?.platform || 'Carits'}
             </span>
             <button
               onClick={handleSubmitCode}
-              disabled={actions.submitting || !actions.submitCode.trim() || actions.submitMethod !== 'robot'}
+              disabled={actions.submitting || !actions.submitCode.trim()}
               style={{
                 padding: '0.625rem 2rem',
-                background: (actions.submitting || !actions.submitCode.trim() || actions.submitMethod !== 'robot') ? 'var(--gray-300)' : 'var(--primary)',
-                color: (actions.submitting || !actions.submitCode.trim() || actions.submitMethod !== 'robot') ? 'var(--gray-500)' : 'white',
+                background: (actions.submitting || !actions.submitCode.trim()) ? 'var(--gray-300)' : 'var(--primary)',
+                color: (actions.submitting || !actions.submitCode.trim()) ? 'var(--gray-500)' : 'white',
                 border: 'none', borderRadius: '6px', fontSize: '0.875rem', fontWeight: 500,
-                cursor: (actions.submitting || !actions.submitCode.trim() || actions.submitMethod !== 'robot') ? 'not-allowed' : 'pointer',
+                cursor: (actions.submitting || !actions.submitCode.trim()) ? 'not-allowed' : 'pointer',
                 opacity: actions.submitting ? 0.7 : 1,
               }}
             >

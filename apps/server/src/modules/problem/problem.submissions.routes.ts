@@ -72,6 +72,7 @@ problemSubmissionsRouter.get('/:id/submissions', authenticate, asyncHandler(asyn
       oj: s.oj,
       problemId: s.problemId,
       result: s.result,
+      submitMethod: s.submitMethod,
       timeUsed: s.timeUsed,
       memoryUsed: s.memoryUsed,
       codeLength: s.codeLength,

@@ -85,26 +85,19 @@ rankingRouter.get('/personal/solved', authenticate, asyncHandler(async (req: Aut
   })
   const userIds = profiles.map(profile => profile.userId)
 
-  const [submissionRows, archivedRows] = userIds.length > 0
-    ? await Promise.all([
-        prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
-          SELECT DISTINCT "userId", "problemId"
-          FROM "Submission"
-          WHERE "userId" = ANY(${userIds}::text[])
-            AND "workspaceScope" = 'personal'
-            AND "result" IN ('accepted', 'Accepted', 'AC', 'ac')
-        `,
-        prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
-          SELECT "userId", "problemId"
-          FROM "UserArchivedProblem"
-          WHERE "userId" = ANY(${userIds}::text[])
-            AND "solvedAt" IS NOT NULL
-        `
-      ])
-    : [[], []]
+  const submissionRows = userIds.length > 0
+    ? await prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
+        SELECT DISTINCT "userId", "problemId"
+        FROM "Submission"
+        WHERE "userId" = ANY(${userIds}::text[])
+          AND "workspaceScope" = 'personal'
+          AND "submitMethod" <> 'archive'
+          AND "result" IN ('accepted', 'Accepted', 'AC', 'ac')
+      `
+    : []
 
   const solvedByUser = new Map<string, Set<string>>()
-  for (const row of [...submissionRows, ...archivedRows]) {
+  for (const row of submissionRows) {
     const solved = solvedByUser.get(row.userId) || new Set<string>()
     solved.add(row.problemId)
     solvedByUser.set(row.userId, solved)
@@ -153,7 +146,7 @@ rankingRouter.get('/organizations/:organizationId/:metric', authenticate, asyncH
   let ranked: Array<typeof baseRows[number] & { solvedCount?: number }>
   if (metric === 'rating') ranked = [...baseRows].sort((a,b) => b.rating - a.rating || a.username.localeCompare(b.username))
   else {
-    const accepted = await prisma.submission.findMany({ where: { userId: { in: baseRows.map(row => row.userId) }, result: { in: ['accepted', 'Accepted', 'AC', 'ac'] }, Training: { organizationId } }, select: { userId: true, problemInternalId: true, problemId: true } })
+    const accepted = await prisma.submission.findMany({ where: { userId: { in: baseRows.map(row => row.userId) }, submitMethod: { not: 'archive' }, result: { in: ['accepted', 'Accepted', 'AC', 'ac'] }, Training: { organizationId } }, select: { userId: true, problemInternalId: true, problemId: true } })
     const solved = new Map<string, Set<string>>()
     for (const item of accepted) { const set = solved.get(item.userId) || new Set<string>(); set.add(item.problemInternalId || item.problemId); solved.set(item.userId, set) }
     ranked = baseRows.map(row => ({ ...row, solvedCount: solved.get(row.userId)?.size || 0 })).sort((a,b) => (b.solvedCount || 0) - (a.solvedCount || 0) || a.username.localeCompare(b.username))

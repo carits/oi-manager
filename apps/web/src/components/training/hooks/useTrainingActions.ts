@@ -24,7 +24,6 @@ export function useTrainingActions(
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [submitCode, setSubmitCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [submitMethod, setSubmitMethod] = useState<'robot' | 'myAccount' | 'archive'>('robot')
   const submitKeyRef = useRef<string | null>(null)
 
   // Edit/delete state
@@ -37,11 +36,6 @@ export function useTrainingActions(
       toast.error('请输入代码')
       return
     }
-    // 训练/比赛只支持机器人账号提交
-    if (submitMethod !== 'robot') {
-      toast.error('训练/比赛暂不支持个人账号提交，请使用机器人账号')
-      return
-    }
     setSubmitting(true)
     try {
       submitKeyRef.current ||= createClientUUID()
@@ -52,7 +46,7 @@ export function useTrainingActions(
           trainingProblemId: selectedProblemId,
           language: submitLanguage,
           code: submitCode,
-          submitMethod,
+          submitMethod: 'local',
         },
         { headers: { 'Idempotency-Key': submitKeyRef.current } },
       )
@@ -78,7 +72,7 @@ export function useTrainingActions(
     } finally {
       setSubmitting(false)
     }
-  }, [selectedProblemId, submitCode, submitMethod, submitLanguage, trainingId, toast])
+  }, [selectedProblemId, submitCode, submitLanguage, trainingId, toast])
 
   const handleDelete = useCallback(async () => {
     if (!training) return false
@@ -119,7 +113,6 @@ export function useTrainingActions(
     submitLanguage, setSubmitLanguage,
     submitCode, setSubmitCode,
     submitting,
-    submitMethod, setSubmitMethod,
     handleSubmitCode,
     // Edit/delete
     showEditModal, setShowEditModal,

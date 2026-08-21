@@ -35,6 +35,15 @@ const judgeHeartbeats = new Map<WebSocket, number>()
 
 let wss: WebSocketServer | null = null
 
+const localJudgeSubmissionWhere = () => ({
+  problemInternalId: { not: null },
+  submitMethod: { not: 'archive' },
+  OR: [
+    { submitMethod: { in: ['local', 'demo_scenario'] } },
+    { oj: 'carits' },
+  ],
+})
+
 /**
  * JudgeConsumer 类：轮询 Submission 表，分发任务到评测机
  */
@@ -87,7 +96,12 @@ class JudgeConsumer {
         const candidates = await tx.$queryRaw<Array<{ id: number }>>`
           SELECT id
           FROM "Submission"
-          WHERE result = 'queuing' AND oj = 'carits'
+          WHERE result = 'queuing'
+            AND "problemInternalId" IS NOT NULL
+            AND (
+              "submitMethod" IN ('local', 'demo_scenario')
+              OR (oj = 'carits' AND "submitMethod" <> 'archive')
+            )
           ORDER BY "createdAt" ASC
           FOR UPDATE SKIP LOCKED
           LIMIT 1
@@ -97,7 +111,7 @@ class JudgeConsumer {
 
         const submission = await tx.submission.findUnique({
           where: { id: candidate.id },
-          select: { id: true, problemInternalId: true, code: true, language: true }
+          select: { id: true, problemInternalId: true, trainingProblemId: true, code: true, language: true }
         })
         if (!submission) return null
 
@@ -116,6 +130,12 @@ class JudgeConsumer {
           where: { id: submission.problemInternalId! },
           select: { judgeConfig: true }
         })
+        const trainingProblem = submission.trainingProblemId
+          ? await tx.trainingProblem.findUnique({
+              where: { id: submission.trainingProblemId },
+              select: { judgeConfigSnapshot: true },
+            })
+          : null
 
         // 统一使用 TESTDATA_DIR 环境变量
         const TESTDATA_DIR = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
@@ -126,7 +146,7 @@ class JudgeConsumer {
           code: submission.code,
           language: submission.language,
           testdataPath: path.join(TESTDATA_DIR, submission.problemInternalId!),
-          config: problem?.judgeConfig ? yaml.load(problem.judgeConfig) : {}
+          config: yaml.load(trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}')
         }
       })
     } catch (e: any) {
@@ -237,6 +257,7 @@ export function initJudgeWebSocket() {
       const stale = await prisma.submission.updateMany({
         where: {
           result: 'judging',
+          ...localJudgeSubmissionWhere(),
           judgeStarted: { lt: new Date(Date.now() - 5 * 60 * 1000) } // 5 分钟前
         },
         data: {
@@ -366,7 +387,7 @@ async function recoverAllStaleTasks() {
   try {
     // 恢复所有 judging 状态的任务（上次服务重启遗留）
     const recovered = await prisma.submission.updateMany({
-      where: { result: 'judging', oj: 'carits' },
+      where: { result: 'judging', ...localJudgeSubmissionWhere() },
       data: {
         result: 'queuing',
         judgeId: null,
@@ -588,8 +609,8 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
     return { success: false, message: '提交不存在' }
   }
 
-  if (submission.oj !== 'carits') {
-    return { success: false, message: '仅支持 Carits 平台题目的 rejudge' }
+  if (submission.submitMethod === 'archive') {
+    return { success: false, message: '远程归档记录不支持重新评测' }
   }
 
   if (!submission.problemInternalId) {
@@ -601,6 +622,7 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
     where: { id: submissionId },
     data: {
       result: 'queuing',
+      submitMethod: 'local',
       timeUsed: null,
       memoryUsed: null,
       wallTimeUsed: null,
@@ -612,7 +634,8 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
       errorMessage: null,
       judgeId: null,
       judgeStarted: null,
-      ojRemoteId: submissionId.toString()
+      ojAccountId: null,
+      ojRemoteId: submission.oj === 'carits' ? submissionId.toString() : null,
     }
   })
 

@@ -56,6 +56,9 @@ async function pollPendingSubmissions() {
     where: {
       result: 'queuing',
       ojRemoteId: { not: null },
+      // Only legacy remote code submissions are polled. Local and archive
+      // records have independent lifecycles.
+      submitMethod: { in: ['robot', 'myAccount'] },
     },
     include: {
       OjAccount: true,
