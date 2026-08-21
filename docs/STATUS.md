@@ -94,9 +94,12 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 
 ## 2026-08-21 远端部署快照
 
-- 开发服务器当前运行功能提交 `c7cb7cf`，公网优化预览构建为 `eT3lfFreazJiKcuMbPe39`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
+- 开发服务器当前运行功能提交 `3edf4f8`，公网优化预览构建为 `SUjSF5JVPnpXvR3BO0msz`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
   项目仍处开发阶段，不代表正式投产。
-- 数据库迁移 22/22；用户内容迁移前的 PostgreSQL 16 完整备份为
+- 数据库迁移 23/23；VJudge 式多题面迁移前的 PostgreSQL 16 完整备份为
+  `/data/backups/oi-manager/oi_manager_pre_vjudge_statements_20260821_1900.dump`，已通过容器内
+  `pg_restore -l` 校验。301 道历史活动题均生成一组 statement set 和默认 snapshot。
+  用户内容迁移前的 PostgreSQL 16 完整备份为
   `/data/backups/oi-manager/oi_manager_pre_user_content_20260821044529.dump`，已通过容器内同版本
   `pg_restore -l` 校验。301 个历史活动题均已生成题面和题解 revision 1（301/301）。
   校内题库迁移前的完整备份为
