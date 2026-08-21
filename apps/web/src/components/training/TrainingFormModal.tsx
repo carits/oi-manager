@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
@@ -32,18 +32,6 @@ interface ContentOption {
   authorUsername: string | null
   fileName: string | null
   previewText: string | null
-}
-
-function formatContentOption(option: ContentOption): string {
-  if (option.sourceType === 'none') return '不提供题解'
-  const source = option.sourceType === 'canonical'
-    ? '官方'
-    : option.authorUsername
-      ? `用户 · ${option.authorUsername}`
-      : '用户版本'
-  const meta = [option.format.toUpperCase(), option.language].filter(Boolean).join(' · ')
-  const title = option.title || option.fileName || '未命名版本'
-  return `${source}｜${title}${meta ? `（${meta}）` : ''}`
 }
 
 interface ProblemRow {
@@ -587,8 +575,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                     </thead>
                     <tbody>
                       {problemRows.map((row, idx) => (
-                        <Fragment key={row.id}>
-                        <tr style={{ background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
+                        <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
                           <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center' }}>
                             <button
                               onClick={() => moveUp(idx)}
@@ -676,45 +663,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                             <button onClick={() => removeRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.85rem', padding: '0.1rem 0.2rem' }} title="移除">&#10005;</button>
                           </td>
                         </tr>
-                        <tr style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? '#fafbfc' : '#fffdf2' }}>
-                          <td colSpan={(format === 'ioi' || format === 'oi') ? 8 : 7} style={{ padding: '0.65rem 0.75rem' }}>
-                            {row.contentOptionsLoading ? (
-                              <div style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>正在加载可用题面与题解版本…</div>
-                            ) : row.resolved?.found ? (
-                              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.75rem' }}>
-                                <label style={{ display: 'grid', gap: '0.3rem' }}>
-                                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-600)' }}>活动题面版本</span>
-                                  <select
-                                    aria-label={`${row.alias || `第 ${idx + 1} 题`}题面版本`}
-                                    value={row.statementOptionKey || ''}
-                                    onChange={event => updateRow(row.id, { statementOptionKey: event.target.value })}
-                                    style={{ ...inputStyle, padding: '0.42rem 0.5rem', background: 'white' }}
-                                  >
-                                    {(row.statementOptions || []).map(option => (
-                                      <option key={option.key} value={option.key}>{formatContentOption(option)}</option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label style={{ display: 'grid', gap: '0.3rem' }}>
-                                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-600)' }}>活动题解版本</span>
-                                  <select
-                                    aria-label={`${row.alias || `第 ${idx + 1} 题`}题解版本`}
-                                    value={row.solutionOptionKey || 'none'}
-                                    onChange={event => updateRow(row.id, { solutionOptionKey: event.target.value })}
-                                    style={{ ...inputStyle, padding: '0.42rem 0.5rem', background: 'white' }}
-                                  >
-                                    {(row.solutionOptions || []).map(option => (
-                                      <option key={option.key} value={option.key}>{formatContentOption(option)}</option>
-                                    ))}
-                                  </select>
-                                </label>
-                              </div>
-                            ) : (
-                              <div style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>题目解析成功后可选择活动使用的题面和题解。</div>
-                            )}
-                          </td>
-                        </tr>
-                        </Fragment>
                       ))}
                     </tbody>
                   </table>

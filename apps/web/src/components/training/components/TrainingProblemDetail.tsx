@@ -55,6 +55,7 @@ interface TrainingProblemDetailProps {
   trainingStatus: 'upcoming' | 'ongoing' | 'finished'
   onSubmitClick: () => void
   onMyContentClick: () => void
+  onManageContentClick: () => void
   onGoToAttachments: () => void
   saveNoteNow: () => Promise<void>
   saveRecordNow: () => Promise<void>
@@ -87,6 +88,7 @@ export function TrainingProblemDetail({
   trainingStatus,
   onSubmitClick,
   onMyContentClick,
+  onManageContentClick,
   onGoToAttachments,
   saveNoteNow,
   saveRecordNow,
@@ -490,6 +492,24 @@ B 题：...
           }}
         >
           我的题面 / 题解
+        </button>
+      )}
+      {selectedProblem && training.isAdmin && (
+        <button
+          onClick={onManageContentClick}
+          style={{
+            padding: '0.6rem 1rem',
+            background: 'white',
+            color: 'var(--primary)',
+            border: '1px solid var(--primary)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            width: '100%',
+          }}
+        >
+          管理活动内容版本
         </button>
       )}
       {trainingStatus === 'upcoming' && (

@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-21
 source_of_truth: apps/web/src
 ---
 
@@ -41,6 +41,10 @@ Header、背景和最大宽度。
 | API | `lib/apiClient.ts` | 认证、超时和响应解析 |
 
 大型组件按正在修改的业务区域渐进拆分，不进行无关的整体重写。
+
+比赛、训练和作业的基础编辑弹窗只管理活动元数据、题目顺序、别名和分值。题面/题解
+版本选择属于单题上下文，只能从活动“题面”页当前题目的“管理活动内容版本”入口打开
+`TrainingContentSelectionModal`；不要再把内容版本选择器铺进活动基础编辑表格。
 
 ## API 响应
 
@@ -103,4 +107,3 @@ SWR/Hooks 的 key 包含接口、查询参数和 `sessionKey=role:userId:workspa
 
 当前验收重点是 `1440×900` 和 `1280×720` 桌面端。固定格式控件使用明确的
 grid、min/max、aspect-ratio 或稳定按钮尺寸，避免动态内容导致布局跳动。
-

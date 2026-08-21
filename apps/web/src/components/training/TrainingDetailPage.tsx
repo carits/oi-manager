@@ -24,6 +24,7 @@ import { useTrainingActions } from './hooks/useTrainingActions'
 import { TrainingProblemList } from './components/TrainingProblemList'
 import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
+import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
 import { UserProblemContentPanel } from '@/components/problem/UserProblemContentPanel'
 import { Bell, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -94,6 +95,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const [makeupLoading, setMakeupLoading] = useState(false)
   const [showRejudgeModal, setShowRejudgeModal] = useState(false)
   const [showMyContentModal, setShowMyContentModal] = useState(false)
+  const [showContentSelectionModal, setShowContentSelectionModal] = useState(false)
   const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string; displayName?: string }>>([])
   const [rejudgeUsersLoading, setRejudgeUsersLoading] = useState(false)
   const [rankingSubmissionContext, setRankingSubmissionContext] = useState<{
@@ -407,6 +409,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             trainingStatus={training.status as 'upcoming' | 'ongoing' | 'finished'}
             onSubmitClick={() => actions.setShowSubmitModal(true)}
             onMyContentClick={() => setShowMyContentModal(true)}
+            onManageContentClick={() => setShowContentSelectionModal(true)}
             onGoToAttachments={() => selectTab('attachments')}
             saveNoteNow={saveNoteNow}
             saveRecordNow={saveRecordNow}
@@ -491,6 +494,17 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           />
         )}
       </Modal>
+
+      {selectedProblem && (
+        <TrainingContentSelectionModal
+          isOpen={showContentSelectionModal}
+          onClose={() => setShowContentSelectionModal(false)}
+          trainingId={trainingId}
+          trainingProblemId={selectedProblem.id}
+          problemLabel={`${selectedProblem.alias || ''}${selectedProblem.problemTitle ? ` · ${selectedProblem.problemTitle}` : ''}` || '当前题目'}
+          onSaved={async () => { await retryProblemDetail(); refresh() }}
+        />
+      )}
 
       <TrainingRejudgeModal
         isOpen={showRejudgeModal}
