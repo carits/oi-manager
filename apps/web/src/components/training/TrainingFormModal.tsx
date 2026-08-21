@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { Fragment, useState, useEffect, useRef } from 'react'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +23,29 @@ interface ResolvedProblem {
   created: boolean
 }
 
+interface ContentOption {
+  key: string
+  sourceType: 'canonical' | 'user' | 'training' | 'none'
+  title: string | null
+  format: string
+  language: string | null
+  authorUsername: string | null
+  fileName: string | null
+  previewText: string | null
+}
+
+function formatContentOption(option: ContentOption): string {
+  if (option.sourceType === 'none') return '不提供题解'
+  const source = option.sourceType === 'canonical'
+    ? '官方'
+    : option.authorUsername
+      ? `用户 · ${option.authorUsername}`
+      : '用户版本'
+  const meta = [option.format.toUpperCase(), option.language].filter(Boolean).join(' · ')
+  const title = option.title || option.fileName || '未命名版本'
+  return `${source}｜${title}${meta ? `（${meta}）` : ''}`
+}
+
 interface ProblemRow {
   id: string
   trainingProblemId?: string
@@ -33,6 +56,13 @@ interface ProblemRow {
   resolving: boolean
   resolved: ResolvedProblem | null
   existing?: boolean
+  contentOptionsLoading?: boolean
+  statementOptions?: ContentOption[]
+  solutionOptions?: ContentOption[]
+  statementOptionKey?: string
+  solutionOptionKey?: string
+  originalStatementOptionKey?: string
+  originalSolutionOptionKey?: string
 }
 
 interface TrainingFormModalProps {
@@ -97,21 +127,35 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
           const problemsRes = await apiClient.get(`/api/trainings/${trainingId}/problems`)
           if (problemsRes.success && problemsRes.data) {
-            const rows: ProblemRow[] = (problemsRes.data as any[]).map((p: any) => ({
-              id: `existing-${p.id}`,
-              trainingProblemId: p.id,
-              ojName: p.platform || 'carits',
-              problemCode: p.platformProblemId || p.problemId || '',
-              alias: p.alias,
-              points: p.points ?? 100,
-              resolving: false,
-              resolved: {
-                found: true,
-                problemId: p.problemId,
-                title: p.problemTitle || '',
-                created: false,
-              },
-              existing: true,
+            const rows: ProblemRow[] = await Promise.all((problemsRes.data as any[]).map(async (p: any) => {
+              const optionsRes = await apiClient.get<{
+                statement: ContentOption[]
+                solution: ContentOption[]
+                currentSelection: { statementOptionKey: string | null; solutionOptionKey: string | null }
+              }>(`/api/trainings/${trainingId}/problems/${p.id}/content-options`)
+              const options = optionsRes.success ? optionsRes.data : null
+              return {
+                id: `existing-${p.id}`,
+                trainingProblemId: p.id,
+                ojName: p.platform || 'carits',
+                problemCode: p.platformProblemId || p.problemId || '',
+                alias: p.alias,
+                points: p.points ?? 100,
+                resolving: false,
+                resolved: {
+                  found: true,
+                  problemId: p.problemId,
+                  title: p.problemTitle || '',
+                  created: false,
+                },
+                existing: true,
+                statementOptions: options?.statement || [],
+                solutionOptions: options?.solution || [],
+                statementOptionKey: options?.currentSelection.statementOptionKey || options?.statement[0]?.key,
+                solutionOptionKey: options?.currentSelection.solutionOptionKey || options?.solution.find(option => option.key !== 'none')?.key || 'none',
+                originalStatementOptionKey: options?.currentSelection.statementOptionKey || options?.statement[0]?.key,
+                originalSolutionOptionKey: options?.currentSelection.solutionOptionKey || options?.solution.find(option => option.key !== 'none')?.key || 'none',
+              }
             }))
             setProblemRows(rows)
           }
@@ -176,6 +220,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       points: 100,
       resolving: false,
       resolved: null,
+      statementOptions: [],
+      solutionOptions: [],
+      contentOptionsLoading: false,
     }
     setProblemRows(prev => [...prev, row])
   }
@@ -199,7 +246,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       updateRow(row.id, { resolved: null, resolving: false })
       return
     }
-    updateRow(row.id, { resolving: true })
+    updateRow(row.id, {
+      resolving: true,
+      contentOptionsLoading: true,
+      statementOptions: [],
+      solutionOptions: [],
+      statementOptionKey: undefined,
+      solutionOptionKey: undefined,
+    })
     resolveTimerRef.current[row.id] = setTimeout(async () => {
       try {
         const res = await apiClient.post(`/api/resolve-problems`, {
@@ -208,11 +262,29 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         if (res.success && res.data) {
           const resolved = (res.data as any).resolved
           if (resolved && resolved.length > 0) {
-            updateRow(row.id, { resolved: resolved[0], resolving: false })
+            const found = resolved[0] as ResolvedProblem
+            if (!found.found) {
+              updateRow(row.id, { resolved: found, resolving: false, contentOptionsLoading: false })
+              return
+            }
+            const optionsRes = await apiClient.get<{
+              statement: ContentOption[]
+              solution: ContentOption[]
+            }>(`/api/problems/${found.problemId}/content-options`)
+            const options = optionsRes.success ? optionsRes.data : null
+            updateRow(row.id, {
+              resolved: found,
+              resolving: false,
+              contentOptionsLoading: false,
+              statementOptions: options?.statement || [],
+              solutionOptions: options?.solution || [],
+              statementOptionKey: options?.statement[0]?.key,
+              solutionOptionKey: options?.solution.find(option => option.key !== 'none')?.key || 'none',
+            })
           }
         }
       } catch {
-        updateRow(row.id, { resolving: false })
+        updateRow(row.id, { resolving: false, contentOptionsLoading: false })
       }
     }, 500)
   }
@@ -262,6 +334,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         toast.error(`有 ${unresolvedRows.length} 道题目未找到，请检查题号`)
         return
       }
+      const changedContent = problemRows.some(row => row.existing && (
+        row.statementOptionKey !== row.originalStatementOptionKey ||
+        row.solutionOptionKey !== row.originalSolutionOptionKey
+      ))
+      if (isStarted && changedContent && !window.confirm('更换后所有参与者将看到新版本，旧版本会保留在活动快照历史中。确定继续吗？')) {
+        return
+      }
     } else {
       // 创建模式验证
       if (new Date(startTime) <= new Date()) { toast.error('开始时间不能早于当前时间'); return }
@@ -308,12 +387,25 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           }
         }
 
-        // 3. Update existing problems (alias, points)
+        // 3. Update existing problems (alias, points and immutable content snapshots)
         for (const row of problemRows.filter(r => r.existing)) {
           await apiClient.put(`/api/trainings/${trainingId}/problems/${row.trainingProblemId}`, {
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
           })
+          const selectionChanged =
+            row.statementOptionKey !== row.originalStatementOptionKey ||
+            row.solutionOptionKey !== row.originalSolutionOptionKey
+          if (selectionChanged && row.statementOptionKey && row.solutionOptionKey) {
+            const selectionRes = await apiClient.put(
+              `/api/trainings/${trainingId}/problems/${row.trainingProblemId}/content-selection`,
+              {
+                statementOptionKey: row.statementOptionKey,
+                solutionOptionKey: row.solutionOptionKey,
+              },
+            )
+            if (!selectionRes.success) throw new Error(selectionRes.message || '保存题面和题解版本失败')
+          }
         }
 
         // 4. Add new problems
@@ -324,6 +416,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
+            statementOptionKey: row.statementOptionKey,
+            solutionOptionKey: row.solutionOptionKey || 'none',
           })
           if (createRes.success && createRes.data) {
             newTrainingProblemIds.push((createRes.data as any).id)
@@ -362,6 +456,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             problemId: row.resolved!.problemId,
             alias: row.alias,
             points: (format === 'ioi' || format === 'oi') ? row.points : null,
+            statementOptionKey: row.statementOptionKey,
+            solutionOptionKey: row.solutionOptionKey || 'none',
           })
         }
 
@@ -491,7 +587,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                     </thead>
                     <tbody>
                       {problemRows.map((row, idx) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
+                        <Fragment key={row.id}>
+                        <tr style={{ background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
                           <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center' }}>
                             <button
                               onClick={() => moveUp(idx)}
@@ -579,6 +676,45 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                             <button onClick={() => removeRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.85rem', padding: '0.1rem 0.2rem' }} title="移除">&#10005;</button>
                           </td>
                         </tr>
+                        <tr style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? '#fafbfc' : '#fffdf2' }}>
+                          <td colSpan={(format === 'ioi' || format === 'oi') ? 8 : 7} style={{ padding: '0.65rem 0.75rem' }}>
+                            {row.contentOptionsLoading ? (
+                              <div style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>正在加载可用题面与题解版本…</div>
+                            ) : row.resolved?.found ? (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.75rem' }}>
+                                <label style={{ display: 'grid', gap: '0.3rem' }}>
+                                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-600)' }}>活动题面版本</span>
+                                  <select
+                                    aria-label={`${row.alias || `第 ${idx + 1} 题`}题面版本`}
+                                    value={row.statementOptionKey || ''}
+                                    onChange={event => updateRow(row.id, { statementOptionKey: event.target.value })}
+                                    style={{ ...inputStyle, padding: '0.42rem 0.5rem', background: 'white' }}
+                                  >
+                                    {(row.statementOptions || []).map(option => (
+                                      <option key={option.key} value={option.key}>{formatContentOption(option)}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label style={{ display: 'grid', gap: '0.3rem' }}>
+                                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-600)' }}>活动题解版本</span>
+                                  <select
+                                    aria-label={`${row.alias || `第 ${idx + 1} 题`}题解版本`}
+                                    value={row.solutionOptionKey || 'none'}
+                                    onChange={event => updateRow(row.id, { solutionOptionKey: event.target.value })}
+                                    style={{ ...inputStyle, padding: '0.42rem 0.5rem', background: 'white' }}
+                                  >
+                                    {(row.solutionOptions || []).map(option => (
+                                      <option key={option.key} value={option.key}>{formatContentOption(option)}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+                            ) : (
+                              <div style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>题目解析成功后可选择活动使用的题面和题解。</div>
+                            )}
+                          </td>
+                        </tr>
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>

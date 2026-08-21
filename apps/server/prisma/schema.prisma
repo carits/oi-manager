@@ -376,6 +376,7 @@ model Problem {
   ProblemListEntry  ProblemListEntry[]
   ProblemNote       ProblemNote[]
   ProblemStatement  ProblemStatement[]
+  UserProblemContent UserProblemContent[]
   TestdataFile      TestdataFile[]
   ProblemChecker    ProblemChecker[]
   TrainingProblem   TrainingProblem[]
@@ -533,6 +534,41 @@ model ProblemStatement {
 
   @@unique([problemId, type, format, language])
   @@index([problemId, type])
+}
+
+model UserProblemContent {
+  id        String   @id
+  problemId String
+  userId    String
+  kind      String
+  title     String?
+  format    String
+  language  String?
+  content   String?  @db.Text
+  fileId    String?
+  revision  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Share     UserProblemContentShare[]
+
+  @@unique([problemId, userId, kind])
+  @@index([problemId, kind])
+  @@index([userId, updatedAt])
+}
+
+model UserProblemContentShare {
+  contentId     String
+  shareKey      String
+  scope         String
+  organizationId String?
+  createdAt     DateTime @default(now())
+  Content       UserProblemContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, shareKey])
+  @@index([shareKey])
+  @@index([organizationId])
 }
 
 model School {
@@ -1112,12 +1148,38 @@ model TrainingProblem {
   Problem                   Problem                     @relation(fields: [problemId], references: [id])
   Training                  Training                    @relation(fields: [trainingId], references: [id], onDelete: Cascade)
   TrainingSolution          TrainingSolution?
+  ContentSnapshot           TrainingProblemContentSnapshot[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
 
   @@unique([trainingId, alias])
   @@unique([trainingId, orderIndex])
   @@index([problemId])
   @@index([trainingId])
+}
+
+model TrainingProblemContentSnapshot {
+  id                     String          @id
+  trainingProblemId      String
+  kind                   String
+  revision               Int
+  sourceType             String
+  sourceContentId        String?
+  sourceRevision         Int?
+  format                 String
+  language               String?
+  title                  String?
+  content                String?         @db.Text
+  snapshotFileId         String?
+  fileName               String?
+  authorUserId           String?
+  authorUsernameSnapshot String?
+  selectedBy             String
+  selectedAt             DateTime        @default(now())
+  TrainingProblem        TrainingProblem @relation(fields: [trainingProblemId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingProblemId, kind, revision])
+  @@index([trainingProblemId, kind, revision])
+  @@index([sourceContentId])
 }
 
 model TrainingSolution {
@@ -1174,6 +1236,7 @@ model User {
   UserArchivedProblem       UserArchivedProblem[]
   UserPlatformBinding       UserPlatformBinding[]
   UserNotification          UserNotification[]
+  UserProblemContent        UserProblemContent[]
   OrganizationMembership    OrganizationMembership[]
   CaritsAccount             CaritsAccount?            @relation("CaritsAccountUser")
   CaritsTransactions        CaritsTransaction[]       @relation("CaritsTransactionOperator")

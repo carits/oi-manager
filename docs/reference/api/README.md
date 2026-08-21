@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-16
+last_verified: 2026-08-21
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -282,3 +282,19 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/checker/:fileName/download` | 下载 Checker 源码 |
 | `POST` | `/api/problems/:id/checker` | 上传 Checker 源码 |
 | `DELETE` | `/api/problems/:id/checker/:checkerId` | 删除 Checker 源码 |
+| `GET` | `/api/problems/:id/my-content` | 获取自己的题面、题解及可共享校园 |
+| `GET` | `/api/problems/:id/content-options` | 获取创建活动时可选用的题面与题解 |
+| `PUT` | `/api/problems/:id/my-content/:kind` | 保存自己的 Markdown 题面或题解 |
+| `PUT` | `/api/problems/:id/my-content/:kind/shares` | 设置个人内容的平台/校园共享范围 |
+| `POST` | `/api/problems/:id/my-content/:kind/pdf` | 上传自己的 PDF 题面或题解 |
+| `DELETE` | `/api/problems/:id/my-content/:kind` | 删除自己的当前版本；既有活动快照不受影响 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/my-content` | 从活动上下文读取自己的版本 |
+| `PUT` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind` | 从活动上下文保存自己的 Markdown 版本 |
+| `POST` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind/pdf` | 从活动上下文上传自己的 PDF 版本 |
+| `PUT` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind/shares` | 从活动上下文设置共享范围 |
+| `DELETE` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind` | 从活动上下文删除自己的当前版本 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options` | 管理员获取活动可选内容与当前快照 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options/:optionKey/preview` | 管理员预览候选内容 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options/:optionKey/file` | 管理员预览候选 PDF |
+| `PUT` | `/api/trainings/:id/problems/:trainingProblemId/content-selection` | 选择活动题面与题解并追加不可变快照 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-snapshot/:kind/file` | 读取活动当前 PDF 快照 |

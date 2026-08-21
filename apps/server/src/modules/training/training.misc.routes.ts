@@ -302,6 +302,11 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
       TrainingSolution: {
         select: { content: true, visible: true },
       },
+      ContentSnapshot: {
+        where: { kind: 'solution' },
+        orderBy: [{ revision: 'desc' }, { selectedAt: 'desc' }],
+        take: 1,
+      },
       Problem: {
         select: {
           solutionType: true,
@@ -327,15 +332,36 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
   const solutions: Record<string, {
     content: string
     visible: boolean
-    source: 'training' | 'problem'
+    source: 'canonical' | 'user' | 'training' | 'none' | 'problem'
     solutionType?: string
     solutionPdfUrl?: string | null
     format?: string
     language?: string | null
     fileUrl?: string | null
+    contentRevision?: number
+    authorUsername?: string | null
   }> = {}
 
   for (const item of problems) {
+    const snapshot = item.ContentSnapshot[0]
+    if (snapshot) {
+      if (snapshot.sourceType !== 'none') {
+        solutions[item.id] = {
+          content: snapshot.content ? rewriteTrainingFileUrls(id, item.id, snapshot.content) : '',
+          visible: true,
+          source: snapshot.sourceType as 'canonical' | 'user' | 'training',
+          solutionType: snapshot.format,
+          format: snapshot.format,
+          language: snapshot.language,
+          fileUrl: snapshot.snapshotFileId
+            ? `/api/trainings/${id}/problems/${item.id}/content-snapshot/solution/file`
+            : null,
+          contentRevision: snapshot.revision,
+          authorUsername: snapshot.sourceType === 'user' ? snapshot.authorUsernameSnapshot : null,
+        }
+      }
+      continue
+    }
     if (item.TrainingSolution && (item.TrainingSolution.visible || isAdmin)) {
       solutions[item.id] = {
         content: rewriteTrainingFileUrls(id, item.id, item.TrainingSolution.content),

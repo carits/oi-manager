@@ -21,6 +21,12 @@ import {
 import { findAccessibleProblem } from '../problem/problem.access'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 import { buildContestProblemStatus } from './training.problem-status'
+import { fileService } from '../../lib/storage'
+import {
+  activityOrganizationId,
+  createInitialContentSnapshots,
+  latestContentSnapshot,
+} from '../problem/problem.content.service'
 
 const managedProblemFilePattern = /\/api\/files\/([^/?#]+)\/(?:download|public)/g
 
@@ -88,6 +94,10 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
           },
         },
         TrainingSolution: { select: { id: true, visible: true } },
+        ContentSnapshot: {
+          orderBy: [{ revision: 'desc' }, { selectedAt: 'desc' }],
+          select: { kind: true, revision: true, sourceType: true, sourceContentId: true, authorUsernameSnapshot: true },
+        },
         _count: { select: { TrainingAttachment: true } },
       },
       orderBy: { orderIndex: 'asc' },
@@ -106,6 +116,12 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
           solutionVisible: p.TrainingSolution?.visible ?? false,
           attachmentCount,
           problemSourceHidden: hideProblemIdentity,
+          ...(isAdmin ? {
+            contentSelection: {
+              statement: p.ContentSnapshot.find(item => item.kind === 'statement') || null,
+              solution: p.ContentSnapshot.find(item => item.kind === 'solution') || null,
+            },
+          } : {}),
         }
 
         return {
@@ -248,7 +264,7 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
 trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandler(async (req: AuthRequest, res) => {
     const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
-    const { problemId, alias, points } = req.body
+    const { problemId, alias, points, statementOptionKey, solutionOptionKey } = req.body
 
     const training = await prisma.training.findUnique({
       where: { id },
@@ -310,6 +326,20 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
         return res.status(400).json({ success: false, message: '别名或题号已存在' })
       }
       throw e
+    }
+
+    try {
+      await createInitialContentSnapshots({
+        trainingProblemId: trainingProblem.id,
+        problemId: problem.id,
+        selectedBy: userId,
+        organizationId: await activityOrganizationId(training),
+        statementOptionKey: typeof statementOptionKey === 'string' ? statementOptionKey : undefined,
+        solutionOptionKey: typeof solutionOptionKey === 'string' ? solutionOptionKey : undefined,
+      })
+    } catch (error) {
+      await prisma.trainingProblem.delete({ where: { id: trainingProblem.id } })
+      throw error
     }
 
     res.json({ success: true, data: trainingProblem })
@@ -433,7 +463,12 @@ trainingProblemsRouter.delete('/trainings/:id/problems/:problemId', authenticate
       return res.status(403).json({ success: false, message: '题目不属于该训练' })
     }
 
+    const snapshotFiles = await prisma.trainingProblemContentSnapshot.findMany({
+      where: { trainingProblemId: problemId, snapshotFileId: { not: null } },
+      select: { snapshotFileId: true },
+    })
     await prisma.trainingProblem.delete({ where: { id: problemId } })
+    await Promise.all(snapshotFiles.map(item => item.snapshotFileId ? fileService.softDelete(item.snapshotFileId) : Promise.resolve()))
 
     res.json({ success: true, message: '删除成功' })
 }, '删除失败'))
@@ -508,33 +543,52 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     })
 
     const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
+    const statementSnapshot = await latestContentSnapshot(trainingProblem.id, 'statement')
     // 返回题面内容；赛中“题号赛后显示”时不返回任何原题识别字段。
     const problem = trainingProblem.Problem
+    const snapshotStatement = statementSnapshot ? [{
+      id: statementSnapshot.id,
+      type: 'statement',
+      format: statementSnapshot.format,
+      language: statementSnapshot.language,
+      content: contextualizeProblemContent(id, trainingProblem.id, statementSnapshot.content),
+      fileUrl: statementSnapshot.snapshotFileId
+        ? `/api/trainings/${id}/problems/${trainingProblem.id}/content-snapshot/statement/file`
+        : null,
+      isVisible: true,
+    }] : null
     res.json({
       success: true,
       data: {
         problemSourceHidden: hideProblemIdentity,
         orderIndex: trainingProblem.orderIndex,
         points: trainingProblem.points,
-        timeLimit: problem.timeLimit,
-        memoryLimit: problem.memoryLimit,
+        timeLimit: trainingProblem.timeLimitSnapshot ?? problem.timeLimit,
+        memoryLimit: trainingProblem.memoryLimitSnapshot ?? problem.memoryLimit,
         difficulty: problem.difficulty,
-        description: problem.description,
-        statementType: problem.statementType,
-        statementPdfUrl: contextualizeProblemFile(id, trainingProblem.id, problem.statementPdfUrl),
-        statements: problem.ProblemStatement.map(statement => ({
+        description: statementSnapshot?.content ?? problem.description,
+        statementType: statementSnapshot?.format ?? problem.statementType,
+        statementPdfUrl: statementSnapshot?.snapshotFileId
+          ? `/api/trainings/${id}/problems/${trainingProblem.id}/content-snapshot/statement/file`
+          : contextualizeProblemFile(id, trainingProblem.id, problem.statementPdfUrl),
+        statements: snapshotStatement || problem.ProblemStatement.map(statement => ({
           ...statement,
           content: contextualizeProblemContent(id, trainingProblem.id, statement.content),
           fileUrl: contextualizeProblemFile(id, trainingProblem.id, statement.fileUrl),
         })),
         noteContent: note?.content ?? '',
+        contentRevision: statementSnapshot?.revision ?? null,
+        contentSource: statementSnapshot?.sourceType ?? 'canonical',
+        ...(isAdmin && statementSnapshot?.authorUsernameSnapshot
+          ? { authorUsername: statementSnapshot.authorUsernameSnapshot }
+          : {}),
         ...(!hideProblemIdentity && {
           alias: trainingProblem.alias,
-          problemTitle: problem.title,
+          problemTitle: statementSnapshot?.title || trainingProblem.titleSnapshot || problem.title,
         }),
         // 管理员额外信息
         ...(isAdmin && {
-          problemTitle: problem.title,
+          problemTitle: statementSnapshot?.title || trainingProblem.titleSnapshot || problem.title,
           platform: problem.platform,
           platformProblemId: problem.problemId,
         }),

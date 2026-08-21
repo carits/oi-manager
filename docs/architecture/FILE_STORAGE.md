@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-02
+last_verified: 2026-08-21
 source_of_truth: apps/server/src/config/storage.ts, apps/server/src/routes/files.ts
 ---
 
@@ -42,6 +42,9 @@ STORAGE_ROOT/
   `/api/problem-lists/:id/entries/:entryId/files/:fileId` 教学上下文通道，同时校验教学资源、题目条目和文件引用。
 - 直接访问跨校文件、未授权学校题文件或私有静态路径统一返回 `404`。
 - 文件元数据保存在 `File`，题目附件和题面还有对应业务模型。
+- 用户个人 PDF 以私有 `ownerType=user` 文件保存；活动选用 PDF 时复制为
+  `ownerType=training_content` 的快照文件。参与者只能通过活动内容接口读取当前快照，
+  不能凭原始用户文件 ID 绕过共享与活动权限。
 - 删除采用业务记录更新和回收站策略，不允许把用户提供的路径直接拼进文件系统。
 
 ## 限制
@@ -66,4 +69,5 @@ STORAGE_ROOT/
 - 数据盘迁移必须保证 `STORAGE_ROOT`、测试数据路径和 PM2 工作目录同步更新。
 - 历史学校题文件使用 `pnpm --filter server migrate:school-problem-files`
   迁入私有目录；必须先执行 `--dry-run`并备份数据库和存储根目录。
-
+- 删除或替换个人 PDF 会软删除原文件；已经复制到活动快照的文件继续保留。删除活动时，
+  其 `training_content` 快照文件进入现有软删除流程。

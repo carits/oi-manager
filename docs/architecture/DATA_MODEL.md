@@ -1,13 +1,13 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-02
+last_verified: 2026-08-21
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
 # 数据模型
 
-当前数据库为 PostgreSQL，Prisma Schema 有 51 个模型。这里解释领域关系；逐模型
+当前数据库为 PostgreSQL，Prisma Schema 有 63 个模型。这里解释领域关系；逐模型
 字段目录见[数据库参考](../reference/DATABASE_SCHEMA.md)。
 
 ## 领域分组
@@ -69,6 +69,12 @@ erDiagram
 - `Problem.status` 使用 `draft | published | archived`，`ownerId` 关联创建用户，
   `ownerType` 和 `visibility` 只作为开发周期内的旧数据兼容字段。
 - `ProblemStatement`、附件和测试数据独立，但访问一律继承题目作用域。
+- `UserProblemContent` 允许每个用户在每道题下分别维护一份当前题面和一份当前题解，
+  唯一键为 `problemId + userId + kind`；每次替换递增 `revision`。`UserProblemContentShare`
+  记录 `platform` 或 `organization:<id>` 授权，缺少共享记录时只有作者可选用。
+- `TrainingProblemContentSnapshot` 保存活动实际展示的题面/题解。每个
+  `trainingProblemId + kind` 按 revision 追加不可变记录，当前版本取最大 revision；用户
+  PDF 被选用时复制到活动专属文件，撤销共享、编辑或删除原内容不会改变历史活动。
 - `ProblemList` 通过 section/entry 组织题目，通过 `scope`、share、学校和团队关联控制可见性。
 - `Training.scope` 继承团队作用域；学校任务固定为 `campus`。
 - `Submission.workspaceScope` 在服务端创建时从会话推导，客户端不能指定。
@@ -81,4 +87,3 @@ erDiagram
 - 学校必须有当前负责人，负责人转移使用事务和日志记录。
 - 团队成员、题单分享和多种状态表有唯一约束，业务代码仍需处理并发冲突。
 - Judge 任务领取依赖 PostgreSQL `FOR UPDATE SKIP LOCKED`，测试不得改用 SQLite。
-

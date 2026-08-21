@@ -16,6 +16,7 @@ import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAG
 import { TranslateModal } from './TranslateModal'
 import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
 import { Copy } from 'lucide-react'
+import { UserProblemContentPanel } from './UserProblemContentPanel'
 
 interface Statement {
   id: string
@@ -179,8 +180,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const { user } = useAuth()
   const pathname = usePathname()
   const toast = useToast()
-  type TabType = 'statement' | 'solution' | 'attachments' | 'records'
-  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'records']
+  type TabType = 'statement' | 'solution' | 'attachments' | 'my-content' | 'records'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'my-content', 'records']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>(
@@ -841,6 +842,21 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               )}
             </button>
             <button
+              onClick={() => handleTabChange('my-content')}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'my-content' ? '2px solid var(--primary)' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                color: activeTab === 'my-content' ? 'var(--primary)' : 'var(--gray-500)',
+                fontWeight: activeTab === 'my-content' ? 600 : 400,
+              }}
+            >
+              我的版本
+            </button>
+            <button
               onClick={() => handleTabChange('records')}
               style={{
                 padding: '0.75rem 1rem',
@@ -1125,6 +1141,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {/* 提交记录 Tab */}
+          {activeTab === 'my-content' && (
+            <UserProblemContentPanel problemId={problemId} />
           )}
 
           {/* 提交记录 Tab */}

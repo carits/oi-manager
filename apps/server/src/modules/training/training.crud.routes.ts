@@ -4,6 +4,7 @@
  */
 
 import { Router } from 'express'
+import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
@@ -21,6 +22,7 @@ import {
   sortTrainingListForDisplay,
 } from './training.helpers'
 import { teamService } from '../team/team.service'
+import { fileService } from '../../lib/storage'
 
 export const trainingCrudRouter = Router()
 
@@ -415,7 +417,12 @@ trainingCrudRouter.delete('/trainings/:id', authenticate, asyncHandler(async (re
       return res.status(403).json({ success: false, message: '只有创建者或管理员可以删除训练' })
     }
 
+    const snapshotFiles = await prisma.trainingProblemContentSnapshot.findMany({
+      where: { TrainingProblem: { trainingId: id }, snapshotFileId: { not: null } },
+      select: { snapshotFileId: true },
+    })
     await prisma.training.delete({ where: { id } })
+    await Promise.all(snapshotFiles.map(item => item.snapshotFileId ? fileService.softDelete(item.snapshotFileId) : Promise.resolve()))
 
     logger.info('training_deleted', { action: 'trainings', metadata: { trainingId: id } })
     res.json({ success: true, message: '删除成功' })
@@ -435,6 +442,7 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
       include: {
         TrainingProblem: {
           orderBy: { orderIndex: 'asc' },
+          include: { ContentSnapshot: { orderBy: [{ revision: 'desc' }, { selectedAt: 'desc' }] } },
         },
       },
     })
@@ -489,9 +497,10 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
 
     // 克隆题目快照
     for (const tp of training.TrainingProblem) {
+      const newTrainingProblemId = `makeup-${makeupTraining.id}-${tp.orderIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       await prisma.trainingProblem.create({
         data: {
-          id: `makeup-${makeupTraining.id}-${tp.orderIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: newTrainingProblemId,
           trainingId: makeupTraining.id,
           problemId: tp.problemId,
           alias: tp.alias,
@@ -511,6 +520,40 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
           dataVersion: tp.dataVersion || '1',
         },
       })
+      for (const contentKind of ['statement', 'solution'] as const) {
+        const source = tp.ContentSnapshot.find(snapshot => snapshot.kind === contentKind)
+        if (!source) continue
+        const snapshotId = crypto.randomUUID()
+        let snapshotFileId: string | null = null
+        if (source.snapshotFileId) {
+          const file = await fileService.download(source.snapshotFileId)
+          const copied = await fileService.upload(file.buffer, {
+            category: 'pdf', ownerType: 'training_content', ownerId: snapshotId,
+            originalName: file.originalName, mimeType: file.mimeType, isPublic: false,
+          })
+          snapshotFileId = copied.id
+        }
+        await prisma.trainingProblemContentSnapshot.create({
+          data: {
+            id: snapshotId,
+            trainingProblemId: newTrainingProblemId,
+            kind: source.kind,
+            revision: 1,
+            sourceType: source.sourceType,
+            sourceContentId: source.sourceContentId,
+            sourceRevision: source.sourceRevision,
+            format: source.format,
+            language: source.language,
+            title: source.title,
+            content: source.content,
+            snapshotFileId,
+            fileName: source.fileName,
+            authorUserId: source.authorUserId,
+            authorUsernameSnapshot: source.authorUsernameSnapshot,
+            selectedBy: userId,
+          },
+        })
+      }
     }
 
     logger.info('makeup_homework_created', {

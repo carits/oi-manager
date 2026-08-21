@@ -18,7 +18,7 @@ export type AccessLevel = 'public' | 'private' | 'protected'
 export type FileCategory = 'pdf' | 'attachment' | 'avatar' | 'image' | 'testdata'
 
 // 业务归属类型
-export type OwnerType = 'problem' | 'contest' | 'user' | 'team' | 'attachment'
+export type OwnerType = 'problem' | 'contest' | 'user' | 'team' | 'attachment' | 'training_content'
 
 // 目录配置
 export const STORAGE_DIRS = {

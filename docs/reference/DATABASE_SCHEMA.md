@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-16
+last_verified: 2026-08-21
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -63,9 +63,12 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `TrainingAttachment` | 以 Prisma schema 为准 |
 | `TrainingParticipant` | 以 Prisma schema 为准 |
 | `TrainingProblem` | 以 Prisma schema 为准 |
+| `TrainingProblemContentSnapshot` | 活动题面/题解不可变 revision 快照；当前版本取最大 revision |
 | `TrainingSolution` | 以 Prisma schema 为准 |
 | `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
 | `User` | 以 Prisma schema 为准 |
+| `UserProblemContent` | 每位用户在每道题下的一份当前题面或题解 |
+| `UserProblemContentShare` | 个人内容对平台或指定校园的活动选用授权 |
 | `UserArchivedProblem` | 以 Prisma schema 为准 |
 | `UserNotification` | 以 Prisma schema 为准 |
 | `UserPlatformBinding` | 以 Prisma schema 为准 |

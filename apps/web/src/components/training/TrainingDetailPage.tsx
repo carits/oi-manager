@@ -24,6 +24,7 @@ import { useTrainingActions } from './hooks/useTrainingActions'
 import { TrainingProblemList } from './components/TrainingProblemList'
 import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
+import { UserProblemContentPanel } from '@/components/problem/UserProblemContentPanel'
 import { Bell, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -92,6 +93,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const [makeupEndTime, setMakeupEndTime] = useState('')
   const [makeupLoading, setMakeupLoading] = useState(false)
   const [showRejudgeModal, setShowRejudgeModal] = useState(false)
+  const [showMyContentModal, setShowMyContentModal] = useState(false)
   const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string; displayName?: string }>>([])
   const [rejudgeUsersLoading, setRejudgeUsersLoading] = useState(false)
   const [rankingSubmissionContext, setRankingSubmissionContext] = useState<{
@@ -404,6 +406,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             setRecordEditMode={setRecordEditMode}
             trainingStatus={training.status as 'upcoming' | 'ongoing' | 'finished'}
             onSubmitClick={() => actions.setShowSubmitModal(true)}
+            onMyContentClick={() => setShowMyContentModal(true)}
             onGoToAttachments={() => selectTab('attachments')}
             saveNoteNow={saveNoteNow}
             saveRecordNow={saveRecordNow}
@@ -474,6 +477,20 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         </>
         )}
       </div>
+
+      <Modal
+        isOpen={showMyContentModal && !!selectedProblem}
+        onClose={() => setShowMyContentModal(false)}
+        title={`我的版本 · ${selectedProblem?.alias || selectedProblem?.platformProblemId || '当前题目'}`}
+        width="min(960px, calc(100vw - 2rem))"
+      >
+        {selectedProblem && (
+          <UserProblemContentPanel
+            problemId={selectedProblem.id}
+            apiBase={`/api/trainings/${trainingId}/problems/${selectedProblem.id}`}
+          />
+        )}
+      </Modal>
 
       <TrainingRejudgeModal
         isOpen={showRejudgeModal}

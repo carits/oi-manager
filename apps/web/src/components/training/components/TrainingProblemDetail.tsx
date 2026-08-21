@@ -54,6 +54,7 @@ interface TrainingProblemDetailProps {
   setRecordEditMode: (v: 'edit' | 'preview' | 'split') => void
   trainingStatus: 'upcoming' | 'ongoing' | 'finished'
   onSubmitClick: () => void
+  onMyContentClick: () => void
   onGoToAttachments: () => void
   saveNoteNow: () => Promise<void>
   saveRecordNow: () => Promise<void>
@@ -85,6 +86,7 @@ export function TrainingProblemDetail({
   setRecordEditMode,
   trainingStatus,
   onSubmitClick,
+  onMyContentClick,
   onGoToAttachments,
   saveNoteNow,
   saveRecordNow,
@@ -472,6 +474,24 @@ B 题：...
       >
         ▶ 提交代码
       </button>
+      {selectedProblem && (
+        <button
+          onClick={onMyContentClick}
+          style={{
+            padding: '0.6rem 1rem',
+            background: 'white',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 500,
+            width: '100%',
+          }}
+        >
+          我的题面 / 题解
+        </button>
+      )}
       {trainingStatus === 'upcoming' && (
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
           {training.type === 'contest' ? '比赛未开始' : '训练未开始'}
