@@ -52,7 +52,7 @@ CREATE INDEX "UserProblemContentShare_shareKey_idx" ON "UserProblemContentShare"
 CREATE INDEX "UserProblemContentShare_organizationId_idx" ON "UserProblemContentShare"("organizationId");
 CREATE UNIQUE INDEX "TrainingProblemContentSnapshot_trainingProblemId_kind_revision_key"
   ON "TrainingProblemContentSnapshot"("trainingProblemId", "kind", "revision");
-CREATE INDEX "TrainingProblemContentSnapshot_trainingProblemId_kind_revision_idx"
+CREATE INDEX "TrainingContentSnapshot_lookup_idx"
   ON "TrainingProblemContentSnapshot"("trainingProblemId", "kind", "revision");
 CREATE INDEX "TrainingProblemContentSnapshot_sourceContentId_idx"
   ON "TrainingProblemContentSnapshot"("sourceContentId");
