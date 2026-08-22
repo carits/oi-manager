@@ -187,22 +187,14 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
       </aside>
       <main style={{ minWidth: 0, padding: '1.5rem 2rem' }}>
         {!selected ? <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>暂无题面</div> : <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
-            <div><h2 style={{ margin: 0 }}>{selected.name}</h2><div style={{ color: 'var(--text-muted)', marginTop: '0.3rem' }}>{selected.isOfficial ? 'System · 官方' : `${selected.authorUsername} · ${selected.visibility === 'public' ? '公开' : '私有'}`} · {selected.language || '未知'} · {selected.format.toUpperCase()}</div></div>
-            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <button onClick={() => openCreate(selected)}>基于此题面创建</button>
-              {!selected.isOfficial && <button onClick={() => navigator.clipboard.writeText(window.location.href)}>复制链接</button>}
-              {selected.isMine && <>
-                {selected.format === 'markdown' && <button onClick={() => { setDraft(selected.content || ''); setEditing(true) }}>编辑题面</button>}
-                <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" hidden onChange={event => void uploadPdf(event.target.files?.[0])} />
-                <button onClick={() => pdfInputRef.current?.click()} disabled={saving}>{selected.format === 'pdf' ? '替换 PDF' : '改用 PDF'}</button>
-                <button onClick={() => { const next = window.prompt('新的题面名称', selected.name); if (next) void patchSelected({ name: next }) }}>重命名</button>
-                <button onClick={() => patchSelected({ visibility: selected.visibility === 'public' ? 'private' : 'public' })}>{selected.visibility === 'public' ? '设为私有' : '设为公开'}</button>
-                <button onClick={remove} style={{ color: 'var(--error)' }}>删除</button>
-              </>}
-            </div>
-          </div>
-          {selected.sourceNameSnapshot && <div style={{ padding: '0.6rem 0.8rem', background: 'var(--gray-50)', borderRadius: '6px', marginBottom: '1rem', color: 'var(--text-muted)' }}>基于「{selected.sourceAuthorSnapshot} / {selected.sourceNameSnapshot}」创建</div>}
+          {selected.isMine && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            {selected.format === 'markdown' && <button onClick={() => { setDraft(selected.content || ''); setEditing(true) }}>编辑</button>}
+            <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" hidden onChange={event => void uploadPdf(event.target.files?.[0])} />
+            <button onClick={() => pdfInputRef.current?.click()} disabled={saving}>{selected.format === 'pdf' ? '替换 PDF' : '改用 PDF'}</button>
+            <button onClick={() => { const next = window.prompt('新的题面名称', selected.name); if (next) void patchSelected({ name: next }) }}>重命名</button>
+            <button onClick={() => patchSelected({ visibility: selected.visibility === 'public' ? 'private' : 'public' })}>{selected.visibility === 'public' ? '设为私有' : '设为公开'}</button>
+            <button onClick={remove} style={{ color: 'var(--error)' }}>删除</button>
+          </div>}
           {editing ? <div><MarkdownEditor value={draft} onChange={setDraft} minHeight="480px" showPreview /><div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}><button onClick={() => setEditing(false)}>取消</button><button onClick={saveContent} disabled={saving}>{saving ? '保存中…' : '保存'}</button></div></div>
             : selected.format === 'pdf' && selected.fileUrl ? <iframe src={selected.fileUrl} style={{ width: '100%', height: '720px', border: 'none' }} />
             : <MarkdownRenderer content={selected.content || '暂无题面内容'} />}
