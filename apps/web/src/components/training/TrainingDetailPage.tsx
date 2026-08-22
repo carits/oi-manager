@@ -25,7 +25,7 @@ import { TrainingProblemList } from './components/TrainingProblemList'
 import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
 import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
-import { UserProblemContentPanel } from '@/components/problem/UserProblemContentPanel'
+import { TrainingContentSnapshotEditorModal, type EditableActivitySnapshot } from './components/TrainingContentSnapshotEditorModal'
 import { Bell, BookOpenCheck, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -94,8 +94,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const [makeupEndTime, setMakeupEndTime] = useState('')
   const [makeupLoading, setMakeupLoading] = useState(false)
   const [showRejudgeModal, setShowRejudgeModal] = useState(false)
-  const [showMyContentModal, setShowMyContentModal] = useState(false)
   const [showContentSelectionModal, setShowContentSelectionModal] = useState(false)
+  const [editingContentSnapshot, setEditingContentSnapshot] = useState<EditableActivitySnapshot | null>(null)
   const [rejudgeUsers, setRejudgeUsers] = useState<Array<{ id: string; username: string; displayName?: string }>>([])
   const [rejudgeUsersLoading, setRejudgeUsersLoading] = useState(false)
   const [rankingSubmissionContext, setRankingSubmissionContext] = useState<{
@@ -155,7 +155,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
   const solutionsResource = useResource<Record<string, {
     content: string; visible: boolean; source?: 'training' | 'problem';
-    solutionType?: string; solutionPdfUrl?: string
+    solutionType?: string; solutionPdfUrl?: string; fileUrl?: string | null;
+    format?: string; snapshotId?: string
   }>>(
     activeTab === 'solutions' ? `/api/trainings/${trainingId}/solutions` : null,
     { dedupingInterval: 30000, isEmpty: () => false, sessionKey },
@@ -316,7 +317,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           <PageHeader
             title={training.title}
             breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
-            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面管理</Button>}{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
+            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面选择</Button>}{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
           />
           <div className={styles.stats}>
             <div className={styles.stat}><span className={styles.statLabel}>赛制</span><span className={styles.statValue}>{fmtLabel}</span></div>
@@ -408,8 +409,12 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             setRecordEditMode={setRecordEditMode}
             trainingStatus={training.status as 'upcoming' | 'ongoing' | 'finished'}
             onSubmitClick={() => actions.setShowSubmitModal(true)}
-            onMyContentClick={() => setShowMyContentModal(true)}
             onManageContentClick={() => setShowContentSelectionModal(true)}
+            onEditStatement={statement => selectedProblem && setEditingContentSnapshot({
+              kind: 'statement', trainingProblemId: selectedProblem.id, snapshotId: statement.id,
+              label: statement.name || selectedProblem.alias || '当前题面', format: statement.format,
+              content: statement.content, fileUrl: statement.fileUrl,
+            })}
             onGoToAttachments={() => selectTab('attachments')}
             saveNoteNow={saveNoteNow}
             saveRecordNow={saveRecordNow}
@@ -448,6 +453,12 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
                 training={training}
                 problems={problems}
                 allSolutions={allSolutions}
+                onEditSolution={(problem, solution) => solution.snapshotId && setEditingContentSnapshot({
+                  kind: 'solution', trainingProblemId: problem.id, snapshotId: solution.snapshotId,
+                  label: problem.alias || problem.problemTitle || '当前题解',
+                  format: solution.format || solution.solutionType || 'markdown', content: solution.content,
+                  fileUrl: solution.fileUrl || solution.solutionPdfUrl || null,
+                })}
               />
             )}
           </AsyncRegion>
@@ -481,20 +492,6 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         )}
       </div>
 
-      <Modal
-        isOpen={showMyContentModal && !!selectedProblem}
-        onClose={() => setShowMyContentModal(false)}
-        title={`我的版本 · ${selectedProblem?.alias || selectedProblem?.platformProblemId || '当前题目'}`}
-        width="min(960px, calc(100vw - 2rem))"
-      >
-        {selectedProblem && (
-          <UserProblemContentPanel
-            problemId={selectedProblem.id}
-            apiBase={`/api/trainings/${trainingId}/problems/${selectedProblem.id}`}
-          />
-        )}
-      </Modal>
-
       {selectedProblem && (
         <TrainingContentSelectionModal
           isOpen={showContentSelectionModal}
@@ -505,6 +502,19 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           onSaved={async () => { await retryProblemDetail(); refresh() }}
         />
       )}
+
+      <TrainingContentSnapshotEditorModal
+        isOpen={editingContentSnapshot !== null}
+        trainingId={trainingId}
+        snapshot={editingContentSnapshot}
+        onClose={() => setEditingContentSnapshot(null)}
+        onSaved={async (result, kind) => {
+          if (kind === 'statement') {
+            setSelectedStatementId(result.snapshotId)
+            await retryProblemDetail()
+          } else await solutionsResource.retry()
+        }}
+      />
 
       <TrainingRejudgeModal
         isOpen={showRejudgeModal}

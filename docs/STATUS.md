@@ -6,6 +6,7 @@ source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Pri
 ---
 
 - 2026-08-22: multi-statement routes are loaded by the restarted Server process; authenticated statement-version listing was verified with a real organization-scoped session.
+- 2026-08-22: activity pages are selection-only for statements and solutions; managers can edit immutable activity snapshots, while participant creation APIs are removed. Targeted snapshot tests pass 7/7.
 
 # 当前状态
 

@@ -76,6 +76,9 @@ erDiagram
   `TrainingProblemStatementSnapshot` 保存每份题面的内容/PDF、显示顺序和唯一默认标记。
   来源后续编辑、转私有或删除均不影响活动快照。旧 `TrainingProblemContentSnapshot` 继续
   承担题解快照及历史兼容读取。
+- 活动管理员编辑题面时复制当前 statement set 并追加 revision；编辑题解时追加新的
+  `TrainingProblemContentSnapshot` revision。编辑后的记录使用 `sourceType=training` 和上一
+  快照 ID 保留链路，陈旧快照 ID 不允许覆盖当前版本。
 - `ProblemList` 通过 section/entry 组织题目，通过 `scope`、share、学校和团队关联控制可见性。
 - `Training.scope` 继承团队作用域；学校任务固定为 `campus`。
 - `Submission.workspaceScope` 在服务端创建时从会话推导，客户端不能指定。

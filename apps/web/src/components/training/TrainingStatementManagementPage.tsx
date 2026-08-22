@@ -93,10 +93,10 @@ export function TrainingStatementManagementPage({ trainingId }: { trainingId: st
   }
 
   if (loading && !data) return <PageFrame><div style={{ padding: '4rem', textAlign: 'center' }}>正在加载题面矩阵…</div></PageFrame>
-  if (!data) return <PageFrame><div style={{ padding: '4rem', textAlign: 'center' }}>题面管理无法加载</div></PageFrame>
+  if (!data) return <PageFrame><div style={{ padding: '4rem', textAlign: 'center' }}>题面选择无法加载</div></PageFrame>
   return (
     <PageFrame>
-      <PageHeader title="题面管理" description={`${data.training.title} · 为参赛者选择可用题面并指定默认版本`} actions={<div style={{ display: 'flex', gap: '0.6rem' }}><button onClick={() => router.back()}>返回活动</button><button onClick={save} disabled={saving}>{saving ? '保存中…' : '保存题面配置'}</button></div>} />
+      <PageHeader title="题面选择" description={`${data.training.title} · 为参赛者选择可用题面并指定默认版本`} actions={<div style={{ display: 'flex', gap: '0.6rem' }}><button onClick={() => router.back()}>返回活动</button><button onClick={save} disabled={saving}>{saving ? '保存中…' : '保存题面选择'}</button></div>} />
       <div style={{ marginTop: '1rem', padding: '0.8rem 1rem', background: 'var(--info-light)', borderRadius: '8px', color: 'var(--text-secondary)' }}>点击空白/✓切换是否提供；点击星标设为默认。每道题可有多个 ✓，但只能有一个 ★。</div>
       <div style={{ marginTop: '1rem', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '10px', maxHeight: 'calc(100vh - 260px)' }}>
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: Math.max(900, 330 + data.problems.length * 150), width: '100%' }}>

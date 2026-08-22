@@ -6,6 +6,7 @@ import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
 import { createTestProblem } from './helpers/problemListHelpers'
 import { prisma } from '../src/prisma'
+import { fileService } from '../src/lib/storage'
 
 const app = createTestApp()
 
@@ -103,5 +104,115 @@ describe('VJudge 式多题面版本与活动快照', () => {
     })
     expect(latest.revision).toBe(2)
     expect(latest.Snapshot.find(item => item.sourceContentId === versionId)?.content).toBe('活动第一版')
+  })
+
+  it('管理员编辑活动题面会创建新集合并拒绝陈旧或非管理员写入', async () => {
+    await prisma.problem.update({ where: { id: problem.id }, data: { description: '原始官方题面' } })
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))
+    const participant = await createTestUser({ role: 'student', schoolId: author.schoolId })
+    const participantClient = createAuthenticatedRequest(app, generateTokenFromUser(participant.user))
+    const training = await prisma.training.create({ data: {
+      title: '活动快照编辑', startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
+      status: 'ongoing', createdBy: author.user.id, organizationId,
+    } })
+    const tp = await prisma.trainingProblem.create({ data: {
+      id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
+    } })
+    const matrix = await client.get(`/api/trainings/${training.id}/statement-management`)
+    const canonical = matrix.body.data.problems[0].options.find((item: any) => item.sourceType === 'canonical')
+    await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [{
+      trainingProblemId: tp.id, visibleOptionKeys: [canonical.key], defaultOptionKey: canonical.key,
+    }] })
+    const before = await prisma.trainingProblemStatementSet.findFirstOrThrow({
+      where: { trainingProblemId: tp.id }, orderBy: { revision: 'desc' }, include: { Snapshot: true },
+    })
+    const oldSnapshot = before.Snapshot[0]
+    const forbidden = await participantClient.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '越权内容' })
+    expect(forbidden.status).toBe(403)
+
+    const edited = await client.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '活动专属题面' })
+    expect(edited.status).toBe(200)
+    expect(edited.body.data.revision).toBe(before.revision + 1)
+    const after = await prisma.trainingProblemStatementSet.findFirstOrThrow({
+      where: { trainingProblemId: tp.id }, orderBy: { revision: 'desc' }, include: { Snapshot: true },
+    })
+    expect(after.Snapshot[0].content).toBe('活动专属题面')
+    expect(after.Snapshot[0].sourceType).toBe('training')
+    expect(after.Snapshot[0].sourceContentId).toBe(oldSnapshot.id)
+    expect((await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } })).description).toBe('原始官方题面')
+    expect((await prisma.trainingProblemStatementSnapshot.findUniqueOrThrow({ where: { id: oldSnapshot.id } })).content).toBe('原始官方题面')
+
+    const stale = await client.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}`).send({ content: '陈旧覆盖' })
+    expect(stale.status).toBe(409)
+    expect(stale.body.code).toBe('CONTENT_SNAPSHOT_STALE')
+    expect((await client.post(`/api/trainings/${training.id}/problems/${tp.id}/statement-versions`).send({ name: '禁止创建' })).status).toBe(404)
+    expect((await client.put(`/api/trainings/${training.id}/problems/${tp.id}/my-content/statement`).send({ content: '禁止写入' })).status).toBe(404)
+    expect((await client.put(`/api/trainings/${training.id}/problems/${tp.id}/my-content/statement/shares`).send({ shareKeys: ['platform'] })).status).toBe(404)
+    expect((await client.delete(`/api/trainings/${training.id}/problems/${tp.id}/my-content/statement`)).status).toBe(404)
+  })
+
+  it('管理员编辑活动题解会追加 revision 并保留旧快照', async () => {
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))
+    const training = await prisma.training.create({ data: {
+      title: '活动题解编辑', startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
+      status: 'ongoing', createdBy: author.user.id, organizationId,
+    } })
+    const tp = await prisma.trainingProblem.create({ data: {
+      id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
+    } })
+    const old = await prisma.trainingProblemContentSnapshot.create({ data: {
+      id: crypto.randomUUID(), trainingProblemId: tp.id, kind: 'solution', revision: 1,
+      sourceType: 'canonical', format: 'markdown', language: 'zh', content: '旧题解',
+      selectedBy: author.user.id,
+    } })
+    const edited = await client.put(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/solution/${old.id}`).send({ content: '活动新题解' })
+    expect(edited.status).toBe(200)
+    expect(edited.body.data.revision).toBe(2)
+    const snapshots = await prisma.trainingProblemContentSnapshot.findMany({
+      where: { trainingProblemId: tp.id, kind: 'solution' }, orderBy: { revision: 'asc' },
+    })
+    expect(snapshots.map(item => [item.revision, item.content, item.sourceType])).toEqual([
+      [1, '旧题解', 'canonical'], [2, '活动新题解', 'training'],
+    ])
+    const options = await client.get(`/api/trainings/${training.id}/problems/${tp.id}/content-options`)
+    expect(options.status).toBe(200)
+    expect(options.body.data.currentSelection.solutionOptionKey).toBe(`snapshot:${edited.body.data.snapshotId}`)
+    const preview = await client.get(`/api/trainings/${training.id}/problems/${tp.id}/content-options/${encodeURIComponent(`snapshot:${edited.body.data.snapshotId}`)}/preview`)
+    expect(preview.status).toBe(200)
+    expect(preview.body.data.content).toBe('活动新题解')
+  })
+
+  it('管理员替换活动 PDF 会保留旧文件与旧快照', async () => {
+    const token = generateTokenFromUser(author.user)
+    const training = await prisma.training.create({ data: {
+      title: '活动 PDF 编辑', startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
+      status: 'ongoing', createdBy: author.user.id, organizationId,
+    } })
+    const tp = await prisma.trainingProblem.create({ data: {
+      id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
+    } })
+    const originalFile = await fileService.upload(Buffer.from('%PDF-1.4\noriginal'), {
+      category: 'pdf', ownerType: 'training_content', ownerId: tp.id,
+      originalName: 'original.pdf', mimeType: 'application/pdf', isPublic: false,
+    })
+    const set = await prisma.trainingProblemStatementSet.create({ data: {
+      id: crypto.randomUUID(), trainingProblemId: tp.id, revision: 1, selectedBy: author.user.id,
+    } })
+    const oldSnapshot = await prisma.trainingProblemStatementSnapshot.create({ data: {
+      id: crypto.randomUUID(), statementSetId: set.id, sourceType: 'canonical', name: 'PDF 题面',
+      format: 'pdf', snapshotFileId: originalFile.id, fileName: 'original.pdf', isDefault: true, orderIndex: 0,
+    } })
+    const response = await request(app)
+      .post(`/api/trainings/${training.id}/problems/${tp.id}/content-snapshots/statement/${oldSnapshot.id}/pdf`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('%PDF-1.4\nreplacement'), { filename: 'replacement.pdf', contentType: 'application/pdf' })
+    expect(response.status).toBe(200)
+    const latest = await prisma.trainingProblemStatementSet.findFirstOrThrow({
+      where: { trainingProblemId: tp.id }, orderBy: { revision: 'desc' }, include: { Snapshot: true },
+    })
+    expect(latest.revision).toBe(2)
+    expect(latest.Snapshot[0].snapshotFileId).not.toBe(originalFile.id)
+    expect((await prisma.trainingProblemStatementSnapshot.findUniqueOrThrow({ where: { id: oldSnapshot.id } })).snapshotFileId).toBe(originalFile.id)
+    expect((await fileService.download(originalFile.id)).buffer.toString()).toContain('original')
   })
 })

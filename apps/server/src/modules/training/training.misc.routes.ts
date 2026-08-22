@@ -339,6 +339,7 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
     language?: string | null
     fileUrl?: string | null
     contentRevision?: number
+    snapshotId?: string
     authorUsername?: string | null
   }> = {}
 
@@ -357,6 +358,7 @@ trainingMiscRouter.get('/trainings/:id/solutions', authenticate, asyncHandler(as
             ? `/api/trainings/${id}/problems/${item.id}/content-snapshot/solution/file`
             : null,
           contentRevision: snapshot.revision,
+          snapshotId: snapshot.id,
           authorUsername: snapshot.sourceType === 'user' ? snapshot.authorUsernameSnapshot : null,
         }
       }

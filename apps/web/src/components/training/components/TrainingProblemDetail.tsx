@@ -4,8 +4,6 @@ import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import type { ResourceState } from '@/lib/resource'
-import apiClient from '@/lib/apiClient'
-import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, ProblemDetail } from '../types'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
@@ -56,8 +54,8 @@ interface TrainingProblemDetailProps {
   setRecordEditMode: (v: 'edit' | 'preview' | 'split') => void
   trainingStatus: 'upcoming' | 'ongoing' | 'finished'
   onSubmitClick: () => void
-  onMyContentClick: () => void
   onManageContentClick: () => void
+  onEditStatement: (statement: ProblemDetail['statements'][number]) => void
   onGoToAttachments: () => void
   saveNoteNow: () => Promise<void>
   saveRecordNow: () => Promise<void>
@@ -89,13 +87,12 @@ export function TrainingProblemDetail({
   setRecordEditMode,
   trainingStatus,
   onSubmitClick,
-  onMyContentClick,
   onManageContentClick,
+  onEditStatement,
   onGoToAttachments,
   saveNoteNow,
   saveRecordNow,
 }: TrainingProblemDetailProps) {
-  const toast = useToast()
   const selectedProblem = problems.find(p => p.id === selectedProblemId)
   const hideProblemIdentity = !training.isAdmin
     && !training.problemIdVisible
@@ -138,32 +135,34 @@ export function TrainingProblemDetail({
     if (!currentStatement) {
       return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>暂无题面</div>
     }
+    const editAction = training.isAdmin ? (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.65rem' }}>
+        <button onClick={() => onEditStatement(currentStatement)} style={{ padding: '0.45rem 0.8rem', border: '1px solid var(--primary)', borderRadius: '6px', background: 'white', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>编辑题面</button>
+      </div>
+    ) : null
     if (currentStatement.format === 'pdf' && currentStatement.fileUrl) {
       const pdfUrl = getPdfUrl(currentStatement.fileUrl)
       if (pdfUrl && pdfUrl.startsWith('/')) {
-        return <iframe src={pdfUrl} style={{ width: '100%', height: '600px', border: 'none' }} />
+        return <>{editAction}<iframe src={pdfUrl} style={{ width: '100%', height: '600px', border: 'none' }} /></>
       }
       return (
-        <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+        <><div>{editAction}</div><div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>题面为外部 PDF 文件，请在新窗口中查看</p>
           <a href={currentStatement.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '0.5rem 1.5rem', backgroundColor: 'var(--primary)', color: 'var(--text-inverse)', borderRadius: '6px', textDecoration: 'none', fontSize: '0.875rem' }}>
             打开 PDF 题面
           </a>
-        </div>
+        </div></>
       )
     }
     if (currentStatement.content) {
-      return <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={currentStatement.content} /></div>
+      return <>{editAction}<div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={currentStatement.content} /></div></>
     }
-    return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>暂无题面</div>
+    return <>{editAction}<div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>暂无题面</div></>
   }
 
   const renderStatementSelector = () => {
     const visibleStatements = (problemDetail?.statements || []).filter(s => true)
     if (visibleStatements.length === 0) return null
-    const current = selectedStatementId
-      ? visibleStatements.find(statement => statement.id === selectedStatementId)
-      : visibleStatements.find(statement => statement.isDefault) || visibleStatements[0]
     return (
       <aside style={{ width: '240px', flexShrink: 0, padding: '0.75rem', borderRight: '1px solid var(--border)', background: 'var(--gray-50)' }}>
         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.45rem' }}>比赛题面</div>
@@ -179,18 +178,6 @@ export function TrainingProblemDetail({
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
           </button>
         ))}
-        <button onClick={async () => {
-          if (!selectedProblemId || !current) return
-          const name = window.prompt('个人题面名称', `${current.name || '活动题面'} - 我的版本`)
-          if (!name?.trim()) return
-          const response = await apiClient.post(`/api/trainings/${training.id}/problems/${selectedProblemId}/statement-versions`, {
-            name, visibility: 'private', source: { type: 'snapshot', id: current.id },
-          })
-          if (response.success) toast.success('个人题面已创建，可在题目页继续编辑')
-          else toast.error(response.message || '创建个人题面失败')
-        }} style={{ width: '100%', marginTop: '0.6rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>
-          基于当前题面创建个人版本
-        </button>
       </aside>
     )
   }
@@ -487,24 +474,6 @@ B 题：...
       >
         ▶ 提交代码
       </button>
-      {selectedProblem && (
-        <button
-          onClick={onMyContentClick}
-          style={{
-            padding: '0.6rem 1rem',
-            background: 'white',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: 500,
-            width: '100%',
-          }}
-        >
-          我的题面 / 题解
-        </button>
-      )}
       {selectedProblem && training.isAdmin && (
         <button
           onClick={onManageContentClick}
@@ -520,7 +489,7 @@ B 题：...
             width: '100%',
           }}
         >
-          管理活动题解
+          题解选择
         </button>
       )}
       {trainingStatus === 'upcoming' && (

@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import multer from 'multer'
@@ -18,7 +17,8 @@ import {
   selectTrainingProblemContent,
   type ContentKind,
 } from '../problem/problem.content.service'
-import { replaceContentShares, saveMarkdownContent, serializeMyContent } from '../problem/problem.user-content.routes'
+import { serializeMyContent } from '../problem/problem.user-content.routes'
+import { ContentSnapshotEditError, editActivityContentSnapshot } from './training.content-snapshot.service'
 
 export const trainingContentRouter = Router()
 const tempDir = path.join(STORAGE_ROOT, 'temp/uploads')
@@ -72,72 +72,55 @@ trainingContentRouter.get('/trainings/:id/problems/:trainingProblemId/my-content
   res.json({ success: true, data: await serializeMyContent(loaded.trainingProblem.problemId, req.user!.userId) })
 }))
 
-trainingContentRouter.put('/trainings/:id/problems/:trainingProblemId/my-content/:kind', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  const loaded = await requireAccess(req, res)
+function snapshotEditFailure(res: any, error: unknown) {
+  const known = error instanceof ContentSnapshotEditError
+  return res.status(known ? error.status : 400).json({
+    success: false,
+    message: error instanceof Error ? error.message : '活动内容编辑失败',
+    ...(known && error.code ? { code: error.code } : {}),
+  })
+}
+
+trainingContentRouter.put('/trainings/:id/problems/:trainingProblemId/content-snapshots/:kind/:snapshotId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  const loaded = await requireAccess(req, res, true)
   const contentKind = kind(req.params.kind)
   if (!loaded || !contentKind) return
   try {
-    const saved = await saveMarkdownContent({
-      problemId: loaded.trainingProblem.problemId, userId: req.user!.userId, kind: contentKind,
-      title: req.body?.title, language: req.body?.language, content: String(req.body?.content || ''),
+    const result = await editActivityContentSnapshot({
+      trainingProblemId: loaded.trainingProblem.id, kind: contentKind,
+      snapshotId: req.params.snapshotId, selectedBy: req.user!.userId,
+      mode: 'markdown', content: String(req.body?.content || ''),
     })
-    res.json({ success: true, data: { id: saved.id, revision: saved.revision } })
-  } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message })
+    res.json({ success: true, data: result })
+  } catch (error) {
+    snapshotEditFailure(res, error)
   }
 }))
 
-trainingContentRouter.post('/trainings/:id/problems/:trainingProblemId/my-content/:kind/pdf', authenticate, pdfUpload.single('file'), asyncHandler(async (req: AuthRequest, res) => {
-  const loaded = await requireAccess(req, res)
+trainingContentRouter.post('/trainings/:id/problems/:trainingProblemId/content-snapshots/:kind/:snapshotId/pdf', authenticate, pdfUpload.single('file'), asyncHandler(async (req: AuthRequest, res) => {
+  const loaded = await requireAccess(req, res, true)
   const contentKind = kind(req.params.kind)
   if (!loaded || !contentKind || !req.file) {
     if (req.file?.path) fs.unlinkSync(req.file.path)
-    return res.status(400).json({ success: false, message: '活动题目、内容类型或 PDF 无效' })
+    if (loaded && contentKind) return res.status(400).json({ success: false, message: '请选择 PDF 文件' })
+    return
   }
-  const problemId = loaded.trainingProblem.problemId
-  const userId = req.user!.userId
-  const existing = await prisma.userProblemContent.findFirst({ where: { problemId, userId, kind: contentKind, deletedAt: null } })
-  const uploaded = await fileService.uploadFromMulter(req.file, {
-    category: 'pdf', ownerType: 'user', ownerId: userId, isPublic: false,
-  })
-  const saved = existing ? await prisma.userProblemContent.update({ where: { id: existing.id }, data: {
-      title: contentKind === 'statement' ? String(req.body?.title || '').trim() || null : null,
-      format: 'pdf', language: req.body?.language || null, content: null, fileId: uploaded.id,
-      revision: { increment: 1 },
-    } }) : await prisma.userProblemContent.create({ data: {
-      id: crypto.randomUUID(), problemId, userId, kind: contentKind,
-      title: contentKind === 'statement' ? String(req.body?.title || '').trim() || null : null,
-      format: 'pdf', language: req.body?.language || null, fileId: uploaded.id,
-    } })
-  if (existing?.fileId && existing.fileId !== uploaded.id) await fileService.softDelete(existing.fileId)
-  res.json({ success: true, data: { id: saved.id, revision: saved.revision } })
-}))
-
-trainingContentRouter.put('/trainings/:id/problems/:trainingProblemId/my-content/:kind/shares', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  const loaded = await requireAccess(req, res)
-  const contentKind = kind(req.params.kind)
-  if (!loaded || !contentKind) return
-  const content = await prisma.userProblemContent.findFirst({ where: { problemId: loaded.trainingProblem.problemId, userId: req.user!.userId, kind: contentKind, deletedAt: null } })
-  if (!content) return res.status(404).json({ success: false, message: '请先保存个人内容' })
+  let uploadedId: string | null = null
   try {
-    await replaceContentShares(content.id, req.user!.userId, Array.isArray(req.body?.shareKeys) ? req.body.shareKeys : [])
-    res.json({ success: true })
-  } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message })
+    const uploaded = await fileService.uploadFromMulter(req.file, {
+      category: 'pdf', ownerType: 'training_content', ownerId: loaded.trainingProblem.id, isPublic: false,
+    })
+    uploadedId = uploaded.id
+    const result = await editActivityContentSnapshot({
+      trainingProblemId: loaded.trainingProblem.id, kind: contentKind,
+      snapshotId: req.params.snapshotId, selectedBy: req.user!.userId,
+      mode: 'pdf', fileId: uploaded.id, fileName: uploaded.originalName,
+    })
+    res.json({ success: true, data: result })
+  } catch (error) {
+    if (uploadedId) await fileService.softDelete(uploadedId).catch(() => undefined)
+    snapshotEditFailure(res, error)
   }
-}))
-
-trainingContentRouter.delete('/trainings/:id/problems/:trainingProblemId/my-content/:kind', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  const loaded = await requireAccess(req, res)
-  const contentKind = kind(req.params.kind)
-  if (!loaded || !contentKind) return
-  const content = await prisma.userProblemContent.findFirst({ where: {
-    problemId: loaded.trainingProblem.problemId, userId: req.user!.userId, kind: contentKind, deletedAt: null,
-  } })
-  if (!content) return res.status(404).json({ success: false, message: '个人内容不存在' })
-  await prisma.userProblemContent.delete({ where: { id: content.id } })
-  if (content.fileId) await fileService.softDelete(content.fileId)
-  res.json({ success: true })
 }))
 
 trainingContentRouter.get('/trainings/:id/problems/:trainingProblemId/content-options', authenticate, asyncHandler(async (req: AuthRequest, res) => {
@@ -157,14 +140,28 @@ trainingContentRouter.get('/trainings/:id/problems/:trainingProblemId/content-op
       : candidates.find(option => option.sourceType === snapshot.sourceType && option.content === snapshot.content && option.format === snapshot.format)
     return direct?.key || null
   }
+  const solutionOptions = [...options.solution]
+  let solutionOptionKey = currentKey(solution, solutionOptions)
+  if (solution && solution.sourceType !== 'none' && !solutionOptionKey) {
+    const frozen = {
+      key: `snapshot:${solution.id}`, kind: 'solution' as const, sourceType: 'training' as const,
+      sourceId: solution.id, sourceRevision: solution.revision, title: solution.title,
+      format: solution.format, language: solution.language, content: solution.content,
+      fileId: solution.snapshotFileId, fileName: solution.fileName,
+      authorUserId: solution.authorUserId, authorUsername: solution.authorUsernameSnapshot,
+      shareKeys: [],
+    }
+    solutionOptions.unshift(frozen)
+    solutionOptionKey = frozen.key
+  }
   res.json({
     success: true,
     data: {
       statement: options.statement.map(publicOption),
-      solution: options.solution.map(publicOption),
+      solution: solutionOptions.map(publicOption),
       currentSelection: {
         statementOptionKey: currentKey(statement, options.statement),
-        solutionOptionKey: currentKey(solution, options.solution),
+        solutionOptionKey,
         statementRevision: statement?.revision || null,
         solutionRevision: solution?.revision || null,
       },
@@ -178,7 +175,17 @@ async function optionForRequest(req: AuthRequest, res: any) {
   const organizationId = await activityOrganizationId(loaded.training)
   const options = await listContentOptions(loaded.trainingProblem.problemId, req.user!.userId, organizationId)
   const key = decodeURIComponent(req.params.optionKey)
-  const option = [...options.statement, ...options.solution].find(item => item.key === key)
+  let option = [...options.statement, ...options.solution].find(item => item.key === key)
+  if (!option && key.startsWith('snapshot:')) {
+    const snapshot = await latestContentSnapshot(loaded.trainingProblem.id, 'solution')
+    if (snapshot?.id === key.slice('snapshot:'.length) && snapshot.sourceType !== 'none') option = {
+      key, kind: 'solution', sourceType: 'training', sourceId: snapshot.id,
+      sourceRevision: snapshot.revision, title: snapshot.title, format: snapshot.format,
+      language: snapshot.language, content: snapshot.content, fileId: snapshot.snapshotFileId,
+      fileName: snapshot.fileName, authorUserId: snapshot.authorUserId,
+      authorUsername: snapshot.authorUsernameSnapshot, shareKeys: [],
+    }
+  }
   if (!option) {
     res.status(404).json({ success: false, message: '内容版本不存在或不可用' })
     return null

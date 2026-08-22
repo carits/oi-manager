@@ -21,7 +21,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PATCH` | `/api/problems/:id/statement-versions/:versionId` | 重命名或切换个人题面可见性 |
 | `POST` | `/api/problems/:id/statement-versions` | 从官方、用户版本或空白创建独立题面 |
 | `POST` | `/api/problems/:id/statement-versions/:versionId/pdf` | 上传或替换个人 PDF 题面 |
-| `POST` | `/api/trainings/:id/problems/:trainingProblemId/statement-versions` | 从活动快照创建个人题面版本 |
+| `POST` | `/api/trainings/:id/problems/:trainingProblemId/content-snapshots/:kind/:snapshotId/pdf` | 管理员替换活动 PDF 并创建新 revision |
 | `PUT` | `/api/problems/:id/statement-versions/:versionId/content` | 更新个人 Markdown 题面内容 |
 | `PUT` | `/api/trainings/:id/statement-management` | 保存活动多题面选择和唯一默认项 |
 | `DELETE` | `/api/archived-problems` | 见对应路由实现 |
@@ -302,10 +302,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/problems/:id/my-content/:kind/pdf` | 上传自己的 PDF 题面或题解 |
 | `DELETE` | `/api/problems/:id/my-content/:kind` | 删除自己的当前版本；既有活动快照不受影响 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/my-content` | 从活动上下文读取自己的版本 |
-| `PUT` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind` | 从活动上下文保存自己的 Markdown 版本 |
-| `POST` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind/pdf` | 从活动上下文上传自己的 PDF 版本 |
-| `PUT` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind/shares` | 从活动上下文设置共享范围 |
-| `DELETE` | `/api/trainings/:id/problems/:trainingProblemId/my-content/:kind` | 从活动上下文删除自己的当前版本 |
+| `PUT` | `/api/trainings/:id/problems/:trainingProblemId/content-snapshots/:kind/:snapshotId` | 管理员编辑活动 Markdown 并创建新 revision |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options` | 管理员获取活动可选内容与当前快照 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options/:optionKey/preview` | 管理员预览候选内容 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options/:optionKey/file` | 管理员预览候选 PDF |

@@ -79,10 +79,7 @@ export function TrainingContentSelectionModal({
 
   useEffect(() => { void load() }, [load])
 
-  const changed = useMemo(() => !!data && (
-    statementKey !== (data.currentSelection.statementOptionKey || data.statement[0]?.key || '') ||
-    solutionKey !== (data.currentSelection.solutionOptionKey || 'none')
-  ), [data, solutionKey, statementKey])
+  const changed = useMemo(() => !!data && solutionKey !== (data.currentSelection.solutionOptionKey || 'none'), [data, solutionKey])
 
   const showPreview = async (kind: 'statement' | 'solution') => {
     const key = kind === 'statement' ? statementKey : solutionKey
@@ -128,7 +125,7 @@ export function TrainingContentSelectionModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`活动题解 · ${problemLabel}`}
+      title={`选择活动题解 · ${problemLabel}`}
       width="min(720px, calc(100vw - 2rem))"
       footer={(
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
@@ -142,7 +139,7 @@ export function TrainingContentSelectionModal({
       {loading || !data ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>正在加载可用版本…</div> : (
         <div style={{ display: 'grid', gap: '1rem' }}>
           <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            此处只管理当前题目的题解版本。题面请前往独立的“题面管理”页面统一配置。
+            此处只选择当前题目的活动题解。题面请前往独立的“题面选择”页面统一配置。
           </p>
           {([
             { kind: 'solution' as const, label: '活动题解', value: solutionKey, setValue: setSolutionKey, options: data.solution, revision: data.currentSelection.solutionRevision },

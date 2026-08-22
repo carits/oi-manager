@@ -7,7 +7,6 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import { canAccessTraining, canManageTraining, parseTrainingId, requireTrainingStarted } from './training.helpers'
 import { activityOrganizationId, listContentOptions, type ContentOption } from '../problem/problem.content.service'
 import { fileService } from '../../lib/storage'
-import { normalizeStatementName, serializeStatementVersion } from '../problem/problem.statement-version.service'
 
 export const trainingStatementManagementRouter = Router()
 
@@ -200,43 +199,4 @@ trainingStatementManagementRouter.get('/trainings/:id/problems/:trainingProblemI
   res.setHeader('Content-Type', file.mimeType)
   res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`)
   res.send(file.buffer)
-}))
-
-trainingStatementManagementRouter.post('/trainings/:id/problems/:trainingProblemId/statement-versions', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-  const id = parseTrainingId(req.params.id)
-  const training = await context(id)
-  const tp = training?.TrainingProblem.find(item => item.id === req.params.trainingProblemId)
-  if (!training || !tp || !await canAccessTraining(req.user!.userId, training)) return res.status(404).json({ success: false, message: '活动题目不存在' })
-  const { name, nameKey } = normalizeStatementName(req.body?.name)
-  const visibility = req.body?.visibility === 'public' ? 'public' : 'private'
-  const duplicate = await prisma.userProblemContent.findFirst({
-    where: { problemId: tp.problemId, userId: req.user!.userId, kind: 'statement', nameKey, deletedAt: null },
-    select: { id: true },
-  })
-  if (duplicate) return res.status(409).json({ success: false, message: '同名题面已经存在' })
-  const sourceType = String(req.body?.source?.type || 'blank')
-  let material: any = { content: '', format: 'markdown', language: req.body?.language || 'zh', snapshotFileId: null, name: null, authorUsernameSnapshot: null, sourceType: 'blank', sourceContentId: null }
-  if (sourceType === 'snapshot') {
-    const selected = await currentSet(tp.id)
-    const snapshot = selected?.Snapshot.find(item => item.id === req.body?.source?.id)
-    if (!snapshot) return res.status(400).json({ success: false, message: '来源活动题面不存在' })
-    material = snapshot
-  }
-  let fileId: string | null = null
-  if (material.snapshotFileId) {
-    const file = await fileService.download(material.snapshotFileId)
-    fileId = (await fileService.upload(file.buffer, { category: 'pdf', ownerType: 'user', ownerId: req.user!.userId, originalName: file.originalName, mimeType: file.mimeType, isPublic: false })).id
-  }
-  try {
-    const created = await prisma.userProblemContent.create({ data: {
-      id: crypto.randomUUID(), problemId: tp.problemId, userId: req.user!.userId, kind: 'statement', name, nameKey,
-      title: material.title, language: req.body?.language || material.language || 'zh', format: material.format || 'markdown',
-      content: material.content, fileId, visibility, sourceType: material.sourceType === 'user' ? 'user' : material.sourceType === 'canonical' ? 'canonical' : 'blank',
-      sourceId: material.sourceContentId, sourceNameSnapshot: material.name, sourceAuthorSnapshot: material.authorUsernameSnapshot || 'System',
-    }, include: { User: { select: { username: true } } } })
-    res.status(201).json({ success: true, data: serializeStatementVersion(created, req.user!.userId) })
-  } catch (error: any) {
-    if (fileId) await fileService.softDelete(fileId)
-    res.status(error?.code === 'P2002' ? 409 : 400).json({ success: false, message: error?.code === 'P2002' ? '同名题面已经存在' : error.message })
-  }
 }))
