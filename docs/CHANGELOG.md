@@ -1,13 +1,21 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-19
+last_verified: 2026-08-22
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-22
+
+- 修复多题面接口上线后返回 404：数据库迁移和 Web 预览已更新，但 3002 Server 仍是功能
+  发布前启动的旧进程，未注册 `statement-versions` 路由。重启开发服务组后，未登录请求由
+  404 恢复为预期的 401；使用负责人有效会话请求指定题目返回 200 和官方题面列表。
+- 验证：3000/3002 健康检查通过，Server/Judge 均于本次修复重新启动；指定接口使用实际
+  组织上下文和会话复测返回 200。
+
 ## 2026-08-21
 
 - 将个人题面重构为 VJudge 式多版本：每位用户每题可创建多份独立命名的 Markdown/PDF

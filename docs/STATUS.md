@@ -1,11 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-21
+last_verified: 2026-08-22
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-21: global-admin training scope prefilter fixed; OI in-contest problem identity leakage removed; archived-problem stats route ordering fixed; OJ configuration/batch input bounds and DNS-level SSRF protection enforced; training compatibility regression is 37/37; `pnpm restart` now exits successfully with an idempotent lifecycle start phase.
+- 2026-08-22: multi-statement routes are loaded by the restarted Server process; authenticated statement-version listing was verified with a real organization-scoped session.
 
 # 当前状态
 
