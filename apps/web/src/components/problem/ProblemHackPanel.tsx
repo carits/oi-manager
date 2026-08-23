@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { getLanguageLabel } from '@/lib/judge-constants'
@@ -18,6 +18,9 @@ interface Attempt {
   candidateResult?: string | null
   message?: string | null
   createdAt: string
+  inputData?: string | null
+  generatorSource?: string | null
+  hackSource?: string | null
 }
 
 const STATUS: Record<string, string> = {
@@ -34,12 +37,13 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
   const [choice, setChoice] = useState<InputChoice>('data')
   const [candidate, setCandidate] = useState('')
   const [hackSource, setHackSource] = useState('')
-  const [hackLanguage, setHackLanguage] = useState(languages[0] || 'cpp17')
+  const [hackLanguage, setHackLanguage] = useState(languages[0] || '')
   const [attempts, setAttempts] = useState<Attempt[]>([])
   const [canManage, setCanManage] = useState(false)
   const [totalAccepted, setTotalAccepted] = useState(acceptedCount)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const result = await apiClient.get<{ attempts: Attempt[]; acceptedCount: number; canManage: boolean }>(`/api/problems/${problemId}/hacks?pageSize=50`)
@@ -120,7 +124,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
         </div>
 
         <div className={styles.twoColumns}>
-          <div className={styles.field}><span className={styles.label}>被 Hack 程序语言</span><select className={styles.select} value={hackLanguage} onChange={event => setHackLanguage(event.target.value)}>{languages.map(language => <option key={language} value={language}>{getLanguageLabel(language)}</option>)}</select></div>
+          <div className={styles.field}><span className={styles.label}>被 Hack 程序语言</span><select className={styles.select} value={hackLanguage} disabled={languages.length === 0} onChange={event => setHackLanguage(event.target.value)}>{languages.length === 0 ? <option value="">题目没有可用的本地语言</option> : languages.map(language => <option key={language} value={language}>{getLanguageLabel(language)}</option>)}</select></div>
           <div className={styles.warning}>有效 Hack 会直接加入题目测试数据，并同步到所有 ACM 活动的后续新提交。已经完成的提交、成绩和排行榜不会重新评测。</div>
         </div>
 
@@ -128,13 +132,13 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
           <div className={styles.labelRow}><span className={styles.label}>用于证明的被 Hack 程序</span><label className={styles.upload}>上传源码<input type="file" accept=".c,.cc,.cpp,.cxx,.py,text/plain" onChange={event => readFile(event.target.files?.[0], setHackSource, 256 * 1024)} /></label></div>
           <textarea className={styles.textarea} spellCheck={false} value={hackSource} onChange={event => setHackSource(event.target.value)} placeholder="填写在加入候选数据前后会产生不同最终 Verdict 的程序…" />
         </div>
-        <div className={styles.submitRow}><button type="button" className={styles.submit} disabled={submitting || hasActive || !candidate.trim() || !hackSource.trim()} onClick={submit}>{hasActive ? '已有 Hack 正在处理' : submitting ? '正在提交…' : '发起 Hack'}</button></div>
+        <div className={styles.submitRow}><button type="button" className={styles.submit} disabled={submitting || hasActive || !candidate.trim() || !hackSource.trim() || !hackLanguage} onClick={submit}>{hasActive ? '已有 Hack 正在处理' : submitting ? '正在提交…' : '发起 Hack'}</button></div>
       </div>
 
       <section className={styles.history}>
         <h3 className={styles.historyTitle}>{canManage ? '本题全部 Hack 记录' : '我的 Hack 记录'}</h3>
         {loading ? <div className={styles.empty}>正在加载…</div> : attempts.length === 0 ? <div className={styles.empty}>暂无 Hack 记录</div> : (
-          <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>时间</th>{canManage && <th>用户</th>}<th>输入方式</th><th>程序语言</th><th>前后 Verdict</th><th>状态</th><th>说明</th>{canManage && <th>操作</th>}</tr></thead><tbody>{attempts.map(item => <tr key={item.id}><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td>{canManage && <td>{item.username || '-'}</td>}<td>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</td><td>{getLanguageLabel(item.hackLanguage)}</td><td>{item.baselineResult ? `${item.baselineResult} → ${item.candidateResult || '—'}` : '—'}</td><td><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></td><td title={item.message || ''}>{item.message || '—'}</td>{canManage && <td>{item.status === 'system_error' ? <button type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</button> : '—'}</td>}</tr>)}</tbody></table></div>
+          <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>时间</th>{canManage && <th>用户</th>}<th>输入方式</th><th>程序语言</th><th>前后 Verdict</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody>{attempts.map(item => <Fragment key={item.id}><tr><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td>{canManage && <td>{item.username || '-'}</td>}<td>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</td><td>{getLanguageLabel(item.hackLanguage)}</td><td>{item.baselineResult ? `${item.baselineResult} → ${item.candidateResult || '—'}` : '—'}</td><td><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></td><td title={item.message || ''}>{item.message || '—'}</td><td><div className={styles.actions}><button type="button" className={styles.retry} onClick={() => setExpandedAttemptId(current => current === item.id ? null : item.id)}>{expandedAttemptId === item.id ? '收起' : '查看'}</button>{canManage && item.status === 'system_error' && <button type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</button>}</div></td></tr>{expandedAttemptId === item.id && <tr><td colSpan={canManage ? 8 : 7} className={styles.detailCell}><div className={styles.detailGrid}><section><strong>{item.inputMode === 'data' ? '候选输入' : `${item.generatorLanguage} 生成器`}</strong><pre>{item.inputMode === 'data' ? item.inputData : item.generatorSource}</pre></section><section><strong>被 Hack 程序（{getLanguageLabel(item.hackLanguage)}）</strong><pre>{item.hackSource}</pre></section></div></td></tr>}</Fragment>)}</tbody></table></div>
         )}
       </section>
     </div>

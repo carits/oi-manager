@@ -20,6 +20,8 @@ source_of_truth: Git history
 - go-judge 镜像加入 Python 3.11；修复无输入程序缺少空 `stdin` 文件导致生成器 RE 的问题。
 - 在线浏览器验收发现并修复历史 `problemType=standard` 传统题被 Hack 配置页错误禁用的问题；
   `standard/default/objective` 现统一按源码型批处理题处理。
+- 被 Hack 程序语言与 Judge 实际注册能力取交集，当前支持 C/C++ 与 Python3；Hack 历史增加
+  本人/题目管理员可见的候选输入或生成器及被 Hack 源码详情。
 - 验证：Prisma Schema 校验、24/24 迁移、Server/Judge/Web 生产构建、Server 2/2 和 Judge
   3/3 定向测试通过；真实 go-judge 以直接输入和 Python3 生成器两次验证 `Accepted → Wrong Answer`。
 - 迁移前完整备份 `/data/backups/oi-manager/oi_manager_pre_problem_hack_20260823_2355.dump`

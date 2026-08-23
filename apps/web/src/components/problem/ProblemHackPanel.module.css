@@ -34,4 +34,9 @@
 .error { background: #fdecec; color: #a83232; }
 .empty { padding: 26px; text-align: center; color: var(--gray-500); }
 .retry { border: 1px solid var(--gray-300); background: white; border-radius: 7px; padding: 5px 8px; cursor: pointer; }
-@media (max-width: 850px) { .hero { flex-direction: column; } .modeGrid, .twoColumns { grid-template-columns: 1fr; } .root { padding: 16px; } }
+.actions { display: flex; gap: 6px; }
+.detailCell { padding: 0 !important; background: #f8fafc; white-space: normal !important; }
+.detailGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 14px; }
+.detailGrid section { min-width: 0; color: var(--gray-700); }
+.detailGrid pre { max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 12px; border-radius: 8px; background: #111827; color: #e5e7eb; white-space: pre; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+@media (max-width: 850px) { .hero { flex-direction: column; } .modeGrid, .twoColumns, .detailGrid { grid-template-columns: 1fr; } .root { padding: 16px; } }

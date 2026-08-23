@@ -658,13 +658,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const currentStatement = getSelectedStatement()
   const currentSolution = getSelectedSolution()
   const hackLanguages = (() => {
-    if (!problem.allowedLanguages) return ['cpp17']
+    const localLanguages = ['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp17', 'cpp20', 'python3']
+    const locallySupported = new Set(localLanguages)
+    if (!problem.allowedLanguages) return localLanguages
     try {
       const parsed = JSON.parse(problem.allowedLanguages) as Array<string | PlatformLanguage>
       const values = parsed.map(item => typeof item === 'string' ? item : item.id).filter(Boolean)
-      return values.length > 0 ? values : ['cpp17']
+      return values.length > 0 ? values.filter(value => locallySupported.has(value)) : localLanguages
     } catch {
-      return ['cpp17']
+      return localLanguages
     }
   })()
 

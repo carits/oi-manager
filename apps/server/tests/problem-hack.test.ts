@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import yaml from 'js-yaml'
 import {
   appendHackCase,
+  allowedProblemLanguages,
   isHackableJudgeConfig,
   resolveJudgeMode,
 } from '../src/modules/problem/problem.hack.service'
@@ -13,6 +14,13 @@ describe('problem ACM Hack configuration', () => {
     expect(isHackableJudgeConfig({ mode: 'oi', type: 'default' })).toBe(false)
     expect(isHackableJudgeConfig({ mode: 'acm', type: 'interactive' })).toBe(false)
     expect(resolveJudgeMode({ subtasks: [{ cases: [] }] })).toBe('oi')
+  })
+
+  it('only exposes languages actually registered by the local Judge', () => {
+    expect(allowedProblemLanguages({
+      allowedLanguages: JSON.stringify([{ id: 'cpp17' }, { id: 'java' }, { id: 'python3' }]),
+      judgeConfig: null,
+    })).toEqual(['cpp17', 'python3'])
   })
 
   it('keeps accepted Hack cases before ordinary cases and appends new Hack cases', () => {

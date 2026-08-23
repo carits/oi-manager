@@ -6,6 +6,7 @@ import { prisma } from '../../prisma'
 
 export const HACK_SOURCE_LIMIT = 256 * 1024
 export const HACK_INPUT_LIMIT = 1024 * 1024
+const HACK_TARGET_LANGUAGES = new Set(['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp17', 'cpp20', 'python3'])
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const problemLocks = new Map<string, Promise<unknown>>()
@@ -33,17 +34,19 @@ export function isHackableJudgeConfig(config: Record<string, any>): boolean {
 
 export function allowedProblemLanguages(problem: { allowedLanguages: string | null; judgeConfig: string | null }): string[] {
   const config = parseJudgeConfig(problem.judgeConfig)
-  if (Array.isArray(config.langs) && config.langs.length > 0) return config.langs.map(String)
+  if (Array.isArray(config.langs) && config.langs.length > 0) {
+    return config.langs.map(String).filter(language => HACK_TARGET_LANGUAGES.has(language))
+  }
   if (problem.allowedLanguages) {
     try {
       const parsed = JSON.parse(problem.allowedLanguages)
       if (Array.isArray(parsed)) {
         const languages = parsed.map(item => typeof item === 'string' ? item : item?.id).filter(Boolean).map(String)
-        if (languages.length > 0) return languages
+        if (languages.length > 0) return languages.filter(language => HACK_TARGET_LANGUAGES.has(language))
       }
     } catch {}
   }
-  return ['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp17', 'cpp20']
+  return [...HACK_TARGET_LANGUAGES]
 }
 
 function checkerHeader(): string {
