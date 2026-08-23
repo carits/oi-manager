@@ -17,6 +17,12 @@ source_of_truth: Git history
   `409 HACK_ALREADY_ACTIVE`，不再出现极端并发下的 500。
 - Hack 测试数据提升现在覆盖暂存写入、两次重命名和数据库事务的统一失败清理；任一阶段失败都不会留下
   单独的 `.in`、`.out` 或 `.pending` 文件。
+- 修复提交 `f1337b4` 与原子提升提交 `af11921` 已推送 `main`；迁移 25/25，预览构建
+  `8fxNjMc1nbC96bWmMLqlt` 已提升到公网，Server/Judge 已重启。迁移前备份
+  `/data/backups/oi-manager/oi_manager_pre_hack_refinement_20260824_070650.dump` 已通过 PostgreSQL 16
+  `pg_restore -l` 校验。
+- 验证：Judge 4/4、Server 4/4 定向测试，Prisma 校验，Server/Judge/Web 生产构建，导航审计、UI 状态门禁、
+  文档门禁和在线 Edge 的“评测设置 → Hack”配置入口均通过。
 
 - 平台安全审计发现 PostgreSQL `5432` 与高权限 go-judge `5050` 被 Docker 发布到所有网卡；
   Compose 端口现仅绑定 `127.0.0.1`，数据库和沙箱不再可从公网直接访问。
