@@ -11,6 +11,7 @@ import {
   isHackableJudgeConfig,
   judgeConfigHash,
   parseJudgeConfig,
+  serializeHackAttempt,
   validateHackCppSource,
 } from './problem.hack.service'
 
@@ -20,32 +21,6 @@ const ACTIVE_STATUSES = ['queuing', 'judging']
 
 function canSubmitProblem(user: any, problem: any): boolean {
   return problem.status === 'published' && canViewProblem(user, problem)
-}
-
-function publicAttempt(attempt: any, includePrivate: boolean) {
-  const data: Record<string, any> = {
-    id: attempt.id,
-    problemId: attempt.problemId,
-    userId: attempt.userId,
-    username: attempt.User?.username,
-    status: attempt.status,
-    inputMode: attempt.inputMode,
-    generatorLanguage: attempt.generatorLanguage,
-    hackLanguage: attempt.hackLanguage,
-    baselineResult: attempt.baselineResult,
-    candidateResult: attempt.candidateResult,
-    message: attempt.message,
-    acceptedInputFile: attempt.acceptedInputFile,
-    createdAt: attempt.createdAt,
-    updatedAt: attempt.updatedAt,
-    finishedAt: attempt.finishedAt,
-  }
-  if (includePrivate) {
-    data.inputData = attempt.inputData
-    data.generatorSource = attempt.generatorSource
-    data.hackSource = attempt.hackSource
-  }
-  return data
 }
 
 problemHackRouter.get('/:id/hack-config', authenticate, asyncHandler(async (req, res) => {
@@ -188,7 +163,7 @@ problemHackRouter.post('/:id/hacks', authenticate, asyncHandler(async (req, res)
     }
     throw error
   }
-  res.status(202).json({ success: true, data: publicAttempt(attempt, true), message: 'Hack 已加入独立评测队列' })
+  res.status(202).json({ success: true, data: serializeHackAttempt(attempt, true), message: 'Hack 已加入独立评测队列' })
 }))
 
 problemHackRouter.get('/:id/hacks', authenticate, asyncHandler(async (req, res) => {
@@ -209,7 +184,7 @@ problemHackRouter.get('/:id/hacks', authenticate, asyncHandler(async (req, res) 
     prisma.problemHackAttempt.count({ where }),
     prisma.problemHackAttempt.count({ where: { problemId: problem.id, status: 'accepted' } }),
   ])
-  res.json({ success: true, data: { attempts: attempts.map(item => publicAttempt(item, true)), total, page, pageSize, acceptedCount, canManage: manager } })
+  res.json({ success: true, data: { attempts: attempts.map(item => serializeHackAttempt(item, false)), total, page, pageSize, acceptedCount, canManage: manager } })
 }))
 
 problemHackRouter.get('/:id/hacks/:hackId', authenticate, asyncHandler(async (req, res) => {
@@ -221,7 +196,7 @@ problemHackRouter.get('/:id/hacks/:hackId', authenticate, asyncHandler(async (re
     include: { User: { select: { username: true } } },
   })
   if (!attempt || (!manager && attempt.userId !== req.user!.userId)) return res.status(404).json({ success: false, message: 'Hack 记录不存在' })
-  res.json({ success: true, data: publicAttempt(attempt, true) })
+  res.json({ success: true, data: serializeHackAttempt(attempt, true) })
 }))
 
 problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(async (req, res) => {
@@ -234,19 +209,34 @@ problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(as
   if (!attempt || attempt.status !== 'system_error' || !config?.enabled) {
     return res.status(409).json({ success: false, message: '只有系统错误的 Hack 可以重新执行' })
   }
-  const updated = await prisma.problemHackAttempt.update({
-    where: { id: attempt.id },
-    data: {
-      status: 'queuing',
-      hackConfigRevision: config.revision,
-      judgeConfigHash: judgeConfigHash(problem.judgeConfig),
-      baselineResult: null,
-      candidateResult: null,
-      message: null,
-      judgeId: null,
-      judgeStarted: null,
-      finishedAt: null,
-    },
+  const active = await prisma.problemHackAttempt.findFirst({
+    where: { problemId: problem.id, userId: attempt.userId, status: { in: ACTIVE_STATUSES }, id: { not: attempt.id } },
+    select: { id: true },
   })
-  res.json({ success: true, data: publicAttempt(updated, true), message: 'Hack 已重新加入队列' })
+  if (active) {
+    return res.status(409).json({ success: false, code: 'HACK_ALREADY_ACTIVE', message: '该用户在这道题已有一个正在处理的 Hack' })
+  }
+  try {
+    const updated = await prisma.problemHackAttempt.update({
+      where: { id: attempt.id },
+      data: {
+        status: 'queuing',
+        hackConfigRevision: config.revision,
+        judgeConfigHash: judgeConfigHash(problem.judgeConfig),
+        baselineResult: null,
+        candidateResult: null,
+        failureStage: null,
+        message: null,
+        judgeId: null,
+        judgeStarted: null,
+        finishedAt: null,
+      },
+    })
+    return res.json({ success: true, data: serializeHackAttempt(updated, true), message: 'Hack 已重新加入队列' })
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({ success: false, code: 'HACK_ALREADY_ACTIVE', message: '该用户在这道题已有一个正在处理的 Hack' })
+    }
+    throw error
+  }
 }))

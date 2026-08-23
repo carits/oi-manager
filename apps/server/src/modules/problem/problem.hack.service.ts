@@ -11,6 +11,33 @@ const HACK_TARGET_LANGUAGES = new Set(['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const problemLocks = new Map<string, Promise<unknown>>()
 
+export function serializeHackAttempt(attempt: any, includePrivate: boolean) {
+  const data: Record<string, any> = {
+    id: attempt.id,
+    problemId: attempt.problemId,
+    userId: attempt.userId,
+    username: attempt.User?.username,
+    status: attempt.status,
+    inputMode: attempt.inputMode,
+    generatorLanguage: attempt.generatorLanguage,
+    hackLanguage: attempt.hackLanguage,
+    baselineResult: attempt.baselineResult,
+    candidateResult: attempt.candidateResult,
+    failureStage: attempt.failureStage,
+    message: attempt.message,
+    acceptedInputFile: attempt.acceptedInputFile,
+    createdAt: attempt.createdAt,
+    updatedAt: attempt.updatedAt,
+    finishedAt: attempt.finishedAt,
+  }
+  if (includePrivate) {
+    data.inputData = attempt.inputData
+    data.generatorSource = attempt.generatorSource
+    data.hackSource = attempt.hackSource
+  }
+  return data
+}
+
 export function judgeConfigHash(config: string | null | undefined): string {
   return crypto.createHash('sha256').update(config || '').digest('hex')
 }
@@ -170,6 +197,7 @@ async function withProblemLock<T>(problemId: string, action: () => Promise<T>): 
 export interface HackJudgeResultPayload {
   hackAttemptId: string
   outcome: 'accepted' | 'rejected' | 'system_error'
+  failureStage?: 'input' | 'generator' | 'validator' | 'standard' | 'baseline' | 'candidate'
   baselineResult?: string
   candidateResult?: string
   message?: string
@@ -190,6 +218,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
         status: payload.outcome,
         baselineResult: payload.baselineResult || null,
         candidateResult: payload.candidateResult || null,
+        failureStage: payload.failureStage || null,
         message: payload.message || null,
         judgeId: null,
         judgeStarted: null,
@@ -211,7 +240,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
         current.judgeConfigHash !== judgeConfigHash(problem.judgeConfig)) {
       await prisma.problemHackAttempt.update({
         where: { id: current.id },
-        data: { status: 'stale', message: '题目评测配置已变化，请重新发起 Hack', judgeId: null, judgeStarted: null, finishedAt: new Date() },
+        data: { status: 'stale', failureStage: 'stale', message: '题目评测配置已变化，请重新发起 Hack', judgeId: null, judgeStarted: null, finishedAt: new Date() },
       })
       return
     }
@@ -221,7 +250,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
     if (!inputData.trim() || Buffer.byteLength(inputData, 'utf8') > HACK_INPUT_LIMIT || Buffer.byteLength(outputData, 'utf8') > HACK_INPUT_LIMIT) {
       await prisma.problemHackAttempt.update({
         where: { id: current.id },
-        data: { status: 'system_error', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() },
+        data: { status: 'system_error', failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() },
       })
       return
     }
@@ -239,6 +268,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
         where: { id: current.id },
         data: {
           status: 'rejected',
+          failureStage: 'input',
           baselineResult: payload.baselineResult || null,
           candidateResult: payload.candidateResult || null,
           message: `候选输入与已有测试数据 ${duplicate.filename} 重复`,
@@ -296,6 +326,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
           where: { id: current.id },
           data: {
             status: 'accepted',
+            failureStage: null,
             baselineResult: payload.baselineResult || null,
             candidateResult: payload.candidateResult || null,
             message: payload.message || '有效 Hack 数据已加入题目',

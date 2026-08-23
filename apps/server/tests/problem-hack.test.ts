@@ -5,6 +5,7 @@ import {
   allowedProblemLanguages,
   isHackableJudgeConfig,
   resolveJudgeMode,
+  serializeHackAttempt,
 } from '../src/modules/problem/problem.hack.service'
 
 describe('problem ACM Hack configuration', () => {
@@ -42,5 +43,27 @@ describe('problem ACM Hack configuration', () => {
     ])
     expect(result.mode).toBe('acm')
     expect(result.subtasks).toBeUndefined()
+  })
+
+  it('keeps source and generated data out of list responses', () => {
+    const attempt = {
+      id: 'hack-1',
+      problemId: 'problem-1',
+      userId: 'user-1',
+      status: 'system_error',
+      failureStage: 'standard',
+      inputData: 'private input',
+      generatorSource: 'private generator',
+      hackSource: 'private target',
+    }
+    expect(serializeHackAttempt(attempt, false)).toMatchObject({ id: 'hack-1', failureStage: 'standard' })
+    expect(serializeHackAttempt(attempt, false)).not.toHaveProperty('inputData')
+    expect(serializeHackAttempt(attempt, false)).not.toHaveProperty('generatorSource')
+    expect(serializeHackAttempt(attempt, false)).not.toHaveProperty('hackSource')
+    expect(serializeHackAttempt(attempt, true)).toMatchObject({
+      inputData: 'private input',
+      generatorSource: 'private generator',
+      hackSource: 'private target',
+    })
   })
 })

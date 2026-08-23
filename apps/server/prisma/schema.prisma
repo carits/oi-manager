@@ -430,6 +430,7 @@ model ProblemHackAttempt {
   judgeConfigHash       String
   baselineResult        String?
   candidateResult       String?
+  failureStage          String?
   message               String?  @db.Text
   inputSha256           String?
   outputSha256          String?

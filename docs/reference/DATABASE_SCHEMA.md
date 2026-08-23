@@ -41,7 +41,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `Problem` | 以 Prisma schema 为准 |
 | `ProblemAttachment` | 以 Prisma schema 为准 |
 | `ProblemChecker` | Lemon SPJ 源码与头文件记录 |
-| `ProblemHackAttempt` | 题目级 ACM Hack 的独立队列、前后 Verdict 与落库状态 |
+| `ProblemHackAttempt` | 题目级 ACM Hack 的独立队列、前后 Verdict、结构化失败阶段与落库状态 |
 | `ProblemHackConfig` | 题目级 ACM Hack 开关、STD、Validator 和配置 revision |
 | `ProblemList` | 以 Prisma schema 为准 |
 | `ProblemListEntry` | 以 Prisma schema 为准 |

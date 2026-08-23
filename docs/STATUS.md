@@ -5,6 +5,7 @@ last_verified: 2026-08-24
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-24: 题目级 ACM Hack 已补齐空 STD 输出拦截、结构化失败阶段、列表摘要/按权限详情分离和并发重试保护。
 - 2026-08-24: 全平台审计已启动；首轮端口检查发现并修复 PostgreSQL `5432` 与 go-judge
   `5050` 及 Server API `3002` 对公网监听，三者现均仅绑定本机回环地址。
 - 2026-08-24: Playwright 路由测试从无法收集恢复为 251 条，E2E 隔离种子已迁移到统一组织身份模型；

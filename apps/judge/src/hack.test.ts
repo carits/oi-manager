@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCandidateConfig, isEffectiveHackVerdictChange } from './hack'
+import { buildCandidateConfig, hasStandardOutput, isEffectiveHackVerdictChange } from './hack'
 
 describe('ACM Hack verdict comparison', () => {
   it('accepts any deterministic final verdict change', () => {
@@ -22,5 +22,12 @@ describe('ACM Hack verdict comparison', () => {
     )
     expect(result.cases?.map(item => item.input)).toEqual(['.hack_pending_id.in', '1.in'])
     expect(result.subtasks).toBeUndefined()
+  })
+
+  it('requires the standard program to generate an answer', () => {
+    expect(hasStandardOutput(undefined)).toBe(false)
+    expect(hasStandardOutput('')).toBe(false)
+    expect(hasStandardOutput('\n')).toBe(true)
+    expect(hasStandardOutput('0\n')).toBe(true)
   })
 })

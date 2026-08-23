@@ -21,6 +21,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId/file` | 读取个人 PDF 题面 |
+
+Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段。候选输入、生成器源码和被 Hack
+程序只由单条详情接口返回，并继续执行“本人或题目管理者”权限校验。活动任务冲突时重新执行接口
+返回 `409 HACK_ALREADY_ACTIVE`。
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/statement-versions` | 读取活动当前可见题面快照集合 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/statement-versions/:snapshotId/file` | 读取活动 PDF 题面快照 |
 | `GET` | `/api/trainings/:id/statement-management` | 读取活动多题面管理矩阵 |

@@ -203,7 +203,7 @@ class JudgeConsumer {
             judgeConfigHash(problem.judgeConfig) !== attempt.judgeConfigHash) {
           await tx.problemHackAttempt.update({
             where: { id: attempt.id },
-            data: { status: 'stale', message: 'Hack 配置已变化，请重新发起', finishedAt: new Date() },
+            data: { status: 'stale', failureStage: 'stale', message: 'Hack 配置已变化，请重新发起', finishedAt: new Date() },
           })
           return null
         }
@@ -732,6 +732,7 @@ async function handleHackResult(ws: WebSocket, payload: any) {
       where: { id: hackAttemptId, status: 'judging' },
       data: {
         status: 'system_error',
+        failureStage: 'persist',
         message: `Hack 数据入库失败：${error.message}`,
         judgeId: null,
         judgeStarted: null,

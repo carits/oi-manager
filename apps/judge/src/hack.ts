@@ -98,12 +98,18 @@ async function createCandidateInput(request: HackJudgeRequest): Promise<string> 
   return result.stdout || ''
 }
 
-function rejected(request: HackJudgeRequest, message: string, baselineResult?: JudgeResult, candidateResult?: JudgeResult): HackJudgeTaskResult {
-  return { hackAttemptId: request.hackAttemptId, outcome: 'rejected', baselineResult, candidateResult, message }
+type HackFailureStage = NonNullable<HackJudgeTaskResult['failureStage']>
+
+function rejected(request: HackJudgeRequest, failureStage: HackFailureStage, message: string, baselineResult?: JudgeResult, candidateResult?: JudgeResult): HackJudgeTaskResult {
+  return { hackAttemptId: request.hackAttemptId, outcome: 'rejected', failureStage, baselineResult, candidateResult, message }
 }
 
-function systemError(request: HackJudgeRequest, message: string, baselineResult?: JudgeResult, candidateResult?: JudgeResult): HackJudgeTaskResult {
-  return { hackAttemptId: request.hackAttemptId, outcome: 'system_error', baselineResult, candidateResult, message }
+function systemError(request: HackJudgeRequest, failureStage: HackFailureStage, message: string, baselineResult?: JudgeResult, candidateResult?: JudgeResult): HackJudgeTaskResult {
+  return { hackAttemptId: request.hackAttemptId, outcome: 'system_error', failureStage, baselineResult, candidateResult, message }
+}
+
+export function hasStandardOutput(output: string | undefined): output is string {
+  return typeof output === 'string' && output.length > 0
 }
 
 export function isEffectiveHackVerdictChange(baseline: JudgeResult, candidate: JudgeResult): boolean {
@@ -125,16 +131,16 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   try {
     candidateInput = await createCandidateInput(request)
   } catch (error: any) {
-    return rejected(request, error.message)
+    return rejected(request, request.inputMode === 'generator' ? 'generator' : 'input', error.message)
   }
-  if (!candidateInput.trim()) return rejected(request, '候选输入不能为空')
-  if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, '候选输入超过 1 MiB')
+  if (!candidateInput.trim()) return rejected(request, 'input', '候选输入不能为空')
+  if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, 'input', '候选输入超过 1 MiB')
 
   let validator
   try {
     validator = await compileProgram('cpp17', request.validatorSource, checkerDependencies())
   } catch (error: any) {
-    return systemError(request, `Validator 编译失败：${error.message}`)
+    return systemError(request, 'validator', `Validator 编译失败：${error.message}`)
   }
   const validation = await execute({
     language: 'cpp17',
@@ -146,14 +152,14 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
     workDir: validator.workDir,
   })
   if (validation.status !== 'Accepted' || validation.exitCode !== 0) {
-    return rejected(request, `Validator 拒绝候选输入${validation.stderr ? `：${validation.stderr.slice(0, 2000)}` : ''}`)
+    return rejected(request, 'validator', `Validator 拒绝候选输入${validation.stderr ? `：${validation.stderr.slice(0, 2000)}` : ''}`)
   }
 
   let standard
   try {
     standard = await compileProgram('cpp17', request.standardSource)
   } catch (error: any) {
-    return systemError(request, `标准程序编译失败：${error.message}`)
+    return systemError(request, 'standard', `标准程序编译失败：${error.message}`)
   }
   const timeLimit = Math.max(1000, parseTime(request.config.time) * 3)
   const memoryLimit = Math.max(262_144, parseMemory(request.config.memory))
@@ -167,11 +173,12 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
     compileFileId: standard.fileId,
     workDir: standard.workDir,
   })
-  if (standardRun.status !== 'Accepted' || standardRun.stdout === undefined) {
-    return systemError(request, `标准程序运行失败：${standardRun.status}${standardRun.stderr ? `；${standardRun.stderr.slice(0, 1000)}` : ''}`)
+  if (standardRun.status !== 'Accepted') {
+    return systemError(request, 'standard', `标准程序运行失败：${standardRun.status}${standardRun.stderr ? `；${standardRun.stderr.slice(0, 1000)}` : ''}`)
   }
+  if (!hasStandardOutput(standardRun.stdout)) return systemError(request, 'standard', '标准程序没有生成答案输出')
   const candidateOutput = standardRun.stdout
-  if (Buffer.byteLength(candidateOutput, 'utf8') > MAX_DATA_BYTES) return systemError(request, '标准答案输出超过 1 MiB')
+  if (Buffer.byteLength(candidateOutput, 'utf8') > MAX_DATA_BYTES) return systemError(request, 'standard', '标准答案输出超过 1 MiB')
 
   const baseline = await judge({
     submissionId: `hack-baseline-${request.hackAttemptId}`,
@@ -181,9 +188,9 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
     config: request.config,
     testdataPath: request.testdataPath,
   })
-  if (baseline.result === 'Compilation Error') return rejected(request, `被 Hack 程序编译失败：${baseline.message || ''}`, baseline.result)
+  if (baseline.result === 'Compilation Error') return rejected(request, 'baseline', `被 Hack 程序编译失败：${baseline.message || ''}`, baseline.result)
   if (!VALID_DIFFERENCE_RESULTS.has(baseline.result)) {
-    return systemError(request, `原始完整评测未得到可比较结果：${baseline.result}`, baseline.result)
+    return systemError(request, 'baseline', `原始完整评测未得到可比较结果：${baseline.result}`, baseline.result)
   }
 
   const pendingStem = `.hack_pending_${request.hackAttemptId}`
@@ -204,10 +211,10 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
       testdataPath: request.testdataPath,
     })
     if (!VALID_DIFFERENCE_RESULTS.has(candidate.result)) {
-      return systemError(request, `加入候选点后的完整评测未得到可比较结果：${candidate.result}`, baseline.result, candidate.result)
+      return systemError(request, 'candidate', `加入候选点后的完整评测未得到可比较结果：${candidate.result}`, baseline.result, candidate.result)
     }
     if (!isEffectiveHackVerdictChange(baseline.result, candidate.result)) {
-      return rejected(request, `最终 Verdict 未变化（${baseline.result}）`, baseline.result, candidate.result)
+      return rejected(request, 'candidate', `最终 Verdict 未变化（${baseline.result}）`, baseline.result, candidate.result)
     }
     return {
       hackAttemptId: request.hackAttemptId,

@@ -133,7 +133,10 @@ Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 同一用户同题最多一个排队或评测中的任务，同一题最多一个正在评测的 Hack；PostgreSQL
 部分唯一索引提供最终并发约束。配置 revision 或评测配置哈希变化会把旧任务标记为 stale，
 不会写入数据。用户只可查看自己的完整记录，题目管理者可查看全部记录并重新执行系统错误
-任务；其他用户只能看到有效 Hack 数量。
+任务；其他用户只能看到有效 Hack 数量。列表接口只返回摘要，候选输入、生成器和被 Hack
+源码必须通过单条详情接口按权限读取，避免历史记录较多时一次返回大量源码。失败记录使用
+`failureStage` 标明输入、生成器、Validator、标准程序、baseline、candidate、配置一致性或
+数据入库阶段；STD 未生成任何答案输出时按标准程序阶段系统错误处理，不能成为有效 Hack。
 
 接口为 `GET/PUT /api/problems/:id/hack-config`、`POST/GET /api/problems/:id/hacks`、
 `GET /api/problems/:id/hacks/:hackId` 和 `POST /api/problems/:id/hacks/:hackId/retry`。

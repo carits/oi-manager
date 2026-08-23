@@ -16,6 +16,7 @@ interface Attempt {
   hackLanguage: string
   baselineResult?: string | null
   candidateResult?: string | null
+  failureStage?: string | null
   message?: string | null
   createdAt: string
   inputData?: string | null
@@ -26,6 +27,11 @@ interface Attempt {
 const STATUS: Record<string, string> = {
   queuing: '排队中', judging: '验证与评测中', accepted: '有效 Hack', rejected: '无效 Hack',
   system_error: '系统错误', stale: '配置已变化',
+}
+
+const FAILURE_STAGE: Record<string, string> = {
+  input: '候选输入', generator: '数据生成器', validator: 'Validator', standard: '标准程序',
+  baseline: '原始完整评测', candidate: '加入候选点后评测', persist: '测试数据入库', stale: '配置一致性检查',
 }
 
 export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
@@ -44,6 +50,8 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null)
+  const [attemptDetails, setAttemptDetails] = useState<Record<string, Attempt>>({})
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const result = await apiClient.get<{ attempts: Attempt[]; acceptedCount: number; canManage: boolean }>(`/api/problems/${problemId}/hacks?pageSize=50`)
@@ -98,6 +106,23 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
     await load()
   }
 
+  const toggleDetails = async (attempt: Attempt) => {
+    if (expandedAttemptId === attempt.id) {
+      setExpandedAttemptId(null)
+      return
+    }
+    setExpandedAttemptId(attempt.id)
+    if (attemptDetails[attempt.id]) return
+    setLoadingDetailId(attempt.id)
+    try {
+      const result = await apiClient.get<Attempt>(`/api/problems/${problemId}/hacks/${attempt.id}`)
+      if (!result.success || !result.data) return toast.error(result.message || 'Hack 详情加载失败')
+      setAttemptDetails(current => ({ ...current, [attempt.id]: result.data! }))
+    } finally {
+      setLoadingDetailId(current => current === attempt.id ? null : current)
+    }
+  }
+
   return (
     <div className={styles.root}>
       <div className={styles.hero}>
@@ -138,7 +163,10 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages }: {
       <section className={styles.history}>
         <h3 className={styles.historyTitle}>{canManage ? '本题全部 Hack 记录' : '我的 Hack 记录'}</h3>
         {loading ? <div className={styles.empty}>正在加载…</div> : attempts.length === 0 ? <div className={styles.empty}>暂无 Hack 记录</div> : (
-          <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>时间</th>{canManage && <th>用户</th>}<th>输入方式</th><th>程序语言</th><th>前后 Verdict</th><th>状态</th><th>说明</th><th>操作</th></tr></thead><tbody>{attempts.map(item => <Fragment key={item.id}><tr><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td>{canManage && <td>{item.username || '-'}</td>}<td>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</td><td>{getLanguageLabel(item.hackLanguage)}</td><td>{item.baselineResult ? `${item.baselineResult} → ${item.candidateResult || '—'}` : '—'}</td><td><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></td><td title={item.message || ''}>{item.message || '—'}</td><td><div className={styles.actions}><button type="button" className={styles.retry} onClick={() => setExpandedAttemptId(current => current === item.id ? null : item.id)}>{expandedAttemptId === item.id ? '收起' : '查看'}</button>{canManage && item.status === 'system_error' && <button type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</button>}</div></td></tr>{expandedAttemptId === item.id && <tr><td colSpan={canManage ? 8 : 7} className={styles.detailCell}><div className={styles.detailGrid}><section><strong>{item.inputMode === 'data' ? '候选输入' : `${item.generatorLanguage} 生成器`}</strong><pre>{item.inputMode === 'data' ? item.inputData : item.generatorSource}</pre></section><section><strong>被 Hack 程序（{getLanguageLabel(item.hackLanguage)}）</strong><pre>{item.hackSource}</pre></section></div></td></tr>}</Fragment>)}</tbody></table></div>
+          <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>时间</th>{canManage && <th>用户</th>}<th>输入方式</th><th>程序语言</th><th>前后 Verdict</th><th>状态</th><th>失败阶段</th><th>说明</th><th>操作</th></tr></thead><tbody>{attempts.map(item => {
+            const detail = attemptDetails[item.id]
+            return <Fragment key={item.id}><tr><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td>{canManage && <td>{item.username || '-'}</td>}<td>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</td><td>{getLanguageLabel(item.hackLanguage)}</td><td>{item.baselineResult ? `${item.baselineResult} → ${item.candidateResult || '—'}` : '—'}</td><td><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></td><td>{item.failureStage ? FAILURE_STAGE[item.failureStage] || item.failureStage : '—'}</td><td title={item.message || ''}>{item.message || '—'}</td><td><div className={styles.actions}><button type="button" className={styles.retry} disabled={loadingDetailId === item.id} onClick={() => toggleDetails(item)}>{loadingDetailId === item.id ? '读取中…' : expandedAttemptId === item.id ? '收起' : '查看'}</button>{canManage && item.status === 'system_error' && <button type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</button>}</div></td></tr>{expandedAttemptId === item.id && <tr><td colSpan={canManage ? 9 : 8} className={styles.detailCell}>{detail ? <div className={styles.detailGrid}><section><strong>{detail.inputMode === 'data' ? '候选输入' : `${detail.generatorLanguage} 生成器`}</strong><pre>{detail.inputMode === 'data' ? detail.inputData : detail.generatorSource}</pre></section><section><strong>被 Hack 程序（{getLanguageLabel(detail.hackLanguage)}）</strong><pre>{detail.hackSource}</pre></section></div> : <div className={styles.detailLoading}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '10rem' }} aria-label="Hack 详情正在准备" /></div>}</td></tr>}</Fragment>
+          })}</tbody></table></div>
         )}
       </section>
     </div>

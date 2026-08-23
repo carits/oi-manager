@@ -149,6 +149,7 @@ export interface HackJudgeRequest {
 export interface HackJudgeTaskResult {
   hackAttemptId: string
   outcome: 'accepted' | 'rejected' | 'system_error'
+  failureStage?: 'input' | 'generator' | 'validator' | 'standard' | 'baseline' | 'candidate'
   baselineResult?: JudgeResult
   candidateResult?: JudgeResult
   message?: string
