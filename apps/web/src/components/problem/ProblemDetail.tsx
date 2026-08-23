@@ -18,6 +18,7 @@ import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailM
 import { Copy } from 'lucide-react'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
 import { StatementVersionWorkspace } from './StatementVersionWorkspace'
+import { ProblemHackPanel } from './ProblemHackPanel'
 
 interface Statement {
   id: string
@@ -55,7 +56,9 @@ interface Problem {
     canPublish: boolean
     canArchive: boolean
     canCopyToSchool: boolean
+    canSubmit?: boolean
   }
+  hack?: { enabled: boolean; acceptedCount: number; canHack: boolean }
   // 多版本字段
   statements: Statement[]
   solutions: Statement[]
@@ -181,8 +184,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const { user } = useAuth()
   const pathname = usePathname()
   const toast = useToast()
-  type TabType = 'statement' | 'solution' | 'attachments' | 'my-content' | 'records'
-  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'my-content', 'records']
+  type TabType = 'statement' | 'solution' | 'attachments' | 'my-content' | 'records' | 'hack'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'my-content', 'records', 'hack']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>(
@@ -654,6 +657,16 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const visibleSolutions = getVisibleSolutions()
   const currentStatement = getSelectedStatement()
   const currentSolution = getSelectedSolution()
+  const hackLanguages = (() => {
+    if (!problem.allowedLanguages) return ['cpp17']
+    try {
+      const parsed = JSON.parse(problem.allowedLanguages) as Array<string | PlatformLanguage>
+      const values = parsed.map(item => typeof item === 'string' ? item : item.id).filter(Boolean)
+      return values.length > 0 ? values : ['cpp17']
+    } catch {
+      return ['cpp17']
+    }
+  })()
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-muted)' }}>
@@ -872,6 +885,23 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             >
               提交记录
             </button>
+            {problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
+              <button
+                onClick={() => handleTabChange('hack')}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === 'hack' ? '2px solid var(--primary)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  color: activeTab === 'hack' ? 'var(--primary)' : 'var(--gray-500)',
+                  fontWeight: activeTab === 'hack' ? 600 : 400,
+                }}
+              >
+                Hack{problem.hack.acceptedCount > 0 ? ` ${problem.hack.acceptedCount}` : ''}
+              </button>
+            )}
           </div>
 
           {/* 思路记录按钮 */}
@@ -1063,6 +1093,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           {/* 提交记录 Tab */}
           {activeTab === 'my-content' && (
             <UserProblemContentPanel problemId={problemId} />
+          )}
+
+          {activeTab === 'hack' && problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
+            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} />
           )}
 
           {/* 提交记录 Tab */}

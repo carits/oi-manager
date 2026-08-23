@@ -17,6 +17,7 @@ import { normalizeResult } from '../lib/result-enum'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getHeartbeatAction } from './judge-protocol'
+import { finalizeHackResult, judgeConfigHash } from '../modules/problem/problem.hack.service'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -49,11 +50,12 @@ const localJudgeSubmissionWhere = () => ({
  */
 class JudgeConsumer {
   consuming: boolean = false
-  processing: Map<string, { submissionId: string; startTime: number }> = new Map()
+  processing: Map<string, { taskType: 'submission' | 'hack'; id: string; startTime: number }> = new Map()
   concurrency: number = 1
   notify: ((value?: unknown) => void) | null = null
   ws: WebSocket
   judgeId: string
+  preferHack = true
 
   constructor(ws: WebSocket, judgeId: string, concurrency: number = 1) {
     this.ws = ws
@@ -75,22 +77,36 @@ class JudgeConsumer {
         continue
       }
 
-      this.processing.set(task.submissionId, { submissionId: task.submissionId, startTime: Date.now() })
+      const taskType: 'submission' | 'hack' = task.taskType === 'hack' ? 'hack' : 'submission'
+      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.submissionId
+      const taskKey = `${taskType}:${taskId}`
+      this.processing.set(taskKey, { taskType, id: taskId, startTime: Date.now() })
 
       logger.info('consumer_task_dispatched', {
         action: 'judge_consumer',
-        metadata: { judgeId: this.judgeId, submissionId: task.submissionId, processingSize: this.processing.size }
+        metadata: { judgeId: this.judgeId, taskType, taskId, processingSize: this.processing.size }
       })
 
       // 发送任务到评测机
       this.ws.send(JSON.stringify({
-        type: 'judge',
+        type: taskType === 'hack' ? 'hack' : 'judge',
         payload: task
       }))
     }
   }
 
-  async fetchNextTask(): Promise<JudgeTask | null> {
+  async fetchNextTask(): Promise<DispatchTask | null> {
+    const first = this.preferHack ? await this.fetchNextHackTask() : await this.fetchNextSubmissionTask()
+    if (first) {
+      this.preferHack = !this.preferHack
+      return first
+    }
+    const second = this.preferHack ? await this.fetchNextSubmissionTask() : await this.fetchNextHackTask()
+    if (second) this.preferHack = !this.preferHack
+    return second
+  }
+
+  async fetchNextSubmissionTask(): Promise<JudgeTask | null> {
     try {
       return await prisma.$transaction(async (tx) => {
         const candidates = await tx.$queryRaw<Array<{ id: number }>>`
@@ -141,6 +157,7 @@ class JudgeConsumer {
         const TESTDATA_DIR = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 
         return {
+          taskType: 'submission' as const,
           submissionId: submission.id.toString(),
           problemId: submission.problemInternalId!,
           code: submission.code,
@@ -158,8 +175,69 @@ class JudgeConsumer {
     }
   }
 
-  handleResult(submissionId: string) {
-    this.processing.delete(submissionId)
+  async fetchNextHackTask(): Promise<HackTask | null> {
+    try {
+      return await prisma.$transaction(async tx => {
+        const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT candidate.id
+          FROM "ProblemHackAttempt" candidate
+          WHERE candidate.status = 'queuing'
+            AND NOT EXISTS (
+              SELECT 1 FROM "ProblemHackAttempt" active
+              WHERE active."problemId" = candidate."problemId"
+                AND active.status = 'judging'
+            )
+          ORDER BY candidate."createdAt" ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+        `
+        const candidate = candidates[0]
+        if (!candidate) return null
+        const attempt = await tx.problemHackAttempt.findUnique({ where: { id: candidate.id } })
+        if (!attempt) return null
+        const [problem, hackConfig] = await Promise.all([
+          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true } }),
+          tx.problemHackConfig.findUnique({ where: { problemId: attempt.problemId } }),
+        ])
+        if (!problem || !hackConfig?.enabled || hackConfig.revision !== attempt.hackConfigRevision ||
+            judgeConfigHash(problem.judgeConfig) !== attempt.judgeConfigHash) {
+          await tx.problemHackAttempt.update({
+            where: { id: attempt.id },
+            data: { status: 'stale', message: 'Hack 配置已变化，请重新发起', finishedAt: new Date() },
+          })
+          return null
+        }
+        await tx.problemHackAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'judging', judgeId: this.judgeId, judgeStarted: new Date() },
+        })
+        const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
+        return {
+          taskType: 'hack' as const,
+          hackAttemptId: attempt.id,
+          problemId: attempt.problemId,
+          testdataPath: path.join(testdataRoot, attempt.problemId),
+          config: yaml.load(problem.judgeConfig || '{}'),
+          judgeConfigHash: attempt.judgeConfigHash,
+          hackConfigRevision: attempt.hackConfigRevision,
+          inputMode: attempt.inputMode as 'data' | 'generator',
+          inputData: attempt.inputData || undefined,
+          generatorSource: attempt.generatorSource || undefined,
+          generatorLanguage: attempt.generatorLanguage || undefined,
+          hackSource: attempt.hackSource,
+          hackLanguage: attempt.hackLanguage,
+          standardSource: hackConfig.standardSource,
+          validatorSource: hackConfig.validatorSource,
+        }
+      })
+    } catch (error: any) {
+      logger.error('fetch_hack_task_error', { action: 'judge_consumer', metadata: { judgeId: this.judgeId, error: error.message } })
+      return null
+    }
+  }
+
+  handleResult(taskType: 'submission' | 'hack', id: string) {
+    this.processing.delete(`${taskType}:${id}`)
     this.notify?.()
   }
 
@@ -178,20 +256,23 @@ class JudgeConsumer {
 
     // 精准恢复该评测机的任务（断连时）
     const recoveredCount = this.processing.size
-    for (const [id, _] of this.processing) {
+    for (const [, task] of this.processing) {
       try {
-        await prisma.submission.update({
-          where: { id: parseInt(id) },
-          data: {
-            result: 'queuing',
-            judgeId: null,
-            judgeStarted: null
-          }
-        })
+        if (task.taskType === 'submission') {
+          await prisma.submission.update({
+            where: { id: parseInt(task.id) },
+            data: { result: 'queuing', judgeId: null, judgeStarted: null }
+          })
+        } else {
+          await prisma.problemHackAttempt.update({
+            where: { id: task.id },
+            data: { status: 'queuing', judgeId: null, judgeStarted: null }
+          })
+        }
       } catch (e: any) {
         logger.error('reset_task_error', {
           action: 'judge_consumer',
-          metadata: { submissionId: id, error: e.message }
+          metadata: { taskType: task.taskType, taskId: task.id, error: e.message }
         })
       }
     }
@@ -204,6 +285,7 @@ class JudgeConsumer {
 }
 
 interface JudgeTask {
+  taskType: 'submission'
   submissionId: string
   problemId: string
   code: string
@@ -211,6 +293,26 @@ interface JudgeTask {
   testdataPath: string
   config: any
 }
+
+interface HackTask {
+  taskType: 'hack'
+  hackAttemptId: string
+  problemId: string
+  testdataPath: string
+  config: any
+  judgeConfigHash: string
+  hackConfigRevision: number
+  inputMode: 'data' | 'generator'
+  inputData?: string
+  generatorSource?: string
+  generatorLanguage?: string
+  hackSource: string
+  hackLanguage: string
+  standardSource: string
+  validatorSource: string
+}
+
+type DispatchTask = JudgeTask | HackTask
 
 /**
  * 初始化 WebSocket 服务器
@@ -266,11 +368,15 @@ export function initJudgeWebSocket() {
           judgeStarted: null
         }
       })
+      const staleHacks = await prisma.problemHackAttempt.updateMany({
+        where: { status: 'judging', judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
+        data: { status: 'queuing', judgeId: null, judgeStarted: null },
+      })
 
-      if (stale.count > 0) {
+      if (stale.count > 0 || staleHacks.count > 0) {
         logger.warn('stale_tasks_recovered', {
           action: 'judge_ws',
-          metadata: { count: stale.count }
+          metadata: { submissionCount: stale.count, hackCount: staleHacks.count }
         })
       }
     } catch (e: any) {
@@ -394,11 +500,15 @@ async function recoverAllStaleTasks() {
         judgeStarted: null
       }
     })
+    const recoveredHacks = await prisma.problemHackAttempt.updateMany({
+      where: { status: 'judging' },
+      data: { status: 'queuing', judgeId: null, judgeStarted: null },
+    })
 
-    if (recovered.count > 0) {
+    if (recovered.count > 0 || recoveredHacks.count > 0) {
       logger.info('startup_recovered_stale_tasks', {
         action: 'judge_ws',
-        metadata: { count: recovered.count }
+        metadata: { submissionCount: recovered.count, hackCount: recoveredHacks.count }
       })
     }
   } catch (e: any) {
@@ -434,6 +544,9 @@ async function handleMessage(ws: WebSocket, msg: any) {
       break
     case 'result':
       await handleResult(ws, msg.payload)
+      break
+    case 'hack_result':
+      await handleHackResult(ws, msg.payload)
       break
     default:
       logger.warn('judge_ws_unknown_message', {
@@ -593,7 +706,41 @@ async function handleResult(ws: WebSocket, payload: any) {
 
   // 通知 Consumer 任务完成
   const judge = judges.get(ws)
-  judge?.consumer?.handleResult(submissionId)
+  judge?.consumer?.handleResult('submission', submissionId)
+}
+
+async function handleHackResult(ws: WebSocket, payload: any) {
+  const hackAttemptId = String(payload?.hackAttemptId || '')
+  if (!hackAttemptId) return
+  logger.info('judge_ws_hack_result', {
+    action: 'judge_ws',
+    metadata: {
+      hackAttemptId,
+      outcome: payload.outcome,
+      baselineResult: payload.baselineResult,
+      candidateResult: payload.candidateResult,
+    },
+  })
+  try {
+    await finalizeHackResult(payload)
+  } catch (error: any) {
+    logger.error('judge_ws_hack_finalize_error', {
+      action: 'judge_ws',
+      metadata: { hackAttemptId, error: error.message },
+    })
+    await prisma.problemHackAttempt.updateMany({
+      where: { id: hackAttemptId, status: 'judging' },
+      data: {
+        status: 'system_error',
+        message: `Hack 数据入库失败：${error.message}`,
+        judgeId: null,
+        judgeStarted: null,
+        finishedAt: new Date(),
+      },
+    })
+  } finally {
+    judges.get(ws)?.consumer?.handleResult('hack', hackAttemptId)
+  }
 }
 
 /**

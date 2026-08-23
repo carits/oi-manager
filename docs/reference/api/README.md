@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-21
+last_verified: 2026-08-24
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -11,6 +11,12 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `GET` | `/api/problems/:id/hack-config` | 题目管理者读取 ACM Hack 配置 |
+| `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator 和 Hack 开关 |
+| `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |
+| `POST` | `/api/problems/:id/hacks` | 以直接数据或生成器发起题目级 Hack |
+| `GET` | `/api/problems/:id/hacks/:hackId` | 查看有权限的 Hack 详情 |
+| `POST` | `/api/problems/:id/hacks/:hackId/retry` | 题目管理者重新执行系统错误任务 |
 | `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |

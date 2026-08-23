@@ -12,6 +12,7 @@ import { problemSubmissionsRouter } from './problem.submissions.routes'
 import { problemJudgeRouter } from './problem.judge.routes'
 import { problemUserContentRouter } from './problem.user-content.routes'
 import { problemStatementVersionRouter } from './problem.statement-version.routes'
+import { problemHackRouter } from './problem.hack.routes'
 
 export const problemsRouter = Router()
 
@@ -19,6 +20,7 @@ export const problemsRouter = Router()
 problemsRouter.use(problemCrudRouter)
 problemsRouter.use(problemUserContentRouter)
 problemsRouter.use(problemStatementVersionRouter)
+problemsRouter.use(problemHackRouter)
 problemsRouter.use(problemFilesRouter)
 problemsRouter.use(problemNotesRouter)
 problemsRouter.use(problemAiRouter)

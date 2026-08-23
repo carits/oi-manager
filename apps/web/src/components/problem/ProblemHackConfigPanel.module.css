@@ -1,0 +1,19 @@
+.panel { display: grid; gap: 20px; }
+.intro { padding: 16px 18px; border: 1px solid #dbe4ff; border-radius: 12px; background: #f6f8ff; color: var(--gray-700); line-height: 1.65; }
+.switchRow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; border: 1px solid var(--gray-200); border-radius: 12px; background: white; }
+.switchTitle { font-size: 15px; font-weight: 700; color: var(--gray-900); }
+.switchHint { margin-top: 4px; font-size: 13px; color: var(--gray-500); }
+.sourceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.sourceCard { min-width: 0; padding: 18px; border: 1px solid var(--gray-200); border-radius: 12px; background: white; }
+.sourceHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sourceTitle { font-weight: 700; color: var(--gray-900); }
+.sourceMeta { margin-top: 3px; font-size: 12px; color: var(--gray-500); }
+.upload { position: relative; overflow: hidden; padding: 7px 11px; border: 1px solid var(--gray-300); border-radius: 8px; background: white; color: var(--gray-700); cursor: pointer; font-size: 13px; }
+.upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.editor { width: 100%; min-height: 300px; resize: vertical; border: 1px solid var(--gray-300); border-radius: 9px; padding: 12px 14px; background: #111827; color: #e5e7eb; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; outline: none; }
+.editor:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent); }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 4px; }
+.revision { color: var(--gray-500); font-size: 13px; }
+.save { border: 0; border-radius: 9px; padding: 10px 20px; background: var(--primary); color: white; font-weight: 700; cursor: pointer; }
+.save:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 900px) { .sourceGrid { grid-template-columns: 1fr; } .switchRow, .footer { align-items: flex-start; flex-direction: column; } }

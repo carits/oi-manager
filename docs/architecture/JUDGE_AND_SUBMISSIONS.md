@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-21
+last_verified: 2026-08-24
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -109,3 +109,33 @@ Docker 服务需要 cgroup/privileged 能力才能可靠检测内存限制。测
 日志可以记录 `judgeId/submissionId`，不得记录 Judge Token 或用户源码全文。
 
 Checker 上传仅接受 C/C++ 源文件，`testlib.h` 由系统提供；下载接口只返回受鉴权的 API 地址，不返回服务器绝对路径，且题目目录必须位于 `TESTDATA_DIR` 下。
+
+## 题目级 ACM Hack
+
+源码型 ACM 批处理题可在评测设置中配置 C++17 标准程序和 Validator，并显式启用题目级
+Hack。Validator 可引用 Judge 内置的 `testlib.h`；启用前 Server 会通过 go-judge 编译检查
+两个程序。任何拥有该题提交权限的用户都可提交直接输入，或提交 C++17/Python3 生成器，
+同时提供一份使用题目允许语言的被 Hack 程序。
+
+Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
+
+1. 生成或读取候选输入，并在沙箱内通过 Validator。
+2. 运行标准程序生成候选点答案。
+3. 使用当前完整测试集评测被 Hack 程序，取得 baseline Verdict。
+4. 把候选点放在最前面，再运行候选点和当前完整测试集。
+5. 两次确定性最终 Verdict 不同时接受；测试点编号、耗时或 message 变化不算有效。
+
+有效结果限定为 Accepted、WA、PE、TLE、MLE、RE 和 OLE；CE、System Error 或通信失败
+不能构成有效 Hack。有效输入以 `hack_<attemptId>.in/.out` 加入正式数据，所有已接受 Hack
+位于普通测试点之前。题目配置和所有 ACM 活动快照同步更新，但历史提交、成绩和排行榜不
+重新评测，OI/IOI 快照不变。
+
+同一用户同题最多一个排队或评测中的任务，同一题最多一个正在评测的 Hack；PostgreSQL
+部分唯一索引提供最终并发约束。配置 revision 或评测配置哈希变化会把旧任务标记为 stale，
+不会写入数据。用户只可查看自己的完整记录，题目管理者可查看全部记录并重新执行系统错误
+任务；其他用户只能看到有效 Hack 数量。
+
+接口为 `GET/PUT /api/problems/:id/hack-config`、`POST/GET /api/problems/:id/hacks`、
+`GET /api/problems/:id/hacks/:hackId` 和 `POST /api/problems/:id/hacks/:hackId/retry`。
+源码上限 256 KiB，候选输入和标准答案各 1 MiB。Judge WebSocket 使用独立的 `hack` /
+`hack_result` 消息，并与普通提交交替领取，避免任一队列长期饥饿。

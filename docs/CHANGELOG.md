@@ -1,13 +1,28 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-22
+last_verified: 2026-08-24
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-23
+
+- 新增题目级 ACM Hack：题目管理者配置并编译检查 C++17 STD/Validator，拥有题目提交权限的
+  用户可提交直接数据、C++17/Python3 生成器和被 Hack 程序；Hack 使用独立记录与队列，不
+  污染普通提交、排名和重测。
+- 有效性按两次完整评测的最终 Verdict 变化判定。候选点在第二次评测中优先执行，通过后生成
+  `hack_<attemptId>.in/.out`，同步题目和所有 ACM 活动快照；已完成提交和 OI/IOI 快照不变。
+- 增加同用户同题与同题评测中的数据库并发约束、配置 revision/hash 过期保护、重复输入检测、
+  题目级原子落库和失败清理；普通用户只查看自己的记录，题目管理者可查看全部并重试系统错误。
+- go-judge 镜像加入 Python 3.11；修复无输入程序缺少空 `stdin` 文件导致生成器 RE 的问题。
+- 验证：Prisma Schema 校验、24/24 迁移、Server/Judge/Web 生产构建、Server 2/2 和 Judge
+  3/3 定向测试通过；真实 go-judge 以直接输入和 Python3 生成器两次验证 `Accepted → Wrong Answer`。
+- 迁移前完整备份 `/data/backups/oi-manager/oi_manager_pre_problem_hack_20260823_2355.dump`
+  已通过 PostgreSQL 16 `pg_restore -l` 校验。
+
 ## 2026-08-22
 
 - 收紧活动题面/题解边界：比赛、训练和作业页面移除“基于当前题面创建个人版本”和“我的题面/题解”，

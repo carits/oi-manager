@@ -64,6 +64,14 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     compile_time_limit: 60000,
     compile_memory_limit: 524288,
   },
+  'python3': {
+    code_file: 'main.py',
+    execute_file: 'main',
+    compile: 'python3 -m py_compile main.py && cp main.py main',
+    execute: 'python3 main',
+    compile_time_limit: 30000,
+    compile_memory_limit: 262144,
+  },
 }
 
 export function getLanguageConfig(lang: string): LanguageConfig | null {

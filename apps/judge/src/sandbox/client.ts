@@ -324,9 +324,9 @@ async function sandboxExecute(
       copyOutFiles = [`${filename}.out`, 'stderr']
     } else {
       // 标准 stdin/stdout 模式
-      if (stdin) {
-        copyIn['stdin'] = { content: stdin }
-      }
+      // The shell command always redirects from `stdin`; create the file even
+      // for empty-input programs such as Hack data generators.
+      copyIn['stdin'] = { content: stdin || '' }
       execCommand = `${langConfig.execute} <stdin >stdout 2>stderr`
       copyOutFiles = ['stdout', 'stderr']
     }

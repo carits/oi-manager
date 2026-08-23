@@ -128,6 +128,36 @@ export interface JudgeTaskResult {
   message?: string
 }
 
+export interface HackJudgeRequest {
+  taskType: 'hack'
+  hackAttemptId: string
+  problemId: string
+  testdataPath: string
+  config: ProblemConfig
+  judgeConfigHash: string
+  hackConfigRevision: number
+  inputMode: 'data' | 'generator'
+  inputData?: string
+  generatorSource?: string
+  generatorLanguage?: 'cpp17' | 'python3'
+  hackSource: string
+  hackLanguage: string
+  standardSource: string
+  validatorSource: string
+}
+
+export interface HackJudgeTaskResult {
+  hackAttemptId: string
+  outcome: 'accepted' | 'rejected' | 'system_error'
+  baselineResult?: JudgeResult
+  candidateResult?: JudgeResult
+  message?: string
+  inputData?: string
+  outputData?: string
+  inputSha256?: string
+  outputSha256?: string
+}
+
 // ==================== 语言配置 ====================
 
 export interface LanguageConfig {
@@ -166,7 +196,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
+  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
   payload: any
 }
 
@@ -201,4 +231,14 @@ export interface JudgeMessage {
 export interface ResultMessage {
   type: 'result'
   payload: JudgeTaskResult
+}
+
+export interface HackMessage {
+  type: 'hack'
+  payload: HackJudgeRequest
+}
+
+export interface HackResultMessage {
+  type: 'hack_result'
+  payload: HackJudgeTaskResult
 }

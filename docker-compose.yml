@@ -17,12 +17,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # go-judge sandbox with C/C++ compilers; compile and execute both stay isolated.
+  # go-judge sandbox with C/C++ and Python 3; compile and execute both stay isolated.
   judge:
     build:
       context: .
       dockerfile: docker/go-judge.Dockerfile
-    image: oi-manager/go-judge:v1.12.1-gcc
+    image: oi-manager/go-judge:v1.12.1-gcc-python3
     container_name: oi-judge
     ports:
       - "5050:5050"

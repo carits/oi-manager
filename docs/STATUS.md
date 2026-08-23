@@ -1,10 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-22
+last_verified: 2026-08-24
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-23: 题目级 ACM Hack 已实现独立队列、STD/Validator、直接数据与 C++17/Python3 生成器、双完整评测和有效数据自动入库；历史提交不重测。
 - 2026-08-22: multi-statement routes are loaded by the restarted Server process; authenticated statement-version listing was verified with a real organization-scoped session.
 - 2026-08-22: activity pages are selection-only for statements and solutions; managers can edit immutable activity snapshots, while participant creation APIs are removed. Targeted snapshot tests pass 7/7.
 
@@ -48,6 +49,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   评测后端，比赛提交优先使用 `judgeConfigSnapshot`。
 - 超级管理员和平台管理员的评测记录页提供全平台全量视图，包含所有用户、个人区、校园区和比赛提交，支持总数、范围提示和 20/50/100 条分页浏览。
 - 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
+- ACM 标准批处理题可配置题目级 Hack。有效 Hack 必须通过 Validator，并使被 Hack 程序在
+  当前完整数据与“候选点优先 + 当前完整数据”之间发生最终 Verdict 变化；有效数据同步题目
+  和全部 ACM 活动快照，仅影响后续新提交。
 - 比赛提交列表、详情和排行榜已统一纳入 OLE/CE/RE 等无测试点明细终态；Queuing/Judging 可查询，ACM 不把进行中记录计入失败次数。
 - 平台管理员和超级管理员可在独立平台工作区管理平台题目、评测配置和 Checker；学校题仍按组织隔离。通用文件上传已启用类别/归属类型白名单，Checker API 不泄露绝对路径。
 - 外部 OJ 下载已增加公网 URL、重定向和响应大小限制；不再向非可信目标发送平台 Cookie。
@@ -78,6 +82,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   通过。桌面主跑中 2 项旧测试辅助契约失败已单独复跑通过，不属于页面路由失败。
 - 根构建、Server/Web TypeScript 检查、Web Vitest 23/23、Judge Vitest 2/2、UI 状态守卫与
   文档检查均通过。
+- 2026-08-23 题目级 Hack 定向测试 Server 2/2、Judge 3/3 通过；真实 go-judge 沙箱分别以
+  直接输入和 Python3 生成器验证 `Accepted → Wrong Answer`，Validator、STD、候选点优先及
+  双完整评测链路通过。Server/Judge/Web 生产构建通过。
 - 2026-08-02 统一左侧导航改造后，远端隔离 UI 冒烟 28/28 通过，覆盖 Chromium、Firefox、
   五种角色的个人工作区、默认隐藏、人工展开、侧栏记忆和左下账号菜单。
 - 校内题库远端隔离 E2E 14/14 通过，包含 Chromium 双桌面视口和 Firefox 冒烟；教师、
@@ -97,7 +104,11 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 
 - 开发服务器当前运行功能提交 `19b6b6f`，公网优化预览构建为 `fMB8H8E8lL7Q0M2T54lJj`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
   项目仍处开发阶段，不代表正式投产。
-- 数据库迁移 23/23；VJudge 式多题面迁移前的 PostgreSQL 16 完整备份为
+- 数据库迁移 24/24；题目级 Hack 迁移前的 PostgreSQL 16 完整备份为
+  `/data/backups/oi-manager/oi_manager_pre_problem_hack_20260823_2355.dump`，已通过容器内
+  `pg_restore -l` 校验。含 Python3 的 go-judge 镜像 ID 为
+  `sha256:03be41256057e38005d0acee9710d12ddb6cba83bf19183193d7ae01980cad8b`。
+  VJudge 式多题面迁移前的 PostgreSQL 16 完整备份为
   `/data/backups/oi-manager/oi_manager_pre_vjudge_statements_20260821_1900.dump`，已通过容器内
   `pg_restore -l` 校验。301 道历史活动题均生成一组 statement set 和默认 snapshot。
   用户内容迁移前的 PostgreSQL 16 完整备份为

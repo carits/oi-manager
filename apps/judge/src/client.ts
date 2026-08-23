@@ -11,7 +11,8 @@
 import WebSocket from 'ws'
 import { config } from './config'
 import { judge } from './judge'
-import type { JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
+import { judgeHack } from './hack'
+import type { HackMessage, HackResultMessage, JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
 import { getClientHeartbeatReply } from './protocol'
 
 class JudgeClient {
@@ -76,7 +77,7 @@ class JudgeClient {
       type: 'register',
       payload: {
         judgeId: config.judgeId,
-        languages: ['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp17', 'cpp20']
+        languages: ['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp17', 'cpp20', 'python3']
       }
     }
     this.send(registerMsg)
@@ -125,9 +126,25 @@ class JudgeClient {
       case 'judge':
         await this.handleJudgeTask(msg as JudgeMessage)
         break
+      case 'hack':
+        await this.handleHackTask(msg as HackMessage)
+        break
       default:
         console.log('[Judge] Unknown message type:', msg.type)
     }
+  }
+
+  private async handleHackTask(msg: HackMessage) {
+    const { hackAttemptId, problemId } = msg.payload
+    console.log(`[Judge] Received Hack task: attempt=${hackAttemptId}, problem=${problemId}`)
+    let payload
+    try {
+      payload = await judgeHack(msg.payload)
+    } catch (error: any) {
+      payload = { hackAttemptId, outcome: 'system_error' as const, message: error.message }
+    }
+    const result: HackResultMessage = { type: 'hack_result', payload }
+    this.send(result)
   }
 
   private async handleJudgeTask(msg: JudgeMessage) {

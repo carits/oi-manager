@@ -180,6 +180,7 @@ const routerPrefixes = {
   problemJudgeRouter: '/api/problems',
   problemUserContentRouter: '/api/problems',
   problemStatementVersionRouter: '/api/problems',
+  problemHackRouter: '/api/problems',
   ojFetcherRouter: '/api/oj-fetcher',
   filesRouter: '/api/files',
   platformBindingRouter: '/api/platform-bindings',

@@ -13,7 +13,8 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       gcc \
       g++ \
-      libc6-dev; \
+      libc6-dev \
+      python3; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt

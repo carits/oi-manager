@@ -289,6 +289,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
     include: {
       Owner: { select: { username: true } },
       ProblemStatement: { orderBy: [{ type: 'asc' }, { format: 'asc' }, { language: 'asc' }] },
+      ProblemHackConfig: { select: { enabled: true } },
     },
   })
   if (!problem || !canViewProblem(user, problem)) {
@@ -299,7 +300,9 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const statements = problem.ProblemStatement.filter(item => item.type === 'statement' && item.isVisible)
   const solutions = problem.ProblemStatement.filter(item =>
     item.type === 'solution' && (canEdit || item.isVisible))
-  const { ProblemStatement, Owner, ...data } = problem
+  const acceptedHackCount = await prisma.problemHackAttempt.count({ where: { problemId: problem.id, status: 'accepted' } })
+  const { ProblemStatement, ProblemHackConfig, Owner, ...data } = problem
+  const permissions = problemPermissions(user, data)
   res.json({
     success: true,
     data: {
@@ -311,7 +314,12 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       statements,
       solutions,
       platforms: parsePlatforms(data),
-      permissions: problemPermissions(user, data),
+      permissions: { ...permissions, canSubmit: data.status === 'published' && permissions.canView },
+      hack: {
+        enabled: Boolean(ProblemHackConfig?.enabled),
+        acceptedCount: acceptedHackCount,
+        canHack: Boolean(ProblemHackConfig?.enabled) && data.status === 'published' && permissions.canView,
+      },
     },
   })
 }))

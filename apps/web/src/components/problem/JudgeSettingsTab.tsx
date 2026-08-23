@@ -6,6 +6,7 @@ import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { ProblemHackConfigPanel } from './ProblemHackConfigPanel'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
 
 // ==================== 类型定义 ====================
@@ -193,7 +194,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 状态 ====================
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'basic' | 'subtasks' | 'testdata'>('basic')
+  const [activeTab, setActiveTab] = useState<'basic' | 'subtasks' | 'testdata' | 'hack'>('basic')
   const [yamlCollapsed, setYamlCollapsed] = useState(true)
 
   // 基础配置
@@ -810,7 +811,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
       {/* ===== Tab 切换 ===== */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: '1.25rem' }}>
-        {([['basic', '基础配置'], ...(judgeMode === 'oi' ? [['subtasks', '子任务'] as const] : []), ['testdata', '测试数据']] as const).map(([key, label]) => (
+        {([['basic', '基础配置'], ...(judgeMode === 'oi' ? [['subtasks', '子任务'] as const] : []), ['testdata', '测试数据'], ...(problemId ? [['hack', 'Hack'] as const] : [])] as const).map(([key, label]) => (
           <button type="button" key={key} onClick={() => setActiveTab(key)}
             style={{
               padding: '0.625rem 1.25rem',
@@ -1379,6 +1380,10 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             )
           })()}
         </div>
+      )}
+
+      {activeTab === 'hack' && problemId && (
+        <ProblemHackConfigPanel problemId={problemId} judgeMode={judgeMode} problemType={problemType} />
       )}
 
       {/* ===== 确认弹窗 ===== */}
