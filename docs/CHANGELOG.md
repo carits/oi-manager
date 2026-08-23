@@ -15,6 +15,8 @@ source_of_truth: Git history
   `failureStage`，管理者可直接区分输入、生成器、Validator、STD、两次评测、配置过期和入库失败。
 - 管理者重新执行系统错误 Hack 前会检查同用户同题的活动任务，并把数据库并发唯一约束冲突稳定转换为
   `409 HACK_ALREADY_ACTIVE`，不再出现极端并发下的 500。
+- Hack 测试数据提升现在覆盖暂存写入、两次重命名和数据库事务的统一失败清理；任一阶段失败都不会留下
+  单独的 `.in`、`.out` 或 `.pending` 文件。
 
 - 平台安全审计发现 PostgreSQL `5432` 与高权限 go-judge `5050` 被 Docker 发布到所有网卡；
   Compose 端口现仅绑定 `127.0.0.1`，数据库和沙箱不再可从公网直接访问。

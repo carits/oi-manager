@@ -306,11 +306,15 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
         : []
     })
 
-    await fs.promises.writeFile(stagedInput, inputData, 'utf8')
-    await fs.promises.writeFile(stagedOutput, outputData, 'utf8')
-    await fs.promises.rename(stagedInput, finalInput)
-    await fs.promises.rename(stagedOutput, finalOutput)
+    let inputPromoted = false
+    let outputPromoted = false
     try {
+      await fs.promises.writeFile(stagedInput, inputData, { encoding: 'utf8', flag: 'wx' })
+      await fs.promises.writeFile(stagedOutput, outputData, { encoding: 'utf8', flag: 'wx' })
+      await fs.promises.rename(stagedInput, finalInput)
+      inputPromoted = true
+      await fs.promises.rename(stagedOutput, finalOutput)
+      outputPromoted = true
       await prisma.$transaction(async tx => {
         await tx.problem.update({ where: { id: problem.id }, data: { judgeConfig: nextProblemConfig } })
         await tx.testdataFile.createMany({
@@ -341,7 +345,12 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
         })
       })
     } catch (error) {
-      await Promise.allSettled([fs.promises.rm(finalInput, { force: true }), fs.promises.rm(finalOutput, { force: true })])
+      await Promise.allSettled([
+        fs.promises.rm(stagedInput, { force: true }),
+        fs.promises.rm(stagedOutput, { force: true }),
+        ...(inputPromoted ? [fs.promises.rm(finalInput, { force: true })] : []),
+        ...(outputPromoted ? [fs.promises.rm(finalOutput, { force: true })] : []),
+      ])
       throw error
     }
   })

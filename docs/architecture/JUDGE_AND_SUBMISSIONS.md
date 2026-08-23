@@ -137,6 +137,8 @@ Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 源码必须通过单条详情接口按权限读取，避免历史记录较多时一次返回大量源码。失败记录使用
 `failureStage` 标明输入、生成器、Validator、标准程序、baseline、candidate、配置一致性或
 数据入库阶段；STD 未生成任何答案输出时按标准程序阶段系统错误处理，不能成为有效 Hack。
+测试数据先以互斥创建方式写入两份暂存文件，再逐一提升并提交数据库事务；暂存写入、任一文件提升或事务
+失败都会清理本次已经产生的暂存及最终文件，禁止留下半份 Hack 测试点。
 
 接口为 `GET/PUT /api/problems/:id/hack-config`、`POST/GET /api/problems/:id/hacks`、
 `GET /api/problems/:id/hacks/:hackId` 和 `POST /api/problems/:id/hacks/:hackId/retry`。
