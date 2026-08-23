@@ -9,7 +9,9 @@ source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Pri
   `5050` 及 Server API `3002` 对公网监听，三者现均仅绑定本机回环地址。
 - 2026-08-24: Playwright 路由测试从无法收集恢复为 251 条，E2E 隔离种子已迁移到统一组织身份模型；
   负责人 Edge 已完成校园九个一级模块、团队/比赛/题目/提交等详情工作台首轮验收。组织题单详情、
-  嵌套提交弹窗单滚动条与逐层关闭已修复，等待最新预览复验。
+  嵌套提交弹窗单滚动条与逐层关闭已修复并完成线上 Edge 复验。
+- 2026-08-24: E2E 旧 `/teacher`、`/student` 页面与 `/api/schools` 排名依赖已迁移到组织工作区；
+  Chromium 56 条全量冒烟通过。组织导航、学生模块边界、账号中心错误预取和题目 AI 权限 404 已修复。
 - 2026-08-23: 题目级 ACM Hack 已实现独立队列、STD/Validator、直接数据与 C++17/Python3 生成器、双完整评测和有效数据自动入库；历史提交不重测。
 - 2026-08-22: multi-statement routes are loaded by the restarted Server process; authenticated statement-version listing was verified with a real organization-scoped session.
 - 2026-08-22: activity pages are selection-only for statements and solutions; managers can edit immutable activity snapshots, while participant creation APIs are removed. Targeted snapshot tests pass 7/7.

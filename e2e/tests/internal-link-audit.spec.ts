@@ -2,10 +2,11 @@ import { expect, test } from '@playwright/test'
 import { accounts, type AuthRole } from '../fixtures/auth'
 import { assertPageHealth, waitForPageReady, watchPage } from '../support/page-audit'
 
+const organizationBase = '/org/org_school-default'
 const entries: Array<{ role: AuthRole; roots: string[] }> = [
-  { role: 'principal', roots: ['/teacher', '/teacher/school', '/teacher/management', '/teacher/students', '/teacher/teachers', '/teacher/teams', '/teacher/homeworks', '/teacher/contests', '/teacher/problems', '/teacher/problem-lists', '/teacher/rankings'] },
-  { role: 'teacher', roots: ['/teacher', '/teacher/school', '/teacher/management', '/teacher/students', '/teacher/teams', '/teacher/homeworks', '/teacher/contests', '/teacher/problems', '/teacher/problem-lists', '/teacher/rankings'] },
-  { role: 'campusStudent', roots: ['/student', '/student/school', '/student/team', '/student/homeworks', '/student/contests', '/student/problem-lists', '/student/rating', '/student/submissions'] },
+  { role: 'principal', roots: ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings'].map(module => `${organizationBase}/${module}`) },
+  { role: 'teacher', roots: ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings'].map(module => `${organizationBase}/${module}`) },
+  { role: 'campusStudent', roots: ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings'].map(module => `${organizationBase}/${module}`) },
   { role: 'personalStudent', roots: ['/personal', '/personal/teams', '/personal/problems', '/personal/contests', '/personal/problem-lists', '/personal/rankings', '/personal/submissions'] },
 ]
 

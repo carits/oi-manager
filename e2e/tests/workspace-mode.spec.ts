@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { accounts, type AuthRole } from '../fixtures/auth'
 
+const organizationBase = '/org/org_school-default'
 const switchableRoles: Array<{ account: AuthRole; expectedRole: string }> = [
   { account: 'principal', expectedRole: 'school_principal' },
   { account: 'teacher', expectedRole: 'teacher' },
@@ -15,9 +16,9 @@ const administratorRoles: Array<{ account: AuthRole; expectedRole: string; home:
 const workHomes: Record<AuthRole, string> = {
   superAdmin: '/admin/schools',
   platformAdmin: '/platform-admin',
-  principal: '/teacher',
-  teacher: '/teacher',
-  campusStudent: '/student',
+  principal: `${organizationBase}/overview`,
+  teacher: `${organizationBase}/overview`,
+  campusStudent: `${organizationBase}/overview`,
   personalStudent: '/personal',
 }
 
@@ -88,7 +89,7 @@ test.describe('all-role workspace shell @smoke', () => {
       const page = await context.newPage()
       await page.goto(workHomes[entry.account])
 
-      const workspaceControl = page.locator('button[aria-haspopup="dialog"]')
+      const workspaceControl = page.locator('button[aria-haspopup="dialog"]:not([aria-label^="打开通知"])').last()
       await workspaceControl.click()
       await page.getByRole('dialog', { name: '切换身份' }).getByRole('button', { name: /个人/ }).click()
       await page.waitForURL(/\/personal(?:\?.*)?$/)
@@ -133,7 +134,7 @@ test.describe('administrator workspace isolation @smoke', () => {
       const context = await browser.newContext({ storageState: account.storageState })
       const page = await context.newPage()
       await page.goto(entry.home)
-      await expect(page.locator('button[aria-haspopup="dialog"]')).toHaveCount(0)
+      await expect(page.locator('button[aria-haspopup="dialog"]:not([aria-label^="打开通知"])')).toHaveCount(0)
 
       await page.goto('/personal')
       await expect(page).toHaveURL(new RegExp(`${entry.home.replaceAll('/', '\\/')}(?:\\?.*)?$`))
@@ -146,7 +147,7 @@ test.describe('unified sidebar navigation @smoke', () => {
   test('is hidden by default, keeps the account menu in its footer, and remembers a manual choice', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
-    await page.goto('/teacher')
+    await page.goto(`${organizationBase}/overview`)
 
     const navigationToggle = page.getByRole('button', { name: '显示导航' })
     await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
@@ -157,8 +158,8 @@ test.describe('unified sidebar navigation @smoke', () => {
     await expect(navigation).toBeVisible()
     await expect(page.getByRole('button', { name: '打开账号菜单' })).toBeVisible()
 
-    await page.getByRole('link', { name: '学生' }).click()
-    await expect(page).toHaveURL(/\/teacher\/students$/)
+    await page.getByRole('link', { name: '管理', exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/management$`))
     await expect(navigation).toBeVisible()
 
     await page.reload()
@@ -211,13 +212,12 @@ test.describe('personal workspace isolation', () => {
       body: JSON.stringify({ success: false, message: 'temporary failure' }),
     }))
 
-    await page.goto('/teacher')
+    await page.goto(`${organizationBase}/overview`)
     const workspaceControl = page.locator('button[aria-haspopup="dialog"]')
     await workspaceControl.click()
     await page.getByRole('dialog', { name: '切换身份' }).getByRole('button', { name: /个人/ }).click()
 
-    await expect(page).toHaveURL(/\/teacher$/)
-    await expect(page).toHaveURL(/\/teacher$/)
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/overview$`))
     await context.close()
   })
 })

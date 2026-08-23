@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test'
 import { accounts } from '../fixtures/auth'
 
+const organizationBase = '/org/org_school-default'
+
 test.describe('school problem library permissions @smoke', () => {
   test('teacher can use the school and platform library tabs', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
 
-    await page.goto('/teacher/problems?library=school')
+    await page.goto(`${organizationBase}/problems?library=school`)
     await expect(page.getByRole('heading', { name: '校内题库' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '校内题库' })).toHaveAttribute('aria-selected', 'true')
 
@@ -15,7 +17,7 @@ test.describe('school problem library permissions @smoke', () => {
     await expect(schoolRow.getByRole('button', { name: '查看' })).toBeVisible()
     await expect(schoolRow.getByRole('button', { name: '编辑' })).toBeVisible()
 
-    await page.goto('/teacher/problems?library=platform')
+    await page.goto(`${organizationBase}/problems?library=platform`)
     await expect(page.getByRole('heading', { name: '平台题库' })).toBeVisible()
     const platformRow = page.locator('tbody tr').filter({ hasText: 'E2E A Plus B' })
     await expect(platformRow).toHaveCount(1)
@@ -28,7 +30,7 @@ test.describe('school problem library permissions @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.principal.storageState })
     const page = await context.newPage()
 
-    await page.goto('/teacher/problems?library=school')
+    await page.goto(`${organizationBase}/problems?library=school`)
     const schoolRow = page.locator('tbody tr').filter({ hasText: 'E2E Sequence' })
     await expect(schoolRow).toHaveCount(1)
     await expect(schoolRow.getByRole('button', { name: '查看' })).toBeVisible()
@@ -41,10 +43,10 @@ test.describe('school problem library permissions @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const page = await context.newPage()
 
-    await page.goto('/student')
+    await page.goto(`${organizationBase}/overview`)
     await expect(page.getByRole('link', { name: '题库', exact: true })).toHaveCount(0)
-    await page.goto('/student/problems')
-    await expect(page).toHaveURL(/\/student$/)
+    await page.goto(`${organizationBase}/problems`)
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/overview$`))
 
     await context.close()
   })
@@ -53,7 +55,7 @@ test.describe('school problem library permissions @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.platformAdmin.storageState })
     const page = await context.newPage()
 
-    await page.goto('/teacher/problems?library=school')
+    await page.goto(`${organizationBase}/problems?library=school`)
     await expect(page).toHaveURL(/\/platform-admin$/)
     await page.goto('/platform-admin/problems')
     await expect(page.getByRole('heading', { name: '题库管理' })).toBeVisible()

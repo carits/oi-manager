@@ -235,7 +235,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   useEffect(() => {
     fetchProblem()
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
-    fetchAiUsage()
     setSubmitMethod('local')
   }, [problemId])
 
@@ -327,6 +326,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       const result = await apiClient.get<Problem>(`/api/problems/${problemId}`)
       if (result.success && result.data) {
         setProblem(result.data)
+        if (result.data.permissions.canEdit) void fetchAiUsage()
         // 设置默认提交语言为平台语言列表的第一项
         const langs: PlatformLanguage[] = result.data.allowedLanguages
           ? JSON.parse(result.data.allowedLanguages)
@@ -1195,7 +1195,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           gap: '0.75rem',
         }}>
           {/* AI 工具 - 仅 Markdown 题面时显示 */}
-          {activeTab === 'statement' && currentStatement?.format === 'markdown' && (
+          {canModify() && activeTab === 'statement' && currentStatement?.format === 'markdown' && (
             <div style={{
               background: 'white',
               borderRadius: '8px',

@@ -5,6 +5,7 @@ import { loadFixtureIds } from '../fixtures/data'
 import { assertPageHealth, waitForPageReady, watchPage } from '../support/page-audit'
 
 const ids = loadFixtureIds()
+const organizationBase = `/org/org_${ids.school}`
 
 function teamRows(body: any) {
   return body?.data?.data || []
@@ -14,9 +15,10 @@ test.describe('student mode API isolation @smoke', () => {
   test('campus and personal team resources stay isolated', async ({ request }) => {
     const campus = await loginAs(request, 'campusStudent')
     const personal = await loginAs(request, 'personalStudent')
+    const campusHeaders = { ...bearer(campus), 'X-OI-Organization-ID': `org_${ids.school}` }
 
     const campusMine = await request.get('/api/teams?view=mine&pageSize=100', {
-      headers: bearer(campus),
+      headers: campusHeaders,
     })
     expect(campusMine.status()).toBe(200)
     const campusTeams = teamRows(await campusMine.json())
@@ -45,7 +47,7 @@ test.describe('student mode API isolation @smoke', () => {
     expect(personalTeam).not.toHaveProperty('schoolId')
 
     expect((await request.get(`/api/teams/${ids.personalTeam}`, {
-      headers: bearer(campus),
+      headers: campusHeaders,
     })).status()).toBe(403)
     expect((await request.get(`/api/teams/${ids.team}`, {
       headers: bearer(personal),
@@ -59,13 +61,14 @@ test.describe('student mode API isolation @smoke', () => {
       `/api/teams/${ids.personalTeam}/join-requests`,
     ]) {
       expect((await request.get(path, { headers: bearer(personal) })).status()).toBe(200)
-      expect((await request.get(path, { headers: bearer(campus) })).status()).toBe(403)
+      expect((await request.get(path, { headers: campusHeaders })).status()).toBe(403)
     }
   })
 
   test('campus and personal rankings expose separate identity contracts', async ({ request }) => {
     const campus = await loginAs(request, 'campusStudent')
     const personal = await loginAs(request, 'personalStudent')
+    const campusHeaders = { ...bearer(campus), 'X-OI-Organization-ID': `org_${ids.school}` }
 
     for (const endpoint of ['rating', 'solved']) {
       const response = await request.get(`/api/rankings/personal/${endpoint}?pageSize=100`, {
@@ -77,14 +80,14 @@ test.describe('student mode API isolation @smoke', () => {
       expect(body.data.every((row: any) => row.username && !('name' in row) && !('schoolId' in row))).toBe(true)
 
       expect((await request.get(`/api/rankings/personal/${endpoint}`, {
-        headers: bearer(campus),
+        headers: campusHeaders,
       })).status()).toBe(403)
     }
 
-    expect((await request.get(`/api/schools/${ids.school}/student-rankings`, {
-      headers: bearer(campus),
+    expect((await request.get(`/api/rankings/organizations/org_${ids.school}/rating`, {
+      headers: campusHeaders,
     })).status()).toBe(200)
-    expect((await request.get(`/api/schools/${ids.school}/student-rankings`, {
+    expect((await request.get(`/api/rankings/organizations/org_${ids.school}/rating`, {
       headers: bearer(personal),
     })).status()).toBe(403)
   })
@@ -128,7 +131,7 @@ test.describe('personal workspace pages @smoke', () => {
     await expect(page.locator('main')).not.toContainText('E2E Personal Student')
 
     await page.goto('/personal/rankings')
-    await expect(page.getByRole('heading', { name: '个人排名' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '个人排行榜' })).toBeVisible()
     await expect(page.getByRole('cell', { name: new RegExp(accounts.personalStudent.username) })).toBeVisible()
     await expect(page.locator('main')).not.toContainText('E2E Personal Student')
   })
@@ -137,12 +140,12 @@ test.describe('personal workspace pages @smoke', () => {
     await page.goto('/personal/teams')
     await expect(page.getByText('E2E Personal Team')).toBeVisible()
 
-    const modeControl = page.getByRole('group', { name: '工作区' })
-    await modeControl.getByRole('button', { name: '校园', exact: true }).click()
-    await page.waitForURL('/student')
-    await expect(page.getByRole('group', { name: '工作区' }).getByRole('button', { name: '校园', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    const workspaceControl = page.locator('button[aria-haspopup="dialog"]:not([aria-label^="打开通知"])').last()
+    await workspaceControl.click()
+    await page.getByRole('dialog', { name: '切换身份' }).getByRole('button', { name: /E2E School|校园/ }).click()
+    await page.waitForURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/(?:overview|teams|homeworks|contests|problem-lists|rankings)$`))
 
-    await page.goto('/student/team')
+    await page.goto(`${organizationBase}/teams`)
     await expect(page.getByText('E2E Training Team')).toBeVisible()
     await expect(page.locator('main')).not.toContainText('E2E Personal Team')
   })

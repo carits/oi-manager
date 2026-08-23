@@ -77,7 +77,8 @@ export function routeOwner(pattern: RoutePattern): RouteOwner {
   if (pattern === '/profile/teacher/[id]') return 'principal'
   if (pattern === '/profile/user/[id]') return 'personalStudent'
   if (pattern.startsWith('/personal')) return 'personalStudent'
-  if (pattern.startsWith('/org')) return 'campusStudent'
+  if (pattern === '/org/[organizationId]/[module]') return 'campusStudent'
+  if (pattern.startsWith('/org')) return 'principal'
   if (pattern.startsWith('/account') || pattern === '/identity') return 'campusStudent'
   if (pattern === '/super_admin' || pattern.startsWith('/admin')) return 'superAdmin'
   if (pattern.startsWith('/platform-admin')) return 'platformAdmin'
@@ -97,7 +98,7 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   }
 
   let route: string = pattern
-  if (route.includes('/admin/schools/[id]')) route = route.replace('[id]', ids.school)
+  if (route.includes('/admin/schools/[id]')) route = route.replace('[id]', `org_${ids.school}`)
   else if (route.includes('/admin/users/[id]')) route = route.replace('[id]', ids.users.platformAdmin)
   else if (route.includes('/personal/teams/[id]')) route = route.replace('[id]', ids.personalTeam)
   else if (route.includes('/personal/problems/[id]')) route = route.replace('[id]', ids.personalProblem)

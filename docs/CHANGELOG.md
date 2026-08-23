@@ -20,6 +20,13 @@ source_of_truth: Git history
   Organization、Membership 和校园身份 Profile；隔离库重置重新可执行。
 - 修复组织 catch-all 路由下题单详情把 `segments` 误读为 `params.id`，导致列表可见但详情恒为空；
   组织路由现在显式传入题单 ID。
+- 统一组织工作区侧栏使用绝对 `/org/:organizationId/*` 链接；学生直接访问管理、题库等未授权模块时
+  自动返回校园概览，不再停留在受限 URL。
+- 账号中心改用绝对个人导航，消除从校园页面进入账号资料后对 `/account/teams`、`/account/campus`
+  等不存在 RSC 路由的 404 预取。
+- 题目详情仅在拥有编辑权限时请求和展示 AI 工具，普通查看者不再触发 `/ai/usage` 404。
+- E2E 全面迁移到统一组织路由和组织上下文；Chromium 56 条冒烟全部通过，当前登录、管理员、
+  校园负责人、学生、个人区、题单和提交详情视觉基线已重新审阅并固化。
 - 修复嵌套提交弹窗的双滚动条和单次 Escape 同时关闭两层弹窗；页面模式现在锁定根滚动容器，
   且仅最上层 Modal 处理键盘事件。
 - 迁移题单测试 helper：`ProblemList.schoolId` 改为当前 `scope + organizationId`；为已退役的

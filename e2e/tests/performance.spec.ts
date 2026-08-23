@@ -3,6 +3,7 @@ import { accounts } from '../fixtures/auth'
 import { loadFixtureIds } from '../fixtures/data'
 
 const ids = loadFixtureIds()
+const organizationBase = `/org/org_${ids.school}`
 
 test.describe('response budgets', () => {
   test.use({ storageState: accounts.principal.storageState })
@@ -16,7 +17,7 @@ test.describe('response budgets', () => {
       }
     })
 
-    await page.goto(`/teacher/teams/${ids.team}/homeworks/${ids.homework}`)
+    await page.goto(`${organizationBase}/homeworks/${ids.homework}`)
     await expect(page.getByRole('heading', { name: 'E2E Active Homework' })).toBeVisible()
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
 
@@ -47,7 +48,7 @@ test.describe('response budgets', () => {
       })
 
       const startedAt = Date.now()
-      await page.goto(`/teacher/teams/${ids.team}/homeworks/${ids.homework}`, {
+      await page.goto(`${organizationBase}/homeworks/${ids.homework}`, {
         waitUntil: 'domcontentloaded',
       })
       await expect(page.getByRole('navigation')).toBeVisible()

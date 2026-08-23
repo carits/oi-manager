@@ -20,6 +20,8 @@ import StudentRankingsPage from '@/components/organization-pages/student/rating/
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
 
+const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings'])
+
 export default function OrgPage() {
   const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
   const router = useRouter()
@@ -50,6 +52,7 @@ export default function OrgPage() {
   }, [activateOrganization, organizationId, user?.organizationId, user?.organizationRole])
 
   const student = (workspaceRole || user?.organizationRole) === 'student'
+  const studentModuleAllowed = !student || studentModules.has(module)
 
   useEffect(() => {
     if (!ready) return
@@ -63,7 +66,13 @@ export default function OrgPage() {
     if (legacyTarget[module]) router.replace(legacyTarget[module])
   }, [module, organizationId, ready, router])
 
-  if (!ready || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
+  useEffect(() => {
+    if (ready && student && !studentModuleAllowed) {
+      router.replace(`/org/${organizationId}/overview`)
+    }
+  }, [module, organizationId, ready, router, student, studentModuleAllowed])
+
+  if (!ready || !studentModuleAllowed || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
   if (loadError && !workspaceRole) return <main style={{ maxWidth: 720, margin: '0 auto', padding: '4rem 1.5rem' }}><h1>校园工作区无法打开</h1><p>{loadError}</p></main>
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return <OrganizationCampusPage />

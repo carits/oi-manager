@@ -19,7 +19,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
 | 测试文件 | 58 | 仓库文件清单 |
 | E2E 文件 | 42 | 仓库文件清单 |
-| Playwright 可收集用例 | 251 | 修复路由 fixture 后 `playwright test --list` |
+| Playwright 可收集用例 | 253 | 修复并迁移统一组织路由后 `playwright test --list` |
 
 ## 已发现并处理
 
@@ -34,6 +34,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 中 | 旧学校题单/比赛测试继续调用已退役 `/api/schools/*`，产生大量 410 假失败 | 增加明确 410 退役契约；当前组织资源由统一接口、团队接口和浏览器套件覆盖；旧行为用例不再作为现行契约 |
 | 中 | 题单测试 helper 仍写已移除 `ProblemList.schoolId` | 改为通过 `School.organizationId` 写入 `scope/organizationId` |
 | 中 | 排行榜提交列表叠加详情弹窗时出现页面与弹窗两个滚动条，且按一次 Escape 会关闭两层 | Modal 同时锁定 `html/body`，仅最上层处理 Escape/Tab；长代码嵌套弹窗 E2E 已通过 |
+| 高 | 学生直接输入 `/org/:id/management`、`problems` 可停留在受限 URL；组织侧栏部分链接是相对地址 | 学生模块白名单增加客户端强制返回概览；侧栏统一从已解析配置生成绝对组织链接 |
+| 中 | `/account/*` 继续使用相对校园导航，Next 预取多个不存在的 `/account/*` 子路由并产生 404 | 账号中心统一使用绝对个人导航；全角色真实点击巡检通过 |
+| 中 | 无题目编辑权仍展示 AI 工具并请求受保护的 `/ai/usage`，页面控制台产生 404 | 仅 `permissions.canEdit` 时加载并渲染 AI 工具，题目详情路由健康检查通过 |
 
 ## Edge 页面验收进度
 
@@ -52,6 +55,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 - 已通过：`docs:check`、`routes:audit`、`ui:state-check`、Prisma Schema、Web TypeScript、
   Playwright 收集、E2E 隔离库重建、校园负责人“题单→作业→比赛→排名→两级提交弹窗”浏览器流程。
+- 已通过：Chromium 56 条完整冒烟（统一登录、权限矩阵、六种身份、内部链接、路由、题库、工作区隔离）；
+  性能预算 3/3、加载/空/超时状态 3/4，剩余一条仅为已改版团队选择器断言，已修正等待复跑。
 - 全量 Server 主跑首次在旧契约套件累计大量同源失败后中止，避免重复执行无效用例；正在迁移
   测试 helper 与退役契约，完成后重新执行全量 Server/Web/Judge。
 - E2E 使用独立 `e2e` schema、3100/3102 和独立存储；重置脚本拒绝任何不含 `schema=e2e` 的数据库。

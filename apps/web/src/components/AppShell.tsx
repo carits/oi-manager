@@ -12,7 +12,7 @@ import { getRoleHome } from '@/lib/roleAccess'
 import { SessionUnavailable } from './SessionUnavailable'
 import { apiClient } from '@/lib/apiClient'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import { notificationTeamHref, workspaceModule } from '@/components/workspace/workspaceRouting'
+import { notificationTeamHref } from '@/components/workspace/workspaceRouting'
 import styles from './AppShell.module.css'
 
 interface AppShellProps { children: ReactNode }
@@ -71,7 +71,11 @@ export function AppShell({ children }: AppShellProps) {
   const notificationRef = useRef<HTMLDivElement>(null)
 
   // Workspace context is URL-derived; it must not come from a persisted mode.
-  const contextKind = pathname === '/personal' || pathname.startsWith('/personal/') ? 'personal' : 'organization'
+  const contextKind = pathname === '/personal'
+    || pathname.startsWith('/personal/')
+    || pathname.startsWith('/account/')
+    ? 'personal'
+    : 'organization'
 
   useEffect(() => {
     if (!user) return
@@ -193,12 +197,14 @@ export function AppShell({ children }: AppShellProps) {
     } else setNotificationError(response.message || '操作失败，请重试')
   }
 
-  const orgModuleByLabel: Record<string, string> = { '概览': 'overview', '校园': 'campus', '教师': 'teachers', '学生': 'students', '团队': 'teams', '作业': 'homeworks', '比赛': 'contests', '题库': 'problems', '题单': 'problem-lists', '排名': 'rankings' }
-  const navLinks = navConfig.items.map(item => {
+  const navLinks = resolvedNavConfig.items.map(item => {
     const Icon = getNavIcon(item.label)
-    const href = organizationId && orgModuleByLabel[item.label] ? `/org/${organizationId}/${orgModuleByLabel[item.label]}` : item.href
+    const href = item.href
+    const current = organizationId
+      ? pathname === href || pathname.startsWith(`${href}/`)
+      : activeItem === item.label
     return (
-      <Link key={item.href} href={href} className={styles.sidebarLink} aria-current={(organizationId ? orgModuleByLabel[item.label] === workspaceModule(pathname) : activeItem === item.label) ? 'page' : undefined}>
+      <Link key={item.href} href={href} className={styles.sidebarLink} aria-current={current ? 'page' : undefined}>
         <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
         <span>{item.label}</span>
       </Link>

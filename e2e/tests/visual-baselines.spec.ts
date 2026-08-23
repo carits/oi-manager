@@ -4,6 +4,7 @@ import { loadFixtureIds } from '../fixtures/data'
 import { installExternalMocks } from '../fixtures/external-mocks'
 
 const ids = loadFixtureIds()
+const organizationBase = `/org/org_${ids.school}`
 
 async function capture(
   browser: Browser,
@@ -37,22 +38,22 @@ test.describe('stable desktop visual baselines', () => {
   test('role home pages', async ({ browser }) => {
     await capture(browser, 'superAdmin', '/admin', 'super-admin-home.png')
     await capture(browser, 'platformAdmin', '/platform-admin', 'platform-admin-home.png')
-    await capture(browser, 'principal', '/teacher', 'teacher-home.png')
-    await capture(browser, 'campusStudent', '/student', 'student-home.png')
+    await capture(browser, 'principal', `${organizationBase}/overview`, 'teacher-home.png')
+    await capture(browser, 'campusStudent', `${organizationBase}/overview`, 'student-home.png')
   })
 
   test('major list and detail pages', async ({ browser }) => {
-    await capture(browser, 'principal', '/teacher/problem-lists', 'problem-lists.png')
+    await capture(browser, 'principal', `${organizationBase}/problem-lists`, 'problem-lists.png')
     await capture(
       browser,
       'principal',
-      `/teacher/problem-lists/${ids.problemList}`,
+      `${organizationBase}/problem-lists/${ids.problemList}`,
       'problem-list-detail.png',
     )
     await capture(
       browser,
       'campusStudent',
-      `/student/submissions/${ids.submission}`,
+      `${organizationBase}/submissions/${ids.submission}`,
       'submission-detail.png',
     )
   })

@@ -24,15 +24,8 @@ const smokePatterns = new Set([
   '/admin/schools',
   '/platform-admin',
   '/platform-admin/problems',
-  '/teacher',
-  '/teacher/management',
-  '/teacher/students',
-  '/teacher/teams',
-  '/teacher/homeworks',
-  '/student',
-  '/student/team',
-  '/student/homeworks',
-  '/student/problems',
+  '/org/[organizationId]/[module]',
+  '/org/[organizationId]/[module]/[...segments]',
 ])
 
 const owners: RouteOwner[] = [

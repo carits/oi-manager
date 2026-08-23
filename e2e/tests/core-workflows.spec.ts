@@ -5,13 +5,14 @@ import { loadFixtureIds } from '../fixtures/data'
 import { installExternalMocks } from '../fixtures/external-mocks'
 
 const ids = loadFixtureIds()
+const organizationBase = `/org/org_${ids.school}`
 
 test.describe('core role workflows @smoke', () => {
   test('super admin can inspect a school and its member tabs', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.superAdmin.storageState })
     const page = await context.newPage()
 
-    await page.goto(`/admin/schools/${ids.school}`)
+    await page.goto(`/admin/schools/org_${ids.school}`)
     await expect(page.getByRole('heading', { level: 2 })).toBeVisible()
     await expect(page.getByText('E2E School')).toBeVisible()
     await page.getByRole('button', { name: /教师/ }).click()
@@ -38,8 +39,6 @@ test.describe('core role workflows @smoke', () => {
   test('teacher can inspect the problem-list, homework, contest and ranking', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.principal.storageState })
     const page = await context.newPage()
-    const organizationBase = `/org/org_${ids.school}`
-
     await page.goto(`${organizationBase}/problem-lists/${ids.problemList}`)
     await expect(page.locator('body')).toContainText('E2E Basic Problem List')
     await expect(page.getByRole('button', { name: /发布.*作业/ })).toBeVisible()
@@ -173,9 +172,9 @@ test.describe('core role workflows @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
 
-    await page.goto(`/teacher/teams/${ids.team}`)
+    await page.goto(`${organizationBase}/teams/${ids.team}`)
     await expect(page.locator('body')).toContainText('E2E Training Team')
-    await page.goto('/teacher/students')
+    await page.goto(`${organizationBase}/management`)
     await expect(page.locator('body')).toContainText('E2E Personal Student')
 
     await context.close()
@@ -213,7 +212,7 @@ test.describe('core role workflows @smoke', () => {
         contentType: 'application/json',
         body: JSON.stringify({ success: true, data: { format, ...scoreRanking } }),
       }))
-      await page.goto(`/teacher/teams/${ids.team}/contests/${ids.contest}?tab=ranking`)
+      await page.goto(`${organizationBase}/contests/${ids.contest}?tab=ranking`)
 
       const table = page.getByRole('table', { name: '比赛排名' })
       await expect(table).toHaveAttribute('data-ranking-format', format)
@@ -237,7 +236,7 @@ test.describe('core role workflows @smoke', () => {
         await expect(full).toHaveCSS('background-color', 'rgb(232, 247, 233)')
         await expect(partial).not.toHaveCSS('background-color', 'rgb(255, 255, 255)')
       }
-      await expect(zero).toHaveCSS('color', 'rgb(148, 163, 184)')
+      await expect(zero).toHaveCSS('color', 'rgb(136, 136, 136)')
 
       await context.close()
     }
@@ -247,11 +246,11 @@ test.describe('core role workflows @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const page = await context.newPage()
 
-    await page.goto(`/student/team/${ids.team}`)
+    await page.goto(`${organizationBase}/teams/${ids.team}`)
     await expect(page.locator('body')).toContainText('E2E Training Team')
-    await page.goto(`/student/homeworks/${ids.homework}`)
+    await page.goto(`${organizationBase}/homeworks/${ids.homework}`)
     await expect(page.locator('body')).toContainText('E2E Active Homework')
-    await page.goto(`/student/submissions/${ids.submission}`)
+    await page.goto(`${organizationBase}/submissions/${ids.submission}`)
     await expect(page.locator('body')).toContainText(/accepted|通过/i)
 
     await context.close()

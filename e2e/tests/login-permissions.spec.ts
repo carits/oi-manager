@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { accounts } from '../fixtures/auth'
 
+const organizationBase = '/org/org_school-default'
+
 test.describe('login and permission boundaries @smoke @compact', () => {
   test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -10,9 +12,9 @@ test.describe('login and permission boundaries @smoke @compact', () => {
     await expect(page.locator('form')).toBeVisible()
   })
 
-  test('login role query selects the requested entry', async ({ page }) => {
+  test('legacy role query keeps the unified login form', async ({ page }) => {
     await page.goto('/login?role=student')
-    await expect(page.getByRole('button', { name: '学生', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: '学生', exact: true })).toHaveCount(0)
     await expect(page.getByLabel('用户名')).toBeVisible()
     await expect(page.getByLabel('密码')).toBeVisible()
   })
@@ -26,8 +28,8 @@ test.describe('login and permission boundaries @smoke @compact', () => {
   })
 
   test('anonymous protected route redirects to role login', async ({ page }) => {
-    await page.goto('/teacher/teams')
-    await expect(page).toHaveURL(/\/login\?role=teacher/)
+    await page.goto(`${organizationBase}/teams`)
+    await expect(page).toHaveURL(/\/login\?next=%2Forg%2Forg_school-default%2Fteams/)
   })
 })
 
@@ -35,10 +37,10 @@ test.describe('authenticated permission matrix @smoke', () => {
   test('student cannot enter teacher or admin areas', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.campusStudent.storageState })
     const page = await context.newPage()
-    await page.goto('/teacher/teams')
-    await expect(page).toHaveURL(/\/student$/)
+    await page.goto(`${organizationBase}/management`)
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/overview$`))
     await page.goto('/admin/schools')
-    await expect(page).toHaveURL(/\/student$/)
+    await expect(page).toHaveURL(/\/identity$/)
     await context.close()
   })
 
@@ -46,24 +48,24 @@ test.describe('authenticated permission matrix @smoke', () => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
     await page.goto('/platform-admin')
-    await expect(page).toHaveURL(/\/teacher$/)
+    await expect(page).toHaveURL(/\/identity$/)
     await context.close()
   })
 
-  test('principal inherits teacher pages', async ({ browser }) => {
+  test('principal can enter organization management', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.principal.storageState })
     const page = await context.newPage()
-    await page.goto('/teacher/teachers')
-    await expect(page).toHaveURL(/\/teacher\/teachers/)
+    await page.goto(`${organizationBase}/management`)
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/management$`))
     await expect(page.locator('body')).not.toContainText('无权限')
     await context.close()
   })
 
-  test('super admin can enter platform administration', async ({ browser }) => {
+  test('super admin cannot enter platform administration', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.superAdmin.storageState })
     const page = await context.newPage()
     await page.goto('/platform-admin/problems')
-    await expect(page).toHaveURL(/\/platform-admin\/problems/)
+    await expect(page).toHaveURL(/\/admin$/)
     await context.close()
   })
 
@@ -77,7 +79,7 @@ test.describe('authenticated permission matrix @smoke', () => {
     await expect(page).toHaveURL(/\/platform-admin$/)
 
     await page.goto('/admin/profile')
-    await expect(page).toHaveURL(/\/admin\/profile/)
+    await expect(page).toHaveURL(/\/platform-admin$/)
     await context.close()
   })
 })
