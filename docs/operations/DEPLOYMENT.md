@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-19
+last_verified: 2026-08-24
 source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, ecosystem.config.js, nginx configuration
 
 ---
@@ -21,6 +21,9 @@ source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, 
 - 正式变量模板：三个应用的 `.env.production.example`
 
 Compose 不包含 Web、Server 或 Judge 客户端。
+
+PostgreSQL `5432` 与 go-judge `5050` 必须只绑定 `127.0.0.1`。go-judge 以高权限沙箱模式
+运行，禁止直接发布到公网；远程维护数据库必须使用 SSH 隧道，不得临时改回全网卡监听。
 
 ## 构建验证
 

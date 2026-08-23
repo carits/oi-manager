@@ -5,6 +5,8 @@ last_verified: 2026-08-24
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-24: 全平台审计已启动；首轮端口检查发现并修复 PostgreSQL `5432` 与 go-judge
+  `5050` 对公网监听，二者现仅绑定本机回环地址。
 - 2026-08-23: 题目级 ACM Hack 已实现独立队列、STD/Validator、直接数据与 C++17/Python3 生成器、双完整评测和有效数据自动入库；历史提交不重测。
 - 2026-08-22: multi-statement routes are loaded by the restarted Server process; authenticated statement-version listing was verified with a real organization-scoped session.
 - 2026-08-22: activity pages are selection-only for statements and solutions; managers can edit immutable activity snapshots, while participant creation APIs are removed. Targeted snapshot tests pass 7/7.
@@ -21,8 +23,8 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 |------|----------|----------|------|
 | Web preview / HMR | `3000` / `127.0.0.1:3001` | `3100` | Next.js App Router |
 | Server/API | `3002` | `3102` | Express + Prisma |
-| PostgreSQL | `5432` | 同实例 `e2e` schema | Docker Compose 基础设施 |
-| go-judge | `5050` | `5050` | 评测沙箱 |
+| PostgreSQL | `127.0.0.1:5432` | 同实例 `e2e` schema | Docker Compose 基础设施，仅本机访问 |
+| go-judge | `127.0.0.1:5050` | `5050` | 高权限评测沙箱，仅本机访问 |
 
 ## 已实现能力
 

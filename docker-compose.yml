@@ -8,7 +8,9 @@ services:
       POSTGRES_USER: oi
       POSTGRES_PASSWORD: oi_password
     ports:
-      - "5432:5432"
+      # The application and maintenance tools run on this host. Do not expose
+      # the database directly to the public network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -25,7 +27,9 @@ services:
     image: oi-manager/go-judge:v1.12.1-gcc-python3
     container_name: oi-judge
     ports:
-      - "5050:5050"
+      # go-judge is a privileged execution service and must only be reachable
+      # by the local judge consumer.
+      - "127.0.0.1:5050:5050"
     volumes:
       - judge-data:/tmp/go-judge
       # Mount cgroup filesystem for memory limit and peak memory metrics.
