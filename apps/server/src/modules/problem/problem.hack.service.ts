@@ -28,7 +28,7 @@ export function resolveJudgeMode(config: Record<string, any>): 'acm' | 'oi' {
 
 export function isHackableJudgeConfig(config: Record<string, any>): boolean {
   const type = String(config.type || 'default')
-  return resolveJudgeMode(config) === 'acm' && (type === 'default' || type === 'objective')
+  return resolveJudgeMode(config) === 'acm' && ['default', 'standard', 'objective'].includes(type)
 }
 
 export function allowedProblemLanguages(problem: { allowedLanguages: string | null; judgeConfig: string | null }): string[] {

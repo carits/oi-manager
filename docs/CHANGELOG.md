@@ -18,6 +18,8 @@ source_of_truth: Git history
 - 增加同用户同题与同题评测中的数据库并发约束、配置 revision/hash 过期保护、重复输入检测、
   题目级原子落库和失败清理；普通用户只查看自己的记录，题目管理者可查看全部并重试系统错误。
 - go-judge 镜像加入 Python 3.11；修复无输入程序缺少空 `stdin` 文件导致生成器 RE 的问题。
+- 在线浏览器验收发现并修复历史 `problemType=standard` 传统题被 Hack 配置页错误禁用的问题；
+  `standard/default/objective` 现统一按源码型批处理题处理。
 - 验证：Prisma Schema 校验、24/24 迁移、Server/Judge/Web 生产构建、Server 2/2 和 Judge
   3/3 定向测试通过；真实 go-judge 以直接输入和 Python3 生成器两次验证 `Accepted → Wrong Answer`。
 - 迁移前完整备份 `/data/backups/oi-manager/oi_manager_pre_problem_hack_20260823_2355.dump`
