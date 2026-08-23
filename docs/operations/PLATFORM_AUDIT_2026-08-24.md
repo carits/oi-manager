@@ -26,6 +26,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 级别 | 问题 | 处理与验证 |
 |---|---|---|
 | 高 | PostgreSQL 5432、go-judge 5050 发布到所有网卡 | Compose 改为 `127.0.0.1`；容器重建后 DB healthy、SQL 查询、沙箱版本、API/Web 200 均通过 |
+| 高 | Server API 3002 监听所有网卡，绕过同源 Web 入口直接暴露公网 | Server 默认 `API_HOST=127.0.0.1`；同机 Web/Judge 保持可用，外网 TCP 复测应不可达 |
 | 高 | Playwright 路由 fixture 丢失 `routeOwner`、`resolveRoute`、`compactPatterns`，测试收集为 0 | 恢复并适配当前 63 路由；重新收集到 251 条用例 |
 | 高 | E2E 种子仍写已删除的 `User.schoolId`、Teacher/Student/Admin 旧表，按当前 Prisma 重建后无法初始化 | 改用 Organization、OrganizationMembership 及学生/教师 Profile；`test:ui:prepare` 已通过 |
 | 中 | 认证测试仍假设超级管理员、平台管理员可进入个人区 | 改为断言切换返回 403、会话保持管理工作区；E2E 同步增加管理员单工作区场景 |
@@ -45,7 +46,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 - 学校工作概览、校园信息、学生/教师/资产管理、团队、作业、比赛、校内题库、题单、校内排行榜。
 - 团队详情、ACM 比赛详情、活动题面选择、校内题目详情、题目编辑、提交详情。
-- 组织题单详情发现并修复 catch-all 参数问题，待最新预览构建上线后复验。
+- 组织题单详情 catch-all 参数、嵌套提交弹窗单滚动条与逐层关闭均已在最新预览中用 Edge 复验。
 
 ## 自动化状态
 

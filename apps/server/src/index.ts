@@ -63,7 +63,7 @@ setGlobalDispatcher(new Agent({ connect: { timeout: 30_000 } }))
 validateEnv()
 
 const app = express()
-const PORT = process.env.PORT || 3002
+const PORT = Number.parseInt(process.env.PORT || '3002', 10)
 
 // ==================== 安全中间件 ====================
 
@@ -230,10 +230,14 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
-const httpServer = app.listen(PORT, () => {
+// The public Web process proxies /api to this service. Bind to loopback by
+// default so the raw API and Judge WebSocket are not exposed on a second
+// public port. Container deployments can opt in with API_HOST=0.0.0.0.
+const API_HOST = process.env.API_HOST || '127.0.0.1'
+const httpServer = app.listen(PORT, API_HOST, () => {
   logger.info('server_started', {
     action: 'server_start',
-    metadata: { port: PORT, env: process.env.NODE_ENV || 'development' }
+    metadata: { host: API_HOST, port: PORT, env: process.env.NODE_ENV || 'development' }
   })
   if (process.env.DISABLE_BACKGROUND_JOBS !== 'true') {
     startCronTasks()

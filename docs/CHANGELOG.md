@@ -12,6 +12,8 @@ source_of_truth: Git history
 
 - 平台安全审计发现 PostgreSQL `5432` 与高权限 go-judge `5050` 被 Docker 发布到所有网卡；
   Compose 端口现仅绑定 `127.0.0.1`，数据库和沙箱不再可从公网直接访问。
+- Server API `3002` 原先也监听所有网卡并可从公网直连；现默认通过 `API_HOST=127.0.0.1`
+  仅服务同机 Web 反向代理与 Judge，容器部署需要外部监听时必须显式配置。
 - 恢复 Playwright 路由 fixture 缺失的归属、解析和紧凑视口导出，251 条 E2E 用例重新可收集；
   管理员工作区测试同步为“超级管理员/平台管理员无个人区”的当前规则。
 - 将 E2E 身份与资源种子从已删除的 `User.schoolId`、旧 Teacher/Student/Admin 表迁移到
