@@ -38,14 +38,15 @@ test.describe('core role workflows @smoke', () => {
   test('teacher can inspect the problem-list, homework, contest and ranking', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.principal.storageState })
     const page = await context.newPage()
+    const organizationBase = `/org/org_${ids.school}`
 
-    await page.goto(`/teacher/problem-lists/${ids.problemList}`)
+    await page.goto(`${organizationBase}/problem-lists/${ids.problemList}`)
     await expect(page.locator('body')).toContainText('E2E Basic Problem List')
     await expect(page.getByRole('button', { name: /发布.*作业/ })).toBeVisible()
 
-    await page.goto(`/teacher/teams/${ids.team}/homeworks/${ids.homework}`)
+    await page.goto(`${organizationBase}/homeworks/${ids.homework}`)
     await expect(page.locator('body')).toContainText('E2E Active Homework')
-    await page.goto(`/teacher/teams/${ids.team}/contests/${ids.contest}`)
+    await page.goto(`${organizationBase}/contests/${ids.contest}`)
     await expect(page.locator('body')).toContainText('E2E Finished Contest')
     await page.getByRole('tab', { name: /排名/ }).click()
     await expect(page.locator('body')).toContainText('E2E Campus Student')
@@ -94,6 +95,34 @@ test.describe('core role workflows @smoke', () => {
     expect(tableMetrics.rightSpace).toBeGreaterThan(0)
     expect(tableMetrics.viewportWidth).toBeGreaterThan(tableMetrics.tableWidth)
 
+    // A ranking cell opens the submission list first, then the existing
+    // page-scrolling detail dialog. The document itself must stay locked so
+    // the nested dialog has exactly one far-right vertical scrollbar.
+    await firstAcceptedCells.first().click()
+    const submissionListDialog = page.getByRole('dialog').filter({ hasText: '提交记录' })
+    await expect(submissionListDialog).toBeVisible()
+    await submissionListDialog.getByRole('button', { name: /^#\d+/ }).first().click()
+    await expect(page.getByRole('dialog')).toHaveCount(2)
+    await expect(page.getByRole('dialog').last()).toContainText(/评测结果/)
+    const nestedModalScrollState = await page.evaluate(() => ({
+      bodyOverflow: document.body.style.overflow,
+      rootOverflow: document.documentElement.style.overflow,
+      rightEdgeScrollOwners: Array.from(document.querySelectorAll<HTMLElement>('*')).filter(element => {
+        const style = getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        return /auto|scroll/.test(style.overflowY)
+          && element.scrollHeight > element.clientHeight + 1
+          && Math.abs(rect.right - window.innerWidth) <= 2
+      }).length,
+    }))
+    expect(nestedModalScrollState.bodyOverflow).toBe('hidden')
+    expect(nestedModalScrollState.rootOverflow).toBe('hidden')
+    expect(nestedModalScrollState.rightEdgeScrollOwners).toBe(1)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
     await context.close()
 
     const mobileContext = await browser.newContext({
@@ -101,7 +130,7 @@ test.describe('core role workflows @smoke', () => {
       viewport: { width: 390, height: 844 },
     })
     const mobilePage = await mobileContext.newPage()
-    await mobilePage.goto(`/student/team/${ids.team}/contests/${ids.contest}?tab=ranking`)
+    await mobilePage.goto(`${organizationBase}/contests/${ids.contest}?tab=ranking`)
     await expect(mobilePage.getByRole('table', { name: '比赛排名' })).toBeVisible()
     const currentUserRow = mobilePage.locator('tbody tr').filter({ hasText: 'E2E Campus Student' })
     await expect(currentUserRow).toBeVisible()

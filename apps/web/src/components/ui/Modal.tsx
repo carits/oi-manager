@@ -46,15 +46,24 @@ export function Modal({
   useEffect(() => {
     if (!isOpen) return
     returnFocusRef.current = document.activeElement as HTMLElement
-    const shouldLockBody = scrollMode !== 'page'
-    const previousOverflow = document.body.style.overflow
-    if (shouldLockBody) document.body.style.overflow = 'hidden'
+    // Lock both root scroll containers. Page-mode dialogs scroll through their
+    // overlay; leaving the document element scrollable produces a second bar
+    // beside the modal scrollbar, especially when dialogs are nested.
+    const previousBodyOverflow = document.body.style.overflow
+    const previousRootOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
 
     const dialog = dialogRef.current
     const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) || [])
     const focusFrame = requestAnimationFrame(() => (focusables()[0] || dialog)?.focus())
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Nested dialogs share the document listener. Only the last rendered
+      // modal is interactive; otherwise one Escape press closes every layer
+      // and both focus traps try to handle the same Tab event.
+      const openDialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'))
+      if (openDialogs.at(-1) !== dialog) return
       if (event.key === 'Escape') {
         event.preventDefault()
         onCloseRef.current()
@@ -82,7 +91,8 @@ export function Modal({
     return () => {
       cancelAnimationFrame(focusFrame)
       document.removeEventListener('keydown', handleKeyDown)
-      if (shouldLockBody) document.body.style.overflow = previousOverflow
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousRootOverflow
       if (returnFocusRef.current?.isConnected) {
         returnFocusRef.current.focus()
       }

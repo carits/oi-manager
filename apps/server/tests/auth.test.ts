@@ -374,8 +374,6 @@ describe('Authentication Module', () => {
 
   describe('POST /api/auth/switch-workspace', () => {
     it.each([
-      ['super_admin', 'admin'],
-      ['platform_admin', 'admin'],
       ['school_principal', 'teacher'],
       ['teacher', 'teacher'],
       ['student', 'student']
@@ -412,6 +410,31 @@ describe('Authentication Module', () => {
         .send({ workspaceMode: 'work' })
       expect(restored.status).toBe(200)
       expect(restored.body.data.workspaceMode).toBe('work')
+    })
+
+    it.each([
+      ['super_admin', 'admin'],
+      ['platform_admin', 'admin'],
+    ] as const)('keeps the %s role and rejects a personal workspace', async (role, loginRole) => {
+      const { user, password } = await createTestUser({ role })
+      const agent = request.agent(app)
+
+      const login = await agent
+        .post('/api/auth/login')
+        .send({ username: user.username, password, role: loginRole, workspaceMode: 'work' })
+      expect(login.status).toBe(200)
+      expect(login.body.data.role).toBe(role)
+      expect(login.body.data.workspaceMode).toBe('work')
+
+      const switched = await agent
+        .post('/api/auth/switch-workspace')
+        .send({ workspaceMode: 'personal' })
+      expect(switched.status).toBe(403)
+
+      const me = await agent.get('/api/auth/me')
+      expect(me.status).toBe(200)
+      expect(me.body.data.role).toBe(role)
+      expect(me.body.data.workspaceMode).toBe('work')
     })
 
     it('rejects an invalid workspace without changing the session', async () => {

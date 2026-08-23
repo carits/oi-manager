@@ -11,6 +11,9 @@ export async function createTestProblemList(options: {
   ownerType?: 'teacher' | 'student'
 }) {
   const { ownerId, schoolId = null, title = '测试题单', ownerType = 'teacher' } = options
+  const school = schoolId
+    ? await prisma.school.findUnique({ where: { id: schoolId }, select: { organizationId: true } })
+    : null
 
   const list = await prisma.problemList.create({
     data: {
@@ -18,7 +21,8 @@ export async function createTestProblemList(options: {
       title,
       ownerId,
       ownerType,
-      schoolId,
+      scope: school?.organizationId ? 'campus' : 'personal',
+      organizationId: school?.organizationId ?? null,
       ProblemListSection: {
         create: { id: crypto.randomUUID(), title: '默认章节', sortOrder: 0 }
       }

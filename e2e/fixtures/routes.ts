@@ -71,6 +71,49 @@ export const routePatterns = [
 
 export type RoutePattern = typeof routePatterns[number]
 
-export function routeFor(pattern: RoutePattern, ids: FixtureIds) {
-  return pattern.replace('[organizationId]', ids.organizationId).replace('[id]', ids.problemId).replace('[cid]', ids.trainingId).replace('[tid]', ids.trainingId)
+export function routeOwner(pattern: RoutePattern): RouteOwner {
+  if (pattern === '/' || pattern === '/login') return 'public'
+  if (pattern === '/profile/student/[id]') return 'campusStudent'
+  if (pattern === '/profile/teacher/[id]') return 'principal'
+  if (pattern === '/profile/user/[id]') return 'personalStudent'
+  if (pattern.startsWith('/personal')) return 'personalStudent'
+  if (pattern.startsWith('/org')) return 'campusStudent'
+  if (pattern.startsWith('/account') || pattern === '/identity') return 'campusStudent'
+  if (pattern === '/super_admin' || pattern.startsWith('/admin')) return 'superAdmin'
+  if (pattern.startsWith('/platform-admin')) return 'platformAdmin'
+  if (pattern.startsWith('/teacher')) return 'principal'
+  return 'campusStudent'
 }
+
+export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
+  if (pattern === '/student/[[...legacy]]') return '/student'
+  if (pattern === '/teacher/[[...legacy]]') return '/teacher'
+
+  if (pattern === '/org/[organizationId]/[module]') {
+    return `/org/org_${ids.school}/overview`
+  }
+  if (pattern === '/org/[organizationId]/[module]/[...segments]') {
+    return `/org/org_${ids.school}/problems/${ids.problem}`
+  }
+
+  let route: string = pattern
+  if (route.includes('/admin/schools/[id]')) route = route.replace('[id]', ids.school)
+  else if (route.includes('/admin/users/[id]')) route = route.replace('[id]', ids.users.platformAdmin)
+  else if (route.includes('/personal/teams/[id]')) route = route.replace('[id]', ids.personalTeam)
+  else if (route.includes('/personal/problems/[id]')) route = route.replace('[id]', ids.personalProblem)
+  else if (route.includes('/personal/problem-lists/[id]')) route = route.replace('[id]', ids.personalProblemList)
+  else if (route.includes('/personal/submissions/[id]')) route = route.replace('[id]', ids.personalSubmission)
+  else if (route.includes('/personal/contests/[id]')) route = route.replace('[id]', ids.personalContest)
+  else if (route.includes('/platform-admin/problems/[id]')) route = route.replace('[id]', ids.problem)
+  else if (route.includes('/platform-admin/submissions/[id]')) route = route.replace('[id]', ids.submission)
+  else if (route.includes('/admin/submissions/[id]')) route = route.replace('[id]', ids.submission)
+  else if (route.includes('/profile/student/[id]')) route = route.replace('[id]', ids.users.campusStudent)
+  else if (route.includes('/profile/teacher/[id]')) route = route.replace('[id]', ids.users.principal)
+  else if (route.includes('/profile/user/[id]')) route = route.replace('[id]', ids.users.personalStudent)
+
+  return route
+    .replace('[cid]', ids.personalContest)
+    .replace('[tid]', ids.personalContest)
+}
+
+export const compactPatterns = new Set<RoutePattern>(routePatterns)

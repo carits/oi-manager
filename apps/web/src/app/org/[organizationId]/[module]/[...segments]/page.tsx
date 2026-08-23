@@ -59,6 +59,6 @@ export default function OrganizationResourcePage() {
   }
   if (module === 'problems' && parts.length === 1) return <ProblemDetail role={userType} problemId={parts[0]} />
   if (module === 'submissions' && parts.length === 1) return <SubmissionDetailPage role={userType} submissionId={parts[0]} />
-  if (module === 'problem-lists' && parts.length === 1) return <ProblemListDetailPage />
+  if (module === 'problem-lists' && parts.length === 1) return <ProblemListDetailPage listIdOverride={parts[0]} />
   return <PageLoadingFrame title="正在返回组织页面" rows={4} />
 }

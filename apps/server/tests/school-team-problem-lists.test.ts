@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import request from 'supertest'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
@@ -7,7 +8,9 @@ import { prisma } from '../src/prisma'
 
 const app = createTestApp()
 
-describe('学校题单 API', () => {
+// Historical /api/schools/:id/problem-lists behavior is intentionally retired.
+// Organization-scoped behavior is covered by problem-lists and browser suites.
+describe.skip('旧学校题单 API（已退役）', () => {
   let schoolData: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
   let teacherUser: Awaited<ReturnType<typeof createTestUser>>
   let otherTeacherUser: Awaited<ReturnType<typeof createTestUser>>
@@ -291,6 +294,14 @@ describe('学校题单 API', () => {
       .delete(`/api/problem-lists/${list.id}`)
 
     expect(res.status).toBe(200)
+  })
+})
+
+describe('旧学校题单 API 退役契约', () => {
+  it('统一返回 410，避免旧客户端误写数据', async () => {
+    const res = await request(app).get('/api/schools/legacy/problem-lists')
+    expect(res.status).toBe(410)
+    expect(res.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
   })
 })
 

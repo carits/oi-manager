@@ -1,12 +1,15 @@
 import { expect, test } from '@playwright/test'
 import { accounts, type AuthRole } from '../fixtures/auth'
 
-const roles: Array<{ account: AuthRole; expectedRole: string }> = [
-  { account: 'superAdmin', expectedRole: 'super_admin' },
-  { account: 'platformAdmin', expectedRole: 'platform_admin' },
+const switchableRoles: Array<{ account: AuthRole; expectedRole: string }> = [
   { account: 'principal', expectedRole: 'school_principal' },
   { account: 'teacher', expectedRole: 'teacher' },
   { account: 'campusStudent', expectedRole: 'student' },
+]
+
+const administratorRoles: Array<{ account: AuthRole; expectedRole: string; home: string }> = [
+  { account: 'superAdmin', expectedRole: 'super_admin', home: '/admin' },
+  { account: 'platformAdmin', expectedRole: 'platform_admin', home: '/platform-admin' },
 ]
 
 const workHomes: Record<AuthRole, string> = {
@@ -29,7 +32,7 @@ const personalCoreRoutes = [
 ] as const
 
 test.describe('all-role workspace switching @smoke', () => {
-  for (const entry of roles) {
+  for (const entry of switchableRoles) {
     test(`${entry.expectedRole} keeps its role while switching workspaces`, async ({ request }) => {
       const account = accounts[entry.account]
       const login = await request.post('/api/auth/login', {
@@ -78,7 +81,7 @@ test.describe('all-role workspace switching @smoke', () => {
 })
 
 test.describe('all-role workspace shell @smoke', () => {
-  for (const entry of roles) {
+  for (const entry of switchableRoles) {
     test(`${entry.expectedRole} enters the same personal shell`, async ({ browser }) => {
       const account = accounts[entry.account]
       const context = await browser.newContext({ storageState: account.storageState })
@@ -108,6 +111,32 @@ test.describe('all-role workspace shell @smoke', () => {
         await expect(page.locator('main')).not.toContainText('页面不存在')
       }
 
+      await context.close()
+    })
+  }
+})
+
+test.describe('administrator workspace isolation @smoke', () => {
+  for (const entry of administratorRoles) {
+    test(`${entry.expectedRole} has only its administrator workspace`, async ({ browser, request }) => {
+      const account = accounts[entry.account]
+      const login = await request.post('/api/auth/login', {
+        data: { username: account.username, password: account.password, role: account.loginRole },
+      })
+      expect(login.status()).toBe(200)
+
+      const personalSwitch = await request.post('/api/auth/switch-workspace', {
+        data: { workspaceMode: 'personal' },
+      })
+      expect(personalSwitch.status()).toBe(403)
+
+      const context = await browser.newContext({ storageState: account.storageState })
+      const page = await context.newPage()
+      await page.goto(entry.home)
+      await expect(page.locator('button[aria-haspopup="dialog"]')).toHaveCount(0)
+
+      await page.goto('/personal')
+      await expect(page).toHaveURL(new RegExp(`${entry.home.replaceAll('/', '\\/')}(?:\\?.*)?$`))
       await context.close()
     })
   }

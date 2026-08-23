@@ -12,6 +12,16 @@ source_of_truth: Git history
 
 - 平台安全审计发现 PostgreSQL `5432` 与高权限 go-judge `5050` 被 Docker 发布到所有网卡；
   Compose 端口现仅绑定 `127.0.0.1`，数据库和沙箱不再可从公网直接访问。
+- 恢复 Playwright 路由 fixture 缺失的归属、解析和紧凑视口导出，251 条 E2E 用例重新可收集；
+  管理员工作区测试同步为“超级管理员/平台管理员无个人区”的当前规则。
+- 将 E2E 身份与资源种子从已删除的 `User.schoolId`、旧 Teacher/Student/Admin 表迁移到
+  Organization、Membership 和校园身份 Profile；隔离库重置重新可执行。
+- 修复组织 catch-all 路由下题单详情把 `segments` 误读为 `params.id`，导致列表可见但详情恒为空；
+  组织路由现在显式传入题单 ID。
+- 修复嵌套提交弹窗的双滚动条和单次 Escape 同时关闭两层弹窗；页面模式现在锁定根滚动容器，
+  且仅最上层 Modal 处理键盘事件。
+- 迁移题单测试 helper：`ProblemList.schoolId` 改为当前 `scope + organizationId`；为已退役的
+  `/api/schools/*` 增加明确 410 契约，避免旧行为测试污染全量回归结果。
 
 ## 2026-08-23
 

@@ -132,12 +132,16 @@ let tempIdCounter = 0
 
 // ==================== 主组件 ====================
 
-export default function ProblemListDetailPage() {
+interface ProblemListDetailPageProps {
+  listIdOverride?: string
+}
+
+export default function ProblemListDetailPage({ listIdOverride }: ProblemListDetailPageProps = {}) {
   const router = useRouter()
   const params = useParams()
   const pathname = usePathname()
   const { user } = useAuth()
-  const listId = params.id as string
+  const listId = listIdOverride || (params.id as string)
   const pathPrefix = currentWorkspacePrefix(pathname, user?.role === 'platform_admin' ? '/platform-admin' : '/personal')
 
   const [detail, setDetail] = useState<ListDetail | null>(null)

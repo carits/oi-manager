@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs'
 import { PrismaClient } from '@prisma/client'
-import { Client } from 'pg'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
@@ -11,9 +10,6 @@ const parsedUrl = new URL(databaseUrl)
 if (parsedUrl.searchParams.get('schema') !== 'e2e') {
   throw new Error('Refusing to seed a database without schema=e2e')
 }
-
-const adminUrl = new URL(databaseUrl)
-adminUrl.searchParams.delete('schema')
 
 const ids = {
   platformSchool: 'platform-school-00000000',
@@ -35,67 +31,61 @@ const ids = {
   problemListSection: 'e2e-problem-list-section',
   personalProblemList: 'e2e-personal-problem-list',
   personalProblemListSection: 'e2e-personal-problem-list-section',
+  platformOrganization: 'org_platform-school-00000000',
+  organization: 'org_school-default',
 }
 
-async function seedIdentityGraph(passwordHash: string) {
-  const client = new Client({ connectionString: adminUrl.toString() })
-  await client.connect()
-  try {
-    await client.query('BEGIN')
-    await client.query('SET session_replication_role = replica')
-    await client.query(`
-      INSERT INTO e2e."School"
-        (id, name, region, "schoolType", "educationSystem", status, "currentPrincipalTeacherId", "updatedAt")
-      VALUES
-        ('${ids.platformSchool}', 'E2E Platform', 'system', 'platform', '6-3-3', 'active', '${ids.superAdmin}', NOW()),
-        ('${ids.school}', 'E2E School', 'Zhejiang/Hangzhou', 'middle', '6-3-3', 'active', '${ids.principal}', NOW())
-    `)
-    await client.query(`
-      INSERT INTO e2e."User"
-        (id, username, "passwordHash", role, "schoolId", status, email, "updatedAt")
-      VALUES
-        ('${ids.superAdmin}', 'admin', $1, 'super_admin', '${ids.platformSchool}', 'active', 'admin@e2e.test', NOW()),
-        ('${ids.platformAdmin}', 'platform_admin', $1, 'platform_admin', '${ids.platformSchool}', 'active', 'platform@e2e.test', NOW()),
-        ('${ids.principal}', 'teacher1', $1, 'school_principal', '${ids.school}', 'active', 'principal@e2e.test', NOW()),
-        ('${ids.teacher}', 'teacher2', $1, 'teacher', '${ids.school}', 'active', 'teacher@e2e.test', NOW()),
-        ('${ids.campusStudent}', 'student1', $1, 'student', '${ids.school}', 'active', 'student@e2e.test', NOW()),
-        ('${ids.personalStudent}', 'personal_student1', $1, 'student', '${ids.school}', 'active', 'personal@e2e.test', NOW())
-    `, [passwordHash])
-    await client.query(`
-      INSERT INTO e2e."Teacher"
-        (id, name, title, "schoolId", status, "updatedAt")
-      VALUES
-        ('${ids.superAdmin}', 'E2E Super Admin', 'Administrator', '${ids.platformSchool}', 'active', NOW()),
-        ('${ids.principal}', 'E2E Principal', 'Head Coach', '${ids.school}', 'active', NOW()),
-        ('${ids.teacher}', 'E2E Teacher', 'Coach', '${ids.school}', 'active', NOW())
-    `)
-    await client.query(`
-      INSERT INTO e2e."Admin" (id, name, "schoolId", "updatedAt")
-      VALUES ('${ids.platformAdmin}', 'E2E Platform Admin', '${ids.platformSchool}', NOW())
-    `)
-    await client.query(`
-      INSERT INTO e2e."Student"
-        (id, name, gender, "schoolId", "headTeacherId", "enrollmentYear", "targetContest", rating, "updatedAt")
-      VALUES
-        ('${ids.campusStudent}', 'E2E Campus Student', 'male', '${ids.school}', '${ids.principal}', 2024, 'NOIP', 1280, NOW()),
-        ('${ids.personalStudent}', 'E2E Personal Student', 'female', '${ids.school}', '${ids.teacher}', 2023, 'CSP', 1350, NOW())
-    `)
-    await client.query('SET session_replication_role = origin')
-    await client.query('COMMIT')
-  } catch (error) {
-    await client.query('ROLLBACK')
-    throw error
-  } finally {
-    await client.end()
-  }
+async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
+  await prisma.user.createMany({
+    data: [
+      { id: ids.superAdmin, username: 'admin', passwordHash, role: 'super_admin', status: 'active', email: 'admin@e2e.test' },
+      { id: ids.platformAdmin, username: 'platform_admin', passwordHash, role: 'platform_admin', status: 'active', email: 'platform@e2e.test' },
+      { id: ids.principal, username: 'teacher1', passwordHash, role: 'school_principal', status: 'active', email: 'principal@e2e.test' },
+      { id: ids.teacher, username: 'teacher2', passwordHash, role: 'teacher', status: 'active', email: 'teacher@e2e.test' },
+      { id: ids.campusStudent, username: 'student1', passwordHash, role: 'student', status: 'active', email: 'student@e2e.test' },
+      { id: ids.personalStudent, username: 'personal_student1', passwordHash, role: 'student', status: 'active', email: 'personal@e2e.test' },
+    ],
+  })
+  await prisma.organization.createMany({
+    data: [
+      { id: ids.platformOrganization, name: 'E2E Platform', type: 'platform', status: 'active' },
+      { id: ids.organization, name: 'E2E School', type: 'school', status: 'active' },
+    ],
+  })
+  await prisma.school.createMany({
+    data: [
+      { id: ids.platformSchool, name: 'E2E Platform', region: 'system', schoolType: 'platform', educationSystem: '6-3-3', status: 'active', organizationId: ids.platformOrganization },
+      { id: ids.school, name: 'E2E School', region: 'Zhejiang/Hangzhou', schoolType: 'middle', educationSystem: '6-3-3', status: 'active', organizationId: ids.organization },
+    ],
+  })
+  await prisma.organizationMembership.createMany({
+    data: [
+      { id: 'e2e-membership-principal', organizationId: ids.organization, userId: ids.principal, memberRole: 'school_principal', relationType: 'employee', status: 'active', joinedAt: new Date() },
+      { id: 'e2e-membership-teacher', organizationId: ids.organization, userId: ids.teacher, memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date() },
+      { id: 'e2e-membership-student', organizationId: ids.organization, userId: ids.campusStudent, memberRole: 'student', relationType: 'student', status: 'active', joinedAt: new Date() },
+      { id: 'e2e-membership-personal-student', organizationId: ids.organization, userId: ids.personalStudent, memberRole: 'student', relationType: 'student', status: 'active', joinedAt: new Date() },
+    ],
+  })
+  await prisma.organizationTeacherProfile.createMany({
+    data: [
+      { id: 'e2e-teacher-profile-principal', membershipId: 'e2e-membership-principal', name: 'E2E Principal', title: 'Head Coach', status: 'active' },
+      { id: 'e2e-teacher-profile-teacher', membershipId: 'e2e-membership-teacher', name: 'E2E Teacher', title: 'Coach', status: 'active' },
+    ],
+  })
+  await prisma.organizationStudentProfile.createMany({
+    data: [
+      { id: 'e2e-student-profile-campus', membershipId: 'e2e-membership-student', name: 'E2E Campus Student', gender: 'male', headTeacherMembershipId: 'e2e-membership-principal', enrollmentYear: 2024, targetContest: 'NOIP', rating: 1280, status: 'active' },
+      { id: 'e2e-student-profile-personal', membershipId: 'e2e-membership-personal-student', name: 'E2E Personal Student', gender: 'female', headTeacherMembershipId: 'e2e-membership-teacher', enrollmentYear: 2023, targetContest: 'CSP', rating: 1350, status: 'active' },
+    ],
+  })
+  await prisma.school.update({ where: { id: ids.school }, data: { currentPrincipalMembershipId: 'e2e-membership-principal' } })
 }
 
 async function main() {
   const passwordHash = await bcrypt.hash(accountPassword, 4)
-  await seedIdentityGraph(passwordHash)
-
   const prisma = new PrismaClient()
   try {
+    await seedIdentityGraph(prisma, passwordHash)
     await prisma.personalProfile.createMany({
       data: [
         ids.superAdmin,
@@ -112,21 +102,20 @@ async function main() {
           id: ids.team,
           name: 'E2E Training Team',
           description: 'Deterministic team for UI workflows',
-          schoolId: ids.school,
+          organizationId: ids.organization,
           isPublic: true,
         },
         {
           id: ids.browseTeam,
           name: 'E2E Public Team',
           description: 'Joinable team for student workflows',
-          schoolId: ids.school,
+          organizationId: ids.organization,
           isPublic: true,
         },
         {
           id: ids.personalTeam,
           name: 'E2E Personal Team',
           description: 'Personal-mode team for scope isolation checks',
-          schoolId: null,
           scope: 'personal',
           isPublic: true,
         },
@@ -192,7 +181,6 @@ async function main() {
           visibility: 'public',
           libraryScope: 'platform',
           libraryKey: 'platform',
-          schoolId: null,
           ownerType: 'teacher',
           ownerId: ids.principal,
           status: 'published',
@@ -209,8 +197,8 @@ async function main() {
           memoryLimit: 256,
           visibility: 'school',
           libraryScope: 'school',
-          libraryKey: `school:${ids.school}`,
-          schoolId: ids.school,
+          libraryKey: `organization:${ids.organization}`,
+          organizationId: ids.organization,
           ownerType: 'teacher',
           ownerId: ids.teacher,
           status: 'published',
@@ -227,8 +215,8 @@ async function main() {
           memoryLimit: 256,
           visibility: 'school',
           libraryScope: 'school',
-          libraryKey: `school:${ids.school}`,
-          schoolId: ids.school,
+          libraryKey: `organization:${ids.organization}`,
+          organizationId: ids.organization,
           ownerType: 'teacher',
           ownerId: ids.teacher,
           status: 'published',
@@ -246,7 +234,6 @@ async function main() {
           visibility: 'private',
           libraryScope: 'platform',
           libraryKey: 'platform',
-          schoolId: null,
           ownerType: 'student',
           ownerId: ids.personalStudent,
           status: 'published',
@@ -280,7 +267,8 @@ async function main() {
         id: ids.problemList,
         title: 'E2E Basic Problem List',
         description: 'Deterministic list for UI workflows',
-        schoolId: ids.school,
+        organizationId: ids.organization,
+        scope: 'campus',
         ownerId: ids.principal,
         ownerType: 'teacher',
         visibility: 'public',
@@ -291,7 +279,6 @@ async function main() {
         id: ids.personalProblemList,
         title: 'E2E Personal Problem List',
         description: 'Personal-scope list for all-role workspace checks',
-        schoolId: null,
         scope: 'personal',
         ownerId: ids.personalStudent,
         ownerType: 'user',
@@ -344,7 +331,7 @@ async function main() {
     await prisma.schoolProblemList.create({
       data: {
         id: 'e2e-school-list',
-        schoolId: ids.school,
+        organizationId: ids.organization,
         problemListId: ids.problemList,
         addedBy: ids.principal,
         addedByRole: 'teacher',
@@ -361,12 +348,21 @@ async function main() {
     })
 
     const now = Date.now()
+    const longAcceptedCode = [
+      '#include <iostream>',
+      'int main() {',
+      ...Array.from({ length: 80 }, (_, index) => `  // deterministic line ${index + 1}`),
+      '  int a, b;',
+      '  std::cin >> a >> b;',
+      '  std::cout << a + b;',
+      '}',
+    ].join('\n')
     const contestStartTime = new Date(now - 48 * 60 * 60 * 1000)
     const contestEndTime = new Date(now - 24 * 60 * 60 * 1000)
     const homework = await prisma.training.create({
       data: {
         teamId: ids.team,
-        schoolId: ids.school,
+        organizationId: ids.organization,
         title: 'E2E Active Homework',
         description: 'Active homework for the UI suite',
         format: 'ioi',
@@ -382,7 +378,7 @@ async function main() {
     const contest = await prisma.training.create({
       data: {
         teamId: ids.team,
-        schoolId: ids.school,
+        organizationId: ids.organization,
         title: 'E2E Finished Contest',
         description: 'Finished contest for ranking and makeup flows',
         format: 'icpc',
@@ -398,7 +394,6 @@ async function main() {
     const personalContest = await prisma.training.create({
       data: {
         teamId: ids.personalTeam,
-        schoolId: null,
         scope: 'personal',
         title: 'E2E Personal Contest',
         description: 'Personal workspace contest for the UI suite',
@@ -583,8 +578,8 @@ async function main() {
         problemId: 'E2E-1000',
         problemInternalId: ids.problem,
         language: 'cpp',
-        code: 'int main(){return 0;}',
-        codeLength: 21,
+        code: longAcceptedCode,
+        codeLength: Buffer.byteLength(longAcceptedCode),
         result: 'accepted',
         timeUsed: 2,
         memoryUsed: 768,
