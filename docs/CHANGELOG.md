@@ -26,8 +26,8 @@ source_of_truth: Git history
   3/3 定向测试通过；真实 go-judge 以直接输入和 Python3 生成器两次验证 `Accepted → Wrong Answer`。
 - 迁移前完整备份 `/data/backups/oi-manager/oi_manager_pre_problem_hack_20260823_2355.dump`
   已通过 PostgreSQL 16 `pg_restore -l` 校验。
-- 功能提交 `44ad7c4` 与兼容修复 `f3a56fc` 已推送并部署；预览构建
-  `NffFbRxwd2Qay6W-Ufwdy` 通过 3200 候选和 3000 提升健康检查，Server/Judge 已重启。
+- 功能提交 `44ad7c4`、兼容修复 `f3a56fc` 与详情收口 `a36c1f8` 已推送并部署；预览构建
+  `ubx1GgM3v7m0hPeZKng7g` 通过 3200 候选和 3000 提升健康检查，Server/Judge 已重启。
   负责人真实浏览器验收确认历史 `standard` 传统题的 Hack 配置可启用，页面无 warning/error。
 
 ## 2026-08-22

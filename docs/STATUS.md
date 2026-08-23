@@ -102,8 +102,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 
 ## 2026-08-21 远端部署快照
 
-- 开发服务器当前运行题目级 ACM Hack 功能提交 `44ad7c4` 和兼容修复 `f3a56fc`，公网优化
-  预览构建为 `NffFbRxwd2Qay6W-Ufwdy`，公网优化预览为 `http://47.99.222.76:3000`，API 为 `3002`；
+- 开发服务器当前运行题目级 ACM Hack 功能提交 `44ad7c4`、兼容修复 `f3a56fc` 和详情收口
+  `a36c1f8`，公网优化预览构建为 `ubx1GgM3v7m0hPeZKng7g`，公网优化预览为
+  `http://47.99.222.76:3000`，API 为 `3002`；
   项目仍处开发阶段，不代表正式投产。
 - 数据库迁移 24/24；题目级 Hack 迁移前的 PostgreSQL 16 完整备份为
   `/data/backups/oi-manager/oi_manager_pre_problem_hack_20260823_2355.dump`，已通过容器内
