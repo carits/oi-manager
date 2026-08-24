@@ -1,9 +1,22 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-21
+last_verified: 2026-08-24
 source_of_truth: apps/server/src/config/storage.ts, apps/server/src/routes/files.ts
 ---
+
+## 2026-08-24 security contract
+
+- Only `STORAGE_ROOT/public` is mounted as static content. Private files are served by authenticated APIs.
+- Read, move, delete and hard-delete paths use `path.relative` containment checks. String-prefix checks are forbidden
+  because a sibling directory such as `storage-evil` shares the `storage` prefix.
+- Team and contest files require an active team membership in the current workspace scope. Campus resources must also
+  match `JwtPayload.organizationId`; management operations require the `owner` or `admin` team role.
+- Global administrators do not bypass ownership for arbitrary user/team files. Problem access continues through the
+  centralized problem permission policy.
+- Upload validation checks size, extension-to-MIME pairing and actual content. Images, PDF and archives require their expected
+  magic signature; text/source/testdata files reject NUL and excessive control bytes.
+- Soft-deleted files are excluded from metadata and download access even when the former record was public.
 
 # 文件存储
 

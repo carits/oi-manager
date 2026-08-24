@@ -19,7 +19,7 @@ import { canModifyProblem, canViewProblem } from '../modules/problem/problem.acc
 export const filesRouter = Router()
 
 const ALLOWED_UPLOAD_CATEGORIES = new Set(['pdf', 'attachment', 'avatar', 'image', 'testdata'])
-const ALLOWED_OWNER_TYPES = new Set(['problem', 'contest', 'user', 'team', 'attachment'])
+const ALLOWED_OWNER_TYPES = new Set(['problem', 'contest', 'user', 'team'])
 
 // ==================== Multer 配置 ====================
 
@@ -123,7 +123,7 @@ filesRouter.post('/upload', authenticate, upload.single('file'), async (req, res
     }
 
     const message = error instanceof Error ? error.message : '服务器错误'
-    const isValidationError = /^(File extension not allowed|File type not allowed|File size exceeds limit):/.test(message)
+    const isValidationError = /^(File extension not allowed|File type not allowed|File size exceeds limit|File content does not match extension|File MIME does not match extension):/.test(message)
     if (isValidationError) {
       logger.warn('file_upload_rejected', { action: 'file_upload', metadata: { message } })
     } else {
@@ -311,6 +311,11 @@ filesRouter.get('/by-owner/:ownerType/:ownerId', authenticate, async (req, res) 
     const { category } = req.query
     const user = (req as any).user as JwtPayload
 
+    if (!ALLOWED_OWNER_TYPES.has(ownerType)
+      || (category !== undefined && !ALLOWED_UPLOAD_CATEGORIES.has(String(category)))) {
+      return res.status(400).json({ success: false, message: '文件类别或业务归属类型无效' })
+    }
+
     // 检查查看权限
     const hasViewPermission = await checkViewPermission(user, ownerType as OwnerType, ownerId)
     if (!hasViewPermission) {
@@ -347,10 +352,6 @@ async function checkUploadPermission(
   ownerType: OwnerType,
   ownerId: string
 ): Promise<boolean> {
-  if (ownerType !== 'problem' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
-    return true
-  }
-
   switch (ownerType) {
     case 'problem': {
       // 检查是否是题目所有者
@@ -365,17 +366,11 @@ async function checkUploadPermission(
       })
       if (!contest || !contest.teamId) return false
       // 检查团队管理员权限
-      const member = await prisma.teamMember.findFirst({
-        where: { teamId: contest.teamId, userId: user.userId, role: { in: ['owner', 'admin'] } }
-      })
-      return !!member
+      return checkTeamPermission(user, contest.teamId, true)
     }
     case 'team': {
       // 检查是否是团队管理员
-      const member = await prisma.teamMember.findFirst({
-        where: { teamId: ownerId, userId: user.userId, role: { in: ['owner', 'admin'] } }
-      })
-      return !!member
+      return checkTeamPermission(user, ownerId, true)
     }
     case 'user': {
       // 用户只能上传到自己的资源
@@ -394,10 +389,6 @@ async function checkDeletePermission(
   user: JwtPayload,
   file: { id: string; ownerType: string; ownerId: string; category: string }
 ): Promise<boolean> {
-  if (file.ownerType !== 'problem' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
-    return true
-  }
-
   switch (file.ownerType) {
     case 'problem': {
       // 检查是否是题目所有者
@@ -411,17 +402,11 @@ async function checkDeletePermission(
         select: { teamId: true }
       })
       if (!contest || !contest.teamId) return false
-      const member = await prisma.teamMember.findFirst({
-        where: { teamId: contest.teamId, userId: user.userId, role: { in: ['owner', 'admin'] } }
-      })
-      return !!member
+      return checkTeamPermission(user, contest.teamId, true)
     }
     case 'team': {
       // 检查是否是团队管理员
-      const member = await prisma.teamMember.findFirst({
-        where: { teamId: file.ownerId, userId: user.userId, role: { in: ['owner', 'admin'] } }
-      })
-      return !!member
+      return checkTeamPermission(user, file.ownerId, true)
     }
     case 'user': {
       // 用户只能删除自己的文件
@@ -441,10 +426,6 @@ async function checkViewPermission(
   ownerType: OwnerType,
   ownerId: string
 ): Promise<boolean> {
-  if (ownerType !== 'problem' && (user.role === 'super_admin' || user.role === 'platform_admin')) {
-    return true
-  }
-
   switch (ownerType) {
     case 'problem': {
       // 公开题目所有人可见，私有题目只有所有者可见
@@ -459,17 +440,11 @@ async function checkViewPermission(
       })
       if (!contest || !contest.teamId) return false
       // 检查是否是团队成员
-      const member = await prisma.teamMember.findFirst({
-        where: { teamId: contest.teamId, userId: user.userId }
-      })
-      return !!member
+      return checkTeamPermission(user, contest.teamId, false)
     }
     case 'team': {
       // 检查是否是团队成员
-      const member = await prisma.teamMember.findFirst({
-        where: { teamId: ownerId, userId: user.userId }
-      })
-      return !!member
+      return checkTeamPermission(user, ownerId, false)
     }
     case 'user': {
       // 用户只能查看自己的文件
@@ -478,4 +453,25 @@ async function checkViewPermission(
     default:
       return false
   }
+}
+
+async function checkTeamPermission(user: JwtPayload, teamId: string, requireManager: boolean): Promise<boolean> {
+  const expectedScope = user.organizationId ? 'campus' : 'personal'
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { scope: true, organizationId: true },
+  })
+  if (!team || team.scope !== expectedScope) return false
+  if (expectedScope === 'campus' && team.organizationId !== user.organizationId) return false
+  if (expectedScope === 'personal' && team.organizationId) return false
+
+  const member = await prisma.teamMember.findFirst({
+    where: {
+      teamId,
+      userId: user.userId,
+      status: 'active',
+      ...(requireManager ? { role: { in: ['owner', 'admin'] } } : {}),
+    },
+  })
+  return !!member
 }

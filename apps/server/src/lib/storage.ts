@@ -19,6 +19,7 @@ import {
 import type { StorageType, AccessLevel, FileCategory, OwnerType } from '../config/storage'
 import type { JwtPayload } from '@oi-manager/shared'
 import { canViewProblem } from '../modules/problem/problem.access'
+import { resolveStoragePath, validateMimeForExtension, validateUploadedFileContent } from './file-security'
 
 // ==================== 类型定义 ====================
 
@@ -207,15 +208,7 @@ export class LocalStorageProvider implements StorageProvider {
    * 获取物理路径
    */
   private getPhysicalPath(relativePath: string, fileName: string): string {
-    // 安全检查：防止路径穿越
-    const fullPath = path.resolve(STORAGE_ROOT, relativePath, fileName)
-    const normalizedRoot = path.resolve(STORAGE_ROOT)
-
-    if (!fullPath.startsWith(normalizedRoot)) {
-      throw new Error('Invalid file path: potential path traversal attack')
-    }
-
-    return fullPath
+    return resolveStoragePath(STORAGE_ROOT, relativePath, fileName)
   }
 
   /**
@@ -256,6 +249,9 @@ class FileService {
 
     // 验证文件大小
     this.validateFileSize(buffer.length, options.category)
+
+    // Do not trust multipart MIME headers: verify binary signatures/text shape.
+    validateUploadedFileContent(buffer, options.originalName)
 
     return this.provider.upload(buffer, options)
   }
@@ -344,7 +340,7 @@ class FileService {
     }
 
     // 删除物理文件
-    const filePath = path.join(STORAGE_ROOT, file.relativePath, file.fileName)
+    const filePath = resolveStoragePath(STORAGE_ROOT, file.relativePath, file.fileName)
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath)
     }
@@ -403,7 +399,7 @@ class FileService {
       where: { id: fileId }
     })
 
-    if (!file) {
+    if (!file || file.status !== 'active') {
       return false
     }
 
@@ -428,19 +424,13 @@ class FileService {
         if (!contest) return false
         // 团队成员允许访问
         if (contest.teamId) {
-          const member = await prisma.teamMember.findFirst({
-            where: { teamId: contest.teamId, userId: user.userId }
-          })
-          return !!member
+          return this.checkTeamMembership(user, contest.teamId)
         }
         return false
       }
       case 'team': {
         // 团队资源：检查是否是团队成员
-        const member = await prisma.teamMember.findFirst({
-          where: { teamId: file.ownerId, userId: user.userId }
-        })
-        return !!member
+        return this.checkTeamMembership(user, file.ownerId)
       }
       case 'user': {
         // 用户资源：只有本人可以访问
@@ -471,6 +461,8 @@ class FileService {
     if (!allowedMimes.includes(mimeType)) {
       throw new Error(`File type not allowed: ${mimeType}`)
     }
+
+    validateMimeForExtension(originalName, mimeType)
   }
 
   /**
@@ -482,6 +474,22 @@ class FileService {
     if (size > limit) {
       throw new Error(`File size exceeds limit: ${size} > ${limit}`)
     }
+  }
+
+  private async checkTeamMembership(user: JwtPayload, teamId: string): Promise<boolean> {
+    const expectedScope = user.organizationId ? 'campus' : 'personal'
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { scope: true, organizationId: true },
+    })
+    if (!team || team.scope !== expectedScope) return false
+    if (expectedScope === 'campus' && team.organizationId !== user.organizationId) return false
+    if (expectedScope === 'personal' && team.organizationId) return false
+
+    const member = await prisma.teamMember.findFirst({
+      where: { teamId, userId: user.userId, status: 'active' },
+    })
+    return !!member
   }
 }
 
