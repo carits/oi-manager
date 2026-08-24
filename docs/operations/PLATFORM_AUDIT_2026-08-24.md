@@ -102,7 +102,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 - Web 单元测试当前 29/29 通过；其中新增隐藏身份题目标签 3 条，并把超级管理员首页旧断言迁移为当前 `/admin` 契约。
 - 全量 Server 主跑首次在旧契约套件累计大量同源失败后中止，避免重复执行无效用例；当前已迁移权限 helper
   与退役的学校权限契约，真实组织档案/跨组织/团队上下文定向测试 13/13 通过。其余旧测试仍需分组迁移，
-  完成后重新执行全量 Server/Web/Judge。
+  完成后重新执行全量 Server/Web/Judge。提交 `59f4597` 已部署为构建 `cLM4IQTMUJofnTy88pd_F`。
 - E2E 使用独立 `e2e` schema、3100/3102 和独立存储；重置脚本拒绝任何不含 `schema=e2e` 的数据库。
 
 ## 未完成审计

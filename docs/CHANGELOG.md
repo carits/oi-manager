@@ -13,6 +13,8 @@ source_of_truth: Git history
 - 迁移已退役的 Server 权限单元测试：删除不存在的 `canAccessSchool/canManageSchool` 旧契约，测试夹具在保留
   历史 User ID 别名的同时返回真实组织学生/教师档案 ID。新权限套件覆盖本人、同组织、跨组织、负责人、
   班主任、团队公开/私有、owner/admin/member、个人/校园上下文和全局管理员前置条件，定向测试 13/13 通过。
+- 权限测试迁移提交 `59f4597` 已推送；主干预览构建 `cLM4IQTMUJofnTy88pd_F` 通过 3200 候选与
+  3000 提升健康检查，Server/Judge 已重启，数据库与带 Python3 的 Judge 容器保持健康。
 - 提交详情共享结果组件修复 `be83577` 已推送并部署为公网预览构建 `YFyBItVMM7t35S7z9XQE-`。
   学生 Edge 已在线复验 IOI #3682 的 40/100、`sum` Subtask、20 个测试点及 checker message；
   ACM #3681 正确显示首个失败点与 Fast-Fail 跳过项且无得分列，#3677 显示 20 个 Accepted 测试点。
