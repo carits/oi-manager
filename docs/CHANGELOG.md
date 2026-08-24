@@ -10,6 +10,13 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 收紧题目级 ACM Hack 的题型边界：仅传统源码批处理题 `default` 与历史兼容名称
+  `standard` 可以启用；客观题 `objective` 不再出现在可启用状态，题目详情接口也不会对
+  已残留的无效配置暴露 Hack 入口。
+- Judge 增加独立 Vitest 配置，只收集 `src/tests` 下的 TypeScript 测试，避免生产构建目录
+  `dist` 中的 CommonJS 测试副本被二次收集而导致伪失败。验证包括 Server Hack 4/4、Judge
+  6/6 以及 Server/Judge/Web TypeScript 检查。
+
 - 普通教师 Edge 权限审计覆盖校园全部一级模块及团队、比赛、题目、提交动态详情；修复非比赛管理员直接进入
   题面选择时永久加载并重复弹出 403 的问题，现在一次提示后返回明确的活动详情路径。
 - 题面选择组件为组织比赛/作业、组织团队活动、个人比赛和个人团队训练分别接收稳定返回路径；非权限错误

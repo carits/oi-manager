@@ -112,10 +112,12 @@ Checker 上传仅接受 C/C++ 源文件，`testlib.h` 由系统提供；下载�
 
 ## 题目级 ACM Hack
 
-源码型 ACM 批处理题可在评测设置中配置 C++17 标准程序和 Validator，并显式启用题目级
+传统源码型 ACM 批处理题（`default`，以及历史兼容名称 `standard`）可在评测设置中配置
+C++17 标准程序和 Validator，并显式启用题目级
 Hack。Validator 可引用 Judge 内置的 `testlib.h`；启用前 Server 会通过 go-judge 编译检查
 两个程序。任何拥有该题提交权限的用户都可提交直接输入，或提交 C++17/Python3 生成器，
 同时提供一份使用题目允许语言的被 Hack 程序。
+客观题、交互题、通信题、提交答案题和 OI 计分题不进入该流程。
 
 Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 

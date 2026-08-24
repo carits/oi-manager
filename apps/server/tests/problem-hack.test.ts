@@ -12,6 +12,7 @@ describe('problem ACM Hack configuration', () => {
   it('only enables batch ACM configurations', () => {
     expect(isHackableJudgeConfig({ mode: 'acm', type: 'default' })).toBe(true)
     expect(isHackableJudgeConfig({ mode: 'acm', type: 'standard' })).toBe(true)
+    expect(isHackableJudgeConfig({ mode: 'acm', type: 'objective' })).toBe(false)
     expect(isHackableJudgeConfig({ mode: 'oi', type: 'default' })).toBe(false)
     expect(isHackableJudgeConfig({ mode: 'acm', type: 'interactive' })).toBe(false)
     expect(resolveJudgeMode({ subtasks: [{ cases: [] }] })).toBe('oi')

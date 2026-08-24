@@ -54,7 +54,7 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
     }
   }
 
-  const hackable = judgeMode === 'acm' && ['default', 'standard', 'objective'].includes(problemType)
+  const hackable = judgeMode === 'acm' && ['default', 'standard'].includes(problemType)
   if (loading) return <div className={styles.intro}>正在加载 Hack 配置…</div>
 
   return (

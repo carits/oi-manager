@@ -16,6 +16,7 @@ import {
   problemPermissions,
 } from './problem.access'
 import { copyPlatformProblemToSchool } from './problem.copy'
+import { isHackableJudgeConfig, parseJudgeConfig } from './problem.hack.service'
 
 export const problemCrudRouter = Router()
 
@@ -303,6 +304,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const acceptedHackCount = await prisma.problemHackAttempt.count({ where: { problemId: problem.id, status: 'accepted' } })
   const { ProblemStatement, ProblemHackConfig, Owner, ...data } = problem
   const permissions = problemPermissions(user, data)
+  const hackable = isHackableJudgeConfig(parseJudgeConfig(data.judgeConfig))
   res.json({
     success: true,
     data: {
@@ -316,9 +318,9 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
       platforms: parsePlatforms(data),
       permissions: { ...permissions, canSubmit: data.status === 'published' && permissions.canView },
       hack: {
-        enabled: Boolean(ProblemHackConfig?.enabled),
+        enabled: Boolean(ProblemHackConfig?.enabled) && hackable,
         acceptedCount: acceptedHackCount,
-        canHack: Boolean(ProblemHackConfig?.enabled) && data.status === 'published' && permissions.canView,
+        canHack: Boolean(ProblemHackConfig?.enabled) && hackable && data.status === 'published' && permissions.canView,
       },
     },
   })

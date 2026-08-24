@@ -56,7 +56,10 @@ export function resolveJudgeMode(config: Record<string, any>): 'acm' | 'oi' {
 
 export function isHackableJudgeConfig(config: Record<string, any>): boolean {
   const type = String(config.type || 'default')
-  return resolveJudgeMode(config) === 'acm' && ['default', 'standard', 'objective'].includes(type)
+  // `standard` is the legacy name for a traditional source-code batch task.
+  // Objective tasks do not execute user source against ordinary test cases and
+  // therefore cannot participate in the two-pass Hack lifecycle.
+  return resolveJudgeMode(config) === 'acm' && ['default', 'standard'].includes(type)
 }
 
 export function allowedProblemLanguages(problem: { allowedLanguages: string | null; judgeConfig: string | null }): string[] {
