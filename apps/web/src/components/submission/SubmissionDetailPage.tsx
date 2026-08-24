@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
-import { Check, CheckCircle2, ChevronDown, ChevronRight, Copy, XCircle } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -17,19 +17,20 @@ import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
+import { SubmissionJudgeResult } from './SubmissionJudgeResult'
 
 interface CaseResult {
-  caseId: number
-  subtaskId?: number
+  caseId: number | string
+  subtaskId?: number | string
   result: string
-  time: number
-  memory: number
+  time?: number | null
+  memory?: number | null
   score?: number
   message?: string
 }
 
 interface SubtaskResult {
-  id: number
+  id: number | string
   type: string
   score: number
   cases: CaseResult[]
@@ -70,55 +71,6 @@ interface SubmissionDetailPageProps {
   submissionId: string
 }
 
-// Hydro-style score color gradient (0=red → 100=green)
-function getScoreColor(score: number): string {
-  const colors = [
-    '#ff4f4f', '#ff694f', '#f8603a', '#fc8354', '#fa9231',
-    '#f7bb3b', '#ecdb44', '#e2ec52', '#b0d628', '#93b127', '#25ad40',
-  ]
-  return colors[Math.floor(Math.max(0, Math.min(100, score)) / 10)]
-}
-
-// Map result to Hydro-style status class
-function getStatusClass(result: string): 'pass' | 'fail' | 'progress' | 'pending' {
-  if (result === 'accepted') return 'pass'
-  if (result === 'queuing') return 'pending'
-  if (result === 'judging') return 'progress'
-  return 'fail'
-}
-
-// Hydro-style status colors
-const STATUS_COLORS: Record<string, string> = {
-  pass: '#25ad40',
-  fail: '#fb5555',
-  progress: '#f39800',
-  pending: '#9fa0a0',
-}
-
-// Result display labels
-const RESULT_LABELS: Record<string, string> = {
-  accepted: 'Accepted',
-  queuing: 'Waiting',
-  judging: 'Running',
-  tle: 'Time Exceeded',
-  mle: 'Memory Exceeded',
-  wa: 'Wrong Answer',
-  re: 'Runtime Error',
-  ce: 'Compile Error',
-  pe: 'Presentation Error',
-  ole: 'Output Exceeded',
-  submit_failed: 'Submit Failed',
-  se: 'System Error',
-  skipped: 'Skipped',
-}
-
-// Case result status class
-function getCaseStatusClass(result: string): 'pass' | 'fail' | 'skip' {
-  if (result === 'Accepted') return 'pass'
-  if (result === 'Skipped') return 'skip'
-  return 'fail'
-}
-
 // Language to highlight.js mapping
 const LANGUAGE_HLJS_MAP: Record<string, string> = {
   c: 'c', cpp: 'cpp', csharp: 'csharp', java: 'java', python: 'python',
@@ -138,11 +90,6 @@ const OJ_LABELS: Record<string, string> = {
   loj: 'LOJ',
 }
 
-function formatMemory(kb: number): string {
-  if (kb >= 1024) return `${(kb / 1024).toFixed(0)}MB`
-  return `${kb}KB`
-}
-
 export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPageProps) {
   const { user } = useAuth()
   const pathname = usePathname()
@@ -152,7 +99,6 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [showCode, setShowCode] = useState(true)
-  const [expandedCase, setExpandedCase] = useState<number | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -249,19 +195,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
     )
   }
 
-  const statusClass = getStatusClass(detail.result)
-  const statusColor = STATUS_COLORS[statusClass]
-  const resultLabel = RESULT_LABELS[detail.result] || detail.result
-  const isQueuing = detail.result === 'queuing' || detail.result === 'judging'
   const ojLabel = OJ_LABELS[detail.oj] || detail.oj
-
-  // Calculate summary stats from cases
-  const cases = detail.cases || []
-  const passedCount = cases.filter(c => c.result === 'Accepted').length
-  const peakTime = cases.length > 0 ? Math.max(...cases.map(c => c.time || 0)) : null
-  const peakMemory = cases.length > 0 ? Math.max(...cases.map(c => c.memory || 0)) : null
-  const isOiJudge = detail.judgeMode === 'oi'
-  const failedCaseIndex = cases.findIndex(c => c.result !== 'Accepted' && c.result !== 'accepted' && c.result !== 'Skipped')
 
   return (
     <>
@@ -277,237 +211,13 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
         <div className={styles.grid}>
           {/* Left column (9/12) */}
           <div className={styles.main}>
-            {/* Status section header — Hydro style */}
-            <div className={styles.panel}>
-              <div className={`${styles.panelHeader} ${styles.statusHeader}`}>
-                {/* Status icon */}
-                {isQueuing ? (
-                  <span style={{
-                    display: 'inline-block',
-                    width: '16px', height: '16px',
-                    border: '2px solid #e5e7eb',
-                    borderTopColor: statusColor,
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                  }} />
-                ) : statusClass === 'pass' ? (
-                  <CheckCircle2 size={19} color={statusColor} aria-hidden="true" />
-                ) : (
-                  <XCircle size={18} color={statusColor} aria-hidden="true" />
-                )}
-                {/* Score */}
-                {isOiJudge && detail.score !== null && detail.score !== undefined && (
-                  <span style={{
-                    color: getScoreColor(detail.score),
-                    fontWeight: 700,
-                    fontSize: '1.125rem',
-                  }}>
-                    {detail.score}
-                  </span>
-                )}
-                {/* Status text */}
-                <span style={{ color: statusColor, fontWeight: 600, fontSize: '0.9375rem' }}>
-                  {resultLabel}
-                </span>
-                {!isOiJudge && failedCaseIndex >= 0 && (
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginLeft: '0.5rem' }}>
-                    测试点 #{failedCaseIndex + 1}
-                  </span>
-                )}
-                {/* Progress */}
-                {isQueuing && detail.cases && detail.cases.length > 0 && (
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginLeft: '0.25rem' }}>
-                    {passedCount}/{cases.length}
-                  </span>
-                )}
-              </div>
-
-              {/* Compiler / error text */}
-              {detail.errorMessage && (
-                <div style={{
-                  padding: '0.625rem 1rem',
-                  background: '#fff5f5',
-                  fontSize: '0.8125rem',
-                  color: 'var(--error-text)',
-                  fontFamily: 'Consolas, Monaco, monospace',
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: '200px',
-                  overflow: 'auto',
-                }}>
-                  {detail.errorMessage}
-                </div>
-              )}
-
-              {/* Test case table — Hydro style */}
-              {cases.length > 0 && (
-                <div style={{ overflow: 'auto', maxHeight: '500px' }}>
-                  <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    fontSize: '0.8125rem',
-                  }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-muted)' }}>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', width: '60px' }}>#</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)' }}>状态</th>
-                        {isOiJudge && <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '80px' }}>得分</th>}
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>用时</th>
-                        <th style={{ padding: '0.5rem 0.625rem', textAlign: 'right', fontWeight: 500, color: 'var(--text-secondary)', width: '100px' }}>内存</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        const subtasks = detail.subtasks
-                        if (isOiJudge && subtasks && subtasks.length > 0) {
-                          // 按子任务分组显示
-                          const rows: React.ReactNode[] = []
-                          let caseIdx = 0
-                          for (const st of subtasks) {
-                            const stPassed = st.cases.every(c => c.result === 'Accepted')
-                            const stColor = stPassed ? '#25ad40' : '#fb5555'
-                            // 子任务标题行
-                            rows.push(
-                              <tr key={`st-${st.id}`} style={{ background: '#f8f9fa' }}>
-                                <td colSpan={5} style={{
-                                  padding: '0.5rem 0.625rem',
-                                  borderLeft: `3px solid ${stColor}`,
-                                  fontWeight: 600,
-                                  fontSize: '0.8125rem',
-                                }}>
-                                  <span style={{ color: 'var(--text-primary)' }}>子任务 {st.id}</span>
-                                  <span style={{ marginLeft: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                                    {st.cases.length} 测试点 · {st.type}
-                                  </span>
-                                  <span style={{ marginLeft: '0.75rem', fontWeight: 700, color: stColor }}>
-                                    {st.score} 分
-                                  </span>
-                                </td>
-                              </tr>
-                            )
-                            // 子任务的测试点行
-                            for (const c of st.cases) {
-                              const cClass = getCaseStatusClass(c.result)
-                              const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555'
-                              rows.push(
-                                <tr key={`case-${caseIdx}`}>
-                                  <td style={{
-                                    padding: '0.5rem 0.625rem',
-                                    color: 'var(--text-secondary)',
-                                    borderLeft: `3px solid ${borderColor}`,
-                                    fontWeight: 500,
-                                  }}>
-                                    {caseIdx + 1}
-                                  </td>
-                                  <td style={{ padding: '0.5rem 0.625rem' }}>
-                                    <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555', fontWeight: 500 }}>
-                                      {cClass === 'pass' ? '✓' : cClass === 'skip' ? '-' : '✕'}
-                                    </span>
-                                    <span style={{ marginLeft: '0.375rem', color: 'var(--text-primary)' }}>{c.result}</span>
-                                    {c.message && (
-                                      <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{c.message}</span>
-                                    )}
-                                  </td>
-                                  {isOiJudge && <td style={{
-                                    padding: '0.5rem 0.625rem',
-                                    textAlign: 'right',
-                                    color: c.score !== undefined && c.score !== null
-                                      ? (cClass === 'pass' ? '#25ad40' : '#fb5555')
-                                      : 'var(--text-muted)',
-                                    fontWeight: 600,
-                                  }}>
-                                    {c.score !== undefined && c.score !== null ? c.score : '-'}
-                                  </td>}
-                                  <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
-                                    {c.time ? `${c.time}ms` : '-'}
-                                  </td>
-                                  <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
-                                    {c.memory ? formatMemory(c.memory) : '-'}
-                                  </td>
-                                </tr>
-                              )
-                              caseIdx++
-                            }
-                          }
-                          return rows
-                        }
-                        // 无子任务：直接显示测试点
-                        return cases.map((c, idx) => {
-                          const cClass = getCaseStatusClass(c.result)
-                          const borderColor = cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555'
-                          return (
-                            <tr key={idx}>
-                              <td style={{
-                                padding: '0.5rem 0.625rem',
-                                color: 'var(--text-secondary)',
-                                borderLeft: `3px solid ${borderColor}`,
-                                fontWeight: 500,
-                              }}>
-                                {idx + 1}
-                              </td>
-                              <td style={{ padding: '0.5rem 0.625rem' }}>
-                                <span style={{ color: cClass === 'pass' ? '#25ad40' : cClass === 'skip' ? 'var(--text-muted)' : '#fb5555', fontWeight: 500 }}>
-                                  {cClass === 'pass' ? '✓' : cClass === 'skip' ? '-' : '✕'}
-                                </span>
-                                <span style={{ marginLeft: '0.375rem', color: 'var(--text-primary)' }}>{c.result}</span>
-                                {c.message && (
-                                  <span style={{ marginLeft: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{c.message}</span>
-                                )}
-                              </td>
-                              {isOiJudge && <td style={{
-                                padding: '0.5rem 0.625rem',
-                                textAlign: 'right',
-                                color: c.score !== undefined && c.score !== null
-                                  ? (cClass === 'pass' ? '#25ad40' : '#fb5555')
-                                  : 'var(--text-muted)',
-                                fontWeight: 600,
-                              }}>
-                                {c.score !== undefined && c.score !== null ? c.score : '-'}
-                              </td>}
-                              <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
-                                {c.time ? `${c.time}ms` : '-'}
-                              </td>
-                              <td style={{ padding: '0.5rem 0.625rem', textAlign: 'right', color: 'var(--text-primary)' }}>
-                                {c.memory ? formatMemory(c.memory) : '-'}
-                              </td>
-                            </tr>
-                          )
-                        })
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Summary bar — Hydro style horizontal dl */}
-              {(detail.score !== null && detail.score !== undefined || detail.timeUsed || detail.memoryUsed) && (
-                <div className={styles.summary}>
-                  {isOiJudge && detail.score !== null && detail.score !== undefined && (
-                    <div>
-                      <span>得分：</span>
-                      <span style={{ fontWeight: 600, color: getScoreColor(detail.score) }}>{detail.score}</span>
-                    </div>
-                  )}
-                  {detail.timeUsed !== null && detail.timeUsed !== undefined && (
-                    <div>
-                      <span>总用时：</span>
-                      <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.timeUsed}ms</span>
-                    </div>
-                  )}
-                  {peakTime !== null && (
-                    <div>
-                      <span>单点峰值用时：</span>
-                      <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{peakTime}ms</span>
-                    </div>
-                  )}
-                  {detail.memoryUsed !== null && detail.memoryUsed !== undefined && (
-                    <div>
-                      <span>峰值内存：</span>
-                      <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatMemory(detail.memoryUsed)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <SubmissionJudgeResult
+              judgeMode={detail.judgeMode}
+              result={detail.result}
+              score={detail.score}
+              cases={detail.cases}
+              subtasks={detail.subtasks}
+            />
 
             {/* Code section */}
             <div className={styles.panel}>
