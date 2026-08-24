@@ -2,6 +2,7 @@
 
 import type { TrainingProblem, Attachment } from '../types'
 import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
+import { hasTrainingAttachments } from '../attachment-state'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -42,7 +43,7 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
           </div>
         )
       })}
-      {Object.keys(allAttachments).length === 0 && (
+      {!hasTrainingAttachments(allAttachments) && (
         <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无附件</div>
       )}
     </div>

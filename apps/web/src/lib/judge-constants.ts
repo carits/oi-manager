@@ -19,6 +19,7 @@ export const JUDGE_RESULT_OPTIONS: readonly SelectOption[] = [
   { value: 'ole', label: 'Output Limit Exceed' },
   { value: 're', label: 'Runtime Error' },
   { value: 'ce', label: 'Compile Error' },
+  { value: 'pending', label: 'Pending' },
   { value: 'remote_unavailable', label: 'Remote OJ Unavailable' },
   { value: 'judge_failed', label: 'Judge Failed' },
   { value: 'unknown_error', label: 'Unknown Error' },
