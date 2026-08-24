@@ -17,6 +17,7 @@ automatic `.dump` files in that exact directory; migration/pre-change backups el
 cd /data/oi-manager-response-refactor
 bash -n scripts/backup-db.sh scripts/install-backup-cron.sh
 scripts/backup-db.sh
+pnpm backup:verify
 scripts/install-backup-cron.sh
 crontab -l
 tail -n 50 /data/backups/oi-manager/automatic/backup.log
@@ -24,6 +25,9 @@ tail -n 50 /data/backups/oi-manager/automatic/backup.log
 
 Default schedule is daily at 03:00. Override with `BACKUP_SCHEDULE`, `BACKUP_DIR` and
 `BACKUP_KEEP_DAYS` when provisioning. A zero-byte or unverified archive is never promoted to the final filename.
+`backup:verify` restores the newest archive into an exact `oi_manager_restore_audit_<pid>` temporary database,
+validates tables, migrations and users, then removes both the temporary database and copied container archive. It never
+restores over `oi_manager`.
 
 ## Service monitor
 

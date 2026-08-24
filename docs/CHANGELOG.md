@@ -10,6 +10,8 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 新增可复用的自动备份恢复验证脚本与 `pnpm backup:verify`。最新 5.2MB 归档已成功恢复到隔离临时库，核对 67 张表、29 条 Prisma 迁移和 20186 个用户记录；临时数据库及容器归档随后自动清理，正式库未修改。
+
 - 修复 `pnpm restart` 的长故障窗：pnpm 特殊 restart 生命周期的自动 stop 现在延后，由重启脚本先完成 PostgreSQL/go-judge 准备，再进入应用切换；停止逻辑不再把已退出的 zombie 父进程当作存活服务。100ms 采样确认 Judge 构建期间 API 持续可用，实际单实例切换窗口约 16 秒。
 
 - 完成生产依赖安全升级：Next.js 14.2.35 升级到 15.5.21，并同步升级 Express、express-rate-limit、Undici、UUID、WebSocket、js-yaml、Superagent 及安全传递依赖；`pnpm audit --prod` 从 51 项漏洞降为 0。项目未使用 `next/image`，明确忽略仍带 libvips 公告的可选 Sharp。

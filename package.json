@@ -20,6 +20,7 @@
     "stop": "bash scripts/stop-dev.sh",
     "monitor": "bash scripts/monitor-services.sh",
     "monitor:install": "bash scripts/install-monitor-cron.sh",
+    "backup:verify": "bash scripts/verify-backup-restore.sh",
     "load:smoke": "bash scripts/load-smoke.sh",
     "build": "pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate && pnpm --filter server build && pnpm --filter web build && pnpm --filter @oi-manager/judge build",
     "test": "pnpm --filter server test && pnpm --filter web test && pnpm --filter @oi-manager/judge test",
