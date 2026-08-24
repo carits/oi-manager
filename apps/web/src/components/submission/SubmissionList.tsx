@@ -45,6 +45,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const isAdminView = viewRole === 'admin' || isGlobalAdmin
   const adminHome = user?.role === 'super_admin' ? '/admin' : '/platform-admin'
   const pathPrefix = currentWorkspacePrefix(pathname, isAdminView ? adminHome : '/personal')
+  const campusStudentView = viewRole === 'student' && pathname.startsWith('/org/')
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const pageSizeOptions = [20, 50, 100]
   const requestedPageSize = Number(searchParams.get('pageSize'))
@@ -87,7 +88,11 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   }
 
   const problemCell = (submission: Submission) => {
-    const canOpenLocal = submission.problemInternalId && ['public', 'private'].includes(submission.problemVisibility || '')
+    // Campus students do not have direct access to the school problem library.
+    // Their submission row still opens the authorized submission detail, but
+    // linking the problem cell to /org/:id/problems/:id only bounces them back
+    // to the overview and presents a false interactive affordance.
+    const canOpenLocal = !campusStudentView && submission.problemInternalId && ['public', 'private'].includes(submission.problemVisibility || '')
     if (canOpenLocal) return <Link className={styles.link} href={`${pathPrefix}/problems/${submission.problemInternalId}`}>{submission.problemId}</Link>
     const external = externalProblemUrl(submission.oj, submission.problemId)
     return external ? <a className={styles.link} href={external} target="_blank" rel="noreferrer">{submission.problemId}</a> : submission.problemId

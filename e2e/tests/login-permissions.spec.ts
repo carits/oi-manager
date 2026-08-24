@@ -51,6 +51,7 @@ test.describe('authenticated permission matrix @smoke', () => {
     await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/submissions$`))
     await expect(page.getByRole('heading', { name: '评测记录' })).toBeVisible()
     await expect(page.getByLabel('用户名')).toHaveCount(0)
+    await expect(page.locator(`a[href^="${organizationBase}/problems/"]`)).toHaveCount(0)
     await context.close()
   })
 

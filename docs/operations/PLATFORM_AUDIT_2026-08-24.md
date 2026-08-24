@@ -38,6 +38,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 中 | `/account/*` 继续使用相对校园导航，Next 预取多个不存在的 `/account/*` 子路由并产生 404 | 账号中心统一使用绝对个人导航；全角色真实点击巡检通过 |
 | 中 | 无题目编辑权仍展示 AI 工具并请求受保护的 `/ai/usage`，页面控制台产生 404 | 仅 `permissions.canEdit` 时加载并渲染 AI 工具，题目详情路由健康检查通过 |
 | 中 | 学生概览提供“评测记录”链接，但 `/org/:id/submissions` 未在学生模块白名单内，点击立即返回概览 | 学生校园模块放行自己的评测记录列表并复用统一 SubmissionList；用户名筛选仍隐藏，详情继续由后端限制为本人 |
+| 中 | 学生评测记录把题号链接到无权进入的 `/org/:id/problems/:id`，点击后静默回到概览 | 校园学生列表不再渲染虚假的校内题库链接；整行仍进入本人提交详情，外部 OJ 原始链接保持可用 |
 | 中 | E2E 页面审计监听器每次巡检后不解绑，且快速连续导航会把 Next 已声明回退完整导航的 RSC 推测预取取消视为页面错误 | PageAudit 增加显式 `stop` 生命周期；仅忽略精确匹配的“RSC 失败并回退浏览器导航”，最终目标页面、API 失败和其他控制台错误仍逐一检查 |
 
 ## Edge 页面验收进度
