@@ -10,6 +10,11 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 迁移事务、功能入口与比赛来源可见性测试：学校/学生事务改测平台组织创建、组织学生创建、负责人转移、
+  跨组织回滚、账号状态和校园团队 owner；旧 `/api/schools` 明确断言 410。删除已移除的
+  `plannedFeatureResponse` 与 `shouldHideTrainingProblemIdentity` 契约，改测当前钱包权限和
+  `shouldHideTrainingProblemSource`。三套定向测试 14/14 通过，消除全量基线中的 11 个失败。
+
 - 迁移已退役的学校比赛测试契约：删除不存在的 `/api/schools/:schoolId/contests`、`isSchoolMember`、
   `isSchoolContestAdmin` 和 `Training.schoolId` 断言，改测当前组织活动接口、`organizationId` 所有权、
   active 成员、团队可见比赛、严格管理员工作区、创建权限及 OI 赛中脱敏。当前比赛套件 17/17，

@@ -1,321 +1,175 @@
-import { describe, it, expect } from 'vitest'
 import request from 'supertest'
-import { createTestApp } from './helpers/testRequest'
-import { createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
-import { generateTestToken } from './helpers/testToken'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
+import { createTestApp } from './helpers/testRequest'
+import { generateTestToken } from './helpers/testToken'
+import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
 
 const app = createTestApp()
-const shortId = () => Math.random().toString(36).slice(2, 8)
+const unique = (prefix: string) => `${prefix}_${crypto.randomUUID().slice(0, 8)}`
 
-describe('Transactions Module', () => {
-  describe('School Creation Transaction', () => {
-    it('should create school with principal in a single transaction', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
-      })
+function tokenFor(user: Awaited<ReturnType<typeof createTestUser>>) {
+  return generateTestToken({
+    userId: user.user.id,
+    role: user.user.role,
+    username: user.user.username,
+    schoolId: user.schoolId,
+    teacherId: user.teacherId,
+    studentId: user.studentId,
+    adminId: user.adminId,
+  })
+}
 
-      const schoolName = `测试学校_${Date.now()}`
-      const res = await request(app)
-        .post('/api/schools')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: schoolName,
-          username: `p_${shortId()}`,
-          password: 'password123',
-          teacherName: '测试负责人',
-          region: '湖南省/长沙市',
-          schoolType: '初中+高中'
-        })
+describe('current transactional resource flows', () => {
+  let superAdmin: Awaited<ReturnType<typeof createTestUser>>
 
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.name).toBe(schoolName)
-
-      // Verify all related records were created
-      const school = await prisma.school.findUnique({
-        where: { id: res.body.data.id },
-        include: {
-          Teacher_Teacher_schoolIdToSchool: true
-        }
-      })
-
-      expect(school).not.toBeNull()
-      expect(school!.Teacher_Teacher_schoolIdToSchool.length).toBeGreaterThan(0)
-      expect(school!.currentPrincipalTeacherId).toBeDefined()
-    })
-
-    it('should not create school with duplicate name', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school: existingSchool } = await createTestSchoolWithPrincipal()
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
-      })
-
-      const res = await request(app)
-        .post('/api/schools')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: existingSchool.name, // Duplicate name
-          username: `p_${shortId()}`,
-          password: 'password123',
-          teacherName: '测试负责人'
-        })
-
-      expect(res.status).toBe(400)
-      expect(res.body.success).toBe(false)
-      expect(res.body.message).toContain('已存在')
-    })
-
-    it('should not create school with duplicate username', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { principal } = await createTestSchoolWithPrincipal()
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
-      })
-
-      const res = await request(app)
-        .post('/api/schools')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: `新学校_${Date.now()}`,
-          username: principal.username, // Duplicate username
-          password: 'password123',
-          teacherName: '测试负责人'
-        })
-
-      expect(res.status).toBe(400)
-      expect(res.body.success).toBe(false)
-      expect(res.body.message).toContain('用户名已存在')
-    })
-
-    it('should not create school without required fields', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
-      })
-
-      const res = await request(app)
-        .post('/api/schools')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          // Missing name
-          username: `p_${shortId()}`,
-          password: 'password123'
-        })
-
-      expect(res.status).toBe(400)
-      expect(res.body.success).toBe(false)
-    })
-
-    it('should require super_admin role', async () => {
-      const { user: teacher } = await createTestUser({ role: 'teacher' })
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId: teacher.teacherId
-      })
-
-      const res = await request(app)
-        .post('/api/schools')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          name: `新学校_${Date.now()}`,
-          username: `p_${shortId()}`,
-          password: 'password123',
-          teacherName: '测试负责人'
-        })
-
-      expect(res.status).toBe(403)
-      expect(res.body.success).toBe(false)
-    })
+  beforeEach(async () => {
+    superAdmin = await createTestUser({ role: 'super_admin' })
   })
 
-  describe('Student Creation Transaction', () => {
-    it('should create student with user in a single transaction', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
-
-      const res = await request(app)
-        .post('/api/students')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          username: `stu_${shortId()}`,
-          password: 'password123',
-          name: '测试学生',
-          gender: '男',
-          enrollmentYear: 2023,
-          schoolId: school.id,
-          headTeacherId: teacherId  // 指向 Teacher.id (= User.id)
-        })
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-
-      // Verify both User and Student were created
-      // Student 主键是 id，等于 User.id
-      const student = await prisma.student.findUnique({
-        where: { id: res.body.data.id },
-        include: { User: true }
-      })
-
-      expect(student).not.toBeNull()
-      expect(student!.User).toBeDefined()
-      expect(student!.name).toBe('测试学生')
-    })
-
-    it('should not create student without school', async () => {
-      // 创建两个学校，教师属于其中一个
-      const { school: school1 } = await createTestSchoolWithPrincipal()
-      const { school: school2 } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school1.id })
-
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school1.id
-      })
-
-      // 尝试为另一个学校创建学生（应该失败）
-      const res = await request(app)
-        .post('/api/students')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          username: `stu_${shortId()}`,
-          password: 'password123',
-          name: '测试学生',
-          schoolId: school2.id // 不同的学校
-        })
-
-      expect(res.status).toBe(400)
-      expect(res.body.success).toBe(false)
-    })
+  it('retires the legacy school endpoint instead of mutating old models', async () => {
+    const response = await request(app)
+      .post('/api/schools')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+      .send({ name: 'Legacy school' })
+    expect(response.status).toBe(410)
+    expect(response.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
   })
 
-  describe('School Update Transaction', () => {
-    it('should update school with principal transfer', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school, principal } = await createTestSchoolWithPrincipal()
-      const { user: newPrincipal, teacherId: newPrincipalTeacherId } = await createTestUser({
-        role: 'teacher',
-        schoolId: school.id
-      })
+  it('creates organization, school, principal membership and profile atomically', async () => {
+    const username = unique('principal')
+    const response = await request(app)
+      .post('/api/platform/organizations')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+      .send({ name: 'Transactional School', username, password: 'password123', teacherName: 'Principal' })
+    expect(response.status).toBe(201)
 
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
-      })
-
-      const res = await request(app)
-        .put(`/api/schools/${school.id}/principal`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          teacherId: newPrincipalTeacherId
-        })
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-
-      // Verify the transfer
-      const updatedSchool = await prisma.school.findUnique({
-        where: { id: school.id }
-      })
-
-      expect(updatedSchool!.currentPrincipalTeacherId).toBe(newPrincipalTeacherId)
+    const organizationId = response.body.data.organizationId as string
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      include: {
+        School: true,
+        Membership: {
+          include: { User: true, TeacherProfile: true },
+        },
+      },
     })
+    expect(organization).toMatchObject({ name: 'Transactional School', type: 'school', status: 'active' })
+    expect(organization?.School?.currentPrincipalMembershipId).toBe(organization?.Membership[0].id)
+    expect(organization?.Membership[0]).toMatchObject({ memberRole: 'school_principal', status: 'active' })
+    expect(organization?.Membership[0].User.username).toBe(username)
+    expect(organization?.Membership[0].TeacherProfile?.name).toBe('Principal')
   })
 
-  describe('User Update Transaction', () => {
-    it('should update user status atomically', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { user: targetUser } = await createTestUser({ role: 'teacher' })
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.id
-      })
-
-      const res = await request(app)
-        .put(`/api/users/${targetUser.id}/status`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          status: 'disabled'
-        })
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-
-      // Verify status was updated
-      const updatedUser = await prisma.user.findUnique({
-        where: { id: targetUser.id }
-      })
-
-      expect(updatedUser!.status).toBe('disabled')
-    })
+  it('rejects duplicate principal usernames without creating a partial organization', async () => {
+    const existing = await createTestUser({ role: 'teacher' })
+    const name = unique('No Partial School')
+    const response = await request(app)
+      .post('/api/platform/organizations')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+      .send({ name, username: existing.user.username, password: 'password123', teacherName: 'Principal' })
+    expect(response.status).toBe(409)
+    expect(await prisma.organization.count({ where: { name } })).toBe(0)
   })
 
-  describe('Team Creation', () => {
-    it('should create team with owner', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+  it('requires all school creation fields and a super-admin caller', async () => {
+    const incomplete = await request(app)
+      .post('/api/platform/organizations')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+      .send({ name: 'Missing principal' })
+    expect(incomplete.status).toBe(400)
 
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
+    const platformAdmin = await createTestUser({ role: 'platform_admin' })
+    const denied = await request(app)
+      .post('/api/platform/organizations')
+      .set('Authorization', `Bearer ${tokenFor(platformAdmin)}`)
+      .send({ name: 'Denied', username: unique('principal'), teacherName: 'Denied' })
+    expect(denied.status).toBe(403)
+  })
 
-      const res = await request(app)
-        .post('/api/teams')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          id: `team_${shortId()}`,
-          name: `测试团队_${Date.now()}`,
-          schoolId: school.id,
-          isPublic: true
-        })
+  it('creates a student user, membership and profile in the active organization', async () => {
+    const { school } = await createTestSchoolWithPrincipal()
+    const teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+    const username = unique('student')
+    const response = await request(app)
+      .post(`/api/organizations/${school.organizationId}/members/students`)
+      .set('Authorization', `Bearer ${tokenFor(teacher)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+      .send({ username, password: 'password123', name: 'Transactional Student' })
+    expect(response.status).toBe(201)
 
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-
-      // Verify team was created
-      const team = await prisma.team.findUnique({
-        where: { id: res.body.data.id }
-      })
-
-      expect(team).not.toBeNull()
+    const profile = await prisma.organizationStudentProfile.findUnique({
+      where: { id: response.body.data.id },
+      include: { Membership: { include: { User: true } } },
     })
+    expect(profile?.name).toBe('Transactional Student')
+    expect(profile?.Membership).toMatchObject({ organizationId: school.organizationId, memberRole: 'student', status: 'active' })
+    expect(profile?.Membership.User.username).toBe(username)
+  })
+
+  it('rejects cross-organization student creation before writing a user', async () => {
+    const { school: schoolA } = await createTestSchoolWithPrincipal('School A')
+    const { school: schoolB } = await createTestSchoolWithPrincipal('School B')
+    const teacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+    const username = unique('cross_student')
+    const response = await request(app)
+      .post(`/api/organizations/${schoolB.organizationId}/members/students`)
+      .set('Authorization', `Bearer ${tokenFor(teacher)}`)
+      .set('x-oi-organization-id', schoolA.organizationId!)
+      .send({ username, password: 'password123', name: 'Cross Student' })
+    expect(response.status).toBe(403)
+    expect(await prisma.user.findUnique({ where: { username } })).toBeNull()
+  })
+
+  it('transfers the principal membership and demotes the previous principal atomically', async () => {
+    const { school } = await createTestSchoolWithPrincipal()
+    const next = await createTestUser({ role: 'teacher', schoolId: school.id })
+    const nextMembership = await prisma.organizationMembership.findFirstOrThrow({
+      where: { organizationId: school.organizationId!, userId: next.user.id, status: 'active' },
+    })
+    const oldPrincipalId = (await prisma.school.findUniqueOrThrow({ where: { id: school.id } })).currentPrincipalMembershipId!
+
+    const response = await request(app)
+      .put(`/api/platform/organizations/${school.organizationId}/principal`)
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+      .send({ membershipId: nextMembership.id })
+    expect(response.status).toBe(200)
+
+    const [updatedSchool, oldPrincipal, newPrincipal] = await Promise.all([
+      prisma.school.findUniqueOrThrow({ where: { id: school.id } }),
+      prisma.organizationMembership.findUniqueOrThrow({ where: { id: oldPrincipalId } }),
+      prisma.organizationMembership.findUniqueOrThrow({ where: { id: nextMembership.id } }),
+    ])
+    expect(updatedSchool.currentPrincipalMembershipId).toBe(nextMembership.id)
+    expect(oldPrincipal.memberRole).toBe('teacher')
+    expect(newPrincipal.memberRole).toBe('school_principal')
+  })
+
+  it('updates account status atomically', async () => {
+    const target = await createTestUser({ role: 'teacher' })
+    const response = await request(app)
+      .put(`/api/users/${target.user.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+      .send({ status: 'disabled' })
+    expect(response.status).toBe(200)
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: target.user.id } })).status).toBe('disabled')
+  })
+
+  it('creates a campus team with an active owner in the request organization', async () => {
+    const { school } = await createTestSchoolWithPrincipal()
+    const teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+    const response = await request(app)
+      .post('/api/teams')
+      .set('Authorization', `Bearer ${tokenFor(teacher)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+      .send({ id: unique('team'), name: unique('Team'), isPublic: true })
+    expect(response.status).toBe(200)
+
+    const team = await prisma.team.findUniqueOrThrow({
+      where: { id: response.body.data.id },
+      include: { TeamMember: true },
+    })
+    expect(team).toMatchObject({ organizationId: school.organizationId, scope: 'campus' })
+    expect(team.TeamMember).toContainEqual(expect.objectContaining({ userId: teacher.user.id, role: 'owner', status: 'active' }))
   })
 })

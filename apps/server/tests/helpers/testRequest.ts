@@ -23,6 +23,7 @@ import { rankingRouter } from '../../src/modules/ranking/ranking.routes'
 import { testdataRouter } from '../../src/routes/testdata'
 import { filesRouter } from '../../src/routes/files'
 import { organizationMemberRouter } from '../../src/routes/organization-members'
+import { platformOrganizationRouter } from '../../src/routes/platform-organizations'
 import { verifyCookieOrigin } from '../../src/middleware/csrf'
 
 /**
@@ -63,6 +64,7 @@ export function createTestApp() {
   app.use('/api', testdataRouter)
   app.use('/api/files', filesRouter)
   app.use('/api/organizations/:organizationId/members', organizationMemberRouter)
+  app.use('/api/platform/organizations', platformOrganizationRouter)
   app.use('/api/rankings', rankingRouter)
 
   // 健康检查
