@@ -40,10 +40,10 @@ export default function OrganizationResourcePage() {
     return <TrainingDetailPage basePath={`${prefix}/teams`} trainingIdOverride={parts[2]} />
   }
   if (module === 'teams' && parts.length === 4 && ['contests', 'trainings', 'homeworks'].includes(parts[1]) && parts[3] === 'statements') {
-    return <TrainingStatementManagementPage trainingId={parts[2]} />
+    return <TrainingStatementManagementPage trainingId={parts[2]} backPath={`${prefix}/teams/${parts[0]}/${parts[1]}/${parts[2]}`} />
   }
   if ((module === 'contests' || module === 'homeworks') && parts.length === 2 && parts[1] === 'statements') {
-    return <TrainingStatementManagementPage trainingId={parts[0]} />
+    return <TrainingStatementManagementPage trainingId={parts[0]} backPath={`${prefix}/${module}/${parts[0]}`} />
   }
   if ((module === 'contests' || module === 'homeworks') && parts.length === 1) {
     return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />

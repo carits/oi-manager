@@ -5,5 +5,5 @@ import { TrainingStatementManagementPage } from '@/components/training/TrainingS
 
 export default function PersonalContestStatementsPage() {
   const { id } = useParams<{ id: string }>()
-  return <TrainingStatementManagementPage trainingId={id} />
+  return <TrainingStatementManagementPage trainingId={id} backPath={`/personal/contests/${id}`} />
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
@@ -28,18 +28,31 @@ interface Problem {
 }
 interface Payload { training: { id: number; title: string; type: string }; problems: Problem[] }
 
-export function TrainingStatementManagementPage({ trainingId }: { trainingId: string }) {
+export function TrainingStatementManagementPage({ trainingId, backPath }: { trainingId: string; backPath?: string }) {
   const router = useRouter()
   const toast = useToast()
+  const toastRef = useRef(toast)
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selection, setSelection] = useState<Record<string, { keys: string[]; defaultKey: string }>>({})
+
+  useEffect(() => { toastRef.current = toast }, [toast])
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     const response = await apiClient.get<Payload>(`/api/trainings/${trainingId}/statement-management`)
-    if (!response.success || !response.data) toast.error(response.message || '加载题面管理失败')
+    if (!response.success || !response.data) {
+      const message = response.message || '加载题面管理失败'
+      if (response.status === 403 && backPath) {
+        toastRef.current.error(message)
+        router.replace(backPath)
+      } else {
+        setLoadError(message)
+      }
+    }
     else {
       setData(response.data)
       setSelection(Object.fromEntries(response.data.problems.map(problem => [problem.trainingProblemId, {
@@ -48,7 +61,7 @@ export function TrainingStatementManagementPage({ trainingId }: { trainingId: st
       }])))
     }
     setLoading(false)
-  }, [trainingId, toast])
+  }, [backPath, router, trainingId])
   useEffect(() => { void load() }, [load])
 
   const rows = useMemo(() => {
@@ -93,10 +106,10 @@ export function TrainingStatementManagementPage({ trainingId }: { trainingId: st
   }
 
   if (loading && !data) return <PageFrame><div style={{ padding: '4rem', textAlign: 'center' }}>正在加载题面矩阵…</div></PageFrame>
-  if (!data) return <PageFrame><div style={{ padding: '4rem', textAlign: 'center' }}>题面选择无法加载</div></PageFrame>
+  if (!data) return <PageFrame><PageHeader title="题面选择无法加载" description={loadError || '活动题面数据暂时不可用'} actions={<button onClick={() => backPath ? router.replace(backPath) : router.back()}>返回活动</button>} /></PageFrame>
   return (
     <PageFrame>
-      <PageHeader title="题面选择" description={`${data.training.title} · 为参赛者选择可用题面并指定默认版本`} actions={<div style={{ display: 'flex', gap: '0.6rem' }}><button onClick={() => router.back()}>返回活动</button><button onClick={save} disabled={saving}>{saving ? '保存中…' : '保存题面选择'}</button></div>} />
+      <PageHeader title="题面选择" description={`${data.training.title} · 为参赛者选择可用题面并指定默认版本`} actions={<div style={{ display: 'flex', gap: '0.6rem' }}><button onClick={() => backPath ? router.replace(backPath) : router.back()}>返回活动</button><button onClick={save} disabled={saving}>{saving ? '保存中…' : '保存题面选择'}</button></div>} />
       <div style={{ marginTop: '1rem', padding: '0.8rem 1rem', background: 'var(--info-light)', borderRadius: '8px', color: 'var(--text-secondary)' }}>点击空白/✓切换是否提供；点击星标设为默认。每道题可有多个 ✓，但只能有一个 ★。</div>
       <div style={{ marginTop: '1rem', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '10px', maxHeight: 'calc(100vh - 260px)' }}>
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: Math.max(900, 330 + data.problems.length * 150), width: '100%' }}>
