@@ -17,6 +17,8 @@ source_of_truth: Git history
   已退役的学生作业列表接口到当前组织活动接口。
 - 核心流程、Judge、Hack 与重测联合 18/18；Server 37 文件 420/420、Web 9 文件 34/34、Judge
   2 文件 6/6 和根生产构建均通过。E2E 清单现为 19 个文件、265 条可收集用例。
+- 重测隔离与详情修复提交 `3d06912` 已推送并部署为公网构建 `Y1Nc3hNxHVKLRi2vil5hP`；3200 候选、
+  3000 提升、3002 API、统一监控及 3000/3002 两套匿名 303/303 矩阵均通过。
 
 - 修复 Judge E2E 的隐藏顺序依赖：全新 `e2e` schema 下原用例因题目没有显式 `judgeConfig/TestdataFile` 而返回 409，过去通过依赖前序残留。隔离种子现在在独立 `test-results/testdata` 写入确定性 ACM 配置和 `1.in/1.out`，校园提交同时补齐 `organizationId`；全新环境 Judge 8/8、Judge + Hack 联合 9/9 通过。
 - 新增题目级 Hack 破坏性 E2E：真实调用 go-judge 编译 STD/Validator，通过独立 WebSocket Hack 队列模拟 `Accepted → Wrong Answer`，验证 `hack_<id>.in/.out` 入库、Hack 点顺序、普通提交数量不变和历史结果不重置。E2E 清单现为 18 个文件、264 条可收集用例。

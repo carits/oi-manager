@@ -9,6 +9,7 @@ source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Pri
   远程归档排除和其他题目结果不变；修复无测试点明细的终态提交详情不显示 Verdict，并把发布作业、
   补题作业测试迁移到显式组织上下文和当前活动接口。核心 + Judge + Hack + 重测联合 18/18，
   Server/Web/Judge 全量分别 420/420、34/34、6/6，根生产构建通过；E2E 清单为 19 文件、265 条。
+  提交 `3d06912` 已部署为公网构建 `Y1Nc3hNxHVKLRi2vil5hP`，两套匿名 303/303 矩阵和统一监控通过。
 - 2026-08-24: 隔离 E2E 已补齐独立 `test-results/testdata`、确定性 ACM 配置和测试点，消除 Judge 流程对残留数据的顺序依赖；新增有效 Hack 入库且历史提交不重测的破坏性流程。全新 schema 下 Judge 8/8、Judge + Hack 联合 9/9，通过清单为 18 个 E2E 文件、264 条用例。提交 `da24952` 已部署为公网构建 `yl9YyYjjo3cSTnOQUGMvB`。
 - 2026-08-24: 六种身份已分别完成 303 个文档端点的认证健壮性矩阵，共 1818 次请求且无 5xx；无效团队、未绑定外部账号、缺失导入批次、非法提交 ID 和不存在的拉题任务均返回稳定 4xx，预期客户端错误不再污染 error 日志。Server 全量回归为 37 文件 420/420；提交 `a2bb119` 已部署为公网构建 `OP9c7Uk_sz75WSE7etrIz`。
 - 2026-08-24: 题目级 ACM Hack 已补齐空 STD 输出拦截、结构化失败阶段、列表摘要/按权限详情分离、并发重试保护
