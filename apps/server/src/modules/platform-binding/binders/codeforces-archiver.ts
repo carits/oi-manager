@@ -63,6 +63,17 @@ interface SyncResult {
   skipped: number     // 已存在跳过的数量
 }
 
+const MAX_CF_SUBMISSION_PAGES = 10
+
+export class RemoteArchiveFetchError extends Error {
+  readonly code = 'REMOTE_ARCHIVE_UNAVAILABLE'
+
+  constructor(message = 'Codeforces 提交记录暂时无法获取') {
+    super(message)
+    this.name = 'RemoteArchiveFetchError'
+  }
+}
+
 /**
  * 通过 CF API 获取用户所有提交记录
  *
@@ -75,9 +86,10 @@ export async function fetchCfAllSubmissions(
   options?: ArchiveOptions
 ): Promise<CfSubmissionRecord[]> {
   const submissions: CfSubmissionRecord[] = []
-  // 单题同步：不限制页数，获取该题所有提交
-  // 批量同步：限制10页（最近1000条提交）
-  const maxPages = options?.problemId ? Infinity : 10
+  // A single authenticated request must never fan out into an unbounded CF
+  // history scan. Both full and single-problem imports inspect at most the
+  // latest 1000 records; callers can retry later without duplicating rows.
+  const maxPages = MAX_CF_SUBMISSION_PAGES
   const count = 100
   let page = 0
 
@@ -87,9 +99,15 @@ export async function fetchCfAllSubmissions(
 
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+      if (!response.ok) {
+        throw new RemoteArchiveFetchError(`Codeforces API 返回 HTTP ${response.status}`)
+      }
       const data = await response.json()
 
-      if (data.status !== 'OK' || !data.result?.length) break
+      if (data.status !== 'OK') {
+        throw new RemoteArchiveFetchError('Codeforces API 拒绝了提交记录请求')
+      }
+      if (!data.result?.length) break
 
       for (const sub of data.result) {
         // 只处理有 verdict 的提交（跳过正在评测的）
@@ -125,7 +143,8 @@ export async function fetchCfAllSubmissions(
 
     } catch (error) {
       logger.error('cf_api_fetch_submissions_error', error as Error, { action: 'fetch_cf_submissions' })
-      break
+      if (error instanceof RemoteArchiveFetchError) throw error
+      throw new RemoteArchiveFetchError()
     }
   }
 
@@ -605,7 +624,13 @@ export async function archiveCfProblemsForUser(
   options?: ArchiveOptions
 ): Promise<ArchiveResult> {
   // 1. 抓取已解决的题目
-  const problems = await fetchCfSolvedProblems(jsessionid, handle, options)
+  let problems: CfProblemInfo[]
+  try {
+    problems = await fetchCfSolvedProblems(jsessionid, handle, options)
+  } catch (error) {
+    if (error instanceof RemoteArchiveFetchError) throw error
+    throw new RemoteArchiveFetchError()
+  }
 
   // 2. 查询已归档的题目（去重）
   const existingArchived = await prisma.userArchivedProblem.findMany({

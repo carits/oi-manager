@@ -17,9 +17,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | Next.js 页面文件 | 63 | `route-inventory.spec.ts` 与源码清单一致 |
 | HTTP 端点 | 303 | `pnpm docs:check` |
 | Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
-| 单元/集成测试文件 | 48 | Server 37、Web 9、Judge 2 |
-| E2E 文件 | 20 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
-| Playwright 可收集用例 | 266 | `playwright test --list` |
+| 单元/集成测试文件 | 49 | Server 38、Web 9、Judge 2 |
+| E2E 文件 | 21 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
+| Playwright 可收集用例 | 267 | `playwright test --list` |
 
 认证边界门禁已覆盖上述 303 个端点：296 个必须认证，7 个匿名端点均在
 `scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
@@ -50,6 +50,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 高 | 多个局部路由把团队不存在、账号未绑定、导入批次不存在、非法提交 ID 和缺失拉题任务转换为 500 | 统一已知客户端错误为 400/403/404/409；六角色 × 303 端点共 1818 次请求无 5xx，预期 4xx 同时从 error 日志降噪 |
 | 高 | Judge E2E 在全新隔离库中没有评测配置和测试数据，过去依赖前序残留才通过 | Seed 显式写入独立 `test-results/testdata`、ACM 配置、文件元数据和校园 `organizationId`；全新 schema Judge 8/8、Judge + Hack 联合 9/9 |
 | 中 | 活动题面矩阵按官方语言/格式正确合并各题，但共享行标题误用第一道题标题，视觉上像把 A 题题面分配给 B/C/D | 官方行改为“官方中文/Official English/官方题面”通用标签；活动选择、参与者读取、编辑 revision、陈旧写入 409 和活动内创建 404 的真实 API + 页面 E2E 通过 |
+| 高 | Codeforces 单题归档可无界翻页，远端 HTTP/API 失败又被当作空成功，既可能放大资源消耗，也会误导用户 | 单次限制最近 1000 条；参数先行校验；远端失败返回稳定 502。新增 4 项服务端测试与真实前端归档流程，确认幂等且归档不进入 Judge、排名或活动状态 |
 
 隔离 Judge/Hack 修复提交 `da24952` 已按 preview/canary/promote 部署为 `yl9YyYjjo3cSTnOQUGMvB`；
 3000/3002 健康、统一监控 healthy，3000 匿名 303/303 矩阵零失败。
@@ -115,7 +116,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 ## 自动化状态
 
-- Server 完整回归在认证健壮性修复后为 37/37 文件、420/420 用例通过，0 失败、0 跳过；历史整文件
+- Server 完整回归为 38/38 文件、424/424 用例通过，0 失败、0 跳过；历史整文件
   `describe.skip` 已替换为当前旧学校 API 的 GET/POST/DELETE 410 且不写库契约。
 - Web 9 文件 34/34、Judge 2 文件 6/6 通过；Next 15 隔离环境的身份初始化、性能预算、加载、空状态、
   超时与重试共 13/13 通过。
@@ -146,8 +147,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 - 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 303 个 HTTP 端点的匿名门禁和六角色无 5xx 健壮性矩阵已完成；本人/同组织/跨组织/管理员的资源所有权语义矩阵仍需继续扩展。
-- 文件上传、本地 Judge、有效 Hack 入库/历史不重测、比赛重测和题面快照写流程已在隔离 E2E 复验；
-  外部归档同步入口和比赛三赛制的完整破坏性闭环仍需补齐。
+- 文件上传、本地 Judge、有效 Hack 入库/历史不重测、比赛重测、题面快照写流程和外部归档同步入口
+  已在隔离 E2E 复验；比赛三赛制的完整破坏性闭环仍需补齐。
 - 活动题面矩阵问题由真实 Edge 首轮定位；修复后的真页面在隔离 Chromium 验证。公网提升后 Edge 扩展
   连续读取超时，线上第二份 Edge DOM/控制台证据尚待扩展恢复后补录，不以构建通过替代该证据。
 - 外部告警通道、隔离环境写入负载、容量上限和长稳测试尚未完成。

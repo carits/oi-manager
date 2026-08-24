@@ -12,6 +12,21 @@ import type { BindingPlatform } from './platform-binding.types'
 export const platformBindingRouter = Router()
 const service = new PlatformBindingService()
 
+function codeforcesArchiveInputError(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return '请求参数格式无效'
+  const { startTime, endTime, problemId } = body as Record<string, unknown>
+  if (problemId !== undefined && (
+    typeof problemId !== 'string'
+    || !/^[1-9]\d{0,8}[A-Z][A-Z0-9]{0,7}$/.test(problemId)
+  )) return 'Codeforces 题号格式无效'
+  const start = startTime === undefined ? null : new Date(String(startTime))
+  const end = endTime === undefined ? null : new Date(String(endTime))
+  if (start && Number.isNaN(start.getTime())) return '开始时间格式无效'
+  if (end && Number.isNaN(end.getTime())) return '结束时间格式无效'
+  if (start && end && start > end) return '开始时间不能晚于结束时间'
+  return null
+}
+
 /**
  * 获取支持的平台列表
  * GET /api/platform-bindings/platforms
@@ -175,6 +190,8 @@ platformBindingRouter.post('/:platform/refresh', authenticate, async (req: Reque
  * - problemId?: string - 单题归档时传入（题库页归档当前题）
  */
 platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req: Request, res: Response) => {
+  const inputError = codeforcesArchiveInputError(req.body)
+  if (inputError) return res.status(400).json({ success: false, code: 'INVALID_ARCHIVE_REQUEST', message: inputError })
   try {
     const userId = (req as any).user.userId
     const { startTime, endTime, problemId } = req.body
@@ -253,6 +270,13 @@ platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req:
     })
 
   } catch (error) {
+    if ((error as { code?: string })?.code === 'REMOTE_ARCHIVE_UNAVAILABLE') {
+      return res.status(502).json({
+        success: false,
+        code: 'REMOTE_ARCHIVE_UNAVAILABLE',
+        message: 'Codeforces 提交记录暂时无法获取，请稍后重试',
+      })
+    }
     console.error('Sync CF archive error:', error)
     res.status(500).json({ success: false, message: '同步归档失败' })
   }
@@ -268,6 +292,8 @@ platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req:
  * - problemId?: string - 单题同步时传入
  */
 platformBindingRouter.post('/codeforces/sync-submissions', authenticate, async (req: Request, res: Response) => {
+  const inputError = codeforcesArchiveInputError(req.body)
+  if (inputError) return res.status(400).json({ success: false, code: 'INVALID_ARCHIVE_REQUEST', message: inputError })
   try {
     const userId = (req as any).user.userId
     const { startTime, endTime, problemId } = req.body
@@ -345,6 +371,13 @@ platformBindingRouter.post('/codeforces/sync-submissions', authenticate, async (
     })
 
   } catch (error) {
+    if ((error as { code?: string })?.code === 'REMOTE_ARCHIVE_UNAVAILABLE') {
+      return res.status(502).json({
+        success: false,
+        code: 'REMOTE_ARCHIVE_UNAVAILABLE',
+        message: 'Codeforces 提交记录暂时无法获取，请稍后重试',
+      })
+    }
     console.error('Sync CF submissions error:', error)
     res.status(500).json({ success: false, message: '同步提交记录失败' })
   }
