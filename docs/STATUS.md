@@ -5,7 +5,7 @@ last_verified: 2026-08-25
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。
+- 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。提交 97ee230 已部署为公网构建 zqmtCul8BqfkMjyMkx8fU，线上权限复验为管理员 200 且含完整源码、其他用户访问他人详情 404。
 - 2026-08-24: 新增 ICPC/OI/IOI 完整破坏性闭环，真实创建比赛、切换 ACM/OI 题目快照、提交并通过
   Judge WebSocket 回传、校验赛中/赛后排名与详情后清理。审计修复远程归档进入排行榜、Judge 结果后
   立即断线被恢复排队、重测统计与自身更新竞争三个问题。核心破坏性流程联合 21/21；Server/Web/Judge
