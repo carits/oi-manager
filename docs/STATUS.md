@@ -106,6 +106,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   通过。桌面主跑中 2 项旧测试辅助契约失败已单独复跑通过，不属于页面路由失败。
 - 根构建、Server/Web TypeScript 检查、Web Vitest 23/23、Judge Vitest 2/2、UI 状态守卫与
   文档检查均通过。
+- 2026-08-24 Server 权限 helper 已增加真实组织学生/教师档案 ID，过时的学校权限测试已迁移为
+  当前组织与工作区模型；本人、同组织、跨组织、负责人、班主任和团队角色/上下文共 13/13 通过，
+  Server TypeScript 检查通过。其余旧 Server 套件仍按模块迁移中，尚未宣称全量回归通过。
 - 2026-08-23 题目级 Hack 定向测试 Server 2/2、Judge 3/3 通过；真实 go-judge 沙箱分别以
   直接输入和 Python3 生成器验证 `Accepted → Wrong Answer`，Validator、STD、候选点优先及
   双完整评测链路通过。Server/Judge/Web 生产构建通过。

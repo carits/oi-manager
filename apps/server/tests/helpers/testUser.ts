@@ -24,12 +24,16 @@ interface CreatedTestUser {
     status: string
     teacherId?: string
     studentId?: string
+    teacherProfileId?: string
+    studentProfileId?: string
     adminId?: string
     schoolId?: string
   }
   password: string
   teacherId?: string
   studentId?: string
+  teacherProfileId?: string
+  studentProfileId?: string
   adminId?: string
   schoolId?: string
 }
@@ -78,6 +82,8 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
 
   let teacherId: string | undefined
   let studentId: string | undefined
+  let teacherProfileId: string | undefined
+  let studentProfileId: string | undefined
   let adminId: string | undefined
   if (role === 'super_admin' || role === 'platform_admin') {
     adminId = user.id
@@ -104,7 +110,7 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
             select: { id: true },
           })
         : null
-      await prisma.organizationStudentProfile.create({
+      const profile = await prisma.organizationStudentProfile.create({
         data: {
           id: crypto.randomUUID(),
           membershipId,
@@ -115,8 +121,9 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
         },
       })
       studentId = user.id
+      studentProfileId = profile.id
     } else {
-      await prisma.organizationTeacherProfile.create({
+      const profile = await prisma.organizationTeacherProfile.create({
         data: {
           id: crypto.randomUUID(),
           membershipId,
@@ -125,6 +132,7 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
         },
       })
       teacherId = user.id
+      teacherProfileId = profile.id
       if (role === 'school_principal') {
         await prisma.school.update({ where: { id: schoolId }, data: { currentPrincipalMembershipId: membershipId } })
       }
@@ -140,12 +148,16 @@ export async function createTestUser(options: CreateTestUserOptions = {}): Promi
       status: user.status,
       teacherId,
       studentId,
+      teacherProfileId,
+      studentProfileId,
       adminId,
       schoolId,
     },
     password,
     teacherId,
     studentId,
+    teacherProfileId,
+    studentProfileId,
     adminId,
     schoolId,
   }
@@ -187,6 +199,7 @@ export async function createTestSchoolWithPrincipal(schoolName?: string) {
     principal: {
       userId: principalUser.user.id,
       teacherId: principalUser.teacherId!,
+      teacherProfileId: principalUser.teacherProfileId!,
       username: principalUser.user.username,
     },
   }

@@ -1,464 +1,209 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  canAccessSchool,
-  canManageSchool,
-  canViewStudent,
+  canAccessProblemBank,
   canManageStudent,
-  canViewTeacher,
   canManageTeacher,
+  canManageTeam,
+  canViewStudent,
+  canViewTeacher,
   canViewTeam,
-  canManageTeam
 } from '../src/middleware/permissions'
-import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
 import { prisma } from '../src/prisma'
 import type { AuthRequest } from '../src/middleware/auth'
+import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
 
-// 创建模拟的 AuthRequest
-function createMockAuthRequest(userId: string, role: string): AuthRequest {
+function createMockAuthRequest(
+  userId: string,
+  role: string,
+  organizationId?: string | null,
+  workspaceMode: 'work' | 'personal' = organizationId ? 'work' : 'personal',
+): AuthRequest {
   return {
-    user: { userId, role: role as any, username: 'test' },
+    user: {
+      userId,
+      role,
+      username: 'test',
+      workspaceMode,
+      ...(organizationId ? { organizationId } : {}),
+    },
     headers: {},
     get: () => '',
-    header: () => ''
+    header: () => '',
   } as unknown as AuthRequest
 }
 
-describe('Permissions Module', () => {
-  describe('canAccessSchool', () => {
-    it('should allow super_admin to access any school', async () => {
-      const { user } = await createTestUser({ role: 'super_admin' })
+describe('current organization permission model', () => {
+  describe('student profiles', () => {
+    it('allows a student to view only their own profile in the active organization', async () => {
       const { school } = await createTestSchoolWithPrincipal()
+      const viewer = await createTestUser({ role: 'student', schoolId: school.id })
+      const other = await createTestUser({ role: 'student', schoolId: school.id })
+      const req = createMockAuthRequest(viewer.user.id, 'student', school.organizationId)
 
-      const req = createMockAuthRequest(user.id, 'super_admin')
-      const result = await canAccessSchool(req, school.id)
-
-      expect(result).toBe(true)
+      await expect(canViewStudent(req, viewer.studentProfileId!)).resolves.toBe(true)
+      await expect(canViewStudent(req, other.studentProfileId!)).resolves.toBe(false)
     })
 
-    it('should allow platform_admin to access any school', async () => {
-      const { user } = await createTestUser({ role: 'platform_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-
-      const req = createMockAuthRequest(user.id, 'platform_admin')
-      const result = await canAccessSchool(req, school.id)
-
-      expect(result).toBe(true)
-    })
-
-    it('should allow school_principal to access their own school', async () => {
-      const { school, principal } = await createTestSchoolWithPrincipal()
-
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canAccessSchool(req, school.id)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny school_principal from accessing other school', async () => {
-      const { principal } = await createTestSchoolWithPrincipal('School A')
-      const { school: otherSchool } = await createTestSchoolWithPrincipal('School B')
-
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canAccessSchool(req, otherSchool.id)
-
-      expect(result).toBe(false)
-    })
-
-    it('should allow teacher to access their own school', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const req = createMockAuthRequest(user.id, 'teacher')
-      const result = await canAccessSchool(req, school.id)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny teacher from accessing other school', async () => {
+    it('allows teachers to view same-organization students but not cross-organization profiles', async () => {
       const { school: schoolA } = await createTestSchoolWithPrincipal('School A')
       const { school: schoolB } = await createTestSchoolWithPrincipal('School B')
-      const { user } = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+      const teacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+      const localStudent = await createTestUser({ role: 'student', schoolId: schoolA.id })
+      const remoteStudent = await createTestUser({ role: 'student', schoolId: schoolB.id })
+      const req = createMockAuthRequest(teacher.user.id, 'teacher', schoolA.organizationId)
 
-      const req = createMockAuthRequest(user.id, 'teacher')
-      const result = await canAccessSchool(req, schoolB.id)
-
-      expect(result).toBe(false)
-    })
-  })
-
-  describe('canManageSchool', () => {
-    it('should allow super_admin to manage any school', async () => {
-      const { user } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-
-      const req = createMockAuthRequest(user.id, 'super_admin')
-      const result = await canManageSchool(req, school.id)
-
-      expect(result).toBe(true)
+      await expect(canViewStudent(req, localStudent.studentProfileId!)).resolves.toBe(true)
+      await expect(canViewStudent(req, remoteStudent.studentProfileId!)).resolves.toBe(false)
     })
 
-    it('should allow school_principal to manage their own school', async () => {
+    it('allows principals to manage local students and teachers only their assigned students', async () => {
       const { school, principal } = await createTestSchoolWithPrincipal()
+      const teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const assigned = await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacher.user.id })
+      const unassigned = await createTestUser({ role: 'student', schoolId: school.id })
 
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canManageSchool(req, school.id)
-
-      expect(result).toBe(true)
+      const principalReq = createMockAuthRequest(principal.userId, 'school_principal', school.organizationId)
+      const teacherReq = createMockAuthRequest(teacher.user.id, 'teacher', school.organizationId)
+      await expect(canManageStudent(principalReq, assigned.studentProfileId!)).resolves.toBe(true)
+      await expect(canManageStudent(teacherReq, assigned.studentProfileId!)).resolves.toBe(true)
+      await expect(canManageStudent(teacherReq, unassigned.studentProfileId!)).resolves.toBe(false)
     })
 
-    it('should deny school_principal from managing other school', async () => {
-      const { principal } = await createTestSchoolWithPrincipal('School A')
-      const { school: otherSchool } = await createTestSchoolWithPrincipal('School B')
-
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canManageSchool(req, otherSchool.id)
-
-      expect(result).toBe(false)
-    })
-
-    it('should deny teacher from managing any school', async () => {
+    it('keeps global administrators out of personal-context profile management', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const student = await createTestUser({ role: 'student', schoolId: school.id })
+      const admin = await createTestUser({ role: 'super_admin' })
+      await prisma.organizationMembership.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId: school.organizationId!,
+          userId: admin.user.id,
+          memberRole: 'teacher',
+          relationType: 'employee',
+          status: 'active',
+          joinedAt: new Date(),
+        },
+      })
+      const workReq = createMockAuthRequest(admin.user.id, 'super_admin', school.organizationId)
+      const personalReq = createMockAuthRequest(admin.user.id, 'super_admin', null, 'personal')
 
-      const req = createMockAuthRequest(user.id, 'teacher')
-      const result = await canManageSchool(req, school.id)
-
-      expect(result).toBe(false)
-    })
-
-    it('should deny student from managing any school', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(user.id, 'student')
-      const result = await canManageSchool(req, school.id)
-
-      expect(result).toBe(false)
+      await expect(canManageStudent(workReq, student.studentProfileId!)).resolves.toBe(true)
+      await expect(canManageStudent(personalReq, student.studentProfileId!)).resolves.toBe(false)
     })
   })
 
-  describe('canViewStudent', () => {
-    it('should allow super_admin to view any student', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: studentUser, studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(admin.id, 'super_admin')
-      const result = await canViewStudent(req, studentId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should allow student to view themselves', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user, studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(user.id, 'student')
-      const result = await canViewStudent(req, studentId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny student from viewing other student', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: viewer } = await createTestUser({ role: 'student', schoolId: school.id })
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(viewer.id, 'student')
-      const result = await canViewStudent(req, studentId!)
-
-      expect(result).toBe(false)
-    })
-
-    it('should allow teacher to view student from same school', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacherUser } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(teacherUser.id, 'teacher')
-      const result = await canViewStudent(req, studentId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny teacher from viewing student from other school', async () => {
+  describe('teacher profiles', () => {
+    it('allows campus members to view only teachers in the active organization', async () => {
       const { school: schoolA } = await createTestSchoolWithPrincipal('School A')
       const { school: schoolB } = await createTestSchoolWithPrincipal('School B')
-      const { user: teacherUser } = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-      const { studentId } = await createTestUser({ role: 'student', schoolId: schoolB.id })
+      const student = await createTestUser({ role: 'student', schoolId: schoolA.id })
+      const localTeacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+      const remoteTeacher = await createTestUser({ role: 'teacher', schoolId: schoolB.id })
+      const req = createMockAuthRequest(student.user.id, 'student', schoolA.organizationId)
 
-      const req = createMockAuthRequest(teacherUser.id, 'teacher')
-      const result = await canViewStudent(req, studentId!)
-
-      expect(result).toBe(false)
-    })
-  })
-
-  describe('canManageStudent', () => {
-    it('should allow super_admin to manage any student', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(admin.id, 'super_admin')
-      const result = await canManageStudent(req, studentId!)
-
-      expect(result).toBe(true)
+      await expect(canViewTeacher(req, localTeacher.teacherProfileId!)).resolves.toBe(true)
+      await expect(canViewTeacher(req, remoteTeacher.teacherProfileId!)).resolves.toBe(false)
     })
 
-    it('should deny student from managing other student', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: viewer } = await createTestUser({ role: 'student', schoolId: school.id })
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-
-      const req = createMockAuthRequest(viewer.id, 'student')
-      const result = await canManageStudent(req, studentId!)
-
-      expect(result).toBe(false)
-    })
-
-    it('should allow school_principal to manage student from same school', async () => {
+    it('allows a principal to manage another local teacher but not themselves', async () => {
       const { school, principal } = await createTestSchoolWithPrincipal()
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id })
+      const teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const req = createMockAuthRequest(principal.userId, 'school_principal', school.organizationId)
 
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canManageStudent(req, studentId!)
-
-      expect(result).toBe(true)
+      await expect(canManageTeacher(req, teacher.teacherProfileId!)).resolves.toBe(true)
+      await expect(canManageTeacher(req, principal.teacherProfileId)).resolves.toBe(false)
     })
 
-    it('should allow teacher to manage student from same school', async () => {
+    it('does not grant ordinary teachers teacher-management permission', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacherUser, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { studentId } = await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacherId })
+      const viewer = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const target = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const req = createMockAuthRequest(viewer.user.id, 'teacher', school.organizationId)
 
-      const req = createMockAuthRequest(teacherUser.id, 'teacher')
-      const result = await canManageStudent(req, studentId!)
-
-      expect(result).toBe(true)
+      await expect(canManageTeacher(req, target.teacherProfileId!)).resolves.toBe(false)
     })
   })
 
-  describe('canViewTeacher', () => {
-    it('should allow super_admin to view any teacher', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacherUser, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const req = createMockAuthRequest(admin.id, 'super_admin')
-      const result = await canViewTeacher(req, teacherId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should allow teacher to view teacher from same school', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: viewer } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const req = createMockAuthRequest(viewer.id, 'teacher')
-      const result = await canViewTeacher(req, teacherId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny teacher from viewing teacher from other school', async () => {
+  describe('team scope and membership', () => {
+    it('allows same-organization users to view public campus teams and rejects cross-organization access', async () => {
       const { school: schoolA } = await createTestSchoolWithPrincipal('School A')
       const { school: schoolB } = await createTestSchoolWithPrincipal('School B')
-      const { user: viewer } = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
-      const { teacherId } = await createTestUser({ role: 'teacher', schoolId: schoolB.id })
+      const local = await createTestUser({ role: 'student', schoolId: schoolA.id })
+      const remote = await createTestUser({ role: 'student', schoolId: schoolB.id })
+      const team = await createTestTeam({ schoolId: schoolA.id, isPublic: true })
 
-      const req = createMockAuthRequest(viewer.id, 'teacher')
-      const result = await canViewTeacher(req, teacherId!)
-
-      expect(result).toBe(false)
+      await expect(canViewTeam(createMockAuthRequest(local.user.id, 'student', schoolA.organizationId), team.id)).resolves.toBe(true)
+      await expect(canViewTeam(createMockAuthRequest(remote.user.id, 'student', schoolB.organizationId), team.id)).resolves.toBe(false)
     })
-  })
 
-  describe('canManageTeacher', () => {
-    it('should allow super_admin to manage any teacher', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
+    it('requires active membership for private teams', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacherUser, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const req = createMockAuthRequest(admin.id, 'super_admin')
-      const result = await canManageTeacher(req, teacherId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should allow school_principal to manage teacher from same school', async () => {
-      const { school, principal } = await createTestSchoolWithPrincipal()
-      const { teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canManageTeacher(req, teacherId!)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny school_principal from managing themselves', async () => {
-      const { principal } = await createTestSchoolWithPrincipal()
-
-      const req = createMockAuthRequest(principal.userId, 'school_principal')
-      const result = await canManageTeacher(req, principal.teacherId)
-
-      expect(result).toBe(false)
-    })
-
-    it('should deny teacher from managing other teacher', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: viewer } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const req = createMockAuthRequest(viewer.id, 'teacher')
-      const result = await canManageTeacher(req, teacherId!)
-
-      expect(result).toBe(false)
-    })
-  })
-
-  describe('canViewTeam', () => {
-    it('should allow super_admin to view any team', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
+      const member = await createTestUser({ role: 'student', schoolId: school.id })
+      const outsider = await createTestUser({ role: 'student', schoolId: school.id })
       const team = await createTestTeam({ schoolId: school.id, isPublic: false })
-
-      const req = createMockAuthRequest(admin.id, 'super_admin')
-      const result = await canViewTeam(req, team.id)
-
-      expect(result).toBe(true)
-    })
-
-    it('should allow school user to view public team', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user } = await createTestUser({ role: 'student', schoolId: school.id })
-      const team = await createTestTeam({ schoolId: school.id, isPublic: true })
-
-      const req = createMockAuthRequest(user.id, 'student')
-      const result = await canViewTeam(req, team.id)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny non-member from viewing private team', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user } = await createTestUser({ role: 'student', schoolId: school.id })
-      const team = await createTestTeam({ schoolId: school.id, isPublic: false })
-
-      const req = createMockAuthRequest(user.id, 'student')
-      const result = await canViewTeam(req, team.id)
-
-      expect(result).toBe(false)
-    })
-
-    it('should allow member to view private team', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user, studentId } = await createTestUser({ role: 'student', schoolId: school.id })
-      const team = await createTestTeam({ schoolId: school.id, isPublic: false })
-
-      // Add user as team member
       await prisma.teamMember.create({
         data: {
           id: crypto.randomUUID(),
           teamId: team.id,
-          userId: studentId!,
+          userId: member.user.id,
           userType: 'student',
           role: 'member',
           status: 'active',
-          joinedAt: new Date()
-        }
+          joinedAt: new Date(),
+        },
       })
 
-      const req = createMockAuthRequest(user.id, 'student')
-      const result = await canViewTeam(req, team.id)
-
-      expect(result).toBe(true)
-    })
-  })
-
-  describe('canManageTeam', () => {
-    it('should allow super_admin to manage any team', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-      const team = await createTestTeam({ schoolId: school.id })
-
-      const req = createMockAuthRequest(admin.id, 'super_admin')
-      const result = await canManageTeam(req, team.id)
-
-      expect(result).toBe(true)
+      await expect(canViewTeam(createMockAuthRequest(member.user.id, 'student', school.organizationId), team.id)).resolves.toBe(true)
+      await expect(canViewTeam(createMockAuthRequest(outsider.user.id, 'student', school.organizationId), team.id)).resolves.toBe(false)
     })
 
-    it('should allow team owner to manage team', async () => {
+    it.each(['owner', 'admin'] as const)('allows a team %s to manage the campus team', async role => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const user = await createTestUser({ role: 'teacher', schoolId: school.id })
       const team = await createTestTeam({ schoolId: school.id })
-
-      // Add user as team owner
       await prisma.teamMember.create({
         data: {
           id: crypto.randomUUID(),
           teamId: team.id,
-          userId: teacherId!,
+          userId: user.user.id,
           userType: 'teacher',
-          role: 'owner',
+          role,
           status: 'active',
-          joinedAt: new Date()
-        }
+          joinedAt: new Date(),
+        },
       })
 
-      const req = createMockAuthRequest(user.id, 'teacher')
-      const result = await canManageTeam(req, team.id)
-
-      expect(result).toBe(true)
+      await expect(canManageTeam(createMockAuthRequest(user.user.id, 'teacher', school.organizationId), team.id)).resolves.toBe(true)
     })
 
-    it('should allow team admin to manage team', async () => {
+    it('rejects regular members, personal contexts and organization-less administrators', async () => {
       const { school } = await createTestSchoolWithPrincipal()
-      const { user, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const user = await createTestUser({ role: 'teacher', schoolId: school.id })
+      const admin = await createTestUser({ role: 'super_admin' })
       const team = await createTestTeam({ schoolId: school.id })
-
-      // Add user as team admin
       await prisma.teamMember.create({
         data: {
           id: crypto.randomUUID(),
           teamId: team.id,
-          userId: teacherId!,
-          userType: 'teacher',
-          role: 'admin',
-          status: 'active',
-          joinedAt: new Date()
-        }
-      })
-
-      const req = createMockAuthRequest(user.id, 'teacher')
-      const result = await canManageTeam(req, team.id)
-
-      expect(result).toBe(true)
-    })
-
-    it('should deny regular member from managing team', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const team = await createTestTeam({ schoolId: school.id })
-
-      // Add user as regular member
-      await prisma.teamMember.create({
-        data: {
-          id: crypto.randomUUID(),
-          teamId: team.id,
-          userId: teacherId!,
+          userId: user.user.id,
           userType: 'teacher',
           role: 'member',
           status: 'active',
-          joinedAt: new Date()
-        }
+          joinedAt: new Date(),
+        },
       })
 
-      const req = createMockAuthRequest(user.id, 'teacher')
-      const result = await canManageTeam(req, team.id)
-
-      expect(result).toBe(false)
+      await expect(canManageTeam(createMockAuthRequest(user.user.id, 'teacher', school.organizationId), team.id)).resolves.toBe(false)
+      await expect(canViewTeam(createMockAuthRequest(user.user.id, 'teacher', null, 'personal'), team.id)).resolves.toBe(false)
+      await expect(canManageTeam(createMockAuthRequest(admin.user.id, 'super_admin', null, 'work'), team.id)).resolves.toBe(false)
     })
+  })
+
+  it('keeps students out of the problem bank while allowing staff and administrators', () => {
+    expect(canAccessProblemBank('student')).toBe(false)
+    expect(canAccessProblemBank('teacher')).toBe(true)
+    expect(canAccessProblemBank('school_principal')).toBe(true)
+    expect(canAccessProblemBank('platform_admin')).toBe(true)
+    expect(canAccessProblemBank('super_admin')).toBe(true)
   })
 })

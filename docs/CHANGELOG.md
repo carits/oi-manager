@@ -10,6 +10,9 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 迁移已退役的 Server 权限单元测试：删除不存在的 `canAccessSchool/canManageSchool` 旧契约，测试夹具在保留
+  历史 User ID 别名的同时返回真实组织学生/教师档案 ID。新权限套件覆盖本人、同组织、跨组织、负责人、
+  班主任、团队公开/私有、owner/admin/member、个人/校园上下文和全局管理员前置条件，定向测试 13/13 通过。
 - 提交详情共享结果组件修复 `be83577` 已推送并部署为公网预览构建 `YFyBItVMM7t35S7z9XQE-`。
   学生 Edge 已在线复验 IOI #3682 的 40/100、`sum` Subtask、20 个测试点及 checker message；
   ACM #3681 正确显示首个失败点与 Fast-Fail 跳过项且无得分列，#3677 显示 20 个 Accepted 测试点。
