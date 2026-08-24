@@ -25,6 +25,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 `scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
 运行时匿名矩阵也已逐一请求 303 个端点：首轮唯一失败为缺失凭据的登录请求返回 500，修复输入类型、
 空值和长度校验后 303/303 通过；296 个受保护端点均在业务处理前返回 401。
+修复提交 `9eda8c5` 已部署为构建 `ywaWmTvM6CM5X2HamOmSM`；3002 直连和 3000 同源代理均复跑
+303/303，通过候选提升与服务重启健康检查。
 
 ## 已发现并处理
 
