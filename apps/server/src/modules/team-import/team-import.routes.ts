@@ -9,9 +9,21 @@ import { vjudgeImportService } from './vjudge-import.service'
 import { luoguImportService } from './luogu-import.service'
 import { memberMatchService } from './member-match.service'
 import type { ImportPlatform } from './team-import.types'
+import { classifyClientError } from '../../lib/asyncHandler'
 
 export const teamImportRouter = Router()
 const service = new TeamImportService()
+
+function sendKnownTeamImportError(res: Response, error: unknown): boolean {
+  const clientError = classifyClientError(error)
+  if (!clientError) return false
+  res.status(clientError.status).json({
+    success: false,
+    message: clientError.message,
+    ...(clientError.code ? { code: clientError.code } : {}),
+  })
+  return true
+}
 
 
 // ==================== VJudge 导入相关路由 ====================
@@ -37,7 +49,6 @@ teamImportRouter.get('/vjudge/groups', authenticate, async (req: Request, res: R
       data: groups
     })
   } catch (err) {
-    console.error('[TeamImport] VJudge groups error:', err)
     const errMsg = err instanceof Error ? err.message : '获取团队列表失败'
     // Cloudflare 拦截返回 400 让前端能区分
     if (errMsg.includes('CLOUDFLARE_BLOCKED') || errMsg.includes('Cloudflare') || errMsg.includes('人机验证')) {
@@ -47,6 +58,8 @@ teamImportRouter.get('/vjudge/groups', authenticate, async (req: Request, res: R
         errorType: 'CLOUDFLARE_BLOCKED'
       })
     } else {
+      if (sendKnownTeamImportError(res, err)) return
+      console.error('[TeamImport] VJudge groups error:', err)
       res.status(500).json({
         success: false,
         message: errMsg
@@ -224,6 +237,7 @@ teamImportRouter.get('/luogu/groups', authenticate, async (req: Request, res: Re
 
     res.json({ success: true, data: groups })
   } catch (err) {
+    if (sendKnownTeamImportError(res, err)) return
     console.error('[TeamImport] Luogu groups error:', err)
     res.status(500).json({
       success: false,
@@ -496,6 +510,7 @@ teamImportRouter.get('/:batchId/preview', authenticate, async (req: Request, res
       data: preview,
     })
   } catch (err) {
+    if (sendKnownTeamImportError(res, err)) return
     console.error('[TeamImport] Preview error:', err)
     res.status(500).json({
       success: false,
@@ -580,6 +595,7 @@ teamImportRouter.get('/:batchId/result', authenticate, async (req: Request, res:
       data: result,
     })
   } catch (err) {
+    if (sendKnownTeamImportError(res, err)) return
     console.error('[TeamImport] Get result error:', err)
     res.status(500).json({
       success: false,

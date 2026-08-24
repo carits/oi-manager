@@ -388,7 +388,13 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
 submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
   try {
     const { id } = req.params
-    const submissionId = parseInt(id)
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ success: false, message: '无效的提交 ID' })
+    }
+    const submissionId = Number(id)
+    if (!Number.isSafeInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ success: false, message: '无效的提交 ID' })
+    }
 
     const submission = await prisma.submission.findUnique({
       where: { id: submissionId },

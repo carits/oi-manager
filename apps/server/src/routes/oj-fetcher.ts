@@ -436,6 +436,12 @@ ojFetcherRouter.delete('/jobs/:id', ...adminOnly, async (req: Request, res: Resp
       message: '任务已删除',
     })
   } catch (error) {
+    if ((error as any)?.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: '任务不存在',
+      })
+    }
     console.error('[OJ Fetcher] Delete job error:', error)
     res.status(500).json({
       success: false,

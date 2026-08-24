@@ -5,6 +5,7 @@ last_verified: 2026-08-24
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-24: 六种身份已分别完成 303 个文档端点的认证健壮性矩阵，共 1818 次请求且无 5xx；无效团队、未绑定外部账号、缺失导入批次、非法提交 ID 和不存在的拉题任务均返回稳定 4xx，预期客户端错误不再污染 error 日志。Server 全量回归为 37 文件 420/420。
 - 2026-08-24: 题目级 ACM Hack 已补齐空 STD 输出拦截、结构化失败阶段、列表摘要/按权限详情分离、并发重试保护
   和失败时的两文件原子清理；数据库迁移 25/25，公网预览构建为 `8fxNjMc1nbC96bWmMLqlt`。
 - 2026-08-24: 全平台审计已启动；首轮端口检查发现并修复 PostgreSQL `5432` 与 go-judge

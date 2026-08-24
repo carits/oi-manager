@@ -232,8 +232,9 @@ export function populateSnapshotData(problem: {
 
 /** 解析训练 ID（数字） */
 export function parseTrainingId(raw: string): number {
-  const n = parseInt(raw, 10)
-  if (isNaN(n)) throw new Error('无效的训练 ID')
+  if (!/^\d+$/.test(raw)) throw new Error('无效的训练 ID')
+  const n = Number(raw)
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error('无效的训练 ID')
   return n
 }
 

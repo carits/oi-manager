@@ -13,8 +13,20 @@ import { prisma } from '../prisma'
 import { authenticate, isPersonalContextForTeams } from '../middleware/auth'
 import type { AuthRequest } from '../middleware/auth'
 import { teamService } from '../modules/team/team.service'
+import { classifyClientError } from '../lib/asyncHandler'
 
 export const teamProblemListsRouter = Router()
+
+function sendKnownTeamProblemListError(res: any, error: unknown): boolean {
+  const clientError = classifyClientError(error)
+  if (!clientError) return false
+  res.status(clientError.status).json({
+    success: false,
+    message: clientError.message,
+    ...(clientError.code ? { code: clientError.code } : {}),
+  })
+  return true
+}
 
 /**
  * 判断用户是否可以管理团队题单（owner/admin 或教师成员）
@@ -144,6 +156,7 @@ teamProblemListsRouter.get('/:teamId/problem-lists', authenticate, async (req: A
     if (error instanceof Error && error.message === 'TEAM_SCOPE_MISMATCH') {
       return res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
     }
+    if (sendKnownTeamProblemListError(res, error)) return
     res.status(500).json({ success: false, message: '获取团队题单列表失败' })
   }
 })
@@ -210,6 +223,7 @@ teamProblemListsRouter.post('/:teamId/problem-lists', authenticate, async (req: 
     if (error instanceof Error && error.message === 'TEAM_SCOPE_MISMATCH') {
       return res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
     }
+    if (sendKnownTeamProblemListError(res, error)) return
     res.status(500).json({ success: false, message: '添加团队题单失败' })
   }
 })
@@ -260,6 +274,7 @@ teamProblemListsRouter.delete('/:teamId/problem-lists/:id', authenticate, async 
     if (error instanceof Error && error.message === 'TEAM_SCOPE_MISMATCH') {
       return res.status(403).json({ success: false, message: '该团队不属于当前使用模式' })
     }
+    if (sendKnownTeamProblemListError(res, error)) return
     res.status(500).json({ success: false, message: '移除团队题单失败' })
   }
 })

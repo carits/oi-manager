@@ -210,7 +210,8 @@ trainingContentRouter.get('/trainings/:id/problems/:trainingProblemId/content-op
 
 trainingContentRouter.get('/trainings/:id/problems/:trainingProblemId/content-options/:optionKey/file', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   const resolved = await optionForRequest(req, res)
-  if (!resolved || !resolved.option.fileId) return res.status(404).json({ success: false, message: 'PDF 不存在' })
+  if (!resolved) return
+  if (!resolved.option.fileId) return res.status(404).json({ success: false, message: 'PDF 不存在' })
   const file = await fileService.download(resolved.option.fileId)
   res.setHeader('Content-Type', file.mimeType)
   res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`)
