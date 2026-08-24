@@ -499,10 +499,23 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
     }
     if (trainingProblem) baseWhere.AND.push({ OR: [{ trainingProblemId: trainingProblem.id }, { problemId: trainingProblem.Problem.problemId }] })
     if (scopeType === 'user_problem') baseWhere.userId = scope.userId
-    const [skippedCount, updateResult] = await Promise.all([
-      prisma.submission.count({ where: { ...baseWhere, result: { in: ['queuing', 'judging'] } } }),
-      prisma.submission.updateMany({
-        where: { ...baseWhere, result: { notIn: ['queuing', 'judging'] } },
+    // Snapshot the target IDs before mutating them. Running the count and update
+    // in Promise.all lets the count observe rows just changed to queuing by this
+    // same request, producing impossible summaries such as reset=3, skipped=3.
+    const candidates = await prisma.submission.findMany({
+      where: baseWhere,
+      select: { id: true, result: true },
+    })
+    const completedIds = candidates
+      .filter(item => item.result !== 'queuing' && item.result !== 'judging')
+      .map(item => item.id)
+    const updateResult = completedIds.length > 0
+      ? await prisma.submission.updateMany({
+        where: {
+          ...baseWhere,
+          id: { in: completedIds },
+          result: { notIn: ['queuing', 'judging'] },
+        },
         data: {
           result: 'queuing',
           submitMethod: 'local',
@@ -518,9 +531,10 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
           judgeStarted: null,
           judgeId: null,
         },
-      }),
-    ])
+      })
+      : { count: 0 }
     const count = updateResult.count
+    const skippedCount = candidates.length - count
 
     logger.info('training_rejudge', {
       action: 'training_rejudge',

@@ -119,6 +119,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
         FROM "Submission"
         WHERE "submitScope" = ${submitScopeValue}
           AND "trainingId" = ${id}
+          AND COALESCE("submitMethod", '') <> 'archive'
           AND result NOT IN ('queuing', 'judging', 'pending_review')
           AND result <> ''
           AND COALESCE(score, 0) = (
@@ -127,6 +128,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
               AND s2."problemId" = "Submission"."problemId"
               AND s2."submitScope" = ${submitScopeValue}
               AND s2."trainingId" = ${id}
+              AND COALESCE(s2."submitMethod", '') <> 'archive'
               AND s2.result NOT IN ('queuing', 'judging', 'pending_review')
               AND s2.result <> ''
           )
@@ -191,6 +193,7 @@ trainingRankingRouter.get('/trainings/:id/ranking', authenticate, asyncHandler(a
           submitScope: submitScopeValue,
           trainingId: id,
           ...adminFilterWhere,
+          submitMethod: { not: 'archive' },
           result: { not: '' },
         },
         // 同一毫秒内按提交 ID 稳定排序，保证首 A 归属不会因数据库返回顺序变化。

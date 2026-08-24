@@ -1,15 +1,25 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-24
+last_verified: 2026-08-25
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-25
+
+- Hack 历史把“查看程序”入口移动到程序语言之后，题目管理者无需横向滚动到表格末端即可读取候选输入/生成器和被 Hack 程序；完整源码仍只通过单条详情接口按题目管理权或记录归属返回。
+
 ## 2026-08-24
 
+- 比赛排行榜统一排除 `submitMethod=archive`；远程归档不再可能给 ICPC 增加已解数或抬高 OI/IOI 分数。
+- Judge 收到普通提交/Hack 结果时先解除连接任务所有权，避免结果已送达后立即断线又把任务恢复为排队；
+  普通提交持久化失败时安全回队。
+- 比赛重测先固化目标记录再更新，修复并发统计把本次刚重置的提交同时计入“将跳过”的错误摘要。
+- 新增三赛制完整破坏性 E2E，覆盖 ICPC 两次提交与罚时、IOI 实时部分分、OI 赛中脱敏/管理员可见/
+  赛后公开，以及 ACM/OI 详情模式和三种真实排行榜页面。
 - 远程提交归档：Codeforces 同步参数在访问远端前校验；远端 HTTP/API 失败返回稳定 502，不再伪装为
   “同步成功但零记录”；单次同步限制为最近 1000 条，并新增幂等、归档隔离与前端流程回归。
 - 归档修复提交 `1dcf362` 已按 preview build/canary/promote 部署为 `BWcB26mt5NrhD5un0to-E`；

@@ -643,6 +643,11 @@ function handleConfig(ws: WebSocket, payload: { concurrency?: number }) {
 async function handleResult(ws: WebSocket, payload: any) {
   const { submissionId, result, time, wallTime, memory, score, cases, subtasks, message, timeoutReason, metricSource } = payload
 
+  // The result message has already transferred ownership back to the server.
+  // Remove it synchronously before any database await so a socket close cannot
+  // race with destroy() and put the reported task back into the queue.
+  judges.get(ws)?.consumer?.handleResult('submission', String(submissionId))
+
   logger.info('judge_ws_result', {
     action: 'judge_ws',
     metadata: { submissionId, result, time, wallTime, memory, score, timeoutReason, metricSource }
@@ -702,16 +707,18 @@ async function handleResult(ws: WebSocket, payload: any) {
       action: 'judge_ws',
       metadata: { submissionId, error: e.message }
     })
+    await prisma.submission.updateMany({
+      where: { id: parseInt(submissionId), result: 'judging' },
+      data: { result: 'queuing', judgeId: null, judgeStarted: null },
+    }).catch(() => {})
   }
-
-  // 通知 Consumer 任务完成
-  const judge = judges.get(ws)
-  judge?.consumer?.handleResult('submission', submissionId)
 }
 
 async function handleHackResult(ws: WebSocket, payload: any) {
   const hackAttemptId = String(payload?.hackAttemptId || '')
   if (!hackAttemptId) return
+  // As above, a delivered result must not be recovered by disconnect cleanup.
+  judges.get(ws)?.consumer?.handleResult('hack', hackAttemptId)
   logger.info('judge_ws_hack_result', {
     action: 'judge_ws',
     metadata: {
@@ -739,8 +746,6 @@ async function handleHackResult(ws: WebSocket, payload: any) {
         finishedAt: new Date(),
       },
     })
-  } finally {
-    judges.get(ws)?.consumer?.handleResult('hack', hackAttemptId)
   }
 }
 

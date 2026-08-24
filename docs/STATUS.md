@@ -1,10 +1,16 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-24
+last_verified: 2026-08-25
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。
+- 2026-08-24: 新增 ICPC/OI/IOI 完整破坏性闭环，真实创建比赛、切换 ACM/OI 题目快照、提交并通过
+  Judge WebSocket 回传、校验赛中/赛后排名与详情后清理。审计修复远程归档进入排行榜、Judge 结果后
+  立即断线被恢复排队、重测统计与自身更新竞争三个问题。核心破坏性流程联合 21/21；Server/Web/Judge
+  全量分别 426/426、34/34、6/6，E2E 清单 22 文件、268 条，根生产构建通过。Edge 可接管 1158
+  页面并确认 URL/标题，但 DOM 与截图读取连续超时，视觉复验仍明确待补。
 - 2026-08-24: Codeforces 远程归档同步增加参数前置校验、上游失败 502 契约和单次最近 1000 条上限，
   避免远端故障被误报为空成功及无界分页放大。新增归档幂等、Judge/排名隔离、失败与上限测试，
   Server/Web/Judge 全量分别 424/424、34/34、6/6，远程归档 UI E2E 7/7，E2E 清单为 21 文件、267 条，

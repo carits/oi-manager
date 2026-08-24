@@ -18,8 +18,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | HTTP 端点 | 303 | `pnpm docs:check` |
 | Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
 | 单元/集成测试文件 | 49 | Server 38、Web 9、Judge 2 |
-| E2E 文件 | 21 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
-| Playwright 可收集用例 | 267 | `playwright test --list` |
+| E2E 文件 | 22 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
+| Playwright 可收集用例 | 268 | `playwright test --list` |
 
 认证边界门禁已覆盖上述 303 个端点：296 个必须认证，7 个匿名端点均在
 `scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
@@ -51,6 +51,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 高 | Judge E2E 在全新隔离库中没有评测配置和测试数据，过去依赖前序残留才通过 | Seed 显式写入独立 `test-results/testdata`、ACM 配置、文件元数据和校园 `organizationId`；全新 schema Judge 8/8、Judge + Hack 联合 9/9 |
 | 中 | 活动题面矩阵按官方语言/格式正确合并各题，但共享行标题误用第一道题标题，视觉上像把 A 题题面分配给 B/C/D | 官方行改为“官方中文/Official English/官方题面”通用标签；活动选择、参与者读取、编辑 revision、陈旧写入 409 和活动内创建 404 的真实 API + 页面 E2E 通过 |
 | 高 | Codeforces 单题归档可无界翻页，远端 HTTP/API 失败又被当作空成功，既可能放大资源消耗，也会误导用户 | 单次限制最近 1000 条；参数先行校验；远端失败返回稳定 502。新增 4 项服务端测试与真实前端归档流程，确认幂等且归档不进入 Judge、排名或活动状态 |
+| 高 | ICPC 与 OI/IOI 排行榜查询未排除远程归档；伪造或遗留的比赛关联归档可增加已解数或抬高得分 | 两条排名分支均排除 `submitMethod=archive`；新增有本地 WA + 远程 AC 的 ICPC/IOI 数据测试，分别保持 0 AC 和 40 分 |
+| 高 | Judge 已收到普通提交或 Hack 结果后若连接立即断开，断连恢复可能先把任务改回 `queuing`，覆盖结果处理 | 收到结果消息时同步解除该连接的任务所有权，再执行持久化；联合破坏性流程中 Hack 立即断线与后续普通 Judge 均稳定完成 |
+| 中 | 比赛重测用 `Promise.all` 同时统计活动任务和重置完成记录，统计偶尔读到自己刚改成 queuing 的行 | 先固化目标 ID/状态再更新，`skippedCount=目标数-resetCount`；曾复现的 reset=3/skipped=3 恢复为 reset=3/skipped=0 |
 
 归档修复提交 `1dcf362` 已按 preview/canary/promote 部署为 `BWcB26mt5NrhD5un0to-E`；3000/3002
 匿名端点矩阵各 303/303，统一服务监控 healthy。
@@ -119,7 +122,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 ## 自动化状态
 
-- Server 完整回归为 38/38 文件、424/424 用例通过，0 失败、0 跳过；历史整文件
+- Server 完整回归为 38/38 文件、426/426 用例通过，0 失败、0 跳过；历史整文件
   `describe.skip` 已替换为当前旧学校 API 的 GET/POST/DELETE 410 且不写库契约。
 - Web 9 文件 34/34、Judge 2 文件 6/6 通过；Next 15 隔离环境的身份初始化、性能预算、加载、空状态、
   超时与重试共 13/13 通过。
@@ -150,8 +153,10 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 - 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 303 个 HTTP 端点的匿名门禁和六角色无 5xx 健壮性矩阵已完成；本人/同组织/跨组织/管理员的资源所有权语义矩阵仍需继续扩展。
-- 文件上传、本地 Judge、有效 Hack 入库/历史不重测、比赛重测、题面快照写流程和外部归档同步入口
-  已在隔离 E2E 复验；比赛三赛制的完整破坏性闭环仍需补齐。
+- 文件上传、本地 Judge、有效 Hack 入库/历史不重测、比赛重测、题面快照写流程、外部归档同步入口和
+  ICPC/OI/IOI 完整破坏性闭环均已在隔离 E2E 复验。
+- 本轮 Edge 能接管线上 1158 题面选择页并读取 URL/标题，但 DOM 和截图读取连续超时；三赛制新闭环的
+  Edge 视觉证据仍未完成，不能以 Chromium 21/21 或 API 结果替代。
 - 活动题面矩阵问题由真实 Edge 首轮定位；修复后的真页面在隔离 Chromium 验证。公网提升后 Edge 扩展
   连续读取超时，线上第二份 Edge DOM/控制台证据尚待扩展恢复后补录，不以构建通过替代该证据。
 - 外部告警通道、隔离环境写入负载、容量上限和长稳测试尚未完成。
