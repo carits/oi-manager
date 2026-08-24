@@ -18,8 +18,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | HTTP 端点 | 303 | `pnpm docs:check` |
 | Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
 | 单元/集成测试文件 | 48 | Server 37、Web 9、Judge 2 |
-| E2E 文件 | 18 | `find e2e -name '*.spec.ts'`；仅统计当前可执行的 E2E 规格文件 |
-| Playwright 可收集用例 | 264 | `playwright test --list` |
+| E2E 文件 | 20 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
+| Playwright 可收集用例 | 266 | `playwright test --list` |
 
 认证边界门禁已覆盖上述 303 个端点：296 个必须认证，7 个匿名端点均在
 `scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
@@ -49,6 +49,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 中 | 题单测试 helper 仍写已移除 `ProblemList.schoolId` | 改为通过 `School.organizationId` 写入 `scope/organizationId` |
 | 高 | 多个局部路由把团队不存在、账号未绑定、导入批次不存在、非法提交 ID 和缺失拉题任务转换为 500 | 统一已知客户端错误为 400/403/404/409；六角色 × 303 端点共 1818 次请求无 5xx，预期 4xx 同时从 error 日志降噪 |
 | 高 | Judge E2E 在全新隔离库中没有评测配置和测试数据，过去依赖前序残留才通过 | Seed 显式写入独立 `test-results/testdata`、ACM 配置、文件元数据和校园 `organizationId`；全新 schema Judge 8/8、Judge + Hack 联合 9/9 |
+| 中 | 活动题面矩阵按官方语言/格式正确合并各题，但共享行标题误用第一道题标题，视觉上像把 A 题题面分配给 B/C/D | 官方行改为“官方中文/Official English/官方题面”通用标签；活动选择、参与者读取、编辑 revision、陈旧写入 409 和活动内创建 404 的真实 API + 页面 E2E 通过 |
 
 隔离 Judge/Hack 修复提交 `da24952` 已按 preview/canary/promote 部署为 `yl9YyYjjo3cSTnOQUGMvB`；
 3000/3002 健康、统一监控 healthy，3000 匿名 303/303 矩阵零失败。
@@ -138,12 +139,15 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
   `dy1igmvi3TtWEAwIDKzlN` 已通过候选/提升健康检查，Server/Judge 已重启。
 - Web 单元测试当前 34/34 通过；全量 Server 的旧模型测试迁移已完成，不再保留“旧套件待迁移”例外。
 - E2E 使用独立 `e2e` schema、3100/3102 和独立存储；重置脚本拒绝任何不含 `schema=e2e` 的数据库。
+- 比赛题目范围重测已覆盖管理员权限、普通用户 403、活动中任务跳过、远程归档排除和其他题目不变；
+  活动题面快照已覆盖选择、参与者读取、活动内编辑、不可变 revision、陈旧写入和禁止活动内创建。
 
 ## 未完成审计
 
 - 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 303 个 HTTP 端点的匿名门禁和六角色无 5xx 健壮性矩阵已完成；本人/同组织/跨组织/管理员的资源所有权语义矩阵仍需继续扩展。
-- 文件上传、本地 Judge 和有效 Hack 入库/历史不重测已在隔离 E2E 复验；外部归档、比赛重测、题面快照写流程和比赛三赛制的破坏性闭环仍需补齐。
+- 文件上传、本地 Judge、有效 Hack 入库/历史不重测、比赛重测和题面快照写流程已在隔离 E2E 复验；
+  外部归档同步入口和比赛三赛制的完整破坏性闭环仍需补齐。
 - 外部告警通道、隔离环境写入负载、容量上限和长稳测试尚未完成。
 - 生产进程仍为优化预览与 watch 组合；正式 systemd/PM2 尚未启用。Nginx 当前只提供 HTTP，尚无域名/TLS；
   Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。

@@ -28,7 +28,12 @@ async function currentSet(trainingProblemId: string) {
 
 function livePublicOption(option: ContentOption, managerId: string) {
   const author = option.authorUsername || 'System'
-  const name = option.title || option.fileName || (option.language === 'zh' ? '官方中文' : option.language === 'en' ? 'Official English' : '官方题面')
+  // Canonical rows intentionally span the same language/format across every
+  // problem. Their label must describe that shared row instead of borrowing
+  // the first problem's title and making the other cells look misassigned.
+  const name = option.sourceType === 'canonical'
+    ? option.language === 'zh' ? '官方中文' : option.language === 'en' ? 'Official English' : '官方题面'
+    : option.title || option.fileName || '用户题面'
   const groupKey = option.sourceType === 'canonical'
     ? `canonical:${option.language || 'none'}:${option.format}`
     : `user:${option.authorUserId}:${name.normalize('NFKC').toLocaleLowerCase('zh-CN')}:${option.language || 'none'}:${option.format}`

@@ -93,6 +93,7 @@ describe('VJudge 式多题面版本与活动快照', () => {
     const matrix = await client.get(`/api/trainings/${training.id}/statement-management`)
     const canonical = matrix.body.data.problems[0].options.find((item: any) => item.sourceType === 'canonical')
     expect(canonical).toBeTruthy()
+    expect(canonical.name).toBe('官方中文')
     const second = await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [{
       trainingProblemId: tp.id,
       visibleOptionKeys: [`user:${versionId}`, canonical.key],
