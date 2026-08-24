@@ -10,6 +10,10 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 修复数据库自动备份链路仍指向已废弃 `/home/ecs-user/oi-manager` 的问题。新版脚本默认写入
+  `/data/backups/oi-manager/automatic`，启用 `pipefail`、单实例锁、数据库就绪检查、同容器版本
+  `pg_restore -l` 校验、临时文件原子提升和仅限自动备份目录的 7 天保留策略；新增幂等 cron 安装脚本。
+
 - 收紧通用文件 API 的存储与权限边界：物理路径改用 `path.relative` 判断是否真正位于
   `STORAGE_ROOT` 内，硬删除也复用同一安全解析；团队/比赛文件只允许当前工作区对应作用域、
   当前校园且状态为 `active` 的成员访问，管理操作还要求 owner/admin。全局管理员不再绕过普通

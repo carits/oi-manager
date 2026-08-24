@@ -6,6 +6,25 @@ source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime 
 
 ---
 
+## Automated database backup
+
+The versioned backup script writes verified PostgreSQL custom-format archives to
+`/data/backups/oi-manager/automatic` by default. It uses a non-blocking lock, an atomic temporary file,
+`pg_isready`, and `pg_restore -l` verification before publishing the archive. Retention only deletes matching
+automatic `.dump` files in that exact directory; migration/pre-change backups elsewhere are untouched.
+
+```bash
+cd /data/oi-manager-response-refactor
+bash -n scripts/backup-db.sh scripts/install-backup-cron.sh
+scripts/backup-db.sh
+scripts/install-backup-cron.sh
+crontab -l
+tail -n 50 /data/backups/oi-manager/automatic/backup.log
+```
+
+Default schedule is daily at 03:00. Override with `BACKUP_SCHEDULE`, `BACKUP_DIR` and
+`BACKUP_KEEP_DAYS` when provisioning. A zero-byte or unverified archive is never promoted to the final filename.
+
 # 运行手册
 
 当前服务器项目目录为 `/data/oi-manager-response-refactor`，运行的是开发环境。
