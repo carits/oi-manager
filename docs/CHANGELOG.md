@@ -13,6 +13,8 @@ source_of_truth: Git history
 - 新增统一服务监测与幂等 cron 安装器，覆盖 3000/3001/3002、go-judge 5050、PostgreSQL、当前
   Next.js BUILD_ID、根盘/数据盘占用和自动备份新鲜度；失败返回非零，状态变化写入状态文件，并预留
   `MONITOR_ALERT_COMMAND` 外部告警钩子。
+- 监测提交 `1292dca` 已实装：在线全依赖巡检返回 healthy，故障注入将 go-judge 指向关闭端口时
+  正确返回非零并记录明确原因；当前用户 cron 每 5 分钟运行，健康重复日志保持静默。
 
 - 修复数据库自动备份链路仍指向已废弃 `/home/ecs-user/oi-manager` 的问题。新版脚本默认写入
   `/data/backups/oi-manager/automatic`，启用 `pipefail`、单实例锁、数据库就绪检查、同容器版本
