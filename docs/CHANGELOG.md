@@ -16,6 +16,8 @@ source_of_truth: Git history
 - Judge 增加独立 Vitest 配置，只收集 `src/tests` 下的 TypeScript 测试，避免生产构建目录
   `dist` 中的 CommonJS 测试副本被二次收集而导致伪失败。验证包括 Server Hack 4/4、Judge
   6/6 以及 Server/Judge/Web TypeScript 检查。
+- 修复提交 `851ca0e` 已推送并部署为预览构建 `rKIqHKJvX7wNvf2ibf5gW`；3000 候选与
+  提升后健康检查、Server/Judge 重启、Python3 沙箱镜像和 25/25 数据库迁移状态均通过。
 
 - 普通教师 Edge 权限审计覆盖校园全部一级模块及团队、比赛、题目、提交动态详情；修复非比赛管理员直接进入
   题面选择时永久加载并重复弹出 403 的问题，现在一次提示后返回明确的活动详情路径。
