@@ -17,6 +17,8 @@ source_of_truth: Git history
 - 上传除扩展名、客户端 MIME 和大小外新增内容签名检查，覆盖 JPEG/PNG/GIF/WebP、PDF、
   ZIP/RAR/7z 与文本二进制伪装。新增 6 项回归，覆盖相邻目录前缀穿越、伪造 PNG、跨校园团队、
   失效成员、管理员越权和软删除元数据；Server 类型、303 端点认证静态门禁和运行时匿名矩阵通过。
+- 文件存储安全提交 `f6ddc95` 已部署为公网构建 `gRRkDA9MqSWR-StqiXCOf`；3000/3002 健康检查
+  与两套 303/303 匿名接口矩阵通过，Server/Judge 重启正常。
 
 - 修复校园提交只记录 `workspaceScope=campus`、未记录具体组织导致的多校园串读风险。`Submission` 新增
   `organizationId`；题库提交和活动提交在创建时固化请求/活动组织，列表、题目记录与详情按当前组织过滤。
