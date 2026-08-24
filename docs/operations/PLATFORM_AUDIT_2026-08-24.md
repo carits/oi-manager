@@ -52,6 +52,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 中 | 活动题面矩阵按官方语言/格式正确合并各题，但共享行标题误用第一道题标题，视觉上像把 A 题题面分配给 B/C/D | 官方行改为“官方中文/Official English/官方题面”通用标签；活动选择、参与者读取、编辑 revision、陈旧写入 409 和活动内创建 404 的真实 API + 页面 E2E 通过 |
 | 高 | Codeforces 单题归档可无界翻页，远端 HTTP/API 失败又被当作空成功，既可能放大资源消耗，也会误导用户 | 单次限制最近 1000 条；参数先行校验；远端失败返回稳定 502。新增 4 项服务端测试与真实前端归档流程，确认幂等且归档不进入 Judge、排名或活动状态 |
 
+归档修复提交 `1dcf362` 已按 preview/canary/promote 部署为 `BWcB26mt5NrhD5un0to-E`；3000/3002
+匿名端点矩阵各 303/303，统一服务监控 healthy。
+
 隔离 Judge/Hack 修复提交 `da24952` 已按 preview/canary/promote 部署为 `yl9YyYjjo3cSTnOQUGMvB`；
 3000/3002 健康、统一监控 healthy，3000 匿名 303/303 矩阵零失败。
 | 中 | 排行榜提交列表叠加详情弹窗时出现页面与弹窗两个滚动条，且按一次 Escape 会关闭两层 | Modal 同时锁定 `html/body`，仅最上层处理 Escape/Tab；长代码嵌套弹窗 E2E 已通过 |
