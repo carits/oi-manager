@@ -10,6 +10,13 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 迁移已退役的学校比赛测试契约：删除不存在的 `/api/schools/:schoolId/contests`、`isSchoolMember`、
+  `isSchoolContestAdmin` 和 `Training.schoolId` 断言，改测当前组织活动接口、`organizationId` 所有权、
+  active 成员、团队可见比赛、严格管理员工作区、创建权限及 OI 赛中脱敏。当前比赛套件 17/17，
+  文件/组织权限关联回归 19/19 通过。
+- 测试数据库清理由逐表 66 次 `TRUNCATE ... CASCADE` 改为一次多表 `TRUNCATE ... RESTART IDENTITY
+  CASCADE`，保持每例隔离和平台夹具重建不变；单例固定清理耗时由约 4.6 秒降至约 1.0 秒。
+
 - 新增统一服务监测与幂等 cron 安装器，覆盖 3000/3001/3002、go-judge 5050、PostgreSQL、当前
   Next.js BUILD_ID、根盘/数据盘占用和自动备份新鲜度；失败返回非零，状态变化写入状态文件，并预留
   `MONITOR_ALERT_COMMAND` 外部告警钩子。

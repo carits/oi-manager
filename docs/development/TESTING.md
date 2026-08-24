@@ -5,6 +5,13 @@ last_verified: 2026-07-30
 source_of_truth: Vitest configs, apps/server/tests, package scripts
 ---
 
+## Server database isolation
+
+Server tests use the PostgreSQL `test` schema and remain serial. After every test, the harness issues one multi-table
+`TRUNCATE ... RESTART IDENTITY CASCADE`, then recreates the platform fixture. Do not restore the historical loop that
+truncated each table separately: it traversed the same foreign-key graph 66 times and added about 4.5 seconds to every
+test, including pure unit tests. Never point `TEST_DATABASE_URL` at the production `public` schema.
+
 # 单元与集成测试
 
 ## 数据库隔离
@@ -61,4 +68,3 @@ pnpm --filter server exec vitest run tests/security-boundaries.test.ts
 - API 客户端正确处理 JSON、文本、空响应、HTTP 错误、超时和断网。
 
 全页面和业务闭环由[UI E2E](UI_E2E.md)覆盖。
-

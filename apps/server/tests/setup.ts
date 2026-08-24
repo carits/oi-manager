@@ -5,6 +5,7 @@ const PLATFORM_ORGANIZATION_ID = 'platform-organization-00000000'
 const PLATFORM_SCHOOL_ID = 'platform-school-00000000'
 const PLATFORM_PRINCIPAL_USER_ID = 'platform-principal-user-placeholder'
 const PLATFORM_MEMBERSHIP_ID = 'platform-principal-membership-placeholder'
+let cleanupTableList = ''
 
 // 测试夹具必须跟随当前 Prisma schema：User 不再直接关联 schoolId，
 // 校园关系通过 OrganizationMembership 与 OrganizationTeacherProfile 表达。
@@ -58,23 +59,25 @@ async function ensurePlatformFixture() {
 
 beforeAll(async () => {
   await prisma.$connect()
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename
+    FROM pg_tables
+    WHERE schemaname = current_schema()
+      AND tablename <> '_prisma_migrations'
+    ORDER BY tablename
+  `
+  cleanupTableList = tables
+    .map(({ tablename }) => `"${tablename.replaceAll('"', '""')}"`)
+    .join(', ')
   await ensurePlatformFixture()
 })
 
 afterEach(async () => {
-  const cleanupSql = [
-    'DO $$',
-    'DECLARE table_record RECORD;',
-    'BEGIN',
-    '  FOR table_record IN',
-    '    SELECT tablename FROM pg_tables',
-    '    WHERE schemaname = current_schema() AND tablename <> \'_prisma_migrations\'',
-    '  LOOP',
-    '    EXECUTE format(\'TRUNCATE TABLE %I.%I CASCADE\', current_schema(), table_record.tablename);',
-    '  END LOOP;',
-    'END $$;',
-  ].join('\n')
-  await prisma.$executeRawUnsafe(cleanupSql)
+  if (!cleanupTableList) throw new Error('Test cleanup table list was not initialized')
+  // One multi-table TRUNCATE resolves all foreign-key relationships together.
+  // The old per-table CASCADE loop repeatedly traversed the same 66-table graph
+  // and added roughly 4.5 seconds to every test, including pure unit tests.
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${cleanupTableList} RESTART IDENTITY CASCADE`)
   await ensurePlatformFixture()
 })
 

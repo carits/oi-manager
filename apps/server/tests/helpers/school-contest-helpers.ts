@@ -173,6 +173,12 @@ export async function createTestSubmission(options: {
     createdAt,
   } = options
 
+  const [training, trainingProblem] = await Promise.all([
+    prisma.training.findUniqueOrThrow({ where: { id: trainingId }, select: { organizationId: true, scope: true } }),
+    trainingProblemId
+      ? prisma.trainingProblem.findUnique({ where: { id: trainingProblemId }, select: { problemId: true } })
+      : Promise.resolve(null),
+  ])
   const submission = await prisma.submission.create({
     data: {
       userId,
@@ -188,7 +194,10 @@ export async function createTestSubmission(options: {
       trainingId,
       trainingProblemId,
       submitScope,
-      submitMethod: 'robot',
+      submitMethod: 'local',
+      workspaceScope: training.scope,
+      organizationId: training.organizationId,
+      problemInternalId: trainingProblem?.problemId ?? null,
       isGlobalVisible: submitScope === 'contest' ? false : true,
       ojRemoteId: null,
       cases: cases ?? JSON.stringify([{ status: 'accepted', time: 100, memory: 1024 }]),
