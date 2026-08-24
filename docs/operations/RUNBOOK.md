@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-19
+last_verified: 2026-08-24
 source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints
 
 ---
@@ -42,6 +42,24 @@ The cron installer runs every five minutes and suppresses repeated healthy lines
 trusted local command when an external mail/webhook integration is provisioned; it receives `MONITOR_STATUS` and
 `MONITOR_MESSAGE` and is invoked only when the state changes. No external alert channel is configured on the current
 development server, so cron failures are currently retained in the local monitor log.
+
+## Controlled load smoke
+
+`scripts/load-smoke.sh` provides a bounded read-only concurrency check. For safety it only accepts the explicitly
+listed loopback URLs on ports `3000` and `3002`, rejects more than 5,000 requests or concurrency above 100, and
+never targets login mutations, submissions, Judge queues or other write operations.
+
+```bash
+pnpm load:smoke
+LOAD_REQUESTS=1000 LOAD_CONCURRENCY=25 \
+  LOAD_URL=http://127.0.0.1:3000/api/platform-bindings/platforms pnpm load:smoke
+LOAD_REQUESTS=300 LOAD_CONCURRENCY=15 \
+  LOAD_URL=http://127.0.0.1:3000/login pnpm load:smoke
+```
+
+The output includes total/success/failed counts, elapsed time, throughput, average, maximum, P50 and P95 latency.
+Run the service monitor and inspect application logs after each load smoke. This is a bounded operational smoke,
+not a production capacity claim or a substitute for an isolated soak test.
 
 # 运行手册
 

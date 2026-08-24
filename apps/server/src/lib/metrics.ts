@@ -73,8 +73,10 @@ function normalizePath(method: string, path: string): string {
   normalized = normalized.replace(/\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '/:id')
   // 匹配纯数字 ID
   normalized = normalized.replace(/\/\d+/g, '/:id')
-  // 匹配其他可能的 ID（字母数字组合，长度 > 10）
-  normalized = normalized.replace(/\/[a-zA-Z0-9_-]{10,}/g, '/:id')
+  // 匹配项目中带稳定资源前缀的历史字符串 ID。不要按长度替换
+  // 任意路由段，否则 platform-bindings、submission-users 等静态名称
+  // 会被错误聚合为 :id，令端点指标失去意义。
+  normalized = normalized.replace(/\/(?:org|team|user|problem|school|membership|file)_[a-zA-Z0-9_-]+/gi, '/:id')
 
   return `${method}:${normalized}`
 }

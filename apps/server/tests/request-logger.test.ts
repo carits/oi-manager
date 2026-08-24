@@ -28,4 +28,14 @@ describe('requestLogger', () => {
       })
     ])
   })
+
+  it('keeps long static route segments while normalizing resource IDs', () => {
+    metrics.recordEndpoint('GET', '/api/platform-bindings/platforms', 5, true)
+    metrics.recordEndpoint('GET', '/api/organizations/org_school-default/members', 7, true)
+
+    expect(metrics.getEndpointSummary().map(item => item.endpoint)).toEqual([
+      'GET:/api/platform-bindings/platforms',
+      'GET:/api/organizations/:id/members'
+    ])
+  })
 })
