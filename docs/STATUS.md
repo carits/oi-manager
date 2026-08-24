@@ -128,6 +128,8 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   `rKIqHKJvX7wNvf2ibf5gW`；客观题不再暴露或允许启用 Hack，Judge 测试不再收集 `dist`。
 - 2026-08-24 隐藏原题身份标签与时间单位修复 `f2acba5` 已部署，当前公网预览构建为
   `AehXHfPqGZHMu5vpiCKWx`；Edge 已复验 1158 题目列表和题面，无缺失标题、秒单位误标或横向溢出。
+- 2026-08-24 活动附件空状态与评测筛选统一修复 `933cb26` 已部署，当前公网预览构建为
+  `yAOIk_SAEjxP3QmmqzxiF`；Edge 已复验“暂无附件”和包含 OLE/PE/队列状态的 16 项结果筛选。
 - 开发服务器当前运行题目级 ACM Hack 功能提交 `44ad7c4`、兼容修复 `f3a56fc` 和详情收口
   `a36c1f8`，公网优化预览构建为 `ubx1GgM3v7m0hPeZKng7g`，公网优化预览为
   `http://47.99.222.76:3000`，API 为 `3002`；

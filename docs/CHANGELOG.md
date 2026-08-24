@@ -22,6 +22,8 @@ source_of_truth: Git history
 - 比赛评测记录筛选改为复用全局唯一 `JUDGE_RESULT_OPTIONS` 与 `LANGUAGE_OPTIONS`，补齐 PE、OLE、
   远程不可用、Judge 失败、未知错误、提交失败和完整语言集合；全局状态集合保留旧 `pending` 兼容。
   Web 单元测试增至 31/31，类型检查和 UI 状态契约通过。
+- 修复提交 `933cb26` 已推送并部署为预览构建 `yAOIk_SAEjxP3QmmqzxiF`；真实 Edge 确认附件页显示
+  “暂无附件”，评测筛选完整显示 16 个结果选项（含 OLE/PE/Queuing/Judging）且页面无横向溢出。
 
 - 收紧题目级 ACM Hack 的题型边界：仅传统源码批处理题 `default` 与历史兼容名称
   `standard` 可以启用；客观题 `objective` 不再出现在可启用状态，题目详情接口也不会对
