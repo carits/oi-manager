@@ -25,6 +25,24 @@ tail -n 50 /data/backups/oi-manager/automatic/backup.log
 Default schedule is daily at 03:00. Override with `BACKUP_SCHEDULE`, `BACKUP_DIR` and
 `BACKUP_KEEP_DAYS` when provisioning. A zero-byte or unverified archive is never promoted to the final filename.
 
+## Service monitor
+
+`scripts/monitor-services.sh` checks the optimized preview (`3000`), HMR (`3001`), API (`3002`), go-judge
+(`5050`), PostgreSQL readiness, the currently served Next.js build, root/data disk usage and automatic-backup age.
+It exits non-zero on any failure and records state changes in `.run/service-monitor.state`.
+
+```bash
+pnpm monitor
+pnpm monitor:install
+crontab -l
+tail -n 50 /data/backups/oi-manager/monitor.log
+```
+
+The cron installer runs every five minutes and suppresses repeated healthy lines. Set `MONITOR_ALERT_COMMAND` to a
+trusted local command when an external mail/webhook integration is provisioned; it receives `MONITOR_STATUS` and
+`MONITOR_MESSAGE` and is invoked only when the state changes. No external alert channel is configured on the current
+development server, so cron failures are currently retained in the local monitor log.
+
 # 运行手册
 
 当前服务器项目目录为 `/data/oi-manager-response-refactor`，运行的是开发环境。

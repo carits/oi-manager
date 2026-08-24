@@ -10,6 +10,10 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 新增统一服务监测与幂等 cron 安装器，覆盖 3000/3001/3002、go-judge 5050、PostgreSQL、当前
+  Next.js BUILD_ID、根盘/数据盘占用和自动备份新鲜度；失败返回非零，状态变化写入状态文件，并预留
+  `MONITOR_ALERT_COMMAND` 外部告警钩子。
+
 - 修复数据库自动备份链路仍指向已废弃 `/home/ecs-user/oi-manager` 的问题。新版脚本默认写入
   `/data/backups/oi-manager/automatic`，启用 `pipefail`、单实例锁、数据库就绪检查、同容器版本
   `pg_restore -l` 校验、临时文件原子提升和仅限自动备份目录的 7 天保留策略；新增幂等 cron 安装脚本。
