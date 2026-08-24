@@ -49,6 +49,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 中 | 题单测试 helper 仍写已移除 `ProblemList.schoolId` | 改为通过 `School.organizationId` 写入 `scope/organizationId` |
 | 高 | 多个局部路由把团队不存在、账号未绑定、导入批次不存在、非法提交 ID 和缺失拉题任务转换为 500 | 统一已知客户端错误为 400/403/404/409；六角色 × 303 端点共 1818 次请求无 5xx，预期 4xx 同时从 error 日志降噪 |
 | 高 | Judge E2E 在全新隔离库中没有评测配置和测试数据，过去依赖前序残留才通过 | Seed 显式写入独立 `test-results/testdata`、ACM 配置、文件元数据和校园 `organizationId`；全新 schema Judge 8/8、Judge + Hack 联合 9/9 |
+
+隔离 Judge/Hack 修复提交 `da24952` 已按 preview/canary/promote 部署为 `yl9YyYjjo3cSTnOQUGMvB`；
+3000/3002 健康、统一监控 healthy，3000 匿名 303/303 矩阵零失败。
 | 中 | 排行榜提交列表叠加详情弹窗时出现页面与弹窗两个滚动条，且按一次 Escape 会关闭两层 | Modal 同时锁定 `html/body`，仅最上层处理 Escape/Tab；长代码嵌套弹窗 E2E 已通过 |
 | 高 | 学生直接输入 `/org/:id/management`、`problems` 可停留在受限 URL；组织侧栏部分链接是相对地址 | 学生模块白名单增加客户端强制返回概览；侧栏统一从已解析配置生成绝对组织链接 |
 | 中 | `/account/*` 继续使用相对校园导航，Next 预取多个不存在的 `/account/*` 子路由并产生 404 | 账号中心统一使用绝对个人导航；全角色真实点击巡检通过 |
