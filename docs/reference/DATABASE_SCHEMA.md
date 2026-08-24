@@ -51,7 +51,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `ProblemStatement` | 以 Prisma schema 为准 |
 | `School` | 以 Prisma schema 为准 |
 | `SchoolProblemList` | 以 Prisma schema 为准 |
-| `Submission` | 以 Prisma schema 为准 |
+| `Submission` | 普通提交；以 `workspaceScope + organizationId` 固化个人/具体校园归属，活动提交另关联 Training |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |
 | `TeamMember` | 以 Prisma schema 为准 |

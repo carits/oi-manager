@@ -48,7 +48,11 @@ submissionsRouter.get('/', authenticate, async (req, res) => {
     // 全部工作区以及进行中比赛暂未全局公开的提交。
     const adminUser = isAdmin(user.role)
     const where: any = {
-      ...(adminUser ? {} : { isGlobalVisible: true, workspaceScope }),
+      ...(adminUser ? {} : {
+        isGlobalVisible: true,
+        workspaceScope,
+        organizationId: workspaceScope === 'campus' ? user.organizationId || '__missing_organization__' : null,
+      }),
     }
 
     // 管理员始终是全平台视图；scope 仅作为前端展示元数据，不参与权限降级。
@@ -232,7 +236,14 @@ submissionsRouter.get('/:id', authenticate, async (req, res) => {
       if (training) hasContestManagerAccess = await canManageTraining(user.userId, training)
     }
     const adminUser = isAdmin(user.role)
-    if (!submission || (!adminUser && !hasContestManagerAccess && submission.workspaceScope !== getResourceScope(user))) {
+    const workspaceScope = getResourceScope(user)
+    if (
+      !submission
+      || (!adminUser && !hasContestManagerAccess && (
+        submission.workspaceScope !== workspaceScope
+        || (workspaceScope === 'campus' && submission.organizationId !== user.organizationId)
+      ))
+    ) {
       return res.status(404).json({
         success: false,
         message: '提交记录不存在',
@@ -388,13 +399,18 @@ submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
         problemId: true,
         userId: true,
         workspaceScope: true,
+        organizationId: true,
       },
     })
 
+    const user = (req as any).user
+    const workspaceScope = getResourceScope(user)
+
     if (
       !submission
-      || submission.workspaceScope !== getResourceScope((req as any).user)
-      || (isPersonalContext((req as any).user) && submission.userId !== (req as any).user.userId)
+      || submission.workspaceScope !== workspaceScope
+      || (workspaceScope === 'campus' && submission.organizationId !== user.organizationId)
+      || (!isAdmin(user.role) && submission.userId !== user.userId)
     ) {
       return res.status(404).json({ success: false, message: '提交记录不存在' })
     }

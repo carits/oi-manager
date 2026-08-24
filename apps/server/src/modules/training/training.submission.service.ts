@@ -2,7 +2,13 @@ import { prisma } from '../../prisma'
 
 export interface QueuedTrainingSubmissionInput {
   userId: string
-  training: { id: number; scope: string; type: string }
+  training: {
+    id: number
+    scope: string
+    type: string
+    organizationId?: string | null
+    Team?: { organizationId: string | null } | null
+  }
   trainingProblem: { id: string; Problem: { id: string; platform: string; problemId: string } }
   language: string
   code: string
@@ -17,6 +23,9 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
     data: {
       userId: input.userId,
       workspaceScope: input.training.scope,
+      organizationId: input.training.scope === 'campus'
+        ? input.training.organizationId || input.training.Team?.organizationId || null
+        : null,
       oj: input.trainingProblem.Problem.platform,
       problemId: input.trainingProblem.Problem.problemId,
       language: input.language,

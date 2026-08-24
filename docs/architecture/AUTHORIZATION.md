@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-21
+last_verified: 2026-08-24
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -50,6 +50,17 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 `organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；
 `schoolId` 是 `School.id`，仅在组织具有关联学校时返回。二者不能互换。
+
+### 提交组织归属
+
+校园提交同时保存 `workspaceScope=campus` 与创建时的 `organizationId`；个人提交的
+`organizationId` 为 `null`。校园评测列表、题目提交列表、详情、通用重评和远程代码重新抓取都必须
+匹配当前请求组织，不能只按“提交者目前属于该校园”推断历史提交归属。这样同一账号加入多个校园时，
+在 B 校产生的提交不会出现在 A 校教师或该账号的 A 校工作区中。
+
+通用重评与重新抓取只允许提交本人；比赛管理者使用活动范围重测接口，全局管理员继续使用独立管理入口。
+历史校园提交依次按活动组织、校内题组织和唯一有效成员关系回填；无法确定的多组织历史记录保持空值并从
+校园列表隐藏，禁止猜测归属。
 
 ## 权限矩阵
 

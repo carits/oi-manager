@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate, getResourceScope, isPersonalContext } from '../middleware/auth'
+import { authenticate, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
 import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
 import { rejudgeSubmission } from '../ws/judge'
@@ -64,6 +64,7 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
           data: {
             userId,
             workspaceScope: getResourceScope(req.user),
+            organizationId: req.user.organizationId || null,
             oj: problem.platform,
             problemId: problem.problemId,
             problemInternalId: problem.id,
@@ -113,12 +114,15 @@ submitRouter.post('/rejudge', authenticate, async (req: any, res) => {
     }
     const submission = await prisma.submission.findUnique({
       where: { id: submissionId },
-      select: { userId: true, workspaceScope: true },
+      select: { userId: true, workspaceScope: true, organizationId: true },
     })
-    if (!submission || submission.workspaceScope !== getResourceScope(req.user)) {
-      return res.status(404).json({ success: false, message: '提交记录不存在' })
-    }
-    if (getResourceScope(req.user) === 'personal' && submission.userId !== req.user.userId) {
+    const workspaceScope = getResourceScope(req.user)
+    if (
+      !submission
+      || submission.workspaceScope !== workspaceScope
+      || (workspaceScope === 'campus' && submission.organizationId !== req.user.organizationId)
+      || (!isAdmin(req.user.role) && submission.userId !== req.user.userId)
+    ) {
       return res.status(404).json({ success: false, message: '提交记录不存在' })
     }
     return res.json(await rejudgeSubmission(submissionId))

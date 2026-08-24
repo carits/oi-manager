@@ -68,7 +68,10 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       submitMethod: method,
     })
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await prisma.training.findUnique({
+      where: { id },
+      include: { Team: { select: { organizationId: true } } },
+    })
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }

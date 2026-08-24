@@ -665,6 +665,7 @@ model Organization {
   SchoolProblemList SchoolProblemList[]
   Team Team[]
   Training Training[]
+  Submission Submission[]
 
   @@index([type, status])
 }
@@ -897,12 +898,14 @@ model Submission {
   judgeStarted      DateTime?
   submitScope       String     @default("problem")
   workspaceScope    String     @default("campus")
+  organizationId    String?
   trainingId        Int?
   trainingProblemId String?
   contestId         Int?
   contestProblemId  String?
   OjAccount         OjAccount? @relation(fields: [ojAccountId], references: [id])
   Training          Training?  @relation(fields: [trainingId], references: [id])
+  Organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   User              User       @relation(fields: [userId], references: [id])
 
   @@index([contestId])
@@ -918,6 +921,7 @@ model Submission {
   @@index([submitScope, contestId])
   @@index([submitScope])
   @@index([workspaceScope])
+  @@index([organizationId, workspaceScope, createdAt])
   @@index([workspaceScope, userId, createdAt])
   @@index([submitScope, trainingId])
   @@index([submitSource])

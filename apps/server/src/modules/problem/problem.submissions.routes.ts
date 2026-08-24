@@ -37,6 +37,7 @@ problemSubmissionsRouter.get('/:id/submissions', authenticate, asyncHandler(asyn
       problemId: problem.problemId,
       userId: (req as any).user?.userId,
       workspaceScope: getResourceScope((req as any).user),
+      organizationId: (req as any).user?.organizationId || null,
       submitScope: 'problem',  // 只显示题库提交，排除训练/比赛提交
     }
 

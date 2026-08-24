@@ -30,6 +30,7 @@ describe('提交记录学校数据隔离', () => {
 
   let submissionA: any
   let submissionB: any
+  let submissionSameUserOtherOrganization: any
 
   beforeEach(async () => {
     // 创建两个学校
@@ -42,6 +43,22 @@ describe('提交记录学校数据隔离', () => {
     studentA = await createTestUser({ role: 'student', schoolId: schoolA.school.id })
     studentB = await createTestUser({ role: 'student', schoolId: schoolB.school.id })
     superAdmin = await createTestUser({ role: 'super_admin', schoolId: 'platform-school-00000000' })
+
+    const secondMembershipId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: secondMembershipId,
+        organizationId: schoolB.school.organizationId!,
+        userId: studentA.user.id,
+        memberRole: 'student',
+        relationType: 'student',
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    })
+    await prisma.organizationStudentProfile.create({
+      data: { id: crypto.randomUUID(), membershipId: secondMembershipId, name: '跨校学生', status: 'active' },
+    })
 
     // 生成 Token
     teacherAToken = generateTestToken({
@@ -97,6 +114,7 @@ describe('提交记录学校数据隔离', () => {
     submissionA = await prisma.submission.create({
       data: {
         userId: studentA.user.id,
+        organizationId: schoolA.school.organizationId,
         problemId: problem.id,
         oj: 'carits',
         language: 'cpp',
@@ -115,6 +133,7 @@ describe('提交记录学校数据隔离', () => {
     submissionB = await prisma.submission.create({
       data: {
         userId: studentB.user.id,
+        organizationId: schoolB.school.organizationId,
         problemId: problem.id,
         oj: 'carits',
         language: 'cpp',
@@ -128,6 +147,23 @@ describe('提交记录学校数据隔离', () => {
         submitScope: 'problem',
         isGlobalVisible: true
       }
+    })
+
+    submissionSameUserOtherOrganization = await prisma.submission.create({
+      data: {
+        userId: studentA.user.id,
+        organizationId: schoolB.school.organizationId,
+        problemId: problem.id,
+        oj: 'carits',
+        language: 'cpp',
+        code: 'int main() { return 2; }',
+        codeLength: 24,
+        submitMethod: 'standard',
+        result: 'wrong_answer',
+        score: 0,
+        submitScope: 'problem',
+        isGlobalVisible: true,
+      },
     })
   })
 
@@ -153,6 +189,7 @@ describe('提交记录学校数据隔离', () => {
     const submissions = res.body.data.submissions || res.body.data || []
     const hasSubmissionB = submissions.some((s: any) => s.id === submissionB.id)
     expect(hasSubmissionB).toBe(false)
+    expect(submissions.some((s: any) => s.id === submissionSameUserOtherOrganization.id)).toBe(false)
   })
 
   it('S3: 学生可以查看本校提交', async () => {
@@ -177,6 +214,14 @@ describe('提交记录学校数据隔离', () => {
     const submissions = res.body.data.submissions || res.body.data || []
     const hasSubmissionB = submissions.some((s: any) => s.id === submissionB.id)
     expect(hasSubmissionB).toBe(false)
+    expect(submissions.some((s: any) => s.id === submissionSameUserOtherOrganization.id)).toBe(false)
+  })
+
+  it('S4.1: 多校园用户不能在当前校园读取自己另一校园的提交详情', async () => {
+    const res = await createAuthenticatedRequest(app, studentAToken)
+      .get(`/api/submissions/${submissionSameUserOtherOrganization.id}`)
+
+    expect(res.status).toBe(404)
   })
 
   it('S5: 超管可以查看所有提交', async () => {
@@ -191,6 +236,27 @@ describe('提交记录学校数据隔离', () => {
     const hasSubmissionB = submissions.some((s: any) => s.id === submissionB.id)
     expect(hasSubmissionA).toBe(true)
     expect(hasSubmissionB).toBe(true)
+  })
+
+  it('S6: 校园用户不能通过通用接口重评其他用户或其他组织的提交', async () => {
+    const teacherRes = await createAuthenticatedRequest(app, teacherAToken)
+      .post('/api/submit/rejudge')
+      .send({ submissionId: submissionA.id })
+    expect(teacherRes.status).toBe(404)
+
+    const crossOrganizationRes = await createAuthenticatedRequest(app, studentAToken)
+      .post('/api/submit/rejudge')
+      .send({ submissionId: submissionSameUserOtherOrganization.id })
+    expect(crossOrganizationRes.status).toBe(404)
+  })
+
+  it('S7: 校园教师不能通过重新抓取接口清空学生代码', async () => {
+    const res = await createAuthenticatedRequest(app, teacherAToken)
+      .post(`/api/submissions/${submissionA.id}/refetch-code`)
+
+    expect(res.status).toBe(404)
+    const unchanged = await prisma.submission.findUniqueOrThrow({ where: { id: submissionA.id } })
+    expect(unchanged.code).toBe('int main() { return 0; }')
   })
 })
 
@@ -269,6 +335,7 @@ describe('提交详情权限', () => {
     submissionA = await prisma.submission.create({
       data: {
         userId: studentA.user.id,
+        organizationId: schoolA.school.organizationId,
         problemId: problem.id,
         oj: 'carits',
         language: 'cpp',
@@ -308,7 +375,7 @@ describe('提交详情权限', () => {
     const res = await createAuthenticatedRequest(app, studentBToken)
       .get(`/api/submissions/${submissionA.id}`)
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
   })
 
   it('D4: 超管可以查看任意提交详情', async () => {
@@ -397,6 +464,7 @@ describe('训练提交隔离', () => {
         title: '测试训练',
         format: 'ioi',
         type: 'training',
+        organizationId: schoolData.school.organizationId,
         startTime: new Date(now - 3600000),
         endTime: new Date(now + 3600000),
         status: 'ongoing',
@@ -423,6 +491,7 @@ describe('训练提交隔离', () => {
     trainingSubmission = await prisma.submission.create({
       data: {
         userId: studentUser.user.id,
+        organizationId: schoolData.school.organizationId,
         problemId: problem.id,
         oj: 'carits',
         language: 'cpp',
@@ -447,6 +516,7 @@ describe('训练提交隔离', () => {
     problemSubmission = await prisma.submission.create({
       data: {
         userId: studentUser.user.id,
+        organizationId: schoolData.school.organizationId,
         problemId: problem.id,
         oj: 'carits',
         language: 'cpp',
@@ -493,6 +563,7 @@ describe('训练提交隔离', () => {
     const submission = await prisma.submission.create({
       data: {
         userId: studentUser.user.id,
+        organizationId: schoolData.school.organizationId,
         problemId: relation.Problem.problemId,
         oj: 'carits',
         language: 'cpp',
