@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-07-30
+last_verified: 2026-08-24
 source_of_truth: Vitest configs, apps/server/tests, package scripts
 ---
 
@@ -34,12 +34,12 @@ postgresql://oi:oi_password@localhost:5432/oi_manager?schema=test
 
 ## 测试分层
 
-| 工作区 | 重点 | 2026-07-30 快照 |
+| 工作区 | 重点 | 2026-08-24 快照 |
 |--------|------|----------------:|
-| Server | 认证、权限、事务、团队、题单、训练、OJ、安全边界 | 444 |
-| Web | 登录角色、API 响应解析等 | 8 |
-| Judge | 心跳协议和客户端行为 | 2 |
-| 合计 | Vitest | 454 |
+| Server | 认证、权限、事务、团队、题单、训练、OJ、安全边界 | 420 |
+| Web | 登录角色、API 响应解析等 | 34 |
+| Judge | 心跳协议、评测与 Hack 判定 | 6 |
+| 合计 | Vitest | 460 |
 
 测试数会随代码变化；命令和覆盖行为比固定数字更重要。
 

@@ -23,6 +23,7 @@ if (parsedUrl.searchParams.get('schema') !== 'e2e') {
 
 const adminUrl = new URL(databaseUrl)
 adminUrl.searchParams.delete('schema')
+const testdataRoot = path.join(rootDir, 'test-results/testdata')
 const runtimeSecrets = {
   accountPassword: randomBytes(24).toString('base64url'),
   jwtSecret: randomBytes(32).toString('base64url'),
@@ -41,6 +42,7 @@ function run(command: string, args: string[]) {
       JUDGE_TOKEN: runtimeSecrets.judgeToken,
       DISABLE_BACKGROUND_JOBS: 'true',
       STORAGE_ROOT: path.join(rootDir, 'test-results/storage'),
+      TESTDATA_DIR: testdataRoot,
     },
     encoding: 'utf8',
     stdio: 'inherit',
@@ -64,6 +66,8 @@ async function main() {
 
   fs.rmSync(path.join(rootDir, 'test-results/storage'), { recursive: true, force: true })
   fs.mkdirSync(path.join(rootDir, 'test-results/storage'), { recursive: true })
+  fs.rmSync(testdataRoot, { recursive: true, force: true })
+  fs.mkdirSync(testdataRoot, { recursive: true })
   fs.writeFileSync(
     path.join(rootDir, 'test-results/e2e-runtime.json'),
     `${JSON.stringify(runtimeSecrets, null, 2)}\n`,

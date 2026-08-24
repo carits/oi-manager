@@ -55,6 +55,7 @@ export default defineConfig({
         DISABLE_BACKGROUND_JOBS: 'true',
         ENABLE_MAINTENANCE_API: 'false',
         STORAGE_ROOT: path.join(resultsDir, 'storage'),
+        TESTDATA_DIR: path.join(resultsDir, 'testdata'),
       },
     },
     {

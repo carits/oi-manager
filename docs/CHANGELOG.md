@@ -10,6 +10,9 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 修复 Judge E2E 的隐藏顺序依赖：全新 `e2e` schema 下原用例因题目没有显式 `judgeConfig/TestdataFile` 而返回 409，过去通过依赖前序残留。隔离种子现在在独立 `test-results/testdata` 写入确定性 ACM 配置和 `1.in/1.out`，校园提交同时补齐 `organizationId`；全新环境 Judge 8/8、Judge + Hack 联合 9/9 通过。
+- 新增题目级 Hack 破坏性 E2E：真实调用 go-judge 编译 STD/Validator，通过独立 WebSocket Hack 队列模拟 `Accepted → Wrong Answer`，验证 `hack_<id>.in/.out` 入库、Hack 点顺序、普通提交数量不变和历史结果不重置。E2E 清单现为 18 个文件、264 条可收集用例。
+
 - 新增六角色认证 API 健壮性矩阵：超级管理员、平台管理员、校长、教师、校园学生和个人学生分别请求文档登记的 303 个端点，共 1818 次请求。首轮定位并修复无效团队、未绑定外部账号、缺失导入批次、非法提交 ID 和不存在的拉题任务被局部 `catch` 错误转换为 500 的问题；修复后六种身份均无 5xx。
 - 已知客户端错误现在统一返回 400/403/404/409；外部团队导入和 OJ 拉题删除不再把预期 4xx 先记录为 `console.error`，避免监控误报。Server 类型构建、定向回归 7/7、全量 37 文件 420/420 和认证矩阵 12/12（含六身份初始化）通过。
 - 认证健壮性修复提交 `a2bb119` 已推送并按 preview build/canary/promote 部署为公网构建 `OP9c7Uk_sz75WSE7etrIz`；3200 候选、3000 提升、3002 API、服务监控及 3000/3002 两套匿名 303/303 矩阵均通过。

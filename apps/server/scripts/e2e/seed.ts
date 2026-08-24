@@ -1,10 +1,15 @@
 import bcrypt from 'bcryptjs'
 import { PrismaClient } from '@prisma/client'
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
 const accountPassword = process.env.E2E_ACCOUNT_PASSWORD
 if (!accountPassword) throw new Error('E2E_ACCOUNT_PASSWORD is required')
+const testdataRoot = process.env.TESTDATA_DIR
+if (!testdataRoot) throw new Error('TESTDATA_DIR is required for the isolated E2E seed')
 
 const parsedUrl = new URL(databaseUrl)
 if (parsedUrl.searchParams.get('schema') !== 'e2e') {
@@ -166,6 +171,13 @@ async function main() {
       ],
     })
 
+    const judgeConfig = JSON.stringify({
+      mode: 'acm',
+      type: 'default',
+      time: '1000ms',
+      memory: '256MB',
+      cases: [{ input: '1.in', output: '1.out' }],
+    })
     await prisma.problem.createMany({
       data: [
         {
@@ -184,6 +196,7 @@ async function main() {
           ownerType: 'teacher',
           ownerId: ids.principal,
           status: 'published',
+          judgeConfig,
         },
         {
           id: ids.secondProblem,
@@ -237,6 +250,32 @@ async function main() {
           ownerType: 'student',
           ownerId: ids.personalStudent,
           status: 'published',
+        },
+      ],
+    })
+    const inputData = '1 1\n'
+    const outputData = '2\n'
+    const problemTestdataDir = path.join(testdataRoot, ids.problem)
+    fs.mkdirSync(problemTestdataDir, { recursive: true })
+    fs.writeFileSync(path.join(problemTestdataDir, '1.in'), inputData, 'utf8')
+    fs.writeFileSync(path.join(problemTestdataDir, '1.out'), outputData, 'utf8')
+    await prisma.testdataFile.createMany({
+      data: [
+        {
+          id: 'e2e-testdata-input',
+          problemId: ids.problem,
+          filename: '1.in',
+          size: Buffer.byteLength(inputData),
+          md5: createHash('md5').update(inputData).digest('hex'),
+          sha256: createHash('sha256').update(inputData).digest('hex'),
+        },
+        {
+          id: 'e2e-testdata-output',
+          problemId: ids.problem,
+          filename: '1.out',
+          size: Buffer.byteLength(outputData),
+          md5: createHash('md5').update(outputData).digest('hex'),
+          sha256: createHash('sha256').update(outputData).digest('hex'),
         },
       ],
     })
@@ -536,6 +575,7 @@ async function main() {
     await prisma.submission.create({
       data: {
         userId: ids.campusStudent,
+        organizationId: ids.organization,
         oj: 'carits',
         problemId: 'E2E-1000',
         problemInternalId: ids.problem,
@@ -574,6 +614,7 @@ async function main() {
     await prisma.submission.create({
       data: {
         userId: ids.campusStudent,
+        organizationId: ids.organization,
         oj: 'carits',
         problemId: 'E2E-1000',
         problemInternalId: ids.problem,
@@ -599,6 +640,7 @@ async function main() {
       data: [
         {
           userId: ids.personalStudent,
+          organizationId: ids.organization,
           oj: 'carits',
           problemId: 'E2E-1001',
           problemInternalId: ids.secondProblem,
@@ -621,6 +663,7 @@ async function main() {
         },
         {
           userId: ids.campusStudent,
+          organizationId: ids.organization,
           oj: 'carits',
           problemId: 'E2E-1001',
           problemInternalId: ids.secondProblem,
@@ -643,6 +686,7 @@ async function main() {
         },
         {
           userId: ids.campusStudent,
+          organizationId: ids.organization,
           oj: 'carits',
           problemId: 'E2E-1001',
           problemInternalId: ids.secondProblem,
@@ -665,6 +709,7 @@ async function main() {
         },
         {
           userId: ids.campusStudent,
+          organizationId: ids.organization,
           oj: 'carits',
           problemId: 'E2E-1002',
           problemInternalId: ids.thirdProblem,
@@ -687,6 +732,7 @@ async function main() {
         },
         {
           userId: ids.campusStudent,
+          organizationId: ids.organization,
           oj: 'carits',
           problemId: 'E2E-1002',
           problemInternalId: ids.thirdProblem,

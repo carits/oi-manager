@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-12
+last_verified: 2026-08-24
 source_of_truth: playwright.config.ts and e2e directory
 ---
 
@@ -18,11 +18,12 @@ Playwright 不复用 `3000/3002` 开发服务：
 | 数据库 | PostgreSQL `schema=e2e` |
 | Next 构建目录 | `.next-e2e` |
 | 文件存储 | `test-results/storage` |
+| 测试数据 | `test-results/testdata` |
 | 后台任务 | `DISABLE_BACKGROUND_JOBS=true` |
 | 维护 API | `ENABLE_MAINTENANCE_API=false` |
 
-`test:ui:prepare` 会验证 URL 明确包含 `schema=e2e`，重建 schema 并写入确定性 fixture。
-它拒绝 `public` 或没有 schema 的数据库。
+`test:ui:prepare` 会验证 URL 明确包含 `schema=e2e`，重建 schema，并重新创建独立文件存储与
+`test-results/testdata` 后写入确定性 fixture。它拒绝 `public` 或没有 schema 的数据库。
 
 ## 角色与数据
 
@@ -67,7 +68,7 @@ pnpm routes:audit
 ```
 
 - `smoke`：Chromium 和 Firefox 的登录、权限、导航与角色核心流程。
-- `test:ui`：109 个页面、1440×900、1280×720、核心 CRUD、文件、Judge 和安全边界。
+- `test:ui`：当前 18 个规格文件、264 条可收集用例，覆盖 1440×900、1280×720、核心 CRUD、文件、Judge、Hack 和安全边界。
 - `headed`：本地可视调试。
 - `live`：手动真实 OJ/Judge 探针，不作为合并门禁。
 - `routes:audit`：扫描前端跳转表达式，生成 `test-results/navigation-static-report.json`；不存在静态路径、缺失动态标识和已知禁止父路径会阻断。
@@ -98,7 +99,9 @@ pnpm exec playwright test e2e/tests/internal-link-audit.spec.ts --project=chromi
 ## Mock 与报告
 
 外部 OJ 默认使用确定性 API Mock；本地模拟 WebSocket 驱动
-`queuing → judging → accepted`。失败时保存 HTML/JSON、截图、视频、trace、控制台
+`queuing → judging → accepted`。Judge 种子必须显式包含 `judgeConfig`、`TestdataFile` 和物理测试数据，
+不得依赖开发目录或前序用例残留。Hack E2E 使用真实 go-judge 编译 STD/Validator，并用独立 WebSocket
+消息验证有效数据入库和历史提交不重测。失败时保存 HTML/JSON、截图、视频、trace、控制台
 异常和失败请求，CI 保留 14 天。
 
 PR 运行冒烟；`main` 推送和每日定时任务运行 Chromium 全量与紧凑视口。真实连通性

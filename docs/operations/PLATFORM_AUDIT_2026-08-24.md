@@ -18,8 +18,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | HTTP 端点 | 303 | `pnpm docs:check` |
 | Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
 | 单元/集成测试文件 | 48 | Server 37、Web 9、Judge 2 |
-| E2E 文件 | 17 | `find e2e -name '*.spec.ts'`；仅统计当前可执行的 E2E 规格文件 |
-| Playwright 可收集用例 | 263 | `playwright test --list` |
+| E2E 文件 | 18 | `find e2e -name '*.spec.ts'`；仅统计当前可执行的 E2E 规格文件 |
+| Playwright 可收集用例 | 264 | `playwright test --list` |
 
 认证边界门禁已覆盖上述 303 个端点：296 个必须认证，7 个匿名端点均在
 `scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
@@ -48,6 +48,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 中 | 旧学校题单/比赛测试继续调用已退役 `/api/schools/*`，产生大量 410 假失败 | 增加明确 410 退役契约；当前组织资源由统一接口、团队接口和浏览器套件覆盖；旧行为用例不再作为现行契约 |
 | 中 | 题单测试 helper 仍写已移除 `ProblemList.schoolId` | 改为通过 `School.organizationId` 写入 `scope/organizationId` |
 | 高 | 多个局部路由把团队不存在、账号未绑定、导入批次不存在、非法提交 ID 和缺失拉题任务转换为 500 | 统一已知客户端错误为 400/403/404/409；六角色 × 303 端点共 1818 次请求无 5xx，预期 4xx 同时从 error 日志降噪 |
+| 高 | Judge E2E 在全新隔离库中没有评测配置和测试数据，过去依赖前序残留才通过 | Seed 显式写入独立 `test-results/testdata`、ACM 配置、文件元数据和校园 `organizationId`；全新 schema Judge 8/8、Judge + Hack 联合 9/9 |
 | 中 | 排行榜提交列表叠加详情弹窗时出现页面与弹窗两个滚动条，且按一次 Escape 会关闭两层 | Modal 同时锁定 `html/body`，仅最上层处理 Escape/Tab；长代码嵌套弹窗 E2E 已通过 |
 | 高 | 学生直接输入 `/org/:id/management`、`problems` 可停留在受限 URL；组织侧栏部分链接是相对地址 | 学生模块白名单增加客户端强制返回概览；侧栏统一从已解析配置生成绝对组织链接 |
 | 中 | `/account/*` 继续使用相对校园导航，Next 预取多个不存在的 `/account/*` 子路由并产生 404 | 账号中心统一使用绝对个人导航；全角色真实点击巡检通过 |
@@ -139,7 +140,7 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 - 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 303 个 HTTP 端点的匿名门禁和六角色无 5xx 健壮性矩阵已完成；本人/同组织/跨组织/管理员的资源所有权语义矩阵仍需继续扩展。
-- 文件上传、外部归档、评测、Hack、重测、题面快照、比赛三赛制的破坏性流程在隔离 E2E 环境复验。
+- 文件上传、本地 Judge 和有效 Hack 入库/历史不重测已在隔离 E2E 复验；外部归档、比赛重测、题面快照写流程和比赛三赛制的破坏性闭环仍需补齐。
 - 外部告警通道、隔离环境写入负载、容量上限和长稳测试尚未完成。
 - 生产进程仍为优化预览与 watch 组合；正式 systemd/PM2 尚未启用。Nginx 当前只提供 HTTP，尚无域名/TLS；
   Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。
