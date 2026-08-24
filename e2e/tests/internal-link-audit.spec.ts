@@ -6,7 +6,7 @@ const organizationBase = '/org/org_school-default'
 const entries: Array<{ role: AuthRole; roots: string[] }> = [
   { role: 'principal', roots: ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings'].map(module => `${organizationBase}/${module}`) },
   { role: 'teacher', roots: ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings'].map(module => `${organizationBase}/${module}`) },
-  { role: 'campusStudent', roots: ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings'].map(module => `${organizationBase}/${module}`) },
+  { role: 'campusStudent', roots: ['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings', 'submissions'].map(module => `${organizationBase}/${module}`) },
   { role: 'personalStudent', roots: ['/personal', '/personal/teams', '/personal/problems', '/personal/contests', '/personal/problem-lists', '/personal/rankings', '/personal/submissions'] },
 ]
 

@@ -17,10 +17,11 @@ import StudentProblemListsPage from '@/components/organization-pages/student/pro
 import TeacherRankingsPage from '@/components/organization-pages/teacher/rankings/page'
 import CampusManagementPage from '@/components/organization-pages/teacher/management/page'
 import StudentRankingsPage from '@/components/organization-pages/student/rating/page'
+import { SubmissionList } from '@/components/submission/SubmissionList'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
 
-const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings'])
+const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'problem-lists', 'rankings', 'submissions'])
 
 export default function OrgPage() {
   const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
@@ -83,5 +84,6 @@ export default function OrgPage() {
   if (module === 'problems' && !student) return <TeacherProblemsPage />
   if (module === 'problem-lists') return student ? <StudentProblemListsPage /> : <TeacherProblemListsPage />
   if (module === 'rankings') return student ? <StudentRankingsPage /> : <TeacherRankingsPage />
+  if (module === 'submissions') return <SubmissionList viewRole={student ? 'student' : 'teacher'} />
   return student ? <StudentHome /> : <TeacherHome />
 }

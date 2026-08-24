@@ -1,36 +1,41 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, type Page, type Response } from '@playwright/test'
+import { expect, type ConsoleMessage, type Page, type Response } from '@playwright/test'
 
 const ignoredConsolePatterns = [
   /Download the React DevTools/,
+  // Next can abort a speculative RSC prefetch when this audit immediately
+  // navigates to another discovered link. It explicitly falls back to a full
+  // browser navigation; the destination is still checked by the same audit.
+  /^Failed to fetch RSC payload for .* Falling back to browser navigation\. TypeError: (?:Failed to fetch|network error)/,
 ]
 
 export interface PageAudit {
   consoleErrors: string[]
   pageErrors: string[]
   failedResponses: string[]
+  stop: () => void
 }
 
 export function watchPage(page: Page): PageAudit {
-  const audit: PageAudit = {
+  const audit = {
     consoleErrors: [],
     pageErrors: [],
     failedResponses: [],
-  }
+  } as PageAudit
 
-  page.on('console', message => {
+  const onConsole = (message: ConsoleMessage) => {
     if (message.type() !== 'error') return
     const text = message.text()
     if (!ignoredConsolePatterns.some(pattern => pattern.test(text))) {
       audit.consoleErrors.push(text)
     }
-  })
+  }
 
-  page.on('pageerror', error => {
+  const onPageError = (error: Error) => {
     audit.pageErrors.push(error.message)
-  })
+  }
 
-  page.on('response', (response: Response) => {
+  const onResponse = (response: Response) => {
     const url = new URL(response.url())
     if (
       url.pathname.startsWith('/api/') &&
@@ -39,7 +44,16 @@ export function watchPage(page: Page): PageAudit {
     ) {
       audit.failedResponses.push(`${response.status()} ${url.pathname}`)
     }
-  })
+  }
+
+  page.on('console', onConsole)
+  page.on('pageerror', onPageError)
+  page.on('response', onResponse)
+  audit.stop = () => {
+    page.off('console', onConsole)
+    page.off('pageerror', onPageError)
+    page.off('response', onResponse)
+  }
 
   return audit
 }
@@ -57,6 +71,7 @@ export async function assertPageHealth(
   audit: PageAudit,
   { checkAccessibility = true }: { checkAccessibility?: boolean } = {},
 ) {
+  audit.stop()
   const body = await page.locator('body').innerText()
   expect(body).not.toMatch(/404|This page could not be found/i)
   expect(body).not.toContain('加载中')

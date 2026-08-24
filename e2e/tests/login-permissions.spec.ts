@@ -44,6 +44,16 @@ test.describe('authenticated permission matrix @smoke', () => {
     await context.close()
   })
 
+  test('student can open the campus submission history linked from the overview', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.campusStudent.storageState })
+    const page = await context.newPage()
+    await page.goto(`${organizationBase}/submissions`)
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/submissions$`))
+    await expect(page.getByRole('heading', { name: '评测记录' })).toBeVisible()
+    await expect(page.getByLabel('用户名')).toHaveCount(0)
+    await context.close()
+  })
+
   test('teacher cannot enter administrator areas', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
