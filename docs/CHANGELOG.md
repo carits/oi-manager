@@ -10,6 +10,10 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 完成第二轮 Server 基线剩余 5 个失败文件迁移：题库/题单使用 `organizationId` 与组织 library key，
+  未授权题单按跨作用域规则返回 404；基础列表改用组织成员、平台组织和当前排名路由；用户一致性改查
+  OrganizationMembership/Profile；团队列表改用 organization/mine。五套定向测试 85/85 通过。
+
 - 迁移事务、功能入口与比赛来源可见性测试：学校/学生事务改测平台组织创建、组织学生创建、负责人转移、
   跨组织回滚、账号状态和校园团队 owner；旧 `/api/schools` 明确断言 410。删除已移除的
   `plannedFeatureResponse` 与 `shouldHideTrainingProblemIdentity` 契约，改测当前钱包权限和

@@ -85,8 +85,8 @@ describe('学校私有题库隔离', () => {
     expect(created.status).toBe(201)
     const problem = await prisma.problem.findUniqueOrThrow({ where: { id: created.body.data.id } })
     expect(problem.libraryScope).toBe('school')
-    expect(problem.libraryKey).toBe(`school:${schoolA.school.id}`)
-    expect(problem.schoolId).toBe(schoolA.school.id)
+    expect(problem.libraryKey).toBe(`organization:${schoolA.school.organizationId}`)
+    expect(problem.organizationId).toBe(schoolA.school.organizationId)
     expect(problem.status).toBe('draft')
     expect(problem.publishedAt).toBeNull()
 
@@ -146,7 +146,7 @@ describe('学校私有题库隔离', () => {
     expect(platformDetail.status).toBe(404)
     expect(superDetail.status).toBe(404)
     expect(personalSchoolList.status).toBe(403)
-    expect(personalSchoolList.body.code).toBe('WORKSPACE_MODE_REQUIRED')
+    expect(personalSchoolList.body.code).toBe('ORGANIZATION_REQUIRED')
   })
 
   it('不同学校可使用相同 OJ 题号，同校重复创建被拒绝', async () => {
@@ -185,13 +185,13 @@ describe('学校私有题库隔离', () => {
 
     expect(firstCopy.status).toBe(201)
     expect(firstCopy.body.data.problem.status).toBe('draft')
-    expect(firstCopy.body.data.problem.schoolId).toBe(schoolA.school.id)
+    expect(firstCopy.body.data.problem.organizationId).toBe(schoolA.school.organizationId)
     expect(firstCopy.body.data.problem.sourceProblemId).toBe(platformProblem.body.data.id)
     expect(duplicateCopy.status).toBe(409)
     expect(duplicateCopy.body.code).toBe('SCHOOL_PROBLEM_EXISTS')
     expect(duplicateCopy.body.data.id).toBe(firstCopy.body.data.problem.id)
     expect(otherSchoolCopy.status).toBe(201)
-    expect(otherSchoolCopy.body.data.problem.schoolId).toBe(schoolB.school.id)
+    expect(otherSchoolCopy.body.data.problem.organizationId).toBe(schoolB.school.organizationId)
   })
 
   it('附件、文件元数据、测试数据与 AI 操作沿用同一学校边界', async () => {
@@ -270,7 +270,7 @@ describe('学校私有题库隔离', () => {
         ownerId: ownerA.user.id,
         ownerType: 'teacher',
         scope: 'campus',
-        schoolId: schoolA.school.id,
+        organizationId: schoolA.school.organizationId,
         ProblemListSection: {
           create: {
             id: sectionId,

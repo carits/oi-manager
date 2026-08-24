@@ -1,273 +1,143 @@
-import { describe, it, expect } from 'vitest'
 import request from 'supertest'
-import { createTestApp } from './helpers/testRequest'
-import { createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
-import { generateTestToken } from './helpers/testToken'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
+import { createTestApp } from './helpers/testRequest'
+import { generateTestToken } from './helpers/testToken'
+import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
 
 const app = createTestApp()
+type TestUser = Awaited<ReturnType<typeof createTestUser>>
 
-describe('Regression Tests - Basic List and Detail', () => {
-  describe('Student List', () => {
-    it('should list students with pagination', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+function tokenFor(user: TestUser) {
+  return generateTestToken({
+    userId: user.user.id,
+    username: user.user.username,
+    role: user.user.role,
+    schoolId: user.schoolId,
+    teacherId: user.teacherId,
+    studentId: user.studentId,
+    adminId: user.adminId,
+  })
+}
 
-      // Create multiple students
-      for (let i = 0; i < 5; i++) {
-        await createTestUser({ role: 'student', schoolId: school.id })
-      }
+describe('current list and detail regressions', () => {
+  let school: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>['school']
+  let principal: TestUser
+  let teacher: TestUser
+  let superAdmin: TestUser
 
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
-
-      const res = await request(app)
-        .get('/api/students?page=1&pageSize=3')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.page).toBe(1)
-      expect(res.body.data.pageSize).toBe(3)
-      expect(res.body.data.data.length).toBeLessThanOrEqual(3)
-    })
-
-    it('should filter students by school', async () => {
-      const { school } = await createTestSchoolWithPrincipal('School A')
-      const { school: schoolB } = await createTestSchoolWithPrincipal('School B')
-
-      await createTestUser({ role: 'student', schoolId: school.id })
-      await createTestUser({ role: 'student', schoolId: schoolB.id })
-
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
-      })
-
-      const res = await request(app)
-        .get(`/api/students?schoolId=${school.id}`)
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      // All returned students should belong to school A
-      res.body.data.data.forEach((student: any) => {
-        expect(student.schoolId).toBe(school.id)
-      })
-    })
-
-    it('should filter students by headTeacherId', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher1, teacherId: teacherId1 } = await createTestUser({ role: 'teacher', schoolId: school.id })
-      const { teacherId: teacherId2 } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      // Create students with different head teachers
-      await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacherId1 })
-      await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacherId2 })
-
-      const token = generateTestToken({
-        userId: teacher1.id,
-        role: 'teacher',
-        username: teacher1.username,
-        teacherId: teacherId1,
-        schoolId: school.id
-      })
-
-      const res = await request(app)
-        .get(`/api/students?headTeacherId=${teacherId1}`)
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-    })
+  beforeEach(async () => {
+    school = (await createTestSchoolWithPrincipal()).school
+    principal = await createTestUser({ role: 'school_principal', schoolId: school.id })
+    teacher = await createTestUser({ role: 'teacher', schoolId: school.id })
+    superAdmin = await createTestUser({ role: 'super_admin' })
   })
 
-  describe('School List', () => {
-    it('should list schools', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      await createTestSchoolWithPrincipal('School 1')
-      await createTestSchoolWithPrincipal('School 2')
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
-      })
-
-      const res = await request(app)
-        .get('/api/schools')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.data.length).toBeGreaterThanOrEqual(2)
-    })
-
-    it('should get school detail', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      const { school } = await createTestSchoolWithPrincipal()
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
-      })
-
-      const res = await request(app)
-        .get(`/api/schools/${school.id}`)
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.id).toBe(school.id)
-    })
+  it('paginates students inside the active organization', async () => {
+    for (let index = 0; index < 5; index += 1) await createTestUser({ role: 'student', schoolId: school.id })
+    const response = await request(app)
+      .get(`/api/organizations/${school.organizationId}/members/students?page=1&pageSize=3`)
+      .set('Authorization', `Bearer ${tokenFor(principal)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+    expect(response.status).toBe(200)
+    expect(response.body.data).toMatchObject({ page: 1, pageSize: 3, total: 5 })
+    expect(response.body.data.data).toHaveLength(3)
   })
 
-  describe('Teacher List', () => {
-    it('should get teacher info via /me', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
-
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
-
-      const res = await request(app)
-        .get('/api/teachers/me')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-    })
+  it('never mixes student profiles from another organization', async () => {
+    const local = await createTestUser({ role: 'student', schoolId: school.id })
+    const otherSchool = (await createTestSchoolWithPrincipal('Other School')).school
+    const remote = await createTestUser({ role: 'student', schoolId: otherSchool.id })
+    const response = await request(app)
+      .get(`/api/organizations/${school.organizationId}/members/students`)
+      .set('Authorization', `Bearer ${tokenFor(principal)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+    const userIds = response.body.data.data.map((item: { userId: string }) => item.userId)
+    expect(userIds).toContain(local.user.id)
+    expect(userIds).not.toContain(remote.user.id)
   })
 
-  describe('User List', () => {
-    it('should list users with pagination', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-
-      // Create multiple users
-      for (let i = 0; i < 5; i++) {
-        await createTestUser({ role: 'student' })
-      }
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
-      })
-
-      const res = await request(app)
-        .get('/api/users?page=1&pageSize=3')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.page).toBe(1)
-      expect(res.body.data.pageSize).toBe(3)
-    })
-
-    it('should filter users by role', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      await createTestUser({ role: 'teacher' })
-      await createTestUser({ role: 'student' })
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
-      })
-
-      const res = await request(app)
-        .get('/api/users?role=teacher')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      res.body.data.users.forEach((user: any) => {
-        expect(user.role).toBe('teacher')
-      })
-    })
-
-    it('should filter users by status', async () => {
-      const { user: admin } = await createTestUser({ role: 'super_admin' })
-      await createTestUser({ role: 'student', status: 'active' })
-      await createTestUser({ role: 'student', status: 'disabled' })
-
-      const token = generateTestToken({
-        userId: admin.id,
-        role: 'super_admin',
-        username: admin.username,
-        adminId: admin.adminId
-      })
-
-      const res = await request(app)
-        .get('/api/users?status=active')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      res.body.data.users.forEach((user: any) => {
-        expect(user.status).toBe('active')
-      })
-    })
+  it('ordinary teachers only list students assigned to their organization membership', async () => {
+    const assigned = await createTestUser({ role: 'student', schoolId: school.id, headTeacherId: teacher.user.id })
+    const unassigned = await createTestUser({ role: 'student', schoolId: school.id })
+    const response = await request(app)
+      .get(`/api/organizations/${school.organizationId}/members/students`)
+      .set('Authorization', `Bearer ${tokenFor(teacher)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+    const userIds = response.body.data.data.map((item: { userId: string }) => item.userId)
+    expect(userIds).toContain(assigned.user.id)
+    expect(userIds).not.toContain(unassigned.user.id)
   })
 
-  describe('Student Rankings', () => {
-    it('should return student rankings sorted by rating', async () => {
-      const { school } = await createTestSchoolWithPrincipal()
-      const { user: teacher, teacherId } = await createTestUser({ role: 'teacher', schoolId: school.id })
+  it('lists and reads organizations only through the super-admin platform route', async () => {
+    const list = await request(app)
+      .get('/api/platform/organizations?page=1&pageSize=10')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+    expect(list.status).toBe(200)
+    expect(list.body.data.data.map((item: { organizationId: string }) => item.organizationId)).toContain(school.organizationId)
 
-      // Create students with different ratings
-      await createTestUser({ role: 'student', schoolId: school.id, rating: 1500 })
-      await createTestUser({ role: 'student', schoolId: school.id, rating: 1200 })
-      await createTestUser({ role: 'student', schoolId: school.id, rating: 1800 })
-
-      const token = generateTestToken({
-        userId: teacher.id,
-        role: 'teacher',
-        username: teacher.username,
-        teacherId,
-        schoolId: school.id
-      })
-
-      const res = await request(app)
-        .get('/api/students/rankings')
-        .set('Authorization', `Bearer ${token}`)
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.data.rankings.length).toBeGreaterThan(0)
-
-      // Verify descending order
-      const ratings = res.body.data.rankings.map((s: any) => s.rating)
-      for (let i = 1; i < ratings.length; i++) {
-        expect(ratings[i - 1]).toBeGreaterThanOrEqual(ratings[i])
-      }
-    })
+    const detail = await request(app)
+      .get(`/api/platform/organizations/${school.organizationId}`)
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+    expect(detail.status).toBe(200)
+    expect(detail.body.data).toMatchObject({ organizationId: school.organizationId, schoolId: school.id })
   })
 
-  describe('Health Check', () => {
-    it('should return healthy status', async () => {
-      const res = await request(app).get('/api/health')
+  it('returns the current organization teacher profile without exposing another organization', async () => {
+    const local = await request(app)
+      .get(`/api/users/${teacher.user.id}/profile?userType=teacher`)
+      .set('Authorization', `Bearer ${tokenFor(principal)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+    expect(local.status).toBe(200)
+    expect(local.body.data).toMatchObject({ id: teacher.user.id, userType: 'teacher' })
 
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-    })
+    const otherSchool = (await createTestSchoolWithPrincipal('Profile Other School')).school
+    const remoteTeacher = await createTestUser({ role: 'teacher', schoolId: otherSchool.id })
+    const remote = await request(app)
+      .get(`/api/users/${remoteTeacher.user.id}/profile?userType=teacher`)
+      .set('Authorization', `Bearer ${tokenFor(principal)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+    expect(remote.status).toBe(404)
+  })
+
+  it('paginates global accounts and applies valid global-role and status filters', async () => {
+    await createTestUser({ role: 'platform_admin', status: 'active' })
+    await createTestUser({ role: 'platform_admin', status: 'disabled' })
+    const response = await request(app)
+      .get('/api/users?page=1&pageSize=10&role=platform_admin&status=active')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+    expect(response.status).toBe(200)
+    expect(response.body.data.users.length).toBeGreaterThan(0)
+    for (const user of response.body.data.users) {
+      expect(user).toMatchObject({ role: 'platform_admin', status: 'active' })
+    }
+  })
+
+  it('sorts organization rating rankings in descending order', async () => {
+    await createTestUser({ role: 'student', schoolId: school.id, rating: 1500 })
+    await createTestUser({ role: 'student', schoolId: school.id, rating: 1200 })
+    await createTestUser({ role: 'student', schoolId: school.id, rating: 1800 })
+    const response = await request(app)
+      .get(`/api/rankings/organizations/${school.organizationId}/rating`)
+      .set('Authorization', `Bearer ${tokenFor(teacher)}`)
+      .set('x-oi-organization-id', school.organizationId!)
+    expect(response.status).toBe(200)
+    const ratings = response.body.data.map((item: { rating: number }) => item.rating)
+    expect(ratings).toEqual([...ratings].sort((left, right) => right - left))
+  })
+
+  it('returns the minimal health response', async () => {
+    const response = await request(app).get('/api/health')
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({ success: true, message: 'OK' })
+  })
+
+  it('keeps the legacy school list retired', async () => {
+    const response = await request(app)
+      .get('/api/schools')
+      .set('Authorization', `Bearer ${tokenFor(superAdmin)}`)
+    expect(response.status).toBe(410)
+    expect(response.body.code).toBe('LEGACY_SCHOOL_API_RETIRED')
+    expect(await prisma.organization.count()).toBeGreaterThan(0)
   })
 })

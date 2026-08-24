@@ -142,10 +142,10 @@ describe('题单权限模块', () => {
       expect(res.body.data._permission).toBe('view')
     })
 
-    it('未分享用户查看 → 403', async () => {
+    it('未分享用户查看 → 404（隐藏跨作用域资源存在性）', async () => {
       const res = await createAuthenticatedRequest(app, strangerToken)
         .get(`/api/problem-lists/${testList.list.id}`)
-      expect(res.status).toBe(403)
+      expect(res.status).toBe(404)
     })
   })
 

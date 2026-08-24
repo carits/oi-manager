@@ -1,88 +1,87 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 
-/**
- * userId 统一迁移验证测试
- *
- * 验证数据库中 userId 相关字段的一致性：
- * - Teacher.id === User.id（主键一致性）
- * - Student.id === User.id（主键一致性）
- * - Admin.id === User.id（主键一致性）
- * - TeamMember.userId 在 User 表中存在
- * - TeamOperationLog.operatorId 在 User 表中存在
- * - Milestone.studentId/teacherId 在 User 表中存在
- * - TeamJoinRequest.userId 在 Student 表中存在
- */
-describe('userId 数据一致性验证', () => {
-  it('Teacher.id 应全部匹配 User.id', async () => {
-    const orphanedTeachers = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT t."id" FROM "Teacher" t
-      LEFT JOIN "User" u ON t."id" = u.id
-      WHERE u.id IS NULL
+describe('current organization identity consistency', () => {
+  it('every organization membership references an existing user and organization', async () => {
+    const orphaned = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT m.id
+      FROM "OrganizationMembership" m
+      LEFT JOIN "User" u ON u.id = m."userId"
+      LEFT JOIN "Organization" o ON o.id = m."organizationId"
+      WHERE u.id IS NULL OR o.id IS NULL
     `
-    expect(orphanedTeachers.length).toBe(0)
+    expect(orphaned).toEqual([])
   })
 
-  it('Student.id 应全部匹配 User.id', async () => {
-    const orphanedStudents = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT s."id" FROM "Student" s
-      LEFT JOIN "User" u ON s."id" = u.id
-      WHERE u.id IS NULL
+  it('student and teacher profiles reference memberships with compatible roles', async () => {
+    const invalidStudents = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT p.id
+      FROM "OrganizationStudentProfile" p
+      LEFT JOIN "OrganizationMembership" m ON m.id = p."membershipId"
+      WHERE m.id IS NULL OR m."memberRole" <> 'student'
     `
-    expect(orphanedStudents.length).toBe(0)
+    const invalidTeachers = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT p.id
+      FROM "OrganizationTeacherProfile" p
+      LEFT JOIN "OrganizationMembership" m ON m.id = p."membershipId"
+      WHERE m.id IS NULL OR m."memberRole" NOT IN ('teacher', 'school_principal')
+    `
+    expect(invalidStudents).toEqual([])
+    expect(invalidTeachers).toEqual([])
   })
 
-  it('Admin.id 应全部匹配 User.id', async () => {
-    const orphanedAdmins = await prisma.$queryRaw<{ id: string }[]>`
-      SELECT a."id" FROM "Admin" a
-      LEFT JOIN "User" u ON a."id" = u.id
-      WHERE u.id IS NULL
+  it('team members and join requests reference existing global users and teams', async () => {
+    const invalidMembers = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT tm.id
+      FROM "TeamMember" tm
+      LEFT JOIN "User" u ON u.id = tm."userId"
+      LEFT JOIN "Team" t ON t.id = tm."teamId"
+      WHERE u.id IS NULL OR t.id IS NULL
     `
-    expect(orphanedAdmins.length).toBe(0)
+    const invalidRequests = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT r.id
+      FROM "TeamJoinRequest" r
+      LEFT JOIN "User" u ON u.id = r."userId"
+      LEFT JOIN "Team" t ON t.id = r."teamId"
+      WHERE u.id IS NULL OR t.id IS NULL
+    `
+    expect(invalidMembers).toEqual([])
+    expect(invalidRequests).toEqual([])
   })
 
-  it('TeamMember.userId 应全部匹配 User.id', async () => {
-    const orphanedTeamMembers = await prisma.$queryRaw<{ userId: string }[]>`
-      SELECT tm."userId" FROM "TeamMember" tm
-      LEFT JOIN "User" u ON tm."userId" = u.id
-      WHERE u.id IS NULL
+  it('legacy audit rows never point at missing teams or operators', async () => {
+    const invalidLogs = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT l.id
+      FROM "TeamOperationLog" l
+      LEFT JOIN "User" u ON u.id = l."operatorId"
+      LEFT JOIN "Team" t ON t.id = l."teamId"
+      WHERE u.id IS NULL OR t.id IS NULL
     `
-    expect(orphanedTeamMembers.length).toBe(0)
+    expect(invalidLogs).toEqual([])
   })
 
-  it('TeamOperationLog.operatorId 应全部匹配 User.id', async () => {
-    const orphanedLogs = await prisma.$queryRaw<{ operatorId: string }[]>`
-      SELECT tol."operatorId" FROM "TeamOperationLog" tol
-      LEFT JOIN "User" u ON tol."operatorId" = u.id
-      WHERE u.id IS NULL
+  it('milestones reference student and teacher memberships in the same organization', async () => {
+    const invalid = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT m.id
+      FROM "Milestone" m
+      LEFT JOIN "OrganizationMembership" student ON student.id = m."studentMembershipId"
+      LEFT JOIN "OrganizationMembership" teacher ON teacher.id = m."teacherMembershipId"
+      WHERE student.id IS NULL
+        OR teacher.id IS NULL
+        OR student."memberRole" <> 'student'
+        OR teacher."memberRole" NOT IN ('teacher', 'school_principal')
+        OR student."organizationId" <> teacher."organizationId"
     `
-    expect(orphanedLogs.length).toBe(0)
+    expect(invalid).toEqual([])
   })
 
-  it('Milestone.studentId 应全部匹配 User.id', async () => {
-    const orphanedStudentMilestones = await prisma.$queryRaw<{ studentId: string }[]>`
-      SELECT m."studentId" FROM "Milestone" m
-      LEFT JOIN "User" u ON m."studentId" = u.id
+  it('team problem-list attribution references existing users', async () => {
+    const invalid = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT item.id
+      FROM "TeamProblemList" item
+      LEFT JOIN "User" u ON u.id = item."addedBy"
       WHERE u.id IS NULL
     `
-    expect(orphanedStudentMilestones.length).toBe(0)
-  })
-
-  it('Milestone.teacherId 应全部匹配 User.id', async () => {
-    const orphanedTeacherMilestones = await prisma.$queryRaw<{ teacherId: string }[]>`
-      SELECT m."teacherId" FROM "Milestone" m
-      LEFT JOIN "User" u ON m."teacherId" = u.id
-      WHERE u.id IS NULL
-    `
-    expect(orphanedTeacherMilestones.length).toBe(0)
-  })
-
-  it('TeamJoinRequest.userId 应在 Student 表中存在', async () => {
-    const orphanedRequests = await prisma.$queryRaw<{ userId: string }[]>`
-      SELECT tjr."userId" FROM "TeamJoinRequest" tjr
-      LEFT JOIN "Student" s ON tjr."userId" = s.id
-      WHERE s.id IS NULL
-    `
-    expect(orphanedRequests.length).toBe(0)
+    expect(invalid).toEqual([])
   })
 })

@@ -386,8 +386,9 @@ describe('Team Operations', () => {
       })
 
       const res = await request(app)
-        .get(`/api/teams/school/${school.id}`)
+        .get(`/api/teams/organization/${school.organizationId}`)
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -423,8 +424,9 @@ describe('Team Operations', () => {
       })
 
       const res = await request(app)
-        .get(`/api/teams/student/${studentId}`)
+        .get('/api/teams/mine')
         .set('Authorization', `Bearer ${token}`)
+        .set('x-oi-organization-id', school.organizationId!)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -683,7 +685,7 @@ describe('Team Operations', () => {
       expect(rows.every((row: any) => !('name' in row))).toBe(true)
 
       const schoolResponse = await request(app)
-        .get(`/api/schools/${schoolA.id}/student-rankings`)
+        .get(`/api/rankings/organizations/${schoolA.organizationId}/rating`)
         .set('Authorization', `Bearer ${personalToken}`)
       expect(schoolResponse.status).toBe(403)
     })
