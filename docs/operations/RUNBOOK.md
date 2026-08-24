@@ -114,6 +114,10 @@ tail -f /tmp/oi-web-preview.log
 go-judge、`3001` HMR、`3002` Server 和 Judge。`preview:start` 独立持有 `3000`；
 两个命令遇到未知端口占用都会失败并报告，不会执行广泛 `pkill` 或 `kill -9`。
 
+`pnpm restart` 会触发 pnpm 的 `stop → restart → start` 生命周期；版本化脚本会自动延后第一阶段 stop，
+先准备 PostgreSQL 和 go-judge，再执行应用进程切换。当前仍是单 API 实例，实测切换约 16 秒；重大活动期间
+不要主动重启。零停机需要部署双实例和 Nginx upstream 切换后才能宣称完成。
+
 首次启动或依赖变化前执行：
 
 ```bash

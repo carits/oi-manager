@@ -20,8 +20,6 @@ if [ "${npm_lifecycle_event:-}" = "start" ]; then
   fi
 fi
 
-"$ROOT_DIR/scripts/stop-dev.sh"
-
 ensure_compose_service() {
   local container_name="$1"
   local service_name="$2"
@@ -71,21 +69,19 @@ if [ "$sandbox_ready" != "true" ]; then
   exit 1
 fi
 
+# Prepare the slow Docker dependencies while the current API/HMR processes are
+# still serving traffic. Only after PostgreSQL and go-judge are ready do we
+# enter the short application restart window.
+"$ROOT_DIR/scripts/stop-dev.sh"
+
 "$ROOT_DIR/scripts/check-ports.sh" 3001 3002
 
 nohup setsid pnpm dev > "$LOG_FILE" 2>&1 &
 pid=$!
 echo "$pid" > "$PID_FILE"
 
-sleep 3
-if ! kill -0 "$pid" 2>/dev/null; then
-  rm -f "$PID_FILE"
-  echo "Development services failed to start. See $LOG_FILE" >&2
-  exit 1
-fi
-
 api_ready=false
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+for _ in $(seq 1 100); do
   if curl --fail --silent --show-error http://127.0.0.1:3002/api/health >/dev/null 2>&1; then
     api_ready=true
     break
@@ -93,7 +89,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
   if ! kill -0 "$pid" 2>/dev/null; then
     break
   fi
-  sleep 1
+  sleep 0.2
 done
 
 if [ "$api_ready" != "true" ]; then

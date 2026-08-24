@@ -112,6 +112,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 - 受控 loopback 只读负载冒烟 2300/2300 成功；API 直连、3000 同源代理和登录页均无失败，结束后服务监控 healthy。
 - 3000 公网可达；3001、3002、5050、5432 外网均不可达。自动备份和五分钟服务监控 cron 已安装，首份
   5.2MB 备份通过 `pg_restore -l` 验证。
+- 安全升级提交 `2998473` 已按 preview build/promote 部署为 `UhlTIrV7m4XFpXwf8DMsa`；3000 登录页基础安全头
+  与隐藏框架标识已在线确认，3000/3002 匿名端点矩阵各 303/303。真实 Edge 现有会话在升级后可正常进入
+  `/identity`；扩展读取大 DOM/控制台发生自身遥测超时，因此页面结构和控制台完整证据继续以隔离 E2E 13/13 为准。
 
 - 已通过：`docs:check`、`routes:audit`、`ui:state-check`、Prisma Schema、Web TypeScript、
   Playwright 收集、E2E 隔离库重建、校园负责人“题单→作业→比赛→排名→两级提交弹窗”浏览器流程。
@@ -132,3 +135,5 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 - 外部告警通道、备份恢复演练、隔离环境写入负载、容量上限和长稳测试尚未完成。
 - 生产进程仍为优化预览与 watch 组合；正式 systemd/PM2 尚未启用。Nginx 当前只提供 HTTP，尚无域名/TLS；
   Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。
+- `pnpm restart` 已把数据库/Judge 准备移到应用停止前，但单 API 实例切换仍有约 16 秒不可用；零停机 upstream
+  切换仍未实现。
