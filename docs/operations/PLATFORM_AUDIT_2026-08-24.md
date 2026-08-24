@@ -32,6 +32,8 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 分别请求上述 303 个端点，共 1818 次请求。首轮约 30 个无效资源场景被局部路由错误转换为 500；统一客户端
 错误分类并修复剩余局部 `catch` 后，六种身份均无 5xx。该矩阵证明所有文档端点在六种认证身份和无效资源
 输入下不会崩溃，但不把“无 5xx”等同于每一种资源所有权组合都已完成语义授权证明。
+修复提交 `a2bb119` 已按 preview build/canary/promote 部署为 `OP9c7Uk_sz75WSE7etrIz`；3200 候选、
+3000 提升、3002 API、统一服务监控以及 3000/3002 两套匿名 303/303 矩阵均通过。
 
 ## 已发现并处理
 
