@@ -29,7 +29,8 @@ export async function RoleLayout({
   requiredContext,
   roleOverrides = [],
 }: RoleLayoutProps) {
-  const requestedPath = headers().get('x-oi-request-path') || homePath
+  const requestHeaders = await headers()
+  const requestedPath = requestHeaders.get('x-oi-request-path') || homePath
   const pathname = requestedPath.split('?')[0]
   const session = await getServerSession()
 

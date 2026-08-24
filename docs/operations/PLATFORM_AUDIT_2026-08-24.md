@@ -17,9 +17,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | Next.js 页面文件 | 63 | `route-inventory.spec.ts` 与源码清单一致 |
 | HTTP 端点 | 303 | `pnpm docs:check` |
 | Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
-| 测试文件 | 58 | 仓库文件清单 |
+| 单元/集成测试文件 | 47 | Server 36、Web 9、Judge 2 |
 | E2E 文件 | 16 | `find e2e -name '*.spec.ts'`；仅统计当前可执行的 E2E 规格文件 |
-| Playwright 可收集用例 | 253 | 修复并迁移统一组织路由后 `playwright test --list` |
+| Playwright 可收集用例 | 257 | `playwright test --list` |
 
 认证边界门禁已覆盖上述 303 个端点：296 个必须认证，7 个匿名端点均在
 `scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
@@ -102,24 +102,33 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 ## 自动化状态
 
+- Server 完整回归在依赖升级后为 36/36 文件、417/417 用例通过，0 失败、0 跳过；历史整文件
+  `describe.skip` 已替换为当前旧学校 API 的 GET/POST/DELETE 410 且不写库契约。
+- Web 9 文件 34/34、Judge 2 文件 6/6 通过；Next 15 隔离环境的身份初始化、性能预算、加载、空状态、
+  超时与重试共 13/13 通过。
+- 生产依赖扫描从 51 项（22 high、24 moderate、5 low）收敛为 `pnpm audit --prod` 0 项；Next 升级至
+  15.5.21，Undici、Express、WebSocket、YAML 与相关传递依赖同步升级。项目未使用 `next/image`，因此不安装
+  当前仍带 libvips 公告的可选 Sharp 包。
+- 受控 loopback 只读负载冒烟 2300/2300 成功；API 直连、3000 同源代理和登录页均无失败，结束后服务监控 healthy。
+- 3000 公网可达；3001、3002、5050、5432 外网均不可达。自动备份和五分钟服务监控 cron 已安装，首份
+  5.2MB 备份通过 `pg_restore -l` 验证。
+
 - 已通过：`docs:check`、`routes:audit`、`ui:state-check`、Prisma Schema、Web TypeScript、
   Playwright 收集、E2E 隔离库重建、校园负责人“题单→作业→比赛→排名→两级提交弹窗”浏览器流程。
 - 已通过：Chromium 56 条完整冒烟（统一登录、权限矩阵、六种身份、内部链接、路由、题库、工作区隔离）；
-  性能预算 3/3、加载/空/超时状态 3/4，剩余一条仅为已改版团队选择器断言，已修正等待复跑。
+  性能预算 3/3、加载/空/超时/重试状态 4/4。
 - 学生校园评测记录权限与全角色内部链接两文件合并复跑 20/20 通过。审计器仅忽略连续链接点击期间 Next
   已明确回退完整导航的 RSC 推测预取取消；最终页面、API 失败和其他控制台错误仍保持阻断。
 - 学生评测记录修复提交 `44d4cb0` 与题号链接修复 `fb66a7a` 已推送；最新公网预览构建
   `dy1igmvi3TtWEAwIDKzlN` 已通过候选/提升健康检查，Server/Judge 已重启。
-- Web 单元测试当前 29/29 通过；其中新增隐藏身份题目标签 3 条，并把超级管理员首页旧断言迁移为当前 `/admin` 契约。
-- 全量 Server 主跑首次在旧契约套件累计大量同源失败后中止，避免重复执行无效用例；当前已迁移权限 helper
-  与退役的学校权限契约，真实组织档案/跨组织/团队上下文定向测试 13/13 通过。其余旧测试仍需分组迁移，
-  完成后重新执行全量 Server/Web/Judge。提交 `59f4597` 已部署为构建 `cLM4IQTMUJofnTy88pd_F`。
+- Web 单元测试当前 34/34 通过；全量 Server 的旧模型测试迁移已完成，不再保留“旧套件待迁移”例外。
 - E2E 使用独立 `e2e` schema、3100/3102 和独立存储；重置脚本拒绝任何不含 `schema=e2e` 的数据库。
 
 ## 未完成审计
 
-- 普通教师的全部页面与交互、学生/个人区有数据动态详情页的 Edge 验收。
+- 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 303 个 HTTP 端点按匿名/本人/同组织/跨组织/管理员权限矩阵检查。
 - 文件上传、外部归档、评测、Hack、重测、题面快照、比赛三赛制的破坏性流程在隔离 E2E 环境复验。
-- 正式监控、日志采集、告警、备份恢复演练、负载/容量/长稳测试和依赖漏洞扫描。
-- 生产进程仍为开发预览与 watch 组合；正式 systemd/PM2、Nginx、TLS 与限流尚未启用。
+- 外部告警通道、备份恢复演练、隔离环境写入负载、容量上限和长稳测试尚未完成。
+- 生产进程仍为优化预览与 watch 组合；正式 systemd/PM2 尚未启用。Nginx 当前只提供 HTTP，尚无域名/TLS；
+  Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。

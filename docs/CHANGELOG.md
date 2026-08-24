@@ -10,6 +10,11 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 完成生产依赖安全升级：Next.js 14.2.35 升级到 15.5.21，并同步升级 Express、express-rate-limit、Undici、UUID、WebSocket、js-yaml、Superagent 及安全传递依赖；`pnpm audit --prod` 从 51 项漏洞降为 0。项目未使用 `next/image`，明确忽略仍带 libvips 公告的可选 Sharp。
+- 适配 Next 15 异步 `searchParams`、`headers()` 和 `cookies()`，按官方建议不再跟踪每次构建都会按 distDir 改写的 `next-env.d.ts`；新增 Web 基础安全头并关闭 `X-Powered-By`。
+- 修复全局限流在认证之前执行、导致所有校园用户共享出口 IP 配额的问题：Limiter 现在验证 Bearer/HttpOnly Session JWT 后按 userId 分桶，无效或匿名凭据仍按 IP；定向回归 3/3 通过。
+- 移除退役学校题单套件的 14 项整文件跳过，改为 GET/POST/DELETE 明确 410 且不写库契约。升级后 Server 36 文件 417/417、Web 34/34、Judge 6/6、Next 15 隔离 E2E 13/13 通过，生产根构建和静态门禁通过。
+
 - 新增默认仅允许 loopback 只读端点、请求数上限 5000、并发上限 100 的受控压测脚本与 `pnpm load:smoke`。在线完成 2300 次请求：API 直连 1000/1000、3000 同源代理 1000/1000、登录页面 300/300 均无失败，压测后 PostgreSQL/Judge 资源稳定且统一监控 healthy。
 - 压测期间发现 metrics 的“长度大于 10 即视为 ID”规则会把 `platform-bindings` 等静态路由误归一化。改为只识别 UUID、CUID、纯数字和项目明确的历史资源 ID 前缀，并新增静态路由与组织 ID 回归测试。
 - Web 完整测试 9 文件 34/34、Judge 完整测试 2 文件 6/6 通过。

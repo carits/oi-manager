@@ -3,10 +3,10 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from '@/lib/serverSession'
 
 interface LoginPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     role?: string | string[]
     next?: string | string[]
-  }
+  }>
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -15,9 +15,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect('/identity')
   }
 
-  const rawNext = Array.isArray(searchParams?.next)
-    ? searchParams?.next[0]
-    : searchParams?.next
+  const resolvedSearchParams = await searchParams
+  const rawNext = Array.isArray(resolvedSearchParams?.next)
+    ? resolvedSearchParams?.next[0]
+    : resolvedSearchParams?.next
   const nextPath = rawNext?.startsWith('/') && !rawNext.startsWith('//')
     ? rawNext
     : undefined

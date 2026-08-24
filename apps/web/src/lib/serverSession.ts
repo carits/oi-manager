@@ -10,7 +10,7 @@ export type ServerSessionResult =
   | { state: 'unavailable'; message: string; requestId?: string }
 
 export async function getServerSession(): Promise<ServerSessionResult> {
-  const cookieHeader = cookies().toString()
+  const cookieHeader = (await cookies()).toString()
   if (!cookieHeader.includes('oi_session=')) {
     return { state: 'anonymous' }
   }

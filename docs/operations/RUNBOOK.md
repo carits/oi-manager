@@ -61,6 +61,22 @@ The output includes total/success/failed counts, elapsed time, throughput, avera
 Run the service monitor and inspect application logs after each load smoke. This is a bounded operational smoke,
 not a production capacity claim or a substitute for an isolated soak test.
 
+## Dependency security audit
+
+Run the production dependency audit after every dependency or framework update:
+
+```bash
+pnpm audit --prod --audit-level low
+pnpm build
+pnpm --filter server test
+pnpm --filter web test
+pnpm --filter @oi-manager/judge test
+```
+
+The current Web application does not import `next/image`; the optional Sharp dependency is deliberately excluded until
+its patched release is supported by the installed Next.js line. Do not remove the pnpm security overrides without first
+confirming the resolved lockfile still passes `pnpm audit --prod`.
+
 # 运行手册
 
 当前服务器项目目录为 `/data/oi-manager-response-refactor`，运行的是开发环境。

@@ -1,9 +1,35 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import jwt from 'jsonwebtoken'
 import type { RequestHandler } from 'express'
+import type { Request } from 'express'
+import { getJwtSecret } from '../lib/jwtSecret'
+import { getSessionToken } from '../lib/sessionCookie'
 
 // 测试环境跳过限流（避免测试被限流导致失败）
 const noop: RequestHandler = (_req, _res, next) => next()
 const shouldSkip = process.env.NODE_ENV === 'test'
+
+export function getRateLimitKey(req: Request): string {
+  const authorization = req.headers.authorization
+  const bearerToken = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : null
+  const token = bearerToken || getSessionToken(req)
+
+  if (token) {
+    try {
+      const payload = jwt.verify(token, getJwtSecret())
+      if (typeof payload !== 'string' && typeof payload.userId === 'string' && payload.userId) {
+        return `user:${payload.userId}`
+      }
+    } catch {
+      // Invalid credentials remain subject to the anonymous IP bucket. The
+      // authentication middleware later returns the actual 401 response.
+    }
+  }
+
+  return `ip:${ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`
+}
 
 /**
  * 全局 API 限流
@@ -15,11 +41,7 @@ export const globalLimiter = shouldSkip ? noop : rateLimit({
   max: parseInt(process.env.RATE_LIMIT_MAX || '2000'),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    const user = (req as any).user
-    if (user?.userId) return user.userId
-    return ipKeyGenerator(req.ip || 'unknown')
-  },
+  keyGenerator: getRateLimitKey,
   message: { success: false, message: '请求过于频繁，请稍后再试' }
 })
 
