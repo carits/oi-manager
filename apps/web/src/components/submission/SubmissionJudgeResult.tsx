@@ -40,7 +40,6 @@ export function SubmissionJudgeResult({
 }: SubmissionJudgeResultProps) {
   if (hidden) return null
   const rows = buildJudgeResultRows(judgeMode, cases, subtasks)
-  if (rows.length === 0) return null
   const failedIndex = firstFailedCaseIndex(cases)
 
   return (
@@ -52,7 +51,7 @@ export function SubmissionJudgeResult({
         <strong>{verdictLabel(result)}</strong>
         {judgeMode === 'acm' && failedIndex >= 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>失败测试点 #{failedIndex + 1}</span>}
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      {rows.length > 0 && <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -95,7 +94,7 @@ export function SubmissionJudgeResult({
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
     </section>
   )
 }

@@ -10,6 +10,14 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 新增比赛范围重测的确定性破坏性 E2E：按指定题目重置 3 条本地终态提交，验证普通参赛者无权操作、
+  重复请求跳过 3 条排队记录、Codeforces 远程归档不进入重测、其他题目历史结果保持 Accepted。
+- 修复终态提交没有测试点明细时整个评测结果区被隐藏的问题；独立详情页现在仍显示最终 Verdict，
+  仅在确有测试点时渲染明细表。核心流程中的发布作业和补题作业请求改用显式校园上下文，并迁移
+  已退役的学生作业列表接口到当前组织活动接口。
+- 核心流程、Judge、Hack 与重测联合 18/18；Server 37 文件 420/420、Web 9 文件 34/34、Judge
+  2 文件 6/6 和根生产构建均通过。E2E 清单现为 19 个文件、265 条可收集用例。
+
 - 修复 Judge E2E 的隐藏顺序依赖：全新 `e2e` schema 下原用例因题目没有显式 `judgeConfig/TestdataFile` 而返回 409，过去通过依赖前序残留。隔离种子现在在独立 `test-results/testdata` 写入确定性 ACM 配置和 `1.in/1.out`，校园提交同时补齐 `organizationId`；全新环境 Judge 8/8、Judge + Hack 联合 9/9 通过。
 - 新增题目级 Hack 破坏性 E2E：真实调用 go-judge 编译 STD/Validator，通过独立 WebSocket Hack 队列模拟 `Accepted → Wrong Answer`，验证 `hack_<id>.in/.out` 入库、Hack 点顺序、普通提交数量不变和历史结果不重置。E2E 清单现为 18 个文件、264 条可收集用例。
 - 隔离 Judge/Hack 流程提交 `da24952` 已推送并部署为公网构建 `yl9YyYjjo3cSTnOQUGMvB`；3200 候选、3000 提升、3002 API、统一监控和 3000 匿名 303/303 矩阵均通过。

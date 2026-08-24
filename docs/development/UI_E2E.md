@@ -68,7 +68,7 @@ pnpm routes:audit
 ```
 
 - `smoke`：Chromium 和 Firefox 的登录、权限、导航与角色核心流程。
-- `test:ui`：当前 18 个规格文件、264 条可收集用例，覆盖 1440×900、1280×720、核心 CRUD、文件、Judge、Hack 和安全边界。
+- `test:ui`：当前 19 个规格文件、265 条可收集用例，覆盖 1440×900、1280×720、核心 CRUD、文件、Judge、Hack、比赛重测和安全边界。
 - `headed`：本地可视调试。
 - `live`：手动真实 OJ/Judge 探针，不作为合并门禁。
 - `routes:audit`：扫描前端跳转表达式，生成 `test-results/navigation-static-report.json`；不存在静态路径、缺失动态标识和已知禁止父路径会阻断。
@@ -103,6 +103,10 @@ pnpm exec playwright test e2e/tests/internal-link-audit.spec.ts --project=chromi
 不得依赖开发目录或前序用例残留。Hack E2E 使用真实 go-judge 编译 STD/Validator，并用独立 WebSocket
 消息验证有效数据入库和历史提交不重测。失败时保存 HTML/JSON、截图、视频、trace、控制台
 异常和失败请求，CI 保留 14 天。
+
+`rejudge-flow.spec.ts` 使用题目范围执行真实比赛重测，必须同时验证普通参赛者返回 `403`、
+已完成本地提交进入 `queuing`、重复重测只计入跳过、远程归档记录保持原结果，以及未选择题目的
+历史结果不变。核心流程还固定验证：终态提交即使没有测试点明细，详情页也必须显示最终 Verdict。
 
 PR 运行冒烟；`main` 推送和每日定时任务运行 Chromium 全量与紧凑视口。真实连通性
 只在手动 workflow 中使用 Secrets，且不保存可能含凭据的 trace。

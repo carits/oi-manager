@@ -6,6 +6,7 @@ import { installExternalMocks } from '../fixtures/external-mocks'
 
 const ids = loadFixtureIds()
 const organizationBase = `/org/org_${ids.school}`
+const organizationHeaders = { 'X-OI-Organization-ID': `org_${ids.school}` }
 
 test.describe('core role workflows @smoke', () => {
   test('super admin can inspect a school and its member tabs', async ({ browser }) => {
@@ -266,7 +267,7 @@ test.describe('published work and ranking contracts', () => {
     const publishResponse = await request.post(
       `/api/problem-lists/${ids.problemList}/publish-homework`,
       {
-        headers: bearer(teacher),
+        headers: { ...bearer(teacher), ...organizationHeaders },
         data: {
           teamId: ids.team,
           title,
@@ -280,8 +281,8 @@ test.describe('published work and ranking contracts', () => {
     const published = await publishResponse.json()
     expect(published.success).toBe(true)
 
-    const listResponse = await request.get('/api/students/my-homeworks', {
-      headers: bearer(student),
+    const listResponse = await request.get(`/api/organizations/org_${ids.school}/members/activities/homeworks`, {
+      headers: { ...bearer(student), ...organizationHeaders },
     })
     expect(listResponse.status()).toBe(200)
     const list = await listResponse.json()
@@ -293,7 +294,7 @@ test.describe('published work and ranking contracts', () => {
     const response = await request.post(
       `/api/trainings/${ids.contest}/create-makeup-homework`,
       {
-        headers: bearer(teacher),
+        headers: { ...bearer(teacher), ...organizationHeaders },
         data: {
           title: `E2E Makeup ${Date.now()}`,
           startTime: new Date(Date.now() - 60_000).toISOString(),
@@ -307,7 +308,7 @@ test.describe('published work and ranking contracts', () => {
     expect(String(body.data.sourceTrainingId)).toBe(ids.contest)
 
     const rankingResponse = await request.get(`/api/trainings/${ids.contest}/ranking`, {
-      headers: bearer(teacher),
+      headers: { ...bearer(teacher), ...organizationHeaders },
     })
     expect(rankingResponse.status()).toBe(200)
     const ranking = await rankingResponse.json()
