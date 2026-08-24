@@ -5,20 +5,11 @@ import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import type { ResourceState } from '@/lib/resource'
 import type { TrainingInfo, TrainingProblem, ProblemDetail } from '../types'
+import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
   zh: '中文',
   en: 'English'
-}
-
-function toExcelColumnName(index: number): string {
-  let result = ''
-  let i = index
-  while (i >= 0) {
-    result = String.fromCharCode(65 + (i % 26)) + result
-    i = Math.floor(i / 26) - 1
-  }
-  return result
 }
 
 function getPdfUrl(fileUrl: string): string | null {
@@ -203,7 +194,7 @@ export function TrainingProblemDetail({
             minWidth: '28px',
           }}
         >
-          {toExcelColumnName(p.orderIndex ?? 0)}
+          {trainingProblemCode(p.orderIndex)}
         </button>
       ))}
       {problems.length === 0 && (
@@ -218,9 +209,9 @@ export function TrainingProblemDetail({
     if (!problemDetail) return null
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.alias || problemDetail.problemTitle || '未命名题目'}</span>
+        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.alias || problemDetail.problemTitle || trainingProblemTitle(selectedProblem || { orderIndex: problemDetail.orderIndex })}</span>
         {problemDetail.points != null && <span>分值: {problemDetail.points}</span>}
-        {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}s</span>}
+        {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}ms</span>}
         {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}
         {problemDetail.difficulty && (
           <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: problemDetail.difficulty === '简单' ? 'var(--success-light)' : problemDetail.difficulty === '中等' ? 'var(--warning-light)' : 'var(--error-light)', color: problemDetail.difficulty === '简单' ? 'var(--success-text)' : problemDetail.difficulty === '中等' ? 'var(--warning-text)' : 'var(--error-text)' }}>

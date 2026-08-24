@@ -2,16 +2,7 @@
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import type { TrainingInfo, TrainingProblem } from '../types'
-
-function toExcelColumnName(index: number): string {
-  let result = ''
-  let i = index
-  while (i >= 0) {
-    result = String.fromCharCode(65 + (i % 26)) + result
-    i = Math.floor(i / 26) - 1
-  }
-  return result
-}
+import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
 
 interface SolutionData {
   content: string
@@ -53,7 +44,7 @@ export function TrainingSolutionPanel({ training, problems, allSolutions, onEdit
               <div key={p.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{`${toExcelColumnName(p.orderIndex ?? 0)}. ${p.alias || p.problemTitle || '未命名题目'}`}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{`${trainingProblemCode(p.orderIndex)}. ${p.alias || trainingProblemSectionTitle(p)}`}</span>
                   {sol?.source === 'problem' && (
                     <span style={{ fontSize: '0.75rem', background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px', color: 'var(--gray-500)' }}>
                       原题目题解

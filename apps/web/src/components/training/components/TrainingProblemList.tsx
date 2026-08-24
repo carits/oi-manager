@@ -2,6 +2,7 @@
 
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import type { TrainingInfo, ProblemListEntry } from '../types'
+import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
 import styles from '../TrainingWorkspace.module.css'
 
 const RESULT_LABEL_MAP: Record<string, string> = {
@@ -10,16 +11,6 @@ const RESULT_LABEL_MAP: Record<string, string> = {
   re: 'Runtime Error', ce: 'Compilation Error', pe: 'Presentation Error',
   ole: 'Output Limit Exceeded', pending_review: 'Judging', remote_unavailable: 'Judge Error',
   judge_failed: 'Judge Error', unknown_error: 'Judge Error', submit_failed: 'Submit Failed',
-}
-
-function toExcelColumnName(index: number) {
-  let result = ''
-  let i = index
-  while (i >= 0) {
-    result = String.fromCharCode(65 + (i % 26)) + result
-    i = Math.floor(i / 26) - 1
-  }
-  return result
 }
 
 function sourceText(problem: ProblemListEntry) {
@@ -114,12 +105,12 @@ export function TrainingProblemList({
               <tr><td colSpan={sourceVisible ? 4 : 3} className={styles.empty}>暂无题目</td></tr>
             )}
             {problemListData.map(problem => {
-              const title = problem.title?.trim() || problem.problemTitle?.trim()
+              const title = trainingProblemTitle(problem)
               return (
                 <tr key={problem.id}>
                   <td className={styles.problemStatusColumn}>{renderStatus(problem, training)}</td>
                   <td className={styles.problemSequenceColumn}>
-                    <span className={styles.problemCode}>{toExcelColumnName(problem.orderIndex)}</span>
+                    <span className={styles.problemCode}>{trainingProblemCode(problem.orderIndex)}</span>
                   </td>
                   {sourceVisible && <td className={styles.problemSourceColumn}>{renderSource(problem)}</td>}
                   <td className={styles.problemTitleCell}>
@@ -127,9 +118,9 @@ export function TrainingProblemList({
                       type="button"
                       className={styles.problemTitleButton}
                       onClick={() => openProblem(problem.id)}
-                      title={title || '题目标题缺失'}
+                      title={title}
                     >
-                      {title || '题目标题缺失'}
+                      {title}
                     </button>
                   </td>
                 </tr>

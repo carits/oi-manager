@@ -286,7 +286,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             <span>📖</span>
             <span>题目描述</span>
             <div style={{ flex: 1 }} />
-            {problem.timeLimit && <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>时间: {problem.timeLimit}s</span>}
+            {problem.timeLimit && <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>时间: {problem.timeLimit}ms</span>}
             {problem.memoryLimit && <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>内存: {problem.memoryLimit}MB</span>}
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>

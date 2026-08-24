@@ -1,16 +1,7 @@
 'use client'
 
 import type { TrainingProblem, Attachment } from '../types'
-
-function toExcelColumnName(index: number): string {
-  let result = ''
-  let i = index
-  while (i >= 0) {
-    result = String.fromCharCode(65 + (i % 26)) + result
-    i = Math.floor(i / 26) - 1
-  }
-  return result
-}
+import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -32,7 +23,7 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
         if (atts.length === 0) return null
         return (
           <div key={p.id} style={{ marginBottom: '1rem' }}>
-            <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{`${toExcelColumnName(p.orderIndex ?? 0)}. ${p.alias || p.problemTitle || '未命名题目'}`}</div>
+            <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{`${trainingProblemCode(p.orderIndex)}. ${p.alias || trainingProblemSectionTitle(p)}`}</div>
             {atts.map(a => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--gray-100)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

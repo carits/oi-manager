@@ -44,6 +44,7 @@ export interface TrainingProblem {
 }
 
 export interface ProblemDetail {
+  orderIndex?: number
   problemSourceHidden?: boolean
   /** @deprecated compatibility with older API payloads */
   problemIdentityHidden?: boolean
