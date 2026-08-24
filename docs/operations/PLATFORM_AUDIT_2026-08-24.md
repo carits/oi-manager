@@ -21,6 +21,11 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | E2E 文件 | 16 | `find e2e -name '*.spec.ts'`；仅统计当前可执行的 E2E 规格文件 |
 | Playwright 可收集用例 | 253 | 修复并迁移统一组织路由后 `playwright test --list` |
 
+认证边界门禁已覆盖上述 303 个端点：296 个必须认证，7 个匿名端点均在
+`scripts/api-public-endpoints.json` 中登记用途和最小公开理由。该结果不替代资源级角色与组织隔离测试。
+运行时匿名矩阵也已逐一请求 303 个端点：首轮唯一失败为缺失凭据的登录请求返回 500，修复输入类型、
+空值和长度校验后 303/303 通过；296 个受保护端点均在业务处理前返回 401。
+
 ## 已发现并处理
 
 | 级别 | 问题 | 处理与验证 |

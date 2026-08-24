@@ -94,7 +94,16 @@ function renewablePayload(payload: JwtPayload): JwtPayload {
 
 authRouter.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, password, workspaceMode: requestedWorkspaceMode, mode } = req.body as { username: string; password: string; workspaceMode?: unknown; mode?: unknown }
+    const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {}
+    const username = typeof body.username === 'string' ? body.username.trim() : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: '请输入用户名和密码' })
+    }
+    if (username.length > 64 || password.length > 256) {
+      return res.status(400).json({ success: false, message: '用户名或密码格式无效' })
+    }
+    const { workspaceMode: requestedWorkspaceMode, mode } = body
     const workspaceMode = parseWorkspaceMode(requestedWorkspaceMode ?? mode)
     if (!workspaceMode) return res.status(400).json({ success: false, message: '无效的工作区模式' })
     const clientIp = getClientIp(req)

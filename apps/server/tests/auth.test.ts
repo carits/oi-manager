@@ -9,6 +9,20 @@ const app = createTestApp()
 
 describe('Authentication Module', () => {
   describe('POST /api/auth/login', () => {
+    it.each([
+      [{}, '请输入用户名和密码'],
+      [{ username: 'only-user' }, '请输入用户名和密码'],
+      [{ password: 'only-password' }, '请输入用户名和密码'],
+      [{ username: 123, password: true }, '请输入用户名和密码'],
+      [{ username: 'u'.repeat(65), password: 'valid-password' }, '用户名或密码格式无效'],
+      [{ username: 'valid-user', password: 'p'.repeat(257) }, '用户名或密码格式无效'],
+    ])('should reject malformed credentials without a server error', async (payload, message) => {
+      const res = await request(app).post('/api/auth/login').send(payload)
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ success: false, message })
+    })
+
     it('should login successfully with correct credentials', async () => {
       // 创建测试用户
       const { user, password } = await createTestUser({ role: 'student' })

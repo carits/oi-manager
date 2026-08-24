@@ -1,0 +1,37 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/files/:id/public",
+    "rationale": "Only serves active File records explicitly marked isPublic; private and missing IDs both return 404."
+  },
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "rationale": "Minimal liveness endpoint used by preview promotion and external monitoring; it exposes no account or dependency details."
+  },
+  {
+    "method": "GET",
+    "path": "/api/platform-bindings/platforms",
+    "rationale": "Returns the static list of supported public platform identifiers needed before login and contains no user binding data."
+  },
+  {
+    "method": "GET",
+    "path": "/api/platform-bindings/:platform/config-schema",
+    "rationale": "Returns non-secret form metadata for a supported platform; user credentials and binding state remain authenticated."
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login",
+    "rationale": "Authentication entry point; protected by validation, rate limiting and uniform credential failure responses."
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "rationale": "Idempotently clears the session cookie even when it is expired or absent and returns no private data."
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/register",
+    "rationale": "Account registration entry point; protected by validation and authentication rate limiting."
+  }
+]
