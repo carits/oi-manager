@@ -10,6 +10,9 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 修复请求日志与端点指标在 Express 嵌套路由完成后读取被改写 `req.path` 的问题。请求入口现在固化原始 method/path，`request_end`、慢请求日志和 metrics 不再坍缩为 `/` 或路由内部相对路径；新增嵌套路由回归测试。
+- 完成迁移后的第三轮 Server 全量基线：34 个测试文件全部通过，423 项通过、14 项跳过、0 项失败，用时 502.38 秒。此前第二轮识别的 33 项旧模型契约失败已全部迁移或重写为当前组织模型契约。
+
 - 完成第二轮 Server 基线剩余 5 个失败文件迁移：题库/题单使用 `organizationId` 与组织 library key，
   未授权题单按跨作用域规则返回 404；基础列表改用组织成员、平台组织和当前排名路由；用户一致性改查
   OrganizationMembership/Profile；团队列表改用 organization/mine。五套定向测试 85/85 通过。

@@ -71,6 +71,12 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     return
   }
 
+  // Express mutates req.path while a request is traversing nested routers.
+  // Capture the public path and method before calling next() so the finish
+  // callback records the endpoint that actually entered this middleware.
+  const requestMethod = req.method
+  const requestPath = req.path
+
   // 生成请求 ID
   const requestId = generateRequestId()
   req.requestId = requestId
@@ -89,8 +95,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     requestId,
     action: 'request',
     metadata: {
-      method: req.method,
-      path: req.path,
+      method: requestMethod,
+      path: requestPath,
       query: Object.keys(req.query).length > 0 ? req.query : undefined,
       ip: clientIp,
       userAgent
@@ -103,15 +109,15 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
     // 记录到 metrics（用于聚合统计）
     const success = res.statusCode < 400
-    metrics.recordEndpoint(req.method, req.path, duration, success)
+    metrics.recordEndpoint(requestMethod, requestPath, duration, success)
 
     if (duration > 1000) {
       logger.warn('slow_request', {
         requestId,
         action: 'slow',
         metadata: {
-          method: req.method,
-          path: req.path,
+          method: requestMethod,
+          path: requestPath,
           status: res.statusCode,
           duration
         }
@@ -122,8 +128,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       requestId,
       action: 'response',
       metadata: {
-        method: req.method,
-        path: req.path,
+        method: requestMethod,
+        path: requestPath,
         status: res.statusCode,
         duration
       }
