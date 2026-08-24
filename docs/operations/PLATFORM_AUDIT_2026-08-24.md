@@ -78,7 +78,10 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 - 无当前比赛管理权限时直接访问题面选择出现永久加载和重复 403 Toast，已修复；隔离 E2E 定向复跑含身份初始化 7/7 通过，在线 Edge 确认只提示一次并返回比赛详情。
 - Edge 在线复现 1158 赛中隐藏身份场景并确认后端并未丢数据；构建 `AehXHfPqGZHMu5vpiCKWx` 已复验列表“题目 A/B/C/D”、题面“题目 A”和 `2000ms`，无缺失占位或横向溢出。
 - 1158 的评测记录、题解、附件、排名已由普通教师真实点击；构建 `yAOIk_SAEjxP3QmmqzxiF` 已复验附件“暂无附件”、16 项统一结果筛选和完整语言列表，无横向溢出。
-- 学生 oi20260815_07 的 1158 本人评测记录与 #3682 详情已由 Edge 打开；API 确认返回 20 cases/1 subtask，弹窗遗漏已完成共享结果组件修复，等待部署复验。
+- 学生 oi20260815_07 已在公网构建 `YFyBItVMM7t35S7z9XQE-` 完成动态 Edge 复验：1158 IOI #3682
+  显示 40/100、`sum` Subtask、20 cases 与 checker message；1157 ACM #3681 显示首个失败点与
+  Fast-Fail 跳过项且无得分列，#3677 显示 20 个 Accepted 测试点。两场排行榜均验证本人题目格可用
+  Enter 打开提交列表、他人题目格不可点击、详情关闭后返回列表、嵌套弹窗仅一个最外层滚动容器。
 
 ### 个人工作区
 

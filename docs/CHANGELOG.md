@@ -10,6 +10,11 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-24
 
+- 提交详情共享结果组件修复 `be83577` 已推送并部署为公网预览构建 `YFyBItVMM7t35S7z9XQE-`。
+  学生 Edge 已在线复验 IOI #3682 的 40/100、`sum` Subtask、20 个测试点及 checker message；
+  ACM #3681 正确显示首个失败点与 Fast-Fail 跳过项且无得分列，#3677 显示 20 个 Accepted 测试点。
+  IOI/ACM 排行榜均完成“本人题目格 → 提交列表 → 现有详情弹窗”两级流程验证：他人题目格不可点击，
+  Enter 可打开本人记录，嵌套弹窗只有最外层单一滚动容器，Escape 按详情、列表的层级逐次关闭。
 - 学生 Edge 在线打开 IOI 40 分提交 #3682 时，详情弹窗只显示摘要和源码，虽然后端已返回 20 个测试点、
   1 个 `sum` Subtask 及 checker message。新增共享 `SubmissionJudgeResult`，提交独立页和活动弹窗统一显示：
   OI/IOI 总分、Subtask、测试点得分/耗时/内存/message；ACM Verdict、首个失败点且不显示点分。
