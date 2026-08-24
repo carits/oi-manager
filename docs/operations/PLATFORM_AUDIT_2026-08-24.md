@@ -53,6 +53,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 高 | IOI 提交详情弹窗只显示 Verdict/分数摘要和源码，后端已有的 Subtask、测试点与 checker message 全部丢失；隐藏原题标题仍读取旧字段并显示“全部平台-C” | 抽取提交详情共享结果组件，独立页和弹窗按题目 `judgeMode` 展示；兼容当前脱敏字段并使用安全比赛提交标题 |
 | 高 | 校园提交只有 `workspaceScope=campus`，多校园账号可能让 A 校教师看到该学生在 B 校的提交；通用重评/重新抓取也只校验 campus | `Submission` 固化 `organizationId`；列表、详情、题目记录和破坏性接口均匹配当前组织并限制本人。历史 2576 条全部回填，跨校园测试 16/16 |
 
+提交组织隔离修复 `39b857b` 已部署为构建 `_3YRjoz8eLKRo8vT_gr0s`；迁移 26/26、历史空组织数 0、
+3000/3002 匿名矩阵 303/303、预览提升与服务重启健康检查均通过。
+
 ## Edge 页面验收进度
 
 使用真实 Microsoft Edge，经 SSH 隧道访问当前线上构建；每页记录最终 URL、可见标题、主内容、
