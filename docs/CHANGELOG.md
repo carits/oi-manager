@@ -14,7 +14,7 @@ source_of_truth: Git history
 - OI 评测设置只保留“数据与分组”入口，旧 Subtask/测试数据入口不再可达；Hack 配置页只维护 STD、Validator 和 Classifier。
 - 新增题目管理员单题显式迁移和测试点注册 API；整图校验返回字段路径，revision 冲突返回 `409 TEST_GRAPH_STALE`，被使用文件返回 `409 TESTDATA_IN_USE`，同名替换同步 Testcase 哈希。
 - 验证：Server 39 文件 430/430、Web 36/36、Judge 9/9、Server/Judge/Web 生产构建、UI 门禁、Chromium `1280×720`/`1440×900` 工作台 E2E 全部通过。
-- 公网候选构建 `yWNYBecXwn49NS0LJhzwS` 已完成 3200 canary、3000 promote 和 3000/3002 健康检查；提交与推送信息在完成后补记。
+- 提交 `7002e8d` 已推送远程 `main`；公网构建 `yWNYBecXwn49NS0LJhzwS` 已完成 3200 canary、3000 promote 和 3000/3002 健康检查。
 
 ## 2026-08-25
 
