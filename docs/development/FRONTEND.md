@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-22
+last_verified: 2026-08-25
 source_of_truth: apps/web/src
 ---
 
@@ -95,6 +95,11 @@ interface ApiResponse<T> {
 统一基础控件包括 `PageFrame`、`PageHeader`、`Toolbar`、`Tabs`、
 `SegmentedControl`、`Table`、`FormField`、`StatusBadge`、`Empty`、`Pagination`
 和 `Modal`。样式由 CSS Modules 与全局 Token 组成；Lucide 提供通用操作图标。
+
+2026-08-25 起新增代码必须使用统一表单控件、DataTable、Section、Menu/Popover，以及
+FormDialog、ConfirmDialog、DetailDialog 三类业务弹窗。静态样式放入 CSS Modules，内联样式只允许
+动态尺寸、坐标和 CSS 自定义变量。遗留基线按文件计数且只能下降，门禁命令为
+`pnpm ui:state-check`；确需重建基线必须在同一提交中说明减少项，不能用于放宽新增违规。
 
 109 路由的目标、页面类型、筛选和交互契约见[UI 路由与交互矩阵](UX_ROUTE_MATRIX.md)。
 

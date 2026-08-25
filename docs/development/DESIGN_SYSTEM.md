@@ -1,11 +1,39 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-01
+last_verified: 2026-08-25
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
 # 设计系统
+
+## 2026-08-25 统一组件契约
+
+本文件是当前界面视觉与交互的唯一规范。`globals.css` 和 `components/ui` 是实现来源；业务组件
+不得复制通用控件或弹窗。当前基线为 189 个 TSX、78 个内联样式文件、59 个原生按钮文件、31 个
+原生表单控件文件和 19 个原生表格文件，后续按批次递减。
+
+新增统一组件包括 Input、Textarea、Select、Checkbox、RadioGroup、Switch、SearchField、Combobox、
+IconButton、Popover、Menu、DataTable、TableToolbar、Section、FormDialog、ConfirmDialog 和
+DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`；`pnpm ui:state-check` 阻止任意
+文件增加静态内联样式、原生控件、自定义 Dialog、任意 Modal 宽度和硬编码视觉值。
+组件选择和调用约束见[UI 组件契约](UI_COMPONENTS.md)。
+
+### 紧凑密度与页面顺序
+
+- 普通页面固定为 PageHeader → Toolbar/筛选 → 内容 Section/DataTable → Pagination。
+- 控件默认高 38px，紧凑控件 32px，表头 42px，数据行不低于 48px。
+- 管理页强调扫描和比较，不嵌套装饰卡片；详情与代码工作台可使用 workbench 全宽布局。
+- 颜色、间距、字号、圆角、阴影和层级只使用全局语义 Token；业务 CSS 不新增等价硬编码值。
+
+### Dialog 契约
+
+- FormDialog 用于创建/编辑，ConfirmDialog 用于确认和危险操作，DetailDialog 用于长内容与代码。
+- 尺寸只允许 sm 420、md 560、lg 720、xl 960、wide 1200；旧 `width` 属性仅在迁移期兼容。
+- 表单弹窗内部滚动；详情弹窗使用 page 模式且只有最右侧一个滚动条。
+- 底部固定“取消 → 主操作”；提交中禁用重复操作、ESC、遮罩关闭和关闭按钮。
+- dirty 表单关闭前确认；嵌套弹窗只有顶层处理 Escape/Tab，关闭后恢复触发点焦点。
+- 640px 以下 Dialog 全屏，关键操作保持可见；桌面完整验收 1440×900 与 1280×720。
 
 ## 2026-08-01 UX 审查结论
 

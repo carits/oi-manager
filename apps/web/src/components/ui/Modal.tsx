@@ -3,6 +3,8 @@
 import React, { useEffect, useId, useRef } from 'react'
 import { X } from 'lucide-react'
 import styles from './primitives.module.css'
+import { MODAL_SIZE_WIDTHS, type ModalSize } from './dialog-contract'
+export type { ModalSize } from './dialog-contract'
 
 export interface ModalProps {
   isOpen: boolean
@@ -10,6 +12,11 @@ export interface ModalProps {
   title?: string
   children: React.ReactNode
   footer?: React.ReactNode
+  description?: React.ReactNode
+  size?: ModalSize
+  busy?: boolean
+  className?: string
+  /** @deprecated Use size presets. Kept temporarily for legacy call sites. */
   width?: string
   closeOnOverlay?: boolean
   scrollMode?: 'contained' | 'page'
@@ -30,7 +37,11 @@ export function Modal({
   title,
   children,
   footer,
-  width = '600px',
+  description,
+  size = 'md',
+  busy = false,
+  className = '',
+  width,
   closeOnOverlay = true,
   scrollMode = 'contained',
 }: ModalProps) {
@@ -38,6 +49,7 @@ export function Modal({
   const onCloseRef = useRef(onClose)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const titleId = useId()
+  const descriptionId = useId()
 
   useEffect(() => {
     onCloseRef.current = onClose
@@ -65,6 +77,7 @@ export function Modal({
       const openDialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'))
       if (openDialogs.at(-1) !== dialog) return
       if (event.key === 'Escape') {
+        if (busy) return
         event.preventDefault()
         onCloseRef.current()
         return
@@ -97,7 +110,7 @@ export function Modal({
         returnFocusRef.current.focus()
       }
     }
-  }, [isOpen, scrollMode])
+  }, [busy, isOpen, scrollMode])
 
   if (!isOpen) return null
 
@@ -105,23 +118,29 @@ export function Modal({
     <div
       className={`${styles.modalOverlay} ${scrollMode === 'page' ? styles.modalOverlayPage : ''}`}
       onMouseDown={event => {
-        if (closeOnOverlay && event.target === event.currentTarget) onClose()
+        if (!busy && closeOnOverlay && event.target === event.currentTarget) onClose()
       }}
     >
       <div
         ref={dialogRef}
-        className={styles.modalContent}
-        style={{ '--modal-width': width } as React.CSSProperties}
+        className={`${styles.modalContent} ${className}`.trim()}
+        style={{ '--modal-width': width || MODAL_SIZE_WIDTHS[size] } as React.CSSProperties}
+        data-size={size}
+        data-busy={busy || undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descriptionId : undefined}
         aria-label={title ? undefined : '对话框'}
         tabIndex={-1}
       >
         {title && (
           <header className={styles.modalHeader}>
-            <h2 className={styles.modalTitle} id={titleId}>{title}</h2>
-            <button type="button" className={styles.modalClose} onClick={onClose} aria-label="关闭对话框" title="关闭">
+            <div>
+              <h2 className={styles.modalTitle} id={titleId}>{title}</h2>
+              {description && <div className={styles.modalDescription} id={descriptionId}>{description}</div>}
+            </div>
+            <button type="button" className={styles.modalClose} onClick={onClose} disabled={busy} aria-label="关闭对话框" title="关闭">
               <X size={19} aria-hidden="true" />
             </button>
           </header>

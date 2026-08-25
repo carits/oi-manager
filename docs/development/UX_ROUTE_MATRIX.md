@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-02
+last_verified: 2026-08-25
 source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 ---
 
@@ -33,6 +33,16 @@ source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 | 学校与用户 | 超管、负责人、平台管理员 | 查找并维护组织和账号 | 列表、详情、编辑、状态操作 |
 | 导入 | 教师 | 按步骤导入学生或团队 | 输入、预览、冲突处理、结果 |
 | 资料与安全 | 全部角色 | 维护自己的资料和凭据 | 字段校验、保存反馈、危险操作确认 |
+
+## 统一迁移批次
+
+| 批次 | 页面族 | 统一目标 | 状态 |
+|---|---|---|---|
+| 1 | 全局基础 | Token、表单、DataTable、Section、Dialog API、递减门禁 | 已建立 |
+| 2 | 全部弹窗 | Form/Confirm/Detail Dialog、尺寸、滚动、焦点和操作区 | 待迁移 |
+| 3 | 比赛、题目、提交、排名、团队、题单 | 页面顺序、工具栏、表格和状态 | 待迁移 |
+| 4 | 超管、平台、学校、用户、OJ、导入 | 紧凑管理表格和表单 | 待迁移 |
+| 5 | 全路由 | 删除遗留白名单、视觉与移动端收口 | 待迁移 |
 
 完整路径、动态参数和访问角色见[页面路由参考](../reference/WEB_ROUTES.md)。
 

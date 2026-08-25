@@ -182,8 +182,8 @@
 }
 
 .buttonDanger:hover:not(:disabled) {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: var(--error-hover);
+  border-color: var(--error-hover);
 }
 
 .buttonIconOnly {
@@ -483,6 +483,52 @@ textarea.formControl {
 .formHint { color: var(--text-muted); }
 .formError { color: var(--error-text); }
 
+.selectControl { appearance: auto; }
+.choiceControl { min-width: 0; display: flex; align-items: flex-start; gap: var(--space-2); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
+.choiceControl input { margin-top: 3px; accent-color: var(--primary); }
+.choiceControl span { display: grid; gap: 2px; }
+.choiceControl strong { font-weight: 600; }
+.choiceControl small { color: var(--text-muted); font-size: var(--text-xs); }
+.choiceControl:has(input:disabled) { cursor: not-allowed; opacity: .55; }
+.switchControl { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); cursor: pointer; }
+.switchControl > span { display: grid; gap: 2px; color: var(--text-primary); font-size: var(--text-sm); }
+.switchControl strong { font-weight: 600; }
+.switchControl small { color: var(--text-muted); font-size: var(--text-xs); }
+.switchControl input { position: absolute; opacity: 0; pointer-events: none; }
+.switchControl i { position: relative; width: 38px; height: 22px; flex: 0 0 auto; border-radius: var(--radius-full); background: var(--gray-300); transition: background var(--transition-fast); }
+.switchControl i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--bg-card); box-shadow: var(--shadow-xs); transition: transform var(--transition-fast); }
+.switchControl input:checked + i { background: var(--primary); }
+.switchControl input:checked + i::after { transform: translateX(16px); }
+.switchControl input:focus-visible + i { box-shadow: var(--focus-ring); }
+.switchControl:has(input:disabled) { cursor: not-allowed; opacity: .55; }
+.radioGroup { display: grid; gap: var(--space-2); min-width: 0; border: 0; }
+.radioGroup legend { margin-bottom: var(--space-2); color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; }
+.searchField { min-width: 180px; height: var(--control-height); display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+.searchField:focus-within { color: var(--primary); border-color: var(--primary); box-shadow: var(--focus-ring); }
+.searchField input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text-primary); background: transparent; font-size: var(--text-sm); }
+.combobox { position: relative; min-width: 0; }
+.comboboxTrigger { width: 100%; height: var(--control-height); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-3); color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); }
+.comboboxPanel { position: absolute; z-index: 50; inset: calc(100% + var(--space-1)) 0 auto; display: grid; gap: var(--space-2); padding: var(--space-2); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.comboboxOptions { max-height: 240px; overflow: auto; display: grid; gap: 2px; }
+.comboboxOptions button { display: grid; gap: 2px; padding: var(--space-2); color: var(--text-primary); border-radius: var(--radius-sm); text-align: left; }
+.comboboxOptions button:hover, .comboboxOptions button[aria-selected='true'] { background: var(--primary-light); color: var(--primary-text); }
+.comboboxOptions strong { font-size: var(--text-sm); font-weight: 600; }
+.comboboxOptions small, .comboboxOptions p { color: var(--text-muted); font-size: var(--text-xs); }
+.section { min-width: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.sectionHeader { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.sectionHeader h2 { margin: 0; color: var(--text-primary); font-size: var(--text-base); font-weight: 650; }
+.sectionHeader p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--text-xs); }
+.sectionActions { display: flex; align-items: center; gap: var(--space-2); }
+.sectionBody { min-width: 0; padding: var(--space-4); }
+.popover { position: relative; display: inline-flex; }
+.popoverPanel { position: absolute; z-index: var(--z-popover); top: calc(100% + var(--space-1)); left: 0; min-width: 220px; padding: var(--space-2); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.popoverPanel[data-align='end'] { right: 0; left: auto; }
+.menuList { display: grid; gap: 2px; }
+.menuList button { min-height: var(--control-height-sm); display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); color: var(--text-primary); border-radius: var(--radius-sm); font-size: var(--text-sm); text-align: left; }
+.menuList button:hover:not(:disabled) { background: var(--bg-hover); }
+.menuList button[data-danger='true'] { color: var(--error-text); }
+.menuList button:disabled { cursor: not-allowed; opacity: .5; }
+
 .badge {
   min-height: 24px;
   display: inline-flex;
@@ -611,11 +657,11 @@ textarea.formControl {
 .modalOverlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
   padding: var(--space-5);
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--overlay-backdrop);
 }
 
 .modalOverlayPage {
@@ -661,6 +707,12 @@ textarea.formControl {
   font-weight: 650;
 }
 
+.modalDescription { margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.5; }
+.modalContent[data-busy='true'] { cursor: wait; }
+.dialogMessage { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.65; }
+.dialogWarning { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3); color: var(--warning-text); background: var(--warning-light); border-left: 3px solid var(--warning); border-radius: var(--radius); font-size: var(--text-sm); line-height: 1.65; }
+.dialogWarning > svg { flex: 0 0 auto; margin-top: 1px; }
+
 .modalClose {
   width: var(--control-height-sm);
   height: var(--control-height-sm);
@@ -690,4 +742,18 @@ textarea.formControl {
 @media (max-width: 1320px) {
   .pageFrame { gap: var(--space-4); }
   .pageHeader { gap: var(--space-4); }
+}
+
+@media (max-width: 640px) {
+  .modalOverlay { display: block; padding: 0; overflow-y: auto; }
+  .modalContent { width: 100%; min-height: 100dvh; max-height: none; border: 0; border-radius: 0; }
+  .modalOverlayPage .modalContent { margin: 0; }
+  .modalBody { padding: var(--space-4); }
+  .modalFooter { position: sticky; bottom: 0; flex-wrap: wrap; background: var(--bg-card); }
+  .modalFooter > * { flex: 1 1 auto; }
+  .pageHeader { flex-direction: column; }
+  .pageActions { width: 100%; justify-content: flex-start; }
+  .toolbar { align-items: stretch; }
+  .toolbarGroup { width: 100%; }
+  .searchField { min-width: 0; width: 100%; }
 }

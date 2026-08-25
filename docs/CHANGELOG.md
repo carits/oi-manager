@@ -10,6 +10,10 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-25
 
+- 启动全站 UI 统一基础批次：新增统一表单控件、Combobox、Menu/Popover、Section、DataTable 与
+  Form/Confirm/Detail Dialog；Modal 使用五档尺寸、busy 关闭保护、说明语义和手机全屏降级。
+- 新增按文件计数的递减遗留基线，`ui:state-check` 现在阻止新增原生控件、自定义弹窗、静态内联样式、
+  任意 Modal 宽度和硬编码视觉值；设计系统、前端架构和 UI 路由矩阵同步为 2026-08-25 基线。
 - 题目级 Hack 扩展到 `judgeConfig.mode: oi` 的 OI / IOI 题：新增 C++17 Classifier，严格解析
   `{"subtasks":[...]}`，按证明程序总分下降判断有效性，并在命中的 Subtask 系统 Hack Gate 中只保存一份
   候选测试数据。历史提交、成绩和排行榜不会自动重测。
