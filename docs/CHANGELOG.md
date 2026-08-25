@@ -16,7 +16,7 @@ source_of_truth: Git history
 - 新增规范化 Testcase / Subtask / Test Group 多对多测试图、无环依赖校验、YAML 执行投影和超级管理员
   `check/apply` 迁移 API。旧配置保持双读；异常题只进入报告并禁止启用 OI Hack。
 - 普通训练、作业和未开始活动自动同步有效 Hack；已经开始或结束的比赛冻结原快照，比赛管理员可在题目
-  操作区预览 revision 差异并手动同步。题目管理页显示测试图和只读系统 Hack Gate，Hack 历史显示前后
+  操作区预览 revision 差异并手动同步。题目管理页显示并可编辑关系测试图，系统 Hack Gate 只读；旧评测配置保存只更新非图配置并重新生成 YAML 投影，避免关系图与执行快照分叉，Hack 历史显示前后
   分数、降分和命中 Subtask。
 - 安全增量迁移前已生成并校验 5.2MB 备份
   `/data/backups/oi-manager/automatic/oi_manager_20260825_133857.dump`；Prisma 迁移

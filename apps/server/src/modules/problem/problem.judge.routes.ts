@@ -13,6 +13,7 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
+import { projectTestGraph } from './problem.test-graph.service'
 
 export const problemJudgeRouter = Router()
 
@@ -144,7 +145,17 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
       }
       const yaml = await import('js-yaml')
       const normalized = { ...config, mode }
-      judgeConfigYaml = yaml.dump(normalized, { lineWidth: -1 })
+      const migratedGraph = mode === 'oi'
+        ? await prisma.problemSubtask.count({ where: { problemId: id } }) > 0
+        : false
+      if (migratedGraph) {
+        // The relation graph is the editing source of truth after migration.
+        // Keep non-graph settings from this form while projecting immutable graph data.
+        const { subtasks: _ignoredLegacySubtasks, ...baseConfig } = normalized
+        judgeConfigYaml = await projectTestGraph(id, yaml.dump(baseConfig, { lineWidth: -1 }))
+      } else {
+        judgeConfigYaml = yaml.dump(normalized, { lineWidth: -1 })
+      }
       logger.info('judge_config_saving', { action: 'saveJudgeConfig', metadata: { mode, subtasksCount: normalized.subtasks?.length ?? 0 } })
     }
 

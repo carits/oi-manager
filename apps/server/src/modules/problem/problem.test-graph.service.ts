@@ -308,7 +308,30 @@ export async function replaceTestGraph(problemId: string, input: any) {
   const testcaseCount = await prisma.problemTestcase.count({ where: { problemId, id: { in: testcaseIds as string[] } } })
   if (testcaseCount !== testcaseIds.length) return { ok: false, issues: ['存在不属于当前题目的 Testcase'] }
 
-  await prisma.$transaction(async tx => {
+  const current = await loadTestGraph(problemId)
+  if (current?.migrated) {
+    if (Number(input?.revision) !== current.revision) {
+      return { ok: false, issues: ['测试图 revision 已变化，请刷新后重试'] }
+    }
+    const currentGates = new Map(current.subtasks.map(subtask => [subtask.id,
+      subtask.groups.filter(group => group.kind === 'hack_gate').map(group => ({
+        key: group.key,
+        cases: group.cases.map(item => item.testcaseId),
+      })),
+    ]))
+    for (const subtask of subtasks) {
+      const submitted = (subtask.groups || []).filter((group: any) => group.kind === 'hack_gate').map((group: any) => ({
+        key: String(group.key),
+        cases: (group.cases || []).map((item: any) => String(item.testcaseId)),
+      }))
+      if (JSON.stringify(submitted) !== JSON.stringify(currentGates.get(Number(subtask.id)) || [])) {
+        return { ok: false, issues: [`Subtask ${subtask.id} 的 Hack Gate 由系统维护，不能手动修改`] }
+      }
+    }
+  }
+
+  try {
+    await prisma.$transaction(async tx => {
     await tx.problemSubtask.deleteMany({ where: { problemId } })
     const dbIds = new Map<number, string>()
     for (const [subtaskIndex, subtask] of subtasks.entries()) {
@@ -326,8 +349,13 @@ export async function replaceTestGraph(problemId: string, input: any) {
     for (const subtask of subtasks) for (const dep of subtask.if || []) {
       await tx.problemSubtaskDependency.create({ data: { id: crypto.randomUUID(), subtaskId: dbIds.get(Number(subtask.id))!, dependsOnId: dbIds.get(Number(dep))! } })
     }
-    await tx.problem.update({ where: { id: problemId }, data: { testGraphRevision: { increment: 1 } } })
-  })
+      const changed = await tx.problem.updateMany({ where: { id: problemId, testGraphRevision: current?.revision ?? 0 }, data: { testGraphRevision: { increment: 1 } } })
+      if (changed.count !== 1) throw new Error('TEST_GRAPH_STALE')
+    })
+  } catch (error: any) {
+    if (error?.message === 'TEST_GRAPH_STALE') return { ok: false, issues: ['测试图 revision 已变化，请刷新后重试'] }
+    throw error
+  }
   await refreshProblemJudgeProjection(problemId)
   return { ok: true, graph: await loadTestGraph(problemId) }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import apiClient from '@/lib/apiClient'
+import { useToast } from '@/components/ui/Toast'
 
 type TestGraph = {
   revision: number
@@ -16,8 +17,12 @@ type TestGraph = {
 }
 
 export function ProblemTestGraphPanel({ problemId }: { problemId: string }) {
+  const toast = useToast()
   const [graph, setGraph] = useState<TestGraph | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -35,12 +40,30 @@ export function ProblemTestGraphPanel({ problemId }: { problemId: string }) {
     </section>
   )
 
+  const beginEdit = () => {
+    setDraft(JSON.stringify({ revision: graph.revision, subtasks: graph.subtasks }, null, 2))
+    setEditing(true)
+  }
+  const save = async () => {
+    let payload: unknown
+    try { payload = JSON.parse(draft) } catch { return toast.error('\u6d4b\u8bd5\u56fe JSON \u683c\u5f0f\u65e0\u6548') }
+    setSaving(true)
+    try {
+      const result = await apiClient.put<TestGraph>(`/api/problems/${problemId}/test-graph`, payload)
+      if (!result.success || !result.data) return toast.error(result.message || '\u4fdd\u5b58\u5931\u8d25')
+      setGraph(result.data)
+      setEditing(false)
+      toast.success('\u6d4b\u8bd5\u56fe\u5df2\u4fdd\u5b58\u5e76\u751f\u6210 Judge \u6295\u5f71')
+    } finally { setSaving(false) }
+  }
+
   return (
     <section style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end' }}>
         <div><strong>{'Subtask / Test Group / Testcase \u6d4b\u8bd5\u56fe'}</strong><div style={{ marginTop: 4, color: 'var(--gray-500)', fontSize: 12 }}>{'Hack Gate \u7531\u7cfb\u7edf\u7ef4\u62a4\uff0c\u4e0d\u5360\u7528\u989d\u5916\u5206\u503c\u3002'}</div></div>
-        <span style={{ color: 'var(--gray-500)', fontSize: 12 }}>revision {graph.revision}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ color: 'var(--gray-500)', fontSize: 12 }}>revision {graph.revision}</span><button type="button" onClick={editing ? () => setEditing(false) : beginEdit} style={{ padding: '6px 10px', border: '1px solid var(--gray-300)', borderRadius: 7, background: 'white', cursor: 'pointer' }}>{editing ? '\u53d6\u6d88\u7f16\u8f91' : '\u7f16\u8f91\u6d4b\u8bd5\u56fe'}</button></div>
       </div>
+      {editing && <div style={{ display: 'grid', gap: 8 }}><div style={{ color: '#92400e', fontSize: 12 }}>{'\u53ef\u7f16\u8f91 Subtask\u3001Official Group \u548c Testcase \u5173\u8054\u3002Hack Gate \u4e3a\u53ea\u8bfb\uff0c\u4fee\u6539\u4f1a\u88ab\u670d\u52a1\u7aef\u62d2\u7edd\u3002'}</div><textarea value={draft} onChange={event => setDraft(event.target.value)} spellCheck={false} style={{ width: '100%', minHeight: 360, padding: 12, border: '1px solid var(--gray-300)', borderRadius: 9, font: '12px/1.5 ui-monospace, monospace' }} /><div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="button" disabled={saving} onClick={save} style={{ padding: '8px 14px', border: 0, borderRadius: 8, background: 'var(--primary)', color: 'white', cursor: saving ? 'wait' : 'pointer' }}>{saving ? '\u4fdd\u5b58\u4e2d...' : '\u4fdd\u5b58\u6d4b\u8bd5\u56fe'}</button></div></div>}
       {graph.subtasks.map(subtask => (
         <article key={subtask.id} style={{ padding: 14, border: '1px solid var(--gray-200)', borderRadius: 10, background: 'white' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><strong>Subtask {subtask.id}</strong><span>{subtask.score} {'\u5206'}{subtask.if.length ? ` / depends on ${subtask.if.join(', ')}` : ''}</span></div>
