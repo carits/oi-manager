@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import unifiedStyles from './ProblemDetail.unified.module.css'
+import { Button } from '@/components/ui/Button'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
@@ -637,7 +640,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className={unifiedStyles.u1}>
         <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
       </div>
     )
@@ -645,7 +648,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
   if (!problem) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className={unifiedStyles.u1}>
         题目不存在
       </div>
     )
@@ -671,39 +674,25 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   })()
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-muted)' }}>
-      <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '2rem' }}>
+    <div className={unifiedStyles.u2}>
+      <div className={unifiedStyles.u3}>
         {/* 返回按钮 */}
-        <button
+        <Button variant="ghost"
           onClick={() => router.push(`${pathPrefix}/problems`)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--primary)',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-            fontSize: '0.875rem'
-          }}
+          className={unifiedStyles.u4}
         >
           ← 返回列表
-        </button>
+        </Button>
 
         {/* 题目头部 */}
-        <div style={{
-          background: 'white',
-          borderRadius: '8px',
-          border: '1px solid var(--border)',
-          padding: '2rem',
-          marginBottom: '1.5rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className={unifiedStyles.u5}>
+          <div className={unifiedStyles.u6}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--gray-500)', fontWeight: 500 }}>{problem.problemId}</span>
-                <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>{problem.title}</h1>
+              <div className={unifiedStyles.u7}>
+                <span className={unifiedStyles.u8}>{problem.problemId}</span>
+                <h1 className={unifiedStyles.u9}>{problem.title}</h1>
               </div>
-              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>
+              <div className={unifiedStyles.u10}>
                 {problem.difficulty && (
                   <span style={{ color: getDifficultyColor(problem.difficulty) }}>{problem.difficulty}</span>
                 )}
@@ -723,44 +712,29 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               </div>
             </div>
             {(canModify() || problem.permissions.canCopyToSchool) && (
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className={unifiedStyles.u11}>
                 {problem.permissions.canCopyToSchool && (
-                  <button
+                  <Button variant="ghost"
                     onClick={() => void copyToSchool()}
                     disabled={copyingToSchool}
                     style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: copyingToSchool ? 'wait' : 'pointer', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
                   >
                     <Copy size={15} aria-hidden="true" />{copyingToSchool ? '复制中' : '复制到校内'}
-                  </button>
+                  </Button>
                 )}
                 {canModify() && <>
-                <button
+                <Button variant="ghost"
                   onClick={() => router.push(`${pathPrefix}/problems/${problemId}/edit`)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    border: '1px solid var(--border)',
-                    background: 'white',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.u12}
                 >
                   编辑
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   onClick={handleDelete}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    border: '1px solid #ef4444',
-                    background: 'white',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                    color: 'var(--error)'
-                  }}
+                  className={unifiedStyles.u13}
                 >
                   归档
-                </button>
+                </Button>
                 </>}
               </div>
             )}
@@ -768,20 +742,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* OJ 绑定 */}
           {ojBindings.length > 0 && (
-            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-              <span style={{ fontSize: '0.875rem', color: 'var(--gray-500)', marginRight: '0.5rem' }}>OJ链接:</span>
+            <div className={unifiedStyles.u14}>
+              <span className={unifiedStyles.u15}>OJ链接:</span>
               {ojBindings.map((binding, index) => (
                 <a
                   key={index}
                   href={binding.url || getOjProblemUrl(binding.platform, binding.problemId)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    marginRight: '0.5rem',
-                    color: 'var(--primary)',
-                    textDecoration: 'none',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.u16}
                 >
                   [{OJ_PLATFORM_LABEL_MAP[binding.platform] || binding.platform} {binding.problemId}]
                 </a>
@@ -791,9 +760,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         </div>
 
         {/* Tab 切换 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
+        <div className={unifiedStyles.u17}>
+          <div className={unifiedStyles.u11}>
+            <Button variant="ghost"
               onClick={() => handleTabChange('statement')}
               style={{
                 padding: '0.75rem 1rem',
@@ -807,8 +776,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               }}
             >
               题面
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               onClick={() => handleTabChange('solution')}
               style={{
                 padding: '0.75rem 1rem',
@@ -822,8 +791,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               }}
             >
               题解
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               onClick={() => {
                 handleTabChange('attachments')
                 setHasVisitedAttachments(true)
@@ -844,20 +813,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             >
               附件
               {attachments.length > 0 && !hasVisitedAttachments && (
-                <span style={{
-                  background: 'var(--primary)',
-                  color: 'white',
-                  fontSize: '0.75rem',
-                  padding: '0.125rem 0.375rem',
-                  borderRadius: '10px',
-                  minWidth: '18px',
-                  textAlign: 'center'
-                }}>
+                <span className={unifiedStyles.u18}>
                   {attachments.length}
                 </span>
               )}
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               onClick={() => handleTabChange('my-content')}
               style={{
                 padding: '0.75rem 1rem',
@@ -871,8 +832,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               }}
             >
               我的题解
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               onClick={() => handleTabChange('records')}
               style={{
                 padding: '0.75rem 1rem',
@@ -886,9 +847,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               }}
             >
               提交记录
-            </button>
+            </Button>
             {problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
-              <button
+              <Button variant="ghost"
                 onClick={() => handleTabChange('hack')}
                 style={{
                   padding: '0.75rem 1rem',
@@ -902,43 +863,24 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 }}
               >
                 Hack{problem.hack.acceptedCount > 0 ? ` ${problem.hack.acceptedCount}` : ''}
-              </button>
+              </Button>
             )}
           </div>
 
           {/* 思路记录按钮 */}
-          <button
+          <Button variant="ghost"
             onClick={() => router.push(`${pathPrefix}/problems/${problemId}/note`)}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginBottom: '-1px'
-            }}
+            className={unifiedStyles.u19}
           >
             写思路
-          </button>
+          </Button>
         </div>
 
         {/* 内容区域 + AI侧边栏 */}
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+        <div className={unifiedStyles.u20}>
           {/* 主内容 */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              background: 'white',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-            }}>
+          <div className={unifiedStyles.u21}>
+            <div className={unifiedStyles.u22}>
           {/* 题面 Tab */}
           {activeTab === 'statement' && (
             <StatementVersionWorkspace problemId={problemId} />
@@ -949,14 +891,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             <>
               {/* 左上角版本选择 */}
               {visibleSolutions.length > 1 && (
-                <div style={{
-                  padding: '0.75rem 1rem',
-                  borderBottom: '1px solid var(--border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <select aria-label="选择"
+                <div className={unifiedStyles.u23}>
+                  <Select aria-label="选择"
                     value={selectedSolutionId || ''}
                     onChange={(e) => {
                       const id = e.target.value
@@ -969,27 +905,21 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         }
                       }
                     }}
-                    style={{
-                      padding: '0.375rem 0.75rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '4px',
-                      fontSize: '0.875rem',
-                      background: 'white'
-                    }}
+                    className={unifiedStyles.u24}
                   >
                     {visibleSolutions.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.format === 'pdf' ? 'PDF' : `${s.language ? LANGUAGE_LABELS[s.language] : '未知'}`}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               )}
 
-              <div style={{ padding: '2rem' }}>
+              <div className={unifiedStyles.u25}>
                 {/* 学生在公共题目上检查题解是否可见 */}
                 {!canModify() && currentSolution && !currentSolution.isVisible ? (
-                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
+                  <div className={unifiedStyles.u26}>
                     题解暂未公开
                   </div>
                 ) : currentSolution ? (
@@ -997,26 +927,18 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     currentSolution.fileUrl.startsWith('/') ? (
                       <iframe
                         src={getPdfUrl(currentSolution.fileUrl) || ''}
-                        style={{ width: '100%', height: '600px', border: 'none' }}
+                        className={unifiedStyles.u27}
                       />
                     ) : (
-                      <div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
-                        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem' }}>
+                      <div className={unifiedStyles.u28}>
+                        <p className={unifiedStyles.u29}>
                           题解为外部 PDF 文件，请在新窗口中查看
                         </p>
                         <a
                           href={currentSolution.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-block',
-                            padding: '0.5rem 1.5rem',
-                            backgroundColor: 'var(--primary)',
-                            color: 'var(--text-inverse)',
-                            borderRadius: 'var(--radius)',
-                            textDecoration: 'none',
-                            fontSize: '0.875rem',
-                          }}
+                          className={unifiedStyles.u30}
                         >
                           打开 PDF 题解
                         </a>
@@ -1025,12 +947,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   ) : currentSolution.content ? (
                     <MarkdownRenderer content={currentSolution.content} />
                   ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
+                    <div className={unifiedStyles.u26}>
                       暂无题解内容
                     </div>
                   )
                 ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
+                  <div className={unifiedStyles.u26}>
                     暂无题解内容
                   </div>
                 )}
@@ -1040,13 +962,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* 附件 Tab */}
           {activeTab === 'attachments' && (
-            <div style={{ padding: '2rem' }}>
+            <div className={unifiedStyles.u25}>
               {attachmentsLoading ? (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
+                <div className={unifiedStyles.u26}>
                   <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
                 </div>
               ) : attachments.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '1.5rem' }}>
+                <div className={unifiedStyles.u26}>
                   暂无附件
                 </div>
               ) : (
@@ -1054,37 +976,23 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   {attachments.map((attachment) => (
                     <div
                       key={attachment.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0.75rem 1rem',
-                        borderBottom: '1px solid var(--border)'
-                      }}
+                      className={unifiedStyles.u31}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '0.875rem' }}>附件</span>
+                      <div className={unifiedStyles.u32}>
+                        <span className={unifiedStyles.u33}>附件</span>
                         <div>
-                          <div style={{ fontWeight: 500 }}>{attachment.fileName}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                          <div className={unifiedStyles.u34}>{attachment.fileName}</div>
+                          <div className={unifiedStyles.u35}>
                             {formatFileSize(attachment.fileSize)}
                           </div>
                         </div>
                       </div>
-                      <button
+                      <Button variant="ghost"
                         onClick={() => handleDownload(attachment)}
-                        style={{
-                          padding: '0.375rem 0.75rem',
-                          background: 'var(--primary)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.875rem'
-                        }}
+                        className={unifiedStyles.u36}
                       >
                         下载
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1103,45 +1011,45 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* 提交记录 Tab */}
           {activeTab === 'records' && (
-            <div style={{ padding: '1rem' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <div className={unifiedStyles.u37}>
+              <table className={unifiedStyles.u38}>
                 <thead>
-                  <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid #e5e7eb' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测ID</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>用户名</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>评测结果</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>类型</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>耗时(MS)</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>内存(MB)</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>代码长度(B)</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>语言</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>提交时间</th>
+                  <tr className={unifiedStyles.u39}>
+                    <th className={unifiedStyles.u40}>评测ID</th>
+                    <th className={unifiedStyles.u40}>用户名</th>
+                    <th className={unifiedStyles.u40}>评测结果</th>
+                    <th className={unifiedStyles.u40}>类型</th>
+                    <th className={unifiedStyles.u40}>耗时(MS)</th>
+                    <th className={unifiedStyles.u40}>内存(MB)</th>
+                    <th className={unifiedStyles.u40}>代码长度(B)</th>
+                    <th className={unifiedStyles.u40}>语言</th>
+                    <th className={unifiedStyles.u40}>提交时间</th>
                   </tr>
                 </thead>
                 <tbody>
                   {problemSubmissionsLoading ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={9} className={unifiedStyles.u41}>
                         <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
                       </td>
                     </tr>
                   ) : problemSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={9} className={unifiedStyles.u41}>
                         暂无提交记录
                       </td>
                     </tr>
                   ) : (
                     problemSubmissions.map(s => (
-                      <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <tr key={s.id} className={unifiedStyles.u42}>
                         <td
                           onClick={() => {
                             router.push(`${pathPrefix}/submissions/${s.id}`)
                           }}
-                          style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
+                          className={unifiedStyles.u43}
                         >#{s.id}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.username}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
+                        <td className={unifiedStyles.u44}>{s.username}</td>
+                        <td className={unifiedStyles.u44}>
                           <span style={{
                             display: 'inline-block',
                             padding: '2px 8px',
@@ -1154,24 +1062,19 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                             {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
                           </span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                        <td className={unifiedStyles.u45}>
                           {s.submitMethod === 'archive' ? '远程归档' : '本地评测'}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.timeUsed ?? '-'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.codeLength ?? '-'}</td>
+                        <td className={unifiedStyles.u44}>{s.timeUsed ?? '-'}</td>
+                        <td className={unifiedStyles.u44}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
+                        <td className={unifiedStyles.u44}>{s.codeLength ?? '-'}</td>
                         <td
                           onClick={() => setDetailSubmissionId(s.id)}
-                          style={{
-                            padding: '0.75rem 1rem',
-                            color: 'var(--primary)',
-                            cursor: 'pointer',
-                            textDecoration: 'underline',
-                          }}
+                          className={unifiedStyles.u46}
                         >
                           {getLanguageLabel(s.language)}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        <td className={unifiedStyles.u47}>
                           {s.submittedAt ? new Date(s.submittedAt).toLocaleString('zh-CN') : '-'}
                         </td>
                       </tr>
@@ -1185,27 +1088,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         </div>{/* /主内容 */}
 
         {/* 右侧边栏 */}
-        <div style={{
-          width: '180px',
-          flexShrink: 0,
-          position: 'sticky',
-          top: '2rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.75rem',
-        }}>
+        <div className={unifiedStyles.u48}>
           {/* AI 工具 - 仅 Markdown 题面时显示 */}
           {canModify() && activeTab === 'statement' && currentStatement?.format === 'markdown' && (
-            <div style={{
-              background: 'white',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              padding: '1rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem'
-            }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--gray-700)', marginBottom: '0.25rem' }}>
+            <div className={unifiedStyles.u49}>
+              <div className={unifiedStyles.u50}>
                 AI 工具
               </div>
               {(() => {
@@ -1218,7 +1105,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
                 return (
                   <>
-                    <button
+                    <Button variant="ghost"
                       onClick={() => !alreadyTranslated && setShowTranslateModal(true)}
                       disabled={aiLoading === 'translate' || !!alreadyTranslated}
                       style={{
@@ -1238,13 +1125,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                       }}
                     >
                       {aiLoading === 'translate' ? '翻译中...' : alreadyTranslated ? '已翻译' : '翻译'}
-                    </button>
+                    </Button>
                     {alreadyTranslated && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', textAlign: 'center' }}>
+                      <div className={unifiedStyles.u51}>
                         已有{targetLabel}版本
                       </div>
                     )}
-                    <button
+                    <Button variant="ghost"
                       onClick={() => !alreadyFormatted && handleFormat()}
                       disabled={aiLoading === 'format' || !!alreadyFormatted}
                       style={{
@@ -1264,9 +1151,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                       }}
                     >
                       {aiLoading === 'format' ? '格式化中...' : alreadyFormatted ? '✨ 已格式化' : '✨ 格式化'}
-                    </button>
+                    </Button>
                     {alreadyFormatted && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--gray-400)', textAlign: 'center' }}>
+                      <div className={unifiedStyles.u51}>
                         该版本已格式化
                       </div>
                     )}
@@ -1274,7 +1161,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 )
               })()}
               {aiError && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '0.25rem' }}>
+                <div className={unifiedStyles.u52}>
                   {aiError}
                 </div>
               )}
@@ -1282,32 +1169,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           )}
 
           {/* 提交代码按钮 */}
-          <div style={{
-            background: 'white',
-            borderRadius: '8px',
-            border: '1px solid var(--border)',
-            padding: '1rem',
-          }}>
-            <button
+          <div className={unifiedStyles.u53}>
+            <Button variant="ghost"
               onClick={() => setShowSubmitPanel(true)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                background: 'var(--primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.25rem'
-              }}
+              className={unifiedStyles.u54}
             >
               ▶ 提交代码
-            </button>
+            </Button>
           </div>
         </div>
       </div>{/* /flex container */}
@@ -1320,22 +1188,19 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           title={`${OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} ${problem.problemId}`}
           size="xl"
         >
-          <div style={{
-            padding: '0.65rem 0.8rem', background: 'var(--gray-50)', borderRadius: '6px',
-            marginBottom: '1rem', fontSize: '0.875rem', color: 'var(--gray-500)',
-          }}>
+          <div className={unifiedStyles.u55}>
             本站提交的代码统一使用本地测试数据评测；远程归档仅同步历史记录，不参与本站成绩。
           </div>
 
           {/* Only platforms with archive connectors expose the archive action. */}
           {['codeforces', 'luogu'].includes(problem.platform) && (
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <div className={unifiedStyles.u56}>
               {([
                 { key: 'local', label: '本地评测' },
                 { key: 'archive', label: '同步归档' },
               ] as const)
                 .map(m => (
-                  <button
+                  <Button variant="ghost"
                     key={m.key}
                     onClick={() => setSubmitMethod(m.key)}
                     style={{
@@ -1351,34 +1216,24 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     }}
                   >
                     {m.label}
-                  </button>
+                  </Button>
                 ))}
             </div>
           )}
 
           {/* Archive requires a bound source-platform account. */}
           {submitMethod === 'archive' && (
-            <div style={{
-              fontSize: '0.875rem',
-              color: 'var(--gray-500)',
-              padding: '0.5rem 0.75rem',
-              background: 'var(--gray-50)',
-              borderRadius: '6px',
-              marginBottom: '1rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
+            <div className={unifiedStyles.u57}>
               <span>平台账号</span>
               {platformBinding === null ? (
-                <span style={{ color: 'var(--gray-400)' }}>检查中...</span>
+                <span className={unifiedStyles.u58}>检查中...</span>
               ) : platformBinding.bound ? (
-                <span style={{ color: 'var(--success)' }}>
+                <span className={unifiedStyles.u59}>
                   已绑定: {platformBinding.platformUsername}
                 </span>
               ) : (
                 <span
-                  style={{ color: 'var(--warning)', cursor: 'pointer', textDecoration: 'underline' }}
+                  className={unifiedStyles.u60}
                   onClick={() => router.push('/account/platform-bindings')}
                 >
                   未绑定，点击去绑定
@@ -1389,7 +1244,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* 语言选择 - 归档模式下隐藏 */}
           {submitMethod !== 'archive' && (
-          <div style={{ marginBottom: '1rem' }}>
+          <div className={unifiedStyles.u61}>
             {(() => {
               const platformLangs: PlatformLanguage[] = problem.allowedLanguages
                 ? JSON.parse(problem.allowedLanguages)
@@ -1398,22 +1253,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 ? platformLangs
                 : LANGUAGE_OPTIONS.filter(o => o.value).map(o => ({ id: o.value, name: o.label }))
               return (
-                <select aria-label="选择"
+                <Select aria-label="选择"
                   value={submitLanguage}
                   onChange={e => setSubmitLanguage(e.target.value)}
-                  style={{
-                    padding: '0.5rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                    minWidth: '150px',
-                    background: 'white',
-                  }}
+                  className={unifiedStyles.u62}
                 >
                   {langs.map(l => (
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
-                </select>
+                </Select>
               )
             })()}
           </div>
@@ -1421,7 +1269,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* 代码输入框 - 归档模式下隐藏 */}
           {submitMethod !== 'archive' && (
-          <textarea
+          <Textarea
             placeholder="在此输入代码..."
             value={submitCode}
             onChange={e => setSubmitCode(e.target.value)}
@@ -1443,12 +1291,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           )}
 
           {/* 提交按钮 */}
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
+          <div className={unifiedStyles.u63}>
+            <span className={unifiedStyles.u64}>
               {submitMethod === 'local' ? '本地评测' : '远程归档：只同步展示，不参与评测或计分'}
             </span>
             {submitMethod === 'archive' ? (
-              <button
+              <Button variant="ghost"
                 onClick={handleArchiveSync}
                 disabled={submitLoading || !platformBinding?.bound}
                 style={{
@@ -1464,9 +1312,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 }}
               >
                 {submitLoading ? '同步中...' : '同步归档'}
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button variant="ghost"
                 onClick={handleSubmitCode}
                 disabled={submitLoading || !submitCode.trim()}
                 style={{
@@ -1482,7 +1330,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 }}
               >
                 {submitLoading ? '提交中...' : '提交'}
-              </button>
+              </Button>
             )}
           </div>
         </DetailDialog>

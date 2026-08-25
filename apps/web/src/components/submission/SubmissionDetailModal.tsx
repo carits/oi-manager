@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import unifiedStyles from './SubmissionDetailModal.unified.module.css'
+import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
 import { DetailDialog } from '@/components/ui/Dialogs'
 import apiClient from '@/lib/apiClient'
@@ -58,17 +60,7 @@ interface SubmissionDetailModalProps {
 
 // 转圈动画组件
 const Spinner = () => (
-  <span style={{
-    display: 'inline-block',
-    width: '14px',
-    height: '14px',
-    border: '2px solid #e5e7eb',
-    borderTopColor: 'var(--primary)',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-    marginRight: '6px',
-    verticalAlign: 'middle',
-  }} />
+  <span className={unifiedStyles.u1} />
 )
 
 // 语言 ID 到 highlight.js 语言名映射
@@ -242,15 +234,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
     // OI 赛中非管理员：显示"已提交"
     if (hidden || displayResult === 'pending') {
       return (
-        <span style={{
-          display: 'inline-block',
-          padding: '4px 12px',
-          borderRadius: '6px',
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          background: 'var(--info-light)',
-          color: 'var(--info-text)',
-        }}>
+        <span className={unifiedStyles.u2}>
           已提交
         </span>
       )
@@ -258,15 +242,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
     if (!result) {
       return (
-        <span style={{
-          display: 'inline-block',
-          padding: '4px 12px',
-          borderRadius: '6px',
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          background: 'var(--bg-muted)',
-          color: 'var(--text-muted)',
-        }}>
+        <span className={unifiedStyles.u3}>
           -
         </span>
       )
@@ -304,8 +280,8 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
         background: colors.bg,
         color: colors.text,
       }}>
-        {result === 'accepted' && <span style={{ marginRight: '4px' }}>✓</span>}
-        {result !== 'accepted' && result !== 'queuing' && result !== 'judging' && <span style={{ marginRight: '4px' }}>✕</span>}
+        {result === 'accepted' && <span className={unifiedStyles.u4}>✓</span>}
+        {result !== 'accepted' && result !== 'queuing' && result !== 'judging' && <span className={unifiedStyles.u4}>✕</span>}
         {label}
       </span>
     )
@@ -342,25 +318,16 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
       ) : error && !detail ? (
         <LoadError message={error} onRetry={() => window.location.reload()} />
       ) : detail ? (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className={unifiedStyles.u5}>
           {/* 提交信息表格 */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, 1fr)',
-            gap: '1rem',
-            marginBottom: '1.5rem',
-            padding: '1rem',
-            background: 'var(--bg-muted)',
-            borderRadius: '8px',
-            flexShrink: 0,
-          }}>
+          <div className={unifiedStyles.u6}>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>评测结果</div>
+              <div className={unifiedStyles.u7}>评测结果</div>
               {getResultBadge(detail.result, detail.score, detail.hidden, detail.displayResult)}
             </div>
             {detail.judgeMode === 'oi' && !detail.hidden && (
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>分数</div>
+              <div className={unifiedStyles.u7}>分数</div>
               <div style={{
                 fontWeight: 700,
                 fontSize: '1.125rem',
@@ -375,14 +342,14 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             {!detail.hidden && (
             <>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>耗时</div>
-              <div style={{ fontWeight: 500 }}>
+              <div className={unifiedStyles.u7}>耗时</div>
+              <div className={unifiedStyles.u8}>
                 {detail.timeUsed ? `${detail.timeUsed}MS` : '-'}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>内存</div>
-              <div style={{ fontWeight: 500 }}>
+              <div className={unifiedStyles.u7}>内存</div>
+              <div className={unifiedStyles.u8}>
                 {detail.memoryUsed != null
                   ? `${(detail.memoryUsed / 1024).toFixed(2)}MB`
                   : '-'}
@@ -391,39 +358,31 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             </>
             )}
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>代码长度</div>
-              <div style={{ fontWeight: 500 }}>{detail.codeLength}B</div>
+              <div className={unifiedStyles.u7}>代码长度</div>
+              <div className={unifiedStyles.u8}>{detail.codeLength}B</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>语言</div>
-              <div style={{ fontWeight: 500 }}>{getLanguageLabelLocal(detail.language)}</div>
+              <div className={unifiedStyles.u7}>语言</div>
+              <div className={unifiedStyles.u8}>{getLanguageLabelLocal(detail.language)}</div>
             </div>
           </div>
 
           {/* 提交时间和远程提交ID */}
-          <div style={{
-            display: 'flex',
-            gap: '2rem',
-            marginBottom: '1.5rem',
-            padding: '0.75rem 1rem',
-            background: 'var(--bg-muted)',
-            borderRadius: '8px',
-            flexShrink: 0,
-          }}>
+          <div className={unifiedStyles.u9}>
             <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>提交时间：</span>
-              <span style={{ fontWeight: 500 }}>{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
+              <span className={unifiedStyles.u10}>提交时间：</span>
+              <span className={unifiedStyles.u8}>{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
             </div>
             {!detail.hidden && !detail.problemSourceHidden && !detail.problemIdentityHidden && !detail.hideRemoteId && (
             <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>远程提交ID：</span>
+              <span className={unifiedStyles.u10}>远程提交ID：</span>
               {detail.ojRemoteId ? (
                 getRemoteSubmitUrl(detail.oj || '', detail.id, detail.ojRemoteId, viewRole, detail.problemId, submissionPathPrefix) ? (
                   <a
                     href={getRemoteSubmitUrl(detail.oj || '', detail.id, detail.ojRemoteId, viewRole, detail.problemId, submissionPathPrefix)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                    className={unifiedStyles.u11}
                   >
                     {detail.ojRemoteId}
                   </a>
@@ -431,7 +390,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
                   <span>{detail.ojRemoteId}</span>
                 )
               ) : (
-                <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span className={unifiedStyles.u12}>
                   <Spinner />
                   等待分配...
                 </span>
@@ -442,15 +401,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
           {/* 错误信息 */}
           {detail.errorMessage && (
-            <div style={{
-              marginBottom: '1rem',
-              padding: '0.75rem',
-              background: 'var(--error-light)',
-              borderRadius: '8px',
-              color: 'var(--error-text)',
-              fontSize: '0.875rem',
-              flexShrink: 0,
-            }}>
+            <div className={unifiedStyles.u13}>
               {detail.errorMessage}
             </div>
           )}
@@ -466,45 +417,18 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
           {/* 源码显示区 */}
           {detail.code ? (
-          <div style={{
-            position: 'relative',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            overflow: 'visible',
-          }}>
+          <div className={unifiedStyles.u14}>
             {/* Copy Code 按钮 */}
-            <button
+            <Button variant="ghost"
               onClick={handleCopy}
-              style={{
-                position: 'absolute',
-                top: '0.5rem',
-                right: '0.5rem',
-                padding: '0.375rem 0.75rem',
-                background: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                zIndex: 10,
-              }}
+              className={unifiedStyles.u15}
             >
               {copied ? '已复制' : '复制代码'}
-            </button>
+            </Button>
 
             {/* 代码区域 */}
-            <div style={{
-              overflow: 'visible',
-              background: 'var(--bg-muted)',
-            }}>
-              <pre style={{
-                margin: 0,
-                padding: '1rem',
-                fontSize: '0.875rem',
-                lineHeight: 1.6,
-                overflow: 'visible',
-                whiteSpace: 'pre-wrap',
-                overflowWrap: 'anywhere',
-              }}>
+            <div className={unifiedStyles.u16}>
+              <pre className={unifiedStyles.u17}>
                 <code
                   dangerouslySetInnerHTML={{ __html: getHighlightedCode() }}
                   style={{ fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace" }}
@@ -513,20 +437,13 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             </div>
           </div>
           ) : (
-          <div style={{
-            padding: '2rem',
-            textAlign: 'center',
-            color: 'var(--text-muted)',
-            background: 'var(--bg-muted)',
-            borderRadius: '8px',
-            border: '1px solid #e5e7eb',
-          }}>
+          <div className={unifiedStyles.u18}>
             {detail.submitMethod === 'archive' ? '归档记录，源代码不可用' : '无源代码'}
           </div>
           )}
         </div>
       ) : (
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div className={unifiedStyles.u19}>
           提交记录不存在
         </div>
       )}

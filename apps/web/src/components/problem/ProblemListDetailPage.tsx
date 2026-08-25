@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import unifiedStyles from './ProblemListDetailPage.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter, useParams } from 'next/navigation'
@@ -424,7 +426,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
         />
         {editingTitle && (
           <Toolbar>
-            <ToolbarGroup style={{ flex: 1 }}><label htmlFor="problem-list-title">题单标题</label><input id="problem-list-title" type="text" value={titleDraft} onChange={event => setTitleDraft(event.target.value)} onKeyDown={event => event.key === 'Enter' && handleSaveTitle()} autoFocus style={{ flex: 1, minWidth: 280, padding: '0.5rem 0.75rem', border: '1px solid var(--primary)', borderRadius: 'var(--radius)' }} /></ToolbarGroup>
+            <ToolbarGroup className={unifiedStyles.u1}><label htmlFor="problem-list-title">题单标题</label><Input id="problem-list-title" type="text" value={titleDraft} onChange={event => setTitleDraft(event.target.value)} onKeyDown={event => event.key === 'Enter' && handleSaveTitle()} autoFocus className={unifiedStyles.u2} /></ToolbarGroup>
             <ToolbarGroup><Button variant="secondary" onClick={() => setEditingTitle(false)}>取消</Button><Button onClick={handleSaveTitle}>保存</Button></ToolbarGroup>
           </Toolbar>
         )}
@@ -433,16 +435,16 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
           {detail.Sections.map((section) => {
             const sectionNewRows = newRows.filter(r => r.sectionId === section.id)
             return (
-              <div key={section.id} style={{ marginBottom: '1.5rem' }}>
+              <div key={section.id} className={unifiedStyles.u3}>
                 {/* 章节标题 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 0', borderBottom: '2px solid var(--gray-200)', marginBottom: '0.5rem' }}>
+                <div className={unifiedStyles.u4}>
                   {editingSection === section.id ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                      <input type="text" value={sectionTitleDraft} onChange={e => setSectionTitleDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRenameSection(section.id)} autoFocus
-                        style={{ fontSize: '1rem', fontWeight: 600, padding: '0.2rem 0.5rem', border: '1px solid var(--primary)', borderRadius: '4px', width: '250px' }}
+                    <div className={unifiedStyles.u5}>
+                      <Input type="text" value={sectionTitleDraft} onChange={e => setSectionTitleDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRenameSection(section.id)} autoFocus
+                        className={unifiedStyles.u6}
                       />
-                      <button onClick={() => handleRenameSection(section.id)} style={{ padding: '0.2rem 0.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>保存</button>
-                      <button onClick={() => setEditingSection(null)} style={{ padding: '0.2rem 0.5rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>取消</button>
+                      <Button variant="ghost" onClick={() => handleRenameSection(section.id)} className={unifiedStyles.u7}>保存</Button>
+                      <Button variant="ghost" onClick={() => setEditingSection(null)} className={unifiedStyles.u8}>取消</Button>
                     </div>
                   ) : (
                     <>
@@ -450,13 +452,13 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                         style={{ fontSize: '1rem', fontWeight: 600, cursor: canEdit && !isStudentView ? 'pointer' : 'default', margin: 0 }}>
                         {section.title}
                       </h2>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>({section.Entries.length} 题)</span>
+                      <span className={unifiedStyles.u9}>({section.Entries.length} 题)</span>
                     </>
                   )}
                   {canEdit && !isStudentView && editingSection !== section.id && (
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem' }}>
+                    <div className={unifiedStyles.u10}>
                       {detail.Sections.length > 1 && (
-                        <button onClick={() => setDeleteSectionConfirm(section.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', fontSize: '0.75rem', padding: '0.1rem 0.3rem' }} title="删除章节">✕</button>
+                        <Button variant="ghost" onClick={() => setDeleteSectionConfirm(section.id)} className={unifiedStyles.u11} title="删除章节">✕</Button>
                       )}
                     </div>
                   )}
@@ -464,87 +466,87 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
                 {/* 题目表格 */}
                 {(section.Entries.length > 0 || sectionNewRows.length > 0) ? (
-                  <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+                  <div className={unifiedStyles.u12}>
+                    <table className={unifiedStyles.u13}>
                       <colgroup>
-                        <col style={{ width: '36px' }} />
-                        {!isStudentView && <col style={{ width: '150px' }} />}
-                        {!isStudentView && <col style={{ width: '80px' }} />}
+                        <col className={unifiedStyles.u14} />
+                        {!isStudentView && <col className={unifiedStyles.u15} />}
+                        {!isStudentView && <col className={unifiedStyles.u16} />}
                         <col />
-                        {!isStudentView && <col style={{ width: '600px' }} />}
-                        {canEdit && !isStudentView && <col style={{ width: '60px' }} />}
+                        {!isStudentView && <col className={unifiedStyles.u17} />}
+                        {canEdit && !isStudentView && <col className={unifiedStyles.u18} />}
                       </colgroup>
                       <thead>
-                        <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>#</th>
-                          {!isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>OJ</th>}
-                          {!isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>题号</th>}
-                          <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>标题</th>
-                          {!isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>备注</th>}
-                          {canEdit && !isStudentView && <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 500, color: 'var(--gray-500)', fontSize: '0.75rem' }}>操作</th>}
+                        <tr className={unifiedStyles.u19}>
+                          <th className={unifiedStyles.u20}>#</th>
+                          {!isStudentView && <th className={unifiedStyles.u21}>OJ</th>}
+                          {!isStudentView && <th className={unifiedStyles.u21}>题号</th>}
+                          <th className={unifiedStyles.u21}>标题</th>
+                          {!isStudentView && <th className={unifiedStyles.u21}>备注</th>}
+                          {canEdit && !isStudentView && <th className={unifiedStyles.u20}>操作</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {section.Entries.map((entry, idx) => (
-                          <tr key={entry.id} style={{ borderBottom: '1px solid var(--gray-100)' }}>
-                            <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{idx + 1}</td>
-                            {!isStudentView && <td style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</td>}
-                            {!isStudentView && <td style={{ padding: '0.4rem 0.75rem' }}>
-                              <Link href={`${pathPrefix}/problems/${entry.problemId}`} style={{ color: 'var(--primary)', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                          <tr key={entry.id} className={unifiedStyles.u22}>
+                            <td className={unifiedStyles.u23}>{idx + 1}</td>
+                            {!isStudentView && <td className={unifiedStyles.u24}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</td>}
+                            {!isStudentView && <td className={unifiedStyles.u25}>
+                              <Link href={`${pathPrefix}/problems/${entry.problemId}`} className={unifiedStyles.u26}>
                                 {entry.Problem.problemId}
                               </Link>
                             </td>}
-                            <td style={{ padding: '0.4rem 0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span>
+                            <td className={unifiedStyles.u27}>
+                              <span className={unifiedStyles.u28}>✓</span>
                               {!isStudentView ? (
-                                <Link href={`${pathPrefix}/problems/${entry.problemId}`} style={{ color: 'var(--primary)', fontSize: '0.85rem' }} title={entry.Problem.title}>
+                                <Link href={`${pathPrefix}/problems/${entry.problemId}`} className={unifiedStyles.u29} title={entry.Problem.title}>
                                   {entry.Problem.title}
                                 </Link>
                               ) : (
-                                <button
+                                <Button variant="ghost"
                                   type="button"
                                   onClick={() => openContextProblem(entry.id)}
-                                  style={{ color: 'var(--primary)', fontSize: '0.85rem', textAlign: 'left' }}
+                                  className={unifiedStyles.u30}
                                   title={`查看「${entry.Problem.title}」题面`}
                                 >
                                   {entry.Problem.title}
-                                </button>
+                                </Button>
                               )}
                             </td>
-                            {!isStudentView && <td style={{ padding: '0.4rem 0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {!isStudentView && <td className={unifiedStyles.u31}>
                               {editingEntry === entry.id ? (
-                                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}
+                                <div className={unifiedStyles.u32}
                                   onBlur={(e) => {
                                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                                       handleUpdateEntry(entry.id, { notes: editNotes || null })
                                     }
                                   }}
                                 >
-                                  <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                                  <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
                                     autoFocus rows={2} wrap="soft"
-                                    style={{ flex: 1, padding: '0.15rem 0.3rem', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', minWidth: 0, resize: 'vertical', lineHeight: '1.4', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-all', boxSizing: 'border-box' }}
+                                    className={unifiedStyles.u33}
                                   />
-                                  <button onClick={() => handleUpdateEntry(entry.id, { notes: editNotes || null })}
-                                    style={{ padding: '0.1rem 0.3rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0 }}>
+                                  <Button variant="ghost" onClick={() => handleUpdateEntry(entry.id, { notes: editNotes || null })}
+                                    className={unifiedStyles.u34}>
                                     ✓
-                                  </button>
+                                  </Button>
                                 </div>
                               ) : (
-                                <button type="button" onClick={() => { if (!canEdit) return; setEditingEntry(entry.id); setEditNotes(entry.notes || '') }} disabled={!canEdit}
+                                <Button variant="ghost" type="button" onClick={() => { if (!canEdit) return; setEditingEntry(entry.id); setEditNotes(entry.notes || '') }} disabled={!canEdit}
                                   style={{ cursor: canEdit ? 'pointer' : 'default', color: entry.notes ? 'var(--gray-600)' : 'var(--gray-400)', fontSize: '0.8rem', textAlign: 'left', width: '100%' }}>
                                   {entry.notes || (canEdit ? '点击添加' : '-')}
-                                </button>
+                                </Button>
                               )}
                             </td>}
                             {canEdit && !isStudentView && (
-                              <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center', alignItems: 'center' }}>
-                                  <button onClick={() => handleMoveEntry(section.id, entry.id, 'up')} disabled={idx === 0}
-                                    style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
-                                  <button onClick={() => handleMoveEntry(section.id, entry.id, 'down')} disabled={idx === section.Entries.length - 1}
-                                    style={{ background: 'none', border: 'none', cursor: idx === section.Entries.length - 1 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === section.Entries.length - 1 ? 0.3 : 1 }}>↓</button>
-                                  <button onClick={() => setDeleteEntryConfirm(entry.id)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.8rem', padding: '0.1rem 0.2rem' }}>✕</button>
+                              <td className={unifiedStyles.u35}>
+                                <div className={unifiedStyles.u36}>
+                                  <Button variant="ghost" onClick={() => handleMoveEntry(section.id, entry.id, 'up')} disabled={idx === 0}
+                                    style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === 0 ? 0.3 : 1 }}>↑</Button>
+                                  <Button variant="ghost" onClick={() => handleMoveEntry(section.id, entry.id, 'down')} disabled={idx === section.Entries.length - 1}
+                                    style={{ background: 'none', border: 'none', cursor: idx === section.Entries.length - 1 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === section.Entries.length - 1 ? 0.3 : 1 }}>↓</Button>
+                                  <Button variant="ghost" onClick={() => setDeleteEntryConfirm(entry.id)}
+                                    className={unifiedStyles.u37}>✕</Button>
                                 </div>
                               </td>
                             )}
@@ -553,40 +555,40 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
                         {/* 新行 */}
                         {canEdit && !isStudentView && sectionNewRows.map((row) => (
-                          <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: '#fffbe6' }}>
-                            <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</td>
-                            <td style={{ padding: '0.4rem 0.75rem' }}>
-                              <select aria-label="选择" value={row.ojName} onChange={e => updateNewRow(row.id, { ojName: e.target.value, resolved: null })}
-                                style={{ padding: '0.25rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', width: '100%' }}>
+                          <tr key={row.id} className={unifiedStyles.u38}>
+                            <td className={unifiedStyles.u23}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</td>
+                            <td className={unifiedStyles.u25}>
+                              <Select aria-label="选择" value={row.ojName} onChange={e => updateNewRow(row.id, { ojName: e.target.value, resolved: null })}
+                                className={unifiedStyles.u39}>
                                 {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
-                              </select>
+                              </Select>
                             </td>
-                            <td style={{ padding: '0.4rem 0.75rem' }}>
-                              <input type="text" value={row.problemCode}
+                            <td className={unifiedStyles.u25}>
+                              <Input type="text" value={row.problemCode}
                                 onChange={e => { updateNewRow(row.id, { problemCode: e.target.value, resolved: null }); handleResolveRow({ ...row, problemCode: e.target.value }) }}
                                 placeholder="输入题号" autoFocus
-                                style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%' }}
+                                className={unifiedStyles.u40}
                               />
                             </td>
-                            <td style={{ padding: '0.4rem 0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {row.saving ? <span style={{ color: 'var(--primary)', fontSize: '0.8rem' }}>保存中...</span>
-                                : row.resolving ? <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>检索中...</span>
-                                : row.resolved ? row.resolved.found ? <span><span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>✓</span><span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>{row.resolved.title}</span></span>
-                                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: 'var(--error)', fontSize: '0.85rem' }}><AlertTriangle aria-hidden="true" size={14} />题目不存在</span>
-                                : <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>-</span>}
+                            <td className={unifiedStyles.u27}>
+                              {row.saving ? <span className={unifiedStyles.u41}>保存中...</span>
+                                : row.resolving ? <span className={unifiedStyles.u42}>检索中...</span>
+                                : row.resolved ? row.resolved.found ? <span><span className={unifiedStyles.u28}>✓</span><span className={unifiedStyles.u29}>{row.resolved.title}</span></span>
+                                  : <span className={unifiedStyles.u43}><AlertTriangle aria-hidden="true" size={14} />题目不存在</span>
+                                : <span className={unifiedStyles.u42}>-</span>}
                             </td>
-                            <td style={{ padding: '0.4rem 0.75rem' }}>
-                              <textarea value={row.notes} onChange={e => updateNewRow(row.id, { notes: e.target.value })}
+                            <td className={unifiedStyles.u25}>
+                              <Textarea value={row.notes} onChange={e => updateNewRow(row.id, { notes: e.target.value })}
                                 placeholder="备注" disabled={row.saving} rows={2} wrap="soft"
-                                style={{ width: '100%', padding: '0.15rem 0.3rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', minWidth: 0, resize: 'vertical', lineHeight: '1.4', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: 'break-all', boxSizing: 'border-box' }} />
+                                className={unifiedStyles.u44} />
                             </td>
-                            <td style={{ padding: '0.4rem 0.75rem', textAlign: 'center' }}>
-                              <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center', alignItems: 'center' }}>
-                                {row.saving ? <span style={{ color: 'var(--primary)', fontSize: '0.75rem' }}>保存中...</span>
-                                  : row.resolved?.found ? <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}>✓ 已就绪</span>
-                                  : row.resolved && !row.resolved.found ? <span style={{ color: 'var(--error)', fontSize: '0.75rem' }}>不存在</span>
+                            <td className={unifiedStyles.u35}>
+                              <div className={unifiedStyles.u36}>
+                                {row.saving ? <span className={unifiedStyles.u45}>保存中...</span>
+                                  : row.resolved?.found ? <span className={unifiedStyles.u46}>✓ 已就绪</span>
+                                  : row.resolved && !row.resolved.found ? <span className={unifiedStyles.u47}>不存在</span>
                                   : null}
-                                {!row.saving && <button onClick={() => removeNewRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.8rem', padding: '0.1rem 0.2rem' }}>✕</button>}
+                                {!row.saving && <Button variant="ghost" onClick={() => removeNewRow(row.id)} className={unifiedStyles.u37}>✕</Button>}
                               </div>
                             </td>
                           </tr>
@@ -595,18 +597,18 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                     </table>
                   </div>
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--gray-400)', fontSize: '0.85rem', background: 'white', borderRadius: '8px', border: '1px solid var(--border)' }}>暂无题目</div>
+                  <div className={unifiedStyles.u48}>暂无题目</div>
                 )}
 
                 {/* 添加题目 + 保存按钮 */}
                 {canEdit && !isStudentView && (
-                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => addNewRow(section.id)}
-                      style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: '1px dashed var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--gray-400)', fontSize: '0.85rem' }}>
+                  <div className={unifiedStyles.u49}>
+                    <Button variant="ghost" onClick={() => addNewRow(section.id)}
+                      className={unifiedStyles.u50}>
                       + 添加一道题目
-                    </button>
+                    </Button>
                     {sectionNewRows.length > 0 && (
-                      <button
+                      <Button variant="ghost"
                         onClick={() => saveAllSectionRows(section.id)}
                         disabled={!sectionNewRows.some(r => r.resolved?.found && !r.saving)}
                         style={{
@@ -622,7 +624,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                         }}
                       >
                         保存 ({sectionNewRows.filter(r => r.resolved?.found && !r.saving).length} 题)
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -632,24 +634,24 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
           {/* 添加章节 */}
           {canEdit && (
-            <div style={{ marginTop: '1rem' }}>
+            <div className={unifiedStyles.u51}>
               {showNewSection ? (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <input type="text" value={newSectionTitle} onChange={e => setNewSectionTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSection()} placeholder="章节标题" autoFocus
-                    style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid var(--primary)', borderRadius: '6px', fontSize: '0.85rem' }} />
-                  <button onClick={handleAddSection} style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>确认</button>
-                  <button onClick={() => { setShowNewSection(false); setNewSectionTitle('') }} style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>取消</button>
+                <div className={unifiedStyles.u52}>
+                  <Input type="text" value={newSectionTitle} onChange={e => setNewSectionTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSection()} placeholder="章节标题" autoFocus
+                    className={unifiedStyles.u53} />
+                  <Button variant="ghost" onClick={handleAddSection} className={unifiedStyles.u54}>确认</Button>
+                  <Button variant="ghost" onClick={() => { setShowNewSection(false); setNewSectionTitle('') }} className={unifiedStyles.u55}>取消</Button>
                 </div>
               ) : (
-                <button onClick={() => setShowNewSection(true)}
-                  style={{ width: '100%', padding: '0.75rem', background: 'transparent', border: '1px dashed var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--gray-400)', fontSize: '0.85rem' }}>
+                <Button variant="ghost" onClick={() => setShowNewSection(true)}
+                  className={unifiedStyles.u56}>
                   + 添加章节
-                </button>
+                </Button>
               )}
             </div>
           )}
 
-          <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--gray-400)' }}>
+          <div className={unifiedStyles.u57}>
             共 {detail.Sections.length} 个章节，{totalEntries} 题
           </div>
       </PageFrame>
@@ -681,8 +683,8 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
             action={<Button onClick={() => contextEntryId && openContextProblem(contextEntryId)}>重试</Button>}
           />
         ) : contextProblem ? (
-          <div style={{ display: 'grid', gap: '1.25rem' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', color: 'var(--gray-500)', fontSize: '0.85rem' }}>
+          <div className={unifiedStyles.u58}>
+            <div className={unifiedStyles.u59}>
               {contextProblem.difficulty && <span>难度：{contextProblem.difficulty}</span>}
               {contextProblem.timeLimit && <span>时间限制：{contextProblem.timeLimit} ms</span>}
               {contextProblem.memoryLimit && <span>内存限制：{contextProblem.memoryLimit} MB</span>}
@@ -696,8 +698,8 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
             )}
             {contextProblem.attachments.length > 0 && (
               <section>
-                <h3 style={{ fontSize: '1rem', margin: '0 0 0.75rem' }}>附件</h3>
-                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                <h3 className={unifiedStyles.u60}>附件</h3>
+                <div className={unifiedStyles.u61}>
                   {contextProblem.attachments.map(attachment => (
                     <a key={attachment.id} href={getAssetUrl(attachment.fileUrl)} target="_blank" rel="noreferrer">
                       {attachment.fileName}
@@ -775,46 +777,46 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
 
   return (
     <FormDialog isOpen={true} onClose={onClose} title="发布为作业" size="md">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className={unifiedStyles.u62}>
         <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>目标团队</label>
-          <select aria-label="选择" value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem' }}>
+          <label className={unifiedStyles.u63}>目标团队</label>
+          <Select aria-label="选择" value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
+            className={unifiedStyles.u64}>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>作业标题（留空则使用题单标题）</label>
-          <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="可选"
-            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+          <label className={unifiedStyles.u63}>作业标题（留空则使用题单标题）</label>
+          <Input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="可选"
+            className={unifiedStyles.u65} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>赛制</label>
-          <select aria-label="选择" value={format} onChange={e => setFormat(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem' }}>
+          <label className={unifiedStyles.u63}>赛制</label>
+          <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value)}
+            className={unifiedStyles.u64}>
             <option value="oi">OI</option>
             <option value="ioi">IOI</option>
             <option value="icpc">ICPC</option>
-          </select>
+          </Select>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className={unifiedStyles.u66}>
           <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>开始时间</label>
-            <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            <label className={unifiedStyles.u63}>开始时间</label>
+            <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)}
+              className={unifiedStyles.u65} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>结束时间</label>
-            <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            <label className={unifiedStyles.u63}>结束时间</label>
+            <Input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)}
+              className={unifiedStyles.u65} />
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-          <button onClick={onClose} style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '0.9rem' }}>取消</button>
-          <button onClick={handleSubmit} disabled={submitting}
+        <div className={unifiedStyles.u67}>
+          <Button variant="ghost" onClick={onClose} className={unifiedStyles.u68}>取消</Button>
+          <Button variant="ghost" onClick={handleSubmit} disabled={submitting}
             style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
             {submitting ? '发布中...' : '发布'}
-          </button>
+          </Button>
         </div>
       </div>
     </FormDialog>
@@ -938,19 +940,19 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
 
   return (
     <FormDialog isOpen={true} onClose={onClose} title="权限管理" size="xl">
-      <div style={{ minHeight: '420px', display: 'flex', flexDirection: 'column' }}>
+      <div className={unifiedStyles.u69}>
         {/* 表头行 */}
-        <div style={{ display: 'flex', fontSize: '0.8rem', color: 'var(--gray-400)', marginBottom: '0.75rem', padding: '0 0.25rem', flexShrink: 0 }}>
-          <span style={{ flex: 1 }}>用户</span>
-          <span style={{ width: '110px', textAlign: 'center' }}>权限</span>
-          <span style={{ width: '72px' }} />
+        <div className={unifiedStyles.u70}>
+          <span className={unifiedStyles.u1}>用户</span>
+          <span className={unifiedStyles.u71}>权限</span>
+          <span className={unifiedStyles.u72} />
         </div>
 
         {/* 操作行：搜索 + 权限下拉 + 提交 */}
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1.25rem', position: 'relative', flexShrink: 0 }} ref={dropdownRef}>
+        <div className={unifiedStyles.u73} ref={dropdownRef}>
           {/* 搜索框 */}
-          <div style={{ flex: 1, position: 'relative' }}>
-            <input
+          <div className={unifiedStyles.u74}>
+            <Input
               type="text" value={keyword} onChange={e => handleKeywordChange(e.target.value)}
               onFocus={() => { if (keyword.trim() && candidates.length > 0) setShowDropdown(true) }}
               placeholder="搜索用户"
@@ -963,15 +965,11 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
             />
             {/* 候选人下拉浮层 */}
             {showDropdown && (candidates.length > 0 || searching) && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                background: 'white', border: '1px solid var(--border)', borderRadius: '8px',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: '240px', overflowY: 'auto', marginTop: '4px',
-              }}>
+              <div className={unifiedStyles.u75}>
                 {searching ? (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.9rem' }}>搜索中...</div>
+                  <div className={unifiedStyles.u76}>搜索中...</div>
                 ) : candidates.map(c => (
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     key={c.id}
                     onClick={() => handleSelectCandidate(c)}
@@ -986,9 +984,9 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
                     }}>
                       {!c.avatar && (c.name || '?').charAt(0)}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontWeight: 500, fontSize: '0.95rem' }}>{c.name}</span>
-                      <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem', marginLeft: '0.4rem' }}>({c.username})</span>
+                    <div className={unifiedStyles.u77}>
+                      <span className={unifiedStyles.u78}>{c.name}</span>
+                      <span className={unifiedStyles.u79}>({c.username})</span>
                     </div>
                     <span style={{
                       fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
@@ -997,21 +995,21 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
                     }}>
                       {c.type === 'teacher' ? '教师' : '学生'}
                     </span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
           </div>
 
           {/* 权限下拉 */}
-          <select aria-label="选择" value={permission} onChange={e => setPermission(e.target.value as 'view' | 'edit')}
-            style={{ width: '110px', padding: '0.55rem 0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.95rem' }}>
+          <Select aria-label="选择" value={permission} onChange={e => setPermission(e.target.value as 'view' | 'edit')}
+            className={unifiedStyles.u80}>
             <option value="view">只读</option>
             <option value="edit">可读写</option>
-          </select>
+          </Select>
 
           {/* 提交按钮 */}
-          <button
+          <Button variant="ghost"
             onClick={handleSubmit}
             disabled={!selectedCandidate || submitting}
             style={{
@@ -1023,16 +1021,13 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
             }}
           >
             {submitting ? '...' : '提交'}
-          </button>
+          </Button>
         </div>
 
         {/* 已分享列表 — 可滚动 */}
-        <div style={{ borderTop: '1px solid var(--gray-200)', paddingTop: '0.75rem', flex: 1, overflowY: 'auto', minHeight: '200px', maxHeight: '400px' }}>
+        <div className={unifiedStyles.u81}>
           {shares.length > 0 ? shares.map(share => (
-            <div key={share.id} style={{
-              display: 'flex', alignItems: 'center', gap: '0.75rem',
-              padding: '0.65rem 0.25rem', borderBottom: '1px solid var(--gray-100)',
-            }}>
+            <div key={share.id} className={unifiedStyles.u82}>
               {/* 头像 */}
               <div style={{
                 width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
@@ -1042,32 +1037,32 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
               }}>
                 {!share.targetAvatar && (share.targetName || '?').charAt(0)}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontWeight: 500, fontSize: '0.95rem' }}>{share.targetName}</span>
+              <div className={unifiedStyles.u77}>
+                <span className={unifiedStyles.u78}>{share.targetName}</span>
                 {share.targetUsername && (
-                  <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem', marginLeft: '0.4rem' }}>({share.targetUsername})</span>
+                  <span className={unifiedStyles.u79}>({share.targetUsername})</span>
                 )}
               </div>
-              <span style={{ fontSize: '0.95rem', color: 'var(--gray-600)' }}>
+              <span className={unifiedStyles.u83}>
                 {share.permission === 'edit' ? '可读写' : '只读'}
               </span>
               {/* 编辑图标 — 切换权限 */}
-              <button onClick={() => handleTogglePermission(share.id, share.permission)} title="切换权限"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
+              <Button variant="ghost" onClick={() => handleTogglePermission(share.id, share.permission)} title="切换权限"
+                className={unifiedStyles.u84}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
-              </button>
+              </Button>
               {/* 删除图标 */}
-              <button onClick={() => handleRemove(share.id)} title="移除"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', padding: '0.2rem', display: 'flex', alignItems: 'center' }}>
+              <Button variant="ghost" onClick={() => handleRemove(share.id)} title="移除"
+                className={unifiedStyles.u84}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
-              </button>
+              </Button>
             </div>
           )) : (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-400)', fontSize: '0.95rem' }}>
+            <div className={unifiedStyles.u85}>
               暂无分享
             </div>
           )}

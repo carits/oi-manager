@@ -172,7 +172,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
                     {item.problemList.title}
                   </Link>
                   {canRemove && (
-                    <button
+                    <Button variant="ghost"
                       onClick={() => setRemoveTarget(item)}
                       style={{
                         background: 'none',
@@ -185,7 +185,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
                       title="移除"
                     >
                       ✕
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {item.problemList.description && (

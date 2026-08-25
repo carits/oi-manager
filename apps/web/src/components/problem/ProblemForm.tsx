@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import unifiedStyles from './ProblemForm.unified.module.css'
+import { Button } from '@/components/ui/Button'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
@@ -536,118 +539,81 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className={unifiedStyles.u1}>
         <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
+    <div className={unifiedStyles.u2}>
+      <div className={unifiedStyles.u3}>
         {/* 返回按钮 */}
-        <button
+        <Button variant="ghost"
           onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--primary)',
-            cursor: 'pointer',
-            marginBottom: '1rem',
-            fontSize: '0.875rem'
-          }}
+          className={unifiedStyles.u4}
         >
           ← 返回
-        </button>
+        </Button>
 
         <form onSubmit={handleSubmit}>
           {/* 基本信息 */}
-          <div style={{
-            background: 'white',
-            borderRadius: '8px',
-            border: '1px solid var(--border)',
-            padding: '1.5rem',
-            marginBottom: '1.5rem'
-          }}>
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>
+          <div className={unifiedStyles.u5}>
+            <h2 className={unifiedStyles.u6}>
               {mode === 'create' ? '新建题目' : '编辑题目'}
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '1rem' }}>
+            <div className={unifiedStyles.u7}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>标题 *</label>
-                <input
+                <label className={unifiedStyles.u8}>标题 *</label>
+                <Input
                   type="text"
                   value={form.title}
                   onChange={(e) => handleChange('title', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.u9}
                   placeholder="请输入题目标题"
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>难度</label>
-                <select aria-label="选择"
+                <label className={unifiedStyles.u8}>难度</label>
+                <Select aria-label="选择"
                   value={form.difficulty}
                   onChange={(e) => handleChange('difficulty', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.u9}
                 >
                   <option value="">请选择</option>
                   <option value="简单">简单</option>
                   <option value="中等">中等</option>
                   <option value="困难">困难</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>时间限制</label>
-                <input
+                <label className={unifiedStyles.u8}>时间限制</label>
+                <Input
                   type="number"
                   value={form.timeLimit}
                   onChange={(e) => handleChange('timeLimit', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.u9}
                   placeholder="1000"
                 />
-                <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>ms</span>
+                <span className={unifiedStyles.u10}>ms</span>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>空间限制</label>
-                <input
+                <label className={unifiedStyles.u8}>空间限制</label>
+                <Input
                   type="number"
                   value={form.memoryLimit}
                   onChange={(e) => handleChange('memoryLimit', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.u9}
                   placeholder="256"
                 />
-                <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>MB</span>
+                <span className={unifiedStyles.u10}>MB</span>
               </div>
             </div>
           </div>
 
           {/* Tab 切换 */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-            <button type="button" onClick={() => handleTabChange('statement')}
+          <div className={unifiedStyles.u11}>
+            <Button variant="ghost" type="button" onClick={() => handleTabChange('statement')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -658,8 +624,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 color: activeTab === 'statement' ? 'var(--primary)' : 'var(--gray-500)'
               }}>
               题面
-            </button>
-            <button type="button" onClick={() => handleTabChange('solution')}
+            </Button>
+            <Button variant="ghost" type="button" onClick={() => handleTabChange('solution')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -670,8 +636,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 color: activeTab === 'solution' ? 'var(--primary)' : 'var(--gray-500)'
               }}>
               题解
-            </button>
-            <button type="button" onClick={() => handleTabChange('judge_settings')}
+            </Button>
+            <Button variant="ghost" type="button" onClick={() => handleTabChange('judge_settings')}
                 style={{
                   padding: '0.75rem 1rem',
                   background: 'transparent',
@@ -682,8 +648,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                   color: activeTab === 'judge_settings' ? 'var(--primary)' : 'var(--gray-500)'
                 }}>
                 评测设置
-            </button>
-            <button type="button" onClick={() => handleTabChange('settings')}
+            </Button>
+            <Button variant="ghost" type="button" onClick={() => handleTabChange('settings')}
               style={{
                 padding: '0.75rem 1rem',
                 background: 'transparent',
@@ -694,9 +660,9 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 color: activeTab === 'settings' ? 'var(--primary)' : 'var(--gray-500)'
               }}>
               发布设置
-            </button>
+            </Button>
             {mode === 'edit' && (
-              <button type="button" onClick={() => handleTabChange('attachments')}
+              <Button variant="ghost" type="button" onClick={() => handleTabChange('attachments')}
                 style={{
                   padding: '0.75rem 1rem',
                   background: 'transparent',
@@ -711,52 +677,27 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 }}>
                 附件
                 {attachments.length > 0 && (
-                  <span style={{
-                    background: 'var(--primary)',
-                    color: 'white',
-                    fontSize: '0.75rem',
-                    padding: '0.125rem 0.375rem',
-                    borderRadius: '10px',
-                    minWidth: '18px',
-                    textAlign: 'center'
-                  }}>
+                  <span className={unifiedStyles.u12}>
                     {attachments.length}
                   </span>
                 )}
-              </button>
+              </Button>
             )}
           </div>
 
           {/* Tab 内容 */}
-          <div style={{
-            background: 'white',
-            borderRadius: '8px',
-            border: '1px solid var(--border)',
-            padding: '1.5rem',
-            marginBottom: '1.5rem'
-          }}>
+          <div className={unifiedStyles.u5}>
             {activeTab === 'statement' && (
               <div>
                 {/* 已添加的版本 */}
                 {statements.map((stmt, index) => (
-                  <div key={index} style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    marginBottom: '1rem',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      background: 'var(--gray-50)',
-                      padding: '0.75rem 1rem',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <span style={{ fontWeight: 500 }}>
+                  <div key={index} className={unifiedStyles.u13}>
+                    <div className={unifiedStyles.u14}>
+                      <span className={unifiedStyles.u15}>
                         {stmt.format === 'pdf' ? 'PDF' : `${stmt.language ? LANGUAGE_LABELS[stmt.language] : '未知'}`}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <div className={unifiedStyles.u16}>
+                        <label className={unifiedStyles.u17}>
                           <input
                             type="checkbox"
                             checked={stmt.isVisible}
@@ -764,28 +705,20 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                           />
                           可见
                         </label>
-                        <button
+                        <Button variant="ghost"
                           type="button"
                           onClick={() => removeStatement(index)}
-                          style={{
-                            padding: '0.25rem 0.5rem',
-                            border: '1px solid #ef4444',
-                            borderRadius: '4px',
-                            background: 'white',
-                            color: 'var(--error)',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem'
-                          }}
+                          className={unifiedStyles.u18}
                         >
                           删除
-                        </button>
+                        </Button>
                       </div>
                     </div>
-                    <div style={{ padding: '1rem' }}>
+                    <div className={unifiedStyles.u19}>
                       {stmt.format === 'markdown' ? (
                         <div>
-                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <button type="button" onClick={() => setEditMode('edit')}
+                          <div className={unifiedStyles.u20}>
+                            <Button variant="ghost" type="button" onClick={() => setEditMode('edit')}
                               style={{
                                 padding: '0.25rem 0.75rem',
                                 border: '1px solid var(--border)',
@@ -796,8 +729,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                                 fontSize: '0.75rem'
                               }}>
                               编辑
-                            </button>
-                            <button type="button" onClick={() => setEditMode('preview')}
+                            </Button>
+                            <Button variant="ghost" type="button" onClick={() => setEditMode('preview')}
                               style={{
                                 padding: '0.25rem 0.75rem',
                                 border: '1px solid var(--border)',
@@ -808,35 +741,21 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                                 fontSize: '0.75rem'
                               }}>
                               预览
-                            </button>
+                            </Button>
                           </div>
                           {editMode === 'edit' ? (
-                            <textarea
+                            <Textarea
                               value={stmt.content || ''}
                               onChange={(e) => updateStatement(index, { content: e.target.value })}
-                              style={{
-                                width: '100%',
-                                minHeight: '400px',
-                                padding: '0.75rem',
-                                border: '1px solid var(--border)',
-                                borderRadius: '6px',
-                                fontSize: '0.875rem',
-                                fontFamily: 'monospace'
-                              }}
+                              className={unifiedStyles.u21}
                               placeholder="请输入题面内容（支持 Markdown 和 LaTeX）"
                             />
                           ) : (
-                            <div style={{
-                              minHeight: '400px',
-                              padding: '1rem',
-                              border: '1px solid var(--border)',
-                              borderRadius: '6px',
-                              overflow: 'auto'
-                            }}>
+                            <div className={unifiedStyles.u22}>
                               {stmt.content ? (
                                 <MarkdownRenderer content={stmt.content} />
                               ) : (
-                                <span style={{ color: 'var(--gray-400)' }}>暂无内容</span>
+                                <span className={unifiedStyles.u23}>暂无内容</span>
                               )}
                             </div>
                           )}
@@ -852,16 +771,16 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                                   const file = e.target.files?.[0]
                                   if (file) uploadPdf('statement', index, file)
                                 }}
-                                style={{ fontSize: '0.875rem' }}
+                                className={unifiedStyles.u24}
                               />
                               {stmt.fileUrl && (
-                                <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
+                                <p className={unifiedStyles.u25}>
                                   已上传 PDF
                                 </p>
                               )}
                             </div>
                           ) : (
-                            <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>
+                            <p className={unifiedStyles.u26}>
                               请先保存题目后再上传 PDF
                             </p>
                           )}
@@ -872,8 +791,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 ))}
 
                 {/* 添加版本下拉 */}
-                <div style={{ marginTop: '1rem' }}>
-                  <select aria-label="选择"
+                <div className={unifiedStyles.u27}>
+                  <Select aria-label="选择"
                     onChange={(e) => {
                       const value = e.target.value
                       if (value === 'markdown-zh') addStatement('markdown', 'zh')
@@ -881,12 +800,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                       else if (value === 'pdf') addStatement('pdf', null)
                       e.target.value = ''
                     }}
-                    style={{
-                      padding: '0.5rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem'
-                    }}
+                    className={unifiedStyles.u28}
                   >
                     <option value="">+ 添加题面版本</option>
                     <option value="markdown-zh" disabled={hasStatement('markdown', 'zh')}>
@@ -898,7 +812,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                     <option value="pdf" disabled={hasStatement('pdf', null)}>
                       上传 PDF {hasStatement('pdf', null) ? '(已添加)' : ''}
                     </option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             )}
@@ -907,24 +821,13 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               <div>
                 {/* 已添加的版本 */}
                 {solutions.map((sol, index) => (
-                  <div key={index} style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    marginBottom: '1rem',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      background: 'var(--gray-50)',
-                      padding: '0.75rem 1rem',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <span style={{ fontWeight: 500 }}>
+                  <div key={index} className={unifiedStyles.u13}>
+                    <div className={unifiedStyles.u14}>
+                      <span className={unifiedStyles.u15}>
                         题解 - {sol.format === 'pdf' ? 'PDF' : `${sol.language ? LANGUAGE_LABELS[sol.language] : '未知'}`}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <div className={unifiedStyles.u16}>
+                        <label className={unifiedStyles.u17}>
                           <input
                             type="checkbox"
                             checked={sol.isVisible}
@@ -932,37 +835,21 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                           />
                           可见
                         </label>
-                        <button
+                        <Button variant="ghost"
                           type="button"
                           onClick={() => removeSolution(index)}
-                          style={{
-                            padding: '0.25rem 0.5rem',
-                            border: '1px solid #ef4444',
-                            borderRadius: '4px',
-                            background: 'white',
-                            color: 'var(--error)',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem'
-                          }}
+                          className={unifiedStyles.u18}
                         >
                           删除
-                        </button>
+                        </Button>
                       </div>
                     </div>
-                    <div style={{ padding: '1rem' }}>
+                    <div className={unifiedStyles.u19}>
                       {sol.format === 'markdown' ? (
-                        <textarea
+                        <Textarea
                           value={sol.content || ''}
                           onChange={(e) => updateSolution(index, { content: e.target.value })}
-                          style={{
-                            width: '100%',
-                            minHeight: '300px',
-                            padding: '0.75rem',
-                            border: '1px solid var(--border)',
-                            borderRadius: '6px',
-                            fontSize: '0.875rem',
-                            fontFamily: 'monospace'
-                          }}
+                          className={unifiedStyles.u29}
                           placeholder="请输入题解内容（支持 Markdown 和 LaTeX）"
                         />
                       ) : (
@@ -976,16 +863,16 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                                   const file = e.target.files?.[0]
                                   if (file) uploadPdf('solution', index, file)
                                 }}
-                                style={{ fontSize: '0.875rem' }}
+                                className={unifiedStyles.u24}
                               />
                               {sol.fileUrl && (
-                                <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
+                                <p className={unifiedStyles.u25}>
                                   已上传 PDF
                                 </p>
                               )}
                             </div>
                           ) : (
-                            <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>
+                            <p className={unifiedStyles.u26}>
                               请先保存题目后再上传 PDF
                             </p>
                           )}
@@ -996,8 +883,8 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 ))}
 
                 {/* 添加版本下拉 */}
-                <div style={{ marginTop: '1rem' }}>
-                  <select aria-label="选择"
+                <div className={unifiedStyles.u27}>
+                  <Select aria-label="选择"
                     onChange={(e) => {
                       const value = e.target.value
                       if (value === 'markdown-zh') addSolution('markdown', 'zh')
@@ -1005,12 +892,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                       else if (value === 'pdf') addSolution('pdf', null)
                       e.target.value = ''
                     }}
-                    style={{
-                      padding: '0.5rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem'
-                    }}
+                    className={unifiedStyles.u28}
                   >
                     <option value="">+ 添加题解版本</option>
                     <option value="markdown-zh" disabled={hasSolution('markdown', 'zh')}>
@@ -1022,7 +904,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                     <option value="pdf" disabled={hasSolution('pdf', null)}>
                       上传 PDF {hasSolution('pdf', null) ? '(已添加)' : ''}
                     </option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             )}
@@ -1042,67 +924,51 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               <div>
                 {/* 题库归属由服务端根据当前工作区和角色确定 */}
                 {role === 'admin' && (
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>题库归属</label>
-                    <p style={{ margin: 0, color: 'var(--gray-600)', fontSize: '0.875rem' }}>平台题库</p>
+                  <div className={unifiedStyles.u30}>
+                    <label className={unifiedStyles.u8}>题库归属</label>
+                    <p className={unifiedStyles.u31}>平台题库</p>
                   </div>
                 )}
 
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>状态</label>
-                  <select aria-label="选择"
+                <div className={unifiedStyles.u30}>
+                  <label className={unifiedStyles.u8}>状态</label>
+                  <Select aria-label="选择"
                     value={form.status}
                     onChange={(e) => handleChange('status', e.target.value)}
-                    style={{
-                      padding: '0.5rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem'
-                    }}
+                    className={unifiedStyles.u28}
                   >
                     <option value="draft">草稿</option>
                     <option value="published">已发布</option>
-                  </select>
+                  </Select>
                 </div>
 
                 {/* OJ 绑定 */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>OJ 题目绑定</label>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
+                <div className={unifiedStyles.u30}>
+                  <label className={unifiedStyles.u8}>OJ 题目绑定</label>
+                  <p className={unifiedStyles.u32}>
                     绑定外部OJ题目，最多可添加3个
                   </p>
 
                   {ojBindings.map((binding, index) => (
-                    <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                      <select aria-label="选择"
+                    <div key={index} className={unifiedStyles.u33}>
+                      <Select aria-label="选择"
                         value={binding.platform}
                         onChange={(e) => updateOjBinding(index, 'platform', e.target.value)}
-                        style={{
-                          padding: '0.5rem',
-                          border: '1px solid var(--border)',
-                          borderRadius: '6px',
-                          fontSize: '0.875rem'
-                        }}
+                        className={unifiedStyles.u28}
                       >
                         <option value="">选择平台</option>
                         {OJ_PLATFORMS.map(p => (
                           <option key={p.value} value={p.value}>{p.label}</option>
                         ))}
-                      </select>
-                      <input
+                      </Select>
+                      <Input
                         type="text"
                         value={binding.problemId}
                         onChange={(e) => updateOjBinding(index, 'problemId', e.target.value)}
                         placeholder="题号"
-                        style={{
-                          flex: 1,
-                          padding: '0.5rem',
-                          border: '1px solid var(--border)',
-                          borderRadius: '6px',
-                          fontSize: '0.875rem'
-                        }}
+                        className={unifiedStyles.u34}
                       />
-                      <button
+                      <Button variant="ghost"
                         type="button"
                         onClick={() => handleFetchFromOj(index)}
                         disabled={fetchingFromOj || !binding.platform || !binding.problemId.trim()}
@@ -1118,40 +984,25 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                         }}
                       >
                         {fetchingFromOj ? '拉取中...' : '拉取'}
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="ghost"
                         type="button"
                         onClick={() => removeOjBinding(index)}
-                        style={{
-                          padding: '0.5rem 0.75rem',
-                          border: '1px solid #ef4444',
-                          borderRadius: '6px',
-                          background: 'white',
-                          color: 'var(--error)',
-                          cursor: 'pointer',
-                          fontSize: '0.75rem'
-                        }}
+                        className={unifiedStyles.u35}
                       >
                         删除
-                      </button>
+                      </Button>
                     </div>
                   ))}
 
                   {ojBindings.length < 3 && (
-                    <button
+                    <Button variant="ghost"
                       type="button"
                       onClick={addOjBinding}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        background: 'white',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem'
-                      }}
+                      className={unifiedStyles.u36}
                     >
                       + 添加绑定
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -1159,9 +1010,9 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
             {activeTab === 'attachments' && (
               <div>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>上传附件</label>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
+                <div className={unifiedStyles.u37}>
+                  <label className={unifiedStyles.u8}>上传附件</label>
+                  <p className={unifiedStyles.u32}>
                     支持 PDF、ZIP、RAR、7Z、TXT、CPP、C、PY、JAVA、PAS、IN、OUT、MD 格式，最大 50MB
                   </p>
                   <input
@@ -1169,54 +1020,40 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                     accept=".pdf,.zip,.rar,.7z,.txt,.cpp,.c,.py,.java,.pas,.in,.out,.md"
                     onChange={handleAttachmentUpload}
                     disabled={uploadingAttachment}
-                    style={{ fontSize: '0.875rem' }}
+                    className={unifiedStyles.u24}
                   />
-                  {uploadingAttachment && <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>上传中...</span>}
+                  {uploadingAttachment && <span className={unifiedStyles.u38}>上传中...</span>}
                 </div>
 
-                <div style={{ marginTop: '1.5rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>已上传附件</label>
+                <div className={unifiedStyles.u39}>
+                  <label className={unifiedStyles.u8}>已上传附件</label>
                   {attachmentsLoading ? (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+                    <div className={unifiedStyles.u40}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
                   ) : attachments.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无附件</div>
+                    <div className={unifiedStyles.u40}>暂无附件</div>
                   ) : (
                     <div>
                       {attachments.map((attachment) => (
                         <div
                           key={attachment.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0.75rem 1rem',
-                            borderBottom: '1px solid var(--border)'
-                          }}
+                          className={unifiedStyles.u41}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div className={unifiedStyles.u16}>
                             <Paperclip aria-hidden="true" size={20} />
                             <div>
-                              <div style={{ fontWeight: 500 }}>{attachment.fileName}</div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                              <div className={unifiedStyles.u15}>{attachment.fileName}</div>
+                              <div className={unifiedStyles.u10}>
                                 {formatFileSize(attachment.fileSize)}
                               </div>
                             </div>
                           </div>
-                          <button
+                          <Button variant="ghost"
                             type="button"
                             onClick={() => handleAttachmentDelete(attachment.id)}
-                            style={{
-                              padding: '0.375rem 0.75rem',
-                              border: '1px solid #ef4444',
-                              background: 'white',
-                              color: 'var(--error)',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.875rem'
-                            }}
+                            className={unifiedStyles.u42}
                           >
                             删除
-                          </button>
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -1225,36 +1062,29 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
                 {/* 远程附件（从 OJ 拉取的附件） */}
                 {remoteAttachments.length > 0 && (
-                  <div style={{ marginTop: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem' }}>
+                  <div className={unifiedStyles.u39}>
+                    <label className={unifiedStyles.u8}>
                       远程附件（从 OJ 拉取）
                     </label>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
+                    <p className={unifiedStyles.u32}>
                       以下附件来自 OJ 平台，点击下载后保存到本系统
                     </p>
                     <div>
                       {remoteAttachments.map((attachment, index) => (
                         <div
                           key={index}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0.75rem 1rem',
-                            borderBottom: '1px solid var(--border)',
-                            background: 'var(--warning-light)'
-                          }}
+                          className={unifiedStyles.u43}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <span style={{ fontSize: '1.25rem' }}>📥</span>
+                          <div className={unifiedStyles.u16}>
+                            <span className={unifiedStyles.u44}>📥</span>
                             <div>
-                              <div style={{ fontWeight: 500 }}>{attachment.filename}</div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                              <div className={unifiedStyles.u15}>{attachment.filename}</div>
+                              <div className={unifiedStyles.u10}>
                                 待下载
                               </div>
                             </div>
                           </div>
-                          <button
+                          <Button variant="ghost"
                             type="button"
                             onClick={() => handleDownloadRemoteAttachment(attachment)}
                             disabled={downloadingAttachment !== null}
@@ -1269,7 +1099,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                             }}
                           >
                             {downloadingAttachment === attachment.filename ? '下载中...' : '下载'}
-                          </button>
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -1280,22 +1110,15 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           </div>
 
           {/* 提交按钮 */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-            <button
+          <div className={unifiedStyles.u45}>
+            <Button variant="ghost"
               type="button"
               onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
-              style={{
-                padding: '0.5rem 1rem',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                background: 'white',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
-              }}
+              className={unifiedStyles.u36}
             >
               取消
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="submit"
               disabled={saving}
               style={{
@@ -1310,7 +1133,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
               }}
             >
               {saving ? '保存中...' : '保存'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

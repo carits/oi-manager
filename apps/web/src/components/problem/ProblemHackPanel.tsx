@@ -1,6 +1,8 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { getLanguageLabel } from '@/lib/judge-constants'
@@ -142,27 +144,27 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
             ['cpp17', 'C++17 生成器', '程序标准输出作为候选输入'],
             ['python3', 'Python3 生成器', '程序标准输出作为候选输入'],
           ] as const).map(([value, title, hint]) => (
-            <button key={value} type="button" role="radio" aria-checked={choice === value} className={`${styles.mode} ${choice === value ? styles.modeActive : ''}`} onClick={() => { setChoice(value); setCandidate('') }}>
+            <Button variant="ghost" key={value} type="button" role="radio" aria-checked={choice === value} className={`${styles.mode} ${choice === value ? styles.modeActive : ''}`} onClick={() => { setChoice(value); setCandidate('') }}>
               <span className={styles.modeTitle}>{title}</span><span className={styles.modeHint}>{hint}</span>
-            </button>
+            </Button>
           ))}
         </div>
 
         <div className={styles.field}>
           <div className={styles.labelRow}><span className={styles.label}>{choice === 'data' ? '候选输入数据' : `${choice === 'cpp17' ? 'C++17' : 'Python3'} 数据生成器`}</span><label className={styles.upload}>上传文件<input type="file" accept={choice === 'data' ? '.in,.txt,text/plain' : choice === 'cpp17' ? '.cpp,.cc,.cxx,text/plain' : '.py,text/plain'} onChange={event => readFile(event.target.files?.[0], setCandidate, choice === 'data' ? 1024 * 1024 : 256 * 1024)} /></label></div>
-          <textarea className={styles.textarea} spellCheck={false} value={candidate} onChange={event => setCandidate(event.target.value)} placeholder={choice === 'data' ? '填写完整输入数据…' : '填写生成器源码，程序应将一组完整输入输出到 stdout…'} />
+          <Textarea className={styles.textarea} spellCheck={false} value={candidate} onChange={event => setCandidate(event.target.value)} placeholder={choice === 'data' ? '填写完整输入数据…' : '填写生成器源码，程序应将一组完整输入输出到 stdout…'} />
         </div>
 
         <div className={styles.twoColumns}>
-          <div className={styles.field}><span className={styles.label}>被 Hack 程序语言</span><select className={styles.select} value={hackLanguage} disabled={languages.length === 0} onChange={event => setHackLanguage(event.target.value)}>{languages.length === 0 ? <option value="">题目没有可用的本地语言</option> : languages.map(language => <option key={language} value={language}>{getLanguageLabel(language)}</option>)}</select></div>
+          <div className={styles.field}><span className={styles.label}>被 Hack 程序语言</span><Select className={styles.select} value={hackLanguage} disabled={languages.length === 0} onChange={event => setHackLanguage(event.target.value)}>{languages.length === 0 ? <option value="">题目没有可用的本地语言</option> : languages.map(language => <option key={language} value={language}>{getLanguageLabel(language)}</option>)}</Select></div>
           <div className={styles.warning}>有效 Hack 会直接加入题目测试数据。普通训练和未开始活动自动同步；进行中或已结束比赛由管理员手动同步。历史提交、成绩和排行榜不会自动重测。</div>
         </div>
 
         <div className={styles.field}>
           <div className={styles.labelRow}><span className={styles.label}>用于证明的被 Hack 程序</span><label className={styles.upload}>上传源码<input type="file" accept=".c,.cc,.cpp,.cxx,.py,text/plain" onChange={event => readFile(event.target.files?.[0], setHackSource, 256 * 1024)} /></label></div>
-          <textarea className={styles.textarea} spellCheck={false} value={hackSource} onChange={event => setHackSource(event.target.value)} placeholder={mode === 'oi' ? '填写加入候选数据后总分会下降的证明程序…' : '填写在加入候选数据前后会产生不同最终 Verdict 的程序…'} />
+          <Textarea className={styles.textarea} spellCheck={false} value={hackSource} onChange={event => setHackSource(event.target.value)} placeholder={mode === 'oi' ? '填写加入候选数据后总分会下降的证明程序…' : '填写在加入候选数据前后会产生不同最终 Verdict 的程序…'} />
         </div>
-        <div className={styles.submitRow}><button type="button" className={styles.submit} disabled={submitting || hasActive || !candidate.trim() || !hackSource.trim() || !hackLanguage} onClick={submit}>{hasActive ? '已有 Hack 正在处理' : submitting ? '正在提交…' : '发起 Hack'}</button></div>
+        <div className={styles.submitRow}><Button variant="ghost" type="button" className={styles.submit} disabled={submitting || hasActive || !candidate.trim() || !hackSource.trim() || !hackLanguage} onClick={submit}>{hasActive ? '已有 Hack 正在处理' : submitting ? '正在提交…' : '发起 Hack'}</Button></div>
       </div>
 
       <section className={styles.history}>
@@ -171,7 +173,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
           <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>时间</th>{canManage && <th>用户</th>}<th>输入方式</th><th>程序语言</th><th>Hack 程序</th><th>前后 Verdict</th><th>状态</th><th>失败阶段</th><th>说明</th></tr></thead><tbody>{attempts.map(item => {
             const detail = attemptDetails[item.id]
             const comparison = mode === 'oi' && item.baselineScore != null ? `${item.baselineScore} → ${item.candidateScore ?? '—'}${item.scoreDelta ? `（-${item.scoreDelta}）` : ''}${item.affectedSubtaskIds?.length ? ` · S${item.affectedSubtaskIds.join(', S')}` : ''}` : item.baselineResult ? `${item.baselineResult} → ${item.candidateResult || '—'}` : '—'
-            return <Fragment key={item.id}><tr><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td>{canManage && <td>{item.username || '-'}</td>}<td>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</td><td>{getLanguageLabel(item.hackLanguage)}</td><td><div className={styles.actions}><button type="button" className={styles.retry} disabled={loadingDetailId === item.id} onClick={() => toggleDetails(item)}>{loadingDetailId === item.id ? '读取中…' : expandedAttemptId === item.id ? '收起程序' : '查看程序'}</button>{canManage && item.status === 'system_error' && <button type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</button>}</div></td><td>{comparison}</td><td><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></td><td>{item.failureStage ? FAILURE_STAGE[item.failureStage] || item.failureStage : '—'}</td><td title={item.message || ''}>{item.message || '—'}</td></tr>{expandedAttemptId === item.id && <tr><td colSpan={canManage ? 9 : 8} className={styles.detailCell}>{detail ? <div className={styles.detailGrid}><section><strong>{detail.inputMode === 'data' ? '候选输入' : `${detail.generatorLanguage} 生成器`}</strong><pre>{detail.inputMode === 'data' ? detail.inputData : detail.generatorSource}</pre></section><section><strong>被 Hack 程序（{getLanguageLabel(detail.hackLanguage)}）</strong><pre>{detail.hackSource}</pre></section></div> : <div className={styles.detailLoading}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '10rem' }} aria-label="Hack 详情正在准备" /></div>}</td></tr>}</Fragment>
+            return <Fragment key={item.id}><tr><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td>{canManage && <td>{item.username || '-'}</td>}<td>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</td><td>{getLanguageLabel(item.hackLanguage)}</td><td><div className={styles.actions}><Button variant="ghost" type="button" className={styles.retry} disabled={loadingDetailId === item.id} onClick={() => toggleDetails(item)}>{loadingDetailId === item.id ? '读取中…' : expandedAttemptId === item.id ? '收起程序' : '查看程序'}</Button>{canManage && item.status === 'system_error' && <Button variant="ghost" type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</Button>}</div></td><td>{comparison}</td><td><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></td><td>{item.failureStage ? FAILURE_STAGE[item.failureStage] || item.failureStage : '—'}</td><td title={item.message || ''}>{item.message || '—'}</td></tr>{expandedAttemptId === item.id && <tr><td colSpan={canManage ? 9 : 8} className={styles.detailCell}>{detail ? <div className={styles.detailGrid}><section><strong>{detail.inputMode === 'data' ? '候选输入' : `${detail.generatorLanguage} 生成器`}</strong><pre>{detail.inputMode === 'data' ? detail.inputData : detail.generatorSource}</pre></section><section><strong>被 Hack 程序（{getLanguageLabel(detail.hackLanguage)}）</strong><pre>{detail.hackSource}</pre></section></div> : <div className={styles.detailLoading}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '10rem' }} aria-label="Hack 详情正在准备" /></div>}</td></tr>}</Fragment>
           })}</tbody></table></div>
         )}
       </section>

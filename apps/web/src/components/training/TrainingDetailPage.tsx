@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import apiClient from '@/lib/apiClient'
@@ -572,7 +573,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <select aria-label="选择"
+            <Select aria-label="选择"
               value={actions.submitLanguage}
               onChange={e => actions.setSubmitLanguage(e.target.value)}
               style={{
@@ -583,10 +584,10 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               {LANGUAGE_OPTIONS.filter(o => o.value).map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <textarea
+          <Textarea
             placeholder="在此输入代码..."
             value={actions.submitCode}
             onChange={e => actions.setSubmitCode(e.target.value)}
@@ -605,7 +606,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
               本地评测 · 题目来源：{OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || selectedProblem?.platform || 'Carits'}
             </span>
-            <button
+            <Button variant="ghost"
               onClick={handleSubmitCode}
               disabled={actions.submitting || !actions.submitCode.trim()}
               style={{
@@ -618,7 +619,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               }}
             >
               {actions.submitting ? '提交中...' : '提交'}
-            </button>
+            </Button>
           </div>
         </DetailDialog>
       )}
@@ -658,7 +659,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>标题</label>
-            <input
+            <Input
               value={makeupTitle}
               onChange={e => setMakeupTitle(e.target.value)}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
@@ -666,7 +667,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>开始时间</label>
-            <input
+            <Input
               type="datetime-local"
               value={makeupStartTime}
               onChange={e => setMakeupStartTime(e.target.value)}
@@ -675,7 +676,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>结束时间</label>
-            <input
+            <Input
               type="datetime-local"
               value={makeupEndTime}
               onChange={e => setMakeupEndTime(e.target.value)}
@@ -683,13 +684,13 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button
+            <Button variant="ghost"
               onClick={() => setShowMakeupModal(false)}
               style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
             >
               取消
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               onClick={async () => {
                 setMakeupLoading(true)
                 try {
@@ -720,7 +721,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               }}
             >
               {makeupLoading ? '创建中...' : '创建'}
-            </button>
+            </Button>
           </div>
         </div>
       </FormDialog>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Copy, Eye, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
@@ -188,21 +189,21 @@ export function ProblemList({ role }: ProblemListProps) {
 
       <Toolbar>
         <ToolbarGroup>
-          <select className={styles.search} style={{ width: 150 }} aria-label="来源平台" value={platform} onChange={event => navigate({ platform: event.target.value || null, page: null })}>
+          <Select className={styles.search} style={{ width: 150 }} aria-label="来源平台" value={platform} onChange={event => navigate({ platform: event.target.value || null, page: null })}>
             {OJ_PLATFORMS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          </Select>
           {library === 'school' && (
-            <select className={styles.search} style={{ width: 140 }} aria-label="题目状态" value={status} onChange={event => navigate({ status: event.target.value || null, page: null })}>
+            <Select className={styles.search} style={{ width: 140 }} aria-label="题目状态" value={status} onChange={event => navigate({ status: event.target.value || null, page: null })}>
               {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </Select>
           )}
           {library === 'school' && creators.data && creators.data.length > 0 && (
-            <select className={styles.search} style={{ width: 170 }} aria-label="创建教师" value={ownerId} onChange={event => navigate({ ownerId: event.target.value || null, page: null })}>
+            <Select className={styles.search} style={{ width: 170 }} aria-label="创建教师" value={ownerId} onChange={event => navigate({ ownerId: event.target.value || null, page: null })}>
               <option value="">全部创建教师</option>
               {creators.data.map(creator => <option key={creator.id} value={creator.id}>{creator.name} ({creator.count})</option>)}
-            </select>
+            </Select>
           )}
-          <input
+          <Input
             className={styles.search}
             value={searchInput}
             onChange={event => setSearchInput(event.target.value)}

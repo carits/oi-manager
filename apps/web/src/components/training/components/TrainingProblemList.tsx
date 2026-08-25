@@ -1,6 +1,7 @@
 'use client'
 
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { Button } from '@/components/ui/Button'
 import type { TrainingInfo, ProblemListEntry } from '../types'
 import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
 import styles from '../TrainingWorkspace.module.css'
@@ -114,14 +115,14 @@ export function TrainingProblemList({
                   </td>
                   {sourceVisible && <td className={styles.problemSourceColumn}>{renderSource(problem)}</td>}
                   <td className={styles.problemTitleCell}>
-                    <button
+                    <Button variant="ghost"
                       type="button"
                       className={styles.problemTitleButton}
                       onClick={() => openProblem(problem.id)}
                       title={title}
                     >
                       {title}
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               )

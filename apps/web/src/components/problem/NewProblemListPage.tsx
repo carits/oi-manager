@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
@@ -40,12 +42,12 @@ export default function NewProblemListPage() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '2rem' }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <button
+        <Button variant="ghost"
           onClick={() => router.push(`${pathPrefix}/problem-lists`)}
           style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}
         >
           ← 返回题单列表
-        </button>
+        </Button>
       </div>
 
       <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>
@@ -54,7 +56,7 @@ export default function NewProblemListPage() {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.field}>
             <label style={formStyles.label}>题单标题 *</label>
-            <input
+            <Input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
@@ -67,7 +69,7 @@ export default function NewProblemListPage() {
 
           <div style={formStyles.field}>
             <label style={formStyles.label}>题单描述</label>
-            <textarea
+            <Textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={4}
@@ -77,7 +79,7 @@ export default function NewProblemListPage() {
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-            <button
+            <Button variant="ghost"
               type="submit"
               disabled={loading || !title.trim()}
               style={{
@@ -92,8 +94,8 @@ export default function NewProblemListPage() {
               }}
             >
               {loading ? '创建中...' : '创建题单'}
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
               onClick={() => router.push(`${pathPrefix}/problem-lists`)}
               style={{
@@ -106,7 +108,7 @@ export default function NewProblemListPage() {
               }}
             >
               取消
-            </button>
+            </Button>
           </div>
         </form>
       </div>

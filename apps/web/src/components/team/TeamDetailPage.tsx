@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { Button } from '@/components/ui/Button'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
@@ -406,14 +407,14 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
         {/* Tab 导航 */}
         <div className={styles.teamDetailTabs}>
           {tabs.map(tab => (
-            <button
+            <Button variant="ghost"
               key={tab.key}
               className={styles.teamDetailTab}
               data-active={activeTab === tab.key}
               onClick={() => { setActiveTab(tab.key as TabType); router.push(`${basePath}/${teamId}?tab=${tab.key}`, { scroll: false }) }}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
 

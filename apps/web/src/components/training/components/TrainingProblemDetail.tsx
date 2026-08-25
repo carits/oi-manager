@@ -1,6 +1,9 @@
 'use client'
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import unifiedStyles from './TrainingProblemDetail.unified.module.css'
+import { Button } from '@/components/ui/Button'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
 import type { ResourceState } from '@/lib/resource'
@@ -109,7 +112,7 @@ export function TrainingProblemDetail({
 
     if (!problemDetail) {
       return (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div className={unifiedStyles.u1}>
           {problems.length > 0 ? '请选择题目查看' : '暂无题目'}
         </div>
       )
@@ -117,7 +120,7 @@ export function TrainingProblemDetail({
 
     const visibleStatements = (problemDetail.statements || []).filter(s => true)
     if (visibleStatements.length === 0 && problemDetail.description) {
-      return <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={problemDetail.description} /></div>
+      return <div className={unifiedStyles.u2}><MarkdownRenderer content={problemDetail.description} /></div>
     }
     const currentStatement = selectedStatementId
       ? visibleStatements.find(s => s.id === selectedStatementId)
@@ -125,50 +128,50 @@ export function TrainingProblemDetail({
         || visibleStatements.find(s => s.format === 'markdown')
         || visibleStatements[0]
     if (!currentStatement) {
-      return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>暂无题面</div>
+      return <div className={unifiedStyles.u3}>暂无题面</div>
     }
     const editAction = training.isAdmin ? (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.65rem' }}>
-        <button onClick={() => onEditStatement(currentStatement)} style={{ padding: '0.45rem 0.8rem', border: '1px solid var(--primary)', borderRadius: '6px', background: 'white', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>编辑题面</button>
+      <div className={unifiedStyles.u4}>
+        <Button variant="ghost" onClick={() => onEditStatement(currentStatement)} className={unifiedStyles.u5}>编辑题面</Button>
       </div>
     ) : null
     if (currentStatement.format === 'pdf' && currentStatement.fileUrl) {
       const pdfUrl = getPdfUrl(currentStatement.fileUrl)
       if (pdfUrl && pdfUrl.startsWith('/')) {
-        return <>{editAction}<iframe src={pdfUrl} style={{ width: '100%', height: '600px', border: 'none' }} /></>
+        return <>{editAction}<iframe src={pdfUrl} className={unifiedStyles.u6} /></>
       }
       return (
-        <><div>{editAction}</div><div style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>题面为外部 PDF 文件，请在新窗口中查看</p>
-          <a href={currentStatement.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '0.5rem 1.5rem', backgroundColor: 'var(--primary)', color: 'var(--text-inverse)', borderRadius: '6px', textDecoration: 'none', fontSize: '0.875rem' }}>
+        <><div>{editAction}</div><div className={unifiedStyles.u7}>
+          <p className={unifiedStyles.u8}>题面为外部 PDF 文件，请在新窗口中查看</p>
+          <a href={currentStatement.fileUrl} target="_blank" rel="noopener noreferrer" className={unifiedStyles.u9}>
             打开 PDF 题面
           </a>
         </div></>
       )
     }
     if (currentStatement.content) {
-      return <>{editAction}<div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}><MarkdownRenderer content={currentStatement.content} /></div></>
+      return <>{editAction}<div className={unifiedStyles.u2}><MarkdownRenderer content={currentStatement.content} /></div></>
     }
-    return <>{editAction}<div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>暂无题面</div></>
+    return <>{editAction}<div className={unifiedStyles.u3}>暂无题面</div></>
   }
 
   const renderStatementSelector = () => {
     const visibleStatements = (problemDetail?.statements || []).filter(s => true)
     if (visibleStatements.length === 0) return null
     return (
-      <aside style={{ width: '240px', flexShrink: 0, padding: '0.75rem', borderRight: '1px solid var(--border)', background: 'var(--gray-50)' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.45rem' }}>比赛题面</div>
+      <aside className={unifiedStyles.u10}>
+        <div className={unifiedStyles.u11}>比赛题面</div>
         {visibleStatements.map(statement => (
-          <button key={statement.id} onClick={() => {
+          <Button variant="ghost" key={statement.id} onClick={() => {
             setSelectedStatementId(statement.id)
             if (selectedProblemId) localStorage.setItem(`training-stmt-pref-${training.id}-${selectedProblemId}`, statement.id)
           }} style={{
             width: '100%', padding: '0.6rem', marginBottom: '0.3rem', border: 'none', borderRadius: '6px', textAlign: 'left',
             background: selectedStatementId === statement.id ? 'var(--info-light)' : 'transparent', cursor: 'pointer',
           }}>
-            <strong style={{ display: 'block' }}>{statement.name || (statement.language ? STATEMENT_LANGUAGE_LABELS[statement.language] || statement.language : '题面')}</strong>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
-          </button>
+            <strong className={unifiedStyles.u12}>{statement.name || (statement.language ? STATEMENT_LANGUAGE_LABELS[statement.language] || statement.language : '题面')}</strong>
+            <span className={unifiedStyles.u13}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
+          </Button>
         ))}
       </aside>
     )
@@ -177,9 +180,9 @@ export function TrainingProblemDetail({
   // ========== 题目按钮渲染 ==========
 
   const renderProblemButtons = (compact: boolean) => (
-    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+    <div className={unifiedStyles.u14}>
       {problems.map(p => (
-        <button
+        <Button variant="ghost"
           key={p.id}
           onClick={() => setSelectedProblemId(p.id)}
           style={{
@@ -196,10 +199,10 @@ export function TrainingProblemDetail({
           }}
         >
           {trainingProblemCode(p.orderIndex)}
-        </button>
+        </Button>
       ))}
       {problems.length === 0 && (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>暂无题目</div>
+        <div className={unifiedStyles.u15}>暂无题目</div>
       )}
     </div>
   )
@@ -209,8 +212,8 @@ export function TrainingProblemDetail({
   const renderProblemInfo = () => {
     if (!problemDetail) return null
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-        <span style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>{problemDetail.alias || problemDetail.problemTitle || trainingProblemTitle(selectedProblem || { orderIndex: problemDetail.orderIndex })}</span>
+      <div className={unifiedStyles.u16}>
+        <span className={unifiedStyles.u17}>{problemDetail.alias || problemDetail.problemTitle || trainingProblemTitle(selectedProblem || { orderIndex: problemDetail.orderIndex })}</span>
         {problemDetail.points != null && <span>分值: {problemDetail.points}</span>}
         {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}ms</span>}
         {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}
@@ -221,10 +224,10 @@ export function TrainingProblemDetail({
         )}
         {training.isAdmin && problemDetail.problemTitle && (
           <>
-            <div style={{ width: '1px', height: '12px', background: 'var(--border)' }} />
-            <span style={{ color: 'var(--primary)' }}>{problemDetail.platformProblemId}</span>
+            <div className={unifiedStyles.u18} />
+            <span className={unifiedStyles.u19}>{problemDetail.platformProblemId}</span>
             <span>{problemDetail.problemTitle}</span>
-            <span style={{ color: 'var(--text-muted)' }}>({problemDetail.platform})</span>
+            <span className={unifiedStyles.u20}>({problemDetail.platform})</span>
           </>
         )}
       </div>
@@ -237,9 +240,9 @@ export function TrainingProblemDetail({
     if (training.type === 'contest') {
       // 比赛记录编辑器
       return (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div className={unifiedStyles.u21}>
           {(recordEditMode === 'edit' || recordEditMode === 'split') && (
-            <textarea
+            <Textarea
               value={recordContent}
               onChange={e => setRecordContent(e.target.value)}
               placeholder={hideProblemIdentity ? `在这里记录你的比赛心得...
@@ -281,7 +284,7 @@ B 题：...
               spellCheck={false}
             />
           )}
-          {recordEditMode === 'split' && <div style={{ width: '1px', background: 'var(--border)' }} />}
+          {recordEditMode === 'split' && <div className={unifiedStyles.u22} />}
           {(recordEditMode === 'preview' || recordEditMode === 'split') && (
             <div style={{
               flex: recordEditMode === 'split' ? 1 : undefined,
@@ -293,11 +296,11 @@ B 题：...
               boxSizing: 'border-box',
             }}>
               {recordContent.trim() ? (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                <div className={unifiedStyles.u2}>
                   <MarkdownRenderer content={recordContent} />
                 </div>
               ) : (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>
+                <div className={unifiedStyles.u23}>
                   暂无内容，开始编辑...
                 </div>
               )}
@@ -308,9 +311,9 @@ B 题：...
     } else {
       // 训练思路编辑器
       return (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div className={unifiedStyles.u21}>
           {(noteEditMode === 'edit' || noteEditMode === 'split') && (
-            <textarea
+            <Textarea
               value={noteContent}
               onChange={e => setNoteContent(e.target.value)}
               placeholder={`在这里记录你的解题思路...
@@ -348,7 +351,7 @@ B 题：...
               spellCheck={false}
             />
           )}
-          {noteEditMode === 'split' && <div style={{ width: '1px', background: 'var(--border)' }} />}
+          {noteEditMode === 'split' && <div className={unifiedStyles.u22} />}
           {(noteEditMode === 'preview' || noteEditMode === 'split') && (
             <div style={{
               flex: noteEditMode === 'split' ? 1 : undefined,
@@ -360,11 +363,11 @@ B 题：...
               boxSizing: 'border-box',
             }}>
               {noteContent.trim() ? (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                <div className={unifiedStyles.u2}>
                   <MarkdownRenderer content={noteContent} />
                 </div>
               ) : (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>
+                <div className={unifiedStyles.u23}>
                   暂无内容，开始编辑...
                 </div>
               )}
@@ -381,7 +384,7 @@ B 题：...
     const handleSave = training.type === 'contest' ? saveRecordNow : saveNoteNow
     const isSaving = training.type === 'contest' ? recordSaving : noteSaving
     return (
-      <button
+      <Button variant="ghost"
         onClick={handleSave}
         disabled={isSaving}
         style={{
@@ -396,7 +399,7 @@ B 题：...
         }}
       >
         {isSaving ? '保存中...' : '保存'}
-      </button>
+      </Button>
     )
   }
 
@@ -406,17 +409,17 @@ B 题：...
     if (training.type === 'contest') {
       return (
         <>
-          {recordSaving && <span style={{ color: 'var(--warning-text)', fontSize: '0.7rem' }}>保存中...</span>}
-          {recordLastSaved && !recordSaving && <span style={{ color: 'var(--success-text)', fontSize: '0.7rem' }}>已保存 {recordLastSaved.toLocaleTimeString()}</span>}
-          {!recordSaving && !recordLastSaved && <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>输入后自动保存</span>}
+          {recordSaving && <span className={unifiedStyles.u24}>保存中...</span>}
+          {recordLastSaved && !recordSaving && <span className={unifiedStyles.u25}>已保存 {recordLastSaved.toLocaleTimeString()}</span>}
+          {!recordSaving && !recordLastSaved && <span className={unifiedStyles.u26}>输入后自动保存</span>}
         </>
       )
     } else {
       return (
         <>
-          {noteSaving && <span style={{ color: 'var(--warning-text)', fontSize: '0.7rem' }}>保存中...</span>}
-          {noteLastSaved && !noteSaving && <span style={{ color: 'var(--success-text)', fontSize: '0.7rem' }}>已保存 {noteLastSaved.toLocaleTimeString()}</span>}
-          {!noteSaving && !noteLastSaved && <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>输入后自动保存</span>}
+          {noteSaving && <span className={unifiedStyles.u24}>保存中...</span>}
+          {noteLastSaved && !noteSaving && <span className={unifiedStyles.u25}>已保存 {noteLastSaved.toLocaleTimeString()}</span>}
+          {!noteSaving && !noteLastSaved && <span className={unifiedStyles.u26}>输入后自动保存</span>}
         </>
       )
     }
@@ -428,17 +431,17 @@ B 题：...
     if (training.type === 'contest') {
       return (
         <>
-          <button onClick={() => setRecordEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'edit' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'edit' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</button>
-          <button onClick={() => setRecordEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'preview' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'preview' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</button>
-          <button onClick={() => setRecordEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'split' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'split' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</button>
+          <Button variant="ghost" onClick={() => setRecordEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'edit' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'edit' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
+          <Button variant="ghost" onClick={() => setRecordEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'preview' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'preview' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
+          <Button variant="ghost" onClick={() => setRecordEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'split' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'split' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
         </>
       )
     } else {
       return (
         <>
-          <button onClick={() => setNoteEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'edit' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'edit' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</button>
-          <button onClick={() => setNoteEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'preview' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'preview' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</button>
-          <button onClick={() => setNoteEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'split' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'split' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</button>
+          <Button variant="ghost" onClick={() => setNoteEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'edit' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'edit' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
+          <Button variant="ghost" onClick={() => setNoteEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'preview' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'preview' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
+          <Button variant="ghost" onClick={() => setNoteEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'split' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'split' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
         </>
       )
     }
@@ -447,8 +450,8 @@ B 题：...
   // ========== 底部操作按钮 ==========
 
   const renderActionButtons = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-      <button
+    <div className={unifiedStyles.u27}>
+      <Button variant="ghost"
         onClick={onSubmitClick}
         style={{
           padding: '0.6rem 1rem',
@@ -465,50 +468,30 @@ B 题：...
         disabled={trainingStatus !== 'ongoing'}
       >
         ▶ 提交代码
-      </button>
+      </Button>
       {selectedProblem && training.isAdmin && (
         <TrainingHackSyncAction trainingId={training.id} trainingProblemId={selectedProblem.id} />
       )}
       {selectedProblem && training.isAdmin && (
-        <button
+        <Button variant="ghost"
           onClick={onManageContentClick}
-          style={{
-            padding: '0.6rem 1rem',
-            background: 'white',
-            color: 'var(--primary)',
-            border: '1px solid var(--primary)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: 600,
-            width: '100%',
-          }}
+          className={unifiedStyles.u28}
         >
           题解选择
-        </button>
+        </Button>
       )}
       {trainingStatus === 'upcoming' && (
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+        <div className={unifiedStyles.u29}>
           {training.type === 'contest' ? '比赛未开始' : '训练未开始'}
         </div>
       )}
       {(selectedProblem?.attachmentCount ?? 0) > 0 && (trainingStatus !== 'upcoming' || training.isAdmin) && (
-        <button
+        <Button variant="ghost"
           onClick={onGoToAttachments}
-          style={{
-            padding: '0.6rem 1rem',
-            background: 'white',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: 500,
-            width: '100%',
-          }}
+          className={unifiedStyles.u30}
         >
           附件 ({selectedProblem?.attachmentCount ?? 0})
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -518,34 +501,34 @@ B 题：...
   if (editModeActive) {
     // 编辑模式：左右分栏
     return (
-      <div style={{ display: 'flex', gap: '0.5rem', minHeight: '600px' }}>
+      <div className={unifiedStyles.u31}>
         {/* 左侧：题面面板 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'white', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <div style={{ padding: '0.5rem 0.75rem', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+        <div className={unifiedStyles.u32}>
+          <div className={unifiedStyles.u33}>
             {renderProblemButtons(true)}
             {renderProblemInfo()}
           </div>
-          <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+          <div className={unifiedStyles.u34}>
             {renderStatementSelector()}
-            <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
+            <div className={unifiedStyles.u35}>
               {renderStatementContent()}
             </div>
           </div>
         </div>
 
         {/* 右侧：编辑器面板 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'white', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          <div style={{ padding: '0.5rem 0.75rem', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)', fontWeight: 500, fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className={unifiedStyles.u32}>
+          <div className={unifiedStyles.u36}>
             <span>{training.type === 'contest' ? '比赛记录' : '训练记录'}</span>
             <span>{training.type === 'contest' ? '比赛记录' : '思路记录'}</span>
-            <div style={{ flex: 1 }} />
+            <div className={unifiedStyles.u37} />
             {renderSaveButton()}
             {renderSaveStatus()}
             {renderModeButtons()}
-            <button onClick={() => setEditModeActive(false)} style={{ padding: '0.2rem 0.5rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'white', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.7rem', marginLeft: '0.25rem' }}>关闭</button>
+            <Button variant="ghost" onClick={() => setEditModeActive(false)} className={unifiedStyles.u38}>关闭</Button>
           </div>
           {renderEditorContent()}
-          <div style={{ padding: '0.5rem 0.75rem', borderTop: '1px solid var(--border)' }}>
+          <div className={unifiedStyles.u39}>
             {renderActionButtons()}
           </div>
         </div>
@@ -555,31 +538,31 @@ B 题：...
 
   // 默认模式：原有三列布局
   return (
-    <div style={{ display: 'flex', gap: '1rem' }}>
+    <div className={unifiedStyles.u40}>
       {/* 左侧：题目按钮 */}
-      <div style={{ width: '200px', flexShrink: 0 }}>
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '0.5rem' }}>
+      <div className={unifiedStyles.u41}>
+        <div className={unifiedStyles.u42}>
           {renderProblemButtons(false)}
         </div>
       </div>
 
       {/* 中间：题面内容 */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+      <div className={unifiedStyles.u43}>
+        <div className={unifiedStyles.u44}>
           {problemDetail ? (
             <>
-              <div style={{ padding: '0.5rem 1rem', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              <div className={unifiedStyles.u45}>
                 {renderProblemInfo()}
               </div>
-              <div style={{ display: 'flex', minHeight: '560px' }}>
+              <div className={unifiedStyles.u46}>
                 {renderStatementSelector()}
-                <div style={{ flex: 1, minWidth: 0, padding: '1.5rem' }}>
+                <div className={unifiedStyles.u47}>
                   {renderStatementContent()}
                 </div>
               </div>
             </>
           ) : (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div className={unifiedStyles.u1}>
               {problems.length > 0 ? '请选择左侧题目查看' : '暂无题目'}
             </div>
           )}
@@ -587,25 +570,15 @@ B 题：...
       </div>
 
       {/* 右侧：操作按钮 */}
-      <div style={{ width: '150px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div className={unifiedStyles.u48}>
+        <div className={unifiedStyles.u27}>
           {(trainingStatus !== 'upcoming' || training.isAdmin) && (
-            <button
+            <Button variant="ghost"
               onClick={() => setEditModeActive(true)}
-              style={{
-                padding: '0.6rem 1rem',
-                background: 'var(--primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-                fontWeight: 500,
-                width: '100%',
-              }}
+              className={unifiedStyles.u49}
             >
               {training.type === 'contest' ? '比赛记录' : '写思路'}
-            </button>
+            </Button>
           )}
           {renderActionButtons()}
         </div>

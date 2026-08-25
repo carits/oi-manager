@@ -1,6 +1,7 @@
 'use client'
 
 import ReactMarkdown from 'react-markdown'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -89,9 +90,9 @@ export function TeamHeader({
 
   return (
     <>
-      <button type="button" className={styles.backLink} onClick={onBack}>
+      <Button variant="ghost" type="button" className={styles.backLink} onClick={onBack}>
         <ChevronLeft size={16} aria-hidden="true" />返回
-      </button>
+      </Button>
 
       <section className={styles.teamOverviewCard}>
         <div className={styles.teamOverviewMain}>
@@ -106,7 +107,7 @@ export function TeamHeader({
             {permission.isOwner && (
               <>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className={styles.hiddenInput} />
-                <button
+                <Button variant="ghost"
                   type="button"
                   className={styles.avatarEditButton}
                   onClick={() => fileInputRef.current?.click()}
@@ -115,7 +116,7 @@ export function TeamHeader({
                   aria-label="更换团队头像"
                 >
                   <Camera size={15} aria-hidden="true" />
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -162,7 +163,7 @@ export function TeamHeader({
 
         {editingAnnouncement ? (
           <div className={styles.announcementEditor}>
-            <textarea
+            <Textarea
               value={announcementText}
               onChange={(event) => onAnnouncementTextChange(event.target.value)}
               rows={6}

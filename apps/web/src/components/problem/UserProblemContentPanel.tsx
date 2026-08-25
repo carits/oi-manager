@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
@@ -116,9 +118,9 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: kind === 'statement' ? 'minmax(180px, 1fr) 140px 140px' : '140px 140px', gap: '0.75rem' }}>
-        {kind === 'statement' && <label style={{ fontSize: '0.8rem' }}>题面标题<input value={title} onChange={event => setTitle(event.target.value)} placeholder="默认使用原题标题" style={{ display: 'block', width: '100%', marginTop: '0.3rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }} /></label>}
-        <label style={{ fontSize: '0.8rem' }}>格式<select value={format} onChange={event => setFormat(event.target.value as Format)} style={{ display: 'block', width: '100%', marginTop: '0.3rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white' }}><option value="markdown">Markdown</option><option value="pdf">PDF</option></select></label>
-        <label style={{ fontSize: '0.8rem' }}>语言<select value={language} onChange={event => setLanguage(event.target.value)} style={{ display: 'block', width: '100%', marginTop: '0.3rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white' }}><option value="zh">中文</option><option value="en">English</option></select></label>
+        {kind === 'statement' && <label style={{ fontSize: '0.8rem' }}>题面标题<Input value={title} onChange={event => setTitle(event.target.value)} placeholder="默认使用原题标题" style={{ display: 'block', width: '100%', marginTop: '0.3rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }} /></label>}
+        <label style={{ fontSize: '0.8rem' }}>格式<Select value={format} onChange={event => setFormat(event.target.value as Format)} style={{ display: 'block', width: '100%', marginTop: '0.3rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white' }}><option value="markdown">Markdown</option><option value="pdf">PDF</option></Select></label>
+        <label style={{ fontSize: '0.8rem' }}>语言<Select value={language} onChange={event => setLanguage(event.target.value)} style={{ display: 'block', width: '100%', marginTop: '0.3rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'white' }}><option value="zh">中文</option><option value="en">English</option></Select></label>
       </div>
 
       {format === 'markdown' ? (
@@ -139,8 +141,8 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
-        {current && <button onClick={remove} disabled={saving} style={{ padding: '0.55rem 1rem', border: '1px solid var(--error)', color: 'var(--error)', background: 'white', borderRadius: '6px', cursor: 'pointer' }}>删除</button>}
-        <button onClick={save} disabled={saving} style={{ padding: '0.55rem 1.25rem', border: 'none', color: 'white', background: 'var(--primary)', borderRadius: '6px', cursor: 'pointer' }}>{saving ? '保存中…' : '保存个人版本'}</button>
+        {current && <Button variant="ghost" onClick={remove} disabled={saving} style={{ padding: '0.55rem 1rem', border: '1px solid var(--error)', color: 'var(--error)', background: 'white', borderRadius: '6px', cursor: 'pointer' }}>删除</Button>}
+        <Button variant="ghost" onClick={save} disabled={saving} style={{ padding: '0.55rem 1.25rem', border: 'none', color: 'white', background: 'var(--primary)', borderRadius: '6px', cursor: 'pointer' }}>{saving ? '保存中…' : '保存个人版本'}</Button>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 
@@ -38,8 +39,8 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
   }
 
   return (
-    <button type="button" onClick={sync} disabled={syncing} title={`test graph revision ${preview.currentRevision} -> ${preview.latestRevision}`} style={{ padding: '0.6rem 1rem', background: '#fffbeb', color: '#92400e', border: '1px solid #f59e0b', borderRadius: '6px', cursor: syncing ? 'wait' : 'pointer', fontSize: '0.82rem', fontWeight: 600, width: '100%' }}>
+    <Button variant="ghost" type="button" onClick={sync} disabled={syncing} title={`test graph revision ${preview.currentRevision} -> ${preview.latestRevision}`} style={{ padding: '0.6rem 1rem', background: '#fffbeb', color: '#92400e', border: '1px solid #f59e0b', borderRadius: '6px', cursor: syncing ? 'wait' : 'pointer', fontSize: '0.82rem', fontWeight: 600, width: '100%' }}>
       {syncing ? '\u6b63\u5728\u540c\u6b65...' : `\u540c\u6b65 Hack \u6570\u636e (${preview.revisionDelta} revision)`}
-    </button>
+    </Button>
   )
 }

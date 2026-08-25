@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter } from 'next/navigation'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import apiClient from '@/lib/apiClient'
@@ -195,7 +197,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
         borderBottom: '1px solid var(--border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button
+          <Button variant="ghost"
             onClick={() => router.push(`${pathPrefix}/problems/${problemId}`)}
             style={{
               background: 'transparent',
@@ -208,7 +210,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             }}
           >
             ← 返回
-          </button>
+          </Button>
           <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
           <span style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.8rem' }}>{problem.problemId}</span>
           <h1 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{problem.title}</h1>
@@ -242,7 +244,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               <span>输入后自动保存</span>
             )}
           </div>
-          <button
+          <Button variant="ghost"
             onClick={handleSave}
             disabled={noteSaving}
             style={{
@@ -257,7 +259,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             }}
           >
             {noteSaving ? '保存中...' : '保存'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -363,14 +365,14 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             <Pencil aria-hidden="true" size={14} />
             <span>思路记录</span>
             <div style={{ flex: 1 }} />
-            <button onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</button>
-            <button onClick={() => setEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'preview' ? 'var(--primary)' : 'transparent', color: editMode === 'preview' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</button>
-            <button onClick={() => setEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'split' ? 'var(--primary)' : 'transparent', color: editMode === 'split' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</button>
+            <Button variant="ghost" onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
+            <Button variant="ghost" onClick={() => setEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'preview' ? 'var(--primary)' : 'transparent', color: editMode === 'preview' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
+            <Button variant="ghost" onClick={() => setEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'split' ? 'var(--primary)' : 'transparent', color: editMode === 'split' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
           </div>
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             {(editMode === 'edit' || editMode === 'split') && (
-              <textarea
+              <Textarea
                 value={noteContent}
                 onChange={(e) => setNoteContent(e.target.value)}
                 placeholder={`在这里记录你的解题思路...

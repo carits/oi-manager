@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemHackConfigPanel.module.css'
@@ -85,9 +87,9 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
       </div>
       <div className={styles.footer}>
         <span className={styles.revision}>当前配置 revision {config.revision || '尚未保存'}</span>
-        <button type="button" className={styles.save} disabled={saving || (config.enabled && (!config.standardSource.trim() || !config.validatorSource.trim() || (judgeMode === 'oi' && !config.classifierSource.trim())))} onClick={save}>
+        <Button variant="ghost" type="button" className={styles.save} disabled={saving || (config.enabled && (!config.standardSource.trim() || !config.validatorSource.trim() || (judgeMode === 'oi' && !config.classifierSource.trim())))} onClick={save}>
           {saving ? '正在编译检查并保存…' : '保存 Hack 配置'}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -106,7 +108,7 @@ function SourceEditor({ title, hint, value, onChange, onFile }: {
         <div><div className={styles.sourceTitle}>{title}</div><div className={styles.sourceMeta}>{hint}</div></div>
         <label className={styles.upload}>上传源码<input type="file" accept=".cpp,.cc,.cxx,text/plain" onChange={event => onFile(event.target.files?.[0])} /></label>
       </div>
-      <textarea className={styles.editor} spellCheck={false} value={value} onChange={event => onChange(event.target.value)} placeholder={`在这里填写${title}源码…`} />
+      <Textarea className={styles.editor} spellCheck={false} value={value} onChange={event => onChange(event.target.value)} placeholder={`在这里填写${title}源码…`} />
     </section>
   )
 }

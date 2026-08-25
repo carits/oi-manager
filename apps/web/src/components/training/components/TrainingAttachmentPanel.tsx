@@ -1,6 +1,7 @@
 'use client'
 
 import type { TrainingProblem, Attachment } from '../types'
+import { Button } from '@/components/ui/Button'
 import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
 import { hasTrainingAttachments } from '../attachment-state'
 
@@ -32,12 +33,12 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
                   <span>{a.fileName}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>{formatFileSize(a.fileSize)}</span>
                 </div>
-                <button
+                <Button variant="ghost"
                   onClick={() => onDownload(a)}
                   style={{ padding: '0.25rem 0.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
                 >
                   下载
-                </button>
+                </Button>
               </div>
             ))}
           </div>

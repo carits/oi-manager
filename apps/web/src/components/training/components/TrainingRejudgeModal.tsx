@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { AlertTriangle, Check, ClipboardList, ListChecks, LoaderCircle, RotateCcw, UserRound } from 'lucide-react'
 import apiClient from '@/lib/apiClient'
 import { FormDialog } from '@/components/ui/Dialogs'
@@ -116,15 +117,15 @@ export function TrainingRejudgeModal({
           {scopeCards.map(card => {
             const Icon = card.icon
             const selected = scope === card.value
-            return <button key={card.value} type="button" role="radio" aria-checked={selected} className={`${styles.scopeCard} ${selected ? styles.scopeCardSelected : ''}`} onClick={() => { setScope(card.value); if (card.value !== 'user_problem') setUserId('') }}>
+            return <Button variant="ghost" key={card.value} type="button" role="radio" aria-checked={selected} className={`${styles.scopeCard} ${selected ? styles.scopeCardSelected : ''}`} onClick={() => { setScope(card.value); if (card.value !== 'user_problem') setUserId('') }}>
               <span className={styles.scopeIcon}><Icon size={19} /></span><span className={styles.scopeCopy}><strong>{card.title}</strong><small>{card.meta}</small><span>{card.description}</span></span>{selected && <span className={styles.check}><Check size={15} /></span>}
-            </button>
+            </Button>
           })}
         </div>
 
         {scope !== 'all' && <div className={styles.fields}>
-          <label className={styles.field}><span>重测题目</span><select value={problemId} onChange={event => setProblemId(event.target.value)}><option value="">选择题目</option>{problems.map(problem => <option key={problem.id} value={problem.id}>{problem.alias ? `${problem.alias} · ` : ''}{problem.problemTitle || problem.id}</option>)}</select></label>
-          {scope === 'user_problem' && <label className={styles.field}><span>重测用户</span><select value={userId} onChange={event => setUserId(event.target.value)} disabled={usersLoading}><option value="">{usersLoading ? '正在加载用户…' : '选择用户'}</option>{users.map(user => <option key={user.id} value={user.id}>{user.displayName && user.displayName !== user.username ? `${user.displayName} · ` : ''}{user.username}</option>)}</select></label>}
+          <label className={styles.field}><span>重测题目</span><Select value={problemId} onChange={event => setProblemId(event.target.value)}><option value="">选择题目</option>{problems.map(problem => <option key={problem.id} value={problem.id}>{problem.alias ? `${problem.alias} · ` : ''}{problem.problemTitle || problem.id}</option>)}</Select></label>
+          {scope === 'user_problem' && <label className={styles.field}><span>重测用户</span><Select value={userId} onChange={event => setUserId(event.target.value)} disabled={usersLoading}><option value="">{usersLoading ? '正在加载用户…' : '选择用户'}</option>{users.map(user => <option key={user.id} value={user.id}>{user.displayName && user.displayName !== user.username ? `${user.displayName} · ` : ''}{user.username}</option>)}</Select></label>}
         </div>}
 
         {selectionHint && <div className={styles.hint}>{selectionHint}</div>}

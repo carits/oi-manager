@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import unifiedStyles from './TrainingFormModal.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
@@ -486,7 +488,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       title={isEdit ? `编辑${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}` : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`}
       size="xl"
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+        <div className={unifiedStyles.u1}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
           <Button onClick={handleSave} disabled={saving || loading}>
             {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`)}
@@ -494,90 +496,90 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         </div>
       }
     >
-      <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '0 0.25rem' }}>
+      <div className={unifiedStyles.u2}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-400)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+          <div className={unifiedStyles.u3}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
         ) : (
           <>
             {/* Basic Info */}
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>标题 *</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="训练标题" style={inputStyle} />
+            <div className={unifiedStyles.u4}>
+              <label className={unifiedStyles.u5}>标题 *</label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="训练标题" style={inputStyle} />
             </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>公告</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="训练公告（可选）" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+            <div className={unifiedStyles.u4}>
+              <label className={unifiedStyles.u5}>公告</label>
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="训练公告（可选）" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div className={unifiedStyles.u6}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>赛制</label>
-                <select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
+                <label className={unifiedStyles.u5}>赛制</label>
+                <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
                   <option value="ioi">IOI（即时反馈+部分分）</option>
                   <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
                   <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>开始时间 *</label>
-                <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
+                <label className={unifiedStyles.u5}>开始时间 *</label>
+                <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>结束时间 *</label>
-                <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
+                <label className={unifiedStyles.u5}>结束时间 *</label>
+                <Input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
               </div>
             </div>
 
             {/* 可见性设置 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div className={unifiedStyles.u6}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题目来源显示</label>
-                <select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
+                <label className={unifiedStyles.u5}>题目来源显示</label>
+                <Select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>题解显示</label>
-                <select aria-label="选择" value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')} style={inputStyle}>
+                <label className={unifiedStyles.u5}>题解显示</label>
+                <Select aria-label="选择" value={solutionVisible ? 'always' : 'after'} onChange={e => setSolutionVisible(e.target.value === 'always')} style={inputStyle}>
                   <option value="after">赛后显示</option>
                   <option value="always">始终显示</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>管理员排名</label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '0.5rem' }}>
-                  <input type="checkbox" checked={includeAdminInRanking} onChange={e => setIncludeAdminInRanking(e.target.checked)} style={{ width: '1rem', height: '1rem' }} />
-                  <span style={{ fontSize: '0.85rem' }}>包含管理员</span>
+                <label className={unifiedStyles.u5}>管理员排名</label>
+                <label className={unifiedStyles.u7}>
+                  <input type="checkbox" checked={includeAdminInRanking} onChange={e => setIncludeAdminInRanking(e.target.checked)} className={unifiedStyles.u8} />
+                  <span className={unifiedStyles.u9}>包含管理员</span>
                 </label>
               </div>
             </div>
 
             {/* Problems */}
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-              <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>题目列表</h3>
+            <div className={unifiedStyles.u10}>
+              <h3 className={unifiedStyles.u11}>题目列表</h3>
 
               {problemRows.length > 0 && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', marginBottom: '0.75rem' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <div className={unifiedStyles.u12}>
+                  <table className={unifiedStyles.u13}>
                     <thead>
-                      <tr style={{ background: 'var(--bg-muted)' }}>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '64px' }}>排序</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '36px' }}>#</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '130px' }}>OJ</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)', width: '120px' }}>题号</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>题目</th>
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '70px' }}>别名</th>
-                        {(format === 'ioi' || format === 'oi') && <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '65px' }}>分值</th>}
-                        <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', borderBottom: '1px solid var(--border)', width: '40px' }}></th>
+                      <tr className={unifiedStyles.u14}>
+                        <th className={unifiedStyles.u15}>排序</th>
+                        <th className={unifiedStyles.u16}>#</th>
+                        <th className={unifiedStyles.u17}>OJ</th>
+                        <th className={unifiedStyles.u18}>题号</th>
+                        <th className={unifiedStyles.u19}>题目</th>
+                        <th className={unifiedStyles.u20}>别名</th>
+                        {(format === 'ioi' || format === 'oi') && <th className={unifiedStyles.u21}>分值</th>}
+                        <th className={unifiedStyles.u22}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {problemRows.map((row, idx) => (
                         <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
-                          <td style={{ padding: '0.4rem 0.25rem', textAlign: 'center' }}>
-                            <button
+                          <td className={unifiedStyles.u23}>
+                            <Button variant="ghost"
                               onClick={() => moveUp(idx)}
                               disabled={idx === 0}
                               style={{
@@ -591,8 +593,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                                 color: idx === 0 ? 'var(--border)' : '#666',
                               }}
                               title="上移"
-                            >↑</button>
-                            <button
+                            >↑</Button>
+                            <Button variant="ghost"
                               onClick={() => moveDown(idx)}
                               disabled={idx === problemRows.length - 1}
                               style={{
@@ -605,22 +607,22 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                                 color: idx === problemRows.length - 1 ? 'var(--border)' : '#666',
                               }}
                               title="下移"
-                            >↓</button>
+                            >↓</Button>
                           </td>
-                          <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.8rem' }}>{idx + 1}</td>
-                          <td style={{ padding: '0.4rem 0.5rem' }}>
-                            <select aria-label="选择" value={row.ojName}
+                          <td className={unifiedStyles.u24}>{idx + 1}</td>
+                          <td className={unifiedStyles.u25}>
+                            <Select aria-label="选择" value={row.ojName}
                               onChange={e => {
                                 updateRow(row.id, { ojName: e.target.value, resolved: row.existing ? row.resolved : null })
                                 if (!row.existing) handleResolve({ ...row, ojName: e.target.value, resolved: null })
                               }}
-                              style={{ padding: '0.25rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.8rem', width: '100%' }}
+                              className={unifiedStyles.u26}
                             >
                               {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
-                            </select>
+                            </Select>
                           </td>
-                          <td style={{ padding: '0.4rem 0.5rem' }}>
-                            <input type="text" value={row.problemCode}
+                          <td className={unifiedStyles.u25}>
+                            <Input type="text" value={row.problemCode}
                               onChange={e => {
                                 updateRow(row.id, { problemCode: e.target.value, resolved: row.existing ? row.resolved : null })
                                 if (!row.existing) handleResolve({ ...row, problemCode: e.target.value })
@@ -630,37 +632,37 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                               style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%', background: row.existing ? 'var(--bg-muted)' : 'white' }}
                             />
                           </td>
-                          <td style={{ padding: '0.4rem 0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <td className={unifiedStyles.u27}>
                             {row.existing ? (
-                              <span><span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#10003;</span><span style={{ color: 'var(--gray-600)', fontSize: '0.85rem' }}>{row.resolved?.title || '-'}</span></span>
+                              <span><span className={unifiedStyles.u28}>&#10003;</span><span className={unifiedStyles.u29}>{row.resolved?.title || '-'}</span></span>
                             ) : row.resolving
-                              ? <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>检索中...</span>
+                              ? <span className={unifiedStyles.u30}>检索中...</span>
                               : row.resolved
                                 ? row.resolved.found
-                                  ? <span><span style={{ color: 'var(--success)', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#10003;</span><span style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>{row.resolved.title}</span></span>
-                                  : <span><span style={{ color: 'var(--error)', fontSize: '0.75rem', marginRight: '0.25rem' }}>&#9888;</span><span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>题目不存在</span></span>
-                                : <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>-</span>
+                                  ? <span><span className={unifiedStyles.u28}>&#10003;</span><span className={unifiedStyles.u31}>{row.resolved.title}</span></span>
+                                  : <span><span className={unifiedStyles.u32}>&#9888;</span><span className={unifiedStyles.u33}>题目不存在</span></span>
+                                : <span className={unifiedStyles.u30}>-</span>
                             }
                           </td>
-                          <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
-                            <input
+                          <td className={unifiedStyles.u34}>
+                            <Input
                               value={row.alias}
                               onChange={e => updateRow(row.id, { alias: e.target.value })}
-                              style={{ width: '60px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
+                              className={unifiedStyles.u35}
                             />
                           </td>
                           {(format === 'ioi' || format === 'oi') && (
-                            <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
-                              <input
+                            <td className={unifiedStyles.u34}>
+                              <Input
                                 type="number"
                                 value={row.points}
                                 onChange={e => updateRow(row.id, { points: parseInt(e.target.value) || 0 })}
-                                style={{ width: '58px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontSize: '0.85rem' }}
+                                className={unifiedStyles.u36}
                               />
                             </td>
                           )}
-                          <td style={{ padding: '0.4rem 0.5rem', textAlign: 'center' }}>
-                            <button onClick={() => removeRow(row.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.85rem', padding: '0.1rem 0.2rem' }} title="移除">&#10005;</button>
+                          <td className={unifiedStyles.u34}>
+                            <Button variant="ghost" onClick={() => removeRow(row.id)} className={unifiedStyles.u37} title="移除">&#10005;</Button>
                           </td>
                         </tr>
                       ))}
@@ -669,13 +671,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 </div>
               )}
 
-              <button onClick={addProblemRow}
-                style={{ width: '100%', padding: '0.5rem', background: 'transparent', border: '1px dashed var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--gray-400)', fontSize: '0.85rem' }}>
+              <Button variant="ghost" onClick={addProblemRow}
+                className={unifiedStyles.u38}>
                 + 添加一道题目
-              </button>
+              </Button>
 
               {problemRows.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--gray-400)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                <div className={unifiedStyles.u39}>
                   点击上方按钮添加题目到训练中
                 </div>
               )}

@@ -1,6 +1,7 @@
 'use client'
 
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { Button } from '@/components/ui/Button'
 import type { TrainingInfo, TrainingProblem } from '../types'
 import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
 
@@ -51,7 +52,7 @@ export function TrainingSolutionPanel({ training, problems, allSolutions, onEdit
                     </span>
                   )}
                   </div>
-                  {training.isAdmin && sol.snapshotId && onEditSolution && <button onClick={() => onEditSolution(p, sol)} style={{ padding: '0.4rem 0.7rem', border: '1px solid var(--primary)', borderRadius: '6px', background: 'white', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>编辑题解</button>}
+                  {training.isAdmin && sol.snapshotId && onEditSolution && <Button variant="ghost" onClick={() => onEditSolution(p, sol)} style={{ padding: '0.4rem 0.7rem', border: '1px solid var(--primary)', borderRadius: '6px', background: 'white', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>编辑题解</Button>}
                 </div>
                 <div>
                   {hasPdfSolution ? (
