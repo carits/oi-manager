@@ -14,6 +14,14 @@ export function isOiConfig(config: Record<string, any>): boolean {
   return config.mode === 'oi' || (config.mode !== 'acm' && Array.isArray(config.subtasks) && config.subtasks.length > 0)
 }
 
+function legacySubtaskId(raw: any, index: number, count: number): number {
+  if (Number.isInteger(Number(raw?.id)) && Number(raw.id) > 0) return Number(raw.id)
+  // Historical single-subtask imports used the symbolic id `all`. Its meaning is
+  // unambiguous, so normalize it deterministically instead of blocking migration.
+  if (count === 1 && String(raw?.id || '').toLowerCase() === 'all') return 1
+  return Number.NaN
+}
+
 function normalizeCase(item: any) {
   if (typeof item === 'number') return { input: `${item}.in`, output: `${item}.ans` }
   return {
@@ -41,7 +49,7 @@ export async function inspectLegacyTestGraph(problemId: string) {
   const ids = new Set<number>()
   let totalScore = 0
   for (const [index, raw] of (config.subtasks || []).entries()) {
-    const id = Number(raw.id || index + 1)
+    const id = legacySubtaskId(raw, index, config.subtasks.length)
     if (!Number.isInteger(id) || id <= 0) issues.push(`Subtask #${index + 1} ID 无效`)
     if (ids.has(id)) issues.push(`Subtask ID ${id} 重复`)
     ids.add(id)
@@ -58,7 +66,7 @@ export async function inspectLegacyTestGraph(problemId: string) {
   }
   if (totalScore !== 100) issues.push(`Subtask 总分为 ${totalScore}，必须为 100`)
   for (const [index, raw] of (config.subtasks || []).entries()) {
-    const id = Number(raw.id || index + 1)
+    const id = legacySubtaskId(raw, index, config.subtasks.length)
     for (const dep of raw.if || []) if (!ids.has(Number(dep))) issues.push(`Subtask ${id} 依赖不存在的 Subtask ${dep}`)
   }
   return { ok: issues.length === 0, issues: [...new Set(issues)], problem, config, alreadyMigrated: false }
@@ -76,7 +84,7 @@ export async function migrateLegacyTestGraph(problemId: string) {
     const subtaskDbIds = new Map<number, string>()
     const testcaseIds = new Map<string, string>()
     for (const [subtaskIndex, raw] of config.subtasks.entries()) {
-      const subtaskId = Number(raw.id || subtaskIndex + 1)
+      const subtaskId = legacySubtaskId(raw, subtaskIndex, config.subtasks.length)
       const dbId = crypto.randomUUID()
       subtaskDbIds.set(subtaskId, dbId)
       await tx.problemSubtask.create({
@@ -145,7 +153,7 @@ export async function migrateLegacyTestGraph(problemId: string) {
       }
     }
     for (const [subtaskIndex, raw] of config.subtasks.entries()) {
-      const sourceId = subtaskDbIds.get(Number(raw.id || subtaskIndex + 1))!
+      const sourceId = subtaskDbIds.get(legacySubtaskId(raw, subtaskIndex, config.subtasks.length))!
       for (const dep of raw.if || []) {
         await tx.problemSubtaskDependency.create({
           data: { id: crypto.randomUUID(), subtaskId: sourceId, dependsOnId: subtaskDbIds.get(Number(dep))! },
