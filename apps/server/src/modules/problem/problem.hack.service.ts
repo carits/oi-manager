@@ -22,7 +22,13 @@ export function serializeHackAttempt(attempt: any, includePrivate: boolean) {
     generatorLanguage: attempt.generatorLanguage,
     hackLanguage: attempt.hackLanguage,
     baselineResult: attempt.baselineResult,
+    baselineScore: attempt.baselineScore,
     candidateResult: attempt.candidateResult,
+    candidateScore: attempt.candidateScore,
+    scoreDelta: attempt.scoreDelta,
+    affectedSubtaskIds: attempt.affectedSubtaskIds ? JSON.parse(attempt.affectedSubtaskIds) : [],
+    acceptedTestcaseId: attempt.acceptedTestcaseId,
+    testGraphRevision: attempt.testGraphRevision,
     failureStage: attempt.failureStage,
     message: attempt.message,
     acceptedInputFile: attempt.acceptedInputFile,
@@ -59,7 +65,7 @@ export function isHackableJudgeConfig(config: Record<string, any>): boolean {
   // `standard` is the legacy name for a traditional source-code batch task.
   // Objective tasks do not execute user source against ordinary test cases and
   // therefore cannot participate in the two-pass Hack lifecycle.
-  return resolveJudgeMode(config) === 'acm' && ['default', 'standard'].includes(type)
+  return ['acm', 'oi'].includes(resolveJudgeMode(config)) && ['default', 'standard'].includes(type)
 }
 
 export function allowedProblemLanguages(problem: { allowedLanguages: string | null; judgeConfig: string | null }): string[] {
@@ -171,6 +177,34 @@ function configuredCases(config: Record<string, any>, problemId: string): Array<
   return discoverCases(problemId)
 }
 
+export function appendOiHackCase(
+  configText: string | null,
+  affectedSubtaskIds: number[],
+  testCase: { input: string; output: string },
+): string {
+  const config = parseJudgeConfig(configText)
+  const affected = new Set(affectedSubtaskIds)
+  const subtasks = (config.subtasks || []).map((subtask: any, index: number) => {
+    const id = Number(subtask.id || index + 1)
+    if (!affected.has(id)) return subtask
+    const groups = Array.isArray(subtask.groups) ? subtask.groups.map((group: any) => ({ ...group, cases: [...(group.cases || [])] })) : []
+    const gate = groups.find((group: any) => group.kind === 'hack_gate')
+    if (!gate) throw new Error(`Subtask ${id} 缺少 Hack Gate`)
+    gate.cases = [testCase, ...gate.cases.filter((item: any) => item.input !== testCase.input)]
+    return { ...subtask, groups }
+  })
+  return yaml.dump({ ...config, mode: 'oi', subtasks }, { lineWidth: -1 })
+}
+
+export function hasOiHackGroups(configText: string | null): boolean {
+  const config = parseJudgeConfig(configText)
+  return resolveJudgeMode(config) === 'oi'
+    && Array.isArray(config.subtasks)
+    && config.subtasks.length > 0
+    && config.subtasks.every((subtask: any) => Array.isArray(subtask.groups)
+      && subtask.groups.some((group: any) => group.kind === 'hack_gate'))
+}
+
 export function appendHackCase(
   configText: string | null,
   problemId: string,
@@ -200,9 +234,12 @@ async function withProblemLock<T>(problemId: string, action: () => Promise<T>): 
 export interface HackJudgeResultPayload {
   hackAttemptId: string
   outcome: 'accepted' | 'rejected' | 'system_error'
-  failureStage?: 'input' | 'generator' | 'validator' | 'standard' | 'baseline' | 'candidate'
+  failureStage?: 'input' | 'generator' | 'validator' | 'classifier' | 'standard' | 'checker' | 'baseline' | 'candidate'
   baselineResult?: string
+  baselineScore?: number
   candidateResult?: string
+  candidateScore?: number
+  affectedSubtaskIds?: number[]
   message?: string
   inputData?: string
   outputData?: string
@@ -214,19 +251,19 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
   const attempt = await prisma.problemHackAttempt.findUnique({ where: { id: payload.hackAttemptId } })
   if (!attempt || attempt.status !== 'judging') return
 
+  const resultFields = {
+    baselineResult: payload.baselineResult || null,
+    baselineScore: payload.baselineScore ?? null,
+    candidateResult: payload.candidateResult || null,
+    candidateScore: payload.candidateScore ?? null,
+    scoreDelta: payload.baselineScore !== undefined && payload.candidateScore !== undefined
+      ? payload.baselineScore - payload.candidateScore : null,
+    affectedSubtaskIds: payload.affectedSubtaskIds?.length ? JSON.stringify(payload.affectedSubtaskIds) : null,
+  }
   if (payload.outcome !== 'accepted') {
     await prisma.problemHackAttempt.update({
       where: { id: attempt.id },
-      data: {
-        status: payload.outcome,
-        baselineResult: payload.baselineResult || null,
-        candidateResult: payload.candidateResult || null,
-        failureStage: payload.failureStage || null,
-        message: payload.message || null,
-        judgeId: null,
-        judgeStarted: null,
-        finishedAt: new Date(),
-      },
+      data: { status: payload.outcome, ...resultFields, failureStage: payload.failureStage || null, message: payload.message || null, judgeId: null, judgeStarted: null, finishedAt: new Date() },
     })
     return
   }
@@ -238,12 +275,14 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
       prisma.problem.findUnique({ where: { id: current.problemId } }),
       prisma.problemHackConfig.findUnique({ where: { problemId: current.problemId } }),
     ])
-    if (!problem || !hackConfig || !hackConfig.enabled ||
-        current.hackConfigRevision !== hackConfig.revision ||
-        current.judgeConfigHash !== judgeConfigHash(problem.judgeConfig)) {
+    const mode = hackConfig?.mode === 'oi' ? 'oi' : 'acm'
+    if (!problem || !hackConfig || !hackConfig.enabled
+      || current.hackConfigRevision !== hackConfig.revision
+      || current.judgeConfigHash !== judgeConfigHash(problem.judgeConfig)
+      || (mode === 'oi' && current.testGraphRevision !== problem.testGraphRevision)) {
       await prisma.problemHackAttempt.update({
         where: { id: current.id },
-        data: { status: 'stale', failureStage: 'stale', message: '题目评测配置已变化，请重新发起 Hack', judgeId: null, judgeStarted: null, finishedAt: new Date() },
+        data: { status: 'stale', failureStage: 'stale', message: 'Hack 或测试图配置已变化，请重新发起', judgeId: null, judgeStarted: null, finishedAt: new Date() },
       })
       return
     }
@@ -251,106 +290,83 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
     const inputData = payload.inputData || ''
     const outputData = payload.outputData ?? ''
     if (!inputData.trim() || Buffer.byteLength(inputData, 'utf8') > HACK_INPUT_LIMIT || Buffer.byteLength(outputData, 'utf8') > HACK_INPUT_LIMIT) {
-      await prisma.problemHackAttempt.update({
-        where: { id: current.id },
-        data: { status: 'system_error', failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() },
-      })
+      await prisma.problemHackAttempt.update({ where: { id: current.id }, data: { status: 'system_error', failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() } })
       return
     }
-
     const inputSha256 = crypto.createHash('sha256').update(inputData).digest('hex')
     const outputSha256 = crypto.createHash('sha256').update(outputData).digest('hex')
     if (payload.inputSha256 && payload.inputSha256 !== inputSha256) throw new Error('Hack input hash mismatch')
     if (payload.outputSha256 && payload.outputSha256 !== outputSha256) throw new Error('Hack output hash mismatch')
-
-    const duplicate = await prisma.testdataFile.findFirst({
-      where: { problemId: current.problemId, sha256: inputSha256, filename: { endsWith: '.in' } },
-    })
+    const duplicate = await prisma.testdataFile.findFirst({ where: { problemId: current.problemId, sha256: inputSha256, filename: { endsWith: '.in' } } })
     if (duplicate) {
       await prisma.problemHackAttempt.update({
         where: { id: current.id },
-        data: {
-          status: 'rejected',
-          failureStage: 'input',
-          baselineResult: payload.baselineResult || null,
-          candidateResult: payload.candidateResult || null,
-          message: `候选输入与已有测试数据 ${duplicate.filename} 重复`,
-          inputSha256,
-          judgeId: null,
-          judgeStarted: null,
-          finishedAt: new Date(),
-        },
+        data: { status: 'rejected', ...resultFields, failureStage: 'input', message: `候选输入与已有测试数据 ${duplicate.filename} 重复`, inputSha256, judgeId: null, judgeStarted: null, finishedAt: new Date() },
       })
       return
     }
 
-    const inputFile = `hack_${current.id}.in`
-    const outputFile = `hack_${current.id}.out`
-    const directory = problemDirectory(current.problemId)
-    await fs.promises.mkdir(directory, { recursive: true })
-    const stagedInput = path.join(directory, `.${inputFile}.pending`)
-    const stagedOutput = path.join(directory, `.${outputFile}.pending`)
-    const finalInput = path.join(directory, inputFile)
-    const finalOutput = path.join(directory, outputFile)
-    const nextProblemConfig = appendHackCase(problem.judgeConfig, problem.id, { input: inputFile, output: outputFile })
+    const affected = payload.affectedSubtaskIds || []
+    if (mode === 'oi' && affected.length === 0) throw new Error('OI Hack missing affected subtasks')
+    const inputFile = `hack_${current.id}.in`, outputFile = `hack_${current.id}.out`
+    const inputFileId = crypto.randomUUID(), outputFileId = crypto.randomUUID()
+    const testcaseId = mode === 'oi' ? crypto.randomUUID() : null
+    const nextRevision = mode === 'oi' ? problem.testGraphRevision + 1 : problem.testGraphRevision
+    const nextProblemConfig = mode === 'oi'
+      ? appendOiHackCase(problem.judgeConfig, affected, { input: inputFile, output: outputFile })
+      : appendHackCase(problem.judgeConfig, problem.id, { input: inputFile, output: outputFile })
 
+    const gateGroups = mode === 'oi' ? await prisma.problemTestGroup.findMany({
+      where: { problemId: problem.id, kind: 'hack_gate', Subtask: { subtaskId: { in: affected } } },
+      include: { Subtask: { select: { subtaskId: true } } },
+    }) : []
+    if (mode === 'oi' && gateGroups.length !== affected.length) throw new Error('OI Hack Gate configuration incomplete')
+
+    const now = new Date()
     const trainingProblems = await prisma.trainingProblem.findMany({
       where: { problemId: problem.id },
-      select: { id: true, judgeConfigSnapshot: true, Training: { select: { format: true } } },
+      select: { id: true, judgeConfigSnapshot: true, Training: { select: { type: true, startTime: true, endTime: true } } },
     })
-    const acmSnapshots = trainingProblems.flatMap(item => {
+    const snapshots = trainingProblems.flatMap(item => {
+      if (mode === 'oi') {
+        const frozenContest = item.Training.type === 'contest' && now >= item.Training.startTime
+        return frozenContest ? [] : [{ id: item.id, judgeConfigSnapshot: nextProblemConfig, testGraphRevisionSnapshot: nextRevision }]
+      }
       const source = item.judgeConfigSnapshot || problem.judgeConfig
-      const parsed = parseJudgeConfig(source)
-      const snapshotIsAcm = item.judgeConfigSnapshot
-        ? isHackableJudgeConfig(parsed)
-        : ['acm', 'icpc'].includes(String(item.Training.format).toLowerCase()) && isHackableJudgeConfig(parsed)
-      return snapshotIsAcm
-        ? [{ id: item.id, judgeConfigSnapshot: appendHackCase(source, problem.id, { input: inputFile, output: outputFile }) }]
+      return isHackableJudgeConfig(parseJudgeConfig(source))
+        ? [{ id: item.id, judgeConfigSnapshot: appendHackCase(source, problem.id, { input: inputFile, output: outputFile }), testGraphRevisionSnapshot: item.Training.type === 'contest' ? undefined : nextRevision }]
         : []
     })
 
-    let inputPromoted = false
-    let outputPromoted = false
+    const directory = problemDirectory(current.problemId)
+    await fs.promises.mkdir(directory, { recursive: true })
+    const stagedInput = path.join(directory, `.${inputFile}.pending`), stagedOutput = path.join(directory, `.${outputFile}.pending`)
+    const finalInput = path.join(directory, inputFile), finalOutput = path.join(directory, outputFile)
+    let inputPromoted = false, outputPromoted = false
     try {
       await fs.promises.writeFile(stagedInput, inputData, { encoding: 'utf8', flag: 'wx' })
       await fs.promises.writeFile(stagedOutput, outputData, { encoding: 'utf8', flag: 'wx' })
-      await fs.promises.rename(stagedInput, finalInput)
-      inputPromoted = true
-      await fs.promises.rename(stagedOutput, finalOutput)
-      outputPromoted = true
+      await fs.promises.rename(stagedInput, finalInput); inputPromoted = true
+      await fs.promises.rename(stagedOutput, finalOutput); outputPromoted = true
       await prisma.$transaction(async tx => {
-        await tx.problem.update({ where: { id: problem.id }, data: { judgeConfig: nextProblemConfig } })
-        await tx.testdataFile.createMany({
-          data: [
-            { id: crypto.randomUUID(), problemId: problem.id, filename: inputFile, size: Buffer.byteLength(inputData), md5: crypto.createHash('md5').update(inputData).digest('hex'), sha256: inputSha256 },
-            { id: crypto.randomUUID(), problemId: problem.id, filename: outputFile, size: Buffer.byteLength(outputData), md5: crypto.createHash('md5').update(outputData).digest('hex'), sha256: outputSha256 },
-          ],
-        })
-        for (const item of acmSnapshots) {
-          await tx.trainingProblem.update({ where: { id: item.id }, data: { judgeConfigSnapshot: item.judgeConfigSnapshot } })
+        await tx.problem.update({ where: { id: problem.id }, data: { judgeConfig: nextProblemConfig, ...(mode === 'oi' ? { testGraphRevision: nextRevision } : {}) } })
+        await tx.testdataFile.createMany({ data: [
+          { id: inputFileId, problemId: problem.id, filename: inputFile, size: Buffer.byteLength(inputData), md5: crypto.createHash('md5').update(inputData).digest('hex'), sha256: inputSha256 },
+          { id: outputFileId, problemId: problem.id, filename: outputFile, size: Buffer.byteLength(outputData), md5: crypto.createHash('md5').update(outputData).digest('hex'), sha256: outputSha256 },
+        ] })
+        if (mode === 'oi' && testcaseId) {
+          await tx.problemTestcase.create({ data: { id: testcaseId, problemId: problem.id, inputFileId, outputFileId, source: 'hack', hackerId: current.userId, hackAttemptId: current.id, inputSha256, outputSha256, orderIndex: 0 } })
+          for (const group of gateGroups) await tx.problemTestcaseGroup.create({ data: { id: crypto.randomUUID(), testcaseId, groupId: group.id, orderIndex: 0, score: 100 } })
         }
+        for (const item of snapshots) await tx.trainingProblem.update({ where: { id: item.id }, data: { judgeConfigSnapshot: item.judgeConfigSnapshot, ...(item.testGraphRevisionSnapshot === undefined ? {} : { testGraphRevisionSnapshot: item.testGraphRevisionSnapshot }) } })
         await tx.problemHackAttempt.update({
           where: { id: current.id },
-          data: {
-            status: 'accepted',
-            failureStage: null,
-            baselineResult: payload.baselineResult || null,
-            candidateResult: payload.candidateResult || null,
-            message: payload.message || '有效 Hack 数据已加入题目',
-            inputSha256,
-            outputSha256,
-            acceptedInputFile: inputFile,
-            acceptedOutputFile: outputFile,
-            judgeId: null,
-            judgeStarted: null,
-            finishedAt: new Date(),
-          },
+          data: { status: 'accepted', ...resultFields, failureStage: null, message: payload.message || '有效 Hack 数据已加入题目', inputSha256, outputSha256, acceptedInputFile: inputFile, acceptedOutputFile: outputFile, acceptedTestcaseId: testcaseId, testGraphRevision: nextRevision, judgeId: null, judgeStarted: null, finishedAt: new Date() },
         })
       })
     } catch (error) {
       await Promise.allSettled([
-        fs.promises.rm(stagedInput, { force: true }),
-        fs.promises.rm(stagedOutput, { force: true }),
+        fs.promises.rm(stagedInput, { force: true }), fs.promises.rm(stagedOutput, { force: true }),
         ...(inputPromoted ? [fs.promises.rm(finalInput, { force: true })] : []),
         ...(outputPromoted ? [fs.promises.rm(finalOutput, { force: true })] : []),
       ])

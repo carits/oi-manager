@@ -208,6 +208,7 @@ export function populateSnapshotData(problem: {
   timeLimit: number | null
   memoryLimit: number | null
   judgeConfig: string | null
+  testGraphRevision?: number
   allowedLanguages: string | null
   platform: string
   problemId: string
@@ -221,6 +222,7 @@ export function populateSnapshotData(problem: {
     timeLimitSnapshot: problem.timeLimit,
     memoryLimitSnapshot: problem.memoryLimit,
     judgeConfigSnapshot: problem.judgeConfig,
+    testGraphRevisionSnapshot: problem.testGraphRevision ?? 0,
     allowedLanguagesSnapshot: problem.allowedLanguages,
     sourcePlatformSnapshot: problem.platform,
     sourceProblemIdSnapshot: problem.problemId,

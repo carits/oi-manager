@@ -58,7 +58,7 @@ interface Problem {
     canCopyToSchool: boolean
     canSubmit?: boolean
   }
-  hack?: { enabled: boolean; acceptedCount: number; canHack: boolean }
+  hack?: { enabled: boolean; acceptedCount: number; canHack: boolean; mode: 'acm' | 'oi' }
   // 多版本字段
   statements: Statement[]
   solutions: Statement[]
@@ -1098,7 +1098,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           )}
 
           {activeTab === 'hack' && problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
-            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} />
+            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} mode={problem.hack.mode} />
           )}
 
           {/* 提交记录 Tab */}

@@ -26,6 +26,7 @@ import { teamProblemListsRouter } from './routes/team-problem-lists'
 import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
 import { submitRouter } from './routes/submit'
 import { testdataRouter } from './routes/testdata'
+import { testGraphAdminRouter } from './routes/test-graph-admin'
 import { trainingsRouter } from './modules/training/training.routes'
 import { adminDataRouter } from './routes/admin-data'
 import { migrationRouter } from './routes/migration'
@@ -130,7 +131,8 @@ app.use('/api/oj-accounts', authenticate, ojAccountsRouter)
 app.use('/api/submit', submitRouter)
 app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
 app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
-app.use('/api/admin/data', authenticate, adminDataRouter)  // 管理员数据维护 API
+app.use('/api/admin/data', authenticate, adminDataRouter)
+app.use('/api/admin', testGraphAdminRouter)  // 管理员数据维护 API
 app.use('/api/admin/migration', authenticate, migrationRouter)  // 数据迁移 API
 app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
 app.use('/api/rankings', rankingRouter)

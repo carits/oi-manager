@@ -41,8 +41,13 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `Problem` | 以 Prisma schema 为准 |
 | `ProblemAttachment` | 以 Prisma schema 为准 |
 | `ProblemChecker` | Lemon SPJ 源码与头文件记录 |
-| `ProblemHackAttempt` | 题目级 ACM Hack 的独立队列、前后 Verdict、结构化失败阶段与落库状态 |
-| `ProblemHackConfig` | 题目级 ACM Hack 开关、STD、Validator 和配置 revision |
+| `ProblemHackAttempt` | 题目级 ACM/OI Hack 独立队列、前后 Verdict/分数、命中 Subtask 与落库状态 |
+| `ProblemHackConfig` | 题目级 Hack 开关、STD、Validator、OI Classifier 和配置 revision |
+| `ProblemTestcase` | 规范化测试点；一份输入/答案可关联多个 Test Group |
+| `ProblemSubtask` | OI 稳定数字 Subtask、满分和顺序 |
+| `ProblemSubtaskDependency` | Subtask 有向无环依赖关系 |
+| `ProblemTestGroup` | Subtask 的官方计分组或系统 Hack Gate |
+| `ProblemTestcaseGroup` | Testcase 与 Test Group 多对多关系及点级限制/分值 |
 | `ProblemList` | 以 Prisma schema 为准 |
 | `ProblemListEntry` | 以 Prisma schema 为准 |
 | `ProblemListSection` | 以 Prisma schema 为准 |

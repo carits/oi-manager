@@ -313,25 +313,17 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       let caseIndex = 0
 
       for (const subtask of subtasks) {
-        // 对于 sum 类型，如果没有配置 case 级别的分数，需要分配分数
-        // 参考 Hydro normalizeSubtasks: 将子任务分数均匀分配给没有 score 的 cases
         const subtaskCases = subtask.cases || []
-        if (subtask.type === 'sum' && subtask.score) {
+        const grouped = Array.isArray(subtask.groups) && subtask.groups.length > 0
+        if (!grouped && subtask.type === 'sum' && subtask.score) {
           const casesWithoutScore = subtaskCases.filter(c => !c.score).length
           const casesWithScore = subtaskCases.reduce((sum, c) => sum + (c.score || 0), 0)
           const remainingScore = Math.max(subtask.score - casesWithScore, 0)
           const perCaseScore = casesWithoutScore > 0 ? Math.floor(remainingScore / casesWithoutScore) : 0
-          // 分配分数给没有 score 的 cases
-          subtaskCases.forEach(c => {
-            if (!c.score) c.score = perCaseScore
-          })
+          subtaskCases.forEach(c => { if (!c.score) c.score = perCaseScore })
         }
-        // 对于 min/max 类型，如果没有配置 case 级别的分数，继承子任务的分数
-        // 参考 Hydro normalizeSubtasks: score: c.score || (s.type === 'sum' ? caseScore.next().value as number : score)
-        if ((subtask.type === 'min' || subtask.type === 'max') && subtask.score) {
-          subtaskCases.forEach(c => {
-            if (!c.score) c.score = subtask.score
-          })
+        if (!grouped && (subtask.type === 'min' || subtask.type === 'max') && subtask.score) {
+          subtaskCases.forEach(c => { if (!c.score) c.score = subtask.score })
         }
 
         // 检查子任务依赖：如果依赖的子任务失败，跳过当前子任务
@@ -405,6 +397,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           )
           caseResult.caseId = caseIndex
           caseResult.subtaskId = subtask.id
+          caseResult.groupId = testCase.groupId
+          caseResult.groupKind = testCase.groupKind
           // A subtask case inherits its subtask score unless it has an explicit score.
           if (caseResult.result === 'Accepted') {
             caseResult.score = testCase.score ?? subtask.score ?? 0
@@ -415,9 +409,9 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           updateMaxMetrics(caseResult)
 
           // 检查是否可以提前终止
-          if (subtaskType === 'min' && caseResult.result !== 'Accepted') {
+          if (!grouped && subtaskType === 'min' && caseResult.result !== 'Accepted') {
             subtaskDetermined = true
-          } else if (subtaskType === 'max' && caseResult.result === 'Accepted' && (caseResult.score || 0) >= (testCase.score || 0)) {
+          } else if (!grouped && subtaskType === 'max' && caseResult.result === 'Accepted' && (caseResult.score || 0) >= (testCase.score || 0)) {
             // max: 已有满分用例，跳过剩余
             subtaskDetermined = true
           }
@@ -426,7 +420,9 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         }
 
         // 计算子任务分数
-        const subtaskScore = calculateSubtaskScore(subtaskCaseResults, subtask.type || 'min', subtask.score || 0)
+        const subtaskScore = grouped
+          ? calculateGroupedSubtaskScore(subtaskCaseResults, subtask.groups || [], subtask.score || 0)
+          : calculateSubtaskScore(subtaskCaseResults, subtask.type || 'min', subtask.score || 0)
         subtaskResults.push({
           id: subtask.id || 0,
           type: subtask.type || 'min',
@@ -923,13 +919,33 @@ function loadTestCases(
 
   // 将 cases 中的数字转换为 {input, output} 对象，并将 scoring 映射到 type
   function normalizeSubtask(st: any): any {
-    const rawCases = st.cases || []
-    const cases = rawCases.map((c: any) => {
-      if (typeof c === 'number') {
-        return { input: `${c}.in`, output: `${c}.ans` }
-      }
-      return c
+    const normalizeCases = (rawCases: any[]) => rawCases.map((c: any) => {
+      if (typeof c === 'number') return { input: `${c}.in`, output: `${c}.ans` }
+      return { ...c }
     })
+    if (Array.isArray(st.groups) && st.groups.length > 0) {
+      const groups = st.groups.map((group: any, index: number) => {
+        const groupId = String(group.id || `group-${index + 1}`)
+        const kind = group.kind === 'hack_gate' ? 'hack_gate' : 'official'
+        const type = group.type || group.scoring || 'min'
+        const score = Number(group.score || 0)
+        const cases = normalizeCases(group.cases || []).map((testCase: any) => ({
+          ...testCase, groupId, groupKind: kind, groupScore: score, groupType: type,
+        }))
+        if (kind === 'hack_gate') cases.forEach((testCase: any) => { if (testCase.score === undefined) testCase.score = 100 })
+        if (kind === 'official' && type === 'sum' && score > 0) {
+          const missing = cases.filter((testCase: any) => !testCase.score)
+          const assigned = cases.reduce((sum: number, testCase: any) => sum + Number(testCase.score || 0), 0)
+          const perCase = missing.length ? Math.floor(Math.max(0, score - assigned) / missing.length) : 0
+          missing.forEach((testCase: any) => { testCase.score = perCase })
+        } else if (kind === 'official' && (type === 'min' || type === 'max')) {
+          cases.forEach((testCase: any) => { if (!testCase.score) testCase.score = score })
+        }
+        return { ...group, id: groupId, kind, type, score, cases }
+      })
+      return { ...st, groups, cases: groups.flatMap((group: any) => group.cases), type: st.type || st.scoring || 'min' }
+    }
+    const cases = normalizeCases(st.cases || [])
     return { ...st, cases, type: st.type || st.scoring }
   }
 
@@ -1003,6 +1019,27 @@ function calculateSubtaskScore(
     default:
       return 0
   }
+}
+
+function calculateGroupedSubtaskScore(
+  caseResults: JudgeCaseResult[],
+  groups: NonNullable<SubtaskConfig['groups']>,
+  maxScore: number,
+): number {
+  let officialScore = 0
+  let gateRatio = 1
+  for (const group of groups) {
+    const results = caseResults.filter(result => result.groupId === String(group.id))
+    if (group.kind === 'hack_gate') {
+      if (results.length > 0) {
+        const ratios = results.map(result => Math.max(0, Math.min(1, Number(result.score || 0) / 100)))
+        gateRatio = Math.min(gateRatio, ...ratios)
+      }
+      continue
+    }
+    officialScore += calculateSubtaskScore(results, group.type || 'min', group.score || 0)
+  }
+  return Math.min(maxScore, Math.floor(officialScore * gateRatio))
 }
 
 /**

@@ -10,6 +10,17 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-25
 
+- 题目级 Hack 扩展到 `judgeConfig.mode: oi` 的 OI / IOI 题：新增 C++17 Classifier，严格解析
+  `{"subtasks":[...]}`，按证明程序总分下降判断有效性，并在命中的 Subtask 系统 Hack Gate 中只保存一份
+  候选测试数据。历史提交、成绩和排行榜不会自动重测。
+- 新增规范化 Testcase / Subtask / Test Group 多对多测试图、无环依赖校验、YAML 执行投影和超级管理员
+  `check/apply` 迁移 API。旧配置保持双读；异常题只进入报告并禁止启用 OI Hack。
+- 普通训练、作业和未开始活动自动同步有效 Hack；已经开始或结束的比赛冻结原快照，比赛管理员可在题目
+  操作区预览 revision 差异并手动同步。题目管理页显示测试图和只读系统 Hack Gate，Hack 历史显示前后
+  分数、降分和命中 Subtask。
+- 安全增量迁移前已生成并校验 5.2MB 备份
+  `/data/backups/oi-manager/automatic/oi_manager_20260825_133857.dump`；Prisma 迁移
+  `20260825_oi_hack_test_graph` 已应用。Judge 9/9、训练权限 43/43 及 Server/Judge/Web 生产构建通过。
 - Hack 历史把“查看程序”入口移动到程序语言之后，题目管理者无需横向滚动到表格末端即可读取候选输入/生成器和被 Hack 程序；完整源码仍只通过单条详情接口按题目管理权或记录归属返回。
 - Hack 程序详情入口修复随提交 97ee230 推送并部署为公网构建 zqmtCul8BqfkMjyMkx8fU；Web 34/34、生产构建、文档门禁、3000/3002 健康检查通过，线上 API 验证管理员可读完整源码、其他用户读取他人记录返回 404。
 

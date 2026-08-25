@@ -33,6 +33,19 @@ export interface TestCaseConfig {
   time?: string      // "1s", "1000ms"
   memory?: string    // "256MB"
   score?: number
+  groupId?: string
+  groupKind?: 'official' | 'hack_gate'
+  groupScore?: number
+  groupType?: SubtaskType
+}
+
+export interface TestGroupConfig {
+  id?: string
+  name?: string
+  kind: 'official' | 'hack_gate'
+  score?: number
+  type?: SubtaskType
+  cases?: TestCaseConfig[]
 }
 
 export interface SubtaskConfig {
@@ -43,6 +56,7 @@ export interface SubtaskConfig {
   type?: SubtaskType
   if?: number[]
   cases?: TestCaseConfig[]
+  groups?: TestGroupConfig[]
 }
 
 export interface CompilableSource {
@@ -94,6 +108,8 @@ export interface JudgeRequest {
 export interface JudgeCaseResult {
   caseId: number
   subtaskId?: number
+  groupId?: string
+  groupKind?: 'official' | 'hack_gate'
   result: JudgeResult
   /** Backward compatible CPU time, ms */
   time: number
@@ -144,14 +160,20 @@ export interface HackJudgeRequest {
   hackLanguage: string
   standardSource: string
   validatorSource: string
+  classifierSource?: string
+  hackMode?: 'acm' | 'oi'
+  testGraphRevision?: number
 }
 
 export interface HackJudgeTaskResult {
   hackAttemptId: string
   outcome: 'accepted' | 'rejected' | 'system_error'
-  failureStage?: 'input' | 'generator' | 'validator' | 'standard' | 'baseline' | 'candidate'
+  failureStage?: 'input' | 'generator' | 'validator' | 'classifier' | 'standard' | 'checker' | 'baseline' | 'candidate'
   baselineResult?: JudgeResult
+  baselineScore?: number
   candidateResult?: JudgeResult
+  candidateScore?: number
+  affectedSubtaskIds?: number[]
   message?: string
   inputData?: string
   outputData?: string

@@ -9,8 +9,10 @@ import {
   HACK_SOURCE_LIMIT,
   allowedProblemLanguages,
   isHackableJudgeConfig,
+  hasOiHackGroups,
   judgeConfigHash,
   parseJudgeConfig,
+  resolveJudgeMode,
   serializeHackAttempt,
   validateHackCppSource,
 } from './problem.hack.service'
@@ -33,10 +35,13 @@ problemHackRouter.get('/:id/hack-config', authenticate, asyncHandler(async (req,
     success: true,
     data: config || {
       enabled: false,
+      mode: resolveJudgeMode(parseJudgeConfig(problem.judgeConfig)),
       standardSource: '',
       standardLanguage: 'cpp17',
       validatorSource: '',
       validatorLanguage: 'cpp17',
+      classifierSource: '',
+      classifierLanguage: 'cpp17',
       revision: 0,
     },
   })
@@ -50,12 +55,17 @@ problemHackRouter.put('/:id/hack-config', authenticate, asyncHandler(async (req,
   const enabled = req.body?.enabled === true
   const standardSource = typeof req.body?.standardSource === 'string' ? req.body.standardSource : ''
   const validatorSource = typeof req.body?.validatorSource === 'string' ? req.body.validatorSource : ''
-  if (Buffer.byteLength(standardSource, 'utf8') > HACK_SOURCE_LIMIT || Buffer.byteLength(validatorSource, 'utf8') > HACK_SOURCE_LIMIT) {
-    return res.status(413).json({ success: false, code: 'SOURCE_TOO_LARGE', message: 'STD 或 Validator 源码不能超过 256 KiB' })
+  const classifierSource = typeof req.body?.classifierSource === 'string' ? req.body.classifierSource : ''
+  const mode = resolveJudgeMode(parseJudgeConfig(problem.judgeConfig))
+  if (Buffer.byteLength(standardSource, 'utf8') > HACK_SOURCE_LIMIT || Buffer.byteLength(validatorSource, 'utf8') > HACK_SOURCE_LIMIT || Buffer.byteLength(classifierSource, 'utf8') > HACK_SOURCE_LIMIT) {
+    return res.status(413).json({ success: false, code: 'SOURCE_TOO_LARGE', message: 'STD、Validator 或 Classifier 源码不能超过 256 KiB' })
   }
   if (enabled) {
     if (!isHackableJudgeConfig(parseJudgeConfig(problem.judgeConfig))) {
-      return res.status(409).json({ success: false, code: 'HACK_REQUIRES_ACM', message: '只有 ACM 本地批处理题可以启用 Hack' })
+      return res.status(409).json({ success: false, code: 'HACK_REQUIRES_BATCH', message: '只有 ACM 或 OI 本地批处理题可以启用 Hack' })
+    }
+    if (mode === 'oi' && !hasOiHackGroups(problem.judgeConfig)) {
+      return res.status(409).json({ success: false, code: 'OI_TEST_GRAPH_REQUIRED', message: '请先完成 OI 测试图迁移并确保每个 Subtask 都有 Hack Gate' })
     }
     const testdataCount = await prisma.testdataFile.count({ where: { problemId: problem.id } })
     if (!problem.judgeConfig?.trim() || testdataCount === 0) {
@@ -64,6 +74,7 @@ problemHackRouter.put('/:id/hack-config', authenticate, asyncHandler(async (req,
     try {
       await validateHackCppSource(standardSource, '标准程序')
       await validateHackCppSource(validatorSource, 'Validator')
+      if (mode === 'oi') await validateHackCppSource(classifierSource, 'Classifier')
     } catch (error: any) {
       return res.status(422).json({ success: false, code: 'HACK_CONFIG_COMPILE_ERROR', message: error.message })
     }
@@ -75,19 +86,25 @@ problemHackRouter.put('/:id/hack-config', authenticate, asyncHandler(async (req,
       id: crypto.randomUUID(),
       problemId: problem.id,
       enabled,
+      mode,
       standardSource,
       validatorSource,
       standardLanguage: 'cpp17',
       validatorLanguage: 'cpp17',
+      classifierSource,
+      classifierLanguage: 'cpp17',
       revision: 1,
       updatedBy: req.user!.userId,
     },
     update: {
       enabled,
+      mode,
       standardSource,
       validatorSource,
+      classifierSource,
       standardLanguage: 'cpp17',
       validatorLanguage: 'cpp17',
+      classifierLanguage: 'cpp17',
       revision: { increment: 1 },
       updatedBy: req.user!.userId,
     },
@@ -102,7 +119,7 @@ problemHackRouter.post('/:id/hacks', authenticate, asyncHandler(async (req, res)
   }
   const hackConfig = await prisma.problemHackConfig.findUnique({ where: { problemId: problem.id } })
   if (!hackConfig?.enabled || !isHackableJudgeConfig(parseJudgeConfig(problem.judgeConfig))) {
-    return res.status(409).json({ success: false, code: 'HACK_NOT_ENABLED', message: '该题未启用 ACM Hack' })
+    return res.status(409).json({ success: false, code: 'HACK_NOT_ENABLED', message: '该题未启用 Hack' })
   }
 
   const inputMode = req.body?.inputMode === 'generator' ? 'generator' : req.body?.inputMode === 'data' ? 'data' : null
@@ -155,6 +172,7 @@ problemHackRouter.post('/:id/hacks', authenticate, asyncHandler(async (req, res)
         hackLanguage,
         hackConfigRevision: hackConfig.revision,
         judgeConfigHash: judgeConfigHash(problem.judgeConfig),
+        testGraphRevision: problem.testGraphRevision,
       },
     })
   } catch (error: any) {
@@ -225,6 +243,12 @@ problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(as
         judgeConfigHash: judgeConfigHash(problem.judgeConfig),
         baselineResult: null,
         candidateResult: null,
+        baselineScore: null,
+        candidateScore: null,
+        scoreDelta: null,
+        affectedSubtaskIds: null,
+        acceptedTestcaseId: null,
+        testGraphRevision: problem.testGraphRevision,
         failureStage: null,
         message: null,
         judgeId: null,

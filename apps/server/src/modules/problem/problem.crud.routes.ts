@@ -16,7 +16,7 @@ import {
   problemPermissions,
 } from './problem.access'
 import { copyPlatformProblemToSchool } from './problem.copy'
-import { isHackableJudgeConfig, parseJudgeConfig } from './problem.hack.service'
+import { isHackableJudgeConfig, parseJudgeConfig, resolveJudgeMode } from './problem.hack.service'
 
 export const problemCrudRouter = Router()
 
@@ -321,6 +321,7 @@ problemCrudRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
         enabled: Boolean(ProblemHackConfig?.enabled) && hackable,
         acceptedCount: acceptedHackCount,
         canHack: Boolean(ProblemHackConfig?.enabled) && hackable && data.status === 'published' && permissions.canView,
+        mode: resolveJudgeMode(parseJudgeConfig(data.judgeConfig)),
       },
     },
   })

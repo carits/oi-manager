@@ -10,21 +10,27 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 303 个端点中 296 个必须认证，7 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 309 个端点中 302 个必须认证，7 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 303 个无会话请求：296 个受保护端点必须返回
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 309 个无会话请求：302 个受保护端点必须返回
 401，7 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| `GET` | `/api/problems/:id/hack-config` | 题目管理者读取 ACM Hack 配置 |
-| `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator 和 Hack 开关 |
+| `GET` | `/api/problems/:id/hack-config` | 题目管理者读取 ACM/OI Hack 配置 |
+| `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator、Classifier 和 Hack 开关 |
 | `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |
 | `POST` | `/api/problems/:id/hacks` | 以直接数据或生成器发起题目级 Hack |
 | `GET` | `/api/problems/:id/hacks/:hackId` | 查看有权限的 Hack 详情 |
 | `POST` | `/api/problems/:id/hacks/:hackId/retry` | 题目管理者重新执行系统错误任务 |
+| `GET` | `/api/problems/:id/test-graph` | 题目管理者读取规范化 OI 测试图和迁移检查结果 |
+| `PUT` | `/api/problems/:id/test-graph` | 校验并保存 Subtask/Group/Testcase 测试图 |
+| `GET` | `/api/admin/problem-test-graph/migration` | 超级管理员检查旧 OI 配置迁移条件 |
+| `POST` | `/api/admin/problem-test-graph/migration` | 超级管理员通过 API 幂等迁移合法题目 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/hack-sync-preview` | 活动管理员预览冻结快照与最新测试图 revision |
+| `POST` | `/api/trainings/:id/problems/:trainingProblemId/hack-sync` | 活动管理员同步最新 Hack 数据且不自动重测 |
 | `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |

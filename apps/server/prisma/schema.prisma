@@ -370,6 +370,7 @@ model Problem {
   publishedAt       DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @default(now())
+  testGraphRevision Int                 @default(0)
   allowedLanguages  String?
   ojBindings        String?
   ProblemAttachment ProblemAttachment[]
@@ -381,6 +382,9 @@ model Problem {
   ProblemChecker    ProblemChecker[]
   ProblemHackConfig ProblemHackConfig?
   ProblemHackAttempt ProblemHackAttempt[]
+  ProblemTestcase   ProblemTestcase[]
+  ProblemSubtask    ProblemSubtask[]
+  ProblemTestGroup  ProblemTestGroup[]
   TrainingProblem   TrainingProblem[]
   Owner             User                @relation("ProblemOwner", fields: [ownerId], references: [id])
   Organization       Organization?        @relation(fields: [organizationId], references: [id])
@@ -401,10 +405,13 @@ model ProblemHackConfig {
   id              String   @id
   problemId       String   @unique
   enabled         Boolean  @default(false)
+  mode            String   @default("acm")
   standardSource  String   @db.Text
   standardLanguage String  @default("cpp17")
   validatorSource String   @db.Text
   validatorLanguage String @default("cpp17")
+  classifierSource String   @default("") @db.Text
+  classifierLanguage String @default("cpp17")
   revision        Int      @default(1)
   updatedBy       String
   createdAt       DateTime @default(now())
@@ -429,7 +436,13 @@ model ProblemHackAttempt {
   hackConfigRevision    Int
   judgeConfigHash       String
   baselineResult        String?
+  baselineScore         Int?
   candidateResult       String?
+  candidateScore        Int?
+  scoreDelta            Int?
+  affectedSubtaskIds    String?
+  acceptedTestcaseId    String?
+  testGraphRevision     Int      @default(0)
   failureStage          String?
   message               String?  @db.Text
   inputSha256           String?
@@ -470,7 +483,7 @@ model ProblemChecker {
   fileUrl    String
   language   String?
   uploadedAt DateTime @default(now())
-  Problem    Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Problem    Problem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
   @@unique([problemId, fileName])
   @@index([problemId])
 }
@@ -1107,9 +1120,97 @@ model TestdataFile {
   sha256     String?
   uploadedAt DateTime @default(now())
   Problem    Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  InputForTestcase  ProblemTestcase[] @relation("ProblemTestcaseInput")
+  OutputForTestcase ProblemTestcase[] @relation("ProblemTestcaseOutput")
 
   @@unique([problemId, filename])
   @@index([problemId])
+}
+
+model ProblemTestcase {
+  id             String   @id
+  problemId      String
+  inputFileId    String
+  outputFileId   String
+  source         String   @default("official")
+  hackerId       String?
+  hackAttemptId  String?
+  inputSha256    String?
+  outputSha256   String?
+  enabled        Boolean  @default(true)
+  orderIndex     Int      @default(0)
+  createdAt      DateTime @default(now())
+  Problem        Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  InputFile      TestdataFile @relation("ProblemTestcaseInput", fields: [inputFileId], references: [id], onDelete: Restrict)
+  OutputFile     TestdataFile @relation("ProblemTestcaseOutput", fields: [outputFileId], references: [id], onDelete: Restrict)
+  GroupLinks     ProblemTestcaseGroup[]
+
+  @@unique([problemId, inputFileId, outputFileId])
+  @@index([problemId, source, enabled])
+  @@index([hackAttemptId])
+}
+
+model ProblemSubtask {
+  id           String   @id
+  problemId    String
+  subtaskId    Int
+  score        Int
+  orderIndex   Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  Problem      Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Groups       ProblemTestGroup[]
+  Dependencies ProblemSubtaskDependency[] @relation("SubtaskDependencySource")
+  RequiredBy   ProblemSubtaskDependency[] @relation("SubtaskDependencyTarget")
+
+  @@unique([problemId, subtaskId])
+  @@index([problemId, orderIndex])
+}
+
+model ProblemSubtaskDependency {
+  id          String @id
+  subtaskId   String
+  dependsOnId String
+  Subtask     ProblemSubtask @relation("SubtaskDependencySource", fields: [subtaskId], references: [id], onDelete: Cascade)
+  DependsOn   ProblemSubtask @relation("SubtaskDependencyTarget", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([subtaskId, dependsOnId])
+  @@index([dependsOnId])
+}
+
+model ProblemTestGroup {
+  id          String   @id
+  problemId   String
+  subtaskId   String
+  key         String
+  name        String
+  kind        String
+  score       Int      @default(0)
+  aggregation String   @default("min")
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Problem     Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Subtask     ProblemSubtask @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
+  Testcases   ProblemTestcaseGroup[]
+
+  @@unique([subtaskId, key])
+  @@index([problemId, kind])
+}
+
+model ProblemTestcaseGroup {
+  id         String @id
+  testcaseId String
+  groupId    String
+  orderIndex Int    @default(0)
+  score      Int?
+  time       String?
+  memory     String?
+  Testcase   ProblemTestcase @relation(fields: [testcaseId], references: [id], onDelete: Cascade)
+  Group      ProblemTestGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([testcaseId, groupId])
+  @@index([groupId, orderIndex])
 }
 
 model Training {
@@ -1191,6 +1292,7 @@ model TrainingProblem {
   timeLimitSnapshot         Int?
   memoryLimitSnapshot       Int?
   judgeConfigSnapshot       String?                     @db.Text
+  testGraphRevisionSnapshot Int?
   allowedLanguagesSnapshot  String?
   sourcePlatformSnapshot    String?
   sourceProblemIdSnapshot   String?

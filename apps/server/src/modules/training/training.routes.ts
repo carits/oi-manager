@@ -20,6 +20,7 @@ import { trainingMiscRouter } from './training.misc.routes'
 import { trainingRecordRouter } from './training.record.routes'
 import { trainingContentRouter } from './training.content.routes'
 import { trainingStatementManagementRouter } from './training.statement-management.routes'
+import { trainingHackSyncRouter } from './training.hack-sync.routes'
 
 export const trainingsRouter = Router()
 
@@ -40,6 +41,7 @@ trainingsRouter.use('/trainings/:id', authenticate, async (req, res, next) => {
 trainingsRouter.use(trainingCrudRouter)
 trainingsRouter.use(trainingContentRouter)
 trainingsRouter.use(trainingStatementManagementRouter)
+trainingsRouter.use(trainingHackSyncRouter)
 trainingsRouter.use(trainingProblemsRouter)
 trainingsRouter.use(trainingNotesRouter)
 trainingsRouter.use(trainingRecordRouter)

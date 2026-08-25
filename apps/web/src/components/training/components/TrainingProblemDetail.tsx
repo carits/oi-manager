@@ -6,6 +6,7 @@ import { LoadError } from '@/components/ui/LoadError'
 import type { ResourceState } from '@/lib/resource'
 import type { TrainingInfo, TrainingProblem, ProblemDetail } from '../types'
 import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
+import { TrainingHackSyncAction } from './TrainingHackSyncAction'
 
 const STATEMENT_LANGUAGE_LABELS: Record<string, string> = {
   zh: '中文',
@@ -465,6 +466,9 @@ B 题：...
       >
         ▶ 提交代码
       </button>
+      {selectedProblem && training.isAdmin && (
+        <TrainingHackSyncAction trainingId={training.id} trainingProblemId={selectedProblem.id} />
+      )}
       {selectedProblem && training.isAdmin && (
         <button
           onClick={onManageContentClick}

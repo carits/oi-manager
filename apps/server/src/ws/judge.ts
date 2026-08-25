@@ -196,11 +196,12 @@ class JudgeConsumer {
         const attempt = await tx.problemHackAttempt.findUnique({ where: { id: candidate.id } })
         if (!attempt) return null
         const [problem, hackConfig] = await Promise.all([
-          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true } }),
+          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true, testGraphRevision: true } }),
           tx.problemHackConfig.findUnique({ where: { problemId: attempt.problemId } }),
         ])
         if (!problem || !hackConfig?.enabled || hackConfig.revision !== attempt.hackConfigRevision ||
-            judgeConfigHash(problem.judgeConfig) !== attempt.judgeConfigHash) {
+            judgeConfigHash(problem.judgeConfig) !== attempt.judgeConfigHash ||
+            (hackConfig.mode === 'oi' && problem.testGraphRevision !== attempt.testGraphRevision)) {
           await tx.problemHackAttempt.update({
             where: { id: attempt.id },
             data: { status: 'stale', failureStage: 'stale', message: 'Hack 配置已变化，请重新发起', finishedAt: new Date() },
@@ -220,6 +221,8 @@ class JudgeConsumer {
           config: yaml.load(problem.judgeConfig || '{}'),
           judgeConfigHash: attempt.judgeConfigHash,
           hackConfigRevision: attempt.hackConfigRevision,
+          hackMode: hackConfig.mode as 'acm' | 'oi',
+          testGraphRevision: attempt.testGraphRevision,
           inputMode: attempt.inputMode as 'data' | 'generator',
           inputData: attempt.inputData || undefined,
           generatorSource: attempt.generatorSource || undefined,
@@ -228,6 +231,7 @@ class JudgeConsumer {
           hackLanguage: attempt.hackLanguage,
           standardSource: hackConfig.standardSource,
           validatorSource: hackConfig.validatorSource,
+          classifierSource: hackConfig.classifierSource || undefined,
         }
       })
     } catch (error: any) {
@@ -302,6 +306,8 @@ interface HackTask {
   config: any
   judgeConfigHash: string
   hackConfigRevision: number
+  hackMode: 'acm' | 'oi'
+  testGraphRevision: number
   inputMode: 'data' | 'generator'
   inputData?: string
   generatorSource?: string
@@ -310,6 +316,7 @@ interface HackTask {
   hackLanguage: string
   standardSource: string
   validatorSource: string
+  classifierSource?: string
 }
 
 type DispatchTask = JudgeTask | HackTask
