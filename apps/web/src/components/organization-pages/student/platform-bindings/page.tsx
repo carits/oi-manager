@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
@@ -204,7 +205,7 @@ export default function StudentPlatformBindingsPage() {
             {PLATFORMS.map((platform) => {
               const status = getBindingStatus(platform.id)
               return (
-                <button
+                <Button variant="ghost"
                   type="button"
                   key={platform.id}
                   onClick={() => handlePlatformClick(platform.id)}
@@ -233,7 +234,7 @@ export default function StudentPlatformBindingsPage() {
                     </div>
                   </div>
                   <span style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>▶</span>
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -311,7 +312,7 @@ export default function StudentPlatformBindingsPage() {
                     {field.label}
                     {field.required && <span style={{ color: 'var(--error)', marginLeft: '0.25rem' }}>*</span>}
                   </label>
-                  <input
+                  <Input
                     type={field.type}
                     value={configValues[field.key] || ''}
                     onChange={(e) => setConfigValues({ ...configValues, [field.key]: e.target.value })}

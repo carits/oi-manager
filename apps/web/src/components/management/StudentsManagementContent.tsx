@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -168,10 +169,10 @@ export default function StudentsManagementContent() {
         </PageHeader>
 
         <ManagementToolbar total={total} noun="学生">
-          <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索学生" />
-          <select className={managementListStyles.select} value={filters.grade} onChange={event => updateFilter('grade', event.target.value)} aria-label="年级筛选"><option value="">年级：全部</option>{gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}</select>
-          {isPrincipal && <select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select>}
-          <select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></select>
+          <Input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索学生" />
+          <Select className={managementListStyles.select} value={filters.grade} onChange={event => updateFilter('grade', event.target.value)} aria-label="年级筛选"><option value="">年级：全部</option>{gradeOptions.map(grade => <option key={grade} value={grade}>{grade}</option>)}</Select>
+          {isPrincipal && <Select className={managementListStyles.select} value={filters.headTeacherMembershipId} onChange={event => updateFilter('headTeacherMembershipId', event.target.value)} aria-label="主教练筛选"><option value="">主教练：全部</option>{teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</Select>}
+          <Select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></Select>
         </ManagementToolbar>
         <Table
           data={students}
@@ -196,7 +197,7 @@ export default function StudentsManagementContent() {
                 if (transferringStudent?.id === student.id) {
                   return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <select aria-label="选择"
+                      <Select aria-label="选择"
                         value={selectedTeacherId}
                         onChange={(e) => setSelectedTeacherId(e.target.value)}
                         style={{
@@ -212,7 +213,7 @@ export default function StudentsManagementContent() {
                             {teacher.name}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                       <Button size="sm" onClick={handleConfirmTransfer}>
                         确认
                       </Button>
@@ -370,7 +371,7 @@ function StudentFormModal({
       <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名 *</label>
-          <input
+          <Input
             type="text"
             value={form.values.name}
             onChange={(e) => form.handleChange('name', e.target.value)}
@@ -381,7 +382,7 @@ function StudentFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>性别</label>
-          <select aria-label="选择"
+          <Select aria-label="选择"
             value={form.values.gender}
             onChange={(e) => form.handleChange('gender', e.target.value)}
             style={formStyles.select}
@@ -389,12 +390,12 @@ function StudentFormModal({
             <option value="">请选择</option>
             <option value="男">男</option>
             <option value="女">女</option>
-          </select>
+          </Select>
         </div>
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>用户名 *</label>
-          <input
+          <Input
             type="text"
             value={form.values.username}
             onChange={(e) => form.handleChange('username', e.target.value)}
@@ -406,7 +407,7 @@ function StudentFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>密码 {!student && '*'}</label>
-          <input
+          <Input
             type="password"
             value={form.values.password}
             onChange={(e) => form.handleChange('password', e.target.value)}
@@ -418,7 +419,7 @@ function StudentFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>入学年份</label>
-          <input
+          <Input
             type="number"
             value={form.values.enrollmentYear}
             onChange={(e) => form.handleChange('enrollmentYear', e.target.value)}

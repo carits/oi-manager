@@ -1,0 +1,285 @@
+.u1 {
+  min-height: 100vh;
+  background: var(--gray-50);
+}
+
+.u2 {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.u3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.u4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.u5 {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.u6 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.u7 {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+}
+
+.u8 {
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  margin-bottom: 0.25rem;
+}
+
+.u9 {
+  color: var(--gray-400);
+  font-size: 0.9rem;
+}
+
+.u10 {
+  font-size: 0.75rem;
+  color: var(--error);
+  margin-top: 0.25rem;
+}
+
+.u11 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.u12 {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.u13 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+  color: var(--gray-700);
+}
+
+.u14 {
+  overflow-x: auto;
+}
+
+.u15 {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.u16 {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.u17 {
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: auto;
+}
+
+.u18 {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.u19 {
+  background: var(--gray-50);
+  border-bottom: 2px solid var(--border);
+}
+
+.u20 {
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.u21 {
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.u22 {
+  padding: 3rem;
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.u23 {
+  padding: 0.75rem;
+}
+
+.u24 {
+  padding: 0.75rem;
+  font-weight: 500;
+}
+
+.u25 {
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.u26 {
+  padding: 0.75rem;
+  color: var(--gray-500);
+  font-size: 0.8rem;
+}
+
+.u27 {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.u28 {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  cursor: pointer;
+}
+
+.u29 {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--error);
+  cursor: pointer;
+}
+
+.u30 {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.u31 {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.u32 {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.u33 {
+  display: flex;
+  gap: 1rem;
+}
+
+.u34 {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.u35 {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.u36 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.u37 {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.u38 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.u39 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1rem;
+}
+
+.u40 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.u41 {
+  font-size: 0.8rem;
+  color: var(--gray-700);
+  white-space: nowrap;
+  min-width: 140px;
+}
+
+.u42 {
+  color: var(--gray-400);
+  font-size: 0.7rem;
+}
+
+.u43 {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.u44 {
+  width: 80px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  text-align: right;
+}

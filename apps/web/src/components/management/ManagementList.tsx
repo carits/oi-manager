@@ -43,7 +43,7 @@ export function ActionMenu({ children }: { children: ReactNode }) {
 
 export function ActionMenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
   const close = useContext(ActionMenuContext)
-  return <button type="button" role="menuitem" className={`${styles.actionItem} ${danger ? styles.actionDanger : ''}`} onClick={() => { close(); onClick() }}>{children}</button>
+  return <Button variant="ghost" type="button" role="menuitem" className={`${styles.actionItem} ${danger ? styles.actionDanger : ''}`} onClick={() => { close(); onClick() }}>{children}</Button>
 }
 
 export { styles as managementListStyles }

@@ -1,0 +1,125 @@
+.u1 {
+  padding: 1rem 0;
+}
+
+.u2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.u3 {
+  color: var(--gray-500);
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.u4 {
+  text-align: center;
+  padding: 2rem;
+  color: var(--gray-500);
+}
+
+.u5 {
+  display: grid;
+  gap: 1rem;
+  max-width: 600px;
+}
+
+.u6 {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.u7 {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.u8 {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-400);
+}
+
+.u9 {
+  color: var(--gray-400);
+  font-size: 0.875rem;
+}
+
+.u10 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.u11 {
+  padding: 0.75rem 1rem;
+  background: var(--success-light);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  color: var(--success);
+}
+
+.u12 {
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.u13 {
+  margin: 0;
+}
+
+.u14 {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.u15 {
+  margin-bottom: 1rem;
+}
+
+.u16 {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--gray-700);
+}
+
+.u17 {
+  color: var(--error);
+  margin-left: 0.25rem;
+}
+
+.u18 {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+
+.u19 {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  margin-top: 0.5rem;
+  line-height: 1.5;
+}
+
+.u20 {
+  padding: 0.75rem 1rem;
+  background: var(--error-light);
+  border-radius: 6px;
+  margin-top: 1rem;
+  color: var(--error);
+  font-size: 0.875rem;
+}
+
+.u21 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import unifiedStyles from './page.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { Pagination } from '@/components/ui/Pagination'
@@ -134,37 +137,29 @@ export default function AdminUsersPage() {
 
   return (
     <>
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-        <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>账号管理</h2>
+      <div className={unifiedStyles.u1}>
+        <main className={unifiedStyles.u2}>
+          <div className={unifiedStyles.u3}>
+            <h2 className={unifiedStyles.u4}>账号管理</h2>
             {currentUser?.role === 'super_admin' && (
-              <button
+              <Button variant="ghost"
                 onClick={() => router.push('/admin/users/new-platform-admin')}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: 'var(--primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem'
-                }}
+                className={unifiedStyles.u5}
               >
                 + 创建平台管理员
-              </button>
+              </Button>
             )}
           </div>
 
           {/* 筛选器 */}
-          <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+          <div className={unifiedStyles.u6}>
+            <div className={unifiedStyles.u7}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>角色</label>
-                <select aria-label="选择"
+                <label className={unifiedStyles.u8}>角色</label>
+                <Select aria-label="选择"
                   value={filters.role}
                   onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
+                  className={unifiedStyles.u9}
                 >
                   <option value="">全部</option>
                   <option value="super_admin">超级管理员</option>
@@ -172,83 +167,74 @@ export default function AdminUsersPage() {
                   <option value="school_principal">学校负责人</option>
                   <option value="teacher">教师</option>
                   <option value="student">学生</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>状态</label>
-                <select aria-label="选择"
+                <label className={unifiedStyles.u8}>状态</label>
+                <Select aria-label="选择"
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
+                  className={unifiedStyles.u9}
                 >
                   <option value="">全部</option>
                   <option value="active">正常</option>
                   <option value="disabled">禁用</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>搜索</label>
-                <input
+                <label className={unifiedStyles.u8}>搜索</label>
+                <Input
                   type="text"
                   placeholder="用户名"
                   value={filters.keyword}
                   onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
+                  className={unifiedStyles.u9}
                 />
               </div>
             </div>
-            <button
+            <Button variant="ghost"
               onClick={handleSearch}
-              style={{
-                marginTop: '1rem',
-                padding: '0.5rem 1rem',
-                background: 'var(--primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
-              }}
+              className={unifiedStyles.u10}
             >
               查询
-            </button>
+            </Button>
           </div>
 
           {loading ? (
             <p><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></p>
           ) : error ? (
-            <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
+            <div className={unifiedStyles.u11}>
               {error}
             </div>
           ) : (
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className={unifiedStyles.u12}>
+              <table className={unifiedStyles.u13}>
                 <thead>
-                  <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>用户名</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>姓名</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>角色</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>学校</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>状态</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>创建时间</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 500, fontSize: '0.875rem' }}>操作</th>
+                  <tr className={unifiedStyles.u14}>
+                    <th className={unifiedStyles.u15}>用户名</th>
+                    <th className={unifiedStyles.u15}>姓名</th>
+                    <th className={unifiedStyles.u15}>角色</th>
+                    <th className={unifiedStyles.u15}>学校</th>
+                    <th className={unifiedStyles.u15}>状态</th>
+                    <th className={unifiedStyles.u15}>创建时间</th>
+                    <th className={unifiedStyles.u15}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-500)' }}>
+                      <td colSpan={7} className={unifiedStyles.u16}>
                         暂无用户数据
                       </td>
                     </tr>
                   ) : (
                     users.map((user) => (
-                      <tr key={user.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontWeight: 500 }}>{user.username}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{user.profile?.name || '-'}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{getRoleLabel(user.role)}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{user.profile?.schoolName || '-'}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                      <tr key={user.id} className={unifiedStyles.u17}>
+                        <td className={unifiedStyles.u18}>{user.username}</td>
+                        <td className={unifiedStyles.u19}>{user.profile?.name || '-'}</td>
+                        <td className={unifiedStyles.u19}>{getRoleLabel(user.role)}</td>
+                        <td className={unifiedStyles.u19}>{user.profile?.schoolName || '-'}</td>
+                        <td className={unifiedStyles.u19}>
                           <span style={{
                             padding: '2px 8px',
                             borderRadius: '4px',
@@ -259,28 +245,28 @@ export default function AdminUsersPage() {
                             {user.status === 'active' ? '正常' : '禁用'}
                           </span>
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                        <td className={unifiedStyles.u19}>
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                        <td className={unifiedStyles.u19}>
                           <a
                             href={`/admin/users/${user.id}`}
-                            style={{ color: 'var(--primary)', marginRight: '0.5rem' }}
+                            className={unifiedStyles.u20}
                           >
                             查看
                           </a>
-                          <button
+                          <Button variant="ghost"
                             onClick={() => handleResetPassword(user.id, user.username)}
-                            style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', marginRight: '0.5rem' }}
+                            className={unifiedStyles.u21}
                           >
                             重置密码
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="ghost"
                             onClick={() => handleToggleStatus(user.id, user.status, user.username)}
                             style={{ color: user.status === 'active' ? 'var(--error)' : 'var(--success)', background: 'none', border: 'none', cursor: 'pointer' }}
                           >
                             {user.status === 'active' ? '禁用' : '启用'}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))

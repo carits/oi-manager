@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import unifiedStyles from './page.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { RegionSelector } from '@/components/business/RegionSelector'
@@ -151,44 +154,44 @@ export default function NewSchoolPage() {
 
   return (
     <>
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-        <main style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <button
+      <div className={unifiedStyles.u1}>
+        <main className={unifiedStyles.u2}>
+          <div className={unifiedStyles.u3}>
+            <Button variant="ghost"
               onClick={() => router.push('/admin/schools')}
-              style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', padding: 0, textDecoration: 'none' }}
+              className={unifiedStyles.u4}
             >
               ← 返回学校列表
-            </button>
+            </Button>
           </div>
 
-          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>创建学校</h2>
+          <div className={unifiedStyles.u5}>
+            <h2 className={unifiedStyles.u6}>创建学校</h2>
 
             <form onSubmit={handleSubmit}>
               {/* 学校基本信息 */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--gray-700)' }}>学校信息</h3>
+              <div className={unifiedStyles.u3}>
+                <h3 className={unifiedStyles.u7}>学校信息</h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学校名称 *</label>
-                    <input
+                <div className={unifiedStyles.u8}>
+                  <div className={unifiedStyles.u9}>
+                    <label className={unifiedStyles.u10}>学校名称 *</label>
+                    <Input
                       aria-label="学校名称"
                       type="text"
                       value={formData.name}
                       onChange={(e) => updateField('name', e.target.value)}
                       required
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学校类型</label>
-                    <select aria-label="选择"
+                    <label className={unifiedStyles.u10}>学校类型</label>
+                    <Select aria-label="选择"
                       value={formData.schoolType}
                       onChange={(e) => updateField('schoolType', e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     >
                       <option value="">请选择</option>
                       <option value="小学">小学</option>
@@ -197,24 +200,24 @@ export default function NewSchoolPage() {
                       <option value="小学+初中">小学+初中（九年一贯制）</option>
                       <option value="初中+高中">初中+高中（完全中学）</option>
                       <option value="小学+初中+高中">小学+初中+高中（十二年一贯制）</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>学制</label>
-                    <select aria-label="选择"
+                    <label className={unifiedStyles.u10}>学制</label>
+                    <Select aria-label="选择"
                       value={formData.educationSystem}
                       onChange={(e) => updateField('educationSystem', e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     >
                       <option value="6-3-3">6-3-3（小学6年+初中3年+高中3年）</option>
                       <option value="5-4-3">5-4-3（小学5年+初中4年+高中3年）</option>
-                    </select>
+                    </Select>
                   </div>
 
                   {/* 省市区三级联动 */}
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>所属区域 *</label>
+                  <div className={unifiedStyles.u9}>
+                    <label className={unifiedStyles.u10}>所属区域 *</label>
                     <RegionSelector
                       province={selectedProvince}
                       city={selectedCity}
@@ -223,30 +226,30 @@ export default function NewSchoolPage() {
                       onCityChange={handleCityChange}
                       onDistrictChange={setSelectedDistrict}
                     />
-                    {errors.region && <p style={{ color: 'red', fontSize: '0.75rem', marginTop: '0.25rem' }}>{errors.region}</p>}
+                    {errors.region && <p className={unifiedStyles.u12}>{errors.region}</p>}
                   </div>
                 </div>
               </div>
 
               {/* 联系方式 */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--gray-700)' }}>联系方式</h3>
+              <div className={unifiedStyles.u3}>
+                <h3 className={unifiedStyles.u7}>联系方式</h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className={unifiedStyles.u8}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系人</label>
-                    <input
+                    <label className={unifiedStyles.u10}>联系人</label>
+                    <Input
                       aria-label="联系人"
                       type="text"
                       value={formData.contactPerson}
                       onChange={(e) => updateField('contactPerson', e.target.value)}
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系电话</label>
-                    <input
+                    <label className={unifiedStyles.u10}>联系电话</label>
+                    <Input
                       aria-label="联系电话"
                       type="text"
                       value={formData.contactPhone}
@@ -255,12 +258,12 @@ export default function NewSchoolPage() {
                       placeholder="11位手机号"
                       style={{ width: '100%', padding: '0.5rem', border: `1px solid ${errors.contactPhone ? 'red' : 'var(--border)'}`, borderRadius: '6px' }}
                     />
-                    {errors.contactPhone && <p style={{ color: 'red', fontSize: '0.75rem', marginTop: '0.25rem' }}>{errors.contactPhone}</p>}
+                    {errors.contactPhone && <p className={unifiedStyles.u12}>{errors.contactPhone}</p>}
                   </div>
 
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>联系邮箱</label>
-                    <input
+                  <div className={unifiedStyles.u9}>
+                    <label className={unifiedStyles.u10}>联系邮箱</label>
+                    <Input
                       aria-label="联系邮箱"
                       type="text"
                       value={formData.contactEmail}
@@ -269,19 +272,19 @@ export default function NewSchoolPage() {
                       placeholder="example@domain.com"
                       style={{ width: '100%', padding: '0.5rem', border: `1px solid ${errors.contactEmail ? 'red' : 'var(--border)'}`, borderRadius: '6px' }}
                     />
-                    {errors.contactEmail && <p style={{ color: 'red', fontSize: '0.75rem', marginTop: '0.25rem' }}>{errors.contactEmail}</p>}
+                    {errors.contactEmail && <p className={unifiedStyles.u12}>{errors.contactEmail}</p>}
                   </div>
                 </div>
               </div>
 
               {/* 创建人信息 */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--gray-700)' }}>学校负责人（创建管理员账号）</h3>
+              <div className={unifiedStyles.u3}>
+                <h3 className={unifiedStyles.u7}>学校负责人（创建管理员账号）</h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className={unifiedStyles.u8}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>账号 *</label>
-                    <input
+                    <label className={unifiedStyles.u10}>账号 *</label>
+                    <Input
                       aria-label="负责人账号"
                       type="text"
                       value={formData.username}
@@ -291,76 +294,63 @@ export default function NewSchoolPage() {
                       required
                       style={{ width: '100%', padding: '0.5rem', border: `1px solid ${errors.username ? 'red' : 'var(--border)'}`, borderRadius: '6px' }}
                     />
-                    {errors.username && <p style={{ color: 'red', fontSize: '0.75rem', marginTop: '0.25rem' }}>{errors.username}</p>}
+                    {errors.username && <p className={unifiedStyles.u12}>{errors.username}</p>}
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>密码</label>
-                    <input
+                    <label className={unifiedStyles.u10}>密码</label>
+                    <Input
                       aria-label="负责人密码"
                       type="text"
                       value={formData.password}
                       onChange={(e) => updateField('password', e.target.value)}
                       placeholder="默认与账号相同"
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>姓名 *</label>
-                    <input
+                    <label className={unifiedStyles.u10}>姓名 *</label>
+                    <Input
                       aria-label="负责人姓名"
                       type="text"
                       value={formData.teacherName}
                       onChange={(e) => updateField('teacherName', e.target.value)}
                       placeholder="校长/负责人姓名"
                       required
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.875rem' }}>职务</label>
-                    <input
+                    <label className={unifiedStyles.u10}>职务</label>
+                    <Input
                       aria-label="负责人职务"
                       type="text"
                       value={formData.teacherTitle}
                       onChange={(e) => updateField('teacherTitle', e.target.value)}
                       placeholder="例如：校长，信息学主教练"
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
+                      className={unifiedStyles.u11}
                     />
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button
+              <div className={unifiedStyles.u13}>
+                <Button variant="ghost"
                   type="submit"
                   disabled={loading}
-                  style={{
-                    flex: 1,
-                    padding: '0.625rem',
-                    background: 'var(--primary)',
-                    color: 'white',
-                    borderRadius: '6px',
-                    fontWeight: 500
-                  }}
+                  className={unifiedStyles.u14}
                 >
                   {loading ? '创建中...' : '创建学校'}
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   type="button"
                   onClick={() => router.push('/admin/schools')}
-                  style={{
-                    flex: 1,
-                    padding: '0.625rem',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    background: 'white'
-                  }}
+                  className={unifiedStyles.u15}
                 >
                   取消
-                </button>
+                </Button>
               </div>
             </form>
           </div>

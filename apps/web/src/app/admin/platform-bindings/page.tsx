@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import unifiedStyles from './page.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
@@ -202,31 +204,31 @@ export default function AdminPlatformBindingsPage() {
 
   return (
     <>
-      <div style={{ padding: '1rem 0' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+      <div className={unifiedStyles.u1}>
+        <h2 className={unifiedStyles.u2}>
           平台绑定
         </h2>
-        <p style={{ color: 'var(--gray-500)', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+        <p className={unifiedStyles.u3}>
           绑定您的 OJ 平台账号，以便同步题目和成绩数据
         </p>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
+          <div className={unifiedStyles.u4}>
             <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '1rem', maxWidth: '600px' }}>
+          <div className={unifiedStyles.u5}>
             {platforms.map((platform) => {
               const status = getBindingStatus(platform.id)
               return (
-                <button
+                <Button variant="ghost"
                   type="button"
                   key={platform.id}
                   onClick={() => handlePlatformClick(platform)}
                   className={styles.platformCard}
                   disabled={!platform.supported}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div className={unifiedStyles.u6}>
                     <div
                       style={{
                         width: '40px',
@@ -244,10 +246,10 @@ export default function AdminPlatformBindingsPage() {
                       {platform.name.charAt(0)}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>
+                      <div className={unifiedStyles.u7}>
                         {platform.name}
                         {!platform.supported && (
-                          <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--gray-400)' }}>
+                          <span className={unifiedStyles.u8}>
                             (暂不支持)
                           </span>
                         )}
@@ -255,8 +257,8 @@ export default function AdminPlatformBindingsPage() {
                       <div style={{ fontSize: '0.875rem', color: status.color }}>{status.text}</div>
                     </div>
                   </div>
-                  <span style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>▶</span>
-                </button>
+                  <span className={unifiedStyles.u9}>▶</span>
+                </Button>
               )
             })}
           </div>
@@ -270,9 +272,9 @@ export default function AdminPlatformBindingsPage() {
         title={`绑定 ${selectedPlatform?.name || ''} 账号`}
         size="md"
       >
-        <div style={{ padding: '1rem 0' }}>
+        <div className={unifiedStyles.u1}>
           {/* 平台图标 */}
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div className={unifiedStyles.u10}>
             <div
               style={{
                 width: '60px',
@@ -295,65 +297,41 @@ export default function AdminPlatformBindingsPage() {
           {/* 当前绑定状态 */}
           {currentBinding?.bindingStatus === 'bound' && (
             <div
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'var(--success-light, #d1fae5)',
-                borderRadius: '6px',
-                marginBottom: '1rem',
-                color: 'var(--success)',
-              }}
+              className={unifiedStyles.u11}
             >
               已绑定: {currentBinding.platformUsername}
             </div>
           )}
 
           {!selectedPlatform?.supported ? (
-            <div style={{ textAlign: 'center', color: 'var(--gray-500)' }}>
-              <p style={{ margin: 0 }}>该平台绑定功能暂未开放</p>
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem' }}>敬请期待</p>
+            <div className={unifiedStyles.u12}>
+              <p className={unifiedStyles.u13}>该平台绑定功能暂未开放</p>
+              <p className={unifiedStyles.u14}>敬请期待</p>
             </div>
           ) : configSchema ? (
             <>
               {/* 配置表单 */}
               {configSchema.fields.map((field) => (
-                <div key={field.key} style={{ marginBottom: '1rem' }}>
+                <div key={field.key} className={unifiedStyles.u15}>
                   <label
-                    style={{
-                      display: 'block',
-                      fontSize: '0.875rem',
-                      fontWeight: 500,
-                      marginBottom: '0.5rem',
-                      color: 'var(--gray-700)',
-                    }}
+                    className={unifiedStyles.u16}
                   >
                     {field.label}
-                    {field.required && <span style={{ color: 'var(--error)', marginLeft: '0.25rem' }}>*</span>}
+                    {field.required && <span className={unifiedStyles.u17}>*</span>}
                   </label>
-                  <input
+                  <Input
                     type={field.type}
                     value={configValues[field.key] || ''}
                     onChange={(e) => setConfigValues({ ...configValues, [field.key]: e.target.value })}
                     placeholder={field.placeholder}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem 0.75rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem',
-                      boxSizing: 'border-box',
-                    }}
+                    className={unifiedStyles.u18}
                   />
                 </div>
               ))}
 
               {/* 帮助文本 */}
               <p
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--gray-500)',
-                  marginTop: '0.5rem',
-                  lineHeight: 1.5,
-                }}
+                className={unifiedStyles.u19}
               >
                 {configSchema.helpText}
               </p>
@@ -363,14 +341,7 @@ export default function AdminPlatformBindingsPage() {
           {/* 错误信息 */}
           {error && (
             <div
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'var(--error-light, #fee2e2)',
-                borderRadius: '6px',
-                marginTop: '1rem',
-                color: 'var(--error)',
-                fontSize: '0.875rem',
-              }}
+              className={unifiedStyles.u20}
             >
               {error}
             </div>
@@ -378,7 +349,7 @@ export default function AdminPlatformBindingsPage() {
         </div>
 
         {/* 操作按钮 */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+        <div className={unifiedStyles.u21}>
           <Button variant="secondary" onClick={() => setModalOpen(false)}>
             取消
           </Button>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useForm } from '@/hooks/form/useForm'
@@ -102,12 +103,12 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
     <FormDialog isOpen onClose={onClose} title="编辑校园信息" size="lg">
       <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
         <FormSection title="基本资料">
-          <div style={formStyles.field}><label style={formStyles.label}>学校名称 *</label><input value={form.values.name} onChange={event => form.handleChange('name', event.target.value)} required style={formStyles.input} /></div>
-          <div style={formStyles.field}><label style={formStyles.label}>学校简称</label><input value={form.values.shortName} onChange={event => form.handleChange('shortName', event.target.value)} style={formStyles.input} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>学校名称 *</label><Input value={form.values.name} onChange={event => form.handleChange('name', event.target.value)} required style={formStyles.input} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>学校简称</label><Input value={form.values.shortName} onChange={event => form.handleChange('shortName', event.target.value)} style={formStyles.input} /></div>
           <div style={formStyles.field}><label style={formStyles.label}>所在地区</label><RegionSelector province={province} city={city} district={district} onProvinceChange={setProvince} onCityChange={setCity} onDistrictChange={setDistrict} /></div>
-          <div style={formStyles.field}><label style={formStyles.label}>学校类型</label><select value={form.values.schoolType} onChange={event => form.handleChange('schoolType', event.target.value)} style={formStyles.select}><option value="">请选择</option><option value="小学">小学</option><option value="初中">初中</option><option value="高中">高中</option><option value="小学+初中">小学+初中（九年一贯制）</option><option value="初中+高中">初中+高中（完全中学）</option><option value="小学+初中+高中">小学+初中+高中（十二年一贯制）</option></select></div>
-          <div style={formStyles.field}><label style={formStyles.label}>办学性质</label><select value={form.values.schoolNature} onChange={event => form.handleChange('schoolNature', event.target.value)} style={formStyles.select}><option value="">请选择</option><option value="公办">公办</option><option value="民办">民办</option><option value="其他">其他</option></select></div>
-          <div style={formStyles.field}><label style={formStyles.label}>学校简介</label><textarea value={form.values.description} onChange={event => form.handleChange('description', event.target.value)} style={{ ...formStyles.input, minHeight: 110, resize: 'vertical' }} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>学校类型</label><Select value={form.values.schoolType} onChange={event => form.handleChange('schoolType', event.target.value)} style={formStyles.select}><option value="">请选择</option><option value="小学">小学</option><option value="初中">初中</option><option value="高中">高中</option><option value="小学+初中">小学+初中（九年一贯制）</option><option value="初中+高中">初中+高中（完全中学）</option><option value="小学+初中+高中">小学+初中+高中（十二年一贯制）</option></Select></div>
+          <div style={formStyles.field}><label style={formStyles.label}>办学性质</label><Select value={form.values.schoolNature} onChange={event => form.handleChange('schoolNature', event.target.value)} style={formStyles.select}><option value="">请选择</option><option value="公办">公办</option><option value="民办">民办</option><option value="其他">其他</option></Select></div>
+          <div style={formStyles.field}><label style={formStyles.label}>学校简介</label><Textarea value={form.values.description} onChange={event => form.handleChange('description', event.target.value)} style={{ ...formStyles.input, minHeight: 110, resize: 'vertical' }} /></div>
         </FormSection>
 
         <FormSection title="学制">
@@ -124,7 +125,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
               {(['primaryYears', 'middleYears', 'highYears'] as const).map((key, index) => (
                 <div style={formStyles.field} key={key}>
                   <label style={formStyles.label}>{['小学', '初中', '高中'][index]}年数</label>
-                  <input type="number" min="0" max="9" value={customYears[key]} onChange={event => setCustomYears(current => ({ ...current, [key]: Number(event.target.value) }))} style={formStyles.input} />
+                  <Input type="number" min="0" max="9" value={customYears[key]} onChange={event => setCustomYears(current => ({ ...current, [key]: Number(event.target.value) }))} style={formStyles.input} />
                 </div>
               ))}
             </div>
@@ -132,9 +133,9 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
         </FormSection>
 
         <FormSection title="联系信息">
-          <div style={formStyles.field}><label style={formStyles.label}>联系人</label><input value={form.values.contactPerson} onChange={event => form.handleChange('contactPerson', event.target.value)} style={formStyles.input} /></div>
-          <div style={formStyles.field}><label style={formStyles.label}>联系电话</label><input type="tel" value={form.values.contactPhone} onChange={event => form.handleChange('contactPhone', event.target.value)} style={formStyles.input} /></div>
-          <div style={formStyles.field}><label style={formStyles.label}>联系邮箱</label><input type="email" value={form.values.contactEmail} onChange={event => form.handleChange('contactEmail', event.target.value)} style={formStyles.input} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>联系人</label><Input value={form.values.contactPerson} onChange={event => form.handleChange('contactPerson', event.target.value)} style={formStyles.input} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>联系电话</label><Input type="tel" value={form.values.contactPhone} onChange={event => form.handleChange('contactPhone', event.target.value)} style={formStyles.input} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>联系邮箱</label><Input type="email" value={form.values.contactEmail} onChange={event => form.handleChange('contactEmail', event.target.value)} style={formStyles.input} /></div>
         </FormSection>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', position: 'sticky', bottom: 0, background: 'var(--bg-card)', paddingTop: '0.75rem' }}>

@@ -1,6 +1,7 @@
 'use client'
 
 import { getProvinces, getCities, getDistricts } from '@/lib/regionData'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { formStyles } from '@/lib/styles'
 
 interface RegionSelectorProps {
@@ -37,7 +38,7 @@ export function RegionSelector({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-      <select aria-label="省份"
+      <Select aria-label="省份"
         value={province}
         onChange={(e) => handleProvinceChange(e.target.value)}
         style={formStyles.select}
@@ -48,9 +49,9 @@ export function RegionSelector({
             {p}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <select aria-label="城市"
+      <Select aria-label="城市"
         value={city}
         onChange={(e) => handleCityChange(e.target.value)}
         style={formStyles.select}
@@ -62,9 +63,9 @@ export function RegionSelector({
             {c}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <select aria-label="区县"
+      <Select aria-label="区县"
         value={district}
         onChange={(e) => onDistrictChange(e.target.value)}
         style={formStyles.select}
@@ -76,7 +77,7 @@ export function RegionSelector({
             {d}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }

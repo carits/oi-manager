@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import unifiedStyles from './page.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { useToast } from '@/components/ui/Toast'
@@ -374,7 +377,7 @@ export default function PlatformAdminProblemsPage() {
   }
 
   const renderAttachmentStatus = (status: string | null) => {
-    if (!status) return <span style={{ color: 'var(--text-muted)' }}>-</span>
+    if (!status) return <span className={unifiedStyles.u1}>-</span>
     const map: Record<string, { text: string; color: string }> = {
       pending: { text: '⏳ 待处理', color: 'var(--text-muted)' },
       success: { text: '成功', color: 'var(--success)' },
@@ -388,7 +391,7 @@ export default function PlatformAdminProblemsPage() {
   // 渲染附件列：区分"无附件"和"有附件但xxx"
   const renderAttachmentColumn = (job: FetchJob) => {
     if (!job.hasAttachment) {
-      return <span style={{ color: 'var(--text-muted)' }}>无附件</span>
+      return <span className={unifiedStyles.u1}>无附件</span>
     }
     return renderAttachmentStatus(job.attachmentStatus)
   }
@@ -402,38 +405,38 @@ export default function PlatformAdminProblemsPage() {
   ) => (
     <>
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+        <div className={unifiedStyles.u2}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
       ) : problems.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无题目</div>
+        <div className={unifiedStyles.u2}>暂无题目</div>
       ) : (
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+        <div className={unifiedStyles.u3}>
+          <table className={unifiedStyles.u4}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>题号</th>
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>标题</th>
-                {showPlatform && <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>来源</th>}
-                <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>操作</th>
+              <tr className={unifiedStyles.u5}>
+                <th className={unifiedStyles.u6}>题号</th>
+                <th className={unifiedStyles.u6}>标题</th>
+                {showPlatform && <th className={unifiedStyles.u6}>来源</th>}
+                <th className={unifiedStyles.u6}>操作</th>
               </tr>
             </thead>
             <tbody>
               {problems.map((problem) => {
                 let source = problem.platform ? `${problem.platform} / ${problem.problemId}` : '-'
                 return (
-                  <tr key={problem.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '0.75rem' }}>{problem.problemId}</td>
-                    <td style={{ padding: '0.75rem' }}>
-                      <button type="button" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={{ color: 'var(--primary)', textAlign: 'left' }}>{problem.title}</button>
+                  <tr key={problem.id} className={unifiedStyles.u5}>
+                    <td className={unifiedStyles.u7}>{problem.problemId}</td>
+                    <td className={unifiedStyles.u7}>
+                      <Button variant="ghost" type="button" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} className={unifiedStyles.u8}>{problem.title}</Button>
                     </td>
-                    {showPlatform && <td style={{ padding: '0.75rem', color: 'var(--gray-500)' }}>{source}</td>}
-                    <td style={{ padding: '0.75rem' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={smallBtnStyle()}>查看</button>
-                        <button onClick={() => router.push(`/platform-admin/problems/${problem.id}/edit`)} style={smallBtnStyle()}>编辑</button>
+                    {showPlatform && <td className={unifiedStyles.u9}>{source}</td>}
+                    <td className={unifiedStyles.u7}>
+                      <div className={unifiedStyles.u10}>
+                        <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={smallBtnStyle()}>查看</Button>
+                        <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${problem.id}/edit`)} style={smallBtnStyle()}>编辑</Button>
                         {showRefetch && problem.ojBindings && (
-                          <button onClick={() => handleRefetchProblem(problem)} style={smallBtnStyle('primary')}>重新拉取</button>
+                          <Button variant="ghost" onClick={() => handleRefetchProblem(problem)} style={smallBtnStyle('primary')}>重新拉取</Button>
                         )}
-                        <button onClick={() => handleDeleteProblem(problem.id)} style={smallBtnStyle('danger')}>删除</button>
+                        <Button variant="ghost" onClick={() => handleDeleteProblem(problem.id)} style={smallBtnStyle('danger')}>删除</Button>
                       </div>
                     </td>
                   </tr>
@@ -470,33 +473,33 @@ export default function PlatformAdminProblemsPage() {
 
   return (
     <>
-      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>题库管理</h1>
+      <div className={unifiedStyles.u11}>
+        <h1 className={unifiedStyles.u12}>题库管理</h1>
 
         {/* Tab 切换 */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
-          <button onClick={() => handleTabChange('fetch')} style={tabButtonStyle(activeTab === 'fetch')}>拉取队列</button>
-          <button onClick={() => handleTabChange('public')} style={tabButtonStyle(activeTab === 'public')}>平台题库</button>
+        <div className={unifiedStyles.u13}>
+          <Button variant="ghost" onClick={() => handleTabChange('fetch')} style={tabButtonStyle(activeTab === 'fetch')}>拉取队列</Button>
+          <Button variant="ghost" onClick={() => handleTabChange('public')} style={tabButtonStyle(activeTab === 'public')}>平台题库</Button>
         </div>
 
         {/* ==================== 拉取队列 Tab ==================== */}
         {activeTab === 'fetch' && (
           <div>
             {/* 拉取配置（统一平台选择 + Cookie + 批量拉取） */}
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>拉取配置</h2>
+            <div className={unifiedStyles.u14}>
+              <h2 className={unifiedStyles.u15}>拉取配置</h2>
 
               {/* 统一平台选择 */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>选择平台</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <select aria-label="选择" value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
+              <div className={unifiedStyles.u16}>
+                <label className={unifiedStyles.u17}>选择平台</label>
+                <div className={unifiedStyles.u18}>
+                  <Select aria-label="选择" value={fetchPlatform} onChange={(e) => setFetchPlatform(e.target.value)} style={selectStyle}>
                     {OJ_PLATFORMS_NO_ALL.map(p => (
                       <option key={p.value} value={p.value}>{p.label}</option>
                     ))}
-                  </select>
+                  </Select>
                   {!FETCHABLE_PLATFORMS.find(p => p.value === fetchPlatform) && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>
+                    <span className={unifiedStyles.u19}>
                       该平台暂未支持拉取，敬请期待
                     </span>
                   )}
@@ -505,104 +508,104 @@ export default function PlatformAdminProblemsPage() {
 
               {/* Cookie 配置（仅对该平台有字段定义时显示） */}
               {PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials && (
-                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
+                <div className={unifiedStyles.u20}>
+                  <p className={unifiedStyles.u21}>
                     已保存的值不会回传到浏览器。当前已配置：
                     {configuredCookieNames.length > 0 ? configuredCookieNames.join('、') : '无'}。
                     输入的新值会整体替换现有配置。
                   </p>
-                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div className={unifiedStyles.u22}>
                     {PLATFORM_COOKIE_FIELDS[fetchPlatform].map(field => (
                       <div key={field.key}>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>{field.label}</label>
-                        <input type="text" value={platformCookies[field.key] || ''} onChange={(e) => setPlatformCookies({ ...platformCookies, [field.key]: e.target.value })} placeholder={field.placeholder}
-                          style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', width: '300px' }} />
+                        <label className={unifiedStyles.u17}>{field.label}</label>
+                        <Input type="text" value={platformCookies[field.key] || ''} onChange={(e) => setPlatformCookies({ ...platformCookies, [field.key]: e.target.value })} placeholder={field.placeholder}
+                          className={unifiedStyles.u23} />
                       </div>
                     ))}
-                    <button onClick={handleSaveCookies} disabled={savingCookies}
-                      style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <Button variant="ghost" onClick={handleSaveCookies} disabled={savingCookies}
+                      className={unifiedStyles.u24}>
                       {savingCookies ? '保存中...' : '保存配置'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
 
               {/* 批量拉取 */}
               <div style={{ borderTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? '1px solid var(--border)' : 'none', paddingTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? '1rem' : 0 }}>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>批量拉取</h3>
-                <textarea value={problemIdsInput} onChange={(e) => setProblemIdsInput(e.target.value)}
+                <h3 className={unifiedStyles.u25}>批量拉取</h3>
+                <Textarea value={problemIdsInput} onChange={(e) => setProblemIdsInput(e.target.value)}
                   placeholder="输入题号，每行一个或逗号分隔，例如：&#10;P1001&#10;P1002&#10;B2001"
-                  style={{ width: '100%', height: '120px', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', resize: 'vertical', marginBottom: '1rem' }} />
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button onClick={handleSubmit} disabled={submitting}
-                    style={{ padding: '0.5rem 1.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                  className={unifiedStyles.u26} />
+                <div className={unifiedStyles.u10}>
+                  <Button variant="ghost" onClick={handleSubmit} disabled={submitting}
+                    className={unifiedStyles.u27}>
                     {submitting ? '提交中...' : '开始拉取'}
-                  </button>
-                  <button onClick={() => setProblemIdsInput('')}
-                    style={{ padding: '0.5rem 1rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                  </Button>
+                  <Button variant="ghost" onClick={() => setProblemIdsInput('')}
+                    className={unifiedStyles.u28}>
                     清空
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
 
             {/* 任务列表 */}
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>任务列表</h2>
-                <button onClick={() => fetchJobs()} style={{ ...smallBtnStyle(), padding: '0.25rem 0.75rem' }}>刷新</button>
+            <div className={unifiedStyles.u29}>
+              <div className={unifiedStyles.u30}>
+                <h2 className={unifiedStyles.u31}>任务列表</h2>
+                <Button variant="ghost" onClick={() => fetchJobs()} style={{ ...smallBtnStyle(), padding: '0.25rem 0.75rem' }}>刷新</Button>
               </div>
 
               {/* 任务筛选栏 */}
-              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                <select aria-label="选择" value={jobsPlatformFilter} onChange={(e) => { setJobsPlatformFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
+              <div className={unifiedStyles.u32}>
+                <Select aria-label="选择" value={jobsPlatformFilter} onChange={(e) => { setJobsPlatformFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
                   {OJ_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-                <select aria-label="选择" value={jobsStatusFilter} onChange={(e) => { setJobsStatusFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
+                </Select>
+                <Select aria-label="选择" value={jobsStatusFilter} onChange={(e) => { setJobsStatusFilter(e.target.value); setJobsPage(1) }} style={selectStyle}>
                   {JOB_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                </Select>
                 {(jobsPlatformFilter || jobsStatusFilter) && (
-                  <button onClick={() => { setJobsPlatformFilter(''); setJobsStatusFilter(''); setJobsPage(1) }}
-                    style={{ padding: '0.5rem 1rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                  <Button variant="ghost" onClick={() => { setJobsPlatformFilter(''); setJobsStatusFilter(''); setJobsPage(1) }}
+                    className={unifiedStyles.u28}>
                     重置筛选
-                  </button>
+                  </Button>
                 )}
               </div>
 
               {jobsLoading ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+                <div className={unifiedStyles.u2}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
               ) : !jobs || jobs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>暂无任务</div>
+                <div className={unifiedStyles.u2}>暂无任务</div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <table className={unifiedStyles.u4}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>平台</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>题号</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>状态</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>附件</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-500)' }}>信息</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', color: 'var(--gray-600)' }}>操作</th>
+                    <tr className={unifiedStyles.u5}>
+                      <th className={unifiedStyles.u6}>平台</th>
+                      <th className={unifiedStyles.u6}>题号</th>
+                      <th className={unifiedStyles.u6}>状态</th>
+                      <th className={unifiedStyles.u6}>附件</th>
+                      <th className={unifiedStyles.u33}>信息</th>
+                      <th className={unifiedStyles.u6}>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {jobs.map((job) => (
-                      <tr key={job.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '0.75rem' }}>{job.platform}</td>
-                        <td style={{ padding: '0.75rem' }}>{job.problemId}</td>
-                        <td style={{ padding: '0.75rem' }}>{renderStatus(job.status)}</td>
-                        <td style={{ padding: '0.75rem' }}>{renderAttachmentColumn(job)}</td>
-                        <td style={{ padding: '0.75rem', color: 'var(--gray-500)', maxWidth: '200px' }}>{job.message || '-'}</td>
-                        <td style={{ padding: '0.75rem' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <tr key={job.id} className={unifiedStyles.u5}>
+                        <td className={unifiedStyles.u7}>{job.platform}</td>
+                        <td className={unifiedStyles.u7}>{job.problemId}</td>
+                        <td className={unifiedStyles.u7}>{renderStatus(job.status)}</td>
+                        <td className={unifiedStyles.u7}>{renderAttachmentColumn(job)}</td>
+                        <td className={unifiedStyles.u34}>{job.message || '-'}</td>
+                        <td className={unifiedStyles.u7}>
+                          <div className={unifiedStyles.u10}>
                             {job.createdProblemId && (
-                              <button onClick={() => router.push(`/platform-admin/problems/${job.createdProblemId}`)} style={smallBtnStyle()}>查看</button>
+                              <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${job.createdProblemId}`)} style={smallBtnStyle()}>查看</Button>
                             )}
-                            <button onClick={() => handleRetry(job.id)}
+                            <Button variant="ghost" onClick={() => handleRetry(job.id)}
                               style={smallBtnStyle((job.status === 'failed' || job.status === 'duplicate') ? 'primary' : 'default')}>
                               {job.status === 'failed' || job.status === 'duplicate' ? '重试' : '重新拉取'}
-                            </button>
-                            <button onClick={() => handleDelete(job.id)} style={smallBtnStyle()}>删除</button>
+                            </Button>
+                            <Button variant="ghost" onClick={() => handleDelete(job.id)} style={smallBtnStyle()}>删除</Button>
                           </div>
                         </td>
                       </tr>
@@ -624,26 +627,26 @@ export default function PlatformAdminProblemsPage() {
         {/* ==================== 公共题库 Tab ==================== */}
         {activeTab === 'public' && (
           <div>
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem 1.5rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className={unifiedStyles.u35}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>平台</label>
-                <select aria-label="选择" value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)} style={selectStyle}>
+                <label className={unifiedStyles.u17}>平台</label>
+                <Select aria-label="选择" value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)} style={selectStyle}>
                   {OJ_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
+                </Select>
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>搜索</label>
-                <input type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="搜索题号或标题..."
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem' }} />
+              <div className={unifiedStyles.u36}>
+                <label className={unifiedStyles.u17}>搜索</label>
+                <Input type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="搜索题号或标题..."
+                  className={unifiedStyles.u37} />
               </div>
-              <button onClick={() => { setSelectedPlatform(''); setSearchKeyword('') }}
-                style={{ padding: '0.5rem 1rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+              <Button variant="ghost" onClick={() => { setSelectedPlatform(''); setSearchKeyword('') }}
+                className={unifiedStyles.u28}>
                 重置
-              </button>
-              <button onClick={() => router.push('/platform-admin/problems/new')}
-                style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+              </Button>
+              <Button variant="ghost" onClick={() => router.push('/platform-admin/problems/new')}
+                className={unifiedStyles.u24}>
                 + 新建题目
-              </button>
+              </Button>
             </div>
             {renderProblemTable(publicProblems, publicLoading, publicPage, publicTotalPages, publicTotal, publicPageSize, setPublicPage, setPublicPageSize, true, true)}
           </div>
@@ -652,20 +655,20 @@ export default function PlatformAdminProblemsPage() {
         {/* ==================== 私有题库 Tab ==================== */}
         {activeTab === 'private' && (
           <div>
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem 1.5rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--gray-600)', marginBottom: '0.25rem' }}>搜索</label>
-                <input type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="搜索题号或标题..."
-                  style={{ width: '100%', maxWidth: '300px', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem' }} />
+            <div className={unifiedStyles.u35}>
+              <div className={unifiedStyles.u36}>
+                <label className={unifiedStyles.u17}>搜索</label>
+                <Input type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="搜索题号或标题..."
+                  className={unifiedStyles.u38} />
               </div>
-              <button onClick={() => setSearchKeyword('')}
-                style={{ padding: '0.5rem 1rem', background: 'var(--gray-100)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+              <Button variant="ghost" onClick={() => setSearchKeyword('')}
+                className={unifiedStyles.u28}>
                 重置
-              </button>
-              <button onClick={() => router.push('/platform-admin/problems/new')}
-                style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+              </Button>
+              <Button variant="ghost" onClick={() => router.push('/platform-admin/problems/new')}
+                className={unifiedStyles.u24}>
                 + 新建题目
-              </button>
+              </Button>
             </div>
             {renderProblemTable(privateProblems, privateLoading, privatePage, privateTotalPages, privateTotal, privatePageSize, setPrivatePage, setPrivatePageSize, false, false)}
           </div>

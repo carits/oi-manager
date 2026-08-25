@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
@@ -196,9 +197,9 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
     <div className={managementListStyles.page}>
       {showActions && isPrincipal && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}><Button onClick={() => addModal.open()}>添加教师</Button></div>}
       <ManagementToolbar total={total} noun="教师">
-        <input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索教师" />
-        <select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="school_principal">学校负责人</option><option value="teacher">教师</option></select>
-        <select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></select>
+        <Input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索教师" />
+        <Select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="school_principal">学校负责人</option><option value="teacher">教师</option></Select>
+        <Select className={managementListStyles.select} value={filters.status} onChange={event => updateFilter('status', event.target.value)} aria-label="状态筛选"><option value="">状态：全部</option><option value="active">正常</option><option value="disabled">已禁用</option></Select>
       </ManagementToolbar>
 
       <Table
@@ -275,7 +276,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
             </p>
             <div style={formStyles.field}>
               <label style={formStyles.label}>选择新负责人 *</label>
-              <select aria-label="选择"
+              <Select aria-label="选择"
                 value={selectedNewPrincipal}
                 onChange={(e) => setSelectedNewPrincipal(e.target.value)}
                 style={formStyles.select}
@@ -286,7 +287,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
                     {teacher.name} ({teacher.user.username})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -384,7 +385,7 @@ function TeacherFormModal({
       <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名 *</label>
-          <input
+          <Input
             type="text"
             value={form.values.name}
             onChange={(e) => form.handleChange('name', e.target.value)}
@@ -395,7 +396,7 @@ function TeacherFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>用户名 *</label>
-          <input
+          <Input
             type="text"
             value={form.values.username}
             onChange={(e) => form.handleChange('username', e.target.value)}
@@ -407,7 +408,7 @@ function TeacherFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>密码 {!teacher && '*'}</label>
-          <input
+          <Input
             type="password"
             value={form.values.password}
             onChange={(e) => form.handleChange('password', e.target.value)}
@@ -419,7 +420,7 @@ function TeacherFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>职称</label>
-          <input
+          <Input
             type="text"
             value={form.values.title}
             onChange={(e) => form.handleChange('title', e.target.value)}
@@ -430,7 +431,7 @@ function TeacherFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>邮箱 *</label>
-          <input
+          <Input
             type="email"
             value={form.values.email}
             onChange={(e) => form.handleChange('email', e.target.value)}
@@ -441,7 +442,7 @@ function TeacherFormModal({
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>联系电话 *</label>
-          <input
+          <Input
             type="tel"
             value={form.values.phone}
             onChange={(e) => form.handleChange('phone', e.target.value)}

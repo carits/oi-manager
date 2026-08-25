@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import unifiedStyles from './page.unified.module.css'
+import { Button } from '@/components/ui/Button'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { Pagination } from '@/components/ui/Pagination'
 import apiClient from '@/lib/apiClient'
@@ -132,36 +134,30 @@ export default function AdminSchoolDetailPage() {
   if (!school) {
     return (
       <>
-        <div style={{ padding: '2rem', textAlign: 'center' }}>学校不存在</div>
+        <div className={unifiedStyles.u1}>学校不存在</div>
       </>
     )
   }
 
   return (
     <>
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-        <main style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className={unifiedStyles.u2}>
+        <main className={unifiedStyles.u3}>
           {/* 返回按钮 */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <a href="/admin/schools" onClick={(e) => { e.preventDefault(); router.push('/admin/schools') }} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.875rem', cursor: 'pointer' }}>
+          <div className={unifiedStyles.u4}>
+            <a href="/admin/schools" onClick={(e) => { e.preventDefault(); router.push('/admin/schools') }} className={unifiedStyles.u5}>
               ← 返回学校列表
             </a>
           </div>
 
           {/* 学校基本信息 */}
-          <div style={{
-            background: 'white',
-            borderRadius: '8px',
-            border: '1px solid var(--border)',
-            padding: '1.5rem',
-            marginBottom: '1.5rem'
-          }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>{school.name}</h2>
+          <div className={unifiedStyles.u6}>
+            <h2 className={unifiedStyles.u7}>{school.name}</h2>
 
             {/* 标签页 */}
-            <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', gap: '2rem' }}>
-                <button
+            <div className={unifiedStyles.u8}>
+              <div className={unifiedStyles.u9}>
+                <Button variant="ghost"
                   onClick={() => { setActiveTab('info'); router.push(`/admin/schools/${schoolId}?tab=info`, { scroll: false }) }}
                   style={{
                     padding: '0.75rem 0',
@@ -175,8 +171,8 @@ export default function AdminSchoolDetailPage() {
                   }}
                 >
                   主页
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   onClick={() => { setActiveTab('teachers'); router.push(`/admin/schools/${schoolId}?tab=teachers`, { scroll: false }) }}
                   style={{
                     padding: '0.75rem 0',
@@ -190,8 +186,8 @@ export default function AdminSchoolDetailPage() {
                   }}
                 >
                   教师
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   onClick={() => { setActiveTab('students'); router.push(`/admin/schools/${schoolId}?tab=students`, { scroll: false }) }}
                   style={{
                     padding: '0.75rem 0',
@@ -205,46 +201,46 @@ export default function AdminSchoolDetailPage() {
                   }}
                 >
                   学生
-                </button>
+                </Button>
               </div>
             </div>
 
             {/* 主页标签 */}
             {activeTab === 'info' && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1rem' }}>
+                <div className={unifiedStyles.u10}>
                   <div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>学校类型</p>
-                    <p style={{ fontSize: '0.875rem' }}>{school.schoolType || '-'}</p>
+                    <p className={unifiedStyles.u11}>学校类型</p>
+                    <p className={unifiedStyles.u12}>{school.schoolType || '-'}</p>
                   </div>
                   <div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>所属区域</p>
-                    <p style={{ fontSize: '0.875rem' }}>{school.region || '-'}</p>
+                    <p className={unifiedStyles.u11}>所属区域</p>
+                    <p className={unifiedStyles.u12}>{school.region || '-'}</p>
                   </div>
                   <div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>联系人</p>
-                    <p style={{ fontSize: '0.875rem' }}>{school.contactPerson || '-'}</p>
+                    <p className={unifiedStyles.u11}>联系人</p>
+                    <p className={unifiedStyles.u12}>{school.contactPerson || '-'}</p>
                   </div>
                   <div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>联系电话</p>
-                    <p style={{ fontSize: '0.875rem' }}>{school.contactPhone || '-'}</p>
+                    <p className={unifiedStyles.u11}>联系电话</p>
+                    <p className={unifiedStyles.u12}>{school.contactPhone || '-'}</p>
                   </div>
                   <div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>联系邮箱</p>
-                    <p style={{ fontSize: '0.875rem' }}>{school.contactEmail || '-'}</p>
+                    <p className={unifiedStyles.u11}>联系邮箱</p>
+                    <p className={unifiedStyles.u12}>{school.contactEmail || '-'}</p>
                   </div>
                 </div>
 
                 {/* 负责人信息 */}
                 {school.principal && (
-                  <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--gray-50)', borderRadius: '6px' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: '0.25rem' }}>学校负责人</p>
-                    <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>{school.principal.name}</p>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{school.principal.title || '校长'} · {school.principal.user?.username || '-'}</p>
+                  <div className={unifiedStyles.u13}>
+                    <p className={unifiedStyles.u11}>学校负责人</p>
+                    <p className={unifiedStyles.u14}>{school.principal.name}</p>
+                    <p className={unifiedStyles.u15}>{school.principal.title || '校长'} · {school.principal.user?.username || '-'}</p>
                   </div>
                 )}
 
-                <div style={{ marginTop: '1rem', display: 'flex', gap: '2rem', fontSize: '0.875rem', color: 'var(--gray-600)' }}>
+                <div className={unifiedStyles.u16}>
                   <span>学生总数：{school._count.students}</span>
                 </div>
               </>
@@ -254,27 +250,27 @@ export default function AdminSchoolDetailPage() {
             {activeTab === 'students' && (
               <div>
                 {students.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>暂无学生数据</p>
+                  <p className={unifiedStyles.u17}>暂无学生数据</p>
                 ) : (
                   <>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className={unifiedStyles.u18}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>姓名</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>用户名</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>Rating</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>入学年份</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>主教练</th>
+                        <tr className={unifiedStyles.u19}>
+                          <th className={unifiedStyles.u20}>姓名</th>
+                          <th className={unifiedStyles.u20}>用户名</th>
+                          <th className={unifiedStyles.u20}>Rating</th>
+                          <th className={unifiedStyles.u20}>入学年份</th>
+                          <th className={unifiedStyles.u20}>主教练</th>
                         </tr>
                       </thead>
                       <tbody>
                         {students.map((student) => (
-                          <tr key={student.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{student.name}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{student.user.username}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: 600 }}>{student.rating}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{student.enrollmentYear || '-'}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{student.headTeacher?.name || '-'}</td>
+                          <tr key={student.id} className={unifiedStyles.u19}>
+                            <td className={unifiedStyles.u21}>{student.name}</td>
+                            <td className={unifiedStyles.u21}>{student.user.username}</td>
+                            <td className={unifiedStyles.u22}>{student.rating}</td>
+                            <td className={unifiedStyles.u21}>{student.enrollmentYear || '-'}</td>
+                            <td className={unifiedStyles.u21}>{student.headTeacher?.name || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -299,26 +295,26 @@ export default function AdminSchoolDetailPage() {
             {activeTab === 'teachers' && (
               <div>
                 {teachers.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: 'var(--gray-500)', padding: '2rem' }}>暂无教师数据</p>
+                  <p className={unifiedStyles.u17}>暂无教师数据</p>
                 ) : (
                   <>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className={unifiedStyles.u18}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>姓名</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>用户名</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>职称</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>角色</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 500 }}>联系方式</th>
+                        <tr className={unifiedStyles.u19}>
+                          <th className={unifiedStyles.u20}>姓名</th>
+                          <th className={unifiedStyles.u20}>用户名</th>
+                          <th className={unifiedStyles.u20}>职称</th>
+                          <th className={unifiedStyles.u20}>角色</th>
+                          <th className={unifiedStyles.u20}>联系方式</th>
                         </tr>
                       </thead>
                       <tbody>
                         {teachers.map((teacher) => (
-                          <tr key={teacher.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{teacher.name}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{teacher.user.username}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>{teacher.title || '-'}</td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
+                          <tr key={teacher.id} className={unifiedStyles.u19}>
+                            <td className={unifiedStyles.u21}>{teacher.name}</td>
+                            <td className={unifiedStyles.u21}>{teacher.user.username}</td>
+                            <td className={unifiedStyles.u21}>{teacher.title || '-'}</td>
+                            <td className={unifiedStyles.u21}>
                               <span style={{
                                 padding: '0.125rem 0.5rem',
                                 borderRadius: '4px',
@@ -329,7 +325,7 @@ export default function AdminSchoolDetailPage() {
                                 {teacher.user.role === 'school_principal' ? '负责人' : '教师'}
                               </span>
                             </td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
+                            <td className={unifiedStyles.u21}>
                               {teacher.email || teacher.phone || '-'}
                             </td>
                           </tr>

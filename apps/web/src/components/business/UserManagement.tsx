@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -257,7 +258,7 @@ export function UserManagement({
             {showRoleFilter && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>角色</label>
-                <select aria-label="选择"
+                <Select aria-label="选择"
                   value={filters.role}
                   onChange={(e) => setFilters({ ...filters, role: e.target.value })}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
@@ -268,14 +269,14 @@ export function UserManagement({
                   <option value="school_principal">学校负责人</option>
                   <option value="teacher">教师</option>
                   <option value="student">学生</option>
-                </select>
+                </Select>
               </div>
             )}
 
             {showStatusFilter && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>状态</label>
-                <select aria-label="选择"
+                <Select aria-label="选择"
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
@@ -283,14 +284,14 @@ export function UserManagement({
                   <option value="">全部</option>
                   <option value="active">正常</option>
                   <option value="disabled">禁用</option>
-                </select>
+                </Select>
               </div>
             )}
 
             {showKeywordSearch && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>搜索</label>
-                <input
+                <Input
                   type="text"
                   placeholder="用户名"
                   value={filters.keyword}
