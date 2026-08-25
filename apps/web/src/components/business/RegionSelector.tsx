@@ -1,6 +1,7 @@
 'use client'
 
 import { getProvinces, getCities, getDistricts } from '@/lib/regionData'
+import unifiedStyles from './RegionSelector.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { formStyles } from '@/lib/styles'
 
@@ -37,7 +38,7 @@ export function RegionSelector({
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+    <div className={unifiedStyles.u1}>
       <Select aria-label="省份"
         value={province}
         onChange={(e) => handleProvinceChange(e.target.value)}

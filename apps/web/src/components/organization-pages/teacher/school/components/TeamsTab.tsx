@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import unifiedStyles from './TeamsTab.unified.module.css'
 import Link from 'next/link'
 import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
@@ -46,7 +47,7 @@ export default function TeamsTab({ schoolId, organizationId, sessionKey }: Teams
             render: (team) => (
               <Link
                 href={`/org/${organizationId}/teams/${team.id}`}
-                style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}
+                className={unifiedStyles.u1}
               >
                 {team.name}
               </Link>

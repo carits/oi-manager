@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import unifiedStyles from './NewProblemListPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter } from 'next/navigation'
@@ -40,18 +41,18 @@ export default function NewProblemListPage() {
   }
 
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '2rem' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
+    <div className={unifiedStyles.u1}>
+      <div className={unifiedStyles.u2}>
         <Button variant="ghost"
           onClick={() => router.push(`${pathPrefix}/problem-lists`)}
-          style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.875rem', padding: 0 }}
+          className={unifiedStyles.u3}
         >
           ← 返回题单列表
         </Button>
       </div>
 
-      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>新建题单</h2>
+      <div className={unifiedStyles.u4}>
+        <h2 className={unifiedStyles.u5}>新建题单</h2>
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.field}>
@@ -78,7 +79,7 @@ export default function NewProblemListPage() {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+          <div className={unifiedStyles.u6}>
             <Button variant="ghost"
               type="submit"
               disabled={loading || !title.trim()}
@@ -98,14 +99,7 @@ export default function NewProblemListPage() {
             <Button variant="ghost"
               type="button"
               onClick={() => router.push(`${pathPrefix}/problem-lists`)}
-              style={{
-                flex: 1,
-                padding: '0.625rem',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                background: 'white',
-                cursor: 'pointer'
-              }}
+              className={unifiedStyles.u7}
             >
               取消
             </Button>

@@ -1,0 +1,46 @@
+.u1 {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.u2 {
+  margin-bottom: 1.5rem;
+}
+
+.u3 {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0;
+}
+
+.u4 {
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+}
+
+.u5 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.u6 {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.u7 {
+  flex: 1;
+  padding: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  cursor: pointer;
+}

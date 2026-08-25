@@ -1,4 +1,6 @@
 import { SkeletonRegion } from './ui/AsyncRegion'
+import unifiedStyles from './Loading.unified.module.css'
+import { Button } from '@/components/ui/Button'
 
 export function Loading({ tip = '内容正在准备' }: { tip?: string }) {
   return <SkeletonRegion rows={5} label={tip} />
@@ -6,25 +8,15 @@ export function Loading({ tip = '内容正在准备' }: { tip?: string }) {
 
 export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div style={{
-      padding: '2rem',
-      textAlign: 'center',
-      color: 'var(--error)'
-    }}>
+    <div className={unifiedStyles.u1}>
       <p style={{ marginBottom: onRetry ? '1rem' : 0 }}>{message}</p>
       {onRetry && (
-        <button
+        <Button variant="ghost"
           onClick={onRetry}
-          style={{
-            padding: '0.5rem 1rem',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            background: 'white',
-            fontSize: '0.875rem'
-          }}
+          className={unifiedStyles.u2}
         >
           重试
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -32,11 +24,7 @@ export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: 
 
 export function Empty({ message = '暂无数据' }: { message?: string }) {
   return (
-    <div style={{
-      padding: '3rem',
-      textAlign: 'center',
-      color: 'var(--gray-500)'
-    }}>
+    <div className={unifiedStyles.u3}>
       {message}
     </div>
   )

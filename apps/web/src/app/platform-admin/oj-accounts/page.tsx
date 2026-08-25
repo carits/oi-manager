@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -288,38 +289,38 @@ export default function OjAccountsPage() {
 
             {/* 账号表格 */}
             <div className={unifiedStyles.u17}>
-              <table className={unifiedStyles.u18}>
-                <thead>
-                  <tr className={unifiedStyles.u19}>
-                    <th className={unifiedStyles.u20}>平台</th>
-                    <th className={unifiedStyles.u20}>用户名</th>
-                    <th className={unifiedStyles.u21}>启用</th>
-                    <th className={unifiedStyles.u21}>优先级</th>
-                    <th className={unifiedStyles.u20}>状态</th>
-                    <th className={unifiedStyles.u20}>最后登录</th>
-                    <th className={unifiedStyles.u20}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <TableRoot className={unifiedStyles.u18}>
+                <TableHead>
+                  <TableRow className={unifiedStyles.u19}>
+                    <TableHeaderCell className={unifiedStyles.u20}>平台</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u20}>用户名</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u21}>启用</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u21}>优先级</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u20}>状态</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u20}>最后登录</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u20}>操作</TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {accounts.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className={unifiedStyles.u22}>
+                    <TableRow>
+                      <TableCell colSpan={7} className={unifiedStyles.u22}>
                         暂无账号，点击「添加账号」开始配置
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : accounts.map(acc => {
                     const sc = STATUS_CONFIG[acc.status] || STATUS_CONFIG.unverified
                     return (
-                      <tr key={acc.id} style={{ borderBottom: '1px solid var(--border)', opacity: acc.enabled ? 1 : 0.5 }}>
-                        <td className={unifiedStyles.u23}>{OJ_PLATFORM_LABEL_MAP[acc.platform] || acc.platform}</td>
-                        <td className={unifiedStyles.u24}>{acc.username}</td>
-                        <td className={unifiedStyles.u21}>
+                      <TableRow key={acc.id} style={{ borderBottom: '1px solid var(--border)', opacity: acc.enabled ? 1 : 0.5 }}>
+                        <TableCell className={unifiedStyles.u23}>{OJ_PLATFORM_LABEL_MAP[acc.platform] || acc.platform}</TableCell>
+                        <TableCell className={unifiedStyles.u24}>{acc.username}</TableCell>
+                        <TableCell className={unifiedStyles.u21}>
                           <span style={{ color: acc.enabled ? 'var(--success)' : 'var(--error)', fontSize: '0.8rem', fontWeight: 500 }}>
                             {acc.enabled ? '启用' : '停用'}
                           </span>
-                        </td>
-                        <td className={unifiedStyles.u25}>{acc.priority}</td>
-                        <td className={unifiedStyles.u23}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u25}>{acc.priority}</TableCell>
+                        <TableCell className={unifiedStyles.u23}>
                           <span style={{
                             padding: '0.15rem 0.5rem',
                             borderRadius: 'var(--radius-lg)',
@@ -330,11 +331,11 @@ export default function OjAccountsPage() {
                           }}>
                             {sc.label}
                           </span>
-                        </td>
-                        <td className={unifiedStyles.u26}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u26}>
                           {acc.lastLoginAt ? new Date(acc.lastLoginAt).toLocaleString('zh-CN') : '-'}
-                        </td>
-                        <td className={unifiedStyles.u23}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u23}>
                           <div className={unifiedStyles.u27}>
                             <Button variant="ghost"
                               onClick={() => setEditTarget(acc)}
@@ -365,12 +366,12 @@ export default function OjAccountsPage() {
                               删除
                             </Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </TableRoot>
             </div>
           </div>
         </div>
@@ -499,11 +500,11 @@ function AddAccountModal({ isOpen, onClose, onSuccess }: {
           <label className={unifiedStyles.u31}>登录方式</label>
           <div className={unifiedStyles.u33}>
             <label className={unifiedStyles.u34}>
-              <input type="radio" checked={loginMethod === 'cookie'} onChange={() => setLoginMethod('cookie')} />
+              <Input type="radio" checked={loginMethod === 'cookie'} onChange={() => setLoginMethod('cookie')} />
               Cookie
             </label>
             <label className={unifiedStyles.u34}>
-              <input type="radio" checked={loginMethod === 'password'} onChange={() => setLoginMethod('password')} />
+              <Input type="radio" checked={loginMethod === 'password'} onChange={() => setLoginMethod('password')} />
               账号密码
             </label>
           </div>
@@ -642,7 +643,7 @@ function EditAccountModal({ isOpen, onClose, account, onSuccess }: {
                   </label>
                   {f.type === 'boolean' ? (
                     <label className={unifiedStyles.u43}>
-                      <input
+                      <Input
                         type="checkbox"
                         checked={!!form[f.key]}
                         onChange={e => setForm({ ...form, [f.key]: e.target.checked })}

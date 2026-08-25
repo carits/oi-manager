@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './ImportPreview.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
@@ -337,28 +338,28 @@ export default function ImportPreview({
             <p className={unifiedStyles.u8}>
               请妥善保存以下账号信息
             </p>
-            <table className={unifiedStyles.u9}>
-              <thead>
-                <tr className={unifiedStyles.u10}>
-                  <th style={thStyle}>学生姓名</th>
-                  <th style={thStyle}>登录用户名</th>
-                  <th style={thStyle}>初始密码</th>
-                  <th style={thStyle}>{platformUsernameLabel}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <TableRoot className={unifiedStyles.u9}>
+              <TableHead>
+                <TableRow className={unifiedStyles.u10}>
+                  <TableHeaderCell style={thStyle}>学生姓名</TableHeaderCell>
+                  <TableHeaderCell style={thStyle}>登录用户名</TableHeaderCell>
+                  <TableHeaderCell style={thStyle}>初始密码</TableHeaderCell>
+                  <TableHeaderCell style={thStyle}>{platformUsernameLabel}</TableHeaderCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {importResult.details
                   .filter((d: ImportResultDetail) => d.action === 'created')
                   .map((d: ImportResultDetail, i: number) => (
-                    <tr key={i}>
-                      <td style={tdStyle}>{d.studentName || d.nickname}</td>
-                      <td style={{ ...tdStyle, fontFamily: 'monospace' }}>{d.systemUsername}</td>
-                      <td style={{ ...tdStyle, fontFamily: 'monospace' }}>{d.tempPassword}</td>
-                      <td style={tdStyle}>{d.username}</td>
-                    </tr>
+                    <TableRow key={i}>
+                      <TableCell style={tdStyle}>{d.studentName || d.nickname}</TableCell>
+                      <TableCell style={{ ...tdStyle, fontFamily: 'monospace' }}>{d.systemUsername}</TableCell>
+                      <TableCell style={{ ...tdStyle, fontFamily: 'monospace' }}>{d.tempPassword}</TableCell>
+                      <TableCell style={tdStyle}>{d.username}</TableCell>
+                    </TableRow>
                   ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </TableRoot>
           </div>
         )}
 
@@ -493,7 +494,7 @@ export default function ImportPreview({
               }}>
                 {/* 顶部行 */}
                 <div className={unifiedStyles.u18}>
-                  <input type="checkbox" checked={member.selected} onChange={() => toggleSelected(index)} />
+                  <Input type="checkbox" checked={member.selected} onChange={() => toggleSelected(index)} />
                   <span className={unifiedStyles.u19}>
                     {member.username}
                     {member.nickname && member.nickname !== member.username && (

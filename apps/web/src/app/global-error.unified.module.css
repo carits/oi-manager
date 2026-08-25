@@ -1,0 +1,27 @@
+.u1 {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  font-family: sans-serif;
+}
+
+.u2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+}
+
+.u3 {
+  color: var(--gray-600);
+}
+
+.u4 {
+  color: var(--gray-500);
+  font-size: 0.875rem;
+}
+
+.u5 {
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+  cursor: pointer;
+}

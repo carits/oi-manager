@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { AlertCircle, LogIn } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
@@ -45,10 +46,10 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
           <div className={styles.heading}><h1 className={styles.title} id="login-title">登录</h1><p className={styles.subtitle}>使用账号登录后选择身份</p></div>
           <form className={styles.form} onSubmit={handleLogin}>
             <FormField label="用户名" required>
-              <input name="username" type="text" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required autoFocus />
+              <Input name="username" type="text" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required autoFocus />
             </FormField>
             <FormField label="密码" required>
-              <input name="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
+              <Input name="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
             </FormField>
             {error && <p className={styles.error} role="alert"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
             <Button type="submit" size="lg" fullWidth loading={loading} icon={<LogIn size={18} aria-hidden="true" />}>登录</Button>

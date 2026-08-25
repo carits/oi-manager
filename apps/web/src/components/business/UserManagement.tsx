@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import unifiedStyles from './UserManagement.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
@@ -246,22 +247,22 @@ export function UserManagement({
     <div>
       {/* 顶部操作栏 */}
       {canCreate && onCreateClick && (
-        <div style={{ marginBottom: '1rem' }}>
+        <div className={unifiedStyles.u1}>
           <Button onClick={onCreateClick}>+ 创建用户</Button>
         </div>
       )}
 
       {/* 筛选器 */}
       {(showRoleFilter || showStatusFilter || showKeywordSearch) && (
-        <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+        <div className={unifiedStyles.u2}>
+          <div className={unifiedStyles.u3}>
             {showRoleFilter && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>角色</label>
+                <label className={unifiedStyles.u4}>角色</label>
                 <Select aria-label="选择"
                   value={filters.role}
                   onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
+                  className={unifiedStyles.u5}
                 >
                   <option value="">全部</option>
                   <option value="super_admin">超级管理员</option>
@@ -275,11 +276,11 @@ export function UserManagement({
 
             {showStatusFilter && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>状态</label>
+                <label className={unifiedStyles.u4}>状态</label>
                 <Select aria-label="选择"
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
+                  className={unifiedStyles.u5}
                 >
                   <option value="">全部</option>
                   <option value="active">正常</option>
@@ -290,18 +291,18 @@ export function UserManagement({
 
             {showKeywordSearch && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem' }}>搜索</label>
+                <label className={unifiedStyles.u4}>搜索</label>
                 <Input
                   type="text"
                   placeholder="用户名"
                   value={filters.keyword}
                   onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '4px' }}
+                  className={unifiedStyles.u5}
                 />
               </div>
             )}
           </div>
-          <Button onClick={handleSearch} style={{ marginTop: '1rem' }}>
+          <Button onClick={handleSearch} className={unifiedStyles.u6}>
             查询
           </Button>
         </div>

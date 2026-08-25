@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Globe2, LockKeyhole, Save } from 'lucide-react'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
@@ -79,32 +80,32 @@ export function TeamEditModal({ isOpen, onClose, teamId, initialData, onSuccess 
       <div className={styles.dialogForm}>
         <label className={styles.dialogField}>
           <span>团队名称 <strong>*</strong></span>
-          <input value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} placeholder="请输入团队名称" />
+          <Input value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} placeholder="请输入团队名称" />
         </label>
 
         {formData.teamId && (
           <label className={styles.dialogField}>
             <span>团队标识</span>
-            <input value={formData.teamId} disabled />
+            <Input value={formData.teamId} disabled />
             <small>团队标识创建后不可修改。</small>
           </label>
         )}
 
         <label className={styles.dialogField}>
           <span>团队描述</span>
-          <textarea value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows={3} placeholder="说明训练方向或加入要求" />
+          <Textarea value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows={3} placeholder="说明训练方向或加入要求" />
         </label>
 
         <fieldset className={styles.dialogFieldset}>
           <legend>加入方式</legend>
           <div className={styles.visibilityOptions}>
             <label className={styles.visibilityOption}>
-              <input type="radio" name="edit-team-visibility" checked={formData.isPublic} onChange={() => setFormData({ ...formData, isPublic: true })} />
+              <Input type="radio" name="edit-team-visibility" checked={formData.isPublic} onChange={() => setFormData({ ...formData, isPublic: true })} />
               <Globe2 size={18} aria-hidden="true" />
               <span>公开<br /><small>其他用户可以申请加入</small></span>
             </label>
             <label className={styles.visibilityOption}>
-              <input type="radio" name="edit-team-visibility" checked={!formData.isPublic} onChange={() => setFormData({ ...formData, isPublic: false })} />
+              <Input type="radio" name="edit-team-visibility" checked={!formData.isPublic} onChange={() => setFormData({ ...formData, isPublic: false })} />
               <LockKeyhole size={18} aria-hidden="true" />
               <span>私有<br /><small>仅通过邀请加入</small></span>
             </label>

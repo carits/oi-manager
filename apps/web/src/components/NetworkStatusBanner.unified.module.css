@@ -1,0 +1,11 @@
+.u1 {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: 0.4rem 1rem;
+  text-align: center;
+  background: var(--warning-light);
+  color: var(--warning-text);
+  border-bottom: 1px solid var(--warning);
+  font-size: 0.8rem;
+}

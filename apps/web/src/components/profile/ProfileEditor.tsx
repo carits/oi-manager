@@ -1,6 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import collisionStyles from './ProfileEditor.collision.module.css'
+import unifiedStyles from './ProfileEditor.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
@@ -91,7 +95,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
   }
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+    return <div className={unifiedStyles.u1}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
   }
 
   const getInitial = () => {
@@ -101,9 +105,9 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
   }
 
   return (
-    <div style={{ maxWidth: '600px' }}>
+    <div className={unifiedStyles.u2}>
       {/* 头像区域 */}
-      <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div className={unifiedStyles.u3}>
         {user?.avatar ? (
           <div
             style={{
@@ -116,25 +120,13 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
           />
         ) : (
           <div
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: 'var(--primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '2rem',
-              fontWeight: 700,
-              border: '3px solid var(--border)'
-            }}
+            className={unifiedStyles.u4}
           >
             {getInitial()}
           </div>
         )}
         <div>
-          <button
+          <Button variant="ghost"
             type="button"
             onClick={handleAvatarClick}
             disabled={uploadingAvatar}
@@ -149,25 +141,25 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
             }}
           >
             {uploadingAvatar ? '上传中...' : '更换头像'}
-          </button>
-          <input
+          </Button>
+          <Input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             onChange={handleAvatarChange}
-            style={{ display: 'none' }}
+            className={unifiedStyles.u5}
           />
-          <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.5rem', margin: '0.5rem 0 0' }}>
+          <p className={unifiedStyles.u6}>
             支持 JPG、PNG 格式，建议尺寸 200x200
           </p>
         </div>
       </div>
 
       {/* 表单区域 */}
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1.25rem' }}>
+      <form onSubmit={handleSubmit} className={unifiedStyles.u7}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名</label>
-          <input
+          <Input
             type="text"
             value={form.name}
             onChange={(e) => handleChange('name', e.target.value)}
@@ -178,7 +170,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>邮箱</label>
-          <input
+          <Input
             type="email"
             value={form.email}
             onChange={(e) => handleChange('email', e.target.value)}
@@ -189,7 +181,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>手机号</label>
-          <input
+          <Input
             type="tel"
             value={form.phone}
             onChange={(e) => handleChange('phone', e.target.value)}
@@ -200,7 +192,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>个人简介</label>
-          <textarea
+          <Textarea
             value={form.bio}
             onChange={(e) => handleChange('bio', e.target.value)}
             placeholder="请输入个人简介"
@@ -208,8 +200,8 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-          <button
+        <div className={unifiedStyles.u8}>
+          <Button variant="ghost"
             type="submit"
             disabled={saving}
             style={{
@@ -225,7 +217,7 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
             }}
           >
             {saving ? '保存中...' : '保存'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

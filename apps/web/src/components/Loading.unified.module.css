@@ -1,0 +1,19 @@
+.u1 {
+  padding: 2rem;
+  text-align: center;
+  color: var(--error);
+}
+
+.u2 {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  font-size: 0.875rem;
+}
+
+.u3 {
+  padding: 3rem;
+  text-align: center;
+  color: var(--gray-500);
+}

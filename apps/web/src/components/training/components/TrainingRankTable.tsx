@@ -1,6 +1,10 @@
 'use client'
 
 import { type CSSProperties, useMemo, useState } from 'react'
+import collisionStyles from './TrainingRankTable.collision.module.css'
+import unifiedStyles from './TrainingRankTable.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Search } from 'lucide-react'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import styles from '../TrainingWorkspace.module.css'
@@ -148,7 +152,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
   )
 
   if (!rankingData) {
-    return <div className={styles.surface}><div className={styles.locked}><span className="resource-skeleton-line" style={{ width: '8rem' }} aria-label="内容正在准备" /></div></div>
+    return <div className={styles.surface}><div className={styles.locked}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div></div>
   }
   if (rankingData.hidden) {
     return <div className={styles.surface}><div className={styles.locked}><strong>排名暂不可见</strong><span>OI 赛制比赛结束后公布排名</span></div></div>
@@ -183,7 +187,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
         <div className={styles.rankSearch}>
           <Search size={16} aria-hidden="true" />
           <label className="sr-only" htmlFor="training-ranking-search">搜索参赛者</label>
-          <input
+          <Input
             id="training-ranking-search"
             value={query}
             onChange={event => setQuery(event.target.value)}
@@ -192,7 +196,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
         </div>
       </div>
       <div className={styles.scroll} data-testid="training-ranking-scroll">
-        <table
+        <TableRoot
           aria-label="比赛排名"
           className={`${styles.table} ${styles.rankTable}`}
           data-ranking-format={format}
@@ -205,14 +209,14 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
             {format === 'icpc' && <col className={styles.rankPenaltyColumn} />}
             {problems.map(problem => <col className={styles.rankProblemColumn} key={problem.id} />)}
           </colgroup>
-          <thead>
-            <tr>
-              <th className={`${styles.center} ${styles.rankStickyPosition}`} scope="col">#</th>
-              <th className={styles.rankStickyParticipant} scope="col">参赛者</th>
-              <th className={styles.center} scope="col">{isScoreBased ? '总分' : '通过'}</th>
-              {format === 'icpc' && <th className={styles.center} scope="col">罚时</th>}
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell className={`${styles.center} ${styles.rankStickyPosition}`} scope="col">#</TableHeaderCell>
+              <TableHeaderCell className={styles.rankStickyParticipant} scope="col">参赛者</TableHeaderCell>
+              <TableHeaderCell className={styles.center} scope="col">{isScoreBased ? '总分' : '通过'}</TableHeaderCell>
+              {format === 'icpc' && <TableHeaderCell className={styles.center} scope="col">罚时</TableHeaderCell>}
               {problems.map(problem => (
-                <th
+                <TableHeaderCell
                   className={`${styles.center} ${styles.rankProblemHeader}`}
                   data-problem-column="true"
                   key={problem.id}
@@ -222,15 +226,15 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                   {isScoreBased && (
                     <span className={styles.rankProblemPoints}>{problem.points ?? 100} 分</span>
                   )}
-                </th>
+                </TableHeaderCell>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {visibleRanking.map(({ row, index }: { row: any; index: number }) => (
-              <tr key={row.userId} className={row.userId === currentUserId ? styles.rankRowCurrent : ''}>
-                <td className={`${styles.center} ${styles.rankCell} ${styles.rankMetaCell} ${styles.rankStickyPosition} ${index < 3 ? medalClass[index] : ''}`}>{index + 1}</td>
-                <td className={`${styles.rankParticipantCell} ${styles.rankMetaCell} ${styles.rankStickyParticipant}`}>
+              <TableRow key={row.userId} className={row.userId === currentUserId ? styles.rankRowCurrent : ''}>
+                <TableCell className={`${styles.center} ${styles.rankCell} ${styles.rankMetaCell} ${styles.rankStickyPosition} ${index < 3 ? medalClass[index] : ''}`}>{index + 1}</TableCell>
+                <TableCell className={`${styles.rankParticipantCell} ${styles.rankMetaCell} ${styles.rankStickyParticipant}`}>
                   <span className={styles.rankIdentity}>
                     <UserIdentityLink id={row.userId} userType={row.userType} name={row.name} username={row.username} avatar={row.avatar} avatarOnly size={32} />
                     <span className={styles.rankIdentityText} title={row.username ? `${row.name || row.username}（${row.username}）` : row.name}>
@@ -240,17 +244,17 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                         name={row.name}
                         username={row.username}
                         currentSuffix={row.userId === currentUserId ? '（我）' : ''}
-                        style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        className={unifiedStyles.u1}
                       />
                       {row.username && row.username !== row.name && (
                         <span className={styles.rankUsername}>{row.username}</span>
                       )}
                     </span>
                   </span>
-                </td>
+                </TableCell>
                 {isScoreBased ? (
                   <>
-                    <td className={`${styles.center} ${styles.numeric} ${format === 'ioi' ? styles.ioiTotalScore : styles.oiTotalScore}`}><strong>{row.totalScore}</strong></td>
+                    <TableCell className={`${styles.center} ${styles.numeric} ${format === 'ioi' ? styles.ioiTotalScore : styles.oiTotalScore}`}><strong>{row.totalScore}</strong></TableCell>
                     {problems.map(problem => {
                       const problemResult = row.problems[problem.id]
                       const score = problemResult?.score ?? 0
@@ -258,7 +262,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                       const canOpen = Boolean(onOpenSubmissions && problemResult?.submitted && (canViewOtherSubmissions || row.userId === currentUserId))
                       const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, trainingProblemId: problem.id, problemAlias: problemLabel(problem) }) }
                       return (
-                        <td
+                        <TableCell
                           aria-label={canOpen ? `${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分，点击查看提交记录` : `${problemLabel(problem)}：${score} 分，满分 ${maxScore} 分`}
                           data-score-state={score >= maxScore ? 'full' : score > 0 ? 'partial' : 'zero'}
                           data-clickable={canOpen || undefined}
@@ -271,21 +275,21 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                           key={problem.id}
                         >
                           {score}
-                        </td>
+                        </TableCell>
                       )
                     })}
                   </>
                 ) : (
                   <>
-                    <td className={`${styles.center} ${styles.numeric}`}><strong>{row.solvedCount}</strong></td>
-                    <td className={`${styles.center} ${styles.numeric} ${styles.muted}`}>{row.totalPenalty}</td>
+                    <TableCell className={`${styles.center} ${styles.numeric}`}><strong>{row.solvedCount}</strong></TableCell>
+                    <TableCell className={`${styles.center} ${styles.numeric} ${styles.muted}`}>{row.totalPenalty}</TableCell>
                     {problems.map(problem => {
                       const problemResult = row.problems[problem.id]
                       const presentation = describeICPCResult(problemLabel(problem), problemResult)
                       const canOpen = Boolean(onOpenSubmissions && problemResult?.submitted && (canViewOtherSubmissions || row.userId === currentUserId))
                       const open = () => { if (canOpen) onOpenSubmissions?.({ userId: row.userId, userName: row.name, username: row.username, trainingProblemId: problem.id, problemAlias: problemLabel(problem) }) }
                       return (
-                        <td
+                        <TableCell
                           aria-label={canOpen ? `${presentation.description}，点击查看提交记录` : presentation.description}
                           className={`${styles.center} ${styles.numeric} ${styles.icpcResultCell} ${presentation.className} ${canOpen ? styles.rankInteractiveCell : ''}`}
                           data-problem-column="true"
@@ -299,18 +303,18 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                           key={problem.id}
                         >
                           {presentation.text}
-                        </td>
+                        </TableCell>
                       )
                     })}
                   </>
                 )}
-              </tr>
+              </TableRow>
             ))}
             {visibleRanking.length === 0 && (
-              <tr><td colSpan={columnCount} className={styles.empty}>{ranking.length === 0 ? '暂无排名数据' : '没有符合搜索条件的参赛者'}</td></tr>
+              <TableRow><TableCell colSpan={columnCount} className={styles.empty}>{ranking.length === 0 ? '暂无排名数据' : '没有符合搜索条件的参赛者'}</TableCell></TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </TableRoot>
       </div>
     </div>
   )

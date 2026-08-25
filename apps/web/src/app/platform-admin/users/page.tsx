@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import collisionStyles from './page.collision.module.css'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
@@ -187,40 +189,40 @@ export default function PlatformAdminUsersPage() {
           </div>
 
           {loading ? (
-            <p><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></p>
+            <p><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></p>
           ) : error ? (
             <div className={unifiedStyles.u10}>
               {error}
             </div>
           ) : (
             <div className={unifiedStyles.u11}>
-              <table className={unifiedStyles.u12}>
-                <thead>
-                  <tr className={unifiedStyles.u13}>
-                    <th className={unifiedStyles.u14}>用户名</th>
-                    <th className={unifiedStyles.u14}>姓名</th>
-                    <th className={unifiedStyles.u14}>角色</th>
-                    <th className={unifiedStyles.u14}>学校</th>
-                    <th className={unifiedStyles.u14}>状态</th>
-                    <th className={unifiedStyles.u14}>创建时间</th>
-                    <th className={unifiedStyles.u14}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <TableRoot className={unifiedStyles.u12}>
+                <TableHead>
+                  <TableRow className={unifiedStyles.u13}>
+                    <TableHeaderCell className={unifiedStyles.u14}>用户名</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u14}>姓名</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u14}>角色</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u14}>学校</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u14}>状态</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u14}>创建时间</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u14}>操作</TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {users.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className={unifiedStyles.u15}>
+                    <TableRow>
+                      <TableCell colSpan={7} className={unifiedStyles.u15}>
                         暂无用户数据
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     users.map((user) => (
-                      <tr key={user.id} className={unifiedStyles.u16}>
-                        <td className={unifiedStyles.u17}>{user.username}</td>
-                        <td className={unifiedStyles.u18}>{user.profile?.name || '-'}</td>
-                        <td className={unifiedStyles.u18}>{getRoleLabel(user.role)}</td>
-                        <td className={unifiedStyles.u18}>{user.profile?.schoolName || '-'}</td>
-                        <td className={unifiedStyles.u18}>
+                      <TableRow key={user.id} className={unifiedStyles.u16}>
+                        <TableCell className={unifiedStyles.u17}>{user.username}</TableCell>
+                        <TableCell className={unifiedStyles.u18}>{user.profile?.name || '-'}</TableCell>
+                        <TableCell className={unifiedStyles.u18}>{getRoleLabel(user.role)}</TableCell>
+                        <TableCell className={unifiedStyles.u18}>{user.profile?.schoolName || '-'}</TableCell>
+                        <TableCell className={unifiedStyles.u18}>
                           <span style={{
                             padding: '2px 8px',
                             borderRadius: '4px',
@@ -230,11 +232,11 @@ export default function PlatformAdminUsersPage() {
                           }}>
                             {user.status === 'active' ? '正常' : '禁用'}
                           </span>
-                        </td>
-                        <td className={unifiedStyles.u18}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u18}>
                           {new Date(user.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className={unifiedStyles.u18}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u18}>
                           <a
                             href={`/admin/users/${user.id}`}
                             className={unifiedStyles.u19}
@@ -253,12 +255,12 @@ export default function PlatformAdminUsersPage() {
                           >
                             {user.status === 'active' ? '禁用' : '启用'}
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </TableRoot>
 
               {/* 分页组件 */}
               <Pagination

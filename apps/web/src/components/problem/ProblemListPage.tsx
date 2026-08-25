@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Search } from 'lucide-react'
@@ -70,7 +71,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
       <PageHeader title="题单" description="集中组织题目，并按需要共享或发布。" actions={newAction} />
       <Toolbar>
         <ToolbarGroup>
-          <input className={styles.search} value={searchInput} onChange={event => setSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') updateLocation(activeTab, searchInput) }} placeholder="按名称搜索题单" aria-label="搜索题单" />
+          <Input className={styles.search} value={searchInput} onChange={event => setSearchInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') updateLocation(activeTab, searchInput) }} placeholder="按名称搜索题单" aria-label="搜索题单" />
           <Button variant="secondary" icon={<Search size={16} />} onClick={() => updateLocation(activeTab, searchInput)}>搜索</Button>
         </ToolbarGroup>
         {keyword && <Button variant="text" onClick={() => { setSearchInput(''); updateLocation(activeTab, '') }}>清除搜索</Button>}

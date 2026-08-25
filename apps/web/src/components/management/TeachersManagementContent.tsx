@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import unifiedStyles from './TeachersManagementContent.unified.module.css'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
@@ -36,7 +37,7 @@ export default function TeachersManagementContent() {
     return (
       <div className={styles.page}>
         <PageHeader title="教师" description="管理本校教师账号与身份" />
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div className={unifiedStyles.u1}>
           <p>未找到学校信息</p>
         </div>
       </div>

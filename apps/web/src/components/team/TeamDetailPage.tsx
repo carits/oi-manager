@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import unifiedStyles from './TeamDetailPage.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
@@ -360,7 +361,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className={unifiedStyles.u1}>
         <SkeletonRegion rows={8} label="正在获取团队详情" />
       </div>
     )
@@ -368,7 +369,7 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
 
   if (error || !team) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className={unifiedStyles.u1}>
         <LoadError
           message={error || '团队不存在'}
           onRetry={refetch}

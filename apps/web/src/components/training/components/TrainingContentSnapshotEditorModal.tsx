@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import unifiedStyles from './TrainingContentSnapshotEditorModal.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
@@ -66,17 +69,17 @@ export function TrainingContentSnapshotEditorModal({ isOpen, trainingId, snapsho
       onClose={onClose}
       title={`编辑活动${snapshot?.kind === 'statement' ? '题面' : '题解'} · ${snapshot?.label || ''}`}
       size="xl"
-      footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}><button onClick={onClose} disabled={saving}>取消</button><button onClick={save} disabled={saving || (!isPdf && !content.trim())}>{saving ? '保存中…' : '保存新 revision'}</button></div>}
+      footer={<div className={unifiedStyles.u1}><Button variant="ghost" onClick={onClose} disabled={saving}>取消</Button><Button variant="ghost" onClick={save} disabled={saving || (!isPdf && !content.trim())}>{saving ? '保存中…' : '保存新 revision'}</Button></div>}
     >
-      <div style={{ marginBottom: '0.85rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--info-light)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+      <div className={unifiedStyles.u2}>
         本次编辑只影响当前活动，并创建新的不可变快照；题库原版本、用户版本和其他活动不会改变。
       </div>
       {isPdf ? (
-        <div style={{ display: 'grid', gap: '0.85rem' }}>
-          {snapshot?.fileUrl && <a href={snapshot.fileUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>查看当前 PDF</a>}
-          <label style={{ padding: '1rem', border: '1px dashed var(--border)', borderRadius: '8px', background: 'var(--gray-50)' }}>
+        <div className={unifiedStyles.u3}>
+          {snapshot?.fileUrl && <a href={snapshot.fileUrl} target="_blank" rel="noreferrer" className={unifiedStyles.u4}>查看当前 PDF</a>}
+          <label className={unifiedStyles.u5}>
             替换 PDF（最大 20MB）
-            <input type="file" accept="application/pdf,.pdf" onChange={event => setFile(event.target.files?.[0] || null)} style={{ display: 'block', marginTop: '0.7rem' }} />
+            <Input type="file" accept="application/pdf,.pdf" onChange={event => setFile(event.target.files?.[0] || null)} className={unifiedStyles.u6} />
           </label>
         </div>
       ) : <MarkdownEditor value={content} onChange={setContent} minHeight="440px" showPreview />}

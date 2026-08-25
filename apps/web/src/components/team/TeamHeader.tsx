@@ -106,7 +106,7 @@ export function TeamHeader({
             </div>
             {permission.isOwner && (
               <>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className={styles.hiddenInput} />
+                <Input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className={styles.hiddenInput} />
                 <Button variant="ghost"
                   type="button"
                   className={styles.avatarEditButton}

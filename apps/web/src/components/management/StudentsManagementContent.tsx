@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import unifiedStyles from './StudentsManagementContent.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
@@ -160,7 +161,7 @@ export default function StudentsManagementContent() {
     <>
       <div className={managementListStyles.page}>
         <PageHeader title="学生" description="管理本校学生信息">
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className={unifiedStyles.u1}>
             <Button variant="secondary" onClick={() => router.push(`/org/${organizationId}/management?tab=students`)}>
               导入学生
             </Button>
@@ -196,16 +197,11 @@ export default function StudentsManagementContent() {
               render: (student) => {
                 if (transferringStudent?.id === student.id) {
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div className={unifiedStyles.u2}>
                       <Select aria-label="选择"
                         value={selectedTeacherId}
                         onChange={(e) => setSelectedTeacherId(e.target.value)}
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          fontSize: '0.875rem',
-                          border: '1px solid var(--border)',
-                          borderRadius: '4px'
-                        }}
+                        className={unifiedStyles.u3}
                       >
                         <option value="">选择教练</option>
                         {teachers.map((teacher) => (
@@ -279,21 +275,7 @@ export default function StudentsManagementContent() {
 
         {/* Toast 通知 */}
         {toastMsg && (
-          <div style={{
-            position: 'fixed',
-            top: 24,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'var(--text-inverse)',
-            color: 'var(--text-primary)',
-            padding: '12px 28px',
-            borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-            fontSize: 14,
-            fontWeight: 500,
-            zIndex: 9999,
-            animation: 'toastIn 0.25s ease'
-          }}>
+          <div className={unifiedStyles.u7}>
             {toastMsg}
           </div>
         )}
@@ -368,7 +350,7 @@ function StudentFormModal({
 
   return (
     <FormDialog isOpen={true} onClose={onClose} title={student ? '编辑学生' : '添加学生'} size="md">
-      <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
+      <form onSubmit={form.handleSubmit} className={unifiedStyles.u4}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名 *</label>
           <Input
@@ -430,11 +412,11 @@ function StudentFormModal({
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-          <Button type="submit" disabled={submitting} style={{ flex: 1 }}>
+        <div className={unifiedStyles.u5}>
+          <Button type="submit" disabled={submitting} className={unifiedStyles.u6}>
             {submitting ? '保存中...' : '保存'}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose} style={{ flex: 1 }}>
+          <Button type="button" variant="secondary" onClick={onClose} className={unifiedStyles.u6}>
             取消
           </Button>
         </div>

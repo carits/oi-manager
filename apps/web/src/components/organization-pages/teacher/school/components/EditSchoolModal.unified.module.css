@@ -1,0 +1,43 @@
+.u1 {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.u2 {
+  margin: 0;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1rem;
+}
+
+.u3 {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.u4 {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.u5 {
+  display: block;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.u6 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.u7 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-card);
+  padding-top: 0.75rem;
+}

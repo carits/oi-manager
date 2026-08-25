@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Globe2, LockKeyhole, Mail, Plus } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { Button } from '@/components/ui/Button'
@@ -139,12 +140,12 @@ export function TeamListPage({
         )}
       >
         <form id="create-team-form" className={styles.dialogForm} onSubmit={submit}>
-          <FormField label="团队名称" required><input value={createName} onChange={event => setCreateName(event.target.value)} required placeholder="例如：2026 暑期集训队" /></FormField>
-          <FormField label="团队标识" required hint="仅支持英文字母、数字和下划线，创建后不可修改。" error={createTeamIdInvalid ? '团队标识只能包含英文字母、数字和下划线。' : undefined}><input value={createTeamId} onChange={event => setCreateTeamId(event.target.value)} required maxLength={50} placeholder="summer_2026" /></FormField>
-          <FormField label="团队说明"><textarea value={createDescription} onChange={event => setCreateDescription(event.target.value)} rows={3} placeholder="说明训练方向或加入要求" /></FormField>
+          <FormField label="团队名称" required><Input value={createName} onChange={event => setCreateName(event.target.value)} required placeholder="例如：2026 暑期集训队" /></FormField>
+          <FormField label="团队标识" required hint="仅支持英文字母、数字和下划线，创建后不可修改。" error={createTeamIdInvalid ? '团队标识只能包含英文字母、数字和下划线。' : undefined}><Input value={createTeamId} onChange={event => setCreateTeamId(event.target.value)} required maxLength={50} placeholder="summer_2026" /></FormField>
+          <FormField label="团队说明"><Textarea value={createDescription} onChange={event => setCreateDescription(event.target.value)} rows={3} placeholder="说明训练方向或加入要求" /></FormField>
           <fieldset className={styles.dialogFieldset}><legend>加入方式</legend><div className={styles.visibilityOptions}>
-            <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={createIsPublic} onChange={() => setCreateIsPublic(true)} /><Globe2 size={18} /><span>公开<br /><small>其他用户可以申请加入</small></span></label>
-            <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={!createIsPublic} onChange={() => setCreateIsPublic(false)} /><LockKeyhole size={18} /><span>私有<br /><small>仅通过邀请加入</small></span></label>
+            <label className={styles.visibilityOption}><Input type="radio" name="visibility" checked={createIsPublic} onChange={() => setCreateIsPublic(true)} /><Globe2 size={18} /><span>公开<br /><small>其他用户可以申请加入</small></span></label>
+            <label className={styles.visibilityOption}><Input type="radio" name="visibility" checked={!createIsPublic} onChange={() => setCreateIsPublic(false)} /><LockKeyhole size={18} /><span>私有<br /><small>仅通过邀请加入</small></span></label>
           </div></fieldset>
         </form>
       </FormDialog>

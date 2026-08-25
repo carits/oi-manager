@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Search, UsersRound } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/components/ui/Pagination'
@@ -141,20 +142,20 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
           <label className={styles.searchField}>
             <Search size={17} aria-hidden="true" />
             <span className="sr-only">搜索{scope === 'campus' ? '姓名或用户名' : '用户名'}</span>
-            <input value={searchValue} onChange={event => setSearchValue(event.target.value)} placeholder={scope === 'campus' ? '搜索姓名或用户名' : '搜索用户名'} />
+            <Input value={searchValue} onChange={event => setSearchValue(event.target.value)} placeholder={scope === 'campus' ? '搜索姓名或用户名' : '搜索用户名'} />
           </label>
           {scope === 'campus' && !isContribution && (
             <label className={styles.selectField}>
               <span className="sr-only">按年级筛选</span>
-              <select value={grade} onChange={event => updateQuery({ grade: event.target.value || null })}>
+              <Select value={grade} onChange={event => updateQuery({ grade: event.target.value || null })}>
                 <option value="">全部年级</option>
                 {grades.map(item => <option key={item} value={item}>{item}</option>)}
-              </select>
+              </Select>
             </label>
           )}
           {scope === 'campus' && !isContribution && (
             <label className={styles.checkboxField}>
-              <input type="checkbox" checked={includeGraduated} onChange={event => updateQuery({ includeGraduated: event.target.checked ? '1' : null })} />
+              <Input type="checkbox" checked={includeGraduated} onChange={event => updateQuery({ includeGraduated: event.target.checked ? '1' : null })} />
               <span>包含已毕业学生</span>
             </label>
           )}

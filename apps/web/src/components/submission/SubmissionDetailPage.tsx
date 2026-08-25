@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import unifiedStyles from './SubmissionDetailPage.unified.module.css'
 import { usePathname, useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react'
@@ -224,7 +225,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
               <div className={styles.panelHeader}>
                 <Button variant="text" icon={showCode ? <ChevronDown size={16} /> : <ChevronRight size={16} />} onClick={() => setShowCode(!showCode)}>
                   源代码
-                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.8125rem' }}>
+                  <span className={unifiedStyles.u1}>
                     ({detail.codeLength}B)
                   </span>
                 </Button>
@@ -235,12 +236,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
               {showCode && (
                 detail.code ? (
                 <div className={styles.codeArea}>
-                  <pre style={{
-                    margin: 0,
-                    padding: '1rem',
-                    fontSize: '0.8125rem',
-                    lineHeight: 1.6,
-                  }}>
+                  <pre className={unifiedStyles.u2}>
                     <code
                       dangerouslySetInnerHTML={{ __html: getHighlightedCode() }}
                       style={{ fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace" }}
@@ -248,12 +244,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   </pre>
                 </div>
                 ) : (
-                <div style={{
-                  padding: '2rem',
-                  textAlign: 'center',
-                  color: 'var(--text-muted)',
-                  background: 'var(--bg-muted)',
-                }}>
+                <div className={unifiedStyles.u3}>
                   {detail.submitMethod === 'archive' ? '归档记录，源代码不可用' : '无源代码'}
                 </div>
                 )
@@ -266,56 +257,51 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
             <div className={styles.panel}>
               <div className={styles.panelHeader}><h2 className={styles.panelTitle}>提交信息</h2></div>
 
-              <div style={{ padding: '0.875rem 1rem', fontSize: '0.8125rem' }}>
+              <div className={unifiedStyles.u4}>
                 {/* Submitter */}
-                <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>提交人</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className={unifiedStyles.u5}>
+                  <div className={unifiedStyles.u6}>提交人</div>
+                  <div className={unifiedStyles.u7}>
                     {detail.submitterAvatar ? (
                       <img
                         src={getAvatarUrl(detail.submitterAvatar)}
                         alt=""
-                        style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                        className={unifiedStyles.u8}
                       />
                     ) : (
-                      <div style={{
-                        width: '28px', height: '28px', borderRadius: '50%',
-                        background: 'var(--primary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-inverse)',
-                      }}>
+                      <div className={unifiedStyles.u9}>
                         {detail.submitterName?.charAt(0) || '?'}
                       </div>
                     )}
-                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.submitterName}</span>
+                    <span className={unifiedStyles.u10}>{detail.submitterName}</span>
                   </div>
                 </div>
 
                 {/* Problem */}
-                <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>题目</div>
-                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                <div className={unifiedStyles.u5}>
+                  <div className={unifiedStyles.u6}>题目</div>
+                  <div className={unifiedStyles.u10}>
                     [{ojLabel}-{detail.problemId}]
                     {detail.problemTitle ? ` ${detail.problemTitle}` : ''}
                   </div>
                 </div>
 
                 {/* Language */}
-                <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>语言</div>
-                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{getLanguageLabel(detail.language)}</div>
+                <div className={unifiedStyles.u5}>
+                  <div className={unifiedStyles.u6}>语言</div>
+                  <div className={unifiedStyles.u10}>{getLanguageLabel(detail.language)}</div>
                 </div>
 
                 {/* Code Length */}
-                <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>代码长度</div>
-                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{detail.codeLength}B</div>
+                <div className={unifiedStyles.u5}>
+                  <div className={unifiedStyles.u6}>代码长度</div>
+                  <div className={unifiedStyles.u10}>{detail.codeLength}B</div>
                 </div>
 
                 {/* Submit At */}
-                <div style={{ marginBottom: '0.875rem' }}>
-                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>提交时间</div>
-                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                <div className={unifiedStyles.u5}>
+                  <div className={unifiedStyles.u6}>提交时间</div>
+                  <div className={unifiedStyles.u10}>
                     {new Date(detail.submittedAt).toLocaleString('zh-CN')}
                   </div>
                 </div>
@@ -323,12 +309,12 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 {/* OJ Remote ID */}
                 {detail.ojRemoteId && (
                   <div>
-                    <div style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>远端记录编号</div>
-                    <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                    <div className={unifiedStyles.u6}>远端记录编号</div>
+                    <div className={unifiedStyles.u10}>
                       {detail.oj === 'carits' ? (
                         <a
                           href={`${getPathPrefix()}/submissions/${detail.id}`}
-                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                          className={unifiedStyles.u11}
                         >
                           {detail.ojRemoteId}
                         </a>
@@ -337,7 +323,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                           href={`https://acm.hdu.edu.cn/status.php?first=${detail.ojRemoteId}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                          className={unifiedStyles.u11}
                         >
                           {detail.ojRemoteId}
                         </a>
@@ -346,7 +332,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                           href={`https://codeforces.com/contest/${detail.problemId.replace(/^(\d+).*$/, '$1')}/submission/${detail.ojRemoteId}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                          className={unifiedStyles.u11}
                         >
                           {detail.ojRemoteId}
                         </a>
@@ -355,7 +341,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                           href={`https://www.luogu.com.cn/record/${detail.ojRemoteId}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                          className={unifiedStyles.u11}
                         >
                           {detail.ojRemoteId}
                         </a>

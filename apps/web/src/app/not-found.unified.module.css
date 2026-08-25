@@ -1,0 +1,24 @@
+.u1 {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+.u2 {
+  margin: 0 0 0.5rem;
+  color: var(--text-muted);
+}
+
+.u3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+}
+
+.u4 {
+  margin: 0 0 1.5rem;
+  color: var(--text-secondary);
+}
+
+.u5 {
+  color: var(--primary);
+}

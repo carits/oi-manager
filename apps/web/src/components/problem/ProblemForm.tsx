@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import collisionStyles from './ProblemForm.collision.module.css'
 import unifiedStyles from './ProblemForm.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -540,7 +541,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   if (loading) {
     return (
       <div className={unifiedStyles.u1}>
-        <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
+        <span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
       </div>
     )
   }
@@ -698,7 +699,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                       </span>
                       <div className={unifiedStyles.u16}>
                         <label className={unifiedStyles.u17}>
-                          <input
+                          <Input
                             type="checkbox"
                             checked={stmt.isVisible}
                             onChange={(e) => updateStatement(index, { isVisible: e.target.checked })}
@@ -764,7 +765,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                         <div>
                           {mode === 'edit' && problemId ? (
                             <div>
-                              <input
+                              <Input
                                 type="file"
                                 accept=".pdf"
                                 onChange={(e) => {
@@ -828,7 +829,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                       </span>
                       <div className={unifiedStyles.u16}>
                         <label className={unifiedStyles.u17}>
-                          <input
+                          <Input
                             type="checkbox"
                             checked={sol.isVisible}
                             onChange={(e) => updateSolution(index, { isVisible: e.target.checked })}
@@ -856,7 +857,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                         <div>
                           {mode === 'edit' && problemId ? (
                             <div>
-                              <input
+                              <Input
                                 type="file"
                                 accept=".pdf"
                                 onChange={(e) => {
@@ -1015,7 +1016,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                   <p className={unifiedStyles.u32}>
                     支持 PDF、ZIP、RAR、7Z、TXT、CPP、C、PY、JAVA、PAS、IN、OUT、MD 格式，最大 50MB
                   </p>
-                  <input
+                  <Input
                     type="file"
                     accept=".pdf,.zip,.rar,.7z,.txt,.cpp,.c,.py,.java,.pas,.in,.out,.md"
                     onChange={handleAttachmentUpload}
@@ -1028,7 +1029,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                 <div className={unifiedStyles.u39}>
                   <label className={unifiedStyles.u8}>已上传附件</label>
                   {attachmentsLoading ? (
-                    <div className={unifiedStyles.u40}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+                    <div className={unifiedStyles.u40}><span className={[("resource-skeleton-line"), collisionStyles.u2].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
                   ) : attachments.length === 0 ? (
                     <div className={unifiedStyles.u40}>暂无附件</div>
                   ) : (

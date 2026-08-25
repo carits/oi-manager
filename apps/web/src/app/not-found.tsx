@@ -1,14 +1,15 @@
 import Link from 'next/link'
+import unifiedStyles from './not-found.unified.module.css'
 
 export default function NotFound() {
   return (
-    <main style={{ maxWidth: '720px', margin: '0 auto', padding: '3rem 1.5rem' }}>
-      <p style={{ margin: '0 0 0.5rem', color: 'var(--text-muted)' }}>404</p>
-      <h1 style={{ margin: '0 0 0.75rem', fontSize: '1.5rem' }}>页面不存在</h1>
-      <p style={{ margin: '0 0 1.5rem', color: 'var(--text-secondary)' }}>
+    <main className={unifiedStyles.u1}>
+      <p className={unifiedStyles.u2}>404</p>
+      <h1 className={unifiedStyles.u3}>页面不存在</h1>
+      <p className={unifiedStyles.u4}>
         地址可能已经变更，或者当前账号没有对应的页面入口。
       </p>
-      <Link href="/" style={{ color: 'var(--primary)' }}>返回首页</Link>
+      <Link href="/" className={unifiedStyles.u5}>返回首页</Link>
     </main>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import type { TrainingProblem, Attachment } from '../types'
+import unifiedStyles from './TrainingAttachmentPanel.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { trainingProblemCode, trainingProblemSectionTitle } from '../problem-label'
 import { hasTrainingAttachments } from '../attachment-state'
@@ -19,23 +20,23 @@ interface TrainingAttachmentPanelProps {
 
 export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }: TrainingAttachmentPanelProps) {
   return (
-    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', padding: '1rem' }}>
+    <div className={unifiedStyles.u1}>
       {problems.map(p => {
         const atts = allAttachments[p.id] || []
         if (atts.length === 0) return null
         return (
-          <div key={p.id} style={{ marginBottom: '1rem' }}>
-            <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>{`${trainingProblemCode(p.orderIndex)}. ${p.alias || trainingProblemSectionTitle(p)}`}</div>
+          <div key={p.id} className={unifiedStyles.u2}>
+            <div className={unifiedStyles.u3}>{`${trainingProblemCode(p.orderIndex)}. ${p.alias || trainingProblemSectionTitle(p)}`}</div>
             {atts.map(a => (
-              <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--gray-100)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.875rem' }}>附件</span>
+              <div key={a.id} className={unifiedStyles.u4}>
+                <div className={unifiedStyles.u5}>
+                  <span className={unifiedStyles.u6}>附件</span>
                   <span>{a.fileName}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>{formatFileSize(a.fileSize)}</span>
+                  <span className={unifiedStyles.u7}>{formatFileSize(a.fileSize)}</span>
                 </div>
                 <Button variant="ghost"
                   onClick={() => onDownload(a)}
-                  style={{ padding: '0.25rem 0.5rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
+                  className={unifiedStyles.u8}
                 >
                   下载
                 </Button>
@@ -45,7 +46,7 @@ export function TrainingAttachmentPanel({ problems, allAttachments, onDownload }
         )
       })}
       {!hasTrainingAttachments(allAttachments) && (
-        <div style={{ textAlign: 'center', color: 'var(--gray-400)' }}>暂无附件</div>
+        <div className={unifiedStyles.u9}>暂无附件</div>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
+import unifiedStyles from './EditSchoolModal.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
@@ -32,8 +33,8 @@ function normalizeEducationSystem(value: string | null) {
 
 function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ display: 'grid', gap: '0.85rem' }}>
-      <h3 style={{ margin: 0, paddingBottom: '0.65rem', borderBottom: '1px solid var(--border)', fontSize: '1rem' }}>{title}</h3>
+    <section className={unifiedStyles.u1}>
+      <h3 className={unifiedStyles.u2}>{title}</h3>
       {children}
     </section>
   )
@@ -101,7 +102,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
 
   return (
     <FormDialog isOpen onClose={onClose} title="编辑校园信息" size="lg">
-      <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
+      <form onSubmit={form.handleSubmit} className={unifiedStyles.u3}>
         <FormSection title="基本资料">
           <div style={formStyles.field}><label style={formStyles.label}>学校名称 *</label><Input value={form.values.name} onChange={event => form.handleChange('name', event.target.value)} required style={formStyles.input} /></div>
           <div style={formStyles.field}><label style={formStyles.label}>学校简称</label><Input value={form.values.shortName} onChange={event => form.handleChange('shortName', event.target.value)} style={formStyles.input} /></div>
@@ -112,16 +113,16 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
         </FormSection>
 
         <FormSection title="学制">
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <div className={unifiedStyles.u4}>
             {educationOptions.map(([value, title, description]) => (
               <label key={value} style={{ display: 'flex', gap: '0.65rem', alignItems: 'flex-start', padding: '0.7rem', border: `1px solid ${form.values.educationSystem === value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer' }}>
-                <input type="radio" name="educationSystem" checked={form.values.educationSystem === value} onChange={() => form.handleChange('educationSystem', value)} />
-                <span><strong>{title}</strong><small style={{ display: 'block', color: 'var(--text-muted)', marginTop: 3 }}>{description}</small></span>
+                <Input type="radio" name="educationSystem" checked={form.values.educationSystem === value} onChange={() => form.handleChange('educationSystem', value)} />
+                <span><strong>{title}</strong><small className={unifiedStyles.u5}>{description}</small></span>
               </label>
             ))}
           </div>
           {form.values.educationSystem === 'custom' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.75rem' }}>
+            <div className={unifiedStyles.u6}>
               {(['primaryYears', 'middleYears', 'highYears'] as const).map((key, index) => (
                 <div style={formStyles.field} key={key}>
                   <label style={formStyles.label}>{['小学', '初中', '高中'][index]}年数</label>
@@ -138,7 +139,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
           <div style={formStyles.field}><label style={formStyles.label}>联系邮箱</label><Input type="email" value={form.values.contactEmail} onChange={event => form.handleChange('contactEmail', event.target.value)} style={formStyles.input} /></div>
         </FormSection>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', position: 'sticky', bottom: 0, background: 'var(--bg-card)', paddingTop: '0.75rem' }}>
+        <div className={unifiedStyles.u7}>
           <Button type="button" variant="secondary" onClick={onClose}>取消</Button>
           <Button type="submit" disabled={submitting}>{submitting ? '保存中...' : '保存修改'}</Button>
         </div>

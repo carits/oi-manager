@@ -1,6 +1,7 @@
 'use client'
 
 import { Check, Crown, Mail, ShieldCheck, UserPlus, Users, X } from 'lucide-react'
+import unifiedStyles from './TeamMemberList.unified.module.css'
 import type { TeamDetail } from '@/hooks/data/useTeamDetail'
 import type { TeamPermission, UserType } from '@/hooks/useTeamPermission'
 import { Button } from '@/components/ui/Button'
@@ -167,7 +168,7 @@ export function TeamMemberList({
               name={member.name}
               username={member.username}
               showUsername
-              style={{ color: 'var(--text-primary)' }}
+              className={unifiedStyles.u1}
             />
             <span className={`${styles.memberTag} ${memberTypeClass(member.userType)}`}>{memberTypeLabel(member.userType)}</span>
             <span className={styles.roleTag}>{roleIcon(role)}{roleLabel(role)}</span>
@@ -183,7 +184,7 @@ export function TeamMemberList({
               <Button variant="secondary" size="sm" onClick={() => onSetAdmin(member.id, member.name, member.userType)}>设为管理员</Button>
             )}
             {canRemoveThis && onRemoveMember && (
-              <Button variant="outline" size="sm" onClick={() => onRemoveMember(member.id, member.name, member.userType)} style={{ color: 'var(--danger)' }}>移除</Button>
+              <Button variant="outline" size="sm" onClick={() => onRemoveMember(member.id, member.name, member.userType)} className={unifiedStyles.u2}>移除</Button>
             )}
           </div>
         )}

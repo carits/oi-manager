@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import unifiedStyles from './TrainingContentSelectionModal.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
@@ -128,39 +131,39 @@ export function TrainingContentSelectionModal({
       title={`选择活动题解 · ${problemLabel}`}
       size="lg"
       footer={(
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
-          <button onClick={onClose} style={{ padding: '0.6rem 1rem', border: '1px solid var(--border)', borderRadius: '7px', background: 'white', cursor: 'pointer' }}>取消</button>
-          <button onClick={save} disabled={!changed || saving || loading} style={{ padding: '0.6rem 1.1rem', border: 'none', borderRadius: '7px', background: changed ? 'var(--primary)' : 'var(--gray-300)', color: 'white', cursor: changed ? 'pointer' : 'not-allowed' }}>
+        <div className={unifiedStyles.u1}>
+          <Button variant="ghost" onClick={onClose} className={unifiedStyles.u2}>取消</Button>
+          <Button variant="ghost" onClick={save} disabled={!changed || saving || loading} style={{ padding: '0.6rem 1.1rem', border: 'none', borderRadius: '7px', background: changed ? 'var(--primary)' : 'var(--gray-300)', color: 'white', cursor: changed ? 'pointer' : 'not-allowed' }}>
             {saving ? '保存中…' : '应用新版本'}
-          </button>
+          </Button>
         </div>
       )}
     >
-      {loading || !data ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>正在加载可用版本…</div> : (
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+      {loading || !data ? <div className={unifiedStyles.u3}>正在加载可用版本…</div> : (
+        <div className={unifiedStyles.u4}>
+          <p className={unifiedStyles.u5}>
             此处只选择当前题目的活动题解。题面请前往独立的“题面选择”页面统一配置。
           </p>
           {([
             { kind: 'solution' as const, label: '活动题解', value: solutionKey, setValue: setSolutionKey, options: data.solution, revision: data.currentSelection.solutionRevision },
           ]).map(item => (
-            <section key={item.kind} style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: '10px', background: 'var(--gray-50)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.55rem' }}>
+            <section key={item.kind} className={unifiedStyles.u6}>
+              <div className={unifiedStyles.u7}>
                 <strong>{item.label}</strong>
-                {item.revision && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>当前 revision {item.revision}</span>}
+                {item.revision && <span className={unifiedStyles.u8}>当前 revision {item.revision}</span>}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '0.55rem' }}>
-                <select aria-label={item.label} value={item.value} onChange={event => item.setValue(event.target.value)} style={selectStyle}>
+              <div className={unifiedStyles.u9}>
+                <Select aria-label={item.label} value={item.value} onChange={event => item.setValue(event.target.value)} style={selectStyle}>
                   {item.options.map(option => <option key={option.key} value={option.key}>{optionLabel(option)}</option>)}
-                </select>
-                <button onClick={() => showPreview(item.kind)} style={{ padding: '0.55rem 0.9rem', border: '1px solid var(--border)', borderRadius: '7px', background: 'white', cursor: 'pointer' }}>预览</button>
+                </Select>
+                <Button variant="ghost" onClick={() => showPreview(item.kind)} className={unifiedStyles.u10}>预览</Button>
               </div>
             </section>
           ))}
           {preview && (
-            <section style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: '10px', maxHeight: '320px', overflow: 'auto' }}>
+            <section className={unifiedStyles.u11}>
               <strong>{preview.title}</strong>
-              <div style={{ marginTop: '0.75rem' }}>
+              <div className={unifiedStyles.u12}>
                 {preview.fileUrl ? <a href={preview.fileUrl} target="_blank" rel="noreferrer">在新窗口查看 PDF</a> : <MarkdownRenderer content={preview.content || '暂无内容'} />}
               </div>
             </section>

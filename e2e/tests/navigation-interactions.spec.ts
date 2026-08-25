@@ -66,8 +66,8 @@ test.describe('导航与顶栏交互巡检 @smoke', () => {
     await page.goto(`${organizationBase}/management`)
 
     const headerPanels = [
-      { button: page.getByRole('button', { name: /打开通知/ }), panel: page.getByRole('dialog', { name: '通知' }) },
-      { button: page.locator('button[aria-haspopup="dialog"]:not([aria-label^="打开通知"])').last(), panel: page.getByRole('dialog', { name: '切换身份' }) },
+      { button: page.getByRole('button', { name: /打开通知/ }), panel: page.getByRole('region', { name: '通知' }) },
+      { button: page.getByRole('button', { name: '切换身份' }), panel: page.getByRole('menu', { name: '切换身份' }) },
     ]
     for (const { button, panel } of headerPanels) {
       await button.click()

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './ProblemListDetailPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
@@ -467,7 +468,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                 {/* 题目表格 */}
                 {(section.Entries.length > 0 || sectionNewRows.length > 0) ? (
                   <div className={unifiedStyles.u12}>
-                    <table className={unifiedStyles.u13}>
+                    <TableRoot className={unifiedStyles.u13}>
                       <colgroup>
                         <col className={unifiedStyles.u14} />
                         {!isStudentView && <col className={unifiedStyles.u15} />}
@@ -476,27 +477,27 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                         {!isStudentView && <col className={unifiedStyles.u17} />}
                         {canEdit && !isStudentView && <col className={unifiedStyles.u18} />}
                       </colgroup>
-                      <thead>
-                        <tr className={unifiedStyles.u19}>
-                          <th className={unifiedStyles.u20}>#</th>
-                          {!isStudentView && <th className={unifiedStyles.u21}>OJ</th>}
-                          {!isStudentView && <th className={unifiedStyles.u21}>题号</th>}
-                          <th className={unifiedStyles.u21}>标题</th>
-                          {!isStudentView && <th className={unifiedStyles.u21}>备注</th>}
-                          {canEdit && !isStudentView && <th className={unifiedStyles.u20}>操作</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
+                      <TableHead>
+                        <TableRow className={unifiedStyles.u19}>
+                          <TableHeaderCell className={unifiedStyles.u20}>#</TableHeaderCell>
+                          {!isStudentView && <TableHeaderCell className={unifiedStyles.u21}>OJ</TableHeaderCell>}
+                          {!isStudentView && <TableHeaderCell className={unifiedStyles.u21}>题号</TableHeaderCell>}
+                          <TableHeaderCell className={unifiedStyles.u21}>标题</TableHeaderCell>
+                          {!isStudentView && <TableHeaderCell className={unifiedStyles.u21}>备注</TableHeaderCell>}
+                          {canEdit && !isStudentView && <TableHeaderCell className={unifiedStyles.u20}>操作</TableHeaderCell>}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
                         {section.Entries.map((entry, idx) => (
-                          <tr key={entry.id} className={unifiedStyles.u22}>
-                            <td className={unifiedStyles.u23}>{idx + 1}</td>
-                            {!isStudentView && <td className={unifiedStyles.u24}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</td>}
-                            {!isStudentView && <td className={unifiedStyles.u25}>
+                          <TableRow key={entry.id} className={unifiedStyles.u22}>
+                            <TableCell className={unifiedStyles.u23}>{idx + 1}</TableCell>
+                            {!isStudentView && <TableCell className={unifiedStyles.u24}>{getOjPlatformLabel(entry.Problem.ojBindings, entry.ojName)}</TableCell>}
+                            {!isStudentView && <TableCell className={unifiedStyles.u25}>
                               <Link href={`${pathPrefix}/problems/${entry.problemId}`} className={unifiedStyles.u26}>
                                 {entry.Problem.problemId}
                               </Link>
-                            </td>}
-                            <td className={unifiedStyles.u27}>
+                            </TableCell>}
+                            <TableCell className={unifiedStyles.u27}>
                               <span className={unifiedStyles.u28}>✓</span>
                               {!isStudentView ? (
                                 <Link href={`${pathPrefix}/problems/${entry.problemId}`} className={unifiedStyles.u29} title={entry.Problem.title}>
@@ -512,8 +513,8 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                                   {entry.Problem.title}
                                 </Button>
                               )}
-                            </td>
-                            {!isStudentView && <td className={unifiedStyles.u31}>
+                            </TableCell>
+                            {!isStudentView && <TableCell className={unifiedStyles.u31}>
                               {editingEntry === entry.id ? (
                                 <div className={unifiedStyles.u32}
                                   onBlur={(e) => {
@@ -537,9 +538,9 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                                   {entry.notes || (canEdit ? '点击添加' : '-')}
                                 </Button>
                               )}
-                            </td>}
+                            </TableCell>}
                             {canEdit && !isStudentView && (
-                              <td className={unifiedStyles.u35}>
+                              <TableCell className={unifiedStyles.u35}>
                                 <div className={unifiedStyles.u36}>
                                   <Button variant="ghost" onClick={() => handleMoveEntry(section.id, entry.id, 'up')} disabled={idx === 0}
                                     style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === 0 ? 0.3 : 1 }}>↑</Button>
@@ -548,41 +549,41 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                                   <Button variant="ghost" onClick={() => setDeleteEntryConfirm(entry.id)}
                                     className={unifiedStyles.u37}>✕</Button>
                                 </div>
-                              </td>
+                              </TableCell>
                             )}
-                          </tr>
+                          </TableRow>
                         ))}
 
                         {/* 新行 */}
                         {canEdit && !isStudentView && sectionNewRows.map((row) => (
-                          <tr key={row.id} className={unifiedStyles.u38}>
-                            <td className={unifiedStyles.u23}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</td>
-                            <td className={unifiedStyles.u25}>
+                          <TableRow key={row.id} className={unifiedStyles.u38}>
+                            <TableCell className={unifiedStyles.u23}>{section.Entries.length + sectionNewRows.indexOf(row) + 1}</TableCell>
+                            <TableCell className={unifiedStyles.u25}>
                               <Select aria-label="选择" value={row.ojName} onChange={e => updateNewRow(row.id, { ojName: e.target.value, resolved: null })}
                                 className={unifiedStyles.u39}>
                                 {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
                               </Select>
-                            </td>
-                            <td className={unifiedStyles.u25}>
+                            </TableCell>
+                            <TableCell className={unifiedStyles.u25}>
                               <Input type="text" value={row.problemCode}
                                 onChange={e => { updateNewRow(row.id, { problemCode: e.target.value, resolved: null }); handleResolveRow({ ...row, problemCode: e.target.value }) }}
                                 placeholder="输入题号" autoFocus
                                 className={unifiedStyles.u40}
                               />
-                            </td>
-                            <td className={unifiedStyles.u27}>
+                            </TableCell>
+                            <TableCell className={unifiedStyles.u27}>
                               {row.saving ? <span className={unifiedStyles.u41}>保存中...</span>
                                 : row.resolving ? <span className={unifiedStyles.u42}>检索中...</span>
                                 : row.resolved ? row.resolved.found ? <span><span className={unifiedStyles.u28}>✓</span><span className={unifiedStyles.u29}>{row.resolved.title}</span></span>
                                   : <span className={unifiedStyles.u43}><AlertTriangle aria-hidden="true" size={14} />题目不存在</span>
                                 : <span className={unifiedStyles.u42}>-</span>}
-                            </td>
-                            <td className={unifiedStyles.u25}>
+                            </TableCell>
+                            <TableCell className={unifiedStyles.u25}>
                               <Textarea value={row.notes} onChange={e => updateNewRow(row.id, { notes: e.target.value })}
                                 placeholder="备注" disabled={row.saving} rows={2} wrap="soft"
                                 className={unifiedStyles.u44} />
-                            </td>
-                            <td className={unifiedStyles.u35}>
+                            </TableCell>
+                            <TableCell className={unifiedStyles.u35}>
                               <div className={unifiedStyles.u36}>
                                 {row.saving ? <span className={unifiedStyles.u45}>保存中...</span>
                                   : row.resolved?.found ? <span className={unifiedStyles.u46}>✓ 已就绪</span>
@@ -590,11 +591,11 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                                   : null}
                                 {!row.saving && <Button variant="ghost" onClick={() => removeNewRow(row.id)} className={unifiedStyles.u37}>✕</Button>}
                               </div>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </TableRoot>
                   </div>
                 ) : (
                   <div className={unifiedStyles.u48}>暂无题目</div>

@@ -1,0 +1,54 @@
+.u1 {
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 1rem;
+}
+
+.u2 {
+  margin-bottom: 1rem;
+}
+
+.u3 {
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.u4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.u5 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.u6 {
+  font-size: 0.875rem;
+}
+
+.u7 {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+}
+
+.u8 {
+  padding: 0.25rem 0.5rem;
+  background: var(--primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.u9 {
+  text-align: center;
+  color: var(--gray-400);
+}

@@ -1,0 +1,82 @@
+.u1 {
+  padding: 4rem;
+  text-align: center;
+}
+
+.u2 {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.u3 {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--info-light);
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.u4 {
+  margin-top: 1rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: calc(100vh - 260px);
+}
+
+.u5 {
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  background: var(--gray-100);
+  padding: 0.8rem;
+  text-align: left;
+  width: 310px;
+}
+
+.u6 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--gray-100);
+  padding: 0.8rem;
+  min-width: 140px;
+}
+
+.u7 {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.u8 {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding: 0.75rem;
+}
+
+.u9 {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.u10 {
+  border-top: 1px solid var(--border);
+  text-align: center;
+  background: var(--gray-50);
+  color: var(--gray-300);
+  font-size: 1.2rem;
+}
+
+.u11 {
+  margin-left: 0.25rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--warning);
+}

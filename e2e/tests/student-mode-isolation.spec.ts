@@ -140,9 +140,9 @@ test.describe('personal workspace pages @smoke', () => {
     await page.goto('/personal/teams')
     await expect(page.getByText('E2E Personal Team')).toBeVisible()
 
-    const workspaceControl = page.locator('button[aria-haspopup="dialog"]:not([aria-label^="打开通知"])').last()
+    const workspaceControl = page.getByRole('button', { name: '切换身份' })
     await workspaceControl.click()
-    await page.getByRole('dialog', { name: '切换身份' }).getByRole('button', { name: /E2E School|校园/ }).click()
+    await page.getByRole('menu', { name: '切换身份' }).getByRole('menuitem', { name: /E2E School|校园/ }).click()
     await page.waitForURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/(?:overview|teams|homeworks|contests|problem-lists|rankings)$`))
 
     await page.goto(`${organizationBase}/teams`)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import collisionStyles from './page.collision.module.css'
 import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
@@ -214,7 +215,7 @@ export default function AdminPlatformBindingsPage() {
 
         {loading ? (
           <div className={unifiedStyles.u4}>
-            <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
+            <span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
           </div>
         ) : (
           <div className={unifiedStyles.u5}>

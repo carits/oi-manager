@@ -1,6 +1,8 @@
 'use client'
 
 import { JUDGE_RESULT_LABEL_MAP } from '@/lib/judge-constants'
+import unifiedStyles from './SubmissionJudgeResult.unified.module.css'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import type { CSSProperties } from 'react'
 import {
   buildJudgeResultRows,
@@ -43,57 +45,57 @@ export function SubmissionJudgeResult({
   const failedIndex = firstFailedCaseIndex(cases)
 
   return (
-    <section aria-label="评测详情" style={{ marginBottom: '1.5rem', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.8rem 1rem', background: 'var(--bg-muted)' }}>
+    <section aria-label="评测详情" className={unifiedStyles.u1}>
+      <div className={unifiedStyles.u2}>
         {judgeMode === 'oi' && score != null && (
           <strong style={{ fontSize: '1.1rem', color: score >= 100 ? 'var(--success-text)' : 'var(--warning-text)' }}>{score} / 100</strong>
         )}
         <strong>{verdictLabel(result)}</strong>
-        {judgeMode === 'acm' && failedIndex >= 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>失败测试点 #{failedIndex + 1}</span>}
+        {judgeMode === 'acm' && failedIndex >= 0 && <span className={unifiedStyles.u3}>失败测试点 #{failedIndex + 1}</span>}
       </div>
-      {rows.length > 0 && <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              <th style={headerCell}>#</th>
-              <th style={headerCell}>状态</th>
-              {judgeMode === 'oi' && <th style={{ ...headerCell, textAlign: 'right' }}>得分</th>}
-              <th style={{ ...headerCell, textAlign: 'right' }}>用时</th>
-              <th style={{ ...headerCell, textAlign: 'right' }}>内存</th>
-            </tr>
-          </thead>
-          <tbody>
+      {rows.length > 0 && <div className={unifiedStyles.u4}>
+        <TableRoot className={unifiedStyles.u5}>
+          <TableHead>
+            <TableRow className={unifiedStyles.u6}>
+              <TableHeaderCell style={headerCell}>#</TableHeaderCell>
+              <TableHeaderCell style={headerCell}>状态</TableHeaderCell>
+              {judgeMode === 'oi' && <TableHeaderCell style={{ ...headerCell, textAlign: 'right' }}>得分</TableHeaderCell>}
+              <TableHeaderCell style={{ ...headerCell, textAlign: 'right' }}>用时</TableHeaderCell>
+              <TableHeaderCell style={{ ...headerCell, textAlign: 'right' }}>内存</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {rows.map((row, rowIndex) => {
               if (row.kind === 'subtask') {
                 return (
-                  <tr key={`subtask-${row.subtask.id}-${rowIndex}`} style={{ background: 'var(--bg-muted)' }}>
-                    <td colSpan={judgeMode === 'oi' ? 5 : 4} style={{ padding: '0.6rem 0.75rem', fontWeight: 700 }}>
+                  <TableRow key={`subtask-${row.subtask.id}-${rowIndex}`} className={unifiedStyles.u7}>
+                    <TableCell colSpan={judgeMode === 'oi' ? 5 : 4} className={unifiedStyles.u8}>
                       Subtask {row.subtask.id}
-                      <span style={{ marginLeft: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>{row.subtask.cases.length} 个测试点 · {row.subtask.type}</span>
-                      <span style={{ marginLeft: '0.75rem', color: 'var(--primary)' }}>{row.subtask.score} 分</span>
-                    </td>
-                  </tr>
+                      <span className={unifiedStyles.u9}>{row.subtask.cases.length} 个测试点 · {row.subtask.type}</span>
+                      <span className={unifiedStyles.u10}>{row.subtask.score} 分</span>
+                    </TableCell>
+                  </TableRow>
                 )
               }
               const tone = CASE_TONE[row.testCase.result] || { mark: '✕', color: 'var(--error-text)' }
               return (
-                <tr key={`case-${row.index}-${rowIndex}`} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={bodyCell}>{row.index + 1}</td>
-                  <td style={bodyCell}>
+                <TableRow key={`case-${row.index}-${rowIndex}`} className={unifiedStyles.u11}>
+                  <TableCell style={bodyCell}>{row.index + 1}</TableCell>
+                  <TableCell style={bodyCell}>
                     <span style={{ color: tone.color, fontWeight: 700 }}>{tone.mark}</span>
-                    <span style={{ marginLeft: '0.4rem' }}>{row.testCase.result}</span>
+                    <span className={unifiedStyles.u12}>{row.testCase.result}</span>
                     {row.testCase.message && row.testCase.message !== row.testCase.result && (
-                      <div style={{ marginTop: '0.2rem', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'pre-wrap' }}>{row.testCase.message}</div>
+                      <div className={unifiedStyles.u13}>{row.testCase.message}</div>
                     )}
-                  </td>
-                  {judgeMode === 'oi' && <td style={{ ...bodyCell, textAlign: 'right', fontWeight: 600 }}>{row.testCase.score ?? '-'}</td>}
-                  <td style={{ ...bodyCell, textAlign: 'right' }}>{row.testCase.time != null ? `${row.testCase.time} ms` : '-'}</td>
-                  <td style={{ ...bodyCell, textAlign: 'right' }}>{formatJudgeMemory(row.testCase.memory)}</td>
-                </tr>
+                  </TableCell>
+                  {judgeMode === 'oi' && <TableCell style={{ ...bodyCell, textAlign: 'right', fontWeight: 600 }}>{row.testCase.score ?? '-'}</TableCell>}
+                  <TableCell style={{ ...bodyCell, textAlign: 'right' }}>{row.testCase.time != null ? `${row.testCase.time} ms` : '-'}</TableCell>
+                  <TableCell style={{ ...bodyCell, textAlign: 'right' }}>{formatJudgeMemory(row.testCase.memory)}</TableCell>
+                </TableRow>
               )
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </TableRoot>
       </div>}
     </section>
   )

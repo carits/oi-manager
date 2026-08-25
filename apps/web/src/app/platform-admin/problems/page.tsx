@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import collisionStyles from './page.collision.module.css'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
@@ -405,31 +407,31 @@ export default function PlatformAdminProblemsPage() {
   ) => (
     <>
       {loading ? (
-        <div className={unifiedStyles.u2}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+        <div className={unifiedStyles.u2}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
       ) : problems.length === 0 ? (
         <div className={unifiedStyles.u2}>暂无题目</div>
       ) : (
         <div className={unifiedStyles.u3}>
-          <table className={unifiedStyles.u4}>
-            <thead>
-              <tr className={unifiedStyles.u5}>
-                <th className={unifiedStyles.u6}>题号</th>
-                <th className={unifiedStyles.u6}>标题</th>
-                {showPlatform && <th className={unifiedStyles.u6}>来源</th>}
-                <th className={unifiedStyles.u6}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
+          <TableRoot className={unifiedStyles.u4}>
+            <TableHead>
+              <TableRow className={unifiedStyles.u5}>
+                <TableHeaderCell className={unifiedStyles.u6}>题号</TableHeaderCell>
+                <TableHeaderCell className={unifiedStyles.u6}>标题</TableHeaderCell>
+                {showPlatform && <TableHeaderCell className={unifiedStyles.u6}>来源</TableHeaderCell>}
+                <TableHeaderCell className={unifiedStyles.u6}>操作</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {problems.map((problem) => {
                 let source = problem.platform ? `${problem.platform} / ${problem.problemId}` : '-'
                 return (
-                  <tr key={problem.id} className={unifiedStyles.u5}>
-                    <td className={unifiedStyles.u7}>{problem.problemId}</td>
-                    <td className={unifiedStyles.u7}>
+                  <TableRow key={problem.id} className={unifiedStyles.u5}>
+                    <TableCell className={unifiedStyles.u7}>{problem.problemId}</TableCell>
+                    <TableCell className={unifiedStyles.u7}>
                       <Button variant="ghost" type="button" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} className={unifiedStyles.u8}>{problem.title}</Button>
-                    </td>
-                    {showPlatform && <td className={unifiedStyles.u9}>{source}</td>}
-                    <td className={unifiedStyles.u7}>
+                    </TableCell>
+                    {showPlatform && <TableCell className={unifiedStyles.u9}>{source}</TableCell>}
+                    <TableCell className={unifiedStyles.u7}>
                       <div className={unifiedStyles.u10}>
                         <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${problem.id}`)} style={smallBtnStyle()}>查看</Button>
                         <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${problem.id}/edit`)} style={smallBtnStyle()}>编辑</Button>
@@ -438,12 +440,12 @@ export default function PlatformAdminProblemsPage() {
                         )}
                         <Button variant="ghost" onClick={() => handleDeleteProblem(problem.id)} style={smallBtnStyle('danger')}>删除</Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </TableRoot>
           <Pagination
             currentPage={page}
             totalPages={totalPages}
@@ -573,30 +575,30 @@ export default function PlatformAdminProblemsPage() {
               </div>
 
               {jobsLoading ? (
-                <div className={unifiedStyles.u2}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+                <div className={unifiedStyles.u2}><span className={[("resource-skeleton-line"), collisionStyles.u2].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
               ) : !jobs || jobs.length === 0 ? (
                 <div className={unifiedStyles.u2}>暂无任务</div>
               ) : (
-                <table className={unifiedStyles.u4}>
-                  <thead>
-                    <tr className={unifiedStyles.u5}>
-                      <th className={unifiedStyles.u6}>平台</th>
-                      <th className={unifiedStyles.u6}>题号</th>
-                      <th className={unifiedStyles.u6}>状态</th>
-                      <th className={unifiedStyles.u6}>附件</th>
-                      <th className={unifiedStyles.u33}>信息</th>
-                      <th className={unifiedStyles.u6}>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <TableRoot className={unifiedStyles.u4}>
+                  <TableHead>
+                    <TableRow className={unifiedStyles.u5}>
+                      <TableHeaderCell className={unifiedStyles.u6}>平台</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u6}>题号</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u6}>状态</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u6}>附件</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u33}>信息</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u6}>操作</TableHeaderCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                     {jobs.map((job) => (
-                      <tr key={job.id} className={unifiedStyles.u5}>
-                        <td className={unifiedStyles.u7}>{job.platform}</td>
-                        <td className={unifiedStyles.u7}>{job.problemId}</td>
-                        <td className={unifiedStyles.u7}>{renderStatus(job.status)}</td>
-                        <td className={unifiedStyles.u7}>{renderAttachmentColumn(job)}</td>
-                        <td className={unifiedStyles.u34}>{job.message || '-'}</td>
-                        <td className={unifiedStyles.u7}>
+                      <TableRow key={job.id} className={unifiedStyles.u5}>
+                        <TableCell className={unifiedStyles.u7}>{job.platform}</TableCell>
+                        <TableCell className={unifiedStyles.u7}>{job.problemId}</TableCell>
+                        <TableCell className={unifiedStyles.u7}>{renderStatus(job.status)}</TableCell>
+                        <TableCell className={unifiedStyles.u7}>{renderAttachmentColumn(job)}</TableCell>
+                        <TableCell className={unifiedStyles.u34}>{job.message || '-'}</TableCell>
+                        <TableCell className={unifiedStyles.u7}>
                           <div className={unifiedStyles.u10}>
                             {job.createdProblemId && (
                               <Button variant="ghost" onClick={() => router.push(`/platform-admin/problems/${job.createdProblemId}`)} style={smallBtnStyle()}>查看</Button>
@@ -607,11 +609,11 @@ export default function PlatformAdminProblemsPage() {
                             </Button>
                             <Button variant="ghost" onClick={() => handleDelete(job.id)} style={smallBtnStyle()}>删除</Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </TableRoot>
               )}
               <Pagination
                 currentPage={jobsPage}

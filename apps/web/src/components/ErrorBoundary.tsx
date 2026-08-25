@@ -1,6 +1,8 @@
 'use client'
 
 import { Component, ReactNode } from 'react'
+import unifiedStyles from './ErrorBoundary.unified.module.css'
+import { Button } from '@/components/ui/Button'
 import { AlertTriangle } from 'lucide-react'
 
 interface Props {
@@ -25,53 +27,26 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '200px',
-          padding: '40px 20px',
-          textAlign: 'center',
-          color: 'var(--text-primary)',
-        }}>
+        <div className={unifiedStyles.u1}>
           <AlertTriangle
             aria-hidden="true"
             size={44}
             strokeWidth={1.5}
-            style={{ color: 'var(--warning)', marginBottom: '16px' }}
+            className={unifiedStyles.u2}
           />
-          <h2 style={{
-            fontSize: 'var(--text-xl)',
-            fontWeight: 600,
-            marginBottom: '8px',
-          }}>页面出现错误</h2>
-          <p style={{
-            color: 'var(--text-secondary)',
-            fontSize: 'var(--text-sm)',
-            marginBottom: '24px',
-            maxWidth: '400px',
-          }}>
+          <h2 className={unifiedStyles.u3}>页面出现错误</h2>
+          <p className={unifiedStyles.u4}>
             {this.state.error?.message || '发生了未知错误'}
           </p>
-          <button
+          <Button variant="ghost"
             onClick={() => {
               this.setState({ hasError: false, error: null })
               window.location.reload()
             }}
-            style={{
-              padding: '8px 24px',
-              background: 'var(--primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius)',
-              cursor: 'pointer',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 500,
-            }}
+            className={unifiedStyles.u5}
           >
             刷新页面
-          </button>
+          </Button>
         </div>
       )
     }

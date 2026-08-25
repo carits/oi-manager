@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react'
+import collisionStyles from './JudgeSettingsTab.collision.module.css'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './JudgeSettingsTab.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -771,7 +773,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 渲染 ====================
 
   if (loading) {
-    return <div className={unifiedStyles.u1}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+    return <div className={unifiedStyles.u1}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
   }
 
   return (
@@ -915,7 +917,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
               {checkerType === 'default' && (
                 <label className={unifiedStyles.u14}>
-                  <input type="checkbox" checked={ignoreTrailingSpace}
+                  <Input type="checkbox" checked={ignoreTrailingSpace}
                     onChange={(e) => { setIgnoreTrailingSpace(e.target.checked); if (!e.target.checked) setCheckerType('strict') }} />
                   忽略行末空格与文件尾回车
                 </label>
@@ -1016,7 +1018,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             <div style={cardStyle}>
               <div style={sectionTitle}>提交答案题配置</div>
               <label className={unifiedStyles.u16}>
-                <input type="checkbox" checked={submitAnswerMulti} onChange={(e) => setSubmitAnswerMulti(e.target.checked)} />
+                <Input type="checkbox" checked={submitAnswerMulti} onChange={(e) => setSubmitAnswerMulti(e.target.checked)} />
                 Multi-file（多文件提交）
               </label>
               {submitAnswerMulti && (
@@ -1073,7 +1075,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     background: langs.includes(lang.value) ? 'rgba(59, 130, 246, 0.06)' : 'transparent',
                     color: langs.includes(lang.value) ? 'var(--primary)' : 'var(--gray-600)',
                   }}>
-                    <input type="checkbox" checked={langs.includes(lang.value)}
+                    <Input type="checkbox" checked={langs.includes(lang.value)}
                       onChange={(e) => e.target.checked ? setLangs([...langs, lang.value]) : setLangs(langs.filter(l => l !== lang.value))} />
                     {lang.label}
                   </label>
@@ -1245,7 +1247,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           <div className={unifiedStyles.u48}>
             <label style={{ ...btnPrimary, cursor: checkerUploading ? 'not-allowed' : 'pointer' }}>
               {checkerUploading ? '上传中...' : '上传 Checker'}
-              <input ref={checkerInputRef} type="file" multiple accept=".cpp,.cc,.cxx" onChange={handleCheckerUpload} className={unifiedStyles.u49} disabled={checkerUploading} />
+              <Input ref={checkerInputRef} type="file" multiple accept=".cpp,.cc,.cxx" onChange={handleCheckerUpload} className={unifiedStyles.u49} disabled={checkerUploading} />
             </label>
             <span className={unifiedStyles.u5}>上传 Checker C++ 源文件；系统已内置 testlib.h。</span>
           </div>
@@ -1269,7 +1271,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               )}
               <label style={{ ...btnPrimary, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.7 : 1 }}>
                 {uploading ? '\u4e0a\u4f20\u4e2d...' : '\u4e0a\u4f20\u6587\u4ef6'}
-                <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" className={unifiedStyles.u49} disabled={uploading} />
+                <Input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" className={unifiedStyles.u49} disabled={uploading} />
               </label>
             </div>
           </div>
@@ -1299,36 +1301,36 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             if (!problemId) {
               return stagedFiles.length > 0 ? (
                 <div className={unifiedStyles.u58}>
-                  <table className={unifiedStyles.u59}>
-                    <thead>
-                      <tr className={unifiedStyles.u60}>
-                        <th className={unifiedStyles.u61}>文件名</th>
-                        <th className={unifiedStyles.u62}>大小</th>
-                        <th className={unifiedStyles.u62}>状态</th>
-                        <th className={unifiedStyles.u63}>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <TableRoot className={unifiedStyles.u59}>
+                    <TableHead>
+                      <TableRow className={unifiedStyles.u60}>
+                        <TableHeaderCell className={unifiedStyles.u61}>文件名</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u62}>大小</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u62}>状态</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u63}>操作</TableHeaderCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
                       {stagedFiles.map((file, i) => (
-                        <tr key={i} className={unifiedStyles.u64}>
-                          <td className={unifiedStyles.u65}>
+                        <TableRow key={i} className={unifiedStyles.u64}>
+                          <TableCell className={unifiedStyles.u65}>
                             <span style={{ color: file.name.endsWith('.in') ? 'var(--primary)' : file.name.endsWith('.out') || file.name.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
                               {file.name}
                             </span>
-                          </td>
-                          <td className={unifiedStyles.u66}>{formatFileSize(file.size)}</td>
-                          <td className={unifiedStyles.u67}>
+                          </TableCell>
+                          <TableCell className={unifiedStyles.u66}>{formatFileSize(file.size)}</TableCell>
+                          <TableCell className={unifiedStyles.u67}>
                             <span className={unifiedStyles.u68}>待上传</span>
-                          </td>
-                          <td className={unifiedStyles.u69}>
+                          </TableCell>
+                          <TableCell className={unifiedStyles.u69}>
                             <Button variant="ghost" type="button" onClick={() => handleDeleteFile('', file.name)} style={btnDanger}>
                               删除
                             </Button>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </TableRoot>
                 </div>
               ) : (
                 <div className={unifiedStyles.u45}>
@@ -1340,26 +1342,26 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             // 编辑模式：显示已上传文件
             return testdataFiles.length > 0 ? (
               <div className={unifiedStyles.u58}>
-                <table className={unifiedStyles.u59}>
-                  <thead>
-                    <tr className={unifiedStyles.u60}>
-                      <th className={unifiedStyles.u61}>文件名</th>
-                      <th className={unifiedStyles.u62}>大小</th>
-                      <th className={unifiedStyles.u70}>上传时间</th>
-                      <th className={unifiedStyles.u63}>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <TableRoot className={unifiedStyles.u59}>
+                  <TableHead>
+                    <TableRow className={unifiedStyles.u60}>
+                      <TableHeaderCell className={unifiedStyles.u61}>文件名</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u62}>大小</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u70}>上传时间</TableHeaderCell>
+                      <TableHeaderCell className={unifiedStyles.u63}>操作</TableHeaderCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                     {testdataFiles.map(file => (
-                      <tr key={file.id} className={unifiedStyles.u64}>
-                        <td className={unifiedStyles.u65}>
+                      <TableRow key={file.id} className={unifiedStyles.u64}>
+                        <TableCell className={unifiedStyles.u65}>
                           <span style={{ color: file.filename.endsWith('.in') ? 'var(--primary)' : file.filename.endsWith('.out') || file.filename.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
                             {file.filename}
                           </span>
-                        </td>
-                        <td className={unifiedStyles.u66}>{formatFileSize(file.size)}</td>
-                        <td className={unifiedStyles.u66}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</td>
-                        <td className={unifiedStyles.u69}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u66}>{formatFileSize(file.size)}</TableCell>
+                        <TableCell className={unifiedStyles.u66}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</TableCell>
+                        <TableCell className={unifiedStyles.u69}>
                           <div className={unifiedStyles.u71}>
                             <Button variant="ghost" type="button" onClick={() => handleDownloadFile(file)} disabled={downloadingFile === file.id}
                               style={{ ...btnOutline, padding: '0.25rem 0.5rem', fontSize: '0.75rem', opacity: downloadingFile === file.id ? 0.5 : 1 }}>
@@ -1370,11 +1372,11 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                               {deletingFile === file.id ? '...' : '\u5220\u9664'}
                             </Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </TableRoot>
               </div>
             ) : (
               <div className={unifiedStyles.u45}>

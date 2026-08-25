@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import collisionStyles from './TeamInviteListModal.collision.module.css'
+import unifiedStyles from './TeamInviteListModal.unified.module.css'
 import { CalendarDays, Trash2 } from 'lucide-react'
 import { DetailDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
@@ -109,7 +111,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
         }
       >
         {loading ? (
-          <div className={styles.modalEmpty}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+          <div className={styles.modalEmpty}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
         ) : pendingInvites.length > 0 ? (
           <div className={styles.inviteList}>
             {pendingInvites.map(invite => {
@@ -141,7 +143,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
                     size="sm"
                     icon={<Trash2 size={15} />}
                     onClick={() => handleCancelInvite(invite)}
-                    style={{ color: 'var(--danger)' }}
+                    className={unifiedStyles.u1}
                   >
                     取消邀请
                   </Button>

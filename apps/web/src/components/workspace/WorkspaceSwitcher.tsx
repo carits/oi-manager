@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { Check, ChevronDown, Search, School, ShieldCheck, UserRound } from 'lucide-react'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
@@ -56,9 +58,9 @@ export function WorkspaceSwitcher() {
   const shouldSearch = workspaces.filter(item => item.type === 'organization').length > 5
 
   return <div className={styles.root} ref={rootRef}>
-    <button className={styles.trigger} type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="dialog">
+    <Button variant="ghost" className={styles.trigger} type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu" aria-label="切换身份">
       <span className={styles.badge}>{current?.type === 'platform' ? <ShieldCheck size={17} /> : current?.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span className={styles.currentText}><strong>{title}</strong><small>{subtitle}</small></span><ChevronDown size={16} />
-    </button>
-    {open && <section className={styles.menu} role="menu" aria-label="切换身份"><header><strong>切换身份</strong></header>{shouldSearch && <label className={styles.search}><Search size={16} /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" /></label>}<div className={styles.list}>{visible.map(item => <button key={item.organizationId || item.type} className={styles.item} type="button" role="menuitem" onClick={() => select(item)}><span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : item.relationLabel}</small></span>{(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}</button>)}</div></section>}
+    </Button>
+    {open && <section className={styles.menu} role="menu" aria-label="切换身份"><header><strong>切换身份</strong></header>{shouldSearch && <label className={styles.search}><Search size={16} /><Input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索学校" /></label>}<div className={styles.list}>{visible.map(item => <Button variant="ghost" key={item.organizationId || item.type} className={styles.item} type="button" role="menuitem" onClick={() => select(item)}><span className={styles.itemBadge}>{item.type === 'platform' ? <ShieldCheck size={17} /> : item.type === 'personal' ? <UserRound size={17} /> : <School size={17} />}</span><span><strong>{item.type === 'platform' ? '平台管理' : item.type === 'personal' ? '个人' : item.organizationName}</strong><small>{item.type === 'platform' ? '平台管理员' : item.type === 'personal' ? user?.username : item.relationLabel}</small></span>{(item.organizationId === currentOrganization || (item.type === 'personal' && !currentOrganization)) && <Check className={styles.check} size={17} />}</Button>)}</div></section>}
   </div>
 }

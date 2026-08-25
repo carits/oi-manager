@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import unifiedStyles from './TeachersTab.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
@@ -195,7 +196,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
   return (
     <div className={managementListStyles.page}>
-      {showActions && isPrincipal && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}><Button onClick={() => addModal.open()}>添加教师</Button></div>}
+      {showActions && isPrincipal && <div className={unifiedStyles.u1}><Button onClick={() => addModal.open()}>添加教师</Button></div>}
       <ManagementToolbar total={total} noun="教师">
         <Input className={managementListStyles.search} value={filters.q} onChange={event => updateFilter('q', event.target.value)} placeholder="搜索姓名或用户名" aria-label="搜索教师" />
         <Select className={managementListStyles.select} value={filters.role} onChange={event => updateFilter('role', event.target.value)} aria-label="身份筛选"><option value="">身份：全部</option><option value="school_principal">学校负责人</option><option value="teacher">教师</option></Select>
@@ -270,8 +271,8 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
 
       {transferModal.isOpen && (
         <FormDialog isOpen={true} onClose={transferModal.close} title="转移学校负责人" size="md">
-          <div style={{ marginBottom: '1rem' }}>
-            <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '1rem' }}>
+          <div className={unifiedStyles.u2}>
+            <p className={unifiedStyles.u3}>
               选择新的学校负责人。转移后，您将失去学校负责人权限，新负责人将获得管理本校教师的权限。
             </p>
             <div style={formStyles.field}>
@@ -290,7 +291,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
               </Select>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <div className={unifiedStyles.u4}>
             <Button onClick={handleTransferPrincipal} disabled={transferring || !selectedNewPrincipal}>
               {transferring ? '转移中...' : '确认转移'}
             </Button>
@@ -382,7 +383,7 @@ function TeacherFormModal({
 
   return (
     <FormDialog isOpen={true} onClose={onClose} title={teacher ? '编辑教师' : '添加教师'} size="md">
-      <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
+      <form onSubmit={form.handleSubmit} className={unifiedStyles.u5}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名 *</label>
           <Input
@@ -451,15 +452,15 @@ function TeacherFormModal({
           />
         </div>
 
-        <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>
+        <div className={unifiedStyles.u6}>
           * 邮箱和电话至少填写一个
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-          <Button type="submit" disabled={submitting} style={{ flex: 1 }}>
+        <div className={unifiedStyles.u7}>
+          <Button type="submit" disabled={submitting} className={unifiedStyles.u8}>
             {submitting ? '保存中...' : '保存'}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose} style={{ flex: 1 }}>
+          <Button type="button" variant="secondary" onClick={onClose} className={unifiedStyles.u8}>
             取消
           </Button>
         </div>

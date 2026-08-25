@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import unifiedStyles from './page.unified.module.css'
 import { useRouter } from 'next/navigation'
 
 // 旧路由重定向到新路由
@@ -12,12 +13,7 @@ export default function SuperAdminRedirect() {
   }, [router])
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    }}>
+    <div className={unifiedStyles.u1}>
       <p>正在跳转...</p>
     </div>
   )

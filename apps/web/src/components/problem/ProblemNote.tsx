@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import collisionStyles from './ProblemNote.collision.module.css'
+import unifiedStyles from './ProblemNote.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter } from 'next/navigation'
@@ -177,8 +179,8 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
 
   if (loading) {
     return (
-      <div style={{ height: '100vh', background: 'var(--bg-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></span>
+      <div className={unifiedStyles.u1}>
+        <span className={unifiedStyles.u2}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></span>
       </div>
     )
   }
@@ -186,34 +188,19 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   if (!problem) return null
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-muted)' }}>
+    <div className={unifiedStyles.u3}>
       {/* 顶部栏 */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0.5rem 1rem',
-        background: 'white',
-        borderBottom: '1px solid var(--border)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div className={unifiedStyles.u4}>
+        <div className={unifiedStyles.u5}>
           <Button variant="ghost"
             onClick={() => router.push(`${pathPrefix}/problems/${problemId}`)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--gray-600)',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              padding: '0.25rem 0.5rem',
-              borderRadius: '4px'
-            }}
+            className={unifiedStyles.u6}
           >
             ← 返回
           </Button>
-          <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
-          <span style={{ color: 'var(--primary)', fontWeight: 500, fontSize: '0.8rem' }}>{problem.problemId}</span>
-          <h1 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>{problem.title}</h1>
+          <div className={unifiedStyles.u7} />
+          <span className={unifiedStyles.u8}>{problem.problemId}</span>
+          <h1 className={unifiedStyles.u9}>{problem.title}</h1>
           {problem.difficulty && (
             <span style={{
               fontSize: '0.7rem',
@@ -226,7 +213,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className={unifiedStyles.u5}>
           <div style={{
             padding: '0.25rem 0.5rem',
             borderRadius: '4px',
@@ -264,34 +251,17 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       </div>
 
       {/* 主内容区 */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', padding: '0.5rem', gap: '0.5rem' }}>
+      <div className={unifiedStyles.u10}>
         {/* 左侧：题目描述 */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'white',
-          borderRadius: '6px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            padding: '0.5rem 0.75rem',
-            background: 'var(--bg-muted)',
-            borderBottom: '1px solid var(--border)',
-            fontWeight: 500,
-            fontSize: '0.8rem',
-            color: 'var(--gray-600)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
+        <div className={unifiedStyles.u11}>
+          <div className={unifiedStyles.u12}>
             <span>📖</span>
             <span>题目描述</span>
-            <div style={{ flex: 1 }} />
-            {problem.timeLimit && <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>时间: {problem.timeLimit}ms</span>}
-            {problem.memoryLimit && <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>内存: {problem.memoryLimit}MB</span>}
+            <div className={unifiedStyles.u13} />
+            {problem.timeLimit && <span className={unifiedStyles.u14}>时间: {problem.timeLimit}ms</span>}
+            {problem.memoryLimit && <span className={unifiedStyles.u14}>内存: {problem.memoryLimit}MB</span>}
           </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
+          <div className={unifiedStyles.u15}>
             {(() => {
               // 优先使用新的多版本题面
               const visibleStatements = (problem.statements || []).filter(s => s.isVisible)
@@ -302,14 +272,14 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               if (stmt) {
                 if (stmt.format === 'pdf' && stmt.fileUrl) {
                   return (
-                    <object data={getPdfUrl(stmt.fileUrl) || ''} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }}>
+                    <object data={getPdfUrl(stmt.fileUrl) || ''} type="application/pdf" className={unifiedStyles.u16}>
                       <a href={getPdfUrl(stmt.fileUrl) || '#'} target="_blank">打开 PDF</a>
                     </object>
                   )
                 }
                 if (stmt.content) {
                   return (
-                    <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                    <div className={unifiedStyles.u17}>
                       <MarkdownRenderer content={stmt.content} />
                     </div>
                   )
@@ -319,22 +289,22 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               // 回退到旧字段
               if (problem.statementType === 'markdown' && problem.description) {
                 return (
-                  <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                  <div className={unifiedStyles.u17}>
                     <MarkdownRenderer content={problem.description} />
                   </div>
                 )
               }
               if (problem.statementType === 'pdf' && problem.statementPdfUrl) {
                 return (
-                  <object data={getPdfUrl(problem.statementPdfUrl) || ''} type="application/pdf" style={{ width: '100%', height: '100%', border: 'none' }}>
+                  <object data={getPdfUrl(problem.statementPdfUrl) || ''} type="application/pdf" className={unifiedStyles.u16}>
                     <a href={getPdfUrl(problem.statementPdfUrl) || '#'} target="_blank">打开 PDF</a>
                   </object>
                 )
               }
 
               return (
-                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
-                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📄</div>
+                <div className={unifiedStyles.u18}>
+                  <div className={unifiedStyles.u19}>📄</div>
                   <p>暂无题目描述</p>
                 </div>
               )
@@ -343,34 +313,17 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
         </div>
 
         {/* 右侧：思路记录 */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'white',
-          borderRadius: '6px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            padding: '0.5rem 0.75rem',
-            background: 'var(--bg-muted)',
-            borderBottom: '1px solid var(--border)',
-            fontWeight: 500,
-            fontSize: '0.8rem',
-            color: 'var(--gray-600)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
+        <div className={unifiedStyles.u11}>
+          <div className={unifiedStyles.u12}>
             <Pencil aria-hidden="true" size={14} />
             <span>思路记录</span>
-            <div style={{ flex: 1 }} />
+            <div className={unifiedStyles.u13} />
             <Button variant="ghost" onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
             <Button variant="ghost" onClick={() => setEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'preview' ? 'var(--primary)' : 'transparent', color: editMode === 'preview' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
             <Button variant="ghost" onClick={() => setEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'split' ? 'var(--primary)' : 'transparent', color: editMode === 'split' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div className={unifiedStyles.u20}>
             {(editMode === 'edit' || editMode === 'split') && (
               <Textarea
                 value={noteContent}
@@ -411,7 +364,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               />
             )}
 
-            {editMode === 'split' && <div style={{ width: '1px', background: 'var(--border)' }} />}
+            {editMode === 'split' && <div className={unifiedStyles.u21} />}
 
             {(editMode === 'preview' || editMode === 'split') && (
               <div style={{
@@ -424,11 +377,11 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
                 boxSizing: 'border-box'
               }}>
                 {noteContent.trim() ? (
-                  <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                  <div className={unifiedStyles.u17}>
                     <MarkdownRenderer content={noteContent} />
                   </div>
                 ) : (
-                  <div style={{ color: 'var(--gray-400)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>
+                  <div className={unifiedStyles.u22}>
                     暂无内容，开始编辑...
                   </div>
                 )}

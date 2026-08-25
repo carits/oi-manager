@@ -1,0 +1,89 @@
+.u1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.u2 {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.u3 {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.u4 {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+  padding: 0.65rem 0.8rem;
+  background: var(--gray-50);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.u5 {
+  margin-bottom: 1rem;
+}
+
+.u6 {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  min-width: 150px;
+  background: var(--bg-card);
+}
+
+.u7 {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.u8 {
+  font-size: 0.8rem;
+  color: var(--gray-400);
+}
+
+.u9 {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.u10 {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.u11 {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+
+.u12 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.u13 {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}

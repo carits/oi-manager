@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import unifiedStyles from './TrainingDetailPage.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -353,11 +354,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         {hideContent ? (
           <div className={styles.locked}>
             <div className={styles.lockedInner}><LockKeyhole size={36} aria-hidden="true" />
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{tl}尚未开始</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+            <h2 className={unifiedStyles.u1}>{tl}尚未开始</h2>
+            <p className={unifiedStyles.u2}>
               开始时间：{new Date(training.startTime).toLocaleString('zh-CN')}
             </p>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            <p className={unifiedStyles.u3}>
               请等待管理员开启{tl}后再查看内容
             </p>
             </div>
@@ -565,21 +566,15 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           })()}
           size="xl"
         >
-          <div style={{
-            fontSize: '0.875rem', color: 'var(--gray-500)', padding: '0.65rem 0.8rem',
-            background: 'var(--gray-50)', borderRadius: '6px', marginBottom: '1rem',
-          }}>
+          <div className={unifiedStyles.u4}>
             代码将使用本站测试数据进行本地评测。远程提交记录可在题目页同步归档，且不计入本场比赛。
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
+          <div className={unifiedStyles.u5}>
             <Select aria-label="选择"
               value={actions.submitLanguage}
               onChange={e => actions.setSubmitLanguage(e.target.value)}
-              style={{
-                padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px',
-                fontSize: '0.875rem', minWidth: '150px', background: 'white',
-              }}
+              className={unifiedStyles.u6}
             >
               {LANGUAGE_OPTIONS.filter(o => o.value).map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -602,8 +597,8 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           />
 
           {/* Submit button */}
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>
+          <div className={unifiedStyles.u7}>
+            <span className={unifiedStyles.u8}>
               本地评测 · 题目来源：{OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || selectedProblem?.platform || 'Carits'}
             </span>
             <Button variant="ghost"
@@ -656,37 +651,37 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         title="创建补题作业"
         size="md"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className={unifiedStyles.u9}>
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>标题</label>
+            <label className={unifiedStyles.u10}>标题</label>
             <Input
               value={makeupTitle}
               onChange={e => setMakeupTitle(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+              className={unifiedStyles.u11}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>开始时间</label>
+            <label className={unifiedStyles.u10}>开始时间</label>
             <Input
               type="datetime-local"
               value={makeupStartTime}
               onChange={e => setMakeupStartTime(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+              className={unifiedStyles.u11}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>结束时间</label>
+            <label className={unifiedStyles.u10}>结束时间</label>
             <Input
               type="datetime-local"
               value={makeupEndTime}
               onChange={e => setMakeupEndTime(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+              className={unifiedStyles.u11}
             />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <div className={unifiedStyles.u12}>
             <Button variant="ghost"
               onClick={() => setShowMakeupModal(false)}
-              style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
+              className={unifiedStyles.u13}
             >
               取消
             </Button>

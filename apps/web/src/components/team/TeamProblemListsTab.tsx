@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import collisionStyles from './TeamProblemListsTab.collision.module.css'
+import unifiedStyles from './TeamProblemListsTab.unified.module.css'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { usePathname } from 'next/navigation'
@@ -131,57 +133,42 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
   }
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+    return <div className={unifiedStyles.u1}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem' }}>
+      <div className={unifiedStyles.u2}>
         {effectiveCanManage && (
           <Button onClick={handleOpenAddModal}>+ 共享题单</Button>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--gray-500)' }}>
+        <div className={unifiedStyles.u3}>
           <p>暂无题单</p>
-          {effectiveCanManage && <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>点击「共享题单」将你的题单共享给团队</p>}
+          {effectiveCanManage && <p className={unifiedStyles.u4}>点击「共享题单」将你的题单共享给团队</p>}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+        <div className={unifiedStyles.u5}>
           {items.map(item => {
             const canRemove = !isStudent && (isOwner || item.addedBy === (userId || user?.userId))
             return (
               <div
                 key={item.id}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '1rem',
-                  background: 'white',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                }}
+                className={unifiedStyles.u6}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div className={unifiedStyles.u7}>
                   <Link
                     href={`${problemListsPrefix}/${item.problemListId}`}
-                    style={{ fontWeight: 600, color: 'var(--primary)', textDecoration: 'none', fontSize: '0.95rem' }}
+                    className={unifiedStyles.u8}
                   >
                     {item.problemList.title}
                   </Link>
                   {canRemove && (
                     <Button variant="ghost"
                       onClick={() => setRemoveTarget(item)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--gray-400)',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        padding: '0.2rem 0.4rem',
-                      }}
+                      className={unifiedStyles.u9}
                       title="移除"
                     >
                       ✕
@@ -189,11 +176,11 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
                   )}
                 </div>
                 {item.problemList.description && (
-                  <p style={{ fontSize: '0.8rem', color: 'var(--gray-500)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <p className={unifiedStyles.u10}>
                     {item.problemList.description}
                   </p>
                 )}
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: 'auto' }}>
+                <div className={unifiedStyles.u11}>
                   <span>创建者: {item.problemList.ownerName}</span>
                   <span>添加者: {item.addedByName}</span>
                   <span>{item.problemList.entryCount} 题</span>
@@ -211,16 +198,16 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
         title="共享题单给团队"
         size="lg"
       >
-        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+        <div className={unifiedStyles.u12}>
           {loadingMyLists ? (
-            <div style={{ textAlign: 'center', padding: '2rem' }}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+            <div className={unifiedStyles.u13}><span className={[("resource-skeleton-line"), collisionStyles.u2].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
           ) : myLists.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
+            <div className={unifiedStyles.u1}>
               <p>你还没有创建题单</p>
-              <Link href={`${problemListsPrefix}/new`} style={{ color: 'var(--primary)' }}>去创建</Link>
+              <Link href={`${problemListsPrefix}/new`} className={unifiedStyles.u14}>去创建</Link>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div className={unifiedStyles.u15}>
               {myLists.map(list => {
                 const alreadyAdded = alreadyAddedIds.has(list.id)
                 return (
@@ -237,13 +224,13 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 500 }}>{list.title}</div>
+                      <div className={unifiedStyles.u16}>{list.title}</div>
                       {list.description && (
-                        <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>{list.description}</div>
+                        <div className={unifiedStyles.u17}>{list.description}</div>
                       )}
                     </div>
                     {alreadyAdded ? (
-                      <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>已添加</span>
+                      <span className={unifiedStyles.u18}>已添加</span>
                     ) : (
                       <Button
                         onClick={() => handleAdd(list.id)}

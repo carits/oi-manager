@@ -6,8 +6,9 @@ type InputProps = React.InputHTMLAttributes<HTMLInputElement>
 type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>
 type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement>
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ className = '', ...props }, ref) {
-  return <input ref={ref} className={`${styles.formControl} ${className}`.trim()} {...props} />
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ className = '', type = 'text', ...props }, ref) {
+  const isNativeChoice = type === 'checkbox' || type === 'radio' || type === 'file'
+  return <input ref={ref} type={type} className={`${isNativeChoice ? '' : styles.formControl} ${className}`.trim() || undefined} {...props} />
 })
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ className = '', ...props }, ref) {
   return <textarea ref={ref} className={`${styles.formControl} ${className}`.trim()} {...props} />

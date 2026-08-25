@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Bell, Edit3, UsersRound } from 'lucide-react'
@@ -106,7 +107,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
             </div>
             {editingAnnouncement ? (
               <div className={styles.announcementEditor}>
-                <textarea value={announcement} onChange={event => setAnnouncement(event.target.value)} placeholder="请输入学校公告，支持 Markdown" />
+                <Textarea value={announcement} onChange={event => setAnnouncement(event.target.value)} placeholder="请输入学校公告，支持 Markdown" />
                 <div className={styles.editorActions}><Button onClick={saveAnnouncement} disabled={saving}>{saving ? '保存中...' : '保存公告'}</Button></div>
               </div>
             ) : school.announcement ? (

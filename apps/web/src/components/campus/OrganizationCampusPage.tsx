@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import unifiedStyles from './OrganizationCampusPage.unified.module.css'
 import { useParams } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
@@ -26,9 +27,9 @@ export default function OrganizationCampusPage() {
   }, [organizationId])
   useEffect(() => { void fetchCampus() }, [fetchCampus])
   if (loading) return <PageLoadingFrame title="校园" />
-  if (!school) return <div style={{ padding: '2rem', textAlign: 'center' }}>未找到校园资料</div>
+  if (!school) return <div className={unifiedStyles.u1}>未找到校园资料</div>
   const endpoint = `/api/organizations/${organizationId}/members/campus`
-  return <div style={{ minHeight: '100vh', background: 'var(--gray-50)', padding: 'clamp(1rem, 3vw, 2rem)' }}>
+  return <div className={unifiedStyles.u2}>
     <HomeTab school={school} isPrincipal={isPrincipal} onAnnouncementUpdate={fetchCampus} onEditSchool={() => setEditing(true)} canViewWallet={user?.organizationRole === 'teacher' || isPrincipal} announcementEndpoint={`${endpoint}/announcement`} walletHref={`/org/${organizationId}/management?tab=wallet`} />
     {editing && <EditSchoolModal school={school} endpoint={endpoint} onClose={() => setEditing(false)} onSuccess={fetchCampus} />}
   </div>

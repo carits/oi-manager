@@ -1,6 +1,7 @@
 'use client'
 
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { Button } from '@/components/ui/Button'
 import type { TrainingInfo, ProblemListEntry } from '../types'
 import { trainingProblemCode, trainingProblemTitle } from '../problem-label'
@@ -92,29 +93,29 @@ export function TrainingProblemList({
   return (
     <div className={styles.surface}>
       <div className={styles.scroll}>
-        <table className={`${styles.table} ${styles.problemListTable} ${sourceVisible ? styles.problemListWithSource : styles.problemListWithoutSource}`}>
-          <thead>
-            <tr>
-              <th className={styles.problemStatusColumn}>状态</th>
-              <th className={styles.problemSequenceColumn}>序号</th>
-              {sourceVisible && <th className={styles.problemSourceColumn}>来源</th>}
-              <th>标题</th>
-            </tr>
-          </thead>
-          <tbody>
+        <TableRoot className={`${styles.table} ${styles.problemListTable} ${sourceVisible ? styles.problemListWithSource : styles.problemListWithoutSource}`}>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell className={styles.problemStatusColumn}>状态</TableHeaderCell>
+              <TableHeaderCell className={styles.problemSequenceColumn}>序号</TableHeaderCell>
+              {sourceVisible && <TableHeaderCell className={styles.problemSourceColumn}>来源</TableHeaderCell>}
+              <TableHeaderCell>标题</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {problemListData.length === 0 && (
-              <tr><td colSpan={sourceVisible ? 4 : 3} className={styles.empty}>暂无题目</td></tr>
+              <TableRow><TableCell colSpan={sourceVisible ? 4 : 3} className={styles.empty}>暂无题目</TableCell></TableRow>
             )}
             {problemListData.map(problem => {
               const title = trainingProblemTitle(problem)
               return (
-                <tr key={problem.id}>
-                  <td className={styles.problemStatusColumn}>{renderStatus(problem, training)}</td>
-                  <td className={styles.problemSequenceColumn}>
+                <TableRow key={problem.id}>
+                  <TableCell className={styles.problemStatusColumn}>{renderStatus(problem, training)}</TableCell>
+                  <TableCell className={styles.problemSequenceColumn}>
                     <span className={styles.problemCode}>{trainingProblemCode(problem.orderIndex)}</span>
-                  </td>
-                  {sourceVisible && <td className={styles.problemSourceColumn}>{renderSource(problem)}</td>}
-                  <td className={styles.problemTitleCell}>
+                  </TableCell>
+                  {sourceVisible && <TableCell className={styles.problemSourceColumn}>{renderSource(problem)}</TableCell>}
+                  <TableCell className={styles.problemTitleCell}>
                     <Button variant="ghost"
                       type="button"
                       className={styles.problemTitleButton}
@@ -123,12 +124,12 @@ export function TrainingProblemList({
                     >
                       {title}
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </TableRoot>
       </div>
     </div>
   )

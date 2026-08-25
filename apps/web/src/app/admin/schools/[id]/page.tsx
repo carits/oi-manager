@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './page.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
@@ -253,28 +254,28 @@ export default function AdminSchoolDetailPage() {
                   <p className={unifiedStyles.u17}>暂无学生数据</p>
                 ) : (
                   <>
-                    <table className={unifiedStyles.u18}>
-                      <thead>
-                        <tr className={unifiedStyles.u19}>
-                          <th className={unifiedStyles.u20}>姓名</th>
-                          <th className={unifiedStyles.u20}>用户名</th>
-                          <th className={unifiedStyles.u20}>Rating</th>
-                          <th className={unifiedStyles.u20}>入学年份</th>
-                          <th className={unifiedStyles.u20}>主教练</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <TableRoot className={unifiedStyles.u18}>
+                      <TableHead>
+                        <TableRow className={unifiedStyles.u19}>
+                          <TableHeaderCell className={unifiedStyles.u20}>姓名</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>用户名</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>Rating</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>入学年份</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>主教练</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
                         {students.map((student) => (
-                          <tr key={student.id} className={unifiedStyles.u19}>
-                            <td className={unifiedStyles.u21}>{student.name}</td>
-                            <td className={unifiedStyles.u21}>{student.user.username}</td>
-                            <td className={unifiedStyles.u22}>{student.rating}</td>
-                            <td className={unifiedStyles.u21}>{student.enrollmentYear || '-'}</td>
-                            <td className={unifiedStyles.u21}>{student.headTeacher?.name || '-'}</td>
-                          </tr>
+                          <TableRow key={student.id} className={unifiedStyles.u19}>
+                            <TableCell className={unifiedStyles.u21}>{student.name}</TableCell>
+                            <TableCell className={unifiedStyles.u21}>{student.user.username}</TableCell>
+                            <TableCell className={unifiedStyles.u22}>{student.rating}</TableCell>
+                            <TableCell className={unifiedStyles.u21}>{student.enrollmentYear || '-'}</TableCell>
+                            <TableCell className={unifiedStyles.u21}>{student.headTeacher?.name || '-'}</TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </TableRoot>
                     <Pagination
                       currentPage={studentPage}
                       totalPages={Math.ceil(studentTotal / pageSize)}
@@ -298,23 +299,23 @@ export default function AdminSchoolDetailPage() {
                   <p className={unifiedStyles.u17}>暂无教师数据</p>
                 ) : (
                   <>
-                    <table className={unifiedStyles.u18}>
-                      <thead>
-                        <tr className={unifiedStyles.u19}>
-                          <th className={unifiedStyles.u20}>姓名</th>
-                          <th className={unifiedStyles.u20}>用户名</th>
-                          <th className={unifiedStyles.u20}>职称</th>
-                          <th className={unifiedStyles.u20}>角色</th>
-                          <th className={unifiedStyles.u20}>联系方式</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <TableRoot className={unifiedStyles.u18}>
+                      <TableHead>
+                        <TableRow className={unifiedStyles.u19}>
+                          <TableHeaderCell className={unifiedStyles.u20}>姓名</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>用户名</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>职称</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>角色</TableHeaderCell>
+                          <TableHeaderCell className={unifiedStyles.u20}>联系方式</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
                         {teachers.map((teacher) => (
-                          <tr key={teacher.id} className={unifiedStyles.u19}>
-                            <td className={unifiedStyles.u21}>{teacher.name}</td>
-                            <td className={unifiedStyles.u21}>{teacher.user.username}</td>
-                            <td className={unifiedStyles.u21}>{teacher.title || '-'}</td>
-                            <td className={unifiedStyles.u21}>
+                          <TableRow key={teacher.id} className={unifiedStyles.u19}>
+                            <TableCell className={unifiedStyles.u21}>{teacher.name}</TableCell>
+                            <TableCell className={unifiedStyles.u21}>{teacher.user.username}</TableCell>
+                            <TableCell className={unifiedStyles.u21}>{teacher.title || '-'}</TableCell>
+                            <TableCell className={unifiedStyles.u21}>
                               <span style={{
                                 padding: '0.125rem 0.5rem',
                                 borderRadius: '4px',
@@ -324,14 +325,14 @@ export default function AdminSchoolDetailPage() {
                               }}>
                                 {teacher.user.role === 'school_principal' ? '负责人' : '教师'}
                               </span>
-                            </td>
-                            <td className={unifiedStyles.u21}>
+                            </TableCell>
+                            <TableCell className={unifiedStyles.u21}>
                               {teacher.email || teacher.phone || '-'}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </TableRoot>
                     <Pagination
                       currentPage={teacherPage}
                       totalPages={Math.ceil(teacherTotal / pageSize)}

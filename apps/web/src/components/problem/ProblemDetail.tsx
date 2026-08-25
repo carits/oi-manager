@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import collisionStyles from './ProblemDetail.collision.module.css'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './ProblemDetail.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -641,7 +643,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   if (loading) {
     return (
       <div className={unifiedStyles.u1}>
-        <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
+        <span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
       </div>
     )
   }
@@ -965,7 +967,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             <div className={unifiedStyles.u25}>
               {attachmentsLoading ? (
                 <div className={unifiedStyles.u26}>
-                  <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
+                  <span className={[("resource-skeleton-line"), collisionStyles.u2].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
                 </div>
               ) : attachments.length === 0 ? (
                 <div className={unifiedStyles.u26}>
@@ -1012,44 +1014,44 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           {/* 提交记录 Tab */}
           {activeTab === 'records' && (
             <div className={unifiedStyles.u37}>
-              <table className={unifiedStyles.u38}>
-                <thead>
-                  <tr className={unifiedStyles.u39}>
-                    <th className={unifiedStyles.u40}>评测ID</th>
-                    <th className={unifiedStyles.u40}>用户名</th>
-                    <th className={unifiedStyles.u40}>评测结果</th>
-                    <th className={unifiedStyles.u40}>类型</th>
-                    <th className={unifiedStyles.u40}>耗时(MS)</th>
-                    <th className={unifiedStyles.u40}>内存(MB)</th>
-                    <th className={unifiedStyles.u40}>代码长度(B)</th>
-                    <th className={unifiedStyles.u40}>语言</th>
-                    <th className={unifiedStyles.u40}>提交时间</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <TableRoot className={unifiedStyles.u38}>
+                <TableHead>
+                  <TableRow className={unifiedStyles.u39}>
+                    <TableHeaderCell className={unifiedStyles.u40}>评测ID</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>用户名</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>评测结果</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>类型</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>耗时(MS)</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>内存(MB)</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>代码长度(B)</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>语言</TableHeaderCell>
+                    <TableHeaderCell className={unifiedStyles.u40}>提交时间</TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {problemSubmissionsLoading ? (
-                    <tr>
-                      <td colSpan={9} className={unifiedStyles.u41}>
-                        <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
-                      </td>
-                    </tr>
+                    <TableRow>
+                      <TableCell colSpan={9} className={unifiedStyles.u41}>
+                        <span className={[("resource-skeleton-line"), collisionStyles.u3].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
+                      </TableCell>
+                    </TableRow>
                   ) : problemSubmissions.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className={unifiedStyles.u41}>
+                    <TableRow>
+                      <TableCell colSpan={9} className={unifiedStyles.u41}>
                         暂无提交记录
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     problemSubmissions.map(s => (
-                      <tr key={s.id} className={unifiedStyles.u42}>
-                        <td
+                      <TableRow key={s.id} className={unifiedStyles.u42}>
+                        <TableCell
                           onClick={() => {
                             router.push(`${pathPrefix}/submissions/${s.id}`)
                           }}
                           className={unifiedStyles.u43}
-                        >#{s.id}</td>
-                        <td className={unifiedStyles.u44}>{s.username}</td>
-                        <td className={unifiedStyles.u44}>
+                        >#{s.id}</TableCell>
+                        <TableCell className={unifiedStyles.u44}>{s.username}</TableCell>
+                        <TableCell className={unifiedStyles.u44}>
                           <span style={{
                             display: 'inline-block',
                             padding: '2px 8px',
@@ -1061,27 +1063,27 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                           }}>
                             {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
                           </span>
-                        </td>
-                        <td className={unifiedStyles.u45}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u45}>
                           {s.submitMethod === 'archive' ? '远程归档' : '本地评测'}
-                        </td>
-                        <td className={unifiedStyles.u44}>{s.timeUsed ?? '-'}</td>
-                        <td className={unifiedStyles.u44}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</td>
-                        <td className={unifiedStyles.u44}>{s.codeLength ?? '-'}</td>
-                        <td
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u44}>{s.timeUsed ?? '-'}</TableCell>
+                        <TableCell className={unifiedStyles.u44}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</TableCell>
+                        <TableCell className={unifiedStyles.u44}>{s.codeLength ?? '-'}</TableCell>
+                        <TableCell
                           onClick={() => setDetailSubmissionId(s.id)}
                           className={unifiedStyles.u46}
                         >
                           {getLanguageLabel(s.language)}
-                        </td>
-                        <td className={unifiedStyles.u47}>
+                        </TableCell>
+                        <TableCell className={unifiedStyles.u47}>
                           {s.submittedAt ? new Date(s.submittedAt).toLocaleString('zh-CN') : '-'}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </TableRoot>
             </div>
           )}
         </div>

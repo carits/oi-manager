@@ -1,0 +1,38 @@
+.u1 {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: var(--bg-page);
+}
+
+.u2 {
+  max-width: 32rem;
+  text-align: center;
+}
+
+.u3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.u4 {
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.u5 {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.u6 {
+  display: inline-block;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  background: var(--bg-card);
+  text-decoration: none;
+}

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import collisionStyles from './page.collision.module.css'
+import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
@@ -188,20 +190,20 @@ export default function StudentPlatformBindingsPage() {
 
   return (
     <>
-      <div style={{ padding: '1rem 0' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+      <div className={unifiedStyles.u1}>
+        <h2 className={unifiedStyles.u2}>
           平台绑定
         </h2>
-        <p style={{ color: 'var(--gray-500)', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+        <p className={unifiedStyles.u3}>
           绑定您的 OJ 平台账号，以便同步题目和成绩数据
         </p>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-            <span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" />
+          <div className={unifiedStyles.u4}>
+            <span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '1rem', maxWidth: '600px' }}>
+          <div className={unifiedStyles.u5}>
             {PLATFORMS.map((platform) => {
               const status = getBindingStatus(platform.id)
               return (
@@ -211,7 +213,7 @@ export default function StudentPlatformBindingsPage() {
                   onClick={() => handlePlatformClick(platform.id)}
                   className={styles.platformCard}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div className={unifiedStyles.u6}>
                     <div
                       style={{
                         width: '40px',
@@ -229,11 +231,11 @@ export default function StudentPlatformBindingsPage() {
                       {platform.name.charAt(0)}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>{platform.name}</div>
+                      <div className={unifiedStyles.u7}>{platform.name}</div>
                       <div style={{ fontSize: '0.875rem', color: status.color }}>{status.text}</div>
                     </div>
                   </div>
-                  <span style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>▶</span>
+                  <span className={unifiedStyles.u8}>▶</span>
                 </Button>
               )
             })}
@@ -248,9 +250,9 @@ export default function StudentPlatformBindingsPage() {
         title={`绑定 ${selectedPlatformInfo?.name || ''} 账号`}
         size="md"
       >
-        <div style={{ padding: '0.5rem 0' }}>
+        <div className={unifiedStyles.u9}>
           {/* 平台图标 */}
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div className={unifiedStyles.u10}>
             <div
               style={{
                 width: '60px',
@@ -272,27 +274,13 @@ export default function StudentPlatformBindingsPage() {
 
           {/* 当前绑定状态 */}
           {currentBinding && currentBinding.bindingStatus === 'bound' && (
-            <div style={{
-              padding: '0.75rem 1rem',
-              background: 'var(--success-bg, #dcfce7)',
-              borderRadius: '6px',
-              marginBottom: '1rem',
-              color: 'var(--success, #16a34a)',
-              fontSize: '0.875rem'
-            }}>
+            <div className={unifiedStyles.u20}>
               已绑定: {currentBinding.platformUsername}
             </div>
           )}
 
           {currentBinding && currentBinding.bindingStatus === 'expired' && (
-            <div style={{
-              padding: '0.75rem 1rem',
-              background: 'var(--error-bg, #fee2e2)',
-              borderRadius: '6px',
-              marginBottom: '1rem',
-              color: 'var(--error, #dc2626)',
-              fontSize: '0.875rem'
-            }}>
+            <div className={unifiedStyles.u21}>
               已失效: {currentBinding.statusMessage || '请重新绑定'}
             </div>
           )}
@@ -301,85 +289,57 @@ export default function StudentPlatformBindingsPage() {
           {configSchema ? (
             <div>
               {configSchema.fields.map((field) => (
-                <div key={field.key} style={{ marginBottom: '1rem' }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    marginBottom: '0.5rem',
-                    color: 'var(--gray-700)'
-                  }}>
+                <div key={field.key} className={unifiedStyles.u11}>
+                  <label className={unifiedStyles.u12}>
                     {field.label}
-                    {field.required && <span style={{ color: 'var(--error)', marginLeft: '0.25rem' }}>*</span>}
+                    {field.required && <span className={unifiedStyles.u13}>*</span>}
                   </label>
                   <Input
                     type={field.type}
                     value={configValues[field.key] || ''}
                     onChange={(e) => setConfigValues({ ...configValues, [field.key]: e.target.value })}
                     placeholder={field.placeholder}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem 0.75rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem',
-                      boxSizing: 'border-box'
-                    }}
+                    className={unifiedStyles.u14}
                   />
                 </div>
               ))}
 
               {/* 帮助文本 */}
               {configSchema.helpText && (
-                <div style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--gray-50)',
-                  borderRadius: '6px',
-                  marginBottom: '1rem',
-                  fontSize: '0.75rem',
-                  color: 'var(--gray-600)',
-                  lineHeight: 1.5
-                }}>
+                <div className={unifiedStyles.u15}>
                     {configSchema.helpText}
                   </div>
                 )}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--gray-500)' }}>
+            <div className={unifiedStyles.u16}>
               <p>该平台绑定功能暂未开放，敬请期待</p>
             </div>
           )}
 
           {/* 错误提示 */}
           {error && (
-            <div style={{
-              padding: '0.75rem 1rem',
-              background: 'var(--error-bg, #fee2e2)',
-              borderRadius: '6px',
-              marginBottom: '1rem',
-              color: 'var(--error, #dc2626)',
-              fontSize: '0.875rem'
-            }}>
+            <div className={unifiedStyles.u22}>
               {error}
             </div>
           )}
         </div>
 
         {/* 操作按钮 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginTop: '1rem' }}>
+        <div className={unifiedStyles.u17}>
           <div>
             {currentBinding && currentBinding.bindingStatus !== 'unbound' && (
               <Button
                 variant="secondary"
                 onClick={handleUnbind}
                 disabled={submitting}
-                style={{ color: 'var(--error)' }}
+                className={unifiedStyles.u18}
               >
                 解除绑定
               </Button>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className={unifiedStyles.u19}>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>
               取消
             </Button>

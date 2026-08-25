@@ -1,0 +1,35 @@
+.u1 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.u2 {
+  margin-bottom: 0.85rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--info-light);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.u3 {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.u4 {
+  color: var(--primary);
+}
+
+.u5 {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--gray-50);
+}
+
+.u6 {
+  display: block;
+  margin-top: 0.7rem;
+}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import unifiedStyles from './page.unified.module.css'
 import { useParams, useRouter } from 'next/navigation'
 import TeacherHome from '@/components/organization-pages/teacher/page'
 import StudentHome from '@/components/organization-pages/student/page'
@@ -74,7 +75,7 @@ export default function OrgPage() {
   }, [module, organizationId, ready, router, student, studentModuleAllowed])
 
   if (!ready || !studentModuleAllowed || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
-  if (loadError && !workspaceRole) return <main style={{ maxWidth: 720, margin: '0 auto', padding: '4rem 1.5rem' }}><h1>校园工作区无法打开</h1><p>{loadError}</p></main>
+  if (loadError && !workspaceRole) return <main className={unifiedStyles.u1}><h1>校园工作区无法打开</h1><p>{loadError}</p></main>
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return <OrganizationCampusPage />
   if (module === 'management' && !student) return <CampusManagementPage />

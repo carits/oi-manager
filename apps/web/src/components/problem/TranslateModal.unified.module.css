@@ -1,0 +1,45 @@
+.u1 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.u2 {
+  padding: 0.5rem 1rem;
+  background: var(--gray-100);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.u3 {
+  padding: 0.5rem 0;
+}
+
+.u4 {
+  margin-bottom: 0.75rem;
+}
+
+.u5 {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+  color: var(--gray-700);
+}
+
+.u6 {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: var(--bg-card);
+}
+
+.u7 {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--gray-500);
+}

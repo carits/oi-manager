@@ -16,7 +16,8 @@ source_of_truth: apps/web/src/components/ui
 | 筛选 | `Toolbar`、`TableToolbar` | 筛选在左，主要或批量操作在右 |
 | 表单 | `FormField` + `Input/Textarea/Select` | 错误与字段关联，不自行写标签间距 |
 | 选择 | `Checkbox/RadioGroup/Switch/Combobox` | 布尔、互斥、开关和可搜索集合分别使用对应组件 |
-| 数据 | `DataTable`、`Pagination` | 表格负责加载、错误、空数据、键盘行操作 |
+| 数据 | `DataTable`、`Pagination` | 普通数据表负责加载、错误、空数据、键盘行操作 |
+| 复杂表格 | `TablePrimitives` | 排行、测试图和矩阵保持原生表格语义，但不得在业务层直接创建标签 |
 | 状态 | `StatusBadge`、`Empty`、`LoadError` | 状态不能只靠颜色表达 |
 | 操作 | `Button/IconButton/Menu/Popover` | 图标按钮必须有 `aria-label` |
 | 表单弹窗 | `FormDialog` | 尺寸预设、dirty 关闭确认、提交中禁止关闭 |
@@ -45,3 +46,7 @@ pnpm ui:state-check
 
 迁移一个文件后删除或降低其基线数值。禁止为了让新增违规通过而运行基线更新；确需机械重建时，
 提交说明必须包含规则总数下降前后对比。
+
+当前零基线规则包括业务层原生按钮、表单标签、表格标签、自定义 Dialog、直接 Modal 和任意弹窗宽度。
+`staticInlineStyle` 只登记 174 处经过复核的动态尺寸、坐标、可视化状态和 CSS 自定义变量；静态视觉值必须
+进入 CSS Modules。`Input` 对文本控件应用统一外观，对 checkbox、radio 和 file 保留原生交互尺寸。

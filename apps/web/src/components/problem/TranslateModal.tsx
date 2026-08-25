@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import unifiedStyles from './TranslateModal.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 
 const LANGUAGE_OPTIONS = [
@@ -29,22 +32,15 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
       title="AI 翻译"
       size="lg"
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-          <button
+        <div className={unifiedStyles.u1}>
+          <Button variant="ghost"
             onClick={onCancel}
             disabled={loading}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--gray-100)',
-              border: '1px solid var(--border)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem'
-            }}
+            className={unifiedStyles.u2}
           >
             取消
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             onClick={() => onConfirm(targetLang)}
             disabled={loading || availableOptions.length === 0}
             style={{
@@ -60,34 +56,27 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
             }}
           >
             {loading ? '翻译中...' : '确认翻译'}
-          </button>
+          </Button>
         </div>
       }
     >
-      <div style={{ padding: '0.5rem 0' }}>
-        <div style={{ marginBottom: '0.75rem' }}>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.375rem', color: 'var(--gray-700)' }}>
+      <div className={unifiedStyles.u3}>
+        <div className={unifiedStyles.u4}>
+          <label className={unifiedStyles.u5}>
             翻译到
           </label>
-          <select aria-label="选择"
+          <Select aria-label="选择"
             value={targetLang}
             onChange={(e) => setTargetLang(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.5rem 0.75rem',
-              border: '1px solid var(--border)',
-              borderRadius: '4px',
-              fontSize: '0.875rem',
-              background: 'white'
-            }}
+            className={unifiedStyles.u6}
           >
             {availableOptions.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
         {availableOptions.length === 0 && (
-          <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--gray-500)' }}>
+          <div className={unifiedStyles.u7}>
             当前题面仅有一种语言版本，无法翻译。
           </div>
         )}

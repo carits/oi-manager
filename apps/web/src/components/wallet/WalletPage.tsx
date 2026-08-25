@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import { CircleDollarSign, ReceiptText } from 'lucide-react'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -47,10 +48,10 @@ export function WalletPage({ scope, endpoint, embedded = false }: { scope: 'pers
           <div className={styles.records}>
             <div className={styles.recordsHeader}><ReceiptText size={17} aria-hidden="true" /><h2>资产记录</h2></div>
             <div className={styles.tableWrap}>
-              <table>
-                <thead><tr><th>时间</th><th>类型</th><th>来源/用途</th><th>变动</th><th>余额变化</th></tr></thead>
-                <tbody>{entries.map(item => <tr key={item.id}><td>{new Date(item.createdAt).toLocaleString('zh-CN')}</td><td>{item.type}</td><td>{item.source}</td><td>{item.amount}</td><td>{item.balanceAfter}</td></tr>)}</tbody>
-              </table>
+              <TableRoot>
+                <TableHead><TableRow><TableHeaderCell>时间</TableHeaderCell><TableHeaderCell>类型</TableHeaderCell><TableHeaderCell>来源/用途</TableHeaderCell><TableHeaderCell>变动</TableHeaderCell><TableHeaderCell>余额变化</TableHeaderCell></TableRow></TableHead>
+                <TableBody>{entries.map(item => <TableRow key={item.id}><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell><TableCell>{item.type}</TableCell><TableCell>{item.source}</TableCell><TableCell>{item.amount}</TableCell><TableCell>{item.balanceAfter}</TableCell></TableRow>)}</TableBody>
+              </TableRoot>
             </div>
           </div>
         )}

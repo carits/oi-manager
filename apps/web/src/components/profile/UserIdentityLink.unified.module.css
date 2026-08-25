@@ -1,0 +1,13 @@
+.u1 {
+  font-weight: 500;
+}
+
+.u2 {
+  color: var(--text-muted);
+  font-size: 0.875em;
+}
+
+.u3 {
+  color: var(--primary);
+  text-decoration: none;
+}

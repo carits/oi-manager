@@ -1,0 +1,28 @@
+.u1 {
+  min-height: 100vh;
+  background: var(--gray-50);
+}
+
+.u2 {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.u3 {
+  padding: 1rem;
+  background: var(--error-light);
+  border-radius: 6px;
+  color: var(--error-text);
+}
+
+.u4 {
+  color: var(--error);
+  font-weight: 500;
+}
+
+.u5 {
+  color: var(--primary);
+  margin-right: 0.5rem;
+  text-decoration: none;
+}

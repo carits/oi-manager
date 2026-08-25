@@ -1,6 +1,7 @@
 'use client'
 
 import type { CSSProperties } from 'react'
+import unifiedStyles from './UserIdentityLink.unified.module.css'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getAssetUrl } from '@/lib/assets'
@@ -19,6 +20,7 @@ interface UserIdentityLinkProps {
   currentSuffix?: string
   size?: number
   style?: CSSProperties
+  className?: string
 }
 
 function normalizeUserType(userType?: string | null, personalMode?: boolean): ProfileUserType | null {
@@ -47,6 +49,7 @@ export function UserIdentityLink({
   currentSuffix,
   size = 40,
   style,
+  className,
 }: UserIdentityLinkProps) {
   const pathname = usePathname()
   const personalMode = isPersonalPath(pathname)
@@ -55,6 +58,7 @@ export function UserIdentityLink({
   const href = id && normalizedType ? profileHref(id, normalizedType) : null
   const content = avatarOnly ? (
     <span
+      className={className}
       style={{
         width: size,
         height: size,
@@ -75,10 +79,10 @@ export function UserIdentityLink({
       {!avatar && label.charAt(0).toUpperCase()}
     </span>
   ) : (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.35rem', minWidth: 0, ...style }}>
-      <span style={{ fontWeight: 500 }}>{label}{currentSuffix || ''}</span>
+    <span className={className} style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.35rem', minWidth: 0, ...style }}>
+      <span className={unifiedStyles.u1}>{label}{currentSuffix || ''}</span>
       {showUsername && username && username !== label && (
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.875em' }}>({username})</span>
+        <span className={unifiedStyles.u2}>({username})</span>
       )}
     </span>
   )
@@ -86,7 +90,7 @@ export function UserIdentityLink({
   if (!href) return content
 
   return (
-    <Link href={href} onClick={(event) => event.stopPropagation()} style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+    <Link href={href} onClick={(event) => event.stopPropagation()} className={`${unifiedStyles.u3} ${className || ''}`.trim()}>
       {content}
     </Link>
   )

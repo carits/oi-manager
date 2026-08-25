@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import unifiedStyles from './PasswordEditor.unified.module.css'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { formStyles } from '@/lib/styles'
 
@@ -70,41 +73,27 @@ export function PasswordEditor() {
   }
 
   return (
-    <div style={{ maxWidth: '400px' }}>
-      <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>
+    <div className={unifiedStyles.u1}>
+      <h3 className={unifiedStyles.u2}>
         修改密码
       </h3>
 
       {success && (
-        <div style={{
-          padding: '0.75rem 1rem',
-          background: 'var(--green-100)',
-          color: 'var(--green-700)',
-          borderRadius: '6px',
-          marginBottom: '1rem',
-          fontSize: '0.875rem'
-        }}>
+        <div className={unifiedStyles.u3}>
           密码修改成功
         </div>
       )}
 
       {error && (
-        <div style={{
-          padding: '0.75rem 1rem',
-          background: 'var(--red-100)',
-          color: 'var(--red-700)',
-          borderRadius: '6px',
-          marginBottom: '1rem',
-          fontSize: '0.875rem'
-        }}>
+        <div className={unifiedStyles.u4}>
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
+      <form onSubmit={handleSubmit} className={unifiedStyles.u5}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>当前密码</label>
-          <input
+          <Input
             type="password"
             value={form.currentPassword}
             onChange={(e) => handleChange('currentPassword', e.target.value)}
@@ -115,7 +104,7 @@ export function PasswordEditor() {
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>新密码</label>
-          <input
+          <Input
             type="password"
             value={form.newPassword}
             onChange={(e) => handleChange('newPassword', e.target.value)}
@@ -126,7 +115,7 @@ export function PasswordEditor() {
 
         <div style={formStyles.field}>
           <label style={formStyles.label}>确认新密码</label>
-          <input
+          <Input
             type="password"
             value={form.confirmPassword}
             onChange={(e) => handleChange('confirmPassword', e.target.value)}
@@ -135,8 +124,8 @@ export function PasswordEditor() {
           />
         </div>
 
-        <div style={{ marginTop: '0.5rem' }}>
-          <button
+        <div className={unifiedStyles.u6}>
+          <Button variant="ghost"
             type="submit"
             disabled={saving}
             style={{
@@ -152,7 +141,7 @@ export function PasswordEditor() {
             }}
           >
             {saving ? '保存中...' : '修改密码'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

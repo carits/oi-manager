@@ -76,7 +76,7 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
           <div className={styles.switchHint}>{hackable ? `启用前会在 go-judge 沙箱中编译检查 STD、Validator${judgeMode === 'oi' ? ' 与 Classifier' : ''}。` : '仅 ACM / OI 的标准批处理题支持 Hack。'}</div>
         </div>
         <label>
-          <input type="checkbox" checked={config.enabled} disabled={!hackable} onChange={event => setConfig(current => ({ ...current, enabled: event.target.checked }))} /> 启用 Hack
+          <Input type="checkbox" checked={config.enabled} disabled={!hackable} onChange={event => setConfig(current => ({ ...current, enabled: event.target.checked }))} /> 启用 Hack
         </label>
       </div>
       <>{judgeMode === 'oi' && <ProblemTestGraphPanel problemId={problemId} />}</>
@@ -106,7 +106,7 @@ function SourceEditor({ title, hint, value, onChange, onFile }: {
     <section className={styles.sourceCard}>
       <div className={styles.sourceHeader}>
         <div><div className={styles.sourceTitle}>{title}</div><div className={styles.sourceMeta}>{hint}</div></div>
-        <label className={styles.upload}>上传源码<input type="file" accept=".cpp,.cc,.cxx,text/plain" onChange={event => onFile(event.target.files?.[0])} /></label>
+        <label className={styles.upload}>上传源码<Input type="file" accept=".cpp,.cc,.cxx,text/plain" onChange={event => onFile(event.target.files?.[0])} /></label>
       </div>
       <Textarea className={styles.editor} spellCheck={false} value={value} onChange={event => onChange(event.target.value)} placeholder={`在这里填写${title}源码…`} />
     </section>

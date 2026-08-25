@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Search, UserPlus } from 'lucide-react'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
@@ -142,7 +143,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
           <label className={styles.fieldLabel} htmlFor="team-invite-search">搜索成员</label>
           <div className={styles.searchInputWrap}>
             <Search size={16} aria-hidden="true" />
-            <input
+            <Input
               id="team-invite-search"
               type="text"
               placeholder="输入姓名或用户名"
@@ -162,7 +163,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
                 const checked = selectedMembers.some(item => item.id === member.id && item.memberType === member.memberType)
                 return (
                   <label key={`${member.memberType}-${member.id}`} className={styles.candidateRow} data-selected={checked || undefined}>
-                    <input type="checkbox" checked={checked} onChange={(event) => toggleMember(member, event.target.checked)} />
+                    <Input type="checkbox" checked={checked} onChange={(event) => toggleMember(member, event.target.checked)} />
                     <UserIdentityLink
                       id={member.id}
                       userType={member.memberType}
@@ -187,7 +188,7 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
 
         <section className={styles.manualInviteSection}>
           <label className={styles.fieldLabel} htmlFor="team-invite-usernames">按用户名批量邀请</label>
-          <input
+          <Input
             id="team-invite-usernames"
             className={styles.textInput}
             type="text"

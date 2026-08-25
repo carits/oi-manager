@@ -1,3 +1,5 @@
+import unifiedStyles from './SessionUnavailable.unified.module.css'
+
 export function SessionUnavailable({
   message,
   requestId,
@@ -6,32 +8,18 @@ export function SessionUnavailable({
   requestId?: string
 }) {
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'grid',
-      placeItems: 'center',
-      padding: '2rem',
-      background: 'var(--bg-page)',
-    }}>
-      <section role="alert" style={{ maxWidth: '32rem', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '1.25rem', marginBottom: '0.75rem' }}>暂时无法确认登录状态</h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>{message}</p>
+    <main className={unifiedStyles.u1}>
+      <section role="alert" className={unifiedStyles.u2}>
+        <h1 className={unifiedStyles.u3}>暂时无法确认登录状态</h1>
+        <p className={unifiedStyles.u4}>{message}</p>
         {requestId && (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '1rem' }}>
+          <p className={unifiedStyles.u5}>
             请求编号：{requestId}
           </p>
         )}
         <a
           href=""
-          style={{
-            display: 'inline-block',
-            padding: '0.55rem 1rem',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            color: 'var(--text-primary)',
-            background: 'var(--bg-card)',
-            textDecoration: 'none',
-          }}
+          className={unifiedStyles.u6}
         >
           重试
         </a>

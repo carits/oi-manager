@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { RotateCcw, Search } from 'lucide-react'
@@ -104,11 +105,11 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
       {isGlobalAdminView && <div className={styles.scopeSummary} role="status"><strong>管理员全量视图</strong><span>全平台所有用户、个人区、校园区和比赛提交</span>{total > 0 && <span>当前显示第 {displayStart}–{displayEnd} 条，共 {total} 条</span>}</div>}
       <Toolbar>
         <ToolbarGroup className={styles.filters}>
-          {(viewRole !== 'student' || isGlobalAdmin) && <input className={styles.input} aria-label="用户名" placeholder="用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />}
-          <select className={styles.select} aria-label="OJ 平台" value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>{SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-          <input className={styles.input} aria-label="题号" placeholder="题号" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
-          <select className={styles.select} aria-label="评测结果" value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>{JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-          <select className={styles.select} aria-label="语言" value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value }))}>{LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+          {(viewRole !== 'student' || isGlobalAdmin) && <Input className={styles.input} aria-label="用户名" placeholder="用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />}
+          <Select className={styles.select} aria-label="OJ 平台" value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>{SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
+          <Input className={styles.input} aria-label="题号" placeholder="题号" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
+          <Select className={styles.select} aria-label="评测结果" value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>{JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
+          <Select className={styles.select} aria-label="语言" value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value }))}>{LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
         </ToolbarGroup>
         <ToolbarGroup><Button variant="secondary" icon={<RotateCcw size={16} />} onClick={reset}>重置</Button><Button icon={<Search size={16} />} onClick={applyFilters}>筛选</Button></ToolbarGroup>
       </Toolbar>

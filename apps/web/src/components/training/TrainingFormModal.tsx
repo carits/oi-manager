@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import collisionStyles from './TrainingFormModal.collision.module.css'
+import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './TrainingFormModal.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
@@ -498,7 +500,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     >
       <div className={unifiedStyles.u2}>
         {loading ? (
-          <div className={unifiedStyles.u3}><span className="resource-skeleton-line" style={{ display: 'inline-block', width: '8rem' }} aria-label="内容正在准备" /></div>
+          <div className={unifiedStyles.u3}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
         ) : (
           <>
             {/* Basic Info */}
@@ -550,7 +552,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               <div>
                 <label className={unifiedStyles.u5}>管理员排名</label>
                 <label className={unifiedStyles.u7}>
-                  <input type="checkbox" checked={includeAdminInRanking} onChange={e => setIncludeAdminInRanking(e.target.checked)} className={unifiedStyles.u8} />
+                  <Input type="checkbox" checked={includeAdminInRanking} onChange={e => setIncludeAdminInRanking(e.target.checked)} className={unifiedStyles.u8} />
                   <span className={unifiedStyles.u9}>包含管理员</span>
                 </label>
               </div>
@@ -562,23 +564,23 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
               {problemRows.length > 0 && (
                 <div className={unifiedStyles.u12}>
-                  <table className={unifiedStyles.u13}>
-                    <thead>
-                      <tr className={unifiedStyles.u14}>
-                        <th className={unifiedStyles.u15}>排序</th>
-                        <th className={unifiedStyles.u16}>#</th>
-                        <th className={unifiedStyles.u17}>OJ</th>
-                        <th className={unifiedStyles.u18}>题号</th>
-                        <th className={unifiedStyles.u19}>题目</th>
-                        <th className={unifiedStyles.u20}>别名</th>
-                        {(format === 'ioi' || format === 'oi') && <th className={unifiedStyles.u21}>分值</th>}
-                        <th className={unifiedStyles.u22}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <TableRoot className={unifiedStyles.u13}>
+                    <TableHead>
+                      <TableRow className={unifiedStyles.u14}>
+                        <TableHeaderCell className={unifiedStyles.u15}>排序</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u16}>#</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u17}>OJ</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u18}>题号</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u19}>题目</TableHeaderCell>
+                        <TableHeaderCell className={unifiedStyles.u20}>别名</TableHeaderCell>
+                        {(format === 'ioi' || format === 'oi') && <TableHeaderCell className={unifiedStyles.u21}>分值</TableHeaderCell>}
+                        <TableHeaderCell className={unifiedStyles.u22}></TableHeaderCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
                       {problemRows.map((row, idx) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
-                          <td className={unifiedStyles.u23}>
+                        <TableRow key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
+                          <TableCell className={unifiedStyles.u23}>
                             <Button variant="ghost"
                               onClick={() => moveUp(idx)}
                               disabled={idx === 0}
@@ -608,9 +610,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                               }}
                               title="下移"
                             >↓</Button>
-                          </td>
-                          <td className={unifiedStyles.u24}>{idx + 1}</td>
-                          <td className={unifiedStyles.u25}>
+                          </TableCell>
+                          <TableCell className={unifiedStyles.u24}>{idx + 1}</TableCell>
+                          <TableCell className={unifiedStyles.u25}>
                             <Select aria-label="选择" value={row.ojName}
                               onChange={e => {
                                 updateRow(row.id, { ojName: e.target.value, resolved: row.existing ? row.resolved : null })
@@ -620,8 +622,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                             >
                               {OJ_PLATFORMS_NO_ALL.map(oj => <option key={oj.value} value={oj.value}>{oj.label}</option>)}
                             </Select>
-                          </td>
-                          <td className={unifiedStyles.u25}>
+                          </TableCell>
+                          <TableCell className={unifiedStyles.u25}>
                             <Input type="text" value={row.problemCode}
                               onChange={e => {
                                 updateRow(row.id, { problemCode: e.target.value, resolved: row.existing ? row.resolved : null })
@@ -631,8 +633,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                               disabled={row.existing}
                               style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%', background: row.existing ? 'var(--bg-muted)' : 'white' }}
                             />
-                          </td>
-                          <td className={unifiedStyles.u27}>
+                          </TableCell>
+                          <TableCell className={unifiedStyles.u27}>
                             {row.existing ? (
                               <span><span className={unifiedStyles.u28}>&#10003;</span><span className={unifiedStyles.u29}>{row.resolved?.title || '-'}</span></span>
                             ) : row.resolving
@@ -643,31 +645,31 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                                   : <span><span className={unifiedStyles.u32}>&#9888;</span><span className={unifiedStyles.u33}>题目不存在</span></span>
                                 : <span className={unifiedStyles.u30}>-</span>
                             }
-                          </td>
-                          <td className={unifiedStyles.u34}>
+                          </TableCell>
+                          <TableCell className={unifiedStyles.u34}>
                             <Input
                               value={row.alias}
                               onChange={e => updateRow(row.id, { alias: e.target.value })}
                               className={unifiedStyles.u35}
                             />
-                          </td>
+                          </TableCell>
                           {(format === 'ioi' || format === 'oi') && (
-                            <td className={unifiedStyles.u34}>
+                            <TableCell className={unifiedStyles.u34}>
                               <Input
                                 type="number"
                                 value={row.points}
                                 onChange={e => updateRow(row.id, { points: parseInt(e.target.value) || 0 })}
                                 className={unifiedStyles.u36}
                               />
-                            </td>
+                            </TableCell>
                           )}
-                          <td className={unifiedStyles.u34}>
+                          <TableCell className={unifiedStyles.u34}>
                             <Button variant="ghost" onClick={() => removeRow(row.id)} className={unifiedStyles.u37} title="移除">&#10005;</Button>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </TableRoot>
                 </div>
               )}
 

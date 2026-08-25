@@ -1,0 +1,42 @@
+.u1 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.u2 {
+  margin-bottom: 1rem;
+}
+
+.u3 {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  margin-bottom: 1rem;
+}
+
+.u4 {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.u5 {
+  display: grid;
+  gap: 1rem;
+}
+
+.u6 {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  margin-bottom: 0.5rem;
+}
+
+.u7 {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.u8 {
+  flex: 1;
+}

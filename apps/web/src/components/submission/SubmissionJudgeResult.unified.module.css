@@ -1,0 +1,69 @@
+.u1 {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.u2 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  background: var(--bg-muted);
+}
+
+.u3 {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.u4 {
+  overflow-x: auto;
+}
+
+.u5 {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.u6 {
+  border-bottom: 1px solid var(--border);
+}
+
+.u7 {
+  background: var(--bg-muted);
+}
+
+.u8 {
+  padding: 0.6rem 0.75rem;
+  font-weight: 700;
+}
+
+.u9 {
+  margin-left: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.u10 {
+  margin-left: 0.75rem;
+  color: var(--primary);
+}
+
+.u11 {
+  border-top: 1px solid var(--border);
+}
+
+.u12 {
+  margin-left: 0.4rem;
+}
+
+.u13 {
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}

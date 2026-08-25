@@ -1,6 +1,7 @@
 'use client'
 
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Activity, Bell, BookOpen, Check, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserPlus, UserRound, WalletCards, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
@@ -213,11 +214,11 @@ export function AppShell({ children }: AppShellProps) {
 
   const userMenu = (
     <div className={styles.userMenuRoot} ref={userMenuRef}>
-      <button type="button" className={styles.accountCard} onClick={() => setShowUserMenu(current => !current)} aria-expanded={showUserMenu} aria-haspopup="menu" aria-label="打开账号菜单">
+      <Button variant="ghost" type="button" className={styles.accountCard} onClick={() => setShowUserMenu(current => !current)} aria-expanded={showUserMenu} aria-haspopup="menu" aria-label="打开账号菜单">
         {user.avatar ? <img className={styles.avatar} src={getAssetUrl(user.avatar)} alt="" /> : <span className={styles.avatarFallback} aria-hidden="true">{visibleName.charAt(0).toUpperCase() || '?'}</span>}
         <span className={styles.userText}><span className={styles.userName}>{visibleName}</span><span className={styles.userContext}>{userContext}</span></span>
         <ChevronDown className={styles.chevron} size={16} aria-hidden="true" />
-      </button>
+      </Button>
       {showUserMenu && (
         <div className={styles.userMenu} role="menu">
           <Link className={styles.menuItem} href={accountPaths.profile} role="menuitem" onClick={() => setShowUserMenu(false)}><UserRound size={17} aria-hidden="true" />个人信息</Link>
@@ -225,7 +226,7 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.wallet} role="menuitem" onClick={() => setShowUserMenu(false)}><WalletCards size={17} aria-hidden="true" />我的钱包</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
           <div className={styles.menuDivider} />
-          <button className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</button>
+          <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</Button>
         </div>
       )}
     </div>
@@ -236,22 +237,22 @@ export function AppShell({ children }: AppShellProps) {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <div className={styles.headerStart}>
-            <button type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? '隐藏导航' : '显示导航'} title={sidebarOpen ? '隐藏导航' : '显示导航'}>
+            <Button variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? '隐藏导航' : '显示导航'} title={sidebarOpen ? '隐藏导航' : '显示导航'}>
               <Menu size={21} aria-hidden="true" />
-            </button>
+            </Button>
             <Link className={styles.brandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
           <div className={styles.headerEnd}>
             <div className={styles.notificationRoot} ref={notificationRef}>
-              <button type="button" className={styles.notificationButton} onClick={() => setShowNotifications(current => !current)} aria-expanded={showNotifications} aria-haspopup="dialog" aria-label={unreadCount ? `打开通知，${unreadCount} 条未读` : '打开通知'} title="通知">
+              <Button variant="ghost" type="button" className={styles.notificationButton} onClick={() => setShowNotifications(current => !current)} aria-expanded={showNotifications} aria-haspopup="true" aria-label={unreadCount ? `打开通知，${unreadCount} 条未读` : '打开通知'} title="通知">
                 <Bell size={20} aria-hidden="true" />
                 {unreadCount > 0 && <span className={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
-              </button>
+              </Button>
               {showNotifications && (
                 <div className={styles.notificationPanel} role="region" aria-label="通知">
                   <div className={styles.notificationHeader}>
                     <strong>通知</strong>
-                    <button type="button" className={styles.readAllButton} onClick={() => void markAllRead()} disabled={unreadCount === 0}>全部已读</button>
+                    <Button variant="ghost" type="button" className={styles.readAllButton} onClick={() => void markAllRead()} disabled={unreadCount === 0}>全部已读</Button>
                   </div>
                   <div className={styles.notificationList}>
                     {notificationError && <p className={styles.notificationError} role="status">{notificationError}</p>}
@@ -260,15 +261,15 @@ export function AppShell({ children }: AppShellProps) {
                       const isActionable = notification.actionable
                       const processing = processingNotificationId === notification.id
                       return <article key={notification.id} className={`${styles.notificationItem} ${!notification.readAt ? styles.notificationUnread : ''}`}>
-                        <button type="button" className={styles.notificationContent} onClick={() => void handleNotificationClick(notification)}>
+                        <Button variant="ghost" type="button" className={styles.notificationContent} onClick={() => void handleNotificationClick(notification)}>
                           <span className={styles.notificationIcon} aria-hidden="true">{notification.type === 'team_join_request' ? <UserPlus size={17} /> : <Bell size={17} />}</span>
                           <span className={styles.notificationText}><strong>{notification.title}</strong><span>{notification.body}</span><time>{new Date(notification.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></span>
                           {!notification.readAt && <span className={styles.unreadDot} aria-label="未读" />}
-                        </button>
+                        </Button>
                         {isActionable && <div className={styles.notificationActions}>
                           {notification.type === 'team_invitation' || notification.type === 'organization_invitation'
-                            ? <><button type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</button><button type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'accept')}>接受</button></>
-                            : <><button type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</button><button type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'approve')}>同意</button></>}
+                            ? <><Button variant="ghost" type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</Button><Button variant="ghost" type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'accept')}>接受</Button></>
+                            : <><Button variant="ghost" type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</Button><Button variant="ghost" type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'approve')}>同意</Button></>}
                         </div>}
                       </article>
                     })}
@@ -283,7 +284,7 @@ export function AppShell({ children }: AppShellProps) {
       <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人' : roleName}主导航`} aria-hidden={!sidebarOpen}>
         <div className={styles.sidebarHeader}>
           <Link className={styles.sidebarBrandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
-          <button type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></button>
+          <Button variant="ghost" type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></Button>
         </div>
         <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人' : roleName}主导航`}>{navLinks}</nav>
         <div className={styles.sidebarFooter}>{userMenu}</div>

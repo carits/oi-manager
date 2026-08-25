@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import unifiedStyles from './page.unified.module.css'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
@@ -36,14 +37,14 @@ export default function AdminSchoolsPage() {
 
   return (
     <>
-      <div style={{ minHeight: '100vh', background: 'var(--gray-50)' }}>
-        <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+      <div className={unifiedStyles.u1}>
+        <main className={unifiedStyles.u2}>
           <PageHeader title="学校管理">
             <Button onClick={() => router.push('/admin/schools/new')}>+ 创建学校</Button>
           </PageHeader>
 
           {error ? (
-            <div style={{ padding: '1rem', background: 'var(--error-light)', borderRadius: '6px', color: 'var(--error-text)' }}>
+            <div className={unifiedStyles.u3}>
               {error}
             </div>
           ) : (
@@ -70,7 +71,7 @@ export default function AdminSchoolsPage() {
                     school.principal ? (
                       school.principal.name
                     ) : (
-                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>待指派</span>
+                      <span className={unifiedStyles.u4}>待指派</span>
                     )
                 },
                 {
@@ -97,7 +98,7 @@ export default function AdminSchoolsPage() {
                 <>
                   <Link
                     href={`/admin/schools/${school.id}`}
-                    style={{ color: 'var(--primary)', marginRight: '0.5rem', textDecoration: 'none' }}
+                    className={unifiedStyles.u5}
                   >
                     查看
                   </Link>

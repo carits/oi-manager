@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import unifiedStyles from './NetworkStatusBanner.unified.module.css'
 
 export function NetworkStatusBanner() {
   const [online, setOnline] = useState(true)
@@ -21,17 +22,7 @@ export function NetworkStatusBanner() {
   return (
     <div
       role="status"
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-        padding: '0.4rem 1rem',
-        textAlign: 'center',
-        background: 'var(--warning-light)',
-        color: 'var(--warning-text)',
-        borderBottom: '1px solid var(--warning)',
-        fontSize: '0.8rem',
-      }}
+      className={unifiedStyles.u1}
     >
       网络连接已断开，当前内容会保留，恢复后将自动刷新
     </div>

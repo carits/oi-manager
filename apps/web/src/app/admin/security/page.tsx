@@ -1,12 +1,13 @@
 'use client'
 
 import { PasswordEditor } from '@/components/profile'
+import unifiedStyles from './page.unified.module.css'
 
 export default function AdminSecurityPage() {
   return (
     <>
-      <div style={{ padding: '1rem 0' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1.5rem' }}>
+      <div className={unifiedStyles.u1}>
+        <h2 className={unifiedStyles.u2}>
           账号安全
         </h2>
         <PasswordEditor />
