@@ -1,7 +1,6 @@
 'use client'
 
-import { Modal } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/Dialogs'
 
 interface ConfirmModalProps {
   isOpen: boolean
@@ -26,31 +25,15 @@ export function ConfirmModal({
   danger = false,
   loading = false
 }: ConfirmModalProps) {
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      width="420px"
-      closeOnOverlay={!loading}
-      footer={(
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {cancelText}
-          </Button>
-          <Button
-            variant={danger ? 'danger' : 'primary'}
-            onClick={onConfirm}
-            loading={loading}
-          >
-            {confirmText}
-          </Button>
-        </>
-      )}
-    >
-      <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', margin: 0 }}>
-        {message}
-      </p>
-    </Modal>
-  )
+  return <ConfirmDialog
+    isOpen={isOpen}
+    onClose={onClose}
+    onConfirm={onConfirm}
+    title={title}
+    message={message}
+    confirmText={confirmText}
+    cancelText={cancelText}
+    danger={danger}
+    loading={loading}
+  />
 }

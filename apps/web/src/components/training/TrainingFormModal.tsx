@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 
 function toLocalDatetimeString(date: Date): string {
@@ -480,11 +480,11 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   }
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       title={isEdit ? `编辑${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}` : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`}
-      width="960px"
+      size="xl"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
@@ -683,6 +683,6 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           </>
         )}
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import styles from '@/components/platformBindings.module.css'
@@ -241,11 +241,11 @@ export default function StudentPlatformBindingsPage() {
       </div>
 
       {/* 绑定弹窗 */}
-      <Modal
+      <FormDialog
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={`绑定 ${selectedPlatformInfo?.name || ''} 账号`}
-        width="450px"
+        size="md"
       >
         <div style={{ padding: '0.5rem 0' }}>
           {/* 平台图标 */}
@@ -389,7 +389,7 @@ export default function StudentPlatformBindingsPage() {
             )}
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </>
   )
 }

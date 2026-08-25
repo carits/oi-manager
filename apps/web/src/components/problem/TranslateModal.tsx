@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 
 const LANGUAGE_OPTIONS = [
   { value: 'zh', label: '中文' },
@@ -23,11 +23,11 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
   const availableOptions = LANGUAGE_OPTIONS.filter(opt => opt.value !== currentLang)
 
   return (
-    <Modal
+    <FormDialog
       isOpen={true}
       onClose={onCancel}
       title="AI 翻译"
-      width="640px"
+      size="lg"
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <button
@@ -92,6 +92,6 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
           </div>
         )}
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

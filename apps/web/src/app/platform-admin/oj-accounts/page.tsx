@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORM_LABEL_MAP, OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
@@ -474,7 +474,7 @@ function AddAccountModal({ isOpen, onClose, onSuccess }: {
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="添加 OJ 平台账号" width="500px">
+    <FormDialog isOpen={isOpen} onClose={onClose} title="添加 OJ 平台账号" size="md">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>平台</label>
@@ -544,7 +544,7 @@ function AddAccountModal({ isOpen, onClose, onSuccess }: {
           </Button>
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }
 
@@ -630,7 +630,7 @@ function EditAccountModal({ isOpen, onClose, account, onSuccess }: {
   if (!account) return null
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`编辑配置 — ${OJ_PLATFORM_LABEL_MAP[account.platform] || account.platform} / ${account.username}`} width="640px">
+    <FormDialog isOpen={isOpen} onClose={onClose} title={`编辑配置 — ${OJ_PLATFORM_LABEL_MAP[account.platform] || account.platform} / ${account.username}`} size="lg">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         {CONFIG_FIELDS.map(group => (
           <div key={group.group}>
@@ -674,6 +674,6 @@ function EditAccountModal({ isOpen, onClose, account, onSuccess }: {
           </Button>
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

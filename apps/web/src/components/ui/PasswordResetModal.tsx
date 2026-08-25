@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Modal } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/Button'
-import { formStyles } from '@/lib/styles'
+import { FormDialog } from '@/components/ui/Dialogs'
+import { Input } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
+import styles from './PasswordResetModal.module.css'
 
 interface PasswordResetModalProps {
   isOpen: boolean
@@ -58,36 +58,27 @@ export function PasswordResetModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="重置密码" width="420px">
-      <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '1rem' }}>
+    <FormDialog isOpen={isOpen} onClose={handleClose} onSubmit={handleSubmit} title="重置密码" size="sm" submitText="确认重置" loading={loading} danger dirty={password.length > 0}>
+      <p className={styles.description}>
         为用户 <strong>{username}</strong> 设置新密码
       </p>
 
-      <div style={formStyles.field}>
-        <label style={formStyles.label}>新密码 *</label>
-        <input
+      <div className={styles.field}>
+        <label htmlFor="password-reset-value">新密码 *</label>
+        <Input
+          id="password-reset-value"
           type="text"
           value={password}
           onChange={(e) => { setPassword(e.target.value); setError('') }}
-          style={formStyles.input}
           placeholder="请输入新密码（至少6位）"
           autoFocus
         />
         {error && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '0.25rem' }}>
+          <p className={styles.error} role="alert">
             {error}
           </p>
         )}
       </div>
-
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-        <Button variant="secondary" onClick={handleClose} disabled={loading}>
-          取消
-        </Button>
-        <Button variant="danger" onClick={handleSubmit} disabled={loading}>
-          {loading ? '重置中...' : '确认重置'}
-        </Button>
-      </div>
-    </Modal>
+    </FormDialog>
   )
 }

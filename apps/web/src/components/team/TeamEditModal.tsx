@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Globe2, LockKeyhole, Save } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
@@ -60,11 +60,11 @@ export function TeamEditModal({ isOpen, onClose, teamId, initialData, onSuccess 
   }
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       title="编辑团队"
-      width="560px"
+      size="md"
       closeOnOverlay={!saving}
       footer={
         <div className={styles.modalActionBar}>
@@ -111,6 +111,6 @@ export function TeamEditModal({ isOpen, onClose, teamId, initialData, onSuccess 
           </div>
         </fieldset>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

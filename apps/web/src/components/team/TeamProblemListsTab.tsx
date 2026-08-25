@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import apiClient from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
@@ -205,11 +205,11 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
       )}
 
       {/* 添加题单弹窗 */}
-      <Modal
+      <FormDialog
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         title="共享题单给团队"
-        width="600px"
+        size="lg"
       >
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
           {loadingMyLists ? (
@@ -258,7 +258,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
             </div>
           )}
         </div>
-      </Modal>
+      </FormDialog>
 
       {/* 移除确认弹窗 */}
       <ConfirmModal

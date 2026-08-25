@@ -7,7 +7,7 @@ import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
-import { Modal } from '@/components/ui/Modal'
+import { DetailDialog } from '@/components/ui/Dialogs'
 import apiClient from '@/lib/apiClient'
 import { createClientUUID } from '@/lib/uuid'
 import { saveBlobDownload } from '@/lib/download'
@@ -1314,11 +1314,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
       {/* 提交代码弹窗 */}
       {showSubmitPanel && (
-        <Modal
+        <DetailDialog
           isOpen={true}
           onClose={() => setShowSubmitPanel(false)}
           title={`${OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} ${problem.problemId}`}
-          width="750px"
+          size="xl"
         >
           <div style={{
             padding: '0.65rem 0.8rem', background: 'var(--gray-50)', borderRadius: '6px',
@@ -1485,7 +1485,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               </button>
             )}
           </div>
-        </Modal>
+        </DetailDialog>
       )}
 
       {/* 翻译弹窗 */}

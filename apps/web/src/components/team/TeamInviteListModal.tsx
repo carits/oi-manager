@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CalendarDays, Trash2 } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
+import { DetailDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
@@ -96,11 +96,11 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
 
   return (
     <>
-      <Modal
+      <DetailDialog
         isOpen={isOpen}
         onClose={onClose}
         title="邀请列表"
-        width="640px"
+        size="lg"
         footer={
           <div className={styles.modalActionBar}>
             <span>{pendingInvites.length > 0 ? `待处理邀请 ${pendingInvites.length} 个` : '暂无待处理邀请'}</span>
@@ -152,7 +152,7 @@ export function TeamInviteListModal({ isOpen, onClose, teamId }: TeamInviteListM
         ) : (
           <div className={styles.modalEmpty}>暂无待处理的邀请</div>
         )}
-      </Modal>
+      </DetailDialog>
 
       <ConfirmModal
         isOpen={showCancelConfirm}

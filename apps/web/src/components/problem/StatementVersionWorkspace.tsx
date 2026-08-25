@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { useToast } from '@/components/ui/Toast'
 
 interface Version {
@@ -200,7 +200,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
             : <MarkdownRenderer content={selected.content || '暂无题面内容'} />}
         </>}
       </main>
-      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="创建题面版本" width="520px" footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}><button onClick={() => setCreateOpen(false)}>取消</button><button onClick={create} disabled={saving || !name.trim()}>{saving ? '创建中…' : '创建并编辑'}</button></div>}>
+      <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="创建题面版本" size="md" footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}><button onClick={() => setCreateOpen(false)}>取消</button><button onClick={create} disabled={saving || !name.trim()}>{saving ? '创建中…' : '创建并编辑'}</button></div>}>
         <div style={{ display: 'grid', gap: '0.85rem' }}>
           <div style={{ color: 'var(--text-muted)' }}>基于：{createMode === 'current' && selected ? `${selected.authorUsername || 'System'} / ${selected.name}` : '空白题面'}</div>
           <label>创建方式<select value={createMode} onChange={event => setCreateMode(event.target.value as 'current' | 'blank')} style={{ display: 'block', width: '100%', padding: '0.55rem', marginTop: '0.3rem' }}><option value="current">基于当前题面创建</option><option value="blank">创建空白题面</option></select></label>
@@ -208,7 +208,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
           <label>语言<select value={language} onChange={event => setLanguage(event.target.value)} style={{ display: 'block', width: '100%', padding: '0.55rem', marginTop: '0.3rem' }}><option value="zh">中文</option><option value="en">English</option></select></label>
           <label>可见性<select value={visibility} onChange={event => setVisibility(event.target.value as 'private' | 'public')} style={{ display: 'block', width: '100%', padding: '0.55rem', marginTop: '0.3rem' }}><option value="private">私有</option><option value="public">公开</option></select></label>
         </div>
-      </Modal>
+      </FormDialog>
     </div>
   )
 }

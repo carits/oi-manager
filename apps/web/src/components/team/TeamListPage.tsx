@@ -6,7 +6,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
 import { FormField } from '@/components/ui/FormField'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Pagination } from '@/components/ui/Pagination'
@@ -122,11 +122,11 @@ export function TeamListPage({
         </>
       )}
 
-      <Modal
+      <FormDialog
         isOpen={createModalOpen && Boolean(onCreateTeam)}
         onClose={closeCreate}
         title="创建团队"
-        width="560px"
+        size="md"
         closeOnOverlay={!creating}
         footer={(
           <div className={styles.modalActionBar}>
@@ -147,7 +147,7 @@ export function TeamListPage({
             <label className={styles.visibilityOption}><input type="radio" name="visibility" checked={!createIsPublic} onChange={() => setCreateIsPublic(false)} /><LockKeyhole size={18} /><span>私有<br /><small>仅通过邀请加入</small></span></label>
           </div></fieldset>
         </form>
-      </Modal>
+      </FormDialog>
     </PageFrame>
   )
 }

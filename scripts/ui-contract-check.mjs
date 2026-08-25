@@ -22,6 +22,7 @@ const rules = {
   nativeInput: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /<(?:input|textarea|select)\b/g },
   nativeTable: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /<table\b/g },
   customDialog: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /role=["']dialog["']/g },
+  directModal: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /(?:from\s+["']@\/components\/ui\/Modal["']|<Modal\b)/g },
   arbitraryModalWidth: { files: sources.filter(file => file.endsWith('.tsx') && !exemptUi(file)), expression: /<Modal\b[^>]*\bwidth=/gs },
   hardcodedVisual: { files: sources.filter(file => !relative(file).endsWith('/styles/globals.css') && !relative(file).endsWith('/components/ui/primitives.module.css')), expression: /#[0-9a-fA-F]{3,8}\b|rgba?\(/g },
 }

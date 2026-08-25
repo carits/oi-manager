@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Search, UserPlus } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
@@ -122,11 +122,11 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
   const totalSelected = selectedMembers.length + manualCount
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       title="邀请成员"
-      width="640px"
+      size="lg"
       footer={
         <div className={styles.modalActionBar}>
           <span>{totalSelected > 0 ? `已选择 ${totalSelected} 人` : '选择候选人或输入用户名后发送邀请'}</span>
@@ -198,6 +198,6 @@ export function TeamInviteModal({ isOpen, onClose, teamId, onSuccess }: TeamInvi
           <p>{isPersonalPath(pathname) ? '仅可邀请已启用个人身份的用户。' : '仅可邀请本校成员，多个用户名请用英文逗号分隔。'}</p>
         </section>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

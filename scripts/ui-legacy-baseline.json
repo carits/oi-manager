@@ -192,29 +192,9 @@
     "apps/web/src/components/training/TrainingStatementManagementPage.tsx": 1,
     "apps/web/src/components/wallet/WalletPage.tsx": 1
   },
-  "customDialog": {
-    "apps/web/src/components/AppShell.tsx": 1,
-    "apps/web/src/components/workspace/WorkspaceSwitcher.tsx": 1
-  },
-  "arbitraryModalWidth": {
-    "apps/web/src/app/platform-admin/oj-accounts/page.tsx": 2,
-    "apps/web/src/components/management/StudentsManagementContent.tsx": 1,
-    "apps/web/src/components/organization-pages/teacher/school/components/EditSchoolModal.tsx": 1,
-    "apps/web/src/components/organization-pages/teacher/school/components/TeachersTab.tsx": 2,
-    "apps/web/src/components/problem/ProblemListDetailPage.tsx": 3,
-    "apps/web/src/components/problem/TranslateModal.tsx": 1,
-    "apps/web/src/components/submission/SubmissionDetailModal.tsx": 1,
-    "apps/web/src/components/team/TeamEditModal.tsx": 1,
-    "apps/web/src/components/team/TeamInviteListModal.tsx": 1,
-    "apps/web/src/components/team/TeamInviteModal.tsx": 1,
-    "apps/web/src/components/team/TeamListPage.tsx": 1,
-    "apps/web/src/components/team/TeamTransferModal.tsx": 1,
-    "apps/web/src/components/training/components/TrainingContentSelectionModal.tsx": 1,
-    "apps/web/src/components/training/components/TrainingContentSnapshotEditorModal.tsx": 1,
-    "apps/web/src/components/training/components/TrainingRankingSubmissionsModal.tsx": 1,
-    "apps/web/src/components/training/components/TrainingRejudgeModal.tsx": 1,
-    "apps/web/src/components/training/TrainingFormModal.tsx": 1
-  },
+  "customDialog": {},
+  "directModal": {},
+  "arbitraryModalWidth": {},
   "hardcodedVisual": {
     "apps/web/src/app/admin/platform-bindings/page.tsx": 2,
     "apps/web/src/app/admin/schools/[id]/edit/page.tsx": 20,

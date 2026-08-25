@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, ClipboardList, ListChecks, LoaderCircle, RotateCcw, UserRound } from 'lucide-react'
 import apiClient from '@/lib/apiClient'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import type { TrainingProblem } from '../types'
 import styles from './TrainingRejudgeModal.module.css'
@@ -100,7 +100,7 @@ export function TrainingRejudgeModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="重新评测比赛" width="700px" footer={
+    <FormDialog isOpen={isOpen} onClose={onClose} title="重新评测比赛" size="lg" footer={
       <div className={styles.footer}>
         <Button variant="text" onClick={onClose} disabled={submitting}>取消</Button>
         <Button variant="danger" icon={submitting ? <LoaderCircle className={styles.spin} size={16} /> : <RotateCcw size={16} />} disabled={!ready || previewLoading || !preview || preview.matchedCount === 0 || submitting} onClick={() => void submit()}>
@@ -133,6 +133,6 @@ export function TrainingRejudgeModal({
         <div className={styles.warning}><AlertTriangle size={18} /><p><strong>请确认操作范围</strong>重测会清空所选提交当前的结果、分数、耗时、内存和测试点详情，并重新加入评测队列。正在评测中的提交不会重复加入。</p></div>
         {message && <div className={message.type === 'error' ? styles.error : styles.success}>{message.text}</div>}
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

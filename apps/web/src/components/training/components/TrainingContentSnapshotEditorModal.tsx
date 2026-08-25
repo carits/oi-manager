@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import apiClient from '@/lib/apiClient'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor'
 import { useToast } from '@/components/ui/Toast'
 
@@ -61,11 +61,11 @@ export function TrainingContentSnapshotEditorModal({ isOpen, trainingId, snapsho
 
   const isPdf = snapshot?.format === 'pdf'
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen && !!snapshot}
       onClose={onClose}
       title={`编辑活动${snapshot?.kind === 'statement' ? '题面' : '题解'} · ${snapshot?.label || ''}`}
-      width="min(900px, calc(100vw - 2rem))"
+      size="xl"
       footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}><button onClick={onClose} disabled={saving}>取消</button><button onClick={save} disabled={saving || (!isPdf && !content.trim())}>{saving ? '保存中…' : '保存新 revision'}</button></div>}
     >
       <div style={{ marginBottom: '0.85rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--info-light)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
@@ -80,6 +80,6 @@ export function TrainingContentSnapshotEditorModal({ isOpen, trainingId, snapsho
           </label>
         </div>
       ) : <MarkdownEditor value={content} onChange={setContent} minHeight="440px" showPreview />}
-    </Modal>
+    </FormDialog>
   )
 }

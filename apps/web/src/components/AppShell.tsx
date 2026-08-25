@@ -248,7 +248,7 @@ export function AppShell({ children }: AppShellProps) {
                 {unreadCount > 0 && <span className={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
               </button>
               {showNotifications && (
-                <div className={styles.notificationPanel} role="dialog" aria-label="通知">
+                <div className={styles.notificationPanel} role="region" aria-label="通知">
                   <div className={styles.notificationHeader}>
                     <strong>通知</strong>
                     <button type="button" className={styles.readAllButton} onClick={() => void markAllRead()} disabled={unreadCount === 0}>全部已读</button>

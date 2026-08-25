@@ -14,6 +14,9 @@ source_of_truth: Git history
   Form/Confirm/Detail Dialog；Modal 使用五档尺寸、busy 关闭保护、说明语义和手机全屏降级。
 - 新增按文件计数的递减遗留基线，`ui:state-check` 现在阻止新增原生控件、自定义弹窗、静态内联样式、
   任意 Modal 宽度和硬编码视觉值；设计系统、前端架构和 UI 路由矩阵同步为 2026-08-25 基线。
+- 完成弹窗统一批次：业务组件全部迁移到 Form/Confirm/Detail Dialog，21 处任意宽度改为五档标准尺寸；
+  提交详情与排行榜提交列表统一使用整页单滚动模型，确认弹窗和密码重置通过公共兼容层收口。静态门禁
+  新增 `directModal` 规则，业务层直接导入或渲染底层 Modal 的允许值固定为 0。
 - 题目级 Hack 扩展到 `judgeConfig.mode: oi` 的 OI / IOI 题：新增 C++17 Classifier，严格解析
   `{"subtasks":[...]}`，按证明程序总分下降判断有效性，并在命中的 Subtask 系统 Hack Gate 中只保存一份
   候选测试数据。历史提交、成绩和排行榜不会自动重测。

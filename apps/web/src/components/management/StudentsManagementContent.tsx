@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Pagination } from '@/components/ui/Pagination'
 import { useStudents, Student } from '@/hooks/data/useStudents'
 import { useModal } from '@/hooks/form/useModal'
@@ -366,7 +366,7 @@ function StudentFormModal({
   )
 
   return (
-    <Modal isOpen={true} onClose={onClose} title={student ? '编辑学生' : '添加学生'} width="500px">
+    <FormDialog isOpen={true} onClose={onClose} title={student ? '编辑学生' : '添加学生'} size="md">
       <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名 *</label>
@@ -438,6 +438,6 @@ function StudentFormModal({
           </Button>
         </div>
       </form>
-    </Modal>
+    </FormDialog>
   )
 }

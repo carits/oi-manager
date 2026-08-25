@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Modal } from '@/components/ui/Modal'
+import { DetailDialog } from '@/components/ui/Dialogs'
 import apiClient from '@/lib/apiClient'
 import { JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
@@ -330,11 +330,11 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           to { transform: rotate(360deg); }
         }
       `}</style>
-      <Modal
+      <DetailDialog
         isOpen={isOpen}
         onClose={onClose}
         title={detail ? ((detail.problemSourceHidden || detail.problemIdentityHidden) ? `#${detail.id} | ${detail.username} 的比赛提交` : `#${detail.id} | ${detail.username}'s solution for [${getOjLabel(detail.oj || '')}-${detail.problemId || ''}]`) : '评测详情'}
-        width="900px"
+        size="xl"
         scrollMode="page"
       >
       {loading ? (
@@ -530,7 +530,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
           提交记录不存在
         </div>
       )}
-    </Modal>
+    </DetailDialog>
     </>
   )
 }

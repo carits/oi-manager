@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import apiClient from '@/lib/apiClient'
-import { Modal } from '@/components/ui/Modal'
+import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { AsyncRegion, SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { LoadError } from '@/components/ui/LoadError'
@@ -552,7 +552,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
       {/* Submit Code Modal */}
       {actions.showSubmitModal && training.status === 'ongoing' && (
-        <Modal
+        <DetailDialog
           isOpen={true}
           onClose={() => actions.setShowSubmitModal(false)}
           title={(() => {
@@ -562,7 +562,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             const problemIdPart = hideProblemId ? '' : (selectedProblem?.platformProblemId || '')
             return `${platformPrefix}${problemIdPart} - ${selectedProblem?.alias || selectedProblem?.problemTitle || ''}`
           })()}
-          width="750px"
+          size="xl"
         >
           <div style={{
             fontSize: '0.875rem', color: 'var(--gray-500)', padding: '0.65rem 0.8rem',
@@ -620,7 +620,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
               {actions.submitting ? '提交中...' : '提交'}
             </button>
           </div>
-        </Modal>
+        </DetailDialog>
       )}
 
       {/* Edit Training Modal */}
@@ -649,11 +649,11 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
       />
 
       {/* Makeup Homework Modal */}
-      <Modal
+      <FormDialog
         isOpen={showMakeupModal}
         onClose={() => setShowMakeupModal(false)}
         title="创建补题作业"
-        width="500px"
+        size="md"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
@@ -723,7 +723,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             </button>
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </div>
   )
 }

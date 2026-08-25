@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import apiClient from '@/lib/apiClient'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
 
@@ -122,11 +122,11 @@ export function TrainingContentSelectionModal({
   }
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       title={`选择活动题解 · ${problemLabel}`}
-      width="min(720px, calc(100vw - 2rem))"
+      size="lg"
       footer={(
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
           <button onClick={onClose} style={{ padding: '0.6rem 1rem', border: '1px solid var(--border)', borderRadius: '7px', background: 'white', cursor: 'pointer' }}>取消</button>
@@ -167,6 +167,6 @@ export function TrainingContentSelectionModal({
           )}
         </div>
       )}
-    </Modal>
+    </FormDialog>
   )
 }

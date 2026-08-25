@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import { usePathname, useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
-import { Modal } from '@/components/ui/Modal'
+import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
@@ -666,11 +666,11 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
         <SharePanelModal listId={listId} shares={detail.Shares} onClose={() => setShowSharePanel(false)} onUpdate={fetchDetail} />
       )}
 
-      <Modal
+      <DetailDialog
         isOpen={!!contextEntryId}
         onClose={closeContextProblem}
         title={contextProblem?.title || '题目详情'}
-        width="960px"
+        size="xl"
       >
         {contextLoading ? (
           <SkeletonRegion rows={7} label="题面正在准备" />
@@ -708,7 +708,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
             )}
           </div>
         ) : null}
-      </Modal>
+      </DetailDialog>
 
       <ConfirmModal isOpen={!!deleteEntryConfirm} onClose={() => setDeleteEntryConfirm(null)}
         onConfirm={() => { if (deleteEntryConfirm) handleDeleteEntry(deleteEntryConfirm) }}
@@ -774,7 +774,7 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
   }
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="发布为作业" width="520px">
+    <FormDialog isOpen={true} onClose={onClose} title="发布为作业" size="md">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>目标团队</label>
@@ -817,7 +817,7 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
           </button>
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }
 
@@ -937,7 +937,7 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
   }
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="权限管理" width="800px">
+    <FormDialog isOpen={true} onClose={onClose} title="权限管理" size="xl">
       <div style={{ minHeight: '420px', display: 'flex', flexDirection: 'column' }}>
         {/* 表头行 */}
         <div style={{ display: 'flex', fontSize: '0.8rem', color: 'var(--gray-400)', marginBottom: '0.75rem', padding: '0 0.25rem', flexShrink: 0 }}>
@@ -1073,6 +1073,6 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
           )}
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

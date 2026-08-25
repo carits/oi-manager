@@ -20,7 +20,7 @@ export function Popover({ trigger, children, align = 'start', label = '弹出内
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape) }
   }, [open])
   const control = isValidElement<any>(trigger) ? cloneElement(trigger, { 'aria-expanded': open, 'aria-controls': panelId, 'aria-haspopup': true, onClick: (event: React.MouseEvent) => { trigger.props.onClick?.(event); setOpen(current => !current) } }) : trigger
-  return <div className={styles.popover} ref={rootRef}>{control}{open && <div id={panelId} className={styles.popoverPanel} data-align={align} role="dialog" aria-label={label}>{children}</div>}</div>
+  return <div className={styles.popover} ref={rootRef}>{control}{open && <div id={panelId} className={styles.popoverPanel} data-align={align} aria-label={label}>{children}</div>}</div>
 }
 
 export function Menu({ trigger, items, label = '操作菜单' }: { trigger: ReactElement; label?: string; items: Array<{ key: string; label: string; icon?: ReactNode; danger?: boolean; disabled?: boolean; onSelect: () => void }> }) {

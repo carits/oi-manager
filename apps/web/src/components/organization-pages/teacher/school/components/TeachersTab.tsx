@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Pagination } from '@/components/ui/Pagination'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { useToast } from '@/components/ui/Toast'
@@ -268,7 +268,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
       )}
 
       {transferModal.isOpen && (
-        <Modal isOpen={true} onClose={transferModal.close} title="转移学校负责人" width="500px">
+        <FormDialog isOpen={true} onClose={transferModal.close} title="转移学校负责人" size="md">
           <div style={{ marginBottom: '1rem' }}>
             <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '1rem' }}>
               选择新的学校负责人。转移后，您将失去学校负责人权限，新负责人将获得管理本校教师的权限。
@@ -297,7 +297,7 @@ export default function TeachersTab({ school, isPrincipal, showHeader = false, s
               取消
             </Button>
           </div>
-        </Modal>
+        </FormDialog>
       )}
 
       <ConfirmModal
@@ -380,7 +380,7 @@ function TeacherFormModal({
   )
 
   return (
-    <Modal isOpen={true} onClose={onClose} title={teacher ? '编辑教师' : '添加教师'} width="500px">
+    <FormDialog isOpen={true} onClose={onClose} title={teacher ? '编辑教师' : '添加教师'} size="md">
       <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
         <div style={formStyles.field}>
           <label style={formStyles.label}>姓名 *</label>
@@ -463,6 +463,6 @@ function TeacherFormModal({
           </Button>
         </div>
       </form>
-    </Modal>
+    </FormDialog>
   )
 }

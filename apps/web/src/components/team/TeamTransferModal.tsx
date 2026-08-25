@@ -1,7 +1,7 @@
 'use client'
 
 import { AlertTriangle, Crown } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import apiClient from '@/lib/apiClient'
@@ -50,11 +50,11 @@ export function TeamTransferModal({ isOpen, onClose, teamId, selectedTarget, onS
   }
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       title="转移团队所有权"
-      width="520px"
+      size="md"
       footer={
         <div className={styles.modalActionBar}>
           <span>这是高风险操作，请确认目标成员无误。</span>
@@ -72,6 +72,6 @@ export function TeamTransferModal({ isOpen, onClose, teamId, selectedTarget, onS
           <p>转移后，您将成为普通成员，新所有者将拥有团队编辑、成员管理和解散团队等完整权限。</p>
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   )
 }

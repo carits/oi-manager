@@ -39,7 +39,7 @@ source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 | 批次 | 页面族 | 统一目标 | 状态 |
 |---|---|---|---|
 | 1 | 全局基础 | Token、表单、DataTable、Section、Dialog API、递减门禁 | 已建立 |
-| 2 | 全部弹窗 | Form/Confirm/Detail Dialog、尺寸、滚动、焦点和操作区 | 待迁移 |
+| 2 | 全部弹窗 | Form/Confirm/Detail Dialog、尺寸、滚动、焦点和操作区 | 已迁移 |
 | 3 | 比赛、题目、提交、排名、团队、题单 | 页面顺序、工具栏、表格和状态 | 待迁移 |
 | 4 | 超管、平台、学校、用户、OJ、导入 | 紧凑管理表格和表单 | 待迁移 |
 | 5 | 全路由 | 删除遗留白名单、视觉与移动端收口 | 待迁移 |

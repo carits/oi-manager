@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Modal } from '@/components/ui/Modal'
+import { FormDialog } from '@/components/ui/Dialogs'
 import { Button } from '@/components/ui/Button'
 import { useForm } from '@/hooks/form/useForm'
 import { useToast } from '@/components/ui/Toast'
@@ -99,7 +99,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
   )
 
   return (
-    <Modal isOpen onClose={onClose} title="编辑校园信息" width="640px">
+    <FormDialog isOpen onClose={onClose} title="编辑校园信息" size="lg">
       <form onSubmit={form.handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
         <FormSection title="基本资料">
           <div style={formStyles.field}><label style={formStyles.label}>学校名称 *</label><input value={form.values.name} onChange={event => form.handleChange('name', event.target.value)} required style={formStyles.input} /></div>
@@ -142,6 +142,6 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
           <Button type="submit" disabled={submitting}>{submitting ? '保存中...' : '保存修改'}</Button>
         </div>
       </form>
-    </Modal>
+    </FormDialog>
   )
 }
