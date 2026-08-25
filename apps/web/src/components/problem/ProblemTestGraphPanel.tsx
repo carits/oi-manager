@@ -1,80 +1,381 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import unifiedStyles from './ProblemTestGraphPanel.unified.module.css'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, Copy, Download, GripVertical, Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/Dialogs'
+import { Input, SearchField, Select } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
+import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
+import styles from './ProblemTestGraphPanel.unified.module.css'
+
+type TestcaseRef = {
+  testcaseId: string
+  input: string
+  output: string
+  source: string
+  score?: number | null
+  time?: string | null
+  memory?: string | null
+}
+
+type TestGroup = {
+  id?: string
+  key: string
+  name: string
+  kind: 'official' | 'hack_gate'
+  score: number
+  type: 'min' | 'max' | 'sum'
+  cases: TestcaseRef[]
+}
+
+type Subtask = { dbId?: string; id: number; score: number; if: number[]; groups: TestGroup[] }
+type TestdataFile = { id: string; filename: string; size: number; sha256?: string | null; uploadedAt?: string }
+type TestcasePoolItem = {
+  id: string
+  inputFileId: string
+  outputFileId: string
+  input: string
+  output: string
+  source: string
+  enabled: boolean
+  assignments: Array<{ subtaskId: number; groupId: string; groupKey: string; groupName: string; groupKind: string }>
+}
+type DetectedPair = { inputFileId: string; outputFileId: string; input: string; output: string; testcaseId: string | null }
 
 type TestGraph = {
   revision: number
   migrated: boolean
+  canMigrate?: boolean
   migrationIssues?: string[]
-  subtasks: Array<{
-    id: number
-    score: number
-    if: number[]
-    groups: Array<{ id: string; name: string; kind: 'official' | 'hack_gate'; score: number; type: string; cases: Array<{ testcaseId: string; input: string; output: string; source: string }> }>
-  }>
+  subtasks: Subtask[]
+  files: TestdataFile[]
+  pairs: DetectedPair[]
+  unmatchedFiles: Array<{ id: string; filename: string; size: number }>
+  testcases: TestcasePoolItem[]
 }
 
-export function ProblemTestGraphPanel({ problemId }: { problemId: string }) {
-  const toast = useToast()
-  const [graph, setGraph] = useState<TestGraph | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [saving, setSaving] = useState(false)
+type ValidationIssue = { path: string; message: string; subtaskId?: number; groupKey?: string }
 
-  useEffect(() => {
-    let active = true
-    apiClient.get<TestGraph>(`/api/problems/${problemId}/test-graph`)
-      .then(result => { if (active && result.success && result.data) setGraph(result.data) })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [problemId])
+function cloneSubtasks(subtasks: Subtask[]): Subtask[] {
+  return JSON.parse(JSON.stringify(subtasks))
+}
 
-  if (loading) return <div className={unifiedStyles.u1}>{'\u6b63\u5728\u52a0\u8f7d\u6d4b\u8bd5\u56fe...'}</div>
-  if (!graph?.migrated) return (
-    <section className={unifiedStyles.u14}>
-      <strong>{'OI \u6d4b\u8bd5\u56fe\u5c1a\u672a\u8fc1\u79fb'}</strong>
-      <div className={unifiedStyles.u15}>{graph?.migrationIssues?.join('; ') || '\u8bf7\u7531\u8d85\u7ea7\u7ba1\u7406\u5458\u5148\u6267\u884c\u5b89\u5168\u8fc1\u79fb\u68c0\u67e5\u3002'}</div>
-    </section>
-  )
+function graphFingerprint(revision: number, subtasks: Subtask[]) {
+  return JSON.stringify({ revision, subtasks })
+}
 
-  const beginEdit = () => {
-    setDraft(JSON.stringify({ revision: graph.revision, subtasks: graph.subtasks }, null, 2))
-    setEditing(true)
+function validateGraph(subtasks: Subtask[]): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const ids = new Set<number>()
+  const add = (path: string, message: string, subtaskId?: number, groupKey?: string) => issues.push({ path, message, subtaskId, groupKey })
+  if (!subtasks.length) add('subtasks', '至少需要一个 Subtask')
+  let total = 0
+  for (const subtask of subtasks) {
+    if (!Number.isInteger(subtask.id) || subtask.id <= 0 || ids.has(subtask.id)) add('subtask.id', `Subtask ID ${subtask.id || '—'} 无效或重复`, subtask.id)
+    ids.add(subtask.id)
+    if (!Number.isInteger(subtask.score) || subtask.score < 0) add('subtask.score', `Subtask ${subtask.id} 分值无效`, subtask.id)
+    total += subtask.score || 0
+    const official = subtask.groups.filter(group => group.kind === 'official')
+    const gates = subtask.groups.filter(group => group.kind === 'hack_gate')
+    if (!official.length) add('subtask.groups', `Subtask ${subtask.id} 至少需要一个 Official Group`, subtask.id)
+    if (gates.length !== 1) add('subtask.groups', `Subtask ${subtask.id} 必须恰好有一个 Hack Gate`, subtask.id)
+    if (official.reduce((sum, group) => sum + Number(group.score || 0), 0) !== Number(subtask.score)) add('subtask.groups', `Subtask ${subtask.id} 的 Official Group 分值之和必须等于 ${subtask.score}`, subtask.id)
+    const keys = new Set<string>()
+    for (const group of subtask.groups) {
+      if (!group.key || keys.has(group.key)) add('group.key', `Subtask ${subtask.id} 存在空或重复 Group key`, subtask.id, group.key)
+      keys.add(group.key)
+      if (!group.name.trim()) add('group.name', 'Group 名称不能为空', subtask.id, group.key)
+      if (group.kind === 'official' && !group.cases.length) add('group.cases', `${group.name || group.key} 至少需要一个 Testcase`, subtask.id, group.key)
+      const caseIds = group.cases.map(item => item.testcaseId)
+      if (new Set(caseIds).size !== caseIds.length) add('group.cases', `${group.name || group.key} 存在重复 Testcase`, subtask.id, group.key)
+    }
   }
+  if (total !== 100) add('subtasks.score', `Subtask 总分为 ${total}，必须为 100`)
+  for (const subtask of subtasks) for (const dependency of subtask.if || []) {
+    if (dependency === subtask.id) add('subtask.if', `Subtask ${subtask.id} 不能依赖自身`, subtask.id)
+    else if (!ids.has(dependency)) add('subtask.if', `Subtask ${subtask.id} 依赖不存在的 Subtask ${dependency}`, subtask.id)
+  }
+  const byId = new Map(subtasks.map(subtask => [subtask.id, subtask]))
+  const visiting = new Set<number>()
+  const visited = new Set<number>()
+  const visit = (id: number): boolean => {
+    if (visiting.has(id)) return false
+    if (visited.has(id)) return true
+    visiting.add(id)
+    for (const dependency of byId.get(id)?.if || []) if (!visit(dependency)) return false
+    visiting.delete(id)
+    visited.add(id)
+    return true
+  }
+  for (const id of ids) if (!visit(id)) { add('subtasks.if', 'Subtask 依赖不能形成环'); break }
+  return issues
+}
+
+function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || to < 0 || to >= items.length) return items
+  const next = [...items]
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
+}
+
+export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId: string; onDirtyChange?: (dirty: boolean) => void }) {
+  const toast = useToast()
+  const uploadRef = useRef<HTMLInputElement>(null)
+  const baseFingerprint = useRef('')
+  const [graph, setGraph] = useState<TestGraph | null>(null)
+  const [subtasks, setSubtasks] = useState<Subtask[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [migrating, setMigrating] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [selectedSubtaskId, setSelectedSubtaskId] = useState<number | null>(null)
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null)
+  const [selectedTestcaseIds, setSelectedTestcaseIds] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
+  const [manualInputId, setManualInputId] = useState('')
+  const [manualOutputId, setManualOutputId] = useState('')
+  const [confirmMigration, setConfirmMigration] = useState(false)
+  const [deleteFile, setDeleteFile] = useState<TestdataFile | null>(null)
+  const [replacementFiles, setReplacementFiles] = useState<File[] | null>(null)
+  const [draggedSubtask, setDraggedSubtask] = useState<number | null>(null)
+  const [draggedGroup, setDraggedGroup] = useState<number | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await apiClient.get<TestGraph>(`/api/problems/${problemId}/test-graph`)
+      if (!result.success || !result.data) return toast.error(result.message || '测试图加载失败')
+      setGraph(result.data)
+      const next = cloneSubtasks(result.data.subtasks || [])
+      setSubtasks(next)
+      baseFingerprint.current = graphFingerprint(result.data.revision, next)
+      setSelectedSubtaskId(current => next.some(item => item.id === current) ? current : next[0]?.id ?? null)
+      setSelectedGroupKey(null)
+      setSelectedTestcaseIds(new Set())
+    } finally {
+      setLoading(false)
+    }
+  }, [problemId, toast])
+
+  const refreshPool = useCallback(async () => {
+    const result = await apiClient.get<TestGraph>(`/api/problems/${problemId}/test-graph`)
+    if (!result.success || !result.data) return toast.error(result.message || '测试数据刷新失败')
+    setGraph(result.data)
+  }, [problemId, toast])
+
+  useEffect(() => { load() }, [load])
+  const dirty = Boolean(graph?.migrated) && graphFingerprint(graph?.revision || 0, subtasks) !== baseFingerprint.current
+  useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  const selectedSubtask = subtasks.find(item => item.id === selectedSubtaskId) || null
+  const selectedGroup = selectedSubtask?.groups.find(group => group.key === selectedGroupKey) || selectedSubtask?.groups.find(group => group.kind === 'official') || null
+  useEffect(() => {
+    if (!selectedSubtask) return
+    if (!selectedSubtask.groups.some(group => group.key === selectedGroupKey)) setSelectedGroupKey(selectedSubtask.groups.find(group => group.kind === 'official')?.key || selectedSubtask.groups[0]?.key || null)
+  }, [selectedGroupKey, selectedSubtask])
+
+  const issues = useMemo(() => validateGraph(subtasks), [subtasks])
+  const totalScore = subtasks.reduce((sum, item) => sum + Number(item.score || 0), 0)
+  const visibleTestcases = useMemo(() => (graph?.testcases || []).filter(item => `${item.input} ${item.output}`.toLowerCase().includes(query.trim().toLowerCase())), [graph?.testcases, query])
+  const unregisteredPairs = graph?.pairs.filter(pair => !pair.testcaseId) || []
+
+  const updateSubtask = (id: number, updater: (subtask: Subtask) => Subtask) => setSubtasks(current => current.map(item => item.id === id ? updater(item) : item))
+  const replaceGraphData = (next: TestGraph) => {
+    setGraph(next)
+    const draft = cloneSubtasks(next.subtasks || [])
+    setSubtasks(draft)
+    baseFingerprint.current = graphFingerprint(next.revision, draft)
+    setSelectedSubtaskId(draft[0]?.id ?? null)
+    setSelectedGroupKey(null)
+  }
+
+  const migrate = async () => {
+    setMigrating(true)
+    try {
+      const result = await apiClient.post<TestGraph>(`/api/problems/${problemId}/test-graph/migrate`, {})
+      if (!result.success || !result.data) return toast.error(result.message || '迁移失败')
+      replaceGraphData(result.data)
+      toast.success(result.message || '测试图迁移完成')
+      setConfirmMigration(false)
+    } finally { setMigrating(false) }
+  }
+
   const save = async () => {
-    let payload: unknown
-    try { payload = JSON.parse(draft) } catch { return toast.error('\u6d4b\u8bd5\u56fe JSON \u683c\u5f0f\u65e0\u6548') }
+    if (!graph || issues.length) return
     setSaving(true)
     try {
-      const result = await apiClient.put<TestGraph>(`/api/problems/${problemId}/test-graph`, payload)
-      if (!result.success || !result.data) return toast.error(result.message || '\u4fdd\u5b58\u5931\u8d25')
-      setGraph(result.data)
-      setEditing(false)
-      toast.success('\u6d4b\u8bd5\u56fe\u5df2\u4fdd\u5b58\u5e76\u751f\u6210 Judge \u6295\u5f71')
+      const result = await apiClient.put<TestGraph>(`/api/problems/${problemId}/test-graph`, { revision: graph.revision, subtasks })
+      if (!result.success || !result.data) {
+        if (result.code === 'TEST_GRAPH_STALE') toast.error('测试图已被其他管理员修改；当前草稿仍保留，请导出或刷新后重新调整')
+        else toast.error(result.message || '保存失败')
+        return
+      }
+      replaceGraphData(result.data)
+      toast.success('测试图已保存并生成 Judge 投影')
     } finally { setSaving(false) }
   }
 
-  return (
-    <section className={unifiedStyles.u2}>
-      <div className={unifiedStyles.u3}>
-        <div><strong>{'Subtask / Test Group / Testcase \u6d4b\u8bd5\u56fe'}</strong><div className={unifiedStyles.u4}>{'Hack Gate \u7531\u7cfb\u7edf\u7ef4\u62a4\uff0c\u4e0d\u5360\u7528\u989d\u5916\u5206\u503c\u3002'}</div></div>
-        <div className={unifiedStyles.u5}><span className={unifiedStyles.u6}>revision {graph.revision}</span><Button variant="ghost" type="button" onClick={editing ? () => setEditing(false) : beginEdit} className={unifiedStyles.u7}>{editing ? '\u53d6\u6d88\u7f16\u8f91' : '\u7f16\u8f91\u6d4b\u8bd5\u56fe'}</Button></div>
-      </div>
-      {editing && <div className={unifiedStyles.u8}><div className={unifiedStyles.u16}>{'\u53ef\u7f16\u8f91 Subtask\u3001Official Group \u548c Testcase \u5173\u8054\u3002Hack Gate \u4e3a\u53ea\u8bfb\uff0c\u4fee\u6539\u4f1a\u88ab\u670d\u52a1\u7aef\u62d2\u7edd\u3002'}</div><Textarea value={draft} onChange={event => setDraft(event.target.value)} spellCheck={false} className={unifiedStyles.u9} /><div className={unifiedStyles.u10}><Button variant="ghost" type="button" disabled={saving} onClick={save} style={{ padding: '8px 14px', border: 0, borderRadius: 8, background: 'var(--primary)', color: 'white', cursor: saving ? 'wait' : 'pointer' }}>{saving ? '\u4fdd\u5b58\u4e2d...' : '\u4fdd\u5b58\u6d4b\u8bd5\u56fe'}</Button></div></div>}
-      {graph.subtasks.map(subtask => (
-        <article key={subtask.id} className={unifiedStyles.u11}>
-          <div className={unifiedStyles.u12}><strong>Subtask {subtask.id}</strong><span>{subtask.score} {'\u5206'}{subtask.if.length ? ` / depends on ${subtask.if.join(', ')}` : ''}</span></div>
-          <div className={unifiedStyles.u13}>
-            {subtask.groups.map(group => <div key={group.id} style={{ padding: '9px 11px', borderRadius: 8, background: group.kind === 'hack_gate' ? '#f0fdf4' : 'var(--gray-50)', border: `1px solid ${group.kind === 'hack_gate' ? '#bbf7d0' : 'var(--gray-200)'}` }}><div className={unifiedStyles.u12}><span>{group.kind === 'hack_gate' ? '\u7cfb\u7edf Hack Gate' : group.name}</span><span className={unifiedStyles.u6}>{group.type} / {group.cases.length} cases{group.kind === 'official' ? ` / ${group.score} points` : ''}</span></div></div>)}
-          </div>
-        </article>
-      ))}
-    </section>
-  )
+  const addSubtask = () => {
+    const id = subtasks.length ? Math.max(...subtasks.map(item => item.id)) + 1 : 1
+    const officialKey = `official-${id}-${Date.now()}`
+    const next: Subtask = { id, score: 0, if: [], groups: [
+      { key: officialKey, name: '官方测试组', kind: 'official', score: 0, type: 'min', cases: [] },
+      { key: 'hack-gate', name: 'Hack 得分门槛', kind: 'hack_gate', score: 0, type: 'min', cases: [] },
+    ] }
+    setSubtasks(current => [...current, next])
+    setSelectedSubtaskId(id)
+    setSelectedGroupKey(officialKey)
+  }
+
+  const copySubtask = (source: Subtask) => {
+    const id = subtasks.length ? Math.max(...subtasks.map(item => item.id)) + 1 : 1
+    const next: Subtask = {
+      dbId: undefined, id, score: source.score, if: [...source.if],
+      groups: source.groups.map((group, index) => group.kind === 'hack_gate'
+        ? { ...group, id: undefined, key: 'hack-gate', cases: [] }
+        : { ...group, id: undefined, key: `official-${id}-${index + 1}-${Date.now()}`, name: `${group.name} 副本`, cases: group.cases.map(item => ({ ...item })) }),
+    }
+    setSubtasks(current => [...current, next])
+    setSelectedSubtaskId(id)
+    setSelectedGroupKey(next.groups.find(group => group.kind === 'official')?.key || null)
+  }
+
+  const deleteSubtask = (id: number) => {
+    const next = subtasks.filter(item => item.id !== id).map(item => ({ ...item, if: item.if.filter(dependency => dependency !== id) }))
+    setSubtasks(next)
+    setSelectedSubtaskId(next[0]?.id ?? null)
+  }
+
+  const changeSubtaskId = (oldId: number, newId: number) => {
+    setSubtasks(current => current.map(item => item.id === oldId ? { ...item, id: newId } : { ...item, if: item.if.map(dependency => dependency === oldId ? newId : dependency) }))
+    setSelectedSubtaskId(newId)
+  }
+
+  const addGroup = () => {
+    if (!selectedSubtask) return
+    const key = `official-${selectedSubtask.id}-${Date.now()}`
+    updateSubtask(selectedSubtask.id, item => ({ ...item, groups: [...item.groups.filter(group => group.kind === 'official'), { key, name: '新测试组', kind: 'official', score: 0, type: 'min', cases: [] }, ...item.groups.filter(group => group.kind === 'hack_gate')] }))
+    setSelectedGroupKey(key)
+  }
+
+  const updateGroup = (key: string, updater: (group: TestGroup) => TestGroup) => {
+    if (!selectedSubtask) return
+    updateSubtask(selectedSubtask.id, item => ({ ...item, groups: item.groups.map(group => group.key === key ? updater(group) : group) }))
+  }
+
+  const deleteGroup = (key: string) => {
+    if (!selectedSubtask) return
+    updateSubtask(selectedSubtask.id, item => ({ ...item, groups: item.groups.filter(group => group.key !== key) }))
+    setSelectedGroupKey(selectedSubtask.groups.find(group => group.kind === 'official' && group.key !== key)?.key || null)
+  }
+
+  const assignSelected = () => {
+    if (!selectedGroup || selectedGroup.kind !== 'official' || !selectedTestcaseIds.size || !selectedSubtask) return
+    const additions = (graph?.testcases || []).filter(item => selectedTestcaseIds.has(item.id) && !selectedGroup.cases.some(current => current.testcaseId === item.id)).map(item => ({ testcaseId: item.id, input: item.input, output: item.output, source: item.source }))
+    updateGroup(selectedGroup.key, group => ({ ...group, cases: [...group.cases, ...additions] }))
+    setSelectedTestcaseIds(new Set())
+  }
+
+  const registerPairs = async (pairs: Array<{ inputFileId: string; outputFileId: string }>) => {
+    const result = await apiClient.post<TestGraph>(`/api/problems/${problemId}/test-graph/testcases`, { pairs })
+    if (!result.success || !result.data) return toast.error(result.message || '测试点注册失败')
+    setGraph(result.data)
+    toast.success(result.message || '测试点已注册')
+    setManualInputId('')
+    setManualOutputId('')
+  }
+
+  const uploadFiles = async (files: File[], replace = false) => {
+    const form = new FormData()
+    files.forEach(file => form.append('files', file))
+    if (replace) form.append('replace', 'true')
+    return apiClient.postFile(`/api/problems/${problemId}/testdata`, form, { timeout: 120000 })
+  }
+
+  const handleUpload = async (files: File[]) => {
+    if (!files.length) return
+    setUploading(true)
+    try {
+      const result = await uploadFiles(files)
+      if (result.success) { toast.success(`已上传 ${files.length} 个文件`); await refreshPool() }
+      else if (result.status === 409 && result.code === 'TESTDATA_CONFLICT') setReplacementFiles(files)
+      else toast.error(result.message || '上传失败')
+    } finally { setUploading(false); if (uploadRef.current) uploadRef.current.value = '' }
+  }
+
+  const replaceUpload = async () => {
+    if (!replacementFiles) return
+    setUploading(true)
+    try {
+      const result = await uploadFiles(replacementFiles, true)
+      if (!result.success) return toast.error(result.message || '替换失败')
+      toast.success(`已替换 ${replacementFiles.length} 个文件`)
+      setReplacementFiles(null)
+      await refreshPool()
+    } finally { setUploading(false) }
+  }
+
+  const removeFile = async () => {
+    if (!deleteFile) return
+    const result = await apiClient.delete(`/api/problems/${problemId}/testdata/${deleteFile.id}`)
+    if (!result.success) return toast.error(result.message || '删除失败')
+    toast.success('测试数据文件已删除')
+    setDeleteFile(null)
+    await refreshPool()
+  }
+
+  const downloadFile = async (file: TestdataFile) => {
+    try {
+      const result = await apiClient.download(`/api/problems/${problemId}/testdata/files/${file.id}/download`)
+      saveBlobDownload(result.blob, filenameFromContentDisposition(result.contentDisposition, file.filename))
+    } catch { toast.error('下载失败') }
+  }
+
+  if (loading) return <div className={styles.loading}>正在加载数据与分组工作台…</div>
+  if (!graph) return <div className={styles.error}>测试图加载失败，请重新进入页面。</div>
+  if (!graph.migrated) return <section className={styles.migrationCard}><div><h3>此题尚未迁移到 OI Test Graph</h3><p>迁移会把当前 YAML Subtask、测试点和依赖转换为关系型 Test Graph，并保持 Judge 投影一致。迁移不会重测历史提交。</p></div>{graph.migrationIssues?.length ? <ul>{graph.migrationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : null}<Button variant="primary" disabled={!graph.canMigrate} onClick={() => setConfirmMigration(true)}>迁移并进入工作台</Button>{!graph.canMigrate && <p className={styles.blocked}>当前配置不能安全迁移，请先修复上述问题。</p>}<ConfirmDialog isOpen={confirmMigration} onClose={() => setConfirmMigration(false)} onConfirm={migrate} title="迁移此题的 OI 测试图？" message="系统将基于当前评测配置创建 Subtask、Official Group、Hack Gate 和 Testcase 关系，并生成等价 Judge 投影。" confirmText="确认迁移" loading={migrating} /></section>
+
+  return <section className={styles.root}>
+    <header className={styles.toolbar}>
+      <div className={styles.toolbarTitle}><strong>数据与分组</strong><span>revision {graph.revision}</span><span className={totalScore === 100 ? styles.scoreOk : styles.scoreError}>总分 {totalScore}/100</span><span className={issues.length ? styles.issueCount : styles.ready}>{issues.length ? `${issues.length} 个问题` : '配置有效'}</span></div>
+      <div className={styles.toolbarActions}><label className={styles.uploadButton}><Upload size={16} aria-hidden="true" />{uploading ? '上传中…' : '上传数据'}<Input ref={uploadRef} type="file" multiple accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" disabled={uploading} onChange={event => handleUpload(Array.from(event.target.files || []))} /></label><Button variant="outline" icon={<RefreshCw size={16} />} disabled={saving} onClick={load}>重新加载</Button><Button variant="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || issues.length > 0} onClick={save}>保存测试图</Button></div>
+    </header>
+    {issues.length > 0 && <div className={styles.validationBar}>{issues.slice(0, 4).map(issue => <Button variant="text" key={`${issue.path}-${issue.message}`} onClick={() => { if (issue.subtaskId) setSelectedSubtaskId(issue.subtaskId); if (issue.groupKey) setSelectedGroupKey(issue.groupKey) }}>{issue.message}</Button>)}{issues.length > 4 && <span>另有 {issues.length - 4} 个问题</span>}</div>}
+
+    <div className={styles.workspace}>
+      <section className={styles.column} aria-label="Subtask 列表">
+        <div className={styles.columnHeader}><div><strong>Subtask</strong><span>{subtasks.length} 项</span></div><Button variant="outline" size="sm" icon={<Plus size={15} />} onClick={addSubtask}>添加</Button></div>
+        <div className={styles.columnBody}>{subtasks.map((subtask, index) => <article key={`${subtask.id}-${index}`} draggable onDragStart={() => setDraggedSubtask(index)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedSubtask != null) setSubtasks(current => moveItem(current, draggedSubtask, index)); setDraggedSubtask(null) }} className={`${styles.subtaskCard} ${selectedSubtaskId === subtask.id ? styles.selectedCard : ''}`} onClick={() => setSelectedSubtaskId(subtask.id)}><div className={styles.cardTitle}><GripVertical size={15} aria-hidden="true" /><strong>Subtask {subtask.id}</strong><span>{subtask.score} 分</span></div><div className={styles.cardMeta}>{subtask.groups.filter(group => group.kind === 'official').length} Groups · {new Set(subtask.groups.flatMap(group => group.cases.map(item => item.testcaseId))).size} Testcases</div><div className={styles.cardMeta}>{subtask.if.length ? `依赖 S${subtask.if.join(', S')}` : '无依赖'}</div><div className={styles.cardActions}><Button variant="text" iconOnly aria-label="上移 Subtask" disabled={index === 0} onClick={event => { event.stopPropagation(); setSubtasks(current => moveItem(current, index, index - 1)) }}><ArrowUp size={15} /></Button><Button variant="text" iconOnly aria-label="下移 Subtask" disabled={index === subtasks.length - 1} onClick={event => { event.stopPropagation(); setSubtasks(current => moveItem(current, index, index + 1)) }}><ArrowDown size={15} /></Button><Button variant="text" iconOnly aria-label="复制 Subtask" onClick={event => { event.stopPropagation(); copySubtask(subtask) }}><Copy size={15} /></Button><Button variant="text" iconOnly aria-label="删除 Subtask" onClick={event => { event.stopPropagation(); deleteSubtask(subtask.id) }}><Trash2 size={15} /></Button></div></article>)}</div>
+      </section>
+
+      <section className={styles.column} aria-label="Group 配置">
+        <div className={styles.columnHeader}><div><strong>Group 配置</strong><span>{selectedSubtask ? `Subtask ${selectedSubtask.id}` : '未选择'}</span></div><Button variant="outline" size="sm" icon={<Plus size={15} />} disabled={!selectedSubtask} onClick={addGroup}>添加 Group</Button></div>
+        <div className={styles.columnBody}>{selectedSubtask && <div className={styles.subtaskForm}><label>ID<Input type="number" min={1} value={selectedSubtask.id} onChange={event => changeSubtaskId(selectedSubtask.id, Number(event.target.value))} /></label><label>分值<Input type="number" min={0} value={selectedSubtask.score} onChange={event => updateSubtask(selectedSubtask.id, item => ({ ...item, score: Number(event.target.value) }))} /></label><fieldset><legend>依赖</legend><div className={styles.dependencies}>{subtasks.filter(item => item.id !== selectedSubtask.id).map(item => <label key={item.id}><Input type="checkbox" checked={selectedSubtask.if.includes(item.id)} onChange={event => updateSubtask(selectedSubtask.id, current => ({ ...current, if: event.target.checked ? [...current.if, item.id] : current.if.filter(id => id !== item.id) }))} />S{item.id}</label>)}</div></fieldset></div>}
+          {selectedSubtask?.groups.map((group, index) => <article key={group.key} draggable={group.kind === 'official'} onDragStart={() => setDraggedGroup(index)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedGroup != null && group.kind === 'official') updateSubtask(selectedSubtask.id, item => ({ ...item, groups: moveItem(item.groups, draggedGroup, index) })); setDraggedGroup(null) }} className={`${styles.groupCard} ${selectedGroup?.key === group.key ? styles.selectedCard : ''} ${group.kind === 'hack_gate' ? styles.hackGate : ''}`} onClick={() => setSelectedGroupKey(group.key)}><div className={styles.cardTitle}><GripVertical size={15} aria-hidden="true" /><strong>{group.kind === 'hack_gate' ? '系统 Hack Gate' : group.name}</strong><span>{group.cases.length} 点</span></div>{group.kind === 'official' ? <div className={styles.groupForm}><label>名称<Input value={group.name} onChange={event => updateGroup(group.key, current => ({ ...current, name: event.target.value }))} /></label><label>分值<Input type="number" min={0} value={group.score} onChange={event => updateGroup(group.key, current => ({ ...current, score: Number(event.target.value) }))} /></label><label>聚合<Select value={group.type} onChange={event => updateGroup(group.key, current => ({ ...current, type: event.target.value as TestGroup['type'] }))}><option value="min">Min</option><option value="max">Max</option><option value="sum">Sum</option></Select></label><div className={styles.cardActions}><Button variant="text" iconOnly aria-label="上移 Group" disabled={index === 0} onClick={event => { event.stopPropagation(); updateSubtask(selectedSubtask.id, item => ({ ...item, groups: moveItem(item.groups, index, index - 1) })) }}><ArrowUp size={15} /></Button><Button variant="text" iconOnly aria-label="下移 Group" disabled={index >= selectedSubtask.groups.length - 2} onClick={event => { event.stopPropagation(); updateSubtask(selectedSubtask.id, item => ({ ...item, groups: moveItem(item.groups, index, index + 1) })) }}><ArrowDown size={15} /></Button><Button variant="text" iconOnly aria-label="删除 Group" onClick={event => { event.stopPropagation(); deleteGroup(group.key) }}><Trash2 size={15} /></Button></div></div> : <p>由系统维护 · min 门槛 · 不占分值 · 普通保存不能修改</p>}</article>)}
+          {selectedGroup?.kind === 'official' && <div className={styles.groupCases}><div className={styles.sectionLabel}><strong>当前 Group 测试点</strong><span>{selectedGroup.cases.length}</span></div>{selectedGroup.cases.map((item, index) => <div key={item.testcaseId} className={styles.groupCase}><div><strong>{item.input}</strong><span>→ {item.output}</span></div><Input aria-label={`${item.input} 单点分值`} type="number" placeholder="点分" value={item.score ?? ''} onChange={event => updateGroup(selectedGroup.key, group => ({ ...group, cases: group.cases.map((current, currentIndex) => currentIndex === index ? { ...current, score: event.target.value === '' ? null : Number(event.target.value) } : current) }))} /><Input aria-label={`${item.input} 时间覆盖`} placeholder="时间" value={item.time ?? ''} onChange={event => updateGroup(selectedGroup.key, group => ({ ...group, cases: group.cases.map((current, currentIndex) => currentIndex === index ? { ...current, time: event.target.value || null } : current) }))} /><Input aria-label={`${item.input} 内存覆盖`} placeholder="内存" value={item.memory ?? ''} onChange={event => updateGroup(selectedGroup.key, group => ({ ...group, cases: group.cases.map((current, currentIndex) => currentIndex === index ? { ...current, memory: event.target.value || null } : current) }))} /><div className={styles.caseActions}><Button variant="text" iconOnly aria-label={`上移 ${item.input}`} disabled={index === 0} onClick={() => updateGroup(selectedGroup.key, group => ({ ...group, cases: moveItem(group.cases, index, index - 1) }))}><ArrowUp size={14} /></Button><Button variant="text" iconOnly aria-label={`下移 ${item.input}`} disabled={index === selectedGroup.cases.length - 1} onClick={() => updateGroup(selectedGroup.key, group => ({ ...group, cases: moveItem(group.cases, index, index + 1) }))}><ArrowDown size={14} /></Button><Button variant="text" iconOnly aria-label={`从 Group 移除 ${item.input}`} onClick={() => updateGroup(selectedGroup.key, group => ({ ...group, cases: group.cases.filter(current => current.testcaseId !== item.testcaseId) }))}><Trash2 size={14} /></Button></div></div>)}</div>}
+        </div>
+      </section>
+
+      <section className={styles.column} aria-label="Testcase 测试点池">
+        <div className={styles.columnHeader}><div><strong>Testcase 池</strong><span>{graph.testcases.length} 已注册</span></div>{unregisteredPairs.length > 0 && <Button variant="outline" size="sm" onClick={() => registerPairs(unregisteredPairs)}>注册全部 ({unregisteredPairs.length})</Button>}</div>
+        <div className={styles.poolToolbar}><SearchField value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索输入或答案文件" /><Button variant="primary" size="sm" disabled={!selectedTestcaseIds.size || selectedGroup?.kind !== 'official'} onClick={assignSelected}>加入当前 Group ({selectedTestcaseIds.size})</Button>{unregisteredPairs.length > 0 && <div className={styles.unregistered}><strong>待注册输入/答案对</strong>{unregisteredPairs.slice(0, 8).map(pair => <span key={`${pair.inputFileId}-${pair.outputFileId}`}>{pair.input} → {pair.output}</span>)}{unregisteredPairs.length > 8 && <small>另有 {unregisteredPairs.length - 8} 对</small>}</div>}{graph.unmatchedFiles.length > 0 && <div className={styles.unmatched}>未匹配：{graph.unmatchedFiles.map(file => file.filename).join('、')}</div>}</div>
+        <div className={styles.columnBody}>{visibleTestcases.map(item => <label key={item.id} className={styles.testcaseCard}><Input type="checkbox" checked={selectedTestcaseIds.has(item.id)} onChange={event => setSelectedTestcaseIds(current => { const next = new Set(current); event.target.checked ? next.add(item.id) : next.delete(item.id); return next })} /><div><strong>{item.input}</strong><span>→ {item.output}</span><small>{item.source === 'hack' ? 'Hack 数据' : item.assignments.length ? item.assignments.map(assignment => `S${assignment.subtaskId}/${assignment.groupName}`).join(' · ') : '尚未分组'}</small></div></label>)}</div>
+        <div className={styles.registration}><div className={styles.sectionLabel}><strong>手动注册测试点</strong><span>用于无法按同名自动配对的文件</span></div><Select value={manualInputId} onChange={event => setManualInputId(event.target.value)}><option value="">选择输入文件</option>{graph.files.filter(file => file.filename.toLowerCase().endsWith('.in')).map(file => <option key={file.id} value={file.id}>{file.filename}</option>)}</Select><Select value={manualOutputId} onChange={event => setManualOutputId(event.target.value)}><option value="">选择答案文件</option>{graph.files.filter(file => /\.(out|ans)$/i.test(file.filename)).map(file => <option key={file.id} value={file.id}>{file.filename}</option>)}</Select><Button variant="outline" disabled={!manualInputId || !manualOutputId} onClick={() => registerPairs([{ inputFileId: manualInputId, outputFileId: manualOutputId }])}>注册配对</Button></div>
+      </section>
+    </div>
+
+    <details className={styles.files}><summary>测试数据文件（{graph.files.length}）与未匹配文件（{graph.unmatchedFiles.length}）</summary><div className={styles.fileGrid}>{graph.files.map(file => <div key={file.id} className={styles.fileRow}><div><strong>{file.filename}</strong><span>{file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KiB`}</span></div><div><Button variant="text" iconOnly aria-label={`下载 ${file.filename}`} onClick={() => downloadFile(file)}><Download size={15} /></Button><Button variant="text" iconOnly aria-label={`删除 ${file.filename}`} onClick={() => setDeleteFile(file)}><Trash2 size={15} /></Button></div></div>)}</div></details>
+
+    <ConfirmDialog isOpen={Boolean(replacementFiles)} onClose={() => setReplacementFiles(null)} onConfirm={replaceUpload} title="替换同名测试数据？" message="替换会保留文件 ID，并同步更新已注册 Testcase 的内容哈希。现有分组关系不会改变。" confirmText="确认替换" danger loading={uploading} />
+    <ConfirmDialog isOpen={Boolean(deleteFile)} onClose={() => setDeleteFile(null)} onConfirm={removeFile} title="删除测试数据文件？" message={deleteFile ? `确定删除 ${deleteFile.filename}？已被 Official Group 或 Hack Gate 使用的文件会由服务端拒绝删除。` : ''} confirmText="删除" danger />
+  </section>
 }

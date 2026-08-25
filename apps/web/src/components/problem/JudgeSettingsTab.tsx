@@ -12,6 +12,7 @@ import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { ProblemHackConfigPanel } from './ProblemHackConfigPanel'
+import { ProblemTestGraphPanel } from './ProblemTestGraphPanel'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
 
 // ==================== 类型定义 ====================
@@ -199,7 +200,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 状态 ====================
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'basic' | 'subtasks' | 'testdata' | 'hack'>('basic')
+  const [activeTab, setActiveTab] = useState<'basic' | 'data' | 'subtasks' | 'testdata' | 'hack'>('basic')
+  const [testGraphDirty, setTestGraphDirty] = useState(false)
   const [yamlCollapsed, setYamlCollapsed] = useState(true)
 
   // 基础配置
@@ -816,8 +818,14 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
       {/* ===== Tab 切换 ===== */}
       <div className={unifiedStyles.u9}>
-        {([['basic', '基础配置'], ...(judgeMode === 'oi' ? [['subtasks', '子任务'] as const] : []), ['testdata', '测试数据'], ...(problemId ? [['hack', 'Hack'] as const] : [])] as const).map(([key, label]) => (
-          <Button variant="ghost" type="button" key={key} onClick={() => setActiveTab(key)}
+        {([['basic', '基础配置'], ...(judgeMode === 'oi' && problemId ? [['data', '数据与分组'] as const] : []), ...(judgeMode === 'acm' ? [['testdata', '测试数据'] as const] : []), ...(problemId ? [['hack', 'Hack'] as const] : [])] as const).map(([key, label]) => (
+          <Button variant="ghost" type="button" key={key} onClick={() => {
+            if (activeTab === 'data' && key !== 'data' && testGraphDirty) {
+              setConfirmState({ message: '数据与分组工作台存在未保存修改。离开后本次草稿会丢失，确定继续吗？', action: async () => { setTestGraphDirty(false); setActiveTab(key) } })
+              return
+            }
+            setActiveTab(key)
+          }}
             style={{
               padding: '0.625rem 1.25rem',
               fontSize: '0.875rem',
@@ -834,12 +842,13 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             {key === 'testdata' && (testdataFiles.length > 0 || stagedFiles.length > 0) && (
               <span className={unifiedStyles.u10}>({testdataFiles.length + stagedFiles.length})</span>
             )}
-            {key === 'subtasks' && subtasks.length > 0 && (
-              <span className={unifiedStyles.u10}>({subtasks.length})</span>
-            )}
           </Button>
         ))}
       </div>
+
+      {judgeMode === 'oi' && problemId && activeTab === 'data' && (
+        <ProblemTestGraphPanel problemId={problemId} onDirtyChange={setTestGraphDirty} />
+      )}
 
       {/* ===== 基础配置 Tab ===== */}
       {activeTab === 'basic' && (

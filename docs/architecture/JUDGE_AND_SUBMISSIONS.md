@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-24
+last_verified: 2026-08-26
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -115,14 +115,13 @@ Docker 服务需要 cgroup/privileged 能力才能可靠检测内存限制。测
 
 Checker 上传仅接受 C/C++ 源文件，`testlib.h` 由系统提供；下载接口只返回受鉴权的 API 地址，不返回服务器绝对路径，且题目目录必须位于 `TESTDATA_DIR` 下。
 
-## 题目级 ACM Hack
+## 题目级 ACM / OI Hack
 
-传统源码型 ACM 批处理题（`default`，以及历史兼容名称 `standard`）可在评测设置中配置
-C++17 标准程序和 Validator，并显式启用题目级
-Hack。Validator 可引用 Judge 内置的 `testlib.h`；启用前 Server 会通过 go-judge 编译检查
-两个程序。任何拥有该题提交权限的用户都可提交直接输入，或提交 C++17/Python3 生成器，
+传统源码型 ACM/OI 批处理题（`default`，以及历史兼容名称 `standard`）可在评测设置中配置
+C++17 标准程序和 Validator；OI 题还必须配置 Classifier。Validator 与 Classifier 可引用 Judge
+内置的 `testlib.h`；启用前 Server 会通过 go-judge 编译检查全部系统程序。任何拥有该题提交权限的用户都可提交直接输入，或提交 C++17/Python3 生成器，
 同时提供一份使用题目允许语言的被 Hack 程序。
-客观题、交互题、通信题、提交答案题和 OI 计分题不进入该流程。
+客观题、交互题、通信题和提交答案题不进入该流程。
 
 Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 
@@ -151,3 +150,20 @@ Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 `GET /api/problems/:id/hacks/:hackId` 和 `POST /api/problems/:id/hacks/:hackId/retry`。
 源码上限 256 KiB，候选输入和标准答案各 1 MiB。Judge WebSocket 使用独立的 `hack` /
 `hack_result` 消息，并与普通提交交替领取，避免任一队列长期饥饿。
+
+OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 Validator/STD/Checker 自检的数据
+放入相应的系统 `hack_gate` Group。证明程序只有在加入候选点后总分严格下降才构成有效 Hack；历史
+提交不自动重测。关系型 Test Graph 是 Subtask、Official Group、Hack Gate 和 Testcase 关系的唯一
+编辑事实源，`Problem.judgeConfig` 仅为 Judge 执行投影。
+
+## OI 数据与分组工作台
+
+题目管理者在评测设置的“数据与分组”中使用三栏工作台维护 Subtask、Official Group 和 Testcase 池。
+已迁移 OI 题不再允许旧 Subtask 表单或 JSON textarea 反向覆盖 Test Graph；Hack 配置页只维护 STD、
+Validator 和 Classifier。未迁移历史题必须先查看检查结果并显式执行单题迁移，文件缺失、ID 非法或总分
+不闭合时保持只读，不猜测修复。
+
+测试数据上传后先按 `.in` 与 `.out/.ans` 配对，再注册为稳定 `ProblemTestcase`，同一测试点可以关联多个
+Official Group。被 Group 或 Hack Gate 引用的文件返回 `409 TESTDATA_IN_USE`，不能直接删除；同名替换
+保留文件 ID 并同步 Testcase 哈希。整图保存携带 revision，陈旧写入返回 `409 TEST_GRAPH_STALE`，结构
+错误返回 `422 INVALID_TEST_GRAPH`，成功后重新生成 YAML 投影。

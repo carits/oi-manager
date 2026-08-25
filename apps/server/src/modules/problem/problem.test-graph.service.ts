@@ -3,6 +3,7 @@ import yaml from 'js-yaml'
 import { prisma } from '../../prisma'
 
 export type TestGraphIssue = { problemId: string; problemNumber: string; title: string; issues: string[] }
+export type TestGraphValidationError = { path: string; message: string }
 
 function parseConfig(text: string | null): Record<string, any> {
   if (!text?.trim()) return {}
@@ -213,6 +214,112 @@ export async function loadTestGraph(problemId: string) {
   }
 }
 
+function naturalCompare(left: string, right: string) {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+function detectTestdataPairs(files: Array<{ id: string; filename: string }>) {
+  const byName = new Map(files.map(file => [file.filename.toLowerCase(), file]))
+  const pairs: Array<{ inputFileId: string; outputFileId: string; input: string; output: string }> = []
+  const used = new Set<string>()
+  for (const input of files.filter(file => file.filename.toLowerCase().endsWith('.in')).sort((a, b) => naturalCompare(a.filename, b.filename))) {
+    const stem = input.filename.slice(0, -3)
+    const output = byName.get(`${stem}.out`.toLowerCase()) || byName.get(`${stem}.ans`.toLowerCase())
+    if (!output) continue
+    pairs.push({ inputFileId: input.id, outputFileId: output.id, input: input.filename, output: output.filename })
+    used.add(input.id)
+    used.add(output.id)
+  }
+  return { pairs, used }
+}
+
+export async function loadTestGraphWorkspace(problemId: string) {
+  const [graph, files, testcases] = await Promise.all([
+    loadTestGraph(problemId),
+    prisma.testdataFile.findMany({ where: { problemId }, orderBy: { filename: 'asc' } }),
+    prisma.problemTestcase.findMany({
+      where: { problemId },
+      orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        InputFile: true,
+        OutputFile: true,
+        GroupLinks: { include: { Group: { include: { Subtask: true } } } },
+      },
+    }),
+  ])
+  if (!graph) return null
+  const registeredByPair = new Map(testcases.map(item => [`${item.inputFileId}\0${item.outputFileId}`, item.id]))
+  const detected = detectTestdataPairs(files)
+  return {
+    ...graph,
+    files: files.map(file => ({
+      id: file.id,
+      filename: file.filename,
+      size: file.size,
+      sha256: file.sha256,
+      uploadedAt: file.uploadedAt,
+    })),
+    pairs: detected.pairs.map(pair => ({
+      ...pair,
+      testcaseId: registeredByPair.get(`${pair.inputFileId}\0${pair.outputFileId}`) || null,
+    })),
+    unmatchedFiles: files.filter(file => !detected.used.has(file.id)).map(file => ({ id: file.id, filename: file.filename, size: file.size })),
+    testcases: testcases.map(item => ({
+      id: item.id,
+      inputFileId: item.inputFileId,
+      outputFileId: item.outputFileId,
+      input: item.InputFile.filename,
+      output: item.OutputFile.filename,
+      source: item.source,
+      enabled: item.enabled,
+      assignments: item.GroupLinks.map(link => ({
+        subtaskId: link.Group.Subtask.subtaskId,
+        groupId: link.Group.id,
+        groupKey: link.Group.key,
+        groupName: link.Group.name,
+        groupKind: link.Group.kind,
+      })),
+    })),
+  }
+}
+
+export async function registerOfficialTestcases(problemId: string, pairs: Array<{ inputFileId: string; outputFileId: string }>) {
+  const normalized = pairs.map(pair => ({ inputFileId: String(pair?.inputFileId || ''), outputFileId: String(pair?.outputFileId || '') }))
+    .filter(pair => pair.inputFileId && pair.outputFileId)
+  if (normalized.length === 0) return { ok: false as const, code: 'INVALID_TESTCASE_PAIR', issues: ['请选择至少一组输入与答案文件'] }
+  const fileIds = [...new Set(normalized.flatMap(pair => [pair.inputFileId, pair.outputFileId]))]
+  const files = await prisma.testdataFile.findMany({ where: { problemId, id: { in: fileIds } } })
+  if (files.length !== fileIds.length) return { ok: false as const, code: 'INVALID_TESTCASE_PAIR', issues: ['存在不属于当前题目的测试数据文件'] }
+  const byId = new Map(files.map(file => [file.id, file]))
+  for (const pair of normalized) {
+    const input = byId.get(pair.inputFileId)!
+    const output = byId.get(pair.outputFileId)!
+    if (!input.filename.toLowerCase().endsWith('.in') || !/\.(out|ans)$/i.test(output.filename)) {
+      return { ok: false as const, code: 'INVALID_TESTCASE_PAIR', issues: [`${input.filename} / ${output.filename} 不是有效的 .in 与 .out/.ans 配对`] }
+    }
+  }
+  const currentMax = await prisma.problemTestcase.aggregate({ where: { problemId }, _max: { orderIndex: true } })
+  let nextOrder = (currentMax._max.orderIndex ?? -1) + 1
+  const registered = await prisma.$transaction(async tx => {
+    const result = []
+    for (const pair of normalized) {
+      const input = byId.get(pair.inputFileId)!
+      const output = byId.get(pair.outputFileId)!
+      const item = await tx.problemTestcase.upsert({
+        where: { problemId_inputFileId_outputFileId: { problemId, inputFileId: input.id, outputFileId: output.id } },
+        update: { enabled: true },
+        create: {
+          id: crypto.randomUUID(), problemId, inputFileId: input.id, outputFileId: output.id,
+          source: 'official', inputSha256: input.sha256, outputSha256: output.sha256, orderIndex: nextOrder++,
+        },
+      })
+      result.push(item)
+    }
+    return result
+  })
+  return { ok: true as const, registeredCount: registered.length, testcases: registered }
+}
+
 export async function projectTestGraph(problemId: string, baseConfigText?: string | null): Promise<string | null> {
   const graph = await loadTestGraph(problemId)
   if (!graph?.migrated) return baseConfigText ?? null
@@ -265,33 +372,52 @@ export async function inspectAllOiGraphs() {
 }
 
 
-export async function replaceTestGraph(problemId: string, input: any) {
+export function validateTestGraphInput(input: any): TestGraphValidationError[] {
   const subtasks = Array.isArray(input?.subtasks) ? input.subtasks : []
-  const issues: string[] = []
+  const errors: TestGraphValidationError[] = []
+  const add = (path: string, message: string) => errors.push({ path, message })
+  if (subtasks.length === 0) add('subtasks', '至少需要一个 Subtask')
   const ids = new Set<number>()
   let total = 0
-  for (const subtask of subtasks) {
+  for (const [subtaskIndex, subtask] of subtasks.entries()) {
     const id = Number(subtask.id)
-    if (!Number.isInteger(id) || id <= 0 || ids.has(id)) issues.push(`Subtask ID ${subtask.id} 无效或重复`)
+    const subtaskPath = `subtasks.${subtaskIndex}`
+    if (!Number.isInteger(id) || id <= 0 || ids.has(id)) add(`${subtaskPath}.id`, `Subtask ID ${subtask.id} 无效或重复`)
     ids.add(id)
     const score = Number(subtask.score)
-    if (!Number.isInteger(score) || score < 0) issues.push(`Subtask ${id} 分值无效`)
+    if (!Number.isInteger(score) || score < 0) add(`${subtaskPath}.score`, `Subtask ${id} 分值无效`)
     total += score || 0
     const groups = Array.isArray(subtask.groups) ? subtask.groups : []
     const official = groups.filter((group: any) => group.kind === 'official')
     const gates = groups.filter((group: any) => group.kind === 'hack_gate')
-    if (gates.length !== 1) issues.push(`Subtask ${id} 必须恰好有一个 Hack Gate`)
+    if (official.length === 0) add(`${subtaskPath}.groups`, `Subtask ${id} 至少需要一个 Official Group`)
+    if (gates.length !== 1) add(`${subtaskPath}.groups`, `Subtask ${id} 必须恰好有一个 Hack Gate`)
     if (official.reduce((sum: number, group: any) => sum + Number(group.score || 0), 0) !== score) {
-      issues.push(`Subtask ${id} 的 Official Group 分值之和必须等于 Subtask 分值`)
+      add(`${subtaskPath}.groups`, `Subtask ${id} 的 Official Group 分值之和必须等于 Subtask 分值`)
     }
-    for (const group of groups) {
-      if (!['official', 'hack_gate'].includes(group.kind)) issues.push(`Subtask ${id} Group 类型无效`)
-      if (!['min', 'max', 'sum'].includes(group.type)) issues.push(`Subtask ${id} Group 聚合方式无效`)
-      if (group.kind === 'hack_gate' && Number(group.score || 0) !== 0) issues.push(`Subtask ${id} Hack Gate 分值必须为 0`)
+    const groupKeys = new Set<string>()
+    for (const [groupIndex, group] of groups.entries()) {
+      const groupPath = `${subtaskPath}.groups.${groupIndex}`
+      const key = String(group.key || '').trim()
+      if (!key || groupKeys.has(key)) add(`${groupPath}.key`, `Subtask ${id} Group key 不能为空或重复`)
+      groupKeys.add(key)
+      if (!String(group.name || '').trim()) add(`${groupPath}.name`, `Subtask ${id} Group 名称不能为空`)
+      if (!['official', 'hack_gate'].includes(group.kind)) add(`${groupPath}.kind`, `Subtask ${id} Group 类型无效`)
+      if (!['min', 'max', 'sum'].includes(group.type)) add(`${groupPath}.type`, `Subtask ${id} Group 聚合方式无效`)
+      if (group.kind === 'hack_gate' && Number(group.score || 0) !== 0) add(`${groupPath}.score`, `Subtask ${id} Hack Gate 分值必须为 0`)
+      const cases = Array.isArray(group.cases) ? group.cases : []
+      if (group.kind === 'official' && cases.length === 0) add(`${groupPath}.cases`, `Subtask ${id} 的 Official Group ${group.name || key} 至少需要一个 Testcase`)
+      const testcaseIds = cases.map((item: any) => String(item.testcaseId || ''))
+      if (testcaseIds.some((testcaseId: string) => !testcaseId) || new Set(testcaseIds).size !== testcaseIds.length) {
+        add(`${groupPath}.cases`, `Subtask ${id} Group ${group.name || key} 存在空或重复 Testcase`)
+      }
     }
   }
-  if (total !== 100) issues.push(`Subtask 总分为 ${total}，必须为 100`)
-  for (const subtask of subtasks) for (const dep of subtask.if || []) if (!ids.has(Number(dep))) issues.push(`Subtask ${subtask.id} 依赖不存在的 Subtask ${dep}`)
+  if (total !== 100) add('subtasks', `Subtask 总分为 ${total}，必须为 100`)
+  for (const [subtaskIndex, subtask] of subtasks.entries()) for (const dep of subtask.if || []) {
+    if (Number(dep) === Number(subtask.id)) add(`subtasks.${subtaskIndex}.if`, `Subtask ${subtask.id} 不能依赖自身`)
+    else if (!ids.has(Number(dep))) add(`subtasks.${subtaskIndex}.if`, `Subtask ${subtask.id} 依赖不存在的 Subtask ${dep}`)
+  }
   const visiting = new Set<number>(), visited = new Set<number>()
   const byId = new Map<number, any>(subtasks.map((subtask: any) => [Number(subtask.id), subtask]))
   function visit(id: number): boolean {
@@ -301,19 +427,25 @@ export async function replaceTestGraph(problemId: string, input: any) {
     for (const dep of byId.get(id)?.if || []) if (!visit(Number(dep))) return false
     visiting.delete(id); visited.add(id); return true
   }
-  for (const id of ids) if (!visit(id)) { issues.push('Subtask 依赖不能形成环'); break }
-  if (issues.length > 0) return { ok: false, issues: [...new Set(issues)] }
+  for (const id of ids) if (!visit(id)) { add('subtasks', 'Subtask 依赖不能形成环'); break }
+  return errors.filter((item, index) => errors.findIndex(other => other.path === item.path && other.message === item.message) === index)
+}
+
+export async function replaceTestGraph(problemId: string, input: any) {
+  const subtasks = Array.isArray(input?.subtasks) ? input.subtasks : []
+  const errors = validateTestGraphInput(input)
+  if (errors.length > 0) return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: errors.map(item => item.message), errors }
 
   const testcaseIds = [...new Set(subtasks.flatMap((subtask: any) => (subtask.groups || []).flatMap((group: any) => (group.cases || []).map((item: any) => item.testcaseId))))]
   const testcaseCount = await prisma.problemTestcase.count({ where: { problemId, id: { in: testcaseIds as string[] } } })
-  if (testcaseCount !== testcaseIds.length) return { ok: false, issues: ['存在不属于当前题目的 Testcase'] }
+  if (testcaseCount !== testcaseIds.length) return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: ['存在不属于当前题目的 Testcase'], errors: [{ path: 'subtasks', message: '存在不属于当前题目的 Testcase' }] }
 
   const current = await loadTestGraph(problemId)
   if (current?.migrated) {
     if (Number(input?.revision) !== current.revision) {
-      return { ok: false, issues: ['测试图 revision 已变化，请刷新后重试'] }
+      return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['测试图 revision 已变化，请刷新后重试'], errors: [{ path: 'revision', message: '测试图 revision 已变化，请刷新后重试' }] }
     }
-    const currentGates = new Map(current.subtasks.map(subtask => [subtask.id,
+    const currentGates = new Map(current.subtasks.map(subtask => [subtask.dbId,
       subtask.groups.filter(group => group.kind === 'hack_gate').map(group => ({
         key: group.key,
         cases: group.cases.map(item => item.testcaseId),
@@ -324,8 +456,13 @@ export async function replaceTestGraph(problemId: string, input: any) {
         key: String(group.key),
         cases: (group.cases || []).map((item: any) => String(item.testcaseId)),
       }))
-      if (JSON.stringify(submitted) !== JSON.stringify(currentGates.get(Number(subtask.id)) || [])) {
-        return { ok: false, issues: [`Subtask ${subtask.id} 的 Hack Gate 由系统维护，不能手动修改`] }
+      if (subtask.dbId && !currentGates.has(String(subtask.dbId))) {
+        return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: [`Subtask ${subtask.id} 的稳定标识无效`], errors: [{ path: 'subtasks', message: `Subtask ${subtask.id} 的稳定标识无效` }] }
+      }
+      const existingGate = subtask.dbId ? currentGates.get(String(subtask.dbId)) : undefined
+      const validNewGate = !existingGate && submitted.length === 1 && submitted[0].key === 'hack-gate' && submitted[0].cases.length === 0
+      if (!validNewGate && JSON.stringify(submitted) !== JSON.stringify(existingGate || [])) {
+        return { ok: false as const, code: 'HACK_GATE_READ_ONLY', issues: [`Subtask ${subtask.id} 的 Hack Gate 由系统维护，不能手动修改`], errors: [{ path: 'subtasks', message: `Subtask ${subtask.id} 的 Hack Gate 由系统维护，不能手动修改` }] }
       }
     }
   }
@@ -353,9 +490,9 @@ export async function replaceTestGraph(problemId: string, input: any) {
       if (changed.count !== 1) throw new Error('TEST_GRAPH_STALE')
     })
   } catch (error: any) {
-    if (error?.message === 'TEST_GRAPH_STALE') return { ok: false, issues: ['测试图 revision 已变化，请刷新后重试'] }
+    if (error?.message === 'TEST_GRAPH_STALE') return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['测试图 revision 已变化，请刷新后重试'], errors: [{ path: 'revision', message: '测试图 revision 已变化，请刷新后重试' }] }
     throw error
   }
   await refreshProblemJudgeProjection(problemId)
-  return { ok: true, graph: await loadTestGraph(problemId) }
+  return { ok: true as const, graph: await loadTestGraphWorkspace(problemId) }
 }

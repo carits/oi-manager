@@ -336,10 +336,14 @@ async function commitStagedFiles(problemId: string, stagedFiles: StagedFile[]) {
     })
 
     if (existing) {
-      await prisma.testdataFile.update({
-        where: { id: existing.id },
-        data: { size: file.size, md5: null, sha256: file.sha256, uploadedAt: new Date() },
-      })
+      await prisma.$transaction([
+        prisma.testdataFile.update({
+          where: { id: existing.id },
+          data: { size: file.size, md5: null, sha256: file.sha256, uploadedAt: new Date() },
+        }),
+        prisma.problemTestcase.updateMany({ where: { inputFileId: existing.id }, data: { inputSha256: file.sha256 } }),
+        prisma.problemTestcase.updateMany({ where: { outputFileId: existing.id }, data: { outputSha256: file.sha256 } }),
+      ])
       uploadedFiles.push({ id: existing.id, filename: file.filename, size: file.size, sha256: file.sha256, status: 'updated' })
     } else {
       const testdataFile = await prisma.testdataFile.create({
@@ -439,6 +443,32 @@ testdataRouter.delete('/problems/:id/testdata/:fileId', authenticate, requireTes
     const { id, fileId } = req.params
     const testdataFile = await prisma.testdataFile.findUnique({ where: { id: fileId } })
     if (!testdataFile || testdataFile.problemId !== id) return res.status(404).json({ success: false, message: 'Testdata operation failed' })
+
+    const references = await prisma.problemTestcase.findMany({
+      where: { problemId: id, OR: [{ inputFileId: fileId }, { outputFileId: fileId }] },
+      include: { GroupLinks: { include: { Group: { include: { Subtask: true } } } } },
+    })
+    const usedReferences = references.filter(item => item.GroupLinks.length > 0)
+    if (usedReferences.length > 0) {
+      const locationMap = new Map(usedReferences.flatMap(item => item.GroupLinks.map(link => {
+        const location = {
+          testcaseId: item.id,
+          subtaskId: link.Group.Subtask.subtaskId,
+          groupId: link.Group.id,
+          groupName: link.Group.name,
+          groupKind: link.Group.kind,
+        }
+        return [`${location.testcaseId}\0${location.groupId}`, location] as const
+      })))
+      return res.status(409).json({
+        success: false,
+        code: 'TESTDATA_IN_USE',
+        message: `${testdataFile.filename} 已被 Test Graph 引用，请先从对应 Official Group 移除测试点`,
+        data: { testcaseIds: usedReferences.map(item => item.id), references: [...locationMap.values()] },
+      })
+    }
+
+    if (references.length > 0) await prisma.problemTestcase.deleteMany({ where: { id: { in: references.map(item => item.id) } } })
 
     const filePath = safeJoin(path.join(TESTDATA_DIR, id), testdataFile.filename)
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath)

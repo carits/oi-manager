@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-25
+last_verified: 2026-08-26
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -34,6 +34,14 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 底部固定“取消 → 主操作”；提交中禁用重复操作、ESC、遮罩关闭和关闭按钮。
 - dirty 表单关闭前确认；嵌套弹窗只有顶层处理 Escape/Tab，关闭后恢复触发点焦点。
 - 640px 以下 Dialog 全屏，关键操作保持可见；桌面完整验收 1440×900 与 1280×720。
+
+## 2026-08-26 OI 数据工作台
+
+- OI 数据管理采用三栏工作台：Subtask、Group、Testcase 池。三栏共享一个吸顶操作栏、revision、总分和结构化错误摘要。
+- Subtask 与 Official Group 支持拖放和键盘上移/下移；Hack Gate 使用成功语义色但保持只读，不伪装成普通可编辑卡片。
+- `1280×720` 下 Testcase 池下移为整行，手机下三栏降级为分步纵向区域；页面本身不得产生横向溢出。
+- 文件上传、同名替换和删除使用统一按钮与 ConfirmDialog；工作台不再暴露可编辑 JSON textarea。
+- 离开含未保存草稿的工作台必须确认，revision 冲突保留本地草稿并提示刷新，不自动覆盖。
 
 ## 2026-08-01 UX 审查结论
 

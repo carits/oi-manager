@@ -1,10 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-25
+last_verified: 2026-08-26
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-26: OI Test Graph 已从 JSON textarea 收口为“Subtask → Group → Testcase”三栏工作台；旧 Subtask/测试数据入口在 OI 模式隐藏，Hack 配置只保留系统程序。新增题目管理员单题显式迁移、测试点注册、结构化校验、revision 409 和测试数据引用保护。Server 39 文件 430/430、Web 36/36、Judge 9/9、Chromium `1280×720` 与 `1440×900` E2E 均通过；公网候选构建 `yWNYBecXwn49NS0LJhzwS` 已完成健康提升。
 - 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。提交 97ee230 已部署为公网构建 zqmtCul8BqfkMjyMkx8fU，线上权限复验为管理员 200 且含完整源码、其他用户访问他人详情 404。
 - 2026-08-24: 新增 ICPC/OI/IOI 完整破坏性闭环，真实创建比赛、切换 ACM/OI 题目快照、提交并通过
   Judge WebSocket 回传、校验赛中/赛后排名与详情后清理。审计修复远程归档进入排行榜、Judge 结果后
@@ -89,10 +90,10 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   评测后端，比赛提交优先使用 `judgeConfigSnapshot`。
 - 超级管理员和平台管理员的评测记录页提供全平台全量视图，包含所有用户、个人区、校园区和比赛提交，支持总数、范围提示和 20/50/100 条分页浏览。
 - 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
-- ACM 传统源码批处理题（`default`/历史 `standard`）可配置题目级 Hack；客观题、交互题、
-  通信题、提交答案题和 OI 计分题不能启用。有效 Hack 必须通过 Validator，并使被 Hack 程序在
-  当前完整数据与“候选点优先 + 当前完整数据”之间发生最终 Verdict 变化；有效数据同步题目
-  和全部 ACM 活动快照，仅影响后续新提交。
+- OI 题目的关系型 Test Graph 是 Subtask、Official Group、Hack Gate 与 Testcase 的唯一编辑事实源；题目管理者通过三栏工作台上传/配对数据、注册测试点、设置依赖和聚合方式，YAML 仅由服务端生成 Judge 投影。
+- ACM/OI 传统源码批处理题（`default`/历史 `standard`）可配置题目级 Hack；客观题、交互题、
+  通信题和提交答案题不能启用。ACM 有效性取决于最终 Verdict 变化；OI 由 Classifier 分类并要求
+  总分严格下降。有效数据仅影响后续新提交，历史提交、成绩和排行榜不自动重测。
 - 比赛赛中隐藏原题身份时，页面使用“题目 A/B/…”作为隐私安全的活动标签，不显示缺失占位符，
   也不泄露原题标题、平台或题号；题目时间限制统一按数据库的毫秒单位展示。
 - 比赛评测记录与全局评测记录共用同一结果/语言筛选选项；PE、OLE、Queuing、Judging 及系统/远程错误

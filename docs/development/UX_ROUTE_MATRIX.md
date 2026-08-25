@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-25
+last_verified: 2026-08-26
 source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 ---
 
@@ -60,7 +60,7 @@ source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 | P1 | 提交详情 | 多角色 | 中英文混用、信息侧栏松散、代码操作反馈弱 | 已中文化并重排结果、性能、信息和代码区域 |
 | P1 | 人物资料、导入错误态、题目详情 | 多角色 | 缺少统一 Shell 或语义标题，键盘与自动化无法可靠判断当前位置 | 已统一资料 Shell/组件，并为错误态与题目详情补齐标题语义 |
 | P1 | 学校、用户、OJ 管理低频页 | 管理角色 | 仍有局部原生表格和内联按钮样式 | Shell 与页面边距已统一；控件迁移继续按矩阵跟踪 |
-| P2 | 问题编辑、Judge 设置、导入预览 | 管理角色 | 单文件体积大，局部图标和表单反馈仍不统一 | 已纳入后续按业务区域拆分清单 |
+| P2 | 问题编辑、Judge 设置、导入预览 | 管理角色 | 单文件体积大，局部图标和表单反馈仍不统一 | OI 数据与分组已拆为三栏工作台；其余区域继续按业务拆分 |
 
 失败截图、视频和 trace 写入 `test-results/playwright/`，缺陷报告写入
 `test-results/ui-defects.md`。报告必须包含路由、角色、视口、复现步骤和严重级别。

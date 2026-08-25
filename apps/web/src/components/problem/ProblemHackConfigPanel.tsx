@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemHackConfigPanel.module.css'
-import { ProblemTestGraphPanel } from './ProblemTestGraphPanel'
 
 interface HackConfig {
   enabled: boolean
@@ -79,7 +78,6 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
           <Input type="checkbox" checked={config.enabled} disabled={!hackable} onChange={event => setConfig(current => ({ ...current, enabled: event.target.checked }))} /> 启用 Hack
         </label>
       </div>
-      <>{judgeMode === 'oi' && <ProblemTestGraphPanel problemId={problemId} />}</>
       <div className={styles.sourceGrid}>
         <SourceEditor title="标准程序（STD）" hint="C++17 · 遵循题目现有文件读写配置" value={config.standardSource} onChange={value => setConfig(current => ({ ...current, standardSource: value }))} onFile={file => readSource(file, 'standardSource')} />
         <SourceEditor title="输入校验程序（Validator）" hint={'C++17 · 可直接 #include "testlib.h"'} value={config.validatorSource} onChange={value => setConfig(current => ({ ...current, validatorSource: value }))} onFile={file => readSource(file, 'validatorSource')} />

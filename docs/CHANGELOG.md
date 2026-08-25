@@ -1,13 +1,21 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-25
+last_verified: 2026-08-26
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-26
+
+- 将 OI Test Graph 从可编辑 JSON textarea 重构为 Subtask、Official Group、Testcase 池三栏工作台；支持依赖、分值、`min/max/sum`、批量分配、排序、文件上传/配对和只读 Hack Gate。
+- OI 评测设置只保留“数据与分组”入口，旧 Subtask/测试数据入口不再可达；Hack 配置页只维护 STD、Validator 和 Classifier。
+- 新增题目管理员单题显式迁移和测试点注册 API；整图校验返回字段路径，revision 冲突返回 `409 TEST_GRAPH_STALE`，被使用文件返回 `409 TESTDATA_IN_USE`，同名替换同步 Testcase 哈希。
+- 验证：Server 39 文件 430/430、Web 36/36、Judge 9/9、Server/Judge/Web 生产构建、UI 门禁、Chromium `1280×720`/`1440×900` 工作台 E2E 全部通过。
+- 公网候选构建 `yWNYBecXwn49NS0LJhzwS` 已完成 3200 canary、3000 promote 和 3000/3002 健康检查；提交与推送信息在完成后补记。
+
 ## 2026-08-25
 
 - 启动全站 UI 统一基础批次：新增统一表单控件、Combobox、Menu/Popover、Section、DataTable 与
