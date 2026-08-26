@@ -4,6 +4,8 @@ import { asyncHandler } from '../lib/asyncHandler'
 import { inspectAllOiGraphs, migrateLegacyTestGraph, refreshProblemJudgeProjection } from '../modules/problem/problem.test-graph.service'
 import { prisma } from '../prisma'
 import { inspectTestSetRevisionMigration, migrateProblemTestSetRevisions } from '../modules/problem/problem.testset-revision.service'
+import { ActivityRevisionRepairError, repairActivityRevisionPins } from '../modules/problem/problem.activity-revision-repair.service'
+import { logger } from '../lib/logger'
 
 export const testGraphAdminRouter = Router()
 
@@ -27,6 +29,34 @@ testGraphAdminRouter.post('/problem-test-set-revisions/migration', authenticate,
     data: { succeeded, failed: results.length - succeeded, invalid: inspection.invalid, results },
     message: `已完成 ${succeeded} 道题的正式测试版本迁移`,
   })
+}))
+
+testGraphAdminRouter.post('/problem-test-set-revisions/activity-pin-repair', authenticate, asyncHandler(async (req, res) => {
+  if (req.user?.role !== 'super_admin') return res.status(403).json({ success: false, message: '仅超级管理员可执行活动测试版本恢复' })
+  const action = req.body?.action
+  if (action !== 'preview' && action !== 'apply') return res.status(400).json({ success: false, message: 'action 必须为 preview 或 apply' })
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
+  if (action === 'apply' && reason.length < 10) return res.status(400).json({ success: false, code: 'REVISION_REPAIR_REASON_REQUIRED', message: '执行恢复时必须填写至少 10 个字符的原因' })
+  try {
+    const data = await repairActivityRevisionPins({
+      trainingId: Number(req.body?.trainingId),
+      updates: req.body?.updates,
+      apply: action === 'apply',
+    })
+    if (action === 'apply') {
+      logger.warn('activity_test_set_revision_repaired', {
+        action: 'activity_revision_repair',
+        userId: req.user.userId,
+        metadata: { trainingId: data.trainingId, reason, repairs: data.results },
+      })
+    }
+    res.json({ success: true, data, message: action === 'apply' ? `已恢复 ${data.results.length} 道活动题的正式测试版本` : `可安全恢复 ${data.results.length} 道活动题` })
+  } catch (error) {
+    if (error instanceof ActivityRevisionRepairError) {
+      return res.status(error.status).json({ success: false, code: error.code, message: error.message })
+    }
+    throw error
+  }
 }))
 
 testGraphAdminRouter.get('/problem-test-graph/migration', authenticate, asyncHandler(async (req, res) => {
