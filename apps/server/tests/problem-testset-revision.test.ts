@@ -28,6 +28,7 @@ async function fixture() {
   await Promise.all([
     fs.promises.writeFile(path.join(directory, '1.in'), '1 2\n'),
     fs.promises.writeFile(path.join(directory, '1.out'), '3\n'),
+    fs.promises.writeFile(path.join(directory, '1.ans'), '3\n'),
     fs.promises.writeFile(path.join(directory, 'checker.cpp'), '// checker v1\nint main(){}\n'),
   ])
   const config = [
@@ -52,7 +53,7 @@ async function fixture() {
     status: 'published',
     judgeConfig: config,
   } })
-  for (const filename of ['1.in', '1.out']) {
+  for (const filename of ['1.in', '1.out', '1.ans']) {
     const content = await fs.promises.readFile(path.join(directory, filename))
     await prisma.testdataFile.create({ data: {
       id: crypto.randomUUID(), problemId, filename, size: content.length,
@@ -162,10 +163,8 @@ describe('immutable problem TestSet Revisions', () => {
       'subtasks:',
       '  - id: all',
       '    score: 100',
-      '    type: sum',
-      '    cases:',
-      '      - input: 1.in',
-      '        output: 1.out',
+      '    scoring: sum',
+      '    cases: [1]',
       '',
     ].join('\n'))
 

@@ -165,6 +165,8 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 - `TrainingProblem.testSetRevisionId` 在活动添加题目时固定。活动未开始且无提交时管理员可以手动更新；开始、结束或已有提交后统一返回 `409 TEST_SET_REVISION_FROZEN`。
 - 发布使用 `pg_advisory_xact_lock(problemId)` 与 expected-latest CAS；Test Graph、Judge 投影、最新版指针和兼容 `Problem.judgeConfig` 在同一事务提交。并发 Hack 冲突最多基于最新版重评三次。
 - 普通 Judge Config PUT 不允许隐式改变模式；`POST /api/problems/:id/judge-mode-transition` 创建保留历史的转换 Revision，并关闭 Hack 等待重新配置。
+- 历史迁移接受数字测试点简写 `cases: [1]` 并映射为 `1.in/1.ans`，旧 `scoring` 字段与当前
+  `type` 等价；其他缺少明确输入/答案文件名的结构拒绝迁移，不猜测文件。
 - 内容对象写入失败或 CAS 丢失留下的无引用对象超过 24 小时后由锁内 GC 删除。
 
 ## OI 数据与分组工作台

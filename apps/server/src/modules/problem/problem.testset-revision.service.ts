@@ -228,10 +228,13 @@ export async function resolveConfigSpec(problemId: string, configText: string): 
     const cases = Array.isArray(config.cases) ? config.cases : []
     return {
       mode,
-      cases: await Promise.all(cases.map(async (item: any) => ({
-        ...await resolveNamedPair(problemId, String(item.input), String(item.output)),
-        score: item.score ?? null, time: item.time || null, memory: item.memory || null,
-      }))),
+      cases: await Promise.all(cases.map(async (item: any) => {
+        const normalized = normalizeLegacyCase(item)
+        return {
+          ...await resolveNamedPair(problemId, normalized.input, normalized.output),
+          score: normalized.score ?? null, time: normalized.time || null, memory: normalized.memory || null,
+        }
+      })),
     }
   }
   const rawSubtasks = Array.isArray(config.subtasks) ? config.subtasks : []
@@ -242,7 +245,7 @@ export async function resolveConfigSpec(problemId: string, configText: string): 
     const rawGroups = Array.isArray(raw.groups) && raw.groups.length > 0
       ? raw.groups
       : [
-          { id: `official-${id}`, name: '官方测试组', kind: 'official', score: Number(raw.score || 0), type: raw.type || 'min', cases: raw.cases || [] },
+          { id: `official-${id}`, name: '官方测试组', kind: 'official', score: Number(raw.score || 0), type: raw.type || raw.scoring || 'min', cases: raw.cases || [] },
           { id: 'hack-gate', name: 'Hack 得分门槛', kind: 'hack_gate', score: 0, type: 'min', cases: [] },
         ]
     const groups: RevisionGroupSpec[] = []
@@ -250,15 +253,28 @@ export async function resolveConfigSpec(problemId: string, configText: string): 
       groups.push({
         key: String(group.id || group.key), name: String(group.name || group.id || group.key), kind: group.kind === 'hack_gate' ? 'hack_gate' : 'official',
         score: Number(group.score || 0), type: ['max', 'sum'].includes(group.type) ? group.type : 'min',
-        cases: await Promise.all((group.cases || []).map(async (item: any) => ({
-          ...await resolveNamedPair(problemId, String(item.input), String(item.output)),
-          score: item.score ?? null, time: item.time || null, memory: item.memory || null,
-        }))),
+        cases: await Promise.all((group.cases || []).map(async (item: any) => {
+          const normalized = normalizeLegacyCase(item)
+          return {
+            ...await resolveNamedPair(problemId, normalized.input, normalized.output),
+            score: normalized.score ?? null, time: normalized.time || null, memory: normalized.memory || null,
+          }
+        })),
       })
     }
     subtasks.push({ id, score: Number(raw.score || 0), if: normalizedIds.dependencyIds(raw.if), groups })
   }
   return { mode, subtasks }
+}
+
+function normalizeLegacyCase(item: any): { input: string; output: string; score?: number; time?: string; memory?: string } {
+  if ((typeof item === 'number' && Number.isInteger(item) && item > 0) || (typeof item === 'string' && /^\d+$/.test(item))) {
+    return { input: `${item}.in`, output: `${item}.ans` }
+  }
+  if (!item || typeof item !== 'object' || typeof item.input !== 'string' || typeof item.output !== 'string') {
+    throw new Error('测试点缺少输入文件名或答案文件名')
+  }
+  return item
 }
 
 function projectRevisionConfig(baseConfigText: string | null, spec: TestSetRevisionSpec) {
@@ -651,9 +667,10 @@ export async function inspectTestSetRevisionMigration() {
         const cases = Array.isArray(config.cases) ? config.cases : (config.subtasks || []).flatMap((subtask: any) => subtask.groups?.length
           ? subtask.groups.flatMap((group: any) => group.cases || []) : subtask.cases || [])
         for (const item of cases) {
-          if (typeof item.input === 'string' && item.input.trim()) testdataNames.add(item.input.trim())
+          const normalized = normalizeLegacyCase(item)
+          if (normalized.input.trim()) testdataNames.add(normalized.input.trim())
           else issues.push('测试点缺少输入文件名')
-          if (typeof item.output === 'string' && item.output.trim()) testdataNames.add(item.output.trim())
+          if (normalized.output.trim()) testdataNames.add(normalized.output.trim())
           else issues.push('测试点缺少答案文件名')
         }
         for (const asset of configuredAssetNames(text)) assetNames.add(asset)
