@@ -82,3 +82,6 @@ SSH 暴露面复核及备份恢复演练全部完成或明确关闭。
 API 回滚时将 `.run/api-active-upstream` 原子改回仍在运行的旧端口；若旧实例已经停止，先用对应
 `oi-manager-server@<port>` 启动并通过 readiness，然后重启唯一 Worker。前端继续使用 preview rollback。
 不要执行 `docker compose down -v`，否则会删除数据库卷。
+
+前端 Canary 日志固定保存在项目 `.run/oi-web-canary.log`，不使用 `/tmp` 中可能由其他运行身份创建的
+固定文件名。这避免 Linux `fs.protected_regular` 在粘滞目录中拒绝跨用户覆盖旧日志。

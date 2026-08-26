@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 PID_FILE="$RUN_DIR/oi-web-canary.pid"
-LOG_FILE="${CANARY_LOG_FILE:-/tmp/oi-web-canary.log}"
+LOG_FILE="${CANARY_LOG_FILE:-$RUN_DIR/oi-web-canary.log}"
 
 mkdir -p "$RUN_DIR"
 test -f "$ROOT_DIR/apps/web/.next-candidate/BUILD_ID"
