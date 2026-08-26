@@ -5,6 +5,9 @@ last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-27: 资源所有权矩阵补齐活动、团队、平台题、校内题和全局提交，定向 3/3 通过；
+  真实生产 Web 使用 `admin`/`platform_admin`/`teacher1` 完成 3/3 角色工作区验收，两类全局管理员
+  都只有一个严格隔离的管理工作区，平台管理员评测记录 API 返回 `scope=all`。
 - 2026-08-27: 补登记 20260815 资产并恢复 1005–1014 服务器既有 `.in/.ans + config.json`、
   1015–1019 既有演示数据后，69 道题中 42 道生成 73 个正式 Revision，301 个活动题中 293 个已固定版本，
   2582 条提交中 2361 条固定版本；迁移连续两次复跑保持幂等，检查结果 42 valid / 0 invalid。

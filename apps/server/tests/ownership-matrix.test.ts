@@ -1,0 +1,134 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { canModifyProblem, canUseProblem, canViewProblem } from '../src/modules/problem/problem.access'
+import {
+  canAccessTraining,
+  canManageTraining,
+  isTeamAdmin,
+  isTeamMember,
+} from '../src/modules/training/training.helpers'
+import { prisma } from '../src/prisma'
+import { createTestSchool, createTestTeam, createTestUser } from './helpers/testUser'
+
+describe('resource ownership permission matrix', () => {
+  let schoolA: Awaited<ReturnType<typeof createTestSchool>>
+  let schoolB: Awaited<ReturnType<typeof createTestSchool>>
+  let principal: Awaited<ReturnType<typeof createTestUser>>
+  let creator: Awaited<ReturnType<typeof createTestUser>>
+  let otherTeacher: Awaited<ReturnType<typeof createTestUser>>
+  let student: Awaited<ReturnType<typeof createTestUser>>
+  let outsider: Awaited<ReturnType<typeof createTestUser>>
+  let superAdmin: Awaited<ReturnType<typeof createTestUser>>
+  let platformAdmin: Awaited<ReturnType<typeof createTestUser>>
+
+  beforeEach(async () => {
+    schoolA = await createTestSchool({ name: 'Ownership school A' })
+    schoolB = await createTestSchool({ name: 'Ownership school B' })
+    principal = await createTestUser({ role: 'school_principal', schoolId: schoolA.id })
+    creator = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+    otherTeacher = await createTestUser({ role: 'teacher', schoolId: schoolA.id })
+    student = await createTestUser({ role: 'student', schoolId: schoolA.id })
+    outsider = await createTestUser({ role: 'teacher', schoolId: schoolB.id })
+    superAdmin = await createTestUser({ role: 'super_admin' })
+    platformAdmin = await createTestUser({ role: 'platform_admin' })
+  })
+
+  it('separates activity participation from activity management', async () => {
+    const training = await prisma.training.create({
+      data: {
+        title: 'Ownership contest',
+        type: 'contest',
+        format: 'icpc',
+        scope: 'campus',
+        organizationId: schoolA.organizationId!,
+        createdBy: creator.user.id,
+        status: 'upcoming',
+        startTime: new Date(Date.now() + 60_000),
+        endTime: new Date(Date.now() + 3_600_000),
+      },
+    })
+
+    await expect(canManageTraining(principal.user.id, training)).resolves.toBe(true)
+    await expect(canManageTraining(creator.user.id, training)).resolves.toBe(true)
+    await expect(canManageTraining(otherTeacher.user.id, training)).resolves.toBe(false)
+    await expect(canManageTraining(student.user.id, training)).resolves.toBe(false)
+    await expect(canManageTraining(outsider.user.id, training)).resolves.toBe(false)
+    await expect(canManageTraining(superAdmin.user.id, training)).resolves.toBe(true)
+    await expect(canManageTraining(platformAdmin.user.id, training)).resolves.toBe(false)
+
+    await expect(canAccessTraining(principal.user.id, training)).resolves.toBe(true)
+    await expect(canAccessTraining(otherTeacher.user.id, training)).resolves.toBe(true)
+    await expect(canAccessTraining(student.user.id, training)).resolves.toBe(true)
+    await expect(canAccessTraining(outsider.user.id, training)).resolves.toBe(false)
+    await expect(canAccessTraining(superAdmin.user.id, training)).resolves.toBe(true)
+    await expect(canAccessTraining(platformAdmin.user.id, training)).resolves.toBe(true)
+  })
+
+  it('keeps campus team management narrower than global read access', async () => {
+    const team = await createTestTeam({ schoolId: schoolA.id, ownerId: creator.user.id })
+    await prisma.teamMember.create({
+      data: {
+        id: crypto.randomUUID(),
+        teamId: team.id,
+        userId: student.user.id,
+        userType: 'student',
+        role: 'member',
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    })
+
+    await expect(isTeamAdmin(creator.user.id, team.id)).resolves.toBe(true)
+    await expect(isTeamAdmin(student.user.id, team.id)).resolves.toBe(false)
+    await expect(isTeamAdmin(outsider.user.id, team.id)).resolves.toBe(false)
+    await expect(isTeamAdmin(superAdmin.user.id, team.id)).resolves.toBe(true)
+    await expect(isTeamAdmin(platformAdmin.user.id, team.id)).resolves.toBe(false)
+
+    await expect(isTeamMember(creator.user.id, team.id)).resolves.toBe(true)
+    await expect(isTeamMember(student.user.id, team.id)).resolves.toBe(true)
+    await expect(isTeamMember(outsider.user.id, team.id)).resolves.toBe(false)
+    await expect(isTeamMember(superAdmin.user.id, team.id)).resolves.toBe(true)
+    await expect(isTeamMember(platformAdmin.user.id, team.id)).resolves.toBe(true)
+  })
+
+  it('isolates platform and school problem ownership', () => {
+    const platformDraft = {
+      id: 'platform-draft',
+      libraryScope: 'platform',
+      organizationId: null,
+      ownerId: creator.user.id,
+      status: 'draft',
+      visibility: 'private',
+    }
+    const schoolDraft = {
+      id: 'school-draft',
+      libraryScope: 'school',
+      organizationId: schoolA.organizationId!,
+      ownerId: creator.user.id,
+      status: 'draft',
+      visibility: 'private',
+    }
+    const schoolPublished = { ...schoolDraft, id: 'school-published', status: 'published' }
+    const user = (created: Awaited<ReturnType<typeof createTestUser>>, organizationId?: string) => ({
+      userId: created.user.id,
+      username: created.user.username,
+      role: created.user.role,
+      workspaceMode: 'work' as const,
+      organizationId,
+    })
+
+    expect(canModifyProblem(user(superAdmin), platformDraft)).toBe(true)
+    expect(canModifyProblem(user(platformAdmin), platformDraft)).toBe(true)
+    expect(canModifyProblem(user(principal, schoolA.organizationId!), schoolDraft)).toBe(true)
+    expect(canModifyProblem(user(creator, schoolA.organizationId!), schoolDraft)).toBe(true)
+    expect(canModifyProblem(user(otherTeacher, schoolA.organizationId!), schoolDraft)).toBe(false)
+    expect(canModifyProblem(user(outsider, schoolB.organizationId!), schoolDraft)).toBe(false)
+    expect(canModifyProblem(user(superAdmin), schoolDraft)).toBe(false)
+    expect(canModifyProblem(user(platformAdmin), schoolDraft)).toBe(false)
+
+    expect(canViewProblem(user(otherTeacher, schoolA.organizationId!), schoolDraft)).toBe(false)
+    expect(canViewProblem(user(otherTeacher, schoolA.organizationId!), schoolPublished)).toBe(true)
+    expect(canUseProblem(user(otherTeacher, schoolA.organizationId!), schoolPublished)).toBe(true)
+    expect(canViewProblem(user(outsider, schoolB.organizationId!), schoolPublished)).toBe(false)
+    expect(canViewProblem(user(student, schoolA.organizationId!), schoolPublished)).toBe(false)
+  })
+})
