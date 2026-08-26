@@ -10,6 +10,10 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-27
 
+- 通过受权限保护的题目 API 恢复 1005–1014 已存在于服务器的 `.in/.ans` 与权威 `config.json`，
+  并为 1015–1019 的既有演示数据补齐 Judge Config；活动固定覆盖由 110/301 提升至 293/301，
+  提交固定覆盖由 642/2582 提升至 2361/2582。剩余 8 个活动题全部是无任何本地数据的历史外部 OJ
+  引用，明确保留 `LOCAL_JUDGE_NOT_CONFIGURED`，不生成虚假测试版本。
 - 修复历史上存在多个相同 Judge 投影哈希时，迁移器误选最旧 Revision 并在每次复跑继续发布等价版本；
   现在按 revision number 倒序选择最新等价版本，并增加连续两次迁移不增长的回归测试。
 - TestSet Revision 兼容历史 JSON/YAML 中的数字测试点引用（如 `cases: [1, 2]`），确定性解析为

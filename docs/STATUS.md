@@ -5,9 +5,12 @@ last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-27: 补登记 20260815 `median ACM` 的 40 个输入输出和 `subset ACM/IOI` 的独立 Checker
-  元数据后，69 道题中 27 道生成 49 个正式 Revision，301 个活动题中 110 个已固定版本，2582 条提交中
-  642 条固定版本；迁移连续复跑保持幂等。剩余 10 道旧题因没有真实测试点继续 fail-closed。
+- 2026-08-27: 补登记 20260815 资产并恢复 1005–1014 服务器既有 `.in/.ans + config.json`、
+  1015–1019 既有演示数据后，69 道题中 42 道生成 73 个正式 Revision，301 个活动题中 293 个已固定版本，
+  2582 条提交中 2361 条固定版本；迁移连续两次复跑保持幂等，检查结果 42 valid / 0 invalid。
+  剩余 8 个活动题均为没有 Judge Config、测试文件或本地提交的历史 HDU/洛谷引用，继续返回
+  `LOCAL_JUDGE_NOT_CONFIGURED`，不伪造 Revision；68 条远程归档及其他无法证明历史配置的记录保持
+  `legacy unpinned`。
   `median` 以及使用 F 盘官方 `subset.cpp` 的 ACM Testlib、IOI Lemon 题库提交均为 20/20、Accepted、100；
   这三条 Practice 验证不进入比赛排名。Server 40 文件 436/436、Judge 4 文件 13/13 和两端生产构建通过。
 - 2026-08-26: TestSet Revision 首次线上迁移基线为 24 道题、43 个正式 Revision、104 个固定活动题和
