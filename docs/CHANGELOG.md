@@ -10,6 +10,12 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-26
 
+- 修复 TestSet Revision 迁移审计把独立 `ProblemChecker` 误当作普通 `TestdataFile` 的问题；
+  Checker/Interactor/Manager 现在按独立评测资产校验可读文件，输入输出仍要求完整测试数据元数据。
+  新增回归测试覆盖 Checker 仅存在于专用元数据表时仍可创建不可变 Revision。
+- 通过受权限保护的线上 API 补登记 `20260815 median ACM` 的 40 个既有输入输出文件，并补登记
+  `subset ACM/IOI` 的 `checker.cpp`；ACM 保留 `testlib` 版本，IOI 保留 F 盘权威 Lemon 版本，
+  未上传 `checker.exe` 或题目私有 `testlib.h`。
 - 完成不可变 TestSet Revision 的首次线上迁移与蓝绿部署收口：生产数据库迁移
   `20260826_testset_revision_consistency` 已应用，24 道可安全还原的题目生成 43 个正式 Revision，
   104 个活动题和 570 条可证明历史配置的提交已固定版本；重复执行迁移后 Revision 数量保持不变。

@@ -623,7 +623,9 @@ export async function inspectTestSetRevisionMigration() {
   const invalid: Array<{ problemId: string; problemNumber: string; title: string; issues: string[] }> = []
   for (const problem of problems) {
     const configs = [...new Set([problem.judgeConfig, ...problem.TrainingProblem.map(item => item.judgeConfigSnapshot)].filter((item): item is string => Boolean(item?.trim())))]
-    const names = new Set<string>(), issues: string[] = []
+    const testdataNames = new Set<string>()
+    const assetNames = new Set<string>()
+    const issues: string[] = []
     if (!problem.judgeConfig?.trim()) issues.push('题库题缺少当前 Judge Config，无法确定最新正式 Revision')
     for (const text of configs) {
       try {
@@ -648,14 +650,27 @@ export async function inspectTestSetRevisionMigration() {
         }
         const cases = Array.isArray(config.cases) ? config.cases : (config.subtasks || []).flatMap((subtask: any) => subtask.groups?.length
           ? subtask.groups.flatMap((group: any) => group.cases || []) : subtask.cases || [])
-        for (const item of cases) { names.add(String(item.input)); names.add(String(item.output)) }
-        for (const asset of configuredAssetNames(text)) names.add(asset)
+        for (const item of cases) {
+          if (typeof item.input === 'string' && item.input.trim()) testdataNames.add(item.input.trim())
+          else issues.push('测试点缺少输入文件名')
+          if (typeof item.output === 'string' && item.output.trim()) testdataNames.add(item.output.trim())
+          else issues.push('测试点缺少答案文件名')
+        }
+        for (const asset of configuredAssetNames(text)) assetNames.add(asset)
       } catch (error: any) { issues.push(`Judge Config 无法解析：${error.message}`) }
     }
     const existingFiles = new Set((await prisma.testdataFile.findMany({ where: { problemId: problem.id }, select: { filename: true } })).map(item => item.filename))
-    for (const name of names) {
+    for (const name of testdataNames) {
       try {
         if (!existingFiles.has(name) || !fs.existsSync(path.join(problemRoot(problem.id), safeLogicalName(name)))) issues.push(`测试数据文件缺失：${name}`)
+      } catch (error: any) { issues.push(error.message) }
+    }
+    // Checker/interactor/manager sources use dedicated metadata and are not
+    // ordinary TestdataFile rows. Revisions pin their readable bytes from the
+    // problem directory while their own upload APIs manage metadata.
+    for (const name of assetNames) {
+      try {
+        if (!fs.existsSync(path.join(problemRoot(problem.id), safeLogicalName(name)))) issues.push(`评测资产文件缺失：${name}`)
       } catch (error: any) { issues.push(error.message) }
     }
     if (issues.length > 0) invalid.push({ problemId: problem.id, problemNumber: problem.problemId, title: problem.title, issues: [...new Set(issues)] })

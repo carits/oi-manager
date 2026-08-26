@@ -158,7 +158,7 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 ## 不可变 TestSet Revision
 
 - `Problem.latestTestSetRevisionId` 指向题库 Practice 使用的最新版；管理员保存数据、显式 ACM/OI 转换或有效 Hack 都创建下一 Revision，禁止原地修改。
-- 测试输入/答案使用 `(problemId, sha256)` 内容寻址对象；Revision 目录固化逻辑文件名和文件型 Checker/Interactor/Manager。旧 Revision 永久保持可复现。
+- 测试输入/答案使用 `(problemId, sha256)` 内容寻址对象；Revision 目录固化逻辑文件名和文件型 Checker/Interactor/Manager。输入输出由 `TestdataFile` 管理，Checker 由独立 `ProblemChecker` 管理，迁移审计不会混用两类元数据；旧 Revision 永久保持可复现。
 - `TrainingProblem.testSetRevisionId` 在活动添加题目时固定。活动未开始且无提交时管理员可以手动更新；开始、结束或已有提交后统一返回 `409 TEST_SET_REVISION_FROZEN`。
 - 发布使用 `pg_advisory_xact_lock(problemId)` 与 expected-latest CAS；Test Graph、Judge 投影、最新版指针和兼容 `Problem.judgeConfig` 在同一事务提交。并发 Hack 冲突最多基于最新版重评三次。
 - 普通 Judge Config PUT 不允许隐式改变模式；`POST /api/problems/:id/judge-mode-transition` 创建保留历史的转换 Revision，并关闭 Hack 等待重新配置。

@@ -7,6 +7,7 @@ import {
   TestSetRevisionConflict,
   ensureInitialTestSetRevision,
   ingestTestdataObject,
+  inspectTestSetRevisionMigration,
   loadRevisionSpec,
   publishTestSetRevision,
   resolveConfigSpec,
@@ -51,7 +52,7 @@ async function fixture() {
     status: 'published',
     judgeConfig: config,
   } })
-  for (const filename of ['1.in', '1.out', 'checker.cpp']) {
+  for (const filename of ['1.in', '1.out']) {
     const content = await fs.promises.readFile(path.join(directory, filename))
     await prisma.testdataFile.create({ data: {
       id: crypto.randomUUID(), problemId, filename, size: content.length,
@@ -59,6 +60,14 @@ async function fixture() {
       sha256: crypto.createHash('sha256').update(content).digest('hex'),
     } })
   }
+  await prisma.problemChecker.create({ data: {
+    id: crypto.randomUUID(),
+    problemId,
+    fileName: 'checker.cpp',
+    fileSize: (await fs.promises.stat(path.join(directory, 'checker.cpp'))).size,
+    fileUrl: `/api/problems/${problemId}/checker/checker.cpp/download`,
+    language: 'cpp',
+  } })
   return { owner, problem, directory, config }
 }
 
@@ -67,6 +76,13 @@ afterEach(async () => {
 })
 
 describe('immutable problem TestSet Revisions', () => {
+  it('accepts checker metadata independently from ordinary testdata files', async () => {
+    const { problem } = await fixture()
+    const inspection = await inspectTestSetRevisionMigration()
+    expect(inspection.valid.some(item => item.problemId === problem.id)).toBe(true)
+    expect(inspection.invalid.some(item => item.problemId === problem.id)).toBe(false)
+  })
+
   it('pins case and checker bytes while later revisions use replacements', async () => {
     const { owner, problem, directory, config } = await fixture()
     const first = await ensureInitialTestSetRevision(problem.id, owner.user.id)
