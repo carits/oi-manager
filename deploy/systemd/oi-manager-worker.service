@@ -1,5 +1,5 @@
 [Unit]
-Description=OI Manager API server on port %i
+Description=OI Manager singleton background worker
 Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_DEPLOYMENT.md
 Wants=network-online.target
 After=network-online.target docker.service
@@ -15,19 +15,11 @@ EnvironmentFile=/data/oi-manager-response-refactor/apps/server/.env
 Environment=NODE_ENV=development
 Environment=APP_ENV=development
 Environment=HOME=/home/ecs-user
-Environment=PORT=%i
-Environment=API_HOST=127.0.0.1
-Environment=SKIP_JUDGE_RECOVERY=true
-Environment=DISABLE_BACKGROUND_JOBS=true
-# EnvironmentFile can contain the legacy stable PORT=3002. Put slot-specific
-# values on the final exec command so a blue/green candidate never binds the
-# stable router port before promotion.
-ExecStart=/usr/bin/env PORT=%i API_HOST=127.0.0.1 SKIP_JUDGE_RECOVERY=true DISABLE_BACKGROUND_JOBS=true /usr/bin/node /data/oi-manager-response-refactor/apps/server/dist/index.js
+ExecStart=/usr/bin/node /data/oi-manager-response-refactor/apps/server/dist/background-worker.js
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=45s
-KillSignal=SIGUSR2
-MemoryMax=1024M
+MemoryMax=768M
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

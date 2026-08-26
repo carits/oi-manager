@@ -30,5 +30,12 @@ if systemctl is-active --quiet "oi-manager-server@${CURRENT}.service"; then
 fi
 systemctl disable "oi-manager-server@${CURRENT}.service" 2>/dev/null || true
 
+# Background jobs are deliberately singleton and never run inside blue/green
+# API slots. Restart the worker only after the HTTP upstream has been promoted.
+if systemctl cat oi-manager-worker.service >/dev/null 2>&1; then
+  systemctl restart oi-manager-worker.service
+  systemctl is-active --quiet oi-manager-worker.service
+fi
+
 curl --fail --silent http://127.0.0.1:3002/api/readiness >/dev/null
 echo "API promoted: ${CURRENT} -> ${CANDIDATE}"

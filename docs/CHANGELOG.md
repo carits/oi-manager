@@ -10,6 +10,9 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-27
 
+- 将 Cron、旧远程提交轮询和 OJ 账号自动验证从蓝绿 API 实例拆为独立
+  `oi-manager-worker.service`。Worker 使用 PostgreSQL session advisory lock 保证集群单例，调度器提供
+  幂等停止，轮询防止上一次尚未完成时重入；API promote 在切换完成后只重启这一份 Worker。
 - 通过受权限保护的题目 API 恢复 1005–1014 已存在于服务器的 `.in/.ans` 与权威 `config.json`，
   并为 1015–1019 的既有演示数据补齐 Judge Config；活动固定覆盖由 110/301 提升至 293/301，
   提交固定覆盖由 642/2582 提升至 2361/2582。剩余 8 个活动题全部是无任何本地数据的历史外部 OJ

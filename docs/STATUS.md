@@ -67,7 +67,7 @@ source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Pri
 
 OI Manager 仍处于开发预览阶段。公网 `3000` 运行已发布的 Next.js 优化构建；稳定 API Router
 监听 `127.0.0.1:3002` 并将每个 HTTP/WebSocket 连接固定转发到 `3302/3303` 中的活动实例。
-Web、Router、活动 API slot 和 Judge 均由 systemd 管理，不再依赖 `pnpm dev`、PM2 或 Nix。
+Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd 管理，不再依赖 `pnpm dev`、PM2 或 Nix。
 业务环境仍为 `APP_ENV=development`，不代表已经完成域名、TLS、外部监控等正式投产条件。
 
 | 服务 | 开发端口 | E2E 端口 | 说明 |
@@ -261,9 +261,9 @@ Web、Router、活动 API slot 和 Judge 均由 systemd 管理，不再依赖 `p
 
 ## 当前限制
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
-- 2026-08-26 API 已改为稳定 Router 加 `3302/3303` 蓝绿实例，候选 readiness 后原子切换，旧实例
-  drain 并让 Judge 以 1012 重连；连续两次线上切换已通过。两个 API slot 短暂并存时仍会各自启动
-  Cron、远程轮询和自动验证，后台任务单实例化是当前 P0 运维待办。
+- 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
+  `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
+  API slot 仅保留实例内 HTTP 指标，promote 在 HTTP 切换后重启唯一 Worker。
 - 2026-08-24 生产依赖扫描已从 51 项漏洞清零；Next 15.5.21 兼容构建、Server 417/417、Web 34/34、Judge 6/6 和隔离浏览器 13/13 通过。提交 `2998473` 已部署为公网构建 `UhlTIrV7m4XFpXwf8DMsa`，响应头、303/303 双矩阵和服务监控复验通过。
 - 当前 Nginx 入口仍为 HTTP，尚未配置域名/TLS；Web 基础安全响应头已进入待部署版本，严格 CSP 因现有内联脚本兼容性仍作为后续安全加固项。
 - 2026-08-24 受控 loopback 负载冒烟共 2300/2300 请求成功：3002 API 直连约 95.45 req/s、P95 24.42ms；3000 API 代理约 74.59 req/s、P95 287.90ms；3000 登录页约 49.55 req/s、P95 346.62ms。该结果只代表当前开发服务器上的短时只读冒烟，不是容量承诺；持久化写入、提交和 Judge 压测仍须在隔离环境执行。

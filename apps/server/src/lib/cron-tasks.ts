@@ -8,8 +8,13 @@ import logger from './logger'
 import { collectOrphanTestdataObjects } from './testdata-object-gc'
 
 let isRunning = false
+let cronStopper: (() => void) | null = null
 
 export function startCronTasks() {
+  if (cronStopper) {
+    logger.warn('cron_tasks_already_running', { action: 'cron_start' })
+    return cronStopper
+  }
   // 每 1 分钟扫描一次 code 为空的 CF 提交，每次最多抓取 20 条
   const task = cron.schedule('* * * * *', async () => {
     if (isRunning) {
@@ -42,7 +47,7 @@ export function startCronTasks() {
   // Content-addressed uploads may be left behind when a Revision transaction
   // loses CAS or rolls back. Remove only objects older than 24 hours and still
   // unreferenced, under the same per-problem database lock as publishers.
-  cron.schedule('17 3 * * *', async () => {
+  const gcTask = cron.schedule('17 3 * * *', async () => {
     try {
       const result = await collectOrphanTestdataObjects()
       logger.info('testdata_object_gc_done', { action: 'testdata_object_gc', metadata: result })
@@ -52,5 +57,11 @@ export function startCronTasks() {
   })
 
   logger.info('cron_tasks_started', { action: 'cron_start' })
-  return task
+  cronStopper = () => {
+    task.stop()
+    gcTask.stop()
+    cronStopper = null
+    logger.info('cron_tasks_stopped', { action: 'cron_stop' })
+  }
+  return cronStopper
 }

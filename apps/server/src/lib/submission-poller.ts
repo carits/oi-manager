@@ -9,6 +9,7 @@ import { pollHduResult } from './hdu-submit'
 import { pollCfResultPlaywright, pollCfResultByApi } from './cf-submit'
 
 let pollInterval: NodeJS.Timeout | null = null
+let isPolling = false
 
 /**
  * 启动轮询器
@@ -25,6 +26,11 @@ export function startSubmissionPoller(intervalMs: number = 5000) {
   })
 
   pollInterval = setInterval(async () => {
+    if (isPolling) {
+      logger.info('poller_skip', { action: 'poller', metadata: { reason: 'previous_run_still_active' } })
+      return
+    }
+    isPolling = true
     try {
       await pollPendingSubmissions()
     } catch (e: any) {
@@ -32,6 +38,8 @@ export function startSubmissionPoller(intervalMs: number = 5000) {
         action: 'poller',
         metadata: { error: e.message },
       })
+    } finally {
+      isPolling = false
     }
   }, intervalMs)
 }

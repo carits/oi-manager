@@ -23,7 +23,7 @@ import { submissionsRouter } from './routes/submissions'
 import { problemListsRouter } from './routes/problem-lists'
 import { schoolProblemListsRouter } from './routes/school-problem-lists'
 import { teamProblemListsRouter } from './routes/team-problem-lists'
-import { ojAccountsRouter, startAutoVerifyScheduler } from './routes/oj-accounts'
+import { ojAccountsRouter } from './routes/oj-accounts'
 import { submitRouter } from './routes/submit'
 import { testdataRouter } from './routes/testdata'
 import { testGraphAdminRouter } from './routes/test-graph-admin'
@@ -38,13 +38,11 @@ import { caritsRouter } from './modules/carits/carits.routes'
 import { contributionRouter } from './modules/contribution/contribution.routes'
 import { workspaceRouter } from './routes/workspaces'
 import { demoScenarioRouter } from './routes/demo-scenario'
-import { startSubmissionPoller } from './lib/submission-poller'
 import { metrics } from './lib/metrics'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
 import logger from './lib/logger'
-import { startCronTasks } from './lib/cron-tasks'
 import { validateEnv, isProduction } from './config/env'
 import { getCorsOptions } from './config/cors'
 import { STORAGE_ROOT } from './config/storage'
@@ -270,12 +268,9 @@ const httpServer = app.listen(PORT, API_HOST, () => {
     action: 'server_start',
     metadata: { host: API_HOST, port: PORT, env: process.env.NODE_ENV || 'development' }
   })
-  if (process.env.DISABLE_BACKGROUND_JOBS !== 'true') {
-    startCronTasks()
-    startAutoVerifyScheduler()
-    startSubmissionPoller(5000) // 每 5 秒轮询一次
-    metrics.startPeriodicLog(300000) // 每 5 分钟输出一次指标汇总
-  }
+  // HTTP metrics are instance-local and safe during a blue/green overlap.
+  // Mutating cron/poller jobs run only in the singleton background worker.
+  metrics.startPeriodicLog(300000)
 
   // 初始化评测机 WebSocket 服务器
   ;(global as any).httpServer = httpServer

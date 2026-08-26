@@ -15,7 +15,8 @@ Environment=NODE_ENV=development
 Environment=APP_ENV=development
 Environment=HOME=/home/ecs-user
 EnvironmentFile=/data/oi-manager-response-refactor/apps/server/.env
-ExecStart=/usr/bin/node /data/oi-manager-response-refactor/apps/server/dist/index.js
+Environment=DISABLE_BACKGROUND_JOBS=true
+ExecStart=/usr/bin/env DISABLE_BACKGROUND_JOBS=true /usr/bin/node /data/oi-manager-response-refactor/apps/server/dist/index.js
 Restart=on-failure
 RestartSec=5s
 MemoryMax=1024M

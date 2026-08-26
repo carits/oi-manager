@@ -506,11 +506,18 @@ async function loginHdu(username: string, password: string): Promise<{ success: 
 
 // ==================== 自动验证定时任务 ====================
 
+let autoVerifyStartTimer: NodeJS.Timeout | null = null
+let autoVerifyInterval: NodeJS.Timeout | null = null
+
 /**
  * 启动自动验证定时任务
  * 每 5 分钟检查一次，对超过 autoVerifyIntervalMinutes 未验证的账号执行验证
  */
 export function startAutoVerifyScheduler() {
+  if (autoVerifyStartTimer || autoVerifyInterval) {
+    logger.warn('oj_auto_verify_scheduler_already_running', { action: 'oj_auto_verify' })
+    return stopAutoVerifyScheduler
+  }
   const CHECK_INTERVAL = 5 * 60 * 1000 // 5 分钟
 
   const tick = async () => {
@@ -606,10 +613,20 @@ export function startAutoVerifyScheduler() {
   }
 
   // 启动后延迟 30 秒执行第一次，避免和启动流程冲突
-  setTimeout(() => {
+  autoVerifyStartTimer = setTimeout(() => {
+    autoVerifyStartTimer = null
     tick()
-    setInterval(tick, CHECK_INTERVAL)
+    autoVerifyInterval = setInterval(tick, CHECK_INTERVAL)
   }, 30_000)
 
   logger.info('oj_auto_verify_scheduler_started', { action: 'oj_auto_verify', metadata: { intervalMinutes: 5 } })
+  return stopAutoVerifyScheduler
+}
+
+export function stopAutoVerifyScheduler() {
+  if (autoVerifyStartTimer) clearTimeout(autoVerifyStartTimer)
+  if (autoVerifyInterval) clearInterval(autoVerifyInterval)
+  autoVerifyStartTimer = null
+  autoVerifyInterval = null
+  logger.info('oj_auto_verify_scheduler_stopped', { action: 'oj_auto_verify' })
 }
