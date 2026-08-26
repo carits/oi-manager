@@ -87,3 +87,17 @@
   cursor: pointer;
   font-size: 0.875rem;
 }
+.codeInput {
+  width: 100%;
+  min-height: 350px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}

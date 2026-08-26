@@ -135,3 +135,7 @@
   color: var(--error);
   font-size: 0.875rem;
 }
+.platformIcon, .platformIconLarge { background: var(--platform-color); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-weight: 600; }
+.platformIcon { width: 40px; height: 40px; border-radius: 8px; font-size: 0.875rem; }
+.platformIconLarge { width: 60px; height: 60px; border-radius: var(--radius-lg); font-size: 1.5rem; margin: 0 auto; }
+.bindingStatus { font-size: 0.875rem; color: var(--binding-status-color); }

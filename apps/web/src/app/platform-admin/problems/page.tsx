@@ -375,7 +375,8 @@ export default function PlatformAdminProblemsPage() {
       duplicate: { text: '已存在', color: 'var(--warning)' },
     }
     const s = map[status] || { text: status, color: 'var(--text-secondary)' }
-    return <span style={{ color: s.color }}>{s.text}</span>
+    const statusStyle = { color: s.color }
+    return <span style={statusStyle}>{s.text}</span>
   }
 
   const renderAttachmentStatus = (status: string | null) => {
@@ -387,7 +388,8 @@ export default function PlatformAdminProblemsPage() {
       skipped: { text: '跳过', color: 'var(--warning)' },
     }
     const s = map[status] || { text: status, color: 'var(--text-secondary)' }
-    return <span style={{ color: s.color }}>{s.text}</span>
+    const statusStyle = { color: s.color }
+    return <span style={statusStyle}>{s.text}</span>
   }
 
   // 渲染附件列：区分"无附件"和"有附件但xxx"
@@ -533,7 +535,7 @@ export default function PlatformAdminProblemsPage() {
               )}
 
               {/* 批量拉取 */}
-              <div style={{ borderTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? '1px solid var(--border)' : 'none', paddingTop: PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? '1rem' : 0 }}>
+              <div className={PLATFORM_COOKIE_FIELDS[fetchPlatform] && canManageCredentials ? unifiedStyles.batchFetchSeparated : undefined}>
                 <h3 className={unifiedStyles.u25}>批量拉取</h3>
                 <Textarea value={problemIdsInput} onChange={(e) => setProblemIdsInput(e.target.value)}
                   placeholder="输入题号，每行一个或逗号分隔，例如：&#10;P1001&#10;P1002&#10;B2001"
@@ -555,7 +557,7 @@ export default function PlatformAdminProblemsPage() {
             <div className={unifiedStyles.u29}>
               <div className={unifiedStyles.u30}>
                 <h2 className={unifiedStyles.u31}>任务列表</h2>
-                <Button variant="ghost" onClick={() => fetchJobs()} style={{ ...smallBtnStyle(), padding: '0.25rem 0.75rem' }}>刷新</Button>
+                <Button variant="secondary" size="sm" onClick={() => fetchJobs()}>刷新</Button>
               </div>
 
               {/* 任务筛选栏 */}

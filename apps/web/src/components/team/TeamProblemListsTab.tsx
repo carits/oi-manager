@@ -211,18 +211,7 @@ export default function TeamProblemListsTab({ teamId, basePath, canManage, isOwn
               {myLists.map(list => {
                 const alreadyAdded = alreadyAddedIds.has(list.id)
                 return (
-                  <div
-                    key={list.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.75rem',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border)',
-                      opacity: alreadyAdded ? 0.5 : 1,
-                    }}
-                  >
+                  <div key={list.id} className={`${unifiedStyles.problemListOption} ${alreadyAdded ? unifiedStyles.alreadyAdded : ''}`}>
                     <div>
                       <div className={unifiedStyles.u16}>{list.title}</div>
                       {list.description && (

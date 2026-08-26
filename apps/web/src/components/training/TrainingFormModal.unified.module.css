@@ -247,3 +247,11 @@
   font-size: 0.85rem;
   margin-top: 0.5rem;
 }
+.descriptionInput { resize: vertical; }
+.problemRow { border-bottom: 1px solid var(--gray-100); }
+.existingProblem { background: var(--text-inverse); }
+.newProblem { background: var(--warning-surface); }
+.moveButton, .moveButtonFirst { padding: 0.15rem 0.35rem; font-size: 0.7rem; }
+.moveButtonFirst { margin-right: 2px; }
+.problemIdInput { padding: 0.25rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; font-family: monospace; width: 100%; }
+.problemIdInput:disabled { background: var(--bg-muted); }

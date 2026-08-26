@@ -248,3 +248,4 @@
   border-radius: 6px;
   font-size: 0.875rem;
 }
+.batchFetchSeparated { border-top: 1px solid var(--border); padding-top: 1rem; }

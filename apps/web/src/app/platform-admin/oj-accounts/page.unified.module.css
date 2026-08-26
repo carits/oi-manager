@@ -283,3 +283,16 @@
   font-size: 0.85rem;
   text-align: right;
 }
+.tone_active { color: var(--success); }
+.tone_expired { color: var(--error); }
+.tone_error { color: var(--warning); }
+.tone_unverified { color: var(--text-secondary); }
+.chartCanvas { width: var(--chart-width); height: 200px; }
+.accountRow { border-bottom: 1px solid var(--border); }
+.accountDisabled { opacity: 0.5; }
+.accountState { font-size: 0.8rem; font-weight: 500; }
+.statusBadge { padding: 0.15rem 0.5rem; border-radius: var(--radius-lg); font-size: 0.75rem; font-weight: 500; }
+.status_active { color: var(--success); background: var(--success-light); }
+.status_expired { color: var(--error); background: var(--error-light); }
+.status_error { color: var(--warning); background: var(--warning-light); }
+.status_unverified { color: var(--text-secondary); background: var(--bg-muted); }

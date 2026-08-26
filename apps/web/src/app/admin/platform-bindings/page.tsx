@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import collisionStyles from './page.collision.module.css'
 import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -15,6 +15,8 @@ interface PlatformConfig {
   color: string
   supported: boolean
 }
+
+const cssVariable = (name: string, value: string): CSSProperties => ({ [name]: value })
 
 interface PlatformBinding {
   id: string
@@ -230,20 +232,7 @@ export default function AdminPlatformBindingsPage() {
                   disabled={!platform.supported}
                 >
                   <div className={unifiedStyles.u6}>
-                    <div
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '8px',
-                        background: platform.color,
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 600,
-                        fontSize: '0.875rem',
-                      }}
-                    >
+                    <div className={unifiedStyles.platformIcon} style={cssVariable('--platform-color', platform.color)}>
                       {platform.name.charAt(0)}
                     </div>
                     <div>
@@ -255,7 +244,7 @@ export default function AdminPlatformBindingsPage() {
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '0.875rem', color: status.color }}>{status.text}</div>
+                      <div className={unifiedStyles.bindingStatus} style={cssVariable('--binding-status-color', status.color)}>{status.text}</div>
                     </div>
                   </div>
                   <span className={unifiedStyles.u9}>▶</span>
@@ -276,21 +265,7 @@ export default function AdminPlatformBindingsPage() {
         <div className={unifiedStyles.u1}>
           {/* 平台图标 */}
           <div className={unifiedStyles.u10}>
-            <div
-              style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: 'var(--radius-lg)',
-                background: selectedPlatform?.color || 'var(--border)',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 600,
-                fontSize: '1.5rem',
-                margin: '0 auto',
-              }}
-            >
+            <div className={unifiedStyles.platformIconLarge} style={cssVariable('--platform-color', selectedPlatform?.color || 'var(--border)')}>
               {selectedPlatform?.name.charAt(0)}
             </div>
           </div>

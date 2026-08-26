@@ -3,3 +3,8 @@
   text-decoration: none;
   font-weight: 500;
 }
+.teamType { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+.publicTeam { background: var(--green-100); color: var(--green-700); }
+.privateTeam { background: var(--gray-100); color: var(--gray-700); }
+.teamDescription { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; color: var(--gray-700); }
+.emptyDescription { color: var(--gray-400); }

@@ -163,10 +163,7 @@ export function StatementVersionWorkspace({ problemId }: { problemId: string }) 
   ] : [], [data])
 
   const itemButton = (item: Version) => (
-    <Button variant="ghost" key={`${item.isOfficial ? 'official' : 'user'}-${item.id}`} onClick={() => choose(item)} style={{
-      width: '100%', padding: '0.65rem 0.75rem', textAlign: 'left', border: 'none', borderRadius: '7px',
-      background: selected?.id === item.id ? 'var(--info-light)' : 'transparent', cursor: 'pointer',
-    }}>
+    <Button variant="ghost" key={`${item.isOfficial ? 'official' : 'user'}-${item.id}`} onClick={() => choose(item)} className={unifiedStyles.versionButton} aria-selected={selected?.id === item.id}>
       <strong className={unifiedStyles.u1}>{item.name}</strong>
       <span className={unifiedStyles.u2}>
         {item.isOfficial ? 'System · 官方' : `${item.authorUsername || ''} · ${item.isMine ? (item.visibility === 'public' ? '我的 · 公开' : '我的 · 私有') : '公开'}`} · {item.language || '未知'}

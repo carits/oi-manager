@@ -132,3 +132,5 @@
   margin-top: 0.3rem;
   box-sizing: border-box;
 }
+.versionButton { width: 100%; padding: 0.65rem 0.75rem; text-align: left; border: none; border-radius: 7px; }
+.versionButton[aria-selected='true'] { background: var(--info-light); }

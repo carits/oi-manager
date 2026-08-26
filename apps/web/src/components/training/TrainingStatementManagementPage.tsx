@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import unifiedStyles from './TrainingStatementManagementPage.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
@@ -110,12 +110,13 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
 
   if (loading && !data) return <PageFrame><div className={unifiedStyles.u1}>正在加载题面矩阵…</div></PageFrame>
   if (!data) return <PageFrame><PageHeader title="题面选择无法加载" description={loadError || '活动题面数据暂时不可用'} actions={<Button variant="ghost" onClick={() => backPath ? router.replace(backPath) : router.back()}>返回活动</Button>} /></PageFrame>
+  const matrixStyle = { '--statement-matrix-width': `${Math.max(900, 330 + data.problems.length * 150)}px` } as CSSProperties
   return (
     <PageFrame>
       <PageHeader title="题面选择" description={`${data.training.title} · 为参赛者选择可用题面并指定默认版本`} actions={<div className={unifiedStyles.u2}><Button variant="ghost" onClick={() => backPath ? router.replace(backPath) : router.back()}>返回活动</Button><Button variant="ghost" onClick={save} disabled={saving}>{saving ? '保存中…' : '保存题面选择'}</Button></div>} />
       <div className={unifiedStyles.u3}>点击空白/✓切换是否提供；点击星标设为默认。每道题可有多个 ✓，但只能有一个 ★。</div>
       <div className={unifiedStyles.u4}>
-        <TableRoot style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: Math.max(900, 330 + data.problems.length * 150), width: '100%' }}>
+        <TableRoot className={unifiedStyles.matrixTable} style={matrixStyle}>
           <TableHead><TableRow><TableHeaderCell className={unifiedStyles.u5}>题面版本</TableHeaderCell>{data.problems.map(problem => <TableHeaderCell key={problem.trainingProblemId} className={unifiedStyles.u6}>{problem.alias || String.fromCharCode(65 + problem.orderIndex)}<div className={unifiedStyles.u7}>rev {problem.selectionRevision}</div></TableHeaderCell>)}</TableRow></TableHead>
           <TableBody>{rows.map(row => <TableRow key={row.key}>
             <TableCell className={unifiedStyles.u8}><strong>{row.label.name}</strong><div className={unifiedStyles.u9}>{row.label.authorUsername} · {row.label.visibility === 'mine' ? '我的' : row.label.visibility === 'frozen' ? '已固化' : row.key.startsWith('canonical:') ? '官方' : '公开'} · {row.label.language || '未知'} · {row.label.format.toUpperCase()}</div></TableCell>
@@ -125,8 +126,8 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
               const state = selection[problem.trainingProblemId]
               const included = state?.keys.includes(option.key)
               const isDefault = state?.defaultKey === option.key
-              return <TableCell key={problem.trainingProblemId} style={{ borderTop: '1px solid var(--border)', textAlign: 'center', padding: '0.4rem', background: isDefault ? 'var(--selection-warning)' : included ? 'var(--selection-success)' : 'white' }}>
-                <Button variant="ghost" aria-label={`${problem.alias || problem.orderIndex + 1} ${row.label.name} ${included ? '取消提供' : '提供'}`} onClick={() => toggle(problem.trainingProblemId, option.key)} style={{ width: '42px', height: '34px', border: '1px solid var(--border)', borderRadius: '6px', background: included ? 'var(--success-light)' : 'white', cursor: isDefault ? 'not-allowed' : 'pointer' }}>{isDefault ? '★' : included ? '✓' : ''}</Button>
+              return <TableCell key={problem.trainingProblemId} className={`${unifiedStyles.matrixCell} ${isDefault ? unifiedStyles.defaultCell : included ? unifiedStyles.includedCell : ''}`}>
+                <Button variant="ghost" aria-label={`${problem.alias || problem.orderIndex + 1} ${row.label.name} ${included ? '取消提供' : '提供'}`} onClick={() => toggle(problem.trainingProblemId, option.key)} className={`${unifiedStyles.matrixToggle} ${included ? unifiedStyles.matrixToggleIncluded : ''}`} disabled={isDefault}>{isDefault ? '★' : included ? '✓' : ''}</Button>
                 {!isDefault && <Button variant="ghost" aria-label={`设为 ${problem.alias || problem.orderIndex + 1} 默认题面`} onClick={() => makeDefault(problem.trainingProblemId, option.key)} className={unifiedStyles.u11}>☆</Button>}
               </TableCell>
             })}

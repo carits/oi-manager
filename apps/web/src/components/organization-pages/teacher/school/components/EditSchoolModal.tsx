@@ -109,13 +109,13 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
           <div style={formStyles.field}><label style={formStyles.label}>所在地区</label><RegionSelector province={province} city={city} district={district} onProvinceChange={setProvince} onCityChange={setCity} onDistrictChange={setDistrict} /></div>
           <div style={formStyles.field}><label style={formStyles.label}>学校类型</label><Select value={form.values.schoolType} onChange={event => form.handleChange('schoolType', event.target.value)} style={formStyles.select}><option value="">请选择</option><option value="小学">小学</option><option value="初中">初中</option><option value="高中">高中</option><option value="小学+初中">小学+初中（九年一贯制）</option><option value="初中+高中">初中+高中（完全中学）</option><option value="小学+初中+高中">小学+初中+高中（十二年一贯制）</option></Select></div>
           <div style={formStyles.field}><label style={formStyles.label}>办学性质</label><Select value={form.values.schoolNature} onChange={event => form.handleChange('schoolNature', event.target.value)} style={formStyles.select}><option value="">请选择</option><option value="公办">公办</option><option value="民办">民办</option><option value="其他">其他</option></Select></div>
-          <div style={formStyles.field}><label style={formStyles.label}>学校简介</label><Textarea value={form.values.description} onChange={event => form.handleChange('description', event.target.value)} style={{ ...formStyles.input, minHeight: 110, resize: 'vertical' }} /></div>
+          <div style={formStyles.field}><label style={formStyles.label}>学校简介</label><Textarea value={form.values.description} onChange={event => form.handleChange('description', event.target.value)} style={formStyles.input} className={unifiedStyles.descriptionInput} /></div>
         </FormSection>
 
         <FormSection title="学制">
           <div className={unifiedStyles.u4}>
             {educationOptions.map(([value, title, description]) => (
-              <label key={value} style={{ display: 'flex', gap: '0.65rem', alignItems: 'flex-start', padding: '0.7rem', border: `1px solid ${form.values.educationSystem === value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer' }}>
+              <label key={value} className={unifiedStyles.educationOption} data-selected={form.values.educationSystem === value}>
                 <Input type="radio" name="educationSystem" checked={form.values.educationSystem === value} onChange={() => form.handleChange('educationSystem', value)} />
                 <span><strong>{title}</strong><small className={unifiedStyles.u5}>{description}</small></span>
               </label>

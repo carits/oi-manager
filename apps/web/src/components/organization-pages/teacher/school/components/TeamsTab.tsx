@@ -63,13 +63,7 @@ export default function TeamsTab({ schoolId, organizationId, sessionKey }: Teams
             key: 'isPublic',
             label: '类型',
             render: (team) => (
-              <span style={{
-                padding: '0.25rem 0.5rem',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                background: team.isPublic ? 'var(--green-100)' : 'var(--gray-100)',
-                color: team.isPublic ? 'var(--green-700)' : 'var(--gray-700)'
-              }}>
+              <span className={`${unifiedStyles.teamType} ${team.isPublic ? unifiedStyles.publicTeam : unifiedStyles.privateTeam}`}>
                 {team.isPublic ? '公有' : '私有'}
               </span>
             )
@@ -78,14 +72,7 @@ export default function TeamsTab({ schoolId, organizationId, sessionKey }: Teams
             key: 'description',
             label: '描述',
             render: (team) => (
-              <span style={{
-                maxWidth: '200px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                display: 'inline-block',
-                color: team.description ? 'var(--gray-700)' : 'var(--gray-400)'
-              }}>
+              <span className={`${unifiedStyles.teamDescription} ${team.description ? '' : unifiedStyles.emptyDescription}`}>
                 {team.description || '-'}
               </span>
             )

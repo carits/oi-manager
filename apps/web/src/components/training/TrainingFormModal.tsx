@@ -511,7 +511,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
             <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>公告</label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="训练公告（可选）" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="训练公告（可选）" rows={2} style={inputStyle} className={unifiedStyles.descriptionInput} />
             </div>
 
             <div className={unifiedStyles.u6}>
@@ -579,35 +579,18 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                     </TableHead>
                     <TableBody>
                       {problemRows.map((row, idx) => (
-                        <TableRow key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : 'var(--warning-surface)' }}>
+                        <TableRow key={row.id} className={`${unifiedStyles.problemRow} ${row.existing ? unifiedStyles.existingProblem : unifiedStyles.newProblem}`}>
                           <TableCell className={unifiedStyles.u23}>
-                            <Button variant="ghost"
+                            <Button variant="secondary" size="sm"
                               onClick={() => moveUp(idx)}
                               disabled={idx === 0}
-                              style={{
-                                background: idx === 0 ? 'var(--bg-muted)' : 'white',
-                                border: '1px solid var(--border)',
-                                borderRadius: 'var(--radius-sm)',
-                                cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                                padding: '0.15rem 0.35rem',
-                                fontSize: '0.7rem',
-                                marginRight: '2px',
-                                color: idx === 0 ? 'var(--border)' : 'var(--gray-500)',
-                              }}
+                              className={unifiedStyles.moveButtonFirst}
                               title="上移"
                             >↑</Button>
-                            <Button variant="ghost"
+                            <Button variant="secondary" size="sm"
                               onClick={() => moveDown(idx)}
                               disabled={idx === problemRows.length - 1}
-                              style={{
-                                background: idx === problemRows.length - 1 ? 'var(--bg-muted)' : 'white',
-                                border: '1px solid var(--border)',
-                                borderRadius: 'var(--radius-sm)',
-                                cursor: idx === problemRows.length - 1 ? 'not-allowed' : 'pointer',
-                                padding: '0.15rem 0.35rem',
-                                fontSize: '0.7rem',
-                                color: idx === problemRows.length - 1 ? 'var(--border)' : 'var(--gray-500)',
-                              }}
+                              className={unifiedStyles.moveButton}
                               title="下移"
                             >↓</Button>
                           </TableCell>
@@ -631,7 +614,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                               }}
                               placeholder="输入题号"
                               disabled={row.existing}
-                              style={{ padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%', background: row.existing ? 'var(--bg-muted)' : 'white' }}
+                              className={unifiedStyles.problemIdInput}
                             />
                           </TableCell>
                           <TableCell className={unifiedStyles.u27}>

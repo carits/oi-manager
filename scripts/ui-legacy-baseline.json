@@ -1,25 +1,13 @@
 {
   "staticInlineStyle": {
-    "apps/web/src/app/admin/platform-bindings/page.tsx": 3,
-    "apps/web/src/app/platform-admin/oj-accounts/page.tsx": 5,
-    "apps/web/src/app/platform-admin/problems/page.tsx": 4,
-    "apps/web/src/components/organization-pages/student/platform-bindings/page.tsx": 3,
-    "apps/web/src/components/organization-pages/teacher/school/components/EditSchoolModal.tsx": 2,
-    "apps/web/src/components/organization-pages/teacher/school/components/TeamsTab.tsx": 2,
     "apps/web/src/components/problem/JudgeSettingsTab.tsx": 23,
     "apps/web/src/components/problem/ProblemDetail.tsx": 16,
     "apps/web/src/components/problem/ProblemForm.tsx": 10,
     "apps/web/src/components/problem/ProblemListDetailPage.tsx": 11,
     "apps/web/src/components/problem/ProblemNote.tsx": 8,
-    "apps/web/src/components/problem/StatementVersionWorkspace.tsx": 1,
-    "apps/web/src/components/submission/SubmissionDetailModal.tsx": 4,
     "apps/web/src/components/team-import/ImportPreview.tsx": 15,
-    "apps/web/src/components/team/TeamProblemListsTab.tsx": 1,
     "apps/web/src/components/training/components/TrainingProblemDetail.tsx": 15,
-    "apps/web/src/components/training/components/TrainingSubmissionPanel.tsx": 2,
-    "apps/web/src/components/training/TrainingDetailPage.tsx": 3,
-    "apps/web/src/components/training/TrainingFormModal.tsx": 5,
-    "apps/web/src/components/training/TrainingStatementManagementPage.tsx": 3
+    "apps/web/src/components/training/components/TrainingSubmissionPanel.tsx": 1
   },
   "nativeButton": {},
   "nativeInput": {},

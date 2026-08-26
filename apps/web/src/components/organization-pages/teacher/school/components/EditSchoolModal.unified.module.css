@@ -41,3 +41,6 @@
   background: var(--bg-card);
   padding-top: 0.75rem;
 }
+.descriptionInput { min-height: 110px; resize: vertical; }
+.educationOption { display: flex; gap: 0.65rem; align-items: flex-start; padding: 0.7rem; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.educationOption[data-selected='true'] { border-color: var(--primary); }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import unifiedStyles from './SubmissionDetailModal.unified.module.css'
 import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
@@ -116,6 +116,15 @@ function getScoreColor(score: number): string {
   ]
   return colors[Math.floor(Math.max(0, Math.min(100, score)) / 10)]
 }
+
+const resultBadgeStyle = (background: string, color: string): CSSProperties => ({
+  '--submission-result-bg': background,
+  '--submission-result-text': color,
+} as CSSProperties)
+
+const scoreStyle = (score: number | null | undefined): CSSProperties => ({
+  '--submission-score-color': score == null ? 'var(--text-muted)' : getScoreColor(score),
+} as CSSProperties)
 
 // 测试点状态分类
 function getCaseStatusClass(result: string): 'pass' | 'fail' | 'skip' {
@@ -250,20 +259,12 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
 
     const label = JUDGE_RESULT_LABEL_MAP[result] || result
     const colors = RESULT_COLORS[result] || { bg: 'var(--bg-muted)', text: 'var(--text-primary)' }
+    const badgeStyle = resultBadgeStyle(colors.bg, colors.text)
 
     // queuing 状态显示转圈动画
     if (result === 'queuing' || result === 'judging') {
       return (
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '4px 12px',
-          borderRadius: '6px',
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          background: colors.bg,
-          color: colors.text,
-        }}>
+        <span className={`${unifiedStyles.resultBadge} ${unifiedStyles.resultBadgePending}`} style={badgeStyle}>
           <Spinner />
           {label}
         </span>
@@ -271,15 +272,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
     }
 
     return (
-      <span style={{
-        display: 'inline-block',
-        padding: '4px 12px',
-        borderRadius: '6px',
-        fontSize: '0.875rem',
-        fontWeight: 600,
-        background: colors.bg,
-        color: colors.text,
-      }}>
+      <span className={unifiedStyles.resultBadge} style={badgeStyle}>
         {result === 'accepted' && <span className={unifiedStyles.u4}>✓</span>}
         {result !== 'accepted' && result !== 'queuing' && result !== 'judging' && <span className={unifiedStyles.u4}>✕</span>}
         {label}
@@ -328,13 +321,7 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             {detail.judgeMode === 'oi' && !detail.hidden && (
             <div>
               <div className={unifiedStyles.u7}>分数</div>
-              <div style={{
-                fontWeight: 700,
-                fontSize: '1.125rem',
-                color: detail.score !== null && detail.score !== undefined
-                  ? getScoreColor(detail.score)
-                  : 'var(--text-muted)',
-              }}>
+              <div className={unifiedStyles.scoreValue} style={scoreStyle(detail.score)}>
                 {detail.score !== null && detail.score !== undefined ? detail.score : '-'}
               </div>
             </div>
@@ -429,9 +416,8 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             {/* 代码区域 */}
             <div className={unifiedStyles.u16}>
               <pre className={unifiedStyles.u17}>
-                <code
+                <code className={unifiedStyles.codeFont}
                   dangerouslySetInnerHTML={{ __html: getHighlightedCode() }}
-                  style={{ fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace" }}
                 />
               </pre>
             </div>

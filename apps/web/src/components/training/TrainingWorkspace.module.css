@@ -157,3 +157,10 @@
   border-radius: 0;
   font-weight: 600;
 }
+.resultTone_accepted { background: var(--success-light); color: var(--success-text); }
+.resultTone_info { background: var(--info-light); color: var(--info-text); }
+.resultTone_warning { background: var(--warning-light); color: var(--warning-text); }
+.resultTone_error { background: var(--error-light); color: var(--error-text); }
+.resultTone_compile { background: var(--warning-light); color: var(--text-secondary); }
+.resultTone_default { background: var(--bg-muted); color: var(--text-primary); }
+.tableLoading { opacity: 0.72; }

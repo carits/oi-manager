@@ -145,3 +145,7 @@
   text-align: center;
   color: var(--text-muted);
 }
+.resultBadge { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.875rem; font-weight: 600; background: var(--submission-result-bg); color: var(--submission-result-text); }
+.resultBadgePending { display: inline-flex; align-items: center; }
+.scoreValue { font-weight: 700; font-size: 1.125rem; color: var(--submission-score-color); }
+.codeFont { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }

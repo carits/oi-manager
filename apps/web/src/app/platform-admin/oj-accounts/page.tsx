@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, type CSSProperties } from 'react'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import unifiedStyles from './page.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -58,11 +58,11 @@ interface PlatformStats {
   totalSubmissionErrors: number
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  active: { label: '有效', color: 'var(--success)' },
-  expired: { label: '已失效', color: 'var(--error)' },
-  error: { label: '错误', color: 'var(--warning)' },
-  unverified: { label: '未验证', color: 'var(--text-secondary)' },
+const STATUS_CONFIG: Record<string, { label: string; tone: 'active' | 'expired' | 'error' | 'unverified' }> = {
+  active: { label: '有效', tone: 'active' },
+  expired: { label: '已失效', tone: 'expired' },
+  error: { label: '错误', tone: 'error' },
+  unverified: { label: '未验证', tone: 'unverified' },
 }
 
 export default function OjAccountsPage() {
@@ -205,7 +205,7 @@ export default function OjAccountsPage() {
                         {OJ_PLATFORM_LABEL_MAP[s.platform] || s.platform}
                       </div>
                       <div className={unifiedStyles.u4}>
-                        <span style={{ color: statusCfg.color }}>{s.active}</span>
+                        <span className={unifiedStyles[`tone_${statusCfg.tone}`]}>{s.active}</span>
                         <span className={unifiedStyles.u9}> / {s.total}</span>
                       </div>
                       {s.expired > 0 && (
@@ -227,6 +227,7 @@ export default function OjAccountsPage() {
                 platformMap.set(s.platform, OJ_PLATFORM_LABEL_MAP[s.platform] || s.platform)
               }
               const platforms = Array.from(platformMap.entries())
+              const chartStyle = { '--chart-width': `${Math.max(platforms.length * 70, 300)}px` } as CSSProperties
 
               return (
                 <div className={unifiedStyles.u11}>
@@ -239,7 +240,7 @@ export default function OjAccountsPage() {
                     <div key={key} className={unifiedStyles.u12}>
                       <div className={unifiedStyles.u13}>{title}</div>
                       <div className={unifiedStyles.u14}>
-                        <div style={{ width: Math.max(platforms.length * 70, 300), height: 200 }}>
+                        <div className={unifiedStyles.chartCanvas} style={chartStyle}>
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={platforms.map(([id, label]) => {
                               const s = stats.find(st => st.platform === id)
@@ -311,24 +312,17 @@ export default function OjAccountsPage() {
                   ) : accounts.map(acc => {
                     const sc = STATUS_CONFIG[acc.status] || STATUS_CONFIG.unverified
                     return (
-                      <TableRow key={acc.id} style={{ borderBottom: '1px solid var(--border)', opacity: acc.enabled ? 1 : 0.5 }}>
+                      <TableRow key={acc.id} className={`${unifiedStyles.accountRow} ${acc.enabled ? '' : unifiedStyles.accountDisabled}`}>
                         <TableCell className={unifiedStyles.u23}>{OJ_PLATFORM_LABEL_MAP[acc.platform] || acc.platform}</TableCell>
                         <TableCell className={unifiedStyles.u24}>{acc.username}</TableCell>
                         <TableCell className={unifiedStyles.u21}>
-                          <span style={{ color: acc.enabled ? 'var(--success)' : 'var(--error)', fontSize: '0.8rem', fontWeight: 500 }}>
+                          <span className={`${unifiedStyles.accountState} ${acc.enabled ? unifiedStyles.tone_active : unifiedStyles.tone_expired}`}>
                             {acc.enabled ? '启用' : '停用'}
                           </span>
                         </TableCell>
                         <TableCell className={unifiedStyles.u25}>{acc.priority}</TableCell>
                         <TableCell className={unifiedStyles.u23}>
-                          <span style={{
-                            padding: '0.15rem 0.5rem',
-                            borderRadius: 'var(--radius-lg)',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            color: sc.color,
-                            background: `${sc.color}15`,
-                          }}>
+                          <span className={`${unifiedStyles.statusBadge} ${unifiedStyles[`status_${sc.tone}`]}`}>
                             {sc.label}
                           </span>
                         </TableCell>

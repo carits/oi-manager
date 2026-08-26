@@ -586,14 +586,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             placeholder="在此输入代码..."
             value={actions.submitCode}
             onChange={e => actions.setSubmitCode(e.target.value)}
-            style={{
-              width: '100%', minHeight: '350px', padding: '1rem', border: '1px solid var(--border)',
-              borderRadius: '8px', fontSize: '0.875rem',
-              fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-              lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box',
-              background: 'white',
-              color: 'var(--text-primary)',
-            }}
+            className={unifiedStyles.codeInput}
           />
 
           {/* Submit button */}
@@ -601,17 +594,9 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             <span className={unifiedStyles.u8}>
               本地评测 · 题目来源：{OJ_PLATFORM_LABEL_MAP[selectedProblem?.platform || ''] || selectedProblem?.platform || 'Carits'}
             </span>
-            <Button variant="ghost"
+            <Button variant="primary"
               onClick={handleSubmitCode}
               disabled={actions.submitting || !actions.submitCode.trim()}
-              style={{
-                padding: '0.625rem 2rem',
-                background: (actions.submitting || !actions.submitCode.trim()) ? 'var(--gray-300)' : 'var(--primary)',
-                color: (actions.submitting || !actions.submitCode.trim()) ? 'var(--gray-500)' : 'white',
-                border: 'none', borderRadius: '6px', fontSize: '0.875rem', fontWeight: 500,
-                cursor: (actions.submitting || !actions.submitCode.trim()) ? 'not-allowed' : 'pointer',
-                opacity: actions.submitting ? 0.7 : 1,
-              }}
             >
               {actions.submitting ? '提交中...' : '提交'}
             </Button>
@@ -679,7 +664,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             />
           </div>
           <div className={unifiedStyles.u12}>
-            <Button variant="ghost"
+            <Button variant="primary"
               onClick={() => setShowMakeupModal(false)}
               className={unifiedStyles.u13}
             >
@@ -708,12 +693,6 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
                 }
               }}
               disabled={makeupLoading || !makeupEndTime}
-              style={{
-                padding: '0.5rem 1rem',
-                background: (makeupLoading || !makeupEndTime) ? 'var(--gray-300)' : 'var(--primary)',
-                color: (makeupLoading || !makeupEndTime) ? 'var(--gray-500)' : 'white',
-                border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500,
-              }}
             >
               {makeupLoading ? '创建中...' : '创建'}
             </Button>
