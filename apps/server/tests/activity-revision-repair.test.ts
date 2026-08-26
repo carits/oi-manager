@@ -14,7 +14,7 @@ const groupCase = {
   source: 'official',
 }
 
-function revision(aggregation: string, inputObjectId = 'input-1') {
+function revision(aggregation: string, inputObjectId = 'input-1', groupKey = 'official-1') {
   return {
     mode: 'oi',
     AcmCases: [],
@@ -23,7 +23,7 @@ function revision(aggregation: string, inputObjectId = 'input-1') {
       orderIndex: 0,
       score: 100,
       Groups: [{
-        key: 'official-1',
+        key: groupKey,
         kind: 'official',
         orderIndex: 0,
         score: 100,
@@ -46,6 +46,11 @@ describe('activity TestSet Revision repair safety', () => {
 
   it('treats scoring-only group changes as the same immutable data layout', () => {
     expect(revisionDataLayout(revision('min'))).toEqual(revisionDataLayout(revision('sum')))
+  })
+
+  it('treats migration-generated group key normalization as non-semantic', () => {
+    expect(revisionDataLayout(revision('min', 'input-1', 'official-1')))
+      .toEqual(revisionDataLayout(revision('sum', 'input-1', 'official-legacy')))
   })
 
   it('rejects revisions whose immutable data objects differ', () => {

@@ -61,7 +61,6 @@ export function revisionDataLayout(revision: any) {
           subtaskId: subtask.subtaskId,
           orderIndex: subtask.orderIndex,
           groups: subtask.Groups.map((group: any) => ({
-            key: group.key,
             kind: group.kind,
             orderIndex: group.orderIndex,
             cases: group.Cases.map((item: any) => ({
