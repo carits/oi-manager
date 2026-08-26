@@ -125,7 +125,7 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
               const state = selection[problem.trainingProblemId]
               const included = state?.keys.includes(option.key)
               const isDefault = state?.defaultKey === option.key
-              return <TableCell key={problem.trainingProblemId} style={{ borderTop: '1px solid var(--border)', textAlign: 'center', padding: '0.4rem', background: isDefault ? '#fff8d9' : included ? '#eef8ef' : 'white' }}>
+              return <TableCell key={problem.trainingProblemId} style={{ borderTop: '1px solid var(--border)', textAlign: 'center', padding: '0.4rem', background: isDefault ? 'var(--selection-warning)' : included ? 'var(--selection-success)' : 'white' }}>
                 <Button variant="ghost" aria-label={`${problem.alias || problem.orderIndex + 1} ${row.label.name} ${included ? '取消提供' : '提供'}`} onClick={() => toggle(problem.trainingProblemId, option.key)} style={{ width: '42px', height: '34px', border: '1px solid var(--border)', borderRadius: '6px', background: included ? 'var(--success-light)' : 'white', cursor: isDefault ? 'not-allowed' : 'pointer' }}>{isDefault ? '★' : included ? '✓' : ''}</Button>
                 {!isDefault && <Button variant="ghost" aria-label={`设为 ${problem.alias || problem.orderIndex + 1} 默认题面`} onClick={() => makeDefault(problem.trainingProblemId, option.key)} className={unifiedStyles.u11}>☆</Button>}
               </TableCell>

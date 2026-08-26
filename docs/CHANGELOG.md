@@ -18,6 +18,11 @@ source_of_truth: Git history
 - 新增线上角色工作区冒烟：超级管理员、平台管理员严格单工作区，平台管理员评测记录保持全局范围，
   学校负责人可进入当前组织工作区。
 
+### UI Token 收口
+
+- 业务 TSX 与 CSS Module 的硬编码颜色、阴影从 155 处降为 0；竞赛状态、奖牌、热力图、代码区和
+  半透明表层统一进入全局语义 Token，删除比赛列表/详情内重复声明的局部色板。
+
 - 将 Cron、旧远程提交轮询和 OJ 账号自动验证从蓝绿 API 实例拆为独立
   `oi-manager-worker.service`。Worker 使用 PostgreSQL session advisory lock 保证集群单例，调度器提供
   幂等停止，轮询防止上一次尚未完成时重入；API promote 在切换完成后只重启这一份 Worker。

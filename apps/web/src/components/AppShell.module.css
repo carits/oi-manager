@@ -7,7 +7,7 @@
 .notificationRoot { position: relative; }
 .notificationButton { position: relative; width: 38px; height: 38px; display: grid; place-items: center; color: var(--text-secondary); border-radius: var(--radius); transition: color var(--transition-fast), background var(--transition-fast); }
 .notificationButton:hover, .notificationButton[aria-expanded='true'] { color: var(--text-primary); background: var(--bg-hover); }
-.notificationBadge { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 4px; color: #fff; background: var(--error); border: 2px solid var(--bg-card); border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 1; }
+.notificationBadge { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 4px; color: var(--text-inverse); background: var(--error); border: 2px solid var(--bg-card); border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 1; }
 .notificationPanel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 140; width: min(360px, calc(100vw - 24px)); overflow: hidden; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 .notificationHeader { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-4); border-bottom: 1px solid var(--border); }
 .notificationHeader strong { font-size: var(--text-sm); }

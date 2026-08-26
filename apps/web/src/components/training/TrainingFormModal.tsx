@@ -579,7 +579,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                     </TableHead>
                     <TableBody>
                       {problemRows.map((row, idx) => (
-                        <TableRow key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : '#fffbe6' }}>
+                        <TableRow key={row.id} style={{ borderBottom: '1px solid var(--gray-100)', background: row.existing ? 'var(--text-inverse)' : 'var(--warning-surface)' }}>
                           <TableCell className={unifiedStyles.u23}>
                             <Button variant="ghost"
                               onClick={() => moveUp(idx)}
@@ -592,7 +592,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                                 padding: '0.15rem 0.35rem',
                                 fontSize: '0.7rem',
                                 marginRight: '2px',
-                                color: idx === 0 ? 'var(--border)' : '#666',
+                                color: idx === 0 ? 'var(--border)' : 'var(--gray-500)',
                               }}
                               title="上移"
                             >↑</Button>
@@ -606,7 +606,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                                 cursor: idx === problemRows.length - 1 ? 'not-allowed' : 'pointer',
                                 padding: '0.15rem 0.35rem',
                                 fontSize: '0.7rem',
-                                color: idx === problemRows.length - 1 ? 'var(--border)' : '#666',
+                                color: idx === problemRows.length - 1 ? 'var(--border)' : 'var(--gray-500)',
                               }}
                               title="下移"
                             >↓</Button>
@@ -636,13 +636,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                           </TableCell>
                           <TableCell className={unifiedStyles.u27}>
                             {row.existing ? (
-                              <span><span className={unifiedStyles.u28}>&#10003;</span><span className={unifiedStyles.u29}>{row.resolved?.title || '-'}</span></span>
+                              <span><span className={unifiedStyles.u28}>✓</span><span className={unifiedStyles.u29}>{row.resolved?.title || '-'}</span></span>
                             ) : row.resolving
                               ? <span className={unifiedStyles.u30}>检索中...</span>
                               : row.resolved
                                 ? row.resolved.found
-                                  ? <span><span className={unifiedStyles.u28}>&#10003;</span><span className={unifiedStyles.u31}>{row.resolved.title}</span></span>
-                                  : <span><span className={unifiedStyles.u32}>&#9888;</span><span className={unifiedStyles.u33}>题目不存在</span></span>
+                                  ? <span><span className={unifiedStyles.u28}>✓</span><span className={unifiedStyles.u31}>{row.resolved.title}</span></span>
+                                  : <span><span className={unifiedStyles.u32}>⚠</span><span className={unifiedStyles.u33}>题目不存在</span></span>
                                 : <span className={unifiedStyles.u30}>-</span>
                             }
                           </TableCell>
@@ -664,7 +664,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                             </TableCell>
                           )}
                           <TableCell className={unifiedStyles.u34}>
-                            <Button variant="ghost" onClick={() => removeRow(row.id)} className={unifiedStyles.u37} title="移除">&#10005;</Button>
+                            <Button variant="ghost" onClick={() => removeRow(row.id)} className={unifiedStyles.u37} title="移除">✕</Button>
                           </TableCell>
                         </TableRow>
                       ))}

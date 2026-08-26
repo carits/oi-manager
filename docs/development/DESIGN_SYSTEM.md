@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-26
+last_verified: 2026-08-27
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -11,8 +11,8 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 
 本文件是当前界面视觉与交互的唯一规范。`globals.css` 和 `components/ui` 是实现来源；业务组件
 不得复制通用控件或弹窗。2026-08-26 当前源码为 196 个 TSX；原生按钮、原生表单控件、原生表格、
-自定义 Dialog、直接 Modal 和任意 Modal 宽度均已降为 0。遗留白名单仍登记 171 处静态内联样式和
-155 处硬编码视觉值，组件统一已经完成，但视觉 Token 与 CSS Modules 的最后收口尚未完成。
+自定义 Dialog、直接 Modal 和任意 Modal 宽度均已降为 0。硬编码视觉值已于 2026-08-27 降为 0；
+遗留白名单仍登记 171 处静态内联样式，继续收口到 CSS Modules。
 
 新增统一组件包括 Input、Textarea、Select、Checkbox、RadioGroup、Switch、SearchField、Combobox、
 IconButton、Popover、Menu、DataTable、TableToolbar、Section、FormDialog、ConfirmDialog 和
@@ -26,6 +26,8 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 控件默认高 38px，紧凑控件 32px，表头 42px，数据行不低于 48px。
 - 管理页强调扫描和比较，不嵌套装饰卡片；详情与代码工作台可使用 workbench 全宽布局。
 - 颜色、间距、字号、圆角、阴影和层级只使用全局语义 Token；业务 CSS 不新增等价硬编码值。
+- 业务 TSX 和 CSS Module 不得声明十六进制或 `rgb/rgba` 值；竞赛奖牌、热力图、代码区、遮罩与阴影
+  同样必须使用 `globals.css` 中的已命名语义 Token，不在业务模块内重建局部色板。
 
 ### Dialog 契约
 

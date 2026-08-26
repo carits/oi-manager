@@ -400,7 +400,7 @@ export default function ImportPreview({
           marginBottom: '1rem',
           borderRadius: '6px',
           background: 'var(--gray-50)',
-          border: teamIdError ? '1px solid #ef4444' : '1px solid var(--border)',
+          border: teamIdError ? '1px solid var(--error)' : '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           gap: '0.75rem'
@@ -454,8 +454,8 @@ export default function ImportPreview({
           padding: '0.75rem 1rem',
           marginBottom: '1rem',
           borderRadius: '6px',
-          background: allResolved ? 'var(--success-light)' : '#fefce8',
-          border: `1px solid ${allResolved ? '#bbf7d0' : '#fef08a'}`,
+          background: allResolved ? 'var(--success-light)' : 'var(--warning-surface)',
+          border: `1px solid ${allResolved ? 'var(--success-light)' : 'var(--warning-surface-strong)'}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -490,7 +490,7 @@ export default function ImportPreview({
                 padding: '1rem',
                 border: `1px solid ${hasConflict ? 'var(--error)' : 'var(--border)'}`,
                 borderRadius: '6px',
-                background: !member.selected ? 'var(--gray-50)' : hasConflict ? '#fff5f5' : 'white'
+                background: !member.selected ? 'var(--gray-50)' : hasConflict ? 'var(--error-light)' : 'white'
               }}>
                 {/* 顶部行 */}
                 <div className={unifiedStyles.u18}>

@@ -248,7 +248,7 @@ export default function OjAccountsPage() {
                                 value: (s as any)?.[key] || 0,
                               }
                             })} margin={{ left: -10 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                              <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-100)" />
                               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                               <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                               <Tooltip />

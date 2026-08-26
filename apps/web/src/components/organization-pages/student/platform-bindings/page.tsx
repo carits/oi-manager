@@ -11,9 +11,9 @@ import styles from '@/components/platformBindings.module.css'
 
 // 平台配置
 const PLATFORMS = [
-  { id: 'vjudge', name: 'Vjudge', color: '#4A90A4' },
-  { id: 'luogu', name: '洛谷', color: '#3498db' },
-  { id: 'codeforces', name: 'Codeforces', color: '#1f8dd6' },
+  { id: 'vjudge', name: 'Vjudge', color: 'var(--info)' },
+  { id: 'luogu', name: '洛谷', color: 'var(--info)' },
+  { id: 'codeforces', name: 'Codeforces', color: 'var(--info)' },
   { id: 'atcoder', name: 'AtCoder', color: 'var(--text-primary)' },
 ]
 

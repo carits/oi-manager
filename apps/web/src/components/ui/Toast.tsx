@@ -115,10 +115,10 @@ export function showToastNotification(message: string, type: ToastType = 'info')
 
   const el = document.createElement('div')
   el.setAttribute('data-toast-id', String(id))
-  el.style.cssText = 'display:flex;align-items:center;gap:0.625rem;padding:0.75rem 1rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08);min-width:280px;max-width:420px;background:' + config.bg + ';border:1px solid ' + config.border + ';animation:toast-in 0.25s ease-out;'
+  el.style.cssText = 'display:flex;align-items:center;gap:0.625rem;padding:0.75rem 1rem;border-radius:8px;box-shadow:0 2px 8px var(--shadow-color-medium);min-width:280px;max-width:420px;background:' + config.bg + ';border:1px solid ' + config.border + ';animation:toast-in 0.25s ease-out;'
 
   const icon = document.createElement('span')
-  icon.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.7rem;font-weight:700;color:#fff;flex-shrink:0;background:' + (type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--error)' : type === 'warning' ? 'var(--warning)' : 'var(--info)')
+  icon.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.7rem;font-weight:700;color:var(--text-inverse);flex-shrink:0;background:' + (type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--error)' : type === 'warning' ? 'var(--warning)' : 'var(--info)')
   icon.textContent = config.icon
 
   const text = document.createElement('span')

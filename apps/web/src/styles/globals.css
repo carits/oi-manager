@@ -21,6 +21,14 @@
   --info: #2563eb;
   --info-light: #dbeafe;
   --info-text: #1e40af;
+  --primary-tint: rgba(37, 99, 235, 0.08);
+  --primary-tint-subtle: rgba(37, 99, 235, 0.06);
+  --success-tint: rgba(22, 163, 74, 0.08);
+  --success-border: rgba(22, 163, 74, 0.2);
+  --warning-surface: #fefce8;
+  --warning-surface-strong: #fef08a;
+  --selection-warning: #fff8d9;
+  --selection-success: #eef8ef;
 
   /* 背景 */
   --bg-page: #f5f7fa;
@@ -51,6 +59,24 @@
   --gray-800: #1f2937;
   --gray-900: #111827;
 
+  /* 业务可视化 */
+  --medal-gold: #b77900;
+  --medal-silver: #667085;
+  --medal-bronze: #a15c23;
+  --code-bg: #111827;
+  --code-text: #e5e7eb;
+  --chart-1: #ff4f4f;
+  --chart-2: #ff694f;
+  --chart-3: #f8603a;
+  --chart-4: #fc8354;
+  --chart-5: #fa9231;
+  --chart-6: #f7bb3b;
+  --chart-7: #ecdb44;
+  --chart-8: #e2ec52;
+  --chart-9: #b0d628;
+  --chart-10: #93b127;
+  --chart-11: #25ad40;
+
   /* 圆角 */
   --radius-sm: 4px;
   --radius: 6px;
@@ -64,6 +90,12 @@
   --shadow: 0 2px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
   --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04);
+  --shadow-color-faint: rgba(0, 0, 0, 0.04);
+  --shadow-color-soft: rgba(0, 0, 0, 0.06);
+  --shadow-color-medium: rgba(0, 0, 0, 0.08);
+  --shadow-popover-color: rgba(35, 49, 80, 0.14);
+  --shadow-panel-color: rgba(34, 53, 90, 0.08);
+  --surface-glass: rgba(255, 255, 255, 0.42);
 
   /* 间距 */
   --space-1: 4px;
@@ -95,6 +127,7 @@
   --control-height: 38px;
   --control-height-lg: 44px;
   --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  --focus-ring-color: rgba(37, 99, 235, 0.2);
   --transition-fast: 120ms ease;
   --transition: 180ms ease;
 }

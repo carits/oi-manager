@@ -6,8 +6,8 @@
 .createButton { flex: 0 0 auto; }
 .list { display: grid; gap: var(--space-3); }
 .card { position: relative; display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; overflow: hidden; min-height: 130px; color: inherit; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); text-decoration: none; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
-.card:hover { border-color: var(--primary-light); box-shadow: 0 8px 24px rgba(34, 53, 90, .08); transform: translateY(-1px); }
-.cardOngoing { border-color: #b7e4c7; background: linear-gradient(90deg, #f4fff8 0%, var(--bg-card) 48%); }
+.card:hover { border-color: var(--primary-light); box-shadow: 0 8px 24px var(--shadow-panel-color); transform: translateY(-1px); }
+.cardOngoing { border-color: var(--success-light); background: linear-gradient(90deg, var(--success-light) 0%, var(--bg-card) 48%); }
 .cardFinished { background: var(--bg-card); opacity: .82; }
 .statusRail { width: 4px; background: var(--info); }
 .statusRail[data-status='ongoing'] { background: var(--success); }
@@ -36,23 +36,6 @@
 
 /* 仅比赛列表：由现有比赛详情链接限定，不影响训练与作业列表。 */
 .panel:has(a[href*="/contests/"]) {
-  --primary: #2f5fd0;
-  --primary-hover: #244ea9;
-  --primary-light: #eef3ff;
-  --primary-text: #244ea9;
-  --success: #26843b;
-  --success-light: #edf7ef;
-  --success-text: #25733a;
-  --info: #2f5fd0;
-  --info-light: #eef3ff;
-  --info-text: #244ea9;
-  --bg-card: #ffffff;
-  --bg-muted: #fafafa;
-  --text-primary: #222222;
-  --text-secondary: #555555;
-  --text-muted: #888888;
-  --border: #e2e2e2;
-  --border-hover: #d4d4d4;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
 }
 .panel:has(a[href*="/contests/"]) .card { box-shadow: none; transition: border-color .12s ease, background-color .12s ease; }
@@ -66,11 +49,11 @@
 .panel:has(a[href*="/contests/"]) .card,
 .panel:has(a[href*="/contests/"]) .cardOngoing,
 .panel:has(a[href*="/contests/"]) .cardFinished {
-  background: #ffffff;
+  background: var(--bg-card);
   box-shadow: none;
 }
 .panel:has(a[href*="/contests/"]) .fact,
-.panel:has(a[href*="/contests/"]) .facts { border-color: #e2e2e2; }
-.panel:has(a[href*="/contests/"]) .statusRail[data-status="upcoming"] { background: #2f5fd0; }
-.panel:has(a[href*="/contests/"]) .statusRail[data-status="ongoing"] { background: #26843b; }
-.panel:has(a[href*="/contests/"]) .statusRail[data-status="finished"] { background: #b8b8b8; }
+.panel:has(a[href*="/contests/"]) .facts { border-color: var(--border); }
+.panel:has(a[href*="/contests/"]) .statusRail[data-status="upcoming"] { background: var(--primary); }
+.panel:has(a[href*="/contests/"]) .statusRail[data-status="ongoing"] { background: var(--success); }
+.panel:has(a[href*="/contests/"]) .statusRail[data-status="finished"] { background: var(--gray-400); }

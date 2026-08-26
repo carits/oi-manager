@@ -396,7 +396,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: rgba(255, 255, 255, 0.42);
+  background: var(--surface-glass);
 }
 
 .tableActions {

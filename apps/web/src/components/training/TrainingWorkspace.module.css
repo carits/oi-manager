@@ -54,23 +54,23 @@
 .rankRowCurrent .rankMetaCell { background: color-mix(in srgb, var(--primary-light) 46%, transparent) !important; }
 .rankRowCurrent .rankMetaCell:first-child { box-shadow: inset 3px 0 0 var(--primary); }
 .rankCell { width: 52px; color: var(--text-secondary) !important; font-weight: 800; }
-.medal1 { color: #b77900 !important; } .medal2 { color: #667085 !important; } .medal3 { color: #a15c23 !important; }
-.scoreFirstAccepted { color: #fff !important; background: #2f7d32 !important; font-weight: 800; }
+.medal1 { color: var(--medal-gold) !important; } .medal2 { color: var(--medal-silver) !important; } .medal3 { color: var(--medal-bronze) !important; }
+.scoreFirstAccepted { color: var(--text-inverse) !important; background: var(--success) !important; font-weight: 800; }
 .rankScoreCell { padding: 8px !important; }
 .oiTotalScore { color: var(--text-primary) !important; font-size: var(--text-base); }
 .oiScoreFull { color: var(--success-text) !important; font-weight: 800; }
 .oiScorePartial { color: var(--warning-text) !important; font-weight: 700; }
 .oiScoreZero { color: var(--text-muted) !important; }
 .ioiTotalScore { color: var(--primary) !important; font-size: var(--text-base); font-weight: 800; }
-.ioiScoreFull { color: var(--success-text) !important; background: #e8f7e9 !important; font-weight: 800; }
+.ioiScoreFull { color: var(--success-text) !important; background: var(--success-light) !important; font-weight: 800; }
 .ioiScorePartial { color: var(--warning-text) !important; background: color-mix(in srgb, var(--warning-light) 50%, var(--bg-card)); font-weight: 700; }
 .ioiScoreZero { color: var(--text-muted) !important; background: var(--bg-card) !important; }
 .icpcResultCell { padding: 8px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rankInteractiveCell { cursor: pointer; outline: none; }
 .rankInteractiveCell:hover,
 .rankInteractiveCell:focus-visible { filter: brightness(0.97); }
-.icpcAccepted { color: var(--success-text) !important; background: #e8f7e9 !important; }
-.icpcFailed { color: var(--error-text) !important; background: #fbe4e4 !important; }
+.icpcAccepted { color: var(--success-text) !important; background: var(--success-light) !important; }
+.icpcFailed { color: var(--error-text) !important; background: var(--error-light) !important; }
 .icpcUnsubmitted { color: transparent !important; background: var(--bg-card) !important; }
 .locked { display: grid; justify-items: center; gap: var(--space-2); padding: 72px var(--space-4); color: var(--text-muted); text-align: center; }
 .locked strong { color: var(--text-primary); }
@@ -139,20 +139,20 @@
   font-weight: 500;
 }
 :global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table th {
-  color: #555555 !important;
-  background: #f7f7f7 !important;
+  color: var(--text-secondary) !important;
+  background: var(--bg-hover) !important;
   font-weight: 500;
 }
 :global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table td {
-  color: #333333;
-  border-bottom-color: #ececec;
+  color: var(--text-primary);
+  border-bottom-color: var(--border);
 }
 :global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .table tbody tr:hover td,
 :global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .rankTable tbody tr:hover .rankMetaCell {
-  background: #fafafa;
+  background: var(--bg-sidebar);
 }
 :global([class*="TrainingDetail_page"]):has(a[href*="/contests"]) .problemCode {
-  color: #333333;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 0;
   font-weight: 600;

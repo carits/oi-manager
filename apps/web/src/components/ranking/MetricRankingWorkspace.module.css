@@ -12,9 +12,9 @@
 .total strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .identity { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .rank { font-weight: 750; font-variant-numeric: tabular-nums; }
-.rankFirst { color: #a76600; }
-.rankSecond { color: #657184; }
-.rankThird { color: #9b5a2a; }
+.rankFirst { color: var(--warning-text); }
+.rankSecond { color: var(--text-secondary); }
+.rankThird { color: var(--medal-bronze); }
 .ratingValue, .solvedValue { font-variant-numeric: tabular-nums; }
 .ratingValue { color: var(--primary); }
 .solvedValue { color: var(--success-text); }

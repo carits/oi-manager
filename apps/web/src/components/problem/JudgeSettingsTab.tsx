@@ -911,7 +911,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
                     setExpandedSubtasks(new Set([1]))
                   }
-                }} style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem', borderRadius: '6px', border: judgeMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)', background: judgeMode === mode ? 'rgba(59, 130, 246, 0.08)' : 'white', color: judgeMode === mode ? 'var(--primary)' : 'var(--gray-600)', fontWeight: judgeMode === mode ? 600 : 400, cursor: 'pointer' }}>
+                }} style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem', borderRadius: '6px', border: judgeMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)', background: judgeMode === mode ? 'var(--primary-tint)' : 'white', color: judgeMode === mode ? 'var(--primary)' : 'var(--gray-600)', fontWeight: judgeMode === mode ? 600 : 400, cursor: 'pointer' }}>
                   {label}
                 </Button>
               ))}
@@ -932,7 +932,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     fontSize: '0.8125rem',
                     borderRadius: '6px',
                     border: problemType === pt.value ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: problemType === pt.value ? 'rgba(59, 130, 246, 0.08)' : 'white',
+                    background: problemType === pt.value ? 'var(--primary-tint)' : 'white',
                     color: problemType === pt.value ? 'var(--primary)' : 'var(--gray-600)',
                     fontWeight: problemType === pt.value ? 600 : 400,
                     cursor: 'pointer',
@@ -955,7 +955,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     style={{
                       padding: '0.375rem 0.75rem', fontSize: '0.8125rem', borderRadius: '6px',
                       border: checkerType === o.v ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      background: checkerType === o.v ? 'rgba(59, 130, 246, 0.08)' : 'white',
+                      background: checkerType === o.v ? 'var(--primary-tint)' : 'white',
                       color: checkerType === o.v ? 'var(--primary)' : 'var(--gray-600)',
                       cursor: 'pointer',
                     }}
@@ -1120,7 +1120,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8125rem', cursor: 'pointer',
                     padding: '0.25rem 0.625rem', borderRadius: '6px',
                     border: langs.includes(lang.value) ? '1px solid var(--primary)' : '1px solid var(--border)',
-                    background: langs.includes(lang.value) ? 'rgba(59, 130, 246, 0.06)' : 'transparent',
+                    background: langs.includes(lang.value) ? 'var(--primary-tint-subtle)' : 'transparent',
                     color: langs.includes(lang.value) ? 'var(--primary)' : 'var(--gray-600)',
                   }}>
                     <Input type="checkbox" checked={langs.includes(lang.value)}
@@ -1328,7 +1328,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {(() => {
             const pairs = !problemId ? stagedPairs : testdataPairs
             return pairs.length > 0 ? (
-              <div style={{ ...cardStyle, background: 'rgba(16, 185, 129, 0.04)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+              <div style={{ ...cardStyle, background: 'var(--success-tint)', borderColor: 'var(--success-border)' }}>
                 <div style={{ ...sectionTitle, color: 'var(--success)' }}>已识别测试点 ({pairs.length})</div>
                 <div className={unifiedStyles.u20}>
                   {pairs.map((pair, i) => (
