@@ -207,6 +207,9 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // 基础配置
   const [problemType, setProblemType] = useState('default')
   const [judgeMode, setJudgeMode] = useState<'acm' | 'oi'>('acm')
+  const [loadedJudgeMode, setLoadedJudgeMode] = useState<'acm' | 'oi'>('acm')
+  const [pendingJudgeMode, setPendingJudgeMode] = useState<'acm' | 'oi' | null>(null)
+  const [transitioningMode, setTransitioningMode] = useState(false)
   const [checkerType, setCheckerType] = useState('default')
   const [ignoreTrailingSpace, setIgnoreTrailingSpace] = useState(true)
   const [fileioPrefix, setFileioPrefix] = useState('')
@@ -372,6 +375,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         if (pt) setProblemType(pt)
         const resolvedMode = config?.mode === 'oi' || (config?.mode !== 'acm' && config?.subtasks?.length) ? 'oi' : 'acm'
         setJudgeMode(resolvedMode)
+        setLoadedJudgeMode(resolvedMode)
 
         // 同步时间/内存到父组件（ProblemForm 的表单字段）
         if (tl != null && tl > 0) onTimeLimitChange(String(tl))
@@ -529,6 +533,40 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
     } finally {
       setSaving(false)
     }
+  }
+
+  const confirmModeTransition = async () => {
+    if (!pendingJudgeMode || pendingJudgeMode === loadedJudgeMode) { setPendingJudgeMode(null); return }
+    if (!problemId) { setJudgeMode(pendingJudgeMode); setLoadedJudgeMode(pendingJudgeMode); setPendingJudgeMode(null); return }
+    setTransitioningMode(true)
+    try {
+      const list = await apiClient.get<{ latestTestSetRevisionId: string | null }>(`/api/problems/${problemId}/test-set-revisions`)
+      if (!list.success) return toast.error(list.message || '无法读取正式测试版本')
+      if (!list.data?.latestTestSetRevisionId) {
+        setJudgeMode(pendingJudgeMode)
+        setLoadedJudgeMode(pendingJudgeMode)
+        if (pendingJudgeMode === 'acm' && checkerType === 'lemon') {
+          setCheckerType('default'); setCheckerFile(''); setCheckerCategory('preset')
+        }
+        if (pendingJudgeMode === 'oi' && subtasks.length === 0) {
+          const cases = problemId ? testdataPairs : stagedPairs
+          setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
+          setExpandedSubtasks(new Set([1]))
+        }
+        setPendingJudgeMode(null)
+        return
+      }
+      const result = await apiClient.post(`/api/problems/${problemId}/judge-mode-transition`, {
+        targetMode: pendingJudgeMode,
+        expectedLatestRevisionId: list.data.latestTestSetRevisionId,
+      })
+      if (!result.success) return toast.error(result.message || '评测模式迁移失败')
+      toast.success(result.message || '评测模式迁移完成')
+      setJudgeMode(pendingJudgeMode)
+      setLoadedJudgeMode(pendingJudgeMode)
+      setPendingJudgeMode(null)
+      await fetchJudgeConfig()
+    } finally { setTransitioningMode(false) }
   }
 
   // 脏检测：对比当前配置与初始配置
@@ -859,6 +897,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             <div className={unifiedStyles.u11}>
               {([['acm', 'ACM 赛制'], ['oi', 'OI 赛制']] as const).map(([mode, label]) => (
                 <Button variant="ghost" type="button" key={mode} onClick={() => {
+                  if (mode !== loadedJudgeMode) { setPendingJudgeMode(mode); return }
                   setJudgeMode(mode)
                   // Lemon supports partial scores and is intentionally OI-only.
                   // Clear it when switching to ACM so an invalid combination cannot be saved.
@@ -1408,6 +1447,15 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         title="确认操作"
         message={confirmState?.message || ''}
         confirmText="确认"
+        danger
+      />
+      <ConfirmModal
+        isOpen={!!pendingJudgeMode}
+        onClose={() => setPendingJudgeMode(null)}
+        onConfirm={confirmModeTransition}
+        title={`切换为 ${pendingJudgeMode?.toUpperCase() || ''} 评测模式？`}
+        message="模式切换会创建新的不可变正式测试版本，并自动关闭 Hack。已固定旧版本的比赛、训练和作业不会变化；切换后需要重新确认 Hack 配置。"
+        confirmText={transitioningMode ? '迁移中…' : '确认迁移'}
         danger
       />
     </div>

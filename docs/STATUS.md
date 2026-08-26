@@ -5,6 +5,7 @@ last_verified: 2026-08-26
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-26: 题库测试数据改为不可变 TestSet Revision；题库 Practice 使用最新版，比赛、训练和作业添加题目时固定当时 Revision，活动开始或出现提交后永久禁止切换。有效 ACM/OI Hack 只自动晋升题库下一 Revision，不再直接传播到活动。Revision 固化测试点、Checker/Interactor/Manager 与 Judge 投影；PostgreSQL advisory lock + CAS 防止 Test Graph/Hack 并发覆盖。API 增加 3002 稳定 Router 与 3302/3303 蓝绿实例、Judge drain/reconnect，系统程序编译增加 TTL/LRU 缓存。Server 433/433、Web 36/36、Judge 11/11 与三端生产构建通过。
 - 2026-08-26: OI Test Graph 已从 JSON textarea 收口为“Subtask → Group → Testcase”三栏工作台；旧 Subtask/测试数据入口在 OI 模式隐藏，Hack 配置只保留系统程序。新增题目管理员单题显式迁移、测试点注册、结构化校验、revision 409 和测试数据引用保护。Server 39 文件 430/430、Web 36/36、Judge 9/9、Chromium `1280×720` 与 `1440×900` E2E 均通过；提交 `7002e8d` 已推送 `main`，公网构建 `yWNYBecXwn49NS0LJhzwS` 已完成健康提升。
 - 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。提交 97ee230 已部署为公网构建 zqmtCul8BqfkMjyMkx8fU，线上权限复验为管理员 200 且含完整源码、其他用户访问他人详情 404。
 - 2026-08-24: 新增 ICPC/OI/IOI 完整破坏性闭环，真实创建比赛、切换 ACM/OI 题目快照、提交并通过
@@ -61,7 +62,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 | 服务 | 开发端口 | E2E 端口 | 说明 |
 |------|----------|----------|------|
 | Web preview / HMR | `3000` / `127.0.0.1:3001` | `3100` | Next.js App Router |
-| Server/API | `3002` | `3102` | Express + Prisma |
+| Server/API | Router `3002` → blue/green `3302/3303` | `3102` | Express + Prisma；Router 固定入口，候选实例通过 readiness 后原子切换 |
 | PostgreSQL | `127.0.0.1:5432` | 同实例 `e2e` schema | Docker Compose 基础设施，仅本机访问 |
 | go-judge | `127.0.0.1:5050` | `5050` | 高权限评测沙箱，仅本机访问 |
 
@@ -91,6 +92,7 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 - 超级管理员和平台管理员的评测记录页提供全平台全量视图，包含所有用户、个人区、校园区和比赛提交，支持总数、范围提示和 20/50/100 条分页浏览。
 - 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
 - OI 题目的关系型 Test Graph 是 Subtask、Official Group、Hack Gate 与 Testcase 的唯一编辑事实源；题目管理者通过三栏工作台上传/配对数据、注册测试点、设置依赖和聚合方式，YAML 仅由服务端生成 Judge 投影。
+- 正式测试集合使用题库级不可变 Revision；历史 Revision 和评测资产可只读复现，数据工作台每次保存创建下一 Revision。所有活动固定 Revision，题库 Hack 与学校/团队活动没有直接关系。
 - ACM/OI 传统源码批处理题（`default`/历史 `standard`）可配置题目级 Hack；客观题、交互题、
   通信题和提交答案题不能启用。ACM 有效性取决于最终 Verdict 变化；OI 由 Classifier 分类并要求
   总分严格下降。有效数据仅影响后续新提交，历史提交、成绩和排行榜不自动重测。

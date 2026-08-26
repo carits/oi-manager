@@ -3,7 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import { config } from './config'
 import { judge } from './judge'
-import { compile, execute } from './sandbox/client'
+import { execute } from './sandbox/client'
+import { acquireCompiledProgram } from './compiled-program-cache'
 import type { HackJudgeRequest, HackJudgeTaskResult, JudgeResult, ProblemConfig, TestCaseConfig } from './types'
 
 const MAX_DATA_BYTES = 1024 * 1024
@@ -62,24 +63,20 @@ function currentCases(problemConfig: ProblemConfig, testdataPath: string): TestC
     }).filter(item => names.includes(item.output))
 }
 
-async function compileProgram(language: string, code: string, extraCopyIn?: Record<string, string>) {
-  const result = await compile({ language, code, timeLimit: 60_000, memoryLimit: 524_288, extraCopyIn })
-  if (!result.success) throw new Error(result.error || '编译失败')
-  return result
-}
-
 async function createCandidateInput(request: HackJudgeRequest): Promise<string> {
   if (request.inputMode === 'data') return request.inputData || ''
   if (!request.generatorSource || !request.generatorLanguage) throw new Error('生成器源码或语言缺失')
   let compiled
-  try { compiled = await compileProgram(request.generatorLanguage, request.generatorSource) }
+  try { compiled = await acquireCompiledProgram({ language: request.generatorLanguage, code: request.generatorSource }, false) }
   catch (error: any) { throw new Error(`生成器编译失败：${error.message}`) }
-  const result = await execute({
-    language: request.generatorLanguage, timeLimit: 5000, memoryLimit: 262_144,
-    outputLimit: MAX_DATA_BYTES, compileFileId: compiled.fileId, workDir: compiled.workDir,
-  })
-  if (result.status !== 'Accepted') throw new Error(`生成器运行失败：${result.status}${result.stderr ? `；${result.stderr.slice(0, 1000)}` : ''}`)
-  return result.stdout || ''
+  try {
+    const result = await execute({
+      language: request.generatorLanguage, timeLimit: 5000, memoryLimit: 262_144,
+      outputLimit: MAX_DATA_BYTES, compileFileId: compiled.result.fileId, workDir: compiled.result.workDir,
+    })
+    if (result.status !== 'Accepted') throw new Error(`生成器运行失败：${result.status}${result.stderr ? `；${result.stderr.slice(0, 1000)}` : ''}`)
+    return result.stdout || ''
+  } finally { await compiled.release() }
 }
 
 type HackFailureStage = NonNullable<HackJudgeTaskResult['failureStage']>
@@ -128,11 +125,14 @@ export function buildCandidateConfig(
 
 async function classifyInput(request: HackJudgeRequest, candidateInput: string): Promise<number[]> {
   if (!request.classifierSource?.trim()) throw new Error('Classifier 源码缺失')
-  const compiled = await compileProgram('cpp17', request.classifierSource, checkerDependencies())
-  const run = await execute({
-    language: 'cpp17', stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144,
-    outputLimit: 65_536, compileFileId: compiled.fileId, workDir: compiled.workDir,
-  })
+  const compiled = await acquireCompiledProgram({ language: 'cpp17', code: request.classifierSource, extraCopyIn: checkerDependencies() }, true)
+  let run
+  try {
+    run = await execute({
+      language: 'cpp17', stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144,
+      outputLimit: 65_536, compileFileId: compiled.result.fileId, workDir: compiled.result.workDir,
+    })
+  } finally { await compiled.release() }
   if (run.status !== 'Accepted' || run.exitCode !== 0) throw new Error(`Classifier 运行失败：${run.status}${run.stderr ? `；${run.stderr.slice(0, 1000)}` : ''}`)
   let parsed: any
   try { parsed = JSON.parse(run.stdout || '') } catch { throw new Error('Classifier 必须输出严格 JSON') }
@@ -154,12 +154,15 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, 'input', '候选输入超过 1 MiB')
 
   let validator
-  try { validator = await compileProgram('cpp17', request.validatorSource, checkerDependencies()) }
+  try { validator = await acquireCompiledProgram({ language: 'cpp17', code: request.validatorSource, extraCopyIn: checkerDependencies() }, true) }
   catch (error: any) { return systemError(request, 'validator', `Validator 编译失败：${error.message}`) }
-  const validation = await execute({
-    language: 'cpp17', stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144,
-    outputLimit: 65_536, compileFileId: validator.fileId, workDir: validator.workDir,
-  })
+  let validation
+  try {
+    validation = await execute({
+      language: 'cpp17', stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144,
+      outputLimit: 65_536, compileFileId: validator.result.fileId, workDir: validator.result.workDir,
+    })
+  } finally { await validator.release() }
   if (validation.status !== 'Accepted' || validation.exitCode !== 0) {
     return rejected(request, 'validator', `Validator 拒绝候选输入${validation.stderr ? `：${validation.stderr.slice(0, 2000)}` : ''}`)
   }
@@ -171,14 +174,17 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   }
 
   let standard
-  try { standard = await compileProgram('cpp17', request.standardSource) }
+  try { standard = await acquireCompiledProgram({ language: 'cpp17', code: request.standardSource }, true) }
   catch (error: any) { return systemError(request, 'standard', `标准程序编译失败：${error.message}`) }
   const timeLimit = Math.max(1000, parseTime(request.config.time) * 3)
   const memoryLimit = Math.max(262_144, parseMemory(request.config.memory))
-  const standardRun = await execute({
-    language: 'cpp17', stdin: candidateInput, filename: request.config.filename,
-    timeLimit, memoryLimit, outputLimit: MAX_DATA_BYTES, compileFileId: standard.fileId, workDir: standard.workDir,
-  })
+  let standardRun
+  try {
+    standardRun = await execute({
+      language: 'cpp17', stdin: candidateInput, filename: request.config.filename,
+      timeLimit, memoryLimit, outputLimit: MAX_DATA_BYTES, compileFileId: standard.result.fileId, workDir: standard.result.workDir,
+    })
+  } finally { await standard.release() }
   if (standardRun.status !== 'Accepted') return systemError(request, 'standard', `标准程序运行失败：${standardRun.status}${standardRun.stderr ? `；${standardRun.stderr.slice(0, 1000)}` : ''}`)
   if (!hasStandardOutput(standardRun.stdout)) return systemError(request, 'standard', '标准程序没有生成答案输出')
   const candidateOutput = standardRun.stdout

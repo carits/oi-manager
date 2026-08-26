@@ -11,6 +11,11 @@
   },
   {
     "method": "GET",
+    "path": "/api/readiness",
+    "rationale": "Blue/green promotion probe; returns only dependency and TestSet Revision consistency readiness without record details."
+  },
+  {
+    "method": "GET",
     "path": "/api/platform-bindings/platforms",
     "rationale": "Returns the static list of supported public platform identifiers needed before login and contains no user binding data."
   },

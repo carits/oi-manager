@@ -21,6 +21,7 @@ import { parsePagination, paginatedResponse } from '../lib/pagination'
 import { populateSnapshotData } from '../modules/training/training.helpers'
 import { v4 as uuidv4 } from 'uuid'
 import { findAccessibleProblem, findUsableProblemByExternalId } from '../modules/problem/problem.access'
+import { ensureInitialTestSetRevision } from '../modules/problem/problem.testset-revision.service'
 import { fileService } from '../lib/storage'
 
 export const problemListsRouter = Router()
@@ -1521,9 +1522,17 @@ problemListsRouter.post('/:id/publish-homework', authenticate, asyncHandler(asyn
       }
     })
 
-    // 为每个条目创建 TrainingProblem（含快照）
+    for (const entry of allEntries) await ensureInitialTestSetRevision(entry.problemId, userId)
+    const revisionProblems = await prisma.problem.findMany({
+      where: { id: { in: allEntries.map((entry: any) => entry.problemId) } },
+      include: { LatestTestSetRevision: true },
+    })
+    const revisionByProblem = new Map(revisionProblems.map(problem => [problem.id, problem]))
+
+    // 为每个条目创建 TrainingProblem（含固定测试版本快照）
     const problemsData = allEntries.map((entry: any, index: number) => {
-      const snapshotData = populateSnapshotData(entry.Problem)
+      const revisionProblem = revisionByProblem.get(entry.problemId)
+      const snapshotData = populateSnapshotData({ ...entry.Problem, ...revisionProblem })
       return {
         id: uuidv4(),
         trainingId: training.id,

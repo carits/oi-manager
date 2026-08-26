@@ -5,6 +5,7 @@
 import cron from 'node-cron'
 import { fetchMissingCfCodes } from './cf-code-fetcher'
 import logger from './logger'
+import { collectOrphanTestdataObjects } from './testdata-object-gc'
 
 let isRunning = false
 
@@ -35,6 +36,18 @@ export function startCronTasks() {
       })
     } finally {
       isRunning = false
+    }
+  })
+
+  // Content-addressed uploads may be left behind when a Revision transaction
+  // loses CAS or rolls back. Remove only objects older than 24 hours and still
+  // unreferenced, under the same per-problem database lock as publishers.
+  cron.schedule('17 3 * * *', async () => {
+    try {
+      const result = await collectOrphanTestdataObjects()
+      logger.info('testdata_object_gc_done', { action: 'testdata_object_gc', metadata: result })
+    } catch (error) {
+      logger.error('testdata_object_gc_error', { action: 'testdata_object_gc', metadata: { error: (error as Error).message } })
     }
   })
 

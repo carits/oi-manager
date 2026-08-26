@@ -209,6 +209,8 @@ export function populateSnapshotData(problem: {
   memoryLimit: number | null
   judgeConfig: string | null
   testGraphRevision?: number
+  latestTestSetRevisionId?: string | null
+  LatestTestSetRevision?: { judgeConfig: string; revisionNumber: number } | null
   allowedLanguages: string | null
   platform: string
   problemId: string
@@ -221,14 +223,15 @@ export function populateSnapshotData(problem: {
     statementsSnapshotJson: statements.length > 0 ? JSON.stringify(statements) : null,
     timeLimitSnapshot: problem.timeLimit,
     memoryLimitSnapshot: problem.memoryLimit,
-    judgeConfigSnapshot: problem.judgeConfig,
+    judgeConfigSnapshot: problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig,
     testGraphRevisionSnapshot: problem.testGraphRevision ?? 0,
+    testSetRevisionId: problem.latestTestSetRevisionId || null,
     allowedLanguagesSnapshot: problem.allowedLanguages,
     sourcePlatformSnapshot: problem.platform,
     sourceProblemIdSnapshot: problem.problemId,
     sourceUrlSnapshot: null,
     snapshotCreatedAt: new Date(),
-    dataVersion: '1',
+    dataVersion: problem.latestTestSetRevisionId ? '2' : '1',
   }
 }
 

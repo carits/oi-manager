@@ -89,7 +89,7 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
     // Verify problem belongs to this training
     const trainingProblem = await prisma.trainingProblem.findUnique({
       where: { id: trainingProblemId },
-      include: { Problem: true },
+      include: { TestSetRevision: true, Problem: { include: { LatestTestSetRevision: true } } },
     })
     if (!trainingProblem || trainingProblem.trainingId !== id) {
       return res.status(404).json({ success: false, message: '题目不存在' })

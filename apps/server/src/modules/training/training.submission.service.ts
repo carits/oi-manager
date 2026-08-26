@@ -9,7 +9,12 @@ export interface QueuedTrainingSubmissionInput {
     organizationId?: string | null
     Team?: { organizationId: string | null } | null
   }
-  trainingProblem: { id: string; Problem: { id: string; platform: string; problemId: string } }
+  trainingProblem: {
+    id: string
+    testSetRevisionId?: string | null
+    TestSetRevision?: { judgeConfigHash: string } | null
+    Problem: { id: string; platform: string; problemId: string; latestTestSetRevisionId?: string | null; LatestTestSetRevision?: { judgeConfigHash: string } | null }
+  }
   language: string
   code: string
   submitMethod: string
@@ -37,6 +42,8 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
       submitScope: input.training.type === 'contest' ? 'contest' : 'training',
       trainingId: input.training.id,
       trainingProblemId: input.trainingProblem.id,
+      testSetRevisionId: input.trainingProblem.testSetRevisionId || input.trainingProblem.Problem.latestTestSetRevisionId || null,
+      judgeConfigHash: input.trainingProblem.TestSetRevision?.judgeConfigHash || input.trainingProblem.Problem.LatestTestSetRevision?.judgeConfigHash || null,
       ...(input.training.type === 'contest' ? { contestId: input.training.id, contestProblemId: input.trainingProblem.id } : {}),
       isGlobalVisible: input.training.type === 'contest' ? false : true,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),

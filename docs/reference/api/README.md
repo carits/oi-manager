@@ -10,11 +10,11 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 311 个端点中 304 个必须认证，7 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 317 个端点中 309 个必须认证，8 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 311 个无会话请求：304 个受保护端点必须返回
-401，7 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 317 个无会话请求：309 个受保护端点必须返回
+401，8 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
 | 方法 | 路径 | 说明 |
@@ -29,10 +29,16 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/problems/:id/test-graph` | 校验并保存 Subtask/Group/Testcase 测试图 |
 | `POST` | `/api/problems/:id/test-graph/migrate` | 题目管理者显式检查并幂等迁移单题旧 OI 配置 |
 | `POST` | `/api/problems/:id/test-graph/testcases` | 将当前题目的输入与答案文件配对注册为稳定 Testcase |
+| `GET` | `/api/problems/:id/test-set-revisions` | 题目管理者列出正式测试版本历史 |
+| `GET` | `/api/problems/:id/test-set-revisions/:revisionId` | 读取单个不可变 Revision 和只读 Judge 投影 |
+| `POST` | `/api/problems/:id/judge-mode-transition` | 显式创建 ACM/OI 模式转换 Revision 并关闭 Hack |
 | `GET` | `/api/admin/problem-test-graph/migration` | 超级管理员检查旧 OI 配置迁移条件 |
 | `POST` | `/api/admin/problem-test-graph/migration` | 超级管理员通过 API 幂等迁移合法题目 |
-| `GET` | `/api/trainings/:id/problems/:trainingProblemId/hack-sync-preview` | 活动管理员预览冻结快照与最新测试图 revision |
-| `POST` | `/api/trainings/:id/problems/:trainingProblemId/hack-sync` | 活动管理员同步最新 Hack 数据且不自动重测 |
+| `GET` | `/api/admin/problem-test-set-revisions/migration` | 超级管理员检查历史题目和活动快照能否安全固定 Revision |
+| `POST` | `/api/admin/problem-test-set-revisions/migration` | 超级管理员通过 API 幂等生成 Revision 并固定活动/提交 |
+| `GET` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
+| `POST` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
+| `GET` | `/api/readiness` | 蓝绿 API 候选数据库与 Revision 投影 readiness |
 | `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |

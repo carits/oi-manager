@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Copy, Download, GripVertical, Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Download, GripVertical, History, Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { ConfirmDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, DetailDialog } from '@/components/ui/Dialogs'
 import { Input, SearchField, Select } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
@@ -46,6 +46,9 @@ type DetectedPair = { inputFileId: string; outputFileId: string; input: string; 
 
 type TestGraph = {
   revision: number
+  revisionId?: string
+  source?: string
+  createdAt?: string
   migrated: boolean
   canMigrate?: boolean
   migrationIssues?: string[]
@@ -57,6 +60,8 @@ type TestGraph = {
 }
 
 type ValidationIssue = { path: string; message: string; subtaskId?: number; groupKey?: string }
+type RevisionSummary = { id: string; revisionNumber: number; mode: string; source: string; judgeConfigHash: string; graphHash: string; createdAt: string }
+type RevisionDetail = RevisionSummary & { judgeConfig: string; spec: unknown }
 
 function cloneSubtasks(subtasks: Subtask[]): Subtask[] {
   return JSON.parse(JSON.stringify(subtasks))
@@ -142,6 +147,10 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const [replacementFiles, setReplacementFiles] = useState<File[] | null>(null)
   const [draggedSubtask, setDraggedSubtask] = useState<number | null>(null)
   const [draggedGroup, setDraggedGroup] = useState<number | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [revisionHistory, setRevisionHistory] = useState<RevisionSummary[]>([])
+  const [revisionDetail, setRevisionDetail] = useState<RevisionDetail | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -213,14 +222,18 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
     if (!graph || issues.length) return
     setSaving(true)
     try {
-      const result = await apiClient.put<TestGraph>(`/api/problems/${problemId}/test-graph`, { revision: graph.revision, subtasks })
+      const result = await apiClient.put<TestGraph>(`/api/problems/${problemId}/test-graph`, {
+        revision: graph.revision,
+        expectedLatestRevisionId: graph.revisionId,
+        subtasks,
+      })
       if (!result.success || !result.data) {
         if (result.code === 'TEST_GRAPH_STALE') toast.error('测试图已被其他管理员修改；当前草稿仍保留，请导出或刷新后重新调整')
         else toast.error(result.message || '保存失败')
         return
       }
       replaceGraphData(result.data)
-      toast.success('测试图已保存并生成 Judge 投影')
+      toast.success(`已发布正式测试版本 R${result.data.revision}`)
     } finally { setSaving(false) }
   }
 
@@ -340,14 +353,34 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
     } catch { toast.error('下载失败') }
   }
 
+  const openHistory = async () => {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    try {
+      const result = await apiClient.get<{ revisions: RevisionSummary[] }>(`/api/problems/${problemId}/test-set-revisions`)
+      if (!result.success || !result.data) return toast.error(result.message || '版本历史加载失败')
+      setRevisionHistory(result.data.revisions)
+      setRevisionDetail(null)
+    } finally { setHistoryLoading(false) }
+  }
+
+  const inspectRevision = async (revision: RevisionSummary) => {
+    setHistoryLoading(true)
+    try {
+      const result = await apiClient.get<RevisionDetail>(`/api/problems/${problemId}/test-set-revisions/${revision.id}`)
+      if (!result.success || !result.data) return toast.error(result.message || '版本详情加载失败')
+      setRevisionDetail(result.data)
+    } finally { setHistoryLoading(false) }
+  }
+
   if (loading) return <div className={styles.loading}>正在加载数据与分组工作台…</div>
   if (!graph) return <div className={styles.error}>测试图加载失败，请重新进入页面。</div>
   if (!graph.migrated) return <section className={styles.migrationCard}><div><h3>此题尚未迁移到 OI Test Graph</h3><p>迁移会把当前 YAML Subtask、测试点和依赖转换为关系型 Test Graph，并保持 Judge 投影一致。迁移不会重测历史提交。</p></div>{graph.migrationIssues?.length ? <ul>{graph.migrationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : null}<Button variant="primary" disabled={!graph.canMigrate} onClick={() => setConfirmMigration(true)}>迁移并进入工作台</Button>{!graph.canMigrate && <p className={styles.blocked}>当前配置不能安全迁移，请先修复上述问题。</p>}<ConfirmDialog isOpen={confirmMigration} onClose={() => setConfirmMigration(false)} onConfirm={migrate} title="迁移此题的 OI 测试图？" message="系统将基于当前评测配置创建 Subtask、Official Group、Hack Gate 和 Testcase 关系，并生成等价 Judge 投影。" confirmText="确认迁移" loading={migrating} /></section>
 
   return <section className={styles.root}>
     <header className={styles.toolbar}>
-      <div className={styles.toolbarTitle}><strong>数据与分组</strong><span>revision {graph.revision}</span><span className={totalScore === 100 ? styles.scoreOk : styles.scoreError}>总分 {totalScore}/100</span><span className={issues.length ? styles.issueCount : styles.ready}>{issues.length ? `${issues.length} 个问题` : '配置有效'}</span></div>
-      <div className={styles.toolbarActions}><label className={styles.uploadButton}><Upload size={16} aria-hidden="true" />{uploading ? '上传中…' : '上传数据'}<Input ref={uploadRef} type="file" multiple accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" disabled={uploading} onChange={event => handleUpload(Array.from(event.target.files || []))} /></label><Button variant="outline" icon={<RefreshCw size={16} />} disabled={saving} onClick={load}>重新加载</Button><Button variant="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || issues.length > 0} onClick={save}>保存测试图</Button></div>
+      <div className={styles.toolbarTitle}><strong>数据与分组</strong><span>正式版本 R{graph.revision}</span><span>{graph.source === 'hack' ? 'Hack 自动晋升' : graph.source === 'mode_transition' ? '模式迁移' : '管理员发布'}</span><span className={totalScore === 100 ? styles.scoreOk : styles.scoreError}>总分 {totalScore}/100</span><span className={issues.length ? styles.issueCount : styles.ready}>{issues.length ? `${issues.length} 个问题` : '配置有效'}</span></div>
+      <div className={styles.toolbarActions}><label className={styles.uploadButton}><Upload size={16} aria-hidden="true" />{uploading ? '上传中…' : '上传数据'}<Input ref={uploadRef} type="file" multiple accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" disabled={uploading} onChange={event => handleUpload(Array.from(event.target.files || []))} /></label><Button variant="outline" icon={<History size={16} />} onClick={openHistory}>历史版本</Button><Button variant="outline" icon={<RefreshCw size={16} />} disabled={saving} onClick={load}>重新加载</Button><Button variant="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || issues.length > 0} onClick={save}>发布 R{graph.revision + 1}</Button></div>
     </header>
     {issues.length > 0 && <div className={styles.validationBar}>{issues.slice(0, 4).map(issue => <Button variant="text" key={`${issue.path}-${issue.message}`} onClick={() => { if (issue.subtaskId) setSelectedSubtaskId(issue.subtaskId); if (issue.groupKey) setSelectedGroupKey(issue.groupKey) }}>{issue.message}</Button>)}{issues.length > 4 && <span>另有 {issues.length - 4} 个问题</span>}</div>}
 
@@ -375,7 +408,13 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
     <details className={styles.files}><summary>测试数据文件（{graph.files.length}）与未匹配文件（{graph.unmatchedFiles.length}）</summary><div className={styles.fileGrid}>{graph.files.map(file => <div key={file.id} className={styles.fileRow}><div><strong>{file.filename}</strong><span>{file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KiB`}</span></div><div><Button variant="text" iconOnly aria-label={`下载 ${file.filename}`} onClick={() => downloadFile(file)}><Download size={15} /></Button><Button variant="text" iconOnly aria-label={`删除 ${file.filename}`} onClick={() => setDeleteFile(file)}><Trash2 size={15} /></Button></div></div>)}</div></details>
 
-    <ConfirmDialog isOpen={Boolean(replacementFiles)} onClose={() => setReplacementFiles(null)} onConfirm={replaceUpload} title="替换同名测试数据？" message="替换会保留文件 ID，并同步更新已注册 Testcase 的内容哈希。现有分组关系不会改变。" confirmText="确认替换" danger loading={uploading} />
+    <ConfirmDialog isOpen={Boolean(replacementFiles)} onClose={() => setReplacementFiles(null)} onConfirm={replaceUpload} title="替换同名测试数据？" message="替换只更新当前编辑池；已发布 Revision 使用不可变内容对象，不会被覆盖。重新发布后新内容才进入下一正式版本。" confirmText="确认替换" danger loading={uploading} />
     <ConfirmDialog isOpen={Boolean(deleteFile)} onClose={() => setDeleteFile(null)} onConfirm={removeFile} title="删除测试数据文件？" message={deleteFile ? `确定删除 ${deleteFile.filename}？已被 Official Group 或 Hack Gate 使用的文件会由服务端拒绝删除。` : ''} confirmText="删除" danger />
+    <DetailDialog isOpen={historyOpen} onClose={() => setHistoryOpen(false)} title="正式测试版本历史" description="历史 Revision 只读；查看不会改变当前题目或任何活动。" size="wide">
+      <div className={styles.historyLayout}>
+        <div className={styles.historyList}>{historyLoading && !revisionHistory.length ? <p>正在加载…</p> : revisionHistory.map(revision => <Button key={revision.id} variant={revisionDetail?.id === revision.id ? 'primary' : 'outline'} onClick={() => inspectRevision(revision)}><span>R{revision.revisionNumber} · {revision.mode.toUpperCase()} · {revision.source}</span><small>{new Date(revision.createdAt).toLocaleString()}</small></Button>)}</div>
+        <div className={styles.historyDetail}>{revisionDetail ? <><div><strong>R{revisionDetail.revisionNumber}</strong><span>Projection {revisionDetail.judgeConfigHash.slice(0, 12)} · Graph {revisionDetail.graphHash.slice(0, 12)}</span></div><pre>{revisionDetail.judgeConfig}</pre></> : <p>选择一个 Revision 查看当时的只读 Judge 投影。</p>}</div>
+      </div>
+    </DetailDialog>
   </section>
 }

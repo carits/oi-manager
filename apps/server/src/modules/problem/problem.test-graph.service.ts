@@ -1,6 +1,13 @@
 import crypto from 'crypto'
 import yaml from 'js-yaml'
 import { prisma } from '../../prisma'
+import {
+  TestSetRevisionConflict,
+  ensureInitialTestSetRevision,
+  loadLatestRevisionGraph,
+  publishTestSetRevision,
+  resolveGraphDraft,
+} from './problem.testset-revision.service'
 
 export type TestGraphIssue = { problemId: string; problemNumber: string; title: string; issues: string[] }
 export type TestGraphValidationError = { path: string; message: string }
@@ -167,6 +174,8 @@ export async function migrateLegacyTestGraph(problemId: string) {
 }
 
 export async function loadTestGraph(problemId: string) {
+  const revisionGraph = await loadLatestRevisionGraph(problemId)
+  if (revisionGraph) return revisionGraph
   const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { id: true, testGraphRevision: true } })
   if (!problem) return null
   const subtasks = await prisma.problemSubtask.findMany({
@@ -350,6 +359,13 @@ export async function projectTestGraph(problemId: string, baseConfigText?: strin
 }
 
 export async function refreshProblemJudgeProjection(problemId: string) {
+  const problemWithRevision = await prisma.problem.findUnique({
+    where: { id: problemId },
+    select: { latestTestSetRevisionId: true, LatestTestSetRevision: { select: { judgeConfig: true } } },
+  })
+  if (problemWithRevision?.latestTestSetRevisionId && problemWithRevision.LatestTestSetRevision) {
+    return prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: problemWithRevision.LatestTestSetRevision.judgeConfig } })
+  }
   const projected = await projectTestGraph(problemId)
   if (projected === null) return null
   return prisma.problem.update({ where: { id: problemId }, data: { judgeConfig: projected } })
@@ -445,7 +461,7 @@ export async function replaceTestGraph(problemId: string, input: any) {
     if (Number(input?.revision) !== current.revision) {
       return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['测试图 revision 已变化，请刷新后重试'], errors: [{ path: 'revision', message: '测试图 revision 已变化，请刷新后重试' }] }
     }
-    const currentGates = new Map(current.subtasks.map(subtask => [subtask.dbId,
+    const currentGates = new Map(current.subtasks.map(subtask => [subtask.id,
       subtask.groups.filter(group => group.kind === 'hack_gate').map(group => ({
         key: group.key,
         cases: group.cases.map(item => item.testcaseId),
@@ -456,10 +472,7 @@ export async function replaceTestGraph(problemId: string, input: any) {
         key: String(group.key),
         cases: (group.cases || []).map((item: any) => String(item.testcaseId)),
       }))
-      if (subtask.dbId && !currentGates.has(String(subtask.dbId))) {
-        return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: [`Subtask ${subtask.id} 的稳定标识无效`], errors: [{ path: 'subtasks', message: `Subtask ${subtask.id} 的稳定标识无效` }] }
-      }
-      const existingGate = subtask.dbId ? currentGates.get(String(subtask.dbId)) : undefined
+      const existingGate = currentGates.get(Number(subtask.id))
       const validNewGate = !existingGate && submitted.length === 1 && submitted[0].key === 'hack-gate' && submitted[0].cases.length === 0
       if (!validNewGate && JSON.stringify(submitted) !== JSON.stringify(existingGate || [])) {
         return { ok: false as const, code: 'HACK_GATE_READ_ONLY', issues: [`Subtask ${subtask.id} 的 Hack Gate 由系统维护，不能手动修改`], errors: [{ path: 'subtasks', message: `Subtask ${subtask.id} 的 Hack Gate 由系统维护，不能手动修改` }] }
@@ -467,32 +480,28 @@ export async function replaceTestGraph(problemId: string, input: any) {
     }
   }
 
+  const problem = await prisma.problem.findUnique({ where: { id: problemId }, select: { judgeConfig: true, latestTestSetRevisionId: true } })
+  if (!problem) return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: ['题目不存在'], errors: [{ path: 'problemId', message: '题目不存在' }] }
+  if (!problem.latestTestSetRevisionId) await ensureInitialTestSetRevision(problemId)
+  const currentProblem = await prisma.problem.findUnique({ where: { id: problemId }, select: { judgeConfig: true, latestTestSetRevisionId: true } })
+  const expectedRevisionId = typeof input?.expectedLatestRevisionId === 'string'
+    ? input.expectedLatestRevisionId
+    : ('revisionId' in (current || {}) ? String((current as any).revisionId) : currentProblem?.latestTestSetRevisionId || null)
   try {
-    await prisma.$transaction(async tx => {
-    await tx.problemSubtask.deleteMany({ where: { problemId } })
-    const dbIds = new Map<number, string>()
-    for (const [subtaskIndex, subtask] of subtasks.entries()) {
-      const dbId = crypto.randomUUID()
-      dbIds.set(Number(subtask.id), dbId)
-      await tx.problemSubtask.create({ data: { id: dbId, problemId, subtaskId: Number(subtask.id), score: Number(subtask.score), orderIndex: subtaskIndex } })
-      for (const [groupIndex, group] of (subtask.groups || []).entries()) {
-        const groupId = crypto.randomUUID()
-        await tx.problemTestGroup.create({ data: { id: groupId, problemId, subtaskId: dbId, key: String(group.key), name: String(group.name || group.key), kind: group.kind, score: Number(group.score || 0), aggregation: group.type, orderIndex: groupIndex } })
-        for (const [caseIndex, item] of (group.cases || []).entries()) {
-          await tx.problemTestcaseGroup.create({ data: { id: crypto.randomUUID(), testcaseId: item.testcaseId, groupId, orderIndex: caseIndex, score: item.score ?? null, time: item.time || null, memory: item.memory || null } })
-        }
-      }
-    }
-    for (const subtask of subtasks) for (const dep of subtask.if || []) {
-      await tx.problemSubtaskDependency.create({ data: { id: crypto.randomUUID(), subtaskId: dbIds.get(Number(subtask.id))!, dependsOnId: dbIds.get(Number(dep))! } })
-    }
-      const changed = await tx.problem.updateMany({ where: { id: problemId, testGraphRevision: current?.revision ?? 0 }, data: { testGraphRevision: { increment: 1 } } })
-      if (changed.count !== 1) throw new Error('TEST_GRAPH_STALE')
+    const spec = await resolveGraphDraft(problemId, input)
+    await publishTestSetRevision({
+      problemId,
+      expectedLatestRevisionId: expectedRevisionId,
+      source: 'admin_edit',
+      createdBy: typeof input?.updatedBy === 'string' ? input.updatedBy : null,
+      baseConfigText: currentProblem?.judgeConfig || null,
+      spec,
     })
   } catch (error: any) {
-    if (error?.message === 'TEST_GRAPH_STALE') return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['测试图 revision 已变化，请刷新后重试'], errors: [{ path: 'revision', message: '测试图 revision 已变化，请刷新后重试' }] }
+    if (error instanceof TestSetRevisionConflict || error?.code === 'TEST_SET_REVISION_STALE') {
+      return { ok: false as const, code: 'TEST_GRAPH_STALE', issues: ['题目正式测试版本已变化，请刷新后重试'], errors: [{ path: 'revision', message: '题目正式测试版本已变化，请刷新后重试' }] }
+    }
     throw error
   }
-  await refreshProblemJudgeProjection(problemId)
   return { ok: true as const, graph: await loadTestGraphWorkspace(problemId) }
 }

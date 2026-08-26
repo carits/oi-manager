@@ -48,6 +48,13 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `ProblemSubtaskDependency` | Subtask 有向无环依赖关系 |
 | `ProblemTestGroup` | Subtask 的官方计分组或系统 Hack Gate |
 | `ProblemTestcaseGroup` | Testcase 与 Test Group 多对多关系及点级限制/分值 |
+| `TestdataObject` | 题目内以 SHA-256 寻址的不可变测试内容对象，可被多个 Revision 复用 |
+| `ProblemTestSetRevision` | 题库正式不可变测试版本、父版本、来源、Judge 投影与一致性哈希 |
+| `ProblemTestSetRevisionCase` | ACM Revision 中有序的输入/答案映射和限制覆盖 |
+| `ProblemTestSetRevisionSubtask` | OI Revision 内稳定 Subtask、副本分值与顺序 |
+| `ProblemTestSetRevisionDependency` | OI Revision 内不可变 Subtask 依赖 |
+| `ProblemTestSetRevisionGroup` | OI Revision 内 Official Group/Hack Gate 副本 |
+| `ProblemTestSetRevisionGroupCase` | OI Revision Group 与内容对象/Testcase 的不可变关联 |
 | `ProblemList` | 以 Prisma schema 为准 |
 | `ProblemListEntry` | 以 Prisma schema 为准 |
 | `ProblemListSection` | 以 Prisma schema 为准 |

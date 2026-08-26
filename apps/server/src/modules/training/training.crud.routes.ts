@@ -512,6 +512,7 @@ trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, a
           timeLimitSnapshot: tp.timeLimitSnapshot,
           memoryLimitSnapshot: tp.memoryLimitSnapshot,
           judgeConfigSnapshot: tp.judgeConfigSnapshot,
+          testSetRevisionId: tp.testSetRevisionId,
           allowedLanguagesSnapshot: tp.allowedLanguagesSnapshot,
           sourcePlatformSnapshot: tp.sourcePlatformSnapshot,
           sourceProblemIdSnapshot: tp.sourceProblemIdSnapshot,

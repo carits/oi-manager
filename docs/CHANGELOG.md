@@ -10,6 +10,12 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-26
 
+- 新增不可变 `ProblemTestSetRevision`、内容寻址测试对象和 Revision 级 ACM/OI 关系；测试数据及文件型 Checker、Interactor、Manager 固化到独立 Revision 目录，历史版本不受后续替换影响。
+- 比赛、训练和作业题目固定 `testSetRevisionId`，提交记录保存实际 Revision 与投影哈希；活动开始或已有提交后返回 `409 TEST_SET_REVISION_FROZEN`。旧 Hack 同步 API 退役，题库 Hack 自动晋升下一正式 Revision 且不修改任何活动。
+- Test Graph 保存、Hack 晋升、模式转换和正式发布统一使用 PostgreSQL advisory transaction lock 与 latest Revision CAS；普通配置不能隐式切换 ACM/OI，显式模式迁移保留旧版本并关闭 Hack。
+- Judge 系统程序增加引用计数、30 分钟 TTL、64 项 LRU 编译缓存；Generator 和被 Hack 程序仍按任务释放。内容对象孤儿由每日 GC 在题目锁内清理。
+- 增加 3002 稳定 API Router、3302/3303 蓝绿 Server、readiness、Judge drain 与 1012 重连流程；后续 API 发布不再直接替换 3002 单实例。
+- 数据工作台增加正式 Revision 历史只读查看；Server 全量 40 文件 433/433、Web 36/36、Judge 11/11、定向 Revision/CAS/模式迁移/GC、Test Graph、Hack 与 Judge 协议 14/14，以及 Server/Web/Judge 生产构建通过。
 - 将 OI Test Graph 从可编辑 JSON textarea 重构为 Subtask、Official Group、Testcase 池三栏工作台；支持依赖、分值、`min/max/sum`、批量分配、排序、文件上传/配对和只读 Hack Gate。
 - OI 评测设置只保留“数据与分组”入口，旧 Subtask/测试数据入口不再可达；Hack 配置页只维护 STD、Validator 和 Classifier。
 - 新增题目管理员单题显式迁移和测试点注册 API；整图校验返回字段路径，revision 冲突返回 `409 TEST_GRAPH_STALE`，被使用文件返回 `409 TESTDATA_IN_USE`，同名替换同步 Testcase 哈希。

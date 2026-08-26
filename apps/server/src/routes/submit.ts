@@ -10,6 +10,7 @@ import {
   runIdempotent,
 } from '../lib/idempotency'
 import { findUsableProblemByExternalId } from '../modules/problem/problem.access'
+import { ensureInitialTestSetRevision } from '../modules/problem/problem.testset-revision.service'
 
 export const submitRouter = Router()
 
@@ -51,6 +52,11 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
         message: '该题尚未配置完整的本地评测配置和测试数据，请联系题目管理员',
       })
     }
+    let revision
+    try { revision = await ensureInitialTestSetRevision(problem.id, userId) }
+    catch (error: any) {
+      return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: error.message })
+    }
 
     const idempotencyKey = readIdempotencyKey(req)
     const fingerprint = requestFingerprint({ problemId, oj, language, code, submitMethod: 'local' })
@@ -75,6 +81,8 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
             submitMethod: 'local',
             submitScope: 'problem',
             isGlobalVisible: true,
+            testSetRevisionId: revision?.id || null,
+            judgeConfigHash: revision?.judgeConfigHash || null,
           },
         }),
       )

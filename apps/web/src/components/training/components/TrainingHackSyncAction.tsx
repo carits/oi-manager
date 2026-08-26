@@ -4,12 +4,16 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
+import styles from './TrainingHackSyncAction.module.css'
 
 type Preview = {
   pending: boolean
-  currentRevision: number
-  latestRevision: number
-  revisionDelta: number
+  frozen: boolean
+  frozenReason?: string | null
+  currentRevisionId: string | null
+  currentRevision: number | null
+  latestRevisionId: string | null
+  latestRevision: number | null
 }
 
 export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trainingId: string; trainingProblemId: string }) {
@@ -19,28 +23,43 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
 
   useEffect(() => {
     let active = true
-    apiClient.get<Preview>(`/api/trainings/${trainingId}/problems/${trainingProblemId}/hack-sync-preview`)
+    apiClient.get<Preview>(`/api/trainings/${trainingId}/problems/${trainingProblemId}/test-set-update`)
       .then(result => { if (active && result.success && result.data) setPreview(result.data) })
     return () => { active = false }
   }, [trainingId, trainingProblemId])
 
   if (!preview?.pending) return null
+  if (preview.frozen) return (
+    <div className={styles.frozen} role="status">
+      <strong>活动测试版本已冻结在 R{preview.currentRevision ?? '—'}</strong>
+      <span>题库最新为 R{preview.latestRevision ?? '—'}；{preview.frozenReason}，不能更换。</span>
+    </div>
+  )
 
-  const sync = async () => {
+  const updateRevision = async () => {
     setSyncing(true)
     try {
-      const result = await apiClient.post<{ currentRevision: number }>(`/api/trainings/${trainingId}/problems/${trainingProblemId}/hack-sync`)
-      if (!result.success) return toast.error(result.message || '\u540c\u6b65\u5931\u8d25')
-      toast.success(result.message || 'Hack \u6d4b\u8bd5\u6570\u636e\u5df2\u540c\u6b65')
-      setPreview(current => current ? { ...current, pending: false, currentRevision: result.data?.currentRevision ?? current.latestRevision, revisionDelta: 0 } : current)
-    } finally {
-      setSyncing(false)
-    }
+      const result = await apiClient.post<{ currentRevision: number; currentRevisionId: string }>(
+        `/api/trainings/${trainingId}/problems/${trainingProblemId}/test-set-update`,
+        { revisionId: preview.latestRevisionId },
+      )
+      if (!result.success) return toast.error(result.message || '测试版本更新失败')
+      toast.success(result.message || '活动已固定到题库最新测试版本')
+      setPreview(current => current ? {
+        ...current,
+        pending: false,
+        currentRevision: result.data?.currentRevision ?? current.latestRevision,
+        currentRevisionId: result.data?.currentRevisionId ?? current.latestRevisionId,
+      } : current)
+    } finally { setSyncing(false) }
   }
 
   return (
-    <Button variant="ghost" type="button" onClick={sync} disabled={syncing} title={`test graph revision ${preview.currentRevision} -> ${preview.latestRevision}`} style={{ padding: '0.6rem 1rem', background: '#fffbeb', color: '#92400e', border: '1px solid #f59e0b', borderRadius: '6px', cursor: syncing ? 'wait' : 'pointer', fontSize: '0.82rem', fontWeight: 600, width: '100%' }}>
-      {syncing ? '\u6b63\u5728\u540c\u6b65...' : `\u540c\u6b65 Hack \u6570\u636e (${preview.revisionDelta} revision)`}
-    </Button>
+    <div className={styles.update}>
+      <div><strong>题库有新的正式测试版本</strong><span>当前 R{preview.currentRevision ?? '—'} → 最新 R{preview.latestRevision ?? '—'}</span></div>
+      <Button variant="outline" type="button" onClick={updateRevision} disabled={syncing}>
+        {syncing ? '正在更新…' : `更新到 R${preview.latestRevision ?? '—'}`}
+      </Button>
+    </div>
   )
 }

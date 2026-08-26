@@ -23,6 +23,9 @@ interface Attempt {
   candidateResult?: string | null
   candidateScore?: number | null
   scoreDelta?: number | null
+  baseTestSetRevision?: number | null
+  promotedRevision?: number | null
+  canonicalStatus?: string | null
   affectedSubtaskIds?: number[]
   failureStage?: string | null
   message?: string | null

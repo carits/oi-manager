@@ -13,7 +13,12 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
-import { projectTestGraph } from './problem.test-graph.service'
+import {
+  TestSetRevisionConflict,
+  loadRevisionSpec,
+  publishTestSetRevision,
+  resolveConfigSpec,
+} from './problem.testset-revision.service'
 
 export const problemJudgeRouter = Router()
 
@@ -129,13 +134,14 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
     const user = (req as any).user
     const { problemType, timeLimit, memoryLimit, config } = req.body
 
-    const existingProblem = await prisma.problem.findUnique({ where: { id } })
+    const existingProblem = await prisma.problem.findUnique({ where: { id }, include: { LatestTestSetRevision: true } })
 
     if (!existingProblem || !canModifyProblem(user, existingProblem)) {
       return res.status(404).json({ success: false, message: '题目不存在' })
     }
 
-    let judgeConfigYaml = null
+    let judgeConfigYaml: string | null = null
+    let requestedMode: 'acm' | 'oi' | null = null
     if (config) {
       const mode = config.mode || (Array.isArray(config.subtasks) && config.subtasks.length > 0 ? 'oi' : 'acm')
       if (mode !== 'acm' && mode !== 'oi') return res.status(400).json({ success: false, message: '无效的评测模式，必须是 acm 或 oi' })
@@ -145,16 +151,49 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
       }
       const yaml = await import('js-yaml')
       const normalized = { ...config, mode }
-      const migratedGraph = mode === 'oi'
-        ? await prisma.problemSubtask.count({ where: { problemId: id } }) > 0
-        : false
-      if (migratedGraph) {
-        // The relation graph is the editing source of truth after migration.
-        // Keep non-graph settings from this form while projecting immutable graph data.
-        const { subtasks: _ignoredLegacySubtasks, ...baseConfig } = normalized
-        judgeConfigYaml = await projectTestGraph(id, yaml.dump(baseConfig, { lineWidth: -1 }))
-      } else {
-        judgeConfigYaml = yaml.dump(normalized, { lineWidth: -1 })
+      requestedMode = mode
+      const currentMode = existingProblem.LatestTestSetRevision?.mode
+        || (() => {
+          try {
+            const parsed = existingProblem.judgeConfig ? yaml.load(existingProblem.judgeConfig) as any : {}
+            return parsed?.mode === 'oi' || (parsed?.mode !== 'acm' && Array.isArray(parsed?.subtasks) && parsed.subtasks.length) ? 'oi' : 'acm'
+          } catch { return 'acm' }
+        })()
+      if (existingProblem.LatestTestSetRevision && currentMode !== mode) {
+        return res.status(409).json({
+          success: false,
+          code: 'JUDGE_MODE_TRANSITION_REQUIRED',
+          message: 'ACM/OI 模式切换必须使用显式状态迁移操作',
+          data: { currentMode, targetMode: mode, latestRevisionId: existingProblem.latestTestSetRevisionId },
+        })
+      }
+      const baseConfig = yaml.dump(normalized, { lineWidth: -1 })
+      const spec = existingProblem.LatestTestSetRevision
+        ? await loadRevisionSpec(existingProblem.LatestTestSetRevision.id)
+        : await resolveConfigSpec(id, baseConfig)
+      if (!spec) return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: '无法读取当前测试版本' })
+      try {
+        const revision = await publishTestSetRevision({
+          problemId: id,
+          expectedLatestRevisionId: existingProblem.latestTestSetRevisionId,
+          source: existingProblem.latestTestSetRevisionId ? 'admin_edit' : 'initial',
+          createdBy: user.userId,
+          baseConfigText: baseConfig,
+          spec,
+          transactionHook: async tx => {
+            await tx.problem.update({ where: { id }, data: {
+              ...(problemType ? { problemType } : {}),
+              ...(timeLimit !== undefined ? { timeLimit } : {}),
+              ...(memoryLimit !== undefined ? { memoryLimit } : {}),
+            } })
+          },
+        })
+        judgeConfigYaml = revision?.judgeConfig || baseConfig
+      } catch (error: any) {
+        if (error instanceof TestSetRevisionConflict || error?.code === 'TEST_SET_REVISION_STALE') {
+          return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_STALE', message: error.message })
+        }
+        throw error
       }
       logger.info('judge_config_saving', { action: 'saveJudgeConfig', metadata: { mode, subtasksCount: normalized.subtasks?.length ?? 0 } })
     }
@@ -163,18 +202,20 @@ problemJudgeRouter.put('/:id/judge-config', authenticate, asyncHandler(async (re
     if (problemType) updateData.problemType = problemType
     if (timeLimit !== undefined) updateData.timeLimit = timeLimit
     if (memoryLimit !== undefined) updateData.memoryLimit = memoryLimit
-    updateData.judgeConfig = judgeConfigYaml
+    if (!config) {
+      if (existingProblem.latestTestSetRevisionId) return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: '正式测试版本存在时不能清空 Judge Config' })
+      updateData.judgeConfig = null
+    }
 
-    const problem = await prisma.problem.update({
-      where: { id },
-      data: updateData
-    })
+    const problem = config
+      ? await prisma.problem.findUnique({ where: { id } })
+      : await prisma.problem.update({ where: { id }, data: updateData })
 
     logger.audit('judge_config_updated', {
       userId: user.userId,
       action: 'update_judge_config',
       target: id,
-      metadata: { problemType, timeLimit, memoryLimit }
+      metadata: { problemType, timeLimit, memoryLimit, mode: requestedMode }
     })
 
     res.json({ success: true, data: problem })

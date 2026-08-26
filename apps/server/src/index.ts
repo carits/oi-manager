@@ -50,6 +50,7 @@ import { getCorsOptions } from './config/cors'
 import { STORAGE_ROOT } from './config/storage'
 import { verifyCookieOrigin } from './middleware/csrf'
 import { authenticate } from './middleware/auth'
+import { prisma } from './prisma'
 
 // 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
 const envFile = process.env.ENV_FILE ||
@@ -148,6 +149,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+app.get('/api/readiness', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1 AS ready`
+    const inconsistent = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM "Problem" problem
+      JOIN "ProblemTestSetRevision" revision ON revision.id = problem."latestTestSetRevisionId"
+      WHERE problem."judgeConfig" IS DISTINCT FROM revision."judgeConfig"
+    `
+    const inconsistentCount = Number(inconsistent[0]?.count || 0)
+    if (inconsistentCount > 0) return res.status(503).json({ status: 'not_ready', inconsistentRevisions: inconsistentCount })
+    res.json({ status: 'ready', timestamp: new Date().toISOString() })
+  } catch (error: any) {
+    res.status(503).json({ status: 'not_ready', message: error.message })
+  }
+})
+
 // ==================== 错误处理 ====================
 
 // 404 处理
@@ -223,14 +241,25 @@ proxyManager.loadFromEnv()
 
 // 浏览器管理器关闭钩子
 import { browserManager } from './lib/browser/manager'
-import { initJudgeWebSocket } from './ws/judge'
+import { drainJudgeWebSocket, initJudgeWebSocket } from './ws/judge'
+let shutdownPromise: Promise<void> | null = null
 const gracefulShutdown = async (signal: string) => {
-  logger.info('server_shutting_down', { action: 'server_shutdown', metadata: { signal } })
-  await browserManager.close()
-  process.exit(0)
+  if (shutdownPromise) return shutdownPromise
+  shutdownPromise = (async () => {
+    logger.info('server_shutting_down', { action: 'server_shutdown', metadata: { signal } })
+    await drainJudgeWebSocket(Number.parseInt(process.env.API_DRAIN_TIMEOUT_MS || '30000', 10)).catch(error => {
+      logger.error('judge_drain_failed', error, { action: 'server_shutdown' })
+    })
+    await browserManager.close()
+    await new Promise<void>(resolve => httpServer.close(() => resolve()))
+    await prisma.$disconnect()
+    process.exit(0)
+  })()
+  return shutdownPromise
 }
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2'))
 
 // The public Web process proxies /api to this service. Bind to loopback by
 // default so the raw API and Judge WebSocket are not exposed on a second

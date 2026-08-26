@@ -14,6 +14,7 @@ import { problemUserContentRouter } from './problem.user-content.routes'
 import { problemStatementVersionRouter } from './problem.statement-version.routes'
 import { problemHackRouter } from './problem.hack.routes'
 import { problemTestGraphRouter } from './problem.test-graph.routes'
+import { problemTestSetRevisionRouter } from './problem.testset-revision.routes'
 
 export const problemsRouter = Router()
 
@@ -23,6 +24,7 @@ problemsRouter.use(problemUserContentRouter)
 problemsRouter.use(problemStatementVersionRouter)
 problemsRouter.use(problemHackRouter)
 problemsRouter.use(problemTestGraphRouter)
+problemsRouter.use(problemTestSetRevisionRouter)
 problemsRouter.use(problemFilesRouter)
 problemsRouter.use(problemNotesRouter)
 problemsRouter.use(problemAiRouter)

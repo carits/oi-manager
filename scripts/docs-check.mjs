@@ -182,6 +182,7 @@ const routerPrefixes = {
   problemStatementVersionRouter: '/api/problems',
   problemHackRouter: '/api/problems',
   problemTestGraphRouter: '/api/problems',
+  problemTestSetRevisionRouter: '/api/problems',
   ojFetcherRouter: '/api/oj-fetcher',
   filesRouter: '/api/files',
   platformBindingRouter: '/api/platform-bindings',

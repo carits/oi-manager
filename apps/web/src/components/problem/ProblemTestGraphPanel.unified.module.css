@@ -54,10 +54,17 @@
 .registration { display: grid; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--border); background: var(--bg-muted); }
 .files { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
 .files summary { padding: var(--space-3) var(--space-4); cursor: pointer; font-weight: 600; }
+.historyLayout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--space-4); min-height: 520px; }
+.historyList { display: flex; flex-direction: column; gap: var(--space-2); }
+.historyList button { height: auto; align-items: flex-start; flex-direction: column; text-align: left; }
+.historyList small, .historyDetail span { color: var(--text-secondary); font-size: var(--text-sm); }
+.historyDetail { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-subtle); padding: var(--space-4); }
+.historyDetail > div { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+.historyDetail pre { margin: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-sm)/1.6 var(--font-mono); }
 .fileGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-2); padding: 0 var(--space-4) var(--space-4); }
 .fileRow { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .fileRow > div { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .fileRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fileRow span { color: var(--text-secondary); font-size: var(--text-xs); }
 @media (max-width: 1100px) { .workspace { grid-template-columns: 220px minmax(340px, 1fr); overflow-x: auto; } .column:last-child { grid-column: 1 / -1; border-top: 1px solid var(--border); } }
-@media (max-width: 720px) { .toolbar { position: static; align-items: stretch; flex-direction: column; } .toolbarActions { flex-wrap: wrap; } .workspace { display: block; min-height: 0; overflow: visible; } .column { border-right: 0; border-bottom: 1px solid var(--border); } .columnBody { max-height: 480px; } .groupCase { grid-template-columns: 1fr 60px 32px; } .groupCase input:nth-of-type(2), .groupCase input:nth-of-type(3) { display: none; } }
+@media (max-width: 720px) { .toolbar { position: static; align-items: stretch; flex-direction: column; } .toolbarActions { flex-wrap: wrap; } .workspace { display: block; min-height: 0; overflow: visible; } .column { border-right: 0; border-bottom: 1px solid var(--border); } .columnBody { max-height: 480px; } .groupCase { grid-template-columns: 1fr 60px 32px; } .groupCase input:nth-of-type(2), .groupCase input:nth-of-type(3) { display: none; } .historyLayout { grid-template-columns: 1fr; } }

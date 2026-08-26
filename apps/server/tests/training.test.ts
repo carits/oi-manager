@@ -5,7 +5,10 @@
  * @see docs/team/TEST_COVERAGE_PLAN.md §2
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
@@ -13,6 +16,39 @@ import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 
 const app = createTestApp()
+const testdataDirectories: string[] = []
+
+async function createConfiguredProblem(ownerId: string, prefix: string) {
+  const id = `prob_${prefix}_${crypto.randomUUID()}`
+  const directory = path.join(process.cwd(), 'testdata', id)
+  testdataDirectories.push(directory)
+  await fs.promises.mkdir(directory, { recursive: true })
+  await fs.promises.writeFile(path.join(directory, '1.in'), '1\n')
+  await fs.promises.writeFile(path.join(directory, '1.out'), '1\n')
+  const problem = await prisma.problem.create({ data: {
+    id,
+    platform: 'carits',
+    problemId: `P_${prefix}_${crypto.randomUUID()}`,
+    title: `测试题目${prefix}`,
+    ownerId,
+    visibility: 'public',
+    libraryScope: 'platform',
+    libraryKey: 'platform',
+    status: 'published',
+    publishedAt: new Date(),
+    judgeConfig: 'mode: acm\ncases:\n  - input: 1.in\n    output: 1.out\n',
+  } })
+  for (const filename of ['1.in', '1.out']) await prisma.testdataFile.create({ data: {
+    id: crypto.randomUUID(), problemId: id, filename, size: 2,
+    md5: crypto.createHash('md5').update('1\n').digest('hex'),
+    sha256: crypto.createHash('sha256').update('1\n').digest('hex'),
+  } })
+  return problem
+}
+
+afterEach(async () => {
+  await Promise.all(testdataDirectories.splice(0).map(directory => fs.promises.rm(directory, { recursive: true, force: true })))
+})
 
 describe('训练模块权限测试', () => {
   let schoolData: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
@@ -418,20 +454,7 @@ describe('训练模块权限测试', () => {
   describe('题目管理权限', () => {
     it('E1: owner 可以添加题目', async () => {
       // 创建真实题目
-      const problem = await prisma.problem.create({
-        data: {
-          id: `prob_e1_${Date.now()}`,
-          platform: 'carits',
-          problemId: `P_E1_${Date.now()}`,
-          title: '测试题目E1',
-          ownerId: ownerUser.user.id,
-          visibility: 'public',
-          libraryScope: 'platform',
-          libraryKey: 'platform',
-          status: 'published',
-          publishedAt: new Date(),
-        }
-      })
+      const problem = await createConfiguredProblem(ownerUser.user.id, 'E1')
 
       const res = await createAuthenticatedRequest(app, ownerToken)
         .post(`/api/trainings/${training.id}/problems`)
@@ -447,20 +470,7 @@ describe('训练模块权限测试', () => {
 
     it('E2: admin 可以添加题目', async () => {
       // 创建真实题目
-      const problem = await prisma.problem.create({
-        data: {
-          id: `prob_e2_${Date.now()}`,
-          platform: 'carits',
-          problemId: `P_E2_${Date.now()}`,
-          title: '测试题目E2',
-          ownerId: adminUser.user.id,
-          visibility: 'public',
-          libraryScope: 'platform',
-          libraryKey: 'platform',
-          status: 'published',
-          publishedAt: new Date(),
-        }
-      })
+      const problem = await createConfiguredProblem(adminUser.user.id, 'E2')
 
       const res = await createAuthenticatedRequest(app, adminToken)
         .post(`/api/trainings/${training.id}/problems`)

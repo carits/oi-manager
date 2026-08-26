@@ -41,6 +41,7 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - Subtask 与 Official Group 支持拖放和键盘上移/下移；Hack Gate 使用成功语义色但保持只读，不伪装成普通可编辑卡片。
 - `1280×720` 下 Testcase 池下移为整行，手机下三栏降级为分步纵向区域；页面本身不得产生横向溢出。
 - 文件上传、同名替换和删除使用统一按钮与 ConfirmDialog；工作台不再暴露可编辑 JSON textarea。
+- 顶部“历史版本”使用统一 DetailDialog 展示只读 Revision 列表与当时 Judge 投影；查看历史不能切换当前版本，也不能修改活动固定版本。
 - 离开含未保存草稿的工作台必须确认，revision 冲突保留本地草稿并提示刷新，不自动覆盖。
 
 ## 2026-08-01 UX 审查结论

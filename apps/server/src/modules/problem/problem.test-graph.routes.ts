@@ -7,10 +7,10 @@ import {
   inspectLegacyTestGraph,
   loadTestGraphWorkspace,
   migrateLegacyTestGraph,
-  refreshProblemJudgeProjection,
   registerOfficialTestcases,
   replaceTestGraph,
 } from './problem.test-graph.service'
+import { ensureInitialTestSetRevision } from './problem.testset-revision.service'
 
 export const problemTestGraphRouter = Router()
 
@@ -29,8 +29,8 @@ problemTestGraphRouter.post('/:id/test-graph/migrate', authenticate, asyncHandle
   if (!inspection.alreadyMigrated) {
     const migrated = await migrateLegacyTestGraph(problem.id)
     if (!migrated.ok) return res.status(422).json({ success: false, code: 'TEST_GRAPH_MIGRATION_BLOCKED', message: migrated.issues.join('；'), data: { issues: migrated.issues } })
-    await refreshProblemJudgeProjection(problem.id)
   }
+  await ensureInitialTestSetRevision(problem.id, req.user!.userId)
   const current = await prisma.problem.findUnique({ where: { id: problem.id }, select: { testGraphRevision: true } })
   if (current?.testGraphRevision) {
     await prisma.trainingProblem.updateMany({
@@ -52,7 +52,7 @@ problemTestGraphRouter.post('/:id/test-graph/testcases', authenticate, asyncHand
 problemTestGraphRouter.put('/:id/test-graph', authenticate, asyncHandler(async (req, res) => {
   const problem = await prisma.problem.findUnique({ where: { id: req.params.id } })
   if (!problem || !canModifyProblem(req.user!, problem)) return res.status(404).json({ success: false, message: '题目不存在' })
-  const result = await replaceTestGraph(problem.id, req.body)
+  const result = await replaceTestGraph(problem.id, { ...req.body, updatedBy: req.user!.userId })
   if (!result.ok) return res.status(result.code === 'TEST_GRAPH_STALE' ? 409 : 422).json({ success: false, code: result.code, message: result.issues?.join('；'), data: result })
   res.json({ success: true, data: result.graph, message: '测试图已保存' })
 }))

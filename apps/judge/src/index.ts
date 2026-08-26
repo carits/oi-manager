@@ -7,6 +7,7 @@
 import { config } from './config'
 import { client } from './client'
 import * as sandbox from './sandbox/client'
+import { disposeHackCompileCache, getHackCompileCacheStats } from './compiled-program-cache'
 
 console.log('========================================')
 console.log('OI Manager Judge Service')
@@ -38,18 +39,25 @@ async function start() {
   // 连接后端
   client.connect()
 
-  // 优雅关闭
-  process.on('SIGINT', () => {
-    console.log('\n[Judge] Shutting down...')
-    client.disconnect()
-    process.exit(0)
-  })
+  const cacheMetricsTimer = setInterval(() => {
+    console.log('[JudgeMetrics] hack_compile_cache', getHackCompileCacheStats())
+  }, 5 * 60_000)
+  cacheMetricsTimer.unref()
 
-  process.on('SIGTERM', () => {
+  // 优雅关闭
+  let shuttingDown = false
+  const shutdown = async () => {
+    if (shuttingDown) return
+    shuttingDown = true
+    clearInterval(cacheMetricsTimer)
     console.log('\n[Judge] Shutting down...')
     client.disconnect()
+    await disposeHackCompileCache()
+    console.log('[Judge] Hack compile cache disposed:', getHackCompileCacheStats())
     process.exit(0)
-  })
+  }
+  process.on('SIGINT', () => { shutdown().catch(error => { console.error(error); process.exit(1) }) })
+  process.on('SIGTERM', () => { shutdown().catch(error => { console.error(error); process.exit(1) }) })
 }
 
 start().catch(err => {

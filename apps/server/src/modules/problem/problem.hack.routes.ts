@@ -16,6 +16,7 @@ import {
   serializeHackAttempt,
   validateHackCppSource,
 } from './problem.hack.service'
+import { ensureInitialTestSetRevision } from './problem.testset-revision.service'
 
 export const problemHackRouter = Router()
 
@@ -56,15 +57,19 @@ problemHackRouter.put('/:id/hack-config', authenticate, asyncHandler(async (req,
   const standardSource = typeof req.body?.standardSource === 'string' ? req.body.standardSource : ''
   const validatorSource = typeof req.body?.validatorSource === 'string' ? req.body.validatorSource : ''
   const classifierSource = typeof req.body?.classifierSource === 'string' ? req.body.classifierSource : ''
-  const mode = resolveJudgeMode(parseJudgeConfig(problem.judgeConfig))
+  let latestRevision
+  try { latestRevision = await ensureInitialTestSetRevision(problem.id, req.user!.userId) }
+  catch (error: any) { return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: error.message }) }
+  const effectiveConfig = latestRevision?.judgeConfig || problem.judgeConfig
+  const mode = resolveJudgeMode(parseJudgeConfig(effectiveConfig))
   if (Buffer.byteLength(standardSource, 'utf8') > HACK_SOURCE_LIMIT || Buffer.byteLength(validatorSource, 'utf8') > HACK_SOURCE_LIMIT || Buffer.byteLength(classifierSource, 'utf8') > HACK_SOURCE_LIMIT) {
     return res.status(413).json({ success: false, code: 'SOURCE_TOO_LARGE', message: 'STD、Validator 或 Classifier 源码不能超过 256 KiB' })
   }
   if (enabled) {
-    if (!isHackableJudgeConfig(parseJudgeConfig(problem.judgeConfig))) {
+    if (!isHackableJudgeConfig(parseJudgeConfig(effectiveConfig))) {
       return res.status(409).json({ success: false, code: 'HACK_REQUIRES_BATCH', message: '只有 ACM 或 OI 本地批处理题可以启用 Hack' })
     }
-    if (mode === 'oi' && !hasOiHackGroups(problem.judgeConfig)) {
+    if (mode === 'oi' && !hasOiHackGroups(effectiveConfig)) {
       return res.status(409).json({ success: false, code: 'OI_TEST_GRAPH_REQUIRED', message: '请先完成 OI 测试图迁移并确保每个 Subtask 都有 Hack Gate' })
     }
     const testdataCount = await prisma.testdataFile.count({ where: { problemId: problem.id } })
@@ -113,12 +118,17 @@ problemHackRouter.put('/:id/hack-config', authenticate, asyncHandler(async (req,
 }))
 
 problemHackRouter.post('/:id/hacks', authenticate, asyncHandler(async (req, res) => {
-  const problem = await prisma.problem.findUnique({ where: { id: req.params.id } })
+  let problem = await prisma.problem.findUnique({ where: { id: req.params.id }, include: { LatestTestSetRevision: true } })
   if (!problem || !canSubmitProblem(req.user!, problem)) {
     return res.status(404).json({ success: false, message: '题目不存在或当前身份不能提交该题' })
   }
   const hackConfig = await prisma.problemHackConfig.findUnique({ where: { problemId: problem.id } })
-  if (!hackConfig?.enabled || !isHackableJudgeConfig(parseJudgeConfig(problem.judgeConfig))) {
+  if (!problem.LatestTestSetRevision) {
+    try { await ensureInitialTestSetRevision(problem.id, req.user!.userId) }
+    catch (error: any) { return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: error.message }) }
+    problem = await prisma.problem.findUnique({ where: { id: problem.id }, include: { LatestTestSetRevision: true } }) as typeof problem
+  }
+  if (!hackConfig?.enabled || !problem.LatestTestSetRevision || !isHackableJudgeConfig(parseJudgeConfig(problem.LatestTestSetRevision.judgeConfig))) {
     return res.status(409).json({ success: false, code: 'HACK_NOT_ENABLED', message: '该题未启用 Hack' })
   }
 
@@ -171,8 +181,9 @@ problemHackRouter.post('/:id/hacks', authenticate, asyncHandler(async (req, res)
         hackSource,
         hackLanguage,
         hackConfigRevision: hackConfig.revision,
-        judgeConfigHash: judgeConfigHash(problem.judgeConfig),
+        judgeConfigHash: problem.LatestTestSetRevision.judgeConfigHash,
         testGraphRevision: problem.testGraphRevision,
+        baseTestSetRevisionId: problem.latestTestSetRevisionId,
       },
     })
   } catch (error: any) {
@@ -194,7 +205,7 @@ problemHackRouter.get('/:id/hacks', authenticate, asyncHandler(async (req, res) 
   const [attempts, total, acceptedCount] = await Promise.all([
     prisma.problemHackAttempt.findMany({
       where,
-      include: { User: { select: { username: true } } },
+      include: { User: { select: { username: true } }, BaseTestSetRevision: { select: { revisionNumber: true } }, PromotedRevision: { select: { revisionNumber: true } } },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -211,14 +222,14 @@ problemHackRouter.get('/:id/hacks/:hackId', authenticate, asyncHandler(async (re
   const manager = canModifyProblem(req.user!, problem)
   const attempt = await prisma.problemHackAttempt.findFirst({
     where: { id: req.params.hackId, problemId: problem.id },
-    include: { User: { select: { username: true } } },
+    include: { User: { select: { username: true } }, BaseTestSetRevision: { select: { revisionNumber: true } }, PromotedRevision: { select: { revisionNumber: true } } },
   })
   if (!attempt || (!manager && attempt.userId !== req.user!.userId)) return res.status(404).json({ success: false, message: 'Hack 记录不存在' })
   res.json({ success: true, data: serializeHackAttempt(attempt, true) })
 }))
 
 problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(async (req, res) => {
-  const problem = await prisma.problem.findUnique({ where: { id: req.params.id } })
+  const problem = await prisma.problem.findUnique({ where: { id: req.params.id }, include: { LatestTestSetRevision: true } })
   if (!problem || !canModifyProblem(req.user!, problem)) return res.status(404).json({ success: false, message: '题目不存在' })
   const [attempt, config] = await Promise.all([
     prisma.problemHackAttempt.findFirst({ where: { id: req.params.hackId, problemId: problem.id } }),
@@ -240,7 +251,7 @@ problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(as
       data: {
         status: 'queuing',
         hackConfigRevision: config.revision,
-        judgeConfigHash: judgeConfigHash(problem.judgeConfig),
+        judgeConfigHash: problem.LatestTestSetRevision?.judgeConfigHash || judgeConfigHash(problem.judgeConfig),
         baselineResult: null,
         candidateResult: null,
         baselineScore: null,
@@ -249,6 +260,11 @@ problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(as
         affectedSubtaskIds: null,
         acceptedTestcaseId: null,
         testGraphRevision: problem.testGraphRevision,
+        baseTestSetRevisionId: problem.latestTestSetRevisionId,
+        canonicalStatus: null,
+        candidateTestcaseId: null,
+        promotedRevisionId: null,
+        promotionRetries: 0,
         failureStage: null,
         message: null,
         judgeId: null,

@@ -1,15 +1,16 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-19
+last_verified: 2026-08-26
 source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.sh
 ---
 
 # systemd 恢复部署
 
-当前开发服务器使用三个独立的 systemd 服务管理应用进程：
+当前开发服务器使用稳定 Router、蓝绿 API 实例及两个应用服务：
 
-- `oi-manager-server.service`：运行现有 API 构建产物，监听 `3002`。
+- `oi-manager-api-router.service`：稳定监听 `127.0.0.1:3002`，每个 HTTP/WebSocket 连接固定转发到活动实例。
+- `oi-manager-server@3302.service` / `@3303.service`：蓝绿 API 实例；任一时刻一个活动，另一个用于候选启动。
 - `oi-manager-judge.service`：运行 Judge 客户端并自动重连 API。
 - `oi-manager-web.service`：运行已发布的 `.next-current` 预览产物，监听 `3000`。
 
@@ -25,15 +26,23 @@ cd /data/oi-manager-response-refactor
 sudo bash scripts/install-systemd-services.sh
 ```
 
-安装脚本会复制仓库内的 unit 文件、停用已失效的 `pm2-root.service`、重载 systemd、启用三个
-应用服务并按依赖顺序重启。脚本不会构建代码，也不会修改数据库。
+安装脚本会先启动 3302 并通过 `/api/readiness`，再停用旧的直连 3002 Server，启动稳定 Router，最后重启 Judge/Web。脚本不会构建代码，也不会修改数据库。
+
+后续 API 发布使用：
+
+```bash
+sudo bash scripts/promote-api.sh
+```
+
+脚本在非活动端口启动候选、检查数据库与 Revision 投影 readiness、原子切换 Router 指针，再向旧实例发送 `SIGUSR2`。旧实例停止领取新任务，等待在途 Judge/Hack 后以 1012 关闭 WebSocket，Judge 自动重连新实例。候选未就绪时不会切换。
 
 ## 验证
 
 ```bash
-systemctl --no-pager --full status oi-manager-server oi-manager-judge oi-manager-web
-ss -ltnp | grep -E ':3000|:3002'
+systemctl --no-pager --full status oi-manager-api-router 'oi-manager-server@*' oi-manager-judge oi-manager-web
+ss -ltnp | grep -E ':3000|:3002|:3302|:3303'
 curl -fsS http://127.0.0.1:3002/api/health
+curl -fsS http://127.0.0.1:3002/api/readiness
 curl -I http://127.0.0.1:3000/login
 curl -fsS http://127.0.0.1:5050/version
 docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' oi-postgres oi-judge
@@ -61,5 +70,4 @@ SSH 暴露面复核及备份恢复演练全部完成或明确关闭。
 
 ## 回滚
 
-只停止受影响的服务，恢复上一份已发布构建产物或 unit 文件，执行 `systemctl daemon-reload`，
-再重启服务并重复上述验证。不要执行 `docker compose down -v`，否则会删除数据库卷。
+API 回滚时将 `.run/api-active-upstream` 原子改回仍在运行的旧端口；若旧实例已经停止，先用对应 `oi-manager-server@<port>` 启动并通过 readiness。前端继续使用 preview rollback。不要执行 `docker compose down -v`，否则会删除数据库卷。

@@ -17,7 +17,7 @@ import { normalizeResult } from '../lib/result-enum'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getHeartbeatAction } from './judge-protocol'
-import { finalizeHackResult, judgeConfigHash } from '../modules/problem/problem.hack.service'
+import { finalizeHackResult } from '../modules/problem/problem.hack.service'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -35,6 +35,7 @@ const judges = new Map<WebSocket, JudgeConnection>()
 const judgeHeartbeats = new Map<WebSocket, number>()
 
 let wss: WebSocketServer | null = null
+let acceptingJudgeTasks = true
 
 const localJudgeSubmissionWhere = () => ({
   problemInternalId: { not: null },
@@ -65,6 +66,10 @@ class JudgeConsumer {
 
   async consume() {
     while (this.consuming) {
+      if (!acceptingJudgeTasks) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        continue
+      }
       if (this.processing.size >= this.concurrency) {
         await new Promise(resolve => { this.notify = resolve })
         continue
@@ -127,7 +132,7 @@ class JudgeConsumer {
 
         const submission = await tx.submission.findUnique({
           where: { id: candidate.id },
-          select: { id: true, problemInternalId: true, trainingProblemId: true, code: true, language: true }
+          select: { id: true, problemInternalId: true, trainingProblemId: true, testSetRevisionId: true, code: true, language: true }
         })
         if (!submission) return null
 
@@ -144,13 +149,17 @@ class JudgeConsumer {
         // 构建任务数据
         const problem = await tx.problem.findUnique({
           where: { id: submission.problemInternalId! },
-          select: { judgeConfig: true }
+          select: { judgeConfig: true, latestTestSetRevisionId: true }
         })
         const trainingProblem = submission.trainingProblemId
           ? await tx.trainingProblem.findUnique({
               where: { id: submission.trainingProblemId },
-              select: { judgeConfigSnapshot: true },
+              select: { judgeConfigSnapshot: true, testSetRevisionId: true },
             })
+          : null
+        const revisionId = submission.testSetRevisionId || trainingProblem?.testSetRevisionId || problem?.latestTestSetRevisionId
+        const revision = revisionId
+          ? await tx.problemTestSetRevision.findFirst({ where: { id: revisionId, problemId: submission.problemInternalId! }, select: { judgeConfig: true, testdataPath: true } })
           : null
 
         // 统一使用 TESTDATA_DIR 环境变量
@@ -162,8 +171,10 @@ class JudgeConsumer {
           problemId: submission.problemInternalId!,
           code: submission.code,
           language: submission.language,
-          testdataPath: path.join(TESTDATA_DIR, submission.problemInternalId!),
-          config: yaml.load(trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}')
+          testdataPath: revision
+            ? path.join(TESTDATA_DIR, submission.problemInternalId!, revision.testdataPath)
+            : path.join(TESTDATA_DIR, submission.problemInternalId!),
+          config: yaml.load(revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}')
         }
       })
     } catch (e: any) {
@@ -196,11 +207,14 @@ class JudgeConsumer {
         const attempt = await tx.problemHackAttempt.findUnique({ where: { id: candidate.id } })
         if (!attempt) return null
         const [problem, hackConfig] = await Promise.all([
-          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true, testGraphRevision: true } }),
+          tx.problem.findUnique({ where: { id: attempt.problemId }, select: { judgeConfig: true, testGraphRevision: true, latestTestSetRevisionId: true } }),
           tx.problemHackConfig.findUnique({ where: { problemId: attempt.problemId } }),
         ])
-        if (!problem || !hackConfig?.enabled || hackConfig.revision !== attempt.hackConfigRevision ||
-            judgeConfigHash(problem.judgeConfig) !== attempt.judgeConfigHash ||
+        const baseRevision = attempt.baseTestSetRevisionId
+          ? await tx.problemTestSetRevision.findFirst({ where: { id: attempt.baseTestSetRevisionId, problemId: attempt.problemId } })
+          : null
+        if (!problem || !hackConfig?.enabled || !baseRevision || hackConfig.revision !== attempt.hackConfigRevision ||
+            baseRevision.judgeConfigHash !== attempt.judgeConfigHash ||
             (hackConfig.mode === 'oi' && problem.testGraphRevision !== attempt.testGraphRevision)) {
           await tx.problemHackAttempt.update({
             where: { id: attempt.id },
@@ -217,8 +231,8 @@ class JudgeConsumer {
           taskType: 'hack' as const,
           hackAttemptId: attempt.id,
           problemId: attempt.problemId,
-          testdataPath: path.join(testdataRoot, attempt.problemId),
-          config: yaml.load(problem.judgeConfig || '{}'),
+          testdataPath: path.join(testdataRoot, attempt.problemId, baseRevision.testdataPath),
+          config: yaml.load(baseRevision.judgeConfig || '{}'),
           judgeConfigHash: attempt.judgeConfigHash,
           hackConfigRevision: attempt.hackConfigRevision,
           hackMode: hackConfig.mode as 'acm' | 'oi',
@@ -325,6 +339,7 @@ type DispatchTask = JudgeTask | HackTask
  * 初始化 WebSocket 服务器
  */
 export function initJudgeWebSocket() {
+  acceptingJudgeTasks = true
   const judgeToken = process.env.JUDGE_TOKEN?.trim()
   const allowUnauthenticatedLocalJudge =
     process.env.ALLOW_UNAUTHENTICATED_JUDGE === 'true'
@@ -346,7 +361,7 @@ export function initJudgeWebSocket() {
   wss = new WebSocketServer({ server, path: '/ws/judge' })
 
   // 服务启动时恢复悬空任务
-  recoverAllStaleTasks()
+  if (process.env.SKIP_JUDGE_RECOVERY !== 'true') recoverAllStaleTasks()
 
   // 心跳检测定时器（每 30 秒）
   setInterval(() => {
@@ -491,6 +506,26 @@ export function initJudgeWebSocket() {
     action: 'judge_ws',
     metadata: { path: '/ws/judge' }
   })
+}
+
+/**
+ * Stop taking new work, allow in-flight Judge/Hack tasks to finish, then make
+ * clients reconnect (1012 = service restart). Used by blue/green API promote.
+ */
+export async function drainJudgeWebSocket(timeoutMs = 30_000) {
+  acceptingJudgeTasks = false
+  for (const judge of judges.values()) judge.consumer?.notify?.()
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const processing = [...judges.values()].reduce((total, judge) => total + (judge.consumer?.processing.size || 0), 0)
+    if (processing === 0) break
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  const remaining = [...judges.values()].reduce((total, judge) => total + (judge.consumer?.processing.size || 0), 0)
+  for (const ws of judges.keys()) ws.close(1012, 'API deployment')
+  if (wss) await new Promise<void>(resolve => wss!.close(() => resolve()))
+  logger.info('judge_ws_drained', { action: 'judge_ws', metadata: { remaining } })
+  return { remaining }
 }
 
 /**

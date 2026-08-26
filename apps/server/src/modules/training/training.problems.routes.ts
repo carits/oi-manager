@@ -19,6 +19,7 @@ import {
   requireTrainingStarted,
 } from './training.helpers'
 import { findAccessibleProblem } from '../problem/problem.access'
+import { ensureInitialTestSetRevision } from '../problem/problem.testset-revision.service'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 import { buildContestProblemStatus } from './training.problem-status'
 import { fileService } from '../../lib/storage'
@@ -286,9 +287,9 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
 
     // 检查题目是否存在
     const accessibleProblem = await findAccessibleProblem(req.user!, problemId, 'use')
-    const problem = accessibleProblem ? await prisma.problem.findUnique({
+    let problem = accessibleProblem ? await prisma.problem.findUnique({
       where: { id: accessibleProblem.id },
-      include: { ProblemStatement: { where: { isVisible: true } } },
+      include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true } } },
     }) : null
     if (!problem) {
       return res.status(404).json({ success: false, message: '题目不存在' })
@@ -297,6 +298,14 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
       (training.scope === 'campus' && training.Team?.scope === 'campus' ? training.Team.organizationId : null)
     if (problem.libraryScope === 'organization' && trainingSchoolId !== problem.organizationId) {
       return res.status(404).json({ success: false, message: '题目不存在' })
+    }
+    if (!problem.latestTestSetRevisionId) {
+      try { await ensureInitialTestSetRevision(problem.id, userId) }
+      catch (error: any) { return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: error.message }) }
+      problem = await prisma.problem.findUnique({
+        where: { id: problem.id },
+        include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true } } },
+      }) as typeof problem
     }
 
     // 获取当前最大 orderIndex

@@ -93,7 +93,7 @@ LIMIT 1;
 ```
 
 同一事务把任务更新为 `judging` 并记录 `judgeId/judgeStarted`。多个 Judge 不会领取
-同一任务。比赛提交优先使用 `TrainingProblem.judgeConfigSnapshot`，否则使用当前题目配置。
+同一任务。新提交保存实际 `testSetRevisionId`；Judge 优先读取该不可变 Revision 的目录和投影，历史未固定提交才回退活动快照或当前题目配置。
 
 ## 状态恢复
 
@@ -132,9 +132,8 @@ Hack 使用独立的 `ProblemHackAttempt` 队列，不创建 `Submission`：
 5. 两次确定性最终 Verdict 不同时接受；测试点编号、耗时或 message 变化不算有效。
 
 有效结果限定为 Accepted、WA、PE、TLE、MLE、RE 和 OLE；CE、System Error 或通信失败
-不能构成有效 Hack。有效输入以 `hack_<attemptId>.in/.out` 加入正式数据，所有已接受 Hack
-位于普通测试点之前。题目配置和所有 ACM 活动快照同步更新，但历史提交、成绩和排行榜不
-重新评测，OI/IOI 快照不变。
+不能构成有效 Hack。有效输入以 `hack_<attemptId>.in/.out` 自动晋升为题库下一正式 TestSet Revision，
+ACM 中所有已接受 Hack 位于普通测试点之前。Hack 不查询或修改任何比赛、训练和作业；历史提交、成绩和排行榜不重新评测。
 
 同一用户同题最多一个排队或评测中的任务，同一题最多一个正在评测的 Hack；PostgreSQL
 部分唯一索引提供最终并发约束。配置 revision 或评测配置哈希变化会把旧任务标记为 stale，
@@ -155,6 +154,15 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 放入相应的系统 `hack_gate` Group。证明程序只有在加入候选点后总分严格下降才构成有效 Hack；历史
 提交不自动重测。关系型 Test Graph 是 Subtask、Official Group、Hack Gate 和 Testcase 关系的唯一
 编辑事实源，`Problem.judgeConfig` 仅为 Judge 执行投影。
+
+## 不可变 TestSet Revision
+
+- `Problem.latestTestSetRevisionId` 指向题库 Practice 使用的最新版；管理员保存数据、显式 ACM/OI 转换或有效 Hack 都创建下一 Revision，禁止原地修改。
+- 测试输入/答案使用 `(problemId, sha256)` 内容寻址对象；Revision 目录固化逻辑文件名和文件型 Checker/Interactor/Manager。旧 Revision 永久保持可复现。
+- `TrainingProblem.testSetRevisionId` 在活动添加题目时固定。活动未开始且无提交时管理员可以手动更新；开始、结束或已有提交后统一返回 `409 TEST_SET_REVISION_FROZEN`。
+- 发布使用 `pg_advisory_xact_lock(problemId)` 与 expected-latest CAS；Test Graph、Judge 投影、最新版指针和兼容 `Problem.judgeConfig` 在同一事务提交。并发 Hack 冲突最多基于最新版重评三次。
+- 普通 Judge Config PUT 不允许隐式改变模式；`POST /api/problems/:id/judge-mode-transition` 创建保留历史的转换 Revision，并关闭 Hack 等待重新配置。
+- 内容对象写入失败或 CAS 丢失留下的无引用对象超过 24 小时后由锁内 GC 删除。
 
 ## OI 数据与分组工作台
 
