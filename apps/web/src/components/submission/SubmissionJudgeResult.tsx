@@ -3,7 +3,6 @@
 import { JUDGE_RESULT_LABEL_MAP } from '@/lib/judge-constants'
 import unifiedStyles from './SubmissionJudgeResult.unified.module.css'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
-import type { CSSProperties } from 'react'
 import {
   buildJudgeResultRows,
   firstFailedCaseIndex,
@@ -21,11 +20,11 @@ interface SubmissionJudgeResultProps {
   hidden?: boolean
 }
 
-const CASE_TONE: Record<string, { mark: string; color: string }> = {
-  Accepted: { mark: '✓', color: 'var(--success-text)' },
-  accepted: { mark: '✓', color: 'var(--success-text)' },
-  Skipped: { mark: '–', color: 'var(--text-muted)' },
-  skipped: { mark: '–', color: 'var(--text-muted)' },
+const CASE_TONE: Record<string, { mark: string; tone: 'accepted' | 'skipped' }> = {
+  Accepted: { mark: '✓', tone: 'accepted' },
+  accepted: { mark: '✓', tone: 'accepted' },
+  Skipped: { mark: '–', tone: 'skipped' },
+  skipped: { mark: '–', tone: 'skipped' },
 }
 
 function verdictLabel(result: string | null): string {
@@ -48,7 +47,7 @@ export function SubmissionJudgeResult({
     <section aria-label="评测详情" className={unifiedStyles.u1}>
       <div className={unifiedStyles.u2}>
         {judgeMode === 'oi' && score != null && (
-          <strong style={{ fontSize: '1.1rem', color: score >= 100 ? 'var(--success-text)' : 'var(--warning-text)' }}>{score} / 100</strong>
+          <strong className={score >= 100 ? unifiedStyles.scoreFull : unifiedStyles.scorePartial}>{score} / 100</strong>
         )}
         <strong>{verdictLabel(result)}</strong>
         {judgeMode === 'acm' && failedIndex >= 0 && <span className={unifiedStyles.u3}>失败测试点 #{failedIndex + 1}</span>}
@@ -57,11 +56,11 @@ export function SubmissionJudgeResult({
         <TableRoot className={unifiedStyles.u5}>
           <TableHead>
             <TableRow className={unifiedStyles.u6}>
-              <TableHeaderCell style={headerCell}>#</TableHeaderCell>
-              <TableHeaderCell style={headerCell}>状态</TableHeaderCell>
-              {judgeMode === 'oi' && <TableHeaderCell style={{ ...headerCell, textAlign: 'right' }}>得分</TableHeaderCell>}
-              <TableHeaderCell style={{ ...headerCell, textAlign: 'right' }}>用时</TableHeaderCell>
-              <TableHeaderCell style={{ ...headerCell, textAlign: 'right' }}>内存</TableHeaderCell>
+              <TableHeaderCell className={unifiedStyles.headerCell}>#</TableHeaderCell>
+              <TableHeaderCell className={unifiedStyles.headerCell}>状态</TableHeaderCell>
+              {judgeMode === 'oi' && <TableHeaderCell className={unifiedStyles.headerCellRight}>得分</TableHeaderCell>}
+              <TableHeaderCell className={unifiedStyles.headerCellRight}>用时</TableHeaderCell>
+              <TableHeaderCell className={unifiedStyles.headerCellRight}>内存</TableHeaderCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -77,20 +76,20 @@ export function SubmissionJudgeResult({
                   </TableRow>
                 )
               }
-              const tone = CASE_TONE[row.testCase.result] || { mark: '✕', color: 'var(--error-text)' }
+              const tone = CASE_TONE[row.testCase.result] || { mark: '✕', tone: 'failed' as const }
               return (
                 <TableRow key={`case-${row.index}-${rowIndex}`} className={unifiedStyles.u11}>
-                  <TableCell style={bodyCell}>{row.index + 1}</TableCell>
-                  <TableCell style={bodyCell}>
-                    <span style={{ color: tone.color, fontWeight: 700 }}>{tone.mark}</span>
+                  <TableCell className={unifiedStyles.bodyCell}>{row.index + 1}</TableCell>
+                  <TableCell className={unifiedStyles.bodyCell}>
+                    <span className={unifiedStyles[`tone_${tone.tone}`]}>{tone.mark}</span>
                     <span className={unifiedStyles.u12}>{row.testCase.result}</span>
                     {row.testCase.message && row.testCase.message !== row.testCase.result && (
                       <div className={unifiedStyles.u13}>{row.testCase.message}</div>
                     )}
                   </TableCell>
-                  {judgeMode === 'oi' && <TableCell style={{ ...bodyCell, textAlign: 'right', fontWeight: 600 }}>{row.testCase.score ?? '-'}</TableCell>}
-                  <TableCell style={{ ...bodyCell, textAlign: 'right' }}>{row.testCase.time != null ? `${row.testCase.time} ms` : '-'}</TableCell>
-                  <TableCell style={{ ...bodyCell, textAlign: 'right' }}>{formatJudgeMemory(row.testCase.memory)}</TableCell>
+                  {judgeMode === 'oi' && <TableCell className={unifiedStyles.bodyCellScore}>{row.testCase.score ?? '-'}</TableCell>}
+                  <TableCell className={unifiedStyles.bodyCellRight}>{row.testCase.time != null ? `${row.testCase.time} ms` : '-'}</TableCell>
+                  <TableCell className={unifiedStyles.bodyCellRight}>{formatJudgeMemory(row.testCase.memory)}</TableCell>
                 </TableRow>
               )
             })}
@@ -99,17 +98,4 @@ export function SubmissionJudgeResult({
       </div>}
     </section>
   )
-}
-
-const headerCell: CSSProperties = {
-  padding: '0.55rem 0.75rem',
-  color: 'var(--text-secondary)',
-  fontWeight: 600,
-  textAlign: 'left',
-  whiteSpace: 'nowrap',
-}
-
-const bodyCell: CSSProperties = {
-  padding: '0.55rem 0.75rem',
-  verticalAlign: 'top',
 }

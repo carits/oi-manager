@@ -118,7 +118,7 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
         {current && <span className={unifiedStyles.u4}>Revision {current.revision} · {new Date(current.updatedAt).toLocaleString('zh-CN')}</span>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: kind === 'statement' ? 'minmax(180px, 1fr) 140px 140px' : '140px 140px', gap: '0.75rem' }}>
+      <div className={`${unifiedStyles.contentGrid} ${kind === 'statement' ? unifiedStyles.statementGrid : unifiedStyles.solutionGrid}`}>
         {kind === 'statement' && <label className={unifiedStyles.u5}>题面标题<Input value={title} onChange={event => setTitle(event.target.value)} placeholder="默认使用原题标题" className={unifiedStyles.u6} /></label>}
         <label className={unifiedStyles.u5}>格式<Select value={format} onChange={event => setFormat(event.target.value as Format)} className={unifiedStyles.u7}><option value="markdown">Markdown</option><option value="pdf">PDF</option></Select></label>
         <label className={unifiedStyles.u5}>语言<Select value={language} onChange={event => setLanguage(event.target.value)} className={unifiedStyles.u7}><option value="zh">中文</option><option value="en">English</option></Select></label>

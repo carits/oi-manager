@@ -80,19 +80,10 @@ export default function NewProblemListPage() {
           </div>
 
           <div className={unifiedStyles.u6}>
-            <Button variant="ghost"
+            <Button variant="primary"
               type="submit"
               disabled={loading || !title.trim()}
-              style={{
-                flex: 1,
-                padding: '0.625rem',
-                background: loading || !title.trim() ? 'var(--gray-300)' : 'var(--primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: 500,
-                cursor: loading || !title.trim() ? 'not-allowed' : 'pointer'
-              }}
+              className={unifiedStyles.submitButton}
             >
               {loading ? '创建中...' : '创建题单'}
             </Button>

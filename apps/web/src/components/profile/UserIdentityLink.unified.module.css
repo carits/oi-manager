@@ -7,6 +7,26 @@
   font-size: 0.875em;
 }
 
+.avatar {
+  width: var(--identity-size);
+  height: var(--identity-size);
+  border-radius: 50%;
+  background-color: var(--primary);
+  background-image: var(--identity-avatar);
+  background-position: center;
+  background-size: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-inverse);
+  font-size: var(--identity-font-size);
+  font-weight: 600;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.identity { display: inline-flex; align-items: baseline; gap: 0.35rem; min-width: 0; }
+
 .u3 {
   color: var(--primary);
   text-decoration: none;

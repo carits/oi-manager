@@ -50,3 +50,13 @@
   gap: 0.75rem;
   margin-top: 0.5rem;
 }
+
+.profileAvatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--profile-avatar) center / cover;
+  border: 3px solid var(--border);
+}
+
+.bioInput { min-height: 100px; resize: vertical; }

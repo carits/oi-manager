@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import collisionStyles from './ProfileEditor.collision.module.css'
 import unifiedStyles from './ProfileEditor.unified.module.css'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -103,21 +103,16 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
     const name = profile?.name || user?.username
     return name?.charAt(0)?.toUpperCase() || '?'
   }
+  const avatarStyle = user?.avatar
+    ? { '--profile-avatar': `url(${getAssetUrl(user.avatar)})` } as CSSProperties
+    : undefined
 
   return (
     <div className={unifiedStyles.u2}>
       {/* 头像区域 */}
       <div className={unifiedStyles.u3}>
         {user?.avatar ? (
-          <div
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: `url(${getAssetUrl(user.avatar)}) center/cover`,
-              border: '3px solid var(--border)'
-            }}
-          />
+          <div className={unifiedStyles.profileAvatar} style={avatarStyle} />
         ) : (
           <div
             className={unifiedStyles.u4}
@@ -126,19 +121,10 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
           </div>
         )}
         <div>
-          <Button variant="ghost"
+          <Button variant="primary"
             type="button"
             onClick={handleAvatarClick}
             disabled={uploadingAvatar}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
-              opacity: uploadingAvatar ? 0.7 : 1
-            }}
           >
             {uploadingAvatar ? '上传中...' : '更换头像'}
           </Button>
@@ -196,25 +182,15 @@ export function ProfileEditor({ userType }: ProfileEditorProps) {
             value={form.bio}
             onChange={(e) => handleChange('bio', e.target.value)}
             placeholder="请输入个人简介"
-            style={{ ...formStyles.input, minHeight: '100px', resize: 'vertical' }}
+            style={formStyles.input}
+            className={unifiedStyles.bioInput}
           />
         </div>
 
         <div className={unifiedStyles.u8}>
-          <Button variant="ghost"
+          <Button variant="primary"
             type="submit"
             disabled={saving}
-            style={{
-              padding: '0.625rem 1.5rem',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1,
-              fontSize: '0.875rem',
-              fontWeight: 500
-            }}
           >
             {saving ? '保存中...' : '保存'}
           </Button>

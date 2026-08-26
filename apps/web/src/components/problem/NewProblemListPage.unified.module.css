@@ -44,3 +44,5 @@
   background: var(--bg-card);
   cursor: pointer;
 }
+
+.submitButton { flex: 1; }

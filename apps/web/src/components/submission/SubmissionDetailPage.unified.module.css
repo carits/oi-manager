@@ -19,6 +19,8 @@
   background: var(--bg-muted);
 }
 
+.code { font-family: Consolas, Monaco, 'Courier New', monospace; }
+
 .u4 {
   padding: 0.875rem 1rem;
   font-size: 0.8125rem;

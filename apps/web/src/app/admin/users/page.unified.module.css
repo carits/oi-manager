@@ -133,3 +133,9 @@
   cursor: pointer;
   margin-right: 0.5rem;
 }
+
+.statusBadge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+.statusActive { background: var(--success-light); color: var(--success-text); }
+.statusInactive { background: var(--error-light); color: var(--error-text); }
+.toggleDanger { color: var(--error); }
+.toggleSuccess { color: var(--success); }

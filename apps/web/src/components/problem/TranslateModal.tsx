@@ -40,20 +40,9 @@ export function TranslateModal({ currentLang, onConfirm, onCancel, loading }: Tr
           >
             取消
           </Button>
-          <Button variant="ghost"
+          <Button variant="primary"
             onClick={() => onConfirm(targetLang)}
             disabled={loading || availableOptions.length === 0}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              opacity: loading ? 0.7 : 1
-            }}
           >
             {loading ? '翻译中...' : '确认翻译'}
           </Button>

@@ -239,7 +239,7 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                   <pre className={unifiedStyles.u2}>
                     <code
                       dangerouslySetInnerHTML={{ __html: getHighlightedCode() }}
-                      style={{ fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace" }}
+                      className={unifiedStyles.code}
                     />
                   </pre>
                 </div>

@@ -12,6 +12,9 @@
   font-size: 0.875rem;
 }
 
+.message { margin-bottom: 0; }
+.messageWithAction { margin-bottom: 1rem; }
+
 .u3 {
   padding: 3rem;
   text-align: center;

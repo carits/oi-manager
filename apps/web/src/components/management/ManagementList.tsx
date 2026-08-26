@@ -38,7 +38,8 @@ export function ActionMenu({ children }: { children: ReactNode }) {
     document.addEventListener('mousedown', close); document.addEventListener('keydown', escape); window.addEventListener('resize', reposition); window.addEventListener('scroll', reposition, true)
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); window.removeEventListener('resize', reposition); window.removeEventListener('scroll', reposition, true) }
   }, [])
-  return <div className={styles.actionMenu} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && createPortal(<ActionMenuContext.Provider value={() => setOpen(false)}><div ref={menuRef} className={styles.actionPanel} data-placement={position.placement} style={{ top: position.top, left: position.left }} role="menu">{children}</div></ActionMenuContext.Provider>, document.body)}</div>
+  const floatingPosition = { top: position.top, left: position.left }
+  return <div className={styles.actionMenu} ref={rootRef}><Button variant="ghost" size="sm" className={styles.moreButton} icon={<ChevronDown size={14} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>更多</Button>{open && createPortal(<ActionMenuContext.Provider value={() => setOpen(false)}><div ref={menuRef} className={styles.actionPanel} data-placement={position.placement} style={floatingPosition} role="menu">{children}</div></ActionMenuContext.Provider>, document.body)}</div>
 }
 
 export function ActionMenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {

@@ -223,13 +223,7 @@ export default function PlatformAdminUsersPage() {
                         <TableCell className={unifiedStyles.u18}>{getRoleLabel(user.role)}</TableCell>
                         <TableCell className={unifiedStyles.u18}>{user.profile?.schoolName || '-'}</TableCell>
                         <TableCell className={unifiedStyles.u18}>
-                          <span style={{
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            background: user.status === 'active' ? 'var(--success-light)' : 'var(--error-light)',
-                            color: user.status === 'active' ? 'var(--success-text)' : 'var(--error-text)'
-                          }}>
+                          <span className={`${unifiedStyles.statusBadge} ${user.status === 'active' ? unifiedStyles.statusActive : unifiedStyles.statusInactive}`}>
                             {user.status === 'active' ? '正常' : '禁用'}
                           </span>
                         </TableCell>
@@ -249,9 +243,9 @@ export default function PlatformAdminUsersPage() {
                           >
                             重置密码
                           </Button>
-                          <Button variant="ghost"
+                          <Button variant="text"
                             onClick={() => handleToggleStatus(user.id, user.status, user.username)}
-                            style={{ color: user.status === 'active' ? 'var(--error)' : 'var(--success)', background: 'none', border: 'none', cursor: 'pointer' }}
+                            className={user.status === 'active' ? unifiedStyles.toggleDanger : unifiedStyles.toggleSuccess}
                           >
                             {user.status === 'active' ? '禁用' : '启用'}
                           </Button>

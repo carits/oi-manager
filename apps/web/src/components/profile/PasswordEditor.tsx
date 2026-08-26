@@ -125,20 +125,9 @@ export function PasswordEditor() {
         </div>
 
         <div className={unifiedStyles.u6}>
-          <Button variant="ghost"
+          <Button variant="primary"
             type="submit"
             disabled={saving}
-            style={{
-              padding: '0.625rem 1.5rem',
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1,
-              fontSize: '0.875rem',
-              fontWeight: 500
-            }}
           >
             {saving ? '保存中...' : '修改密码'}
           </Button>

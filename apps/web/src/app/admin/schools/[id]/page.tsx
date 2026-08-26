@@ -158,48 +158,24 @@ export default function AdminSchoolDetailPage() {
             {/* 标签页 */}
             <div className={unifiedStyles.u8}>
               <div className={unifiedStyles.u9}>
-                <Button variant="ghost"
+                <Button variant="text"
                   onClick={() => { setActiveTab('info'); router.push(`/admin/schools/${schoolId}?tab=info`, { scroll: false }) }}
-                  style={{
-                    padding: '0.75rem 0',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: activeTab === 'info' ? '2px solid var(--primary)' : '2px solid transparent',
-                    color: activeTab === 'info' ? 'var(--primary)' : 'var(--gray-600)',
-                    fontWeight: activeTab === 'info' ? 600 : 400,
-                    cursor: 'pointer',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.tabButton}
+                  aria-selected={activeTab === 'info'}
                 >
                   主页
                 </Button>
-                <Button variant="ghost"
+                <Button variant="text"
                   onClick={() => { setActiveTab('teachers'); router.push(`/admin/schools/${schoolId}?tab=teachers`, { scroll: false }) }}
-                  style={{
-                    padding: '0.75rem 0',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: activeTab === 'teachers' ? '2px solid var(--primary)' : '2px solid transparent',
-                    color: activeTab === 'teachers' ? 'var(--primary)' : 'var(--gray-600)',
-                    fontWeight: activeTab === 'teachers' ? 600 : 400,
-                    cursor: 'pointer',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.tabButton}
+                  aria-selected={activeTab === 'teachers'}
                 >
                   教师
                 </Button>
-                <Button variant="ghost"
+                <Button variant="text"
                   onClick={() => { setActiveTab('students'); router.push(`/admin/schools/${schoolId}?tab=students`, { scroll: false }) }}
-                  style={{
-                    padding: '0.75rem 0',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: activeTab === 'students' ? '2px solid var(--primary)' : '2px solid transparent',
-                    color: activeTab === 'students' ? 'var(--primary)' : 'var(--gray-600)',
-                    fontWeight: activeTab === 'students' ? 600 : 400,
-                    cursor: 'pointer',
-                    fontSize: '0.875rem'
-                  }}
+                  className={unifiedStyles.tabButton}
+                  aria-selected={activeTab === 'students'}
                 >
                   学生
                 </Button>
@@ -316,13 +292,7 @@ export default function AdminSchoolDetailPage() {
                             <TableCell className={unifiedStyles.u21}>{teacher.user.username}</TableCell>
                             <TableCell className={unifiedStyles.u21}>{teacher.title || '-'}</TableCell>
                             <TableCell className={unifiedStyles.u21}>
-                              <span style={{
-                                padding: '0.125rem 0.5rem',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                background: teacher.user.role === 'school_principal' ? 'var(--warning-light)' : 'var(--info-light)',
-                                color: teacher.user.role === 'school_principal' ? 'var(--warning-text)' : 'var(--info-text)'
-                              }}>
+                              <span className={`${unifiedStyles.roleBadge} ${teacher.user.role === 'school_principal' ? unifiedStyles.principalBadge : unifiedStyles.teacherBadge}`}>
                                 {teacher.user.role === 'school_principal' ? '负责人' : '教师'}
                               </span>
                             </TableCell>

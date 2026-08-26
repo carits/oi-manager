@@ -108,13 +108,7 @@ export default function UserDetailPage() {
               </div>
               <div>
                 <label className={unifiedStyles.u9}>状态</label>
-                <span style={{
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  background: user.status === 'active' ? 'var(--success-light)' : 'var(--error-light)',
-                  color: user.status === 'active' ? 'var(--success-text)' : 'var(--error-text)'
-                }}>
+                <span className={`${unifiedStyles.statusBadge} ${user.status === 'active' ? unifiedStyles.statusActive : unifiedStyles.statusInactive}`}>
                   {user.status === 'active' ? '正常' : '禁用'}
                 </span>
               </div>

@@ -160,18 +160,9 @@ export default function NewPlatformAdminPage() {
             </div>
 
             <div className={unifiedStyles.u12}>
-              <Button variant="ghost"
+              <Button variant="primary"
                 type="submit"
                 disabled={loading}
-                style={{
-                  padding: '0.5rem 1.5rem',
-                  background: loading ? 'var(--gray-300)' : 'var(--primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontSize: '0.875rem'
-                }}
               >
                 {loading ? '创建中...' : '创建'}
               </Button>

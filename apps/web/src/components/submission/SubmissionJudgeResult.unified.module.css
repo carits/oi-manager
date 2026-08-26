@@ -67,3 +67,17 @@
   font-size: 0.72rem;
   white-space: pre-wrap;
 }
+
+.scoreFull, .scorePartial { font-size: 1.1rem; }
+.scoreFull { color: var(--success-text); }
+.scorePartial { color: var(--warning-text); }
+.headerCell, .headerCellRight { padding: 0.55rem 0.75rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap; }
+.headerCell { text-align: left; }
+.headerCellRight { text-align: right; }
+.bodyCell, .bodyCellRight, .bodyCellScore { padding: 0.55rem 0.75rem; vertical-align: top; }
+.bodyCellRight, .bodyCellScore { text-align: right; }
+.bodyCellScore { font-weight: 600; }
+.tone_accepted, .tone_skipped, .tone_failed { font-weight: 700; }
+.tone_accepted { color: var(--success-text); }
+.tone_skipped { color: var(--text-muted); }
+.tone_failed { color: var(--error-text); }

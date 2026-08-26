@@ -56,30 +56,22 @@ export function UserIdentityLink({
   const normalizedType = normalizeUserType(userType, personalMode)
   const label = displayName(name, username, personalMode)
   const href = id && normalizedType ? profileHref(id, normalizedType) : null
+  const avatarStyle = {
+    '--identity-size': `${size}px`,
+    '--identity-avatar': avatar ? `url(${getAssetUrl(avatar)})` : 'none',
+    '--identity-font-size': `${Math.max(12, Math.round(size * 0.4))}px`,
+    ...style,
+  } as CSSProperties
   const content = avatarOnly ? (
     <span
-      className={className}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: avatar ? 'url(' + getAssetUrl(avatar) + ') center/cover' : 'var(--primary)',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'white',
-        fontWeight: 600,
-        fontSize: Math.max(12, Math.round(size * 0.4)),
-        flexShrink: 0,
-        textDecoration: 'none',
-        ...style,
-      }}
+      className={[unifiedStyles.avatar, className].filter(Boolean).join(' ')}
+      style={avatarStyle}
       aria-label={label}
     >
       {!avatar && label.charAt(0).toUpperCase()}
     </span>
   ) : (
-    <span className={className} style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.35rem', minWidth: 0, ...style }}>
+    <span className={[unifiedStyles.identity, className].filter(Boolean).join(' ')} style={style}>
       <span className={unifiedStyles.u1}>{label}{currentSuffix || ''}</span>
       {showUsername && username && username !== label && (
         <span className={unifiedStyles.u2}>({username})</span>

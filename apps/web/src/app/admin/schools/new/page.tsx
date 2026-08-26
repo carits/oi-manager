@@ -256,7 +256,7 @@ export default function NewSchoolPage() {
                       onChange={(e) => updateField('contactPhone', e.target.value)}
                       onBlur={(e) => handleBlur('contactPhone', e.target.value)}
                       placeholder="11位手机号"
-                      style={{ width: '100%', padding: '0.5rem', border: `1px solid ${errors.contactPhone ? 'red' : 'var(--border)'}`, borderRadius: '6px' }}
+                      aria-invalid={Boolean(errors.contactPhone)}
                     />
                     {errors.contactPhone && <p className={unifiedStyles.u12}>{errors.contactPhone}</p>}
                   </div>
@@ -270,7 +270,7 @@ export default function NewSchoolPage() {
                       onChange={(e) => updateField('contactEmail', e.target.value)}
                       onBlur={(e) => handleBlur('contactEmail', e.target.value)}
                       placeholder="example@domain.com"
-                      style={{ width: '100%', padding: '0.5rem', border: `1px solid ${errors.contactEmail ? 'red' : 'var(--border)'}`, borderRadius: '6px' }}
+                      aria-invalid={Boolean(errors.contactEmail)}
                     />
                     {errors.contactEmail && <p className={unifiedStyles.u12}>{errors.contactEmail}</p>}
                   </div>
@@ -292,7 +292,7 @@ export default function NewSchoolPage() {
                       onBlur={(e) => handleBlur('username', e.target.value)}
                       placeholder="字母、数字、下划线"
                       required
-                      style={{ width: '100%', padding: '0.5rem', border: `1px solid ${errors.username ? 'red' : 'var(--border)'}`, borderRadius: '6px' }}
+                      aria-invalid={Boolean(errors.username)}
                     />
                     {errors.username && <p className={unifiedStyles.u12}>{errors.username}</p>}
                   </div>

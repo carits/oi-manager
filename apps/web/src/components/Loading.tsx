@@ -9,7 +9,7 @@ export function Loading({ tip = '内容正在准备' }: { tip?: string }) {
 export function ErrorMessage({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className={unifiedStyles.u1}>
-      <p style={{ marginBottom: onRetry ? '1rem' : 0 }}>{message}</p>
+      <p className={onRetry ? unifiedStyles.messageWithAction : unifiedStyles.message}>{message}</p>
       {onRetry && (
         <Button variant="ghost"
           onClick={onRetry}

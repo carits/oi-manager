@@ -133,7 +133,7 @@ export function TrainingContentSelectionModal({
       footer={(
         <div className={unifiedStyles.u1}>
           <Button variant="ghost" onClick={onClose} className={unifiedStyles.u2}>取消</Button>
-          <Button variant="ghost" onClick={save} disabled={!changed || saving || loading} style={{ padding: '0.6rem 1.1rem', border: 'none', borderRadius: '7px', background: changed ? 'var(--primary)' : 'var(--gray-300)', color: 'white', cursor: changed ? 'pointer' : 'not-allowed' }}>
+          <Button variant="primary" onClick={save} disabled={!changed || saving || loading}>
             {saving ? '保存中…' : '应用新版本'}
           </Button>
         </div>
