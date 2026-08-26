@@ -165,10 +165,7 @@ export function TrainingProblemDetail({
           <Button variant="ghost" key={statement.id} onClick={() => {
             setSelectedStatementId(statement.id)
             if (selectedProblemId) localStorage.setItem(`training-stmt-pref-${training.id}-${selectedProblemId}`, statement.id)
-          }} style={{
-            width: '100%', padding: '0.6rem', marginBottom: '0.3rem', border: 'none', borderRadius: '6px', textAlign: 'left',
-            background: selectedStatementId === statement.id ? 'var(--info-light)' : 'transparent', cursor: 'pointer',
-          }}>
+          }} className={unifiedStyles.statementButton} aria-selected={selectedStatementId === statement.id}>
             <strong className={unifiedStyles.u12}>{statement.name || (statement.language ? STATEMENT_LANGUAGE_LABELS[statement.language] || statement.language : '题面')}</strong>
             <span className={unifiedStyles.u13}>{statement.authorUsername || 'System'} · {statement.isDefault ? '默认 · ' : ''}{statement.language || '未知'}</span>
           </Button>
@@ -185,18 +182,7 @@ export function TrainingProblemDetail({
         <Button variant="ghost"
           key={p.id}
           onClick={() => setSelectedProblemId(p.id)}
-          style={{
-            padding: compact ? '0.2rem 0.4rem' : '0.3rem 0.5rem',
-            border: '1px solid',
-            borderColor: selectedProblemId === p.id ? 'var(--primary)' : 'var(--border)',
-            background: selectedProblemId === p.id ? 'var(--primary)' : 'white',
-            color: selectedProblemId === p.id ? 'white' : 'var(--text-primary)',
-            borderRadius: compact ? '4px' : '6px',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            fontWeight: 500,
-            minWidth: '28px',
-          }}
+          className={`${unifiedStyles.problemButton} ${compact ? unifiedStyles.problemButtonCompact : ''}`} aria-selected={selectedProblemId === p.id}
         >
           {trainingProblemCode(p.orderIndex)}
         </Button>
@@ -218,7 +204,7 @@ export function TrainingProblemDetail({
         {problemDetail.timeLimit && <span>时间: {problemDetail.timeLimit}ms</span>}
         {problemDetail.memoryLimit && <span>内存: {problemDetail.memoryLimit}MB</span>}
         {problemDetail.difficulty && (
-          <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', background: problemDetail.difficulty === '简单' ? 'var(--success-light)' : problemDetail.difficulty === '中等' ? 'var(--warning-light)' : 'var(--error-light)', color: problemDetail.difficulty === '简单' ? 'var(--success-text)' : problemDetail.difficulty === '中等' ? 'var(--warning-text)' : 'var(--error-text)' }}>
+          <span className={unifiedStyles.difficultyBadge} data-difficulty={problemDetail.difficulty}>
             {problemDetail.difficulty}
           </span>
         )}
@@ -267,34 +253,13 @@ B 题：...
 
 ## 赛后总结
 这次比赛暴露了...`}
-              style={{
-                flex: recordEditMode === 'split' ? 1 : undefined,
-                width: recordEditMode === 'edit' ? '100%' : undefined,
-                minHeight: '100%',
-                padding: '0.75rem',
-                border: 'none',
-                fontSize: '0.85rem',
-                fontFamily: 'Consolas, Monaco, monospace',
-                lineHeight: 1.6,
-                resize: 'none',
-                background: recordEditMode === 'split' ? 'var(--bg-muted)' : 'white',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
+              className={`${unifiedStyles.contentEditor} ${recordEditMode === 'split' ? unifiedStyles.splitPane : unifiedStyles.fullPane}`}
               spellCheck={false}
             />
           )}
           {recordEditMode === 'split' && <div className={unifiedStyles.u22} />}
           {(recordEditMode === 'preview' || recordEditMode === 'split') && (
-            <div style={{
-              flex: recordEditMode === 'split' ? 1 : undefined,
-              width: recordEditMode === 'preview' ? '100%' : undefined,
-              minHeight: '100%',
-              padding: '0.75rem',
-              overflow: 'auto',
-              background: 'white',
-              boxSizing: 'border-box',
-            }}>
+            <div className={`${unifiedStyles.contentPreview} ${recordEditMode === 'split' ? unifiedStyles.splitPane : unifiedStyles.fullPane}`}>
               {recordContent.trim() ? (
                 <div className={unifiedStyles.u2}>
                   <MarkdownRenderer content={recordContent} />
@@ -334,34 +299,13 @@ B 题：...
 ## 复杂度分析
 - 时间复杂度：O(n)
 - 空间复杂度：O(n)`}
-              style={{
-                flex: noteEditMode === 'split' ? 1 : undefined,
-                width: noteEditMode === 'edit' ? '100%' : undefined,
-                minHeight: '100%',
-                padding: '0.75rem',
-                border: 'none',
-                fontSize: '0.85rem',
-                fontFamily: 'Consolas, Monaco, monospace',
-                lineHeight: 1.6,
-                resize: 'none',
-                background: noteEditMode === 'split' ? 'var(--bg-muted)' : 'white',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
+              className={`${unifiedStyles.contentEditor} ${noteEditMode === 'split' ? unifiedStyles.splitPane : unifiedStyles.fullPane}`}
               spellCheck={false}
             />
           )}
           {noteEditMode === 'split' && <div className={unifiedStyles.u22} />}
           {(noteEditMode === 'preview' || noteEditMode === 'split') && (
-            <div style={{
-              flex: noteEditMode === 'split' ? 1 : undefined,
-              width: noteEditMode === 'preview' ? '100%' : undefined,
-              minHeight: '100%',
-              padding: '0.75rem',
-              overflow: 'auto',
-              background: 'white',
-              boxSizing: 'border-box',
-            }}>
+            <div className={`${unifiedStyles.contentPreview} ${noteEditMode === 'split' ? unifiedStyles.splitPane : unifiedStyles.fullPane}`}>
               {noteContent.trim() ? (
                 <div className={unifiedStyles.u2}>
                   <MarkdownRenderer content={noteContent} />
@@ -384,19 +328,9 @@ B 题：...
     const handleSave = training.type === 'contest' ? saveRecordNow : saveNoteNow
     const isSaving = training.type === 'contest' ? recordSaving : noteSaving
     return (
-      <Button variant="ghost"
+      <Button variant="primary" size="sm"
         onClick={handleSave}
         disabled={isSaving}
-        style={{
-          padding: '0.2rem 0.6rem',
-          background: isSaving ? 'var(--gray-300)' : 'var(--primary)',
-          color: 'white',
-          border: 'none',
-          borderRadius: 'var(--radius-sm)',
-          cursor: isSaving ? 'not-allowed' : 'pointer',
-          fontSize: '0.7rem',
-          fontWeight: 500,
-        }}
       >
         {isSaving ? '保存中...' : '保存'}
       </Button>
@@ -431,17 +365,17 @@ B 题：...
     if (training.type === 'contest') {
       return (
         <>
-          <Button variant="ghost" onClick={() => setRecordEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'edit' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'edit' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
-          <Button variant="ghost" onClick={() => setRecordEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'preview' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'preview' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
-          <Button variant="ghost" onClick={() => setRecordEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: recordEditMode === 'split' ? 'var(--primary)' : 'transparent', color: recordEditMode === 'split' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
+          <Button variant="ghost" onClick={() => setRecordEditMode('edit')} className={unifiedStyles.modeButton} aria-pressed={recordEditMode === 'edit'}>编辑</Button>
+          <Button variant="ghost" onClick={() => setRecordEditMode('preview')} className={unifiedStyles.modeButton} aria-pressed={recordEditMode === 'preview'}>预览</Button>
+          <Button variant="ghost" onClick={() => setRecordEditMode('split')} className={unifiedStyles.modeButton} aria-pressed={recordEditMode === 'split'}>分栏</Button>
         </>
       )
     } else {
       return (
         <>
-          <Button variant="ghost" onClick={() => setNoteEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'edit' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'edit' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
-          <Button variant="ghost" onClick={() => setNoteEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'preview' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'preview' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
-          <Button variant="ghost" onClick={() => setNoteEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: noteEditMode === 'split' ? 'var(--primary)' : 'transparent', color: noteEditMode === 'split' ? 'white' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
+          <Button variant="ghost" onClick={() => setNoteEditMode('edit')} className={unifiedStyles.modeButton} aria-pressed={noteEditMode === 'edit'}>编辑</Button>
+          <Button variant="ghost" onClick={() => setNoteEditMode('preview')} className={unifiedStyles.modeButton} aria-pressed={noteEditMode === 'preview'}>预览</Button>
+          <Button variant="ghost" onClick={() => setNoteEditMode('split')} className={unifiedStyles.modeButton} aria-pressed={noteEditMode === 'split'}>分栏</Button>
         </>
       )
     }
@@ -451,20 +385,8 @@ B 题：...
 
   const renderActionButtons = () => (
     <div className={unifiedStyles.u27}>
-      <Button variant="ghost"
+      <Button variant="primary" fullWidth
         onClick={onSubmitClick}
-        style={{
-          padding: '0.6rem 1rem',
-          background: 'var(--primary)',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: trainingStatus === 'ongoing' ? 'pointer' : 'not-allowed',
-          fontSize: '0.85rem',
-          fontWeight: 500,
-          width: '100%',
-          opacity: trainingStatus === 'ongoing' ? 1 : 0.5,
-        }}
         disabled={trainingStatus !== 'ongoing'}
       >
         ▶ 提交代码

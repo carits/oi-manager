@@ -10,9 +10,9 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 ## 2026-08-25 统一组件契约
 
 本文件是当前界面视觉与交互的唯一规范。`globals.css` 和 `components/ui` 是实现来源；业务组件
-不得复制通用控件或弹窗。2026-08-26 当前源码为 196 个 TSX；原生按钮、原生表单控件、原生表格、
-自定义 Dialog、直接 Modal 和任意 Modal 宽度均已降为 0。硬编码视觉值已于 2026-08-27 降为 0；
-遗留白名单仍登记 171 处静态内联样式，继续收口到 CSS Modules。
+不得复制通用控件或弹窗。2026-08-27 当前业务源码中的原生按钮、原生表单控件、原生表格、
+自定义 Dialog、直接 Modal、任意 Modal 宽度、硬编码视觉值和静态内联样式均已降为 0。
+仅动态尺寸、坐标、资源 URL 和 CSS 自定义变量允许使用受控 `style={computedStyle}`；遗留白名单各分类均为空。
 
 新增统一组件包括 Input、Textarea、Select、Checkbox、RadioGroup、Switch、SearchField、Combobox、
 IconButton、Popover、Menu、DataTable、TableToolbar、Section、FormDialog、ConfirmDialog 和
@@ -52,7 +52,8 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 当前界面的问题不是单一配色或某个页面样式，而是信息架构、页面布局和组件约束没有形成
 统一产品语言。代码审查快照如下：
 
-- 171 个 TSX 文件中有 117 个直接写内联样式。
+- 2026-08-01 审计时，171 个 TSX 文件中有 117 个直接写内联样式；该数字仅为历史基线，
+  2026-08-27 已完成业务层静态内联样式清零。
 - 60 个文件直接使用原生 `<button>`，22 个文件直接使用原生 `<table>`。
 - 只有 56 个 App 页面引入 `components/ui` 基础组件。
 - 页面和业务组件中存在 146 处独立的全屏高度、宽度上限或 `2rem` 页面边距声明。
@@ -98,9 +99,9 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 高频页面：首页、团队、作业、比赛、题库、题单、排名、训练和提交已进入新体系。
 - 测试：90 路由在 `1440×900` 与 `1280×720` 均进入 UX 健康检查。
 
-学校、用户、OJ 管理和复杂导入页面仍包含历史局部内联样式；这些页面已获得统一 Shell、
-页面边距、焦点 Token 和错误契约，但内部控件仍按
-[UI 路由与交互矩阵](UX_ROUTE_MATRIX.md)继续渐进迁移，不能标记为视觉重构完成。
+学校、用户、OJ 管理、复杂导入、题目评测设置和活动工作台已经完成统一 Shell、控件、
+CSS Module、焦点 Token 与错误契约迁移；后续变更由静态门禁直接阻止重新引入业务层
+静态内联样式或硬编码视觉值。
 
 ## 信息架构目标
 

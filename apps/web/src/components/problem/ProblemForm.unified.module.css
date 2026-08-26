@@ -300,3 +300,8 @@
   justify-content: flex-end;
   gap: 0.5rem;
 }
+.tabButton { padding: 0.75rem 1rem; border: none; border-bottom: 2px solid transparent; border-radius: 0; font-size: 0.875rem; color: var(--gray-500); }
+.tabButton[aria-selected='true'] { border-bottom-color: var(--primary); color: var(--primary); }
+.attachmentTab { display: flex; align-items: center; gap: 0.25rem; }
+.editorModeButton { padding: 0.25rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--gray-600); font-size: 0.75rem; }
+.editorModeButton[aria-pressed='true'] { background: var(--primary); color: var(--text-inverse); }

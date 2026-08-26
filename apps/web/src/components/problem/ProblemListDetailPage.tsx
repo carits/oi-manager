@@ -18,6 +18,10 @@ import { getAssetUrl } from '@/lib/assets'
 import { AlertTriangle, Edit3, Send, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Empty } from '@/components/ui/Empty'
+
+const avatarStyle = (avatar?: string | null): React.CSSProperties => ({
+  '--problem-list-avatar': avatar ? `url(${getAssetUrl(avatar)})` : 'none',
+} as React.CSSProperties)
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
@@ -450,7 +454,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                   ) : (
                     <>
                       <h2 onClick={() => { if (canEdit && !isStudentView) { setEditingSection(section.id); setSectionTitleDraft(section.title) } }}
-                        style={{ fontSize: '1rem', fontWeight: 600, cursor: canEdit && !isStudentView ? 'pointer' : 'default', margin: 0 }}>
+                        className={unifiedStyles.sectionTitle} data-editable={canEdit && !isStudentView}>
                         {section.title}
                       </h2>
                       <span className={unifiedStyles.u9}>({section.Entries.length} 题)</span>
@@ -534,7 +538,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                                 </div>
                               ) : (
                                 <Button variant="ghost" type="button" onClick={() => { if (!canEdit) return; setEditingEntry(entry.id); setEditNotes(entry.notes || '') }} disabled={!canEdit}
-                                  style={{ cursor: canEdit ? 'pointer' : 'default', color: entry.notes ? 'var(--gray-600)' : 'var(--gray-400)', fontSize: '0.8rem', textAlign: 'left', width: '100%' }}>
+                                  className={`${unifiedStyles.notesButton} ${entry.notes ? unifiedStyles.notesPresent : unifiedStyles.notesEmpty}`}>
                                   {entry.notes || (canEdit ? '点击添加' : '-')}
                                 </Button>
                               )}
@@ -543,9 +547,9 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                               <TableCell className={unifiedStyles.u35}>
                                 <div className={unifiedStyles.u36}>
                                   <Button variant="ghost" onClick={() => handleMoveEntry(section.id, entry.id, 'up')} disabled={idx === 0}
-                                    style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === 0 ? 0.3 : 1 }}>↑</Button>
+                                    className={unifiedStyles.moveEntryButton}>↑</Button>
                                   <Button variant="ghost" onClick={() => handleMoveEntry(section.id, entry.id, 'down')} disabled={idx === section.Entries.length - 1}
-                                    style={{ background: 'none', border: 'none', cursor: idx === section.Entries.length - 1 ? 'not-allowed' : 'pointer', color: 'var(--gray-400)', fontSize: '0.8rem', padding: '0.1rem 0.2rem', opacity: idx === section.Entries.length - 1 ? 0.3 : 1 }}>↓</Button>
+                                    className={unifiedStyles.moveEntryButton}>↓</Button>
                                   <Button variant="ghost" onClick={() => setDeleteEntryConfirm(entry.id)}
                                     className={unifiedStyles.u37}>✕</Button>
                                 </div>
@@ -609,20 +613,10 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
                       + 添加一道题目
                     </Button>
                     {sectionNewRows.length > 0 && (
-                      <Button variant="ghost"
+                      <Button variant="primary"
                         onClick={() => saveAllSectionRows(section.id)}
                         disabled={!sectionNewRows.some(r => r.resolved?.found && !r.saving)}
-                        style={{
-                          padding: '0.5rem 1.5rem',
-                          background: sectionNewRows.some(r => r.resolved?.found && !r.saving) ? 'var(--primary)' : 'var(--gray-300)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: sectionNewRows.some(r => r.resolved?.found && !r.saving) ? 'pointer' : 'not-allowed',
-                          fontSize: '0.85rem',
-                          fontWeight: 500,
-                          whiteSpace: 'nowrap',
-                        }}
+                        className={unifiedStyles.saveRowsButton}
                       >
                         保存 ({sectionNewRows.filter(r => r.resolved?.found && !r.saving).length} 题)
                       </Button>
@@ -814,8 +808,7 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
         </div>
         <div className={unifiedStyles.u67}>
           <Button variant="ghost" onClick={onClose} className={unifiedStyles.u68}>取消</Button>
-          <Button variant="ghost" onClick={handleSubmit} disabled={submitting}
-            style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius)', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+          <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
             {submitting ? '发布中...' : '发布'}
           </Button>
         </div>
@@ -957,12 +950,9 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
               type="text" value={keyword} onChange={e => handleKeywordChange(e.target.value)}
               onFocus={() => { if (keyword.trim() && candidates.length > 0) setShowDropdown(true) }}
               placeholder="搜索用户"
-              style={{
-                width: '100%', padding: '0.55rem 1rem',
-                border: `1px solid ${selectedCandidate ? 'var(--success)' : 'var(--border)'}`,
-                borderRadius: '6px', fontSize: '0.95rem', boxSizing: 'border-box',
-                outline: 'none',
-              }}
+              className={unifiedStyles.candidateSearch}
+              aria-invalid={false}
+              data-selected={Boolean(selectedCandidate)}
             />
             {/* 候选人下拉浮层 */}
             {showDropdown && (candidates.length > 0 || searching) && (
@@ -977,23 +967,14 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
                     className={`${styles.candidate} ${selectedCandidate?.id === c.id ? styles.candidateSelected : ''}`}
                   >
                     {/* 头像 */}
-                    <div style={{
-                      width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-                      background: c.avatar ? `url(${getAssetUrl(c.avatar)}) center/cover` : 'var(--primary)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', fontWeight: 600, fontSize: '0.8rem',
-                    }}>
+                    <div className={unifiedStyles.identityAvatar} style={avatarStyle(c.avatar)}>
                       {!c.avatar && (c.name || '?').charAt(0)}
                     </div>
                     <div className={unifiedStyles.u77}>
                       <span className={unifiedStyles.u78}>{c.name}</span>
                       <span className={unifiedStyles.u79}>({c.username})</span>
                     </div>
-                    <span style={{
-                      fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
-                      background: c.type === 'teacher' ? 'var(--info-light)' : 'var(--success-light)',
-                      color: c.type === 'teacher' ? 'var(--primary-hover)' : 'var(--success)',
-                    }}>
+                    <span className={`${unifiedStyles.identityType} ${c.type === 'teacher' ? unifiedStyles.teacherType : unifiedStyles.studentType}`}>
                       {c.type === 'teacher' ? '教师' : '学生'}
                     </span>
                   </Button>
@@ -1010,16 +991,10 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
           </Select>
 
           {/* 提交按钮 */}
-          <Button variant="ghost"
+          <Button variant="primary"
             onClick={handleSubmit}
             disabled={!selectedCandidate || submitting}
-            style={{
-              width: '72px', padding: '0.55rem 0', border: '1px solid var(--border)', borderRadius: '6px',
-              background: selectedCandidate ? 'var(--primary)' : 'white',
-              color: selectedCandidate ? 'white' : 'var(--gray-400)',
-              cursor: selectedCandidate ? 'pointer' : 'not-allowed',
-              fontSize: '0.95rem', fontWeight: 500,
-            }}
+            className={unifiedStyles.shareSubmit}
           >
             {submitting ? '...' : '提交'}
           </Button>
@@ -1030,12 +1005,7 @@ function SharePanelModal({ listId, shares, onClose, onUpdate }: {
           {shares.length > 0 ? shares.map(share => (
             <div key={share.id} className={unifiedStyles.u82}>
               {/* 头像 */}
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-                background: share.targetAvatar ? `url(${getAssetUrl(share.targetAvatar)}) center/cover` : 'var(--primary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'white', fontWeight: 600, fontSize: '0.8rem',
-              }}>
+              <div className={unifiedStyles.identityAvatar} style={avatarStyle(share.targetAvatar)}>
                 {!share.targetAvatar && (share.targetName || '?').charAt(0)}
               </div>
               <div className={unifiedStyles.u77}>

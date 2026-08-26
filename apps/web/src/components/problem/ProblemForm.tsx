@@ -615,67 +615,24 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           {/* Tab 切换 */}
           <div className={unifiedStyles.u11}>
             <Button variant="ghost" type="button" onClick={() => handleTabChange('statement')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'statement' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'statement' ? 'var(--primary)' : 'var(--gray-500)'
-              }}>
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'statement'}>
               题面
             </Button>
             <Button variant="ghost" type="button" onClick={() => handleTabChange('solution')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'solution' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'solution' ? 'var(--primary)' : 'var(--gray-500)'
-              }}>
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'solution'}>
               题解
             </Button>
             <Button variant="ghost" type="button" onClick={() => handleTabChange('judge_settings')}
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: activeTab === 'judge_settings' ? '2px solid var(--primary)' : '2px solid transparent',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  color: activeTab === 'judge_settings' ? 'var(--primary)' : 'var(--gray-500)'
-                }}>
+                className={unifiedStyles.tabButton} aria-selected={activeTab === 'judge_settings'}>
                 评测设置
             </Button>
             <Button variant="ghost" type="button" onClick={() => handleTabChange('settings')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'settings' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'settings' ? 'var(--primary)' : 'var(--gray-500)'
-              }}>
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'settings'}>
               发布设置
             </Button>
             {mode === 'edit' && (
               <Button variant="ghost" type="button" onClick={() => handleTabChange('attachments')}
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: activeTab === 'attachments' ? '2px solid var(--primary)' : '2px solid transparent',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  color: activeTab === 'attachments' ? 'var(--primary)' : 'var(--gray-500)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.25rem'
-                }}>
+                className={`${unifiedStyles.tabButton} ${unifiedStyles.attachmentTab}`} aria-selected={activeTab === 'attachments'}>
                 附件
                 {attachments.length > 0 && (
                   <span className={unifiedStyles.u12}>
@@ -720,27 +677,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                         <div>
                           <div className={unifiedStyles.u20}>
                             <Button variant="ghost" type="button" onClick={() => setEditMode('edit')}
-                              style={{
-                                padding: '0.25rem 0.75rem',
-                                border: '1px solid var(--border)',
-                                borderRadius: '4px',
-                                background: editMode === 'edit' ? 'var(--primary)' : 'white',
-                                color: editMode === 'edit' ? 'white' : 'var(--gray-600)',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem'
-                              }}>
+                              className={unifiedStyles.editorModeButton} aria-pressed={editMode === 'edit'}>
                               编辑
                             </Button>
                             <Button variant="ghost" type="button" onClick={() => setEditMode('preview')}
-                              style={{
-                                padding: '0.25rem 0.75rem',
-                                border: '1px solid var(--border)',
-                                borderRadius: '4px',
-                                background: editMode === 'preview' ? 'var(--primary)' : 'white',
-                                color: editMode === 'preview' ? 'white' : 'var(--gray-600)',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem'
-                              }}>
+                              className={unifiedStyles.editorModeButton} aria-pressed={editMode === 'preview'}>
                               预览
                             </Button>
                           </div>
@@ -969,20 +910,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                         placeholder="题号"
                         className={unifiedStyles.u34}
                       />
-                      <Button variant="ghost"
+                      <Button variant="outline"
                         type="button"
                         onClick={() => handleFetchFromOj(index)}
                         disabled={fetchingFromOj || !binding.platform || !binding.problemId.trim()}
-                        style={{
-                          padding: '0.5rem 0.75rem',
-                          border: '1px solid var(--primary)',
-                          borderRadius: '6px',
-                          background: 'white',
-                          color: 'var(--primary)',
-                          cursor: fetchingFromOj ? 'not-allowed' : 'pointer',
-                          fontSize: '0.75rem',
-                          opacity: fetchingFromOj ? 0.5 : 1
-                        }}
+                        size="sm"
                       >
                         {fetchingFromOj ? '拉取中...' : '拉取'}
                       </Button>
@@ -1048,7 +980,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                               </div>
                             </div>
                           </div>
-                          <Button variant="ghost"
+                          <Button variant="outline" size="sm"
                             type="button"
                             onClick={() => handleAttachmentDelete(attachment.id)}
                             className={unifiedStyles.u42}
@@ -1089,15 +1021,6 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
                             type="button"
                             onClick={() => handleDownloadRemoteAttachment(attachment)}
                             disabled={downloadingAttachment !== null}
-                            style={{
-                              padding: '0.375rem 0.75rem',
-                              border: '1px solid var(--primary)',
-                              background: downloadingAttachment === attachment.filename ? 'var(--gray-200)' : 'white',
-                              color: 'var(--primary)',
-                              borderRadius: '4px',
-                              cursor: downloadingAttachment !== null ? 'not-allowed' : 'pointer',
-                              fontSize: '0.875rem'
-                            }}
                           >
                             {downloadingAttachment === attachment.filename ? '下载中...' : '下载'}
                           </Button>
@@ -1112,7 +1035,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
 
           {/* 提交按钮 */}
           <div className={unifiedStyles.u45}>
-            <Button variant="ghost"
+            <Button variant="primary"
               type="button"
               onClick={() => router.push(mode === 'edit' && problemId ? `${pathPrefix}/problems/${problemId}` : `${pathPrefix}/problems`)}
               className={unifiedStyles.u36}
@@ -1122,16 +1045,6 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
             <Button variant="ghost"
               type="submit"
               disabled={saving}
-              style={{
-                padding: '0.5rem 1.5rem',
-                border: 'none',
-                borderRadius: '6px',
-                background: 'var(--primary)',
-                color: 'white',
-                cursor: saving ? 'not-allowed' : 'pointer',
-                fontSize: '0.875rem',
-                opacity: saving ? 0.7 : 1
-              }}
             >
               {saving ? '保存中...' : '保存'}
             </Button>

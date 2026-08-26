@@ -17,6 +17,8 @@ import {
 import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 
+const conflictColorStyle = (color: string): React.CSSProperties => ({ '--conflict-color': color } as React.CSSProperties)
+
 // ── 可编辑文本框：独立 state，打字时不触发父组件重渲染 ──
 
 function EditableField({
@@ -48,10 +50,8 @@ function EditableField({
         focused.current = false
         if (local !== value) onChange(local)
       }}
-      style={{
-        ...style,
-        ...(error ? { borderColor: 'var(--error)', background: 'var(--error-light)' } : {}),
-      }}
+      style={style}
+      className={error ? unifiedStyles.editableError : undefined}
     />
   )
 }
@@ -304,7 +304,7 @@ export default function ImportPreview({
   // ── 结果页 ──
   if (importResult) {
     return (
-      <div style={{ ...cardStyle, textAlign: 'center' }}>
+      <div style={cardStyle} className={unifiedStyles.resultCard}>
         <h2 className={unifiedStyles.u1}>
           导入完成
         </h2>
@@ -314,9 +314,9 @@ export default function ImportPreview({
             [importResult.createdCount, '创建学生', 'var(--success)'],
             [importResult.invitedCount, '发送邀请', 'var(--primary)'],
             ...(importResult.errorCount > 0 ? [[importResult.errorCount, '失败', 'var(--error)']] : [])
-          ].map(([count, label, color], i) => (
+          ].map(([count, label], i) => (
             <div key={i}>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: color as string }}>{count as number}</div>
+              <div className={unifiedStyles.resultMetric} data-tone={i}>{count as number}</div>
               <div className={unifiedStyles.u3}>{label as string}</div>
             </div>
           ))}
@@ -353,8 +353,8 @@ export default function ImportPreview({
                   .map((d: ImportResultDetail, i: number) => (
                     <TableRow key={i}>
                       <TableCell style={tdStyle}>{d.studentName || d.nickname}</TableCell>
-                      <TableCell style={{ ...tdStyle, fontFamily: 'monospace' }}>{d.systemUsername}</TableCell>
-                      <TableCell style={{ ...tdStyle, fontFamily: 'monospace' }}>{d.tempPassword}</TableCell>
+                      <TableCell style={tdStyle} className={unifiedStyles.monospace}>{d.systemUsername}</TableCell>
+                      <TableCell style={tdStyle} className={unifiedStyles.monospace}>{d.tempPassword}</TableCell>
                       <TableCell style={tdStyle}>{d.username}</TableCell>
                     </TableRow>
                   ))}
@@ -364,11 +364,11 @@ export default function ImportPreview({
         )}
 
         <div className={unifiedStyles.u11}>
-          <Button variant="ghost" onClick={() => onComplete(importResult)} style={btnPrimary}>
+          <Button variant="primary" onClick={() => onComplete(importResult)}>
             返回团队列表
           </Button>
           {importResult.teamId && (
-            <Button variant="ghost" onClick={() => onComplete(importResult)} style={btnOutline}>
+            <Button variant="outline" onClick={() => onComplete(importResult)}>
               查看团队
             </Button>
           )}
@@ -395,16 +395,7 @@ export default function ImportPreview({
 
       {/* 团队标识（仅创建新团队时显示） */}
       {createTeam && (
-        <div style={{
-          padding: '0.75rem 1rem',
-          marginBottom: '1rem',
-          borderRadius: '6px',
-          background: 'var(--gray-50)',
-          border: teamIdError ? '1px solid var(--error)' : '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
+        <div className={unifiedStyles.teamIdPanel} data-error={Boolean(teamIdError)}>
           <span className={unifiedStyles.u12}>
             团队ID *:
           </span>
@@ -424,14 +415,8 @@ export default function ImportPreview({
               }
             }}
             placeholder="请输入团队ID（如 team_2024）"
-            style={{
-              flex: 1,
-              padding: '0.375rem 0.625rem',
-              border: `1px solid ${teamIdError ? 'var(--error)' : 'var(--border)'}`,
-              borderRadius: '4px',
-              fontSize: '0.875rem',
-              fontFamily: 'monospace'
-            }}
+            className={unifiedStyles.teamIdInput}
+            aria-invalid={Boolean(teamIdError)}
           />
           {teamIdValidating && (
             <span className={unifiedStyles.u13}>校验中...</span>
@@ -450,16 +435,7 @@ export default function ImportPreview({
 
       {/* 校验状态汇总 */}
       {validated && (
-        <div style={{
-          padding: '0.75rem 1rem',
-          marginBottom: '1rem',
-          borderRadius: '6px',
-          background: allResolved ? 'var(--success-light)' : 'var(--warning-surface)',
-          border: `1px solid ${allResolved ? 'var(--success-light)' : 'var(--warning-surface-strong)'}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+        <div className={unifiedStyles.validationSummary} data-resolved={allResolved}>
           <span className={unifiedStyles.u16}>
             {allResolved
               ? `全部通过，${clearedMembers.length} 人可以导入`
@@ -467,9 +443,8 @@ export default function ImportPreview({
             }
           </span>
           {validated && clearedMembers.length > 0 && conflictMembers.length > 0 && (
-            <Button variant="ghost"
+            <Button variant="outline" size="sm"
               onClick={() => setShowCleared(!showCleared)}
-              style={{ ...smallBtnOutline, fontSize: '0.75rem' }}
             >
               {showCleared ? '隐藏已通过' : `显示 ${clearedMembers.length} 人已通过`}
             </Button>
@@ -486,12 +461,7 @@ export default function ImportPreview({
             const hasConflict = member.conflictStatus === 'conflict'
 
             return (
-              <div key={index} style={{
-                padding: '1rem',
-                border: `1px solid ${hasConflict ? 'var(--error)' : 'var(--border)'}`,
-                borderRadius: '6px',
-                background: !member.selected ? 'var(--gray-50)' : hasConflict ? 'var(--error-light)' : 'white'
-              }}>
+              <div key={index} className={unifiedStyles.memberCard} data-conflict={hasConflict} data-selected={member.selected}>
                 {/* 顶部行 */}
                 <div className={unifiedStyles.u18}>
                   <Input type="checkbox" checked={member.selected} onChange={() => toggleSelected(index)} />
@@ -523,11 +493,7 @@ export default function ImportPreview({
                         updateMember(index, { username: v, conflictStatus: 'unchecked' })
                         setValidated(false)
                       }}
-                      style={{
-                        ...inputStyle,
-                        borderColor: member.username && !isValidUsername(member.username) ? 'var(--error)' : undefined,
-                        background: member.username && !isValidUsername(member.username) ? 'var(--error-light)' : undefined
-                      }}
+                      style={inputStyle}
                       error={!!(member.username && !isValidUsername(member.username))}
                     />
                     {member.username && !isValidUsername(member.username) && (
@@ -582,19 +548,9 @@ export default function ImportPreview({
                   {hasConflict && member.conflicts.map((conflict, ci) => {
                     const label = CONFLICT_LABELS[conflict.type] || { text: '未知问题', color: 'var(--text-muted)' }
                     return (
-                      <div key={ci} style={{
-                        marginTop: '0.5rem',
-                        padding: '0.75rem',
-                        background: 'var(--text-inverse)',
-                        border: `1px solid ${label.color}33`,
-                        borderRadius: '6px',
-                        borderLeft: `3px solid ${label.color}`
-                      }}>
+                      <div key={ci} className={unifiedStyles.conflictCard} style={conflictColorStyle(label.color)}>
                         <div className={unifiedStyles.u18}>
-                          <span style={{
-                            padding: '0.125rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem',
-                            background: `${label.color}22`, color: label.color, fontWeight: 600
-                          }}>
+                          <span className={unifiedStyles.conflictBadge}>
                             {label.text}
                           </span>
                         </div>
@@ -663,25 +619,16 @@ export default function ImportPreview({
       <div className={unifiedStyles.u36}>
         <Button variant="ghost" onClick={onBack} style={btnSecondary}>上一步</Button>
         <div className={unifiedStyles.u37}>
-          <Button variant="ghost"
+          <Button variant="outline"
             onClick={handleValidate}
             disabled={validatingMembers || selectedMembers.length === 0}
-            style={{
-              ...btnOutline,
-              opacity: validatingMembers || selectedMembers.length === 0 ? 0.7 : 1
-            }}
           >
             {validatingMembers ? '校验中...' : validated ? '重新校验' : '校验'}
           </Button>
           {validated && allResolved && (
-            <Button variant="ghost"
+            <Button variant="primary"
               onClick={handleImport}
               disabled={importing}
-              style={{
-                ...btnPrimary,
-                opacity: importing ? 0.7 : 1,
-                cursor: importing ? 'not-allowed' : 'pointer'
-              }}
             >
               {importing ? '导入中...' : `确认导入 (${selectedMembers.length} 人)`}
             </Button>

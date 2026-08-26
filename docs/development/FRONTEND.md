@@ -23,7 +23,7 @@ source_of_truth: apps/web/src
 展开状态按 `userId + role + workspaceMode` 写入本机偏好。账号身份卡位于展开侧栏左下角，点击后向上
 打开资料、安全、平台绑定和退出菜单，顶部不重复展示头像。
 
-页面仍有部分历史内联样式，整改基线见[设计系统](DESIGN_SYSTEM.md)。当前由 `AppShell`
+业务页面静态内联样式已清零，动态尺寸、坐标和 CSS 自定义变量的受控例外见[设计系统](DESIGN_SYSTEM.md)。当前由 `AppShell`
 独占普通页面的宽度、边距和导航；迁移中的旧页面通过 `data-page-host` 兼容层去除第二层
 页面边距，新增和已迁移页面使用 `PageFrame`。
 训练详情等全宽工作区通过显式 layout variant 获得空间，不在业务组件内部重新创建整页

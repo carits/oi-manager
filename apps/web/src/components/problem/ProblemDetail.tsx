@@ -553,15 +553,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     return problem?.permissions.canEdit ?? false
   }
 
-  const getDifficultyColor = (difficulty: string | null) => {
-    switch (difficulty) {
-      case '简单': return 'var(--success)'
-      case '中等': return 'var(--warning)'
-      case '困难': return 'var(--error)'
-      default: return 'var(--gray-500)'
-    }
-  }
-
   // 获取选中的题面
   const getSelectedStatement = (): Statement | null => {
     if (!problem) return null
@@ -696,16 +687,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               </div>
               <div className={unifiedStyles.u10}>
                 {problem.difficulty && (
-                  <span style={{ color: getDifficultyColor(problem.difficulty) }}>{problem.difficulty}</span>
+                  <span className={unifiedStyles.difficulty} data-difficulty={problem.difficulty}>{problem.difficulty}</span>
                 )}
                 {problem.timeLimit && <span>时间限制: {problem.timeLimit}ms</span>}
                 {problem.memoryLimit && <span>空间限制: {problem.memoryLimit}MB</span>}
-                <span style={{
-                  padding: '0.125rem 0.5rem',
-                  borderRadius: '4px',
-                  background: problem.libraryScope === 'platform' ? 'var(--info-light)' : 'var(--gray-100)',
-                  color: problem.libraryScope === 'platform' ? 'var(--primary-hover)' : 'var(--gray-600)'
-                }}>
+                <span className={unifiedStyles.libraryScope} data-scope={problem.libraryScope}>
                   {problem.libraryScope === 'platform' ? '平台题库' : '校内题库'}
                 </span>
                 {problem.libraryScope === 'school' && (
@@ -716,10 +702,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             {(canModify() || problem.permissions.canCopyToSchool) && (
               <div className={unifiedStyles.u11}>
                 {problem.permissions.canCopyToSchool && (
-                  <Button variant="ghost"
+                  <Button variant="outline"
                     onClick={() => void copyToSchool()}
                     disabled={copyingToSchool}
-                    style={{ padding: '0.5rem 1rem', border: '1px solid var(--border)', background: 'white', borderRadius: '6px', cursor: copyingToSchool ? 'wait' : 'pointer', fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
+                    className={unifiedStyles.copyButton}
                   >
                     <Copy size={15} aria-hidden="true" />{copyingToSchool ? '复制中' : '复制到校内'}
                   </Button>
@@ -766,31 +752,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           <div className={unifiedStyles.u11}>
             <Button variant="ghost"
               onClick={() => handleTabChange('statement')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'statement' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'statement' ? 'var(--primary)' : 'var(--gray-500)',
-                fontWeight: activeTab === 'statement' ? 600 : 400
-              }}
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'statement'}
             >
               题面
             </Button>
             <Button variant="ghost"
               onClick={() => handleTabChange('solution')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'solution' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'solution' ? 'var(--primary)' : 'var(--gray-500)',
-                fontWeight: activeTab === 'solution' ? 600 : 400
-              }}
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'solution'}
             >
               题解
             </Button>
@@ -799,19 +767,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 handleTabChange('attachments')
                 setHasVisitedAttachments(true)
               }}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'attachments' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'attachments' ? 'var(--primary)' : 'var(--gray-500)',
-                fontWeight: activeTab === 'attachments' ? 600 : 400,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
+              className={`${unifiedStyles.tabButton} ${unifiedStyles.attachmentTab}`} aria-selected={activeTab === 'attachments'}
             >
               附件
               {attachments.length > 0 && !hasVisitedAttachments && (
@@ -822,47 +778,20 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             </Button>
             <Button variant="ghost"
               onClick={() => handleTabChange('my-content')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'my-content' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'my-content' ? 'var(--primary)' : 'var(--gray-500)',
-                fontWeight: activeTab === 'my-content' ? 600 : 400,
-              }}
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'my-content'}
             >
               我的题解
             </Button>
             <Button variant="ghost"
               onClick={() => handleTabChange('records')}
-              style={{
-                padding: '0.75rem 1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: activeTab === 'records' ? '2px solid var(--primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                color: activeTab === 'records' ? 'var(--primary)' : 'var(--gray-500)',
-                fontWeight: activeTab === 'records' ? 600 : 400
-              }}
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'records'}
             >
               提交记录
             </Button>
             {problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
               <Button variant="ghost"
                 onClick={() => handleTabChange('hack')}
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: activeTab === 'hack' ? '2px solid var(--primary)' : '2px solid transparent',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  color: activeTab === 'hack' ? 'var(--primary)' : 'var(--gray-500)',
-                  fontWeight: activeTab === 'hack' ? 600 : 400,
-                }}
+                className={unifiedStyles.tabButton} aria-selected={activeTab === 'hack'}
               >
                 Hack{problem.hack.acceptedCount > 0 ? ` ${problem.hack.acceptedCount}` : ''}
               </Button>
@@ -1052,15 +981,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         >#{s.id}</TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.username}</TableCell>
                         <TableCell className={unifiedStyles.u44}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            background: s.result === 'accepted' ? 'var(--success-light)' : s.result === 'queuing' ? 'var(--info-light)' : 'var(--error-light)',
-                            color: s.result === 'accepted' ? 'var(--success-text)' : s.result === 'queuing' ? 'var(--info-text)' : 'var(--error-text)',
-                          }}>
+                          <span className={unifiedStyles.submissionResult} data-result={s.result}>
                             {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
                           </span>
                         </TableCell>
@@ -1107,24 +1028,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
                 return (
                   <>
-                    <Button variant="ghost"
+                    <Button variant="primary"
                       onClick={() => !alreadyTranslated && setShowTranslateModal(true)}
                       disabled={aiLoading === 'translate' || !!alreadyTranslated}
-                      style={{
-                        padding: '0.5rem',
-                        background: alreadyTranslated ? 'var(--bg-hover)' : 'var(--primary)',
-                        color: alreadyTranslated ? 'var(--text-muted)' : 'white',
-                        border: alreadyTranslated ? '1px solid var(--border)' : 'none',
-                        borderRadius: '6px',
-                        cursor: (aiLoading === 'translate' || alreadyTranslated) ? 'not-allowed' : 'pointer',
-                        fontSize: '0.8rem',
-                        fontWeight: 500,
-                        opacity: aiLoading === 'translate' ? 0.7 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.25rem'
-                      }}
+                      className={unifiedStyles.aiAction}
                     >
                       {aiLoading === 'translate' ? '翻译中...' : alreadyTranslated ? '已翻译' : '翻译'}
                     </Button>
@@ -1133,24 +1040,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                         已有{targetLabel}版本
                       </div>
                     )}
-                    <Button variant="ghost"
+                    <Button variant="secondary"
                       onClick={() => !alreadyFormatted && handleFormat()}
                       disabled={aiLoading === 'format' || !!alreadyFormatted}
-                      style={{
-                        padding: '0.5rem',
-                        background: alreadyFormatted ? 'var(--gray-100)' : 'var(--gray-100)',
-                        color: alreadyFormatted ? 'var(--gray-400)' : 'var(--gray-700)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        cursor: (aiLoading === 'format' || alreadyFormatted) ? 'not-allowed' : 'pointer',
-                        fontSize: '0.8rem',
-                        fontWeight: 500,
-                        opacity: aiLoading === 'format' ? 0.7 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.25rem'
-                      }}
+                      className={unifiedStyles.aiAction}
                     >
                       {aiLoading === 'format' ? '格式化中...' : alreadyFormatted ? '✨ 已格式化' : '✨ 格式化'}
                     </Button>
@@ -1205,17 +1098,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   <Button variant="ghost"
                     key={m.key}
                     onClick={() => setSubmitMethod(m.key)}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.875rem',
-                      border: '1px solid',
-                      borderColor: submitMethod === m.key ? 'var(--primary)' : 'var(--border)',
-                      borderRadius: '6px',
-                      background: submitMethod === m.key ? 'var(--info-light)' : 'white',
-                      color: submitMethod === m.key ? 'var(--primary)' : 'var(--gray-500)',
-                      cursor: 'pointer',
-                      fontWeight: submitMethod === m.key ? 600 : 400,
-                    }}
+                    className={unifiedStyles.submitMethod} aria-selected={submitMethod === m.key}
                   >
                     {m.label}
                   </Button>
@@ -1275,20 +1158,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             placeholder="在此输入代码..."
             value={submitCode}
             onChange={e => setSubmitCode(e.target.value)}
-            style={{
-              width: '100%',
-              minHeight: '350px',
-              padding: '1rem',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              fontSize: '0.875rem',
-              fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-              lineHeight: 1.5,
-              resize: 'vertical',
-              boxSizing: 'border-box',
-              background: 'white',
-              color: 'var(--text-primary)',
-            }}
+            className={unifiedStyles.codeInput}
           />
           )}
 
@@ -1298,38 +1168,16 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               {submitMethod === 'local' ? '本地评测' : '远程归档：只同步展示，不参与评测或计分'}
             </span>
             {submitMethod === 'archive' ? (
-              <Button variant="ghost"
+              <Button variant="primary"
                 onClick={handleArchiveSync}
                 disabled={submitLoading || !platformBinding?.bound}
-                style={{
-                  padding: '0.625rem 2rem',
-                  background: platformBinding?.bound ? 'var(--primary)' : 'var(--gray-300)',
-                  color: platformBinding?.bound ? 'white' : 'var(--gray-500)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  cursor: platformBinding?.bound ? 'pointer' : 'not-allowed',
-                  opacity: submitLoading ? 0.7 : 1,
-                }}
               >
                 {submitLoading ? '同步中...' : '同步归档'}
               </Button>
             ) : (
-              <Button variant="ghost"
+              <Button variant="primary"
                 onClick={handleSubmitCode}
                 disabled={submitLoading || !submitCode.trim()}
-                style={{
-                  padding: '0.625rem 2rem',
-                  background: !submitLoading && submitCode.trim() ? 'var(--primary)' : 'var(--gray-300)',
-                  color: !submitLoading && submitCode.trim() ? 'white' : 'var(--gray-500)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  cursor: !submitLoading && submitCode.trim() ? 'pointer' : 'not-allowed',
-                  opacity: submitLoading ? 0.7 : 1,
-                }}
               >
                 {submitLoading ? '提交中...' : '提交'}
               </Button>

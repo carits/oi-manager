@@ -168,15 +168,6 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [noteSaving])
 
-  const getDifficultyColor = (difficulty: string | null) => {
-    switch (difficulty) {
-      case '简单': return 'var(--success)'
-      case '中等': return 'var(--warning)'
-      case '困难': return 'var(--error)'
-      default: return 'var(--gray-500)'
-    }
-  }
-
   if (loading) {
     return (
       <div className={unifiedStyles.u1}>
@@ -202,27 +193,13 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
           <span className={unifiedStyles.u8}>{problem.problemId}</span>
           <h1 className={unifiedStyles.u9}>{problem.title}</h1>
           {problem.difficulty && (
-            <span style={{
-              fontSize: '0.7rem',
-              padding: '0.125rem 0.375rem',
-              borderRadius: '4px',
-              background: problem.difficulty === '简单' ? 'var(--success-light)' : problem.difficulty === '中等' ? 'var(--warning-light)' : 'var(--error-light)',
-              color: getDifficultyColor(problem.difficulty)
-            }}>
+            <span className={unifiedStyles.difficultyBadge} data-difficulty={problem.difficulty}>
               {problem.difficulty}
             </span>
           )}
         </div>
         <div className={unifiedStyles.u5}>
-          <div style={{
-            padding: '0.25rem 0.5rem',
-            borderRadius: '4px',
-            background: noteSaving ? 'var(--warning-light)' : noteLastSaved ? 'var(--success-light)' : 'transparent',
-            fontSize: '0.75rem',
-            color: noteSaving ? 'var(--warning-text)' : noteLastSaved ? 'var(--success-text)' : 'var(--gray-400)',
-            minWidth: '100px',
-            textAlign: 'center'
-          }}>
+          <div className={`${unifiedStyles.saveStatus} ${noteSaving ? unifiedStyles.savePending : noteLastSaved ? unifiedStyles.saveComplete : ''}`}>
             {noteSaving ? (
               <span>⏳ 保存中...</span>
             ) : noteLastSaved ? (
@@ -231,19 +208,9 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
               <span>输入后自动保存</span>
             )}
           </div>
-          <Button variant="ghost"
+          <Button variant="primary" size="sm"
             onClick={handleSave}
             disabled={noteSaving}
-            style={{
-              padding: '0.375rem 0.875rem',
-              background: noteSaving ? 'var(--gray-300)' : 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: noteSaving ? 'not-allowed' : 'pointer',
-              fontSize: '0.8rem',
-              fontWeight: 500
-            }}
           >
             {noteSaving ? '保存中...' : '保存'}
           </Button>
@@ -318,9 +285,9 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             <Pencil aria-hidden="true" size={14} />
             <span>思路记录</span>
             <div className={unifiedStyles.u13} />
-            <Button variant="ghost" onClick={() => setEditMode('edit')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'edit' ? 'var(--primary)' : 'transparent', color: editMode === 'edit' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>编辑</Button>
-            <Button variant="ghost" onClick={() => setEditMode('preview')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'preview' ? 'var(--primary)' : 'transparent', color: editMode === 'preview' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>预览</Button>
-            <Button variant="ghost" onClick={() => setEditMode('split')} style={{ padding: '0.2rem 0.5rem', border: 'none', borderRadius: 'var(--radius-sm)', background: editMode === 'split' ? 'var(--primary)' : 'transparent', color: editMode === 'split' ? 'white' : 'var(--gray-500)', cursor: 'pointer', fontSize: '0.7rem' }}>分栏</Button>
+            <Button variant="ghost" onClick={() => setEditMode('edit')} className={unifiedStyles.modeButton} aria-pressed={editMode === 'edit'}>编辑</Button>
+            <Button variant="ghost" onClick={() => setEditMode('preview')} className={unifiedStyles.modeButton} aria-pressed={editMode === 'preview'}>预览</Button>
+            <Button variant="ghost" onClick={() => setEditMode('split')} className={unifiedStyles.modeButton} aria-pressed={editMode === 'split'}>分栏</Button>
           </div>
 
           <div className={unifiedStyles.u20}>
@@ -346,20 +313,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
 ## 复杂度分析
 - 时间复杂度：O(n)
 - 空间复杂度：O(n)`}
-                style={{
-                  flex: editMode === 'split' ? 1 : undefined,
-                  width: editMode === 'edit' ? '100%' : undefined,
-                  minHeight: '100%',
-                  padding: '0.75rem',
-                  border: 'none',
-                  fontSize: '0.85rem',
-                  fontFamily: 'Consolas, Monaco, monospace',
-                  lineHeight: 1.6,
-                  resize: 'none',
-                  background: editMode === 'split' ? 'var(--bg-muted)' : 'white',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className={`${unifiedStyles.noteEditor} ${editMode === 'split' ? unifiedStyles.splitPane : unifiedStyles.fullPane}`}
                 spellCheck={false}
               />
             )}
@@ -367,15 +321,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
             {editMode === 'split' && <div className={unifiedStyles.u21} />}
 
             {(editMode === 'preview' || editMode === 'split') && (
-              <div style={{
-                flex: editMode === 'split' ? 1 : undefined,
-                width: editMode === 'preview' ? '100%' : undefined,
-                minHeight: '100%',
-                padding: '0.75rem',
-                overflow: 'auto',
-                background: 'white',
-                boxSizing: 'border-box'
-              }}>
+              <div className={`${unifiedStyles.notePreview} ${editMode === 'split' ? unifiedStyles.splitPane : unifiedStyles.fullPane}`}>
                 {noteContent.trim() ? (
                   <div className={unifiedStyles.u17}>
                     <MarkdownRenderer content={noteContent} />

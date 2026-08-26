@@ -1,14 +1,5 @@
 {
-  "staticInlineStyle": {
-    "apps/web/src/components/problem/JudgeSettingsTab.tsx": 23,
-    "apps/web/src/components/problem/ProblemDetail.tsx": 16,
-    "apps/web/src/components/problem/ProblemForm.tsx": 10,
-    "apps/web/src/components/problem/ProblemListDetailPage.tsx": 11,
-    "apps/web/src/components/problem/ProblemNote.tsx": 8,
-    "apps/web/src/components/team-import/ImportPreview.tsx": 15,
-    "apps/web/src/components/training/components/TrainingProblemDetail.tsx": 15,
-    "apps/web/src/components/training/components/TrainingSubmissionPanel.tsx": 1
-  },
+  "staticInlineStyle": {},
   "nativeButton": {},
   "nativeInput": {},
   "nativeTable": {},

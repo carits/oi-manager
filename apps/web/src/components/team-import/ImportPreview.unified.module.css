@@ -244,3 +244,20 @@
   display: flex;
   gap: 0.75rem;
 }
+.editableError { border-color: var(--error); background: var(--error-light); }
+.resultCard { text-align: center; }
+.resultMetric { font-size: 2rem; font-weight: 700; }
+.resultMetric[data-tone='0'] { color: var(--success); }
+.resultMetric[data-tone='1'] { color: var(--primary); }
+.resultMetric[data-tone='2'] { color: var(--error); }
+.monospace { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.teamIdPanel { padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 6px; background: var(--gray-50); border: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; }
+.teamIdPanel[data-error='true'] { border-color: var(--error); }
+.teamIdInput { flex: 1; padding: 0.375rem 0.625rem; border-radius: 4px; font-size: 0.875rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.validationSummary { padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 6px; background: var(--warning-surface); border: 1px solid var(--warning-surface-strong); display: flex; justify-content: space-between; align-items: center; }
+.validationSummary[data-resolved='true'] { background: var(--success-light); border-color: var(--success-light); }
+.memberCard { padding: 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); }
+.memberCard[data-selected='false'] { background: var(--gray-50); }
+.memberCard[data-conflict='true'][data-selected='true'] { border-color: var(--error); background: var(--error-light); }
+.conflictCard { margin-top: 0.5rem; padding: 0.75rem; background: var(--text-inverse); border: 1px solid color-mix(in srgb, var(--conflict-color) 20%, transparent); border-left: 3px solid var(--conflict-color); border-radius: 6px; }
+.conflictBadge { padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; background: color-mix(in srgb, var(--conflict-color) 13%, transparent); color: var(--conflict-color); font-weight: 600; }

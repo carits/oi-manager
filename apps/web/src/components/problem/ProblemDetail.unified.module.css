@@ -440,3 +440,19 @@
   font-size: 0.8rem;
   color: var(--gray-400);
 }
+.difficulty[data-difficulty='简单'] { color: var(--success); }
+.difficulty[data-difficulty='中等'] { color: var(--warning); }
+.difficulty:not([data-difficulty='简单']):not([data-difficulty='中等']) { color: var(--error); }
+.libraryScope { padding: 0.125rem 0.5rem; border-radius: 4px; background: var(--gray-100); color: var(--gray-600); }
+.libraryScope[data-scope='platform'] { background: var(--info-light); color: var(--primary-hover); }
+.copyButton { display: inline-flex; align-items: center; gap: 0.375rem; }
+.tabButton { padding: 0.75rem 1rem; border: none; border-bottom: 2px solid transparent; border-radius: 0; font-size: 0.875rem; color: var(--gray-500); font-weight: 400; }
+.tabButton[aria-selected='true'] { border-bottom-color: var(--primary); color: var(--primary); font-weight: 600; }
+.attachmentTab { display: flex; align-items: center; gap: 0.25rem; }
+.submissionResult { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 500; background: var(--error-light); color: var(--error-text); }
+.submissionResult[data-result='accepted'] { background: var(--success-light); color: var(--success-text); }
+.submissionResult[data-result='queuing'], .submissionResult[data-result='judging'] { background: var(--info-light); color: var(--info-text); }
+.aiAction { display: flex; align-items: center; justify-content: center; gap: 0.25rem; }
+.submitMethod { padding: 0.5rem 1rem; font-size: 0.875rem; border: 1px solid var(--border); border-radius: 6px; color: var(--gray-500); font-weight: 400; }
+.submitMethod[aria-selected='true'] { border-color: var(--primary); background: var(--info-light); color: var(--primary); font-weight: 600; }
+.codeInput { width: 100%; min-height: 350px; padding: 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.875rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.5; resize: vertical; box-sizing: border-box; background: var(--bg-card); color: var(--text-primary); }

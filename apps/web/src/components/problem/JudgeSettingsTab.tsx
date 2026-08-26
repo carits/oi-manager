@@ -823,20 +823,20 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         <div className={unifiedStyles.u3}>
           <label className={unifiedStyles.u4}>时间限制</label>
           <Input type="number" value={timeLimit} onChange={(e) => onTimeLimitChange(e.target.value)}
-            placeholder="1000" style={{ ...inputStyle, width: '100px' }} />
+            placeholder="1000" style={inputStyle} className={unifiedStyles.limitInput} />
           <span className={unifiedStyles.u5}>ms</span>
         </div>
         <div className={unifiedStyles.u3}>
           <label className={unifiedStyles.u4}>内存限制</label>
           <Input type="number" value={memoryLimit} onChange={(e) => onMemoryLimitChange(e.target.value)}
-            placeholder="256" style={{ ...inputStyle, width: '100px' }} />
+            placeholder="256" style={inputStyle} className={unifiedStyles.limitInput} />
           <span className={unifiedStyles.u5}>MB</span>
         </div>
         <div className={unifiedStyles.u6}>
           <Button variant="ghost" type="button" onClick={() => setYamlCollapsed(!yamlCollapsed)} style={btnOutline}>
             {yamlCollapsed ? '查看 YAML' : '收起 YAML'}
           </Button>
-          <Button variant="ghost" type="button" onClick={() => handleSaveConfig()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}>
+          <Button variant="primary" type="button" onClick={() => handleSaveConfig()} disabled={saving}>
             {saving ? '保存中...' : '保存评测配置'}
           </Button>
         </div>
@@ -848,7 +848,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           <div className={unifiedStyles.u8}>
             config.yaml
           </div>
-          <pre style={{ margin: 0, padding: '1rem', fontSize: '0.8125rem', fontFamily: '"SF Mono", "Fira Code", monospace', lineHeight: 1.6, background: 'var(--gray-50)', color: 'var(--gray-800)', whiteSpace: 'pre' }}>
+          <pre className={unifiedStyles.yamlPreview}>
             {yamlPreview}
           </pre>
         </div>
@@ -864,17 +864,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             }
             setActiveTab(key)
           }}
-            style={{
-              padding: '0.625rem 1.25rem',
-              fontSize: '0.875rem',
-              fontWeight: activeTab === key ? 600 : 400,
-              color: activeTab === key ? 'var(--primary)' : 'var(--gray-500)',
-              border: 'none',
-              borderBottom: activeTab === key ? '2px solid var(--primary)' : '2px solid transparent',
-              background: 'transparent',
-              cursor: 'pointer',
-              marginBottom: '-2px',
-            }}
+            className={unifiedStyles.tabButton} aria-selected={activeTab === key}
           >
             {label}
             {key === 'testdata' && (testdataFiles.length > 0 || stagedFiles.length > 0) && (
@@ -911,7 +901,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     setSubtasks([{ id: 1, score: 100, type: 'min', cases }])
                     setExpandedSubtasks(new Set([1]))
                   }
-                }} style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem', borderRadius: '6px', border: judgeMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)', background: judgeMode === mode ? 'var(--primary-tint)' : 'white', color: judgeMode === mode ? 'var(--primary)' : 'var(--gray-600)', fontWeight: judgeMode === mode ? 600 : 400, cursor: 'pointer' }}>
+                }} className={unifiedStyles.optionButton} aria-selected={judgeMode === mode}>
                   {label}
                 </Button>
               ))}
@@ -927,16 +917,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             <div className={unifiedStyles.u11}>
               {PROBLEM_TYPES.map(pt => (
                 <Button variant="ghost" type="button" key={pt.value} onClick={() => setProblemType(pt.value)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.8125rem',
-                    borderRadius: '6px',
-                    border: problemType === pt.value ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: problemType === pt.value ? 'var(--primary-tint)' : 'white',
-                    color: problemType === pt.value ? 'var(--primary)' : 'var(--gray-600)',
-                    fontWeight: problemType === pt.value ? 600 : 400,
-                    cursor: 'pointer',
-                  }}
+                  className={unifiedStyles.optionButton} aria-selected={problemType === pt.value}
                 >
                   {pt.label}
                 </Button>
@@ -952,13 +933,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               <div className={unifiedStyles.u13}>
                 {[{ v: 'default', l: '默认' }, { v: 'testlib', l: 'testlib' }, ...(judgeMode === 'oi' ? [{ v: 'lemon', l: 'Lemon' }] : []), { v: 'other', l: '其他' }].map(o => (
                   <Button variant="ghost" type="button" key={o.v} onClick={() => { setCheckerType(o.v); if (o.v === 'testlib') setCheckerCategory('preset') }}
-                    style={{
-                      padding: '0.375rem 0.75rem', fontSize: '0.8125rem', borderRadius: '6px',
-                      border: checkerType === o.v ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      background: checkerType === o.v ? 'var(--primary-tint)' : 'white',
-                      color: checkerType === o.v ? 'var(--primary)' : 'var(--gray-600)',
-                      cursor: 'pointer',
-                    }}
+                    className={`${unifiedStyles.optionButton} ${unifiedStyles.optionButtonSmall}`} aria-selected={checkerType === o.v}
                   >{o.l}</Button>
                 ))}
               </div>
@@ -1023,7 +998,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {problemType === 'interactive' && (
             <div style={cardStyle}>
               <div style={sectionTitle}>交互器 (Interactor)</div>
-              <div style={{ ...gridRow, gridTemplateColumns: '2fr 1fr' }}>
+              <div style={gridRow} className={unifiedStyles.twoToOneGrid}>
                 <div>
                   <label style={fieldLabel}>Interactor 文件</label>
                   <Input type="text" value={interactorFile} onChange={(e) => setInteractorFile(e.target.value)} placeholder="如: interactor.cpp" style={inputStyle} />
@@ -1042,7 +1017,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {problemType === 'communication' && (
             <div style={cardStyle}>
               <div style={sectionTitle}>管理器 (Manager)</div>
-              <div style={{ ...gridRow, gridTemplateColumns: '2fr 1fr' }}>
+              <div style={gridRow} className={unifiedStyles.twoToOneGrid}>
                 <div>
                   <label style={fieldLabel}>Manager 文件</label>
                   <Input type="text" value={managerFile} onChange={(e) => setManagerFile(e.target.value)} placeholder="如: manager.cpp" style={inputStyle} />
@@ -1116,13 +1091,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
               <div style={sectionTitle}>语言限制</div>
               <div className={unifiedStyles.u20}>
                 {LANGUAGE_OPTIONS.filter(o => o.value).map(lang => (
-                  <label key={lang.value} style={{
-                    display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8125rem', cursor: 'pointer',
-                    padding: '0.25rem 0.625rem', borderRadius: '6px',
-                    border: langs.includes(lang.value) ? '1px solid var(--primary)' : '1px solid var(--border)',
-                    background: langs.includes(lang.value) ? 'var(--primary-tint-subtle)' : 'transparent',
-                    color: langs.includes(lang.value) ? 'var(--primary)' : 'var(--gray-600)',
-                  }}>
+                  <label key={lang.value} className={unifiedStyles.languageOption} data-selected={langs.includes(lang.value)}>
                     <Input type="checkbox" checked={langs.includes(lang.value)}
                       onChange={(e) => e.target.checked ? setLangs([...langs, lang.value]) : setLangs(langs.filter(l => l !== lang.value))} />
                     {lang.label}
@@ -1153,7 +1122,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {/* 未分配测试点 */}
           {unassignedCases.length > 0 && (
             <div style={cardStyle}>
-              <div style={{ ...sectionTitle, color: 'var(--warning)' }}>未分配测试点 ({unassignedCases.length})</div>
+              <div style={sectionTitle} className={unifiedStyles.warningTitle}>未分配测试点 ({unassignedCases.length})</div>
               <div className={unifiedStyles.u24}>
                 {unassignedCases.map((c, i) => (
                   <span key={i} className={unifiedStyles.u25}>
@@ -1163,7 +1132,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                 {subtasks.length > 0 && (
                   <div className={unifiedStyles.u26}>
                     <span className={unifiedStyles.u5}>全部分配到:</span>
-                    <Select aria-label="选择" onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} style={{ ...selectStyle, width: '160px' }} defaultValue="">
+                    <Select aria-label="选择" onChange={(e) => { const sid = parseInt(e.target.value); if (sid) assignCasesToSubtask(sid, unassignedCases); e.target.value = '' }} style={selectStyle} className={unifiedStyles.assignmentSelect} defaultValue="">
                       <option value="" disabled>选择子任务...</option>
                       {subtasks.map(st => <option key={st.id} value={st.id}>子任务 {st.id}</option>)}
                     </Select>
@@ -1194,8 +1163,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                   {st.if && st.if.length > 0 && (
                     <span className={unifiedStyles.u33}>依赖: {st.if.join(', ')}</span>
                   )}
-                  <Button variant="ghost" type="button" onClick={(e) => { e.stopPropagation(); deleteSubtask(st.id) }}
-                    style={{ ...btnDanger, marginLeft: 'auto' }}>删除</Button>
+                  <Button variant="danger" size="sm" type="button" onClick={(e) => { e.stopPropagation(); deleteSubtask(st.id) }}
+                    className={unifiedStyles.deleteSubtask}>删除</Button>
                 </div>
 
                 {/* 展开内容 */}
@@ -1293,13 +1262,13 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
         <div style={cardStyle}>
           <div style={sectionTitle}>Checker 文件</div>
           <div className={unifiedStyles.u48}>
-            <label style={{ ...btnPrimary, cursor: checkerUploading ? 'not-allowed' : 'pointer' }}>
+            <label className={unifiedStyles.uploadButton} data-disabled={checkerUploading}>
               {checkerUploading ? '上传中...' : '上传 Checker'}
               <Input ref={checkerInputRef} type="file" multiple accept=".cpp,.cc,.cxx" onChange={handleCheckerUpload} className={unifiedStyles.u49} disabled={checkerUploading} />
             </label>
             <span className={unifiedStyles.u5}>上传 Checker C++ 源文件；系统已内置 testlib.h。</span>
           </div>
-          {checkerFiles.map(file => <div key={file.id} className={unifiedStyles.u50}><code>{file.fileName}</code><Button variant="ghost" type="button" onClick={() => handleCheckerDelete(file)} style={btnDanger}>删除</Button></div>)}
+          {checkerFiles.map(file => <div key={file.id} className={unifiedStyles.u50}><code>{file.fileName}</code><Button variant="danger" size="sm" type="button" onClick={() => handleCheckerDelete(file)}>删除</Button></div>)}
         </div>
       )}
 
@@ -1313,11 +1282,11 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
             </p>
             <div className={unifiedStyles.u53}>
               {problemId && testdataFiles.length > 0 && (
-                <Button variant="ghost" type="button" onClick={handleDownloadAllTestdata} disabled={downloadingAll} style={{ ...btnOutline, opacity: downloadingAll ? 0.7 : 1 }}>
+                <Button variant="outline" type="button" onClick={handleDownloadAllTestdata} disabled={downloadingAll}>
                   {downloadingAll ? '\u4e0b\u8f7d\u4e2d...' : '\u4e0b\u8f7d\u6570\u636e\u5305'}
                 </Button>
               )}
-              <label style={{ ...btnPrimary, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.7 : 1 }}>
+              <label className={unifiedStyles.uploadButton} data-disabled={uploading}>
                 {uploading ? '\u4e0a\u4f20\u4e2d...' : '\u4e0a\u4f20\u6587\u4ef6'}
                 <Input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" className={unifiedStyles.u49} disabled={uploading} />
               </label>
@@ -1328,8 +1297,8 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {(() => {
             const pairs = !problemId ? stagedPairs : testdataPairs
             return pairs.length > 0 ? (
-              <div style={{ ...cardStyle, background: 'var(--success-tint)', borderColor: 'var(--success-border)' }}>
-                <div style={{ ...sectionTitle, color: 'var(--success)' }}>已识别测试点 ({pairs.length})</div>
+              <div style={cardStyle} className={unifiedStyles.recognizedCard}>
+                <div style={sectionTitle} className={unifiedStyles.successTitle}>已识别测试点 ({pairs.length})</div>
                 <div className={unifiedStyles.u20}>
                   {pairs.map((pair, i) => (
                     <span key={i} className={unifiedStyles.u54}>
@@ -1362,7 +1331,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                       {stagedFiles.map((file, i) => (
                         <TableRow key={i} className={unifiedStyles.u64}>
                           <TableCell className={unifiedStyles.u65}>
-                            <span style={{ color: file.name.endsWith('.in') ? 'var(--primary)' : file.name.endsWith('.out') || file.name.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
+                            <span className={unifiedStyles.testdataName} data-kind={file.name.endsWith('.in') ? 'input' : file.name.endsWith('.out') || file.name.endsWith('.ans') ? 'output' : 'other'}>
                               {file.name}
                             </span>
                           </TableCell>
@@ -1403,7 +1372,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                     {testdataFiles.map(file => (
                       <TableRow key={file.id} className={unifiedStyles.u64}>
                         <TableCell className={unifiedStyles.u65}>
-                          <span style={{ color: file.filename.endsWith('.in') ? 'var(--primary)' : file.filename.endsWith('.out') || file.filename.endsWith('.ans') ? 'var(--success)' : 'var(--gray-700)' }}>
+                          <span className={unifiedStyles.testdataName} data-kind={file.filename.endsWith('.in') ? 'input' : file.filename.endsWith('.out') || file.filename.endsWith('.ans') ? 'output' : 'other'}>
                             {file.filename}
                           </span>
                         </TableCell>
@@ -1411,12 +1380,10 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
                         <TableCell className={unifiedStyles.u66}>{new Date(file.uploadedAt).toLocaleString('zh-CN')}</TableCell>
                         <TableCell className={unifiedStyles.u69}>
                           <div className={unifiedStyles.u71}>
-                            <Button variant="ghost" type="button" onClick={() => handleDownloadFile(file)} disabled={downloadingFile === file.id}
-                              style={{ ...btnOutline, padding: '0.25rem 0.5rem', fontSize: '0.75rem', opacity: downloadingFile === file.id ? 0.5 : 1 }}>
+                            <Button variant="outline" size="sm" type="button" onClick={() => handleDownloadFile(file)} disabled={downloadingFile === file.id}>
                               {downloadingFile === file.id ? '...' : '\u4e0b\u8f7d'}
                             </Button>
-                            <Button variant="ghost" type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}
-                              style={{ ...btnDanger, opacity: deletingFile === file.id ? 0.5 : 1 }}>
+                            <Button variant="danger" size="sm" type="button" onClick={() => handleDeleteFile(file.id, file.filename)} disabled={deletingFile === file.id}>
                               {deletingFile === file.id ? '...' : '\u5220\u9664'}
                             </Button>
                           </div>

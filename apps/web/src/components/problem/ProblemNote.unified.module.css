@@ -143,3 +143,17 @@
   text-align: center;
   padding: 2rem;
 }
+.difficultyBadge { font-size: 0.7rem; padding: 0.125rem 0.375rem; border-radius: 4px; }
+.difficultyBadge[data-difficulty='简单'] { background: var(--success-light); color: var(--success); }
+.difficultyBadge[data-difficulty='中等'] { background: var(--warning-light); color: var(--warning); }
+.difficultyBadge:not([data-difficulty='简单']):not([data-difficulty='中等']) { background: var(--error-light); color: var(--error); }
+.saveStatus { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; color: var(--gray-400); min-width: 100px; text-align: center; }
+.savePending { background: var(--warning-light); color: var(--warning-text); }
+.saveComplete { background: var(--success-light); color: var(--success-text); }
+.modeButton { padding: 0.2rem 0.5rem; border: none; border-radius: var(--radius-sm); color: var(--gray-500); font-size: 0.7rem; }
+.modeButton[aria-pressed='true'] { background: var(--primary); color: var(--text-inverse); }
+.noteEditor { min-height: 100%; padding: 0.75rem; border: none; font-size: 0.85rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.6; resize: none; outline: none; box-sizing: border-box; }
+.noteEditor.splitPane { background: var(--bg-muted); }
+.notePreview { min-height: 100%; padding: 0.75rem; overflow: auto; background: var(--bg-card); box-sizing: border-box; }
+.splitPane { flex: 1; }
+.fullPane { width: 100%; }
