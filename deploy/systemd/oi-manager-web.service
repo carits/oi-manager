@@ -2,8 +2,8 @@
 Description=OI Manager web preview
 Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_DEPLOYMENT.md
 Wants=network-online.target
-After=network-online.target oi-manager-server.service
-Wants=oi-manager-server.service
+After=network-online.target oi-manager-api-router.service
+Wants=oi-manager-api-router.service
 StartLimitIntervalSec=60s
 StartLimitBurst=10
 

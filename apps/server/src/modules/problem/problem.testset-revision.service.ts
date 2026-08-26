@@ -186,6 +186,41 @@ function parseConfig(text: string | null | undefined): Record<string, any> {
   return value && typeof value === 'object' ? value as Record<string, any> : {}
 }
 
+function normalizeLegacySubtaskIds(rawSubtasks: any[]) {
+  const used = new Set<number>()
+  const byLegacyKey = new Map<string, number>()
+  const ids: number[] = []
+  let nextId = 1
+
+  for (const [index, raw] of rawSubtasks.entries()) {
+    const legacyValue = raw?.id ?? index + 1
+    const legacyKey = String(legacyValue)
+    if (byLegacyKey.has(legacyKey)) throw new Error(`OI Subtask ID 重复：${legacyKey}`)
+
+    const numeric = Number(legacyValue)
+    let id = Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null
+    if (id != null && used.has(id)) throw new Error(`OI Subtask ID 重复：${legacyKey}`)
+    if (id == null) {
+      while (used.has(nextId)) nextId++
+      id = nextId
+    }
+    used.add(id)
+    byLegacyKey.set(legacyKey, id)
+    ids.push(id)
+  }
+
+  return {
+    ids,
+    dependencyIds(rawDependencies: unknown) {
+      return (Array.isArray(rawDependencies) ? rawDependencies : []).map(value => {
+        const id = byLegacyKey.get(String(value))
+        if (id == null) throw new Error(`OI Subtask 依赖不存在：${String(value)}`)
+        return id
+      })
+    },
+  }
+}
+
 export async function resolveConfigSpec(problemId: string, configText: string): Promise<TestSetRevisionSpec> {
   const config = parseConfig(configText)
   const mode = config.mode === 'oi' || (config.mode !== 'acm' && Array.isArray(config.subtasks) && config.subtasks.length > 0) ? 'oi' : 'acm'
@@ -200,9 +235,10 @@ export async function resolveConfigSpec(problemId: string, configText: string): 
     }
   }
   const rawSubtasks = Array.isArray(config.subtasks) ? config.subtasks : []
+  const normalizedIds = normalizeLegacySubtaskIds(rawSubtasks)
   const subtasks: RevisionSubtaskSpec[] = []
   for (const [index, raw] of rawSubtasks.entries()) {
-    const id = Number(raw.id || index + 1)
+    const id = normalizedIds.ids[index]
     const rawGroups = Array.isArray(raw.groups) && raw.groups.length > 0
       ? raw.groups
       : [
@@ -220,7 +256,7 @@ export async function resolveConfigSpec(problemId: string, configText: string): 
         }))),
       })
     }
-    subtasks.push({ id, score: Number(raw.score || 0), if: (raw.if || []).map(Number), groups })
+    subtasks.push({ id, score: Number(raw.score || 0), if: normalizedIds.dependencyIds(raw.if), groups })
   }
   return { mode, subtasks }
 }
@@ -596,14 +632,14 @@ export async function inspectTestSetRevisionMigration() {
         if (mode === 'acm' && (!Array.isArray(config.cases) || config.cases.length === 0)) issues.push('ACM Judge Config 没有测试点')
         if (mode === 'oi') {
           const subtasks = Array.isArray(config.subtasks) ? config.subtasks : []
-          const ids = subtasks.map((item: any, index: number) => Number(item.id || index + 1))
+          const normalizedIds = normalizeLegacySubtaskIds(subtasks)
+          const ids = normalizedIds.ids
           if (!subtasks.length) issues.push('OI Judge Config 没有 Subtask')
-          if (new Set(ids).size !== ids.length) issues.push('OI Subtask ID 重复')
           if (subtasks.reduce((sum: number, item: any) => sum + Number(item.score || 0), 0) !== 100) issues.push('OI Subtask 总分不为 100')
           for (const [index, subtask] of subtasks.entries()) {
-            const id = Number(subtask.id || index + 1)
-            const dependencies = Array.isArray(subtask.if) ? subtask.if.map(Number) : []
-            if (dependencies.some((dep: number) => dep === id || !ids.includes(dep))) issues.push(`Subtask ${id} 依赖无效`)
+            const id = ids[index]
+            const dependencies = normalizedIds.dependencyIds(subtask.if)
+            if (dependencies.some((dep: number) => dep === id)) issues.push(`Subtask ${id} 依赖无效`)
             if (Array.isArray(subtask.groups) && subtask.groups.length > 0) {
               const officialScore = subtask.groups.filter((group: any) => group.kind !== 'hack_gate').reduce((sum: number, group: any) => sum + Number(group.score || 0), 0)
               if (officialScore !== Number(subtask.score || 0)) issues.push(`Subtask ${id} Official Group 分值不闭合`)

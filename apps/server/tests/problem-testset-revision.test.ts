@@ -139,6 +139,25 @@ describe('immutable problem TestSet Revisions', () => {
     expect(await prisma.problemTestSetRevision.findUnique({ where: { id: first!.id } })).not.toBeNull()
   })
 
+  it('normalizes legacy string subtask ids to stable numeric ids', async () => {
+    const { problem } = await fixture()
+    const spec = await resolveConfigSpec(problem.id, [
+      'mode: oi',
+      'subtasks:',
+      '  - id: all',
+      '    score: 100',
+      '    type: sum',
+      '    cases:',
+      '      - input: 1.in',
+      '        output: 1.out',
+      '',
+    ].join('\n'))
+
+    expect(spec.subtasks).toHaveLength(1)
+    expect(spec.subtasks?.[0]).toMatchObject({ id: 1, score: 100, if: [] })
+    expect(spec.subtasks?.[0].groups[0]).toMatchObject({ key: 'official-1', type: 'sum' })
+  })
+
   it('garbage-collects only old unreferenced content objects', async () => {
     const { problem, directory } = await fixture()
     const object = await ingestTestdataObject(problem.id, Buffer.from('orphan bytes\n'))

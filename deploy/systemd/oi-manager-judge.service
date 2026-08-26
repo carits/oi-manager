@@ -2,8 +2,8 @@
 Description=OI Manager judge client
 Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_DEPLOYMENT.md
 Wants=network-online.target
-After=network-online.target docker.service oi-manager-server.service
-Requires=oi-manager-server.service
+After=network-online.target docker.service oi-manager-api-router.service
+Requires=oi-manager-api-router.service
 StartLimitIntervalSec=60s
 StartLimitBurst=10
 
