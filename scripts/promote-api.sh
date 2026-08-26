@@ -12,6 +12,7 @@ for _ in {1..30}; do
   sleep 1
 done
 curl --fail --silent "http://127.0.0.1:${CANDIDATE}/api/readiness" >/dev/null
+systemctl enable "oi-manager-server@${CANDIDATE}.service"
 
 mkdir -p "$ROOT_DIR/.run"
 printf '%s\n' "$CANDIDATE" > "$ACTIVE_FILE.next"
@@ -27,6 +28,7 @@ if systemctl is-active --quiet "oi-manager-server@${CURRENT}.service"; then
     systemctl stop "oi-manager-server@${CURRENT}.service"
   fi
 fi
+systemctl disable "oi-manager-server@${CURRENT}.service" 2>/dev/null || true
 
 curl --fail --silent http://127.0.0.1:3002/api/readiness >/dev/null
 echo "API promoted: ${CURRENT} -> ${CANDIDATE}"

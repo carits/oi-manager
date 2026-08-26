@@ -23,6 +23,7 @@ mkdir -p "$ROOT_DIR/.run"
 printf '3302\n' > "$ROOT_DIR/.run/api-active-upstream"
 chown ecs-user:ecs-user "$ROOT_DIR/.run/api-active-upstream"
 systemctl restart oi-manager-server@3302.service
+systemctl enable oi-manager-server@3302.service
 for _ in {1..30}; do
   if curl --fail --silent http://127.0.0.1:3302/api/readiness >/dev/null; then break; fi
   sleep 1
