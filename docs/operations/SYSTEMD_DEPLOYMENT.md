@@ -85,3 +85,5 @@ API 回滚时将 `.run/api-active-upstream` 原子改回仍在运行的旧端口
 
 前端 Canary 日志固定保存在项目 `.run/oi-web-canary.log`，不使用 `/tmp` 中可能由其他运行身份创建的
 固定文件名。这避免 Linux `fs.protected_regular` 在粘滞目录中拒绝跨用户覆盖旧日志。
+已安装 `oi-manager-web.service` 时，`promote-preview.sh` 和 `rollback-preview.sh` 必须使用 `sudo`；脚本会先停止
+systemd Web，原子切换 `.next-current/.next-previous`，再重启并按 BUILD_ID 校验，不再依赖旧 PID 文件。

@@ -7,6 +7,16 @@ CURRENT_DIR="$WEB_DIR/.next-current"
 CANDIDATE_DIR="$WEB_DIR/.next-candidate"
 PREVIOUS_DIR="$WEB_DIR/.next-previous"
 CANARY_PID_FILE="$ROOT_DIR/.run/oi-web-canary.pid"
+WEB_UNIT="oi-manager-web.service"
+USE_SYSTEMD=false
+
+if systemctl cat "$WEB_UNIT" >/dev/null 2>&1; then
+  USE_SYSTEMD=true
+  if [[ "$(id -u)" -ne 0 ]]; then
+    echo "The installed $WEB_UNIT must be promoted as root (use sudo)." >&2
+    exit 1
+  fi
+fi
 
 test -f "$CANDIDATE_DIR/BUILD_ID"
 
@@ -22,6 +32,23 @@ wait_for_preview() {
   return 1
 }
 
+stop_published_preview() {
+  if [[ "$USE_SYSTEMD" == "true" ]]; then
+    systemctl stop "$WEB_UNIT"
+  else
+    "$ROOT_DIR/scripts/stop-preview.sh"
+  fi
+}
+
+start_published_preview() {
+  if [[ "$USE_SYSTEMD" == "true" ]]; then
+    systemctl restart "$WEB_UNIT"
+    systemctl is-active --quiet "$WEB_UNIT"
+  else
+    "$ROOT_DIR/scripts/start-preview.sh"
+  fi
+}
+
 if [ -f "$CANARY_PID_FILE" ] && kill -0 "$(cat "$CANARY_PID_FILE")" 2>/dev/null; then
   echo "Reusing the running preview canary."
 else
@@ -35,7 +62,7 @@ wait_for_preview http://127.0.0.1:3200/login "$(cat "$CANDIDATE_DIR/BUILD_ID")"
 "$ROOT_DIR/scripts/stop-preview-canary.sh"
 trap - EXIT
 
-"$ROOT_DIR/scripts/stop-preview.sh"
+stop_published_preview
 
 if [ -d "$PREVIOUS_DIR" ]; then
   previous_path="$(readlink -f "$PREVIOUS_DIR")"
@@ -51,9 +78,9 @@ if [ -d "$CURRENT_DIR" ]; then
 fi
 mv "$CANDIDATE_DIR" "$CURRENT_DIR"
 
-if ! "$ROOT_DIR/scripts/start-preview.sh" ||
+if ! start_published_preview ||
   ! wait_for_preview http://127.0.0.1:3000/login "$(cat "$CURRENT_DIR/BUILD_ID")"; then
-  "$ROOT_DIR/scripts/stop-preview.sh" || true
+  stop_published_preview || true
   current_path="$(readlink -f "$CURRENT_DIR")"
   expected_current_path="$(readlink -f "$WEB_DIR")/.next-current"
   if [ "$current_path" != "$expected_current_path" ]; then
@@ -63,7 +90,7 @@ if ! "$ROOT_DIR/scripts/start-preview.sh" ||
   rm -rf -- "$current_path"
   if [ -d "$PREVIOUS_DIR" ]; then
     mv "$PREVIOUS_DIR" "$CURRENT_DIR"
-    "$ROOT_DIR/scripts/start-preview.sh"
+    start_published_preview
     wait_for_preview http://127.0.0.1:3000/login "$(cat "$CURRENT_DIR/BUILD_ID")"
   fi
   echo "Promotion failed and the previous preview was restored." >&2

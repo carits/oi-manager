@@ -24,6 +24,8 @@ source_of_truth: Git history
   半透明表层统一进入全局语义 Token，删除比赛列表/详情内重复声明的局部色板。
 - 前端 Canary 日志由公共 `/tmp` 固定文件改为项目 `.run` 目录，避免 `fs.protected_regular` 在部署身份
   变化后拒绝重定向；修复前的提升失败未切换 3000，原 Web 始终保持可用。
+- preview promote/rollback 在已安装 Web systemd unit 时改由 systemd 停启正式进程，切换后强制校验
+  `.next-current/BUILD_ID`；旧 PID 文件仅保留给非 systemd 开发环境。
 
 - 将 Cron、旧远程提交轮询和 OJ 账号自动验证从蓝绿 API 实例拆为独立
   `oi-manager-worker.service`。Worker 使用 PostgreSQL session advisory lock 保证集群单例，调度器提供

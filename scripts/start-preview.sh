@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 PID_FILE="$RUN_DIR/oi-web-preview.pid"
-LOG_FILE="${PREVIEW_LOG_FILE:-/tmp/oi-web-preview.log}"
+LOG_FILE="${PREVIEW_LOG_FILE:-$RUN_DIR/oi-web-preview.log}"
 
 mkdir -p "$RUN_DIR"
 
