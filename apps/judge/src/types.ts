@@ -32,6 +32,8 @@ export interface TestCaseConfig {
   output: string
   time?: string      // "1s", "1000ms"
   memory?: string    // "256MB"
+  outputLimit?: string | number
+  output_limit?: string | number
   score?: number
   groupId?: string
   groupKind?: 'official' | 'hack_gate'
@@ -73,6 +75,8 @@ export interface ProblemConfig {
   type?: ProblemType
   time?: string          // "1s", "1000ms"
   memory?: string        // "256MB"
+  outputLimit?: string | number // "64MB" or bytes
+  output_limit?: string | number
   filename?: string      // 文件 IO 题型的文件名
   checker_type?: string  // 'default' | 'strict' | 'testlib' | 'lemon' | ...
   checker?: CompilableSource

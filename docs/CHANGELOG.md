@@ -1,13 +1,22 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-26
+last_verified: 2026-08-27
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+## 2026-08-27
+
+- 修复 go-judge 自定义 Checker 的输出捕获：沙箱命令现在把进程 stdout/stderr 显式重定向为
+  `copyOut` 文件，Testlib 的 `ok Accepted` 不再因消息为空而被误判为 Wrong Answer。
+- 用户程序输出上限由硬编码 64KB 改为题目/测试点可配置的 `outputLimit` / `output_limit`，默认
+  64MB；保留 Output Limit Exceeded 判定，同时允许 `subset` 等合法输出大量索引的题目通过。
+- Judge 4 个测试文件 13/13 与生产构建通过；使用 F 盘官方 `subset.cpp` 的线上题库 Practice
+  提交用于回归，不进入比赛排名。
+
 ## 2026-08-26
 
 - 修复 TestSet Revision 迁移审计把独立 `ProblemChecker` 误当作普通 `TestdataFile` 的问题；

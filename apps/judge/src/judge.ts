@@ -85,6 +85,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   const judgeMode = cfg.mode || 'acm'
   const timeLimit = parseTime((cfg as any).time || (cfg as any).timeLimit || '1s')
   const memoryLimit = parseMemory((cfg as any).memory || (cfg as any).memoryLimit || '256MB')
+  const outputLimit = parseOutputLimit((cfg as any).output_limit ?? (cfg as any).outputLimit ?? '64MB')
   let checkerType = (cfg as any).checker_type || 'default'
   const filename = (cfg as any).filename || undefined
   const ignoreTrailingSpace = (cfg as any).ignore_trailing_space !== false // 默认 true
@@ -102,7 +103,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
     checkerType = 'strict'
   }
 
-  console.log(`[Judge] timeLimit: ${timeLimit}ms, memoryLimit: ${memoryLimit}KB`)
+  console.log(`[Judge] timeLimit: ${timeLimit}ms, memoryLimit: ${memoryLimit}KB, outputLimit: ${outputLimit}B`)
   console.log(`[Judge] checkerType: ${checkerType}, ignoreTrailingSpace: ${ignoreTrailingSpace}`)
   if (filename) {
     console.log(`[Judge] FileIO mode: ${filename}.in / ${filename}.out`)
@@ -382,12 +383,14 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
           const caseTimeLimit = testCase.time ? parseTime(testCase.time) : timeLimit
           const caseMemoryLimit = testCase.memory ? parseMemory(testCase.memory) : memoryLimit
+          const caseOutputLimit = parseOutputLimit(testCase.output_limit ?? testCase.outputLimit ?? outputLimit)
 
           const caseResult = await runTestCase(
             language,
             testCase,
             caseTimeLimit,
             caseMemoryLimit,
+            caseOutputLimit,
             checkerCtx,
             testdataPath,
             compileResult.fileId,
@@ -478,6 +481,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         const testCase = allCases[i]
         const caseTimeLimit = testCase.time ? parseTime(testCase.time) : timeLimit
         const caseMemoryLimit = testCase.memory ? parseMemory(testCase.memory) : memoryLimit
+        const caseOutputLimit = parseOutputLimit(testCase.output_limit ?? testCase.outputLimit ?? outputLimit)
         const caseScore = testCase.score || 0
 
         const caseResult = await runTestCase(
@@ -485,6 +489,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           testCase,
           caseTimeLimit,
           caseMemoryLimit,
+          caseOutputLimit,
           checkerCtx,
           testdataPath,
           compileResult.fileId,
@@ -572,6 +577,7 @@ async function runTestCase(
   testCase: TestCaseConfig,
   timeLimit: number,
   memoryLimit: number,
+  outputLimit: number,
   checkerCtx: CheckerContext,
   testdataPath: string,
   compileFileId?: string,
@@ -609,7 +615,7 @@ async function runTestCase(
     stdin: input,
     timeLimit,
     memoryLimit,
-    outputLimit: 65536,
+    outputLimit,
     compileFileId,
     workDir,
     filename,  // 当设置时，程序通过 {filename}.in / {filename}.out 文件读写
@@ -780,7 +786,7 @@ async function runCheckerInSandbox(
     } else {
       // go-judge 模式
       const result = await sandboxRunCommand({
-        args: ['sh', '-c', execCommand],
+        args: ['sh', '-c', redirectCheckerCommandForSandbox(execCommand)],
         env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
         copyIn: Object.keys(copyIn).length > 0 ? copyIn : undefined,
         copyOut: ['stdout', ...copyOut],
@@ -1122,6 +1128,25 @@ function parseMemory(memStr: string | number | undefined): number {
     case 'GB': return value * 1024 * 1024
     default: return value
   }
+}
+
+/** Parse a user-program output limit into bytes. Raw numbers are bytes. */
+export function parseOutputLimit(value: string | number | undefined): number {
+  const fallback = 64 * 1024 * 1024
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)(B|KB|MB|GB)?$/i)
+  if (!match) return fallback
+  const amount = Number(match[1])
+  const unit = (match[2] || 'B').toUpperCase()
+  const multiplier = unit === 'GB' ? 1024 ** 3 : unit === 'MB' ? 1024 ** 2 : unit === 'KB' ? 1024 : 1
+  const bytes = Math.floor(amount * multiplier)
+  return Number.isSafeInteger(bytes) && bytes > 0 ? bytes : fallback
+}
+
+/** go-judge only returns files requested through copyOut, so capture both FDs. */
+export function redirectCheckerCommandForSandbox(command: string): string {
+  return `${command} >stdout 2>stderr`
 }
 
 // ==================== 交互题评测 ====================

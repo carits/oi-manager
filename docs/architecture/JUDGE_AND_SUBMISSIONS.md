@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-26
+last_verified: 2026-08-27
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -114,6 +114,9 @@ Docker 服务需要 cgroup/privileged 能力才能可靠检测内存限制。测
 日志可以记录 `judgeId/submissionId`，不得记录 Judge Token 或用户源码全文。
 
 Checker 上传仅接受 C/C++ 源文件，`testlib.h` 由系统提供；下载接口只返回受鉴权的 API 地址，不返回服务器绝对路径，且题目目录必须位于 `TESTDATA_DIR` 下。
+go-judge 模式下自定义 Checker 的 stdout/stderr 必须显式重定向为沙箱 `copyOut` 文件后再解析；
+用户程序输出上限默认 64MB，可由题目或单个测试点的 `outputLimit` / `output_limit` 覆盖，数值按字节、
+字符串支持 `B/KB/MB/GB`。
 
 ## 题目级 ACM / OI Hack
 
