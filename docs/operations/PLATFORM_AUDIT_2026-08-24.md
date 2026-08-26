@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-24
+last_verified: 2026-08-26
 source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, route manifest
 ---
 
@@ -15,9 +15,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 项目 | 当前数量/状态 | 证据 |
 |---|---:|---|
 | Next.js 页面文件 | 63 | `route-inventory.spec.ts` 与源码清单一致 |
-| HTTP 端点 | 303 | `pnpm docs:check` |
-| Prisma 模型 | 66 | `pnpm docs:check`、`prisma validate` |
-| 单元/集成测试文件 | 49 | Server 38、Web 9、Judge 2 |
+| HTTP 端点 | 317 | `pnpm docs:check` |
+| Prisma 模型 | 78 | `pnpm docs:check`、`prisma validate` |
+| 单元/集成测试文件 | 53 | Server 40、Web 10、Judge 3 |
 | E2E 文件 | 22 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
 | Playwright 可收集用例 | 268 | `playwright test --list` |
 
@@ -151,6 +151,12 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 
 ## 未完成审计
 
+- 2026-08-26 已完成稳定 API Router、3302/3303 蓝绿实例、systemd 服务接管和 Judge 1012 重连；
+  旧“生产进程仍为 watch 组合”和“单实例约 16 秒中断”结论已关闭。待办转为后台 Cron/轮询单实例化、
+  受控整机重启演练及独立外部监控。
+- TestSet Revision 当前覆盖 24 道题、43 个 Revision、104 个活动题和 570 条可证明历史版本的提交；
+  13 道配置不完整旧题和其他无本地配置活动仍需分类修复，不能把兼容读取等同于正式版本迁移完成。
+
 - 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 303 个 HTTP 端点的匿名门禁和六角色无 5xx 健壮性矩阵已完成；本人/同组织/跨组织/管理员的资源所有权语义矩阵仍需继续扩展。
 - 文件上传、本地 Judge、有效 Hack 入库/历史不重测、比赛重测、题面快照写流程、外部归档同步入口和
@@ -160,7 +166,4 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 - 活动题面矩阵问题由真实 Edge 首轮定位；修复后的真页面在隔离 Chromium 验证。公网提升后 Edge 扩展
   连续读取超时，线上第二份 Edge DOM/控制台证据尚待扩展恢复后补录，不以构建通过替代该证据。
 - 外部告警通道、隔离环境写入负载、容量上限和长稳测试尚未完成。
-- 生产进程仍为优化预览与 watch 组合；正式 systemd/PM2 尚未启用。Nginx 当前只提供 HTTP，尚无域名/TLS；
-  Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。
-- `pnpm restart` 已把数据库/Judge 准备移到应用停止前，但单 API 实例切换仍有约 16 秒不可用；零停机 upstream
-  切换仍未实现。
+- Nginx 当前只提供 HTTP，尚无域名/TLS；Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。

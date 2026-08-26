@@ -5,6 +5,11 @@ last_verified: 2026-08-26
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-26: TestSet Revision 首次线上迁移完成：69 道题中 24 道生成 43 个正式 Revision，
+  301 个活动题中 104 个已固定版本，2577 条提交中 570 条能可靠固定历史版本；13 道已配置旧题因
+  缺少测试点或 Checker 被 fail-closed 拒绝，其余不可证明历史版本的记录保持 `legacy unpinned`。
+  迁移幂等复跑后数量不变。稳定 API Router、活动 slot、Judge 和 Web 均由 systemd 管理；当前公网
+  构建 `QNCp6PgwE1fmxSgivAPoQ`，Server 40 文件 435/435、Web 36/36、Judge 11/11 通过。
 - 2026-08-26: 题库测试数据改为不可变 TestSet Revision；题库 Practice 使用最新版，比赛、训练和作业添加题目时固定当时 Revision，活动开始或出现提交后永久禁止切换。有效 ACM/OI Hack 只自动晋升题库下一 Revision，不再直接传播到活动。Revision 固化测试点、Checker/Interactor/Manager 与 Judge 投影；PostgreSQL advisory lock + CAS 防止 Test Graph/Hack 并发覆盖。API 增加 3002 稳定 Router 与 3302/3303 蓝绿实例、Judge drain/reconnect，系统程序编译增加 TTL/LRU 缓存。Server 433/433、Web 36/36、Judge 11/11 与三端生产构建通过。
 - 2026-08-26: OI Test Graph 已从 JSON textarea 收口为“Subtask → Group → Testcase”三栏工作台；旧 Subtask/测试数据入口在 OI 模式隐藏，Hack 配置只保留系统程序。新增题目管理员单题显式迁移、测试点注册、结构化校验、revision 409 和测试数据引用保护。Server 39 文件 430/430、Web 36/36、Judge 9/9、Chromium `1280×720` 与 `1440×900` E2E 均通过；提交 `7002e8d` 已推送 `main`，公网构建 `yWNYBecXwn49NS0LJhzwS` 已完成健康提升。
 - 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。提交 97ee230 已部署为公网构建 zqmtCul8BqfkMjyMkx8fU，线上权限复验为管理员 200 且含完整源码、其他用户访问他人详情 404。
@@ -55,13 +60,14 @@ source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Pri
 
 ## 阶段
 
-OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作为开发预览，内部
-`3001` 保留 HMR，`3002` 使用 `tsx watch` 后端。优化构建使用 `NODE_ENV=production`
-只为启用 Next 优化，业务环境仍是 `APP_ENV=development`，不代表已经正式上线。
+OI Manager 仍处于开发预览阶段。公网 `3000` 运行已发布的 Next.js 优化构建；稳定 API Router
+监听 `127.0.0.1:3002` 并将每个 HTTP/WebSocket 连接固定转发到 `3302/3303` 中的活动实例。
+Web、Router、活动 API slot 和 Judge 均由 systemd 管理，不再依赖 `pnpm dev`、PM2 或 Nix。
+业务环境仍为 `APP_ENV=development`，不代表已经完成域名、TLS、外部监控等正式投产条件。
 
 | 服务 | 开发端口 | E2E 端口 | 说明 |
 |------|----------|----------|------|
-| Web preview / HMR | `3000` / `127.0.0.1:3001` | `3100` | Next.js App Router |
+| Web preview | `3000` | `3100` | systemd 管理 `.next-current`；HMR 不作为线上常驻服务 |
 | Server/API | Router `3002` → blue/green `3302/3303` | `3102` | Express + Prisma；Router 固定入口，候选实例通过 readiness 后原子切换 |
 | PostgreSQL | `127.0.0.1:5432` | 同实例 `e2e` schema | Docker Compose 基础设施，仅本机访问 |
 | go-judge | `127.0.0.1:5050` | `5050` | 高权限评测沙箱，仅本机访问 |
@@ -79,8 +85,8 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   OI、IOI、ICPC 三种赛制样例，禁止直接连接默认数据库。
 - 比赛/训练列表由后端统一排序：进行中优先，同状态按现有标题数字级别降序，再按时间兜底。
 - 作业排名仅管理员可见；普通学生作业详情不显示排名入口，接口也会拒绝非管理员访问。
-- 五种角色均可在岗位工作区与统一个人工作区间切换；个人团队、题单、训练、提交、排名
-  和缓存按作用域隔离，个人身份只显示用户名。
+- 学校负责人、教师和学生可在岗位工作区与个人工作区间切换；超级管理员与平台管理员严格只有
+  各自独立管理工作区。个人团队、题单、训练、提交、排名和缓存按作用域隔离，个人身份只显示用户名。
 - 认证会话使用 `workspaceMode` 区分 `work` 与 `personal`；登录兼容旧 `mode` 和旧 JWT 的
   `studentMode`。`schoolId` 仅代表 `School.id`，组织请求上下文使用 `organizationId`。
 - 外部 OJ 题目抓取、平台绑定、远程提交归档和 AI 翻译；归档记录只展示，不参与本站计分或重测。
@@ -250,7 +256,9 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
 
 ## 当前限制
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
-- 2026-08-24 重启流程已避免在 Judge 镜像构建期间提前停止 API；当前单实例应用切换仍有约 16 秒不可用窗口。实现真正零停机仍需双 API 实例、健康检查与 Nginx/upstream 原子切换。
+- 2026-08-26 API 已改为稳定 Router 加 `3302/3303` 蓝绿实例，候选 readiness 后原子切换，旧实例
+  drain 并让 Judge 以 1012 重连；连续两次线上切换已通过。两个 API slot 短暂并存时仍会各自启动
+  Cron、远程轮询和自动验证，后台任务单实例化是当前 P0 运维待办。
 - 2026-08-24 生产依赖扫描已从 51 项漏洞清零；Next 15.5.21 兼容构建、Server 417/417、Web 34/34、Judge 6/6 和隔离浏览器 13/13 通过。提交 `2998473` 已部署为公网构建 `UhlTIrV7m4XFpXwf8DMsa`，响应头、303/303 双矩阵和服务监控复验通过。
 - 当前 Nginx 入口仍为 HTTP，尚未配置域名/TLS；Web 基础安全响应头已进入待部署版本，严格 CSP 因现有内联脚本兼容性仍作为后续安全加固项。
 - 2026-08-24 受控 loopback 负载冒烟共 2300/2300 请求成功：3002 API 直连约 95.45 req/s、P95 24.42ms；3000 API 代理约 74.59 req/s、P95 287.90ms；3000 登录页约 49.55 req/s、P95 346.62ms。该结果只代表当前开发服务器上的短时只读冒烟，不是容量承诺；持久化写入、提交和 Judge 压测仍须在隔离环境执行。
@@ -271,7 +279,8 @@ OI Manager 仍处于开发阶段。公网 `3000` 使用 Next.js 优化构建作�
   跨题目作用域与活动多题面快照不可变；Server/Web 生产构建通过。
 - 交互题、通信题和提交答案题目前沿用各自的测试点执行流程，赛制统一计分已覆盖，尚未提供 ACM 失败后的提前停止优化。
 
-- 当前服务器没有启用正式部署配置。
+- 当前服务器已启用仓库内 systemd 部署配置，但业务环境仍为开发预览；域名/TLS、外部告警、日志异机
+  保存、受控整机重启和隔离写入/长稳压测尚未完成。
 - 外部 OJ 受登录状态、反爬策略和页面结构变化影响，真实连通性不作为 PR 门禁。
 - 浏览器会话使用同域 HttpOnly Cookie；Bearer Token 仅作脚本和旧会话迁移兼容。
 - 旧 `studentMode`、登录请求的 `mode` 与 `POST /api/auth/switch-mode` 仅保留一个开发周期；

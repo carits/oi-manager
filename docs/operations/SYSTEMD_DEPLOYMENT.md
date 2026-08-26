@@ -17,6 +17,10 @@ source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.s
 PostgreSQL 与 go-judge 继续由 Docker Compose 管理。应用运行不再依赖 PM2 或 Nix。三个应用服务均以
 `ecs-user` 运行，日志进入 journald，异常退出后自动重启，并按当前 3.7 GiB 主机容量设置内存上限。
 
+当前 API slot 仍包含 Cron、远程提交轮询与 OJ 自动验证。蓝绿候选和旧实例短暂并存期间可能同时启动
+这些周期任务，因此发布窗口必须保持短暂；后续将把周期任务拆为独立单实例 Worker。在该拆分完成前，
+不得把双 slot 长时间同时运行作为扩容方式。
+
 ## 安装或修复
 
 先确认构建产物存在，再在服务器执行：

@@ -10,8 +10,9 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 ## 2026-08-25 统一组件契约
 
 本文件是当前界面视觉与交互的唯一规范。`globals.css` 和 `components/ui` 是实现来源；业务组件
-不得复制通用控件或弹窗。当前基线为 189 个 TSX、78 个内联样式文件、59 个原生按钮文件、31 个
-原生表单控件文件和 19 个原生表格文件，后续按批次递减。
+不得复制通用控件或弹窗。2026-08-26 当前源码为 196 个 TSX；原生按钮、原生表单控件、原生表格、
+自定义 Dialog、直接 Modal 和任意 Modal 宽度均已降为 0。遗留白名单仍登记 171 处静态内联样式和
+155 处硬编码视觉值，组件统一已经完成，但视觉 Token 与 CSS Modules 的最后收口尚未完成。
 
 新增统一组件包括 Input、Textarea、Select、Checkbox、RadioGroup、Switch、SearchField、Combobox、
 IconButton、Popover、Menu、DataTable、TableToolbar、Section、FormDialog、ConfirmDialog 和

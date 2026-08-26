@@ -10,6 +10,17 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-26
 
+- 完成不可变 TestSet Revision 的首次线上迁移与蓝绿部署收口：生产数据库迁移
+  `20260826_testset_revision_consistency` 已应用，24 道可安全还原的题目生成 43 个正式 Revision，
+  104 个活动题和 570 条可证明历史配置的提交已固定版本；重复执行迁移后 Revision 数量保持不变。
+- 迁移检查继续拒绝 13 道缺少测试点或评测资产的旧题，不猜测补全数据；未能可靠还原的记录保持
+  `legacy unpinned`。迁移前备份 `/data/backups/oi-manager/automatic/oi_manager_20260826_202206.dump`
+  已通过校验。
+- 修复 systemd 蓝绿实例端口被旧 `.env` 覆盖、Judge/Web 错误依赖旧单实例 Server、活动 slot
+  未持久化到开机启动的问题；稳定 Router、活动 API slot、Judge 和 Web 均由 systemd 管理，连续
+  `3302 → 3303 → 3302` 切换期间 readiness 保持正常，Judge 以 1012 自动重连。
+- 兼容旧 OI 配置中的字符串 Subtask ID（如 `all`），按原顺序确定性映射为稳定数字 ID并同步依赖；
+  Server 全量 40 文件 435/435 通过，公网 Web 构建为 `QNCp6PgwE1fmxSgivAPoQ`。
 - 新增不可变 `ProblemTestSetRevision`、内容寻址测试对象和 Revision 级 ACM/OI 关系；测试数据及文件型 Checker、Interactor、Manager 固化到独立 Revision 目录，历史版本不受后续替换影响。
 - 比赛、训练和作业题目固定 `testSetRevisionId`，提交记录保存实际 Revision 与投影哈希；活动开始或已有提交后返回 `409 TEST_SET_REVISION_FROZEN`。旧 Hack 同步 API 退役，题库 Hack 自动晋升下一正式 Revision 且不修改任何活动。
 - Test Graph 保存、Hack 晋升、模式转换和正式发布统一使用 PostgreSQL advisory transaction lock 与 latest Revision CAS；普通配置不能隐式切换 ACM/OI，显式模式迁移保留旧版本并关闭 Hack。

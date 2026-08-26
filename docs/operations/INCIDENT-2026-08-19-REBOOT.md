@@ -3,7 +3,7 @@ status: current
 audience: operations, development
 incident_date: 2026-08-19
 last_verified: 2026-08-19
-last_updated: 2026-08-19
+last_updated: 2026-08-26
 source_of_truth: journald, systemd units, deployment logs, cloud audit records
 severity: service interruption
 ---
@@ -57,8 +57,10 @@ severity: service interruption
 - [ ] **完善启动恢复演练**：在维护窗口执行一次受控重启，验证 systemd 启动顺序、Docker 自启、健康检查和失败自动重启。
 - [ ] **治理评测沙箱资源**：审查 go-judge 的 CPU、内存、进程数、磁盘和超时限制，避免异常提交占用宿主机资源；保留沙箱失败与主机故障的边界证据。
 - [ ] **检查 SSH 暴露面**：复核公网监听、密钥权限、禁止密码登录、最小化 sudo 权限和安全组规则。
-- [ ] **补充备份与恢复演练**：确认数据库、题目数据和提交数据的备份周期，并在独立环境验证恢复。
-- [ ] **统一部署入口**：后续部署只使用仓库脚本和 systemd unit，禁止重新引入依赖个人环境路径的 PM2/Nix 启动配置。
+- [x] **补充备份与恢复演练**：自动备份已恢复为每日执行，并在隔离临时数据库完成完整恢复与清理；
+  覆盖正式库的灾难演练仍需单独维护窗口授权。
+- [x] **统一部署入口**：Web、稳定 API Router、蓝绿 API slot 和 Judge 已统一使用仓库脚本与 systemd，
+  不再依赖个人环境路径、PM2、Nix 或常驻 `pnpm dev`。
 
 ## 复核记录
 
