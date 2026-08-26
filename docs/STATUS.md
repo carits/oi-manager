@@ -1,15 +1,17 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-26
+last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-26: TestSet Revision 首次线上迁移完成：69 道题中 24 道生成 43 个正式 Revision，
-  301 个活动题中 104 个已固定版本，2577 条提交中 570 条能可靠固定历史版本；13 道已配置旧题因
-  缺少测试点或 Checker 被 fail-closed 拒绝，其余不可证明历史版本的记录保持 `legacy unpinned`。
-  迁移幂等复跑后数量不变。稳定 API Router、活动 slot、Judge 和 Web 均由 systemd 管理；当前公网
-  构建 `QNCp6PgwE1fmxSgivAPoQ`，Server 40 文件 435/435、Web 36/36、Judge 11/11 通过。
+- 2026-08-27: 补登记 20260815 `median ACM` 的 40 个输入输出和 `subset ACM/IOI` 的独立 Checker
+  元数据后，69 道题中 27 道生成 49 个正式 Revision，301 个活动题中 110 个已固定版本，2582 条提交中
+  642 条固定版本；迁移连续复跑保持幂等。剩余 10 道旧题因没有真实测试点继续 fail-closed。
+  `median` 以及使用 F 盘官方 `subset.cpp` 的 ACM Testlib、IOI Lemon 题库提交均为 20/20、Accepted、100；
+  这三条 Practice 验证不进入比赛排名。Server 40 文件 436/436、Judge 4 文件 13/13 和两端生产构建通过。
+- 2026-08-26: TestSet Revision 首次线上迁移基线为 24 道题、43 个正式 Revision、104 个固定活动题和
+  570 条固定提交；后续 2026-08-27 资产修复后的现行数量见上一条。
 - 2026-08-26: 题库测试数据改为不可变 TestSet Revision；题库 Practice 使用最新版，比赛、训练和作业添加题目时固定当时 Revision，活动开始或出现提交后永久禁止切换。有效 ACM/OI Hack 只自动晋升题库下一 Revision，不再直接传播到活动。Revision 固化测试点、Checker/Interactor/Manager 与 Judge 投影；PostgreSQL advisory lock + CAS 防止 Test Graph/Hack 并发覆盖。API 增加 3002 稳定 Router 与 3302/3303 蓝绿实例、Judge drain/reconnect，系统程序编译增加 TTL/LRU 缓存。Server 433/433、Web 36/36、Judge 11/11 与三端生产构建通过。
 - 2026-08-26: OI Test Graph 已从 JSON textarea 收口为“Subtask → Group → Testcase”三栏工作台；旧 Subtask/测试数据入口在 OI 模式隐藏，Hack 配置只保留系统程序。新增题目管理员单题显式迁移、测试点注册、结构化校验、revision 409 和测试数据引用保护。Server 39 文件 430/430、Web 36/36、Judge 9/9、Chromium `1280×720` 与 `1440×900` E2E 均通过；提交 `7002e8d` 已推送 `main`，公网构建 `yWNYBecXwn49NS0LJhzwS` 已完成健康提升。
 - 2026-08-25: Hack 历史详情权限保持“题目管理者可查看全部、普通用户仅查看本人”；列表中的“查看程序”入口已前移到程序语言之后，避免宽表格末端入口不可发现。提交 97ee230 已部署为公网构建 zqmtCul8BqfkMjyMkx8fU，线上权限复验为管理员 200 且含完整源码、其他用户访问他人详情 404。

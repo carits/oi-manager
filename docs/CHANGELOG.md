@@ -15,7 +15,8 @@ source_of_truth: Git history
 - 用户程序输出上限由硬编码 64KB 改为题目/测试点可配置的 `outputLimit` / `output_limit`，默认
   64MB；保留 Output Limit Exceeded 判定，同时允许 `subset` 等合法输出大量索引的题目通过。
 - Judge 4 个测试文件 13/13 与生产构建通过；使用 F 盘官方 `subset.cpp` 的线上题库 Practice
-  提交用于回归，不进入比赛排名。
+  提交 `3820`（ACM Testlib）与 `3821`（IOI Lemon）均为 20/20、Accepted、100，median 提交
+  `3822` 同样为 20/20、Accepted、100；这些记录不进入比赛排名。
 
 ## 2026-08-26
 
