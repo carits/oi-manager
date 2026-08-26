@@ -10,6 +10,8 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 ## 2026-08-27
 
+- 修复历史上存在多个相同 Judge 投影哈希时，迁移器误选最旧 Revision 并在每次复跑继续发布等价版本；
+  现在按 revision number 倒序选择最新等价版本，并增加连续两次迁移不增长的回归测试。
 - TestSet Revision 兼容历史 JSON/YAML 中的数字测试点引用（如 `cases: [1, 2]`），确定性解析为
   `1.in/1.ans`、`2.in/2.ans`，并同时兼容旧 `scoring` 聚合字段；缺文件名的非数字结构仍 fail-closed。
 - 修复 go-judge 自定义 Checker 的输出捕获：沙箱命令现在把进程 stdout/stderr 显式重定向为

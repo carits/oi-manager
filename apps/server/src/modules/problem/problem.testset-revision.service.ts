@@ -705,7 +705,13 @@ export async function migrateProblemTestSetRevisions(problemId: string, createdB
   const trainingConfigs = problem.TrainingProblem.map(item => item.judgeConfigSnapshot).filter((item): item is string => Boolean(item?.trim()))
   const orderedConfigs = [...new Set([...trainingConfigs, problem.judgeConfig])]
   const revisionsByHash = new Map<string, string>()
-  const existing = await prisma.problemTestSetRevision.findMany({ where: { problemId } })
+  // Prefer the newest revision for a repeated projection hash. Historical
+  // imports can legitimately contain equivalent immutable revisions; choosing
+  // the oldest one would make every migration run publish another duplicate.
+  const existing = await prisma.problemTestSetRevision.findMany({
+    where: { problemId },
+    orderBy: { revisionNumber: 'desc' },
+  })
   for (const revision of existing) if (!revisionsByHash.has(revision.judgeConfigHash)) revisionsByHash.set(revision.judgeConfigHash, revision.id)
   let latestId = problem.latestTestSetRevisionId
   for (const configText of orderedConfigs) {

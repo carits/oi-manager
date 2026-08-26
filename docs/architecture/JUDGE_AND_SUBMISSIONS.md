@@ -167,6 +167,8 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 - 普通 Judge Config PUT 不允许隐式改变模式；`POST /api/problems/:id/judge-mode-transition` 创建保留历史的转换 Revision，并关闭 Hack 等待重新配置。
 - 历史迁移接受数字测试点简写 `cases: [1]` 并映射为 `1.in/1.ans`，旧 `scoring` 字段与当前
   `type` 等价；其他缺少明确输入/答案文件名的结构拒绝迁移，不猜测文件。
+- 同一题若历史上已有多个等价投影哈希，迁移固定复用 revision number 最大的版本；重复执行迁移不得
+  再发布等价 Revision。已经发布的重复历史 Revision 保留为不可变审计记录，不做破坏性删除。
 - 内容对象写入失败或 CAS 丢失留下的无引用对象超过 24 小时后由锁内 GC 删除。
 
 ## OI 数据与分组工作台

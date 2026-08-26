@@ -9,6 +9,7 @@ import {
   ingestTestdataObject,
   inspectTestSetRevisionMigration,
   loadRevisionSpec,
+  migrateProblemTestSetRevisions,
   publishTestSetRevision,
   resolveConfigSpec,
   transitionJudgeMode,
@@ -127,6 +128,27 @@ describe('immutable problem TestSet Revisions', () => {
     const rejection = results.find(item => item.status === 'rejected') as PromiseRejectedResult
     expect(rejection.reason).toBeInstanceOf(TestSetRevisionConflict)
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: problem.id } })).toBe(2)
+  })
+
+  it('does not publish another revision when the latest projection hash already exists', async () => {
+    const { owner, problem, config } = await fixture()
+    const first = await ensureInitialTestSetRevision(problem.id, owner.user.id)
+    const spec = await loadRevisionSpec(first!.id)
+    const second = await publishTestSetRevision({
+      problemId: problem.id,
+      expectedLatestRevisionId: first!.id,
+      source: 'admin_edit',
+      createdBy: owner.user.id,
+      baseConfigText: config,
+      spec: spec!,
+    })
+    expect(second!.judgeConfigHash).toBe(first!.judgeConfigHash)
+
+    await migrateProblemTestSetRevisions(problem.id, owner.user.id)
+    await migrateProblemTestSetRevisions(problem.id, owner.user.id)
+
+    expect(await prisma.problemTestSetRevision.count({ where: { problemId: problem.id } })).toBe(2)
+    expect((await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } })).latestTestSetRevisionId).toBe(second!.id)
   })
 
   it('creates an explicit mode-transition revision and disables Hack', async () => {
