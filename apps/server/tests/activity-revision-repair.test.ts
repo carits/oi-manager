@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nonScoringJudgeConfig, revisionDataLayout } from '../src/modules/problem/problem.activity-revision-repair.service'
+import { isAllowedRepairSuccessor, nonScoringJudgeConfig, revisionDataLayout } from '../src/modules/problem/problem.activity-revision-repair.service'
 
 const groupCase = {
   testcaseId: 'case-1',
@@ -35,6 +35,15 @@ function revision(aggregation: string, inputObjectId = 'input-1') {
 }
 
 describe('activity TestSet Revision repair safety', () => {
+  it('allows only direct same-mode admin edits or migration-created initial successors', () => {
+    const current = { id: 'revision-1', mode: 'oi' }
+    expect(isAllowedRepairSuccessor(current, { parentRevisionId: current.id, mode: 'oi', source: 'admin_edit' })).toBe(true)
+    expect(isAllowedRepairSuccessor(current, { parentRevisionId: current.id, mode: 'oi', source: 'initial' })).toBe(true)
+    expect(isAllowedRepairSuccessor(current, { parentRevisionId: current.id, mode: 'oi', source: 'hack' })).toBe(false)
+    expect(isAllowedRepairSuccessor(current, { parentRevisionId: 'other', mode: 'oi', source: 'initial' })).toBe(false)
+    expect(isAllowedRepairSuccessor(current, { parentRevisionId: current.id, mode: 'acm', source: 'initial' })).toBe(false)
+  })
+
   it('treats scoring-only group changes as the same immutable data layout', () => {
     expect(revisionDataLayout(revision('min'))).toEqual(revisionDataLayout(revision('sum')))
   })

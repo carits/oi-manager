@@ -98,6 +98,16 @@ function sameValue(left: unknown, right: unknown) {
   return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right))
 }
 
+export function isAllowedRepairSuccessor(current: { id: string; mode: string }, target: {
+  parentRevisionId: string | null
+  mode: string
+  source: string
+}) {
+  return target.parentRevisionId === current.id
+    && target.mode === current.mode
+    && (target.source === 'admin_edit' || target.source === 'initial')
+}
+
 export async function repairActivityRevisionPins(input: {
   trainingId: number
   updates: RepairUpdate[]
@@ -143,8 +153,8 @@ export async function repairActivityRevisionPins(input: {
         tx.problemTestSetRevision.findFirst({ where: { id: update.targetRevisionId, problemId: item.problemId }, include: revisionInclude }),
       ])
       if (!current || !target) throw new ActivityRevisionRepairError(404, 'REVISION_NOT_FOUND', `${item.alias || item.Problem.title} 的测试版本不存在`)
-      if (target.parentRevisionId !== current.id || target.mode !== current.mode || target.source !== 'admin_edit') {
-        throw new ActivityRevisionRepairError(409, 'UNSAFE_REVISION_REPAIR', `${item.alias || item.Problem.title} 仅允许修复到同模式的直接 admin_edit 后继版本`)
+      if (!isAllowedRepairSuccessor(current, target)) {
+        throw new ActivityRevisionRepairError(409, 'UNSAFE_REVISION_REPAIR', `${item.alias || item.Problem.title} 仅允许修复到同模式的直接人工或历史迁移后继版本`)
       }
       if (!sameValue(revisionDataLayout(current), revisionDataLayout(target))) {
         throw new ActivityRevisionRepairError(409, 'TESTDATA_LAYOUT_CHANGED', `${item.alias || item.Problem.title} 的测试数据布局发生变化，不能原位修复`)
