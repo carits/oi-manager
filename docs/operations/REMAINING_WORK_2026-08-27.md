@@ -45,8 +45,9 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] go-judge 已补齐 CPU、内存、PID、NOFILE、只读根、512 MiB 临时盘和 Docker 日志轮转上限；题目级时间、内存、输出和文件大小限制继续由 Judge 配置强制。
 - [x] 保留 go-judge 建立 cgroup 沙箱所需的 `privileged`，同时启用只读根和 `no-new-privileges`；隔离真实评测与生产运行时审计均通过。进一步移除 capability/seccomp 例外需要更换沙箱实现，不能在保留当前 go-judge cgroup 模式时伪装完成。
 - [x] Router、API、Worker、Judge、Web 已补齐 `TasksMax`、`LimitNOFILE`、停止超时和 60 秒/10 次重启频率保护。
-- [ ] 仅检查 JWT、Judge 和账号加密密钥的存在、长度与独立性，不输出原文。
-- [ ] 验证生产 CORS、Cookie/CSRF 和公网端口；CSP 先以 Report-Only 方式清理兼容问题。
+- [x] 不输出原文的安全审计已验证 JWT、Judge 和账号加密密钥均为 64 字符、互相独立、Judge Token 一致，两个环境文件及备份为 mode 600；两个 OJ 账号已事务重加密并完成二次解密。
+- [x] CORS 已固定为当前单一 HTTP 来源且无通配符；PostgreSQL、go-judge、Router 和蓝绿 API 均只监听回环地址。
+- [ ] Cookie Secure、CSRF 最终跨域复验和 CSP Report-Only/严格策略必须与 HTTPS/TLS 一起完成。
 
 ### 3. 外部告警、日志与故障注入
 

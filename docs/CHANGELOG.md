@@ -16,6 +16,7 @@ source_of_truth: Git history
 - 新增不输出原文的运行时安全审计，检查 Server/Judge 环境文件权限与归属、JWT/Judge/账号密钥长度和独立性、Judge Token 一致性、CORS 通配符及 Cookie Secure 状态。
 - 新增默认只读检查、显式 `--apply` 的事务轮换工具：先解密并预验证全部 OJ 账号，再用 CAS 重新加密，生成 mode-600 环境备份并将旧项目环境链接迁移为当前仓库内文件；异常时恢复环境路径并回滚数据库事务。
 - 新增从最新正式备份恢复独立数据库的轮换演练，真实应用新 JWT/AES 密钥并用新密钥再次解密全部账号，测试数据库与临时环境通过 trap 清理。
+- 使用新建并验证的 14MiB 正式备份完成生产轮换：2 个 OJ 账号事务重加密，旧项目 `.env` 链接替换为当前仓库 mode-600 文件，JWT/账号密钥升级为独立 64 字符值，CORS 固定为单一明确来源。轮换后安全审计零 violation、Judge 认证正常、新会话公网回归 4/4；HTTP 阶段按规则不启用 Secure Cookie。
 
 ### Judge 容器与 systemd 资源边界
 

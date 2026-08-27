@@ -5,6 +5,7 @@ last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-27: 运行时密钥完成受控轮换：最新 14MiB PostgreSQL 备份恢复校验为 79 张表、31 条迁移、20186 个用户；隔离恢复库真实轮换和新密钥二次解密通过后，生产 2 个 OJ 账号事务重加密。Server 环境从旧项目软链接迁移为当前仓库 mode-600 文件，JWT/Judge/账号密钥均为 64 字符且互相独立，CORS 为一个明确来源；安全审计零 violation，Judge 重新认证，新会话公网回归 4/4。HTTP 阶段仍保留 Cookie Secure warning，等待 TLS。
 - 2026-08-27: 生产 go-judge 已设置 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根、`no-new-privileges`、512 MiB 临时盘和 20 MiB × 5 日志轮转；Router/API/Worker/Judge/Web 的 TasksMax、NOFILE、停止超时和重启频率保护由 `pnpm runtime:audit` 校验。systemd 重复安装保持当前蓝绿 slot，不再无条件重置到 3302。
 - 2026-08-27: 新增隔离 Judge 长稳与并发一致性基线：真实 go-judge 连续 30 轮处理 3000 条本地提交，3000/3000 Accepted，历时 1747.722 秒、吞吐 1.72 条/秒，每轮均无卡队列且沙箱文件回到 0；结束时 API/Judge RSS 分别比基线低 8564/8620KB。100 路首次 Revision 创建、100 路同基线 CAS 发布、Hack 并发晋升/重复输入和 500 路编译缓存租约定向测试通过；容器资源限制下的 10 条复验同样通过。详见 `docs/operations/JUDGE_STRESS_2026-08-27.md`。
 - 2026-08-27: 新增公网只读动态验收：一个 `teacher1` 会话依次验证 1158 IOI 与 1157 ACM 的“排行榜题目格 → 用户题目提交列表 → 提交详情”闭环，#3678 按 OI 显示分数/Subtask/测试点得分，#3677 按 ACM 隐藏分值；嵌套弹窗逐层关闭且根页面滚动锁定。连同超级管理员、平台管理员和学校负责人的严格工作区验收共 4/4 通过，过程中无 5xx、控制台 error、page error 或页面横向溢出。当前剩余工作统一登记在 `docs/operations/REMAINING_WORK_2026-08-27.md`。
