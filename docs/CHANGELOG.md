@@ -17,6 +17,7 @@ source_of_truth: Git history
 - Router、API 蓝绿实例、Worker、Judge 和 Web 增加任务数、文件描述符、停止超时与重启频率限制；新增无密钥运行时审计，配置漂移会返回非零。
 - systemd 安装脚本重复执行时不再强行将活动 API 指针重置为 3302，而是从当前 slot 通过正常蓝绿流程切换，使 unit 变更可重复、安全部署。
 - Compose 包装脚本固定历史生产 project 名 `oi-manager`，避免 checkout 目录名称变化时创建第二套空网络/卷；go-judge 的 512 MiB tmpfs 覆盖 Go 实际创建随机临时目录的 `/tmp`，而不是错误地只挂载固定子目录。
+- 新增仅允许回环地址的 go-judge 生产冒烟，实际执行受限命令并断言临时 file inventory 前后相同；资源审计在宿主内核不支持 swap accounting 时明确告警，但仍强制 1536 MiB 内存硬上限。
 
 ### Judge 长稳与 Revision/Hack 并发一致性
 

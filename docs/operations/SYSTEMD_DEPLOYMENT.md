@@ -63,12 +63,15 @@ curl -fsS http://127.0.0.1:3002/api/readiness
 curl -I http://127.0.0.1:3000/login
 curl -fsS http://127.0.0.1:5050/version
 pnpm runtime:audit
+pnpm sandbox:smoke
 sudo journalctl -u oi-manager-worker.service --since '-10 min' --no-pager
 docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' oi-postgres oi-judge
 ```
 
 `runtime:audit` 只读取容器与 systemd 的公开运行参数，不读取环境文件或输出密钥。它会在任一资源上限、
 回环绑定、只读根、临时盘或日志轮转配置缺失时返回非零。
+`sandbox:smoke` 只允许回环地址，执行一个有 CPU/内存/进程/输出限制的短命令，并确认 go-judge 文件清单
+前后相同；它不创建提交、不连接数据库。
 
 For failure evidence use `journalctl -u <unit> -b`, `journalctl -k -b`, and `journalctl -b -1`. Do not include environment files, tokens, cookies, or source code in incident reports.
 

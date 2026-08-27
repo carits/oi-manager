@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
 
 function command(file, args) {
   return execFileSync(file, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
@@ -16,13 +17,19 @@ function systemdDurationToMicroseconds(value) {
 }
 
 const failures = []
+const warnings = []
 const judge = JSON.parse(command('docker', ['inspect', 'oi-judge']))[0]
 const host = judge.HostConfig
 const nofile = (host.Ulimits || []).find(item => item.Name === 'nofile')
 const binding = host.PortBindings?.['5050/tcp']?.[0]
 
 assert(host.Memory === 1536 * 1024 * 1024, 'go-judge memory limit must be 1536 MiB', failures)
-assert(host.MemorySwap === 2 * 1024 * 1024 * 1024, 'go-judge memory+swap limit must be 2 GiB', failures)
+const swapAccountingSupported = fs.existsSync('/sys/fs/cgroup/memory/memory.memsw.limit_in_bytes')
+if (swapAccountingSupported) {
+  assert(host.MemorySwap === 2 * 1024 * 1024 * 1024, 'go-judge memory+swap limit must be 2 GiB', failures)
+} else {
+  warnings.push('Host kernel does not expose cgroup v1 swap accounting; the 1536 MiB memory limit is enforced but memory+swap cannot be limited separately')
+}
 assert(host.CpuPeriod === 100000 && host.CpuQuota === 150000, 'go-judge CPU quota must be 1.5 CPUs', failures)
 assert(host.PidsLimit === 256, 'go-judge PID limit must be 256', failures)
 assert(host.ReadonlyRootfs === true, 'go-judge root filesystem must be read-only', failures)
@@ -63,6 +70,7 @@ console.log(JSON.stringify({
   judge: {
     memoryBytes: host.Memory,
     memorySwapBytes: host.MemorySwap,
+    swapAccountingSupported,
     cpuPeriod: host.CpuPeriod,
     cpuQuota: host.CpuQuota,
     pidsLimit: host.PidsLimit,
@@ -75,6 +83,7 @@ console.log(JSON.stringify({
   },
   units,
   failures,
+  warnings,
 }, null, 2))
 
 if (failures.length) process.exitCode = 1

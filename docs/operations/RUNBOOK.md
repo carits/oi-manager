@@ -58,6 +58,7 @@ After changing Docker Compose or any application systemd unit, run:
 docker-compose config >/dev/null
 sudo systemd-analyze verify deploy/systemd/*.service
 pnpm runtime:audit
+pnpm sandbox:smoke
 ```
 
 The audit verifies go-judge CPU, memory, PID, NOFILE, read-only root, bounded `/tmp` tmpfs, loopback port and Docker log
