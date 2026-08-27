@@ -1,0 +1,83 @@
+---
+status: current
+audience: development, operations
+last_verified: 2026-08-27
+source_of_truth: remote main worktree, production runtime inspection, current test and deployment scripts
+---
+
+# 未完成事项执行总表（2026-08-27）
+
+本文件是当前收口阶段的唯一未完成事项清单。已经完成的业务能力不在这里重复规划；历史聊天、归档计划和旧测试快照不能替代本表。
+
+## 执行规则
+
+- 远程 `/data/oi-manager-response-refactor` 的 `main` 分支是唯一项目事实源。
+- 每个批次都要完成相关测试、文档、Git 提交、远程推送和线上部署或明确说明无需部署。
+- 生产数据只允许只读验收；写入、Judge、Hack 和 Revision 压测使用独立 E2E schema、端口与存储。
+- 整机重启、正式库覆盖恢复、云控制台审计和域名/TLS 需要单独维护窗口或云平台权限。
+
+## 已完成的线上动态验收
+
+- [x] 超级管理员严格只有 `/admin` 工作区。
+- [x] 平台管理员严格只有 `/platform-admin` 工作区，并能读取 `scope=all` 的全局评测记录。
+- [x] `teacher1` 可进入第一中学组织工作区。
+- [x] 1158 IOI 排名可从 `oi20260815_07` 的 A 题打开提交列表和 #3678 详情；列表和详情显示分数、Subtask 与测试点得分。
+- [x] 1157 ACM 排名可从同一用户的 A 题打开提交列表和 #3677 详情；列表和详情不显示测试点分值。
+- [x] 两级弹窗按 Escape 逐层关闭，页面根滚动被锁定，无页面横向溢出、控制台 error、page error 或 5xx。
+
+上述验收由 `e2e/live/role-workspaces.spec.ts` 与 `e2e/live/contest-20260815.spec.ts` 直接访问公网 3000 完成，不写生产数据。
+
+## 待完成批次
+
+### 1. 隔离写入、并发与长稳压测
+
+- [ ] 并发本地提交、Judge 消费、比赛范围重测。
+- [ ] ACM/OI Hack 并发晋升、相同输入去重和不同输入并发 Revision。
+- [ ] Test Graph 保存与 Hack 晋升竞争、CAS 冲突及自动重试。
+- [ ] 单实例和双 API 实例各执行 100 个并发 finalization，证明没有 lost update 或重复入队。
+- [ ] 系统程序编译缓存 500 次获取，验证命中、TTL、LRU、引用计数和退出清理。
+- [ ] 运行 30 至 60 分钟长稳测试，记录吞吐、P95、失败率、内存、临时目录和 go-judge 文件数量。
+
+### 2. Judge、容器和应用安全边界
+
+- [ ] 核对并补齐 CPU、内存、PID、文件大小、输出、打开文件数和临时磁盘限制。
+- [ ] 审查 Docker capability、seccomp、只读文件系统和 `no-new-privileges`。
+- [ ] 为 API、Worker、Judge、Web 补齐 `TasksMax`、`LimitNOFILE`、启停超时和重启频率保护。
+- [ ] 仅检查 JWT、Judge 和账号加密密钥的存在、长度与独立性，不输出原文。
+- [ ] 验证生产 CORS、Cookie/CSRF 和公网端口；CSP 先以 Report-Only 方式清理兼容问题。
+
+### 3. 外部告警、日志与故障注入
+
+- [ ] 接通 `MONITOR_ALERT_COMMAND` 的真实外部通知，并验证故障与恢复消息。
+- [ ] 在云控制台复核告警联系人、阈值、主机重启通知和安全组。
+- [ ] 将 journald、Docker、Nginx 与部署日志复制到异机或对象存储，配置明确保留期。
+- [ ] 注入 API、Worker、Judge WebSocket、go-judge 和数据库短时故障，证明不丢任务且恢复告警生效。
+
+### 4. 全新安装迁移链
+
+- [ ] 在不修改已执行 migration 校验和的前提下处理 `20260429_rename_to_id_v2` 空库重放问题。
+- [ ] 验证全新空库安装和现有生产备份升级两条路径。
+- [ ] 对两条路径运行 Prisma、种子、API、Judge、Hack 与 Revision 集成测试，并比较最终 Schema。
+
+### 5. 蓝绿、恢复与整机演练
+
+- [ ] 验证候选 slot、readiness、Router 原子切换、Judge 1012 重连、Worker 单例锁、旧实例 drain 和失败回滚。
+- [ ] 再次从正式备份恢复到隔离库并运行核心业务与评测检查。
+- [ ] 获得维护窗口后执行受控 ECS 重启，验证所有服务自动恢复和实际恢复时间。
+- [ ] 获得明确授权后执行覆盖正式库的灾难恢复演练。
+- [ ] 通过阿里云实例事件和 ActionTrail 核对 2026-08-19 重启原因。
+
+### 6. 正式入口
+
+- [ ] 获得域名、DNS 和证书后配置 TLS、HTTP 跳转、Secure Cookie 与 HSTS。
+- [ ] 完成严格 CSP 后重新执行公网浏览器、安全头和跨域验收。
+
+## 明确不作为缺陷修复的历史数据
+
+- 8 个没有本地测试数据、Judge Config 或本地提交的历史 HDU/洛谷活动题继续返回 `LOCAL_JUDGE_NOT_CONFIGURED`，不能伪造 Revision。
+- 无法证明历史评测版本的远程归档和旧个人提交保持 `legacy unpinned`。
+- 交互题、通信题和提交答案题的 ACM 失败后提前停止属于后续性能优化，不影响当前判定正确性。
+
+## 完成条件
+
+本表所有适用项必须有当前代码、测试输出、运行时记录或云平台证据。需要外部权限的事项只有在实际执行并记录后才能勾选，不能用“已设计”或“已有脚本”代替完成。
