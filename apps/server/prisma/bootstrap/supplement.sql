@@ -13,9 +13,9 @@ ALTER TABLE "ContributionEvent"
   ADD CONSTRAINT "ContributionEvent_score_positive_check" CHECK ("score" > 0);
 
 CREATE UNIQUE INDEX "ProblemHackAttempt_one_judging_per_problem"
-  ON "ProblemHackAttempt"("problemId") WHERE "status" = 'judging';
+  ON "ProblemHackAttempt"("problemId") WHERE "status" IN ('judging', 'finalizing');
 CREATE UNIQUE INDEX "ProblemHackAttempt_one_active_user_problem"
-  ON "ProblemHackAttempt"("userId", "problemId") WHERE "status" IN ('queuing', 'judging');
+  ON "ProblemHackAttempt"("userId", "problemId") WHERE "status" IN ('queuing', 'judging', 'finalizing');
 CREATE UNIQUE INDEX "UserProblemContent_active_statement_name_key"
   ON "UserProblemContent"("problemId", "userId", "kind", "nameKey")
   WHERE "kind" = 'statement' AND "deletedAt" IS NULL;

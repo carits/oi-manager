@@ -37,7 +37,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] 系统程序编译缓存 500 个并发租约只编译一次，引用计数从 500 回到 0 并完成产物清理。
 - [ ] 比赛范围重测与普通提交同时发生时的重复入队、结果覆盖和统计一致性。
 - [ ] Test Graph 保存与 Hack 晋升竞争、CAS 冲突及自动重试。
-- [ ] 单实例和双 API 实例各执行 100 个并发 finalization，证明没有 lost update 或重复入队。
+- [x] 单实例定向测试和双 API 隔离栈各执行 100 个并发 finalization；重复/旧 Judge 回传不能覆盖终态，成绩同步只发生一次。
 - [ ] 在压力工具中补充逐提交延迟分位数；现有 29 分钟长稳报告已记录吞吐、成功率、RSS 与 go-judge 文件数量。
 
 ### 2. Judge、容器和应用安全边界
@@ -59,13 +59,13 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 ### 4. 全新安装迁移链
 
 - [x] 未修改任何历史 migration 或校验和；新增仅空库可用的事务 bootstrap，使用当前 Prisma Schema、Prisma 无法表达对象 supplement 和每个历史 SQL 原始 SHA-256 建库。
-- [x] 全新空库完成 79 张表、28 个唯一 migration、32 个种子用户；正式 14MiB 备份恢复库完成正常 `migrate deploy/status`，生产库同样确认无待应用迁移。
+- [x] 全新空库完成 79 张表、29 个唯一 migration、32 个种子用户；正式 14MiB 备份恢复库完成正常 `migrate deploy/status` 后为 32 条迁移记录和 20186 个用户。
 - [x] 两条路径的 `public` 规范结构签名完全一致，覆盖表、列、默认值、约束、部分索引、Enum、函数、触发器、序列、视图与 RLS；正式非空库调用 bootstrap 在任何 DDL 前被拒绝。
 - [ ] API、Judge、Hack 与 Revision 的跨进程写入验证归入后续蓝绿/故障注入批次；本项只证明安装、迁移、Seed 与数据库结构一致性。
 
 ### 5. 蓝绿、恢复与整机演练
 
-- [ ] 验证候选 slot、readiness、Router 原子切换、Judge 1012 重连、Worker 单例锁、旧实例 drain 和失败回滚。
+- [x] 在独立 e2e schema/端口/go-judge 中验证候选 slot、readiness、Router 原子切换、Judge 1012 重连、Worker 单例锁、旧实例 drain、失败回滚和 50 次客户端 RST；生产发布仍须沿同一流程执行。
 - [ ] 再次从正式备份恢复到隔离库并运行核心业务与评测检查。
 - [ ] 获得维护窗口后执行受控 ECS 重启，验证所有服务自动恢复和实际恢复时间。
 - [ ] 获得明确授权后执行覆盖正式库的灾难恢复演练。

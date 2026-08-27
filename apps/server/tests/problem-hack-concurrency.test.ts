@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { finalizeHackResult, type HackJudgeResultPayload } from '../src/modules/problem/problem.hack.service'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
+import { persistOwnedSubmissionResult } from '../src/ws/judge'
 import { createTestUser } from './helpers/testUser'
 
 const root = path.join(process.cwd(), 'testdata')
@@ -101,6 +102,58 @@ afterEach(async () => {
 })
 
 describe('concurrent Hack promotion', () => {
+  it('accepts exactly one of 100 duplicate cross-process-style submission results', async () => {
+    const context = await fixture()
+    const submission = await prisma.submission.create({ data: {
+      userId: context.owner.user.id,
+      oj: 'carits',
+      problemId: context.problem.problemId,
+      problemInternalId: context.problem.id,
+      language: 'cpp',
+      code: 'int main(){}',
+      codeLength: 12,
+      result: 'judging',
+      submitMethod: 'local',
+      submitScope: 'problem',
+      judgeId: 'judge-owner',
+      judgeStarted: new Date(),
+      testSetRevisionId: context.revision.id,
+      judgeConfigHash: context.revision.judgeConfigHash,
+    } })
+    const payload = {
+      submissionId: submission.id,
+      result: 'Accepted',
+      time: 5,
+      wallTime: 7,
+      memory: 1024,
+      score: 100,
+      cases: [],
+    }
+
+    const results = await Promise.all(Array.from({ length: 100 }, () =>
+      persistOwnedSubmissionResult(payload, 'judge-owner'),
+    ))
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(await persistOwnedSubmissionResult({ ...payload, result: 'Wrong Answer', score: 0 }, 'stale-judge')).toBe(false)
+    expect(await prisma.submission.findUniqueOrThrow({ where: { id: submission.id } })).toMatchObject({
+      result: 'accepted', score: 100, judgeId: null, judgeStarted: null,
+    })
+  }, 60_000)
+
+  it('claims one duplicate Hack finalization and ignores the other 99', async () => {
+    const context = await fixture()
+    const attempt = await createAttempt(context)
+    const payload = acceptedPayload(attempt.id, '73 19\n')
+
+    await Promise.all(Array.from({ length: 100 }, () => finalizeHackResult(payload)))
+
+    expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
+    expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
+    expect(await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({
+      status: 'accepted', canonicalStatus: 'promoted',
+    })
+  }, 60_000)
+
   it('promotes one of ten simultaneous results and safely requeues every loser', async () => {
     const context = await fixture()
     const attempts = await Promise.all(Array.from({ length: 10 }, () => createAttempt(context)))

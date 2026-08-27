@@ -20,7 +20,7 @@ import { ensureInitialTestSetRevision } from './problem.testset-revision.service
 
 export const problemHackRouter = Router()
 
-const ACTIVE_STATUSES = ['queuing', 'judging']
+const ACTIVE_STATUSES = ['queuing', 'judging', 'finalizing']
 
 function canSubmitProblem(user: any, problem: any): boolean {
   return problem.status === 'published' && canViewProblem(user, problem)

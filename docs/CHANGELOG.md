@@ -11,6 +11,15 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### Judge 结果所有权与双 API 蓝绿一致性
+
+- Submission 终态写入改为以 `submissionId + judging + judgeId` 原子认领；重复、延迟或来自旧 Judge 的回传不能覆盖已经落库的结果，也不会重复触发成绩同步。
+- Hack 回传先以 CAS 从 `judging` 进入 `finalizing`，同一 Hack 的 100 个重复回传只有一个拥有最终化权；Revision 发布和 Hack Attempt 的 `promoted` 状态在同一数据库事务中提交。
+- `finalizing` 纳入单题和单用户活动任务唯一索引、排队排除、超时恢复和重启恢复；新增第 29 个迁移并同步空库 supplement。
+- Router 补齐 HTTP、WebSocket、客户端 RST、上游断开和关闭阶段的 Socket 生命周期处理；客户端连接重置不再触发未处理的 `ECONNRESET` 终止进程。
+- 新增独立双 API 演练：在 `e2e` schema、3410/3412/3413 和独立 go-judge 中验证 100 路双实例 finalization、50 次客户端 RST、Worker 单例锁、blue/green 切换与回滚、旧 API drain 和 Judge 1012 自动重连。
+- Server 44 文件 452/452、Judge 4 文件 14/14、双 API E2E 1/1、根生产构建通过；空库和正式备份恢复路径分别为 29/32 条迁移、79 张表，规范结构哈希一致。
+
 ### 全新空库安装与历史迁移兼容
 
 - 在不修改任何历史 migration 或校验和的前提下，新增仅空库可用的原子 bootstrap：根据当前 Prisma Schema 建库，将每个历史 SQL 文件的原始 SHA-256 写入标准迁移表，并在同一事务内通过 advisory lock 二次确认目标仍为空。

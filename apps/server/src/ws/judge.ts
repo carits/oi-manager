@@ -196,7 +196,7 @@ class JudgeConsumer {
             AND NOT EXISTS (
               SELECT 1 FROM "ProblemHackAttempt" active
               WHERE active."problemId" = candidate."problemId"
-                AND active.status = 'judging'
+                AND active.status IN ('judging', 'finalizing')
             )
           ORDER BY candidate."createdAt" ASC
           FOR UPDATE SKIP LOCKED
@@ -391,7 +391,7 @@ export function initJudgeWebSocket() {
         }
       })
       const staleHacks = await prisma.problemHackAttempt.updateMany({
-        where: { status: 'judging', judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
+        where: { status: { in: ['judging', 'finalizing'] }, judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
         data: { status: 'queuing', judgeId: null, judgeStarted: null },
       })
 
@@ -543,7 +543,7 @@ async function recoverAllStaleTasks() {
       }
     })
     const recoveredHacks = await prisma.problemHackAttempt.updateMany({
-      where: { status: 'judging' },
+      where: { status: { in: ['judging', 'finalizing'] } },
       data: { status: 'queuing', judgeId: null, judgeStarted: null },
     })
 
@@ -683,12 +683,13 @@ function handleConfig(ws: WebSocket, payload: { concurrency?: number }) {
  * 处理评测结果
  */
 async function handleResult(ws: WebSocket, payload: any) {
-  const { submissionId, result, time, wallTime, memory, score, cases, subtasks, message, timeoutReason, metricSource } = payload
+  const { submissionId, result, time, wallTime, memory, score, timeoutReason, metricSource } = payload
 
   // The result message has already transferred ownership back to the server.
   // Remove it synchronously before any database await so a socket close cannot
   // race with destroy() and put the reported task back into the queue.
-  judges.get(ws)?.consumer?.handleResult('submission', String(submissionId))
+  const connection = judges.get(ws)
+  connection?.consumer?.handleResult('submission', String(submissionId))
 
   logger.info('judge_ws_result', {
     action: 'judge_ws',
@@ -697,63 +698,66 @@ async function handleResult(ws: WebSocket, payload: any) {
 
   // 更新数据库
   try {
-    const updateData = {
-      result: normalizeResult(result),
-      timeUsed: time,
-      wallTimeUsed: wallTime ?? null,
-      memoryUsed: memory ?? null,
-      timeoutReason: timeoutReason ?? null,
-      metricSource: metricSource ?? null,
-      score: score ?? null,
-      cases: cases ? JSON.stringify(cases) : null,
-      subtasks: subtasks ? JSON.stringify(subtasks) : null,
-      judgeId: null,
-      judgeStarted: null
+    if (!connection?.judgeId) return
+    const claimed = await persistOwnedSubmissionResult(payload, connection.judgeId)
+    if (!claimed) {
+      logger.warn('judge_ws_stale_result_ignored', {
+        action: 'judge_ws', metadata: { submissionId, judgeId: connection.judgeId },
+      })
+      return
     }
-
-    await prisma.submission.update({
-      where: { id: parseInt(submissionId) },
-      data: { ...updateData, errorMessage: message }
-    })
 
     logger.info('judge_ws_db_updated', { action: 'judge_ws', metadata: { submissionId } })
 
-    // 触发 AC 同步（submitScope/trainingId/contestId 等字段由创建时设置）
-    try {
-      const submission = await prisma.submission.findUnique({
-        where: { id: parseInt(submissionId) },
-        select: {
-          id: true,
-          userId: true,
-          problemId: true,
-          result: true,
-          score: true,
-          submitScope: true,
-          trainingId: true,
-          trainingProblemId: true,
-          contestId: true,
-          contestProblemId: true,
-        },
-      })
-      if (submission) {
-        await onSubmissionJudged(submission)
-      }
-    } catch (syncErr: any) {
-      logger.error('judge_ws_sync_error', {
-        action: 'judge_ws',
-        metadata: { submissionId, error: syncErr.message }
-      })
-    }
   } catch (e: any) {
     logger.error('judge_ws_update_error', {
       action: 'judge_ws',
       metadata: { submissionId, error: e.message }
     })
     await prisma.submission.updateMany({
-      where: { id: parseInt(submissionId), result: 'judging' },
+      where: { id: parseInt(submissionId), result: 'judging', judgeId: connection?.judgeId },
       data: { result: 'queuing', judgeId: null, judgeStarted: null },
     }).catch(() => {})
   }
+}
+
+export async function persistOwnedSubmissionResult(payload: any, judgeId: string): Promise<boolean> {
+  const submissionId = Number.parseInt(String(payload?.submissionId || ''), 10)
+  if (!Number.isSafeInteger(submissionId) || !judgeId) return false
+  const updated = await prisma.submission.updateMany({
+    where: { id: submissionId, result: 'judging', judgeId },
+    data: {
+      result: normalizeResult(payload.result),
+      timeUsed: payload.time,
+      wallTimeUsed: payload.wallTime ?? null,
+      memoryUsed: payload.memory ?? null,
+      timeoutReason: payload.timeoutReason ?? null,
+      metricSource: payload.metricSource ?? null,
+      score: payload.score ?? null,
+      cases: payload.cases ? JSON.stringify(payload.cases) : null,
+      subtasks: payload.subtasks ? JSON.stringify(payload.subtasks) : null,
+      errorMessage: payload.message,
+      judgeId: null,
+      judgeStarted: null,
+    },
+  })
+  if (updated.count !== 1) return false
+  try {
+    const submission = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true, userId: true, problemId: true, result: true, score: true,
+        submitScope: true, trainingId: true, trainingProblemId: true,
+        contestId: true, contestProblemId: true,
+      },
+    })
+    if (submission) await onSubmissionJudged(submission)
+  } catch (syncErr: any) {
+    logger.error('judge_ws_sync_error', {
+      action: 'judge_ws', metadata: { submissionId, error: syncErr.message },
+    })
+  }
+  return true
 }
 
 async function handleHackResult(ws: WebSocket, payload: any) {
@@ -771,14 +775,14 @@ async function handleHackResult(ws: WebSocket, payload: any) {
     },
   })
   try {
-    await finalizeHackResult(payload)
+    await finalizeHackResult(payload, { judgeId: judges.get(ws)?.judgeId })
   } catch (error: any) {
     logger.error('judge_ws_hack_finalize_error', {
       action: 'judge_ws',
       metadata: { hackAttemptId, error: error.message },
     })
     await prisma.problemHackAttempt.updateMany({
-      where: { id: hackAttemptId, status: 'judging' },
+      where: { id: hackAttemptId, status: { in: ['judging', 'finalizing'] } },
       data: {
         status: 'system_error',
         failureStage: 'persist',

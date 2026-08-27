@@ -247,9 +247,24 @@ export interface HackJudgeResultPayload {
   outputSha256?: string
 }
 
-export async function finalizeHackResult(payload: HackJudgeResultPayload): Promise<void> {
+export async function finalizeHackResult(
+  payload: HackJudgeResultPayload,
+  owner: { judgeId?: string } = {},
+): Promise<void> {
+  // Claim finalization before reading or writing files. This compare-and-swap
+  // makes duplicate/stale Judge replies idempotent across blue/green API
+  // processes; only the process that still owns the judging attempt proceeds.
+  const claimed = await prisma.problemHackAttempt.updateMany({
+    where: {
+      id: payload.hackAttemptId,
+      status: 'judging',
+      ...(owner.judgeId ? { judgeId: owner.judgeId } : {}),
+    },
+    data: { status: 'finalizing' },
+  })
+  if (claimed.count !== 1) return
   const attempt = await prisma.problemHackAttempt.findUnique({ where: { id: payload.hackAttemptId } })
-  if (!attempt || attempt.status !== 'judging') return
+  if (!attempt || attempt.status !== 'finalizing') return
 
   const resultFields = {
     baselineResult: payload.baselineResult || null,
@@ -270,7 +285,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
 
   {
     const current = await prisma.problemHackAttempt.findUnique({ where: { id: attempt.id } })
-    if (!current || current.status !== 'judging') return
+    if (!current || current.status !== 'finalizing') return
     const [problem, hackConfig] = await Promise.all([
       prisma.problem.findUnique({ where: { id: current.problemId }, include: { LatestTestSetRevision: true } }),
       prisma.problemHackConfig.findUnique({ where: { problemId: current.problemId } }),
@@ -287,6 +302,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
       })
       return
     }
+    const baseRevision = problem.LatestTestSetRevision
 
     const inputData = payload.inputData || ''
     const outputData = payload.outputData ?? ''
@@ -345,7 +361,7 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
     await fs.promises.mkdir(directory, { recursive: true })
     const stagedInput = path.join(directory, `.${inputFile}.pending`), stagedOutput = path.join(directory, `.${outputFile}.pending`)
     const finalInput = path.join(directory, inputFile), finalOutput = path.join(directory, outputFile)
-    let inputPromoted = false, outputPromoted = false, testcaseCreated = false, revisionPublished = false
+    let inputPromoted = false, outputPromoted = false, testcaseCreated = false
     try {
       await fs.promises.writeFile(stagedInput, inputData, { encoding: 'utf8', flag: 'wx' })
       await fs.promises.writeFile(stagedOutput, outputData, { encoding: 'utf8', flag: 'wx' })
@@ -385,24 +401,26 @@ export async function finalizeHackResult(payload: HackJudgeResultPayload): Promi
           gate.cases = [candidateCase, ...gate.cases]
         }
       }
-      const promoted = await publishTestSetRevision({
+      await publishTestSetRevision({
         problemId: problem.id, expectedLatestRevisionId: problem.latestTestSetRevisionId,
         source: 'hack', createdBy: current.userId, hackAttemptId: current.id,
         baseConfigText: problem.LatestTestSetRevision.judgeConfig, spec: baseSpec,
-      })
-      revisionPublished = true
-      await prisma.problemHackAttempt.update({
-        where: { id: current.id },
-        data: {
-          status: 'accepted', canonicalStatus: 'promoted', ...resultFields, failureStage: null,
-          message: `${payload.message || '有效 Hack'}；已从 R${problem.LatestTestSetRevision.revisionNumber} 自动晋升为 R${promoted!.revisionNumber}`, inputSha256, outputSha256,
-          acceptedInputFile: inputFile, acceptedOutputFile: outputFile, acceptedTestcaseId: testcaseId,
-          candidateTestcaseId: testcaseId, promotedRevisionId: promoted!.id, testGraphRevision: nextRevision,
-          judgeId: null, judgeStarted: null, finishedAt: new Date(),
+        transactionHook: async (tx, revision) => {
+          const finalized = await tx.problemHackAttempt.updateMany({
+            where: { id: current.id, status: 'finalizing' },
+            data: {
+              status: 'accepted', canonicalStatus: 'promoted', ...resultFields, failureStage: null,
+              message: `${payload.message || '有效 Hack'}；已从 R${baseRevision.revisionNumber} 自动晋升为 R${revision.revisionNumber}`,
+              inputSha256, outputSha256,
+              acceptedInputFile: inputFile, acceptedOutputFile: outputFile, acceptedTestcaseId: testcaseId,
+              candidateTestcaseId: testcaseId, promotedRevisionId: revision.id, testGraphRevision: nextRevision,
+              judgeId: null, judgeStarted: null, finishedAt: new Date(),
+            },
+          })
+          if (finalized.count !== 1) throw new Error('Hack finalization ownership was lost')
         },
       })
     } catch (error) {
-      if (revisionPublished) throw error
       if (error instanceof TestSetRevisionConflict && current.promotionRetries < 3) {
         const latest = await prisma.problem.findUnique({ where: { id: problem.id }, include: { LatestTestSetRevision: true } })
         if (latest?.LatestTestSetRevision) await prisma.problemHackAttempt.update({ where: { id: current.id }, data: {
