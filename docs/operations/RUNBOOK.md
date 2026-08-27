@@ -66,6 +66,25 @@ rotation, plus the memory, task, file-descriptor, stop-timeout and restart-frequ
 It intentionally does not inspect or print runtime secrets. Never use `docker-compose down -v`; the old named Judge
 scratch volume may be removed only in a separately verified cleanup, while the PostgreSQL volume must be retained.
 
+## Runtime secret audit and rotation
+
+The security audit reports only file metadata, secret lengths and boolean comparisons. It never prints secret values:
+
+```bash
+pnpm security:audit
+pnpm security:rotate:check
+```
+
+`security:rotate:check` decrypts every stored OJ account in memory and performs no writes. A production rotation must
+first create and verify a database backup, then prove `--apply` against a restored isolated database and a temporary
+environment file. The apply path creates a mode-600 environment backup, rotates JWT and the 64-hex AES account key,
+re-encrypts OJ passwords with compare-and-swap inside a transaction, and replaces an old deployment symlink with a
+mode-600 file in the current repository. Do not print, copy into Git, or include either environment file in logs.
+
+After a successful production apply, immediately blue/green promote the API and restart the singleton Worker. Existing
+JWT sessions are intentionally invalidated and users must sign in again. Verify `pnpm security:audit`, both OJ account
+decryptions, login, API readiness and Judge authentication before declaring the rotation complete.
+
 ## SSH hardening
 
 The repository baseline disables password and keyboard-interactive authentication, keeps public-key authentication,
