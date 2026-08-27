@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### 正式备份隔离恢复核心闭环
+
+- 新增 `backup:verify:core`，在专用 PostgreSQL 容器、15435 端口、`e2e` Schema、隔离存储和独立 go-judge 中恢复最新正式备份；生产 Schema 只读，写入验收永远不能落到正式数据库或正式测试数据目录。
+- 恢复后执行当前 Prisma migration/status，再检查正式数据的用户、题目、活动、提交、Revision、活动固定版本和 Revision 哈希关系；随后通过真实 API/Judge 验证四类身份、管理员工作区、AC/WA、Hack 自动晋升、历史版本不变、草稿活动手动升级及活动开始后冻结。
+- 2026-08-28 实际演练恢复 79 张表、32 条迁移、20186 个用户，恢复耗时 11618ms，核心 E2E 2/2 通过；精确命名且带所有权标签的 PostgreSQL/go-judge 容器在成功和失败路径均自动清理。
+
 ### Judge/数据库故障恢复一致性
 
 - go-judge HTTP 传输失败不再返回用户 Compilation Error、Runtime Error 或最终 Hack System Error；普通评测以及 Hack 的 Generator/Validator/Classifier/STD/Checker/双评测基础设施错误都标记为可重试，Judge 主动断开连接，由 Server 立即条件式重排。

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RESULTS_DIR="$ROOT_DIR/test-results/stress"
+RESULTS_DIR="${STRESS_RESULTS_DIR:-$ROOT_DIR/test-results/stress}"
 SANDBOX_PORT="${STRESS_GO_JUDGE_PORT:-15050}"
 SANDBOX_NAME="${STRESS_GO_JUDGE_NAME:-oi-manager-e2e-stress-go-judge}"
 SANDBOX_IMAGE="${STRESS_GO_JUDGE_IMAGE:-oi-manager/go-judge:v1.12.1-gcc-python3}"
