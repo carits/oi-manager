@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-12
+last_verified: 2026-08-28
 source_of_truth: AGENTS.md, package.json and workspace package manifests
 ---
 
@@ -65,6 +65,9 @@ source_of_truth: AGENTS.md, package.json and workspace package manifests
 ## 代码组织
 
 - 新业务优先进入现有 `apps/server/src/modules/<domain>`，避免继续扩张单文件路由。
+- `routes/` 只允许请求解析、DTO 校验、认证上下文、application service 调用和响应映射；禁止新增 Prisma、事务、文件操作、Judge 操作、状态转换或业务权限判断。
+- 核心状态只能通过 domain transition 函数修改；禁止在 route 或无状态机保护的 service 中直接写状态字符串。
+- 领域重构采用 expand → dual-write → switch-write → switch-read → cleanup，任何批次都不得同时删除旧事实源和引入新事实源。
 - 页面只负责组合和交互；跨角色业务 UI 放在 `apps/web/src/components`。
 - 数据获取优先使用 `hooks/data`，特殊调用使用 `apiClient`。
 - JWT、角色和跨应用 DTO 在 `packages/shared/src` 定义。
@@ -80,6 +83,8 @@ source_of_truth: AGENTS.md, package.json and workspace package manifests
 开发阶段可使用 `prisma:push` 快速同步本地 schema；需要保留升级历史或准备正式环境
 时必须创建迁移。任何命令执行前先确认 `DATABASE_URL` 的数据库和 schema，测试只能
 使用 `test` 或 `e2e`。
+
+历史 migration 及其校验和不可修改。新增迁移必须同时验证全新空库与最新正式备份恢复库，二者规范结构签名一致后才允许部署。生产迁移前必须生成并校验备份。
 
 ## Git
 

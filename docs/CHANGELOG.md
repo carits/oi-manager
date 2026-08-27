@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-27
+last_verified: 2026-08-28
 source_of_truth: Git history
 ---
 
@@ -10,6 +10,13 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
 ## 2026-08-28
+
+### JudgeRun/JudgeAttempt 领域模型第一阶段
+
+- 新增 `JudgeRun`、`JudgeAttempt` 和 `RejudgeBatch`，把逻辑评测、物理执行尝试和范围重测从 Submission 用户意图中分离；新增 Run/Attempt/Batch Prisma 枚举与拒绝非法迁移的 domain state machine。
+- 新普通题提交和活动提交改为在一个事务中创建 Submission、Run、Attempt 及 current 指针；远程归档明确不创建本地 Judge 生命周期。旧 `Submission.result/score/judgeId` 等字段保留为兼容投影，本批不切换 Consumer 或删除旧字段。
+- 新迁移为现有本地提交回填确定性 legacy Run/Attempt；全新空库与最新正式备份恢复库分别为 30/33 条迁移、82 张表，规范结构 SHA-256 一致，恢复库保持 20186 用户。
+- Prisma 校验、Server 构建、Judge Domain 6/6 和 Server 全量 46 文件 460/460 通过。架构总览、产品定义与开发路由契约同步为当前蓝绿生产拓扑和双领域模型。
 
 ### 受控 ECS 整机重启演练
 

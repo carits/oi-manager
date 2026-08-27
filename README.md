@@ -1,10 +1,10 @@
 # OI Manager V2
 
-信息学竞赛训练管理平台 - 面向信息学竞赛培养场景的三端成长管理平台
+面向 OI 教学与竞赛训练的一体化管理与评测平台
 
 ## 项目简介
 
-OI Manager V2 是一个专为信息学竞赛培训设计的管理平台，支持学校、团队、教师、学生的全方位管理。系统定位为"信息学竞赛训练管理平台"，不是在线判题 OJ，但内置 Carits 本地评测引擎支持训练提交。
+OI Manager V2 同时包含教育管理域与本地评测域。教育管理域负责学校、团队、教师、学生、训练和题单；评测域负责题目、不可变 TestSet Revision、Submission、JudgeRun/JudgeAttempt、ACM/OI 判定、Hack 和重测。系统保持模块化单体 Server 与独立 Judge Runtime，不拆分微服务。
 
 ### 核心功能
 
@@ -29,9 +29,9 @@ OI Manager V2 是一个专为信息学竞赛培训设计的管理平台，支持
 ## 技术栈
 
 ### 前端
-- **框架**: Next.js 14 (App Router)
+- **框架**: Next.js 15 (App Router)
 - **语言**: TypeScript
-- **UI**: React + 内联样式 + CSS 变量设计 token 系统
+- **UI**: React + CSS Modules + 统一组件/设计 Token
 - **数据**: SWR 请求缓存
 - **Markdown**: react-markdown + remark-gfm
 - **LaTeX**: remark-math + rehype-katex
@@ -74,7 +74,7 @@ docker-compose up -d db judge
 ```bash
 cd apps/server
 pnpm prisma:generate  # 生成 Prisma Client
-pnpm prisma:push      # 推送 schema 到数据库
+pnpm exec prisma migrate deploy # 应用版本化数据库迁移
 pnpm prisma:seed      # 执行种子数据
 ```
 
@@ -152,7 +152,7 @@ oi-manager-v2/
 ## 开发规范
 
 - TypeScript strict mode
-- 内联样式 + CSS 变量设计 token 系统
+- 统一 UI 组件 + CSS Modules + CSS 变量设计 Token
 - RESTful API，统一响应格式 `{ success, data?, message? }`
 - JWT 认证，所有 API 走 `apiClient`
 - Prisma 关联字段名大写 (`Teacher`, `Student`, `Team`)
@@ -175,4 +175,4 @@ npx prisma studio      # 打开 Prisma Studio
 
 ## 项目状态
 
-项目仍处于开发阶段，当前使用 `3000/3002` 开发服务，尚未切换正式部署。已实现能力、验证快照和限制以 [docs/STATUS.md](./docs/STATUS.md) 为准。
+项目已运行正式 systemd/蓝绿部署拓扑：Nginx/Next.js 使用 `80/3000`，稳定 API Router 使用 `3002`，API 蓝绿实例使用 `3302/3303`，Judge 通过稳定 Router 自动重连。当前正式入口仍为 HTTP，TLS、外部告警和异机日志等未闭环事项以 [docs/STATUS.md](./docs/STATUS.md) 与剩余工作表为准。

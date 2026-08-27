@@ -7,6 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum JudgeRunType {
+  NORMAL
+  REJUDGE
+  HACK_REJUDGE
+  MANUAL
+  MIGRATION_VERIFY
+}
+
+enum JudgeRunStatus {
+  QUEUED
+  RUNNING
+  FINALIZED
+  CANCELLED
+}
+
+enum JudgeAttemptState {
+  QUEUED
+  CLAIMED
+  COMPILING
+  RUNNING
+  FINALIZING
+  SUCCEEDED
+  USER_ERROR
+  INFRA_ERROR
+  CANCELLED
+}
+
+enum RejudgeBatchStatus {
+  CREATED
+  QUEUING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model AiUsageLog {
   id          String   @id
   userId      String
@@ -892,6 +927,100 @@ model SchoolProblemList {
   @@index([organizationId])
 }
 
+model RejudgeBatch {
+  id           String             @id
+  trainingId   Int?
+  scopeType    String
+  scopePayload Json?
+  status       RejudgeBatchStatus @default(CREATED)
+  requestedBy  String
+  matchedCount Int                @default(0)
+  queuedCount  Int                @default(0)
+  skippedCount Int                @default(0)
+  errorMessage String?
+  createdAt    DateTime           @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  JudgeRuns    JudgeRun[]
+
+  @@index([trainingId, createdAt])
+  @@index([status, createdAt])
+  @@index([requestedBy, createdAt])
+}
+
+model JudgeRun {
+  id                   String                  @id
+  submissionId         Int
+  runNumber            Int
+  runType              JudgeRunType
+  status               JudgeRunStatus          @default(QUEUED)
+  testSetRevisionId    String?
+  judgeConfigHash      String?
+  rejudgeBatchId       String?
+  requestedBy          String?
+  result               String?
+  score                Int?
+  cases                String?
+  subtasks             String?
+  errorMessage         String?
+  timeUsed             Int?
+  wallTimeUsed         Int?
+  memoryUsed           Int?
+  timeoutReason        String?
+  metricSource         String?
+  currentAttemptId     String?                 @unique
+  createdAt            DateTime                @default(now())
+  startedAt            DateTime?
+  finalizedAt          DateTime?
+  updatedAt            DateTime                @updatedAt
+  Submission           Submission              @relation("SubmissionJudgeRuns", fields: [submissionId], references: [id], onDelete: Cascade)
+  CurrentForSubmission Submission?             @relation("SubmissionCurrentJudgeRun")
+  TestSetRevision      ProblemTestSetRevision? @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
+  RejudgeBatch         RejudgeBatch?           @relation(fields: [rejudgeBatchId], references: [id], onDelete: SetNull)
+  Attempts             JudgeAttempt[]          @relation("JudgeRunAttempts")
+  CurrentAttempt       JudgeAttempt?           @relation("JudgeRunCurrentAttempt", fields: [currentAttemptId], references: [id], onDelete: SetNull)
+
+  @@unique([submissionId, runNumber])
+  @@index([status, createdAt])
+  @@index([testSetRevisionId])
+  @@index([rejudgeBatchId])
+}
+
+model JudgeAttempt {
+  id               String            @id
+  judgeRunId       String
+  attemptNumber    Int
+  state            JudgeAttemptState @default(QUEUED)
+  judgeId          String?
+  fencingToken     String            @unique
+  retryOfAttemptId String?
+  leaseUntil       DateTime?
+  result           String?
+  score            Int?
+  cases            String?
+  subtasks         String?
+  errorMessage     String?
+  timeUsed         Int?
+  wallTimeUsed     Int?
+  memoryUsed       Int?
+  timeoutReason    String?
+  metricSource     String?
+  createdAt        DateTime          @default(now())
+  claimedAt        DateTime?
+  startedAt        DateTime?
+  finalizedAt      DateTime?
+  updatedAt        DateTime          @updatedAt
+  JudgeRun         JudgeRun          @relation("JudgeRunAttempts", fields: [judgeRunId], references: [id], onDelete: Cascade)
+  CurrentForRun    JudgeRun?         @relation("JudgeRunCurrentAttempt")
+  RetryOfAttempt   JudgeAttempt?     @relation("JudgeAttemptRetry", fields: [retryOfAttemptId], references: [id], onDelete: SetNull)
+  RetriedBy        JudgeAttempt[]    @relation("JudgeAttemptRetry")
+
+  @@unique([judgeRunId, attemptNumber])
+  @@index([state, createdAt])
+  @@index([judgeId, state])
+  @@index([retryOfAttemptId])
+}
+
 model Submission {
   id                Int                     @id @default(autoincrement())
   userId            String
@@ -930,11 +1059,14 @@ model Submission {
   contestProblemId  String?
   testSetRevisionId String?
   judgeConfigHash   String?
+  currentJudgeRunId String?                 @unique
   OjAccount         OjAccount?              @relation(fields: [ojAccountId], references: [id])
   Training          Training?               @relation(fields: [trainingId], references: [id])
   Organization      Organization?           @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   User              User                    @relation(fields: [userId], references: [id])
   TestSetRevision   ProblemTestSetRevision? @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
+  JudgeRuns         JudgeRun[]              @relation("SubmissionJudgeRuns")
+  CurrentJudgeRun   JudgeRun?               @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
 
   @@index([contestId])
   @@index([createdAt])
@@ -1271,6 +1403,7 @@ model ProblemTestSetRevision {
   Submissions                     Submission[]
   HackAttemptsBasedOn             ProblemHackAttempt[]              @relation("HackBaseTestSetRevision")
   PromotedHackAttempts            ProblemHackAttempt[]              @relation("HackPromotedTestSetRevision")
+  JudgeRuns                       JudgeRun[]
   ProblemTestSetRevisionGroup     ProblemTestSetRevisionGroup[]
   ProblemTestSetRevisionGroupCase ProblemTestSetRevisionGroupCase[]
 

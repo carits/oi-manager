@@ -11,6 +11,7 @@ import {
 } from '../lib/idempotency'
 import { findUsableProblemByExternalId } from '../modules/problem/problem.access'
 import { ensureInitialTestSetRevision } from '../modules/problem/problem.testset-revision.service'
+import { createQueuedSubmissionWithRun } from '../modules/judge/application/judge-run.service'
 
 export const submitRouter = Router()
 
@@ -66,8 +67,7 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
         `problem-submit:${userId}`,
         idempotencyKey,
         fingerprint,
-        () => prisma.submission.create({
-          data: {
+        () => createQueuedSubmissionWithRun({
             userId,
             workspaceScope: getResourceScope(req.user),
             organizationId: req.user.organizationId || null,
@@ -83,8 +83,7 @@ submitRouter.post('/', authenticate, async (req: any, res) => {
             isGlobalVisible: true,
             testSetRevisionId: revision?.id || null,
             judgeConfigHash: revision?.judgeConfigHash || null,
-          },
-        }),
+        }, { requestedBy: userId }),
       )
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {

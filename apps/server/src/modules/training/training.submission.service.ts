@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma'
+import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 
 export interface QueuedTrainingSubmissionInput {
   userId: string
@@ -24,8 +25,7 @@ export interface QueuedTrainingSubmissionInput {
 
 // Normal and development submissions use one local judge queue path.
 export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmissionInput) {
-  const submission = await prisma.submission.create({
-    data: {
+  const submission = await createQueuedSubmissionWithRun({
       userId: input.userId,
       workspaceScope: input.training.scope,
       organizationId: input.training.scope === 'campus'
@@ -48,8 +48,7 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
       isGlobalVisible: input.training.type === 'contest' ? false : true,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),
       ...(input.sourceId ? { sourceId: input.sourceId, submitSource: 'demo_scenario' } : {}),
-    },
-  })
+  }, { requestedBy: input.userId })
   if (input.trainingProblem.Problem.platform === 'carits') {
     return prisma.submission.update({ where: { id: submission.id }, data: { ojRemoteId: submission.id.toString() } })
   }

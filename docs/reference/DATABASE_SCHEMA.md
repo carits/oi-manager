@@ -1,8 +1,8 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-24
-source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
+last_verified: 2026-08-28
+source_of_truth: apps/server/prisma/schema.prisma
 ---
 
 # 数据库模型
@@ -25,6 +25,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `ContributionEvent` | 以 Prisma schema 为准 |
 | `ContributionProject` | 以 Prisma schema 为准 |
 | `File` | 以 Prisma schema 为准 |
+| `JudgeAttempt` | 一次 JudgeRun 的物理执行尝试，保存状态、执行者、fencing token、租约和阶段结果；终态不可重新打开 |
+| `JudgeRun` | 一次逻辑评测运行，固定测试版本/配置哈希并聚合可重试的 JudgeAttempt |
 | `LoginLog` | 以 Prisma schema 为准 |
 | `Milestone` | 以 Prisma schema 为准 |
 | `OjAccount` | 以 Prisma schema 为准 |
@@ -61,9 +63,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `ProblemListShare` | 以 Prisma schema 为准 |
 | `ProblemNote` | 以 Prisma schema 为准 |
 | `ProblemStatement` | 以 Prisma schema 为准 |
+| `RejudgeBatch` | 一次范围重测请求及其作用域、请求者、计数和关联 JudgeRun |
 | `School` | 以 Prisma schema 为准 |
 | `SchoolProblemList` | 以 Prisma schema 为准 |
-| `Submission` | 普通提交；以 `workspaceScope + organizationId` 固化个人/具体校园归属，活动提交另关联 Training |
+| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |
 | `TeamMember` | 以 Prisma schema 为准 |
