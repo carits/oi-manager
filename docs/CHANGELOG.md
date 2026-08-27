@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### Scheduler/Executor 与架构边界门禁
+
+- 单例后台 Worker 收口为 Scheduler leader，只运行 Cron 和 OJ 账号自动验证；新增 `oi-manager-executor@N` 执行可并行任务。旧远程提交轮询以逐记录 PostgreSQL session advisory lease 保证多个 Executor 不重复处理，进程崩溃时连接关闭即可释放租约。
+- systemd 安装、API 提升、数据库恢复、日志归档和运行时资源审计同步纳入 Executor unit。
+- 新增自动生成架构事实清单，覆盖 Prisma model/enum、legacy/module HTTP adapter、systemd unit 和环境变量名；`docs:check` 会拒绝过期清单。
+- 新增 route boundary baseline：HTTP adapter 中 Prisma、事务、文件系统和 Judge Runtime 依赖只能递减，新 adapter 默认零容忍，避免 `routes/ + modules/` 过渡债继续增长。
+
 ### Testcase Candidate 与 BlobStore 边界
 
 - 新增独立 `TestcaseCandidate`，把“程序确实被候选数据卡掉”的技术事实与“候选数据成为题库正式版本”的发布事实分开；候选固定内容哈希、内容对象、基线 Revision、Subtask 分类及晋升结果。

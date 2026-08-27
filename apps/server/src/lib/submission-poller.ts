@@ -7,6 +7,7 @@ import { prisma } from '../prisma'
 import { logger } from './logger'
 import { pollHduResult } from './hdu-submit'
 import { pollCfResultPlaywright, pollCfResultByApi } from './cf-submit'
+import { tryAcquireExecutorTaskLease } from './executor-task-lease'
 
 let pollInterval: NodeJS.Timeout | null = null
 let isPolling = false
@@ -88,6 +89,8 @@ async function pollPendingSubmissions() {
       continue
     }
 
+    const lease = await tryAcquireExecutorTaskLease('legacy-remote-submission-poll', submission.id)
+    if (!lease) continue
     try {
       // HDU 提交轮询（需要 OjAccount）
       if (submission.oj === 'hdu' && submission.OjAccount) {
@@ -217,6 +220,8 @@ async function pollPendingSubmissions() {
         action: 'poller',
         metadata: { submissionId: submission.id, error: e.message },
       })
+    } finally {
+      await lease.release()
     }
   }
 }

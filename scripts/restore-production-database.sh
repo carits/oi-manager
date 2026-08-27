@@ -163,6 +163,7 @@ start_services() {
   systemctl start "oi-manager-server@${active_slot}.service"
   systemctl start oi-manager-api-router.service
   systemctl start oi-manager-worker.service
+  systemctl start oi-manager-executor@1.service
   systemctl start oi-manager-judge.service
   systemctl start oi-manager-web.service
   local ready=false
@@ -209,7 +210,7 @@ validate_database "$candidate_db"
 if [[ "$SKIP_SERVICE_CONTROL" != true ]]; then
   log "stopping application writes; active_slot=$active_slot"
   services_stopped=true
-  systemctl stop oi-manager-judge.service oi-manager-worker.service oi-manager-api-router.service \
+  systemctl stop oi-manager-judge.service oi-manager-executor@1.service oi-manager-worker.service oi-manager-api-router.service \
     oi-manager-server@3302.service oi-manager-server@3303.service
 fi
 

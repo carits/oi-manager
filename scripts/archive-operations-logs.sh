@@ -39,6 +39,7 @@ units=(
   oi-manager-server@3302.service
   oi-manager-server@3303.service
   oi-manager-worker.service
+  oi-manager-executor@1.service
   oi-manager-judge.service
   oi-manager-web.service
 )

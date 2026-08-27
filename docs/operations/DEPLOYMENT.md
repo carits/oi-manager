@@ -1,13 +1,13 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-27
+last_verified: 2026-08-28
 source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh
 ---
 
 # 部署与回滚
 
-当前线上使用 systemd 管理 Web、稳定 API Router、蓝绿 API、单例 Worker 和 Judge。PM2/Nix/开发 watch 进程不属于现行部署链。详细 unit 参数见 [SYSTEMD_DEPLOYMENT.md](SYSTEMD_DEPLOYMENT.md)。
+当前线上使用 systemd 管理 Web、稳定 API Router、蓝绿 API、单例 Scheduler、可并行 Executor 和 Judge。PM2/Nix/开发 watch 进程不属于现行部署链。详细 unit 参数见 [SYSTEMD_DEPLOYMENT.md](SYSTEMD_DEPLOYMENT.md)。
 
 ## 服务拓扑
 
@@ -15,7 +15,8 @@ source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, 
 公网 3000 → oi-manager-web
 本机 3002 → oi-manager-api-router → 3302 或 3303
                                   ↘ WebSocket /ws/judge
-oi-manager-worker → PostgreSQL session advisory singleton lock
+oi-manager-worker → Scheduler leader advisory lock
+oi-manager-executor@N → per-task advisory lease
 oi-manager-judge  → Router 3002 → 当前 API
 go-judge 5050、PostgreSQL 5432 均只监听 127.0.0.1
 ```
@@ -47,7 +48,7 @@ pnpm security:audit
 5. 检查候选 `/api/health`、`/api/readiness`、数据库投影一致性和日志。
 6. 使用 `scripts/promote-api.sh` 原子切换 Router 指针。
 7. 旧实例收到 drain 信号后向 Judge 发送 1012，等待连接和在途请求退出。
-8. 只重启唯一的 `oi-manager-worker.service`；第二个 Worker 必须因 advisory lock 拒绝启动。
+8. 重启唯一 `oi-manager-worker.service` Scheduler 和 Executor 实例；第二个 Scheduler 必须被 leader lock 拒绝，多个 Executor 通过逐任务 lease 协作。
 9. 验证 Judge 已重新注册、队列继续消费且没有残留 `judging/finalizing` 任务。
 
 ## Web 发布

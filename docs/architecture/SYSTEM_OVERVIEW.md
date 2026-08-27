@@ -83,8 +83,9 @@ Submission (用户提交意图，基本不可变)
 
 ## 后台任务边界
 
-- Scheduler/Coordinator 负责必须全局唯一的定时协调任务并持有 PostgreSQL advisory leader lock。
-- 可并行 Executor 使用行锁、`SKIP LOCKED`、lease 和 fencing token 领取工作。
+- Scheduler/Coordinator 负责必须全局唯一的 Cron 与账号验证，并持有 PostgreSQL advisory leader lock；生产兼容 unit 名为 `oi-manager-worker.service`。
+- 可并行 `oi-manager-executor@N` 使用逐任务 session advisory lease；JudgeRun 队列继续使用行锁、`SKIP LOCKED`、lease 和 fencing token。
+- HTTP adapter 边界由静态门禁约束：现有 legacy 债务记录为只减不增基线，新 adapter 不得直接访问 Prisma、事务、文件系统或 Judge Runtime。
 - 当前后台进程仍包含迁移期单例任务；拆分过程保持同一 Worker systemd 单元，完成后才允许增加 Executor 实例。
 
 ## 失败与一致性边界

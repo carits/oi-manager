@@ -9,13 +9,13 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-for unit in oi-manager-server.service oi-manager-server@.service oi-manager-api-router.service oi-manager-worker.service oi-manager-judge.service oi-manager-web.service; do
+for unit in oi-manager-server.service oi-manager-server@.service oi-manager-api-router.service oi-manager-worker.service oi-manager-executor@.service oi-manager-judge.service oi-manager-web.service; do
   test -f "$UNIT_DIR/$unit" || { echo "Missing unit: $UNIT_DIR/$unit" >&2; exit 1; }
   install -o root -g root -m 0644 "$UNIT_DIR/$unit" "/etc/systemd/system/$unit"
 done
 
 systemctl daemon-reload
-systemctl enable oi-manager-api-router.service oi-manager-worker.service oi-manager-judge.service oi-manager-web.service
+systemctl enable oi-manager-api-router.service oi-manager-worker.service oi-manager-executor@1.service oi-manager-judge.service oi-manager-web.service
 
 mkdir -p "$ROOT_DIR/.run"
 ACTIVE_FILE="$ROOT_DIR/.run/api-active-upstream"
@@ -44,6 +44,7 @@ else
   curl --fail --silent "http://127.0.0.1:${ACTIVE}/api/readiness" >/dev/null
   systemctl restart oi-manager-api-router.service
   systemctl restart oi-manager-worker.service
+  systemctl restart oi-manager-executor@1.service
 fi
 
 systemctl disable --now oi-manager-server.service 2>/dev/null || true
@@ -51,4 +52,4 @@ systemctl restart oi-manager-judge.service
 systemctl restart oi-manager-web.service
 
 echo "Installed OI Manager systemd services; active API slot: ${ACTIVE}."
-systemctl --no-pager --full status oi-manager-api-router.service "oi-manager-server@${ACTIVE}.service" oi-manager-worker.service oi-manager-judge.service oi-manager-web.service
+systemctl --no-pager --full status oi-manager-api-router.service "oi-manager-server@${ACTIVE}.service" oi-manager-worker.service oi-manager-executor@1.service oi-manager-judge.service oi-manager-web.service

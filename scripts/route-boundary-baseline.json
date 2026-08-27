@@ -1,0 +1,362 @@
+{
+  "apps/server/src/modules/carits/carits.routes.ts": {
+    "prisma": 8,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/contribution/contribution.routes.ts": {
+    "prisma": 7,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/notification/notification.routes.ts": {
+    "prisma": 9,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/platform-binding/platform-binding.routes.ts": {
+    "prisma": 26,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.ai.routes.ts": {
+    "prisma": 17,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.crud.routes.ts": {
+    "prisma": 21,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.files.routes.ts": {
+    "prisma": 24,
+    "transaction": 0,
+    "filesystem": 16,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.hack.routes.ts": {
+    "prisma": 22,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.judge.routes.ts": {
+    "prisma": 11,
+    "transaction": 0,
+    "filesystem": 6,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.notes.routes.ts": {
+    "prisma": 5,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.statement-version.routes.ts": {
+    "prisma": 9,
+    "transaction": 0,
+    "filesystem": 3,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.submissions.routes.ts": {
+    "prisma": 4,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.test-graph.routes.ts": {
+    "prisma": 7,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.testset-revision.routes.ts": {
+    "prisma": 3,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.user-content.routes.ts": {
+    "prisma": 14,
+    "transaction": 0,
+    "filesystem": 3,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/ranking/ranking.routes.ts": {
+    "prisma": 8,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/school/school.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/team-import/team-import.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/team/team.crud.routes.ts": {
+    "prisma": 2,
+    "transaction": 0,
+    "filesystem": 6,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/team/team.invitations.routes.ts": {
+    "prisma": 3,
+    "transaction": 2,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/team/team.members.routes.ts": {
+    "prisma": 5,
+    "transaction": 3,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/team/team.requests.routes.ts": {
+    "prisma": 5,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/team/team.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.content.routes.ts": {
+    "prisma": 3,
+    "transaction": 0,
+    "filesystem": 3,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.crud.routes.ts": {
+    "prisma": 22,
+    "transaction": 1,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.hack-sync.routes.ts": {
+    "prisma": 5,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.misc.routes.ts": {
+    "prisma": 17,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.notes.routes.ts": {
+    "prisma": 7,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.problems.routes.ts": {
+    "prisma": 29,
+    "transaction": 1,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.ranking.routes.ts": {
+    "prisma": 7,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.record.routes.ts": {
+    "prisma": 5,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.routes.ts": {
+    "prisma": 2,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.statement-management.routes.ts": {
+    "prisma": 4,
+    "transaction": 1,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training/training.submissions.routes.ts": {
+    "prisma": 25,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/admin-data.ts": {
+    "prisma": 22,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/archived-problems.ts": {
+    "prisma": 14,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/auth.ts": {
+    "prisma": 27,
+    "transaction": 0,
+    "filesystem": 5,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/demo-scenario.ts": {
+    "prisma": 15,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/files.ts": {
+    "prisma": 9,
+    "transaction": 0,
+    "filesystem": 8,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/me.ts": {
+    "prisma": 10,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/migration.ts": {
+    "prisma": 7,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/milestones.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/oj-accounts.ts": {
+    "prisma": 21,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/oj-fetcher.ts": {
+    "prisma": 38,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/organization-members.ts": {
+    "prisma": 34,
+    "transaction": 7,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/platform-organizations.ts": {
+    "prisma": 28,
+    "transaction": 4,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/problem-lists.ts": {
+    "prisma": 62,
+    "transaction": 2,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/school-problem-lists.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/stats.ts": {
+    "prisma": 9,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/students.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/submissions.ts": {
+    "prisma": 16,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/submit.ts": {
+    "prisma": 4,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 1
+  },
+  "apps/server/src/routes/teachers.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/team-problem-lists.ts": {
+    "prisma": 15,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/teams.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/test-graph-admin.ts": {
+    "prisma": 4,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/testdata.ts": {
+    "prisma": 19,
+    "transaction": 1,
+    "filesystem": 20,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/users.ts": {
+    "prisma": 15,
+    "transaction": 1,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/routes/workspaces.ts": {
+    "prisma": 9,
+    "transaction": 1,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  }
+}

@@ -1,13 +1,12 @@
 import dotenv from 'dotenv'
 import path from 'path'
-import { setGlobalDispatcher, Agent } from 'undici'
+import { Agent, setGlobalDispatcher } from 'undici'
 import { validateEnv } from './config/env'
+import { browserManager } from './lib/browser/manager'
+import { proxyManager } from './lib/browser/proxy'
+import { startExecutorServices } from './lib/background-services'
 import logger from './lib/logger'
 import { prisma } from './prisma'
-import { proxyManager } from './lib/browser/proxy'
-import { browserManager } from './lib/browser/manager'
-import { acquireBackgroundWorkerLock } from './lib/background-worker-lock'
-import { startSchedulerServices } from './lib/background-services'
 
 const envFile = process.env.ENV_FILE || (process.env.NODE_ENV === 'production' ? '.env.production' : '.env')
 dotenv.config({ path: path.resolve(process.cwd(), envFile) })
@@ -16,25 +15,24 @@ validateEnv()
 proxyManager.loadFromEnv()
 
 async function main() {
-  const lock = await acquireBackgroundWorkerLock()
-  const services = startSchedulerServices()
+  const instance = process.env.EXECUTOR_INSTANCE || String(process.pid)
+  const services = startExecutorServices()
   const heartbeat = setInterval(() => {
-    logger.info('background_scheduler_heartbeat', { action: 'background_scheduler' })
+    logger.info('background_executor_heartbeat', { action: 'background_executor', metadata: { instance } })
   }, 300_000)
   heartbeat.unref()
-  logger.info('background_scheduler_started', { action: 'background_scheduler', metadata: { pid: process.pid } })
+  logger.info('background_executor_started', { action: 'background_executor', metadata: { instance, pid: process.pid } })
 
   let shutdownPromise: Promise<void> | null = null
   const shutdown = (signal: string) => {
     if (shutdownPromise) return shutdownPromise
     shutdownPromise = (async () => {
-      logger.info('background_scheduler_shutting_down', { action: 'background_scheduler', metadata: { signal } })
+      logger.info('background_executor_shutting_down', { action: 'background_executor', metadata: { signal, instance } })
       clearInterval(heartbeat)
       await services.stop()
       await browserManager.close()
-      await lock.release()
       await prisma.$disconnect()
-      logger.info('background_scheduler_stopped', { action: 'background_scheduler' })
+      logger.info('background_executor_stopped', { action: 'background_executor', metadata: { instance } })
     })()
     return shutdownPromise
   }
@@ -44,7 +42,7 @@ async function main() {
 }
 
 main().catch(async error => {
-  logger.error('background_scheduler_start_failed', error, { action: 'background_scheduler' })
+  logger.error('background_executor_start_failed', error, { action: 'background_executor' })
   await prisma.$disconnect().catch(() => {})
   process.exit(1)
 })

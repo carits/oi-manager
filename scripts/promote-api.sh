@@ -36,6 +36,10 @@ if systemctl cat oi-manager-worker.service >/dev/null 2>&1; then
   systemctl restart oi-manager-worker.service
   systemctl is-active --quiet oi-manager-worker.service
 fi
+if systemctl cat oi-manager-executor@.service >/dev/null 2>&1; then
+  systemctl restart oi-manager-executor@1.service
+  systemctl is-active --quiet oi-manager-executor@1.service
+fi
 
 curl --fail --silent http://127.0.0.1:3002/api/readiness >/dev/null
 echo "API promoted: ${CURRENT} -> ${CANDIDATE}"

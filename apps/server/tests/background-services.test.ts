@@ -21,21 +21,30 @@ vi.mock('../src/lib/submission-poller', () => ({
 }))
 vi.mock('../src/lib/logger', () => ({ default: { info: vi.fn() } }))
 
-import { startBackgroundServices } from '../src/lib/background-services'
+import { startExecutorServices, startSchedulerServices } from '../src/lib/background-services'
 
 describe('singleton background service orchestration', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('starts each scheduler once and stops them idempotently', async () => {
-    const services = startBackgroundServices()
+  it('keeps leader-only schedulers out of parallel executors', async () => {
+    const services = startSchedulerServices()
     expect(mocks.startCron).toHaveBeenCalledTimes(1)
     expect(mocks.startAutoVerify).toHaveBeenCalledTimes(1)
-    expect(mocks.startPoller).toHaveBeenCalledWith(5000)
+    expect(mocks.startPoller).not.toHaveBeenCalled()
 
     await services.stop()
     await services.stop()
-    expect(mocks.stopPoller).toHaveBeenCalledTimes(1)
     expect(mocks.stopAutoVerify).toHaveBeenCalledTimes(1)
     expect(mocks.stopCron).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts only parallel-safe work in an executor', async () => {
+    const services = startExecutorServices()
+    expect(mocks.startPoller).toHaveBeenCalledWith(5000)
+    expect(mocks.startCron).not.toHaveBeenCalled()
+    expect(mocks.startAutoVerify).not.toHaveBeenCalled()
+    await services.stop()
+    await services.stop()
+    expect(mocks.stopPoller).toHaveBeenCalledTimes(1)
   })
 })

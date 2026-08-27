@@ -1,18 +1,18 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-27
+last_verified: 2026-08-28
 source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.sh
 ---
 
 # systemd 恢复部署
 
-当前开发服务器使用稳定 Router、蓝绿 API 实例、单例后台 Worker 及两个应用服务：
+当前开发服务器使用稳定 Router、蓝绿 API、单例 Scheduler、可并行 Executor 及两个应用服务：
 
 - `oi-manager-api-router.service`：稳定监听 `127.0.0.1:3002`，每个 HTTP/WebSocket 连接固定转发到活动实例。
 - `oi-manager-server@3302.service` / `@3303.service`：蓝绿 API 实例；任一时刻一个活动，另一个用于候选启动。
-- `oi-manager-worker.service`：唯一运行 Cron、旧远程提交轮询和 OJ 账号自动验证；持有 PostgreSQL
-  session advisory lock，第二个 Worker 无法同时启动。
+- `oi-manager-worker.service`：兼容名称保留，实际是唯一 Scheduler，只运行 Cron 和 OJ 账号自动验证；持有 PostgreSQL session advisory leader lock。
+- `oi-manager-executor@1.service`：执行可并行的旧远程提交轮询；每条任务使用 PostgreSQL session advisory lease，增加 `@2` 等实例不会重复处理同一记录。
 - `oi-manager-judge.service`：运行 Judge 客户端并自动重连 API。
 - `oi-manager-web.service`：运行已发布的 `.next-current` 预览产物，监听 `3000`。
 
@@ -30,8 +30,7 @@ Router、API、Worker、Judge 与 Web 同时设置 `TasksMax`、`LimitNOFILE`、
 `oi-manager`。不要在当前 `oi-manager-response-refactor` 目录直接运行裸 `docker-compose`，否则会创建
 第二套空网络/卷并与固定容器名冲突。
 
-API slot 仅提供 HTTP/WebSocket 与实例内请求指标，不运行可变后台任务。Cron、远程提交轮询和 OJ 自动
-验证只由 Worker 执行；Worker 的 PostgreSQL session advisory lock 是误启动双实例时的第二道保护。
+API slot 仅提供 HTTP/WebSocket 与实例内请求指标，不运行可变后台任务。Cron 和账号验证由 Scheduler leader 执行；远程轮询由 Executor 执行，并以逐任务 lease 支持多实例。
 
 ## 安装或修复
 
@@ -59,7 +58,7 @@ HTTP 切换完成后只重启一份 Worker。候选未就绪时不会切换。
 ## 验证
 
 ```bash
-systemctl --no-pager --full status oi-manager-api-router 'oi-manager-server@*' oi-manager-worker oi-manager-judge oi-manager-web
+systemctl --no-pager --full status oi-manager-api-router 'oi-manager-server@*' oi-manager-worker 'oi-manager-executor@*' oi-manager-judge oi-manager-web
 ss -ltnp | grep -E ':3000|:3002|:3302|:3303'
 curl -fsS http://127.0.0.1:3002/api/health
 curl -fsS http://127.0.0.1:3002/api/readiness
@@ -68,6 +67,7 @@ curl -fsS http://127.0.0.1:5050/version
 pnpm runtime:audit
 pnpm sandbox:smoke
 sudo journalctl -u oi-manager-worker.service --since '-10 min' --no-pager
+sudo journalctl -u oi-manager-executor@1.service --since '-10 min' --no-pager
 docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' oi-postgres oi-judge
 docker inspect -f '{{.Name}} restart={{.HostConfig.RestartPolicy.Name}}' oi-postgres oi-judge
 ```
@@ -100,7 +100,7 @@ SSH 暴露面复核及备份恢复演练全部完成或明确关闭。
 ## 回滚
 
 API 回滚时将 `.run/api-active-upstream` 原子改回仍在运行的旧端口；若旧实例已经停止，先用对应
-`oi-manager-server@<port>` 启动并通过 readiness，然后重启唯一 Worker。前端继续使用 preview rollback。
+`oi-manager-server@<port>` 启动并通过 readiness，然后重启 Scheduler/Executor。前端继续使用 preview rollback。
 不要执行 `docker compose down -v`，否则会删除数据库卷。
 
 前端 Canary 日志固定保存在项目 `.run/oi-web-canary.log`，不使用 `/tmp` 中可能由其他运行身份创建的

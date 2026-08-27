@@ -48,6 +48,7 @@ const expectedUnits = {
   'oi-manager-server@3302.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
   'oi-manager-server@3303.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
   'oi-manager-worker.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '256', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
+  'oi-manager-executor@1.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '256', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
   'oi-manager-judge.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 60_000_000, requires: 'docker.service', preStartMode: 'judge' },
   'oi-manager-web.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '256', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000 },
 }
