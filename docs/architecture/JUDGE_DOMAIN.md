@@ -58,3 +58,19 @@ QUEUED -> CLAIMED -> COMPILING -> RUNNING -> FINALIZING
 - 终态 Attempt 的旧回传返回 stale/no-op，不同步第二次成绩。
 - `Submission` 代码、语言、用户、题目和活动上下文在创建后不因重试或重测改变。
 - 远程归档记录不创建 Run/Attempt，也不进入本地队列。
+
+## Hack 候选与正式版本
+
+Hack 的技术判定和题库正式数据晋升是两个不同生命周期：
+
+```text
+ProblemHackAttempt
+  -> TestcaseCandidate VALIDATED
+  -> PROMOTING
+  -> PROMOTED | REDUNDANT | STALE | FAILED
+  -> ProblemTestSetRevision（仅 PROMOTED）
+```
+
+Candidate 固定输入/答案内容对象、基线 Revision、命中 Subtask 和逻辑文件名。重复输入不会创建新 Revision；并发 CAS 失败保留为 `STALE` 并让 Hack 基于最新版重评。正式晋升必须在同一事务中完成 Candidate、Hack Attempt、Problem latest pointer 和 Revision 的提交，不能出现 Hack 显示成功但正式版本不存在。
+
+测试内容只能通过 `BlobStore` port 读写。当前 `LocalBlobStore` 以内容寻址文件为事实源；S3/阿里云 OSS 通过注入 adapter 实现同一 `put/get/exists/delete/materialize` 契约，题目和 Hack 领域不得依赖供应商 SDK。

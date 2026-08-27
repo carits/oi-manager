@@ -4,6 +4,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
+import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 
@@ -74,15 +75,9 @@ export async function acquireProblemMutationLock(tx: Prisma.TransactionClient, p
 }
 
 async function writeObjectFile(problemId: string, digest: string, content: Buffer) {
-  const directory = path.join(problemRoot(problemId), 'objects')
-  await fs.promises.mkdir(directory, { recursive: true })
-  const target = path.join(directory, digest)
-  try {
-    await fs.promises.writeFile(target, content, { flag: 'wx' })
-  } catch (error: any) {
-    if (error?.code !== 'EEXIST') throw error
-  }
-  return path.relative(problemRoot(problemId), target)
+  const storageKey = `objects/${digest}`
+  await getTestdataBlobStore().put(problemBlobKey(problemId, storageKey), content, { ifAbsent: true })
+  return storageKey
 }
 
 export async function ingestTestdataObject(problemId: string, content: Buffer) {
@@ -344,10 +339,9 @@ async function materializeRevision(problemId: string, revisionId: string, spec: 
         const previous = targets.get(name)
         if (previous && previous !== object.sha256) throw new Error(`Revision 内文件名冲突：${name}`)
         targets.set(name, object.sha256)
-        const source = path.join(root, object.storageKey)
         const target = path.join(pending, name)
         if (fs.existsSync(target)) continue
-        try { await fs.promises.link(source, target) } catch { await fs.promises.copyFile(source, target) }
+        await getTestdataBlobStore().materialize(problemBlobKey(problemId, object.storageKey), target)
       }
     }
     // Checker / interactor / manager are part of the executable test set.  Pin

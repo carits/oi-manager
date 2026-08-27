@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### Testcase Candidate 与 BlobStore 边界
+
+- 新增独立 `TestcaseCandidate`，把“程序确实被候选数据卡掉”的技术事实与“候选数据成为题库正式版本”的发布事实分开；候选固定内容哈希、内容对象、基线 Revision、Subtask 分类及晋升结果。
+- Hack 重复输入、并发 Revision 冲突和持久化错误分别落为 `REDUNDANT`、`STALE`、`FAILED`；成功时 Candidate、Hack Attempt 和新 Revision 在同一事务终结。
+- TestSet Revision 的内容寻址写入和物化改为统一 `BlobStore` port。本地实现保留硬链接/复制优化，S3 与阿里云 OSS 以注入 adapter 形式建立供应商隔离边界，本批不迁移线上对象。
+- 新增 Blob key 穿越防护、不可变 put/materialize 测试和 Candidate 并发断言。
+
 ### JudgeRun/JudgeAttempt 写路径切换
 
 - Consumer 现在只领取 `Submission.currentJudgeRunId -> JudgeRun.currentAttemptId` 指向的 QUEUED Attempt；领取同时推进 Run/Attempt 状态并双写旧 Submission 投影。Judge 协议回传 Run、Attempt 和 fencing token，100 路重复或延迟回传只能有一次通过 CAS 进入 FINALIZING。

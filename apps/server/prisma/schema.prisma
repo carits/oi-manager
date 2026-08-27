@@ -42,6 +42,16 @@ enum RejudgeBatchStatus {
   CANCELLED
 }
 
+enum TestcaseCandidateStatus {
+  VALIDATED
+  PROMOTING
+  PROMOTED
+  REDUNDANT
+  REJECTED
+  FAILED
+  STALE
+}
+
 model AiUsageLog {
   id          String   @id
   userId      String
@@ -417,6 +427,7 @@ model Problem {
   ProblemChecker          ProblemChecker[]
   ProblemHackConfig       ProblemHackConfig?
   ProblemHackAttempt      ProblemHackAttempt[]
+  TestcaseCandidate       TestcaseCandidate[]
   ProblemTestcase         ProblemTestcase[]
   ProblemSubtask          ProblemSubtask[]
   ProblemTestGroup        ProblemTestGroup[]
@@ -502,11 +513,49 @@ model ProblemHackAttempt {
   User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   BaseTestSetRevision   ProblemTestSetRevision? @relation("HackBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
   PromotedRevision      ProblemTestSetRevision? @relation("HackPromotedTestSetRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
+  Candidate             TestcaseCandidate?
 
   @@index([problemId, status, createdAt])
   @@index([status, judgeId])
   @@index([userId, problemId, createdAt])
   @@index([baseTestSetRevisionId])
+  @@index([promotedRevisionId])
+}
+
+model TestcaseCandidate {
+  id                     String                  @id
+  problemId              String
+  hackAttemptId          String?                 @unique
+  source                 String                  @default("hack")
+  status                 TestcaseCandidateStatus @default(VALIDATED)
+  baseTestSetRevisionId  String?
+  inputObjectId          String?
+  outputObjectId         String?
+  inputSha256            String
+  outputSha256           String
+  inputSize              Int
+  outputSize             Int
+  inputFileName          String
+  outputFileName         String
+  affectedSubtaskIds     String?
+  createdBy              String
+  promotedTestcaseId     String?
+  promotedRevisionId     String?
+  message                String?                 @db.Text
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  promotedAt             DateTime?
+  Problem                Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  HackAttempt            ProblemHackAttempt?     @relation(fields: [hackAttemptId], references: [id], onDelete: SetNull)
+  BaseTestSetRevision    ProblemTestSetRevision? @relation("CandidateBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
+  InputObject            TestdataObject?         @relation("CandidateInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
+  OutputObject           TestdataObject?         @relation("CandidateOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
+  PromotedRevision       ProblemTestSetRevision? @relation("CandidatePromotedRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([problemId, status, createdAt])
+  @@index([baseTestSetRevisionId])
+  @@index([inputObjectId])
+  @@index([outputObjectId])
   @@index([promotedRevisionId])
 }
 
@@ -1286,6 +1335,8 @@ model TestdataObject {
   AcmOutputs   ProblemTestSetRevisionCase[]      @relation("RevisionCaseOutputObject")
   GroupInputs  ProblemTestSetRevisionGroupCase[] @relation("RevisionGroupCaseInputObject")
   GroupOutputs ProblemTestSetRevisionGroupCase[] @relation("RevisionGroupCaseOutputObject")
+  CandidateInputs  TestcaseCandidate[]           @relation("CandidateInputObject")
+  CandidateOutputs TestcaseCandidate[]           @relation("CandidateOutputObject")
 
   @@unique([problemId, sha256])
   @@index([problemId])
@@ -1403,6 +1454,8 @@ model ProblemTestSetRevision {
   Submissions                     Submission[]
   HackAttemptsBasedOn             ProblemHackAttempt[]              @relation("HackBaseTestSetRevision")
   PromotedHackAttempts            ProblemHackAttempt[]              @relation("HackPromotedTestSetRevision")
+  CandidateBases                  TestcaseCandidate[]                @relation("CandidateBaseTestSetRevision")
+  PromotedCandidates              TestcaseCandidate[]                @relation("CandidatePromotedRevision")
   JudgeRuns                       JudgeRun[]
   ProblemTestSetRevisionGroup     ProblemTestSetRevisionGroup[]
   ProblemTestSetRevisionGroupCase ProblemTestSetRevisionGroupCase[]

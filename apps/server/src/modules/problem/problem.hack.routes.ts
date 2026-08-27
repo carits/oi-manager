@@ -205,7 +205,7 @@ problemHackRouter.get('/:id/hacks', authenticate, asyncHandler(async (req, res) 
   const [attempts, total, acceptedCount] = await Promise.all([
     prisma.problemHackAttempt.findMany({
       where,
-      include: { User: { select: { username: true } }, BaseTestSetRevision: { select: { revisionNumber: true } }, PromotedRevision: { select: { revisionNumber: true } } },
+      include: { User: { select: { username: true } }, Candidate: { select: { id: true, status: true } }, BaseTestSetRevision: { select: { revisionNumber: true } }, PromotedRevision: { select: { revisionNumber: true } } },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -222,7 +222,7 @@ problemHackRouter.get('/:id/hacks/:hackId', authenticate, asyncHandler(async (re
   const manager = canModifyProblem(req.user!, problem)
   const attempt = await prisma.problemHackAttempt.findFirst({
     where: { id: req.params.hackId, problemId: problem.id },
-    include: { User: { select: { username: true } }, BaseTestSetRevision: { select: { revisionNumber: true } }, PromotedRevision: { select: { revisionNumber: true } } },
+    include: { User: { select: { username: true } }, Candidate: { select: { id: true, status: true } }, BaseTestSetRevision: { select: { revisionNumber: true } }, PromotedRevision: { select: { revisionNumber: true } } },
   })
   if (!attempt || (!manager && attempt.userId !== req.user!.userId)) return res.status(404).json({ success: false, message: 'Hack 记录不存在' })
   res.json({ success: true, data: serializeHackAttempt(attempt, true) })

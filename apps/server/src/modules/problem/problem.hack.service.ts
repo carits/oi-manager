@@ -5,10 +5,15 @@ import yaml from 'js-yaml'
 import { prisma } from '../../prisma'
 import {
   TestSetRevisionConflict,
-  ingestTestdataObject,
   loadRevisionSpec,
   publishTestSetRevision,
 } from './problem.testset-revision.service'
+import {
+  beginCandidatePromotion,
+  completeCandidatePromotion,
+  createValidatedHackCandidate,
+  setCandidateStatus,
+} from './problem.testcase-candidate.service'
 
 export const HACK_SOURCE_LIMIT = 256 * 1024
 export const HACK_INPUT_LIMIT = 1024 * 1024
@@ -38,6 +43,8 @@ export function serializeHackAttempt(attempt: any, includePrivate: boolean) {
     candidateTestcaseId: attempt.candidateTestcaseId,
     promotedRevisionId: attempt.promotedRevisionId,
     canonicalStatus: attempt.canonicalStatus,
+    testcaseCandidateId: attempt.Candidate?.id ?? null,
+    testcaseCandidateStatus: attempt.Candidate?.status ?? null,
     promotionRetries: attempt.promotionRetries,
     baseTestSetRevision: attempt.BaseTestSetRevision?.revisionNumber ?? null,
     promotedRevision: attempt.PromotedRevision?.revisionNumber ?? null,
@@ -342,17 +349,31 @@ export async function finalizeHackResult(
         { GroupInputs: { some: { revisionId: problem.latestTestSetRevisionId! } } },
       ],
     } })
-    if (duplicate) {
-      await prisma.problemHackAttempt.update({
-        where: { id: current.id },
-        data: { status: 'rejected', canonicalStatus: 'redundant', ...resultFields, failureStage: 'input', message: '候选输入与已有正式测试数据重复', inputSha256, judgeId: null, judgeStarted: null, finishedAt: new Date() },
-      })
-      return
-    }
-
     const affected = payload.affectedSubtaskIds || []
     if (mode === 'oi' && affected.length === 0) throw new Error('OI Hack missing affected subtasks')
     const inputFile = `hack_${current.id}.in`, outputFile = `hack_${current.id}.out`
+    const candidate = await createValidatedHackCandidate({
+      problemId: problem.id,
+      hackAttemptId: current.id,
+      createdBy: current.userId,
+      baseTestSetRevisionId: baseRevision.id,
+      input: Buffer.from(inputData),
+      output: Buffer.from(outputData),
+      inputFileName: inputFile,
+      outputFileName: outputFile,
+      affectedSubtaskIds: affected,
+    })
+    if (duplicate) {
+      await Promise.all([
+        setCandidateStatus(candidate.id, 'REDUNDANT', '候选输入与当前正式测试版本重复'),
+        prisma.problemHackAttempt.update({
+          where: { id: current.id },
+          data: { status: 'rejected', canonicalStatus: 'redundant', ...resultFields, failureStage: 'input', message: '候选输入与已有正式测试数据重复', inputSha256, outputSha256, judgeId: null, judgeStarted: null, finishedAt: new Date() },
+        }),
+      ])
+      return
+    }
+    if (!await beginCandidatePromotion(candidate.id)) return
     const inputFileId = crypto.randomUUID(), outputFileId = crypto.randomUUID()
     const testcaseId = crypto.randomUUID()
     const nextRevision = problem.testGraphRevision + 1
@@ -367,10 +388,6 @@ export async function finalizeHackResult(
       await fs.promises.writeFile(stagedOutput, outputData, { encoding: 'utf8', flag: 'wx' })
       await fs.promises.rename(stagedInput, finalInput); inputPromoted = true
       await fs.promises.rename(stagedOutput, finalOutput); outputPromoted = true
-      const [inputObject, outputObject] = await Promise.all([
-        ingestTestdataObject(problem.id, Buffer.from(inputData)),
-        ingestTestdataObject(problem.id, Buffer.from(outputData)),
-      ])
       await prisma.$transaction(async tx => {
         const rows = [
           { id: inputFileId, problemId: problem.id, filename: inputFile, size: Buffer.byteLength(inputData), md5: crypto.createHash('md5').update(inputData).digest('hex'), sha256: inputSha256 },
@@ -386,7 +403,7 @@ export async function finalizeHackResult(
       if (!baseSpec || baseSpec.mode !== mode) throw new Error('Hack 基础测试版本不存在或模式不一致')
       const candidateCase = {
         testcaseId, inputName: inputFile, outputName: outputFile,
-        inputObjectId: inputObject.id, outputObjectId: outputObject.id,
+        inputObjectId: candidate.inputObjectId!, outputObjectId: candidate.outputObjectId!,
         source: 'hack', score: mode === 'oi' ? 100 : null,
       }
       if (mode === 'acm') {
@@ -406,6 +423,13 @@ export async function finalizeHackResult(
         source: 'hack', createdBy: current.userId, hackAttemptId: current.id,
         baseConfigText: problem.LatestTestSetRevision.judgeConfig, spec: baseSpec,
         transactionHook: async (tx, revision) => {
+          const promoted = await completeCandidatePromotion(tx, {
+            candidateId: candidate.id,
+            testcaseId,
+            revisionId: revision.id,
+            message: `Promoted from R${baseRevision.revisionNumber} to R${revision.revisionNumber}`,
+          })
+          if (promoted.count !== 1) throw new Error('Testcase candidate promotion ownership was lost')
           const finalized = await tx.problemHackAttempt.updateMany({
             where: { id: current.id, status: 'finalizing' },
             data: {
@@ -431,6 +455,7 @@ export async function finalizeHackResult(
           judgeId: null, judgeStarted: null, finishedAt: null,
         } })
       }
+      await setCandidateStatus(candidate.id, error instanceof TestSetRevisionConflict ? 'STALE' : 'FAILED', String((error as Error)?.message || error)).catch(() => {})
       if (testcaseCreated) await prisma.problemTestcase.deleteMany({ where: { id: testcaseId } }).catch(() => {})
       await prisma.testdataFile.deleteMany({ where: { id: { in: [inputFileId, outputFileId] } } }).catch(() => {})
       await Promise.allSettled([
@@ -439,7 +464,15 @@ export async function finalizeHackResult(
         ...(outputPromoted ? [fs.promises.rm(finalOutput, { force: true })] : []),
       ])
       if (error instanceof TestSetRevisionConflict) return
-      throw error
+      await prisma.problemHackAttempt.updateMany({
+        where: { id: current.id, status: 'finalizing' },
+        data: {
+          status: 'system_error', canonicalStatus: 'failed', failureStage: 'persist',
+          message: `候选测试点晋升失败：${String((error as Error)?.message || error).slice(0, 2000)}`,
+          judgeId: null, judgeStarted: null, finishedAt: new Date(),
+        },
+      })
+      return
     }
   }
 }

@@ -45,6 +45,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemChecker` | Lemon SPJ 源码与头文件记录 |
 | `ProblemHackAttempt` | 题目级 ACM/OI Hack 独立队列、前后 Verdict/分数、命中 Subtask 与落库状态 |
 | `ProblemHackConfig` | 题目级 Hack 开关、STD、Validator、OI Classifier 和配置 revision |
+| `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask 与晋升状态 |
 | `ProblemTestcase` | 规范化测试点；一份输入/答案可关联多个 Test Group |
 | `ProblemSubtask` | OI 稳定数字 Subtask、满分和顺序 |
 | `ProblemSubtaskDependency` | Subtask 有向无环依赖关系 |

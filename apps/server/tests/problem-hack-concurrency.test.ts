@@ -171,6 +171,9 @@ describe('concurrent Hack promotion', () => {
 
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
+    expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: attempt.id } })).toMatchObject({
+      status: 'PROMOTED', promotedTestcaseId: expect.any(String), promotedRevisionId: expect.any(String),
+    })
     expect(await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({
       status: 'accepted', canonicalStatus: 'promoted',
     })
@@ -187,6 +190,7 @@ describe('concurrent Hack promotion', () => {
     const rows = await prisma.problemHackAttempt.findMany({ where: { problemId: context.problem.id } })
     expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'promoted')).toHaveLength(1)
     expect(rows.filter(row => row.status === 'queuing' && row.promotionRetries === 1)).toHaveLength(9)
+    expect(await prisma.testcaseCandidate.count({ where: { problemId: context.problem.id, status: 'STALE' } })).toBe(9)
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
 
@@ -209,6 +213,7 @@ describe('concurrent Hack promotion', () => {
 
     const redundant = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: queued.id } })
     expect(redundant).toMatchObject({ status: 'rejected', canonicalStatus: 'redundant', failureStage: 'input' })
+    expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: queued.id } })).toMatchObject({ status: 'REDUNDANT' })
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
     const files = await fs.promises.readdir(context.directory)
