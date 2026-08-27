@@ -7,6 +7,10 @@ import { finalizeHackResult, type HackJudgeResultPayload } from '../src/modules/
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
 import { loadTestGraphWorkspace, replaceTestGraph } from '../src/modules/problem/problem.test-graph.service'
 import { persistOwnedSubmissionResult } from '../src/ws/judge'
+import {
+  claimNextQueuedSubmission,
+  createQueuedSubmissionWithRun,
+} from '../src/modules/judge/application/judge-run.service'
 import { createTestUser } from './helpers/testUser'
 
 const root = path.join(process.cwd(), 'testdata')
@@ -119,7 +123,7 @@ afterEach(async () => {
 describe('concurrent Hack promotion', () => {
   it('accepts exactly one of 100 duplicate cross-process-style submission results', async () => {
     const context = await fixture()
-    const submission = await prisma.submission.create({ data: {
+    const submission = await createQueuedSubmissionWithRun({
       userId: context.owner.user.id,
       oj: 'carits',
       problemId: context.problem.problemId,
@@ -127,16 +131,19 @@ describe('concurrent Hack promotion', () => {
       language: 'cpp',
       code: 'int main(){}',
       codeLength: 12,
-      result: 'judging',
+      result: 'queuing',
       submitMethod: 'local',
       submitScope: 'problem',
-      judgeId: 'judge-owner',
-      judgeStarted: new Date(),
       testSetRevisionId: context.revision.id,
       judgeConfigHash: context.revision.judgeConfigHash,
-    } })
+    })
+    const claimed = await claimNextQueuedSubmission('judge-owner')
+    expect(claimed?.submissionId).toBe(submission.id)
     const payload = {
       submissionId: submission.id,
+      judgeRunId: claimed!.judgeRunId,
+      judgeAttemptId: claimed!.judgeAttemptId,
+      fencingToken: claimed!.fencingToken,
       result: 'Accepted',
       time: 5,
       wallTime: 7,

@@ -70,7 +70,7 @@ Submission (用户提交意图，基本不可变)
 - `JudgeRun` 固定一次逻辑评测使用的 TestSet Revision/配置哈希和最终结果。
 - `JudgeAttempt` 保存一次物理执行的 owner、fencing token、租约、分段时间与终态。
 - 重测创建新的 Run；基础设施重试创建新的 Attempt，不重开终态 Attempt。
-- 当前处于安全双写阶段：新本地提交在同一事务创建 Run/Attempt，旧 `Submission.result/judgeId/...` 暂时保留为兼容投影；消费与回传切换完成后再删除旧执行态字段。
+- 当前处于安全双写阶段：新本地提交、领取、回传、基础设施重试和重测已经以 Run/Attempt 为事实源，并在同一事务维护旧 `Submission.result/judgeId/...` 兼容投影；页面与排名完成 Switch read 且经过稳定观察后才删除旧执行态字段。
 
 详细状态和迁移阶段见 [Judge 领域模型](./JUDGE_DOMAIN.md)。
 

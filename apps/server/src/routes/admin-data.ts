@@ -8,6 +8,10 @@ import crypto from 'crypto'
 import { Router } from 'express'
 import { authenticate } from '../middleware/auth'
 import { prisma } from '../prisma'
+import {
+  createRejudgeBatch,
+  rejudgeSubmissionWithRun,
+} from '../modules/judge/application/judge-run.service'
 
 export const adminDataRouter = Router()
 
@@ -23,9 +27,9 @@ adminDataRouter.use((req: any, res, next) => {
 })
 
 /** Requeue every completed local-judge submission, regardless of source OJ. */
-const rejudgeAllLocal = async (_req: any, res: any) => {
+const rejudgeAllLocal = async (req: any, res: any) => {
   try {
-    const result = await prisma.submission.updateMany({
+    const submissions = await prisma.submission.findMany({
       where: {
         problemInternalId: { not: null },
         submitMethod: { not: 'archive' },
@@ -35,25 +39,18 @@ const rejudgeAllLocal = async (_req: any, res: any) => {
         ],
         result: { notIn: ['queuing', 'judging'] },
       },
-      data: {
-        result: 'queuing',
-        timeUsed: null,
-        memoryUsed: null,
-        wallTimeUsed: null,
-        timeoutReason: null,
-        metricSource: null,
-        score: null,
-        cases: null,
-        subtasks: null,
-        errorMessage: null,
-        judgeId: null,
-        judgeStarted: null,
-      },
+      select: { id: true },
+    })
+    const result = await createRejudgeBatch({
+      submissionIds: submissions.map(item => item.id),
+      requestedBy: req.user.userId,
+      scopeType: 'all_local',
+      scopePayload: { source: 'admin-data' },
     })
 
     res.json({
       success: true,
-      data: { requeued: result.count, message: `已将 ${result.count} 条本地提交重新加入评测队列` },
+      data: { batchId: result.batch.id, requeued: result.queuedCount, skipped: result.skippedCount, message: `已将 ${result.queuedCount} 条本地提交重新加入评测队列` },
     })
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message })
@@ -88,21 +85,10 @@ adminDataRouter.post('/rejudge-legacy-carits', async (req, res) => {
         where: { id: submission.id },
         data: {
           problemInternalId,
-          result: 'queuing',
-          timeUsed: null,
-          memoryUsed: null,
-          wallTimeUsed: null,
-          timeoutReason: null,
-          metricSource: null,
-          score: null,
-          cases: null,
-          subtasks: null,
-          errorMessage: null,
-          judgeId: null,
-          judgeStarted: null,
+          submitMethod: 'local',
         },
       })
-      requeued++
+      if (await rejudgeSubmissionWithRun(submission.id, (req as any).user.userId)) requeued++
     }
     res.json({ success: true, data: { found: legacy.length, requeued, message: `已修复并重新加入 ${requeued} 条旧 Carits 提交` } })
   } catch (error: any) {

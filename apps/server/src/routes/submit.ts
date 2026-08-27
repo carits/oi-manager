@@ -132,7 +132,7 @@ submitRouter.post('/rejudge', authenticate, async (req: any, res) => {
     ) {
       return res.status(404).json({ success: false, message: '提交记录不存在' })
     }
-    return res.json(await rejudgeSubmission(submissionId))
+    return res.json(await rejudgeSubmission(submissionId, req.user.userId))
   } catch (error: any) {
     logger.error('rejudge_error', { action: 'rejudge', metadata: { error: error.message } })
     return res.status(500).json({ success: false, message: '重评失败' })

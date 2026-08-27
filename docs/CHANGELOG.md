@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### JudgeRun/JudgeAttempt 写路径切换
+
+- Consumer 现在只领取 `Submission.currentJudgeRunId -> JudgeRun.currentAttemptId` 指向的 QUEUED Attempt；领取同时推进 Run/Attempt 状态并双写旧 Submission 投影。Judge 协议回传 Run、Attempt 和 fencing token，100 路重复或延迟回传只能有一次通过 CAS 进入 FINALIZING。
+- 正常结果在一个事务中终结 Attempt、Run 和 Submission 投影；断连、沙箱传输故障、租约超时和 API 重启把当前 Attempt 终结为 `INFRA_ERROR` 并创建下一 Attempt，永不重开旧终态。
+- 单条重测创建下一 `runNumber`；比赛范围和全局重测创建持久化 `RejudgeBatch` 并为每条可重测提交创建新 Run。归档记录和正在执行的提交继续跳过。
+- 新增部署窗口对账迁移；空库/最新正式备份迁移链为 82 表、31/34 条迁移、20186 用户且结构签名一致。fenced 生命周期、重试、Batch 和 100 路重复回传通过，Server 46 文件 463/463、Judge 6 文件 17/17 通过。Submission 读取兼容投影仍保留，Switch read 和旧字段删除不在本批执行。
+
 ### JudgeRun/JudgeAttempt 领域模型第一阶段
 
 - 新增 `JudgeRun`、`JudgeAttempt` 和 `RejudgeBatch`，把逻辑评测、物理执行尝试和范围重测从 Submission 用户意图中分离；新增 Run/Attempt/Batch Prisma 枚举与拒绝非法迁移的 domain state machine。

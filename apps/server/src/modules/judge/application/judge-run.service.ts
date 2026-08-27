@@ -1,10 +1,82 @@
 import crypto from 'node:crypto'
-import { JudgeRunType, Prisma } from '@prisma/client'
+import {
+  JudgeAttemptState,
+  JudgeRunStatus,
+  JudgeRunType,
+  Prisma,
+} from '@prisma/client'
 import { prisma } from '../../../prisma'
+import {
+  assertJudgeAttemptTransition,
+  assertJudgeRunTransition,
+} from '../domain/judge-state'
 
 export interface CreateQueuedSubmissionOptions {
   runType?: JudgeRunType
   requestedBy?: string | null
+}
+
+export interface ClaimedSubmissionLifecycle {
+  submissionId: number
+  problemInternalId: string
+  trainingProblemId: string | null
+  testSetRevisionId: string | null
+  code: string
+  language: string
+  judgeRunId: string
+  judgeAttemptId: string
+  fencingToken: string
+}
+
+export interface JudgeResultProjection {
+  result: string
+  timeUsed?: number | null
+  wallTimeUsed?: number | null
+  memoryUsed?: number | null
+  timeoutReason?: string | null
+  metricSource?: string | null
+  score?: number | null
+  cases?: string | null
+  subtasks?: string | null
+  errorMessage?: string | null
+}
+
+interface RejudgeRequest {
+  submissionIds: number[]
+  requestedBy: string
+  trainingId?: number | null
+  scopeType: string
+  scopePayload?: Prisma.InputJsonValue | null
+}
+
+const ACTIVE_ATTEMPT_STATES: JudgeAttemptState[] = ['CLAIMED', 'COMPILING', 'RUNNING', 'FINALIZING']
+
+function terminalAttemptState(result: string): JudgeAttemptState {
+  if (result === 'accepted') return 'SUCCEEDED'
+  if (['system_error', 'judge_failed', 'unknown_error', 'remote_unavailable', 'submit_failed'].includes(result)) {
+    return 'INFRA_ERROR'
+  }
+  return 'USER_ERROR'
+}
+
+function clearedSubmissionProjection(submissionId: number, oj: string) {
+  return {
+    result: 'queuing',
+    submitMethod: 'local',
+    timeUsed: null,
+    memoryUsed: null,
+    wallTimeUsed: null,
+    timeoutReason: null,
+    metricSource: null,
+    score: null,
+    cases: null,
+    subtasks: null,
+    errorMessage: null,
+    judgeId: null,
+    judgeStarted: null,
+    ojAccountId: null,
+    ojRemoteId: oj === 'carits' ? String(submissionId) : null,
+  }
 }
 
 /**
@@ -44,5 +116,379 @@ export async function createQueuedSubmissionWithRun(
     })
     await tx.judgeRun.update({ where: { id: runId }, data: { currentAttemptId: attemptId } })
     return tx.submission.update({ where: { id: submission.id }, data: { currentJudgeRunId: runId } })
+  })
+}
+
+/** Claim the next physical attempt and dual-write the legacy queue projection. */
+export async function claimNextQueuedSubmission(judgeId: string): Promise<ClaimedSubmissionLifecycle | null> {
+  return prisma.$transaction(async tx => {
+    const candidates = await tx.$queryRaw<Array<{
+      submissionId: number
+      judgeRunId: string
+      judgeAttemptId: string
+      fencingToken: string
+    }>>`
+      SELECT submission.id AS "submissionId", run.id AS "judgeRunId",
+             attempt.id AS "judgeAttemptId", attempt."fencingToken"
+      FROM "JudgeAttempt" attempt
+      JOIN "JudgeRun" run ON run.id = attempt."judgeRunId"
+      JOIN "Submission" submission ON submission.id = run."submissionId"
+      WHERE attempt.state = 'QUEUED'
+        AND run.status IN ('QUEUED', 'RUNNING')
+        AND run."currentAttemptId" = attempt.id
+        AND submission."currentJudgeRunId" = run.id
+        AND submission.result = 'queuing'
+        AND submission."problemInternalId" IS NOT NULL
+        AND (
+          submission."submitMethod" IN ('local', 'demo_scenario')
+          OR (submission.oj = 'carits' AND submission."submitMethod" <> 'archive')
+        )
+      ORDER BY attempt."createdAt" ASC
+      FOR UPDATE OF attempt SKIP LOCKED
+      LIMIT 1
+    `
+    const candidate = candidates[0]
+    if (!candidate) return null
+
+    const now = new Date()
+    assertJudgeAttemptTransition('QUEUED', 'CLAIMED')
+    const claimed = await tx.judgeAttempt.updateMany({
+      where: {
+        id: candidate.judgeAttemptId,
+        judgeRunId: candidate.judgeRunId,
+        state: 'QUEUED',
+        fencingToken: candidate.fencingToken,
+      },
+      data: {
+        state: 'CLAIMED',
+        judgeId,
+        claimedAt: now,
+        leaseUntil: new Date(now.getTime() + 5 * 60_000),
+      },
+    })
+    if (claimed.count !== 1) return null
+
+    const run = await tx.judgeRun.findUnique({ where: { id: candidate.judgeRunId }, select: { status: true } })
+    if (!run) throw new Error('JudgeRun disappeared while claiming an attempt')
+    if (run.status === 'QUEUED') {
+      assertJudgeRunTransition('QUEUED', 'RUNNING')
+      await tx.judgeRun.update({
+        where: { id: candidate.judgeRunId },
+        data: { status: 'RUNNING', startedAt: now },
+      })
+    }
+
+    assertJudgeAttemptTransition('CLAIMED', 'RUNNING')
+    await tx.judgeAttempt.update({
+      where: { id: candidate.judgeAttemptId },
+      data: { state: 'RUNNING', startedAt: now },
+    })
+    const submission = await tx.submission.update({
+      where: { id: candidate.submissionId },
+      data: { result: 'judging', judgeId, judgeStarted: now },
+      select: {
+        id: true,
+        problemInternalId: true,
+        trainingProblemId: true,
+        testSetRevisionId: true,
+        code: true,
+        language: true,
+      },
+    })
+    if (!submission.problemInternalId) throw new Error('Queued local submission has no internal problem')
+    return {
+      submissionId: submission.id,
+      problemInternalId: submission.problemInternalId,
+      trainingProblemId: submission.trainingProblemId,
+      testSetRevisionId: submission.testSetRevisionId,
+      code: submission.code,
+      language: submission.language,
+      judgeRunId: candidate.judgeRunId,
+      judgeAttemptId: candidate.judgeAttemptId,
+      fencingToken: candidate.fencingToken,
+    }
+  })
+}
+
+/** Finalize exactly the currently owned attempt and legacy projection. */
+export async function finalizeOwnedJudgeAttempt(input: {
+  submissionId: number
+  judgeRunId: string
+  judgeAttemptId: string
+  fencingToken: string
+  judgeId: string
+  projection: JudgeResultProjection
+}) {
+  return prisma.$transaction(async tx => {
+    assertJudgeAttemptTransition('RUNNING', 'FINALIZING')
+    const finalizing = await tx.judgeAttempt.updateMany({
+      where: {
+        id: input.judgeAttemptId,
+        judgeRunId: input.judgeRunId,
+        fencingToken: input.fencingToken,
+        judgeId: input.judgeId,
+        state: 'RUNNING',
+        JudgeRun: {
+          submissionId: input.submissionId,
+          currentAttemptId: input.judgeAttemptId,
+          status: 'RUNNING',
+          Submission: { currentJudgeRunId: input.judgeRunId },
+        },
+      },
+      data: { state: 'FINALIZING' },
+    })
+    if (finalizing.count !== 1) return null
+
+    const now = new Date()
+    const terminalState = terminalAttemptState(input.projection.result)
+    assertJudgeAttemptTransition('FINALIZING', terminalState)
+    await tx.judgeAttempt.update({
+      where: { id: input.judgeAttemptId },
+      data: {
+        state: terminalState,
+        result: input.projection.result,
+        score: input.projection.score ?? null,
+        cases: input.projection.cases ?? null,
+        subtasks: input.projection.subtasks ?? null,
+        errorMessage: input.projection.errorMessage ?? null,
+        timeUsed: input.projection.timeUsed ?? null,
+        wallTimeUsed: input.projection.wallTimeUsed ?? null,
+        memoryUsed: input.projection.memoryUsed ?? null,
+        timeoutReason: input.projection.timeoutReason ?? null,
+        metricSource: input.projection.metricSource ?? null,
+        leaseUntil: null,
+        finalizedAt: now,
+      },
+    })
+    assertJudgeRunTransition('RUNNING', 'FINALIZED')
+    await tx.judgeRun.update({
+      where: { id: input.judgeRunId },
+      data: {
+        status: 'FINALIZED',
+        result: input.projection.result,
+        score: input.projection.score ?? null,
+        cases: input.projection.cases ?? null,
+        subtasks: input.projection.subtasks ?? null,
+        errorMessage: input.projection.errorMessage ?? null,
+        timeUsed: input.projection.timeUsed ?? null,
+        wallTimeUsed: input.projection.wallTimeUsed ?? null,
+        memoryUsed: input.projection.memoryUsed ?? null,
+        timeoutReason: input.projection.timeoutReason ?? null,
+        metricSource: input.projection.metricSource ?? null,
+        finalizedAt: now,
+      },
+    })
+    return tx.submission.update({
+      where: {
+        id: input.submissionId,
+        currentJudgeRunId: input.judgeRunId,
+        result: 'judging',
+        judgeId: input.judgeId,
+      },
+      data: {
+        ...input.projection,
+        judgeId: null,
+        judgeStarted: null,
+      },
+      select: {
+        id: true,
+        userId: true,
+        problemId: true,
+        result: true,
+        score: true,
+        submitScope: true,
+        trainingId: true,
+        trainingProblemId: true,
+        contestId: true,
+        contestProblemId: true,
+      },
+    })
+  })
+}
+
+async function retryAttemptTransaction(
+  tx: Prisma.TransactionClient,
+  input: { submissionId: number; judgeAttemptId?: string; judgeId?: string; reason: string },
+) {
+  const submission = await tx.submission.findUnique({
+    where: { id: input.submissionId },
+    include: {
+      CurrentJudgeRun: {
+        include: { CurrentAttempt: true },
+      },
+    },
+  })
+  const run = submission?.CurrentJudgeRun
+  const attempt = run?.CurrentAttempt
+  if (!submission || !run || !attempt) return false
+  if (input.judgeAttemptId && attempt.id !== input.judgeAttemptId) return false
+  if (input.judgeId && attempt.judgeId !== input.judgeId) return false
+  if (!ACTIVE_ATTEMPT_STATES.includes(attempt.state)) return false
+
+  const now = new Date()
+  assertJudgeAttemptTransition(attempt.state, 'INFRA_ERROR')
+  await tx.judgeAttempt.update({
+    where: { id: attempt.id },
+    data: {
+      state: 'INFRA_ERROR',
+      result: 'judge_failed',
+      errorMessage: input.reason,
+      leaseUntil: null,
+      finalizedAt: now,
+    },
+  })
+  const nextAttemptId = crypto.randomUUID()
+  await tx.judgeAttempt.create({
+    data: {
+      id: nextAttemptId,
+      judgeRunId: run.id,
+      attemptNumber: attempt.attemptNumber + 1,
+      state: 'QUEUED',
+      fencingToken: crypto.randomUUID(),
+      retryOfAttemptId: attempt.id,
+    },
+  })
+  await tx.judgeRun.update({
+    where: { id: run.id },
+    data: { currentAttemptId: nextAttemptId, errorMessage: null },
+  })
+  await tx.submission.update({
+    where: { id: submission.id },
+    data: {
+      ...clearedSubmissionProjection(submission.id, submission.oj),
+      currentJudgeRunId: run.id,
+    },
+  })
+  return true
+}
+
+/** Infrastructure retry creates a new immutable Attempt; it never reopens one. */
+export async function retryOwnedJudgeAttempt(input: {
+  submissionId: number
+  judgeAttemptId?: string
+  judgeId?: string
+  reason: string
+}) {
+  return prisma.$transaction(tx => retryAttemptTransaction(tx, input))
+}
+
+export async function recoverStaleJudgeAttempts(input: {
+  judgeId?: string
+  leaseBefore?: Date
+  reason: string
+}) {
+  const attempts = await prisma.judgeAttempt.findMany({
+    where: {
+      state: { in: ACTIVE_ATTEMPT_STATES },
+      ...(input.judgeId ? { judgeId: input.judgeId } : {}),
+      ...(input.leaseBefore ? { leaseUntil: { lt: input.leaseBefore } } : {}),
+    },
+    select: {
+      id: true,
+      judgeId: true,
+      JudgeRun: { select: { submissionId: true, currentAttemptId: true } },
+    },
+  })
+  let recoveredCount = 0
+  for (const attempt of attempts) {
+    if (attempt.JudgeRun.currentAttemptId !== attempt.id) continue
+    const recovered = await retryOwnedJudgeAttempt({
+      submissionId: attempt.JudgeRun.submissionId,
+      judgeAttemptId: attempt.id,
+      judgeId: attempt.judgeId || undefined,
+      reason: input.reason,
+    })
+    if (recovered) recoveredCount++
+  }
+  return recoveredCount
+}
+
+async function queueRejudgeRun(
+  tx: Prisma.TransactionClient,
+  submissionId: number,
+  input: { requestedBy: string; rejudgeBatchId?: string | null },
+) {
+  await tx.$queryRaw`SELECT id FROM "Submission" WHERE id = ${submissionId} FOR UPDATE`
+  const submission = await tx.submission.findUnique({
+    where: { id: submissionId },
+    include: { CurrentJudgeRun: true },
+  })
+  if (!submission || submission.submitMethod === 'archive' || !submission.problemInternalId) return false
+  if (submission.result === 'queuing' || submission.result === 'judging') return false
+  if (submission.CurrentJudgeRun && ['QUEUED', 'RUNNING'].includes(submission.CurrentJudgeRun.status)) return false
+
+  const latest = await tx.judgeRun.aggregate({ where: { submissionId }, _max: { runNumber: true } })
+  const runId = crypto.randomUUID()
+  const attemptId = crypto.randomUUID()
+  await tx.judgeRun.create({
+    data: {
+      id: runId,
+      submissionId,
+      runNumber: (latest._max.runNumber || 0) + 1,
+      runType: 'REJUDGE',
+      status: 'QUEUED',
+      testSetRevisionId: submission.testSetRevisionId,
+      judgeConfigHash: submission.judgeConfigHash,
+      rejudgeBatchId: input.rejudgeBatchId || null,
+      requestedBy: input.requestedBy,
+    },
+  })
+  await tx.judgeAttempt.create({
+    data: {
+      id: attemptId,
+      judgeRunId: runId,
+      attemptNumber: 1,
+      state: 'QUEUED',
+      fencingToken: crypto.randomUUID(),
+    },
+  })
+  await tx.judgeRun.update({ where: { id: runId }, data: { currentAttemptId: attemptId } })
+  await tx.submission.update({
+    where: { id: submissionId },
+    data: {
+      ...clearedSubmissionProjection(submissionId, submission.oj),
+      currentJudgeRunId: runId,
+    },
+  })
+  return true
+}
+
+export async function rejudgeSubmissionWithRun(submissionId: number, requestedBy: string) {
+  return prisma.$transaction(tx => queueRejudgeRun(tx, submissionId, { requestedBy }))
+}
+
+/** Queue a scope as a durable batch and create one new Run per eligible submission. */
+export async function createRejudgeBatch(input: RejudgeRequest) {
+  return prisma.$transaction(async tx => {
+    const batchId = crypto.randomUUID()
+    await tx.rejudgeBatch.create({
+      data: {
+        id: batchId,
+        trainingId: input.trainingId || null,
+        scopeType: input.scopeType,
+        scopePayload: input.scopePayload ?? undefined,
+        status: 'QUEUING',
+        requestedBy: input.requestedBy,
+        matchedCount: input.submissionIds.length,
+        startedAt: new Date(),
+      },
+    })
+    let queuedCount = 0
+    for (const submissionId of input.submissionIds) {
+      if (await queueRejudgeRun(tx, submissionId, { requestedBy: input.requestedBy, rejudgeBatchId: batchId })) {
+        queuedCount++
+      }
+    }
+    const skippedCount = input.submissionIds.length - queuedCount
+    const batch = await tx.rejudgeBatch.update({
+      where: { id: batchId },
+      data: {
+        status: 'COMPLETED',
+        queuedCount,
+        skippedCount,
+        completedAt: new Date(),
+      },
+    })
+    return { batch, queuedCount, skippedCount }
   })
 }

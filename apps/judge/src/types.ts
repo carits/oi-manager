@@ -100,6 +100,9 @@ export interface ProblemConfig {
 
 export interface JudgeRequest {
   submissionId: string
+  judgeRunId?: string
+  judgeAttemptId?: string
+  fencingToken?: string
   problemId: string
   code: string
   language: string
@@ -137,6 +140,9 @@ export interface SubtaskResult {
 
 export interface JudgeTaskResult {
   submissionId: string
+  judgeRunId?: string
+  judgeAttemptId?: string
+  fencingToken?: string
   result: JudgeResult
   time: number
   cpuTime?: number

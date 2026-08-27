@@ -2,7 +2,7 @@
  * WebSocket 评测机服务端
  *
  * 处理评测机连接，采用 Hydro 风格的持久化队列模式：
- * - 评测机主动消费 Submission 表（queuing → judging）
+ * - 评测机主动消费 current JudgeAttempt（QUEUED → RUNNING）
  * - 支持动态并发调整（config 消息）
  * - 断连时精准恢复任务
  * - 心跳检测 + 超时扫描
@@ -18,6 +18,13 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getHeartbeatAction } from './judge-protocol'
 import { finalizeHackResult } from '../modules/problem/problem.hack.service'
+import {
+  claimNextQueuedSubmission,
+  finalizeOwnedJudgeAttempt,
+  recoverStaleJudgeAttempts,
+  rejudgeSubmissionWithRun,
+  retryOwnedJudgeAttempt,
+} from '../modules/judge/application/judge-run.service'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -37,21 +44,18 @@ const judgeHeartbeats = new Map<WebSocket, number>()
 let wss: WebSocketServer | null = null
 let acceptingJudgeTasks = true
 
-const localJudgeSubmissionWhere = () => ({
-  problemInternalId: { not: null },
-  submitMethod: { not: 'archive' },
-  OR: [
-    { submitMethod: { in: ['local', 'demo_scenario'] } },
-    { oj: 'carits' },
-  ],
-})
-
 /**
- * JudgeConsumer 类：轮询 Submission 表，分发任务到评测机
+ * JudgeConsumer 类：轮询 JudgeAttempt，分发任务到评测机
  */
 class JudgeConsumer {
   consuming: boolean = false
-  processing: Map<string, { taskType: 'submission' | 'hack'; id: string; startTime: number }> = new Map()
+  processing: Map<string, {
+    taskType: 'submission' | 'hack'
+    id: string
+    startTime: number
+    judgeAttemptId?: string
+    fencingToken?: string
+  }> = new Map()
   concurrency: number = 1
   notify: ((value?: unknown) => void) | null = null
   ws: WebSocket
@@ -85,7 +89,13 @@ class JudgeConsumer {
       const taskType: 'submission' | 'hack' = task.taskType === 'hack' ? 'hack' : 'submission'
       const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.submissionId
       const taskKey = `${taskType}:${taskId}`
-      this.processing.set(taskKey, { taskType, id: taskId, startTime: Date.now() })
+      this.processing.set(taskKey, {
+        taskType,
+        id: taskId,
+        startTime: Date.now(),
+        judgeAttemptId: 'judgeAttemptId' in task ? task.judgeAttemptId : undefined,
+        fencingToken: 'fencingToken' in task ? task.fencingToken : undefined,
+      })
 
       logger.info('consumer_task_dispatched', {
         action: 'judge_consumer',
@@ -112,72 +122,51 @@ class JudgeConsumer {
   }
 
   async fetchNextSubmissionTask(): Promise<JudgeTask | null> {
+    let claimed: Awaited<ReturnType<typeof claimNextQueuedSubmission>> = null
     try {
-      return await prisma.$transaction(async (tx) => {
-        const candidates = await tx.$queryRaw<Array<{ id: number }>>`
-          SELECT id
-          FROM "Submission"
-          WHERE result = 'queuing'
-            AND "problemInternalId" IS NOT NULL
-            AND (
-              "submitMethod" IN ('local', 'demo_scenario')
-              OR (oj = 'carits' AND "submitMethod" <> 'archive')
-            )
-          ORDER BY "createdAt" ASC
-          FOR UPDATE SKIP LOCKED
-          LIMIT 1
-        `
-        const candidate = candidates[0]
-        if (!candidate) return null
-
-        const submission = await tx.submission.findUnique({
-          where: { id: candidate.id },
-          select: { id: true, problemInternalId: true, trainingProblemId: true, testSetRevisionId: true, code: true, language: true }
-        })
-        if (!submission) return null
-
-        // 标记为 judging，同时记录评测机 ID 和开始时间
-        await tx.submission.update({
-          where: { id: submission.id },
-          data: {
-            result: 'judging',
-            judgeId: this.judgeId,
-            judgeStarted: new Date()
-          }
-        })
-
-        // 构建任务数据
-        const problem = await tx.problem.findUnique({
-          where: { id: submission.problemInternalId! },
-          select: { judgeConfig: true, latestTestSetRevisionId: true }
-        })
-        const trainingProblem = submission.trainingProblemId
-          ? await tx.trainingProblem.findUnique({
-              where: { id: submission.trainingProblemId },
-              select: { judgeConfigSnapshot: true, testSetRevisionId: true },
-            })
-          : null
-        const revisionId = submission.testSetRevisionId || trainingProblem?.testSetRevisionId || problem?.latestTestSetRevisionId
-        const revision = revisionId
-          ? await tx.problemTestSetRevision.findFirst({ where: { id: revisionId, problemId: submission.problemInternalId! }, select: { judgeConfig: true, testdataPath: true } })
-          : null
-
-        // 统一使用 TESTDATA_DIR 环境变量
-        const TESTDATA_DIR = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
-
-        return {
-          taskType: 'submission' as const,
-          submissionId: submission.id.toString(),
-          problemId: submission.problemInternalId!,
-          code: submission.code,
-          language: submission.language,
-          testdataPath: revision
-            ? path.join(TESTDATA_DIR, submission.problemInternalId!, revision.testdataPath)
-            : path.join(TESTDATA_DIR, submission.problemInternalId!),
-          config: yaml.load(revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}')
-        }
+      claimed = await claimNextQueuedSubmission(this.judgeId)
+      if (!claimed) return null
+      const problem = await prisma.problem.findUnique({
+        where: { id: claimed.problemInternalId },
+        select: { judgeConfig: true, latestTestSetRevisionId: true },
       })
+      const trainingProblem = claimed.trainingProblemId
+        ? await prisma.trainingProblem.findUnique({
+            where: { id: claimed.trainingProblemId },
+            select: { judgeConfigSnapshot: true, testSetRevisionId: true },
+          })
+        : null
+      const revisionId = claimed.testSetRevisionId || trainingProblem?.testSetRevisionId || problem?.latestTestSetRevisionId
+      const revision = revisionId
+        ? await prisma.problemTestSetRevision.findFirst({
+            where: { id: revisionId, problemId: claimed.problemInternalId },
+            select: { judgeConfig: true, testdataPath: true },
+          })
+        : null
+      const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
+      return {
+        taskType: 'submission' as const,
+        submissionId: String(claimed.submissionId),
+        problemId: claimed.problemInternalId,
+        code: claimed.code,
+        language: claimed.language,
+        judgeRunId: claimed.judgeRunId,
+        judgeAttemptId: claimed.judgeAttemptId,
+        fencingToken: claimed.fencingToken,
+        testdataPath: revision
+          ? path.join(testdataRoot, claimed.problemInternalId, revision.testdataPath)
+          : path.join(testdataRoot, claimed.problemInternalId),
+        config: yaml.load(revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}'),
+      }
     } catch (e: any) {
+      if (claimed) {
+        await retryOwnedJudgeAttempt({
+          submissionId: claimed.submissionId,
+          judgeAttemptId: claimed.judgeAttemptId,
+          judgeId: this.judgeId,
+          reason: `Task construction failed: ${e.message}`,
+        }).catch(() => undefined)
+      }
       logger.error('fetch_task_error', {
         action: 'judge_consumer',
         metadata: { judgeId: this.judgeId, error: e.message }
@@ -277,9 +266,11 @@ class JudgeConsumer {
     for (const [, task] of this.processing) {
       try {
         if (task.taskType === 'submission') {
-          await prisma.submission.updateMany({
-            where: { id: parseInt(task.id), result: 'judging', judgeId: this.judgeId },
-            data: { result: 'queuing', judgeId: null, judgeStarted: null }
+          await retryOwnedJudgeAttempt({
+            submissionId: parseInt(task.id),
+            judgeAttemptId: task.judgeAttemptId,
+            judgeId: this.judgeId,
+            reason: 'Judge connection closed before result persistence',
           })
         } else {
           await prisma.problemHackAttempt.updateMany({
@@ -308,6 +299,9 @@ interface JudgeTask {
   problemId: string
   code: string
   language: string
+  judgeRunId: string
+  judgeAttemptId: string
+  fencingToken: string
   testdataPath: string
   config: any
 }
@@ -378,27 +372,19 @@ export function initJudgeWebSocket() {
   // 超时任务扫描定时器（每 1 分钟）
   setInterval(async () => {
     try {
-      const stale = await prisma.submission.updateMany({
-        where: {
-          result: 'judging',
-          ...localJudgeSubmissionWhere(),
-          judgeStarted: { lt: new Date(Date.now() - 5 * 60 * 1000) } // 5 分钟前
-        },
-        data: {
-          result: 'queuing',
-          judgeId: null,
-          judgeStarted: null
-        }
+      const staleSubmissionCount = await recoverStaleJudgeAttempts({
+        leaseBefore: new Date(),
+        reason: 'Judge attempt lease expired',
       })
       const staleHacks = await prisma.problemHackAttempt.updateMany({
         where: { status: { in: ['judging', 'finalizing'] }, judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
         data: { status: 'queuing', judgeId: null, judgeStarted: null },
       })
 
-      if (stale.count > 0 || staleHacks.count > 0) {
+      if (staleSubmissionCount > 0 || staleHacks.count > 0) {
         logger.warn('stale_tasks_recovered', {
           action: 'judge_ws',
-          metadata: { submissionCount: stale.count, hackCount: staleHacks.count }
+          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count }
         })
       }
     } catch (e: any) {
@@ -533,24 +519,18 @@ export async function drainJudgeWebSocket(timeoutMs = 30_000) {
  */
 async function recoverAllStaleTasks() {
   try {
-    // 恢复所有 judging 状态的任务（上次服务重启遗留）
-    const recovered = await prisma.submission.updateMany({
-      where: { result: 'judging', ...localJudgeSubmissionWhere() },
-      data: {
-        result: 'queuing',
-        judgeId: null,
-        judgeStarted: null
-      }
+    const recoveredCount = await recoverStaleJudgeAttempts({
+      reason: 'API restart recovered an unfinished Judge attempt',
     })
     const recoveredHacks = await prisma.problemHackAttempt.updateMany({
       where: { status: { in: ['judging', 'finalizing'] } },
       data: { status: 'queuing', judgeId: null, judgeStarted: null },
     })
 
-    if (recovered.count > 0 || recoveredHacks.count > 0) {
+    if (recoveredCount > 0 || recoveredHacks.count > 0) {
       logger.info('startup_recovered_stale_tasks', {
         action: 'judge_ws',
-        metadata: { submissionCount: recovered.count, hackCount: recoveredHacks.count }
+        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count }
       })
     }
   } catch (e: any) {
@@ -746,11 +726,19 @@ export async function retryJudgePersistence<T>(
 
 export async function persistOwnedSubmissionResult(payload: any, judgeId: string): Promise<boolean> {
   const submissionId = Number.parseInt(String(payload?.submissionId || ''), 10)
-  if (!Number.isSafeInteger(submissionId) || !judgeId) return false
-  const updated = await prisma.submission.updateMany({
-    where: { id: submissionId, result: 'judging', judgeId },
-    data: {
-      result: normalizeResult(payload.result),
+  const judgeRunId = String(payload?.judgeRunId || '')
+  const judgeAttemptId = String(payload?.judgeAttemptId || '')
+  const fencingToken = String(payload?.fencingToken || '')
+  if (!Number.isSafeInteger(submissionId) || !judgeId || !judgeRunId || !judgeAttemptId || !fencingToken) return false
+  const result = normalizeResult(payload.result)
+  const submission = await finalizeOwnedJudgeAttempt({
+    submissionId,
+    judgeRunId,
+    judgeAttemptId,
+    fencingToken,
+    judgeId,
+    projection: {
+      result,
       timeUsed: payload.time,
       wallTimeUsed: payload.wallTime ?? null,
       memoryUsed: payload.memory ?? null,
@@ -760,21 +748,11 @@ export async function persistOwnedSubmissionResult(payload: any, judgeId: string
       cases: payload.cases ? JSON.stringify(payload.cases) : null,
       subtasks: payload.subtasks ? JSON.stringify(payload.subtasks) : null,
       errorMessage: payload.message,
-      judgeId: null,
-      judgeStarted: null,
     },
   })
-  if (updated.count !== 1) return false
+  if (!submission) return false
   try {
-    const submission = await prisma.submission.findUnique({
-      where: { id: submissionId },
-      select: {
-        id: true, userId: true, problemId: true, result: true, score: true,
-        submitScope: true, trainingId: true, trainingProblemId: true,
-        contestId: true, contestProblemId: true,
-      },
-    })
-    if (submission) await onSubmissionJudged(submission)
+    await onSubmissionJudged(submission)
   } catch (syncErr: any) {
     logger.error('judge_ws_sync_error', {
       action: 'judge_ws', metadata: { submissionId, error: syncErr.message },
@@ -815,7 +793,7 @@ async function handleHackResult(ws: WebSocket, payload: any) {
  * 重新评测提交（rejudge）
  * 将提交状态重置为 queuing，Consumer 会自动消费
  */
-export async function rejudgeSubmission(submissionId: number): Promise<{ success: boolean; message: string }> {
+export async function rejudgeSubmission(submissionId: number, requestedBy = 'system'): Promise<{ success: boolean; message: string }> {
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId }
   })
@@ -832,27 +810,8 @@ export async function rejudgeSubmission(submissionId: number): Promise<{ success
     return { success: false, message: '提交缺少题目内部 ID' }
   }
 
-  // 重置状态为 queuing（入队）
-  await prisma.submission.update({
-    where: { id: submissionId },
-    data: {
-      result: 'queuing',
-      submitMethod: 'local',
-      timeUsed: null,
-      memoryUsed: null,
-      wallTimeUsed: null,
-      timeoutReason: null,
-      metricSource: null,
-      score: null,
-      cases: null,
-      subtasks: null,
-      errorMessage: null,
-      judgeId: null,
-      judgeStarted: null,
-      ojAccountId: null,
-      ojRemoteId: submission.oj === 'carits' ? submissionId.toString() : null,
-    }
-  })
+  const queued = await rejudgeSubmissionWithRun(submissionId, requestedBy)
+  if (!queued) return { success: false, message: '提交正在排队或评测中，未重复加入队列' }
 
   logger.info('rejudge_queued', {
     action: 'rejudge',

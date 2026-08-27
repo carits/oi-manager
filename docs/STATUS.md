@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: Judge 领域写路径切换完成：Consumer 从 current `JudgeAttempt` 领取任务，Judge 回传携带 `judgeRunId + judgeAttemptId + fencingToken` 并在事务内终结 Attempt/Run、同步 Submission 兼容投影；断连、租约过期和 API 重启创建新的 Attempt，不再重开旧终态。单条和比赛范围重测分别创建新 Run 与持久化 RejudgeBatch。100 路重复结果仍只有一个拥有最终化权限，陈旧 token 无法覆盖成绩；第二条增量迁移负责收敛第一阶段部署窗口中的投影差异。空库/最新正式备份迁移链为 82 表、31/34 条迁移、20186 用户且结构签名一致；Server 46 文件 463/463、Judge 6 文件 17/17 通过。Switch read 与旧执行字段清理仍待稳定发布周期后完成。
 - 2026-08-28: Judge 领域模型进入安全增量迁移第一阶段：新增 `JudgeRun`、`JudgeAttempt`、`RejudgeBatch`、四组 Prisma Domain Enum 和显式状态转换；新普通/活动本地提交在同一事务创建 Submission、首个 Run 和首个 Attempt，远程归档不创建本地生命周期。旧 Submission 执行字段继续作为兼容投影，消费、回传和重测尚未切换，未删除历史字段。空库/正式备份恢复迁移验证得到 82 表、30/33 条迁移、20186 用户且结构签名一致；Server 46 文件 460/460 通过。
 - 2026-08-28: 受控 ECS 整机重启演练完成：重启前新建并恢复验证 14MiB 备份 `oi_manager_20260828_015754.dump`（SHA-256 `fd0d1b94b1f3cac543e7cb17836fab81d4c12789d061133f38b6931c618b676b`，79 表/32 迁移/20186 用户）；01:58:43 发出重启，01:59:09 新内核启动，01:59:25 数据库与沙箱就绪，01:59:30 Judge 重新注册，01:59:31 稳定 API/Web 同时健康，端到端 RTO 48 秒。Docker、PostgreSQL、go-judge、Router、API、Worker、Judge、Web、CloudMonitor/Aegis 均自动恢复，运行时审计、监控和公网 BUILD_ID 验收通过，无人工补启动。
 - 2026-08-28: 受控整机重启预检发现并修复 PostgreSQL 不会随 Docker 自动启动的问题：数据库和 go-judge 现在均为 `unless-stopped`；API/Worker/Judge 显式依赖 Docker，API/Worker 等待数据库 healthy，Judge 继续等待沙箱和稳定 API readiness。运行时审计新增数据库/沙箱 restart policy 与 systemd 依赖等待契约，避免未来配置回退。CloudMonitor 4.0 Agent 的 63 项指标持续成功发送，但云端下发的进程、HTTP 和脚本探测均为空，告警联系人/阈值仍需云控制台权限配置。

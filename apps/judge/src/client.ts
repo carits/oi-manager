@@ -154,7 +154,16 @@ class JudgeClient {
 
   private async handleJudgeTask(msg: JudgeMessage) {
     // 兼容旧字段名 problemConfig 和新字段名 config
-    const { submissionId, problemId, code, language, testdataPath } = msg.payload
+    const {
+      submissionId,
+      judgeRunId,
+      judgeAttemptId,
+      fencingToken,
+      problemId,
+      code,
+      language,
+      testdataPath,
+    } = msg.payload
     const config = msg.payload.config ?? msg.payload.problemConfig ?? {}
 
     console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
@@ -163,6 +172,9 @@ class JudgeClient {
     try {
       const result = await judge({
         submissionId,
+        judgeRunId,
+        judgeAttemptId,
+        fencingToken,
         problemId,
         code,
         language,
@@ -180,7 +192,7 @@ class JudgeClient {
 
       const resultMsg: ResultMessage = {
         type: 'result',
-        payload: result
+        payload: { ...result, judgeRunId, judgeAttemptId, fencingToken }
       }
       this.send(resultMsg)
     } catch (e: any) {
@@ -190,6 +202,9 @@ class JudgeClient {
         type: 'result',
         payload: {
           submissionId,
+          judgeRunId,
+          judgeAttemptId,
+          fencingToken,
           result: 'System Error',
           time: 0,
           memory: 0,

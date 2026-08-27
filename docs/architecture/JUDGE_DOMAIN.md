@@ -36,6 +36,8 @@ QUEUED -> CLAIMED -> COMPILING -> RUNNING -> FINALIZING
 
 `SUCCEEDED/USER_ERROR/INFRA_ERROR/CANCELLED` 都是不可重开的终态。基础设施重试创建下一 `attemptNumber`，重测创建下一 `runNumber`。
 
+任务协议必须携带 `judgeRunId`、`judgeAttemptId` 和 `fencingToken`。结果只有在 Attempt 仍为 current、owner Judge 相同且 token 相同时才能进入 `FINALIZING`；重复或延迟结果返回 stale/no-op。
+
 ## 渐进迁移
 
 1. **Expand**：新增表、枚举、索引和兼容回填，不删除旧字段。
@@ -46,6 +48,8 @@ QUEUED -> CLAIMED -> COMPILING -> RUNNING -> FINALIZING
 6. **Cleanup**：稳定一个发布周期后删除 Submission 的 result、Judge owner、得分与测试点等旧执行态字段。
 
 任何阶段都必须保持旧 API 响应兼容、活动计分和排行榜不变，并通过普通 Judge、Hack、重测、蓝绿与故障注入 characterization tests。
+
+当前进度：Expand、Dual write 和 Switch write 已完成；读取仍以 Submission 兼容投影为主。Switch read、对账观察窗口与 Cleanup 尚未执行。
 
 ## 写入规则
 

@@ -25,6 +25,7 @@ import {
 import { createQueuedTrainingSubmission } from './training.submission.service'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 import { resolveJudgePresentationConfig } from '../../lib/judge-mode'
+import { createRejudgeBatch } from '../judge/application/judge-run.service'
 
 export const trainingSubmissionsRouter = Router()
 
@@ -506,40 +507,20 @@ trainingSubmissionsRouter.post('/trainings/:id/rejudge', authenticate, asyncHand
       where: baseWhere,
       select: { id: true, result: true },
     })
-    const completedIds = candidates
-      .filter(item => item.result !== 'queuing' && item.result !== 'judging')
-      .map(item => item.id)
-    const updateResult = completedIds.length > 0
-      ? await prisma.submission.updateMany({
-        where: {
-          ...baseWhere,
-          id: { in: completedIds },
-          result: { notIn: ['queuing', 'judging'] },
-        },
-        data: {
-          result: 'queuing',
-          submitMethod: 'local',
-          score: null,
-          timeUsed: null,
-          wallTimeUsed: null,
-          memoryUsed: null,
-          timeoutReason: null,
-          metricSource: null,
-          cases: null,
-          subtasks: null,
-          errorMessage: null,
-          judgeStarted: null,
-          judgeId: null,
-        },
-      })
-      : { count: 0 }
-    const count = updateResult.count
-    const skippedCount = candidates.length - count
+    const batchResult = await createRejudgeBatch({
+      submissionIds: candidates.map(item => item.id),
+      requestedBy: userId,
+      trainingId: id,
+      scopeType,
+      scopePayload: scope,
+    })
+    const count = batchResult.queuedCount
+    const skippedCount = batchResult.skippedCount
 
     logger.info('training_rejudge', {
       action: 'training_rejudge',
-      metadata: { trainingId: id, scope: scopeType, resetCount: count, skippedCount },
+      metadata: { trainingId: id, batchId: batchResult.batch.id, scope: scopeType, resetCount: count, skippedCount },
     })
 
-    res.json({ success: true, data: { scope: scopeType, resetCount: count, skippedCount, message: '已重置 ' + count + ' 条提交，' + skippedCount + ' 条正在评测中的提交已跳过' } })
+    res.json({ success: true, data: { batchId: batchResult.batch.id, scope: scopeType, resetCount: count, skippedCount, message: '已重置 ' + count + ' 条提交，' + skippedCount + ' 条正在评测中的提交已跳过' } })
 }, '重新评测失败'))

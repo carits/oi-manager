@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { JudgeAttemptState, JudgeRunStatus } from '@prisma/client'
 import { prisma } from '../src/prisma'
-import { createQueuedSubmissionWithRun } from '../src/modules/judge/application/judge-run.service'
+import {
+  claimNextQueuedSubmission,
+  createQueuedSubmissionWithRun,
+  createRejudgeBatch,
+  finalizeOwnedJudgeAttempt,
+  retryOwnedJudgeAttempt,
+} from '../src/modules/judge/application/judge-run.service'
 import {
   assertJudgeAttemptTransition,
   assertJudgeRunTransition,
@@ -85,5 +91,117 @@ describe('Submission and Judge lifecycle creation', () => {
       userId: 'unused', oj: 'codeforces', problemId: '1A', language: 'cpp',
       code: '', codeLength: 0, result: 'accepted', submitMethod: 'archive',
     })).rejects.toThrow('Archive submissions do not create local Judge runs')
+  })
+})
+
+async function createLifecycleFixture() {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const userId = `judge-owner-${suffix}`
+  const problemId = `judge-problem-${suffix}`
+  await prisma.user.create({ data: {
+    id: userId, username: userId, passwordHash: 'test', role: 'student', status: 'active',
+  } })
+  await prisma.problem.create({ data: {
+    id: problemId, platform: 'carits', problemId, title: 'Lifecycle fixture',
+    ownerId: userId, ownerType: 'user', visibility: 'private', status: 'published',
+  } })
+  const submission = await createQueuedSubmissionWithRun({
+    userId, oj: 'carits', problemId, problemInternalId: problemId,
+    language: 'cpp17', code: 'int main(){}', codeLength: 12,
+    result: 'queuing', submitMethod: 'local', submitScope: 'problem',
+  })
+  return { userId, problemId, submission }
+}
+
+describe('Judge lifecycle ownership and retries', () => {
+  it('claims and finalizes only the fenced current attempt', async () => {
+    const fixture = await createLifecycleFixture()
+    const claimed = await claimNextQueuedSubmission('judge-domain-1')
+    expect(claimed?.submissionId).toBe(fixture.submission.id)
+
+    const stale = await finalizeOwnedJudgeAttempt({
+      submissionId: fixture.submission.id,
+      judgeRunId: claimed!.judgeRunId,
+      judgeAttemptId: claimed!.judgeAttemptId,
+      fencingToken: 'wrong-token',
+      judgeId: 'judge-domain-1',
+      projection: { result: 'accepted', score: 100 },
+    })
+    expect(stale).toBeNull()
+
+    const finalized = await finalizeOwnedJudgeAttempt({
+      submissionId: fixture.submission.id,
+      judgeRunId: claimed!.judgeRunId,
+      judgeAttemptId: claimed!.judgeAttemptId,
+      fencingToken: claimed!.fencingToken,
+      judgeId: 'judge-domain-1',
+      projection: { result: 'accepted', score: 100, timeUsed: 7 },
+    })
+    expect(finalized).toMatchObject({ id: fixture.submission.id, result: 'accepted', score: 100 })
+    const stored = await prisma.submission.findUniqueOrThrow({
+      where: { id: fixture.submission.id },
+      include: { CurrentJudgeRun: { include: { CurrentAttempt: true } } },
+    })
+    expect(stored.CurrentJudgeRun).toMatchObject({ status: 'FINALIZED', result: 'accepted', score: 100 })
+    expect(stored.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ state: 'SUCCEEDED', result: 'accepted' })
+  })
+
+  it('creates another attempt for infrastructure retry and rejects the stale result', async () => {
+    const fixture = await createLifecycleFixture()
+    const first = await claimNextQueuedSubmission('judge-domain-retry')
+    expect(first?.submissionId).toBe(fixture.submission.id)
+    expect(await retryOwnedJudgeAttempt({
+      submissionId: fixture.submission.id,
+      judgeAttemptId: first!.judgeAttemptId,
+      judgeId: 'judge-domain-retry',
+      reason: 'sandbox reset',
+    })).toBe(true)
+
+    const afterRetry = await prisma.submission.findUniqueOrThrow({
+      where: { id: fixture.submission.id },
+      include: { CurrentJudgeRun: { include: { CurrentAttempt: true, Attempts: { orderBy: { attemptNumber: 'asc' } } } } },
+    })
+    expect(afterRetry.result).toBe('queuing')
+    expect(afterRetry.CurrentJudgeRun?.Attempts.map(item => item.state)).toEqual(['INFRA_ERROR', 'QUEUED'])
+    expect(afterRetry.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 2, state: 'QUEUED' })
+
+    const stale = await finalizeOwnedJudgeAttempt({
+      submissionId: fixture.submission.id,
+      judgeRunId: first!.judgeRunId,
+      judgeAttemptId: first!.judgeAttemptId,
+      fencingToken: first!.fencingToken,
+      judgeId: 'judge-domain-retry',
+      projection: { result: 'accepted', score: 100 },
+    })
+    expect(stale).toBeNull()
+  })
+
+  it('creates a durable RejudgeBatch and a new logical run', async () => {
+    const fixture = await createLifecycleFixture()
+    const first = await claimNextQueuedSubmission('judge-domain-batch')
+    await finalizeOwnedJudgeAttempt({
+      submissionId: fixture.submission.id,
+      judgeRunId: first!.judgeRunId,
+      judgeAttemptId: first!.judgeAttemptId,
+      fencingToken: first!.fencingToken,
+      judgeId: 'judge-domain-batch',
+      projection: { result: 'wa', score: 0 },
+    })
+    const queued = await createRejudgeBatch({
+      submissionIds: [fixture.submission.id],
+      requestedBy: fixture.userId,
+      scopeType: 'test',
+      scopePayload: { problemId: fixture.problemId },
+    })
+    expect(queued).toMatchObject({ queuedCount: 1, skippedCount: 0 })
+    expect(queued.batch).toMatchObject({ status: 'COMPLETED', matchedCount: 1, queuedCount: 1 })
+    const stored = await prisma.submission.findUniqueOrThrow({
+      where: { id: fixture.submission.id },
+      include: { CurrentJudgeRun: { include: { CurrentAttempt: true } }, JudgeRuns: { orderBy: { runNumber: 'asc' } } },
+    })
+    expect(stored.result).toBe('queuing')
+    expect(stored.JudgeRuns.map(item => item.status)).toEqual(['FINALIZED', 'QUEUED'])
+    expect(stored.CurrentJudgeRun).toMatchObject({ runNumber: 2, runType: 'REJUDGE', rejudgeBatchId: queued.batch.id })
+    expect(stored.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 1, state: 'QUEUED' })
   })
 })
