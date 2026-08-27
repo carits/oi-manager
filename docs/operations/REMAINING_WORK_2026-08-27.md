@@ -87,3 +87,5 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 ## 完成条件
 
 本表所有适用项必须有当前代码、测试输出、运行时记录或云平台证据。需要外部权限的事项只有在实际执行并记录后才能勾选，不能用“已设计”或“已有脚本”代替完成。
+
+当前仍需外部账号、目标、域名或破坏性授权的输入与主机侧证据，统一记录在 `EXTERNAL_DEPENDENCIES_2026-08-28.md`。
