@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### 20260815 ACM / IOI Revision 恢复与耗时基准
+
+- 通过只允许超级管理员调用的安全恢复接口，将 1158 的 median、balloon、string 从迁移期旧 MIN Revision 固定恢复到数据对象完全相同的 SUM 后继版本；活动快照与 67 条既有提交指针在同一 Serializable 事务中更新，subset 继续固定其原 SUM Revision。
+- 1157 ACM 与 1158 IOI 各 89 条提交完成全量重测，按用户名、题目顺序和源码 SHA-256 得到 89 组同源代码，Accepted/100 语义不一致为 0；`oi20260815_07` 的 median 两边均为 Accepted/100。
+- 新增可复现的三轮基准与报告生成脚本。三轮整场耗时为 776.358s、773.414s、782.947s，共 267 个配对观测且无结果不一致；逐用户逐题、测试点 wall/CPU 与排队完成时间见 `docs/operations/ACM_IOI_TIMING_2026-08-27.md` 及配套原始 JSON。
+
 ### 运维监控与 SSH 基线
 
 - 生产优化构建不再默认探测已退役的 HMR 端口 3001；开发环境仍可通过 `MONITOR_HMR_URL` 显式启用。健康成功路径、API 端口故障注入和生产状态恢复均已验证。

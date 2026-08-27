@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-24
+last_verified: 2026-08-27
 source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints
 
 ---
@@ -31,7 +31,7 @@ restores over `oi_manager`.
 
 ## Service monitor
 
-`scripts/monitor-services.sh` checks the optimized preview (`3000`), HMR (`3001`), API (`3002`), go-judge
+`scripts/monitor-services.sh` checks the optimized preview (`3000`), API (`3002`), go-judge
 (`5050`), PostgreSQL readiness, the currently served Next.js build, root/data disk usage and automatic-backup age.
 It exits non-zero on any failure and records state changes in `.run/service-monitor.state`.
 
@@ -46,6 +46,23 @@ The cron installer runs every five minutes and suppresses repeated healthy lines
 trusted local command when an external mail/webhook integration is provisioned; it receives `MONITOR_STATUS` and
 `MONITOR_MESSAGE` and is invoked only when the state changes. No external alert channel is configured on the current
 development server, so cron failures are currently retained in the local monitor log.
+The optimized production preview has no HMR listener; development environments may explicitly set
+`MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. Aliyun CloudMonitor/Aegis agents are
+installed on the current host, but alert contacts and thresholds must still be verified in the cloud console.
+
+## SSH hardening
+
+The repository baseline disables password and keyboard-interactive authentication, keeps public-key authentication,
+and limits root to public-key access. The installer refuses to proceed unless the invoking sudo user has an active
+`authorized_keys`, correct 700/600 permissions and sudo access; invalid `sshd` configuration is rolled back.
+
+```bash
+cd /data/oi-manager-response-refactor
+bash -n scripts/install-ssh-hardening.sh
+sudo scripts/install-ssh-hardening.sh
+ssh -o BatchMode=yes -o PasswordAuthentication=no alias true
+sudo sshd -T | grep -E '^(pubkeyauthentication|passwordauthentication|kbdinteractiveauthentication|permitrootlogin|maxauthtries) '
+```
 
 ## Controlled load smoke
 

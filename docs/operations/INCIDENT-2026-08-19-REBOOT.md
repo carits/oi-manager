@@ -3,7 +3,7 @@ status: current
 audience: operations, development
 incident_date: 2026-08-19
 last_verified: 2026-08-19
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 source_of_truth: journald, systemd units, deployment logs, cloud audit records
 severity: service interruption
 ---
@@ -52,11 +52,11 @@ severity: service interruption
 以下事项暂不在本次事故记录阶段执行，后续逐项处理：
 
 - [ ] **核对阿里云事件与审计**：检查 2026-08-19 14:02–14:18（+08:00）的 ECS 实例事件、系统事件、运维编排和操作审计，确认是否为人工重启、自动运维或平台故障。
-- [ ] **建立独立主机监控**：接入 CPU、内存、磁盘、文件系统、systemd 服务状态和主机重启告警；监控不能依赖本机业务进程。
+- [ ] **建立独立主机监控**：阿里云 CloudMonitor/Aegis Agent 已启用，本地每 5 分钟检查服务、数据库、go-judge、备份、磁盘和构建；仍需在云控制台复核告警联系人、阈值和主机重启通知是否真正生效。
 - [ ] **持久化事故日志**：将 journald、Docker、部署日志转发到独立存储，并保留跨重启的审计时间线。
 - [ ] **完善启动恢复演练**：在维护窗口执行一次受控重启，验证 systemd 启动顺序、Docker 自启、健康检查和失败自动重启。
 - [ ] **治理评测沙箱资源**：审查 go-judge 的 CPU、内存、进程数、磁盘和超时限制，避免异常提交占用宿主机资源；保留沙箱失败与主机故障的边界证据。
-- [ ] **检查 SSH 暴露面**：复核公网监听、密钥权限、禁止密码登录、最小化 sudo 权限和安全组规则。
+- [x] **检查 SSH 暴露面**：`ecs-user` 公钥与目录权限已校验，密码和键盘交互登录已关闭，root 仅允许公钥，`MaxAuthTries=4`；新建 BatchMode 连接和 `sshd -t` 均通过。云安全组仍随阿里云事件审计一并复核。
 - [x] **补充备份与恢复演练**：自动备份已恢复为每日执行，并在隔离临时数据库完成完整恢复与清理；
   覆盖正式库的灾难演练仍需单独维护窗口授权。
 - [x] **统一部署入口**：Web、稳定 API Router、蓝绿 API slot 和 Judge 已统一使用仓库脚本与 systemd，

@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-26
+last_verified: 2026-08-27
 source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, route manifest
 ---
 
@@ -15,9 +15,9 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 | 项目 | 当前数量/状态 | 证据 |
 |---|---:|---|
 | Next.js 页面文件 | 63 | `route-inventory.spec.ts` 与源码清单一致 |
-| HTTP 端点 | 317 | `pnpm docs:check` |
+| HTTP 端点 | 318 | `pnpm docs:check` |
 | Prisma 模型 | 78 | `pnpm docs:check`、`prisma validate` |
-| 单元/集成测试文件 | 53 | Server 40、Web 10、Judge 3 |
+| 单元/集成测试文件 | 57 | Server 43、Web 10、Judge 4 |
 | E2E 文件 | 22 | `playwright test --list`；仅统计当前可执行的 E2E 规格文件 |
 | Playwright 可收集用例 | 268 | `playwright test --list` |
 
@@ -152,10 +152,10 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
 ## 未完成审计
 
 - 2026-08-26 已完成稳定 API Router、3302/3303 蓝绿实例、systemd 服务接管和 Judge 1012 重连；
-  旧“生产进程仍为 watch 组合”和“单实例约 16 秒中断”结论已关闭。待办转为后台 Cron/轮询单实例化、
-  受控整机重启演练及独立外部监控。
-- TestSet Revision 当前覆盖 24 道题、43 个 Revision、104 个活动题和 570 条可证明历史版本的提交；
-  13 道配置不完整旧题和其他无本地配置活动仍需分类修复，不能把兼容读取等同于正式版本迁移完成。
+  2026-08-27 又将 Cron/轮询拆到带 PostgreSQL 单例锁的独立 Worker，并修复生产监控误查退役 HMR 的问题。
+  阿里云 CloudMonitor/Aegis 与本地监控均在运行，剩余项为云端告警策略复核、日志异机保存和受控整机重启演练。
+- TestSet Revision 现覆盖 42 道题、73 个 Revision、293/301 个活动题和 2361/2582 条提交；剩余 8 个活动题均为没有本地测试数据或本地提交的历史外部 OJ 引用，明确保留 `LOCAL_JUDGE_NOT_CONFIGURED`，不再作为待猜测修复项。
+- 1158 的三道旧 MIN 固定已恢复为数据对象相同的 SUM Revision；1157/1158 各 89 条提交完成三轮重测，267 个同源码配对观测无 Accepted/100 不一致。逐用户逐题证据见 `ACM_IOI_TIMING_2026-08-27.md`。
 
 - 学生/个人区缺少真实数据的动态详情页仍需补充线上 Edge 证据；隔离 E2E 已覆盖其路由和权限。
 - 317 个 HTTP 端点的匿名门禁和六角色无 5xx 健壮性矩阵已完成；2026-08-27 补齐活动、团队、平台题、
@@ -167,5 +167,5 @@ source_of_truth: runtime inspection, Edge, Playwright, Vitest, Prisma schema, ro
   Edge 视觉证据仍未完成，不能以 Chromium 21/21 或 API 结果替代。
 - 活动题面矩阵问题由真实 Edge 首轮定位；修复后的真页面在隔离 Chromium 验证。公网提升后 Edge 扩展
   连续读取超时，线上第二份 Edge DOM/控制台证据尚待扩展恢复后补录，不以构建通过替代该证据。
-- 外部告警通道、隔离环境写入负载、容量上限和长稳测试尚未完成。
+- 云端告警策略复核、隔离环境写入负载、容量上限和长稳测试尚未完成；本地只读负载冒烟不能替代这些证据。
 - Nginx 当前只提供 HTTP，尚无域名/TLS；Web 已补齐基础安全头，但严格 CSP 仍需在清理内联脚本兼容性后启用。
