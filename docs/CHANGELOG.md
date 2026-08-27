@@ -19,6 +19,7 @@ source_of_truth: Git history
 - Router 补齐 HTTP、WebSocket、客户端 RST、上游断开和关闭阶段的 Socket 生命周期处理；客户端连接重置不再触发未处理的 `ECONNRESET` 终止进程。
 - 新增独立双 API 演练：在 `e2e` schema、3410/3412/3413 和独立 go-judge 中验证 100 路双实例 finalization、50 次客户端 RST、Worker 单例锁、blue/green 切换与回滚、旧 API drain 和 Judge 1012 自动重连。
 - Server 44 文件 452/452、Judge 4 文件 14/14、双 API E2E 1/1、根生产构建通过；空库和正式备份恢复路径分别为 29/32 条迁移、79 张表，规范结构哈希一致。
+- 提交 `8697c80` 已推送 `main`；生产迁移前新备份 `oi_manager_20260827_230448.dump`（14 MiB）校验通过，第 29 个迁移已应用，API 从 3302 原子提升到 3303。新 Router 受控重启以 `Succeeded` 退出且不再出现 `ECONNRESET`，Judge 自动重新认证注册，318 端点匿名审计和公网/本机健康检查通过。
 
 ### 全新空库安装与历史迁移兼容
 

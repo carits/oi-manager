@@ -37,3 +37,13 @@ source_of_truth: e2e/stress/blue-green-finalization.spec.ts, scripts/start-isola
 - 空库安装：79 张表、29 条迁移、32 个种子用户。
 - 正式备份恢复：79 张表、32 条迁移记录、20186 个用户。
 - 两条数据库路径规范结构 SHA-256：`24eae42c9432f22d83202863811b500624c625b7c9bbf522d5e7133dc21aa599`。
+
+## 生产发布
+
+- Git：`8697c80` 已推送远程 `main`。
+- 迁移前备份：`/data/backups/oi-manager/automatic/oi_manager_20260827_230448.dump`，14 MiB，已完成 `pg_restore` 列表校验。
+- 数据库：`20260827_hack_finalizing_claim` 已应用，生产为 29/29 个迁移。
+- API：Router 活动指针从 3302 原子切换到 3303；3302 drain 后 inactive。
+- Router：新代码再次受控重启时 systemd 记录 `Succeeded`，没有未处理 Socket error。
+- Judge/Worker：均为 active；Judge 在 Router 重启后重新认证并注册，活动队列中 `queuing/judging/finalizing` 均为 0。
+- 验收：本机 3002、公网 3000 健康检查通过，318 个匿名端点审计为 0 failures，服务监控为 healthy。
