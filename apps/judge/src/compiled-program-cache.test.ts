@@ -27,6 +27,26 @@ describe('Hack system compile cache', () => {
     expect(deleteMock).toHaveBeenCalledTimes(1)
   })
 
+  it('deduplicates 500 concurrent leases and returns to zero references', async () => {
+    const cache = await import('./compiled-program-cache.js')
+    await cache.disposeHackCompileCache()
+    deleteMock.mockClear()
+
+    const leases = await Promise.all(Array.from({ length: 500 }, () =>
+      cache.acquireCompiledProgram({ language: 'cpp17', code: 'int main(){return 0;}' }, true),
+    ))
+
+    expect(compileMock).toHaveBeenCalledTimes(1)
+    expect(cache.getHackCompileCacheStats()).toMatchObject({ entries: 1, activeReferences: 500 })
+
+    await Promise.all(leases.map(lease => lease.release()))
+    expect(cache.getHackCompileCacheStats()).toMatchObject({ entries: 1, activeReferences: 0 })
+
+    await cache.disposeHackCompileCache()
+    expect(cache.getHackCompileCacheStats()).toMatchObject({ entries: 0, activeReferences: 0 })
+    expect(deleteMock).toHaveBeenCalledTimes(1)
+  })
+
   it('always disposes non-cacheable generator artifacts', async () => {
     const cache = await import('./compiled-program-cache.js')
     const lease = await cache.acquireCompiledProgram({ language: 'cpp17', code: 'int main(){}' }, false)

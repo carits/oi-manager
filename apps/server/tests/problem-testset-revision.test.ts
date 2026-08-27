@@ -130,6 +130,49 @@ describe('immutable problem TestSet Revisions', () => {
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: problem.id } })).toBe(2)
   })
 
+  it('serializes 100 concurrent publishers without lost updates or orphan revision directories', async () => {
+    const { owner, problem, config, directory } = await fixture()
+    const first = await ensureInitialTestSetRevision(problem.id, owner.user.id)
+    const spec = await loadRevisionSpec(first!.id)
+    const publish = () => publishTestSetRevision({
+      problemId: problem.id,
+      expectedLatestRevisionId: first!.id,
+      source: 'admin_edit',
+      createdBy: owner.user.id,
+      baseConfigText: config,
+      spec: spec!,
+    })
+
+    const results = await Promise.allSettled(Array.from({ length: 100 }, publish))
+    const fulfilled = results.filter(item => item.status === 'fulfilled') as PromiseFulfilledResult<Awaited<ReturnType<typeof publish>>>[]
+    const rejected = results.filter(item => item.status === 'rejected') as PromiseRejectedResult[]
+
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(99)
+    expect(rejected.every(item => item.reason instanceof TestSetRevisionConflict)).toBe(true)
+    expect(await prisma.problemTestSetRevision.count({ where: { problemId: problem.id } })).toBe(2)
+    expect((await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } })).latestTestSetRevisionId).toBe(fulfilled[0].value!.id)
+
+    const revisionEntries = await fs.promises.readdir(path.join(directory, 'revisions'))
+    expect(revisionEntries.filter(name => name.endsWith('.pending'))).toHaveLength(0)
+    expect(revisionEntries).toHaveLength(2)
+  }, 120_000)
+
+  it('lets 100 concurrent first users share the single initial revision', async () => {
+    const { owner, problem, directory } = await fixture()
+    const revisions = await Promise.all(Array.from({ length: 100 }, () =>
+      ensureInitialTestSetRevision(problem.id, owner.user.id),
+    ))
+
+    expect(new Set(revisions.map(revision => revision?.id)).size).toBe(1)
+    expect(await prisma.problemTestSetRevision.count({ where: { problemId: problem.id } })).toBe(1)
+    expect((await prisma.problem.findUniqueOrThrow({ where: { id: problem.id } })).latestTestSetRevisionId).toBe(revisions[0]!.id)
+
+    const revisionEntries = await fs.promises.readdir(path.join(directory, 'revisions'))
+    expect(revisionEntries.filter(name => name.endsWith('.pending'))).toHaveLength(0)
+    expect(revisionEntries).toEqual([revisions[0]!.id])
+  }, 120_000)
+
   it('does not publish another revision when the latest projection hash already exists', async () => {
     const { owner, problem, config } = await fixture()
     const first = await ensureInitialTestSetRevision(problem.id, owner.user.id)

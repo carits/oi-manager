@@ -501,10 +501,28 @@ export async function ensureInitialTestSetRevision(problemId: string, createdBy?
   if (problem.latestTestSetRevisionId) return prisma.problemTestSetRevision.findUnique({ where: { id: problem.latestTestSetRevisionId } })
   if (!problem.judgeConfig?.trim()) throw new Error('题目尚未配置本地评测')
   const spec = await resolveConfigSpec(problemId, problem.judgeConfig)
-  return publishTestSetRevision({
-    problemId, expectedLatestRevisionId: null, source: 'initial', createdBy,
-    baseConfigText: problem.judgeConfig, spec,
-  })
+  try {
+    return await publishTestSetRevision({
+      problemId, expectedLatestRevisionId: null, source: 'initial', createdBy,
+      baseConfigText: problem.judgeConfig, spec,
+    })
+  } catch (error) {
+    // Several first submissions may discover the same legacy/unmigrated
+    // problem concurrently. The advisory lock and CAS intentionally allow
+    // one initial publisher only; all other callers should reuse that winner
+    // instead of surfacing a transient 409 to otherwise valid submissions.
+    if (!(error instanceof TestSetRevisionConflict)) throw error
+    const latest = await prisma.problem.findUnique({
+      where: { id: problemId },
+      select: { latestTestSetRevisionId: true },
+    })
+    if (!latest?.latestTestSetRevisionId) throw error
+    const revision = await prisma.problemTestSetRevision.findUnique({
+      where: { id: latest.latestTestSetRevisionId },
+    })
+    if (!revision) throw error
+    return revision
+  }
 }
 
 export async function revisionAbsolutePath(problemId: string, revision: { testdataPath: string }) {

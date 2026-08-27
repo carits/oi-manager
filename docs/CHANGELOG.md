@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### Judge 长稳与 Revision/Hack 并发一致性
+
+- 新增独立 `e2e` Schema、API 端口、go-judge 容器和测试数据目录的真实 Judge 压力入口；每次执行验证全部提交终态、Accepted/100、无卡住记录、沙箱文件归零及 API readiness，并将报告同时写入固定 latest 文件和带轮次/数量的归档文件。
+- 30 轮共 3000 条真实评测全部 Accepted，历时 1747.722 秒、平均 1.72 条/秒，结束时 API/Judge RSS 没有增长，沙箱文件数为 0；带只读根、`no-new-privileges`、CPU/内存/PID/NOFILE/临时盘限制的 10 条复验通过。
+- 修复多个新提交同时首次访问未迁移题目时，初始 TestSet Revision 的 CAS 竞争失败者错误收到瞬时 409：赢家发布后，其他调用者现在读取并复用正式 Revision。新增 100 路首次创建、100 路同基线发布、Hack 并发晋升与重复输入、500 路系统程序缓存租约回归。
+
 ### 公网动态验收与收口总表
 
 - 新增只读公网比赛动态套件，使用同一负责人会话依次验证 1158 IOI 与 1157 ACM 的排行榜题目格、用户题目提交列表和现有提交详情弹窗；确认 #3678 显示 OI 分数/Subtask/测试点得分，#3677 使用 ACM Verdict/测试点结构且不显示分值。

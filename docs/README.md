@@ -44,6 +44,7 @@ source_of_truth: repository structure and active documentation
 4. [部署模板](operations/DEPLOYMENT.md)
 5. [故障排查](operations/TROUBLESHOOTING.md)
 6. [当前未完成事项执行总表](operations/REMAINING_WORK_2026-08-27.md)
+7. [Judge 长稳与并发一致性报告](operations/JUDGE_STRESS_2026-08-27.md)
 
 ### 查阅接口
 
