@@ -4,6 +4,7 @@ Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_
 Wants=network-online.target
 After=network-online.target docker.service oi-manager-api-router.service
 Requires=oi-manager-api-router.service
+Requires=docker.service
 StartLimitIntervalSec=60s
 StartLimitBurst=10
 
@@ -15,6 +16,7 @@ WorkingDirectory=/data/oi-manager-response-refactor/apps/judge
 Environment=NODE_ENV=production
 Environment=HOME=/home/ecs-user
 EnvironmentFile=/data/oi-manager-response-refactor/apps/judge/.env
+ExecStartPre=/data/oi-manager-response-refactor/scripts/wait-runtime-dependencies.sh judge
 ExecStart=/usr/bin/node /data/oi-manager-response-refactor/apps/judge/dist/index.js
 Restart=on-failure
 RestartSec=5s

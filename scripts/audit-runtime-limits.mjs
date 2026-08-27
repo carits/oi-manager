@@ -19,6 +19,7 @@ function systemdDurationToMicroseconds(value) {
 const failures = []
 const warnings = []
 const judge = JSON.parse(command('docker', ['inspect', 'oi-judge']))[0]
+const database = JSON.parse(command('docker', ['inspect', 'oi-postgres']))[0]
 const host = judge.HostConfig
 const nofile = (host.Ulimits || []).find(item => item.Name === 'nofile')
 const binding = host.PortBindings?.['5050/tcp']?.[0]
@@ -39,13 +40,15 @@ assert(Boolean(host.Tmpfs?.['/tmp']), 'go-judge must use a bounded /tmp tmpfs', 
 assert(binding?.HostIp === '127.0.0.1' && binding?.HostPort === '5050', 'go-judge must bind only to 127.0.0.1:5050', failures)
 assert(host.LogConfig?.Type === 'json-file', 'go-judge must use the json-file log driver', failures)
 assert(host.LogConfig?.Config?.['max-size'] === '20m' && host.LogConfig?.Config?.['max-file'] === '5', 'go-judge log rotation must be 20m × 5', failures)
+assert(database.HostConfig?.RestartPolicy?.Name === 'unless-stopped', 'PostgreSQL must restart automatically after a host reboot', failures)
+assert(host.RestartPolicy?.Name === 'unless-stopped', 'go-judge must restart automatically after a host reboot', failures)
 
 const expectedUnits = {
   'oi-manager-api-router.service': { MemoryMax: 128 * 1024 * 1024, TasksMax: '128', LimitNOFILE: '65536', TimeoutStopUSec: 30_000_000 },
-  'oi-manager-server@3302.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000 },
-  'oi-manager-server@3303.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000 },
-  'oi-manager-worker.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '256', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000 },
-  'oi-manager-judge.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 60_000_000 },
+  'oi-manager-server@3302.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
+  'oi-manager-server@3303.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
+  'oi-manager-worker.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '256', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000, requires: 'docker.service', preStartMode: 'database' },
+  'oi-manager-judge.service': { MemoryMax: 768 * 1024 * 1024, TasksMax: '512', LimitNOFILE: '65536', TimeoutStopUSec: 60_000_000, requires: 'docker.service', preStartMode: 'judge' },
   'oi-manager-web.service': { MemoryMax: 1024 * 1024 * 1024, TasksMax: '256', LimitNOFILE: '65536', TimeoutStopUSec: 45_000_000 },
 }
 
@@ -53,7 +56,7 @@ const units = {}
 for (const [unit, expected] of Object.entries(expectedUnits)) {
   const values = Object.fromEntries(command('systemctl', [
     'show', unit,
-    '--property=MemoryMax,TasksMax,LimitNOFILE,TimeoutStopUSec,StartLimitBurst,StartLimitIntervalUSec',
+    '--property=MemoryMax,TasksMax,LimitNOFILE,TimeoutStopUSec,StartLimitBurst,StartLimitIntervalUSec,Requires,ExecStartPre',
     '--no-pager',
   ]).split('\n').filter(Boolean).map(line => line.split(/=(.*)/s).slice(0, 2)))
   units[unit] = values
@@ -63,6 +66,14 @@ for (const [unit, expected] of Object.entries(expectedUnits)) {
   assert(systemdDurationToMicroseconds(values.TimeoutStopUSec) === expected.TimeoutStopUSec, `${unit} has unexpected TimeoutStopSec`, failures)
   assert(Number(values.StartLimitBurst) === 10, `${unit} must allow at most 10 starts per interval`, failures)
   assert(systemdDurationToMicroseconds(values.StartLimitIntervalUSec) === 60_000_000, `${unit} restart interval must be 60 seconds`, failures)
+  if (expected.requires) assert(values.Requires?.split(/\s+/).includes(expected.requires), `${unit} must require ${expected.requires}`, failures)
+  if (expected.preStartMode) {
+    assert(
+      values.ExecStartPre?.includes('/scripts/wait-runtime-dependencies.sh') && values.ExecStartPre?.includes(` ${expected.preStartMode}`),
+      `${unit} must wait for ${expected.preStartMode} runtime dependencies`,
+      failures,
+    )
+  }
 }
 
 console.log(JSON.stringify({
@@ -80,6 +91,9 @@ console.log(JSON.stringify({
     boundedTmpfs: Boolean(host.Tmpfs?.['/tmp']),
     loopbackPort: binding?.HostIp === '127.0.0.1',
     logRotation: host.LogConfig?.Config || {},
+  },
+  database: {
+    restartPolicy: database.HostConfig?.RestartPolicy?.Name || null,
   },
   units,
   failures,

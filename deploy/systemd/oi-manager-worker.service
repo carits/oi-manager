@@ -3,6 +3,7 @@ Description=OI Manager singleton background worker
 Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_DEPLOYMENT.md
 Wants=network-online.target
 After=network-online.target docker.service
+Requires=docker.service
 StartLimitIntervalSec=60s
 StartLimitBurst=10
 
@@ -15,6 +16,7 @@ EnvironmentFile=/data/oi-manager-response-refactor/apps/server/.env
 Environment=NODE_ENV=development
 Environment=APP_ENV=development
 Environment=HOME=/home/ecs-user
+ExecStartPre=/data/oi-manager-response-refactor/scripts/wait-runtime-dependencies.sh database
 ExecStart=/usr/bin/node /data/oi-manager-response-refactor/apps/server/dist/background-worker.js
 Restart=on-failure
 RestartSec=5s

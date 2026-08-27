@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### 主机重启启动链预检
+
+- PostgreSQL 容器补齐 `unless-stopped`，与 go-judge 一样在 Docker 恢复后自动启动；实际生产容器已无中断更新 restart policy。
+- API、后台 Worker 和 Judge 的 systemd unit 显式要求 Docker；API/Worker 启动前等待数据库 health，Judge 再等待 go-judge 和稳定 API readiness，默认最多等待 120 秒。
+- `runtime:audit` 新增两个基础容器自启动策略以及 systemd `Requires/ExecStartPre` 契约检查；事故记录补充 CloudMonitor 指标发送正常但进程/HTTP/脚本探测为空，以及 8 月 19 日异常 boot 边界复核证据。
+
 ### 正式备份隔离恢复核心闭环
 
 - 新增 `backup:verify:core`，在专用 PostgreSQL 容器、15435 端口、`e2e` Schema、隔离存储和独立 go-judge 中恢复最新正式备份；生产 Schema 只读，写入验收永远不能落到正式数据库或正式测试数据目录。

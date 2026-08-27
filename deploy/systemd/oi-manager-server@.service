@@ -3,6 +3,7 @@ Description=OI Manager API server on port %i
 Documentation=file:///data/oi-manager-response-refactor/docs/operations/SYSTEMD_DEPLOYMENT.md
 Wants=network-online.target
 After=network-online.target docker.service
+Requires=docker.service
 StartLimitIntervalSec=60s
 StartLimitBurst=10
 
@@ -19,6 +20,7 @@ Environment=PORT=%i
 Environment=API_HOST=127.0.0.1
 Environment=SKIP_JUDGE_RECOVERY=true
 Environment=DISABLE_BACKGROUND_JOBS=true
+ExecStartPre=/data/oi-manager-response-refactor/scripts/wait-runtime-dependencies.sh database
 # EnvironmentFile can contain the legacy stable PORT=3002. Put slot-specific
 # values on the final exec command so a blue/green candidate never binds the
 # stable router port before promotion.

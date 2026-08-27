@@ -18,6 +18,9 @@ source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.s
 
 PostgreSQL 与 go-judge 继续由 Docker Compose 管理。应用运行不再依赖 PM2 或 Nix。所有应用服务均以
 `ecs-user` 运行，日志进入 journald，异常退出后自动重启，并按当前 3.7 GiB 主机容量设置内存上限。
+PostgreSQL 和 go-judge 容器都使用 `unless-stopped`，保证 Docker 在主机重启后重新拉起基础设施。API 与
+Worker 显式依赖 Docker 并在启动前等待 PostgreSQL health；Judge 还会等待 go-judge `/version` 和稳定 API
+`/api/readiness`。等待上限默认 120 秒，避免 systemd 在基础设施尚未就绪时耗尽启动频率额度。
 Router、API、Worker、Judge 与 Web 同时设置 `TasksMax`、`LimitNOFILE`、停止超时和 60 秒内最多 10 次
 启动的频率保护。go-judge 设置 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根文件系统、
 `no-new-privileges` 和 512 MiB 临时文件系统；宿主内核没有 swap accounting 时，Docker 只能强制内存
@@ -66,6 +69,7 @@ pnpm runtime:audit
 pnpm sandbox:smoke
 sudo journalctl -u oi-manager-worker.service --since '-10 min' --no-pager
 docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' oi-postgres oi-judge
+docker inspect -f '{{.Name}} restart={{.HostConfig.RestartPolicy.Name}}' oi-postgres oi-judge
 ```
 
 `runtime:audit` 只读取容器与 systemd 的公开运行参数，不读取环境文件或输出密钥。它会在任一资源上限、

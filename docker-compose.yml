@@ -23,6 +23,7 @@ services:
       options:
         max-size: 20m
         max-file: "5"
+    restart: unless-stopped
 
   # go-judge sandbox with C/C++ and Python 3; compile and execute both stay isolated.
   judge:
