@@ -9,6 +9,15 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
+## 2026-08-28
+
+### 外部告警和异机日志接入基础
+
+- Monitor 的 failed/recovered 状态仅在外部通知命令成功后写入；通知失败时保留旧状态并在下一轮重试，避免“本地显示已恢复但外部从未收到”的静默丢警。
+- 新增 HTTPS webhook/邮件告警适配器；Webhook URL 只能从 mode-600/400 文件读取，不进入 Git、进程参数或日志，HTTP 仅允许隔离测试显式开启。
+- 新增运维日志归档，收集 OI Manager systemd、PostgreSQL/go-judge Docker、Nginx、监控和备份记录，生成 manifest 与 SHA-256 后交给可信上传命令；没有外部上传配置时保留本地包并明确失败。
+- 新增 failed/recovered 回环 HTTP、通知失败重试和独立归档接收目录验证。当前主机没有真实外部通知目标或对象存储权限，因此真实送达仍保持未完成。
+
 ## 2026-08-27
 
 ### 并发竞争与逐提交延迟收口

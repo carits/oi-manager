@@ -42,13 +42,42 @@ crontab -l
 tail -n 50 /data/backups/oi-manager/monitor.log
 ```
 
-The cron installer runs every five minutes and suppresses repeated healthy lines. Set `MONITOR_ALERT_COMMAND` to a
-trusted local command when an external mail/webhook integration is provisioned; it receives `MONITOR_STATUS` and
-`MONITOR_MESSAGE` and is invoked only when the state changes. No external alert channel is configured on the current
-development server, so cron failures are currently retained in the local monitor log.
+The cron installer runs every five minutes and suppresses repeated healthy lines. It reads an optional mode-600
+`$HOME/.config/oi-manager/operations.env` before invoking the monitor. Set `MONITOR_ALERT_COMMAND` to
+`/data/oi-manager-response-refactor/scripts/send-monitor-alert.sh` and store the HTTPS endpoint in a separate mode-600
+file referenced by `MONITOR_ALERT_WEBHOOK_URL_FILE`; the secret URL is read inside Node and is never placed in process
+arguments or logs. The command receives `MONITOR_STATUS` and `MONITOR_MESSAGE` and is invoked only when the state
+changes. A failed delivery does not advance the state file, so the next monitor run retries both failure and recovery
+notifications.
+
+No external alert channel is configured on the current development server, so cron failures are currently retained in
+the local monitor log. Do not mark external alerting complete until a real recipient has confirmed both an injected
+failure and its recovery. `pnpm monitor:verify` uses a loopback HTTP receiver solely to verify payload and retry
+contracts; it is not external-delivery evidence.
 The optimized production preview has no HMR listener; development environments may explicitly set
-`MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. Aliyun CloudMonitor/Aegis agents are
-installed on the current host, but alert contacts and thresholds must still be verified in the cloud console.
+`MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. The current host has no SLS Logtail,
+CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delivery must be provisioned explicitly.
+
+## Off-host log archive
+
+`scripts/archive-operations-logs.sh` creates a bounded archive containing the previous 24 hours of OI Manager systemd
+units, PostgreSQL/go-judge Docker logs, the most recent Nginx lines, monitor/backup logs and a build/commit manifest.
+The archive and SHA-256 remain in a local spool until `LOG_ARCHIVE_COMMAND` successfully copies them to an off-host
+machine or object store. Only successfully uploaded local archives are eligible for retention cleanup.
+
+```bash
+mkdir -p "$HOME/.config/oi-manager"
+install -m 600 deploy/observability/operations.env.example \
+  "$HOME/.config/oi-manager/operations.env"
+# Fill in a real HTTPS webhook file and a trusted off-host upload command.
+pnpm monitor:verify
+pnpm logs:archive
+pnpm logs:archive:install
+```
+
+The upload command receives `LOG_ARCHIVE_PATH`, `LOG_ARCHIVE_SHA256`, `LOG_ARCHIVE_SIZE` and `LOG_ARCHIVE_HOST`.
+Credentials belong in provider-owned mode-600 configuration, never in Git or command-line arguments. A local copy or
+loopback test is not accepted as off-host retention evidence.
 
 ## Runtime resource audit
 

@@ -52,8 +52,10 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 ### 3. 外部告警、日志与故障注入
 
 - [ ] 接通 `MONITOR_ALERT_COMMAND` 的真实外部通知，并验证故障与恢复消息。
+- [x] 告警适配器和失败重试契约已完成：URL 从 mode-600 文件读取，failed/recovered 回环 HTTP 通过；没有真实收件人时不标记外部送达完成。
 - [ ] 在云控制台复核告警联系人、阈值、主机重启通知和安全组。
 - [ ] 将 journald、Docker、Nginx 与部署日志复制到异机或对象存储，配置明确保留期。
+- [x] 日志采集、manifest、SHA-256、本地 spool、可信上传命令和“仅清理已上传归档”已实现并通过独立目录验收；仍需真实异机/对象存储凭据完成最终一跳。
 - [ ] 注入 API、Worker、Judge WebSocket、go-judge 和数据库短时故障，证明不丢任务且恢复告警生效。
 
 ### 4. 全新安装迁移链

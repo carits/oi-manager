@@ -21,6 +21,13 @@ ALERT_COMMAND="${MONITOR_ALERT_COMMAND:-}"
 
 failures=()
 
+write_state() {
+  local value="$1"
+  local temp="${STATE_FILE}.next.$$"
+  printf '%s\n' "$value" > "$temp"
+  mv -- "$temp" "$STATE_FILE"
+}
+
 fail() {
   failures+=("$1")
 }
@@ -91,22 +98,24 @@ timestamp="$(date --iso-8601=seconds)"
 if [ "${#failures[@]}" -eq 0 ]; then
   current_state="ok"
   previous_state="$(cat "$STATE_FILE" 2>/dev/null || true)"
-  printf '%s\n' "$current_state" > "$STATE_FILE"
   if [ "$QUIET_SUCCESS" != "1" ] || [ -n "$previous_state" -a "$previous_state" != "ok" ]; then
     echo "[$timestamp] service monitor healthy"
   fi
   if [ -n "$ALERT_COMMAND" ] && [ -n "$previous_state" ] && [ "$previous_state" != "ok" ]; then
     MONITOR_STATUS="recovered" MONITOR_MESSAGE="services recovered" bash -lc "$ALERT_COMMAND"
   fi
+  # Persist the transition only after the external notification succeeds.
+  # A failed delivery is retried during the next monitor run.
+  write_state "$current_state"
   exit 0
 fi
 
 summary="$(printf '%s; ' "${failures[@]}")"
 current_state="failed:$summary"
 previous_state="$(cat "$STATE_FILE" 2>/dev/null || true)"
-printf '%s\n' "$current_state" > "$STATE_FILE"
 echo "[$timestamp] service monitor failed: $summary" >&2
 if [ -n "$ALERT_COMMAND" ] && [ "$current_state" != "$previous_state" ]; then
   MONITOR_STATUS="failed" MONITOR_MESSAGE="$summary" bash -lc "$ALERT_COMMAND"
 fi
+write_state "$current_state"
 exit 1
