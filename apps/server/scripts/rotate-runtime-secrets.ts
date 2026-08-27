@@ -61,8 +61,15 @@ async function main() {
   const resolvedEnv = fs.realpathSync(envPath)
   const originalContent = fs.readFileSync(resolvedEnv, 'utf8')
   const current = parseEnv(originalContent)
-  const databaseUrl = process.env.RUNTIME_DATABASE_URL_OVERRIDE || current.DATABASE_URL
+  let databaseUrl = process.env.RUNTIME_DATABASE_URL_OVERRIDE || current.DATABASE_URL
   if (!databaseUrl) throw new Error('DATABASE_URL is missing from the Server environment')
+  const databaseNameOverride = process.env.RUNTIME_DATABASE_NAME_OVERRIDE
+  if (databaseNameOverride) {
+    if (!/^oi_manager_[a-z0-9_]+$/.test(databaseNameOverride)) throw new Error('Unsafe RUNTIME_DATABASE_NAME_OVERRIDE')
+    const parsed = new URL(databaseUrl)
+    parsed.pathname = `/${databaseNameOverride}`
+    databaseUrl = parsed.toString()
+  }
   process.env.DATABASE_URL = databaseUrl
 
   const oldAccountKeyText = current.ACCOUNT_ENCRYPT_KEY || LEGACY_ACCOUNT_KEY

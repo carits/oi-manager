@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### 运行时密钥审计与可回滚轮换
+
+- 新增不输出原文的运行时安全审计，检查 Server/Judge 环境文件权限与归属、JWT/Judge/账号密钥长度和独立性、Judge Token 一致性、CORS 通配符及 Cookie Secure 状态。
+- 新增默认只读检查、显式 `--apply` 的事务轮换工具：先解密并预验证全部 OJ 账号，再用 CAS 重新加密，生成 mode-600 环境备份并将旧项目环境链接迁移为当前仓库内文件；异常时恢复环境路径并回滚数据库事务。
+- 新增从最新正式备份恢复独立数据库的轮换演练，真实应用新 JWT/AES 密钥并用新密钥再次解密全部账号，测试数据库与临时环境通过 trap 清理。
+
 ### Judge 容器与 systemd 资源边界
 
 - go-judge 增加 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根、`no-new-privileges`、512 MiB 临时盘及 20 MiB × 5 Docker 日志轮转；PostgreSQL 日志同步设置本地轮转但数据库卷保持不变。

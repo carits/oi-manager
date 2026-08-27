@@ -73,9 +73,12 @@ The security audit reports only file metadata, secret lengths and boolean compar
 ```bash
 pnpm security:audit
 pnpm security:rotate:check
+pnpm security:rotate:verify
 ```
 
-`security:rotate:check` decrypts every stored OJ account in memory and performs no writes. A production rotation must
+`security:rotate:check` decrypts every stored OJ account in memory and performs no writes. `security:rotate:verify`
+restores the newest backup into a uniquely named temporary database, applies a real rotation to a mode-600 temporary
+environment file, decrypts every account again with the new key, and removes the database/files through a trap. A production rotation must
 first create and verify a database backup, then prove `--apply` against a restored isolated database and a temporary
 environment file. The apply path creates a mode-600 environment backup, rotates JWT and the 64-hex AES account key,
 re-encrypts OJ passwords with compare-and-swap inside a transaction, and replaces an old deployment symlink with a

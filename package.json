@@ -25,6 +25,7 @@
     "runtime:audit": "node scripts/audit-runtime-limits.mjs",
     "security:audit": "node scripts/audit-runtime-security.mjs",
     "security:rotate:check": "pnpm --filter server exec tsx scripts/rotate-runtime-secrets.ts",
+    "security:rotate:verify": "bash scripts/verify-secret-rotation.sh",
     "sandbox:smoke": "node scripts/smoke-go-judge.mjs",
     "compose": "bash scripts/compose.sh",
     "test:stress:prepare": "pnpm test:ui:prepare",
