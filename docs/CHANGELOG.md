@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### 全新空库安装与历史迁移兼容
+
+- 在不修改任何历史 migration 或校验和的前提下，新增仅空库可用的原子 bootstrap：根据当前 Prisma Schema 建库，将每个历史 SQL 文件的原始 SHA-256 写入标准迁移表，并在同一事务内通过 advisory lock 二次确认目标仍为空。
+- 将旧 Seed 从已删除的 Teacher/Student 和学校负责人字段迁移到当前 OrganizationMembership、校园 Profile、TeamMember、ContestResult 与 Milestone 关系；平台管理员不再获得虚假的校园身份。
+- 新增空库建库/Seed/非空拒绝演练，以及“空库安装”和“正式备份恢复后 migrate deploy”双路径 Schema 规范签名逐字节比较。
+- 实际验收为空库 79 张表/28 个唯一 migration/32 个种子用户，恢复库 79 张表/31 条历史 migration 记录/20186 个用户；按目录语义比较得到相同 `public` Schema SHA-256 `bc604325…06e6`。生产标准 migrate deploy 无待办，bootstrap 对正式非空库在 DDL 前拒绝。
+
 ### 运行时密钥审计与可回滚轮换
 
 - 新增不输出原文的运行时安全审计，检查 Server/Judge 环境文件权限与归属、JWT/Judge/账号密钥长度和独立性、Judge Token 一致性、CORS 通配符及 Cookie Secure 状态。

@@ -5,6 +5,7 @@ last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-27: 全新空库安装链已绕开不可重放的历史 `20260429_rename_to_id_v2`，且未修改任何历史 migration/checksum：事务 bootstrap 从当前 Prisma Schema、非 Prisma Check/部分索引/函数/触发器 supplement 及 28 个原始 SQL SHA-256 建库。空库得到 79 张表、28 条迁移、32 个种子用户，正式备份恢复库为 79 张表、31 条历史记录、20186 个用户；两条路径 `public` 语义签名 SHA-256 均为 `bc604325b870f126658f6dde7314bb190e2118e57130caddb9d512e5231406e6`。生产标准 migrate deploy 无待办，bootstrap 非空保护通过。
 - 2026-08-27: 运行时密钥完成受控轮换：最新 14MiB PostgreSQL 备份恢复校验为 79 张表、31 条迁移、20186 个用户；隔离恢复库真实轮换和新密钥二次解密通过后，生产 2 个 OJ 账号事务重加密。Server 环境从旧项目软链接迁移为当前仓库 mode-600 文件，JWT/Judge/账号密钥均为 64 字符且互相独立，CORS 为一个明确来源；安全审计零 violation，Judge 重新认证，新会话公网回归 4/4。HTTP 阶段仍保留 Cookie Secure warning，等待 TLS。
 - 2026-08-27: 生产 go-judge 已设置 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根、`no-new-privileges`、512 MiB 临时盘和 20 MiB × 5 日志轮转；Router/API/Worker/Judge/Web 的 TasksMax、NOFILE、停止超时和重启频率保护由 `pnpm runtime:audit` 校验。systemd 重复安装保持当前蓝绿 slot，不再无条件重置到 3302。
 - 2026-08-27: 新增隔离 Judge 长稳与并发一致性基线：真实 go-judge 连续 30 轮处理 3000 条本地提交，3000/3000 Accepted，历时 1747.722 秒、吞吐 1.72 条/秒，每轮均无卡队列且沙箱文件回到 0；结束时 API/Judge RSS 分别比基线低 8564/8620KB。100 路首次 Revision 创建、100 路同基线 CAS 发布、Hack 并发晋升/重复输入和 500 路编译缓存租约定向测试通过；容器资源限制下的 10 条复验同样通过。详见 `docs/operations/JUDGE_STRESS_2026-08-27.md`。

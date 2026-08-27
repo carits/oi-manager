@@ -58,9 +58,10 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 
 ### 4. 全新安装迁移链
 
-- [ ] 在不修改已执行 migration 校验和的前提下处理 `20260429_rename_to_id_v2` 空库重放问题。
-- [ ] 验证全新空库安装和现有生产备份升级两条路径。
-- [ ] 对两条路径运行 Prisma、种子、API、Judge、Hack 与 Revision 集成测试，并比较最终 Schema。
+- [x] 未修改任何历史 migration 或校验和；新增仅空库可用的事务 bootstrap，使用当前 Prisma Schema、Prisma 无法表达对象 supplement 和每个历史 SQL 原始 SHA-256 建库。
+- [x] 全新空库完成 79 张表、28 个唯一 migration、32 个种子用户；正式 14MiB 备份恢复库完成正常 `migrate deploy/status`，生产库同样确认无待应用迁移。
+- [x] 两条路径的 `public` 规范结构签名完全一致，覆盖表、列、默认值、约束、部分索引、Enum、函数、触发器、序列、视图与 RLS；正式非空库调用 bootstrap 在任何 DDL 前被拒绝。
+- [ ] API、Judge、Hack 与 Revision 的跨进程写入验证归入后续蓝绿/故障注入批次；本项只证明安装、迁移、Seed 与数据库结构一致性。
 
 ### 5. 蓝绿、恢复与整机演练
 
