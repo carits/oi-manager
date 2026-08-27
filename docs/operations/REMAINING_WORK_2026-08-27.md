@@ -42,9 +42,9 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 
 ### 2. Judge、容器和应用安全边界
 
-- [ ] 核对并补齐 CPU、内存、PID、文件大小、输出、打开文件数和临时磁盘限制。
-- [ ] 审查 Docker capability、seccomp、只读文件系统和 `no-new-privileges`。
-- [ ] 为 API、Worker、Judge、Web 补齐 `TasksMax`、`LimitNOFILE`、启停超时和重启频率保护。
+- [x] go-judge 已补齐 CPU、内存、PID、NOFILE、只读根、512 MiB 临时盘和 Docker 日志轮转上限；题目级时间、内存、输出和文件大小限制继续由 Judge 配置强制。
+- [x] 保留 go-judge 建立 cgroup 沙箱所需的 `privileged`，同时启用只读根和 `no-new-privileges`；隔离真实评测与生产运行时审计均通过。进一步移除 capability/seccomp 例外需要更换沙箱实现，不能在保留当前 go-judge cgroup 模式时伪装完成。
+- [x] Router、API、Worker、Judge、Web 已补齐 `TasksMax`、`LimitNOFILE`、停止超时和 60 秒/10 次重启频率保护。
 - [ ] 仅检查 JWT、Judge 和账号加密密钥的存在、长度与独立性，不输出原文。
 - [ ] 验证生产 CORS、Cookie/CSRF 和公网端口；CSP 先以 Report-Only 方式清理兼容问题。
 

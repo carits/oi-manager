@@ -2,6 +2,8 @@
 Description=OI Manager stable API router
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -14,6 +16,10 @@ Environment=API_ACTIVE_UPSTREAM_FILE=/data/oi-manager-response-refactor/.run/api
 ExecStart=/usr/bin/node /data/oi-manager-response-refactor/scripts/api-router.mjs
 Restart=always
 RestartSec=2s
+TimeoutStopSec=30s
+MemoryMax=128M
+TasksMax=128
+LimitNOFILE=65536
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=read-only

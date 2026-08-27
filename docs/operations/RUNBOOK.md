@@ -50,6 +50,21 @@ The optimized production preview has no HMR listener; development environments m
 `MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. Aliyun CloudMonitor/Aegis agents are
 installed on the current host, but alert contacts and thresholds must still be verified in the cloud console.
 
+## Runtime resource audit
+
+After changing Docker Compose or any application systemd unit, run:
+
+```bash
+docker-compose config >/dev/null
+sudo systemd-analyze verify deploy/systemd/*.service
+pnpm runtime:audit
+```
+
+The audit verifies go-judge CPU, memory, PID, NOFILE, read-only root, bounded tmpfs, loopback port and Docker log
+rotation, plus the memory, task, file-descriptor, stop-timeout and restart-frequency limits of every application unit.
+It intentionally does not inspect or print runtime secrets. Never use `docker-compose down -v`; the old named Judge
+scratch volume may be removed only in a separately verified cleanup, while the PostgreSQL volume must be retained.
+
 ## SSH hardening
 
 The repository baseline disables password and keyboard-interactive authentication, keeps public-key authentication,

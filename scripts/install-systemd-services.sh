@@ -17,23 +17,38 @@ done
 systemctl daemon-reload
 systemctl enable oi-manager-api-router.service oi-manager-worker.service oi-manager-judge.service oi-manager-web.service
 
-# One-time transition from the legacy API bound directly to 3002. Start the
-# blue backend first, then replace the public listener with the stable router.
 mkdir -p "$ROOT_DIR/.run"
-printf '3302\n' > "$ROOT_DIR/.run/api-active-upstream"
-chown ecs-user:ecs-user "$ROOT_DIR/.run/api-active-upstream"
-systemctl restart oi-manager-server@3302.service
-systemctl enable oi-manager-server@3302.service
-for _ in {1..30}; do
-  if curl --fail --silent http://127.0.0.1:3302/api/readiness >/dev/null; then break; fi
-  sleep 1
-done
-curl --fail --silent http://127.0.0.1:3302/api/readiness >/dev/null
+ACTIVE_FILE="$ROOT_DIR/.run/api-active-upstream"
+ACTIVE="$(cat "$ACTIVE_FILE" 2>/dev/null || true)"
+
+if [[ "$ACTIVE" == "3302" || "$ACTIVE" == "3303" ]] && systemctl is-active --quiet oi-manager-api-router.service; then
+  # Repeated installs must preserve the live slot. Restart the stable router so
+  # its unit limits take effect, then let the normal blue/green promotion start
+  # the opposite slot with the new template and drain the current one.
+  systemctl restart oi-manager-api-router.service
+  bash "$ROOT_DIR/scripts/promote-api.sh"
+  ACTIVE="$(cat "$ACTIVE_FILE")"
+else
+  # First installation or repair from an invalid pointer starts the initial
+  # blue slot before the stable router is exposed.
+  ACTIVE=3302
+  printf '%s\n' "$ACTIVE" > "$ACTIVE_FILE.next"
+  chown ecs-user:ecs-user "$ACTIVE_FILE.next"
+  mv -f "$ACTIVE_FILE.next" "$ACTIVE_FILE"
+  systemctl restart "oi-manager-server@${ACTIVE}.service"
+  systemctl enable "oi-manager-server@${ACTIVE}.service"
+  for _ in {1..30}; do
+    if curl --fail --silent "http://127.0.0.1:${ACTIVE}/api/readiness" >/dev/null; then break; fi
+    sleep 1
+  done
+  curl --fail --silent "http://127.0.0.1:${ACTIVE}/api/readiness" >/dev/null
+  systemctl restart oi-manager-api-router.service
+  systemctl restart oi-manager-worker.service
+fi
+
 systemctl disable --now oi-manager-server.service 2>/dev/null || true
-systemctl restart oi-manager-api-router.service
-systemctl restart oi-manager-worker.service
 systemctl restart oi-manager-judge.service
 systemctl restart oi-manager-web.service
 
-echo "Installed and restarted OI Manager systemd services."
-systemctl --no-pager --full status oi-manager-api-router.service oi-manager-server@3302.service oi-manager-worker.service oi-manager-judge.service oi-manager-web.service
+echo "Installed OI Manager systemd services; active API slot: ${ACTIVE}."
+systemctl --no-pager --full status oi-manager-api-router.service "oi-manager-server@${ACTIVE}.service" oi-manager-worker.service oi-manager-judge.service oi-manager-web.service

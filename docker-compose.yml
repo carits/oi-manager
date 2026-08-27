@@ -1,4 +1,4 @@
-version: '3.3'
+version: '2.4'
 services:
   db:
     image: postgres:16-alpine
@@ -18,6 +18,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
 
   # go-judge sandbox with C/C++ and Python 3; compile and execute both stay isolated.
   judge:
@@ -31,14 +36,33 @@ services:
       # by the local judge consumer.
       - "127.0.0.1:5050:5050"
     volumes:
-      - judge-data:/tmp/go-judge
       # Mount cgroup filesystem for memory limit and peak memory metrics.
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      # Sandbox files are ephemeral file IDs; a bounded tmpfs prevents a
+      # malicious or broken task from filling the host data disk.
+      - /tmp/go-judge:rw,nosuid,nodev,size=512m
     shm_size: 512m
     # cgroup access is required by go-judge.
     privileged: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1536m
+    memswap_limit: 2g
+    cpu_period: 100000
+    cpu_quota: 150000
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
     restart: unless-stopped
 
 volumes:
   pgdata:
-  judge-data:

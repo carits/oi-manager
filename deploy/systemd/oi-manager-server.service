@@ -19,7 +19,10 @@ Environment=DISABLE_BACKGROUND_JOBS=true
 ExecStart=/usr/bin/env DISABLE_BACKGROUND_JOBS=true /usr/bin/node /data/oi-manager-response-refactor/apps/server/dist/index.js
 Restart=on-failure
 RestartSec=5s
+TimeoutStopSec=45s
 MemoryMax=1024M
+TasksMax=512
+LimitNOFILE=65536
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

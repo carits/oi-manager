@@ -18,6 +18,10 @@ source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.s
 
 PostgreSQL 与 go-judge 继续由 Docker Compose 管理。应用运行不再依赖 PM2 或 Nix。所有应用服务均以
 `ecs-user` 运行，日志进入 journald，异常退出后自动重启，并按当前 3.7 GiB 主机容量设置内存上限。
+Router、API、Worker、Judge 与 Web 同时设置 `TasksMax`、`LimitNOFILE`、停止超时和 60 秒内最多 10 次
+启动的频率保护。go-judge 设置 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根文件系统、
+`no-new-privileges` 和 512 MiB 临时文件系统；宿主内核没有 swap accounting 时，Docker 只能强制内存
+上限而不能独立强制 memory+swap 上限。
 
 API slot 仅提供 HTTP/WebSocket 与实例内请求指标，不运行可变后台任务。Cron、远程提交轮询和 OJ 自动
 验证只由 Worker 执行；Worker 的 PostgreSQL session advisory lock 是误启动双实例时的第二道保护。
@@ -31,8 +35,9 @@ cd /data/oi-manager-response-refactor
 sudo bash scripts/install-systemd-services.sh
 ```
 
-安装脚本会先启动 3302 并通过 `/api/readiness`，再停用旧的直连 3002 Server，启动稳定 Router，最后
-启动单例 Worker 并重启 Judge/Web。脚本不会构建代码，也不会修改数据库。
+首次安装会启动 3302 并通过 `/api/readiness`，再停用旧的直连 3002 Server，启动稳定 Router，最后
+启动单例 Worker 并重启 Judge/Web。重复执行时不会把活动端口强行改回 3302，而是保留当前指针、使用
+正常蓝绿流程启动另一端口并 drain 原实例。脚本不会构建代码，也不会修改数据库。
 
 后续 API 发布使用：
 
@@ -53,9 +58,13 @@ curl -fsS http://127.0.0.1:3002/api/health
 curl -fsS http://127.0.0.1:3002/api/readiness
 curl -I http://127.0.0.1:3000/login
 curl -fsS http://127.0.0.1:5050/version
+pnpm runtime:audit
 sudo journalctl -u oi-manager-worker.service --since '-10 min' --no-pager
 docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' oi-postgres oi-judge
 ```
+
+`runtime:audit` 只读取容器与 systemd 的公开运行参数，不读取环境文件或输出密钥。它会在任一资源上限、
+回环绑定、只读根、临时盘或日志轮转配置缺失时返回非零。
 
 For failure evidence use `journalctl -u <unit> -b`, `journalctl -k -b`, and `journalctl -b -1`. Do not include environment files, tokens, cookies, or source code in incident reports.
 

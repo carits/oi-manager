@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### Judge 容器与 systemd 资源边界
+
+- go-judge 增加 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根、`no-new-privileges`、512 MiB 临时盘及 20 MiB × 5 Docker 日志轮转；PostgreSQL 日志同步设置本地轮转但数据库卷保持不变。
+- Router、API 蓝绿实例、Worker、Judge 和 Web 增加任务数、文件描述符、停止超时与重启频率限制；新增无密钥运行时审计，配置漂移会返回非零。
+- systemd 安装脚本重复执行时不再强行将活动 API 指针重置为 3302，而是从当前 slot 通过正常蓝绿流程切换，使 unit 变更可重复、安全部署。
+
 ### Judge 长稳与 Revision/Hack 并发一致性
 
 - 新增独立 `e2e` Schema、API 端口、go-judge 容器和测试数据目录的真实 Judge 压力入口；每次执行验证全部提交终态、Accepted/100、无卡住记录、沙箱文件归零及 API readiness，并将报告同时写入固定 latest 文件和带轮次/数量的归档文件。
