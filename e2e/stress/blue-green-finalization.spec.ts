@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import net from 'node:net'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
@@ -113,6 +114,60 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
   expect(await prisma.submission.findUniqueOrThrow({ where: { id: submissions[0].id } })).toMatchObject({ result: 'accepted', score: 100 })
   blueJudge.close()
   greenJudge.close()
+
+  const hackProblem = await prisma.problem.findUniqueOrThrow({
+    where: { id: problem.id }, include: { LatestTestSetRevision: true },
+  })
+  expect(hackProblem.LatestTestSetRevision).toBeTruthy()
+  await prisma.problemHackConfig.upsert({
+    where: { problemId: hackProblem.id },
+    create: {
+      id: crypto.randomUUID(), problemId: hackProblem.id, enabled: true, mode: 'acm',
+      standardSource: '#include <iostream>\nint main(){long long a,b;std::cin>>a>>b;std::cout<<a+b<<"\\n";}',
+      validatorSource: '#include <iostream>\nint main(){long long a,b;if(!(std::cin>>a>>b))return 1;std::string x;if(std::cin>>x)return 1;return 0;}',
+      classifierSource: '', revision: 1, updatedBy: 'e2e-campus-principal',
+    },
+    update: { enabled: true, mode: 'acm', revision: 1, updatedBy: 'e2e-campus-principal' },
+  })
+  const hackAttemptId = crypto.randomUUID()
+  const hackJudgeId = 'dual-hack-finalizer'
+  await prisma.problemHackAttempt.create({ data: {
+    id: hackAttemptId, problemId: hackProblem.id, userId: 'e2e-campus-student',
+    status: 'judging', inputMode: 'data', inputData: '413 587\n',
+    hackSource: 'int main(){return 0;}', hackLanguage: 'cpp17',
+    hackConfigRevision: 1, judgeConfigHash: hackProblem.LatestTestSetRevision!.judgeConfigHash,
+    testGraphRevision: hackProblem.testGraphRevision,
+    baseTestSetRevisionId: hackProblem.latestTestSetRevisionId,
+    judgeId: hackJudgeId, judgeStarted: new Date(),
+  } })
+  const revisionsBeforeHack = await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })
+  const [blueHackJudge, greenHackJudge] = await Promise.all([
+    connectJudge(`ws://127.0.0.1:${stack.bluePort}/ws/judge`, hackJudgeId),
+    connectJudge(`ws://127.0.0.1:${stack.greenPort}/ws/judge`, hackJudgeId),
+  ])
+  const hackResult = JSON.stringify({ type: 'hack_result', payload: {
+    hackAttemptId, outcome: 'accepted', baselineResult: 'Accepted', baselineScore: 100,
+    candidateResult: 'Wrong Answer', candidateScore: 0,
+    inputData: '413 587\n', outputData: '1000\n', message: 'blue/green finalization probe',
+  } })
+  blueHackJudge.send(hackResult)
+  greenHackJudge.send(hackResult)
+  await expect.poll(async () => (await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: hackAttemptId } })).status,
+    { timeout: 30_000 }).toBe('accepted')
+  const promotedHack = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: hackAttemptId } })
+  expect(promotedHack).toMatchObject({ canonicalStatus: 'promoted', baselineResult: 'Accepted', candidateResult: 'Wrong Answer' })
+  expect(promotedHack.promotedRevisionId).toBeTruthy()
+  expect(await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })).toBe(revisionsBeforeHack + 1)
+  expect((await prisma.problem.findUniqueOrThrow({ where: { id: hackProblem.id } })).latestTestSetRevisionId)
+    .toBe(promotedHack.promotedRevisionId)
+  expect(await prisma.problemTestcase.count({ where: { hackAttemptId } })).toBe(1)
+  expect(await prisma.testdataFile.count({ where: { problemId: hackProblem.id, filename: { startsWith: `hack_${hackAttemptId}.` } } })).toBe(2)
+  blueHackJudge.send(hackResult)
+  greenHackJudge.send(hackResult)
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(await prisma.problemTestSetRevision.count({ where: { problemId: hackProblem.id } })).toBe(revisionsBeforeHack + 1)
+  blueHackJudge.close()
+  greenHackJudge.close()
 
   process.kill(stack.workerPid, 'SIGTERM')
   await expect.poll(() => {
