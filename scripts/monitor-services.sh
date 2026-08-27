@@ -4,7 +4,9 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WEB_ORIGIN="${MONITOR_WEB_ORIGIN:-http://127.0.0.1:3000}"
 WEB_URL="${MONITOR_WEB_URL:-$WEB_ORIGIN/login}"
-HMR_URL="${MONITOR_HMR_URL:-http://127.0.0.1:3001}"
+# The deployed optimized Web service has no HMR listener. Development
+# environments can opt in by setting MONITOR_HMR_URL explicitly.
+HMR_URL="${MONITOR_HMR_URL:-}"
 API_URL="${MONITOR_API_URL:-http://127.0.0.1:3002/api/health}"
 JUDGE_URL="${MONITOR_JUDGE_URL:-http://127.0.0.1:5050/version}"
 DB_CONTAINER="${MONITOR_DB_CONTAINER:-oi-postgres}"
@@ -49,7 +51,9 @@ check_disk() {
 }
 
 check_http "preview" "$WEB_URL"
-check_http "HMR" "$HMR_URL"
+if [ -n "$HMR_URL" ]; then
+  check_http "HMR" "$HMR_URL"
+fi
 check_http "API" "$API_URL" '"status":"ok"'
 check_http "go-judge" "$JUDGE_URL"
 
