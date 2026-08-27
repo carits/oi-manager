@@ -166,6 +166,18 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   if (!compileResult.success) {
     console.log(`[Judge] Compilation failed: ${compileResult.error}`)
     cleanupWorkDir(workDir)
+    if (compileResult.infrastructureError) {
+      return {
+        submissionId,
+        result: 'System Error',
+        time: 0,
+        memory: 0,
+        score: 0,
+        cases: [],
+        message: `沙箱基础设施不可用：${compileResult.error}`,
+        retryable: true,
+      }
+    }
     return {
       submissionId,
       result: 'Compilation Error',
@@ -468,7 +480,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         metricSource,
         score: totalScore,
         cases: caseResults,
-        subtasks: subtaskResults
+        subtasks: subtaskResults,
+        retryable: caseResults.some(caseResult => caseResult.infrastructureError),
       }
     } else {
       // 无子任务：直接逐个评测。ACM 首个失败后跳过剩余测试点。
@@ -532,7 +545,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         timeoutReason,
         metricSource,
         score: totalScore,
-        cases: caseResults
+        cases: caseResults,
+        retryable: caseResults.some(caseResult => caseResult.infrastructureError),
       }
     }
   } catch (e: any) {
@@ -551,7 +565,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       memory: 0,
       score: 0,
       cases: caseResults,
-      message: e.message
+      message: e.message,
+      retryable: Boolean(e?.infrastructureError),
     }
   }
 }
@@ -632,7 +647,8 @@ async function runTestCase(
       memory: execResult.memory,
       timeoutReason: execResult.timeoutReason,
       metricSource: execResult.metricSource,
-      message: execResult.stderr
+      message: execResult.stderr,
+      infrastructureError: execResult.infrastructureError,
     }
   }
 
@@ -809,7 +825,8 @@ async function runCheckerInSandbox(
       result: 'System Error',
       time: execTime,
       memory: execMemory,
-      message: `Checker 执行失败: ${e.message}`
+      message: `Checker 执行失败: ${e.message}`,
+      infrastructureError: true,
     }
   }
 }

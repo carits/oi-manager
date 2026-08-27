@@ -56,7 +56,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [ ] 在云控制台复核告警联系人、阈值、主机重启通知和安全组。
 - [ ] 将 journald、Docker、Nginx 与部署日志复制到异机或对象存储，配置明确保留期。
 - [x] 日志采集、manifest、SHA-256、本地 spool、可信上传命令和“仅清理已上传归档”已实现并通过独立目录验收；仍需真实异机/对象存储凭据完成最终一跳。
-- [ ] 注入 API、Worker、Judge WebSocket、go-judge 和数据库短时故障，证明不丢任务且恢复告警生效。
+- [x] 已在隔离栈注入 API、Worker、Judge WebSocket、go-judge 和 PostgreSQL 连接故障；任务不丢失、不误判，Worker/Judge 自动恢复，本地 failed/recovered 通知契约生效。真实外部通知仍由本节第一项跟踪。
 
 ### 4. 全新安装迁移链
 

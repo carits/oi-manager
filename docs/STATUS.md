@@ -5,6 +5,7 @@ last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: 基础设施故障注入完成：双 API 切换/回滚和 Judge 1012 重连再次通过；Worker SIGTERM 后替代进程取得同一单例锁，100 条已完成记录不变；go-judge 编译连接被 reset 后任务立即重排并最终 Accepted；PostgreSQL 连接被全部断开且拒绝 3 秒时，结果持久化保留所有权并重试，恢复后只落库一次。普通评测和 Hack 的沙箱传输错误不再被误判为用户 CE/RE 或最终 Hack System Error，断连恢复增加 `result/status + judgeId` 条件，技术注入全过程只使用独立数据库、端口和容器。
 - 2026-08-28: 外部可观测性接入基础已完成但尚未冒充真实送达：监控状态只有在外部命令成功后才原子推进，发送失败会在下一轮重试；新增 mode-600 HTTPS webhook/邮件适配器、journald/Docker/Nginx/监控/备份日志归档与 SHA-256、可信上传命令和只清理已上传包的保留策略。回环 HTTP 已验证 failed/recovered 两条通知，独立接收目录已验证归档和校验和。当前服务器仍无真实 webhook 收件人、异机存储、CloudMonitor Agent 或 ECS RAM Role，外部验收继续保持未完成。
 - 2026-08-27: 隔离并发与延迟收口完成：比赛题目范围 20 个并发重测与普通提交竞争时，原有 3 条只重置一次且新提交保留；重测与 Judge 终态回传竞争不留下 `judging`，旧回传不能覆盖最终状态。OI Test Graph 保存与 Hack 晋升竞争 5/5 通过，只允许一个下一 Revision 且无半成品文件。真实 go-judge 100/100 Accepted，端到端延迟 P50/P95/P99 为 29990/50925/52932ms，API/Judge RSS 增量均为 0，沙箱文件归零；Judge 压测命令已与蓝绿套件彻底分离。
 - 2026-08-27: Judge 结果所有权和双 API 蓝绿一致性完成隔离及生产验收：Submission 终态按 `judging + judgeId` CAS 写入，Hack 先认领 `finalizing`，Revision 发布与 Attempt 晋升同事务提交。100 条记录由两个 API 同时回传仍只落库一次，50 次客户端 RST 不会终止 Router；Worker 单例锁、blue→green、green→blue 回滚、旧实例 drain、Judge 1012 重连全部通过。提交 `8697c80` 已推送并将生产 API 从 3302 提升到 3303；新 Router 受控重启成功退出且不再出现 `ECONNRESET`，Judge 自动重新注册。迁移前 14 MiB 备份已校验，Server 44 文件 452/452、Judge 4 文件 14/14、双 API E2E 1/1、318 端点匿名审计和三端生产构建通过。

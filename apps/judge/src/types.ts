@@ -124,6 +124,8 @@ export interface JudgeCaseResult {
   timeoutReason?: TimeoutReason
   metricSource?: MetricSource
   message?: string
+  /** Infrastructure failure: the task must be retried, never scored. */
+  infrastructureError?: boolean
 }
 
 export interface SubtaskResult {
@@ -146,6 +148,8 @@ export interface JudgeTaskResult {
   timeoutReason?: TimeoutReason
   metricSource?: MetricSource
   message?: string
+  /** Close the Judge connection so the server immediately requeues the task. */
+  retryable?: boolean
 }
 
 export interface HackJudgeRequest {
@@ -183,6 +187,8 @@ export interface HackJudgeTaskResult {
   outputData?: string
   inputSha256?: string
   outputSha256?: string
+  /** Infrastructure failure: reconnect so the server requeues this Hack. */
+  retryable?: boolean
 }
 
 // ==================== 语言配置 ====================
@@ -218,6 +224,7 @@ export interface SandboxResult {
   exitCode: number
   stdout?: string
   stderr?: string
+  infrastructureError?: boolean
 }
 
 // ==================== WebSocket 消息 ====================

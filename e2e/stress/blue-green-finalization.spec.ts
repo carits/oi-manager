@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
+import { spawn } from 'node:child_process'
 import { expect, test } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
 import WebSocket from 'ws'
@@ -16,6 +17,7 @@ type Stack = {
   bluePid: number
   greenPid: number
   routerPid: number
+  workerPid: number
   activeFile: string
   resultsDir: string
 }
@@ -111,6 +113,30 @@ test('two API processes finalize once, switch/rollback, drain Judge, and keep on
   expect(await prisma.submission.findUniqueOrThrow({ where: { id: submissions[0].id } })).toMatchObject({ result: 'accepted', score: 100 })
   blueJudge.close()
   greenJudge.close()
+
+  process.kill(stack.workerPid, 'SIGTERM')
+  await expect.poll(() => {
+    try { process.kill(stack.workerPid, 0); return 'running' } catch { return 'stopped' }
+  }).toBe('stopped')
+  const replacementLog = path.join(resultRoot, 'worker-replacement.log')
+  const replacementOutput = fs.openSync(replacementLog, 'w')
+  const replacement = spawn('pnpm', ['exec', 'tsx', 'src/background-worker.ts'], {
+    cwd: path.resolve('apps/server'),
+    env: {
+      ...process.env,
+      NODE_ENV: 'test', APP_ENV: 'test',
+      BACKGROUND_WORKER_LOCK_NAME: 'oi-manager-e2e-blue-green-worker',
+    },
+    stdio: ['ignore', replacementOutput, replacementOutput],
+  })
+  try {
+    await expect.poll(() => fs.readFileSync(replacementLog, 'utf8')).toContain('background_worker_started')
+    expect(await prisma.submission.count({ where: { submitSource: batch, result: 'accepted' } })).toBe(100)
+  } finally {
+    replacement.kill('SIGTERM')
+    await new Promise<void>(resolve => replacement.once('exit', () => resolve()))
+    fs.closeSync(replacementOutput)
+  }
 
   const pinned = await connectJudge(`ws://127.0.0.1:${stack.routerPort}/ws/judge`, 'pinned-blue-probe')
   setActive(stack.activeFile, stack.greenPort)

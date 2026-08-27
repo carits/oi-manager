@@ -24,6 +24,12 @@ export type CompiledProgramLease = {
   release: () => Promise<void>
 }
 
+function compileFailure(result: CompileResult) {
+  const error = new Error(result.error || '编译失败') as Error & { infrastructureError?: boolean }
+  error.infrastructureError = result.infrastructureError
+  return error
+}
+
 const CACHE_TTL_MS = Math.max(1_000, Number(process.env.HACK_COMPILE_CACHE_TTL_MS) || 30 * 60_000)
 const CACHE_MAX_ENTRIES = Math.max(1, Number(process.env.HACK_COMPILE_CACHE_MAX_ENTRIES) || 64)
 const TOOLCHAIN_VERSION = process.env.JUDGE_TOOLCHAIN_VERSION || 'default'
@@ -90,7 +96,7 @@ export async function acquireCompiledProgram(input: CompileInput, cacheable: boo
     const result = await compile({ ...input, timeLimit: 60_000, memoryLimit: 524_288 })
     if (!result.success) {
       await disposeCompileResult(result)
-      throw new Error(result.error || '编译失败')
+      throw compileFailure(result)
     }
     let released = false
     return { result, release: async () => { if (!released) { released = true; await disposeCompileResult(result) } } }
@@ -112,7 +118,7 @@ export async function acquireCompiledProgram(input: CompileInput, cacheable: boo
   let result: CompileResult
   try {
     result = await entry.promise
-    if (!result.success) throw new Error(result.error || '编译失败')
+    if (!result.success) throw compileFailure(result)
   } catch (error) {
     entry.refs--
     entries.delete(key)

@@ -84,6 +84,7 @@ export async function initializeSandbox(): Promise<boolean> {
 export interface CompileResult {
   success: boolean
   error?: string
+  infrastructureError?: boolean
   /** go-judge 模式：编译产物的 fileId */
   fileId?: string
   /** 本地模式：包含编译产物的工作目录 */
@@ -190,7 +191,7 @@ export async function compile(params: {
 
     return { success: true, fileId }
   } catch (e: any) {
-    return { success: false, error: e.message }
+    return { success: false, error: e.message, infrastructureError: true }
   }
 }
 
@@ -448,7 +449,8 @@ async function sandboxExecute(
       timeoutReason: null,
       metricSource: 'go-judge-cgroup',
       exitCode: 1,
-      stderr: e.message
+      stderr: e.message,
+      infrastructureError: true,
     }
   }
 }

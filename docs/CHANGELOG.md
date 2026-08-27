@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### Judge/数据库故障恢复一致性
+
+- go-judge HTTP 传输失败不再返回用户 Compilation Error、Runtime Error 或最终 Hack System Error；普通评测以及 Hack 的 Generator/Validator/Classifier/STD/Checker/双评测基础设施错误都标记为可重试，Judge 主动断开连接，由 Server 立即条件式重排。
+- Submission/Hack 的 Consumer 所有权延迟到数据库持久化成功后释放；短时数据库错误使用有界指数退避，超限后通过 WebSocket 断连恢复，条件更新不能覆盖已完成终态。
+- 新增独立 PostgreSQL、TCP 故障代理、go-judge HTTP 故障代理和 E2E：沙箱 reset、数据库连接中断 3 秒后两条提交均最终 Accepted/100，无卡住或误判。
+- 蓝绿 E2E 增加 Worker SIGTERM/替代进程接管；API 切换、回滚、100 路 finalization、Judge 1012 和 Worker 单例联合复验通过。
+
 ### 外部告警和异机日志接入基础
 
 - Monitor 的 failed/recovered 状态仅在外部通知命令成功后写入；通知失败时保留旧状态并在下一轮重试，避免“本地显示已恢复但外部从未收到”的静默丢警。

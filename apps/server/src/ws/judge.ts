@@ -277,13 +277,13 @@ class JudgeConsumer {
     for (const [, task] of this.processing) {
       try {
         if (task.taskType === 'submission') {
-          await prisma.submission.update({
-            where: { id: parseInt(task.id) },
+          await prisma.submission.updateMany({
+            where: { id: parseInt(task.id), result: 'judging', judgeId: this.judgeId },
             data: { result: 'queuing', judgeId: null, judgeStarted: null }
           })
         } else {
-          await prisma.problemHackAttempt.update({
-            where: { id: task.id },
+          await prisma.problemHackAttempt.updateMany({
+            where: { id: task.id, status: { in: ['judging', 'finalizing'] }, judgeId: this.judgeId },
             data: { status: 'queuing', judgeId: null, judgeStarted: null }
           })
         }
@@ -685,11 +685,7 @@ function handleConfig(ws: WebSocket, payload: { concurrency?: number }) {
 async function handleResult(ws: WebSocket, payload: any) {
   const { submissionId, result, time, wallTime, memory, score, timeoutReason, metricSource } = payload
 
-  // The result message has already transferred ownership back to the server.
-  // Remove it synchronously before any database await so a socket close cannot
-  // race with destroy() and put the reported task back into the queue.
   const connection = judges.get(ws)
-  connection?.consumer?.handleResult('submission', String(submissionId))
 
   logger.info('judge_ws_result', {
     action: 'judge_ws',
@@ -699,7 +695,11 @@ async function handleResult(ws: WebSocket, payload: any) {
   // 更新数据库
   try {
     if (!connection?.judgeId) return
-    const claimed = await persistOwnedSubmissionResult(payload, connection.judgeId)
+    const claimed = await retryJudgePersistence(
+      () => persistOwnedSubmissionResult(payload, connection.judgeId),
+      { taskType: 'submission', taskId: String(submissionId) },
+    )
+    connection.consumer?.handleResult('submission', String(submissionId))
     if (!claimed) {
       logger.warn('judge_ws_stale_result_ignored', {
         action: 'judge_ws', metadata: { submissionId, judgeId: connection.judgeId },
@@ -714,10 +714,33 @@ async function handleResult(ws: WebSocket, payload: any) {
       action: 'judge_ws',
       metadata: { submissionId, error: e.message }
     })
-    await prisma.submission.updateMany({
-      where: { id: parseInt(submissionId), result: 'judging', judgeId: connection?.judgeId },
-      data: { result: 'queuing', judgeId: null, judgeStarted: null },
-    }).catch(() => {})
+    // Keep the task in the Consumer ownership map. Closing the socket invokes
+    // conditional destroy() recovery; it can no longer overwrite a terminal
+    // result that won the CAS while the connection was closing.
+    ws.close(1011, 'database persistence unavailable')
+  }
+}
+
+export async function retryJudgePersistence<T>(
+  operation: () => Promise<T>,
+  context: { taskType: 'submission' | 'hack'; taskId: string },
+): Promise<T> {
+  const timeoutMs = Math.max(1_000, Number(process.env.JUDGE_RESULT_DB_RETRY_MS || 60_000))
+  const deadline = Date.now() + timeoutMs
+  let attempt = 0
+  while (true) {
+    try {
+      return await operation()
+    } catch (error: any) {
+      attempt++
+      if (Date.now() >= deadline) throw error
+      const delayMs = Math.min(2_000, 100 * (2 ** Math.min(attempt - 1, 5)))
+      logger.warn('judge_result_persistence_retry', {
+        action: 'judge_ws',
+        metadata: { ...context, attempt, delayMs, error: error.message },
+      })
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
   }
 }
 
@@ -763,8 +786,7 @@ export async function persistOwnedSubmissionResult(payload: any, judgeId: string
 async function handleHackResult(ws: WebSocket, payload: any) {
   const hackAttemptId = String(payload?.hackAttemptId || '')
   if (!hackAttemptId) return
-  // As above, a delivered result must not be recovered by disconnect cleanup.
-  judges.get(ws)?.consumer?.handleResult('hack', hackAttemptId)
+  const connection = judges.get(ws)
   logger.info('judge_ws_hack_result', {
     action: 'judge_ws',
     metadata: {
@@ -775,23 +797,17 @@ async function handleHackResult(ws: WebSocket, payload: any) {
     },
   })
   try {
-    await finalizeHackResult(payload, { judgeId: judges.get(ws)?.judgeId })
+    await retryJudgePersistence(
+      () => finalizeHackResult(payload, { judgeId: connection?.judgeId }),
+      { taskType: 'hack', taskId: hackAttemptId },
+    )
+    connection?.consumer?.handleResult('hack', hackAttemptId)
   } catch (error: any) {
     logger.error('judge_ws_hack_finalize_error', {
       action: 'judge_ws',
       metadata: { hackAttemptId, error: error.message },
     })
-    await prisma.problemHackAttempt.updateMany({
-      where: { id: hackAttemptId, status: { in: ['judging', 'finalizing'] } },
-      data: {
-        status: 'system_error',
-        failureStage: 'persist',
-        message: `Hack 数据入库失败：${error.message}`,
-        judgeId: null,
-        judgeStarted: null,
-        finishedAt: new Date(),
-      },
-    })
+    ws.close(1011, 'database persistence unavailable')
   }
 }
 

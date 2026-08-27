@@ -13,6 +13,16 @@ const VALID_DIFFERENCE_RESULTS = new Set<JudgeResult>([
   'Memory Limit Exceeded', 'Runtime Error', 'Output Limit Exceeded',
 ])
 
+function infrastructureError(message: string) {
+  const error = new Error(message) as Error & { infrastructureError: true }
+  error.infrastructureError = true
+  return error
+}
+
+function isInfrastructureError(value: unknown): value is { message: string; infrastructureError: true } {
+  return Boolean(value && typeof value === 'object' && (value as any).infrastructureError === true)
+}
+
 function parseTime(value: string | number | undefined): number {
   if (typeof value === 'number') return value
   const match = String(value || '1000ms').trim().match(/^([\d.]+)\s*(ms|s)?$/i)
@@ -68,12 +78,16 @@ async function createCandidateInput(request: HackJudgeRequest): Promise<string> 
   if (!request.generatorSource || !request.generatorLanguage) throw new Error('生成器源码或语言缺失')
   let compiled
   try { compiled = await acquireCompiledProgram({ language: request.generatorLanguage, code: request.generatorSource }, false) }
-  catch (error: any) { throw new Error(`生成器编译失败：${error.message}`) }
+  catch (error: any) {
+    if (isInfrastructureError(error)) throw infrastructureError(`生成器编译基础设施失败：${error.message}`)
+    throw new Error(`生成器编译失败：${error.message}`)
+  }
   try {
     const result = await execute({
       language: request.generatorLanguage, timeLimit: 5000, memoryLimit: 262_144,
       outputLimit: MAX_DATA_BYTES, compileFileId: compiled.result.fileId, workDir: compiled.result.workDir,
     })
+    if (result.infrastructureError) throw infrastructureError(`生成器沙箱基础设施失败：${result.stderr || result.status}`)
     if (result.status !== 'Accepted') throw new Error(`生成器运行失败：${result.status}${result.stderr ? `；${result.stderr.slice(0, 1000)}` : ''}`)
     return result.stdout || ''
   } finally { await compiled.release() }
@@ -85,6 +99,9 @@ function rejected(request: HackJudgeRequest, failureStage: HackFailureStage, mes
 }
 function systemError(request: HackJudgeRequest, failureStage: HackFailureStage, message: string, extra: Partial<HackJudgeTaskResult> = {}): HackJudgeTaskResult {
   return { hackAttemptId: request.hackAttemptId, outcome: 'system_error', failureStage, message, ...extra }
+}
+function retryableSystemError(request: HackJudgeRequest, failureStage: HackFailureStage, message: string): HackJudgeTaskResult {
+  return systemError(request, failureStage, message, { retryable: true })
 }
 
 export function hasStandardOutput(output: string | undefined): output is string {
@@ -133,6 +150,7 @@ async function classifyInput(request: HackJudgeRequest, candidateInput: string):
       outputLimit: 65_536, compileFileId: compiled.result.fileId, workDir: compiled.result.workDir,
     })
   } finally { await compiled.release() }
+  if (run.infrastructureError) throw infrastructureError(`Classifier 沙箱基础设施失败：${run.stderr || run.status}`)
   if (run.status !== 'Accepted' || run.exitCode !== 0) throw new Error(`Classifier 运行失败：${run.status}${run.stderr ? `；${run.stderr.slice(0, 1000)}` : ''}`)
   let parsed: any
   try { parsed = JSON.parse(run.stdout || '') } catch { throw new Error('Classifier 必须输出严格 JSON') }
@@ -149,13 +167,20 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   const hackMode = request.hackMode || request.config.mode || 'acm'
   let candidateInput: string
   try { candidateInput = await createCandidateInput(request) }
-  catch (error: any) { return rejected(request, request.inputMode === 'generator' ? 'generator' : 'input', error.message) }
+  catch (error: any) {
+    const stage = request.inputMode === 'generator' ? 'generator' : 'input'
+    return isInfrastructureError(error) ? retryableSystemError(request, stage, error.message) : rejected(request, stage, error.message)
+  }
   if (!candidateInput.trim()) return rejected(request, 'input', '候选输入不能为空')
   if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, 'input', '候选输入超过 1 MiB')
 
   let validator
   try { validator = await acquireCompiledProgram({ language: 'cpp17', code: request.validatorSource, extraCopyIn: checkerDependencies() }, true) }
-  catch (error: any) { return systemError(request, 'validator', `Validator 编译失败：${error.message}`) }
+  catch (error: any) {
+    return isInfrastructureError(error)
+      ? retryableSystemError(request, 'validator', `Validator 编译基础设施失败：${error.message}`)
+      : systemError(request, 'validator', `Validator 编译失败：${error.message}`)
+  }
   let validation
   try {
     validation = await execute({
@@ -163,6 +188,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
       outputLimit: 65_536, compileFileId: validator.result.fileId, workDir: validator.result.workDir,
     })
   } finally { await validator.release() }
+  if (validation.infrastructureError) return retryableSystemError(request, 'validator', `Validator 沙箱基础设施失败：${validation.stderr || validation.status}`)
   if (validation.status !== 'Accepted' || validation.exitCode !== 0) {
     return rejected(request, 'validator', `Validator 拒绝候选输入${validation.stderr ? `：${validation.stderr.slice(0, 2000)}` : ''}`)
   }
@@ -170,12 +196,20 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   let affectedSubtaskIds: number[] = []
   if (hackMode === 'oi') {
     try { affectedSubtaskIds = await classifyInput(request, candidateInput) }
-    catch (error: any) { return systemError(request, 'classifier', error.message) }
+    catch (error: any) {
+      return isInfrastructureError(error)
+        ? retryableSystemError(request, 'classifier', error.message)
+        : systemError(request, 'classifier', error.message)
+    }
   }
 
   let standard
   try { standard = await acquireCompiledProgram({ language: 'cpp17', code: request.standardSource }, true) }
-  catch (error: any) { return systemError(request, 'standard', `标准程序编译失败：${error.message}`) }
+  catch (error: any) {
+    return isInfrastructureError(error)
+      ? retryableSystemError(request, 'standard', `标准程序编译基础设施失败：${error.message}`)
+      : systemError(request, 'standard', `标准程序编译失败：${error.message}`)
+  }
   const timeLimit = Math.max(1000, parseTime(request.config.time) * 3)
   const memoryLimit = Math.max(262_144, parseMemory(request.config.memory))
   let standardRun
@@ -185,6 +219,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
       timeLimit, memoryLimit, outputLimit: MAX_DATA_BYTES, compileFileId: standard.result.fileId, workDir: standard.result.workDir,
     })
   } finally { await standard.release() }
+  if (standardRun.infrastructureError) return retryableSystemError(request, 'standard', `标准程序沙箱基础设施失败：${standardRun.stderr || standardRun.status}`)
   if (standardRun.status !== 'Accepted') return systemError(request, 'standard', `标准程序运行失败：${standardRun.status}${standardRun.stderr ? `；${standardRun.stderr.slice(0, 1000)}` : ''}`)
   if (!hasStandardOutput(standardRun.stdout)) return systemError(request, 'standard', '标准程序没有生成答案输出')
   const candidateOutput = standardRun.stdout
@@ -206,6 +241,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
         submissionId: `hack-standard-${request.hackAttemptId}`, problemId: request.problemId,
         code: request.standardSource, language: 'cpp17', config: candidateConfig, testdataPath: request.testdataPath,
       })
+      if (selfCheck.retryable) return retryableSystemError(request, 'checker', selfCheck.message || 'Checker 沙箱基础设施失败')
       if (selfCheck.result === 'System Error' || selfCheck.score !== 100) {
         return systemError(request, 'checker', `标准程序 Checker 自检未获满分：${selfCheck.score}/100（${selfCheck.result}）`)
       }
@@ -215,6 +251,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
       submissionId: `hack-baseline-${request.hackAttemptId}`, problemId: request.problemId,
       code: request.hackSource, language: request.hackLanguage, config: request.config, testdataPath: request.testdataPath,
     })
+    if (baseline.retryable) return retryableSystemError(request, 'baseline', baseline.message || '原始评测沙箱基础设施失败')
     if (baseline.result === 'Compilation Error') return rejected(request, 'baseline', `被 Hack 程序编译失败：${baseline.message || ''}`, { baselineResult: baseline.result, baselineScore: baseline.score })
     if (!VALID_DIFFERENCE_RESULTS.has(baseline.result)) return systemError(request, 'baseline', `原始完整评测未得到可比较结果：${baseline.result}`, { baselineResult: baseline.result, baselineScore: baseline.score })
 
@@ -222,6 +259,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
       submissionId: `hack-candidate-${request.hackAttemptId}`, problemId: request.problemId,
       code: request.hackSource, language: request.hackLanguage, config: candidateConfig, testdataPath: request.testdataPath,
     })
+    if (candidate.retryable) return retryableSystemError(request, 'candidate', candidate.message || '候选评测沙箱基础设施失败')
     if (!VALID_DIFFERENCE_RESULTS.has(candidate.result)) return systemError(request, 'candidate', `加入候选点后的完整评测未得到可比较结果：${candidate.result}`, { baselineResult: baseline.result, baselineScore: baseline.score, candidateResult: candidate.result, candidateScore: candidate.score, affectedSubtaskIds })
 
     const effective = hackMode === 'oi'

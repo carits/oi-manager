@@ -143,6 +143,11 @@ class JudgeClient {
     } catch (error: any) {
       payload = { hackAttemptId, outcome: 'system_error' as const, message: error.message }
     }
+    if (payload.retryable) {
+      console.warn(`[Judge] Retryable Hack infrastructure failure: attempt=${hackAttemptId}; reconnecting for requeue`)
+      this.ws?.close(1011, 'sandbox infrastructure unavailable')
+      return
+    }
     const result: HackResultMessage = { type: 'hack_result', payload }
     this.send(result)
   }
@@ -164,6 +169,12 @@ class JudgeClient {
         config: config,
         testdataPath
       })
+
+      if (result.retryable) {
+        console.warn(`[Judge] Retryable infrastructure failure: submission=${submissionId}; reconnecting for requeue`)
+        this.ws?.close(1011, 'sandbox infrastructure unavailable')
+        return
+      }
 
       console.log(`[Judge] Task completed: submission=${submissionId}, result=${result.result}`)
 
