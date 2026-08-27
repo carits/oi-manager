@@ -23,6 +23,7 @@
     "backup:verify": "bash scripts/verify-backup-restore.sh",
     "load:smoke": "bash scripts/load-smoke.sh",
     "runtime:audit": "node scripts/audit-runtime-limits.mjs",
+    "compose": "bash scripts/compose.sh",
     "test:stress:prepare": "pnpm test:ui:prepare",
     "test:stress:judge": "pnpm test:stress:prepare && bash scripts/run-isolated-judge-stress.sh",
     "build": "pnpm --filter @oi-manager/shared build && pnpm --filter server prisma:generate && pnpm --filter server build && pnpm --filter web build && pnpm --filter @oi-manager/judge build",

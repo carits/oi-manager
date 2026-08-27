@@ -28,7 +28,7 @@ assert(host.PidsLimit === 256, 'go-judge PID limit must be 256', failures)
 assert(host.ReadonlyRootfs === true, 'go-judge root filesystem must be read-only', failures)
 assert((host.SecurityOpt || []).includes('no-new-privileges:true'), 'go-judge must enable no-new-privileges', failures)
 assert(nofile?.Soft === 65536 && nofile?.Hard === 65536, 'go-judge NOFILE limit must be 65536', failures)
-assert(Boolean(host.Tmpfs?.['/tmp/go-judge']), 'go-judge must use a bounded /tmp/go-judge tmpfs', failures)
+assert(Boolean(host.Tmpfs?.['/tmp']), 'go-judge must use a bounded /tmp tmpfs', failures)
 assert(binding?.HostIp === '127.0.0.1' && binding?.HostPort === '5050', 'go-judge must bind only to 127.0.0.1:5050', failures)
 assert(host.LogConfig?.Type === 'json-file', 'go-judge must use the json-file log driver', failures)
 assert(host.LogConfig?.Config?.['max-size'] === '20m' && host.LogConfig?.Config?.['max-file'] === '5', 'go-judge log rotation must be 20m × 5', failures)
@@ -69,7 +69,7 @@ console.log(JSON.stringify({
     readonlyRootfs: host.ReadonlyRootfs,
     noNewPrivileges: (host.SecurityOpt || []).includes('no-new-privileges:true'),
     nofile: nofile ? { soft: nofile.Soft, hard: nofile.Hard } : null,
-    boundedTmpfs: Boolean(host.Tmpfs?.['/tmp/go-judge']),
+    boundedTmpfs: Boolean(host.Tmpfs?.['/tmp']),
     loopbackPort: binding?.HostIp === '127.0.0.1',
     logRotation: host.LogConfig?.Config || {},
   },

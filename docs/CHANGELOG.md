@@ -16,6 +16,7 @@ source_of_truth: Git history
 - go-judge 增加 1.5 CPU、1536 MiB 内存、256 PID、65536 NOFILE、只读根、`no-new-privileges`、512 MiB 临时盘及 20 MiB × 5 Docker 日志轮转；PostgreSQL 日志同步设置本地轮转但数据库卷保持不变。
 - Router、API 蓝绿实例、Worker、Judge 和 Web 增加任务数、文件描述符、停止超时与重启频率限制；新增无密钥运行时审计，配置漂移会返回非零。
 - systemd 安装脚本重复执行时不再强行将活动 API 指针重置为 3302，而是从当前 slot 通过正常蓝绿流程切换，使 unit 变更可重复、安全部署。
+- Compose 包装脚本固定历史生产 project 名 `oi-manager`，避免 checkout 目录名称变化时创建第二套空网络/卷；go-judge 的 512 MiB tmpfs 覆盖 Go 实际创建随机临时目录的 `/tmp`，而不是错误地只挂载固定子目录。
 
 ### Judge 长稳与 Revision/Hack 并发一致性
 

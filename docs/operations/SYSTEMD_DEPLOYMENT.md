@@ -23,6 +23,10 @@ Router、API、Worker、Judge 与 Web 同时设置 `TasksMax`、`LimitNOFILE`、
 `no-new-privileges` 和 512 MiB 临时文件系统；宿主内核没有 swap accounting 时，Docker 只能强制内存
 上限而不能独立强制 memory+swap 上限。
 
+基础设施命令统一通过 `pnpm compose -- <args>` 调用；包装脚本把 Compose project 固定为历史生产值
+`oi-manager`。不要在当前 `oi-manager-response-refactor` 目录直接运行裸 `docker-compose`，否则会创建
+第二套空网络/卷并与固定容器名冲突。
+
 API slot 仅提供 HTTP/WebSocket 与实例内请求指标，不运行可变后台任务。Cron、远程提交轮询和 OJ 自动
 验证只由 Worker 执行；Worker 的 PostgreSQL session advisory lock 是误启动双实例时的第二道保护。
 

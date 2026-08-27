@@ -39,9 +39,9 @@ services:
       # Mount cgroup filesystem for memory limit and peak memory metrics.
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     tmpfs:
-      # Sandbox files are ephemeral file IDs; a bounded tmpfs prevents a
-      # malicious or broken task from filling the host data disk.
-      - /tmp/go-judge:rw,nosuid,nodev,size=512m
+      # Go's temporary-directory API creates /tmp/go-judge<random>, so the
+      # bounded writable mount must cover /tmp rather than one fixed child.
+      - /tmp:rw,nosuid,nodev,size=512m
     shm_size: 512m
     # cgroup access is required by go-judge.
     privileged: true

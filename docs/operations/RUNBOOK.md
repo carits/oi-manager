@@ -60,7 +60,7 @@ sudo systemd-analyze verify deploy/systemd/*.service
 pnpm runtime:audit
 ```
 
-The audit verifies go-judge CPU, memory, PID, NOFILE, read-only root, bounded tmpfs, loopback port and Docker log
+The audit verifies go-judge CPU, memory, PID, NOFILE, read-only root, bounded `/tmp` tmpfs, loopback port and Docker log
 rotation, plus the memory, task, file-descriptor, stop-timeout and restart-frequency limits of every application unit.
 It intentionally does not inspect or print runtime secrets. Never use `docker-compose down -v`; the old named Judge
 scratch volume may be removed only in a separately verified cleanup, while the PostgreSQL volume must be retained.
@@ -158,7 +158,7 @@ go-judge、`3001` HMR、`3002` Server 和 Judge。`preview:start` 独立持有 `
 
 ```bash
 pnpm install --frozen-lockfile
-docker-compose up -d db judge
+pnpm compose -- up -d db judge
 pnpm run restart
 ```
 
@@ -171,12 +171,12 @@ pnpm run restart
 ```bash
 pnpm stop
 pnpm preview:stop
-docker-compose stop db judge
+pnpm compose -- stop db judge
 ```
 
 `pnpm stop` 停止应用开发进程；Docker 基础设施需要单独停止。不要在仍有数据库写入时
-停止 PostgreSQL。当前服务器使用 `/usr/bin/docker-compose`；安装 Compose Plugin
-的环境可使用 `docker compose`。不要执行 `docker-compose down -v` 或
+停止 PostgreSQL。`scripts/compose.sh` 固定使用生产历史项目名 `oi-manager`，避免仓库目录改名后创建
+第二套空网络和卷。当前服务器使用 `/usr/bin/docker-compose`。不要执行 `docker-compose down -v` 或
 `docker compose down -v`，这两个命令都会删除数据库卷。
 
 ## 端口冲突
