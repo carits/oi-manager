@@ -5,13 +5,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { finalizeHackResult, type HackJudgeResultPayload } from '../src/modules/problem/problem.hack.service'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
+import { loadTestGraphWorkspace, replaceTestGraph } from '../src/modules/problem/problem.test-graph.service'
 import { persistOwnedSubmissionResult } from '../src/ws/judge'
 import { createTestUser } from './helpers/testUser'
 
 const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
 
-async function fixture() {
+async function fixture(mode: 'acm' | 'oi' = 'acm') {
   const owner = await createTestUser({ role: 'platform_admin' })
   const problemId = crypto.randomUUID()
   const directory = path.join(root, problemId)
@@ -23,9 +24,15 @@ async function fixture() {
     fs.promises.writeFile(path.join(directory, '1.in'), input),
     fs.promises.writeFile(path.join(directory, '1.out'), output),
   ])
-  const judgeConfig = JSON.stringify({
+  const judgeConfig = JSON.stringify(mode === 'acm' ? {
     mode: 'acm', type: 'default', time: '1000ms', memory: '256MB',
     cases: [{ input: '1.in', output: '1.out' }],
+  } : {
+    mode: 'oi', type: 'default', time: '1000ms', memory: '256MB',
+    subtasks: [{ id: 1, score: 100, if: [], groups: [
+      { id: 'official-1', key: 'official-1', name: 'Official', kind: 'official', score: 100, type: 'sum', cases: [{ input: '1.in', output: '1.out', score: 100 }] },
+      { id: 'hack-gate', key: 'hack-gate', name: 'Hack Gate', kind: 'hack_gate', score: 0, type: 'min', cases: [] },
+    ] }],
   })
   await prisma.problem.create({ data: {
     id: problemId,
@@ -40,30 +47,38 @@ async function fixture() {
     status: 'published',
     judgeConfig,
   } })
+  const inputFileId = crypto.randomUUID(), outputFileId = crypto.randomUUID()
   await prisma.testdataFile.createMany({ data: [
     {
-      id: crypto.randomUUID(), problemId, filename: '1.in', size: input.length,
+      id: inputFileId, problemId, filename: '1.in', size: input.length,
       md5: crypto.createHash('md5').update(input).digest('hex'),
       sha256: crypto.createHash('sha256').update(input).digest('hex'),
     },
     {
-      id: crypto.randomUUID(), problemId, filename: '1.out', size: output.length,
+      id: outputFileId, problemId, filename: '1.out', size: output.length,
       md5: crypto.createHash('md5').update(output).digest('hex'),
       sha256: crypto.createHash('sha256').update(output).digest('hex'),
     },
   ] })
+  const testcaseId = crypto.randomUUID()
+  await prisma.problemTestcase.create({ data: {
+    id: testcaseId, problemId, inputFileId, outputFileId, source: 'official', orderIndex: 0,
+    inputSha256: crypto.createHash('sha256').update(input).digest('hex'),
+    outputSha256: crypto.createHash('sha256').update(output).digest('hex'),
+  } })
   const revision = await ensureInitialTestSetRevision(problemId, owner.user.id)
   const problem = await prisma.problem.findUniqueOrThrow({ where: { id: problemId } })
   await prisma.problemHackConfig.create({ data: {
     id: crypto.randomUUID(),
     problemId,
     enabled: true,
-    mode: 'acm',
+    mode,
     standardSource: 'int main(){}',
     validatorSource: 'int main(){}',
+    classifierSource: mode === 'oi' ? 'int main(){}' : '',
     updatedBy: owner.user.id,
   } })
-  return { owner, problem, revision: revision!, directory }
+  return { owner, problem, revision: revision!, directory, testcaseId }
 }
 
 async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
@@ -191,6 +206,54 @@ describe('concurrent Hack promotion', () => {
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
     const files = await fs.promises.readdir(context.directory)
     expect(files.filter(name => /^hack_.+\.(?:in|out)$/.test(name))).toHaveLength(2)
+    expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
+  }, 60_000)
+
+  it('serializes an OI Test Graph save against Hack promotion without a partial revision', async () => {
+    const context = await fixture('oi')
+    const attempt = await createAttempt(context)
+    const workspace = await loadTestGraphWorkspace(context.problem.id)
+    expect(workspace?.migrated).toBe(true)
+    const draft = {
+      revision: workspace!.revision,
+      expectedLatestRevisionId: context.revision.id,
+      updatedBy: context.owner.user.id,
+      subtasks: workspace!.subtasks.map(subtask => ({
+        ...subtask,
+        groups: subtask.groups.map(group => ({
+          ...group,
+          name: group.kind === 'official' ? `${group.name} edited` : group.name,
+        })),
+      })),
+    }
+    const payload = {
+      ...acceptedPayload(attempt.id, '81 27\n'),
+      baselineScore: 100,
+      candidateScore: 0,
+      affectedSubtaskIds: [1],
+    }
+
+    const [graphResult] = await Promise.all([
+      replaceTestGraph(context.problem.id, draft),
+      finalizeHackResult(payload),
+    ])
+
+    const revisions = await prisma.problemTestSetRevision.findMany({
+      where: { problemId: context.problem.id }, orderBy: { revisionNumber: 'asc' },
+    })
+    expect(revisions).toHaveLength(2)
+    const finalAttempt = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })
+    if (graphResult.ok) {
+      expect(revisions[1].source).toBe('admin_edit')
+      expect(finalAttempt).toMatchObject({ status: 'queuing', promotionRetries: 1 })
+      expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(0)
+    } else {
+      expect(graphResult.code).toBe('TEST_GRAPH_STALE')
+      expect(revisions[1].source).toBe('hack')
+      expect(finalAttempt).toMatchObject({ status: 'accepted', canonicalStatus: 'promoted' })
+      expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
+    }
+    const files = await fs.promises.readdir(context.directory)
     expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
   }, 60_000)
 })

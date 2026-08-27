@@ -15,4 +15,7 @@ cleanup_owned_sandbox() {
 trap cleanup_owned_sandbox EXIT INT TERM
 cleanup_owned_sandbox
 cd "$ROOT_DIR"
-pnpm exec playwright test --config=playwright.stress.config.ts "$@"
+pnpm exec playwright test \
+  --config=playwright.stress.config.ts \
+  e2e/stress/judge-load.spec.ts \
+  "$@"

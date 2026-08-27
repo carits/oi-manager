@@ -10,6 +10,19 @@ const databaseUrl =
   process.env.E2E_DATABASE_URL ||
   'postgresql://oi:oi_password@127.0.0.1:5432/oi_manager?schema=e2e'
 const runtimeSecrets = loadRuntimeSecrets()
+const parsedDatabaseUrl = new URL(databaseUrl)
+if (parsedDatabaseUrl.searchParams.get('schema') !== 'e2e') {
+  throw new Error('Playwright tests require E2E_DATABASE_URL with schema=e2e')
+}
+const storageRoot = path.join(resultsDir, 'storage')
+const testdataDir = path.join(resultsDir, 'testdata')
+
+// Test files may import server modules directly. Set their process-level
+// dependencies before Playwright loads any test module so singleton clients
+// can never fall back to the production schema or storage paths.
+process.env.DATABASE_URL = databaseUrl
+process.env.STORAGE_ROOT = storageRoot
+process.env.TESTDATA_DIR = testdataDir
 
 export default defineConfig({
   testDir: './e2e/tests',
@@ -54,8 +67,8 @@ export default defineConfig({
         JUDGE_TOKEN: runtimeSecrets.judgeToken,
         DISABLE_BACKGROUND_JOBS: 'true',
         ENABLE_MAINTENANCE_API: 'false',
-        STORAGE_ROOT: path.join(resultsDir, 'storage'),
-        TESTDATA_DIR: path.join(resultsDir, 'testdata'),
+        STORAGE_ROOT: storageRoot,
+        TESTDATA_DIR: testdataDir,
       },
     },
     {

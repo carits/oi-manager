@@ -35,10 +35,10 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] 100 路首次 Revision 创建复用同一个赢家，100 路同基线发布只有一个 CAS 成功且无 pending 目录。
 - [x] Hack 并发晋升和相同输入重试去重已有定向事务测试；失败竞争者安全回到队列，不生成半成品文件。
 - [x] 系统程序编译缓存 500 个并发租约只编译一次，引用计数从 500 回到 0 并完成产物清理。
-- [ ] 比赛范围重测与普通提交同时发生时的重复入队、结果覆盖和统计一致性。
-- [ ] Test Graph 保存与 Hack 晋升竞争、CAS 冲突及自动重试。
+- [x] 比赛范围重测与普通提交竞争已通过隔离 E2E：20 个并发重测只重置原有 3 条一次，正常提交保留为第 4 条；重测与 Judge 回传竞争不会留下 `judging`，旧回传不能覆盖终态。
+- [x] Test Graph 保存与 Hack 晋升竞争、CAS 冲突及冲突后重排/去重 5/5 通过；只生成一个下一 Revision，不残留 pending 文件或重复 Testcase。
 - [x] 单实例定向测试和双 API 隔离栈各执行 100 个并发 finalization；重复/旧 Judge 回传不能覆盖终态，成绩同步只发生一次。
-- [ ] 在压力工具中补充逐提交延迟分位数；现有 29 分钟长稳报告已记录吞吐、成功率、RSS 与 go-judge 文件数量。
+- [x] 压力工具已记录逐提交端到端延迟；100/100 Accepted，P50 29990ms、P95 50925ms、P99 52932ms、最大 52945ms，API/Judge RSS 增量为 0 且沙箱文件归零。
 
 ### 2. Judge、容器和应用安全边界
 

@@ -11,6 +11,14 @@ source_of_truth: Git history
 
 ## 2026-08-27
 
+### 并发竞争与逐提交延迟收口
+
+- Playwright 配置在加载测试模块前强制注入 `schema=e2e` 数据库和隔离存储目录；直接导入 Server 模块的 E2E 不再可能回退到正式 Schema 或正式文件路径。
+- 比赛题目范围重测增加 20 路并发与普通提交竞争验证，并覆盖重测和 Judge 终态回传竞争、旧 Judge 结果拒绝及统计一致性。
+- OI Test Graph 保存与 Hack 自动晋升增加同事务竞争验证；无论哪方赢得题目锁，都只生成一个下一 Revision，失败方安全 stale/requeue 且不留下半成品文件。
+- Judge 压力工具增加逐提交 P50/P95/P99；100 条真实 go-judge 提交为 100/100 Accepted，P50/P95/P99 为 29990/50925/52932ms，RSS 增量和沙箱残留均为 0。
+- `test:stress:judge` 只收集 Judge 负载测试；蓝绿 finalization 继续由独立命令执行，避免两个隔离栈的前置资产互相污染。
+
 ### Judge 结果所有权与双 API 蓝绿一致性
 
 - Submission 终态写入改为以 `submissionId + judging + judgeId` 原子认领；重复、延迟或来自旧 Judge 的回传不能覆盖已经落库的结果，也不会重复触发成绩同步。

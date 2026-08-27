@@ -5,6 +5,7 @@ last_verified: 2026-08-27
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-27: 隔离并发与延迟收口完成：比赛题目范围 20 个并发重测与普通提交竞争时，原有 3 条只重置一次且新提交保留；重测与 Judge 终态回传竞争不留下 `judging`，旧回传不能覆盖最终状态。OI Test Graph 保存与 Hack 晋升竞争 5/5 通过，只允许一个下一 Revision 且无半成品文件。真实 go-judge 100/100 Accepted，端到端延迟 P50/P95/P99 为 29990/50925/52932ms，API/Judge RSS 增量均为 0，沙箱文件归零；Judge 压测命令已与蓝绿套件彻底分离。
 - 2026-08-27: Judge 结果所有权和双 API 蓝绿一致性完成隔离及生产验收：Submission 终态按 `judging + judgeId` CAS 写入，Hack 先认领 `finalizing`，Revision 发布与 Attempt 晋升同事务提交。100 条记录由两个 API 同时回传仍只落库一次，50 次客户端 RST 不会终止 Router；Worker 单例锁、blue→green、green→blue 回滚、旧实例 drain、Judge 1012 重连全部通过。提交 `8697c80` 已推送并将生产 API 从 3302 提升到 3303；新 Router 受控重启成功退出且不再出现 `ECONNRESET`，Judge 自动重新注册。迁移前 14 MiB 备份已校验，Server 44 文件 452/452、Judge 4 文件 14/14、双 API E2E 1/1、318 端点匿名审计和三端生产构建通过。
 - 2026-08-27: 全新空库安装链已绕开不可重放的历史 `20260429_rename_to_id_v2`，且未修改任何历史 migration/checksum：事务 bootstrap 从当前 Prisma Schema、非 Prisma Check/部分索引/函数/触发器 supplement 及 29 个原始 SQL SHA-256 建库。空库得到 79 张表、29 条迁移、32 个种子用户，正式备份恢复库在正常 migrate deploy 后为 79 张表、32 条历史记录、20186 个用户；两条路径 `public` 语义签名 SHA-256 均为 `24eae42c9432f22d83202863811b500624c625b7c9bbf522d5e7133dc21aa599`，bootstrap 非空保护保持生效。
 - 2026-08-27: 运行时密钥完成受控轮换：最新 14MiB PostgreSQL 备份恢复校验为 79 张表、31 条迁移、20186 个用户；隔离恢复库真实轮换和新密钥二次解密通过后，生产 2 个 OJ 账号事务重加密。Server 环境从旧项目软链接迁移为当前仓库 mode-600 文件，JWT/Judge/账号密钥均为 64 字符且互相独立，CORS 为一个明确来源；安全审计零 violation，Judge 重新认证，新会话公网回归 4/4。HTTP 阶段仍保留 Cookie Secure warning，等待 TLS。

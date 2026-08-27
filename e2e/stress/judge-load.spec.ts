@@ -41,6 +41,19 @@ function readRssKb(pid: number) {
   return Number(status.match(/^VmRSS:\s+(\d+)\s+kB$/m)?.[1] || 0)
 }
 
+function latencySummary(values: number[]) {
+  const sorted = [...values].sort((left, right) => left - right)
+  const percentile = (value: number) => sorted[Math.max(0, Math.ceil(sorted.length * value) - 1)] || 0
+  return {
+    samples: sorted.length,
+    min: sorted[0] || 0,
+    p50: percentile(0.50),
+    p95: percentile(0.95),
+    p99: percentile(0.99),
+    max: sorted.at(-1) || 0,
+  }
+}
+
 async function loadSubmissionPages(request: APIRequestContext, headers: Record<string, string>) {
   const pages = Math.ceil((submissionCount + 20) / 100)
   const records: Array<{ id: number; result: string | null; score: number | null }> = []
@@ -69,11 +82,19 @@ test(`real go-judge completes ${roundCount} × ${submissionCount} isolated submi
   expect(baseline.sandboxFiles).toBe(0)
 
   const startedAt = Date.now()
-  const roundReports: Array<{ round: number; submissions: number; durationMs: number; throughputPerSecond: number }> = []
+  const allLatencies: number[] = []
+  const roundReports: Array<{
+    round: number
+    submissions: number
+    durationMs: number
+    throughputPerSecond: number
+    observedEndToEndLatencyMs: ReturnType<typeof latencySummary>
+  }> = []
   for (let round = 1; round <= roundCount; round++) {
     const roundStartedAt = Date.now()
     const inputs = Array.from({ length: submissionCount }, (_, index) => index)
-    const submissionIds = await mapLimit(inputs, 10, async (_, index) => {
+    const submitted = await mapLimit(inputs, 10, async (_, index) => {
+      const submittedAt = Date.now()
       const response = await request.post('/api/submit', {
         headers,
         data: {
@@ -86,15 +107,21 @@ test(`real go-judge completes ${roundCount} × ${submissionCount} isolated submi
       })
       const body = await response.json()
       expect(response.status(), JSON.stringify(body)).toBe(200)
-      return Number(body.data.submissionId)
+      return { id: Number(body.data.submissionId), submittedAt }
     })
+    const submissionIds = submitted.map(item => item.id)
     expect(new Set(submissionIds).size).toBe(submissionCount)
 
     const expectedIds = new Set(submissionIds)
+    const submittedAtById = new Map(submitted.map(item => [item.id, item.submittedAt]))
+    const completedAtById = new Map<number, number>()
     const completed = new Map<number, { id: number; result: string | null; score: number | null }>()
     await expect.poll(async () => {
       for (const record of await loadSubmissionPages(request, headers)) {
-        if (expectedIds.has(record.id) && record.result && terminalResults.has(record.result)) completed.set(record.id, record)
+        if (expectedIds.has(record.id) && record.result && terminalResults.has(record.result)) {
+          completed.set(record.id, record)
+          if (!completedAtById.has(record.id)) completedAtById.set(record.id, Date.now())
+        }
       }
       return completed.size
     }, { timeout: 12 * 60_000, intervals: [500, 1_000, 2_000] }).toBe(submissionCount)
@@ -106,11 +133,14 @@ test(`real go-judge completes ${roundCount} × ${submissionCount} isolated submi
     await expect.poll(() => sandboxFileCount(stack.sandboxPort), { timeout: 30_000, intervals: [250, 500, 1_000] }).toBe(0)
 
     const durationMs = Date.now() - roundStartedAt
+    const roundLatencies = submissionIds.map(id => completedAtById.get(id)! - submittedAtById.get(id)!)
+    allLatencies.push(...roundLatencies)
     roundReports.push({
       round,
       submissions: submissionCount,
       durationMs,
       throughputPerSecond: Number((submissionCount / (durationMs / 1000)).toFixed(2)),
+      observedEndToEndLatencyMs: latencySummary(roundLatencies),
     })
   }
 
@@ -131,6 +161,7 @@ test(`real go-judge completes ${roundCount} × ${submissionCount} isolated submi
     accepted: submissionCount * roundCount,
     durationMs,
     throughputPerSecond: Number(((submissionCount * roundCount) / (durationMs / 1000)).toFixed(2)),
+    observedEndToEndLatencyMs: latencySummary(allLatencies),
     roundReports,
     baseline,
     final,
