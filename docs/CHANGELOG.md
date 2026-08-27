@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### 受控 ECS 整机重启演练
+
+- 重启前生成并恢复验证 `oi_manager_20260828_015754.dump`，确认 79 张表、32 条迁移、20186 个用户；备份 SHA-256 为 `fd0d1b94b1f3cac543e7cb17836fab81d4c12789d061133f38b6931c618b676b`。
+- 受控重启于 01:58:43 发起，主机 01:59:09 进入新 boot，PostgreSQL/go-judge 01:59:25 就绪，Judge 01:59:30 注册，稳定 API 和 Web 01:59:31 同时健康，RTO 为 48 秒。
+- 所有 Docker 和 systemd 服务均自动恢复；重启后 `runtime:audit` 零失败、服务监控 healthy、公网 Web BUILD_ID `_mJoRf679N5624kf24W8l` 验证通过，未执行人工补启动。
+
 ### 主机重启启动链预检
 
 - PostgreSQL 容器补齐 `unless-stopped`，与 go-judge 一样在 Docker 恢复后自动启动；实际生产容器已无中断更新 restart policy。

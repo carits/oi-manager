@@ -69,7 +69,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 
 - [x] 在独立 e2e schema/端口/go-judge 中验证候选 slot、readiness、Router 原子切换、Judge 1012 重连、Worker 单例锁、旧实例 drain、失败回滚和 50 次客户端 RST；生产随后完成 3302→3303 提升、新 Router 成功重启和 Judge 自动重新注册。
 - [x] 最新正式备份已恢复到独立 PostgreSQL 容器/15435；恢复数据只读检查和隔离 `e2e` 写入层的登录、权限、真实 Judge、Hack 晋升、Revision 固定/更新/冻结 2/2 通过，详见 `RESTORE_DRILL_2026-08-28.md`。
-- [ ] 获得维护窗口后执行受控 ECS 重启，验证所有服务自动恢复和实际恢复时间。
+- [x] 受控 ECS 重启已完成：Docker/PostgreSQL/go-judge/Router/API/Worker/Judge/Web/云 Agent 自动恢复，稳定 API/Web 端到端 RTO 48 秒，详见事故文档和 `STATUS.md`。
 - [ ] 获得明确授权后执行覆盖正式库的灾难恢复演练。
 - [ ] 通过阿里云实例事件和 ActionTrail 核对 2026-08-19 重启原因。
 
