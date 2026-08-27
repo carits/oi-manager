@@ -25,6 +25,8 @@
     "logs:archive:install": "bash scripts/install-log-archive-cron.sh",
     "backup:verify": "bash scripts/verify-backup-restore.sh",
     "backup:verify:core": "bash scripts/verify-restored-core-flows.sh",
+    "disaster:restore": "bash scripts/restore-production-database.sh",
+    "disaster:restore:verify": "bash scripts/verify-production-restore-script.sh",
     "load:smoke": "bash scripts/load-smoke.sh",
     "runtime:audit": "node scripts/audit-runtime-limits.mjs",
     "security:audit": "node scripts/audit-runtime-security.mjs",
