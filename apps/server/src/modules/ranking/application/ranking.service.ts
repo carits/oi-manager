@@ -1,6 +1,7 @@
 import { calculateGrade, getAllGrades } from '@oi-manager/shared/utils/grade'
 import { parsePagination, paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
+import { currentJudgeAcceptedWhere } from '../../judge/application/judge-read-projection'
 
 export class RankingApplicationError extends Error {
   constructor(public readonly statusCode: number, message: string) { super(message) }
@@ -43,14 +44,16 @@ export async function getPersonalSolvedRanking(queryParams: any) {
   })
   const userIds = profiles.map(profile => profile.userId)
   const submissions = userIds.length > 0
-    ? await prisma.$queryRaw<Array<{ userId: string; problemId: string }>>`
-        SELECT DISTINCT "userId", "problemId"
-        FROM "Submission"
-        WHERE "userId" = ANY(${userIds}::text[])
-          AND "workspaceScope" = 'personal'
-          AND "submitMethod" <> 'archive'
-          AND "result" IN ('accepted', 'Accepted', 'AC', 'ac')
-      `
+    ? await prisma.submission.findMany({
+        where: {
+          userId: { in: userIds },
+          workspaceScope: 'personal',
+          submitMethod: { not: 'archive' },
+          AND: [currentJudgeAcceptedWhere()],
+        },
+        select: { userId: true, problemId: true },
+        distinct: ['userId', 'problemId'],
+      })
     : []
   const solvedByUser = new Map<string, Set<string>>()
   for (const row of submissions) {
@@ -107,7 +110,8 @@ export async function getOrganizationRanking(organizationId: string, metric: str
     const accepted = await prisma.submission.findMany({
       where: {
         userId: { in: baseRows.map(row => row.userId) }, submitMethod: { not: 'archive' },
-        result: { in: ['accepted', 'Accepted', 'AC', 'ac'] }, Training: { organizationId },
+        Training: { organizationId },
+        AND: [currentJudgeAcceptedWhere()],
       },
       select: { userId: true, problemInternalId: true, problemId: true },
     })

@@ -13,6 +13,10 @@ import {
   replaceTestGraph,
 } from '../problem.test-graph.service'
 import { ensureInitialTestSetRevision, loadRevisionSpec } from '../problem.testset-revision.service'
+import {
+  CURRENT_JUDGE_RUN_SELECT,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
 
 export async function listOwnProblemSubmissions(
   user: JwtPayload,
@@ -33,13 +37,18 @@ export async function listOwnProblemSubmissions(
     prisma.submission.count({ where }),
     prisma.submission.findMany({
       where,
-      include: { User: { select: { username: true } } },
+      include: {
+        User: { select: { username: true } },
+        CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
+      },
       orderBy: { createdAt: 'desc' },
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
   ])
-  const formatted = submissions.map(submission => ({
+  const formatted = submissions.map(rawSubmission => {
+    const submission = projectSubmissionJudgeResult(rawSubmission)
+    return ({
     id: submission.id,
     username: submission.User.username,
     oj: submission.oj,
@@ -51,7 +60,8 @@ export async function listOwnProblemSubmissions(
     codeLength: submission.codeLength,
     language: submission.language,
     submittedAt: submission.createdAt.toISOString(),
-  }))
+    })
+  })
   return { problem, where, submissions: formatted, pagination: paginatedResponse(formatted, total, pagination.page, pagination.pageSize) }
 }
 

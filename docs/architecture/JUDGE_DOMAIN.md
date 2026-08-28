@@ -51,7 +51,9 @@ QUEUED -> CLAIMED -> COMPILING -> RUNNING -> FINALIZING
 
 任何阶段都必须保持旧 API 响应兼容、活动计分和排行榜不变，并通过普通 Judge、Hack、重测、蓝绿与故障注入 characterization tests。
 
-当前进度：Expand、Dual write 和 Switch write 已完成；读取仍以 Submission 兼容投影为主。Switch read、对账观察窗口与 Cleanup 尚未执行。
+当前进度：Expand、Dual write、Switch write 和用户可见读取的 Switch read 已完成。提交列表/详情、筛选、题目状态、个人概览、OI/ICPC 排名、平台/校园解题排名、管理统计及重测预览统一读取 CurrentJudgeRun；远程归档和没有 Run 的历史记录保留兼容回退。当前进入对账观察窗口，Cleanup 尚未执行。
+
+Switch read 由 `judge-read-projection.ts` 作为唯一边界：Run 的 `QUEUED/RUNNING` 映射为 `queuing/judging`，终态结果、分数、测试点、Subtask、错误与资源指标全部来自 CurrentJudgeRun。筛选与聚合使用同一语义的 Prisma/SQL 条件，禁止页面直接混读 `Submission.result/score`。回归测试会故意破坏兼容列，验证列表、详情、筛选和排名仍返回 CurrentJudgeRun 的结果。
 
 ## 写入规则
 

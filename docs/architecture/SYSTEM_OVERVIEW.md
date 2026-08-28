@@ -71,7 +71,7 @@ Submission (用户提交意图，基本不可变)
 - `JudgeAttempt` 保存一次物理执行的 owner、fencing token、租约、分段时间与终态。
 - 分段时间明确为 Queue、Dispatch、Compile、Run、Persist、Total，并由 `judge:slo` 按最近窗口检查 P95、基础设施错误率和卡住任务。
 - 重测创建新的 Run；基础设施重试创建新的 Attempt，不重开终态 Attempt。
-- 当前处于安全双写阶段：新本地提交、领取、回传、基础设施重试和重测已经以 Run/Attempt 为事实源，并在同一事务维护旧 `Submission.result/judgeId/...` 兼容投影；页面与排名完成 Switch read 且经过稳定观察后才删除旧执行态字段。
+- 当前处于安全双写与观察阶段：新本地提交、领取、回传、基础设施重试和重测以 Run/Attempt 为事实源，并在同一事务维护旧 `Submission.result/judgeId/...` 兼容投影。用户可见的提交列表、详情、结果筛选、题目状态、个人概览、排名、统计和重测预览已经统一从 `Submission.currentJudgeRunId` 指向的 Run 读取；远程归档及无 Run 的历史记录才回退兼容列。兼容投影仍保留用于对账，稳定观察一个发布周期后才进入 Cleanup。
 
 详细状态和迁移阶段见 [Judge 领域模型](./JUDGE_DOMAIN.md)。
 

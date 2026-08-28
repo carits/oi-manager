@@ -362,6 +362,68 @@ describe('提交详情权限', () => {
     expect(res.body.data.result).toBe('accepted')
   })
 
+  it('D1.1: 全局列表、筛选与详情优先读取 CurrentJudgeRun', async () => {
+    const runId = crypto.randomUUID()
+    await prisma.judgeRun.create({
+      data: {
+        id: runId,
+        submissionId: submissionA.id,
+        runNumber: 1,
+        runType: 'NORMAL',
+        status: 'FINALIZED',
+        result: 'accepted',
+        score: 100,
+        cases: JSON.stringify([{ result: 'accepted', time: 23, memory: 4096 }]),
+        timeUsed: 23,
+        wallTimeUsed: 25,
+        memoryUsed: 4096,
+        metricSource: 'switch-read-test',
+        finalizedAt: new Date(),
+      },
+    })
+    await prisma.submission.update({
+      where: { id: submissionA.id },
+      data: {
+        currentJudgeRunId: runId,
+        result: 'wa',
+        score: 0,
+        cases: JSON.stringify([{ result: 'wa' }]),
+        timeUsed: 1,
+        memoryUsed: 1,
+        metricSource: 'corrupted-compatibility-projection',
+      },
+    })
+
+    const accepted = await createAuthenticatedRequest(app, studentAToken)
+      .get('/api/submissions?result=accepted')
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
+    expect(accepted.body.data.submissions).toContainEqual(expect.objectContaining({
+      id: submissionA.id,
+      result: 'accepted',
+      score: 100,
+      timeUsed: 23,
+      memoryUsed: 4096,
+    }))
+
+    const compatibility = await createAuthenticatedRequest(app, studentAToken)
+      .get('/api/submissions?result=wa')
+    expect(compatibility.status).toBe(200)
+    expect(compatibility.body.data.submissions.some((item: any) => item.id === submissionA.id)).toBe(false)
+
+    const detail = await createAuthenticatedRequest(app, studentAToken)
+      .get(`/api/submissions/${submissionA.id}`)
+    expect(detail.status, JSON.stringify(detail.body)).toBe(200)
+    expect(detail.body.data).toMatchObject({
+      result: 'accepted',
+      score: 100,
+      cases: [{ result: 'accepted', time: 23, memory: 4096 }],
+      timeUsed: 23,
+      wallTimeUsed: 25,
+      memoryUsed: 4096,
+      metricSource: 'switch-read-test',
+    })
+  })
+
   it('D2: 教师可以查看同校学生提交详情', async () => {
     const res = await createAuthenticatedRequest(app, teacherAToken)
       .get(`/api/submissions/${submissionA.id}`)
@@ -597,6 +659,86 @@ describe('训练提交隔离', () => {
       trainingProblemId: trainingProblem.id,
       cases: null,
     })
+  })
+
+  it('TI2.2: 列表、详情、筛选和排名统一从 CurrentJudgeRun 读取', async () => {
+    const relation = await prisma.trainingProblem.findUniqueOrThrow({
+      where: { id: trainingProblem.id },
+      include: { Problem: true },
+    })
+    const runId = crypto.randomUUID()
+    const runCases = JSON.stringify([{ result: 'accepted', time: 17, memory: 2048 }])
+    const runSubtasks = JSON.stringify([{ id: 1, score: 100 }])
+    await prisma.judgeRun.create({
+      data: {
+        id: runId,
+        submissionId: trainingSubmission.id,
+        runNumber: 1,
+        runType: 'NORMAL',
+        status: 'FINALIZED',
+        result: 'accepted',
+        score: 100,
+        cases: runCases,
+        subtasks: runSubtasks,
+        timeUsed: 17,
+        wallTimeUsed: 19,
+        memoryUsed: 2048,
+        metricSource: 'switch-read-test',
+        finalizedAt: new Date(),
+      },
+    })
+    await prisma.submission.update({
+      where: { id: trainingSubmission.id },
+      data: {
+        currentJudgeRunId: runId,
+        problemId: relation.Problem.problemId,
+        result: 'wa',
+        score: 0,
+        cases: JSON.stringify([{ result: 'wa', time: 1, memory: 1 }]),
+        subtasks: JSON.stringify([{ id: 1, score: 0 }]),
+        timeUsed: 1,
+        wallTimeUsed: 1,
+        memoryUsed: 1,
+        metricSource: 'corrupted-compatibility-projection',
+      },
+    })
+
+    const acceptedList = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/trainings/${training.id}/submissions?result=accepted`)
+    expect(acceptedList.status, JSON.stringify(acceptedList.body)).toBe(200)
+    expect(acceptedList.body.data.submissions).toContainEqual(expect.objectContaining({
+      id: trainingSubmission.id,
+      result: 'accepted',
+      score: 100,
+      timeUsed: 17,
+      memoryUsed: 2048,
+    }))
+
+    const compatibilityFilter = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/trainings/${training.id}/submissions?result=wa`)
+    expect(compatibilityFilter.status).toBe(200)
+    expect(compatibilityFilter.body.data.submissions.some((item: any) => item.id === trainingSubmission.id)).toBe(false)
+
+    const detail = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/trainings/${training.id}/submissions/${trainingSubmission.id}`)
+    expect(detail.status, JSON.stringify(detail.body)).toBe(200)
+    expect(detail.body.data).toMatchObject({
+      result: 'accepted',
+      score: 100,
+      cases: [{ result: 'accepted', time: 17, memory: 2048 }],
+      subtasks: [{ id: 1, score: 100 }],
+      timeUsed: 17,
+      wallTimeUsed: 19,
+      memoryUsed: 2048,
+      metricSource: 'switch-read-test',
+    })
+
+    const ranking = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/trainings/${training.id}/ranking`)
+    expect(ranking.status, JSON.stringify(ranking.body)).toBe(200)
+    const studentRow = ranking.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
+    expect(studentRow).toMatchObject({ totalScore: 100 })
+    expect(studentRow.problems[trainingProblem.id]).toMatchObject({ score: 100, submitted: true })
   })
 
   it('TI3: 全局提交列表排除训练提交', async () => {

@@ -2,6 +2,10 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { isAcceptedResult } from '../../../lib/result-enum'
 import {
+  CURRENT_JUDGE_RUN_SELECT,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
+import {
   canAccessTraining,
   canManageTraining,
   getParticipantNames,
@@ -65,7 +69,7 @@ function problemSummaries(problems: any[]) {
 async function buildOiRanking(training: any, excludedIds: string[]) {
   const submitScope = training.type === 'contest' ? 'contest' : 'training'
   const adminFilter = excludedIds.length > 0
-    ? Prisma.sql`AND "userId" NOT IN (${Prisma.join(excludedIds)})`
+    ? Prisma.sql`AND p."userId" NOT IN (${Prisma.join(excludedIds)})`
     : Prisma.empty
   const aggregated = await prisma.$queryRaw<Array<{
     userId: string
@@ -73,29 +77,43 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
     maxScore: number
     lastSubmitAt: Date
   }>>`
+    WITH projected AS (
+      SELECT
+        s."userId",
+        s."problemId",
+        s."createdAt",
+        CASE
+          WHEN run.status = 'QUEUED' THEN 'queuing'
+          WHEN run.status = 'RUNNING' THEN 'judging'
+          WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
+          WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
+          ELSE s.result
+        END AS result,
+        CASE WHEN s."currentJudgeRunId" IS NOT NULL THEN run.score ELSE s.score END AS score
+      FROM "Submission" s
+      LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
+      WHERE s."submitScope" = ${submitScope}
+        AND s."trainingId" = ${training.id}
+        AND COALESCE(s."submitMethod", '') <> 'archive'
+    )
     SELECT
-      "userId",
-      "problemId",
-      MAX(score) as "maxScore",
-      MAX("createdAt") as "lastSubmitAt"
-    FROM "Submission"
-    WHERE "submitScope" = ${submitScope}
-      AND "trainingId" = ${training.id}
-      AND COALESCE("submitMethod", '') <> 'archive'
-      AND result NOT IN ('queuing', 'judging', 'pending_review')
-      AND result <> ''
-      AND COALESCE(score, 0) = (
-        SELECT MAX(COALESCE(s2.score, 0)) FROM "Submission" s2
-        WHERE s2."userId" = "Submission"."userId"
-          AND s2."problemId" = "Submission"."problemId"
-          AND s2."submitScope" = ${submitScope}
-          AND s2."trainingId" = ${training.id}
-          AND COALESCE(s2."submitMethod", '') <> 'archive'
-          AND s2.result NOT IN ('queuing', 'judging', 'pending_review')
-          AND s2.result <> ''
+      p."userId",
+      p."problemId",
+      MAX(p.score) as "maxScore",
+      MAX(p."createdAt") as "lastSubmitAt"
+    FROM projected p
+    WHERE p.result NOT IN ('queuing', 'judging', 'pending_review')
+      AND p.result <> ''
+      AND COALESCE(p.score, 0) = (
+        SELECT MAX(COALESCE(p2.score, 0))
+        FROM projected p2
+        WHERE p2."userId" = p."userId"
+          AND p2."problemId" = p."problemId"
+          AND p2.result NOT IN ('queuing', 'judging', 'pending_review')
+          AND p2.result <> ''
       )
       ${adminFilter}
-    GROUP BY "userId", "problemId"
+    GROUP BY p."userId", p."problemId"
   `
   const userScores = new Map<string, Map<string, { maxScore: number; lastSubmitAt: Date }>>()
   for (const row of aggregated) {
@@ -148,10 +166,16 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
       trainingId: training.id,
       ...(excludedIds.length > 0 ? { NOT: { userId: { in: excludedIds } } } : {}),
       submitMethod: { not: 'archive' },
-      result: { not: '' },
+      OR: [
+        { currentJudgeRunId: { not: null } },
+        { currentJudgeRunId: null, result: { not: '' } },
+      ],
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, userId: true, problemId: true, score: true, result: true, createdAt: true },
+    select: {
+      id: true, userId: true, problemId: true, score: true, result: true, createdAt: true,
+      CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
+    },
   })
   type ProblemStat = {
     solved: boolean
@@ -166,7 +190,8 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
     problem.Problem.problemId,
     problem.points ?? 100,
   ]))
-  for (const submission of submissions) {
+  for (const rawSubmission of submissions) {
+    const submission = projectSubmissionJudgeResult(rawSubmission)
     if (!userStats.has(submission.userId)) userStats.set(submission.userId, new Map())
     const problemStats = userStats.get(submission.userId)!
     if (!problemStats.has(submission.problemId)) {

@@ -1,5 +1,9 @@
 import { prisma } from '../../../prisma'
 import { latestContentSnapshot } from '../../problem/problem.content.service'
+import {
+  CURRENT_JUDGE_RUN_SELECT,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
 
 export function findTrainingForProblemAccess(id: number, includeTeam = false) {
   return prisma.training.findUnique({
@@ -42,10 +46,12 @@ export async function getTrainingProblemStatusData(trainingId: number, userId: s
       orderBy: { orderIndex: 'asc' },
     }),
     prisma.submission.findMany({
-      where: { submitScope, trainingId, userId }, orderBy: { createdAt: 'asc' },
+      where: { submitScope, trainingId, userId },
+      include: { CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT } },
+      orderBy: { createdAt: 'asc' },
     }),
   ])
-  return { problems, submissions }
+  return { problems, submissions: submissions.map(projectSubmissionJudgeResult) }
 }
 
 export async function getTrainingProblemDetailData(

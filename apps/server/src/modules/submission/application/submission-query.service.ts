@@ -2,6 +2,11 @@ import { prisma } from '../../../prisma'
 import { fetchAndStoreCfCode } from '../../../lib/cf-code-fetcher'
 import { resolveJudgePresentationConfig } from '../../../lib/judge-mode'
 import { canManageTraining } from '../../training/training.helpers'
+import {
+  CURRENT_JUDGE_RUN_SELECT,
+  currentJudgeResultWhere,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
 
 export interface SubmissionQueryContext {
   userId: string
@@ -60,14 +65,17 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
   if (input.username) where.User = { username: { contains: input.username } }
   if (input.oj) where.oj = input.oj
   if (input.problemId) where.problemId = { contains: input.problemId }
-  if (input.result) where.result = input.result
+  if (input.result) where.AND = [...(where.AND || []), currentJudgeResultWhere(input.result)]
   if (input.language) where.language = input.language
 
   const [total, submissions] = await prisma.$transaction([
     prisma.submission.count({ where }),
     prisma.submission.findMany({
       where,
-      include: { User: { select: { username: true, role: true } } },
+      include: {
+        User: { select: { username: true, role: true } },
+        CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -104,7 +112,8 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
   }
 
   return {
-    submissions: submissions.map(submission => {
+    submissions: submissions.map(rawSubmission => {
+      const submission = projectSubmissionJudgeResult(rawSubmission)
       const problemInternalId = submission.problemInternalId || lookup.get(`${submission.oj}:${submission.problemId}`) || null
       return {
         id: submission.id,
@@ -146,6 +155,7 @@ async function requireVisibleSubmission(context: SubmissionQueryContext, submiss
     include: {
       User: { select: { username: true, avatar: true, role: true } },
       OjAccount: { select: { username: true } },
+      CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
     },
   })
   if (!submission) throw notFound()
@@ -185,7 +195,7 @@ function parseJson(value: string | null) {
 }
 
 export async function getSubmissionDetail(context: SubmissionQueryContext, submissionId: number) {
-  const submission = await requireVisibleSubmission(context, submissionId)
+  const submission = projectSubmissionJudgeResult(await requireVisibleSubmission(context, submissionId))
   let problemTitle: string | null = null
   let problemJudgeConfig: string | null = null
   let problemAlias: string | null = null

@@ -10,6 +10,10 @@ import {
 import { shouldHideTrainingProblemSource } from '../training.visibility'
 import { buildContestProblemStatus } from '../training.problem-status'
 import { synchronizeTrainingStatus } from './training-crud.service'
+import {
+  CURRENT_JUDGE_RUN_SELECT,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
 
 export class TrainingMiscError extends Error {
   constructor(
@@ -101,9 +105,10 @@ export async function getTrainingOverview(id: number, userId: string) {
         },
         select: {
           trainingProblemId: true, oj: true, problemId: true, score: true, result: true,
+          CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
         },
         orderBy: { createdAt: 'asc' },
-      })
+      }).then(rows => rows.map(projectSubmissionJudgeResult))
     : []
   const platformLabels = new Map<string, string>([
     ...getSupportedPlatforms().map(platform => [platform.platform, platform.name] as [string, string]),

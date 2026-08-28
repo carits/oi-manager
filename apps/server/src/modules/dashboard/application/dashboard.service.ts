@@ -1,5 +1,9 @@
 import { prisma } from '../../../prisma'
 import { getComputedTrainingStatus, sortTrainingListForDisplay } from '../../training/training.helpers'
+import {
+  CURRENT_JUDGE_RUN_SELECT,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
 
 export interface DashboardActor {
   userId: string
@@ -102,7 +106,10 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
       : [],
     prisma.submission.findMany({
       where: { userId: actor.userId, workspaceScope: 'personal' },
-      select: { id: true, oj: true, problemId: true, result: true, score: true, createdAt: true },
+      select: {
+        id: true, oj: true, problemId: true, result: true, score: true, createdAt: true,
+        CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT },
+      },
       orderBy: { createdAt: 'desc' },
       take: 5,
     }),
@@ -112,6 +119,6 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
     profile: { username: profile.User.username, avatar: profile.User.avatar, rating: profile.rating, rank: higherRated + 1 },
     invitations: invitations.map(invitation => ({ id: invitation.id, invitedAt: invitation.joinedAt, team: invitation.Team })),
     contests,
-    submissions,
+    submissions: submissions.map(projectSubmissionJudgeResult),
   }
 }

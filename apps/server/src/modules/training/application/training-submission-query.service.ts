@@ -1,4 +1,11 @@
 import { prisma } from '../../../prisma'
+import {
+  CURRENT_JUDGE_RUN_SELECT,
+  currentJudgeCompletedWhere,
+  currentJudgeInProgressWhere,
+  currentJudgeResultWhere,
+  projectSubmissionJudgeResult,
+} from '../../judge/application/judge-read-projection'
 
 export const localJudgeSubmissionWhere = () => ({
   problemInternalId: { not: null },
@@ -28,7 +35,12 @@ export async function queryTrainingSubmissions(params: {
   const where: any = {
     submitScope: training.type === 'contest' ? 'contest' : 'training',
     trainingId: training.id,
-    result: { not: '' },
+    AND: [{
+      OR: [
+        { currentJudgeRunId: { not: null } },
+        { currentJudgeRunId: null, result: { not: '' } },
+      ],
+    }],
   }
   if (filters.userId) where.userId = filters.userId
   if (filters.problemId) {
@@ -38,7 +50,7 @@ export async function queryTrainingSubmissions(params: {
     })
     where.problemId = trainingProblem?.Problem.problemId ?? filters.problemId
   }
-  if (filters.result) where.result = filters.result
+  if (filters.result) where.AND.push(currentJudgeResultWhere(filters.result))
   if (filters.language) where.language = filters.language
   if (!isAdmin) {
     if (where.userId && where.userId !== requesterId) return { empty: true as const }
@@ -55,9 +67,11 @@ export async function queryTrainingSubmissions(params: {
       where.userId = { in: [where.userId] }
     } else where.userId = { in: ids }
   }
-  const [submissions, total, trainingProblems] = await Promise.all([
+  const [rawSubmissions, total, trainingProblems] = await Promise.all([
     prisma.submission.findMany({
-      where, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.pageSize,
+      where,
+      include: { CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT } },
+      orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.pageSize,
     }),
     prisma.submission.count({ where }),
     prisma.trainingProblem.findMany({
@@ -68,6 +82,7 @@ export async function queryTrainingSubmissions(params: {
       },
     }),
   ])
+  const submissions = rawSubmissions.map(projectSubmissionJudgeResult)
   const userIds = [...new Set(submissions.map(submission => submission.userId))]
   const [users, memberships] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } }),
@@ -85,24 +100,26 @@ export async function queryTrainingSubmissions(params: {
 export async function loadTrainingSubmissionDetail(trainingId: number, submissionId: number, submitScope: string) {
   const submission = await prisma.submission.findFirst({
     where: { id: submissionId, trainingId, submitScope },
+    include: { CurrentJudgeRun: { select: CURRENT_JUDGE_RUN_SELECT } },
   })
   if (!submission) return null
+  const projectedSubmission = projectSubmissionJudgeResult(submission)
   const [trainingProblem, submitter] = await Promise.all([
-    submission.trainingProblemId
+    projectedSubmission.trainingProblemId
       ? prisma.trainingProblem.findFirst({
-          where: { id: submission.trainingProblemId, trainingId },
+          where: { id: projectedSubmission.trainingProblemId, trainingId },
           include: { Problem: { select: { platform: true, judgeConfig: true } } },
         })
       : prisma.trainingProblem.findFirst({
           where: {
             trainingId,
-            OR: [{ problemId: submission.problemId }, { Problem: { problemId: submission.problemId } }],
+            OR: [{ problemId: projectedSubmission.problemId }, { Problem: { problemId: projectedSubmission.problemId } }],
           },
           include: { Problem: { select: { platform: true, judgeConfig: true } } },
         }),
-    prisma.user.findUnique({ where: { id: submission.userId }, select: { username: true } }),
+    prisma.user.findUnique({ where: { id: projectedSubmission.userId }, select: { username: true } }),
   ])
-  return { submission, trainingProblem, submitter }
+  return { submission: projectedSubmission, trainingProblem, submitter }
 }
 
 export function listTrainingSubmissionUsers(trainingId: number) {
@@ -137,12 +154,12 @@ export async function buildRejudgeTarget(params: {
 
 export async function previewRejudgeTarget(where: any) {
   const [matchedCount, inProgressCount] = await Promise.all([
-    prisma.submission.count({ where: { ...where, result: { notIn: ['queuing', 'judging'] } } }),
-    prisma.submission.count({ where: { ...where, result: { in: ['queuing', 'judging'] } } }),
+    prisma.submission.count({ where: { AND: [where, currentJudgeCompletedWhere()] } }),
+    prisma.submission.count({ where: { AND: [where, currentJudgeInProgressWhere()] } }),
   ])
   return { matchedCount, inProgressCount }
 }
 
 export function listRejudgeCandidates(where: any) {
-  return prisma.submission.findMany({ where, select: { id: true, result: true } })
+  return prisma.submission.findMany({ where, select: { id: true } })
 }

@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../../../prisma'
 import { createRejudgeBatch, rejudgeSubmissionWithRun } from '../../judge/application/judge-run.service'
+import { currentJudgeCompletedWhere } from '../../judge/application/judge-read-projection'
 
 export class AdminDataError extends Error {
   constructor(public readonly statusCode: number, message: string) {
@@ -15,7 +16,7 @@ export async function rejudgeAllLocalSubmissions(requestedBy: string) {
     where: {
       problemInternalId: { not: null }, submitMethod: { not: 'archive' },
       OR: [{ submitMethod: { in: ['local', 'demo_scenario'] } }, { oj: 'carits' }],
-      result: { notIn: ['queuing', 'judging'] },
+      AND: [currentJudgeCompletedWhere()],
     },
     select: { id: true },
   })
@@ -48,14 +49,30 @@ export async function repairLegacyCaritsSubmissions(requestedBy: string) {
 }
 
 export async function getSubmissionMaintenanceStats() {
+  const byResultPromise = prisma.$queryRaw<Array<{ result: string; count: number }>>`
+    SELECT
+      CASE
+        WHEN run.status = 'QUEUED' THEN 'queuing'
+        WHEN run.status = 'RUNNING' THEN 'judging'
+        WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
+        WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
+        ELSE submission.result
+      END AS result,
+      COUNT(*)::integer AS count
+    FROM "Submission" submission
+    LEFT JOIN "JudgeRun" run ON run.id = submission."currentJudgeRunId"
+    GROUP BY 1
+    ORDER BY 2 DESC
+    LIMIT 20
+  `
   const [total, carits, caritsNoRemoteId, trainingSubmissions, byResult] = await Promise.all([
     prisma.submission.count(),
     prisma.submission.count({ where: { oj: 'carits' } }),
     prisma.submission.count({ where: { oj: 'carits', ojRemoteId: null } }),
     prisma.submission.count({ where: { submitScope: { in: ['training', 'contest'] } } }),
-    prisma.submission.groupBy({ by: ['result'], _count: true, orderBy: { _count: { result: 'desc' } }, take: 20 }),
+    byResultPromise,
   ])
-  return { total, carits, caritsNoRemoteId, trainingSubmissions, byResult: byResult.map(item => ({ result: item.result, count: item._count })) }
+  return { total, carits, caritsNoRemoteId, trainingSubmissions, byResult }
 }
 
 export async function fixCaritsRemoteIds() {
