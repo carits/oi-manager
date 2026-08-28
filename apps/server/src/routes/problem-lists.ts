@@ -23,166 +23,19 @@ import { v4 as uuidv4 } from 'uuid'
 import { findAccessibleProblem, findUsableProblemByExternalId } from '../modules/problem/problem.access'
 import { ensureInitialTestSetRevision } from '../modules/problem/problem.testset-revision.service'
 import { fileService } from '../lib/storage'
+import {
+  checkProblemListOptimisticLock as checkOptimisticLock,
+  collectManagedProblemFileIds,
+  extractManagedProblemFileId,
+  generateProblemListId as generateListId,
+  getEntryProblemListId as getEntryListId,
+  getProblemListPermission,
+  getSectionProblemListId as getSectionListId,
+  problemListFileUrl,
+  rewriteProblemListFileUrls,
+} from '../modules/problem-list/application/problem-list-access.service'
 
 export const problemListsRouter = Router()
-
-// ==================== 工具函数 ====================
-
-/**
- * 生成题单 ID（7位随机数字，碰撞时加一位）
- */
-async function generateListId(length = 7): Promise<string> {
-  const min = Math.pow(10, length - 1)
-  const max = Math.pow(10, length) - 1
-  let id = String(min + Math.floor(Math.random() * (max - min + 1)))
-  // 检查是否已存在，碰撞则加一位重试
-  while (await prisma.problemList.findUnique({ where: { id } })) {
-    length++
-    id = await generateListId(length)
-  }
-  return id
-}
-
-type Permission = 'admin' | 'edit' | 'view'
-
-/** 权限优先级排序 */
-const PERM_ORDER: Record<string, number> = { admin: 3, edit: 2, view: 1 }
-
-const managedProblemFilePatterns = [
-  /\/api\/files\/([^/?#]+)\/(?:download|public)/g,
-  /\/api\/files\/download\/([^/?#]+)/g,
-]
-
-function extractManagedProblemFileId(value: string | null | undefined): string | null {
-  if (!value) return null
-  for (const pattern of managedProblemFilePatterns) {
-    pattern.lastIndex = 0
-    const match = pattern.exec(value)
-    if (match?.[1]) return match[1]
-  }
-  return null
-}
-
-function problemListFileUrl(listId: string, entryId: string, value: string | null | undefined) {
-  const fileId = extractManagedProblemFileId(value)
-  return fileId ? `/api/problem-lists/${listId}/entries/${entryId}/files/${fileId}` : value ?? null
-}
-
-function rewriteProblemListFileUrls(listId: string, entryId: string, content: string | null | undefined) {
-  if (!content) return content ?? null
-  let rewritten = content
-  for (const pattern of managedProblemFilePatterns) {
-    pattern.lastIndex = 0
-    rewritten = rewritten.replace(pattern, (_url, fileId: string) =>
-      `/api/problem-lists/${listId}/entries/${entryId}/files/${fileId}`)
-  }
-  return rewritten
-}
-
-/** 取两个权限中更高的 */
-function maxPerm(a: Permission | null, b: Permission | null): Permission | null {
-  if (!a) return b
-  if (!b) return a
-  return PERM_ORDER[a] >= PERM_ORDER[b] ? a : b
-}
-
-/**
- * 获取用户对题单的权限
- * 1. owner → admin
- * 2. 查题单级分享（school > team > teacher/student 逐级匹配）
- */
-async function getProblemListPermission(
-  problemListId: string,
-  user: NonNullable<Express.Request['user']>
-): Promise<Permission | null> {
-  const list = await prisma.problemList.findUnique({
-    where: { id: problemListId },
-    select: { ownerId: true, scope: true, organizationId: true }
-  })
-  if (!list) return null
-  if (list.scope !== getResourceScope(user)) return null
-
-  // owner 全权
-  if (list.ownerId === user.userId) return 'admin'
-
-  // 查分享
-  const shares = await prisma.problemListShare.findMany({
-    where: { problemListId }
-  })
-
-  let best: Permission | null = null
-
-  for (const share of shares) {
-    let matched = false
-    if (share.targetType === getMembershipType(user) && share.targetId === user.userId) {
-      matched = true
-    }
-
-    if (matched) {
-      best = maxPerm(best, share.permission as Permission)
-    }
-  }
-
-  // 题单被当前校园收录后，教师和负责人可查看；学生仍需显式分享。
-  const organizationId = user.organizationId
-  if (organizationId && getMembershipType(user) !== 'student') {
-    const schoolLink = await prisma.schoolProblemList.findFirst({
-      where: { organizationId, problemListId }
-    })
-    if (schoolLink) {
-      best = maxPerm(best, 'view')
-    }
-  }
-
-  // 查团队收录：如果题单被收录到用户所在的团队，给 view 权限
-  const userId = user.userId
-  const userType = getMembershipType(user)
-  if (userId) {
-    const teamIds = (await prisma.teamMember.findMany({
-      where: {
-        userId,
-        userType,
-        status: 'active'
-      },
-      select: { teamId: true }
-    })).map(m => m.teamId)
-
-    if (teamIds.length > 0) {
-      const teamLink = await prisma.teamProblemList.findFirst({
-        where: { teamId: { in: teamIds }, problemListId }
-      })
-      if (teamLink) {
-        best = maxPerm(best, 'view')
-      }
-    }
-  }
-
-  return best
-}
-
-/** 乐观锁校验：比对 expectedUpdatedAt 与数据库当前 updatedAt */
-function checkOptimisticLock(expectedUpdatedAt: string | undefined, currentUpdatedAt: string | Date): boolean {
-  if (!expectedUpdatedAt) return true // 不传则跳过校验（向后兼容）
-  return new Date(currentUpdatedAt).getTime() === new Date(expectedUpdatedAt).getTime()
-}
-
-/** 从 entryId 反查题单 ID（用于权限校验） */
-async function getEntryListId(entryId: string): Promise<string | null> {
-  const entry = await prisma.problemListEntry.findUnique({
-    where: { id: entryId },
-    select: { ProblemListSection: { select: { problemListId: true } } }
-  })
-  return entry?.ProblemListSection?.problemListId || null
-}
-
-/** 从 sectionId 反查题单 ID */
-async function getSectionListId(sectionId: string): Promise<string | null> {
-  const section = await prisma.problemListSection.findUnique({
-    where: { id: sectionId },
-    select: { problemListId: true }
-  })
-  return section?.problemListId || null
-}
 
 // ==================== 题单 CRUD ====================
 
@@ -538,11 +391,7 @@ problemListsRouter.get('/:id/entries/:entryId/files/:fileId', authenticate, asyn
     if (id) allowedIds.add(id)
   }
   const allowContent = (content: string | null | undefined) => {
-    if (!content) return
-    for (const pattern of managedProblemFilePatterns) {
-      pattern.lastIndex = 0
-      for (const match of content.matchAll(pattern)) if (match[1]) allowedIds.add(match[1])
-    }
+    for (const id of collectManagedProblemFileIds(content)) allowedIds.add(id)
   }
   allowContent(entry.Problem.description)
   allowUrl(entry.Problem.statementPdfUrl)

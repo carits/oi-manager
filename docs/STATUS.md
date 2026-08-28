@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: 最大遗留路由 `problem-lists.ts` 开始分层收口：题单 ID 分配、权限合并、校园/团队收录授权、章节/条目归属、乐观锁和受管文件引用解析已迁入 `modules/problem-list/application`。题单回归 43/43、Server 构建通过；路由债务降至 Prisma 525 / transaction 11 / filesystem 70 / Judge Runtime 0，CRUD/章节/条目/分享仍按后续批次继续迁移。
 - 2026-08-28: 团队题单路由完成 Strangler 迁移：团队题单读取、校园展示名解析、owner/admin/教师添加和按添加者/owner 删除规则均迁入 `modules/team/application`，团队作用域错误保持明确 4xx。题单/团队联合回归 62/62、Server 构建通过；路由债务降至 Prisma 533 / transaction 11 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: 用户归档题目路由完成 Strangler 迁移：列表/统计/详情、幂等新增、更新、单删和批删均迁入 `modules/archived-problem/application`，同时修复历史分页响应将 `page/pageSize/total` 错位的问题。归档隔离与分页回归 2/2、Server 构建通过；路由债务降至 Prisma 548 / transaction 11 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: 全局 User 路由完成 Strangler 迁移：个人/校园资料读取、全局账号分页、平台管理员创建、账号状态事务与管理员密码重置均迁入 `modules/user/application`，角色保护策略由应用层统一执行。权限/事务定向 22/22 和 Server 构建通过；路由债务降至 Prisma 562 / transaction 11 / filesystem 70 / Judge Runtime 0。
