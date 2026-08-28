@@ -1,580 +1,129 @@
 /**
- * Training CRUD Routes
- * 训练模块 CRUD 路由
+ * Training CRUD HTTP adapter.
  */
 
 import { Router } from 'express'
-import crypto from 'crypto'
-import { Prisma } from '@prisma/client'
-import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
-import { logger } from '../../lib/logger'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
+import { parseTrainingId } from './training.helpers'
 import {
-  isTeamMember,
-  isTeamAdmin,
-  parseTrainingId,
-  canAccessTraining,
-  canManageTraining,
-  getTrainingAccessMode,
-  getComputedTrainingStatus,
-  sortTrainingListForDisplay,
-} from './training.helpers'
-import { teamService } from '../team/team.service'
-import { fileService } from '../../lib/storage'
+  createMakeupHomework,
+  createTeamTraining,
+  deleteTraining,
+  finishTraining,
+  getTrainingDetail,
+  listTeamTrainings,
+  startTraining,
+  TrainingCrudError,
+  updateTraining,
+  updateTrainingEndTime,
+} from './application/training-crud.service'
 
 export const trainingCrudRouter = Router()
 
-/**
- * GET /api/teams/:teamId/trainings
- * 获取团队训练列表
- */
+function sendTrainingError(error: unknown, res: any) {
+  if (!(error instanceof TrainingCrudError)) throw error
+  return res.status(error.statusCode).json({
+    success: false,
+    code: error.code,
+    message: error.message,
+  })
+}
+
 trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const { teamId } = req.params
-    const userId = req.user!.userId
-    const typeFilter = req.query.type as string | undefined
-
-    const team = await teamService.assertTeamScope(teamId, req.user!)
-
-    if (!await isTeamMember(userId, teamId)) {
-      return res.status(403).json({ success: false, message: '无权限查看该团队训练' })
-    }
-
-    const trainings = await prisma.training.findMany({
-      where: { teamId, scope: team.scope, ...(typeFilter ? { type: typeFilter } : {}) },
-      include: {
-        _count: { select: { TrainingProblem: true } },
-        TrainingProblem: { select: { id: true } },
-      },
-      orderBy: { startTime: 'desc' },
+  try {
+    const data = await listTeamTrainings({
+      teamId: req.params.teamId,
+      user: req.user!,
+      typeFilter: typeof req.query.type === 'string' ? req.query.type : undefined,
     })
-
-    const trainingIds = trainings.map(t => t.id)
-    const participantCounts = new Map<number, number>()
-    if (trainingIds.length > 0) {
-      const rows = await prisma.$queryRaw<Array<{ trainingId: number; count: bigint }>>`
-        SELECT "trainingId", COUNT(DISTINCT "userId")::int as count
-        FROM "Submission"
-        WHERE "trainingId" IN (${Prisma.join(trainingIds)})
-          AND "submitScope" IN ('training', 'contest')
-          AND "workspaceScope" = ${team.scope}
-        GROUP BY "trainingId"
-      `
-      for (const row of rows) {
-        participantCounts.set(Number(row.trainingId), Number(row.count))
-      }
-    }
-
-    const now = new Date()
-    const data = trainings.map(t => {
-      const computedStatus = getComputedTrainingStatus(t, now)
-      return {
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        format: t.format,
-        startTime: t.startTime.toISOString(),
-        endTime: t.endTime.toISOString(),
-        status: computedStatus,
-        createdBy: t.createdBy,
-        type: t.type,
-        problemCount: t._count.TrainingProblem,
-        participantCount: participantCounts.get(t.id) || 0,
-        createdAt: t.createdAt.toISOString(),
-      }
-    })
-
-    res.json({
-      success: true,
-      data: sortTrainingListForDisplay(data),
-    })
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '查询失败'))
 
-/**
- * POST /api/teams/:teamId/trainings
- * 创建训练
- */
 trainingCrudRouter.post('/teams/:teamId/trainings', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const { teamId } = req.params
-    const userId = req.user!.userId
-    const { title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking, type } = req.body
-
-    const team = await teamService.assertTeamScope(teamId, req.user!)
-
-    if (!await isTeamAdmin(userId, teamId)) {
-      return res.status(403).json({ success: false, message: '只有团队管理员可以创建训练' })
-    }
-
-    if (!title || !startTime || !endTime) {
-      return res.status(400).json({ success: false, message: '标题、开始时间、结束时间为必填' })
-    }
-
-    if (new Date(endTime) <= new Date(startTime)) {
-      return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
-    }
-
-    if (new Date(startTime) <= new Date()) {
-      return res.status(400).json({ success: false, message: '开始时间不能早于当前时间' })
-    }
-
-    const training = await prisma.training.create({
-      data: {
-        teamId,
-        organizationId: null,
-        scope: team.scope,
-        title,
-        description: description || null,
-        format: format || 'ioi',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        status: 'upcoming',
-        createdBy: userId,
-        problemIdVisible: problemIdVisible ?? false,
-        solutionVisible: solutionVisible ?? false,
-        includeAdminInRanking: includeAdminInRanking ?? false,
-        type: type || 'training',
-        updatedAt: new Date(),
-      },
+  try {
+    const data = await createTeamTraining({
+      teamId: req.params.teamId,
+      user: req.user!,
+      input: req.body,
     })
-
-    logger.info('training_created', { action: 'trainings', metadata: { trainingId: training.id, teamId } })
-    res.json({ success: true, data: training })
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '创建失败'))
 
-/**
- * GET /api/trainings/:id
- * 获取训练详情
- */
 trainingCrudRouter.get('/trainings/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-
-    const training = await prisma.training.findUnique({
-      where: { id },
-      include: {
-        _count: { select: { TrainingParticipant: true, TrainingProblem: true } },
-      },
-    })
-
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    if (!await canAccessTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '无权限查看该训练' })
-    }
-
-    // 计算当前状态
-    const now = new Date()
-    let computedStatus = training.status
-    {
-      if (now < training.startTime) computedStatus = 'upcoming'
-      else if (now >= training.startTime && now <= training.endTime) computedStatus = 'ongoing'
-      else computedStatus = 'finished'
-
-      // 自动更新状态
-      if (computedStatus !== training.status) {
-        await prisma.training.update({ where: { id }, data: { status: computedStatus } })
-
-        // 比赛结束后，更新所有提交的 isGlobalVisible 为 true
-        if (computedStatus === 'finished' && training.type === 'contest') {
-          const { count } = await prisma.submission.updateMany({
-            where: {
-              submitScope: 'contest',
-              contestId: id,
-              isGlobalVisible: false,
-            },
-            data: { isGlobalVisible: true },
-          })
-          logger.info('contest_submissions_visible', {
-            action: 'training',
-            metadata: { contestId: id, updatedCount: count, message: '比赛结束，提交记录已公开' }
-          })
-        }
-      }
-    }
-
-    const isAdmin = await canManageTraining(userId, training)
-
-    res.json({
-      success: true,
-      data: {
-        id: training.id,
-        teamId: training.teamId,
-        organizationId: training.organizationId,
-        title: training.title,
-        description: training.description,
-        format: training.format,
-        startTime: training.startTime.toISOString(),
-        endTime: training.endTime.toISOString(),
-        status: computedStatus,
-        createdBy: training.createdBy,
-        problemIdVisible: training.problemIdVisible,
-        solutionVisible: training.solutionVisible,
-        includeAdminInRanking: training.includeAdminInRanking,
-        type: training.type,
-        scope: training.scope,
-        sourceTrainingId: training.sourceTrainingId,
-        problemCount: training._count.TrainingProblem,
-        participantCount: training._count.TrainingParticipant,
-        isAdmin,
-        createdAt: training.createdAt.toISOString(),
-      },
-    })
+  try {
+    const data = await getTrainingDetail(parseTrainingId(req.params.id), req.user!.userId)
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '查询失败'))
 
-/**
- * PUT /api/trainings/:id
- * 更新训练信息
- */
 trainingCrudRouter.put('/trainings/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-    const { title, description, format, startTime, endTime, problemIdVisible, solutionVisible, includeAdminInRanking } = req.body
-
-    const training = await prisma.training.findUnique({ where: { id } })
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    if (!await canManageTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '只有管理员可以编辑训练' })
-    }
-
-    const now = new Date()
-    const isStarted = now >= training.startTime
-
-    // 已开始的训练不能修改开始时间
-    // 前端只在用户实际修改了开始时间时才发送 startTime 字段
-    // 如果 startTime 未发送（undefined），说明用户没改，直接跳过
-    if (startTime !== undefined && isStarted) {
-      return res.status(400).json({ success: false, message: '训练已经开始，不能修改开始时间' })
-    }
-
-    // 未开始训练修改开始时间，新时间不能在过去
-    if (!isStarted && startTime && new Date(startTime) <= now) {
-      return res.status(400).json({ success: false, message: '开始时间不能早于当前时间' })
-    }
-
-    const newStartTime = startTime ? new Date(startTime) : training.startTime
-    const newEndTime = endTime ? new Date(endTime) : training.endTime
-
-    if (newEndTime <= newStartTime) {
-      return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
-    }
-
-    // 结束时间不能早于当前时间
-    if (newEndTime <= now) {
-      return res.status(400).json({ success: false, message: '结束时间不能早于当前时间' })
-    }
-
-    const updated = await prisma.training.update({
-      where: { id },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(format !== undefined && { format }),
-        ...(startTime !== undefined && { startTime: newStartTime }),
-        ...(endTime !== undefined && { endTime: newEndTime }),
-        ...(problemIdVisible !== undefined && { problemIdVisible }),
-        ...(solutionVisible !== undefined && { solutionVisible }),
-        ...(includeAdminInRanking !== undefined && { includeAdminInRanking }),
-      },
-    })
-
-    logger.info('training_updated', { action: 'trainings', metadata: { trainingId: id } })
-    res.json({ success: true, data: updated })
+  try {
+    const data = await updateTraining(parseTrainingId(req.params.id), req.user!.userId, req.body)
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '更新失败'))
 
-/**
- * PUT /api/trainings/:id/end-time
- * 单独更新结束时间（ongoing 时使用）
- */
 trainingCrudRouter.put('/trainings/:id/end-time', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-    const { endTime } = req.body
-
-    if (!endTime) {
-      return res.status(400).json({ success: false, message: '结束时间为必填' })
-    }
-
-    const training = await prisma.training.findUnique({ where: { id } })
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    if (!await canManageTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '只有管理员可以修改结束时间' })
-    }
-
-    const newEndTime = new Date(endTime)
-    if (newEndTime <= new Date()) {
-      return res.status(400).json({ success: false, message: '结束时间不能早于当前时间' })
-    }
-
-    if (newEndTime <= training.startTime) {
-      return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
-    }
-
-    const updated = await prisma.training.update({
-      where: { id },
-      data: { endTime: newEndTime },
-    })
-
-    res.json({ success: true, data: updated })
+  try {
+    const data = await updateTrainingEndTime(
+      parseTrainingId(req.params.id),
+      req.user!.userId,
+      req.body.endTime,
+    )
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '更新失败'))
 
-/**
- * POST /api/trainings/:id/start
- * 比赛管理员立即开始未开始的比赛。
- */
 trainingCrudRouter.post('/trainings/:id/start', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-    const training = await prisma.training.findUnique({ where: { id } })
-
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-    if (!await canManageTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '只有管理员可以立即开始比赛' })
-    }
-    if (training.status === 'finished' || new Date() >= training.endTime) {
-      return res.status(400).json({ success: false, message: '比赛已经结束，不能开始' })
-    }
-    if (training.status === 'ongoing' || new Date() >= training.startTime) {
-      return res.json({ success: true, data: training, message: '比赛已经开始' })
-    }
-
-    const started = await prisma.training.update({
-      where: { id },
-      data: { status: 'ongoing', startTime: new Date() },
-    })
-    logger.info('training_started_early', { action: 'trainings', metadata: { trainingId: id, userId } })
-    res.json({ success: true, data: started, message: '比赛已开始' })
+  try {
+    const result = await startTraining(parseTrainingId(req.params.id), req.user!.userId)
+    return res.json({ success: true, data: result.training, message: result.message })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '开始比赛失败'))
 
-/**
- * POST /api/trainings/:id/finish
- * 比赛管理员提前结束已开始的比赛，并公开比赛提交。
- */
 trainingCrudRouter.post('/trainings/:id/finish', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-    const training = await prisma.training.findUnique({ where: { id } })
-
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-    if (!await canManageTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '只有管理员可以提前结束比赛' })
-    }
-    if (training.status === 'finished' || new Date() >= training.endTime) {
-      return res.json({ success: true, data: training, message: '比赛已经结束' })
-    }
-    if (new Date() < training.startTime) {
-      return res.status(400).json({ success: false, message: '比赛尚未开始，不能提前结束' })
-    }
-
-    const finishedAt = new Date()
-    const updated = await prisma.$transaction(async (tx) => {
-      const finished = await tx.training.update({
-        where: { id },
-        data: { status: 'finished', endTime: finishedAt },
-      })
-      if (training.type === 'contest') {
-        await tx.submission.updateMany({
-          where: { submitScope: 'contest', contestId: id, isGlobalVisible: false },
-          data: { isGlobalVisible: true },
-        })
-      }
-      return finished
-    })
-
-    logger.info('training_finished_early', { action: 'trainings', metadata: { trainingId: id, userId } })
-    res.json({ success: true, data: updated, message: '比赛已结束' })
+  try {
+    const result = await finishTraining(parseTrainingId(req.params.id), req.user!.userId)
+    return res.json({ success: true, data: result.training, message: result.message })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '结束比赛失败'))
 
-/**
- * DELETE /api/trainings/:id
- * 删除训练
- */
 trainingCrudRouter.delete('/trainings/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-
-    const training = await prisma.training.findUnique({ where: { id } })
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    // 只有创建者或管理员可删除
-    const isCreator = training.createdBy === userId
-    const isAdmin = await canManageTraining(userId, training)
-    if (!isCreator && !isAdmin) {
-      return res.status(403).json({ success: false, message: '只有创建者或管理员可以删除训练' })
-    }
-
-    const snapshotFiles = await prisma.trainingProblemContentSnapshot.findMany({
-      where: { TrainingProblem: { trainingId: id }, snapshotFileId: { not: null } },
-      select: { snapshotFileId: true },
-    })
-    await prisma.training.delete({ where: { id } })
-    await Promise.all(snapshotFiles.map(item => item.snapshotFileId ? fileService.softDelete(item.snapshotFileId) : Promise.resolve()))
-
-    logger.info('training_deleted', { action: 'trainings', metadata: { trainingId: id } })
-    res.json({ success: true, message: '删除成功' })
+  try {
+    await deleteTraining(parseTrainingId(req.params.id), req.user!.userId)
+    return res.json({ success: true, message: '删除成功' })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '删除失败'))
 
-/**
- * POST /api/trainings/:id/create-makeup-homework
- * 从已结束的比赛/训练创建补题作业
- */
 trainingCrudRouter.post('/trainings/:id/create-makeup-homework', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id)
-    const userId = req.user!.userId
-    const { title, startTime, endTime } = req.body
-
-    const training = await prisma.training.findUnique({
-      where: { id },
-      include: {
-        TrainingProblem: {
-          orderBy: { orderIndex: 'asc' },
-          include: { ContentSnapshot: { orderBy: [{ revision: 'desc' }, { selectedAt: 'desc' }] } },
-        },
-      },
-    })
-
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    if (!await canManageTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '只有管理员可以创建补题作业' })
-    }
-
-    // 只有已结束的训练才能创建补题作业
-    const now = new Date()
-    if (now <= training.endTime && training.status !== 'finished') {
-      return res.status(400).json({ success: false, message: '只有已结束的比赛/训练才能创建补题作业' })
-    }
-
-    if (!endTime) {
-      return res.status(400).json({ success: false, message: '结束时间为必填' })
-    }
-
-    const makeupStartTime = startTime ? new Date(startTime) : now
-    const makeupEndTime = new Date(endTime)
-
-    if (makeupEndTime <= makeupStartTime) {
-      return res.status(400).json({ success: false, message: '结束时间必须晚于开始时间' })
-    }
-
-    const makeupTitle = title || `${training.title} - 补题练习`
-
-    // 创建补题作业
-    const makeupTraining = await prisma.training.create({
-      data: {
-        teamId: training.teamId,
-        organizationId: training.organizationId,
-        scope: training.scope,
-        title: makeupTitle,
-        description: training.description,
-        format: training.format,
-        startTime: makeupStartTime,
-        endTime: makeupEndTime,
-        status: makeupStartTime <= now ? 'ongoing' : 'upcoming',
-        createdBy: userId,
-        problemIdVisible: true,
-        solutionVisible: true,
-        includeAdminInRanking: false,
-        type: 'homework',
-        sourceTrainingId: id,
-      },
-    })
-
-    // 克隆题目快照
-    for (const tp of training.TrainingProblem) {
-      const newTrainingProblemId = `makeup-${makeupTraining.id}-${tp.orderIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      await prisma.trainingProblem.create({
-        data: {
-          id: newTrainingProblemId,
-          trainingId: makeupTraining.id,
-          problemId: tp.problemId,
-          alias: tp.alias,
-          orderIndex: tp.orderIndex,
-          points: tp.points,
-          titleSnapshot: tp.titleSnapshot,
-          statementSnapshot: tp.statementSnapshot,
-          statementsSnapshotJson: tp.statementsSnapshotJson,
-          timeLimitSnapshot: tp.timeLimitSnapshot,
-          memoryLimitSnapshot: tp.memoryLimitSnapshot,
-          judgeConfigSnapshot: tp.judgeConfigSnapshot,
-          testSetRevisionId: tp.testSetRevisionId,
-          allowedLanguagesSnapshot: tp.allowedLanguagesSnapshot,
-          sourcePlatformSnapshot: tp.sourcePlatformSnapshot,
-          sourceProblemIdSnapshot: tp.sourceProblemIdSnapshot,
-          sourceUrlSnapshot: tp.sourceUrlSnapshot,
-          snapshotCreatedAt: tp.snapshotCreatedAt ? new Date(tp.snapshotCreatedAt) : new Date(),
-          dataVersion: tp.dataVersion || '1',
-        },
-      })
-      for (const contentKind of ['statement', 'solution'] as const) {
-        const source = tp.ContentSnapshot.find(snapshot => snapshot.kind === contentKind)
-        if (!source) continue
-        const snapshotId = crypto.randomUUID()
-        let snapshotFileId: string | null = null
-        if (source.snapshotFileId) {
-          const file = await fileService.download(source.snapshotFileId)
-          const copied = await fileService.upload(file.buffer, {
-            category: 'pdf', ownerType: 'training_content', ownerId: snapshotId,
-            originalName: file.originalName, mimeType: file.mimeType, isPublic: false,
-          })
-          snapshotFileId = copied.id
-        }
-        await prisma.trainingProblemContentSnapshot.create({
-          data: {
-            id: snapshotId,
-            trainingProblemId: newTrainingProblemId,
-            kind: source.kind,
-            revision: 1,
-            sourceType: source.sourceType,
-            sourceContentId: source.sourceContentId,
-            sourceRevision: source.sourceRevision,
-            format: source.format,
-            language: source.language,
-            title: source.title,
-            content: source.content,
-            snapshotFileId,
-            fileName: source.fileName,
-            authorUserId: source.authorUserId,
-            authorUsernameSnapshot: source.authorUsernameSnapshot,
-            selectedBy: userId,
-          },
-        })
-      }
-    }
-
-    logger.info('makeup_homework_created', {
-      action: 'training',
-      metadata: { sourceTrainingId: id, makeupTrainingId: makeupTraining.id, teamId: training.teamId }
-    })
-
-    res.json({
-      success: true,
-      data: {
-        id: makeupTraining.id,
-        title: makeupTraining.title,
-        type: makeupTraining.type,
-        sourceTrainingId: makeupTraining.sourceTrainingId,
-        startTime: makeupTraining.startTime.toISOString(),
-        endTime: makeupTraining.endTime.toISOString(),
-        format: makeupTraining.format,
-        teamId: makeupTraining.teamId,
-        organizationId: makeupTraining.organizationId,
-        problemCount: training.TrainingProblem.length,
-      },
-    })
+  try {
+    const data = await createMakeupHomework(
+      parseTrainingId(req.params.id),
+      req.user!.userId,
+      req.body,
+    )
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
 }, '创建补题作业失败'))

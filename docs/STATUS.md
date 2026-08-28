@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-29: 活动 CRUD 完成 Strangler 迁移：团队活动列表/创建、详情状态同步、编辑、延时、立即开始/结束、删除及补题作业复制全部迁入 `modules/training/application`；比赛自然结束的状态更新与提交公开改为同一事务，补题复制失败会回滚活动并清理已复制文件。训练/比赛/补题/权限/事务定向回归 137/137、Server 构建通过；路由债务降至 Prisma 198 / transaction 6 / filesystem 29 / Judge Runtime 0。
 - 2026-08-28: 题单条目层完成 Strangler 迁移：单条添加、批量题号解析、编辑、删除和事务排序均迁入 `modules/problem-list/application`，保留学校题目归属、重复条目和乐观锁规则；排序新增条目所属章节校验，禁止跨章节改序。题单回归 45/45、Server 构建通过；路由债务降至 Prisma 490 / transaction 9 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: 题单章节层完成 Strangler 迁移：章节新增、编辑、至少一章删除保护、乐观锁和事务排序均迁入 `modules/problem-list/application`；排序新增服务端归属校验，不能再用其他题单 section ID 进行跨题单改序。题单回归 44/44、Server 构建通过；路由债务降至 Prisma 502 / transaction 10 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: 题单 CRUD 完成 Strangler 迁移：列表/权限分页、创建默认章节、详情与学生脱敏、元信息乐观锁更新、收录保护删除均迁入 `modules/problem-list/application`。题单回归 43/43、Server 构建通过；路由债务降至 Prisma 510 / transaction 11 / filesystem 70 / Judge Runtime 0，题面文件、章节、条目、分享和发布作业继续分批迁移。
