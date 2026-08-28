@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import request from 'supertest'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
-import { createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
+import { createTestTeam, createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
 import { createTestProblemList, shareTestProblemList, createTestProblem } from './helpers/problemListHelpers'
 import { generateTokenFromUser } from './helpers/testToken'
 
@@ -364,6 +364,42 @@ describe('题单权限模块', () => {
         .send({ entryIds: [added.body.data.entry.id] })
       expect(res.status).toBe(400)
       expect(res.body.message).toBe('条目不属于该章节')
+    })
+  })
+
+  describe('发布作业', () => {
+    it('学生不能发布作业', async () => {
+      const res = await createAuthenticatedRequest(app, viewToken)
+        .post(`/api/problem-lists/${testList.list.id}/publish-homework`)
+        .send({})
+      expect(res.status).toBe(403)
+    })
+
+    it('拒绝无效的作业时间范围', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/${testList.list.id}/publish-homework`)
+        .send({ teamId: 'unused', startTime: '2026-09-02', endTime: '2026-09-01' })
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('作业时间范围无效')
+    })
+
+    it('空题单不能发布作业', async () => {
+      const team = await createTestTeam({
+        schoolId: schoolData.school.id,
+        ownerId: ownerUser.user.id,
+        ownerType: 'teacher',
+      })
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/${testList.list.id}/publish-homework`)
+        .send({
+          teamId: team.id,
+          title: '题单发布回归作业',
+          startTime: '2026-09-01T00:00:00.000Z',
+          endTime: '2026-09-02T00:00:00.000Z',
+          format: 'ioi',
+        })
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('题单中没有题目，无法发布')
     })
   })
 

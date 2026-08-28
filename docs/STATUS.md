@@ -297,7 +297,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 正式环境必须设置严格 CORS、独立 JWT/Judge/加密密钥。
 
 ## 当前限制
-- 2026-08-28 题单分享接口已迁入 application service：分享候选、列表、写入和删除不再在路由层直接访问 Prisma；新增跨校园/身份错配拒绝及跨题单删除隔离测试，题单定向回归 48/48 通过。路由边界基线降至 Prisma 480 / transaction 9 / filesystem 70 / Judge Runtime 0。
+- 2026-08-28 `problem-lists.ts` 已完成 Strangler 收口：访问、CRUD、章节、条目、分享、授权题面文件与发布作业均迁入 application service，路由不再直接访问 Prisma 或文件存储。分享新增跨校园/身份错配及跨题单删除隔离；作业与题目快照改为同事务创建并校验时间范围。题单定向回归 51/51、相关双文件回归 51/51 通过，路由边界基线降至 Prisma 471 / transaction 9 / filesystem 70 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。

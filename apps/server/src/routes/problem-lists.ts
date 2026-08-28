@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 /**
  * 题单管理 API
  * @description 飞书文档式权限的题单管理系统
@@ -7,28 +6,14 @@ import crypto from 'crypto'
  */
 
 import { Router, type Response } from 'express'
-import { prisma } from '../prisma'
-import {
-  authenticate,
-  getMembershipType,
-  getResourceScope,
-  isPersonalContextForTeams,
-  isPersonalContext,
-} from '../middleware/auth'
+import { authenticate } from '../middleware/auth'
 import logger from '../lib/logger'
 import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination } from '../lib/pagination'
-import { populateSnapshotData } from '../modules/training/training.helpers'
-import { v4 as uuidv4 } from 'uuid'
-import { ensureInitialTestSetRevision } from '../modules/problem/problem.testset-revision.service'
-import { fileService } from '../lib/storage'
 import {
-  collectManagedProblemFileIds,
-  extractManagedProblemFileId,
-  getProblemListPermission,
-  problemListFileUrl,
-  rewriteProblemListFileUrls,
-} from '../modules/problem-list/application/problem-list-access.service'
+  downloadProblemListEntryFile,
+  getProblemListEntryStatement,
+} from '../modules/problem-list/application/problem-list-content.service'
 import {
   createProblemList,
   deleteProblemList,
@@ -56,6 +41,7 @@ import {
   listProblemListShares,
   upsertProblemListShare,
 } from '../modules/problem-list/application/problem-list-share.service'
+import { publishProblemListHomework } from '../modules/problem-list/application/problem-list-homework.service'
 import type { AuthRequest } from '../middleware/auth'
 
 export const problemListsRouter = Router()
@@ -109,127 +95,22 @@ problemListsRouter.get('/:id', authenticate, problemListEndpoint('获取题单�
  * GET /api/problem-lists/:id/entries/:entryId/problem
  * Read a published statement through an authorized problem-list context.
  */
-problemListsRouter.get('/:id/entries/:entryId/problem', authenticate, asyncHandler(async (req, res) => {
-  const user = req.user!
-  const permission = await getProblemListPermission(req.params.id, user)
-  if (!permission) return res.status(404).json({ success: false, message: '资源不存在' })
-
-  const entry = await prisma.problemListEntry.findFirst({
-    where: { id: req.params.entryId, ProblemListSection: { problemListId: req.params.id } },
-    include: {
-      ProblemListSection: { select: { ProblemList: { select: { scope: true, organizationId: true } } } },
-      Problem: {
-        include: {
-          ProblemStatement: { where: { type: 'statement', isVisible: true }, orderBy: [{ format: 'asc' }, { language: 'asc' }] },
-          ProblemAttachment: { orderBy: { uploadedAt: 'asc' } },
-        },
-      },
-    },
-  })
-  if (!entry || entry.Problem.status !== 'published') {
-    return res.status(404).json({ success: false, message: '资源不存在' })
-  }
-  const list = entry.ProblemListSection.ProblemList
-  if (entry.Problem.libraryScope === 'school' &&
-      (list.scope !== 'campus' || !list.organizationId || list.organizationId !== entry.Problem.organizationId)) {
-    return res.status(404).json({ success: false, message: '资源不存在' })
-  }
-
-  const problem = entry.Problem
-  res.json({
-    success: true,
-    data: {
-      id: entry.id,
-      title: entry.alias || problem.title,
-      difficulty: problem.difficulty,
-      timeLimit: problem.timeLimit,
-      memoryLimit: problem.memoryLimit,
-      description: rewriteProblemListFileUrls(req.params.id, entry.id, problem.description),
-      statementType: problem.statementType,
-      statementPdfUrl: problemListFileUrl(req.params.id, entry.id, problem.statementPdfUrl),
-      statements: problem.ProblemStatement.map(statement => ({
-        id: statement.id,
-        format: statement.format,
-        language: statement.language,
-        content: rewriteProblemListFileUrls(req.params.id, entry.id, statement.content),
-        fileUrl: problemListFileUrl(req.params.id, entry.id, statement.fileUrl),
-      })),
-      attachments: problem.ProblemAttachment.map(attachment => ({
-        id: attachment.id,
-        fileName: attachment.fileName,
-        fileSize: attachment.fileSize,
-        description: attachment.description,
-        fileUrl: problemListFileUrl(req.params.id, entry.id, attachment.fileUrl),
-      })),
-    },
-  })
-}, '获取题单题面失败'))
+problemListsRouter.get('/:id/entries/:entryId/problem', authenticate, problemListEndpoint('获取题单题面失败', async (req, res) => {
+  res.json({ success: true, data: await getProblemListEntryStatement(req.user!, req.params.id, req.params.entryId) })
+}))
 
 /**
  * GET /api/problem-lists/:id/entries/:entryId/files/:fileId
  * Download only a file referenced by the authorized statement or attachment.
  */
-problemListsRouter.get('/:id/entries/:entryId/files/:fileId', authenticate, asyncHandler(async (req, res) => {
-  const user = req.user!
-  const permission = await getProblemListPermission(req.params.id, user)
-  if (!permission) return res.status(404).json({ success: false, message: '资源不存在' })
-
-  const entry = await prisma.problemListEntry.findFirst({
-    where: { id: req.params.entryId, ProblemListSection: { problemListId: req.params.id } },
-    include: {
-      ProblemListSection: { select: { ProblemList: { select: { scope: true, organizationId: true } } } },
-      Problem: {
-        select: {
-          id: true,
-          status: true,
-          libraryScope: true,
-          organizationId: true,
-          description: true,
-          statementPdfUrl: true,
-          ProblemStatement: { where: { type: 'statement', isVisible: true }, select: { content: true, fileUrl: true } },
-          ProblemAttachment: { select: { fileUrl: true } },
-        },
-      },
-    },
-  })
-  const file = await fileService.getFile(req.params.fileId)
-  if (!entry || entry.Problem.status !== 'published' || !file || file.status !== 'active' ||
-      file.ownerType !== 'problem' || file.ownerId !== entry.Problem.id || file.category === 'testdata') {
-    return res.status(404).json({ success: false, message: '资源不存在' })
-  }
-  const list = entry.ProblemListSection.ProblemList
-  if (entry.Problem.libraryScope === 'school' &&
-      (list.scope !== 'campus' || !list.organizationId || list.organizationId !== entry.Problem.organizationId)) {
-    return res.status(404).json({ success: false, message: '资源不存在' })
-  }
-
-  const allowedIds = new Set<string>()
-  const allowUrl = (url: string | null | undefined) => {
-    const id = extractManagedProblemFileId(url)
-    if (id) allowedIds.add(id)
-  }
-  const allowContent = (content: string | null | undefined) => {
-    for (const id of collectManagedProblemFileIds(content)) allowedIds.add(id)
-  }
-  allowContent(entry.Problem.description)
-  allowUrl(entry.Problem.statementPdfUrl)
-  for (const statement of entry.Problem.ProblemStatement) {
-    allowContent(statement.content)
-    allowUrl(statement.fileUrl)
-  }
-  for (const attachment of entry.Problem.ProblemAttachment) allowUrl(attachment.fileUrl)
-  if (!allowedIds.has(req.params.fileId)) {
-    return res.status(404).json({ success: false, message: '资源不存在' })
-  }
-
-  const download = await fileService.download(file.id)
-  const disposition = file.category === 'attachment' ? 'attachment' : 'inline'
+problemListsRouter.get('/:id/entries/:entryId/files/:fileId', authenticate, problemListEndpoint('下载题单题目资源失败', async (req, res) => {
+  const download = await downloadProblemListEntryFile(req.user!, req.params.id, req.params.entryId, req.params.fileId)
   res.setHeader('Content-Type', download.mimeType)
-  res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(download.originalName)}`)
+  res.setHeader('Content-Disposition', `${download.disposition}; filename*=UTF-8''${encodeURIComponent(download.originalName)}`)
   res.setHeader('Content-Length', download.buffer.length)
   res.setHeader('Cache-Control', 'private, no-store')
   res.send(download.buffer)
-}, '下载题单题目资源失败'))
+}))
 
 /**
  * PUT /api/problem-lists/:id
@@ -361,129 +242,6 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, problemListEndpo
  * POST /api/problem-lists/:id/publish-homework
  * 将题单发布为作业（平铺所有条目，不保留章节结构）
  */
-problemListsRouter.post('/:id/publish-homework', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: '未登录' })
-    }
-
-    const userId = req.user.userId
-    const userRole = req.user.role
-
-    // 作业属于校园工作区；个人团队使用比赛/训练能力。
-    if (isPersonalContext(req.user)) {
-      return res.status(403).json({
-        success: false,
-        code: 'WORKSPACE_MODE_REQUIRED',
-        message: '个人工作区不能发布校园作业',
-      })
-    }
-    if (userRole === 'student') {
-      return res.status(403).json({ success: false, message: '学生不能发布作业' })
-    }
-
-    const { teamId, title, startTime, endTime, format } = req.body
-
-    if (!teamId) {
-      return res.status(400).json({ success: false, message: '必须选择团队' })
-    }
-    if (!startTime || !endTime) {
-      return res.status(400).json({ success: false, message: '必须设置开始和结束时间' })
-    }
-
-    // 检查题单权限
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (!perm || perm === 'view') {
-      return res.status(403).json({ success: false, message: '需要编辑权限才能发布作业' })
-    }
-
-    // 检查团队权限
-    const team = await prisma.team.findUnique({ where: { id: teamId } })
-    if (!team || team.scope !== getResourceScope(req.user)) {
-      return res.status(404).json({ success: false, message: '团队不存在' })
-    }
-
-    // 检查用户是团队管理员
-    const member = await prisma.teamMember.findFirst({
-      where: { teamId, userId, status: 'active', role: { in: ['owner', 'admin'] } }
-    })
-    if (!member && userRole !== 'super_admin') {
-      return res.status(403).json({ success: false, message: '只有团队管理员可以发布作业' })
-    }
-
-    // 获取题单所有条目（平铺，不保留章节）
-    const problemList = await prisma.problemList.findUnique({
-      where: { id: req.params.id },
-      include: {
-        ProblemListSection: {
-          orderBy: { sortOrder: 'asc' },
-          include: {
-            ProblemListEntry: {
-              orderBy: { sortOrder: 'asc' },
-              include: {
-                Problem: {
-                  include: { ProblemStatement: { where: { isVisible: true } } }
-                }
-              }
-            }
-          }
-        }
-      }
-    })
-
-    if (!problemList) {
-      return res.status(404).json({ success: false, message: '题单不存在' })
-    }
-
-    // 平铺所有条目
-    const allEntries = problemList.ProblemListSection.flatMap((s: any) => s.ProblemListEntry)
-    if (allEntries.length === 0) {
-      return res.status(400).json({ success: false, message: '题单中没有题目，无法发布' })
-    }
-
-    // 创建 Training.type = 'homework'
-    const homeworkTitle = title || `${problemList.title} - 作业`
-    const training = await prisma.training.create({
-      data: {
-        title: homeworkTitle,
-        description: `由题单「${problemList.title}」发布`,
-        teamId,
-        organizationId: team.organizationId,
-        scope: team.scope,
-        type: 'homework',
-        format: format || 'ioi',
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        status: 'upcoming',
-        createdBy: userId,
-        problemIdVisible: false,
-        solutionVisible: false,
-        includeAdminInRanking: false,
-      }
-    })
-
-    for (const entry of allEntries) await ensureInitialTestSetRevision(entry.problemId, userId)
-    const revisionProblems = await prisma.problem.findMany({
-      where: { id: { in: allEntries.map((entry: any) => entry.problemId) } },
-      include: { LatestTestSetRevision: true },
-    })
-    const revisionByProblem = new Map(revisionProblems.map(problem => [problem.id, problem]))
-
-    // 为每个条目创建 TrainingProblem（含固定测试版本快照）
-    const problemsData = allEntries.map((entry: any, index: number) => {
-      const revisionProblem = revisionByProblem.get(entry.problemId)
-      const snapshotData = populateSnapshotData({ ...entry.Problem, ...revisionProblem })
-      return {
-        id: uuidv4(),
-        trainingId: training.id,
-        problemId: entry.problemId,
-        alias: entry.alias || String.fromCharCode(65 + index), // A, B, C...
-        orderIndex: index,
-        points: null,
-        ...snapshotData,
-      }
-    })
-
-    await prisma.trainingProblem.createMany({ data: problemsData })
-
-    res.json({ success: true, data: { trainingId: training.id, title: homeworkTitle, problemCount: problemsData.length } })
-}, '发布作业失败'))
+problemListsRouter.post('/:id/publish-homework', authenticate, problemListEndpoint('发布作业失败', async (req, res) => {
+  res.json({ success: true, data: await publishProblemListHomework(req.user!, req.params.id, req.body) })
+}))
