@@ -342,9 +342,9 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/testdata.ts": {
-    "prisma": 19,
-    "transaction": 1,
-    "filesystem": 20,
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/routes/users.ts": {

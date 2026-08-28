@@ -302,6 +302,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-28 通知与贡献路由已迁入 application service：通知列表、单条已读、全部已读均按当前用户和 personal/campus scope 操作，定向回归 3/3；贡献汇总、事件和全局/校园排名查询不再由 HTTP adapter 直接访问 Prisma。本轮完整 Server 回归为 51 个文件、486/486 通过；路由边界基线降至 Prisma 431 / transaction 9 / filesystem 54 / Judge Runtime 0。
 - 2026-08-28 Carits 币个人、校园、流水和平台审计只读查询已迁入 application service，校园查询继续要求 active 教师或负责人关系，金额仍只以字符串输出避免 BigInt 精度丢失。Server 构建通过，路由边界基线降至 Prisma 423 / transaction 9 / filesystem 54 / Judge Runtime 0。
 - 2026-08-28 个人 Rating/过题排名与校园 Rating/过题/年级过滤查询已迁入 application service；HTTP adapter 只保留个人/组织上下文门禁和响应映射，既有分页、毕业过滤和去重过题语义不变。Server 构建通过，路由边界基线降至 Prisma 415 / transaction 9 / filesystem 54 / Judge Runtime 0。
+- 2026-08-28 `testdata.ts` 已完成 Strangler 收口：ZIP 解包、路径边界、暂存、流式哈希和下载进入存储基础设施；授权、列表、冲突替换、删除、Test Graph 引用与下载解析进入 application service。替换/删除持有题目 PostgreSQL advisory transaction lock，并在数据库失败时恢复旧文件。真实 multipart、配对、冲突、替换、下载、跨题隔离和删除回归 4/4，相关测试 22/22 通过；路由边界基线降至 Prisma 396 / transaction 8 / filesystem 34 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
