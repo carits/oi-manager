@@ -18,7 +18,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/platform-binding/platform-binding.routes.ts": {
-    "prisma": 26,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0

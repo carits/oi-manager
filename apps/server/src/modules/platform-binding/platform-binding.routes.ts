@@ -6,8 +6,12 @@
 import { Router, Request, Response } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { PlatformBindingService } from './platform-binding.service'
-import { prisma } from '../../prisma'
 import type { BindingPlatform } from './platform-binding.types'
+import {
+  cleanupArchivedSubmissions,
+  getCodeforcesArchiveCredentials,
+  type CleanupAction,
+} from './application/platform-binding-maintenance.service'
 
 export const platformBindingRouter = Router()
 const service = new PlatformBindingService()
@@ -207,26 +211,16 @@ platformBindingRouter.post('/codeforces/sync-archive', authenticate, async (req:
     }
 
     // 2. 获取绑定数据
-    const bindingRecord = await prisma.userPlatformBinding.findUnique({
-      where: { userId_platform: { userId, platform: 'codeforces' } },
-    })
+    const credentials = await getCodeforcesArchiveCredentials(userId)
 
-    if (!bindingRecord?.bindingData) {
+    if (!credentials?.jsessionid || !credentials.handle) {
       return res.status(400).json({
         success: false,
         message: '绑定数据不完整，请重新绑定',
       })
     }
 
-    const bindingData = JSON.parse(bindingRecord.bindingData)
-    const { jsessionid, handle } = bindingData
-
-    if (!jsessionid || !handle) {
-      return res.status(400).json({
-        success: false,
-        message: '绑定数据不完整，请重新绑定',
-      })
-    }
+    const { jsessionid, handle } = credentials
 
     // 3. 构建归档选项
     const options = {
@@ -309,26 +303,16 @@ platformBindingRouter.post('/codeforces/sync-submissions', authenticate, async (
     }
 
     // 2. 获取绑定数据
-    const bindingRecord = await prisma.userPlatformBinding.findUnique({
-      where: { userId_platform: { userId, platform: 'codeforces' } },
-    })
+    const credentials = await getCodeforcesArchiveCredentials(userId)
 
-    if (!bindingRecord?.bindingData) {
+    if (!credentials?.handle) {
       return res.status(400).json({
         success: false,
         message: '绑定数据不完整，请重新绑定',
       })
     }
 
-    const bindingData = JSON.parse(bindingRecord.bindingData)
-    const { handle } = bindingData
-
-    if (!handle) {
-      return res.status(400).json({
-        success: false,
-        message: '绑定数据不完整，请重新绑定',
-      })
-    }
+    const { handle } = credentials
 
     // 3. 构建同步选项
     const options = {
@@ -558,7 +542,6 @@ platformBindingRouter.post('/luogu/sync-submissions', authenticate, async (req: 
  */
 platformBindingRouter.post('/admin/cleanup-submissions', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId
     const userRole = (req as any).user.role
 
     // 权限检查：只有管理员可以执行
@@ -566,151 +549,14 @@ platformBindingRouter.post('/admin/cleanup-submissions', authenticate, async (re
       return res.status(403).json({ success: false, message: '只有管理员可以执行清理操作' })
     }
 
-    const { action = 'all' } = req.body
-    const results: { deduplicated?: number; fixedLanguage?: number; fixedResult?: number; fixedInternalIds?: number; orphanedSubmissions?: number; testProblems?: number } = {}
-
-    // 1. 去重：删除重复的提交记录（保留最早的一条）
-    if (action === 'deduplicate' || action === 'all') {
-      const duplicates = await prisma.$queryRaw<{ ojRemoteId: string; count: bigint }[]>`
-        SELECT "ojRemoteId", COUNT(*) as count
-        FROM "Submission"
-        WHERE "ojRemoteId" IS NOT NULL
-        GROUP BY "ojRemoteId"
-        HAVING COUNT(*) > 1
-      `
-
-      let deduplicatedCount = 0
-      for (const dup of duplicates) {
-        // 获取所有重复记录，按创建时间排序
-        const submissions = await prisma.submission.findMany({
-          where: { ojRemoteId: dup.ojRemoteId },
-          orderBy: { createdAt: 'asc' },
-          select: { id: true, createdAt: true },
-        })
-
-        // 保留第一条，删除其余
-        const toDelete = submissions.slice(1)
-        if (toDelete.length > 0) {
-          await prisma.submission.deleteMany({
-            where: { id: { in: toDelete.map(s => s.id) } },
-          })
-          deduplicatedCount += toDelete.length
-        }
-      }
-      results.deduplicated = deduplicatedCount
+    const action = (req.body?.action || 'all') as CleanupAction
+    const allowed: CleanupAction[] = [
+      'deduplicate', 'fix-language', 'fix-result', 'fix-internal-ids', 'clean-orphaned', 'all',
+    ]
+    if (!allowed.includes(action)) {
+      return res.status(400).json({ success: false, message: '不支持的清理操作' })
     }
-
-    // 2. 修复语言映射：将 luogu_lang_27 和之前错误修改的 swift 改为 cpp20
-    if (action === 'fix-language' || action === 'all') {
-      // 修复 luogu_lang_27 -> cpp20
-      const fixed1 = await prisma.submission.updateMany({
-        where: { language: 'luogu_lang_27' },
-        data: { language: 'cpp20' },
-      })
-      // 修复之前错误修改的 swift -> cpp20
-      const fixed2 = await prisma.submission.updateMany({
-        where: { language: 'swift' },
-        data: { language: 'cpp20' },
-      })
-      results.fixedLanguage = fixed1.count + fixed2.count
-    }
-
-    // 3. 修复评测结果映射：统一为缩写形式
-    if (action === 'fix-result' || action === 'all') {
-      // unaccepted -> wa
-      const fixedResult1 = await prisma.submission.updateMany({
-        where: { result: 'unaccepted' },
-        data: { result: 'wa' },
-      })
-      // wrong_answer -> wa
-      const fixedResult2 = await prisma.submission.updateMany({
-        where: { result: 'wrong_answer' },
-        data: { result: 'wa' },
-      })
-      // compilation_error -> ce
-      const fixedResult3 = await prisma.submission.updateMany({
-        where: { result: 'compilation_error' },
-        data: { result: 'ce' },
-      })
-      // compile_error -> ce
-      const fixedResult4 = await prisma.submission.updateMany({
-        where: { result: 'compile_error' },
-        data: { result: 'ce' },
-      })
-      // waiting -> queuing
-      const fixedResult5 = await prisma.submission.updateMany({
-        where: { result: 'waiting' },
-        data: { result: 'queuing' },
-      })
-      results.fixedResult = fixedResult1.count + fixedResult2.count + fixedResult3.count + fixedResult4.count + fixedResult5.count
-    }
-
-    // 4. 修复 problemInternalId：对无 problemInternalId 但 Problem 表中存在对应题目的提交补全关联
-    if (action === 'fix-internal-ids' || action === 'all') {
-      const submissions = await prisma.submission.findMany({
-        where: { problemInternalId: null },
-        select: { id: true, oj: true, problemId: true },
-      })
-
-      let fixed = 0
-      for (const sub of submissions) {
-        const problem = await prisma.problem.findFirst({
-          where: { libraryScope: 'platform', platform: sub.oj, problemId: sub.problemId },
-        })
-        if (problem) {
-          await prisma.submission.update({
-            where: { id: sub.id },
-            data: { problemInternalId: problem.id },
-          })
-          fixed++
-        }
-      }
-      results.fixedInternalIds = fixed
-    }
-
-    // 5. 清理 Carits 测试数据（只删除 Carits，不碰其他平台）
-    //    顺序：先删提交 → 删所有关联记录 → 再删题目（避免 FK 冲突）
-    if (action === 'clean-orphaned' || action === 'all') {
-      // 5a. 删除无 problemInternalId 的 Carits 提交
-      const caritsOrphaned = await prisma.submission.deleteMany({
-        where: { oj: 'carits', problemInternalId: null },
-      })
-      // 5b. 找到所有 Carits 测试题目
-      const testProblemIds = await prisma.problem.findMany({
-        where: {
-          libraryScope: 'platform',
-          platform: 'carits',
-          OR: [{ title: { contains: '测试' } }, { title: { contains: '兼容' } }],
-        },
-        select: { id: true },
-      })
-      let testSubmissionCount = 0
-      if (testProblemIds.length > 0) {
-        const ids = testProblemIds.map(p => p.id)
-        // 5b-1. 删除关联到测试题目的 Carits 提交
-        const deleted = await prisma.submission.deleteMany({
-          where: { oj: 'carits', problemInternalId: { in: ids } },
-        })
-        testSubmissionCount = deleted.count
-        // 5b-2. 删除所有引用测试题目的关联记录（按依赖顺序）
-        await prisma.trainingProblem.deleteMany({ where: { problemId: { in: ids } } })
-        await prisma.problemListEntry.deleteMany({ where: { problemId: { in: ids } } })
-        await prisma.problemNote.deleteMany({ where: { problemId: { in: ids } } })
-        await prisma.problemStatement.deleteMany({ where: { problemId: { in: ids } } })
-        await prisma.testdataFile.deleteMany({ where: { problemId: { in: ids } } })
-        await prisma.problemAttachment.deleteMany({ where: { problemId: { in: ids } } })
-      }
-      // 5c. 删除测试题目
-      const testProblems = await prisma.problem.deleteMany({
-        where: {
-          libraryScope: 'platform',
-          platform: 'carits',
-          OR: [{ title: { contains: '测试' } }, { title: { contains: '兼容' } }],
-        },
-      })
-      results.orphanedSubmissions = caritsOrphaned.count + testSubmissionCount
-      results.testProblems = testProblems.count
-    }
+    const results = await cleanupArchivedSubmissions(action)
 
     res.json({
       success: true,
