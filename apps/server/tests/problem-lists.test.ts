@@ -397,6 +397,21 @@ describe('题单权限模块', () => {
       expect(res.status).toBe(200)
     })
 
+    it('不能分享给其他校园成员', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/${testList.list.id}/shares`)
+        .send({ targetType: 'teacher', targetId: strangerUser.teacherId, permission: 'view' })
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('分享对象不属于当前校园或身份不匹配')
+    })
+
+    it('分享对象身份必须与目标类型一致', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/${testList.list.id}/shares`)
+        .send({ targetType: 'student', targetId: editUser.teacherId, permission: 'view' })
+      expect(res.status).toBe(400)
+    })
+
     it('非 owner 添加分享 → 403', async () => {
       const res = await createAuthenticatedRequest(app, editToken)
         .post(`/api/problem-lists/${testList.list.id}/shares`)
@@ -423,6 +438,24 @@ describe('题单权限模块', () => {
       const res = await createAuthenticatedRequest(app, ownerToken)
         .delete(`/api/problem-lists/${testList.list.id}/shares/${share.id}`)
       expect(res.status).toBe(200)
+    })
+
+    it('不能通过另一题单路径删除分享记录', async () => {
+      const otherList = await createTestProblemList({ ownerId: ownerUser.user.id, schoolId: schoolData.school.id })
+      const share = await shareTestProblemList({
+        problemListId: otherList.list.id,
+        targetType: 'teacher',
+        targetId: editUser.teacherId!,
+        permission: 'view',
+        sharedBy: ownerUser.user.id,
+      })
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .delete(`/api/problem-lists/${testList.list.id}/shares/${share.id}`)
+      expect(res.status).toBe(404)
+
+      const remaining = await createAuthenticatedRequest(app, ownerToken)
+        .get(`/api/problem-lists/${otherList.list.id}/shares`)
+      expect(remaining.body.data.some((item: { id: string }) => item.id === share.id)).toBe(true)
     })
 
     it('非 owner 删除分享 → 403', async () => {

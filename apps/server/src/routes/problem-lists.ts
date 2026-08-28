@@ -50,6 +50,12 @@ import {
   resolveProblemListEntries,
   updateProblemListEntry,
 } from '../modules/problem-list/application/problem-list-entry.service'
+import {
+  deleteProblemListShare,
+  listProblemListShareCandidates,
+  listProblemListShares,
+  upsertProblemListShare,
+} from '../modules/problem-list/application/problem-list-share.service'
 import type { AuthRequest } from '../middleware/auth'
 
 export const problemListsRouter = Router()
@@ -322,223 +328,34 @@ problemListsRouter.put('/sections/:sectionId/entries/reorder', authenticate, pro
  * GET /api/problem-lists/:id/shares
  * 获取题单分享列表
  */
-problemListsRouter.get('/:id/shares', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin') {
-      res.status(403).json({ success: false, message: '无权限管理分享' })
-      return
-    }
-
-    const shares = await prisma.problemListShare.findMany({
-      where: { problemListId: req.params.id },
-      orderBy: { createdAt: 'asc' }
-    })
-
-    const enrichedShares = await Promise.all(shares.map(async (share) => {
-      const target = await prisma.user.findUnique({
-        where: { id: share.targetId },
-        select: { username: true, avatar: true },
-      })
-      return {
-        ...share,
-        targetName: target?.username || share.targetId,
-        targetAvatar: target?.avatar || null,
-        targetUsername: target?.username || '',
-      }
-    }))
-
-    res.json({ success: true, data: enrichedShares })
-}, '获取分享列表失败'))
+problemListsRouter.get('/:id/shares', authenticate, problemListEndpoint('获取分享列表失败', async (req, res) => {
+  res.json({ success: true, data: await listProblemListShares(req.user!, req.params.id) })
+}))
 
 /**
  * GET /api/problem-lists/:id/share-candidates
  * 搜索本校可分享的教师/学生
  */
-problemListsRouter.get('/:id/share-candidates', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list || list.scope !== getResourceScope(req.user)) {
-      res.status(404).json({ success: false, message: '题单不存在' })
-      return
-    }
-
-    if (list.ownerId !== req.user.userId) {
-      res.status(403).json({ success: false, message: '只有创建者可以管理分享' })
-      return
-    }
-
-    const personal = isPersonalContext(req.user)
-    const requestedType = typeof req.query.type === 'string' ? req.query.type : 'teacher'
-    const type = personal ? 'user' : requestedType
-    const keyword = typeof req.query.keyword === 'string' ? req.query.keyword : ''
-    const organizationId = list.organizationId
-
-    // 已分享的人
-    const existingShares = await prisma.problemListShare.findMany({
-      where: { problemListId: req.params.id, targetType: type },
-      select: { targetId: true }
-    })
-    const excludeIds = new Set(existingShares.map(s => s.targetId))
-    excludeIds.add(list.ownerId) // 排除 owner 自己
-
-    if (personal) {
-      const users = await prisma.user.findMany({
-        where: {
-          id: { notIn: [...excludeIds] },
-          status: 'active',
-          PersonalProfile: { isNot: null },
-          ...(keyword ? { username: { contains: keyword, mode: 'insensitive' } } : {}),
-        },
-        select: { id: true, username: true, avatar: true },
-        orderBy: { username: 'asc' },
-        take: 20,
-      })
-      return res.json({
-        success: true,
-        data: users.map(user => ({
-          id: user.id,
-          name: user.username,
-          type: 'user',
-          username: user.username,
-          avatar: user.avatar,
-        })),
-      })
-    }
-
-    if (!organizationId) return res.json({ success: true, data: [] })
-    const membershipWhere: any = {
-      organizationId,
-      status: 'active',
-      memberRole: type === 'teacher' ? { in: ['teacher', 'school_principal'] } : 'student',
-      userId: { notIn: [...excludeIds] },
-    }
-    if (keyword) {
-      membershipWhere.OR = [
-        { User: { username: { contains: keyword, mode: 'insensitive' } } },
-        ...(type === 'teacher'
-          ? [{ TeacherProfile: { name: { contains: keyword, mode: 'insensitive' } } }]
-          : [{ StudentProfile: { name: { contains: keyword, mode: 'insensitive' } } }]),
-      ]
-    }
-    const memberships = await prisma.organizationMembership.findMany({
-      where: membershipWhere,
-      select: {
-        userId: true,
-        memberRole: true,
-        User: { select: { username: true, avatar: true } },
-        TeacherProfile: { select: { name: true, avatar: true } },
-        StudentProfile: { select: { name: true, avatar: true } },
-      },
-      take: 20,
-    })
-    const candidates = memberships.map(member => ({
-      id: member.userId,
-      name: member.TeacherProfile?.name || member.StudentProfile?.name || member.User.username,
-      type: member.memberRole === 'student' ? 'student' : 'teacher',
-      username: member.User.username,
-      avatar: member.TeacherProfile?.avatar || member.StudentProfile?.avatar || member.User.avatar,
-    }))
-
-    res.json({ success: true, data: candidates })
-}, '搜索失败'))
+problemListsRouter.get('/:id/share-candidates', authenticate, problemListEndpoint('搜索失败', async (req, res) => {
+  res.json({ success: true, data: await listProblemListShareCandidates(req.user!, req.params.id, req.query) })
+}))
 
 /**
  * POST /api/problem-lists/:id/shares
  * 添加/更新分享
  */
-problemListsRouter.post('/:id/shares', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    // 校园模式：学生不能管理分享；个人模式可以管理自己的
-    if (getMembershipType(req.user) === 'student' && !isPersonalContextForTeams(req.user)) {
-      res.status(403).json({ success: false, message: '校园模式下学生不能管理题单分享' })
-      return
-    }
-
-    const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list || list.scope !== getResourceScope(req.user)) {
-      res.status(404).json({ success: false, message: '题单不存在' })
-      return
-    }
-
-    if (list.ownerId !== req.user.userId) {
-      res.status(403).json({ success: false, message: '只有创建者可以管理分享' })
-      return
-    }
-
-    const { targetType, targetId, permission } = req.body
-    const allowedTargetTypes = isPersonalContext(req.user) ? ['user'] : ['teacher', 'student']
-    if (!allowedTargetTypes.includes(targetType)) {
-      res.status(400).json({ success: false, message: '分享对象与当前工作区不匹配' })
-      return
-    }
-    if (!['view', 'edit'].includes(permission)) {
-      res.status(400).json({ success: false, message: '无效的权限级别' })
-      return
-    }
-
-    // upsert
-    const share = await prisma.problemListShare.upsert({
-      where: {
-        problemListId_targetType_targetId: {
-          problemListId: req.params.id,
-          targetType,
-          targetId
-        }
-      },
-      create: {
-        id: crypto.randomUUID(),
-        problemListId: req.params.id,
-        targetType,
-        targetId,
-        permission,
-        sharedBy: req.user.userId
-      },
-      update: {
-        permission,
-        sharedBy: req.user.userId
-      }
-    })
-
-    res.json({ success: true, data: share })
-}, '添加分享失败'))
+problemListsRouter.post('/:id/shares', authenticate, problemListEndpoint('添加分享失败', async (req, res) => {
+  res.json({ success: true, data: await upsertProblemListShare(req.user!, req.params.id, req.body) })
+}))
 
 /**
  * DELETE /api/problem-lists/:id/shares/:shareId
  * 移除分享
  */
-problemListsRouter.delete('/:id/shares/:shareId', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list || list.scope !== getResourceScope(req.user)) {
-      res.status(404).json({ success: false, message: '题单不存在' })
-      return
-    }
-
-    if (list.ownerId !== req.user.userId) {
-      res.status(403).json({ success: false, message: '只有创建者可以管理分享' })
-      return
-    }
-
-    await prisma.problemListShare.delete({ where: { id: req.params.shareId } })
-    res.json({ success: true, message: '移除成功' })
-}, '移除分享失败'))
+problemListsRouter.delete('/:id/shares/:shareId', authenticate, problemListEndpoint('移除分享失败', async (req, res) => {
+  await deleteProblemListShare(req.user!, req.params.id, req.params.shareId)
+  res.json({ success: true, message: '移除成功' })
+}))
 
 /**
  * POST /api/problem-lists/:id/publish-homework
