@@ -15,7 +15,11 @@ import {
   transitionJudgeMode,
 } from '../src/modules/problem/problem.testset-revision.service'
 import { collectOrphanTestdataObjects } from '../src/lib/testdata-object-gc'
-import { createTestUser } from './helpers/testUser'
+import { createTestTeam, createTestUser } from './helpers/testUser'
+import {
+  previewTrainingTestSetUpdate,
+  updateTrainingTestSetRevision,
+} from '../src/modules/training/application/training-testset-update.service'
 
 const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
@@ -78,6 +82,96 @@ afterEach(async () => {
 })
 
 describe('immutable problem TestSet Revisions', () => {
+  it('updates only an unfrozen activity and reports the pinned revision state', async () => {
+    const { owner, problem, directory, config } = await fixture()
+    const manager = await createTestUser({ role: 'teacher' })
+    const team = await createTestTeam({
+      schoolId: null,
+      ownerId: manager.user.id,
+      ownerType: 'user',
+      scope: 'personal',
+    })
+    const first = await ensureInitialTestSetRevision(problem.id, owner.user.id)
+    await fs.promises.writeFile(path.join(directory, '1.in'), '7 8\n')
+    const spec = await resolveConfigSpec(problem.id, config)
+    const second = await publishTestSetRevision({
+      problemId: problem.id,
+      expectedLatestRevisionId: first!.id,
+      source: 'admin_edit',
+      createdBy: owner.user.id,
+      baseConfigText: config,
+      spec,
+    })
+    const training = await prisma.training.create({ data: {
+      teamId: team.id,
+      organizationId: null,
+      scope: 'personal',
+      title: 'Revision update fixture',
+      format: 'icpc',
+      type: 'training',
+      startTime: new Date(Date.now() + 3600000),
+      endTime: new Date(Date.now() + 7200000),
+      status: 'upcoming',
+      createdBy: manager.user.id,
+    } })
+    const trainingProblem = await prisma.trainingProblem.create({ data: {
+      id: crypto.randomUUID(),
+      trainingId: training.id,
+      problemId: problem.id,
+      alias: 'A',
+      orderIndex: 0,
+      testSetRevisionId: first!.id,
+      judgeConfigSnapshot: first!.judgeConfig,
+    } })
+
+    const preview = await previewTrainingTestSetUpdate(training.id, trainingProblem.id, manager.user.id)
+    expect(preview).toMatchObject({
+      currentRevisionId: first!.id,
+      latestRevisionId: second!.id,
+      pending: true,
+      frozen: false,
+    })
+    const updated = await updateTrainingTestSetRevision({
+      trainingId: training.id,
+      trainingProblemId: trainingProblem.id,
+      userId: manager.user.id,
+      revisionId: second!.id,
+    })
+    expect(updated).toMatchObject({ updated: true, currentRevisionId: second!.id })
+    expect((await prisma.trainingProblem.findUniqueOrThrow({ where: { id: trainingProblem.id } })).testSetRevisionId).toBe(second!.id)
+
+    const frozenTraining = await prisma.training.create({ data: {
+      teamId: team.id,
+      organizationId: null,
+      scope: 'personal',
+      title: 'Frozen revision fixture',
+      format: 'icpc',
+      type: 'training',
+      startTime: new Date(Date.now() - 3600000),
+      endTime: new Date(Date.now() + 3600000),
+      status: 'ongoing',
+      createdBy: manager.user.id,
+    } })
+    const frozenProblem = await prisma.trainingProblem.create({ data: {
+      id: crypto.randomUUID(),
+      trainingId: frozenTraining.id,
+      problemId: problem.id,
+      alias: 'A',
+      orderIndex: 0,
+      testSetRevisionId: first!.id,
+      judgeConfigSnapshot: first!.judgeConfig,
+    } })
+    await expect(updateTrainingTestSetRevision({
+      trainingId: frozenTraining.id,
+      trainingProblemId: frozenProblem.id,
+      userId: manager.user.id,
+      revisionId: second!.id,
+    })).rejects.toMatchObject({
+      code: 'TEST_SET_REVISION_FROZEN',
+      statusCode: 409,
+    })
+  })
+
   it('accepts checker metadata independently from ordinary testdata files', async () => {
     const { problem } = await fixture()
     const inspection = await inspectTestSetRevisionMigration()

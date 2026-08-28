@@ -9,8 +9,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate, getResourceScope, isAdmin } from '../../middleware/auth'
-import { prisma } from '../../prisma'
+import { authenticate } from '../../middleware/auth'
 import { trainingCrudRouter } from './training.crud.routes'
 import { trainingProblemsRouter } from './training.problems.routes'
 import { trainingNotesRouter } from './training.notes.routes'
@@ -21,6 +20,7 @@ import { trainingRecordRouter } from './training.record.routes'
 import { trainingContentRouter } from './training.content.routes'
 import { trainingStatementManagementRouter } from './training.statement-management.routes'
 import { trainingHackSyncRouter } from './training.hack-sync.routes'
+import { trainingMatchesWorkspaceScope } from './application/training-scope.service'
 
 export const trainingsRouter = Router()
 
@@ -29,10 +29,7 @@ trainingsRouter.use('/trainings/:id', authenticate, async (req, res, next) => {
   const id = Number.parseInt(req.params.id, 10)
   if (!Number.isFinite(id) || !req.user) return next()
 
-  const training = await prisma.training.findUnique({ where: { id }, select: { scope: true } })
-  // Global administrators can inspect both campus and personal/team scopes;
-  // regular users remain constrained to the active workspace scope.
-  if (!training || (!isAdmin(req.user.role) && training.scope !== getResourceScope(req.user))) {
+  if (!await trainingMatchesWorkspaceScope(id, req.user)) {
     return res.status(404).json({ success: false, message: '训练不存在' })
   }
   next()

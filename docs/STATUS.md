@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-29: 活动根作用域与测试版本更新完成 Strangler 迁移：工作区 scope 查询移入 application service；活动 TestSet Revision 预览/更新移出路由，并在 Serializable 事务内重新检查开始时间与提交数量后更新，避免冻结检查竞态。Revision/活动/校园定向回归 117/117、Server 构建通过；路由债务降至 Prisma 167 / transaction 6 / filesystem 29 / Judge Runtime 0。
 - 2026-08-29: 活动排名完成 Strangler 迁移：OI/IOI 最大分 SQL 聚合、ICPC 罚时与首 A、管理员排除和参与者身份合并全部迁入 `modules/training/application`，HTTP route 只保留请求与响应映射。排名/比赛/校园权限定向回归 116/116、Server 构建通过；路由债务降至 Prisma 174 / transaction 6 / filesystem 29 / Judge Runtime 0。
 - 2026-08-29: 活动概览与内容读取完成 Strangler 迁移：概览、题解、附件、授权文件下载和批量题号解析迁入 `modules/training/application`，概览自然结束状态复用原子事务；单题题解/附件新增 `trainingId + trainingProblemId` 联合归属校验，堵住跨活动内容读取。定向回归 113/113、Server 构建通过；路由债务降至 Prisma 181 / transaction 6 / filesystem 29 / Judge Runtime 0。
 - 2026-08-29: 活动 CRUD 完成 Strangler 迁移：团队活动列表/创建、详情状态同步、编辑、延时、立即开始/结束、删除及补题作业复制全部迁入 `modules/training/application`；比赛自然结束的状态更新与提交公开改为同一事务，补题复制失败会回滚活动并清理已复制文件。训练/比赛/补题/权限/事务定向回归 137/137、Server 构建通过；路由债务降至 Prisma 198 / transaction 6 / filesystem 29 / Judge Runtime 0。

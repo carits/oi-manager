@@ -156,7 +156,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.hack-sync.routes.ts": {
-    "prisma": 5,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
@@ -192,7 +192,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.routes.ts": {
-    "prisma": 2,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
