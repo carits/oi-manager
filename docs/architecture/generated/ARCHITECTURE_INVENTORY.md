@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 35 |
 | systemd units | 7 |
-| Referenced environment keys | 285 |
+| Referenced environment keys | 287 |
 
 ## HTTP adapter ownership
 
@@ -392,6 +392,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PG_DATABASE_URL`
 - `PIDS`
 - `PID_FILE`
+- `PLAYWRIGHT_BROWSERS_PATH`
+- `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
 - `PORT`
 - `POSTGRES_DB`
 - `POSTGRES_PASSWORD`

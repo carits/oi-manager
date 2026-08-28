@@ -12,11 +12,30 @@
  */
 
 import { chromium, Browser, BrowserContext, Page } from 'rebrowser-playwright-core'
+import { existsSync, readdirSync } from 'fs'
+import { homedir } from 'os'
+import path from 'path'
 import { BrowserSessionOptions, DEFAULT_SESSION_OPTIONS } from './types'
 import { applyStealthToContext, getRandomUserAgent as getRandomUA } from './stealth'
 import { proxyManager } from './proxy'
 import { sessionManager } from './session'
 import { logger } from '../logger'
+
+function findInstalledChromium(): string | null {
+  const root = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(homedir(), '.cache', 'ms-playwright')
+  if (!existsSync(root)) return null
+  const versions = readdirSync(root)
+    .map(name => ({ name, match: /^chromium-(\d+)$/.exec(name) }))
+    .filter((entry): entry is { name: string; match: RegExpExecArray } => Boolean(entry.match))
+    .sort((left, right) => Number(right.match[1]) - Number(left.match[1]))
+  for (const version of versions) {
+    for (const relative of ['chrome-linux64/chrome', 'chrome-linux/chrome']) {
+      const candidate = path.join(root, version.name, relative)
+      if (existsSync(candidate)) return candidate
+    }
+  }
+  return null
+}
 
 export class BrowserManager {
   private browser: Browser | null = null
@@ -45,6 +64,26 @@ export class BrowserManager {
         '--disable-infobars',
         '--window-size=1400,1000',
       ],
+    }
+
+    const configuredExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+    const bundledExecutable = chromium.executablePath()
+    const fullChromiumExecutable = bundledExecutable.replace(
+      /chromium_headless_shell-(\d+)\/chrome-headless-shell-linux64\/chrome-headless-shell$/,
+      'chromium-$1/chrome-linux64/chrome',
+    )
+    const installedExecutable = findInstalledChromium()
+    if (configuredExecutable) {
+      if (!existsSync(configuredExecutable)) {
+        throw new Error(`Configured Chromium executable does not exist: ${configuredExecutable}`)
+      }
+      launchOpts.executablePath = configuredExecutable
+    } else if (!existsSync(bundledExecutable) && existsSync(fullChromiumExecutable)) {
+      // Playwright may install the full Chromium bundle without the optional
+      // headless-shell archive. Reuse the version-matched full browser.
+      launchOpts.executablePath = fullChromiumExecutable
+    } else if (!existsSync(bundledExecutable) && installedExecutable) {
+      launchOpts.executablePath = installedExecutable
     }
 
     if (headless) {

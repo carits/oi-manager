@@ -307,6 +307,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-28 OJ Fetcher 队列已从 API 请求触发改为唯一后台 Worker 轮询；任务使用数据库 compare-and-set 领取，蓝绿实例重叠时同一任务只能被一个执行者获得，超过 15 分钟的中断任务会自动重新排队。题目附件授权与替换元数据进入 application service，替换先建立新记录再回收旧文件。Server 构建、队列并发和 SSRF 定向回归 6/6 通过；路由边界基线降至 Prisma 377 / transaction 8 / filesystem 34 / Judge Runtime 0。远程下载执行与题目主体持久化仍需从路由拆出。
 - 2026-08-28 OJ Fetcher 新的默认持久化路径已把题目元数据与多语言题面放入同一数据库事务，再处理图片和附件，最后才把队列任务置为成功；附件部分失败会留下明确状态而不会把半写入题目当作完整成功。保留 `OJ_FETCHER_LEGACY_PERSISTENCE=1` 作为本发布周期的紧急兼容回退，待稳定观察后连同路由内旧实现一起删除。路由边界当前为 Prisma 375 / transaction 8 / filesystem 34 / Judge Runtime 0。
 - 2026-08-28 平台绑定 HTTP adapter 已清零直接 Prisma 访问：Codeforces 归档凭据读取与校验、远程提交去重、语言/结果规范化、题目关联修复和 Carits 旧测试记录事务清理均迁入 application service；不支持的维护 action 返回 400。Server 构建及归档、权限、安全回归 10/10 通过，路由边界降至 Prisma 349 / transaction 8 / filesystem 34 / Judge Runtime 0。
+- 2026-08-28 依赖恢复后 Playwright 可选 `headless-shell` 缓存缺失的问题已收口：浏览器管理器优先使用显式可执行路径，其次使用包内路径，最后复用缓存中最新完整 Chromium。真实 headless 启动/关闭冒烟通过，避免远程 OJ 浏览器抓取因可选下载包缺失而不可用。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
