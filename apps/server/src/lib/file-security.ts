@@ -1,7 +1,7 @@
 import path from 'path'
 
 const TEXT_EXTENSIONS = new Set([
-  '.txt', '.cpp', '.c', '.py', '.java', '.pas', '.in', '.out', '.ans', '.md',
+  '.txt', '.cpp', '.cc', '.cxx', '.c', '.py', '.java', '.pas', '.in', '.out', '.ans', '.md',
 ])
 
 const MIME_BY_EXTENSION: Record<string, Set<string>> = {
@@ -20,6 +20,8 @@ const MIME_BY_EXTENSION: Record<string, Set<string>> = {
   '.out': new Set(['text/plain']),
   '.ans': new Set(['text/plain']),
   '.cpp': new Set(['text/plain', 'text/x-c++src']),
+  '.cc': new Set(['text/plain', 'text/x-c++src']),
+  '.cxx': new Set(['text/plain', 'text/x-c++src']),
   '.c': new Set(['text/plain', 'text/x-csrc']),
   '.py': new Set(['text/plain', 'text/x-python']),
   '.java': new Set(['text/plain', 'text/x-java-source']),

@@ -48,9 +48,9 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.judge.routes.ts": {
-    "prisma": 11,
+    "prisma": 0,
     "transaction": 0,
-    "filesystem": 6,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.notes.routes.ts": {
