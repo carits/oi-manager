@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: 管理员数据维护路由完成 Strangler 迁移：全量本地重测、旧 Carits 提交修复、统计、远程 ID/内存/可见性修复、训练提交清理、密码重置和参与者回填已迁入 `modules/admin-data/application`。Judge/管理员/事务定向 22/22、Server 构建和 318 端点认证审计通过；路由债务降至 Prisma 633 / transaction 17 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: Organization 成员路由完成 Strangler 迁移：校园资料/公告、作业/比赛、学生与教师档案、密码、状态、归档和负责人转移均迁入 `modules/organization/application`，组织上下文和 HTTP 响应仍由 route adapter 管理。权限/事务定向 48/48、Server 构建通过；路由债务降至 Prisma 655 / transaction 17 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: OJ 账号池完成 Strangler 迁移：原 `routes/oj-accounts.ts` 中的 Prisma、密码加解密、HDU 验证/登录、批量验证与自动验证调度已全部迁入 `modules/oj-account/application`，Scheduler 不再反向依赖 HTTP route。OJ 账号与后台编排 18/18、Server 构建通过；路由边界基线从 Prisma 710 降至 689，transaction 24 / filesystem 70 / Judge Runtime 0 保持不增。
 - 2026-08-28: Judge 兼容投影开始进入可量化观察期：生产 2518 条已绑定 Run 的本地提交中，Submission ↔ current JudgeRun ↔ current JudgeAttempt 的所有权、result、score、cases、subtasks、error、时间、内存和 metric 差异均为 0，且不存在无 Run 的本地提交。新增 `judge:projection:audit/check`，生产 5 分钟监控将差异视为故障；稳定观察期结束前仍不删除 Submission 兼容字段。
