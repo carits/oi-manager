@@ -25,10 +25,16 @@ import {
 } from '../modules/oj-fetcher/application/oj-fetcher-admin.service'
 import {
   claimNextOjFetchJob,
+  completeOjFetchJob,
+  failOjFetchJob,
   findExistingProblemImage,
   getOjFetchCookies,
+  getProblemStatementsForImageProcessing,
+  persistFetchedProblem,
   replaceProblemAttachment,
   requireModifiableProblem,
+  updateFetchedProblemDescription,
+  updateFetchedStatementContent,
   OjFetcherQueueError,
 } from '../modules/oj-fetcher/application/oj-fetcher-queue.service'
 
@@ -220,17 +226,58 @@ export async function processFetchQueue(platform: string) {
         const adapter = getAdapter(platform as any)
 
         if (!adapter.isValidProblemId(job.problemId)) {
-          await prisma.ojFetchJob.update({
-            where: { id: job.id },
-            data: {
-              status: 'failed',
-              message: `无效的题号格式: ${job.problemId}`,
-            },
-          })
+          await failOjFetchJob(job.id, `无效的题号格式: ${job.problemId}`)
           continue
         }
 
         const problemData = await fetchProblemWithMetrics(platform as any, job.problemId)
+
+        if (process.env.OJ_FETCHER_LEGACY_PERSISTENCE !== '1') {
+        // Persist problem metadata and statements atomically before remote assets.
+        const persisted = await persistFetchedProblem(platform, job.problemId, problemData)
+        const persistedProblemId = persisted.problemId
+        for (const imageId of persisted.oldImageIds) await fileService.hardDelete(imageId).catch(() => {})
+
+        let persistedDescription = problemData.description || ''
+        if (persistedDescription) {
+          persistedDescription = await processMarkdownImages(persistedProblemId, persistedDescription, cookies)
+        }
+
+        const persistedAttachments = problemData.attachments || []
+        let persistedAttachmentFailed = false
+        for (const attachment of persistedAttachments) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 2000))
+            const newUrl = await downloadAttachmentInternal(
+              persistedProblemId, attachment.downloadLink, attachment.filename, cookies, platform,
+            )
+            persistedDescription = persistedDescription.split(attachment.downloadLink).join(newUrl)
+          } catch (error) {
+            persistedAttachmentFailed = true
+            logger.error('oj_fetcher_attachment_download_failed', error, {
+              action: 'oj_fetch', metadata: { jobId: job.id, filename: attachment.filename },
+            })
+          }
+        }
+        if (persistedDescription !== problemData.description) {
+          await updateFetchedProblemDescription(persistedProblemId, persistedDescription)
+        }
+
+        const persistedStatements = await getProblemStatementsForImageProcessing(persistedProblemId)
+        for (const statement of persistedStatements) {
+          if (!statement.content || extractImageLinks(statement.content).length === 0) continue
+          const processed = await processMarkdownImages(persistedProblemId, statement.content, cookies)
+          if (processed !== statement.content) await updateFetchedStatementContent(statement.id, processed)
+        }
+        await completeOjFetchJob(
+          job.id,
+          persistedProblemId,
+          persistedAttachments.length > 0,
+          persistedAttachments.length ? (persistedAttachmentFailed ? 'failed' : 'success') : null,
+          persistedAttachmentFailed ? '部分附件下载失败' : null,
+        )
+        continue
+        }
 
         // 检查该平台+题号组合是否已存在
         const existingProblem = await prisma.problem.findFirst({
@@ -471,13 +518,7 @@ export async function processFetchQueue(platform: string) {
 
       } catch (error: any) {
         console.error(`[OJ Fetcher] Job ${job.id} failed:`, error)
-        await prisma.ojFetchJob.update({
-          where: { id: job.id },
-          data: {
-            status: 'failed',
-            message: error instanceof OjFetchError ? error.message : '拉取失败',
-          },
-        })
+        await failOjFetchJob(job.id, error instanceof OjFetchError ? error.message : '拉取失败')
       }
 
       // 限流：每次处理间隔 2s（避免触发 OJ 反爬）
