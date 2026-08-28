@@ -309,6 +309,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-28 平台绑定 HTTP adapter 已清零直接 Prisma 访问：Codeforces 归档凭据读取与校验、远程提交去重、语言/结果规范化、题目关联修复和 Carits 旧测试记录事务清理均迁入 application service；不支持的维护 action 返回 400。Server 构建及归档、权限、安全回归 10/10 通过，路由边界降至 Prisma 349 / transaction 8 / filesystem 34 / Judge Runtime 0。
 - 2026-08-28 依赖恢复后 Playwright 可选 `headless-shell` 缓存缺失的问题已收口：浏览器管理器优先使用显式可执行路径，其次使用包内路径，最后复用缓存中最新完整 Chromium。真实 headless 启动/关闭冒烟通过，避免远程 OJ 浏览器抓取因可选下载包缺失而不可用。
 - 2026-08-28 活动题目新增、两阶段排序、别名/分值更新和删除文件回收已迁入 application service；题目访问范围、初始 TestSet Revision、内容快照创建与失败回滚保持原语义，并新增重复排序值校验。训练权限与兼容回归 80/80 通过；路由边界降至 Prisma 335 / transaction 7 / filesystem 34 / Judge Runtime 0。
+- 2026-08-28 活动题目列表、个人提交状态和题面详情读模型也已迁入 query service，`training.problems.routes.ts` 已成为纯 HTTP adapter；OI 赛中脱敏、来源隐藏、题面快照、笔记和文件上下文化保持不变。兼容回归 37/37 通过；路由边界降至 Prisma 320 / transaction 7 / filesystem 34 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。

@@ -4,7 +4,6 @@
  */
 
 import { Router } from 'express'
-import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
@@ -19,15 +18,18 @@ import {
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 import { buildContestProblemStatus } from './training.problem-status'
 import {
-  latestContentSnapshot,
-} from '../problem/problem.content.service'
-import {
   addManagedTrainingProblem,
   deleteManagedTrainingProblem,
   reorderManagedTrainingProblems,
   TrainingProblemManagementError,
   updateManagedTrainingProblem,
 } from './application/training-problem-management.service'
+import {
+  findTrainingForProblemAccess,
+  getTrainingProblemDetailData,
+  getTrainingProblemStatusData,
+  listTrainingProblems,
+} from './application/training-problem-query.service'
 
 function sendManagementError(error: unknown, res: any) {
   if (!(error instanceof TrainingProblemManagementError)) throw error
@@ -62,10 +64,7 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
     const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
-    const training = await prisma.training.findUnique({
-      where: { id },
-      include: { Team: { select: { organizationId: true, scope: true } } },
-    })
+    const training = await findTrainingForProblemAccess(id, true)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -81,33 +80,7 @@ trainingProblemsRouter.get('/trainings/:id/problems', authenticate, asyncHandler
 
     const isAdmin = await canManageTraining(userId, training)
 
-    const problems = await prisma.trainingProblem.findMany({
-      where: { trainingId: id },
-      include: {
-        Problem: {
-          select: {
-            id: true,
-            title: true,
-            platform: true,
-            problemId: true,
-            difficulty: true,
-            timeLimit: true,
-            memoryLimit: true,
-            statementType: true,
-            description: true,
-            ProblemStatement: { where: { isVisible: true } },
-            _count: { select: { ProblemAttachment: true } },
-          },
-        },
-        TrainingSolution: { select: { id: true, visible: true } },
-        ContentSnapshot: {
-          orderBy: [{ revision: 'desc' }, { selectedAt: 'desc' }],
-          select: { kind: true, revision: true, sourceType: true, sourceContentId: true, authorUsernameSnapshot: true },
-        },
-        _count: { select: { TrainingAttachment: true } },
-      },
-      orderBy: { orderIndex: 'asc' },
-    })
+    const problems = await listTrainingProblems(id)
 
     const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
     res.json({
@@ -157,7 +130,7 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
     const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await findTrainingForProblemAccess(id)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -171,28 +144,8 @@ trainingProblemsRouter.get('/trainings/:id/problem-status', authenticate, asyncH
       return res.status(403).json({ success: false, message: notStarted })
     }
 
-    // 获取所有训练题目
-    const problems = await prisma.trainingProblem.findMany({
-      where: { trainingId: id },
-      include: {
-        Problem: {
-          select: {
-            id: true,
-            title: true,
-            platform: true,
-            problemId: true,
-          },
-        },
-      },
-      orderBy: { orderIndex: 'asc' },
-    })
-
-    // 获取当前用户的所有提交（使用 submitScope + trainingId）
     const submitScopeValue = training.type === 'contest' ? 'contest' : 'training'
-    const submissions = await prisma.submission.findMany({
-      where: { submitScope: submitScopeValue, trainingId: id, userId },
-      orderBy: { createdAt: 'asc' },
-    })
+    const { problems, submissions } = await getTrainingProblemStatusData(id, userId, submitScopeValue)
 
     // Group submissions by source problem ID so each format can expose one stable display status.
     const submissionsByProblem = new Map<string, typeof submissions>()
@@ -272,10 +225,7 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
     const userId = req.user!.userId
     const { problemId, alias, points, statementOptionKey, solutionOptionKey } = req.body
 
-    const training = await prisma.training.findUnique({
-      where: { id },
-      include: { Team: { select: { organizationId: true, scope: true } } },
-    })
+    const training = await findTrainingForProblemAccess(id, true)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -313,7 +263,7 @@ trainingProblemsRouter.put('/trainings/:id/problems/reorder', authenticate, asyn
     const userId = req.user!.userId
     const { orders } = req.body as { orders: Array<{ id: string; orderIndex: number }> }
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await findTrainingForProblemAccess(id)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -337,7 +287,7 @@ trainingProblemsRouter.put('/trainings/:id/problems/:problemId', authenticate, a
     const userId = req.user!.userId
     const { alias, points } = req.body
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await findTrainingForProblemAccess(id)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -361,7 +311,7 @@ trainingProblemsRouter.delete('/trainings/:id/problems/:problemId', authenticate
     const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await findTrainingForProblemAccess(id)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -384,7 +334,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     const id = parseTrainingId(req.params.id), problemId = req.params.problemId
     const userId = req.user!.userId
 
-    const training = await prisma.training.findUnique({ where: { id } })
+    const training = await findTrainingForProblemAccess(id)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
     }
@@ -398,61 +348,13 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
       return res.status(403).json({ success: false, message: notStarted })
     }
 
-    // 验证题目属于该训练
-    const trainingProblemCheck = await prisma.trainingProblem.findUnique({
-      where: { id: problemId },
-      select: { trainingId: true },
-    })
-    if (!trainingProblemCheck || trainingProblemCheck.trainingId !== id) {
-      return res.status(403).json({ success: false, message: '题目不属于该训练' })
-    }
-
-    const trainingProblem = await prisma.trainingProblem.findUnique({
-      where: { id: problemId },
-      include: {
-        Problem: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            statementType: true,
-            statementPdfUrl: true,
-            difficulty: true,
-            timeLimit: true,
-            memoryLimit: true,
-            platform: true,
-            problemId: true,
-            ProblemStatement: { where: { isVisible: true } },
-          },
-        },
-      },
-    })
-
-    if (!trainingProblem) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-
     const isAdmin = await canManageTraining(userId, training)
     const userType = await getUserTypeForTeam(userId)
-    const note = await prisma.problemNote.findUnique({
-      where: {
-        problemId_userId_userType: {
-          problemId: trainingProblem.problemId,
-          userId,
-          userType,
-        },
-      },
-      select: { content: true },
-    })
+    const detail = await getTrainingProblemDetailData(id, problemId, userId, userType)
+    if (!detail) return res.status(403).json({ success: false, message: '题目不属于该训练' })
+    const { trainingProblem, note, statementSet, legacyStatementSnapshot } = detail
 
     const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
-    const [statementSet, legacyStatementSnapshot] = await Promise.all([
-      prisma.trainingProblemStatementSet.findFirst({
-        where: { trainingProblemId: trainingProblem.id }, orderBy: { revision: 'desc' },
-        include: { Snapshot: { orderBy: [{ isDefault: 'desc' }, { orderIndex: 'asc' }] } },
-      }),
-      latestContentSnapshot(trainingProblem.id, 'statement'),
-    ])
     const defaultStatement = statementSet?.Snapshot.find(item => item.isDefault) || statementSet?.Snapshot[0]
     // 返回题面内容；赛中“题号赛后显示”时不返回任何原题识别字段。
     const problem = trainingProblem.Problem
