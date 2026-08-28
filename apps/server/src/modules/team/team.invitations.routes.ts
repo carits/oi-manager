@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 /**
  * Team Invitations Routes
  * 团队邀请处理路由（邀请列表、接受、拒绝）
@@ -10,9 +9,9 @@ import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
 import { getUserDisplayName } from './team.utils'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
 import { notificationService } from '../notification/notification.service'
+import { processInvitation } from './application/team-route-operations.service'
 
 export const teamInvitationsRouter = Router()
 
@@ -290,29 +289,13 @@ teamInvitationsRouter.post('/invitations/:invitationId/accept', authenticate, as
   await teamService.assertTeamScope(invitation.teamId, user)
   const team = await teamRepository.findById(invitation.teamId)
 
-  // 使用事务确保状态更新和日志记录原子性
   const callerType = getMembershipType(user)
   try {
-    await prisma.$transaction(async (tx) => {
-      const result = await tx.teamMember.updateMany({
-        where: { id: invitationId, status: 'pending' },
-        data: { status: 'active', joinedAt: new Date() }
-      })
-      if (result.count === 0) {
-        throw new Error('ALREADY_PROCESSED')
-      }
-
-      await tx.teamOperationLog.create({
-        data: {
-          id: crypto.randomUUID(),
-          teamId: invitation.teamId,
-          operatorId: userId,
-          operatorType: callerType as MemberType,
-          action: 'invite_accept',
-          targetId: invitation.userId,
-          targetType: invitation.userType as MemberType
-        }
-      })
+    await processInvitation({
+      invitationId, teamId: invitation.teamId, userId,
+      userType: invitation.userType as MemberType,
+      operatorType: callerType as MemberType,
+      accepted: true,
     })
     await notificationService.markSourceRead(userId, team!.scope as any, 'team_invitation', invitationId)
     if (invitation.invitedBy) {
@@ -355,28 +338,13 @@ teamInvitationsRouter.post('/invitations/:invitationId/reject', authenticate, as
   await teamService.assertTeamScope(invitation.teamId, user)
   const team = await teamRepository.findById(invitation.teamId)
 
-  // 使用事务确保删除和日志记录原子性
   const callerType = getMembershipType(user)
   try {
-    await prisma.$transaction(async (tx) => {
-      const result = await tx.teamMember.deleteMany({
-        where: { id: invitationId, status: 'pending' }
-      })
-      if (result.count === 0) {
-        throw new Error('ALREADY_PROCESSED')
-      }
-
-      await tx.teamOperationLog.create({
-        data: {
-          id: crypto.randomUUID(),
-          teamId: invitation.teamId,
-          operatorId: userId,
-          operatorType: callerType as MemberType,
-          action: 'invite_reject',
-          targetId: invitation.userId,
-          targetType: invitation.userType as MemberType
-        }
-      })
+    await processInvitation({
+      invitationId, teamId: invitation.teamId, userId,
+      userType: invitation.userType as MemberType,
+      operatorType: callerType as MemberType,
+      accepted: false,
     })
     await notificationService.markSourceRead(userId, team!.scope as any, 'team_invitation', invitationId)
     if (invitation.invitedBy) {

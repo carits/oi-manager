@@ -10,6 +10,8 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 > 同日全局评测记录路由完成收口，当前进一步降至 Prisma 50 / transaction 5 / filesystem 14 / Judge Runtime 0；管理员全平台可见性和校园/个人隔离均已通过定向回归。
 >
 > 通用文件路由完成收口后，当前为 Prisma 41 / transaction 5 / filesystem 6 / Judge Runtime 0；上传暂存清理由基础设施模块统一承担，题目/比赛/团队/用户归属权限保持原边界。
+>
+> 团队 CRUD、邀请、成员与申请路由完成收口后，当前为 Prisma 26 / transaction 0 / filesystem 0 / Judge Runtime 0；路由中的事务、文件系统和 Judge Runtime 直接调用已全部清零，仅剩 3 个维护/演示 adapter 的 Prisma 查询待处理。
 
 # 未完成事项执行总表（2026-08-27）
 

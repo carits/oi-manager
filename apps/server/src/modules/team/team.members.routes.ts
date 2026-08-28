@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 /**
  * Team Members Routes
  * 团队成员管理路由（邀请、移除、管理员、可用成员、待处理邀请）
@@ -13,8 +12,8 @@ import { asyncHandler } from '../../lib/asyncHandler'
 import { validate, validateBody, validateParams } from '../../lib/zodValidate'
 import { addMembersSchema, memberIdSchema, setAdminSchema } from './schemas/team.schemas'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
-import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
+import { changeMemberRoleWithLog, findUsernames, removeMemberWithLog } from './application/team-route-operations.service'
 
 export const teamMembersRouter = Router()
 
@@ -118,25 +117,7 @@ teamMembersRouter.delete('/:id/members/:memberId', authenticate, validateParams(
     return res.status(400).json({ success: false, message: '如需退出团队，请使用退出功能' })
   }
 
-  // 使用事务确保成员删除和日志记录原子性
-  await prisma.$transaction(async (tx) => {
-    await tx.teamMember.delete({ where: { id: member.id } })
-
-    const callerType = getMembershipType(user)
-    await tx.teamOperationLog.create({
-      data: {
-        id: crypto.randomUUID(),
-        teamId: id,
-        operatorId: callerId || '',
-        operatorType: callerType as MemberType,
-        action: 'member_remove',
-        targetId: member.userId,
-        targetType: member.userType as MemberType,
-        oldValue: member.role,
-        newValue: 'removed'
-      }
-    })
-  })
+  await removeMemberWithLog(id, member, callerId, getMembershipType(user) as MemberType)
 
   res.json({ success: true, message: '移除成功' })
 }))
@@ -161,10 +142,7 @@ teamMembersRouter.get('/:id/pending-invites', authenticate, asyncHandler(async (
     getMemberDetailsBatch(pendingMembers.map(m => ({ userId: m.userId, userType: m.userType as MemberType })), team.organizationId || undefined),
     getUserNames(inviterIds, 'teacher', team.organizationId || undefined),
     scope === 'personal'
-      ? prisma.user.findMany({
-          where: { id: { in: inviterIds } },
-          select: { id: true, username: true }
-        })
+      ? findUsernames(inviterIds)
       : Promise.resolve([])
   ])
   if (scope === 'personal') {
@@ -249,32 +227,9 @@ teamMembersRouter.post('/:id/admins', authenticate, validateBody(setAdminSchema)
     return res.status(400).json({ success: false, message: '所有者无需设为管理员' })
   }
 
-  const oldRole = existingMember.role
-
-  // 使用事务确保角色更新和日志记录原子性
-  const result = await prisma.$transaction(async (tx) => {
-    const admin = await tx.teamMember.update({
-      where: { id: existingMember.id },
-      data: { role: 'admin' }
-    })
-
-    const callerId = user.userId
-    const callerType = getMembershipType(user)
-    await tx.teamOperationLog.create({
-      data: {
-        id: crypto.randomUUID(),
-        teamId: id,
-        operatorId: callerId || '',
-        operatorType: callerType as MemberType,
-        action: 'role_change',
-        targetId: existingMember.userId,
-        targetType: existingMember.userType as MemberType,
-        oldValue: oldRole,
-        newValue: 'admin'
-      }
-    })
-
-    return admin
+  const result = await changeMemberRoleWithLog({
+    teamId: id, member: existingMember, role: 'admin', operatorId: user.userId,
+    operatorType: getMembershipType(user) as MemberType,
   })
 
   const team = await teamService.assertTeamScope(id, user)
@@ -318,30 +273,9 @@ teamMembersRouter.delete('/:id/admins/:adminId', authenticate, asyncHandler(asyn
     return res.status(400).json({ success: false, message: '该管理员不属于当前团队' })
   }
 
-  const oldRole = adminMember.role
-
-  // 使用事务确保角色更新和日志记录原子性
-  await prisma.$transaction(async (tx) => {
-    await tx.teamMember.update({
-      where: { id: adminMember.id },
-      data: { role: 'member' }
-    })
-
-    const callerId = user.userId
-    const callerType = getMembershipType(user)
-    await tx.teamOperationLog.create({
-      data: {
-        id: crypto.randomUUID(),
-        teamId: id,
-        operatorId: callerId || '',
-        operatorType: callerType as MemberType,
-        action: 'role_change',
-        targetId: adminMember.userId,
-        targetType: adminMember.userType as MemberType,
-        oldValue: oldRole,
-        newValue: 'member'
-      }
-    })
+  await changeMemberRoleWithLog({
+    teamId: id, member: adminMember, role: 'member', operatorId: user.userId,
+    operatorType: getMembershipType(user) as MemberType,
   })
 
   res.json({ success: true, message: '移除成功' })

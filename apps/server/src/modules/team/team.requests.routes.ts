@@ -8,11 +8,10 @@ import { authenticate, getMembershipType } from '../../middleware/auth'
 import { teamService } from './team.service'
 import { teamRepository } from './team.repository'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { prisma } from '../../prisma'
 import type { MemberType } from './team.types'
 import { getMemberDetailsBatch } from './team.utils'
-import logger from '../../lib/logger'
 import { notificationService } from '../notification/notification.service'
+import { decideJoinRequest, findPendingJoinMember, listPendingJoinMembers } from './application/team-route-operations.service'
 
 export const teamRequestsRouter = Router()
 
@@ -40,10 +39,7 @@ teamRequestsRouter.get('/:id/join-requests', authenticate, asyncHandler(async (r
   const team = await teamService.assertTeamScope(id, user)
 
   // 查询所有待处理的申请（TeamMember status=pending, invitedBy=null）
-  const pendingMembers = await prisma.teamMember.findMany({
-    where: { teamId: id, status: 'pending', invitedBy: null },
-    orderBy: { joinedAt: 'desc' }
-  })
+  const pendingMembers = await listPendingJoinMembers(id)
 
   const details = await getMemberDetailsBatch(
     pendingMembers.map(member => ({ userId: member.userId, userType: member.userType as MemberType })),
@@ -76,14 +72,7 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
   const scope = teamService.getScopeForUser(user)
 
   // 铃铛传 TeamMember.id；旧成员页面仍传申请人的 userId，二者都兼容。
-  const member = await prisma.teamMember.findFirst({
-    where: {
-      OR: [{ id: requestId }, { userId: requestId }],
-      status: 'pending',
-      invitedBy: null,
-      Team: { scope }
-    }
-  })
+  const member = await findPendingJoinMember(requestId, scope)
 
   if (!member) {
     return res.status(404).json({ success: false, message: '申请不存在' })
@@ -94,21 +83,16 @@ teamRequestsRouter.post('/join-requests/:requestId/approve', authenticate, async
     return res.status(403).json({ success: false, message: '无权操作' })
   }
 
-  const count = await teamRepository.updateMemberStatusIfPending(member.id, 'active')
-  if (count === 0) {
-    return res.status(400).json({ success: false, message: '该申请已被处理' })
-  }
-
   const callerId = user.userId
   const callerType = getMembershipType(user)
-  await teamRepository.logOperation({
-    teamId: member.teamId,
-    operatorId: callerId,
-    operatorType: callerType as MemberType,
-    action: 'join_approve',
-    targetId: member.userId,
-    targetType: member.userType as MemberType
-  })
+  try {
+    await decideJoinRequest({ member, accepted: true, operatorId: callerId, operatorType: callerType as MemberType })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
+    throw error
+  }
   const team = await teamRepository.findById(member.teamId)
   if (team) {
     await notificationService.markSourceReadForScope(scope, 'team_join_request', member.id)
@@ -123,14 +107,7 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
   const user = (req as any).user!
   const scope = teamService.getScopeForUser(user)
 
-  const member = await prisma.teamMember.findFirst({
-    where: {
-      OR: [{ id: requestId }, { userId: requestId }],
-      status: 'pending',
-      invitedBy: null,
-      Team: { scope }
-    }
-  })
+  const member = await findPendingJoinMember(requestId, scope)
 
   if (!member) {
     return res.status(404).json({ success: false, message: '申请不存在' })
@@ -141,18 +118,16 @@ teamRequestsRouter.post('/join-requests/:requestId/reject', authenticate, asyncH
     return res.status(403).json({ success: false, message: '无权操作' })
   }
 
-  await prisma.teamMember.delete({ where: { id: member.id } })
-
   const callerId = user.userId
   const callerType = getMembershipType(user)
-  await teamRepository.logOperation({
-    teamId: member.teamId,
-    operatorId: callerId,
-    operatorType: callerType as MemberType,
-    action: 'join_reject',
-    targetId: member.userId,
-    targetType: member.userType as MemberType
-  })
+  try {
+    await decideJoinRequest({ member, accepted: false, operatorId: callerId, operatorType: callerType as MemberType })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
+      return res.status(400).json({ success: false, message: '该申请已被处理' })
+    }
+    throw error
+  }
   const team = await teamRepository.findById(member.teamId)
   if (team) {
     await notificationService.markSourceReadForScope(scope, 'team_join_request', member.id)

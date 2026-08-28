@@ -4,15 +4,11 @@
  */
 
 import { Router, Request, Response } from 'express'
-import multer from 'multer'
-import path from 'path'
-import fs from 'fs'
 import { authenticate, isPersonalContextForTeams } from '../../middleware/auth'
 import { teamService } from './team.service'
-import { teamRepository } from './team.repository'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { parsePagination } from '../../lib/pagination'
-import { validate, validateParams, validateBody } from '../../lib/zodValidate'
+import { validateBody } from '../../lib/zodValidate'
 import {
   createTeamSchema,
   updateTeamSchema,
@@ -21,45 +17,11 @@ import {
   teamListQuerySchema
 } from './schemas/team.schemas'
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
-import { prisma } from '../../prisma'
-import { fileService } from '../../lib/storage'
-import { STORAGE_ROOT } from '../../config/storage'
 import logger from '../../lib/logger'
-import { z } from 'zod'
+import { isTeamIdAvailable, uploadTeamAvatar } from './application/team-route-operations.service'
+import { cleanupTeamAvatarTemporaryFile, teamAvatarUpload } from './infrastructure/team-avatar-upload'
 
 export const teamCrudRouter = Router()
-
-// ==================== Multer 配置 ====================
-
-const tempAvatarDir = path.join(STORAGE_ROOT, 'temp/uploads')
-if (!fs.existsSync(tempAvatarDir)) {
-  fs.mkdirSync(tempAvatarDir, { recursive: true })
-}
-
-const avatarStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, tempAvatarDir)
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueSuffix + path.extname(file.originalname))
-  }
-})
-
-const avatarUpload = multer({
-  storage: avatarStorage,
-  limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase())
-    const mimetype = allowedTypes.test(file.mimetype)
-    if (extname && mimetype) {
-      cb(null, true)
-    } else {
-      cb(new Error('只支持图片文件'))
-    }
-  }
-})
 
 // ==================== 错误处理工具 ====================
 
@@ -154,8 +116,7 @@ teamCrudRouter.get('/check-team-id', authenticate, asyncHandler(async (req, res)
   if ((id as string).length > 50) {
     return res.json({ valid: false, message: '团队ID不能超过50个字符' })
   }
-  const existing = await prisma.team.findUnique({ where: { id: id as string } })
-  if (existing) {
+  if (!await isTeamIdAvailable(id as string)) {
     return res.json({ valid: false, message: '该团队ID已被使用' })
   }
   res.json({ valid: true })
@@ -227,7 +188,7 @@ teamCrudRouter.put('/:id/announcement', authenticate, asyncHandler(async (req, r
 
 // ==================== 上传头像 ====================
 
-teamCrudRouter.post('/:id/avatar', authenticate, avatarUpload.single('avatar'), asyncHandler(async (req: Request, res: Response) => {
+teamCrudRouter.post('/:id/avatar', authenticate, teamAvatarUpload.single('avatar'), asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
   const user = (req as any).user!
 
@@ -236,34 +197,18 @@ teamCrudRouter.post('/:id/avatar', authenticate, avatarUpload.single('avatar'), 
   }
 
   try {
-    const { isOwner } = await teamService.isTeamAdmin(id, user)
-    if (!isOwner) {
-      fs.unlinkSync(req.file.path)
-      return res.status(403).json({ success: false, message: '只有团队所有者可以上传头像' })
-    }
-
-    const result = await fileService.uploadFromMulter(req.file, {
-      category: 'avatar',
-      ownerType: 'team',
-      ownerId: id,
-      isPublic: true
-    })
-
-    const avatarUrl = `/api/files/${result.id}/public`
-    await teamRepository.update(id, { avatar: avatarUrl })
+    const result = await uploadTeamAvatar(id, user, req.file)
 
     logger.audit('team_avatar_uploaded', {
       userId: user.userId,
       action: 'upload_team_avatar',
       target: id,
-      metadata: { fileId: result.id, originalName: result.originalName }
+      metadata: { fileId: result.fileId, originalName: result.originalName }
     })
 
-    res.json({ success: true, data: { avatar: avatarUrl, fileId: result.id } })
+    res.json({ success: true, data: { avatar: result.avatar, fileId: result.fileId } })
   } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path)
-    }
+    cleanupTeamAvatarTemporaryFile(req.file)
     handleError(res, error)
   }
 }))

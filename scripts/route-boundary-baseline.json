@@ -114,25 +114,25 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/team/team.crud.routes.ts": {
-    "prisma": 2,
+    "prisma": 0,
     "transaction": 0,
-    "filesystem": 6,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/team/team.invitations.routes.ts": {
-    "prisma": 3,
-    "transaction": 2,
+    "prisma": 0,
+    "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/team/team.members.routes.ts": {
-    "prisma": 5,
-    "transaction": 3,
+    "prisma": 0,
+    "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/team/team.requests.routes.ts": {
-    "prisma": 5,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
