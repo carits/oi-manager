@@ -1,262 +1,66 @@
-import crypto from 'crypto'
-/**
- * User Archived Problems Routes
- * 用户归档题目 API 路由
- *
- * 归档功能：用户可以将做过的题目保存到个人题库，方便复习和管理
- */
-
-import { Router, Request, Response } from 'express'
-import { authenticate } from '../middleware/auth'
-import { prisma } from '../prisma'
-import logger from '../lib/logger'
-import { parsePagination, paginatedResponse } from '../lib/pagination'
+import { Router, type Response } from 'express'
+import { authenticate, type AuthRequest } from '../middleware/auth'
+import { asyncHandler } from '../lib/asyncHandler'
+import { parsePagination } from '../lib/pagination'
+import {
+  archiveProblem,
+  ArchivedProblemError,
+  deleteArchivedProblem,
+  deleteArchivedProblems,
+  getArchivedProblem,
+  getArchivedProblemStats,
+  listArchivedProblems,
+  updateArchivedProblem,
+} from '../modules/archived-problem/application/archived-problem.service'
 
 export const archivedProblemsRouter = Router()
 
-/**
- * GET /api/archived-problems
- * 获取当前用户的归档题目列表
- */
-archivedProblemsRouter.get('/', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const { platform, keyword } = req.query
-
-    const where: any = { userId }
-    if (platform) {
-      where.platform = platform
+function endpoint(label: string, handler: (req: AuthRequest, res: Response) => Promise<unknown>) {
+  return asyncHandler(async (req: AuthRequest, res: Response) => {
+    try {
+      await handler(req, res)
+    } catch (error) {
+      if (error instanceof ArchivedProblemError) {
+        return res.status(error.statusCode).json({ success: false, message: error.message })
+      }
+      throw error
     }
-    if (keyword) {
-      where.OR = [
-        { title: { contains: keyword as string, mode: 'insensitive' } },
-        { problemId: { contains: keyword as string, mode: 'insensitive' } },
-      ]
-    }
+  }, label)
+}
 
-    const { page, pageSize } = parsePagination(req.query)
-    const skip = (page - 1) * pageSize
+archivedProblemsRouter.get('/', authenticate, endpoint('获取归档列表失败', async (req, res) => {
+  const { page, pageSize, skip } = parsePagination(req.query)
+  res.json(await listArchivedProblems(req.user!.userId, req.query, page, pageSize, skip))
+}))
 
-    const [items, total] = await Promise.all([
-      prisma.userArchivedProblem.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: pageSize,
-      }),
-      prisma.userArchivedProblem.count({ where }),
-    ])
+// Static route must remain before /:id.
+archivedProblemsRouter.get('/stats/summary', authenticate, endpoint('获取归档统计失败', async (req, res) => {
+  res.json({ success: true, data: await getArchivedProblemStats(req.user!.userId) })
+}))
 
-    res.json(paginatedResponse(items, page, pageSize, total))
-  } catch (error) {
-    logger.error('archived_problems_list_error', error as Error)
-    res.status(500).json({ success: false, message: '获取归档列表失败' })
-  }
-})
+archivedProblemsRouter.get('/:id', authenticate, endpoint('获取归档详情失败', async (req, res) => {
+  res.json({ success: true, data: await getArchivedProblem(req.user!.userId, req.params.id) })
+}))
 
-/**
- * GET /api/archived-problems/stats/summary
- * 获取归档统计信息（必须在动态 :id 路由之前注册）
- */
-archivedProblemsRouter.get('/stats/summary', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const [total, byPlatform] = await Promise.all([
-      prisma.userArchivedProblem.count({ where: { userId } }),
-      prisma.userArchivedProblem.groupBy({ by: ['platform'], where: { userId }, _count: { id: true } }),
-    ])
-    res.json({ success: true, data: { total, byPlatform: byPlatform.map((p: { platform: string; _count: { id: number } }) => ({ platform: p.platform, count: p._count.id })) } })
-  } catch (error) {
-    logger.error('archived_problems_stats_error', error as Error)
-    res.status(500).json({ success: false, message: '获取统计失败' })
-  }
-})
+archivedProblemsRouter.post('/', authenticate, endpoint('归档题目失败', async (req, res) => {
+  const result = await archiveProblem(req.user!.userId, req.body)
+  res.status(result.created ? 201 : 200).json({
+    success: true,
+    data: result.item,
+    message: result.created ? '归档成功' : '归档已更新',
+  })
+}))
 
-/**
- * GET /api/archived-problems/:id
- * 获取单个归档题目详情
- */
-archivedProblemsRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const { id } = req.params
+archivedProblemsRouter.put('/:id', authenticate, endpoint('更新归档失败', async (req, res) => {
+  res.json({ success: true, data: await updateArchivedProblem(req.user!.userId, req.params.id, req.body) })
+}))
 
-    const item = await prisma.userArchivedProblem.findFirst({
-      where: { id, userId },
-    })
+archivedProblemsRouter.delete('/:id', authenticate, endpoint('删除归档失败', async (req, res) => {
+  await deleteArchivedProblem(req.user!.userId, req.params.id)
+  res.json({ success: true, message: '已从归档中移除' })
+}))
 
-    if (!item) {
-      return res.status(404).json({ success: false, message: '归档记录不存在' })
-    }
-
-    res.json({ success: true, data: item })
-  } catch (error) {
-    logger.error('archived_problem_detail_error', error as Error)
-    res.status(500).json({ success: false, message: '获取归档详情失败' })
-  }
-})
-
-/**
- * POST /api/archived-problems
- * 添加题目到归档
- */
-archivedProblemsRouter.post('/', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const { platform, problemId, title, difficulty, tags, solvedAt, sourceUrl, note } = req.body
-
-    if (!platform || !problemId) {
-      return res.status(400).json({ success: false, message: '平台和题号不能为空' })
-    }
-
-    // 检查是否已存在
-    const existing = await prisma.userArchivedProblem.findUnique({
-      where: {
-        userId_platform_problemId: { userId, platform, problemId },
-      },
-    })
-
-    if (existing) {
-      // 更新已有记录
-      const updated = await prisma.userArchivedProblem.update({
-        where: { id: existing.id },
-        data: {
-          title: title || existing.title,
-          difficulty: difficulty || existing.difficulty,
-          tags: tags || existing.tags,
-          solvedAt: solvedAt ? new Date(solvedAt) : existing.solvedAt,
-          sourceUrl: sourceUrl || existing.sourceUrl,
-          note: note ?? existing.note,
-        },
-      })
-      return res.json({ success: true, data: updated, message: '归档已更新' })
-    }
-
-    // 创建新记录
-    const item = await prisma.userArchivedProblem.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId,
-        platform,
-        problemId,
-        title,
-        difficulty,
-        tags: tags ? JSON.stringify(tags) : null,
-        solvedAt: solvedAt ? new Date(solvedAt) : null,
-        sourceUrl,
-        note,
-      },
-    })
-
-    logger.info('archived_problem_created', {
-      action: 'archive_problem',
-      userId,
-      metadata: { platform, problemId },
-    })
-
-    res.status(201).json({ success: true, data: item, message: '归档成功' })
-  } catch (error) {
-    logger.error('archived_problem_create_error', error as Error)
-    res.status(500).json({ success: false, message: '归档失败' })
-  }
-})
-
-/**
- * PUT /api/archived-problems/:id
- * 更新归档题目（如添加备注）
- */
-archivedProblemsRouter.put('/:id', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const { id } = req.params
-    const { title, difficulty, tags, note } = req.body
-
-    const existing = await prisma.userArchivedProblem.findFirst({
-      where: { id, userId },
-    })
-
-    if (!existing) {
-      return res.status(404).json({ success: false, message: '归档记录不存在' })
-    }
-
-    const item = await prisma.userArchivedProblem.update({
-      where: { id },
-      data: {
-        title: title ?? existing.title,
-        difficulty: difficulty ?? existing.difficulty,
-        tags: tags ? JSON.stringify(tags) : existing.tags,
-        note: note ?? existing.note,
-      },
-    })
-
-    res.json({ success: true, data: item })
-  } catch (error) {
-    logger.error('archived_problem_update_error', error as Error)
-    res.status(500).json({ success: false, message: '更新失败' })
-  }
-})
-
-/**
- * DELETE /api/archived-problems/:id
- * 从归档中移除题目
- */
-archivedProblemsRouter.delete('/:id', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const { id } = req.params
-
-    const existing = await prisma.userArchivedProblem.findFirst({
-      where: { id, userId },
-    })
-
-    if (!existing) {
-      return res.status(404).json({ success: false, message: '归档记录不存在' })
-    }
-
-    await prisma.userArchivedProblem.delete({ where: { id } })
-
-    logger.info('archived_problem_deleted', {
-      action: 'unarchive_problem',
-      userId,
-      metadata: { platform: existing.platform, problemId: existing.problemId },
-    })
-
-    res.json({ success: true, message: '已从归档中移除' })
-  } catch (error) {
-    logger.error('archived_problem_delete_error', error as Error)
-    res.status(500).json({ success: false, message: '删除失败' })
-  }
-})
-
-/**
- * DELETE /api/archived-problems (批量删除)
- * 批量移除归档题目
- */
-archivedProblemsRouter.delete('/', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user.userId
-    const { ids } = req.body
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ success: false, message: '请提供要删除的归档ID列表' })
-    }
-
-    const result = await prisma.userArchivedProblem.deleteMany({
-      where: {
-        id: { in: ids },
-        userId, // 确保只能删除自己的归档
-      },
-    })
-
-    logger.info('archived_problems_bulk_deleted', {
-      action: 'bulk_unarchive',
-      userId,
-      metadata: { count: result.count },
-    })
-
-    res.json({ success: true, message: `已移除 ${result.count} 条归档` })
-  } catch (error) {
-    logger.error('archived_problems_bulk_delete_error', error as Error)
-    res.status(500).json({ success: false, message: '批量删除失败' })
-  }
-})
+archivedProblemsRouter.delete('/', authenticate, endpoint('批量删除归档失败', async (req, res) => {
+  const count = await deleteArchivedProblems(req.user!.userId, req.body.ids)
+  res.json({ success: true, message: `已移除 ${count} 条归档` })
+}))

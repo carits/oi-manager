@@ -216,7 +216,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/archived-problems.ts": {
-    "prisma": 14,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
