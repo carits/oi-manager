@@ -26,7 +26,7 @@ function sendFileError(res: any, error: unknown, action: string) {
   if (message === 'File not found') return res.status(404).json({ success: false, message: '文件不存在' })
   if (message === 'File is not available') return res.status(410).json({ success: false, message: '文件已不可用' })
   const validation = /^(File extension not allowed|File type not allowed|File size exceeds limit|File content does not match extension|File MIME does not match extension):/.test(message)
-  logger[validation ? 'warn' : 'error'](action, validation ? { action, metadata: { message } } : error)
+  logger[validation ? 'warn' : 'error'](action, validation ? { action, metadata: { message } } : error as Error)
   return res.status(validation ? 400 : 500).json({ success: false, message })
 }
 

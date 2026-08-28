@@ -27,7 +27,7 @@ export async function migrateLegacySubmissionScopes() {
     if (!trainingId) continue
     const contest = types.get(trainingId) === 'contest'
     const changed = await prisma.submission.updateMany({
-      where: { id: item.id, OR: [{ submitScope: null }, { submitScope: 'problem' }] },
+      where: { id: item.id, submitScope: 'problem' },
       data: {
         submitScope: contest ? 'contest' : 'training', trainingId,
         contestId: contest ? trainingId : null, isGlobalVisible: false,

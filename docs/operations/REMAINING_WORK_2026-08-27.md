@@ -46,7 +46,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] Hack 技术判定与 `TestcaseCandidate` 晋升已分离；Revision/Testdata 内容已使用 `BlobStore` port，本地实现可直接替换 S3/OSS adapter。
 - [x] Scheduler 单例和 Executor 可并行任务已分离，生产 systemd 中两类进程独立运行。
 - [x] 架构模型、路由、systemd 和环境变量清单由脚本生成并由 `architecture:check` 校验。
-- [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 83 / transaction 5 / filesystem 14 / Judge Runtime 0。认证、题目 CRUD/详情/题库创建者/Hack 配置与记录/Judge Config/Checker/个人题面题解/多题面版本、题库提交/笔记/TestSet Revision/Test Graph、活动根作用域/CRUD/概览/内容读取/内容快照选择与编辑/多题面矩阵/提交/题目完整读写/笔记/比赛记录/排名/TestSet 更新、OJ 账号池、OJ Fetcher、平台绑定、Organization 成员、管理员数据维护、超级管理员学校治理、Dashboard、Workspace、全局 User、用户归档题目、团队题单、通知、贡献统计、Carits 币、全局排名和测试数据管理已迁入 application/query service；对应已迁移路由不再直接持久化。题目创建/更新与官方题面、题解版本现在同事务写入，Hack 配置使用 revision CAS 防止并发覆盖，Checker 替换/删除使用可回滚文件提升且拒绝伪装二进制源码，个人 PDF 写入失败会回收新文件且公开个人题面仍受原题目校园边界约束；活动自然结束的状态更新与比赛提交公开已使用同一事务，补题复制失败会回滚活动和复制文件，单题内容读取按活动与题目联合归属校验，内容 PDF 上传失败会回收临时文件和新文件，多题面矩阵用 selection revision 拒绝陈旧覆盖并在事务竞争时再次校验，测试版本更新在 Serializable 事务中执行冻结检查。OJ Fetcher 旧持久化与 API 内后台执行已删除。新增债务已阻断。
+- [x] `routes/` Strangler 已完成：60 个 HTTP adapter 的 Prisma / transaction / filesystem / Judge Runtime 直接调用全部为 0；application/query/infrastructure 边界和零基线门禁已生效，新增债务会阻断构建检查。
 - [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期后才能删除；当前生产首次对账为 2518 条、0 差异、0 条无 Run 本地提交，且已纳入 5 分钟监控。观察期内不做破坏性清理。
 
 ### 1. 隔离写入、并发与长稳压测
