@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: 全局 User 路由完成 Strangler 迁移：个人/校园资料读取、全局账号分页、平台管理员创建、账号状态事务与管理员密码重置均迁入 `modules/user/application`，角色保护策略由应用层统一执行。权限/事务定向 22/22 和 Server 构建通过；路由债务降至 Prisma 562 / transaction 11 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: Dashboard/Workspace 路由完成 Strangler 迁移：个人概览、个人/校园比赛与作业、全局/学校统计、工作区枚举、校园邀请和接受/拒绝事务已迁入 application services。身份/校园/事务定向 77/77、新增 Dashboard/Workspace 回归 3/3 和 Server 构建通过；路由债务降至 Prisma 577 / transaction 12 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: 超级管理员学校治理路由完成 Strangler 迁移：学校列表/详情/创建/编辑、负责人创建与转移、师生列表及其事务已迁入 `modules/organization/application`，route 只保留超级管理员鉴权、分页与 HTTP 映射。Server 全量回归和构建通过；路由债务降至 Prisma 605 / transaction 13 / filesystem 70 / Judge Runtime 0。
 - 2026-08-28: 管理员数据维护路由完成 Strangler 迁移：全量本地重测、旧 Carits 提交修复、统计、远程 ID/内存/可见性修复、训练提交清理、密码重置和参与者回填已迁入 `modules/admin-data/application`。Judge/管理员/事务定向 22/22、Server 构建和 318 端点认证审计通过；路由债务降至 Prisma 633 / transaction 17 / filesystem 70 / Judge Runtime 0。

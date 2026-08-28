@@ -348,8 +348,8 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/users.ts": {
-    "prisma": 15,
-    "transaction": 1,
+    "prisma": 0,
+    "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },
