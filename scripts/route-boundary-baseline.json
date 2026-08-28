@@ -144,9 +144,9 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.content.routes.ts": {
-    "prisma": 3,
+    "prisma": 0,
     "transaction": 0,
-    "filesystem": 3,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.crud.routes.ts": {
