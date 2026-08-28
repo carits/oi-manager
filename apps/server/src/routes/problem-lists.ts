@@ -41,6 +41,12 @@ import {
   ProblemListApplicationError,
   updateProblemList,
 } from '../modules/problem-list/application/problem-list-crud.service'
+import {
+  addProblemListSection,
+  deleteProblemListSection,
+  reorderProblemListSections,
+  updateProblemListSection,
+} from '../modules/problem-list/application/problem-list-section.service'
 import type { AuthRequest } from '../middleware/auth'
 
 export const problemListsRouter = Router()
@@ -238,154 +244,35 @@ problemListsRouter.delete('/:id', authenticate, problemListEndpoint('删除题�
  * POST /api/problem-lists/:id/sections
  * 添加章节
  */
-problemListsRouter.post('/:id/sections', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限添加章节' })
-      return
-    }
-
-    const { title } = req.body as { title: string }
-    if (!title || !title.trim()) {
-      res.status(400).json({ success: false, message: '章节标题不能为空' })
-      return
-    }
-
-    // 获取当前最大 sortOrder
-    const maxSection = await prisma.problemListSection.findFirst({
-      where: { problemListId: req.params.id },
-      orderBy: { sortOrder: 'desc' },
-      select: { sortOrder: true }
-    })
-
-    const section = await prisma.problemListSection.create({
-      data: {
-        id: crypto.randomUUID(),
-        problemListId: req.params.id,
-        title: title.trim(),
-        sortOrder: (maxSection?.sortOrder ?? -1) + 1
-      }
-    })
-
-    res.json({ success: true, data: section })
-}, '添加章节失败'))
+problemListsRouter.post('/:id/sections', authenticate, problemListEndpoint('添加章节失败', async (req, res) => {
+  res.json({ success: true, data: await addProblemListSection(req.user!, req.params.id, req.body) })
+}))
 
 /**
  * PUT /api/problem-lists/sections/:sectionId
  * 更新章节（标题 / sortOrder）
  */
-problemListsRouter.put('/sections/:sectionId', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const listId = await getSectionListId(req.params.sectionId)
-    if (!listId) {
-      res.status(404).json({ success: false, message: '章节不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(listId, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限编辑' })
-      return
-    }
-
-    // 乐观锁校验（基于题单级 updatedAt）
-    const { title, sortOrder, expectedUpdatedAt } = req.body
-    if (expectedUpdatedAt) {
-      const currentList = await prisma.problemList.findUnique({ where: { id: listId }, select: { updatedAt: true } })
-      if (!checkOptimisticLock(expectedUpdatedAt, currentList!.updatedAt)) {
-        res.status(409).json({ success: false, message: '题单已被其他人修改，请刷新后重试', code: 'CONFLICT' })
-        return
-      }
-    }
-    const data: any = {}
-    if (title !== undefined) data.title = title.trim()
-    if (sortOrder !== undefined) data.sortOrder = sortOrder
-
-    const updated = await prisma.problemListSection.update({
-      where: { id: req.params.sectionId },
-      data
-    })
-
-    res.json({ success: true, data: updated })
-}, '更新章节失败'))
+problemListsRouter.put('/sections/:sectionId', authenticate, problemListEndpoint('更新章节失败', async (req, res) => {
+  res.json({ success: true, data: await updateProblemListSection(req.user!, req.params.sectionId, req.body) })
+}))
 
 /**
  * DELETE /api/problem-lists/sections/:sectionId
  * 删除章节（级联删除其下所有条目）
  */
-problemListsRouter.delete('/sections/:sectionId', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const listId = await getSectionListId(req.params.sectionId)
-    if (!listId) {
-      res.status(404).json({ success: false, message: '章节不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(listId, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限删除' })
-      return
-    }
-
-    // 检查是否是最后一个章节
-    const sectionCount = await prisma.problemListSection.count({
-      where: { problemListId: listId }
-    })
-    if (sectionCount <= 1) {
-      res.status(400).json({ success: false, message: '至少保留一个章节' })
-      return
-    }
-
-    await prisma.problemListSection.delete({ where: { id: req.params.sectionId } })
-    res.json({ success: true, message: '删除成功' })
-}, '删除章节失败'))
+problemListsRouter.delete('/sections/:sectionId', authenticate, problemListEndpoint('删除章节失败', async (req, res) => {
+  await deleteProblemListSection(req.user!, req.params.sectionId)
+  res.json({ success: true, message: '删除成功' })
+}))
 
 /**
  * PUT /api/problem-lists/:id/sections/reorder
  * 重排章节顺序
  */
-problemListsRouter.put('/:id/sections/reorder', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限排序' })
-      return
-    }
-
-    const { sectionIds } = req.body as { sectionIds: string[] }
-    if (!Array.isArray(sectionIds)) {
-      res.status(400).json({ success: false, message: '参数错误' })
-      return
-    }
-
-    await prisma.$transaction(
-      sectionIds.map((id: string, index: number) =>
-        prisma.problemListSection.update({
-          where: { id },
-          data: { sortOrder: index }
-        })
-      )
-    )
-
-    res.json({ success: true })
-}, '排序失败'))
+problemListsRouter.put('/:id/sections/reorder', authenticate, problemListEndpoint('排序失败', async (req, res) => {
+  await reorderProblemListSections(req.user!, req.params.id, req.body.sectionIds)
+  res.json({ success: true })
+}))
 
 // ==================== 题目条目 CRUD ====================
 

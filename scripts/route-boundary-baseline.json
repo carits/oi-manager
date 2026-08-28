@@ -282,8 +282,8 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/problem-lists.ts": {
-    "prisma": 39,
-    "transaction": 2,
+    "prisma": 31,
+    "transaction": 1,
     "filesystem": 0,
     "judgeRuntime": 0
   },

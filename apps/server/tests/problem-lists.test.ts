@@ -287,6 +287,15 @@ describe('题单权限模块', () => {
         .delete(`/api/problem-lists/sections/${testList.defaultSection.id}`)
       expect(res.status).toBe(403)
     })
+
+    it('章节排序不能修改另一份题单的章节', async () => {
+      const other = await createTestProblemList({ ownerId: ownerUser.user.id, schoolId: schoolData.school.id })
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .put(`/api/problem-lists/${testList.list.id}/sections/reorder`)
+        .send({ sectionIds: [other.defaultSection.id] })
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('章节不属于该题单')
+    })
   })
 
   // ====== 条目操作权限 ======
