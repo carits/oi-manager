@@ -165,6 +165,31 @@ describe('学校私有题库隔离', () => {
     expect(schoolBProblem.body.data.id).not.toBe(schoolAProblem.body.data.id)
   })
 
+  it('题目与题面版本在创建和更新失败时保持原子性', async () => {
+    const createId = `ATOMIC-${crypto.randomUUID()}`
+    const rejectedCreate = await createAuthenticatedRequest(app, ownerAToken)
+      .post('/api/problems')
+      .send({
+        title: '不应留下的半成品题目',
+        ojBindings: [{ platform: 'luogu', problemId: createId }],
+        statements: [{ content: '缺少 format' }],
+      })
+    expect(rejectedCreate.status).toBe(400)
+    expect(await prisma.problem.count({ where: {
+      organizationId: schoolA.school.organizationId,
+      platform: 'luogu',
+      problemId: createId,
+    } })).toBe(0)
+
+    const created = await createSchoolProblem('draft')
+    const originalTitle = created.body.data.title as string
+    const rejectedUpdate = await createAuthenticatedRequest(app, ownerAToken)
+      .put(`/api/problems/${created.body.data.id}`)
+      .send({ title: '不应提交的标题', statements: [{ content: '缺少 format' }], solutions: [] })
+    expect(rejectedUpdate.status).toBe(400)
+    expect((await prisma.problem.findUniqueOrThrow({ where: { id: created.body.data.id } })).title).toBe(originalTitle)
+  })
+
   it('平台题复制为本校独立草稿，重复复制返回已有副本', async () => {
     const platformProblem = await createAuthenticatedRequest(app, platformAdminToken)
       .post('/api/problems')
