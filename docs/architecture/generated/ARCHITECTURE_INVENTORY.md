@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 35 |
 | systemd units | 7 |
-| Referenced environment keys | 287 |
+| Referenced environment keys | 286 |
 
 ## HTTP adapter ownership
 
@@ -388,7 +388,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OI_MANAGER_ROOT`
 - `OI_ORG`
 - `OI_SOURCE_ROOT`
-- `OJ_FETCHER_LEGACY_PERSISTENCE`
 - `PG_DATABASE_URL`
 - `PIDS`
 - `PID_FILE`

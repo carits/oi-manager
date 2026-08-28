@@ -22,8 +22,8 @@ export function startOjFetchQueueScheduler(intervalMs = 2_000): () => void {
       if (recovered) logger.warn('oj_fetch_queue_stale_jobs_recovered', { action: 'oj_fetch', metadata: { recovered } })
       const platforms = await listPendingOjFetchPlatforms()
       if (!platforms.length) return
-      const { processFetchQueue } = await import('../routes/oj-fetcher')
-      await Promise.all(platforms.map(platform => processFetchQueue(platform)))
+      const { processOjFetchQueue } = await import('../modules/oj-fetcher/application/oj-fetcher-worker.service')
+      await Promise.all(platforms.map(platform => processOjFetchQueue(platform)))
     } catch (error) {
       logger.error('oj_fetch_queue_tick_failed', error, { action: 'oj_fetch' })
     } finally {
