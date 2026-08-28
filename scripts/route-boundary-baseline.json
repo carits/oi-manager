@@ -306,7 +306,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/submissions.ts": {
-    "prisma": 16,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0

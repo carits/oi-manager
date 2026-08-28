@@ -6,6 +6,8 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 ---
 
 > 2026-08-29 最新路由边界：60 个 adapter，Prisma 66 / transaction 5 / filesystem 14 / Judge Runtime 0。题目 AI 翻译、格式化和用量查询已迁入 application service；AI 结果与用量日志同事务写入，并以题目动作级锁及事务内重复检查防止并发重复版本。正文中的 83/5/14 是本轮开始时快照，以本注的 66/5/14 为当前值。
+>
+> 同日全局评测记录路由完成收口，当前进一步降至 Prisma 50 / transaction 5 / filesystem 14 / Judge Runtime 0；管理员全平台可见性和校园/个人隔离均已通过定向回归。
 
 # 未完成事项执行总表（2026-08-27）
 

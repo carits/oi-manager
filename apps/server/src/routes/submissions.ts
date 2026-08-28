@@ -1,463 +1,63 @@
-/**
- * 评测记录 API
- */
-
+/** 评测记录 HTTP API。授权与持久化由 application service 负责。 */
 import { Router } from 'express'
 import { authenticate, getResourceScope, isAdmin, isPersonalContext } from '../middleware/auth'
-import { prisma } from '../prisma'
 import { logger } from '../lib/logger'
-import { fetchAndStoreCfCode } from '../lib/cf-code-fetcher'
-import { canManageTraining } from '../modules/training/training.helpers'
-import { resolveJudgePresentationConfig } from '../lib/judge-mode'
+import {
+  getSubmissionDetail,
+  listSubmissions,
+  refetchSubmissionCode,
+  SubmissionQueryError,
+  type SubmissionQueryContext,
+} from '../modules/submission/application/submission-query.service'
 
 export const submissionsRouter = Router()
 
-/**
- * GET /api/submissions
- * 获取评测记录列表
- * 管理员可看所有记录，教师/学生只能看本学校的记录
- * @query username - 用户名筛选
- * @query oj - OJ 平台筛选
- * @query problemId - 题号筛选
- * @query result - 评测结果筛选
- * @query language - 编程语言筛选
- * @query page - 页码（默认 1）
- * @query pageSize - 每页条数（默认 20）
- */
+function contextOf(req: any): SubmissionQueryContext {
+  const user = req.user
+  return {
+    userId: user.userId,
+    role: user.role,
+    workspaceScope: getResourceScope(user),
+    organizationId: user.organizationId || null,
+    isGlobalAdmin: isAdmin(user.role),
+    isPersonal: isPersonalContext(user),
+  }
+}
+
+function sendError(res: any, error: unknown, action: string, fallback: string) {
+  if (error instanceof SubmissionQueryError) {
+    return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+  }
+  logger.error(action, { action: 'submissions', metadata: { error: (error as Error).message } })
+  return res.status(500).json({ success: false, message: fallback })
+}
+
 submissionsRouter.get('/', authenticate, async (req, res) => {
   try {
-    const {
-      username,
-      oj,
-      problemId,
-      result,
-      language,
-      scope: requestedScope,
-      page = '1',
-      pageSize = '20',
-    } = req.query as Record<string, string>
-
-    const user = (req as any).user
-    const workspaceScope = getResourceScope(user)
-    const pageNum = parseInt(page) || 1
-    const pageSizeNum = Math.min(parseInt(pageSize) || 20, 100)
-    const skip = (pageNum - 1) * pageSizeNum
-
-    // 普通用户只查询已进入全局评测记录的当前工作区提交。
-    // 平台管理员和超级管理员需要审核全站评测，因此查询全部用户、
-    // 全部工作区以及进行中比赛暂未全局公开的提交。
-    const adminUser = isAdmin(user.role)
-    const where: any = {
-      ...(adminUser ? {} : {
-        isGlobalVisible: true,
-        workspaceScope,
-        organizationId: workspaceScope === 'campus' ? user.organizationId || '__missing_organization__' : null,
-      }),
-    }
-
-    // 管理员始终是全平台视图；scope 仅作为前端展示元数据，不参与权限降级。
-    // 即使旧页面未传 scope=all，也不能意外按个人/校园范围过滤。
-    const listScope = adminUser ? 'all' : workspaceScope
-
-    // 按角色过滤：学生只能看自己的，教师看全校，管理员看所有。
-    // 管理员没有 organizationId，但不能因此被当作个人区普通用户。
-    if (!adminUser && (isPersonalContext(user) || user.role === 'student')) {
-      // 学生只能看到自己的提交
-      where.userId = user.userId
-    } else if (user.role === 'teacher' || user.role === 'school_principal') {
-      if (!user.organizationId) return res.json({ success: true, data: { submissions: [], page: pageNum, totalPages: 0, total: 0 } })
-      const members = await prisma.organizationMembership.findMany({ where: { organizationId: user.organizationId, status: 'active' }, select: { userId: true } })
-      where.userId = { in: members.map(member => member.userId) }
-    }
-
-    if (username) {
-      where.User = { username: { contains: username } }
-    }
-
-    if (oj) {
-      where.oj = oj
-    }
-
-    if (problemId) {
-      where.problemId = { contains: problemId }
-    }
-
-    if (result) {
-      where.result = result
-    }
-
-    if (language) {
-      where.language = language
-    }
-
-    // 查询总数
-    const total = await prisma.submission.count({ where })
-
-    // 查询列表
-    const submissions = await prisma.submission.findMany({
-      where,
-      include: {
-        User: {
-          select: { username: true, role: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: pageSizeNum,
-    })
-
-    // 批量获取关联题目的可见性信息
-    // 对于有 problemInternalId 的提交，直接查询题目可见性
-    const internalIds = submissions
-      .map(s => s.problemInternalId)
-      .filter((id): id is string => !!id)
-    const problemVisibilityMap = new Map<string, string>()
-    if (internalIds.length > 0) {
-      const problems = await prisma.problem.findMany({
-        where: { id: { in: internalIds } },
-        select: { id: true, visibility: true, ownerId: true, ownerType: true },
-      })
-      for (const p of problems) {
-        problemVisibilityMap.set(p.id, p.visibility)
-      }
-    }
-
-    // 对于没有 problemInternalId 的提交（如 CF 归档），查询题库是否存在对应题目
-    // 根据 oj + problemId 匹配题库中的题目
-    const submissionsWithoutInternalId = submissions.filter(s => !s.problemInternalId)
-    const problemLookupMap = new Map<string, string>() // key: `${oj}:${problemId}`, value: internalId
-    if (submissionsWithoutInternalId.length > 0) {
-      // 收集所有需要查找的 (oj, problemId) 组合
-      const lookupKeys = submissionsWithoutInternalId.map(s => ({ oj: s.oj, problemId: s.problemId }))
-      // 按 oj 分组查找
-      const ojGroups = new Map<string, string[]>()
-      for (const key of lookupKeys) {
-        if (!ojGroups.has(key.oj)) ojGroups.set(key.oj, [])
-        ojGroups.get(key.oj)!.push(key.problemId)
-      }
-      // 批量查询每个 oj 的题目
-      for (const [oj, problemIds] of ojGroups) {
-        const problems = await prisma.problem.findMany({
-          where: {
-            libraryScope: 'platform',
-            platform: oj,
-            problemId: { in: problemIds },
-          },
-          select: { id: true, problemId: true, visibility: true },
-        })
-        for (const p of problems) {
-          problemLookupMap.set(`${oj}:${p.problemId}`, p.id)
-          problemVisibilityMap.set(p.id, p.visibility)
-        }
-      }
-    }
-
-    // 格式化响应
-    const formattedSubmissions = submissions.map(s => {
-      // 如果没有 problemInternalId，尝试从题库查找
-      let problemInternalId = s.problemInternalId
-      if (!problemInternalId) {
-        const lookupKey = `${s.oj}:${s.problemId}`
-        problemInternalId = problemLookupMap.get(lookupKey) || null
-      }
-      return {
-        id: s.id,
-        userId: s.userId,
-        userType: isPersonalContext(user) ? 'user' : (s.User.role === 'student' ? 'student' : (s.User.role === 'teacher' || s.User.role === 'school_principal' ? 'teacher' : 'user')),
-        username: s.User.username,
-        oj: s.oj,
-        problemId: s.problemId,
-        problemInternalId,
-        problemVisibility: problemInternalId ? (problemVisibilityMap.get(problemInternalId) || null) : null,
-        result: s.result,
-        score: s.score,
-        timeUsed: s.timeUsed,
-        memoryUsed: s.memoryUsed,
-        codeLength: s.codeLength,
-        language: s.language,
-        ojRemoteId: s.ojRemoteId,
-        submittedAt: s.createdAt.toISOString(),
-        // 来源字段
-        submitScope: s.submitScope,
-      }
-    })
-
-    res.json({
-      success: true,
-      data: {
-        submissions: formattedSubmissions,
-        page: pageNum,
-        totalPages: Math.ceil(total / pageSizeNum),
-        total,
-        scope: listScope,
-      },
-    })
-  } catch (e: any) {
-    logger.error('submissions_list_error', {
-      action: 'submissions',
-      metadata: { error: e.message },
-    })
-    res.status(500).json({
-      success: false,
-      message: '查询失败',
-    })
+    const data = await listSubmissions(contextOf(req), req.query as Record<string, string>)
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendError(res, error, 'submissions_list_error', '查询失败')
   }
 })
 
-/**
- * GET /api/submissions/:id
- * 获取提交详情
- * 管理员可查看所有，教师/学生只能查看本学校的提交
- */
 submissionsRouter.get('/:id', authenticate, async (req, res) => {
   try {
-    const { id } = req.params
-    const user = (req as any).user
-
-    const submission = await prisma.submission.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        User: {
-          select: {
-            username: true,
-            avatar: true,
-            role: true,
-          },
-        },
-        OjAccount: {
-          select: { username: true },
-        },
-      },
-    })
-
-    let hasContestManagerAccess = false
-    if (submission?.trainingId) {
-      const training = await prisma.training.findUnique({ where: { id: submission.trainingId }, select: { id: true, teamId: true, organizationId: true, createdBy: true } })
-      if (training) hasContestManagerAccess = await canManageTraining(user.userId, training)
-    }
-    const adminUser = isAdmin(user.role)
-    const workspaceScope = getResourceScope(user)
-    if (
-      !submission
-      || (!adminUser && !hasContestManagerAccess && (
-        submission.workspaceScope !== workspaceScope
-        || (workspaceScope === 'campus' && submission.organizationId !== user.organizationId)
-      ))
-    ) {
-      return res.status(404).json({
-        success: false,
-        message: '提交记录不存在',
-      })
-    }
-
-    // 权限检查：学生只能看自己的，教师看本校，管理员看所有
-    // 训练/比赛提交出现在全局评测记录中是正常机制，不做 submitScope 限制
-    if (!adminUser && !hasContestManagerAccess && isPersonalContext(user)) {
-      // 个人工作区的提交详情只对提交者可见，隐藏资源是否存在。
-      if (submission.userId !== user.userId) {
-        return res.status(404).json({ success: false, message: '提交记录不存在' })
-      }
-    } else if (user.role === 'student') {
-      // 校园工作区保留既有权限契约：学生只能查看自己的提交。
-      if (submission.userId !== user.userId) {
-        return res.status(403).json({ success: false, message: '无权查看该提交记录' })
-      }
-    } else if (user.role === 'teacher' || user.role === 'school_principal') {
-      if (!user.organizationId) return res.status(403).json({ success: false, message: '无权查看该提交记录' })
-      const submitterMembership = await prisma.organizationMembership.findFirst({ where: { organizationId: user.organizationId, userId: submission.userId, status: 'active' }, select: { id: true } })
-      if (!submitterMembership) return res.status(403).json({ success: false, message: '无权查看该提交记录' })
-    }
-    // super_admin 和 platform_admin 不加过滤，可以查看所有
-
-    // 获取题目标题
-    let problemTitle: string | null = null
-    let problemJudgeConfig: string | null = null
-    let problemAlias: string | null = null
-    let problemOrderIndex: number | null = null
-    let trainingProblemId: string | null = submission.trainingProblemId || null
-    let contestFormat: string | null = null
-    if (submission.problemInternalId) {
-      const problem = await prisma.problem.findUnique({
-        where: { id: submission.problemInternalId },
-        select: { title: true, libraryScope: true, organizationId: true, judgeConfig: true },
-      })
-      if (problem?.libraryScope === 'school' && (user.role === 'teacher' || user.role === 'school_principal') && problem.organizationId !== user.organizationId) {
-        return res.status(404).json({ success: false, message: '提交记录不存在' })
-      }
-      problemTitle = problem?.title || null
-      problemJudgeConfig = problem?.judgeConfig || null
-    }
-    if (submission.trainingId) {
-      const training = await prisma.training.findUnique({ where: { id: submission.trainingId }, select: { format: true } })
-      contestFormat = training?.format || null
-      const trainingProblem = submission.trainingProblemId
-        ? await prisma.trainingProblem.findFirst({
-            where: { id: submission.trainingProblemId, trainingId: submission.trainingId },
-            select: { id: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
-          })
-        : await prisma.trainingProblem.findFirst({
-            where: { trainingId: submission.trainingId, Problem: { problemId: submission.problemId } },
-            select: { id: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
-          })
-      if (trainingProblem) {
-        trainingProblemId = trainingProblem.id
-        problemAlias = trainingProblem.alias
-        problemOrderIndex = trainingProblem.orderIndex
-        problemJudgeConfig = trainingProblem.judgeConfigSnapshot || trainingProblem.Problem.judgeConfig || problemJudgeConfig
-        problemTitle = problemTitle || trainingProblem.Problem.title || null
-      }
-    }
-    const judgePresentation = resolveJudgePresentationConfig(problemJudgeConfig)
-
-    // 解析提交者显示名和头像
-    const submitter = submission.User
-    const submitterName = submitter.username
-
-    // 解析 cases JSON
-    let cases = null
-    if (submission.cases) {
-      try {
-        cases = JSON.parse(submission.cases)
-      } catch {
-        cases = null
-      }
-    }
-
-    // 解析 subtasks JSON
-    let subtasks = null
-    if (submission.subtasks) {
-      try {
-        subtasks = JSON.parse(submission.subtasks)
-      } catch {
-        subtasks = null
-      }
-    }
-
-    res.json({
-      success: true,
-      data: {
-        id: submission.id,
-        username: submitter.username,
-        submitterName,
-        submitterAvatar: submitter.avatar,
-        oj: submission.oj,
-        problemId: submission.problemId,
-        problemTitle,
-        result: submission.result,
-        timeUsed: submission.timeUsed,
-        memoryUsed: submission.memoryUsed,
-        wallTimeUsed: submission.wallTimeUsed,
-        timeoutReason: submission.timeoutReason,
-        metricSource: submission.metricSource,
-        score: submission.score,
-        cases,
-        subtasks,
-        codeLength: submission.codeLength,
-        language: submission.language,
-        code: submission.code,
-        submitMethod: submission.submitMethod,
-        ojRemoteId: submission.ojRemoteId,
-        ojAccountUsername: submission.OjAccount?.username,
-        submittedAt: submission.createdAt.toISOString(),
-        errorMessage: submission.errorMessage,
-        judgeMode: judgePresentation.mode,
-        judgeConfig: problemJudgeConfig ? { mode: judgePresentation.mode } : undefined,
-        trainingId: submission.trainingId,
-        trainingProblemId,
-        problemAlias,
-        problemOrderIndex,
-        contestFormat,
-      },
-    })
-  } catch (e: any) {
-    logger.error('submission_detail_error', {
-      action: 'submissions',
-      metadata: { error: e.message },
-    })
-    res.status(500).json({
-      success: false,
-      message: '查询失败',
-    })
+    const data = await getSubmissionDetail(contextOf(req), Number(req.params.id))
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendError(res, error, 'submission_detail_error', '查询失败')
   }
 })
 
-/**
- * POST /api/submissions/:id/refetch-code
- * 强制重新抓取 CF 提交源代码（清空已有 code 后重新抓取）
- */
 submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
   try {
-    const { id } = req.params
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ success: false, message: '无效的提交 ID' })
+    if (!/^\d+$/.test(req.params.id)) {
+      return res.status(400).json({ success: false, code: 'INVALID_SUBMISSION_ID', message: '无效的提交 ID' })
     }
-    const submissionId = Number(id)
-    if (!Number.isSafeInteger(submissionId) || submissionId <= 0) {
-      return res.status(400).json({ success: false, message: '无效的提交 ID' })
-    }
-
-    const submission = await prisma.submission.findUnique({
-      where: { id: submissionId },
-      select: {
-        id: true,
-        oj: true,
-        ojRemoteId: true,
-        problemId: true,
-        userId: true,
-        workspaceScope: true,
-        organizationId: true,
-      },
-    })
-
-    const user = (req as any).user
-    const workspaceScope = getResourceScope(user)
-
-    if (
-      !submission
-      || submission.workspaceScope !== workspaceScope
-      || (workspaceScope === 'campus' && submission.organizationId !== user.organizationId)
-      || (!isAdmin(user.role) && submission.userId !== user.userId)
-    ) {
-      return res.status(404).json({ success: false, message: '提交记录不存在' })
-    }
-
-    if (submission.oj !== 'codeforces') {
-      return res.status(400).json({ success: false, message: '仅支持 Codeforces 提交的代码抓取' })
-    }
-
-    if (!submission.ojRemoteId) {
-      return res.status(400).json({ success: false, message: '缺少远程提交 ID' })
-    }
-
-    // 先清空 code
-    await prisma.submission.update({
-      where: { id: submissionId },
-      data: { code: '', codeLength: 0 },
-    })
-
-    // 执行抓取
-    const fetched = await fetchAndStoreCfCode(submissionId)
-
-    if (fetched) {
-      const updated = await prisma.submission.findUnique({
-        where: { id: submissionId },
-        select: { code: true, codeLength: true },
-      })
-      res.json({
-        success: true,
-        data: { code: updated?.code || '', codeLength: updated?.codeLength || 0 },
-      })
-    } else {
-      res.json({
-        success: false,
-        message: '抓取源代码失败，请稍后重试',
-      })
-    }
-  } catch (e: any) {
-    logger.error('submission_refetch_code_error', {
-      action: 'submissions',
-      metadata: { error: e.message },
-    })
-    res.status(500).json({ success: false, message: '抓取失败' })
+    const data = await refetchSubmissionCode(contextOf(req), Number(req.params.id))
+    return res.json({ success: true, data })
+  } catch (error) {
+    return sendError(res, error, 'submission_refetch_code_error', '抓取失败')
   }
 })
