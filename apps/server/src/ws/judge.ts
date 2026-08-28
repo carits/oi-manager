@@ -89,10 +89,11 @@ class JudgeConsumer {
       const taskType: 'submission' | 'hack' = task.taskType === 'hack' ? 'hack' : 'submission'
       const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.submissionId
       const taskKey = `${taskType}:${taskId}`
+      const dispatchedAt = Date.now()
       this.processing.set(taskKey, {
         taskType,
         id: taskId,
-        startTime: Date.now(),
+        startTime: dispatchedAt,
         judgeAttemptId: 'judgeAttemptId' in task ? task.judgeAttemptId : undefined,
         fencingToken: 'fencingToken' in task ? task.fencingToken : undefined,
       })
@@ -105,7 +106,7 @@ class JudgeConsumer {
       // 发送任务到评测机
       this.ws.send(JSON.stringify({
         type: taskType === 'hack' ? 'hack' : 'judge',
-        payload: task
+        payload: taskType === 'submission' ? { ...task, dispatchedAt } : task
       }))
     }
   }
@@ -302,6 +303,7 @@ interface JudgeTask {
   judgeRunId: string
   judgeAttemptId: string
   fencingToken: string
+  dispatchedAt?: number
   testdataPath: string
   config: any
 }
@@ -666,6 +668,7 @@ async function handleResult(ws: WebSocket, payload: any) {
   const { submissionId, result, time, wallTime, memory, score, timeoutReason, metricSource } = payload
 
   const connection = judges.get(ws)
+  const resultReceivedAt = new Date()
 
   logger.info('judge_ws_result', {
     action: 'judge_ws',
@@ -676,7 +679,7 @@ async function handleResult(ws: WebSocket, payload: any) {
   try {
     if (!connection?.judgeId) return
     const claimed = await retryJudgePersistence(
-      () => persistOwnedSubmissionResult(payload, connection.judgeId),
+      () => persistOwnedSubmissionResult(payload, connection.judgeId, resultReceivedAt),
       { taskType: 'submission', taskId: String(submissionId) },
     )
     connection.consumer?.handleResult('submission', String(submissionId))
@@ -724,7 +727,7 @@ export async function retryJudgePersistence<T>(
   }
 }
 
-export async function persistOwnedSubmissionResult(payload: any, judgeId: string): Promise<boolean> {
+export async function persistOwnedSubmissionResult(payload: any, judgeId: string, resultReceivedAt = new Date()): Promise<boolean> {
   const submissionId = Number.parseInt(String(payload?.submissionId || ''), 10)
   const judgeRunId = String(payload?.judgeRunId || '')
   const judgeAttemptId = String(payload?.judgeAttemptId || '')
@@ -737,6 +740,12 @@ export async function persistOwnedSubmissionResult(payload: any, judgeId: string
     judgeAttemptId,
     fencingToken,
     judgeId,
+    performance: {
+      resultReceivedAt,
+      dispatchLatencyMs: payload.phaseMetrics?.dispatchMs,
+      compileLatencyMs: payload.phaseMetrics?.compileMs,
+      runLatencyMs: payload.phaseMetrics?.runMs,
+    },
     projection: {
       result,
       timeUsed: payload.time,

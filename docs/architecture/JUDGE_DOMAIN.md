@@ -13,6 +13,8 @@ source_of_truth: Prisma JudgeRun/JudgeAttempt models and judge domain services
 
 一个 Run 固定 `testSetRevisionId` 与 `judgeConfigHash`。一个 Attempt 只属于一个 Run，拥有唯一 `fencingToken`。`Submission.currentJudgeRunId` 和 `JudgeRun.currentAttemptId` 是读取指针，不改变历史记录。
 
+Attempt 终态同时保存 Queue、Dispatch、Compile、Run、Persist、Total 六段真实延迟；缺少采集能力的历史记录保持 `null`，禁止根据总耗时反推伪造。SLO 口径见 [Judge SLO](../operations/JUDGE_SLO.md)。
+
 ## 状态机
 
 JudgeRun：

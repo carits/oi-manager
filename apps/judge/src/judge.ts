@@ -151,6 +151,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
     fs.mkdirSync(workDir, { recursive: true })
   }
 
+  const compileStartedAt = performance.now()
   const compileResult = await sandbox.compile({
     language,
     code,
@@ -158,6 +159,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
     memoryLimit: 524288,
     workDir
   })
+  const compileLatencyMs = Math.max(0, Math.round(performance.now() - compileStartedAt))
 
   if (compileResult.workDir) {
     workDir = compileResult.workDir
@@ -175,6 +177,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         score: 0,
         cases: [],
         message: `沙箱基础设施不可用：${compileResult.error}`,
+        phaseMetrics: { compileMs: compileLatencyMs },
         retryable: true,
       }
     }
@@ -185,7 +188,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       memory: 0,
       score: 0,
       cases: [],
-      message: compileResult.error
+      message: compileResult.error,
+      phaseMetrics: { compileMs: compileLatencyMs },
     }
   }
 
@@ -203,7 +207,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       memory: 0,
       score: 0,
       cases: [],
-      message: '没有找到测试数据'
+      message: '没有找到测试数据',
+      phaseMetrics: { compileMs: compileLatencyMs },
     }
   }
 
@@ -481,6 +486,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         score: totalScore,
         cases: caseResults,
         subtasks: subtaskResults,
+        phaseMetrics: { compileMs: compileLatencyMs },
         retryable: caseResults.some(caseResult => caseResult.infrastructureError),
       }
     } else {
@@ -546,6 +552,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
         metricSource,
         score: totalScore,
         cases: caseResults,
+        phaseMetrics: { compileMs: compileLatencyMs },
         retryable: caseResults.some(caseResult => caseResult.infrastructureError),
       }
     }
@@ -566,6 +573,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
       score: 0,
       cases: caseResults,
       message: e.message,
+      phaseMetrics: { compileMs: compileLatencyMs },
       retryable: Boolean(e?.infrastructureError),
     }
   }

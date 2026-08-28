@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: Judge SLO 从单一总耗时扩展为 Attempt 级 `queue/dispatch/compile/run/persist/total` 六段指标；Server 分发时间、Judge 单调时钟和结果最终化事务共同产生真实数据，不为历史 Attempt 伪造样本。新增 24 小时 SLO 报告/强制门禁，默认 P95 目标依次为 5s/1s/3s/10s/1s/20s，基础设施错误率 `<0.1%` 且卡住 Attempt 为 0。协议与持久化定向 14/14、Judge 17/17 通过；生产迁移与真实新提交采样尚待本批发布。
 - 2026-08-28: 后台进程边界从“所有任务塞进单例 Worker”拆为 Scheduler/Executor：`oi-manager-worker` 兼容 unit 只运行持有 leader lock 的 Cron 与账号验证，`oi-manager-executor@N` 运行可并行远程轮询，并以逐任务 PostgreSQL session advisory lease 防止多实例重复处理。新增自动架构事实清单与 HTTP adapter 边界门禁；60 个现有 adapter 的 Prisma/事务/文件/Judge Runtime 债务被记录为只减不增基线，新 adapter 默认不得引入这些依赖。定向编排/租约 3/3 和 Server 构建通过，systemd 安装与生产演练完成后方可标记上线。
 - 2026-08-28: Hack 技术判定与正式测试版本晋升完成第一阶段拆分：新增 `TestcaseCandidate` 独立记录已验证候选内容、内容对象、基线 Revision、命中 Subtask 和晋升终态；重复数据记为 `REDUNDANT`，并发失败记为 `STALE`，只有 Candidate 与 Hack Attempt 在 Revision 事务内同时变为 `PROMOTED/accepted`。测试数据内容读写已通过统一 `BlobStore` port，现有本地内容寻址实现保持兼容，并提供可注入的 S3/阿里云 OSS adapter 边界。并发 Hack 5/5、BlobStore 2/2 与 Server 构建通过；生产迁移和全量回归完成后方可标记上线。
 - 2026-08-28: Judge 领域写路径切换完成：Consumer 从 current `JudgeAttempt` 领取任务，Judge 回传携带 `judgeRunId + judgeAttemptId + fencingToken` 并在事务内终结 Attempt/Run、同步 Submission 兼容投影；断连、租约过期和 API 重启创建新的 Attempt，不再重开旧终态。单条和比赛范围重测分别创建新 Run 与持久化 RejudgeBatch。100 路重复结果仍只有一个拥有最终化权限，陈旧 token 无法覆盖成绩；第二条增量迁移负责收敛第一阶段部署窗口中的投影差异。空库/最新正式备份迁移链为 82 表、31/34 条迁移、20186 用户且结构签名一致；Server 46 文件 463/463、Judge 6 文件 17/17 通过。Switch read 与旧执行字段清理仍待稳定发布周期后完成。

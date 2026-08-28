@@ -218,6 +218,12 @@ export async function finalizeOwnedJudgeAttempt(input: {
   fencingToken: string
   judgeId: string
   projection: JudgeResultProjection
+  performance?: {
+    resultReceivedAt: Date
+    dispatchLatencyMs?: number | null
+    compileLatencyMs?: number | null
+    runLatencyMs?: number | null
+  }
 }) {
   return prisma.$transaction(async tx => {
     assertJudgeAttemptTransition('RUNNING', 'FINALIZING')
@@ -240,6 +246,16 @@ export async function finalizeOwnedJudgeAttempt(input: {
     if (finalizing.count !== 1) return null
 
     const now = new Date()
+    const attempt = await tx.judgeAttempt.findUniqueOrThrow({
+      where: { id: input.judgeAttemptId },
+      select: { createdAt: true, claimedAt: true },
+    })
+    const safeMetric = (value?: number | null) => Number.isFinite(value) && Number(value) >= 0
+      ? Math.round(Number(value)) : null
+    const queueLatencyMs = attempt.claimedAt ? Math.max(0, attempt.claimedAt.getTime() - attempt.createdAt.getTime()) : null
+    const persistLatencyMs = input.performance
+      ? Math.max(0, now.getTime() - input.performance.resultReceivedAt.getTime()) : null
+    const totalLatencyMs = Math.max(0, now.getTime() - attempt.createdAt.getTime())
     const terminalState = terminalAttemptState(input.projection.result)
     assertJudgeAttemptTransition('FINALIZING', terminalState)
     await tx.judgeAttempt.update({
@@ -256,6 +272,12 @@ export async function finalizeOwnedJudgeAttempt(input: {
         memoryUsed: input.projection.memoryUsed ?? null,
         timeoutReason: input.projection.timeoutReason ?? null,
         metricSource: input.projection.metricSource ?? null,
+        queueLatencyMs,
+        dispatchLatencyMs: safeMetric(input.performance?.dispatchLatencyMs),
+        compileLatencyMs: safeMetric(input.performance?.compileLatencyMs),
+        runLatencyMs: safeMetric(input.performance?.runLatencyMs),
+        persistLatencyMs,
+        totalLatencyMs,
         leaseUntil: null,
         finalizedAt: now,
       },

@@ -25,7 +25,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ContributionEvent` | 以 Prisma schema 为准 |
 | `ContributionProject` | 以 Prisma schema 为准 |
 | `File` | 以 Prisma schema 为准 |
-| `JudgeAttempt` | 一次 JudgeRun 的物理执行尝试，保存状态、执行者、fencing token、租约和阶段结果；终态不可重新打开 |
+| `JudgeAttempt` | 一次 JudgeRun 的物理执行尝试，保存状态、执行者、fencing token、租约、阶段结果与六段延迟；终态不可重新打开 |
 | `JudgeRun` | 一次逻辑评测运行，固定测试版本/配置哈希并聚合可重试的 JudgeAttempt |
 | `LoginLog` | 以 Prisma schema 为准 |
 | `Milestone` | 以 Prisma schema 为准 |

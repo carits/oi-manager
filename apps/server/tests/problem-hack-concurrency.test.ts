@@ -150,6 +150,7 @@ describe('concurrent Hack promotion', () => {
       memory: 1024,
       score: 100,
       cases: [],
+      phaseMetrics: { dispatchMs: 3, compileMs: 12, runMs: 27, judgeTotalMs: 39 },
     }
 
     const results = await Promise.all(Array.from({ length: 100 }, () =>
@@ -159,6 +160,11 @@ describe('concurrent Hack promotion', () => {
     expect(await persistOwnedSubmissionResult({ ...payload, result: 'Wrong Answer', score: 0 }, 'stale-judge')).toBe(false)
     expect(await prisma.submission.findUniqueOrThrow({ where: { id: submission.id } })).toMatchObject({
       result: 'accepted', score: 100, judgeId: null, judgeStarted: null,
+    })
+    expect(await prisma.judgeAttempt.findUniqueOrThrow({ where: { id: claimed!.judgeAttemptId } })).toMatchObject({
+      dispatchLatencyMs: 3,
+      compileLatencyMs: 12,
+      runLatencyMs: 27,
     })
   }, 60_000)
 

@@ -1054,6 +1054,12 @@ model JudgeAttempt {
   memoryUsed       Int?
   timeoutReason    String?
   metricSource     String?
+  queueLatencyMs   Int?
+  dispatchLatencyMs Int?
+  compileLatencyMs Int?
+  runLatencyMs     Int?
+  persistLatencyMs Int?
+  totalLatencyMs   Int?
   createdAt        DateTime          @default(now())
   claimedAt        DateTime?
   startedAt        DateTime?

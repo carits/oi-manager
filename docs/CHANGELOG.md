@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-28
 
+### Judge 分段延迟与 SLO
+
+- `JudgeAttempt` 新增 Queue、Dispatch、Compile、Run、Persist 和 Total 六段毫秒指标；Server/Judge 协议携带分发时刻与 Judge 侧 phase metrics，最终化事务计算队列、持久化和总耗时。
+- 新增 `pnpm judge:slo` 报告与 `judge:slo:check` 门禁。默认按最近 24 小时、至少 50 个样本检查六项 P95、基础设施错误率和卡住 Attempt；旧历史记录保持空值。
+- SLO 运维契约记录于 `docs/operations/JUDGE_SLO.md`。
+
 ### Scheduler/Executor 与架构边界门禁
 
 - 单例后台 Worker 收口为 Scheduler leader，只运行 Cron 和 OJ 账号自动验证；新增 `oi-manager-executor@N` 执行可并行任务。旧远程提交轮询以逐记录 PostgreSQL session advisory lease 保证多个 Executor 不重复处理，进程崩溃时连接关闭即可释放租约。

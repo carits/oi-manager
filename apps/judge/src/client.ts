@@ -159,6 +159,7 @@ class JudgeClient {
       judgeRunId,
       judgeAttemptId,
       fencingToken,
+      dispatchedAt,
       problemId,
       code,
       language,
@@ -167,6 +168,8 @@ class JudgeClient {
     const config = msg.payload.config ?? msg.payload.problemConfig ?? {}
 
     console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
+    const receivedAt = Date.now()
+    const judgeStartedAt = performance.now()
 
     // 直接执行评测任务（无 PQueue，并发由服务端 Consumer 控制）
     try {
@@ -175,6 +178,7 @@ class JudgeClient {
         judgeRunId,
         judgeAttemptId,
         fencingToken,
+        dispatchedAt,
         problemId,
         code,
         language,
@@ -192,7 +196,18 @@ class JudgeClient {
 
       const resultMsg: ResultMessage = {
         type: 'result',
-        payload: { ...result, judgeRunId, judgeAttemptId, fencingToken }
+        payload: {
+          ...result,
+          judgeRunId,
+          judgeAttemptId,
+          fencingToken,
+          phaseMetrics: {
+            ...result.phaseMetrics,
+            dispatchMs: typeof dispatchedAt === 'number' ? Math.max(0, receivedAt - dispatchedAt) : undefined,
+            judgeTotalMs: Math.max(0, Math.round(performance.now() - judgeStartedAt)),
+            runMs: Math.max(0, Math.round(performance.now() - judgeStartedAt) - (result.phaseMetrics?.compileMs || 0)),
+          },
+        }
       }
       this.send(resultMsg)
     } catch (e: any) {
@@ -210,7 +225,11 @@ class JudgeClient {
           memory: 0,
           score: 0,
           cases: [],
-          message: e.message
+          message: e.message,
+          phaseMetrics: {
+            dispatchMs: typeof dispatchedAt === 'number' ? Math.max(0, receivedAt - dispatchedAt) : undefined,
+            judgeTotalMs: Math.max(0, Math.round(performance.now() - judgeStartedAt)),
+          }
         }
       }
       this.send(resultMsg)

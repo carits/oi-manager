@@ -103,6 +103,7 @@ export interface JudgeRequest {
   judgeRunId?: string
   judgeAttemptId?: string
   fencingToken?: string
+  dispatchedAt?: number
   problemId: string
   code: string
   language: string
@@ -143,6 +144,12 @@ export interface JudgeTaskResult {
   judgeRunId?: string
   judgeAttemptId?: string
   fencingToken?: string
+  phaseMetrics?: {
+    dispatchMs?: number
+    compileMs?: number
+    runMs?: number
+    judgeTotalMs?: number
+  }
   result: JudgeResult
   time: number
   cpuTime?: number
