@@ -107,6 +107,31 @@ describe('VJudge 式多题面版本与活动快照', () => {
     expect(latest.Snapshot.find(item => item.sourceContentId === versionId)?.content).toBe('活动第一版')
   })
 
+  it('活动题面选择使用 revision 拒绝陈旧管理员覆盖', async () => {
+    await prisma.problem.update({ where: { id: problem.id }, data: { description: '# 官方题面' } })
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))
+    const training = await prisma.training.create({ data: {
+      title: '题面并发保护', startTime: new Date(Date.now() - 60_000), endTime: new Date(Date.now() + 60_000),
+      status: 'ongoing', createdBy: author.user.id, organizationId,
+    } })
+    const tp = await prisma.trainingProblem.create({ data: {
+      id: crypto.randomUUID(), trainingId: training.id, problemId: problem.id, alias: 'A', orderIndex: 0,
+    } })
+    const matrix = await client.get(`/api/trainings/${training.id}/statement-management`)
+    const item = matrix.body.data.problems[0]
+    const canonical = item.options.find((option: any) => option.sourceType === 'canonical')
+    const selection = {
+      trainingProblemId: tp.id,
+      visibleOptionKeys: [canonical.key],
+      defaultOptionKey: canonical.key,
+      expectedSelectionRevision: item.selectionRevision,
+    }
+    expect((await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [selection] })).status).toBe(200)
+    const stale = await client.put(`/api/trainings/${training.id}/statement-management`).send({ selections: [selection] })
+    expect(stale.status).toBe(409)
+    expect(stale.body.code).toBe('STATEMENT_SELECTION_STALE')
+  })
+
   it('管理员编辑活动题面会创建新集合并拒绝陈旧或非管理员写入', async () => {
     await prisma.problem.update({ where: { id: problem.id }, data: { description: '原始官方题面' } })
     const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))

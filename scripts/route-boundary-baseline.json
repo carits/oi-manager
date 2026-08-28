@@ -198,8 +198,8 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.statement-management.routes.ts": {
-    "prisma": 4,
-    "transaction": 1,
+    "prisma": 0,
+    "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },

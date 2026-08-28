@@ -320,6 +320,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-29 认证路由已完成 Strangler 收口：登录审计、注册事务、全局角色/校园成员解析、个人工作区、资料/组织档案更新、头像上传替换回滚和密码修改进入 auth application service；Multer 临时目录与清理进入基础设施模块。管理员角色、Cookie/CSRF、工作区、密码和文件安全回归 52/52 通过；路由边界降至 Prisma 245 / transaction 7 / filesystem 29 / Judge Runtime 0。
 - 2026-08-29 活动提交路由已完成收口：本地提交配置检查、列表范围/用户名/题目筛选、展示名、详情、管理员提交用户、重测预览与候选快照进入 training submission query service；HTTP 层继续负责脱敏和响应映射。训练兼容与提交权限回归 53/53 通过；路由边界降至 Prisma 220 / transaction 7 / filesystem 29 / Judge Runtime 0。
 - 2026-08-29 活动内容选择、版本预览、Markdown/PDF 快照编辑及受控下载已迁入 training content application service；HTTP adapter 不再直接访问 Prisma 或文件系统。PDF 临时文件在权限失败与异常路径均清理，新上传文件在快照编辑失败时软删除。Server 构建及完整 53 文件、493/493 回归通过；路由边界降至 Prisma 164 / transaction 6 / filesystem 26 / Judge Runtime 0。
+- 2026-08-29 活动多题面选择矩阵、当前选择集合和参与者题面/PDF 读取已迁入 training statement application service；保存请求携带 selection revision，陈旧管理员页面返回 `409 STATEMENT_SELECTION_STALE`，事务写入前再次校验当前集合，避免并发覆盖。参赛者响应不再泄露个人题面作者。Server/Web 构建与定向 3 文件、89/89 回归通过；路由边界降至 Prisma 160 / transaction 5 / filesystem 26 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。

@@ -101,7 +101,12 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
     }
     setSaving(true)
     const response = await apiClient.put(`/api/trainings/${trainingId}/statement-management`, {
-      selections: data.problems.map(problem => ({ trainingProblemId: problem.trainingProblemId, visibleOptionKeys: selection[problem.trainingProblemId].keys, defaultOptionKey: selection[problem.trainingProblemId].defaultKey })),
+      selections: data.problems.map(problem => ({
+        trainingProblemId: problem.trainingProblemId,
+        visibleOptionKeys: selection[problem.trainingProblemId].keys,
+        defaultOptionKey: selection[problem.trainingProblemId].defaultKey,
+        expectedSelectionRevision: problem.selectionRevision,
+      })),
     })
     if (response.success) { toast.success('活动题面配置已保存'); await load() }
     else toast.error(response.message || '保存失败')
