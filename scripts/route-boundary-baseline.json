@@ -240,7 +240,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/me.ts": {
-    "prisma": 10,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
@@ -294,7 +294,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/stats.ts": {
-    "prisma": 9,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
@@ -354,8 +354,8 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/workspaces.ts": {
-    "prisma": 9,
-    "transaction": 1,
+    "prisma": 0,
+    "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   }
