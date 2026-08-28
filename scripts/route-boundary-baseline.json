@@ -36,9 +36,9 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.files.routes.ts": {
-    "prisma": 24,
+    "prisma": 0,
     "transaction": 0,
-    "filesystem": 16,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.hack.routes.ts": {

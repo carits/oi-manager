@@ -36,7 +36,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] Hack 技术判定与 `TestcaseCandidate` 晋升已分离；Revision/Testdata 内容已使用 `BlobStore` port，本地实现可直接替换 S3/OSS adapter。
 - [x] Scheduler 单例和 Executor 可并行任务已分离，生产 systemd 中两类进程独立运行。
 - [x] 架构模型、路由、systemd 和环境变量清单由脚本生成并由 `architecture:check` 校验。
-- [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 471 / transaction 9 / filesystem 70 / Judge Runtime 0。题库提交、OJ 账号池、Organization 成员、管理员数据维护、超级管理员学校治理、Dashboard、Workspace、全局 User、用户归档题目与团队题单已迁入 application service；`problem-lists.ts` 的访问/归属、CRUD、章节、条目、分享、题面文件和发布作业均已迁移，现为纯 HTTP adapter。分享写入校验同校园和目标身份，删除绑定题单路径；作业和题目快照在同一事务创建。下一批转向 `problem.files.routes.ts`、`testdata.ts` 与 `oj-fetcher.ts`。新增债务已阻断。
+- [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 447 / transaction 9 / filesystem 54 / Judge Runtime 0。题库提交、OJ 账号池、Organization 成员、管理员数据维护、超级管理员学校治理、Dashboard、Workspace、全局 User、用户归档题目与团队题单已迁入 application service；`problem-lists.ts` 与 `problem.files.routes.ts` 已成为纯 HTTP adapter。题目 PDF/附件临时文件清理、数据库失败后的新文件回收、替换/删除后的旧文件软删除和统一题面 PDF 双写事务现由应用服务负责。下一批转向 `testdata.ts` 与 `oj-fetcher.ts`。新增债务已阻断。
 - [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期后才能删除；当前生产首次对账为 2518 条、0 差异、0 条无 Run 本地提交，且已纳入 5 分钟监控。观察期内不做破坏性清理。
 
 ### 1. 隔离写入、并发与长稳压测
