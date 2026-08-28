@@ -6,13 +6,13 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/contribution/contribution.routes.ts": {
-    "prisma": 7,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/notification/notification.routes.ts": {
-    "prisma": 9,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
