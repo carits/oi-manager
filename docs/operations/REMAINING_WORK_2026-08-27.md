@@ -37,7 +37,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] Scheduler 单例和 Executor 可并行任务已分离，生产 systemd 中两类进程独立运行。
 - [x] 架构模型、路由、systemd 和环境变量清单由脚本生成并由 `architecture:check` 校验。
 - [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 710 / transaction 24 / filesystem 70 / Judge Runtime 0。新增债务已阻断，存量代码按业务模块逐批迁移，不在一次发布中冒险重写 710 个数据访问点。
-- [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期和投影差异报告为 0 后才能删除；不在当日发布后立即破坏性清理。
+- [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期后才能删除；当前生产首次对账为 2518 条、0 差异、0 条无 Run 本地提交，且已纳入 5 分钟监控。观察期内不做破坏性清理。
 
 ### 1. 隔离写入、并发与长稳压测
 

@@ -18,6 +18,7 @@ DISK_MAX_PERCENT="${MONITOR_DISK_MAX_PERCENT:-85}"
 STATE_FILE="${MONITOR_STATE_FILE:-$ROOT_DIR/.run/service-monitor.state}"
 QUIET_SUCCESS="${MONITOR_QUIET_SUCCESS:-0}"
 ALERT_COMMAND="${MONITOR_ALERT_COMMAND:-}"
+JUDGE_PROJECTION_CHECK="${MONITOR_JUDGE_PROJECTION_CHECK:-1}"
 
 failures=()
 
@@ -66,6 +67,13 @@ check_http "go-judge" "$JUDGE_URL"
 
 if ! docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
   fail "PostgreSQL is not ready in $DB_CONTAINER"
+fi
+
+if [ "$JUDGE_PROJECTION_CHECK" = "1" ]; then
+  if ! projection_output="$(cd "$ROOT_DIR" && pnpm --silent judge:projection:check 2>&1)"; then
+    projection_summary="$(tail -n 20 <<<"$projection_output" | tr '\n' ' ' | cut -c1-1200)"
+    fail "JudgeRun/Submission projection mismatch: $projection_summary"
+  fi
 fi
 
 build_id_file="$ROOT_DIR/apps/web/.next-current/BUILD_ID"

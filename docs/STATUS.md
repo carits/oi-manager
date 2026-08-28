@@ -5,6 +5,7 @@ last_verified: 2026-08-28
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-28: Judge 兼容投影开始进入可量化观察期：生产 2518 条已绑定 Run 的本地提交中，Submission ↔ current JudgeRun ↔ current JudgeAttempt 的所有权、result、score、cases、subtasks、error、时间、内存和 metric 差异均为 0，且不存在无 Run 的本地提交。新增 `judge:projection:audit/check`，生产 5 分钟监控将差异视为故障；稳定观察期结束前仍不删除 Submission 兼容字段。
 - 2026-08-28: Hack 核心状态写入已统一收口到 `HackAttemptStateMachine`：排队、Judge 认领、最终化、并发重排、失败重试和 API 重启恢复全部使用显式转换 + CAS，终态不能复活、不能跳过所有权状态。题库提交/重评命令从 `routes/submit.ts` 迁入 application service，HTTP adapter 不再依赖 Prisma 或 Judge Runtime；路由债务基线降至 Prisma 710、Judge Runtime 0。定向回归 37/37、Server 全量 49 文件 471/471 通过。
 - 2026-08-28: Judge 六段 SLO 已在生产真实链路验收：公网 API 创建的 #3825 最终 Accepted，Attempt 持久化 `queue/dispatch/compile/run/persist/total = 44/2/3026/201/10/3315 ms`。24 小时报告能读取样本，基础设施错误 0、卡住 Attempt 0；样本数未达 50 时保持 `collecting`，不伪报 SLO 达标。
 - 2026-08-28: Judge SLO 从单一总耗时扩展为 Attempt 级 `queue/dispatch/compile/run/persist/total` 六段指标；Server 分发时间、Judge 单调时钟和结果最终化事务共同产生真实数据，不为历史 Attempt 伪造样本。新增 24 小时 SLO 报告/强制门禁，默认 P95 目标依次为 5s/1s/3s/10s/1s/20s，基础设施错误率 `<0.1%` 且卡住 Attempt 为 0。协议与持久化定向 14/14、Judge 17/17 通过；生产迁移、真实提交采样与 SLO 读取已完成。
