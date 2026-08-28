@@ -9,25 +9,30 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import { getAdapter, getSupportedPlatforms } from '../../oj-adapters'
-import { v4 as uuidv4 } from 'uuid'
 import {
   canAccessTraining,
   canManageTraining,
   getUserTypeForTeam,
   parseTrainingId,
-  populateSnapshotData,
   requireTrainingStarted,
 } from './training.helpers'
-import { findAccessibleProblem } from '../problem/problem.access'
-import { ensureInitialTestSetRevision } from '../problem/problem.testset-revision.service'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 import { buildContestProblemStatus } from './training.problem-status'
-import { fileService } from '../../lib/storage'
 import {
-  activityOrganizationId,
-  createInitialContentSnapshots,
   latestContentSnapshot,
 } from '../problem/problem.content.service'
+import {
+  addManagedTrainingProblem,
+  deleteManagedTrainingProblem,
+  reorderManagedTrainingProblems,
+  TrainingProblemManagementError,
+  updateManagedTrainingProblem,
+} from './application/training-problem-management.service'
+
+function sendManagementError(error: unknown, res: any) {
+  if (!(error instanceof TrainingProblemManagementError)) throw error
+  return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+}
 
 const managedProblemFilePattern = /\/api\/files\/([^/?#]+)\/(?:download|public)/g
 
@@ -283,75 +288,20 @@ trainingProblemsRouter.post('/trainings/:id/problems', authenticate, asyncHandle
       return res.status(400).json({ success: false, message: '题目ID为必填' })
     }
 
-    const aliasValue = alias || null
-
-    // 检查题目是否存在
-    const accessibleProblem = await findAccessibleProblem(req.user!, problemId, 'use')
-    let problem = accessibleProblem ? await prisma.problem.findUnique({
-      where: { id: accessibleProblem.id },
-      include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true } } },
-    }) : null
-    if (!problem) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-    const trainingSchoolId = training.organizationId ||
-      (training.scope === 'campus' && training.Team?.scope === 'campus' ? training.Team.organizationId : null)
-    if (problem.libraryScope === 'organization' && trainingSchoolId !== problem.organizationId) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-    if (!problem.latestTestSetRevisionId) {
-      try { await ensureInitialTestSetRevision(problem.id, userId) }
-      catch (error: any) { return res.status(409).json({ success: false, code: 'TEST_SET_REVISION_REQUIRED', message: error.message }) }
-      problem = await prisma.problem.findUnique({
-        where: { id: problem.id },
-        include: { LatestTestSetRevision: true, ProblemStatement: { where: { isVisible: true } } },
-      }) as typeof problem
-    }
-
-    // 获取当前最大 orderIndex
-    const maxOrder = await prisma.trainingProblem.aggregate({
-      where: { trainingId: id },
-      _max: { orderIndex: true },
-    })
-
-    const snapshotData = populateSnapshotData(problem)
-
-    let trainingProblem
     try {
-      trainingProblem = await prisma.trainingProblem.create({
-        data: {
-          id: uuidv4(),
-          trainingId: id,
-          problemId,
-          alias: aliasValue,
-          points: points || null,
-          orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
-          ...snapshotData,
-        },
-      })
-    } catch (e: any) {
-      // 唯一约束冲突
-      if (e.code === 'P2002') {
-        return res.status(400).json({ success: false, message: '别名或题号已存在' })
-      }
-      throw e
-    }
-
-    try {
-      await createInitialContentSnapshots({
-        trainingProblemId: trainingProblem.id,
-        problemId: problem.id,
-        selectedBy: userId,
-        organizationId: await activityOrganizationId(training),
+      const trainingProblem = await addManagedTrainingProblem({
+        training,
+        user: req.user!,
+        problemId,
+        alias,
+        points,
         statementOptionKey: typeof statementOptionKey === 'string' ? statementOptionKey : undefined,
         solutionOptionKey: typeof solutionOptionKey === 'string' ? solutionOptionKey : undefined,
       })
+      return res.json({ success: true, data: trainingProblem })
     } catch (error) {
-      await prisma.trainingProblem.delete({ where: { id: trainingProblem.id } })
-      throw error
+      return sendManagementError(error, res)
     }
-
-    res.json({ success: true, data: trainingProblem })
 }, '添加失败'))
 
 /**
@@ -372,38 +322,8 @@ trainingProblemsRouter.put('/trainings/:id/problems/reorder', authenticate, asyn
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
-    // 验证所有 TrainingProblem ID 都属于该训练
-    const trainingProblems = await prisma.trainingProblem.findMany({
-      where: { trainingId: id },
-      select: { id: true, orderIndex: true }
-    })
-    const validIds = trainingProblems.map(tp => tp.id)
-    const requestedIds = orders.map(o => o.id)
-    const invalidIds = requestedIds.filter(rid => !validIds.includes(rid))
-
-    if (invalidIds.length > 0) {
-      return res.status(400).json({ success: false, message: '部分题目ID不属于该训练' })
-    }
-
-    // 使用两阶段更新避免 @@unique([trainingId, orderIndex]) 约束冲突
-    // 阶段1: 先将所有 orderIndex 设为负值（避免临时冲突）
-    // 阶段2: 再设为目标值
-    await prisma.$transaction([
-      // 阶段1: 负值
-      ...orders.map(o =>
-        prisma.trainingProblem.update({
-          where: { id: o.id },
-          data: { orderIndex: -(o.orderIndex + 1) }, // -1, -2, -3...
-        })
-      ),
-      // 阶段2: 目标值
-      ...orders.map(o =>
-        prisma.trainingProblem.update({
-          where: { id: o.id },
-          data: { orderIndex: o.orderIndex },
-        })
-      ),
-    ])
+    try { await reorderManagedTrainingProblems(id, orders) }
+    catch (error) { return sendManagementError(error, res) }
 
     res.json({ success: true, message: '排序已更新' })
 }, '排序失败'))
@@ -426,22 +346,9 @@ trainingProblemsRouter.put('/trainings/:id/problems/:problemId', authenticate, a
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
-    // 验证题目属于该训练
-    const existingProblem = await prisma.trainingProblem.findUnique({
-      where: { id: problemId },
-      select: { trainingId: true },
-    })
-    if (!existingProblem || existingProblem.trainingId !== id) {
-      return res.status(403).json({ success: false, message: '题目不属于该训练' })
-    }
-
-    const updated = await prisma.trainingProblem.update({
-      where: { id: problemId },
-      data: {
-        ...(alias !== undefined && { alias }),
-        ...(points !== undefined && { points }),
-      },
-    })
+    let updated
+    try { updated = await updateManagedTrainingProblem(id, problemId, { alias, points }) }
+    catch (error) { return sendManagementError(error, res) }
 
     res.json({ success: true, data: updated })
 }, '更新失败'))
@@ -463,21 +370,8 @@ trainingProblemsRouter.delete('/trainings/:id/problems/:problemId', authenticate
       return res.status(403).json({ success: false, message: '只有团队管理员可以管理题目' })
     }
 
-    // 验证题目属于该训练
-    const existingProblem = await prisma.trainingProblem.findUnique({
-      where: { id: problemId },
-      select: { trainingId: true },
-    })
-    if (!existingProblem || existingProblem.trainingId !== id) {
-      return res.status(403).json({ success: false, message: '题目不属于该训练' })
-    }
-
-    const snapshotFiles = await prisma.trainingProblemContentSnapshot.findMany({
-      where: { trainingProblemId: problemId, snapshotFileId: { not: null } },
-      select: { snapshotFileId: true },
-    })
-    await prisma.trainingProblem.delete({ where: { id: problemId } })
-    await Promise.all(snapshotFiles.map(item => item.snapshotFileId ? fileService.softDelete(item.snapshotFileId) : Promise.resolve()))
+    try { await deleteManagedTrainingProblem(id, problemId) }
+    catch (error) { return sendManagementError(error, res) }
 
     res.json({ success: true, message: '删除成功' })
 }, '删除失败'))

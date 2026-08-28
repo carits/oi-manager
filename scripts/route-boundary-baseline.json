@@ -174,8 +174,8 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.problems.routes.ts": {
-    "prisma": 29,
-    "transaction": 1,
+    "prisma": 15,
+    "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },
