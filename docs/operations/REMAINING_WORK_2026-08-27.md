@@ -5,6 +5,8 @@ last_verified: 2026-08-28
 source_of_truth: remote main worktree, production runtime inspection, current test and deployment scripts
 ---
 
+> 2026-08-29 最新路由边界：60 个 adapter，Prisma 66 / transaction 5 / filesystem 14 / Judge Runtime 0。题目 AI 翻译、格式化和用量查询已迁入 application service；AI 结果与用量日志同事务写入，并以题目动作级锁及事务内重复检查防止并发重复版本。正文中的 83/5/14 是本轮开始时快照，以本注的 66/5/14 为当前值。
+
 # 未完成事项执行总表（2026-08-27）
 
 本文件是当前收口阶段的唯一未完成事项清单。已经完成的业务能力不在这里重复规划；历史聊天、归档计划和旧测试快照不能替代本表。

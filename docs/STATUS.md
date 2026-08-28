@@ -325,6 +325,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-29 Hack 配置、发起、记录、详情和系统错误重试编排已迁入 problem Hack application service；Hack Attempt 仍只通过现有状态机/CAS 转换，配置保存新增 revision CAS，两个管理员并发保存只允许一个成功。Server/Web 构建与 Hack、Revision、并发定向 5 文件、25/25 回归通过；路由边界降至 Prisma 117 / transaction 5 / filesystem 26 / Judge Runtime 0。
 - 2026-08-29 Judge Config 与 Checker 列表、上传、替换、下载、删除已迁入 problem Judge application/storage service；Checker 仅接受安全文本形态的 `.cpp/.cc/.cxx`，替换与删除在数据库失败时恢复原文件，权限失败会清理 Multer 临时文件。Server 构建，Judge/文件安全/Revision/权限回归合计 21/21 通过，新增 API 定向 3/3 复跑通过；路由边界降至 Prisma 106 / transaction 5 / filesystem 20 / Judge Runtime 0。
 - 2026-08-29 个人题解与多题面版本的查询、编辑、公开范围、PDF 替换、下载和软删除已迁入 problem content application service，共用受控 PDF 上传基础设施。新文件在数据库失败时回收，旧文件在成功切换后回收；公开个人题面 PDF 也必须先通过原题目校园访问边界。Server 构建及个人内容、学校隔离、文件安全 3 文件、25/25 回归通过；路由边界降至 Prisma 83 / transaction 5 / filesystem 14 / Judge Runtime 0。
+- 2026-08-29 题目 AI 翻译、格式化和用量查询已迁入 problem AI application service；外部模型调用完成后的题面写入与用量日志在同一事务提交，并通过题目动作级 advisory lock 和事务内重复检查避免并发重复版本。格式化未显式指定题面时会记录实际处理的题面 ID。Server 构建及 AI、题库隔离 6 文件、60/60 回归通过；路由边界降至 Prisma 66 / transaction 5 / filesystem 14 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
