@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-28
+last_verified: 2026-08-29
 source_of_truth: remote main worktree, production runtime inspection, current test and deployment scripts
 ---
 
@@ -14,6 +14,11 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 > 团队 CRUD、邀请、成员与申请路由完成收口后，当前为 Prisma 26 / transaction 0 / filesystem 0 / Judge Runtime 0；路由中的事务、文件系统和 Judge Runtime 直接调用已全部清零，仅剩 3 个维护/演示 adapter 的 Prisma 查询待处理。
 >
 > 受控演示与维护迁移路由收口后，60 个 adapter 当前为 Prisma 0 / transaction 0 / filesystem 0 / Judge Runtime 0。`routes/` Strangler 存量债务已完成，后续门禁不允许重新增加。
+>
+> Submission 用户可见读取已完成 Switch read：列表、详情、结果筛选、题目状态、个人概览、
+> OI/ICPC 排名、平台/校园解题排名、管理统计和重测预览统一读取 CurrentJudgeRun；故意破坏
+> Submission 兼容列的回归仍返回 Run 结果。生产 2518/2518 投影对账为 0 差异。兼容列继续进入
+> 观察期，不在本批次破坏性删除。
 
 # 未完成事项执行总表（2026-08-27）
 
@@ -59,6 +64,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] Test Graph 保存与 Hack 晋升竞争、CAS 冲突及冲突后重排/去重 5/5 通过；只生成一个下一 Revision，不残留 pending 文件或重复 Testcase。
 - [x] 单实例定向测试和双 API 隔离栈各执行 100 个并发 finalization；重复/旧 Judge 回传不能覆盖终态，成绩同步只发生一次。
 - [x] 压力工具已记录逐提交端到端延迟；100/100 Accepted，P50 29990ms、P95 50925ms、P99 52932ms、最大 52945ms，API/Judge RSS 增量为 0 且沙箱文件归零。
+- [x] queue/dispatch/compile/run/persist/total 六段指标和强制 SLO 检查已部署；当前 24 小时窗口只有 2/50 个完整阶段样本，门禁按设计保持未满足，等待真实新提交积累，不降低门槛或伪造生产样本。
 
 ### 2. Judge、容器和应用安全边界
 

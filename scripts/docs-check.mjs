@@ -102,6 +102,10 @@ const stalePatterns = [
   ['planned CI claim', /📋\s*CI\/CD\s*配置/],
   ['obsolete 230 test snapshot', /230\+\s*单元测试/],
   ['obsolete 439 test snapshot', /439\s+vitest/],
+  ['obsolete production-template-only claim', /生产配置仅作为模板保留，尚未在当前服务器启用/],
+  ['obsolete PM2 production topology', /正式环境\s*\|\s*PM2|正式环境\s*\|\s*构建产物、PM2/],
+  ['obsolete watch API runtime', /Server API\s*\|\s*`3002`\s*\|\s*`tsx watch/],
+  ['obsolete fixed page-count claim', /提供\s*90\s*个页面路由/],
 ]
 
 for (const file of activeMarkdown) {

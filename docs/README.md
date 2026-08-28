@@ -1,14 +1,16 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-07
-source_of_truth: repository structure and active documentation
+last_verified: 2026-08-29
+source_of_truth: repository structure, deploy/systemd, generated architecture inventory and active documentation
 ---
 
 # OI Manager 项目文档
 
-本目录是 OI Manager 的唯一正式文档入口。项目目前处于开发阶段：开发服务使用
-`3000/3002`，生产配置仅作为模板保留，尚未在当前服务器启用。
+本目录是 OI Manager 的唯一正式文档入口。当前公网使用 systemd 管理的 Web 构建产物、稳定
+API Router `3002`、蓝绿 API `3302/3303`、Scheduler、Executor 和 Judge；PostgreSQL 与 go-judge
+由 Docker 管理。域名/TLS、严格浏览器安全、真实外部告警和异机留存尚未完成，因此
+Production v1 外部验收仍保持未完成，不能把“运行拓扑已生产化”误写成“所有投产条件已满足”。
 
 ## 阅读路径
 

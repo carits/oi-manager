@@ -1,13 +1,28 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-28
+last_verified: 2026-08-29
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-29
+
+### JudgeRun Switch read
+
+- 新增唯一 `judge-read-projection` 边界。存在 CurrentJudgeRun 的本地提交，其队列状态、终态结果、分数、测试点、Subtask、错误和资源指标全部从 Run 读取；只有远程归档与无 Run 历史记录回退 Submission 兼容列。
+- 全局/活动/题目提交列表与详情、结果筛选、题目状态、个人概览、OI/ICPC 排名、平台/校园解题排名、管理统计和重测预览统一到同一语义；OI SQL 聚合显式投影 CurrentJudgeRun。
+- 新增故意把 Submission 兼容列写成 WA/0、Run 写成 AC/100 的回归，列表、详情、筛选和排名仍返回 AC/100。Server 57 文件 509/509、Web 36/36、Judge 17/17、三端生产构建和文档/架构门禁通过。
+- 提交 `c554aa8` 已推送 `main` 并完成 3302→3303 API 蓝绿提升；Judge 自动重连，生产 2518/2518 投影对账零差异。
+
+### 架构边界与运行文档收口
+
+- 60 个 HTTP adapter 的 Prisma、transaction、filesystem 和 Judge Runtime 直接调用全部归零，Strangler 过渡结束，零基线门禁阻止回退。
+- 环境、远端拓扑、项目概览、存储和剩余工作文档统一到 systemd Web、稳定 Router、蓝绿 API、Scheduler/Executor、Judge、Docker 以及不可变 BlobStore 的当前事实。
+- 文档门禁新增 PM2 正式拓扑、tsx watch 公网 API、“正式配置仅为模板”和固定页面数量等过时表述检查。
 
 ## 2026-08-28
 

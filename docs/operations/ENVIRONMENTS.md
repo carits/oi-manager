@@ -1,61 +1,71 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-07-31
-source_of_truth: environment examples, Playwright config, runtime validation
+last_verified: 2026-08-29
+source_of_truth: deploy/systemd, runtime audit scripts, Playwright config, production host inspection
 ---
 
 # 环境边界
 
-## 三类环境
+## 环境分类
 
-| 环境 | 进程 | 数据 | 用途 |
-|------|------|------|------|
-| development | `3000` 优化预览、`3001` Next HMR、tsx watch | PostgreSQL `public`、开发存储 | 当前服务器与日常开发 |
-| e2e | 3100/3102 临时进程 | PostgreSQL `e2e`、`test-results/storage` | 确定性 UI 测试 |
-| production | 构建产物、PM2、Nginx | 独立正式库和存储 | 模板已提供，当前未启用 |
+| 环境 | 进程与端口 | 数据 | 用途 |
+|------|------------|------|------|
+| development | `pnpm dev`、Web HMR `3001`、tsx watch | 开发 PostgreSQL/schema 与开发存储 | 本地或受控开发，不作为公网常驻服务 |
+| e2e | `3100/3102` 临时进程 | PostgreSQL `e2e` schema、`test-results/storage` | 确定性写入、Judge、Hack、Revision 与浏览器测试 |
+| hosted runtime | systemd Web `3000`、Router `3002`、API `3302/3303`、Worker/Executor/Judge | 当前正式数据与 `/data` 资产 | `47.99.222.76` 当前公网运行形态 |
+| production v1 target | hosted runtime + HTTPS/安全 Cookie/严格 CSP/外部告警/异机留存 | 正式数据、不可变备份与异机副本 | 完成外部依赖后的正式验收状态 |
 
-单元测试使用 PostgreSQL `test` schema，不属于开发数据。
+单元测试使用 PostgreSQL `test` schema。E2E 使用独立 schema、端口、存储和任务开关，禁止复用
+生产 `public` schema。
 
-## 开发
+## 当前公网运行环境
 
-- 业务环境 `APP_ENV=development`
-- 公网预览使用 `NODE_ENV=production` 启用 Next 优化，不改变业务环境
-- Web preview `3000`、HMR `127.0.0.1:3001`、Server `3002`、go-judge `5050`
-- 允许调试日志和 watch
-- `JUDGE_TOKEN` 仍必须配置
-- `ENABLE_MAINTENANCE_API=false`
-- CORS 自动允许本机开发来源
+当前服务器已经启用生产式运行拓扑，不再使用 PM2、Nix、`pnpm dev` 或 watch 进程承载公网流量：
 
-当前公网服务器即使可从外部访问，也仍按开发环境管理。不要因此复用正式密钥或把
-开发进程称为生产服务。
+```text
+Nginx :80
+  ├─ Web systemd :3000 (.next-current)
+  └─ API Router systemd :3002
+       └─ active blue/green API :3302 or :3303
+
+PostgreSQL :5432 loopback (Docker)
+go-judge :5050 loopback (Docker)
+Scheduler leader / Executor / Judge (systemd)
+```
+
+Web/API/Judge 使用构建产物；Router 通过 readiness、原子上游切换和旧实例 drain 完成蓝绿发布。
+数据库、go-judge、Router 和 API 均不直接暴露公网。
+
+当前仍是 HTTP 入口，业务环境继续保留 `APP_ENV=development` 的兼容配置，因此这套运行时不能冒充
+已经完成 Production v1 外部验收。缺口只由
+[未完成事项执行总表](REMAINING_WORK_2026-08-27.md) 跟踪，包括 TLS、Secure Cookie、严格 CSP、
+真实外部告警、异机留存和授权后的生产恢复演练。
+
+## Development
+
+- 只用于本地或受控开发。
+- Web HMR 使用 `127.0.0.1:3001`；Server/Judge 可使用 watch。
+- `JUDGE_TOKEN` 仍必须配置，维护 API 默认关闭。
+- 开发服务不得占用公网稳定 Router 或活动蓝绿 slot。
 
 ## E2E
 
-- `NODE_ENV=test`, `E2E_BUILD=true`
-- `DATABASE_URL` 必须包含 `schema=e2e`
-- `DISABLE_BACKGROUND_JOBS=true`
-- `NEXT_DIST_DIR=.next-e2e`
-- JWT/Judge Token 在准备阶段动态生成
-- 外部 OJ 默认 Mock
+- `NODE_ENV=test`、`E2E_BUILD=true`。
+- `DATABASE_URL` 必须包含 `schema=e2e`。
+- `DISABLE_BACKGROUND_JOBS=true`，外部 OJ 默认 Mock。
+- `NEXT_DIST_DIR=.next-e2e`，JWT/Judge Token 动态生成。
+- 写入、并发、故障注入和破坏性流程只能在该隔离层执行。
 
-E2E 配置拒绝 `public` schema，不能改成复用现有开发服务。
+## Production v1 目标
 
-## 正式
+- `NODE_ENV=production`、`APP_ENV=production`。
+- HTTPS 同源入口，HTTP 强制跳转。
+- `COOKIE_SECURE=true`，启用 HSTS、最终 CSRF 复验和严格 CSP。
+- `CORS_ORIGINS`、`CSRF_TRUSTED_ORIGINS` 只包含正式域名。
+- JWT、Judge Token、账号加密密钥使用独立强随机值。
+- `ALLOW_UNAUTHENTICATED_JUDGE=false`、`ENABLE_MAINTENANCE_API=false`。
+- 外部告警和异机日志/备份必须有真实送达及校验和证据。
 
-- `NODE_ENV=production`
-- `APP_ENV=production`
-- `COOKIE_SECURE=true`，只允许 HTTPS
-- `CSRF_TRUSTED_ORIGINS` 只包含正式同源站点
-- 使用 `*.env.production.example` 创建未提交的实际配置。
-- JWT、Judge Token 和 OJ 账号加密密钥必须是独立强随机值。
-- `CORS_ORIGINS` 只包含正式域名。
-- `ALLOW_UNAUTHENTICATED_JUDGE=false`
-- `ENABLE_MAINTENANCE_API=false`
-- Web 通过同域 Nginx 访问 API 和 WebSocket。
-
-当前只保证正式构建链路可验证，不执行正式切换。部署前还需在 staging 验证 PM2、
-标准 `next build` / `next start` 产物、HTTPS、备份恢复和服务守护。
-
-完整变量见[环境变量参考](../reference/ENVIRONMENT_VARIABLES.md)。
-
+完整变量见[环境变量参考](../reference/ENVIRONMENT_VARIABLES.md)，部署操作见
+[systemd 部署](SYSTEMD_DEPLOYMENT.md)和[部署说明](DEPLOYMENT.md)。
