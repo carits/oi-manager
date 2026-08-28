@@ -204,7 +204,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.submissions.routes.ts": {
-    "prisma": 25,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0

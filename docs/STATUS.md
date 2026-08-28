@@ -314,6 +314,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-29 题库提交、个人笔记、TestSet Revision 和 Test Graph 四个路由已迁入统一 problem application service；访问范围、工作区提交隔离、Revision spec、显式模式迁移、旧图迁移和活动 graph revision 回填语义保持不变。题目访问、提交、Test Graph 和 Revision 回归 31/31 通过；路由边界降至 Prisma 284 / transaction 7 / filesystem 34 / Judge Runtime 0。
 - 2026-08-29 活动题目笔记和比赛记录读写已迁入 training user-content service，并补上 `trainingProblemId + trainingId` 归属校验，避免利用其他活动题目 ID 读写笔记。训练兼容回归 37/37 通过；路由边界降至 Prisma 272 / transaction 7 / filesystem 34 / Judge Runtime 0。
 - 2026-08-29 认证路由已完成 Strangler 收口：登录审计、注册事务、全局角色/校园成员解析、个人工作区、资料/组织档案更新、头像上传替换回滚和密码修改进入 auth application service；Multer 临时目录与清理进入基础设施模块。管理员角色、Cookie/CSRF、工作区、密码和文件安全回归 52/52 通过；路由边界降至 Prisma 245 / transaction 7 / filesystem 29 / Judge Runtime 0。
+- 2026-08-29 活动提交路由已完成收口：本地提交配置检查、列表范围/用户名/题目筛选、展示名、详情、管理员提交用户、重测预览与候选快照进入 training submission query service；HTTP 层继续负责脱敏和响应映射。训练兼容与提交权限回归 53/53 通过；路由边界降至 Prisma 220 / transaction 7 / filesystem 29 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
