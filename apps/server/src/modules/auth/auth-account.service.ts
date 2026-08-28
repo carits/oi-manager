@@ -1,0 +1,243 @@
+import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
+import type { JwtPayload, UserRole } from '@oi-manager/shared'
+import { prisma } from '../../prisma'
+import { fileService } from '../../lib/storage'
+import logger from '../../lib/logger'
+
+export type WorkspaceMode = 'work' | 'personal'
+
+export type LoginAccountResult =
+  | { ok: false; message: string }
+  | {
+      ok: true
+      user: { id: string; username: string; role: string; avatar: string | null }
+      role: UserRole
+      workspaceMode: WorkspaceMode
+      schoolId?: string
+      isGlobalAdmin: boolean
+    }
+
+async function resolveSchoolId(organizationId?: string | null) {
+  if (!organizationId) return undefined
+  return (await prisma.school.findUnique({ where: { organizationId }, select: { id: true } }))?.id
+}
+
+async function writeLoginLog(data: {
+  userId?: string
+  username: string
+  userRole?: string
+  result: string
+  failureReason?: string
+  ipAddress: string
+  userAgent: string
+}) {
+  await prisma.loginLog.create({
+    data: { id: crypto.randomUUID(), loginRole: 'unified', ...data },
+  })
+}
+
+export async function loginAccount(params: {
+  username: string
+  password: string
+  workspaceMode: WorkspaceMode
+  ipAddress: string
+  userAgent: string
+}): Promise<LoginAccountResult> {
+  const user = await prisma.user.findUnique({ where: { username: params.username } })
+  if (!user) {
+    await writeLoginLog({
+      username: params.username, result: 'failed_user_not_found', failureReason: '用户名不存在',
+      ipAddress: params.ipAddress, userAgent: params.userAgent,
+    })
+    return { ok: false, message: '用户名或密码错误' }
+  }
+  if (!await bcrypt.compare(params.password, user.passwordHash)) {
+    await writeLoginLog({
+      username: params.username, userRole: user.role, result: 'failed_wrong_password', failureReason: '密码错误',
+      ipAddress: params.ipAddress, userAgent: params.userAgent,
+    })
+    return { ok: false, message: '用户名或密码错误' }
+  }
+  if (user.status === 'disabled') {
+    await writeLoginLog({
+      userId: user.id, username: params.username, userRole: user.role,
+      result: 'failed_account_disabled', failureReason: '账号已被禁用',
+      ipAddress: params.ipAddress, userAgent: params.userAgent,
+    })
+    return { ok: false, message: '该账号已被禁用，请联系管理员' }
+  }
+  const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+  const membership = isGlobalAdmin ? null : await prisma.organizationMembership.findFirst({
+    where: { userId: user.id, status: 'active' },
+    orderBy: { createdAt: 'asc' },
+    select: { organizationId: true },
+  })
+  await prisma.$transaction([
+    prisma.personalProfile.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
+    prisma.loginLog.create({
+      data: {
+        id: crypto.randomUUID(), userId: user.id, username: params.username, loginRole: 'unified',
+        userRole: user.role, result: 'success', ipAddress: params.ipAddress, userAgent: params.userAgent,
+      },
+    }),
+  ])
+  return {
+    ok: true,
+    user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar },
+    role: user.role as UserRole,
+    workspaceMode: isGlobalAdmin ? 'work' : params.workspaceMode,
+    schoolId: await resolveSchoolId(membership?.organizationId),
+    isGlobalAdmin,
+  }
+}
+
+export async function registerPersonalAccount(username: string, password: string) {
+  const passwordHash = await bcrypt.hash(password, 10)
+  try {
+    return await prisma.$transaction(async tx => {
+      const existing = await tx.user.findUnique({ where: { username }, select: { id: true } })
+      if (existing) return null
+      const user = await tx.user.create({
+        data: { id: crypto.randomUUID(), username, passwordHash, role: 'user' },
+      })
+      await tx.personalProfile.create({ data: { userId: user.id } })
+      return user
+    })
+  } catch (error: any) {
+    if (error?.code === 'P2002') return null
+    throw error
+  }
+}
+
+export async function loadCurrentAccount(
+  userId: string,
+  requestedOrganizationId?: string,
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) return { status: 'missing' as const }
+  if (user.status === 'disabled') return { status: 'disabled' as const }
+  const isGlobalAdmin = ['super_admin', 'platform_admin'].includes(user.role)
+  const membership = isGlobalAdmin ? null : requestedOrganizationId
+    ? await prisma.organizationMembership.findFirst({
+        where: { organizationId: requestedOrganizationId, userId, status: 'active' },
+        include: { StudentProfile: true, TeacherProfile: true },
+      })
+    : await prisma.organizationMembership.findFirst({
+        where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' },
+        include: { StudentProfile: true, TeacherProfile: true },
+      })
+  const organizationId = requestedOrganizationId || membership?.organizationId
+  let profile: any = null
+  if (membership?.StudentProfile) {
+    profile = {
+      id: membership.StudentProfile.id, name: membership.StudentProfile.name,
+      avatar: membership.StudentProfile.avatar, rating: membership.StudentProfile.rating,
+      enrollmentYear: membership.StudentProfile.enrollmentYear,
+    }
+  } else if (membership?.TeacherProfile) {
+    profile = {
+      id: membership.TeacherProfile.id, name: membership.TeacherProfile.name,
+      avatar: membership.TeacherProfile.avatar, organizationRole: membership.memberRole,
+      title: membership.TeacherProfile.title,
+    }
+  } else if (isGlobalAdmin) profile = { id: user.id, name: user.username }
+  return {
+    status: 'ok' as const,
+    user,
+    membership,
+    organizationId,
+    schoolId: await resolveSchoolId(organizationId),
+    profile,
+    isGlobalAdmin,
+  }
+}
+
+export async function resolveWorkspaceSwitch(userId: string, globalRole: string, workspaceMode: WorkspaceMode) {
+  if (workspaceMode === 'personal') {
+    await prisma.personalProfile.upsert({ where: { userId }, create: { userId }, update: {} })
+  }
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { memberRole: true },
+  })
+  return ['super_admin', 'platform_admin'].includes(globalRole) ? globalRole : (membership?.memberRole || globalRole)
+}
+
+export async function updateAccountProfile(
+  payload: JwtPayload,
+  data: { avatar?: string | null; phone?: string | null; email?: string | null; bio?: string | null; name?: string },
+) {
+  return prisma.$transaction(async tx => {
+    const user = await tx.user.update({
+      where: { id: payload.userId },
+      data: { avatar: data.avatar, phone: data.phone, email: data.email, bio: data.bio },
+    })
+    if (payload.organizationMembershipId && typeof data.name === 'string') {
+      const membership = await tx.organizationMembership.findFirst({
+        where: { id: payload.organizationMembershipId, userId: payload.userId, status: 'active' },
+        select: { memberRole: true },
+      })
+      if (membership?.memberRole === 'student') {
+        await tx.organizationStudentProfile.updateMany({
+          where: { membershipId: payload.organizationMembershipId }, data: { name: data.name },
+        })
+      } else if (membership) {
+        await tx.organizationTeacherProfile.updateMany({
+          where: { membershipId: payload.organizationMembershipId }, data: { name: data.name, bio: data.bio },
+        })
+      }
+    }
+    return user
+  })
+}
+
+function publicFileId(url: string | null | undefined) {
+  return url?.match(/^\/api\/files\/([^/]+)\/public$/)?.[1] || null
+}
+
+export async function uploadAccountAvatar(payload: JwtPayload, file: Express.Multer.File) {
+  const oldUser = await prisma.user.findUnique({ where: { id: payload.userId }, select: { avatar: true } })
+  const uploaded = await fileService.uploadFromMulter(file, {
+    category: 'avatar', ownerType: 'user', ownerId: payload.userId, isPublic: true,
+  })
+  const avatar = `/api/files/${uploaded.id}/public`
+  try {
+    await prisma.$transaction(async tx => {
+      await tx.user.update({ where: { id: payload.userId }, data: { avatar } })
+      if (!payload.organizationMembershipId) return
+      const membership = await tx.organizationMembership.findFirst({
+        where: { id: payload.organizationMembershipId, userId: payload.userId, status: 'active' },
+        select: { memberRole: true },
+      })
+      if (membership?.memberRole === 'student') {
+        await tx.organizationStudentProfile.updateMany({
+          where: { membershipId: payload.organizationMembershipId }, data: { avatar },
+        })
+      } else if (membership) {
+        await tx.organizationTeacherProfile.updateMany({
+          where: { membershipId: payload.organizationMembershipId }, data: { avatar },
+        })
+      }
+    })
+  } catch (error) {
+    await fileService.hardDelete(uploaded.id).catch(() => {})
+    throw error
+  }
+  const oldFileId = publicFileId(oldUser?.avatar)
+  if (oldFileId && oldFileId !== uploaded.id) await fileService.hardDelete(oldFileId).catch(() => {})
+  return { avatar, fileId: uploaded.id, originalName: uploaded.originalName }
+}
+
+export async function changeAccountPassword(userId: string, currentPassword: string, newPassword: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } })
+  if (!user) return { ok: false as const, statusCode: 404, message: '用户不存在' }
+  if (!await bcrypt.compare(currentPassword, user.passwordHash)) {
+    return { ok: false as const, statusCode: 400, message: '当前密码错误' }
+  }
+  if (currentPassword === newPassword) {
+    return { ok: false as const, statusCode: 400, message: '新密码不能与当前密码相同' }
+  }
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } })
+  logger.audit('password_change_success', { userId, action: 'password_change' })
+  return { ok: true as const }
+}
