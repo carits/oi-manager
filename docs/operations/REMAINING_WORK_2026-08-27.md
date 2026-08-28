@@ -12,6 +12,8 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 > 通用文件路由完成收口后，当前为 Prisma 41 / transaction 5 / filesystem 6 / Judge Runtime 0；上传暂存清理由基础设施模块统一承担，题目/比赛/团队/用户归属权限保持原边界。
 >
 > 团队 CRUD、邀请、成员与申请路由完成收口后，当前为 Prisma 26 / transaction 0 / filesystem 0 / Judge Runtime 0；路由中的事务、文件系统和 Judge Runtime 直接调用已全部清零，仅剩 3 个维护/演示 adapter 的 Prisma 查询待处理。
+>
+> 受控演示与维护迁移路由收口后，60 个 adapter 当前为 Prisma 0 / transaction 0 / filesystem 0 / Judge Runtime 0。`routes/` Strangler 存量债务已完成，后续门禁不允许重新增加。
 
 # 未完成事项执行总表（2026-08-27）
 

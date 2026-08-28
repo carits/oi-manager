@@ -1,8 +1,17 @@
 import { Router } from 'express'
-import { prisma } from '../prisma'
 import { authenticate, isAdmin, type AuthRequest } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createQueuedTrainingSubmission } from '../modules/training/training.submission.service'
+import {
+  countDemoSubmissions,
+  demoSubmissionExists,
+  findDemoTrainingProblems,
+  findDemoTrainings,
+  findDemoTrainingsByIds,
+  findDemoUsers,
+  normalizeDemoSubmission,
+  updateDemoTrainings,
+} from '../modules/maintenance/application/demo-scenario-persistence.service'
 
 export const demoScenarioRouter = Router()
 const PREFIX = '赛时演示 V2'
@@ -90,8 +99,8 @@ function allowed(req: AuthRequest, res: any) {
   return true
 }
 async function resources() {
-  const users = await prisma.user.findMany({where:{username:{in:USERNAMES}},select:{id:true,username:true}})
-  const trainings = await prisma.training.findMany({where:{teamId:TEAM_ID,title:{startsWith:PREFIX},type:'contest',scope:'campus'}})
+  const users = await findDemoUsers(USERNAMES)
+  const trainings = await findDemoTrainings(TEAM_ID, PREFIX)
   if (users.length !== 5 || trainings.length !== 9) throw new Error('赛时演示 V2 资源不完整，请先运行 API 创建脚本')
   return { users: USERNAMES.map(name => users.find(user => user.username === name)!), trainings }
 }
@@ -99,9 +108,9 @@ demoScenarioRouter.post('/v2/prepare', authenticate, asyncHandler(async (req: Au
   if (!allowed(req,res)) return
   const { trainings } = await resources(); const now=Date.now()
   const active = trainings.filter(item => item.title.endsWith('进行中') || item.title.endsWith('已结束'))
-  const existing = await prisma.submission.count({ where: { sourceId: { startsWith: 'demo-v2:' } } })
+  const existing = await countDemoSubmissions('demo-v2:')
   if (existing === 0) {
-    await prisma.training.updateMany({where:{id:{in:active.map(item=>item.id)}},data:{status:'ongoing',startTime:new Date(now-130*60000),endTime:new Date(now+130*60000),updatedAt:new Date()}})
+    await updateDemoTrainings(active.map(item=>item.id), {status:'ongoing',startTime:new Date(now-130*60000),endTime:new Date(now+130*60000),updatedAt:new Date()})
   }
   // Existing V2 events are normalized from their immutable event definition.
   // This repairs an interrupted run without exposing a generic time-edit API.
@@ -110,7 +119,7 @@ demoScenarioRouter.post('/v2/prepare', authenticate, asyncHandler(async (req: Au
     const events = training.format === 'icpc' ? icpcEvents : scoreEvents
     for (const [index, event] of events.entries()) {
       const sourceId = 'demo-v2:'+training.id+':'+eventKey(event,index)
-      const result = await prisma.submission.updateMany({ where: { sourceId }, data: { createdAt: new Date(training.startTime.getTime()+event.minute*60000), updatedAt: new Date() } })
+      const result = await normalizeDemoSubmission(sourceId, new Date(training.startTime.getTime()+event.minute*60000))
       normalized += result.count
     }
   }
@@ -120,12 +129,12 @@ demoScenarioRouter.post('/v2/events', authenticate, asyncHandler(async (req: Aut
   if (!allowed(req,res)) return
   const { users, trainings } = await resources(); let created=0, existing=0
   for (const training of trainings.filter(item => item.title.endsWith('进行中') || item.title.endsWith('已结束'))) {
-    const problems = await prisma.trainingProblem.findMany({where:{trainingId:training.id},include:{Problem:{select:{id:true,platform:true,problemId:true}}},orderBy:{orderIndex:'asc'}})
+    const problems = await findDemoTrainingProblems(training.id)
     if (problems.length !== 5) throw new Error(training.title+' 题目配置不完整')
     const aliases = new Map(problems.map(problem => [problem.alias!,problem]))
     for (const [index,event] of (training.format === 'icpc' ? icpcEvents : scoreEvents).entries()) {
       const sourceId = 'demo-v2:'+training.id+':'+eventKey(event,index)
-      if (await prisma.submission.findFirst({where:{sourceId},select:{id:true}})) { existing++; continue }
+      if (await demoSubmissionExists(sourceId)) { existing++; continue }
       const trainingProblem = aliases.get(event.alias); if (!trainingProblem) throw new Error(training.title+' 缺少题目 '+event.alias)
       await createQueuedTrainingSubmission({userId:users[event.user].id,training,trainingProblem,language:'cpp',code:event.kind==='full'?full[event.alias]:event.kind==='partial'?partial[event.alias]:wrong,submitMethod:'demo_scenario',createdAt:new Date(training.startTime.getTime()+event.minute*60000),sourceId})
       created++
@@ -135,8 +144,8 @@ demoScenarioRouter.post('/v2/events', authenticate, asyncHandler(async (req: Aut
 }, '写入演示提交失败'))
 
 async function v3Resources() {
-  const users = await prisma.user.findMany({ where: { username: { in: V3_USERNAMES } }, select: { id: true, username: true } })
-  const trainings = await prisma.training.findMany({ where: { teamId: V3_TEAM_ID, title: { startsWith: V3_PREFIX }, type: 'contest', scope: 'campus' } })
+  const users = await findDemoUsers(V3_USERNAMES)
+  const trainings = await findDemoTrainings(V3_TEAM_ID, V3_PREFIX)
   if (users.length !== 8 || trainings.length !== 3) throw new Error('赛时演示 V3 资源不完整，请先运行 API 创建脚本')
   return { users: V3_USERNAMES.map(name => users.find(user => user.username === name)!), trainings }
 }
@@ -145,19 +154,13 @@ demoScenarioRouter.post('/v3/prepare', authenticate, asyncHandler(async (req: Au
   if (!allowed(req, res)) return
   const { trainings } = await v3Resources()
   const now = Date.now()
-  await prisma.training.updateMany({
-    where: { id: { in: trainings.map(item => item.id) } },
-    data: { status: 'ongoing', startTime: new Date(now - 6 * 60 * 60 * 1000), endTime: new Date(now + 14 * 60 * 60 * 1000), updatedAt: new Date() }
-  })
-  const refreshed = await prisma.training.findMany({ where: { id: { in: trainings.map(item => item.id) } } })
+  await updateDemoTrainings(trainings.map(item => item.id), { status: 'ongoing', startTime: new Date(now - 6 * 60 * 60 * 1000), endTime: new Date(now + 14 * 60 * 60 * 1000), updatedAt: new Date() })
+  const refreshed = await findDemoTrainingsByIds(trainings.map(item => item.id))
   let normalized = 0
   for (const training of refreshed) {
     for (const event of v3Events()) {
       const sourceId = 'demo-v3:' + training.id + ':' + event.id
-      const result = await prisma.submission.updateMany({
-        where: { sourceId },
-        data: { createdAt: new Date(training.startTime.getTime() + event.minute * 60000), updatedAt: new Date() }
-      })
+      const result = await normalizeDemoSubmission(sourceId, new Date(training.startTime.getTime() + event.minute * 60000))
       normalized += result.count
     }
   }
@@ -171,16 +174,12 @@ demoScenarioRouter.post('/v3/events', authenticate, asyncHandler(async (req: Aut
   let created = 0
   let existing = 0
   for (const training of trainings) {
-    const problems = await prisma.trainingProblem.findMany({
-      where: { trainingId: training.id },
-      include: { Problem: { select: { id: true, platform: true, problemId: true } } },
-      orderBy: { orderIndex: 'asc' }
-    })
+    const problems = await findDemoTrainingProblems(training.id)
     if (problems.length !== 8) throw new Error(training.title + ' 题目配置不完整')
     const aliases = new Map(problems.map(problem => [problem.alias!, problem]))
     for (const event of events) {
       const sourceId = 'demo-v3:' + training.id + ':' + event.id
-      if (await prisma.submission.findFirst({ where: { sourceId }, select: { id: true } })) { existing += 1; continue }
+      if (await demoSubmissionExists(sourceId)) { existing += 1; continue }
       const trainingProblem = aliases.get(event.alias)
       if (!trainingProblem) throw new Error(training.title + ' 缺少题目 ' + event.alias)
       const code = event.kind === 'full' ? v3Full[event.alias] : event.kind === 'partial' ? v3Partial[event.alias] : wrong
