@@ -1,6 +1,6 @@
 import { startCronTasks } from './cron-tasks'
 import { startSubmissionPoller, stopSubmissionPoller } from './submission-poller'
-import { startAutoVerifyScheduler } from '../routes/oj-accounts'
+import { startAutoVerifyScheduler } from '../modules/oj-account/application/oj-account.service'
 import logger from './logger'
 
 export interface BackgroundServicesHandle {

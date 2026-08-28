@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../src/lib/cron-tasks', () => ({
   startCronTasks: mocks.startCron.mockImplementation(() => mocks.stopCron),
 }))
-vi.mock('../src/routes/oj-accounts', () => ({
+vi.mock('../src/modules/oj-account/application/oj-account.service', () => ({
   startAutoVerifyScheduler: mocks.startAutoVerify.mockImplementation(() => mocks.stopAutoVerify),
 }))
 vi.mock('../src/lib/submission-poller', () => ({
