@@ -25,6 +25,7 @@ source_of_truth: Git history
 - 文档门禁新增 PM2 正式拓扑、tsx watch 公网 API、“正式配置仅为模板”和固定页面数量等过时表述检查。
 - 新增账号级 UI capability 矩阵，统一全局管理员工作区、个人/校园工作区、全量评测记录、组织管理和平台密钥入口判断；动态资源权限继续由后端响应决定。登录、身份选择、RoleLayout、Shell、工作区切换器和提交列表已迁移，UI 门禁拒绝重新拼接全局管理员复合角色判断。
 - Capability 批次提交 `8776b5e` 已推送 `main`，preview 构建 `pLLd_bBuL87zHDakelxvi` 已提升到公网 `3000`。Web、Router、API 3303、Worker、Executor、Judge 与 health/readiness 均正常；Codex 内置浏览器确认登录页可访问且页面控制台无 warning/error。
+- 新增架构收口逐项完成审计，把原评审的产品边界、Judge 生命周期、状态机、Candidate、Strangler、BlobStore、Scheduler/Executor、SLO、API 契约和 capability UI 分别映射到当前实现与验证证据；外部生产 P0 和观察期事项继续保持未完成，不以本地模拟替代。
 
 ## 2026-08-28
 
