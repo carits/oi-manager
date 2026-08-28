@@ -60,6 +60,37 @@ describe('VJudge 式多题面版本与活动快照', () => {
     expect(derivedDetail.body.data.content).toBe('# 原始内容')
   })
 
+  it('个人题解支持 Markdown、PDF、公开范围和软删除', async () => {
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(author.user))
+    const markdown = await client.put(`/api/problems/${problem.id}/my-content/solution`).send({
+      language: 'zh',
+      content: '# 个人题解',
+    })
+    expect(markdown.status).toBe(200)
+    expect(markdown.body.data.revision).toBe(1)
+    expect((await client.put(`/api/problems/${problem.id}/my-content/solution/shares`).send({
+      shareKeys: ['platform'],
+    })).status).toBe(200)
+
+    const pdf = await request(app)
+      .post(`/api/problems/${problem.id}/my-content/solution/pdf`)
+      .set('Authorization', `Bearer ${generateTokenFromUser(author.user)}`)
+      .field('language', 'zh')
+      .attach('file', Buffer.from('%PDF-1.4\npersonal solution'), {
+        filename: 'solution.pdf',
+        contentType: 'application/pdf',
+      })
+    expect(pdf.status).toBe(200)
+    expect(pdf.body.data.revision).toBe(2)
+    const contentId = pdf.body.data.id as string
+    const stored = await prisma.userProblemContent.findUniqueOrThrow({ where: { id: contentId } })
+    expect(stored.format).toBe('pdf')
+    expect(stored.visibility).toBe('public')
+
+    expect((await client.delete(`/api/problems/${problem.id}/my-content/solution`)).status).toBe(200)
+    expect((await prisma.userProblemContent.findUniqueOrThrow({ where: { id: contentId } })).deletedAt).not.toBeNull()
+  })
+
   it('题目路径不能用于修改另一道题下的版本', async () => {
     const created = await createVersion('作用域版本')
     const other = await createTestProblem({ ownerId: author.user.id, title: '另一道题' })

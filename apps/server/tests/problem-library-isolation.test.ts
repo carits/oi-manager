@@ -339,6 +339,33 @@ describe('学校私有题库隔离', () => {
     if (fs.existsSync(physicalPath)) fs.unlinkSync(physicalPath)
   })
 
+  it('公开个人题面 PDF 仍受学校题目边界约束', async () => {
+    const created = await createSchoolProblem('published')
+    const problemId = created.body.data.id as string
+    const version = await createAuthenticatedRequest(app, ownerAToken)
+      .post(`/api/problems/${problemId}/statement-versions`)
+      .send({
+        name: '学校公开版本',
+        language: 'zh',
+        visibility: 'public',
+        source: { type: 'blank' },
+      })
+    expect(version.status).toBe(201)
+    const versionId = version.body.data.id as string
+    const uploaded = await request(app)
+      .post(`/api/problems/${problemId}/statement-versions/${versionId}/pdf`)
+      .set('Authorization', `Bearer ${ownerAToken}`)
+      .attach('file', Buffer.from('%PDF-1.4\nschool statement'), {
+        filename: 'statement.pdf',
+        contentType: 'application/pdf',
+      })
+    expect(uploaded.status).toBe(200)
+    expect((await createAuthenticatedRequest(app, ownerAToken)
+      .get(`/api/problems/${problemId}/statement-versions/${versionId}/file`)).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, teacherBToken)
+      .get(`/api/problems/${problemId}/statement-versions/${versionId}/file`)).status).toBe(404)
+  })
+
   it('匿名请求保持 401', async () => {
     const response = await request(app).get('/api/problems?library=school')
     expect(response.status).toBe(401)

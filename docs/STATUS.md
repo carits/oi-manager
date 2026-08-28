@@ -324,6 +324,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-29 题目列表、创建、详情、更新、归档、题库创建者与学校副本入口已迁入 problem CRUD application service；题目与官方题面/题解版本改为同事务创建和更新，非法内容不会留下半成品题目或已提交一半的标题变更。Server 构建与题库权限/归档定向 3 文件、13/13 回归通过；路由边界降至 Prisma 139 / transaction 5 / filesystem 26 / Judge Runtime 0。
 - 2026-08-29 Hack 配置、发起、记录、详情和系统错误重试编排已迁入 problem Hack application service；Hack Attempt 仍只通过现有状态机/CAS 转换，配置保存新增 revision CAS，两个管理员并发保存只允许一个成功。Server/Web 构建与 Hack、Revision、并发定向 5 文件、25/25 回归通过；路由边界降至 Prisma 117 / transaction 5 / filesystem 26 / Judge Runtime 0。
 - 2026-08-29 Judge Config 与 Checker 列表、上传、替换、下载、删除已迁入 problem Judge application/storage service；Checker 仅接受安全文本形态的 `.cpp/.cc/.cxx`，替换与删除在数据库失败时恢复原文件，权限失败会清理 Multer 临时文件。Server 构建，Judge/文件安全/Revision/权限回归合计 21/21 通过，新增 API 定向 3/3 复跑通过；路由边界降至 Prisma 106 / transaction 5 / filesystem 20 / Judge Runtime 0。
+- 2026-08-29 个人题解与多题面版本的查询、编辑、公开范围、PDF 替换、下载和软删除已迁入 problem content application service，共用受控 PDF 上传基础设施。新文件在数据库失败时回收，旧文件在成功切换后回收；公开个人题面 PDF 也必须先通过原题目校园访问边界。Server 构建及个人内容、学校隔离、文件安全 3 文件、25/25 回归通过；路由边界降至 Prisma 83 / transaction 5 / filesystem 14 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。

@@ -66,9 +66,9 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.statement-version.routes.ts": {
-    "prisma": 9,
+    "prisma": 0,
     "transaction": 0,
-    "filesystem": 3,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.submissions.routes.ts": {
@@ -90,9 +90,9 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.user-content.routes.ts": {
-    "prisma": 14,
+    "prisma": 0,
     "transaction": 0,
-    "filesystem": 3,
+    "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/ranking/ranking.routes.ts": {
