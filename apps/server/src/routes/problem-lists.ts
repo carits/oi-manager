@@ -6,7 +6,7 @@ import crypto from 'crypto'
  * UI 层面：所有章节和题目渲染在同一个页面上，章节仅作二级标题分组
  */
 
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import { prisma } from '../prisma'
 import {
   authenticate,
@@ -17,7 +17,7 @@ import {
 } from '../middleware/auth'
 import logger from '../lib/logger'
 import { asyncHandler } from '../lib/asyncHandler'
-import { parsePagination, paginatedResponse } from '../lib/pagination'
+import { parsePagination } from '../lib/pagination'
 import { populateSnapshotData } from '../modules/training/training.helpers'
 import { v4 as uuidv4 } from 'uuid'
 import { findAccessibleProblem, findUsableProblemByExternalId } from '../modules/problem/problem.access'
@@ -27,15 +27,40 @@ import {
   checkProblemListOptimisticLock as checkOptimisticLock,
   collectManagedProblemFileIds,
   extractManagedProblemFileId,
-  generateProblemListId as generateListId,
   getEntryProblemListId as getEntryListId,
   getProblemListPermission,
   getSectionProblemListId as getSectionListId,
   problemListFileUrl,
   rewriteProblemListFileUrls,
 } from '../modules/problem-list/application/problem-list-access.service'
+import {
+  createProblemList,
+  deleteProblemList,
+  getProblemListDetail,
+  listProblemLists,
+  ProblemListApplicationError,
+  updateProblemList,
+} from '../modules/problem-list/application/problem-list-crud.service'
+import type { AuthRequest } from '../middleware/auth'
 
 export const problemListsRouter = Router()
+
+function problemListEndpoint(label: string, handler: (req: AuthRequest, res: Response) => Promise<unknown>) {
+  return asyncHandler(async (req: AuthRequest, res: Response) => {
+    try {
+      await handler(req, res)
+    } catch (error) {
+      if (error instanceof ProblemListApplicationError) {
+        return res.status(error.statusCode).json({
+          success: false,
+          ...(error.code ? { code: error.code } : {}),
+          message: error.message,
+        })
+      }
+      throw error
+    }
+  }, label)
+}
 
 // ==================== 题单 CRUD ====================
 
@@ -43,249 +68,26 @@ export const problemListsRouter = Router()
  * GET /api/problem-lists
  * 获取题单列表（我的 + 共享给我的）
  */
-problemListsRouter.get('/', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const userId = req.user.userId
-    const scope = getResourceScope(req.user)
-    const memberType = getMembershipType(req.user)
-    const { tab = 'all', keyword = '' } = req.query as Record<string, string>
-    const { page, pageSize, skip } = parsePagination(req.query)
-
-    const where: any = { scope }
-
-    if (tab === 'mine') {
-      where.ownerId = userId
-    } else if (tab === 'shared') {
-      where.ownerId = { not: userId }
-      where.NOT = { ownerId: userId }
-    }
-
-    if (keyword) {
-      where.title = { contains: keyword }
-    }
-
-    // 如果不是"我的"，需要筛选共享给我的
-    if (tab !== 'mine') {
-      const sharedListIds = await prisma.problemListShare.findMany({
-        where: {
-          targetType: memberType,
-          targetId: req.user.userId || '__none__',
-        },
-        select: { problemListId: true }
-      })
-
-      if (tab === 'shared') {
-        where.id = { in: sharedListIds.map(s => s.problemListId) }
-      } else {
-        // all: 我的 + 共享的
-        where.OR = [
-          { ownerId: userId },
-          { id: { in: sharedListIds.map(s => s.problemListId) } }
-        ]
-        delete where.ownerId
-        delete where.NOT
-      }
-    }
-
-    const [lists, total] = await Promise.all([
-      prisma.problemList.findMany({
-        where,
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
-        skip,
-        take: pageSize,
-        include: {
-          _count: { select: { ProblemListSection: true } }
-        }
-      }),
-      prisma.problemList.count({ where })
-    ])
-
-    // 计算每个题单的总题目数（跨章节）
-    const listIds = lists.map(l => l.id)
-    const entryCounts = await prisma.problemListEntry.groupBy({
-      by: ['sectionId'],
-      where: {
-        ProblemListSection: { problemListId: { in: listIds } }
-      },
-      _count: true
-    })
-
-    // 建立 sectionId → listId 映射
-    const sections = await prisma.problemListSection.findMany({
-      where: { problemListId: { in: listIds } },
-      select: { id: true, problemListId: true }
-    })
-    const sectionToList = new Map(sections.map(s => [s.id, s.problemListId]))
-
-    // 汇总每个题单的总题目数
-    const totalCounts = new Map<string, number>()
-    for (const ec of entryCounts) {
-      const listId = sectionToList.get(ec.sectionId)
-      if (listId) {
-        totalCounts.set(listId, (totalCounts.get(listId) || 0) + ec._count)
-      }
-    }
-
-    const result = lists.map(l => ({
-      ...l,
-      _count: { Entries: totalCounts.get(l.id) || 0 }
-    }))
-
-    // 计算当前用户对每个题单的权限
-    const userShares = await prisma.problemListShare.findMany({
-      where: {
-        problemListId: { in: listIds },
-        targetType: memberType,
-        targetId: req.user.userId || '__none__',
-      },
-      select: { problemListId: true, permission: true }
-    })
-    const shareMap = new Map(userShares.map(s => [s.problemListId, s.permission]))
-
-    const enriched = result.map(l => ({
-      ...l,
-      _permission: l.ownerId === userId ? 'admin' : (shareMap.get(l.id) || 'view')
-    }))
-
-    res.json({
-      success: true,
-      data: {
-        lists: enriched,
-        ...paginatedResponse(enriched, total, page, pageSize),
-      }
-    })
-}, '获取题单列表失败'))
+problemListsRouter.get('/', authenticate, problemListEndpoint('获取题单列表失败', async (req, res) => {
+  const { page, pageSize, skip } = parsePagination(req.query)
+  res.json({ success: true, data: await listProblemLists(req.user!, req.query, page, pageSize, skip) })
+}))
 
 /**
  * POST /api/problem-lists
  * 创建题单（同时创建一个默认章节）
  */
-problemListsRouter.post('/', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    // 校园模式：学生不能创建题单；个人模式可以
-    if (getMembershipType(req.user) === 'student' && !isPersonalContextForTeams(req.user)) {
-      res.status(403).json({ success: false, message: '校园模式下学生不能创建题单' })
-      return
-    }
-
-    const { title, description, visibility } = req.body
-    if (!title || !title.trim()) {
-      res.status(400).json({ success: false, message: '标题不能为空' })
-      return
-    }
-
-    const scope = getResourceScope(req.user)
-    const organizationId = scope === 'campus' ? req.user.organizationId ?? null : null
-    if (scope === 'campus' && !organizationId) {
-      res.status(403).json({ success: false, message: '当前校园上下文不可用' })
-      return
-    }
-    const ownerType = getMembershipType(req.user)
-
-    const list = await prisma.problemList.create({
-      data: {
-        id: await generateListId(),
-        title: title.trim(),
-        description: description?.trim() || null,
-        organizationId,
-        scope,
-        ownerId: req.user.userId,
-        ownerType,
-        visibility: visibility || 'private',
-        ProblemListSection: {
-          create: { id: crypto.randomUUID(), title: '默认章节', sortOrder: 0 }
-        }
-      },
-      include: { ProblemListSection: true }
-    })
-
-    res.json({ success: true, data: list })
-}, '创建题单失败'))
+problemListsRouter.post('/', authenticate, problemListEndpoint('创建题单失败', async (req, res) => {
+  res.json({ success: true, data: await createProblemList(req.user!, req.body) })
+}))
 
 /**
  * GET /api/problem-lists/:id
  * 题单详情（含章节 → 题目条目）
  */
-problemListsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const list = await prisma.problemList.findUnique({
-      where: { id: req.params.id },
-      include: {
-        ProblemListSection: {
-          orderBy: { sortOrder: 'asc' },
-          include: {
-            ProblemListEntry: {
-              orderBy: { sortOrder: 'asc' },
-              include: {
-                Problem: {
-                  select: {
-                    id: true,
-                    platform: true,
-                    problemId: true,
-                    title: true,
-                    difficulty: true,
-                    ojBindings: true,
-                  }
-                }
-              }
-            }
-          }
-        },
-        ProblemListShare: true
-      }
-    })
-
-    if (!list || list.scope !== getResourceScope(req.user)) {
-      res.status(404).json({ success: false, message: '题单不存在' })
-      return
-    }
-
-    // 权限检查
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (!perm) {
-      res.status(403).json({ success: false, message: '无权限查看' })
-      return
-    }
-
-    // 分享目标统一保存全局 userId，显示名由当前组织档案在前端补充。
-    const enrichedShares = await Promise.all((list.ProblemListShare || []).map(async (share) => {
-      const target = await prisma.user.findUnique({
-        where: { id: share.targetId },
-        select: { username: true, avatar: true },
-      })
-      return {
-        ...share,
-        targetName: target?.username || share.targetId,
-        targetAvatar: target?.avatar || null,
-        targetUsername: target?.username || '',
-      }
-    }))
-
-    // 学生视角脱敏
-    const isStudent = getMembershipType(req.user) === 'student' && !isPersonalContext(req.user)
-    const sanitizedList = isStudent ? {
-      ...list,
-      ProblemListSection: list.ProblemListSection.map((section: any) => ({
-        ...section,
-        ProblemListEntry: section.ProblemListEntry.map((entry: any) => sanitizeEntryForStudent(entry)),
-      })),
-      ProblemListShare: [], // 学生不需要看分享列表
-    } : list
-
-    res.json({ success: true, data: { ...sanitizedList, Shares: isStudent ? [] : enrichedShares, _permission: perm || 'admin' } })
-}, '获取题单详情失败'))
+problemListsRouter.get('/:id', authenticate, problemListEndpoint('获取题单详情失败', async (req, res) => {
+  res.json({ success: true, data: await getProblemListDetail(req.user!, req.params.id) })
+}))
 
 /**
  * GET /api/problem-lists/:id/entries/:entryId/problem
@@ -413,115 +215,22 @@ problemListsRouter.get('/:id/entries/:entryId/files/:fileId', authenticate, asyn
   res.send(download.buffer)
 }, '下载题单题目资源失败'))
 
-/** 学生视角题单详情脱敏：只保留 title 和 difficulty */
-function sanitizeProblemForStudent(problem: any): any {
-  return {
-    title: problem.title,
-    difficulty: problem.difficulty,
-  }
-}
-
-/** 学生视角条目脱敏：隐藏 problemId */
-function sanitizeEntryForStudent(entry: any): any {
-  const { problemId, ...rest } = entry
-  return {
-    ...rest,
-    problemId: undefined,
-    Problem: entry.Problem ? sanitizeProblemForStudent(entry.Problem) : undefined,
-  }
-}
-
 /**
  * PUT /api/problem-lists/:id
  * 更新题单元信息
  */
-problemListsRouter.put('/:id', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    // 校园模式：学生不能编辑题单；个人模式可以编辑自己的
-    if (getMembershipType(req.user) === 'student' && !isPersonalContextForTeams(req.user)) {
-      res.status(403).json({ success: false, message: '校园模式下学生不能编辑题单' })
-      return
-    }
-
-    const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list) {
-      res.status(404).json({ success: false, message: '题单不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限编辑' })
-      return
-    }
-
-    // 乐观锁校验
-    const { title, description, visibility, sortOrder, coverUrl, expectedUpdatedAt } = req.body
-    if (!checkOptimisticLock(expectedUpdatedAt, list.updatedAt)) {
-      res.status(409).json({ success: false, message: '题单已被其他人修改，请刷新后重试', code: 'CONFLICT' })
-      return
-    }
-    const data: any = {}
-    if (title !== undefined) data.title = title.trim()
-    if (description !== undefined) data.description = description?.trim() || null
-    if (visibility !== undefined) data.visibility = visibility
-    if (sortOrder !== undefined) data.sortOrder = sortOrder
-    if (coverUrl !== undefined) data.coverUrl = coverUrl
-
-    const updated = await prisma.problemList.update({
-      where: { id: req.params.id },
-      data
-    })
-
-    res.json({ success: true, data: updated })
-}, '更新题单失败'))
+problemListsRouter.put('/:id', authenticate, problemListEndpoint('更新题单失败', async (req, res) => {
+  res.json({ success: true, data: await updateProblemList(req.user!, req.params.id, req.body) })
+}))
 
 /**
  * DELETE /api/problem-lists/:id
  * 硬删除题单（级联删除章节→条目→分享）
  */
-problemListsRouter.delete('/:id', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    // 校园模式：学生不能删除题单；个人模式可以删除自己的
-    if (getMembershipType(req.user) === 'student' && !isPersonalContextForTeams(req.user)) {
-      res.status(403).json({ success: false, message: '校园模式下学生不能删除题单' })
-      return
-    }
-
-    const list = await prisma.problemList.findUnique({ where: { id: req.params.id } })
-    if (!list) {
-      res.status(404).json({ success: false, message: '题单不存在' })
-      return
-    }
-
-    if (list.ownerId !== req.user.userId) {
-      res.status(403).json({ success: false, message: '只有创建者可以删除题单' })
-      return
-    }
-
-    // 检查题单是否被学校或团队收录
-    const [schoolLink, teamLink] = await Promise.all([
-      prisma.schoolProblemList.findFirst({ where: { problemListId: list.id } }),
-      prisma.teamProblemList.findFirst({ where: { problemListId: list.id } })
-    ])
-    if (schoolLink || teamLink) {
-      res.status(403).json({ success: false, message: '该题单已被学校或团队收录，请先从题单库中移除后再删除' })
-      return
-    }
-
-    // 硬删除（Prisma schema 中已配置 onDelete: Cascade）
-    await prisma.problemList.delete({ where: { id: req.params.id } })
-
-    res.json({ success: true, message: '删除成功' })
-}, '删除题单失败'))
+problemListsRouter.delete('/:id', authenticate, problemListEndpoint('删除题单失败', async (req, res) => {
+  await deleteProblemList(req.user!, req.params.id)
+  res.json({ success: true, message: '删除成功' })
+}))
 
 // ==================== 章节 CRUD ====================
 
