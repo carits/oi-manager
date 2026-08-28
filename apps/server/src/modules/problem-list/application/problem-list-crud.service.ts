@@ -11,7 +11,12 @@ import {
 type AuthUser = NonNullable<Express.Request['user']>
 
 export class ProblemListApplicationError extends Error {
-  constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
+  constructor(
+    public readonly statusCode: number,
+    message: string,
+    public readonly code?: string,
+    public readonly data?: unknown,
+  ) {
     super(message)
     this.name = 'ProblemListApplicationError'
   }

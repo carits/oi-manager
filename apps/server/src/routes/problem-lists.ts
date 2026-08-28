@@ -20,16 +20,12 @@ import { asyncHandler } from '../lib/asyncHandler'
 import { parsePagination } from '../lib/pagination'
 import { populateSnapshotData } from '../modules/training/training.helpers'
 import { v4 as uuidv4 } from 'uuid'
-import { findAccessibleProblem, findUsableProblemByExternalId } from '../modules/problem/problem.access'
 import { ensureInitialTestSetRevision } from '../modules/problem/problem.testset-revision.service'
 import { fileService } from '../lib/storage'
 import {
-  checkProblemListOptimisticLock as checkOptimisticLock,
   collectManagedProblemFileIds,
   extractManagedProblemFileId,
-  getEntryProblemListId as getEntryListId,
   getProblemListPermission,
-  getSectionProblemListId as getSectionListId,
   problemListFileUrl,
   rewriteProblemListFileUrls,
 } from '../modules/problem-list/application/problem-list-access.service'
@@ -47,6 +43,13 @@ import {
   reorderProblemListSections,
   updateProblemListSection,
 } from '../modules/problem-list/application/problem-list-section.service'
+import {
+  addProblemListEntry,
+  deleteProblemListEntry,
+  reorderProblemListEntries,
+  resolveProblemListEntries,
+  updateProblemListEntry,
+} from '../modules/problem-list/application/problem-list-entry.service'
 import type { AuthRequest } from '../middleware/auth'
 
 export const problemListsRouter = Router()
@@ -60,6 +63,7 @@ function problemListEndpoint(label: string, handler: (req: AuthRequest, res: Res
         return res.status(error.statusCode).json({
           success: false,
           ...(error.code ? { code: error.code } : {}),
+          ...(error.data !== undefined ? { data: error.data } : {}),
           message: error.message,
         })
       }
@@ -280,365 +284,38 @@ problemListsRouter.put('/:id/sections/reorder', authenticate, problemListEndpoin
  * POST /api/problem-lists/sections/:sectionId/entries/single
  * 单条添加题目到指定章节（VJudge 逐行输入）
  */
-problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const listId = await getSectionListId(req.params.sectionId)
-    if (!listId) {
-      res.status(404).json({ success: false, message: '章节不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(listId, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限添加题目' })
-      return
-    }
-
-    const { ojName, problemCode, alias, notes, problemId: directProblemId } = req.body as {
-      ojName: string
-      problemCode: string
-      alias?: string
-      notes?: string
-      problemId?: string
-    }
-
-    if (!ojName || !problemCode) {
-      res.status(400).json({ success: false, message: 'OJ 平台和题号不能为空' })
-      return
-    }
-
-    let problemId: string
-    let problemTitle: string
-    let found = false
-
-    // 如果前端直接传了 problemId（来自 resolve 的结果），跳过搜索直接使用
-    if (directProblemId) {
-      const p = await findAccessibleProblem(req.user, directProblemId, 'use')
-      if (!p) {
-        res.status(404).json({ success: false, message: '题目不存在' })
-        return
-      }
-      problemId = p.id
-      problemTitle = p.title
-      found = true
-    } else if (ojName === 'carits') {
-      // Carits 平台：按 platform + problemId 查本地题库
-      const matched = await findUsableProblemByExternalId(req.user, 'carits', problemCode)
-      if (matched) {
-        problemId = matched.id
-        problemTitle = matched.title
-        found = true
-      } else {
-        res.status(404).json({ success: false, message: '题库中未找到该题目，或无权访问' })
-        return
-      }
-    } else {
-      // 外部 OJ：按 platform + problemId 直接查
-      const p = await findUsableProblemByExternalId(req.user, ojName, problemCode)
-
-      if (p) {
-        problemId = p.id
-        problemTitle = p.title
-        found = true
-      }
-
-      if (!found) {
-        res.status(404).json({ success: false, message: '题库中未找到该题目' })
-        return
-      }
-    }
-
-    const [selectedProblem, targetList] = await Promise.all([
-      prisma.problem.findUnique({ where: { id: problemId! }, select: { libraryScope: true, organizationId: true } }),
-      prisma.problemList.findUnique({ where: { id: listId }, select: { scope: true, organizationId: true } }),
-    ])
-    if (!selectedProblem || !targetList || (selectedProblem.libraryScope === 'school'
-      && (targetList.scope !== 'campus' || targetList.organizationId !== selectedProblem.organizationId))) {
-      res.status(404).json({ success: false, message: '题目不存在' })
-      return
-    }
-
-    // 3. 检查是否已在章节中
-    const existing = await prisma.problemListEntry.findUnique({
-      where: {
-        sectionId_problemId: {
-          sectionId: req.params.sectionId,
-          problemId: problemId!
-        }
-      }
-    })
-
-    if (existing) {
-      res.status(409).json({
-        success: false,
-        message: '该题目已在此章节中',
-        data: { entryId: existing.id, problemId: problemId!, title: problemTitle!, found }
-      })
-      return
-    }
-
-    // 4. 获取当前最大 sortOrder
-    const maxSortEntry = await prisma.problemListEntry.findFirst({
-      where: { sectionId: req.params.sectionId },
-      orderBy: { sortOrder: 'desc' },
-      select: { sortOrder: true }
-    })
-
-    // 5. 创建条目
-    const entry = await prisma.problemListEntry.create({
-      data: {
-        id: crypto.randomUUID(),
-        sectionId: req.params.sectionId,
-        problemId: problemId!,
-        alias: alias?.trim() || null,
-        notes: notes?.trim() || null,
-        ojName: ojName,
-        sortOrder: (maxSortEntry?.sortOrder ?? -1) + 1
-      },
-      include: {
-        Problem: {
-          select: {
-            id: true,
-            platform: true,
-            problemId: true,
-            title: true,
-            difficulty: true,
-            ojBindings: true,
-          }
-        }
-      }
-    })
-
-    res.json({
-      success: true,
-      data: { entry, found, created: !found }
-    })
-}, '添加题目失败'))
+problemListsRouter.post('/sections/:sectionId/entries/single', authenticate, problemListEndpoint('添加题目失败', async (req, res) => {
+  res.json({ success: true, data: await addProblemListEntry(req.user!, req.params.sectionId, req.body) })
+}))
 
 /**
  * POST /api/problem-lists/:id/entries/resolve
  * 批量解析题号 → 查找/创建 Problem 记录（不创建 Entry，仅预览）
  */
-problemListsRouter.post('/:id/entries/resolve', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const perm = await getProblemListPermission(req.params.id, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限操作' })
-      return
-    }
-
-    const { items } = req.body as {
-      items: Array<{ ojName: string; problemCode: string }>
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ success: false, message: '参数错误' })
-      return
-    }
-
-    // 获取题单下所有已有条目的 problemId
-    const sections = await prisma.problemListSection.findMany({
-      where: { problemListId: req.params.id },
-      select: { id: true }
-    })
-    const sectionIds = sections.map(s => s.id)
-
-    const existingEntries = await prisma.problemListEntry.findMany({
-      where: { sectionId: { in: sectionIds } },
-      select: { problemId: true }
-    })
-    const existingProblemIds = new Set(existingEntries.map(e => e.problemId))
-
-    const resolved: Array<{
-      problemId: string
-      title: string
-      ojName: string
-      problemCode: string
-      found: boolean
-      created: boolean
-      duplicate: boolean
-    }> = []
-
-    for (const item of items) {
-      let matched: { id: string; title: string } | null = null
-
-      if (item.ojName === 'carits') {
-        // Carits 平台：按 ID 或 problemId 查本地题库
-        let p = await findAccessibleProblem(req.user, item.problemCode, 'use').catch(() => null)
-        if (!p) {
-          p = await findUsableProblemByExternalId(req.user, 'carits', item.problemCode)
-        }
-        if (p) matched = { id: p.id, title: p.title }
-      } else {
-        // 外部 OJ：按 platform + problemId 直接查
-        const p = await findUsableProblemByExternalId(req.user, item.ojName, item.problemCode)
-        if (p) {
-          matched = { id: p.id, title: p.title }
-        }
-      }
-
-      if (matched) {
-        resolved.push({
-          problemId: matched.id,
-          title: matched.title,
-          ojName: item.ojName,
-          problemCode: item.problemCode,
-          found: true,
-          created: false,
-          duplicate: existingProblemIds.has(matched.id)
-        })
-      } else if (item.ojName === 'carits') {
-        // Carits 平台题目不存在，标记为未找到（不自动创建）
-        resolved.push({
-          problemId: '',
-          title: '题库中未找到',
-          ojName: item.ojName,
-          problemCode: item.problemCode,
-          found: false,
-          created: false,
-          duplicate: false
-        })
-      } else {
-        // 外部 OJ：未找到匹配，不自动创建，返回 found: false
-        resolved.push({
-          problemId: '',
-          title: '题库中未找到',
-          ojName: item.ojName,
-          problemCode: item.problemCode,
-          found: false,
-          created: false,
-          duplicate: false
-        })
-      }
-    }
-
-    res.json({ success: true, data: { resolved } })
-}, '解析题号失败'))
+problemListsRouter.post('/:id/entries/resolve', authenticate, problemListEndpoint('解析题号失败', async (req, res) => {
+  res.json({ success: true, data: await resolveProblemListEntries(req.user!, req.params.id, req.body.items) })
+}))
 
 /**
  * PUT /api/problem-lists/entries/:entryId
  * 更新条目（alias / notes / sortOrder）
  */
-problemListsRouter.put('/entries/:entryId', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const listId = await getEntryListId(req.params.entryId)
-    if (!listId) {
-      res.status(404).json({ success: false, message: '条目不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(listId, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限编辑' })
-      return
-    }
-
-    // 乐观锁校验（基于题单级 updatedAt）
-    const { alias, notes, sortOrder, expectedUpdatedAt } = req.body
-    if (expectedUpdatedAt) {
-      const currentList = await prisma.problemList.findUnique({ where: { id: listId }, select: { updatedAt: true } })
-      if (!checkOptimisticLock(expectedUpdatedAt, currentList!.updatedAt)) {
-        res.status(409).json({ success: false, message: '题单已被其他人修改，请刷新后重试', code: 'CONFLICT' })
-        return
-      }
-    }
-    const data: any = {}
-    if (alias !== undefined) data.alias = alias?.trim() || null
-    if (notes !== undefined) data.notes = notes?.trim() || null
-    if (sortOrder !== undefined) data.sortOrder = sortOrder
-
-    const updated = await prisma.problemListEntry.update({
-      where: { id: req.params.entryId },
-      data,
-      include: {
-        Problem: {
-          select: {
-            id: true,
-            platform: true,
-            problemId: true,
-            title: true,
-            difficulty: true,
-            ojBindings: true,
-          }
-        }
-      }
-    })
-
-    res.json({ success: true, data: updated })
-}, '更新条目失败'))
-problemListsRouter.delete('/entries/:entryId', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const listId = await getEntryListId(req.params.entryId)
-    if (!listId) {
-      res.status(404).json({ success: false, message: '条目不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(listId, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限删除' })
-      return
-    }
-
-    await prisma.problemListEntry.delete({ where: { id: req.params.entryId } })
-    res.json({ success: true, message: '删除成功' })
-}, '删除条目失败'))
+problemListsRouter.put('/entries/:entryId', authenticate, problemListEndpoint('更新条目失败', async (req, res) => {
+  res.json({ success: true, data: await updateProblemListEntry(req.user!, req.params.entryId, req.body) })
+}))
+problemListsRouter.delete('/entries/:entryId', authenticate, problemListEndpoint('删除条目失败', async (req, res) => {
+  await deleteProblemListEntry(req.user!, req.params.entryId)
+  res.json({ success: true, message: '删除成功' })
+}))
 
 /**
  * PUT /api/problem-lists/sections/:sectionId/entries/reorder
  * 重排某章节内的条目顺序
  */
-problemListsRouter.put('/sections/:sectionId/entries/reorder', authenticate, asyncHandler(async (req, res) => {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: '未登录' })
-      return
-    }
-
-    const listId = await getSectionListId(req.params.sectionId)
-    if (!listId) {
-      res.status(404).json({ success: false, message: '章节不存在' })
-      return
-    }
-
-    const perm = await getProblemListPermission(listId, req.user as NonNullable<Express.Request['user']>)
-    if (perm !== 'admin' && perm !== 'edit') {
-      res.status(403).json({ success: false, message: '无权限排序' })
-      return
-    }
-
-    const { entryIds } = req.body as { entryIds: string[] }
-    if (!Array.isArray(entryIds)) {
-      res.status(400).json({ success: false, message: '参数错误' })
-      return
-    }
-
-    await prisma.$transaction(
-      entryIds.map((id: string, index: number) =>
-        prisma.problemListEntry.update({
-          where: { id },
-          data: { sortOrder: index }
-        })
-      )
-    )
-
-    res.json({ success: true })
-}, '排序失败'))
+problemListsRouter.put('/sections/:sectionId/entries/reorder', authenticate, problemListEndpoint('排序失败', async (req, res) => {
+  await reorderProblemListEntries(req.user!, req.params.sectionId, req.body.entryIds)
+  res.json({ success: true })
+}))
 
 
 /**

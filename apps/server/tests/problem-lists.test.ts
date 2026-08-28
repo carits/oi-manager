@@ -352,6 +352,19 @@ describe('题单权限模块', () => {
         .delete(`/api/problem-lists/entries/${entryId}`)
       expect(res.status).toBe(403)
     })
+
+    it('条目排序不能修改另一章节的条目', async () => {
+      const otherList = await createTestProblemList({ ownerId: ownerUser.user.id, schoolId: schoolData.school.id })
+      const otherProblem = await createTestProblem({ platform: 'carits', problemId: `P${Date.now()}_foreign`, ownerId: ownerUser.user.id })
+      const added = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/sections/${otherList.defaultSection.id}/entries/single`)
+        .send({ ojName: 'carits', problemCode: otherProblem.problemId, problemId: otherProblem.id })
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .put(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/reorder`)
+        .send({ entryIds: [added.body.data.entry.id] })
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('条目不属于该章节')
+    })
   })
 
   // ====== 分享管理权限 ======
