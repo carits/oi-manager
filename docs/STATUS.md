@@ -327,6 +327,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-29 个人题解与多题面版本的查询、编辑、公开范围、PDF 替换、下载和软删除已迁入 problem content application service，共用受控 PDF 上传基础设施。新文件在数据库失败时回收，旧文件在成功切换后回收；公开个人题面 PDF 也必须先通过原题目校园访问边界。Server 构建及个人内容、学校隔离、文件安全 3 文件、25/25 回归通过；路由边界降至 Prisma 83 / transaction 5 / filesystem 14 / Judge Runtime 0。
 - 2026-08-29 题目 AI 翻译、格式化和用量查询已迁入 problem AI application service；外部模型调用完成后的题面写入与用量日志在同一事务提交，并通过题目动作级 advisory lock 和事务内重复检查避免并发重复版本。格式化未显式指定题面时会记录实际处理的题面 ID。Server 构建及 AI、题库隔离 6 文件、60/60 回归通过；路由边界降至 Prisma 66 / transaction 5 / filesystem 14 / Judge Runtime 0。
 - 2026-08-29 全局评测记录列表、详情和 Codeforces 归档代码重抓已迁入 submission query service；管理员继续使用全平台视图，普通用户、校园成员与比赛管理者的工作区/组织边界保持不变。列表总数与当前页在同一读事务取得，排序增加 ID 稳定项；重抓失败会恢复旧代码，平台管理员和超级管理员不再被个人工作区条件误挡。Server 构建和提交权限回归 16/16 通过；路由边界降至 Prisma 50 / transaction 5 / filesystem 14 / Judge Runtime 0。
+- 2026-08-29 通用文件上传、下载、公开读取、元数据、按归属列表和软删除已迁入 file application service，Multer 暂存目录与清理进入独立基础设施模块；业务归属权限继续按题目、比赛、团队或本人校验，平台管理员不能借通用接口浏览任意用户文件。Server 构建及文件安全/题库隔离 2 文件、16/16 回归通过；路由边界降至 Prisma 41 / transaction 5 / filesystem 6 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
