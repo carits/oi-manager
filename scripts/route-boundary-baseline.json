@@ -1,6 +1,6 @@
 {
   "apps/server/src/modules/carits/carits.routes.ts": {
-    "prisma": 8,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
