@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { FormField } from '@/components/ui/FormField'
 import { ENV } from '@/config/env'
 import { getRoleHome } from '@/lib/roleAccess'
+import { isGlobalAdministrator } from '@/lib/capabilities'
 import styles from './login.module.css'
 
 export function LoginForm({ nextPath }: { nextPath?: string }) {
@@ -21,7 +22,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      const isGlobalAdmin = user.role === 'super_admin' || user.role === 'platform_admin'
+      const isGlobalAdmin = isGlobalAdministrator(user.role)
       router.replace(isGlobalAdmin ? getRoleHome(user.role, 'organization') : (nextPath || '/identity'))
     }
   }, [isAuthenticated, nextPath, router, user])

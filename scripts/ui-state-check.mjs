@@ -42,6 +42,16 @@ for (const file of sourceRoots.flatMap(collect)) {
   ) {
     failures.push(`${relative}: browser requests must use apiClient so timeout and error contracts apply`)
   }
+
+  for (const [index, line] of source.split(/\r?\n/).entries()) {
+    if (
+      line.includes('||') &&
+      line.includes("'super_admin'") &&
+      line.includes("'platform_admin'")
+    ) {
+      failures.push(`${relative}:${index + 1}: global administrator checks must use the account capability matrix`)
+    }
+  }
 }
 
 if (failures.length > 0) {
@@ -50,4 +60,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('UI state contract passed: loading, auth-wrapper, mounted-gate, and request-client rules hold.')
+console.log('UI state contract passed: loading, auth-wrapper, mounted-gate, request-client, and capability rules hold.')

@@ -10,6 +10,7 @@ import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from 
 import { getAssetUrl } from '@/lib/assets'
 import { getSidebarNavigationOpen, setSidebarNavigationOpen } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
+import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
 import { apiClient } from '@/lib/apiClient'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
@@ -130,7 +131,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const accountRole = user.role as UserRole
   const context = contextKind
-  const isGlobalAdmin = accountRole === 'super_admin' || accountRole === 'platform_admin'
+  const isGlobalAdmin = isGlobalAdministrator(accountRole)
   // 全局管理员进入学校上下文时仍使用管理员导航；普通账号才切换到校园成员身份。
   const role = (organizationId && user.organizationRole && !isGlobalAdmin ? user.organizationRole : accountRole) as UserRole
   const navConfig = getNavConfig(role, context)

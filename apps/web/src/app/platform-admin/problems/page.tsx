@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { Pagination } from '@/components/ui/Pagination'
 import apiClient from '@/lib/apiClient'
+import { hasAccountCapability } from '@/lib/capabilities'
 import {
   OJ_PLATFORMS,
   OJ_PLATFORMS_NO_ALL,
@@ -87,7 +88,7 @@ export default function PlatformAdminProblemsPage() {
   const tabParam = searchParams.get('tab')
   const toast = useToast()
   const { user } = useAuth()
-  const canManageCredentials = user?.role === 'super_admin'
+  const canManageCredentials = hasAccountCapability(user?.role, 'manage-platform-secrets')
   const [confirmState, setConfirmState] = useState<{ id: string; message: string; action: () => Promise<void> } | null>(null)
 
   // 从URL参数获取当前tab，默认为 'fetch'

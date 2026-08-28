@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
+import { hasAccountCapability } from '@/lib/capabilities'
 import { useResource } from '@/hooks/useResource'
 import { JUDGE_RESULT_OPTIONS, LANGUAGE_OPTIONS, JUDGE_RESULT_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { SUBMISSION_OJ_OPTIONS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
@@ -42,7 +43,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const { user, sessionKey } = useAuth()
   const pathname = usePathname()
   // 管理员权限以当前会话的全局角色为准，不能被旧入口或个人区路径降级。
-  const isGlobalAdmin = user?.role === 'super_admin' || user?.role === 'platform_admin'
+  const isGlobalAdmin = hasAccountCapability(user?.role, 'view-all-submissions')
   const isAdminView = viewRole === 'admin' || isGlobalAdmin
   const adminHome = user?.role === 'super_admin' ? '/admin' : '/platform-admin'
   const pathPrefix = currentWorkspacePrefix(pathname, isAdminView ? adminHome : '/personal')

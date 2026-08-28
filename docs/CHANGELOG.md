@@ -23,6 +23,7 @@ source_of_truth: Git history
 - 60 个 HTTP adapter 的 Prisma、transaction、filesystem 和 Judge Runtime 直接调用全部归零，Strangler 过渡结束，零基线门禁阻止回退。
 - 环境、远端拓扑、项目概览、存储和剩余工作文档统一到 systemd Web、稳定 Router、蓝绿 API、Scheduler/Executor、Judge、Docker 以及不可变 BlobStore 的当前事实。
 - 文档门禁新增 PM2 正式拓扑、tsx watch 公网 API、“正式配置仅为模板”和固定页面数量等过时表述检查。
+- 新增账号级 UI capability 矩阵，统一全局管理员工作区、个人/校园工作区、全量评测记录、组织管理和平台密钥入口判断；动态资源权限继续由后端响应决定。登录、身份选择、RoleLayout、Shell、工作区切换器和提交列表已迁移，UI 门禁拒绝重新拼接全局管理员复合角色判断。
 
 ## 2026-08-28
 

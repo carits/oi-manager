@@ -52,6 +52,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] Scheduler 单例和 Executor 可并行任务已分离，生产 systemd 中两类进程独立运行。
 - [x] 架构模型、路由、systemd 和环境变量清单由脚本生成并由 `architecture:check` 校验。
 - [x] `routes/` Strangler 已完成：60 个 HTTP adapter 的 Prisma / transaction / filesystem / Judge Runtime 直接调用全部为 0；application/query/infrastructure 边界和零基线门禁已生效，新增债务会阻断构建检查。
+- [x] 账号级前端入口使用 capability 矩阵驱动；登录、身份选择、布局、Shell、工作区切换和全局提交入口不再各自拼接管理员角色。资源级权限仍由后端校验，UI 门禁阻止复合管理员角色判断回退。
 - [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期后才能删除；当前生产首次对账为 2518 条、0 差异、0 条无 Run 本地提交，且已纳入 5 分钟监控。观察期内不做破坏性清理。
 
 ### 1. 隔离写入、并发与长稳压测

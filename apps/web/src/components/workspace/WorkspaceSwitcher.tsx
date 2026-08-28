@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Check, ChevronDown, Search, School, ShieldCheck, UserRound } from 'lucide-react'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
+import { isGlobalAdministrator } from '@/lib/capabilities'
 import { workspaceHref, workspaceModule } from './workspaceRouting'
 import styles from './WorkspaceSwitcher.module.css'
 
@@ -13,7 +14,7 @@ type Payload = { workspaces: WorkspaceSummary[] }
 
 export function WorkspaceSwitcher() {
   const { user } = useAuth()
-  const isGlobalAdmin = user?.role === 'super_admin' || user?.role === 'platform_admin'
+  const isGlobalAdmin = isGlobalAdministrator(user?.role)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
@@ -48,8 +49,6 @@ export function WorkspaceSwitcher() {
     setOpen(false)
     window.location.assign(workspaceHref(workspace, module))
   }
-
-  if (isGlobalAdmin) return null
 
   if (isGlobalAdmin) return null
 

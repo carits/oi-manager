@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-25
+last_verified: 2026-08-29
 source_of_truth: apps/web/src
 ---
 
@@ -22,6 +22,11 @@ source_of_truth: apps/web/src
 导航默认隐藏，只能通过顶部菜单按钮主动打开；不会因悬停、路由切换、刷新或工作区切换自行显示。
 展开状态按 `userId + role + workspaceMode` 写入本机偏好。账号身份卡位于展开侧栏左下角，点击后向上
 打开资料、安全、平台绑定和退出菜单，顶部不重复展示头像。
+
+账号级 UI 能力集中在 `lib/capabilities.ts`。全局管理员工作区、个人/校园工作区、全量评测记录、
+组织管理和平台密钥入口只能通过 `hasAccountCapability()` / `isGlobalAdministrator()` 判断，业务组件
+不得重复拼接 `super_admin || platform_admin`。资源归属、比赛管理权、题目编辑权等动态能力仍以
+后端响应和权限 API 为唯一事实源，前端能力矩阵只能决定入口展示，不能替代服务端鉴权。
 
 业务页面静态内联样式已清零，动态尺寸、坐标和 CSS 自定义变量的受控例外见[设计系统](DESIGN_SYSTEM.md)。当前由 `AppShell`
 独占普通页面的宽度、边距和导航；迁移中的旧页面通过 `data-page-host` 兼容层去除第二层
@@ -87,7 +92,7 @@ interface ApiResponse<T> {
 
 路由级 `error.tsx`、`global-error.tsx` 和 `not-found.tsx` 负责渲染异常与不存在页面。CI 的
 `pnpm ui:state-check` 会拒绝页面级 `mounted` 渲染门、重复 `ProtectedRoute`、“加载中”
-文案和业务组件中的原生 `fetch`。
+文案、业务组件中的原生 `fetch`，以及绕过账号能力矩阵的全局管理员复合角色判断。
 
 图片、菜单、表格行和图标操作使用可聚焦的按钮或链接。图标按钮必须有
 `aria-label` 或 tooltip。
