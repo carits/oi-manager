@@ -126,7 +126,7 @@ export async function createTeamTraining(params: {
   return training
 }
 
-async function synchronizeTrainingStatus(training: any, now: Date) {
+export async function synchronizeTrainingStatus(training: any, now: Date) {
   const computedStatus = getComputedTrainingStatus(training, now)
   if (computedStatus === training.status) return computedStatus
   const visibleCount = await prisma.$transaction(async tx => {

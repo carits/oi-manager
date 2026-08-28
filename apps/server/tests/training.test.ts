@@ -317,6 +317,50 @@ describe('训练模块权限测试', () => {
 
       expect(res.status).toBe(403)
     })
+
+    it('B8: training problem content stays within its activity', async () => {
+      const problem = await createConfiguredProblem(ownerUser.user.id, 'cross-training-content')
+      await prisma.problem.update({
+        where: { id: problem.id },
+        data: { solutionType: 'markdown', solutionMarkdown: 'cross-training-secret' },
+      })
+      const otherTraining = await prisma.training.create({
+        data: {
+          teamId: team.id,
+          title: 'Another training',
+          format: 'ioi',
+          type: 'training',
+          startTime: new Date(Date.now() - 3600000),
+          endTime: new Date(Date.now() + 3600000),
+          status: 'ongoing',
+          problemIdVisible: true,
+          solutionVisible: true,
+          includeAdminInRanking: false,
+          createdBy: ownerUser.user.id,
+        },
+      })
+      const otherProblem = await prisma.trainingProblem.create({
+        data: {
+          id: crypto.randomUUID(),
+          trainingId: otherTraining.id,
+          problemId: problem.id,
+          alias: 'X',
+          orderIndex: 0,
+          points: 100,
+        },
+      })
+
+      const solution = await createAuthenticatedRequest(app, ownerToken)
+        .get(`/api/trainings/${training.id}/problems/${otherProblem.id}/solution`)
+      expect(solution.status).toBe(200)
+      expect(solution.body.data).toBeNull()
+      expect(JSON.stringify(solution.body)).not.toContain('cross-training-secret')
+
+      const attachments = await createAuthenticatedRequest(app, ownerToken)
+        .get(`/api/trainings/${training.id}/problems/${otherProblem.id}/attachments`)
+      expect(attachments.status).toBe(200)
+      expect(attachments.body.data).toEqual([])
+    })
   })
 
   // ==================== C. 训练编辑权限 ====================
