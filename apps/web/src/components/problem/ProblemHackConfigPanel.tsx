@@ -50,6 +50,7 @@ export function ProblemHackConfigPanel({ problemId, judgeMode, problemType }: {
         standardSource: config.standardSource,
         validatorSource: config.validatorSource,
         classifierSource: config.classifierSource,
+        expectedRevision: config.revision,
       }, { timeout: 150_000 })
       if (!result.success || !result.data) return toast.error(result.message || '保存失败')
       setConfig(result.data)

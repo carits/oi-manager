@@ -322,6 +322,7 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
 - 2026-08-29 活动内容选择、版本预览、Markdown/PDF 快照编辑及受控下载已迁入 training content application service；HTTP adapter 不再直接访问 Prisma 或文件系统。PDF 临时文件在权限失败与异常路径均清理，新上传文件在快照编辑失败时软删除。Server 构建及完整 53 文件、493/493 回归通过；路由边界降至 Prisma 164 / transaction 6 / filesystem 26 / Judge Runtime 0。
 - 2026-08-29 活动多题面选择矩阵、当前选择集合和参与者题面/PDF 读取已迁入 training statement application service；保存请求携带 selection revision，陈旧管理员页面返回 `409 STATEMENT_SELECTION_STALE`，事务写入前再次校验当前集合，避免并发覆盖。参赛者响应不再泄露个人题面作者。Server/Web 构建与定向 3 文件、89/89 回归通过；路由边界降至 Prisma 160 / transaction 5 / filesystem 26 / Judge Runtime 0。
 - 2026-08-29 题目列表、创建、详情、更新、归档、题库创建者与学校副本入口已迁入 problem CRUD application service；题目与官方题面/题解版本改为同事务创建和更新，非法内容不会留下半成品题目或已提交一半的标题变更。Server 构建与题库权限/归档定向 3 文件、13/13 回归通过；路由边界降至 Prisma 139 / transaction 5 / filesystem 26 / Judge Runtime 0。
+- 2026-08-29 Hack 配置、发起、记录、详情和系统错误重试编排已迁入 problem Hack application service；Hack Attempt 仍只通过现有状态机/CAS 转换，配置保存新增 revision CAS，两个管理员并发保存只允许一个成功。Server/Web 构建与 Hack、Revision、并发定向 5 文件、25/25 回归通过；路由边界降至 Prisma 117 / transaction 5 / filesystem 26 / Judge Runtime 0。
 - 2026-08-24 自动备份已完成真实隔离恢复演练：67 张表、29 条迁移、20186 个用户记录校验通过，临时数据库清理完成。恢复覆盖正式库的灾难演练仍必须在停写、二次备份和明确维护窗口下单独授权。
 - 2026-08-27 Cron、旧远程结果轮询和 OJ 账号自动验证已从蓝绿 API slot 拆到
   `oi-manager-worker.service`；Worker 持有 PostgreSQL session advisory lock，调度器可停止且轮询不重叠。
