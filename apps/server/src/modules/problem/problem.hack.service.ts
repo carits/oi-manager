@@ -14,6 +14,7 @@ import {
   createValidatedHackCandidate,
   setCandidateStatus,
 } from './problem.testcase-candidate.service'
+import { transitionHackAttempt } from './problem.hack-state'
 
 export const HACK_SOURCE_LIMIT = 256 * 1024
 export const HACK_INPUT_LIMIT = 1024 * 1024
@@ -261,13 +262,11 @@ export async function finalizeHackResult(
   // Claim finalization before reading or writing files. This compare-and-swap
   // makes duplicate/stale Judge replies idempotent across blue/green API
   // processes; only the process that still owns the judging attempt proceeds.
-  const claimed = await prisma.problemHackAttempt.updateMany({
-    where: {
-      id: payload.hackAttemptId,
-      status: 'judging',
-      ...(owner.judgeId ? { judgeId: owner.judgeId } : {}),
-    },
-    data: { status: 'finalizing' },
+  const claimed = await transitionHackAttempt(prisma, {
+    id: payload.hackAttemptId,
+    from: 'judging',
+    to: 'finalizing',
+    judgeId: owner.judgeId,
   })
   if (claimed.count !== 1) return
   const attempt = await prisma.problemHackAttempt.findUnique({ where: { id: payload.hackAttemptId } })
@@ -283,9 +282,11 @@ export async function finalizeHackResult(
     affectedSubtaskIds: payload.affectedSubtaskIds?.length ? JSON.stringify(payload.affectedSubtaskIds) : null,
   }
   if (payload.outcome !== 'accepted') {
-    await prisma.problemHackAttempt.update({
-      where: { id: attempt.id },
-      data: { status: payload.outcome, canonicalStatus: payload.outcome === 'rejected' ? 'rejected' : 'failed', ...resultFields, failureStage: payload.failureStage || null, message: payload.message || null, judgeId: null, judgeStarted: null, finishedAt: new Date() },
+    await transitionHackAttempt(prisma, {
+      id: attempt.id,
+      from: 'finalizing',
+      to: payload.outcome,
+      data: { canonicalStatus: payload.outcome === 'rejected' ? 'rejected' : 'failed', ...resultFields, failureStage: payload.failureStage || null, message: payload.message || null, judgeId: null, judgeStarted: null, finishedAt: new Date() },
     })
     return
   }
@@ -303,9 +304,11 @@ export async function finalizeHackResult(
       || !problem.LatestTestSetRevision
       || current.judgeConfigHash !== problem.LatestTestSetRevision.judgeConfigHash
       || (mode === 'oi' && current.testGraphRevision !== problem.testGraphRevision)) {
-      await prisma.problemHackAttempt.update({
-        where: { id: current.id },
-        data: { status: 'stale', failureStage: 'stale', message: 'Hack 或测试图配置已变化，请重新发起', judgeId: null, judgeStarted: null, finishedAt: new Date() },
+      await transitionHackAttempt(prisma, {
+        id: current.id,
+        from: 'finalizing',
+        to: 'stale',
+        data: { failureStage: 'stale', message: 'Hack 或测试图配置已变化，请重新发起', judgeId: null, judgeStarted: null, finishedAt: new Date() },
       })
       return
     }
@@ -314,7 +317,7 @@ export async function finalizeHackResult(
     const inputData = payload.inputData || ''
     const outputData = payload.outputData ?? ''
     if (!inputData.trim() || Buffer.byteLength(inputData, 'utf8') > HACK_INPUT_LIMIT || Buffer.byteLength(outputData, 'utf8') > HACK_INPUT_LIMIT) {
-      await prisma.problemHackAttempt.update({ where: { id: current.id }, data: { status: 'system_error', failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() } })
+      await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'system_error', data: { failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() } })
       return
     }
     const inputSha256 = crypto.createHash('sha256').update(inputData).digest('hex')
@@ -323,16 +326,16 @@ export async function finalizeHackResult(
     if (payload.outputSha256 && payload.outputSha256 !== outputSha256) throw new Error('Hack output hash mismatch')
     if (current.baseTestSetRevisionId !== problem.latestTestSetRevisionId) {
       if (current.promotionRetries < 3) {
-        await prisma.problemHackAttempt.update({ where: { id: current.id }, data: {
-          status: 'queuing', baseTestSetRevisionId: problem.latestTestSetRevisionId,
+        await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'queuing', data: {
+          baseTestSetRevisionId: problem.latestTestSetRevisionId,
           judgeConfigHash: problem.LatestTestSetRevision.judgeConfigHash,
           testGraphRevision: problem.testGraphRevision, promotionRetries: { increment: 1 },
           canonicalStatus: null, failureStage: 'stale', message: '题库测试版本已更新，正在基于最新版重新评测',
           judgeId: null, judgeStarted: null, finishedAt: null,
         } })
       } else {
-        await prisma.problemHackAttempt.update({ where: { id: current.id }, data: {
-          status: 'stale', canonicalStatus: 'failed', failureStage: 'stale', message: '并发版本变化次数过多，请重新发起 Hack',
+        await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'stale', data: {
+          canonicalStatus: 'failed', failureStage: 'stale', message: '并发版本变化次数过多，请重新发起 Hack',
           judgeId: null, judgeStarted: null, finishedAt: new Date(),
         } })
       }
@@ -366,9 +369,11 @@ export async function finalizeHackResult(
     if (duplicate) {
       await Promise.all([
         setCandidateStatus(candidate.id, 'REDUNDANT', '候选输入与当前正式测试版本重复'),
-        prisma.problemHackAttempt.update({
-          where: { id: current.id },
-          data: { status: 'rejected', canonicalStatus: 'redundant', ...resultFields, failureStage: 'input', message: '候选输入与已有正式测试数据重复', inputSha256, outputSha256, judgeId: null, judgeStarted: null, finishedAt: new Date() },
+        transitionHackAttempt(prisma, {
+          id: current.id,
+          from: 'finalizing',
+          to: 'rejected',
+          data: { canonicalStatus: 'redundant', ...resultFields, failureStage: 'input', message: '候选输入与已有正式测试数据重复', inputSha256, outputSha256, judgeId: null, judgeStarted: null, finishedAt: new Date() },
         }),
       ])
       return
@@ -430,10 +435,12 @@ export async function finalizeHackResult(
             message: `Promoted from R${baseRevision.revisionNumber} to R${revision.revisionNumber}`,
           })
           if (promoted.count !== 1) throw new Error('Testcase candidate promotion ownership was lost')
-          const finalized = await tx.problemHackAttempt.updateMany({
-            where: { id: current.id, status: 'finalizing' },
+          const finalized = await transitionHackAttempt(tx, {
+            id: current.id,
+            from: 'finalizing',
+            to: 'accepted',
             data: {
-              status: 'accepted', canonicalStatus: 'promoted', ...resultFields, failureStage: null,
+              canonicalStatus: 'promoted', ...resultFields, failureStage: null,
               message: `${payload.message || '有效 Hack'}；已从 R${baseRevision.revisionNumber} 自动晋升为 R${revision.revisionNumber}`,
               inputSha256, outputSha256,
               acceptedInputFile: inputFile, acceptedOutputFile: outputFile, acceptedTestcaseId: testcaseId,
@@ -447,8 +454,8 @@ export async function finalizeHackResult(
     } catch (error) {
       if (error instanceof TestSetRevisionConflict && current.promotionRetries < 3) {
         const latest = await prisma.problem.findUnique({ where: { id: problem.id }, include: { LatestTestSetRevision: true } })
-        if (latest?.LatestTestSetRevision) await prisma.problemHackAttempt.update({ where: { id: current.id }, data: {
-          status: 'queuing', baseTestSetRevisionId: latest.latestTestSetRevisionId,
+        if (latest?.LatestTestSetRevision) await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'queuing', data: {
+          baseTestSetRevisionId: latest.latestTestSetRevisionId,
           judgeConfigHash: latest.LatestTestSetRevision.judgeConfigHash,
           testGraphRevision: latest.testGraphRevision, promotionRetries: { increment: 1 },
           canonicalStatus: null, failureStage: 'stale', message: '并发 Hack 已生成新版本，正在重新评测',
@@ -464,10 +471,12 @@ export async function finalizeHackResult(
         ...(outputPromoted ? [fs.promises.rm(finalOutput, { force: true })] : []),
       ])
       if (error instanceof TestSetRevisionConflict) return
-      await prisma.problemHackAttempt.updateMany({
-        where: { id: current.id, status: 'finalizing' },
+      await transitionHackAttempt(prisma, {
+        id: current.id,
+        from: 'finalizing',
+        to: 'system_error',
         data: {
-          status: 'system_error', canonicalStatus: 'failed', failureStage: 'persist',
+          canonicalStatus: 'failed', failureStage: 'persist',
           message: `候选测试点晋升失败：${String((error as Error)?.message || error).slice(0, 2000)}`,
           judgeId: null, judgeStarted: null, finishedAt: new Date(),
         },

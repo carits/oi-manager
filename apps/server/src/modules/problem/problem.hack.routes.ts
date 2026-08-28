@@ -17,6 +17,7 @@ import {
   validateHackCppSource,
 } from './problem.hack.service'
 import { ensureInitialTestSetRevision } from './problem.testset-revision.service'
+import { transitionHackAttempt } from './problem.hack-state'
 
 export const problemHackRouter = Router()
 
@@ -246,10 +247,11 @@ problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(as
     return res.status(409).json({ success: false, code: 'HACK_ALREADY_ACTIVE', message: '该用户在这道题已有一个正在处理的 Hack' })
   }
   try {
-    const updated = await prisma.problemHackAttempt.update({
-      where: { id: attempt.id },
+    const transitioned = await transitionHackAttempt(prisma, {
+      id: attempt.id,
+      from: 'system_error',
+      to: 'queuing',
       data: {
-        status: 'queuing',
         hackConfigRevision: config.revision,
         judgeConfigHash: problem.LatestTestSetRevision?.judgeConfigHash || judgeConfigHash(problem.judgeConfig),
         baselineResult: null,
@@ -272,6 +274,8 @@ problemHackRouter.post('/:id/hacks/:hackId/retry', authenticate, asyncHandler(as
         finishedAt: null,
       },
     })
+    if (transitioned.count !== 1) return res.status(409).json({ success: false, message: 'Hack 状态已变化，请刷新后重试' })
+    const updated = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })
     return res.json({ success: true, data: serializeHackAttempt(updated, true), message: 'Hack 已重新加入队列' })
   } catch (error: any) {
     if (error?.code === 'P2002') {

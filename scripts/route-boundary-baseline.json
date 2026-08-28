@@ -312,10 +312,10 @@
     "judgeRuntime": 0
   },
   "apps/server/src/routes/submit.ts": {
-    "prisma": 4,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
-    "judgeRuntime": 1
+    "judgeRuntime": 0
   },
   "apps/server/src/routes/teachers.ts": {
     "prisma": 0,

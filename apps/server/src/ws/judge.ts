@@ -18,6 +18,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getHeartbeatAction } from './judge-protocol'
 import { finalizeHackResult } from '../modules/problem/problem.hack.service'
+import { transitionHackAttempt, transitionHackAttempts } from '../modules/problem/problem.hack-state'
 import {
   claimNextQueuedSubmission,
   finalizeOwnedJudgeAttempt,
@@ -206,16 +207,21 @@ class JudgeConsumer {
         if (!problem || !hackConfig?.enabled || !baseRevision || hackConfig.revision !== attempt.hackConfigRevision ||
             baseRevision.judgeConfigHash !== attempt.judgeConfigHash ||
             (hackConfig.mode === 'oi' && problem.testGraphRevision !== attempt.testGraphRevision)) {
-          await tx.problemHackAttempt.update({
-            where: { id: attempt.id },
-            data: { status: 'stale', failureStage: 'stale', message: 'Hack 配置已变化，请重新发起', finishedAt: new Date() },
+          await transitionHackAttempt(tx, {
+            id: attempt.id,
+            from: 'queuing',
+            to: 'stale',
+            data: { failureStage: 'stale', message: 'Hack 配置已变化，请重新发起', finishedAt: new Date() },
           })
           return null
         }
-        await tx.problemHackAttempt.update({
-          where: { id: attempt.id },
-          data: { status: 'judging', judgeId: this.judgeId, judgeStarted: new Date() },
+        const claimed = await transitionHackAttempt(tx, {
+          id: attempt.id,
+          from: 'queuing',
+          to: 'judging',
+          data: { judgeId: this.judgeId, judgeStarted: new Date() },
         })
+        if (claimed.count !== 1) return null
         const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
         return {
           taskType: 'hack' as const,
@@ -274,9 +280,11 @@ class JudgeConsumer {
             reason: 'Judge connection closed before result persistence',
           })
         } else {
-          await prisma.problemHackAttempt.updateMany({
-            where: { id: task.id, status: { in: ['judging', 'finalizing'] }, judgeId: this.judgeId },
-            data: { status: 'queuing', judgeId: null, judgeStarted: null }
+          await transitionHackAttempts(prisma, {
+            from: ['judging', 'finalizing'],
+            to: 'queuing',
+            where: { id: task.id, judgeId: this.judgeId },
+            data: { judgeId: null, judgeStarted: null },
           })
         }
       } catch (e: any) {
@@ -378,9 +386,11 @@ export function initJudgeWebSocket() {
         leaseBefore: new Date(),
         reason: 'Judge attempt lease expired',
       })
-      const staleHacks = await prisma.problemHackAttempt.updateMany({
-        where: { status: { in: ['judging', 'finalizing'] }, judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
-        data: { status: 'queuing', judgeId: null, judgeStarted: null },
+      const staleHacks = await transitionHackAttempts(prisma, {
+        from: ['judging', 'finalizing'],
+        to: 'queuing',
+        where: { judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
+        data: { judgeId: null, judgeStarted: null },
       })
 
       if (staleSubmissionCount > 0 || staleHacks.count > 0) {
@@ -524,9 +534,10 @@ async function recoverAllStaleTasks() {
     const recoveredCount = await recoverStaleJudgeAttempts({
       reason: 'API restart recovered an unfinished Judge attempt',
     })
-    const recoveredHacks = await prisma.problemHackAttempt.updateMany({
-      where: { status: { in: ['judging', 'finalizing'] } },
-      data: { status: 'queuing', judgeId: null, judgeStarted: null },
+    const recoveredHacks = await transitionHackAttempts(prisma, {
+      from: ['judging', 'finalizing'],
+      to: 'queuing',
+      data: { judgeId: null, judgeStarted: null },
     })
 
     if (recoveredCount > 0 || recoveredHacks.count > 0) {

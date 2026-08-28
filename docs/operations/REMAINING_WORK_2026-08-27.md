@@ -29,6 +29,16 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 
 ## 待完成批次
 
+### 0. 架构收口
+
+- [x] `Submission + JudgeRun + JudgeAttempt + RejudgeBatch` 已完成安全增量建模、dual-write、读写切换和陈旧回传 fencing；历史 `Submission` 执行字段暂作兼容投影。
+- [x] Judge 和 Hack 核心流程均通过领域状态机 + CAS 转换，陈旧回传不能跳过所有权状态或复活终态。
+- [x] Hack 技术判定与 `TestcaseCandidate` 晋升已分离；Revision/Testdata 内容已使用 `BlobStore` port，本地实现可直接替换 S3/OSS adapter。
+- [x] Scheduler 单例和 Executor 可并行任务已分离，生产 systemd 中两类进程独立运行。
+- [x] 架构模型、路由、systemd 和环境变量清单由脚本生成并由 `architecture:check` 校验。
+- [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 710 / transaction 24 / filesystem 70 / Judge Runtime 0。新增债务已阻断，存量代码按业务模块逐批迁移，不在一次发布中冒险重写 710 个数据访问点。
+- [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期和投影差异报告为 0 后才能删除；不在当日发布后立即破坏性清理。
+
 ### 1. 隔离写入、并发与长稳压测
 
 - [x] 真实 go-judge 连续完成 30 轮、每轮 100 条本地提交，3000/3000 Accepted；每轮均验证无卡住任务和沙箱文件归零。
