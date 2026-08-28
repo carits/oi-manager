@@ -2,14 +2,44 @@ import { startCronTasks } from './cron-tasks'
 import { startSubmissionPoller, stopSubmissionPoller } from './submission-poller'
 import { startAutoVerifyScheduler } from '../modules/oj-account/application/oj-account.service'
 import logger from './logger'
+import {
+  listPendingOjFetchPlatforms,
+  recoverStaleOjFetchJobs,
+} from '../modules/oj-fetcher/application/oj-fetcher-queue.service'
 
 export interface BackgroundServicesHandle {
   stop(): Promise<void>
 }
 
+export function startOjFetchQueueScheduler(intervalMs = 2_000): () => void {
+  let stopped = false
+  let running = false
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const recovered = await recoverStaleOjFetchJobs()
+      if (recovered) logger.warn('oj_fetch_queue_stale_jobs_recovered', { action: 'oj_fetch', metadata: { recovered } })
+      const platforms = await listPendingOjFetchPlatforms()
+      if (!platforms.length) return
+      const { processFetchQueue } = await import('../routes/oj-fetcher')
+      await Promise.all(platforms.map(platform => processFetchQueue(platform)))
+    } catch (error) {
+      logger.error('oj_fetch_queue_tick_failed', error, { action: 'oj_fetch' })
+    } finally {
+      running = false
+    }
+  }
+  const timer = setInterval(() => { void tick() }, intervalMs)
+  timer.unref()
+  void tick()
+  return () => { stopped = true; clearInterval(timer) }
+}
+
 export function startSchedulerServices(): BackgroundServicesHandle {
   const stopCronTasks = startCronTasks()
   const stopAutoVerify = startAutoVerifyScheduler()
+  const stopOjFetchQueue = startOjFetchQueueScheduler()
   logger.info('scheduler_services_started', { action: 'background_scheduler' })
 
   let stopped = false
@@ -17,6 +47,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
     async stop() {
       if (stopped) return
       stopped = true
+      stopOjFetchQueue()
       stopAutoVerify()
       stopCronTasks()
       logger.info('scheduler_services_stopped', { action: 'background_scheduler' })

@@ -13,7 +13,6 @@ import { getAdapter, isPlatformSupported, getSupportedPlatforms, KNOWN_OJ_PLATFO
 import { fileService } from '../lib/storage'
 import logger from '../lib/logger'
 import { authenticate, authorize } from '../middleware/auth'
-import { canModifyProblem, canViewProblem } from '../modules/problem/problem.access'
 import { asyncHandler } from '../lib/asyncHandler'
 import {
   createOjFetchJobs,
@@ -24,6 +23,14 @@ import {
   retryOjFetchJob,
   updateOjPlatformConfig,
 } from '../modules/oj-fetcher/application/oj-fetcher-admin.service'
+import {
+  claimNextOjFetchJob,
+  findExistingProblemImage,
+  getOjFetchCookies,
+  replaceProblemAttachment,
+  requireModifiableProblem,
+  OjFetcherQueueError,
+} from '../modules/oj-fetcher/application/oj-fetcher-queue.service'
 
 export const ojFetcherRouter = Router()
 const adminOnly = [authenticate, authorize('super_admin' as const, 'platform_admin' as const)]
@@ -169,7 +176,6 @@ ojFetcherRouter.get('/jobs', ...adminOnly, ojAdminEndpoint(async (req, res) => {
  */
 ojFetcherRouter.post('/jobs/batch', ...adminOnly, ojAdminEndpoint(async (req, res) => {
   const result = await createOjFetchJobs(req.body.platform, req.body.problemIds)
-  void processFetchQueue(result.platform)
   res.json({ success: true, data: result.data })
 }))
 
@@ -178,8 +184,7 @@ ojFetcherRouter.post('/jobs/batch', ...adminOnly, ojAdminEndpoint(async (req, re
  * @description 重试任务
  */
 ojFetcherRouter.post('/jobs/:id/retry', ...adminOnly, ojAdminEndpoint(async (req, res) => {
-  const result = await retryOjFetchJob(req.params.id)
-  void processFetchQueue(result.platform)
+  await retryOjFetchJob(req.params.id)
   res.json({ success: true, message: '任务已重置' })
 }))
 
@@ -195,43 +200,21 @@ ojFetcherRouter.delete('/jobs/:id', ...adminOnly, ojAdminEndpoint(async (req, re
 // ==================== 队列处理函数 ====================
 
 // 处理队列（防止并发）
-const processingPlatforms = new Set<string>()
-
-async function processFetchQueue(platform: string) {
+export async function processFetchQueue(platform: string) {
   // 防止同一平台并发处理
-  if (processingPlatforms.has(platform)) return
-  processingPlatforms.add(platform)
-
   try {
     // 获取平台配置
-    const config = await prisma.ojPlatformConfig.findUnique({
-      where: { platform },
-    })
-
-    let cookies: Record<string, string> = {}
-    if (config?.cookies) {
-      try {
-        cookies = JSON.parse(config.cookies)
-      } catch {
-        cookies = {}
-      }
-    }
+    const cookies = await getOjFetchCookies(platform)
 
     // 获取待处理任务（一次处理一个）
     while (true) {
-      const job = await prisma.ojFetchJob.findFirst({
-        where: { platform, status: 'pending' },
-        orderBy: { createdAt: 'asc' },
-      })
+      const job = await claimNextOjFetchJob(platform)
 
       if (!job) break
 
       try {
         // 更新状态为处理中
-        await prisma.ojFetchJob.update({
-          where: { id: job.id },
-          data: { status: 'fetching' },
-        })
+        // claimNextOjFetchJob already moved the job to fetching with a DB CAS.
 
         // 拉取题目
         const adapter = getAdapter(platform as any)
@@ -500,9 +483,7 @@ async function processFetchQueue(platform: string) {
       // 限流：每次处理间隔 2s（避免触发 OJ 反爬）
       await new Promise(resolve => setTimeout(resolve, 2000))
     }
-  } finally {
-    processingPlatforms.delete(platform)
-  }
+  } finally { /* database claiming makes process-local cleanup unnecessary */ }
 }
 
 // 内部下载附件函数
@@ -575,31 +556,9 @@ async function downloadAttachmentInternal(
   const mimeType = getMimeType(ext)
 
   // 检查是否已存在同名附件（重新拉取时覆盖）
-  const existingAttachment = await prisma.problemAttachment.findFirst({
-    where: { problemId, fileName: filename }
-  })
-
-  if (existingAttachment) {
-    // 删除旧的文件记录和物理文件
-    if (existingAttachment.fileUrl.startsWith('/api/files/')) {
-      const fileId = existingAttachment.fileUrl.split('/')[3]
-      await fileService.hardDelete(fileId).catch(() => {})
-    }
-    // 删除旧的附件记录
-    await prisma.problemAttachment.delete({ where: { id: existingAttachment.id } })
-    logger.info('oj_fetcher_attachment_deleted', { action: 'oj_fetch', metadata: { filename } })
-  }
-
   // 检查是否已存在同名图片（重新拉取时覆盖）
   if (isImage) {
-    const existingFile = await prisma.file.findFirst({
-      where: {
-        ownerType: 'problem',
-        ownerId: problemId,
-        category: 'image',
-        originalName: filename
-      }
-    })
+    const existingFile = await findExistingProblemImage(problemId, filename)
     if (existingFile) {
       await fileService.hardDelete(existingFile.id).catch(() => {})
       logger.info('oj_fetcher_image_deleted', { action: 'oj_fetch', metadata: { filename } })
@@ -618,16 +577,10 @@ async function downloadAttachmentInternal(
 
   // 如果是附件（非图片），创建 ProblemAttachment 记录
   if (!isImage) {
-    await prisma.problemAttachment.create({
-      data: {
-        id: crypto.randomUUID(),
-        problemId,
-        fileName: filename,
-        fileSize: buffer.length,
-        fileUrl: result.fileUrl,
-        description: `从 ${platform} 下载的附件`,
-      },
-    })
+    const replaced = await replaceProblemAttachment(
+      problemId, filename, buffer.length, result.fileUrl, `从 ${platform} 下载的附件`,
+    )
+    if (replaced.oldFileId) await fileService.hardDelete(replaced.oldFileId).catch(() => {})
   }
 
   // 返回新的文件 URL
@@ -948,19 +901,7 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
     }
 
     // 检查题目是否存在
-    const problem = await prisma.problem.findUnique({
-      where: { id: problemId },
-    })
-
-    if (!problem || !canViewProblem((req as any).user, problem)) {
-      return res.status(404).json({
-        success: false,
-        message: '题目不存在',
-      })
-    }
-    if (!canModifyProblem((req as any).user, problem)) {
-      return res.status(403).json({ success: false, message: '没有权限修改该题目' })
-    }
+    const problem = await requireModifiableProblem((req as any).user, problemId)
 
     // 准备请求头（模拟浏览器请求）
     const headers: Record<string, string> = {
@@ -1048,16 +989,11 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
     // 如果是附件（非图片），创建 ProblemAttachment 记录
     let attachment = null
     if (!isImage) {
-      attachment = await prisma.problemAttachment.create({
-        data: {
-          id: crypto.randomUUID(),
-          problemId,
-          fileName: filename,
-          fileSize: buffer.length,
-          fileUrl: result.fileUrl,
-          description: '从洛谷下载的附件',
-        },
-      })
+      const replaced = await replaceProblemAttachment(
+        problemId, filename, buffer.length, result.fileUrl, '从洛谷下载的附件',
+      )
+      attachment = replaced.attachment
+      if (replaced.oldFileId) await fileService.hardDelete(replaced.oldFileId).catch(() => {})
     }
 
     logger.info('oj_fetcher_file_saved', { action: 'oj_fetch', metadata: { filename, fileSize: buffer.length, fileType: isImage ? 'image' : 'attachment' } })
@@ -1073,6 +1009,9 @@ ojFetcherRouter.post('/download-attachment', ...authenticatedUsers, async (req: 
       },
     })
   } catch (error) {
+    if (error instanceof OjFetcherQueueError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message })
+    }
     console.error('[OJ Fetcher] Download attachment error:', error)
     res.status(500).json({
       success: false,

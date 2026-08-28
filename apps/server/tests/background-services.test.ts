@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   startAutoVerify: vi.fn(),
   startPoller: vi.fn(),
   stopPoller: vi.fn(),
+  listPendingPlatforms: vi.fn(),
+  recoverStaleJobs: vi.fn(),
 }))
 
 vi.mock('../src/lib/cron-tasks', () => ({
@@ -20,6 +22,10 @@ vi.mock('../src/lib/submission-poller', () => ({
   stopSubmissionPoller: mocks.stopPoller,
 }))
 vi.mock('../src/lib/logger', () => ({ default: { info: vi.fn() } }))
+vi.mock('../src/modules/oj-fetcher/application/oj-fetcher-queue.service', () => ({
+  listPendingOjFetchPlatforms: mocks.listPendingPlatforms.mockResolvedValue([]),
+  recoverStaleOjFetchJobs: mocks.recoverStaleJobs.mockResolvedValue(0),
+}))
 
 import { startExecutorServices, startSchedulerServices } from '../src/lib/background-services'
 
