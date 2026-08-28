@@ -1,97 +1,20 @@
-/**
- * Problem Notes Routes
- * 题目思路记录路由
- */
-
 import { Router } from 'express'
-import { v4 as uuidv4 } from 'uuid'
-import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
-import { getOwnerInfo } from './problem.helpers'
-import { canViewProblem } from './problem.access'
+import { getProblemNote, saveProblemNote } from './application/problem-route.service'
 
 export const problemNotesRouter = Router()
 
-// ==================== 获取思路记录 ====================
+function sendNoteResult(result: any, res: any) {
+  if (result.error === 'not_found') return res.status(404).json({ success: false, message: '题目不存在' })
+  if (result.error === 'owner_missing') return res.status(403).json({ success: false, message: '用户信息不存在' })
+  return res.json({ success: true, data: result.note })
+}
+
 problemNotesRouter.get('/:id/note', authenticate, asyncHandler(async (req, res) => {
-    const { id } = req.params
-    const userId = (req as any).user.userId
-    const role = (req as any).user.role
-
-    const problem = await prisma.problem.findUnique({ where: { id } })
-    if (!problem || !canViewProblem((req as any).user, problem)) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-
-    const ownerInfo = await getOwnerInfo(userId, role)
-    if (!ownerInfo) {
-      return res.status(403).json({ success: false, message: '用户信息不存在' })
-    }
-
-    const userType = role === 'student' ? 'student' : 'teacher'
-
-    let note = await prisma.problemNote.findUnique({
-      where: {
-        problemId_userId_userType: {
-          problemId: id,
-          userId: ownerInfo.ownerId,
-          userType
-        }
-      }
-    })
-
-    if (!note) {
-      note = {
-        id: '',
-        problemId: id,
-        userId: ownerInfo.ownerId,
-        userType,
-        content: '',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    }
-
-    res.json({ success: true, data: note })
+  return sendNoteResult(await getProblemNote(req.user!, req.params.id), res)
 }))
 
-// ==================== 保存思路记录 ====================
 problemNotesRouter.put('/:id/note', authenticate, asyncHandler(async (req, res) => {
-    const { id } = req.params
-    const userId = (req as any).user.userId
-    const role = (req as any).user.role
-    const { content } = req.body
-
-    const problem = await prisma.problem.findUnique({ where: { id } })
-    if (!problem || !canViewProblem((req as any).user, problem)) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-
-    const ownerInfo = await getOwnerInfo(userId, role)
-    if (!ownerInfo) {
-      return res.status(403).json({ success: false, message: '用户信息不存在' })
-    }
-
-    const userType = role === 'student' ? 'student' : 'teacher'
-
-    const note = await prisma.problemNote.upsert({
-      where: {
-        problemId_userId_userType: {
-          problemId: id,
-          userId: ownerInfo.ownerId,
-          userType
-        }
-      },
-      update: { content: content || '' },
-      create: {
-        id: uuidv4(),
-        problemId: id,
-        userId: ownerInfo.ownerId,
-        userType,
-        content: content || ''
-      }
-    })
-
-    res.json({ success: true, data: note })
+  return sendNoteResult(await saveProblemNote(req.user!, req.params.id, req.body?.content), res)
 }))

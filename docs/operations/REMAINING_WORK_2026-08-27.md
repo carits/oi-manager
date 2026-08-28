@@ -36,7 +36,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] Hack 技术判定与 `TestcaseCandidate` 晋升已分离；Revision/Testdata 内容已使用 `BlobStore` port，本地实现可直接替换 S3/OSS adapter。
 - [x] Scheduler 单例和 Executor 可并行任务已分离，生产 systemd 中两类进程独立运行。
 - [x] 架构模型、路由、systemd 和环境变量清单由脚本生成并由 `architecture:check` 校验。
-- [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 303 / transaction 7 / filesystem 34 / Judge Runtime 0。题库提交、OJ 账号池、OJ Fetcher、平台绑定、Organization 成员、管理员数据维护、超级管理员学校治理、Dashboard、Workspace、全局 User、用户归档题目、团队题单、通知、贡献统计、Carits 币、排名、测试数据管理以及活动题目完整读写已迁入 application/query service；对应已迁移路由不再直接持久化。OJ Fetcher 旧持久化与 API 内后台执行已删除。新增债务已阻断。
+- [ ] `routes/` Strangler 仍有存量债务：当前 60 个 adapter 中基线为 Prisma 284 / transaction 7 / filesystem 34 / Judge Runtime 0。题库提交/笔记/TestSet Revision/Test Graph、OJ 账号池、OJ Fetcher、平台绑定、Organization 成员、管理员数据维护、超级管理员学校治理、Dashboard、Workspace、全局 User、用户归档题目、团队题单、通知、贡献统计、Carits 币、排名、测试数据管理以及活动题目完整读写已迁入 application/query service；对应已迁移路由不再直接持久化。OJ Fetcher 旧持久化与 API 内后台执行已删除。新增债务已阻断。
 - [ ] `Submission` 兼容执行投影字段需经过至少一个稳定观察周期后才能删除；当前生产首次对账为 2518 条、0 差异、0 条无 Run 本地提交，且已纳入 5 分钟监控。观察期内不做破坏性清理。
 
 ### 1. 隔离写入、并发与长稳压测
