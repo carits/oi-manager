@@ -9,12 +9,21 @@ import dns from 'dns/promises'
 import { Router, Request, Response } from 'express'
 import path from 'path'
 import { prisma } from '../prisma'
-import { getAdapter, isPlatformSupported, getSupportedPlatforms, isKnownPlatform, KNOWN_OJ_PLATFORMS, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS, fetchProblemWithMetrics } from '../oj-adapters'
+import { getAdapter, isPlatformSupported, getSupportedPlatforms, KNOWN_OJ_PLATFORMS, OjFetchError, OjErrorCode, OJ_ERROR_HTTP_STATUS, fetchProblemWithMetrics } from '../oj-adapters'
 import { fileService } from '../lib/storage'
 import logger from '../lib/logger'
-import { parsePagination, paginatedResponse } from '../lib/pagination'
 import { authenticate, authorize } from '../middleware/auth'
 import { canModifyProblem, canViewProblem } from '../modules/problem/problem.access'
+import { asyncHandler } from '../lib/asyncHandler'
+import {
+  createOjFetchJobs,
+  deleteOjFetchJob,
+  getOjPlatformConfig,
+  listOjFetchJobs,
+  OjFetcherAdminError,
+  retryOjFetchJob,
+  updateOjPlatformConfig,
+} from '../modules/oj-fetcher/application/oj-fetcher-admin.service'
 
 export const ojFetcherRouter = Router()
 const adminOnly = [authenticate, authorize('super_admin' as const, 'platform_admin' as const)]
@@ -32,8 +41,18 @@ const authenticatedUsers = [
 
 const MAX_REMOTE_ATTACHMENT_BYTES = 50 * 1024 * 1024
 const MAX_REMOTE_IMAGE_BYTES = 10 * 1024 * 1024
-const MAX_BATCH_PROBLEM_IDS = 200
-const MAX_COOKIE_CONFIG_BYTES = 64 * 1024
+
+function ojAdminEndpoint(handler: (req: Request, res: Response) => Promise<unknown>) {
+  return asyncHandler(async (req: Request, res: Response) => {
+    try { await handler(req, res) }
+    catch (error) {
+      if (error instanceof OjFetcherAdminError) {
+        return res.status(error.statusCode).json({ success: false, message: error.message })
+      }
+      throw error
+    }
+  })
+}
 
 export function isPrivateRemoteHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, '')
@@ -117,113 +136,17 @@ async function readRemoteBody(response: globalThis.Response, maxBytes: number): 
  * GET /api/oj-fetcher/platforms/:platform/config
  * @description 获取平台 Cookie 配置
  */
-ojFetcherRouter.get('/platforms/:platform/config', ...superAdminOnly, async (req: Request, res: Response) => {
-  try {
-    const { platform } = req.params
-
-    if (!isKnownPlatform(platform)) {
-      return res.status(400).json({ success: false, message: `不支持的 OJ 平台: ${platform}` })
-    }
-
-    const config = await prisma.ojPlatformConfig.findUnique({
-      where: { platform },
-    })
-
-    // 解析 cookies JSON
-    let cookies: Record<string, string> = {}
-    if (config?.cookies) {
-      try {
-        cookies = JSON.parse(config.cookies)
-      } catch {
-        cookies = {}
-      }
-    }
-
-    res.json({
-      success: true,
-      data: {
-        platform,
-        configured: Object.keys(cookies).length > 0,
-        cookieNames: Object.keys(cookies),
-        lastUsedAt: config?.lastUsedAt || null,
-      },
-    })
-  } catch (error) {
-    console.error('[OJ Fetcher] Get config error:', error)
-    res.status(500).json({
-      success: false,
-      message: '获取配置失败',
-    })
-  }
-})
+ojFetcherRouter.get('/platforms/:platform/config', ...superAdminOnly, ojAdminEndpoint(async (req, res) => {
+  res.json({ success: true, data: await getOjPlatformConfig(req.params.platform) })
+}))
 
 /**
  * PUT /api/oj-fetcher/platforms/:platform/config
  * @description 更新平台 Cookie 配置
  */
-ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, async (req: Request, res: Response) => {
-  try {
-    const { platform } = req.params
-    const { cookies } = req.body
-
-    if (!isKnownPlatform(platform)) {
-      return res.status(400).json({ success: false, message: `不支持的 OJ 平台: ${platform}` })
-    }
-
-    if (
-      cookies != null &&
-      (typeof cookies !== 'object' || Array.isArray(cookies) ||
-        Object.values(cookies).some(value => typeof value !== 'string'))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cookie 配置必须是字符串键值对象',
-      })
-    }
-
-    const normalizedCookies = Object.fromEntries(
-      Object.entries((cookies || {}) as Record<string, string>)
-        .map(([key, value]) => [key.trim(), value.trim()])
-        .filter(([key, value]) => key && value),
-    )
-    const cookiesJson = Object.keys(normalizedCookies).length > 0
-      ? JSON.stringify(normalizedCookies)
-      : null
-    if (cookiesJson && Buffer.byteLength(cookiesJson, 'utf8') > MAX_COOKIE_CONFIG_BYTES) {
-      return res.status(400).json({ success: false, message: 'Cookie 配置过大' })
-    }
-
-    const config = await prisma.ojPlatformConfig.upsert({
-      where: { platform },
-      update: {
-        cookies: cookiesJson,
-        lastUsedAt: new Date(),
-      },
-      create: {
-        id: crypto.randomUUID(),
-        platform,
-        cookies: cookiesJson,
-        lastUsedAt: new Date(),
-      },
-    })
-
-    res.json({
-      success: true,
-      data: {
-        platform: config.platform,
-        configured: Object.keys(normalizedCookies).length > 0,
-        cookieNames: Object.keys(normalizedCookies),
-        lastUsedAt: config.lastUsedAt,
-      },
-    })
-  } catch (error) {
-    console.error('[OJ Fetcher] Update config error:', error)
-    res.status(500).json({
-      success: false,
-      message: '更新配置失败',
-    })
-  }
-})
+ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, ojAdminEndpoint(async (req, res) => {
+  res.json({ success: true, data: await updateOjPlatformConfig(req.params.platform, req.body.cookies) })
+}))
 
 // ==================== 拉取队列 API ====================
 
@@ -236,219 +159,38 @@ ojFetcherRouter.put('/platforms/:platform/config', ...superAdminOnly, async (req
  * @query page - 页码（默认1）
  * @query pageSize - 每页条数（默认20）
  */
-ojFetcherRouter.get('/jobs', ...adminOnly, async (req: Request, res: Response) => {
-  try {
-    const { status, platform, problemId } = req.query
-    const { page, pageSize, skip } = parsePagination(req.query)
-
-    const where: any = {}
-    if (status) where.status = status
-    if (platform) where.platform = platform
-    if (problemId && typeof problemId === 'string') {
-      where.problemId = { contains: problemId }
-    }
-
-    const [jobs, total] = await Promise.all([
-      prisma.ojFetchJob.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: pageSize,
-      }),
-      prisma.ojFetchJob.count({ where }),
-    ])
-
-    res.json({
-      success: true,
-      data: paginatedResponse(jobs, total, page, pageSize),
-    })
-  } catch (error) {
-    console.error('[OJ Fetcher] Get jobs error:', error)
-    res.status(500).json({
-      success: false,
-      message: '获取任务列表失败',
-    })
-  }
-})
+ojFetcherRouter.get('/jobs', ...adminOnly, ojAdminEndpoint(async (req, res) => {
+  res.json({ success: true, data: await listOjFetchJobs(req.query) })
+}))
 
 /**
  * POST /api/oj-fetcher/jobs/batch
  * @description 批量创建拉取任务
  */
-ojFetcherRouter.post('/jobs/batch', ...adminOnly, async (req: Request, res: Response) => {
-  try {
-    const { platform, problemIds } = req.body
-
-    if (!platform || !problemIds || !Array.isArray(problemIds) || problemIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: '缺少必要参数',
-      })
-    }
-
-    // 检查平台是否在已知白名单中
-    if (!isKnownPlatform(platform)) {
-      return res.status(400).json({
-        success: false,
-        message: `不支持的 OJ 平台: ${platform}`,
-      })
-    }
-
-    if (problemIds.length > MAX_BATCH_PROBLEM_IDS || problemIds.some((id) => typeof id !== 'string')) {
-      return res.status(400).json({
-        success: false,
-        message: `题目数量不能超过 ${MAX_BATCH_PROBLEM_IDS}，且题号必须是字符串`,
-      })
-    }
-
-    // 去重
-    const uniqueIds = [...new Set(problemIds.map((id: string) => id.trim()).filter(Boolean))]
-
-    // 检查已存在的任务
-    const existingJobs = await prisma.ojFetchJob.findMany({
-      where: {
-        platform,
-        problemId: { in: uniqueIds },
-      },
-      select: { problemId: true, status: true },
-    })
-
-    const existingMap = new Map(existingJobs.map(j => [j.problemId, j.status]))
-
-    // 创建任务
-    const results = []
-    for (const problemId of uniqueIds) {
-      if (existingMap.has(problemId)) {
-        // 已存在，重置状态为 pending 以便重新拉取
-        await prisma.ojFetchJob.update({
-          where: { platform_problemId: { platform, problemId } },
-          data: {
-            status: 'pending',
-            message: null,
-            attachmentStatus: null,
-          },
-        })
-        results.push({
-          problemId,
-          status: 'pending',
-          isNew: false,
-          reset: true,
-        })
-      } else {
-        // 创建新任务
-        const job = await prisma.ojFetchJob.create({
-          data: {
-            id: crypto.randomUUID(),
-            platform,
-            problemId,
-            status: 'pending',
-          },
-        })
-        results.push({
-          problemId,
-          jobId: job.id,
-          status: 'pending',
-          isNew: true,
-        })
-      }
-    }
-
-    // 异步处理队列
-    processFetchQueue(platform)
-
-    res.json({
-      success: true,
-      data: {
-        total: uniqueIds.length,
-        new: results.filter(r => r.isNew).length,
-        existing: results.filter(r => !r.isNew).length,
-        results,
-      },
-    })
-  } catch (error) {
-    console.error('[OJ Fetcher] Create batch jobs error:', error)
-    res.status(500).json({
-      success: false,
-      message: '创建任务失败',
-    })
-  }
-})
+ojFetcherRouter.post('/jobs/batch', ...adminOnly, ojAdminEndpoint(async (req, res) => {
+  const result = await createOjFetchJobs(req.body.platform, req.body.problemIds)
+  void processFetchQueue(result.platform)
+  res.json({ success: true, data: result.data })
+}))
 
 /**
  * POST /api/oj-fetcher/jobs/:id/retry
  * @description 重试任务
  */
-ojFetcherRouter.post('/jobs/:id/retry', ...adminOnly, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-
-    const job = await prisma.ojFetchJob.findUnique({
-      where: { id },
-    })
-
-    if (!job) {
-      return res.status(404).json({
-        success: false,
-        message: '任务不存在',
-      })
-    }
-
-    // 重置状态
-    await prisma.ojFetchJob.update({
-      where: { id },
-      data: {
-        status: 'pending',
-        message: null,
-        attachmentStatus: null,
-      },
-    })
-
-    // 异步处理
-    processFetchQueue(job.platform)
-
-    res.json({
-      success: true,
-      message: '任务已重置',
-    })
-  } catch (error) {
-    console.error('[OJ Fetcher] Retry job error:', error)
-    res.status(500).json({
-      success: false,
-      message: '重试失败',
-    })
-  }
-})
+ojFetcherRouter.post('/jobs/:id/retry', ...adminOnly, ojAdminEndpoint(async (req, res) => {
+  const result = await retryOjFetchJob(req.params.id)
+  void processFetchQueue(result.platform)
+  res.json({ success: true, message: '任务已重置' })
+}))
 
 /**
  * DELETE /api/oj-fetcher/jobs/:id
  * @description 删除任务
  */
-ojFetcherRouter.delete('/jobs/:id', ...adminOnly, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-
-    await prisma.ojFetchJob.delete({
-      where: { id },
-    })
-
-    res.json({
-      success: true,
-      message: '任务已删除',
-    })
-  } catch (error) {
-    if ((error as any)?.code === 'P2025') {
-      return res.status(404).json({
-        success: false,
-        message: '任务不存在',
-      })
-    }
-    console.error('[OJ Fetcher] Delete job error:', error)
-    res.status(500).json({
-      success: false,
-      message: '删除失败',
-    })
-  }
-})
+ojFetcherRouter.delete('/jobs/:id', ...adminOnly, ojAdminEndpoint(async (req, res) => {
+  await deleteOjFetchJob(req.params.id)
+  res.json({ success: true, message: '任务已删除' })
+}))
 
 // ==================== 队列处理函数 ====================
 
