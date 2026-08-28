@@ -1,113 +1,43 @@
-/**
- * Training Note Routes
- * 训练笔记管理路由
- */
-
 import { Router } from 'express'
-import { v4 as uuidv4 } from 'uuid'
-import { prisma } from '../../prisma'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import type { AuthRequest } from '../../middleware/auth'
 import {
   canAccessTraining,
-  parseTrainingId,
   getUserTypeForTeam,
+  parseTrainingId,
   requireTrainingStarted,
 } from './training.helpers'
+import { findTrainingForProblemAccess } from './application/training-problem-query.service'
+import { getTrainingProblemNote, saveTrainingProblemNote } from './application/training-user-content.service'
 
 export const trainingNotesRouter = Router()
 
-/**
- * GET /api/trainings/:id/problems/:problemId/note
- */
+async function context(req: AuthRequest, res: any) {
+  const trainingId = parseTrainingId(req.params.id)
+  const userId = req.user!.userId
+  const training = await findTrainingForProblemAccess(trainingId)
+  if (!training) { res.status(404).json({ success: false, message: '训练不存在' }); return null }
+  if (!await canAccessTraining(userId, training)) { res.status(403).json({ success: false, message: '无权限' }); return null }
+  const notStarted = await requireTrainingStarted(training, userId)
+  if (notStarted) { res.status(403).json({ success: false, message: notStarted }); return null }
+  return { trainingId, userId, userType: await getUserTypeForTeam(userId) }
+}
+
 trainingNotesRouter.get('/trainings/:id/problems/:problemId/note', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
-    const userId = req.user!.userId
-
-    const training = await prisma.training.findUnique({ where: { id } })
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    if (!await canAccessTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '无权限' })
-    }
-
-    const notStarted = await requireTrainingStarted(training, userId)
-    if (notStarted) {
-      return res.status(403).json({ success: false, message: notStarted })
-    }
-
-    const trainingProblem = await prisma.trainingProblem.findUnique({ where: { id: problemId } })
-    if (!trainingProblem) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-
-    const userType = await getUserTypeForTeam(userId)
-
-    // 复用 ProblemNote
-    const note = await prisma.problemNote.findUnique({
-      where: {
-        problemId_userId_userType: {
-          problemId: trainingProblem.problemId,
-          userId,
-          userType,
-        },
-      },
-    })
-
-    res.json({ success: true, data: note || { content: '' } })
+  const ctx = await context(req, res)
+  if (!ctx) return
+  const note = await getTrainingProblemNote(ctx.trainingId, req.params.problemId, ctx.userId, ctx.userType)
+  if (!note) return res.status(404).json({ success: false, message: '题目不存在' })
+  res.json({ success: true, data: note })
 }, '查询失败'))
 
-/**
- * PUT /api/trainings/:id/problems/:problemId/note
- */
 trainingNotesRouter.put('/trainings/:id/problems/:problemId/note', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id), problemId = req.params.problemId
-    const userId = req.user!.userId
-    const { content } = req.body
-
-    const training = await prisma.training.findUnique({ where: { id } })
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
-    }
-
-    if (!await canAccessTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '无权限' })
-    }
-
-    const notStarted = await requireTrainingStarted(training, userId)
-    if (notStarted) {
-      return res.status(403).json({ success: false, message: notStarted })
-    }
-
-    const trainingProblem = await prisma.trainingProblem.findUnique({ where: { id: problemId } })
-    if (!trainingProblem) {
-      return res.status(404).json({ success: false, message: '题目不存在' })
-    }
-
-    const userType = await getUserTypeForTeam(userId)
-
-    const note = await prisma.problemNote.upsert({
-      where: {
-        problemId_userId_userType: {
-          problemId: trainingProblem.problemId,
-          userId,
-          userType,
-        },
-      },
-      create: {
-        id: uuidv4(),
-        problemId: trainingProblem.problemId,
-        userId,
-        userType,
-        content: content || '',
-      },
-      update: {
-        content: content || '',
-      },
-    })
-
-    res.json({ success: true, data: note })
+  const ctx = await context(req, res)
+  if (!ctx) return
+  const note = await saveTrainingProblemNote(
+    ctx.trainingId, req.params.problemId, ctx.userId, ctx.userType, req.body?.content,
+  )
+  if (!note) return res.status(404).json({ success: false, message: '题目不存在' })
+  res.json({ success: true, data: note })
 }, '保存失败'))

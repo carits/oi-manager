@@ -168,7 +168,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.notes.routes.ts": {
-    "prisma": 7,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
@@ -186,7 +186,7 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/training/training.record.routes.ts": {
-    "prisma": 5,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
