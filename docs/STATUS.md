@@ -5,6 +5,8 @@ last_verified: 2026-08-29
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-29: 离站日志归档改为双阶段确认：上传器与远端校验器都必须是绝对路径可执行文件，归档只有在独立远端读取校验大小和 SHA-256 成功后才创建 `.uploaded` 保留标记；校验失败时本地归档和校验和继续保留，不能进入自动清理。故障注入覆盖成功读回和校验失败无标记路径。生产仍缺真实异机/对象存储目标，因此外部验收保持未完成。
+
 - 2026-08-29: Judge 用户可见读取完成 Switch read：全局/活动/题目提交列表与详情、结果筛选、题目状态、个人概览、OI/ICPC 排名、平台/校园解题排名、管理统计和重测预览统一读取 CurrentJudgeRun，远程归档与无 Run 历史记录才回退兼容列。故意破坏 Submission 兼容字段的回归仍返回 Run 的 AC/100；Server 57 文件 509/509、Web 36/36、Judge 17/17、三端生产构建和文档/架构门禁通过。提交 `c554aa8` 已推送 `main` 并蓝绿提升至 API 3303；生产 2518/2518 投影对账零差异。
 - 2026-08-29: 60 个 HTTP adapter 的 Prisma / transaction / filesystem / Judge Runtime 直接调用全部归零；路由边界和 Hack 状态写入门禁均为零违规。当前运行拓扑文档已统一到 systemd Web、稳定 Router、蓝绿 API、Scheduler/Executor、Judge 与 Docker 基础设施；PM2/watch/“正式配置仅为模板”等旧描述不再属于当前事实。
 - 2026-08-29: 前端账号级权限入口改为 capability-driven：全局管理员工作区、个人/校园工作区、全量评测记录、组织管理和平台密钥能力由单一矩阵定义，关键导航与入口不再重复拼接角色判断；资源级权限仍以后端为唯一事实源。Web 11 文件 40/40、UI 状态与组件门禁、Web 生产构建通过。提交 `8776b5e` 已推送 `main`，公网 preview 构建 `pLLd_bBuL87zHDakelxvi` 已提升至 `3000`；Web、Router、API 3303、Worker、Executor、Judge 及公网 health/readiness 均正常。Codex 内置浏览器复验 `/login` 成功渲染，页面控制台无 warning/error。

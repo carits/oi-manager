@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 35 |
 | systemd units | 7 |
-| Referenced environment keys | 300 |
+| Referenced environment keys | 306 |
 
 ## HTTP adapter ownership
 
@@ -336,16 +336,21 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `LOAD_REQUESTS`
 - `LOAD_URL`
 - `LOCK_FILE`
+- `LOG_ARCHIVE_CHECKSUM_PATH`
 - `LOG_ARCHIVE_COMMAND`
 - `LOG_ARCHIVE_CRON_LOG`
 - `LOG_ARCHIVE_ENV_FILE`
 - `LOG_ARCHIVE_KEEP_DAYS`
 - `LOG_ARCHIVE_LOCK_FILE`
+- `LOG_ARCHIVE_NAME`
 - `LOG_ARCHIVE_PATH`
 - `LOG_ARCHIVE_SCHEDULE`
+- `LOG_ARCHIVE_SHA256`
 - `LOG_ARCHIVE_SINCE_HOURS`
+- `LOG_ARCHIVE_SIZE`
 - `LOG_ARCHIVE_SPOOL_DIR`
 - `LOG_ARCHIVE_TEST_REMOTE`
+- `LOG_ARCHIVE_VERIFY_COMMAND`
 - `LOG_FILE`
 - `LOG_LEVEL`
 - `LUOGU_BASE`
@@ -486,6 +491,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `UNIT_DIR`
 - `UPLOAD_COMMAND`
 - `USE_SYSTEMD`
+- `VERIFY_COMMAND`
 - `WEBHOOK_FILE`
 - `WEB_DIR`
 - `WEB_ORIGIN`

@@ -6,6 +6,7 @@ SPOOL_DIR="${LOG_ARCHIVE_SPOOL_DIR:-/data/backups/oi-manager/log-archive-spool}"
 SINCE_HOURS="${LOG_ARCHIVE_SINCE_HOURS:-24}"
 KEEP_DAYS="${LOG_ARCHIVE_KEEP_DAYS:-7}"
 UPLOAD_COMMAND="${LOG_ARCHIVE_COMMAND:-}"
+VERIFY_COMMAND="${LOG_ARCHIVE_VERIFY_COMMAND:-}"
 LOCK_FILE="${LOG_ARCHIVE_LOCK_FILE:-/tmp/oi-manager-log-archive.lock}"
 
 [[ "$SINCE_HOURS" =~ ^[1-9][0-9]*$ ]] || { echo "LOG_ARCHIVE_SINCE_HOURS must be positive" >&2; exit 2; }
@@ -83,12 +84,32 @@ if [[ -z "$UPLOAD_COMMAND" ]]; then
   echo "Log archive retained locally but no LOG_ARCHIVE_COMMAND is configured: $archive" >&2
   exit 2
 fi
+if [[ -z "$VERIFY_COMMAND" ]]; then
+  echo "Log archive retained locally but no LOG_ARCHIVE_VERIFY_COMMAND is configured: $archive" >&2
+  exit 2
+fi
 
-LOG_ARCHIVE_PATH="$archive" \
-LOG_ARCHIVE_SHA256="$(cut -d' ' -f1 "$archive.sha256")" \
-LOG_ARCHIVE_SIZE="$(stat -c '%s' "$archive")" \
-LOG_ARCHIVE_HOST="$host_label" \
-bash -lc "$UPLOAD_COMMAND"
+validate_trusted_executable() {
+  local label="$1"
+  local command_path="$2"
+  if [[ "$command_path" != /* || ! -f "$command_path" || ! -x "$command_path" ]]; then
+    echo "$label must be an absolute executable file: $command_path" >&2
+    exit 2
+  fi
+}
+
+validate_trusted_executable LOG_ARCHIVE_COMMAND "$UPLOAD_COMMAND"
+validate_trusted_executable LOG_ARCHIVE_VERIFY_COMMAND "$VERIFY_COMMAND"
+
+export LOG_ARCHIVE_PATH="$archive"
+export LOG_ARCHIVE_CHECKSUM_PATH="$archive.sha256"
+export LOG_ARCHIVE_SHA256="$(cut -d' ' -f1 "$archive.sha256")"
+export LOG_ARCHIVE_SIZE="$(stat -c '%s' "$archive")"
+export LOG_ARCHIVE_HOST="$host_label"
+export LOG_ARCHIVE_NAME="$(basename "$archive")"
+
+"$UPLOAD_COMMAND"
+"$VERIFY_COMMAND"
 touch "$archive.uploaded"
 
 find "$SPOOL_DIR" -maxdepth 1 -type f -name 'oi-manager-logs-*.tar.gz.uploaded' -mtime "+$KEEP_DAYS" -print0 | while IFS= read -r -d '' marker; do
@@ -96,4 +117,4 @@ find "$SPOOL_DIR" -maxdepth 1 -type f -name 'oi-manager-logs-*.tar.gz.uploaded' 
   rm -f -- "$marker" "$uploaded_archive" "$uploaded_archive.sha256"
 done
 
-echo "Log archive uploaded and verified locally: $archive"
+echo "Log archive uploaded and independently verified remotely: $archive"

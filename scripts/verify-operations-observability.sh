@@ -77,10 +77,28 @@ NODE
 
 mkdir -p "$TEST_ROOT/remote"
 export LOG_ARCHIVE_TEST_REMOTE="$TEST_ROOT/remote"
+upload_command="$TEST_ROOT/upload-archive.sh"
+verify_command="$TEST_ROOT/verify-archive.sh"
+cat > "$upload_command" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cp -- "$LOG_ARCHIVE_PATH" "$LOG_ARCHIVE_TEST_REMOTE/$LOG_ARCHIVE_NAME"
+cp -- "$LOG_ARCHIVE_CHECKSUM_PATH" "$LOG_ARCHIVE_TEST_REMOTE/$LOG_ARCHIVE_NAME.sha256"
+SH
+cat > "$verify_command" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+remote_archive="$LOG_ARCHIVE_TEST_REMOTE/$LOG_ARCHIVE_NAME"
+[[ -s "$remote_archive" ]]
+[[ "$(stat -c '%s' "$remote_archive")" == "$LOG_ARCHIVE_SIZE" ]]
+[[ "$(sha256sum "$remote_archive" | cut -d' ' -f1)" == "$LOG_ARCHIVE_SHA256" ]]
+SH
+chmod 700 "$upload_command" "$verify_command"
 LOG_ARCHIVE_SPOOL_DIR="$TEST_ROOT/spool" \
 LOG_ARCHIVE_LOCK_FILE="$TEST_ROOT/archive.lock" \
 LOG_ARCHIVE_SINCE_HOURS=1 \
-LOG_ARCHIVE_COMMAND='cp -- "$LOG_ARCHIVE_PATH" "$LOG_ARCHIVE_TEST_REMOTE/"; cp -- "$LOG_ARCHIVE_PATH.sha256" "$LOG_ARCHIVE_TEST_REMOTE/"' \
+LOG_ARCHIVE_COMMAND="$upload_command" \
+LOG_ARCHIVE_VERIFY_COMMAND="$verify_command" \
   "$ROOT_DIR/scripts/archive-operations-logs.sh"
 
 archive="$(find "$TEST_ROOT/remote" -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
@@ -92,5 +110,21 @@ tar -tzf "$archive" > "$TEST_ROOT/archive-list.txt"
 grep -Fxq './manifest.txt' "$TEST_ROOT/archive-list.txt"
 grep -Fxq './journal/oi-manager-judge.service.log' "$TEST_ROOT/archive-list.txt"
 grep -Fxq './docker/oi-judge.log' "$TEST_ROOT/archive-list.txt"
+marker="$(find "$TEST_ROOT/spool" -maxdepth 1 -type f -name '*.tar.gz.uploaded' -print -quit)"
+[[ -n "$marker" ]]
 
-echo "Observability verification passed: failed/recovered webhook and off-process archive copy"
+if LOG_ARCHIVE_SPOOL_DIR="$TEST_ROOT/failed-spool" \
+  LOG_ARCHIVE_LOCK_FILE="$TEST_ROOT/failed-archive.lock" \
+  LOG_ARCHIVE_SINCE_HOURS=1 \
+  LOG_ARCHIVE_COMMAND="$upload_command" \
+  LOG_ARCHIVE_VERIFY_COMMAND=/usr/bin/false \
+  "$ROOT_DIR/scripts/archive-operations-logs.sh" >/dev/null 2>&1; then
+  echo 'Expected remote verification failure was reported as success' >&2
+  exit 1
+fi
+if find "$TEST_ROOT/failed-spool" -maxdepth 1 -type f -name '*.tar.gz.uploaded' -print -quit | grep -q .; then
+  echo 'Remote verification failure incorrectly created an uploaded marker' >&2
+  exit 1
+fi
+
+echo "Observability verification passed: alert transitions, remote archive readback, and failure retention"

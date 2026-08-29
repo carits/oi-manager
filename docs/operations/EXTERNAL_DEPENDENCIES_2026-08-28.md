@@ -49,15 +49,18 @@ port, sender and credentials.
 
 ## Off-host log retention
 
-Local collection, manifests, SHA-256 checks, spool retention and trusted upload
-command execution are verified. The production host has no SLS/file-store
+Local collection, manifests, SHA-256 checks, spool retention, trusted upload
+execution and an independent remote-readback verifier contract are verified.
+Shell command fragments are rejected, and retention markers are created only
+after both absolute executables succeed. The production host has no SLS/file-store
 configuration, no object-storage credentials and no second-host target. Local
 spool is not off-host disaster recovery.
 
 Required input: either an OSS/S3-compatible bucket and scoped credentials, or
 an SSH destination and host key. The owner must also choose the retention
-period. After configuration, one archive will be uploaded, downloaded and
-checksum-verified before cleanup is enabled.
+period. After configuration, the uploader and verifier executables will be
+installed, then one archive will be uploaded, downloaded and checksum-verified
+before cleanup is enabled.
 
 ## TLS and strict browser security
 

@@ -20,6 +20,13 @@ set -a
 . "$ENV_FILE"
 set +a
 [[ -n "${LOG_ARCHIVE_COMMAND:-}" ]] || { echo "LOG_ARCHIVE_COMMAND is not configured" >&2; exit 2; }
+[[ -n "${LOG_ARCHIVE_VERIFY_COMMAND:-}" ]] || { echo "LOG_ARCHIVE_VERIFY_COMMAND is not configured" >&2; exit 2; }
+for command_path in "$LOG_ARCHIVE_COMMAND" "$LOG_ARCHIVE_VERIFY_COMMAND"; do
+  [[ "$command_path" == /* && -f "$command_path" && -x "$command_path" ]] || {
+    echo "Log archive commands must be absolute executable files" >&2
+    exit 2
+  }
+done
 
 mkdir -p "$(dirname "$LOG_FILE")"
 current="$(crontab -l 2>/dev/null || true)"

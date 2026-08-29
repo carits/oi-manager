@@ -63,21 +63,25 @@ CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delive
 `scripts/archive-operations-logs.sh` creates a bounded archive containing the previous 24 hours of OI Manager systemd
 units, PostgreSQL/go-judge Docker logs, the most recent Nginx lines, monitor/backup logs and a build/commit manifest.
 The archive and SHA-256 remain in a local spool until `LOG_ARCHIVE_COMMAND` successfully copies them to an off-host
-machine or object store. Only successfully uploaded local archives are eligible for retention cleanup.
+machine or object store and `LOG_ARCHIVE_VERIFY_COMMAND` independently reads the remote object and verifies its size
+and SHA-256. Only archives that pass both commands receive an `.uploaded` marker and become eligible for retention
+cleanup. A failed verifier leaves the only local copy and checksum untouched.
 
 ```bash
 mkdir -p "$HOME/.config/oi-manager"
 install -m 600 deploy/observability/operations.env.example \
   "$HOME/.config/oi-manager/operations.env"
-# Fill in a real HTTPS webhook file and a trusted off-host upload command.
+# Fill in a real HTTPS webhook file plus trusted upload and remote-verification executables.
 pnpm monitor:verify
 pnpm logs:archive
 pnpm logs:archive:install
 ```
 
-The upload command receives `LOG_ARCHIVE_PATH`, `LOG_ARCHIVE_SHA256`, `LOG_ARCHIVE_SIZE` and `LOG_ARCHIVE_HOST`.
-Credentials belong in provider-owned mode-600 configuration, never in Git or command-line arguments. A local copy or
-loopback test is not accepted as off-host retention evidence.
+Both commands must be absolute executable files; shell fragments are rejected. They receive `LOG_ARCHIVE_PATH`,
+`LOG_ARCHIVE_CHECKSUM_PATH`, `LOG_ARCHIVE_NAME`, `LOG_ARCHIVE_SHA256`, `LOG_ARCHIVE_SIZE` and `LOG_ARCHIVE_HOST`.
+The verifier must read or download the remote object rather than trust the uploader's exit status. Credentials belong
+in provider-owned mode-600 configuration, never in Git or command-line arguments. A local copy or loopback test is not
+accepted as off-host retention evidence.
 
 ## Runtime resource audit
 
