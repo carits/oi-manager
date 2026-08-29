@@ -13,6 +13,7 @@ export class JudgeTelemetry {
   private inFlight = 0
   private connected = false
   private authenticated = false
+  private judgeId = process.env.JUDGE_ID || 'unknown'
   private lastMessageAt: string | null = null
   private lastTaskAt: string | null = null
   private compileCache: Record<string, number> = {}
@@ -37,6 +38,11 @@ export class JudgeTelemetry {
     const changed = this.authenticated !== authenticated
     this.authenticated = authenticated
     if (changed) this.increment(authenticated ? 'auth.succeeded' : 'auth.failed')
+  }
+
+  setJudgeId(judgeId: string): void {
+    this.judgeId = judgeId || 'unknown'
+    this.flush()
   }
 
   noteMessage(): void {
@@ -77,7 +83,7 @@ export class JudgeTelemetry {
     return {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      judgeId: process.env.JUDGE_ID || 'unknown',
+      judgeId: this.judgeId,
       process: {
         pid: process.pid,
         uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000),

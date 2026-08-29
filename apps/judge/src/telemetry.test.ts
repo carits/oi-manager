@@ -24,6 +24,7 @@ describe('Judge telemetry', () => {
     telemetry.increment('connection.attempted')
     telemetry.setConnection(true)
     telemetry.setAuthenticated(true)
+    telemetry.setJudgeId('judge-observability-test')
     telemetry.noteMessage()
     const startedAt = telemetry.startTask('submission')
     telemetry.finishTask('submission', 'Accepted', startedAt)
@@ -31,6 +32,7 @@ describe('Judge telemetry', () => {
 
     expect(telemetry.flush()).toBe(target)
     const snapshot = JSON.parse(fs.readFileSync(target, 'utf8'))
+    expect(snapshot.judgeId).toBe('judge-observability-test')
     expect(snapshot.connection).toMatchObject({ connected: true, authenticated: true })
     expect(snapshot.tasks.inFlight).toBe(0)
     expect(snapshot.compileCache).toEqual({ entries: 2, activeReferences: 0 })

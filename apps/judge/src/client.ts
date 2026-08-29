@@ -117,6 +117,7 @@ class JudgeClient {
       case 'registered':
         // 服务端确认注册成功
         this.judgeId = msg.payload?.judgeId || config.judgeId
+        judgeTelemetry.setJudgeId(this.judgeId || config.judgeId)
         console.log('[Judge] Registration confirmed, judgeId:', this.judgeId)
         // 注册成功后发送 start 消息启动服务端 Consumer
         this.send({
