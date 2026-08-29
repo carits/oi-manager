@@ -221,6 +221,7 @@ const routerPrefixes = {
   organizationMemberRouter: '/api/organizations/:organizationId/members',
   platformOrganizationRouter: '/api/platform/organizations',
   demoScenarioRouter: '/api/admin/demo-scenario',
+  telemetryRouter: '/api/telemetry',
 }
 
 const endpointPattern =

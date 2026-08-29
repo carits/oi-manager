@@ -36,6 +36,7 @@ import { meRouter } from './routes/me'
 import { notificationRouter } from './modules/notification/notification.routes'
 import { caritsRouter } from './modules/carits/carits.routes'
 import { contributionRouter } from './modules/contribution/contribution.routes'
+import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { metrics } from './lib/metrics'
@@ -139,6 +140,7 @@ app.use('/api/me', meRouter)
 app.use('/api/notifications', authenticate, notificationRouter)
 app.use('/api/carits', authenticate, caritsRouter)
 app.use('/api/contributions', authenticate, contributionRouter)
+app.use('/api/telemetry', telemetryRouter)
 app.use('/api/workspaces', workspaceRouter)
 app.use('/api/admin/demo-scenario', demoScenarioRouter)
 
@@ -250,6 +252,7 @@ const gracefulShutdown = async (signal: string) => {
     })
     await browserManager.close()
     await new Promise<void>(resolve => httpServer.close(() => resolve()))
+    metrics.stopPeriodicLog()
     await prisma.$disconnect()
     process.exit(0)
   })()
@@ -258,6 +261,15 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2'))
+process.on('uncaughtExceptionMonitor', error => {
+  logger.error('process_uncaught_exception', error, { action: 'process_failure' })
+  metrics.flushSnapshot()
+})
+process.on('unhandledRejection', reason => {
+  logger.error('process_unhandled_rejection', reason, { action: 'process_failure' })
+  metrics.flushSnapshot()
+  process.exit(1)
+})
 
 // The public Web process proxies /api to this service. Bind to loopback by
 // default so the raw API and Judge WebSocket are not exposed on a second

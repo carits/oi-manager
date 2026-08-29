@@ -109,7 +109,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
     // 记录到 metrics（用于聚合统计）
     const success = res.statusCode < 400
-    metrics.recordEndpoint(requestMethod, requestPath, duration, success)
+    metrics.recordEndpoint(requestMethod, requestPath, duration, success, res.statusCode)
 
     if (duration > 1000) {
       logger.warn('slow_request', {

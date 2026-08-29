@@ -79,12 +79,15 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 
 ### 3. 外部告警、日志与故障注入
 
+- [x] API、Judge、业务状态和浏览器错误四层遥测已落地；快照使用原子 `0600` 文件，监控覆盖端点 5xx/P99、事件循环、内存、Judge 连接/认证/心跳、六类陈旧工作流和 Revision 投影差异。
+- [x] 首次故障状态转换会在告警前自动生成事故证据包；包内/包外 SHA-256、权限、必需诊断和敏感路径排除均有故障注入验证。SEV、阈值、保留期、RTO/RPO 和周/月/季度安全周期统一记录在 `OBSERVABILITY_SECURITY_STRATEGY.md`。
 - [ ] 接通 `MONITOR_ALERT_COMMAND` 的真实外部通知，并验证故障与恢复消息。
 - [x] 告警适配器和失败重试契约已完成：URL 从 mode-600 文件读取，failed/recovered 回环 HTTP 通过；没有真实收件人时不标记外部送达完成。
 - [ ] 在云控制台复核告警联系人、阈值、主机重启通知和安全组。
 - [ ] 将 journald、Docker、Nginx 与部署日志复制到异机或对象存储，配置明确保留期。
 - [x] 日志采集、manifest、SHA-256、本地 spool、可信上传命令和独立远端读回校验已实现；只有上传与远端大小/SHA-256 校验均成功才创建可清理标记，失败会保留本地归档。仍需真实异机/对象存储凭据完成最终一跳。
 - [x] 已在隔离栈注入 API、Worker、Judge WebSocket、go-judge 和 PostgreSQL 连接故障；任务不丢失、不误判，Worker/Judge 自动恢复，本地 failed/recovered 通知契约生效。真实外部通知仍由本节第一项跟踪。
+- [ ] 若需要将数据库 RPO 从当前每日备份的 24 小时目标提高，需配置异机 WAL 归档或迁移到具备 PITR 的托管 PostgreSQL；仓库侧不能伪造该外部能力。
 
 ### 4. 全新安装迁移链
 

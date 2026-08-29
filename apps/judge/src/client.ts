@@ -14,6 +14,7 @@ import { judge } from './judge'
 import { judgeHack } from './hack'
 import type { HackMessage, HackResultMessage, JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
 import { getClientHeartbeatReply } from './protocol'
+import { judgeTelemetry } from './telemetry'
 
 class JudgeClient {
   private ws: WebSocket | null = null
@@ -27,12 +28,14 @@ class JudgeClient {
     const url = `${config.backendUrl}/ws/judge`
 
     console.log(`[Judge] Connecting to ${url}...`)
+    judgeTelemetry.increment('connection.attempted')
 
     this.ws = new WebSocket(url)
 
     this.ws.on('open', () => {
       console.log('[Judge] Connected to backend')
       this.isConnected = true
+      judgeTelemetry.setConnection(true)
 
       // 如果有 token，先发送认证消息
       if (config.judgeToken) {
@@ -53,6 +56,7 @@ class JudgeClient {
         const msg: WSMessage = JSON.parse(data.toString())
         await this.handleMessage(msg)
       } catch (e: any) {
+        judgeTelemetry.increment('message.parse_failed')
         console.error('[Judge] Failed to parse message:', e.message)
       }
     })
@@ -63,10 +67,12 @@ class JudgeClient {
       this.isAuthenticated = false
       this.judgeId = null
       this.stopHeartbeat()
+      judgeTelemetry.setConnection(false)
       this.scheduleReconnect()
     })
 
     this.ws.on('error', (err) => {
+      judgeTelemetry.increment('connection.error')
       console.error('[Judge] WebSocket error:', err.message)
     })
   }
@@ -84,6 +90,7 @@ class JudgeClient {
   }
 
   private async handleMessage(msg: WSMessage) {
+    judgeTelemetry.noteMessage()
     const heartbeatReply = getClientHeartbeatReply(msg.type)
     if (heartbeatReply !== undefined) {
       if (heartbeatReply) {
@@ -96,12 +103,14 @@ class JudgeClient {
       case 'auth_success':
         console.log('[Judge] Authentication successful')
         this.isAuthenticated = true
+        judgeTelemetry.setAuthenticated(true)
         this.register()
         break
       case 'error':
         console.error('[Judge] Server error:', msg.payload?.message)
         if (msg.payload?.message?.includes('token') || msg.payload?.message?.includes('auth')) {
           this.isAuthenticated = false
+          judgeTelemetry.setAuthenticated(false)
           this.ws?.close()
         }
         break
@@ -130,6 +139,7 @@ class JudgeClient {
         await this.handleHackTask(msg as HackMessage)
         break
       default:
+        judgeTelemetry.increment('message.unknown')
         console.log('[Judge] Unknown message type:', msg.type)
     }
   }
@@ -137,6 +147,7 @@ class JudgeClient {
   private async handleHackTask(msg: HackMessage) {
     const { hackAttemptId, problemId } = msg.payload
     console.log(`[Judge] Received Hack task: attempt=${hackAttemptId}, problem=${problemId}`)
+    const telemetryStartedAt = judgeTelemetry.startTask('hack')
     let payload
     try {
       payload = await judgeHack(msg.payload)
@@ -144,11 +155,13 @@ class JudgeClient {
       payload = { hackAttemptId, outcome: 'system_error' as const, message: error.message }
     }
     if (payload.retryable) {
+      judgeTelemetry.finishTask('hack', 'infrastructure_retry', telemetryStartedAt)
       console.warn(`[Judge] Retryable Hack infrastructure failure: attempt=${hackAttemptId}; reconnecting for requeue`)
       this.ws?.close(1011, 'sandbox infrastructure unavailable')
       return
     }
     const result: HackResultMessage = { type: 'hack_result', payload }
+    judgeTelemetry.finishTask('hack', payload.outcome || 'unknown', telemetryStartedAt)
     this.send(result)
   }
 
@@ -168,6 +181,7 @@ class JudgeClient {
     const config = msg.payload.config ?? msg.payload.problemConfig ?? {}
 
     console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
+    const telemetryStartedAt = judgeTelemetry.startTask('submission')
     const receivedAt = Date.now()
     const judgeStartedAt = performance.now()
 
@@ -187,12 +201,14 @@ class JudgeClient {
       })
 
       if (result.retryable) {
+        judgeTelemetry.finishTask('submission', 'infrastructure_retry', telemetryStartedAt)
         console.warn(`[Judge] Retryable infrastructure failure: submission=${submissionId}; reconnecting for requeue`)
         this.ws?.close(1011, 'sandbox infrastructure unavailable')
         return
       }
 
       console.log(`[Judge] Task completed: submission=${submissionId}, result=${result.result}`)
+      judgeTelemetry.finishTask('submission', result.result, telemetryStartedAt)
 
       const resultMsg: ResultMessage = {
         type: 'result',
@@ -211,6 +227,7 @@ class JudgeClient {
       }
       this.send(resultMsg)
     } catch (e: any) {
+      judgeTelemetry.finishTask('submission', 'system_error', telemetryStartedAt)
       console.error(`[Judge] Task failed: submission=${submissionId}`, e.message)
 
       const resultMsg: ResultMessage = {
@@ -279,6 +296,7 @@ class JudgeClient {
       this.ws = null
     }
     this.isConnected = false
+    judgeTelemetry.setConnection(false)
   }
 }
 

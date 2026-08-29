@@ -8,6 +8,7 @@ import { config } from './config'
 import { client } from './client'
 import * as sandbox from './sandbox/client'
 import { disposeHackCompileCache, getHackCompileCacheStats } from './compiled-program-cache'
+import { judgeTelemetry } from './telemetry'
 
 console.log('========================================')
 console.log('OI Manager Judge Service')
@@ -38,9 +39,13 @@ async function start() {
 
   // 连接后端
   client.connect()
+  judgeTelemetry.start()
 
   const cacheMetricsTimer = setInterval(() => {
-    console.log('[JudgeMetrics] hack_compile_cache', getHackCompileCacheStats())
+    const cacheStats = getHackCompileCacheStats()
+    judgeTelemetry.setCompileCache(cacheStats)
+    judgeTelemetry.flush()
+    console.log('[JudgeMetrics] hack_compile_cache', cacheStats)
   }, 5 * 60_000)
   cacheMetricsTimer.unref()
 
@@ -53,6 +58,8 @@ async function start() {
     console.log('\n[Judge] Shutting down...')
     client.disconnect()
     await disposeHackCompileCache()
+    judgeTelemetry.setCompileCache(getHackCompileCacheStats())
+    judgeTelemetry.stop()
     console.log('[Judge] Hack compile cache disposed:', getHackCompileCacheStats())
     process.exit(0)
   }
@@ -61,6 +68,8 @@ async function start() {
 }
 
 start().catch(err => {
+  judgeTelemetry.increment('process.start_failed')
+  judgeTelemetry.flush()
   console.error('[Judge] Failed to start:', err)
   process.exit(1)
 })

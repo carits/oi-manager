@@ -256,6 +256,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/submissions/:id/refetch-code` | 见对应路由实现 |
 | `POST` | `/api/submit` | 见对应路由实现 |
 | `POST` | `/api/submit/rejudge` | 见对应路由实现 |
+| `POST` | `/api/telemetry/client-errors` | 匿名、限流的浏览器运行时错误指纹上报；不保存原始堆栈或凭据 |
 | `POST` | `/api/team-import/:batchId/confirm` | 见对应路由实现 |
 | `POST` | `/api/team-import/luogu/import` | 见对应路由实现 |
 | `POST` | `/api/team-import/luogu/preview` | 见对应路由实现 |

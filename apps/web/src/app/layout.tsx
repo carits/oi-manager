@@ -1,6 +1,7 @@
 import '@/styles/globals.css'
 import type { Metadata } from 'next'
 import { Providers } from '@/components/Providers'
+import { ClientTelemetry } from '@/components/telemetry/ClientTelemetry'
 
 export const metadata: Metadata = {
   title: 'Carits',
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         <Providers>{children}</Providers>
+        <ClientTelemetry />
       </body>
     </html>
   )

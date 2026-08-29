@@ -14,6 +14,8 @@ export interface ApiClientOptions extends Omit<RequestInit, 'body'> {
   signal?: AbortSignal
   body?: unknown
   timeout?: number  // 自定义超时时间（毫秒），默认 10000
+  /** Public telemetry/probes that must not copy session or workspace identity. */
+  anonymous?: boolean
 }
 
 export type ApiErrorKind =
@@ -172,14 +174,14 @@ class ApiClient {
     endpoint: string,
     options: ApiClientOptions = {}
   ): Promise<ApiResponse<T>> {
-    const { signal, body, timeout, ...fetchOptions } = options
+    const { signal, body, timeout, anonymous = false, ...fetchOptions } = options
     const url = `${this.baseURL}${endpoint}`
 
     // 判断是否为 FormData
     const isFormData = body instanceof FormData
 
     const headers: Record<string, string> = {
-      ...this.getHeaders(),
+      ...(anonymous ? {} : this.getHeaders()),
       ...(fetchOptions.headers as Record<string, string>)
     }
 

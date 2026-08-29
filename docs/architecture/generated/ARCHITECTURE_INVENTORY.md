@@ -16,9 +16,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Prisma models | 82 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
-| Module route adapters | 35 |
+| Module route adapters | 36 |
 | systemd units | 7 |
-| Referenced environment keys | 307 |
+| Referenced environment keys | 339 |
 
 ## HTTP adapter ownership
 
@@ -76,6 +76,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/team/team.members.routes.ts`
 - `apps/server/src/modules/team/team.requests.routes.ts`
 - `apps/server/src/modules/team/team.routes.ts`
+- `apps/server/src/modules/telemetry/telemetry.routes.ts`
 - `apps/server/src/modules/training/training.content.routes.ts`
 - `apps/server/src/modules/training/training.crud.routes.ts`
 - `apps/server/src/modules/training/training.hack-sync.routes.ts`
@@ -207,10 +208,14 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `API_ALLOWED_UPSTREAMS`
 - `API_AUDIT_BASE_URL`
 - `API_DRAIN_TIMEOUT_MS`
+- `API_ENDPOINT_5XX_MAX_PERCENT`
+- `API_ENDPOINT_MIN_REQUESTS`
+- `API_ENDPOINT_P99_MAX_MS`
 - `API_HOST`
 - `API_PID`
 - `API_ROUTER_HOST`
 - `API_ROUTER_PORT`
+- `API_RSS_MAX_MB`
 - `API_STARTUP_READY_FILE`
 - `API_URL`
 - `APPLY`
@@ -258,6 +263,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CERTIFICATE`
 - `CF_BASE_URL`
 - `CHECKER_INCLUDE_DIR`
+- `CLIENT_TELEMETRY_RATE_LIMIT_MAX`
 - `CONCURRENCY`
 - `CONFIRM_DATABASE`
 - `CONTAINER`
@@ -298,6 +304,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ENABLE_DEMO_SCENARIO_API`
 - `ENABLE_MAINTENANCE_API`
 - `ENV_FILE`
+- `EVENT_LOOP_P99_MAX_MS`
 - `EXECUTOR_INSTANCE`
 - `EXPECTED_BUILD_ID`
 - `EXPECTED_SHA256`
@@ -318,12 +325,21 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `HMR_URL`
 - `HOME`
 - `HOST_LABEL`
+- `INCIDENT_CAPTURE_COMMAND`
+- `INCIDENT_EVIDENCE_DIR`
+- `INCIDENT_EVIDENCE_LOCK_FILE`
+- `INCIDENT_REASON`
+- `INCIDENT_SINCE_HOURS`
 - `JSON`
 - `JUDGE_CONTAINER`
 - `JUDGE_ID`
+- `JUDGE_METRICS_CHECK`
+- `JUDGE_METRICS_MAX_AGE_SECONDS`
+- `JUDGE_METRICS_SNAPSHOT_PATH`
 - `JUDGE_PID`
 - `JUDGE_PROJECTION_CHECK`
 - `JUDGE_RESULT_DB_RETRY_MS`
+- `JUDGE_RSS_MAX_MB`
 - `JUDGE_TIMEOUT`
 - `JUDGE_TOKEN`
 - `JUDGE_TOOLCHAIN_VERSION`
@@ -360,6 +376,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MAX_BATCH_PROBLEM_IDS`
 - `MAX_CONCURRENT`
 - `MESSAGE`
+- `METRICS_CHECK`
+- `METRICS_MAX_AGE_SECONDS`
+- `METRICS_SNAPSHOT_PATH`
 - `MODE`
 - `MONITOR_ALERT_ALLOW_HTTP`
 - `MONITOR_ALERT_CAPTURE_FILE`
@@ -367,6 +386,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MONITOR_ALERT_EMAIL`
 - `MONITOR_ALERT_TEST_MODE`
 - `MONITOR_ALERT_WEBHOOK_URL_FILE`
+- `MONITOR_API_ENDPOINT_5XX_MAX_PERCENT`
+- `MONITOR_API_ENDPOINT_MIN_REQUESTS`
+- `MONITOR_API_ENDPOINT_P99_MAX_MS`
+- `MONITOR_API_RSS_MAX_MB`
 - `MONITOR_API_URL`
 - `MONITOR_BACKUP_DIR`
 - `MONITOR_BACKUP_MAX_AGE_HOURS`
@@ -375,12 +398,20 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MONITOR_DB_USER`
 - `MONITOR_DISK_MAX_PERCENT`
 - `MONITOR_ENV_FILE`
+- `MONITOR_EVENT_LOOP_P99_MAX_MS`
 - `MONITOR_HMR_URL`
 - `MONITOR_HOST_LABEL`
+- `MONITOR_INCIDENT_CAPTURE_COMMAND`
+- `MONITOR_JUDGE_METRICS_CHECK`
+- `MONITOR_JUDGE_METRICS_MAX_AGE_SECONDS`
 - `MONITOR_JUDGE_PROJECTION_CHECK`
+- `MONITOR_JUDGE_RSS_MAX_MB`
 - `MONITOR_JUDGE_URL`
 - `MONITOR_LOG_FILE`
 - `MONITOR_MESSAGE`
+- `MONITOR_METRICS_CHECK`
+- `MONITOR_METRICS_MAX_AGE_SECONDS`
+- `MONITOR_OPERATIONAL_STATE_CHECK`
 - `MONITOR_PAYLOAD_BUILD_ID`
 - `MONITOR_PAYLOAD_HOST`
 - `MONITOR_PAYLOAD_MESSAGE`
@@ -402,6 +433,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OI_MANAGER_ROOT`
 - `OI_ORG`
 - `OI_SOURCE_ROOT`
+- `OPERATIONAL_STATE_CHECK`
 - `OTHER_KEY`
 - `OUTPUT`
 - `PG_DATABASE_URL`
@@ -425,6 +457,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `QUIET_SUCCESS`
 - `RATE_LIMIT_MAX`
 - `READY_FILE`
+- `REASON`
 - `REQUESTS`
 - `RESET`
 - `RESTORE_ALLOW_ISOLATED`

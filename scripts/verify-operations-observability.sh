@@ -50,22 +50,52 @@ NODE
 
 monitor_state="$TEST_ROOT/monitor.state"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
-  MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND=false \
+  MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_INCIDENT_CAPTURE_COMMAND= \
+  MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND=/usr/bin/false \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
   echo 'Expected monitor failure was reported as healthy' >&2
   exit 1
 fi
 [[ ! -e "$monitor_state" ]]
 
-transition_capture="$TEST_ROOT/monitor-transitions.jsonl"
-alert_command="MONITOR_ALERT_TEST_MODE=1 MONITOR_ALERT_CAPTURE_FILE='$transition_capture' '$ROOT_DIR/scripts/send-monitor-alert.sh'"
+incident_capture="$TEST_ROOT/capture-incident.sh"
+incident_result="$TEST_ROOT/incident-reason.txt"
+cat > "$incident_capture" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$INCIDENT_REASON" > '$incident_result'
+SH
+chmod 700 "$incident_capture"
+incident_state="$TEST_ROOT/incident-monitor.state"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
+  MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_INCIDENT_CAPTURE_COMMAND="$incident_capture" MONITOR_STATE_FILE="$incident_state" \
+  "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
+  echo 'Expected incident-capture monitor failure was reported as healthy' >&2
+  exit 1
+fi
+grep -Fq 'monitor failure:' "$incident_result"
+[[ -s "$incident_state" ]]
+
+transition_capture="$TEST_ROOT/monitor-transitions.jsonl"
+alert_command="$TEST_ROOT/capture-monitor-alert.sh"
+cat > "$alert_command" <<SH
+#!/usr/bin/env bash
+MONITOR_ALERT_TEST_MODE=1 MONITOR_ALERT_CAPTURE_FILE='$transition_capture' \
+  '$ROOT_DIR/scripts/send-monitor-alert.sh'
+SH
+chmod 700 "$alert_command"
+if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
+  MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_INCIDENT_CAPTURE_COMMAND= \
   MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND="$alert_command" \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
   echo 'Expected monitor failure was reported as healthy' >&2
   exit 1
 fi
 MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND="$alert_command" MONITOR_QUIET_SUCCESS=1 \
+  MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_INCIDENT_CAPTURE_COMMAND= \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null
 node - "$transition_capture" <<'NODE'
 const fs = require('node:fs')
@@ -127,4 +157,4 @@ if find "$TEST_ROOT/failed-spool" -maxdepth 1 -type f -name '*.tar.gz.uploaded' 
   exit 1
 fi
 
-echo "Observability verification passed: alert transitions, remote archive readback, and failure retention"
+echo "Observability verification passed: alert transitions, incident capture, remote archive readback, and failure retention"

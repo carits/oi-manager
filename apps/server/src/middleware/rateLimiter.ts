@@ -96,3 +96,12 @@ export const passwordResetLimiter = shouldSkip ? noop : rateLimit({
   legacyHeaders: false,
   message: { success: false, message: '密码重置操作过于频繁，请稍后再试' }
 })
+
+export const clientTelemetryLimiter = shouldSkip ? noop : rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.CLIENT_TELEMETRY_RATE_LIMIT_MAX || '30'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  message: { success: false, message: '客户端遥测请求过于频繁' },
+})

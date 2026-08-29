@@ -38,5 +38,10 @@
     "method": "POST",
     "path": "/api/auth/register",
     "rationale": "Account registration entry point; protected by validation and authentication rate limiting."
+  },
+  {
+    "method": "POST",
+    "path": "/api/telemetry/client-errors",
+    "rationale": "Receives a strictly validated, rate-limited and redacted browser failure envelope without cookies; raw stacks are hashed rather than logged."
   }
 ]

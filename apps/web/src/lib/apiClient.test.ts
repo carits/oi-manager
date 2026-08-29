@@ -3,9 +3,34 @@ import { ApiError, apiClient, parseApiResponse } from './apiClient'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('parseApiResponse', () => {
+  it('can send anonymous telemetry without account or workspace headers', async () => {
+    vi.stubGlobal('window', {
+      localStorage: { getItem: () => 'secret-bearer-token' },
+      location: { pathname: '/org/org-secret/problems' },
+      dispatchEvent: vi.fn(),
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await apiClient.post('/api/telemetry/client-errors', { message: 'probe' }, {
+      anonymous: true,
+      credentials: 'omit',
+    })
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    expect(options.credentials).toBe('omit')
+    expect(options.headers).not.toHaveProperty('Authorization')
+    expect(options.headers).not.toHaveProperty('X-OI-Organization-ID')
+  })
+
   it('preserves structured HTTP errors', async () => {
     const response = new Response(
       JSON.stringify({

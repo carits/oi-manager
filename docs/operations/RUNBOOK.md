@@ -46,7 +46,8 @@ The cron installer runs every five minutes and suppresses repeated healthy lines
 `$HOME/.config/oi-manager/operations.env` before invoking the monitor. Set `MONITOR_ALERT_COMMAND` to
 `/data/oi-manager-response-refactor/scripts/send-monitor-alert.sh` and store the HTTPS endpoint in a separate mode-600
 file referenced by `MONITOR_ALERT_WEBHOOK_URL_FILE`; the secret URL is read inside Node and is never placed in process
-arguments or logs. The command receives `MONITOR_STATUS` and `MONITOR_MESSAGE` and is invoked only when the state
+arguments or logs. The alert command must be an absolute executable path; shell fragments are rejected. The command
+receives `MONITOR_STATUS` and `MONITOR_MESSAGE` and is invoked only when the state
 changes. A failed delivery does not advance the state file, so the next monitor run retries both failure and recovery
 notifications.
 
@@ -54,6 +55,25 @@ No external alert channel is configured on the current development server, so cr
 the local monitor log. Do not mark external alerting complete until a real recipient has confirmed both an injected
 failure and its recovery. `pnpm monitor:verify` uses a loopback HTTP receiver solely to verify payload and retry
 contracts; it is not external-delivery evidence.
+
+The monitor also validates the active API metrics snapshot, Judge connection/authentication and metrics freshness,
+endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision projection consistency. On the first
+transition into failure it captures a mode-600 incident evidence bundle before alert delivery. Thresholds and the
+capture command are configured in `deploy/observability/operations.env.example`; do not disable a check merely to
+silence an alert.
+
+```bash
+pnpm operations:snapshot
+pnpm operations:check
+jq . .run/operational-state.json
+jq . ".run/metrics-$(cat .run/api-active-upstream).json"
+jq . .run/judge-metrics.json
+INCIDENT_REASON='manual investigation' pnpm incident:capture
+pnpm incident:verify
+```
+
+The complete signal, severity, retention, RTO/RPO and long-term security contract is documented in
+[`OBSERVABILITY_SECURITY_STRATEGY.md`](OBSERVABILITY_SECURITY_STRATEGY.md).
 The optimized production preview has no HMR listener; development environments may explicitly set
 `MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. The current host has no SLS Logtail,
 CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delivery must be provisioned explicitly.

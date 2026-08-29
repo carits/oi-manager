@@ -4,6 +4,8 @@
  * 提供结构化日志输出，支持请求追踪和审计日志
  */
 
+import { recordRuntimeEvent, type RuntimeEventKind } from './runtimeTelemetry'
+
 export interface LogMetadata {
   requestId?: string
   userId?: string
@@ -65,6 +67,13 @@ function shouldLog(level: LogLevel): boolean {
  * 输出日志到控制台
  */
 function outputLog(entry: LogEntry): void {
+  const kind: RuntimeEventKind = entry.message === 'audit'
+    ? 'audit'
+    : entry.message === 'security'
+      ? 'security'
+      : entry.level
+  recordRuntimeEvent(kind, entry.action || entry.message)
+
   if (!shouldLog(entry.level)) return
 
   const formatted = formatLog(entry)
