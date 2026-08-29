@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-28
+last_verified: 2026-08-29
 source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.sh
 ---
 
@@ -31,6 +31,8 @@ Router、API、Worker、Judge 与 Web 同时设置 `TasksMax`、`LimitNOFILE`、
 第二套空网络/卷并与固定容器名冲突。
 
 API slot 仅提供 HTTP/WebSocket 与实例内请求指标，不运行可变后台任务。Cron 和账号验证由 Scheduler leader 执行；远程轮询由 Executor 执行，并以逐任务 lease 支持多实例。
+
+Web unit 显式使用 `CSP_MODE=off` 作为当前 HTTP 兼容基线。CSP 是 Next.js middleware 的构建输入；启用 report-only 或 enforce 时必须以对应 `CSP_MODE` 重新执行 preview build/promote，不能只修改 unit 后复用旧构建。完整流程见 [TLS_ROLLOUT.md](TLS_ROLLOUT.md)。
 
 ## 安装或修复
 

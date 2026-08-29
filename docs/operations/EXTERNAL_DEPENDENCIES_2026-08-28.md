@@ -74,6 +74,11 @@ points to this ECS, plus permission to issue/install a certificate. The final
 change will add HTTPS, HTTP redirect, Secure Cookie, HSTS and strict CSP, update
 CORS and application URLs, then verify browser flows and security headers.
 
+Repository readiness completed on 2026-08-29: a guarded certificate/domain/key
+renderer, isolated Nginx syntax verifier, nonce-based report-only/enforce CSP,
+and response nonce checker are available and pass. No production Nginx or
+cookie setting was changed without the missing domain and certificate.
+
 ## Production database overwrite exercise
 
 The guarded restore command and its isolated destructive verifier are deployed.

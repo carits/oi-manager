@@ -17,7 +17,7 @@ fi
 
 cd "$ROOT_DIR"
 pnpm --filter @oi-manager/shared build
-APP_ENV=development NODE_ENV=production NEXT_DIST_DIR=.next-candidate pnpm --filter web build
+APP_ENV=development CSP_MODE="${CSP_MODE:-off}" NODE_ENV=production NEXT_DIST_DIR=.next-candidate pnpm --filter web build
 
 test -f "$CANDIDATE_DIR/BUILD_ID"
 echo "Preview candidate built: $(cat "$CANDIDATE_DIR/BUILD_ID")"

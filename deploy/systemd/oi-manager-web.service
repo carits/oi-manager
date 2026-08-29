@@ -13,6 +13,7 @@ User=ecs-user
 Group=ecs-user
 WorkingDirectory=/data/oi-manager-response-refactor/apps/web
 Environment=APP_ENV=development
+Environment=CSP_MODE=off
 Environment=NODE_ENV=production
 Environment=NEXT_DIST_DIR=.next-current
 Environment=HOME=/home/ecs-user

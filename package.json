@@ -30,6 +30,8 @@
     "load:smoke": "bash scripts/load-smoke.sh",
     "runtime:audit": "node scripts/audit-runtime-limits.mjs",
     "security:audit": "node scripts/audit-runtime-security.mjs",
+    "tls:verify": "bash scripts/verify-tls-tooling.sh",
+    "csp:verify": "node scripts/verify-csp-response.mjs",
     "security:rotate:check": "pnpm --filter server exec tsx scripts/rotate-runtime-secrets.ts",
     "security:rotate:verify": "bash scripts/verify-secret-rotation.sh",
     "db:bootstrap:check": "pnpm --filter server exec tsx scripts/bootstrap-clean-database.ts",

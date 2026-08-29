@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 35 |
 | systemd units | 7 |
-| Referenced environment keys | 286 |
+| Referenced environment keys | 300 |
 
 ## HTTP adapter ownership
 
@@ -195,6 +195,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 ## Environment key inventory（不含值）
 
 - `ACCOUNT_ENCRYPT_KEY`
+- `ACME_ROOT`
 - `ACTIVE`
 - `ACTIVE_FILE`
 - `ALERT_COMMAND`
@@ -253,6 +254,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CANDIDATE`
 - `CANDIDATE_DIR`
 - `CAPTURE_FILE`
+- `CERT`
+- `CERTIFICATE`
 - `CF_BASE_URL`
 - `CHECKER_INCLUDE_DIR`
 - `CONCURRENCY`
@@ -262,6 +265,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CONTAINER_NAME`
 - `COOKIE_SECURE`
 - `CORS_ORIGINS`
+- `CSP_MODE`
+- `CSP_VERIFY_URL`
 - `CSRF_TRUSTED_ORIGINS`
 - `CURRENT`
 - `CURRENT_DIR`
@@ -286,6 +291,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `DEMO_V2_STUDENT_USERNAME`
 - `DEV_LOG_FILE`
 - `DISK_MAX_PERCENT`
+- `DOMAIN`
 - `E2E_DATABASE_URL`
 - `EMAIL_TO`
 - `ENABLE_DEMO_SCENARIO_API`
@@ -323,6 +329,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `JUDGE_URL`
 - `JWT_SECRET`
 - `KEEP_DAYS`
+- `KEY`
 - `KEY_LENGTH`
 - `LANGUAGE_NAMES`
 - `LOAD_CONCURRENCY`
@@ -343,6 +350,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `LOG_LEVEL`
 - `LUOGU_BASE`
 - `LUOGU_COOKIE`
+- `MAIN`
 - `MAX_BATCH_PROBLEM_IDS`
 - `MAX_CONCURRENT`
 - `MESSAGE`
@@ -388,6 +396,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OI_MANAGER_ROOT`
 - `OI_ORG`
 - `OI_SOURCE_ROOT`
+- `OTHER_KEY`
+- `OUTPUT`
 - `PG_DATABASE_URL`
 - `PIDS`
 - `PID_FILE`
@@ -402,6 +412,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PREVIEW_LOG_FILE`
 - `PREVIEW_URL`
 - `PREVIOUS_DIR`
+- `PRIVATE_KEY`
 - `PROXY_PID`
 - `PROXY_PORT`
 - `QOJ_SESSION`
@@ -436,6 +447,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SERVER_PID`
 - `SESSION_COOKIE_NAME`
 - `SINCE_HOURS`
+- `SITE`
 - `SKIP_JUDGE_RECOVERY`
 - `SKIP_MIGRATE`
 - `SKIP_SERVICE_CONTROL`
@@ -457,6 +469,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SUDO_USER`
 - `TARGET_FILE`
 - `TARGET_URL`
+- `TEMPLATE`
 - `TEMP_FILE_CLEANUP_HOURS`
 - `TESTDATA_DIR`
 - `TESTDATA_MAX_FILE_COUNT`
@@ -467,6 +480,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TEST_MODE`
 - `TEST_ROOT`
 - `TIMEOUT_SECONDS`
+- `TMP_DIR`
 - `TRANSLATION_ENABLE_CACHE`
 - `TRASH_RETENTION_DAYS`
 - `UNIT_DIR`

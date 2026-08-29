@@ -11,6 +11,8 @@ source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, 
 
 仓库不再提供旧 PM2 ecosystem manifest 或 `start:production` 入口；`architecture:check` 会拒绝重新引入 PM2 生产脚本或 manifest。生产安装、提升和回滚必须使用 `deploy/systemd` 与对应脚本。
 
+域名和证书到位后的 HTTPS、Secure Cookie、HSTS 与 nonce CSP 分阶段切换见 [TLS 与严格浏览器安全发布](TLS_ROLLOUT.md)。
+
 ## 服务拓扑
 
 ```text

@@ -62,6 +62,7 @@ Web/API/Judge 使用构建产物；Router 通过 readiness、原子上游切换�
 - `NODE_ENV=production`、`APP_ENV=production`。
 - HTTPS 同源入口，HTTP 强制跳转。
 - `COOKIE_SECURE=true`，启用 HSTS、最终 CSRF 复验和严格 CSP。
+- CSP 通过构建输入 `CSP_MODE=report-only|enforce` 分阶段发布；完整切换和回滚顺序见 [TLS 发布手册](TLS_ROLLOUT.md)。
 - `CORS_ORIGINS`、`CSRF_TRUSTED_ORIGINS` 只包含正式域名。
 - JWT、Judge Token、账号加密密钥使用独立强随机值。
 - `ALLOW_UNAUTHENTICATED_JUDGE=false`、`ENABLE_MAINTENANCE_API=false`。

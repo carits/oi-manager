@@ -49,6 +49,7 @@ Production v1 外部验收仍保持未完成，不能把“运行拓扑已生产
 7. [Judge 长稳与并发一致性报告](operations/JUDGE_STRESS_2026-08-27.md)
 8. [全新空库 Bootstrap](operations/CLEAN_DATABASE_BOOTSTRAP.md)
 9. [架构收口逐项完成审计](operations/ARCHITECTURE_CONVERGENCE_AUDIT_2026-08-29.md)
+10. [TLS 与严格浏览器安全发布](operations/TLS_ROLLOUT.md)
 
 ### 查阅接口
 
