@@ -35,6 +35,7 @@ import { rankingRouter } from './modules/ranking/ranking.routes'
 import { meRouter } from './routes/me'
 import { notificationRouter } from './modules/notification/notification.routes'
 import { caritsRouter } from './modules/carits/carits.routes'
+import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
 import { contributionRouter } from './modules/contribution/contribution.routes'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
@@ -140,6 +141,7 @@ app.use('/api/rankings', rankingRouter)
 app.use('/api/me', meRouter)
 app.use('/api/notifications', authenticate, notificationRouter)
 app.use('/api/carits', authenticate, caritsRouter)
+app.use('/api/platform-admin/ai', authenticate, aiTokenAdminRouter)
 app.use('/api/contributions', authenticate, contributionRouter)
 app.use('/api/telemetry', telemetryRouter)
 app.use('/api/workspaces', workspaceRouter)

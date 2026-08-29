@@ -34,6 +34,7 @@ export const platformAdminNav: NavConfig = {
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '评测记录', href: '/platform-admin/submissions' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
+    { label: 'AI Token', href: '/platform-admin/ai' },
   ]
 }
 

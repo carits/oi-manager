@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-29
+last_verified: 2026-08-30
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-08-30: 题目评测资产与数据生成闭环已完成：STD/Validator/Classifier/Generator 使用不可变程序版本，C++17/Python3 Generator 与直接输入通过独立 Judge 队列生成候选点，管理员检查后以 CAS 发布下一 TestSet Revision；ACM 顺序、OI Official Group、Hack Gate 只读、固定活动和历史提交边界保持不变。DeepSeek Validator 仅从官方 Markdown 生成并使用内置 testlib 编译，AI 翻译/格式化/Validator 已统一按真实供应商 Token 经平台总池预占、结算和审计。平台管理员新增 Token 管理页，题目评测设置新增程序、导入、生成、候选和正式版本工作台。迁移前 31 MiB 备份已恢复校验，生产和测试 schema 均已更新；Server 全量 520/520 + 最新定向 19/19、Web 45/45、Judge 20/20、三端类型检查及 UI/路由/文档/架构门禁通过。
 
 - 2026-08-29: 全链路可观测性与事故恢复基线完成两轮反向审计：API/Judge 使用 5 分钟/1 分钟滚动快照，覆盖端点状态族/P95/P99、外部依赖、浏览器/安全/服务端错误、内存/事件循环、Judge 认证/心跳/基础设施错误；业务快照覆盖队列积压、陈旧任务、近期失败、数据库连接/长事务/锁等待和 Revision 投影。监控直接检查 Web/Router/API/Worker/Executor/Judge、真实 `NODE_ENV=production`、重启增量、端口暴露、磁盘/inode、备份和每周真实隔离恢复证明；首次故障先生成含 API/Judge/业务/网络/恢复状态的 `0600` 事故包。每周安全基线另外验证存量密文解密、TLS 工具和生产依赖并保留 90 天私有哈希报告。部署探针同时修复畸形 JSON 被误记为 500。Server 60 文件 518/518、Web 12 文件 45/45、Judge 7 文件 18/18、三端生产构建、UI/架构/文档门禁、依赖零已知漏洞及 security/operations/incident/monitor 验证通过。当前 `APP_ENV=development` 仅保留 HTTP 兼容语义；外部告警接收人、异机存储、域名/TLS、云监控和 WAL/PITR 仍明确依赖所有者资源，不伪造完成。
 

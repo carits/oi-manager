@@ -204,6 +204,27 @@ export interface HackJudgeTaskResult {
   retryable?: boolean
 }
 
+export interface DataGenerationRequest {
+  taskType: 'data_generation'
+  jobId: string
+  problemId: string
+  fencingToken: string
+  sourceMode: 'generator' | 'input'
+  filename?: string | null
+  problemConfig: ProblemConfig
+  generator?: { language: 'cpp17' | 'python3'; source: string } | null
+  standard: { language: 'cpp17'; source: string }
+  validator: { language: 'cpp17'; source: string }
+  cases: Array<{ id: string; name: string; args: string[]; seed?: string | null; inputData?: string }>
+}
+
+export interface DataGenerationResult {
+  jobId: string
+  fencingToken: string
+  retryable?: boolean
+  cases: Array<{ id: string; status: 'validated' | 'failed'; failureStage?: string; message?: string; inputData?: string; outputData?: string; generatorTimeMs?: number; validatorTimeMs?: number; standardTimeMs?: number }>
+}
+
 // ==================== 语言配置 ====================
 
 export interface LanguageConfig {
@@ -243,7 +264,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
+  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
   payload: any
 }
 
@@ -289,3 +310,6 @@ export interface HackResultMessage {
   type: 'hack_result'
   payload: HackJudgeTaskResult
 }
+
+export interface DataGenerationMessage { type: 'data_generation'; payload: DataGenerationRequest }
+export interface DataGenerationResultMessage { type: 'data_generation_result'; payload: DataGenerationResult }

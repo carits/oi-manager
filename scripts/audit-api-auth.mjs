@@ -18,7 +18,7 @@ function normalizePath(value) {
 
 function loadRouterPrefixes() {
   const docsCheck = fs.readFileSync(path.join(root, 'scripts/docs-check.mjs'), 'utf8')
-  const block = docsCheck.match(/const routerPrefixes = (\{[\s\S]*?\n\})\n\nconst endpointPattern/)
+  const block = docsCheck.match(/const routerPrefixes = (\{[\s\S]*?\r?\n\})\r?\n\r?\nconst endpointPattern/)
   if (!block) throw new Error('Unable to read routerPrefixes from scripts/docs-check.mjs')
   return Function(`"use strict"; return (${block[1]})`)()
 }

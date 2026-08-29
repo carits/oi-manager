@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-21
+last_verified: 2026-08-30
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -58,6 +58,39 @@ Carits 本地题和外部 OJ 题共用 `Problem`。题面、PDF、附件、测�
 用户平台绑定属于账号级数据。Codeforces/洛谷归档和提交同步归入个人作用域，
 不会创建学校题。OJ 账号池只允许平台管理员和超级管理员管理。
 
-AI 翻译和格式整理只对题目管理者开放，并在再次写入前校验作用域权限。
+AI 翻译、格式整理和 Validator 助手只对题目管理者开放，并在调用和再次写入前
+校验作用域权限。所有 DeepSeek 调用统一经过 AI Gateway：调用前从平台 Token 池预占，
+调用后按供应商返回的 `prompt_tokens`、`completion_tokens` 和 `total_tokens` 结算；网络失败
+释放预占，编译失败仍结算已经发生的 API 用量。普通管理者只能查看单次预估与实际用量，
+平台管理员在 `/platform-admin/ai` 管理总池和不可变流水。数据模型由平台唯一的
+`AiTokenPool`、追加式 `AiTokenLedgerEntry` 和逐次调用的 `AiGenerationRequest` 组成；
+`AiUsageLog` 通过 request ID 关联真实输入、输出和总 Token 数。
+
+Validator 助手只接受官方 Markdown 题面。题面以不可信分隔区传入模型，返回结构化约束、
+EOF 规则、假设和 C++17 `validator.cpp`，随后必须在 go-judge 中使用系统 `testlib.h`
+编译。AI 结果不会自动启用或发布；管理员审阅后才能保存为新的不可变程序版本。
+
+## 评测资产与数据生成
+
+题目评测设置中的“评测资产与生成”是 STD、Validator、Classifier、Generator 和候选测试点
+的统一入口。`ProblemJudgeProgram` 表示逻辑程序，`ProblemJudgeProgramVersion` 保存每次
+上传或编辑产生的不可变源码版本、哈希、编译状态、作者和来源：
+
+- STD、Validator、Classifier 首版固定 C++17；Validator/Classifier 可引用系统 `testlib.h`。
+- Generator 可创建多个，支持 C++17 与 Python3。
+- 只接受有大小上限的文本源码；二进制和可执行文件被拒绝。
+- Hack 配置可以引用程序版本，同时保留旧源码字段双读兼容。
+
+数据生成不是普通 Submission。`ProblemDataGenerationJob` 通过 Judge WebSocket 持久队列领取，
+租约和 fencing token 阻止延迟结果覆盖；每一参数行保存为 `ProblemDataGenerationCase`，
+独立经历 Generator、Validator、STD 与
+Checker 自检。成功输入、答案、参数、种子、程序版本、耗时和内容哈希进入候选池，失败点
+保留阶段与错误，不影响同批其他点。
+
+候选测试点只有在管理员显式发布时才进入正式数据。ACM 按选定顺序追加；OI 只能加入
+Official Group，不能写入系统 Hack Gate。发布携带 `expectedLatestRevisionId`，在题目事务锁
+和 CAS 下生成下一不可变 TestSet Revision；冲突保留候选数据，固定旧 Revision 的比赛、训练、
+作业和历史提交不受影响。
+
 外部平台研究和旧实现方案保存在[研究归档](../../archive/research/)和
 [计划归档](../../archive/plans/)。

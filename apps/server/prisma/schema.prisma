@@ -61,6 +61,10 @@ model AiUsageLog {
   targetLang  String?
   model       String?
   tokensUsed  Int      @default(0)
+  promptTokens Int?
+  completionTokens Int?
+  totalTokens Int?
+  requestId   String?
   status      String   @default("success")
   message     String?
   createdAt   DateTime @default(now())
@@ -68,6 +72,68 @@ model AiUsageLog {
 
   @@index([userId, createdAt])
   @@index([userId, problemId, action, createdAt])
+  @@index([requestId])
+}
+
+model AiTokenPool {
+  id              String   @id
+  availableTokens BigInt   @default(0)
+  reservedTokens  BigInt   @default(0)
+  consumedTokens  BigInt   @default(0)
+  version         Int      @default(0)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AiTokenLedgerEntry {
+  id             String   @id
+  poolId         String
+  type           String
+  amount         BigInt
+  availableAfter BigInt
+  reservedAfter  BigInt
+  consumedAfter  BigInt
+  idempotencyKey String   @unique
+  requestId      String?
+  operatorUserId String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([poolId, createdAt])
+  @@index([requestId])
+}
+
+model AiGenerationRequest {
+  id               String   @id
+  userId           String
+  problemId        String
+  statementId      String?
+  action           String
+  model            String
+  status           String   @default("queued")
+  parentRequestId  String?
+  repairDepth      Int      @default(0)
+  reservedTokens   Int      @default(0)
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  promptHash       String
+  response         Json?
+  errorCode        String?
+  errorMessage     String?  @db.Text
+  compileStatus    String?
+  compileMessage   String?  @db.Text
+  programVersionId String?
+  createdAt        DateTime @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
+
+  @@index([userId, createdAt])
+  @@index([problemId, createdAt])
+  @@index([status, createdAt])
+  @@index([parentRequestId])
 }
 
 model Contest {
@@ -462,6 +528,9 @@ model ProblemHackConfig {
   validatorLanguage  String   @default("cpp17")
   classifierSource   String   @default("") @db.Text
   classifierLanguage String   @default("cpp17")
+  standardProgramVersionId   String?
+  validatorProgramVersionId  String?
+  classifierProgramVersionId String?
   revision           Int      @default(1)
   updatedBy          String
   createdAt          DateTime @default(now())
@@ -470,6 +539,101 @@ model ProblemHackConfig {
 
   @@index([enabled])
   @@index([updatedBy])
+}
+
+model ProblemJudgeProgram {
+  id               String   @id
+  problemId        String
+  kind             String
+  name             String
+  language         String
+  currentVersionId String?
+  status           String   @default("active")
+  createdBy        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([problemId, kind, name])
+  @@index([problemId, kind, status])
+  @@index([currentVersionId])
+}
+
+model ProblemJudgeProgramVersion {
+  id             String   @id
+  programId      String
+  problemId      String
+  versionNumber  Int
+  language       String
+  source         String   @db.Text
+  sourceSha256   String
+  origin         String   @default("manual")
+  aiRequestId    String?
+  compileStatus  String
+  compileMessage String?  @db.Text
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  @@unique([programId, versionNumber])
+  @@index([problemId, createdAt])
+  @@index([aiRequestId])
+}
+
+model ProblemDataGenerationJob {
+  id                       String   @id
+  problemId                String
+  createdBy                String
+  status                   String   @default("queued")
+  baseTestSetRevisionId    String?
+  expectedLatestRevisionId String?
+  generatorVersionId       String?
+  standardVersionId        String
+  validatorVersionId       String
+  config                   Json
+  judgeId                  String?
+  fencingToken             String?  @unique
+  leaseExpiresAt           DateTime?
+  startedAt                DateTime?
+  finishedAt               DateTime?
+  promotedRevisionId       String?
+  errorCode                String?
+  errorMessage             String?  @db.Text
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([problemId, createdAt])
+  @@index([status, createdAt])
+  @@index([judgeId, status])
+}
+
+model ProblemDataGenerationCase {
+  id                 String   @id
+  jobId              String
+  problemId          String
+  orderIndex         Int
+  name               String
+  args               Json
+  seed               String?
+  status             String   @default("queued")
+  failureStage       String?
+  message            String?  @db.Text
+  inputObjectId      String?
+  outputObjectId     String?
+  inputSha256        String?
+  outputSha256       String?
+  inputSize          Int?
+  outputSize         Int?
+  inputPreview       String?  @db.Text
+  outputPreview      String?  @db.Text
+  generatorTimeMs    Int?
+  validatorTimeMs    Int?
+  standardTimeMs     Int?
+  promotedTestcaseId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([jobId, orderIndex])
+  @@index([problemId, status])
+  @@index([inputSha256])
 }
 
 model ProblemHackAttempt {

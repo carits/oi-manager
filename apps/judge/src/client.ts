@@ -15,6 +15,8 @@ import { judgeHack } from './hack'
 import type { HackMessage, HackResultMessage, JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
 import { getClientHeartbeatReply } from './protocol'
 import { judgeTelemetry } from './telemetry'
+import { generateTestdata } from './data-generation'
+import type { DataGenerationMessage, DataGenerationResultMessage } from './types'
 
 class JudgeClient {
   private ws: WebSocket | null = null
@@ -139,10 +141,20 @@ class JudgeClient {
       case 'hack':
         await this.handleHackTask(msg as HackMessage)
         break
+      case 'data_generation':
+        await this.handleDataGenerationTask(msg as DataGenerationMessage)
+        break
       default:
         judgeTelemetry.increment('message.unknown')
         console.log('[Judge] Unknown message type:', msg.type)
     }
+  }
+
+  private async handleDataGenerationTask(msg: DataGenerationMessage) {
+    const result = await generateTestdata(msg.payload)
+    if (result.retryable) { this.ws?.close(1011, 'data generation infrastructure unavailable'); return }
+    const response: DataGenerationResultMessage = { type: 'data_generation_result', payload: result }
+    this.send(response)
   }
 
   private async handleHackTask(msg: HackMessage) {

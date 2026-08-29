@@ -14,6 +14,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { ProblemHackConfigPanel } from './ProblemHackConfigPanel'
 import { ProblemTestGraphPanel } from './ProblemTestGraphPanel'
 import { LANGUAGE_OPTIONS } from '@/lib/judge-constants'
+import { ProblemJudgeAssetsPanel } from './ProblemJudgeAssetsPanel'
 
 // ==================== 类型定义 ====================
 
@@ -200,7 +201,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
   // ==================== 状态 ====================
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'basic' | 'data' | 'subtasks' | 'testdata' | 'hack'>('basic')
+  const [activeTab, setActiveTab] = useState<'basic' | 'data' | 'subtasks' | 'testdata' | 'assets' | 'hack'>('basic')
   const [testGraphDirty, setTestGraphDirty] = useState(false)
   const [yamlCollapsed, setYamlCollapsed] = useState(true)
 
@@ -856,7 +857,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
 
       {/* ===== Tab 切换 ===== */}
       <div className={unifiedStyles.u9}>
-        {([['basic', '基础配置'], ...(judgeMode === 'oi' && problemId ? [['data', '数据与分组'] as const] : []), ...(judgeMode === 'acm' ? [['testdata', '测试数据'] as const] : []), ...(problemId ? [['hack', 'Hack'] as const] : [])] as const).map(([key, label]) => (
+        {([['basic', '基础配置'], ...(judgeMode === 'oi' && problemId ? [['data', '数据与分组'] as const] : []), ...(judgeMode === 'acm' ? [['testdata', '测试数据'] as const] : []), ...(problemId ? [['assets', '评测资产与生成'] as const, ['hack', 'Hack'] as const] : [])] as const).map(([key, label]) => (
           <Button variant="ghost" type="button" key={key} onClick={() => {
             if (activeTab === 'data' && key !== 'data' && testGraphDirty) {
               setConfirmState({ message: '数据与分组工作台存在未保存修改。离开后本次草稿会丢失，确定继续吗？', action: async () => { setTestGraphDirty(false); setActiveTab(key) } })
@@ -1405,6 +1406,7 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       {activeTab === 'hack' && problemId && (
         <ProblemHackConfigPanel problemId={problemId} judgeMode={judgeMode} problemType={problemType} />
       )}
+      {activeTab === 'assets' && problemId && <ProblemJudgeAssetsPanel problemId={problemId} judgeMode={judgeMode} />}
 
       {/* ===== 确认弹窗 ===== */}
       <ConfirmModal

@@ -65,15 +65,28 @@ export async function saveProblemHackConfig(input: {
 }) {
   const problem = await requireManageableProblem(input.user, input.problemId)
   const enabled = input.body?.enabled === true
-  const standardSource = typeof input.body?.standardSource === 'string'
+  let standardSource = typeof input.body?.standardSource === 'string'
     ? input.body.standardSource
     : ''
-  const validatorSource = typeof input.body?.validatorSource === 'string'
+  let validatorSource = typeof input.body?.validatorSource === 'string'
     ? input.body.validatorSource
     : ''
-  const classifierSource = typeof input.body?.classifierSource === 'string'
+  let classifierSource = typeof input.body?.classifierSource === 'string'
     ? input.body.classifierSource
     : ''
+  const programVersionIds = {
+    standard: typeof input.body?.standardProgramVersionId === 'string' ? input.body.standardProgramVersionId : null,
+    validator: typeof input.body?.validatorProgramVersionId === 'string' ? input.body.validatorProgramVersionId : null,
+    classifier: typeof input.body?.classifierProgramVersionId === 'string' ? input.body.classifierProgramVersionId : null,
+  }
+  for (const [kind, versionId] of Object.entries(programVersionIds)) if (versionId) {
+    const version = await prisma.problemJudgeProgramVersion.findFirst({ where: { id: versionId, problemId: problem.id } })
+    const program = version ? await prisma.problemJudgeProgram.findFirst({ where: { id: version.programId, problemId: problem.id, kind } }) : null
+    if (!version || !program) fail(400, 'HACK_PROGRAM_VERSION_INVALID', `${kind} 程序版本无效`)
+    if (kind === 'standard') standardSource = version.source
+    if (kind === 'validator') validatorSource = version.source
+    if (kind === 'classifier') classifierSource = version.source
+  }
   const sourceLengths = [standardSource, validatorSource, classifierSource]
     .map(source => Buffer.byteLength(source, 'utf8'))
   if (sourceLengths.some(length => length > HACK_SOURCE_LIMIT)) {
@@ -155,6 +168,9 @@ export async function saveProblemHackConfig(input: {
         validatorLanguage: 'cpp17',
         classifierLanguage: 'cpp17',
         updatedBy: input.user.userId,
+        standardProgramVersionId: programVersionIds.standard,
+        validatorProgramVersionId: programVersionIds.validator,
+        classifierProgramVersionId: programVersionIds.classifier,
       }
       if (!current) {
         return tx.problemHackConfig.create({

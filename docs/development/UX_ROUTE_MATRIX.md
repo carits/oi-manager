@@ -1,14 +1,14 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-26
+last_verified: 2026-08-30
 source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 ---
 
 # UI 路由与交互矩阵
 
 本页记录桌面端 UI 重构的验收边界。机器可读清单位于
-`e2e/fixtures/ux-matrix.ts`，它从 109 条 `routePatterns` 逐条生成并校验：
+`e2e/fixtures/ux-matrix.ts`，它从 110 条 `routePatterns` 逐条生成并校验：
 
 - 页面所属角色和公共、平台、校园、个人模式。
 - 页面类型、用户目标和主要操作。
@@ -17,7 +17,7 @@ source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 - 键盘导航、历史恢复、错误重试和筛选恢复。
 
 路由增删时如果没有进入矩阵，测试会直接失败。`chromium-desktop` 和
-`chromium-compact` 均运行全部 109 页；Firefox 继续验证登录、导航和核心流程。
+`chromium-compact` 均运行全部 110 页；Firefox 继续验证登录、导航和核心流程。
 
 ## 页面族
 
@@ -31,6 +31,7 @@ source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 | 训练工作区 | 教师、学生 | 在一个上下文完成训练 | 吸顶 Tab、公告、题面、提交、排名 |
 | 提交 | 平台管理员、教师、全角色个人工作区 | 定位提交并理解结果 | 多条件筛选、性能、代码、复制 |
 | 学校与用户 | 超管、负责人、平台管理员 | 查找并维护组织和账号 | 列表、详情、编辑、状态操作 |
+| AI Token | 平台管理员 | 管理 DeepSeek 总池并审计真实用量 | 汇总、正负调整、不可变流水 |
 | 导入 | 教师 | 按步骤导入学生或团队 | 输入、预览、冲突处理、结果 |
 | 资料与安全 | 全部角色 | 维护自己的资料和凭据 | 字段校验、保存反馈、危险操作确认 |
 

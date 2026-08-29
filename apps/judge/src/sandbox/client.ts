@@ -19,6 +19,8 @@ const SANDBOX_HOST = config.sandboxHost
 const NS_PER_MS = 1_000_000
 const ALLOW_LOCAL_FALLBACK = process.env.ALLOW_LOCAL_JUDGE_FALLBACK === 'true'
 
+function shellQuote(value: string) { return `'${String(value).replace(/'/g, `'"'"'`)}'` }
+
 function nsToMsCeil(ns: number): number {
   if (!Number.isFinite(ns) || ns <= 0) return 0
   return Math.ceil(ns / NS_PER_MS)
@@ -217,10 +219,12 @@ export async function execute(params: {
   extraCopyIn?: Record<string, string>
   /** 启用地址空间限制（RLIMIT_AS），默认 false（使用 cgroup 内存限制） */
   addressSpaceLimit?: boolean
+  args?: string[]
+  env?: Record<string, string>
 }): Promise<SandboxResult> {
   // addressSpaceLimit 默认 false，让 cgroup 内存限制生效
   // RLIMIT_AS 会导致 malloc 提前失败，无法正确检测 MLE
-  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir, filename, extraCopyIn, addressSpaceLimit = false } = params
+  const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir, filename, extraCopyIn, addressSpaceLimit = false, args, env } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -263,6 +267,7 @@ export async function execute(params: {
         skipCompile: !!providedWorkDir, // 如果提供了 workDir（已编译过），跳过编译
         filename,
         extraCopyIn
+        , args, env
       })
     } finally {
       if (!providedWorkDir) {
@@ -294,9 +299,11 @@ async function sandboxExecute(
     filename?: string
     extraCopyIn?: Record<string, string>
     addressSpaceLimit?: boolean
+    args?: string[]
+    env?: Record<string, string>
   }
 ): Promise<SandboxResult> {
-  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn, addressSpaceLimit = false } = params
+  const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn, addressSpaceLimit = false, args = [], env = {} } = params
 
   try {
     // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
@@ -321,21 +328,21 @@ async function sandboxExecute(
     if (filename) {
       // File IO 模式：程序通过 {filename}.in / {filename}.out 读写
       copyIn[`${filename}.in`] = { content: stdin || '' }
-      execCommand = `${langConfig.execute} 2>stderr`
+      execCommand = `${langConfig.execute} ${args.map(shellQuote).join(' ')} 2>stderr`
       copyOutFiles = [`${filename}.out`, 'stderr']
     } else {
       // 标准 stdin/stdout 模式
       // The shell command always redirects from `stdin`; create the file even
       // for empty-input programs such as Hack data generators.
       copyIn['stdin'] = { content: stdin || '' }
-      execCommand = `${langConfig.execute} <stdin >stdout 2>stderr`
+      execCommand = `${langConfig.execute} ${args.map(shellQuote).join(' ')} <stdin >stdout 2>stderr`
       copyOutFiles = ['stdout', 'stderr']
     }
 
     const limits = buildLimits(timeLimit)
     const result = await runCommand({
       args: ['sh', '-c', execCommand],
-      env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
+      env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', ...Object.entries(env).map(([key, value]) => `${key}=${value}`)],
       copyIn: Object.keys(copyIn).length > 0 ? copyIn : undefined,
       copyOut: copyOutFiles,
       copyOutOptional: copyOutFiles,

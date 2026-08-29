@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-28
+last_verified: 2026-08-30
 source_of_truth: Prisma JudgeRun/JudgeAttempt models and judge domain services
 ---
 
@@ -78,3 +78,25 @@ ProblemHackAttempt
 Candidate 固定输入/答案内容对象、基线 Revision、命中 Subtask 和逻辑文件名。重复输入不会创建新 Revision；并发 CAS 失败保留为 `STALE` 并让 Hack 基于最新版重评。正式晋升必须在同一事务中完成 Candidate、Hack Attempt、Problem latest pointer 和 Revision 的提交，不能出现 Hack 显示成功但正式版本不存在。
 
 测试内容只能通过 `BlobStore` port 读写。当前 `LocalBlobStore` 以内容寻址文件为事实源；S3/阿里云 OSS 通过注入 adapter 实现同一 `put/get/exists/delete/materialize` 契约，题目和 Hack 领域不得依赖供应商 SDK。
+
+## 数据生成任务
+
+`ProblemDataGenerationJob` 是独立于 Submission/JudgeRun 的持久任务。Server 每次只向 Judge
+发放仍处于 `queued` 或租约已过期的任务，并原子写入 `judgeId`、`fencingToken` 和
+`leaseExpiresAt`。Judge 回传结果时必须同时匹配任务状态、owner 和 token；重复、延迟或来自
+旧连接的结果为 stale/no-op。Judge 断开后只回收它拥有且未完成的任务。
+
+```text
+QUEUED -> RUNNING -> COMPLETED -> PROMOTED
+   |         |            |
+   +---------+------------+-> CANCELLED | FAILED
+```
+
+每个 case 在沙箱内依次执行 Generator（或读取直接输入）、Validator、STD、Checker 自检。
+Generator 参数以 argv 传入，并只注入 `CASE_INDEX`、`CASE_SEED`；输入、答案和错误通过有界
+copy-out 返回。系统 STD/Validator/Checker 使用现有编译缓存，用户 Generator 按任务独立编译
+并在结束后释放。
+
+`COMPLETED` 仅代表候选数据生成和验证完毕，不改变题库正式数据。管理员发布时复用 TestSet
+Revision 的 advisory lock、CAS、内容寻址对象与单向 Judge Projection 事务；Revision 冲突不
+删除候选点。这个边界保证生成队列重试、API 蓝绿并存或管理员并发保存时不会产生半成品版本。

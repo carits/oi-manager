@@ -310,8 +310,10 @@ export async function localExecute(params: {
   filename?: string
   /** 额外需要拷入执行环境的文件 */
   extraCopyIn?: Record<string, string>
+  args?: string[]
+  env?: Record<string, string>
 }): Promise<SandboxResult> {
-  const { language, code, stdin, timeLimit, workDir, skipCompile = false, filename, extraCopyIn } = params
+  const { language, code, stdin, timeLimit, workDir, skipCompile = false, filename, extraCopyIn, args = [], env = {} } = params
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -367,8 +369,9 @@ export async function localExecute(params: {
   const startTime = process.hrtime.bigint()
 
   return new Promise((resolve) => {
-    const execProcess = spawn('sh', ['-c', langConfig.execute], {
+    const execProcess = spawn('sh', ['-c', `${langConfig.execute} ${args.map(value => `'${String(value).replace(/'/g, `'"'"'`)}'`).join(' ')}`], {
       cwd: workDir,
+      env: { ...process.env, ...env },
     })
 
     let stdout = ''

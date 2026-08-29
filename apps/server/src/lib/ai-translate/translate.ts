@@ -80,7 +80,7 @@ export async function translateDocument(input: TranslateOptions): Promise<Transl
     return {
       translated: cached.translated,
       sourceFormat: format,
-      metadata: { ...cached.metadata, cached: true },
+      metadata: { ...cached.metadata, cached: true, usage: undefined },
       diagnostics: {
         warnings: ['Result served from cache'],
         structureValid: true,
@@ -211,6 +211,7 @@ export async function translateDocument(input: TranslateOptions): Promise<Transl
       cached: false,
       placeholdersProtected: placeholderCount,
       model,
+      usage: totalUsage,
     },
     diagnostics: {
       warnings,
@@ -307,6 +308,7 @@ export async function formatDocument(
       cached: false,
       placeholdersProtected: placeholders.length,
       model,
+      usage: result.usage,
     },
     diagnostics: {
       warnings: [

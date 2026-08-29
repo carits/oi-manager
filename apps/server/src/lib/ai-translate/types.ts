@@ -91,6 +91,11 @@ export interface TranslationResult {
     cached: boolean
     placeholdersProtected: number
     model: string
+    usage?: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+    }
   }
   /** 诊断信息 */
   diagnostics: {

@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-26
+last_verified: 2026-08-30
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -10,15 +10,31 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 317 个端点中 309 个必须认证，8 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 335 个端点中 326 个必须认证，9 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 317 个无会话请求：309 个受保护端点必须返回
-401，8 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 335 个无会话请求：326 个受保护端点必须返回
+401，9 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `GET` | `/api/problems/:id/judge-programs` | 列出题目的版本化 STD、Validator、Classifier 与 Generator |
+| `POST` | `/api/problems/:id/judge-programs` | 编译并创建评测程序及首个不可变版本 |
+| `POST` | `/api/problems/:id/judge-programs/:programId/versions` | 编译并追加新的不可变程序版本 |
+| `PATCH` | `/api/problems/:id/judge-programs/:programId` | 切换当前程序版本或归档逻辑程序 |
+| `POST` | `/api/problems/:id/data-generation-jobs` | 创建直接输入或 Generator 参数批次 |
+| `GET` | `/api/problems/:id/data-generation-jobs` | 列出题目的候选数据生成任务 |
+| `GET` | `/api/problems/:id/data-generation-jobs/:jobId` | 读取任务、逐点阶段和内容预览 |
+| `POST` | `/api/problems/:id/data-generation-jobs/:jobId/cancel` | 取消尚未完成的数据生成任务 |
+| `POST` | `/api/problems/:id/data-generation-jobs/:jobId/promote` | 以 CAS 发布选中候选点到下一 TestSet Revision |
+| `POST` | `/api/problems/:id/ai/validator` | 从官方 Markdown 题面生成并编译 Validator 草案 |
+| `GET` | `/api/problems/:id/ai/validator/:requestId` | 读取自己的 Validator 生成请求和真实 Token 用量 |
+| `POST` | `/api/problems/:id/ai/validator/:requestId/repair` | 最多两轮关联修复并重新编译 Validator |
+| `POST` | `/api/problems/:id/ai/validator/:requestId/save` | 将已审阅草案保存为新的 Validator 程序版本 |
+| `GET` | `/api/platform-admin/ai/token-pool` | 平台管理员读取统一 Token 总池 |
+| `GET` | `/api/platform-admin/ai/token-usage` | 平台管理员分页读取不可变 Token 流水 |
+| `POST` | `/api/platform-admin/ai/token-pool/adjust` | 平台管理员按幂等键充值或人工调整 Token |
 | `GET` | `/api/problems/:id/hack-config` | 题目管理者读取 ACM/OI Hack 配置 |
 | `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator、Classifier 和 Hack 开关 |
 | `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |

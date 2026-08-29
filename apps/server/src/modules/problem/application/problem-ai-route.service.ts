@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../../prisma'
 import { canModifyProblem } from '../problem.access'
+import { releaseAiTokens, reserveAiTokens, settleAiTokens } from '../../ai/ai-token.service'
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || ''
 
@@ -33,6 +34,43 @@ async function requireManageableProblem(user: JwtPayload, problemId: string) {
 
 function requireAiProvider() {
   if (!DEEPSEEK_API_KEY) fail(400, 'AI_PROVIDER_NOT_CONFIGURED', '未配置 DEEPSEEK_API_KEY')
+}
+
+async function runMeteredAi<T extends { metadata: { model: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number }; cached?: boolean } }>(input: {
+  user: JwtPayload; problemId: string; statementId?: string; action: string; estimatedTokens: number; execute: () => Promise<T>
+}) {
+  const requestId = crypto.randomUUID()
+  const reserved = Math.max(4096, Math.min(100_000, Math.ceil(input.estimatedTokens)))
+  await prisma.aiGenerationRequest.create({ data: {
+    id: requestId, userId: input.user.userId, problemId: input.problemId, statementId: input.statementId,
+    action: input.action, model: process.env.DEEPSEEK_MODEL || 'deepseek-chat', status: 'pending_reservation',
+    reservedTokens: reserved, promptHash: crypto.createHash('sha256').update(`${input.action}:${input.problemId}:${input.statementId || ''}`).digest('hex'),
+  } })
+  try { await reserveAiTokens({ requestId, userId: input.user.userId, amount: reserved, problemId: input.problemId, action: input.action }) }
+  catch (error) {
+    await prisma.aiGenerationRequest.update({ where: { id: requestId }, data: { status: 'failed', errorMessage: error instanceof Error ? error.message : 'Token 预占失败', finishedAt: new Date() } })
+    throw error
+  }
+  await prisma.aiGenerationRequest.update({ where: { id: requestId }, data: { status: 'running', startedAt: new Date() } })
+  let finalized = false
+  try {
+    const result = await input.execute()
+    const actual = result.metadata.cached ? 0 : result.metadata.usage?.totalTokens ?? reserved
+    await settleAiTokens({ requestId, userId: input.user.userId, reserved, actual })
+    finalized = true
+    await prisma.aiGenerationRequest.update({ where: { id: requestId }, data: {
+      status: 'completed', promptTokens: result.metadata.usage?.promptTokens,
+      completionTokens: result.metadata.usage?.completionTokens, totalTokens: result.metadata.usage?.totalTokens,
+      finishedAt: new Date(), response: { cached: Boolean(result.metadata.cached) },
+    } })
+    return { result, requestId, actual }
+  } catch (error) {
+    if (!finalized) {
+      await releaseAiTokens({ requestId, userId: input.user.userId, reserved, reason: 'DeepSeek 请求未返回可计费用量' }).catch(() => undefined)
+    }
+    await prisma.aiGenerationRequest.update({ where: { id: requestId }, data: { status: 'failed', errorMessage: error instanceof Error ? error.message : 'AI 请求失败', finishedAt: new Date() } }).catch(() => undefined)
+    throw error
+  }
 }
 
 async function loadTranslationSource(problemId: string, statementId?: string) {
@@ -92,12 +130,8 @@ export async function translateProblemStatement(input: {
   const sourceLang = source.language || 'zh'
 
   const { translateDocument } = await import('../../../lib/ai-translate')
-  const result = await translateDocument({
-    text: content,
-    sourceLang: sourceLang as any,
-    targetLang: targetLang as any,
-    temperature: 0.1,
-  })
+  const metered = await runMeteredAi({ user: input.user, problemId: input.problemId, statementId: source.id, action: 'translate', estimatedTokens: Math.ceil(content.length / 2) + 8192, execute: () => translateDocument({ text: content, sourceLang: sourceLang as any, targetLang: targetLang as any, temperature: 0.1 }) })
+  const result = metered.result
 
   const newStatement = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-translate:${input.problemId}:${targetLang}`}, 0)) IS NULL AS locked`
@@ -139,7 +173,11 @@ export async function translateProblemStatement(input: {
         sourceLang,
         targetLang,
         model: result.metadata.model,
-        tokensUsed: result.metadata.chunksProcessed || 0,
+        tokensUsed: metered.actual,
+        promptTokens: result.metadata.usage?.promptTokens,
+        completionTokens: result.metadata.usage?.completionTokens,
+        totalTokens: result.metadata.usage?.totalTokens,
+        requestId: metered.requestId,
         status: 'success',
         statementId: created.id,
       },
@@ -200,7 +238,8 @@ export async function formatProblemStatement(input: {
   if (!admin) await assertFormatAvailable(input.problemId, source.id)
 
   const { formatDocument } = await import('../../../lib/ai-translate')
-  const result = await formatDocument(source.content!)
+  const metered = await runMeteredAi({ user: input.user, problemId: input.problemId, statementId: source.id, action: 'format', estimatedTokens: Math.ceil(source.content!.length / 2) + 8192, execute: () => formatDocument(source.content!) })
+  const result = metered.result
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`ai-format:${input.problemId}:${source.id}`}, 0)) IS NULL AS locked`
     if (!admin) {
@@ -228,6 +267,11 @@ export async function formatProblemStatement(input: {
         problemId: input.problemId,
         action: 'format',
         model: result.metadata.model,
+        tokensUsed: metered.actual,
+        promptTokens: result.metadata.usage?.promptTokens,
+        completionTokens: result.metadata.usage?.completionTokens,
+        totalTokens: result.metadata.usage?.totalTokens,
+        requestId: metered.requestId,
         status: 'success',
         statementId: source.id,
       },
@@ -241,7 +285,7 @@ export async function getProblemAiUsage(user: JwtPayload, problemId: string) {
   const [statements, formatLogs] = await Promise.all([
     prisma.problemStatement.findMany({
       where: { problemId, type: 'statement', format: 'markdown' },
-      select: { language: true },
+      select: { id: true, language: true, content: true, createdAt: true },
     }),
     prisma.aiUsageLog.findMany({
       where: { problemId, action: 'format', status: 'success' },
@@ -257,5 +301,10 @@ export async function getProblemAiUsage(user: JwtPayload, problemId: string) {
     formattedStatementIds: Array.from(new Set(
       formatLogs.map(log => log.statementId).filter(Boolean) as string[],
     )),
+    markdownStatements: statements.map(statement => ({
+      id: statement.id, language: statement.language, createdAt: statement.createdAt,
+      maxReservedTokens: Number(process.env.AI_VALIDATOR_MAX_OUTPUT_TOKENS || 8192)
+        + Math.max(Number(process.env.AI_VALIDATOR_PROMPT_RESERVE || 6000), Math.ceil((statement.content?.length || 0) / 2)),
+    })),
   }
 }

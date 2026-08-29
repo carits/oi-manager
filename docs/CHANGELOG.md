@@ -1,13 +1,25 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-29
+last_verified: 2026-08-30
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-08-30
+
+### 评测资产、数据生成与 DeepSeek Validator
+
+- 新增不可变 `ProblemJudgeProgram` / `ProblemJudgeProgramVersion`，统一管理 C++17 STD、Validator、OI Classifier 以及 C++17/Python3 Generator。源码上传和编辑共用沙箱编译检查，拒绝二进制、NUL、超限源码和跨题目版本引用；Hack 配置可引用程序版本并保留旧源码双读兼容。
+- 新增独立持久化数据生成队列。参数清单和直接输入逐点经过 Generator、Validator、STD、Checker 自检，保存阶段、耗时、参数、种子、预览和内容哈希；任务领取使用租约与 fencing token，题目锁阻止并发创建，延迟结果和重复回传不能覆盖新 owner。
+- 候选测试点由管理员显式发布：ACM 按顺序加入，OI 只能分配到 Official Group，Hack Gate 保持只读。发布复用题目 advisory lock、内容寻址对象、TestSet Revision CAS 和单向 Judge 投影；重复输入或旧 Revision 返回明确 409，固定活动和历史提交保持不变。
+- 题目评测设置新增“评测资产与生成”工作台，包含评测程序、`.in/.out/.ans/ZIP` 数据导入、参数/直接输入生成、候选预览与 OI Group 分配、正式 Revision 记录。平台管理员增加 DeepSeek Token 总池页面。
+- DeepSeek Validator 仅接受官方 Markdown 题面，使用不可信内容分隔提示返回结构化约束、EOF 规则、假设和 C++17 `validator.cpp`，再以系统 `testlib.h` 沙箱编译。结果必须人工审阅保存，最多两轮关联修复，不会自动启用或发布数据。
+- 题面翻译、格式化和 Validator 生成统一进入平台 Token 池：调用前预占、供应商返回后按真实 prompt/completion/total Token 结算，网络失败释放，缓存命中不消费，settle/release 只允许一个终态。额度调整使用幂等键和不可变流水。
+- 数据库迁移前完成 31 MiB 可恢复备份并成功应用 `20260829_judge_assets_ai_validator`。Server 全量 61 文件 520/520、最新 Token/Validator/Revision/Hack 定向 19/19、Web 12 文件 45/45、Judge 8 文件 20/20、三端类型检查、UI/路由/文档/架构门禁通过。
 
 ## 2026-08-29
 

@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 82 |
+| Prisma models | 89 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
-| Module route adapters | 36 |
+| Module route adapters | 39 |
 | systemd units | 7 |
-| Referenced environment keys | 375 |
+| Referenced environment keys | 384 |
 
 ## HTTP adapter ownership
 
@@ -52,14 +52,17 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 ### Domain module adapters
 
+- `apps/server/src/modules/ai/ai-token.routes.ts`
 - `apps/server/src/modules/carits/carits.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
 - `apps/server/src/modules/platform-binding/platform-binding.routes.ts`
 - `apps/server/src/modules/problem/problem.ai.routes.ts`
 - `apps/server/src/modules/problem/problem.crud.routes.ts`
+- `apps/server/src/modules/problem/problem.data-generation.routes.ts`
 - `apps/server/src/modules/problem/problem.files.routes.ts`
 - `apps/server/src/modules/problem/problem.hack.routes.ts`
+- `apps/server/src/modules/problem/problem.judge-program.routes.ts`
 - `apps/server/src/modules/problem/problem.judge.routes.ts`
 - `apps/server/src/modules/problem/problem.notes.routes.ts`
 - `apps/server/src/modules/problem/problem.routes.ts`
@@ -91,6 +94,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 ## Prisma models
 
+- `AiGenerationRequest`
+- `AiTokenLedgerEntry`
+- `AiTokenPool`
 - `AiUsageLog`
 - `CaritsAccount`
 - `CaritsLedgerEntry`
@@ -123,8 +129,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `Problem`
 - `ProblemAttachment`
 - `ProblemChecker`
+- `ProblemDataGenerationCase`
+- `ProblemDataGenerationJob`
 - `ProblemHackAttempt`
 - `ProblemHackConfig`
+- `ProblemJudgeProgram`
+- `ProblemJudgeProgramVersion`
 - `ProblemList`
 - `ProblemListEntry`
 - `ProblemListSection`
@@ -199,6 +209,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ACME_ROOT`
 - `ACTIVE`
 - `ACTIVE_FILE`
+- `AI_MAX_ACTIVE_PER_USER`
+- `AI_MAX_HOURLY_PER_USER`
+- `AI_TOKEN_INITIAL_BALANCE`
+- `AI_VALIDATOR_MAX_OUTPUT_TOKENS`
+- `AI_VALIDATOR_PROMPT_RESERVE`
 - `ALERT_COMMAND`
 - `ALLOW_HTTP`
 - `ALLOW_ISOLATED`
@@ -277,6 +292,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CURRENT`
 - `CURRENT_DIR`
 - `DATABASE_URL`
+- `DATA_GENERATION_LEASE_MS`
+- `DATA_GENERATION_MAX_CASES`
 - `DB_CONTAINER`
 - `DB_CONTROL_PORT`
 - `DB_NAME`
@@ -372,6 +389,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `LUOGU_COOKIE`
 - `MAIN`
 - `MAX_BATCH_PROBLEM_IDS`
+- `MAX_CASES`
 - `MAX_CONCURRENT`
 - `MESSAGE`
 - `METRICS_CHECK`
@@ -457,6 +475,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PID_FILE`
 - `PLAYWRIGHT_BROWSERS_PATH`
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
+- `POOL_ID`
 - `PORT`
 - `POSTGRES_DB`
 - `POSTGRES_PASSWORD`

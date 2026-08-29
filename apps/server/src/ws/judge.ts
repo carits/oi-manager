@@ -26,6 +26,7 @@ import {
   rejudgeSubmissionWithRun,
   retryOwnedJudgeAttempt,
 } from '../modules/judge/application/judge-run.service'
+import { claimDataGenerationJob, finalizeDataGenerationJob } from '../modules/problem/problem.data-generation.service'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -51,7 +52,7 @@ let acceptingJudgeTasks = true
 class JudgeConsumer {
   consuming: boolean = false
   processing: Map<string, {
-    taskType: 'submission' | 'hack'
+    taskType: 'submission' | 'hack' | 'data_generation'
     id: string
     startTime: number
     judgeAttemptId?: string
@@ -62,6 +63,7 @@ class JudgeConsumer {
   ws: WebSocket
   judgeId: string
   preferHack = true
+  preferGeneration = true
 
   constructor(ws: WebSocket, judgeId: string, concurrency: number = 1) {
     this.ws = ws
@@ -87,8 +89,8 @@ class JudgeConsumer {
         continue
       }
 
-      const taskType: 'submission' | 'hack' = task.taskType === 'hack' ? 'hack' : 'submission'
-      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.submissionId
+      const taskType: 'submission' | 'hack' | 'data_generation' = task.taskType
+      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.taskType === 'data_generation' ? task.jobId : task.submissionId
       const taskKey = `${taskType}:${taskId}`
       const dispatchedAt = Date.now()
       this.processing.set(taskKey, {
@@ -106,21 +108,28 @@ class JudgeConsumer {
 
       // 发送任务到评测机
       this.ws.send(JSON.stringify({
-        type: taskType === 'hack' ? 'hack' : 'judge',
+        type: taskType === 'hack' ? 'hack' : taskType === 'data_generation' ? 'data_generation' : 'judge',
         payload: taskType === 'submission' ? { ...task, dispatchedAt } : task
       }))
     }
   }
 
   async fetchNextTask(): Promise<DispatchTask | null> {
+    if (this.preferGeneration) {
+      this.preferGeneration = false
+      const generated = await claimDataGenerationJob(this.judgeId)
+      if (generated) return generated
+    }
     const first = this.preferHack ? await this.fetchNextHackTask() : await this.fetchNextSubmissionTask()
     if (first) {
       this.preferHack = !this.preferHack
+      this.preferGeneration = true
       return first
     }
     const second = this.preferHack ? await this.fetchNextSubmissionTask() : await this.fetchNextHackTask()
-    if (second) this.preferHack = !this.preferHack
-    return second
+    if (second) { this.preferHack = !this.preferHack; this.preferGeneration = true; return second }
+    this.preferGeneration = true
+    return claimDataGenerationJob(this.judgeId)
   }
 
   async fetchNextSubmissionTask(): Promise<JudgeTask | null> {
@@ -250,7 +259,7 @@ class JudgeConsumer {
     }
   }
 
-  handleResult(taskType: 'submission' | 'hack', id: string) {
+  handleResult(taskType: 'submission' | 'hack' | 'data_generation', id: string) {
     this.processing.delete(`${taskType}:${id}`)
     this.notify?.()
   }
@@ -280,7 +289,11 @@ class JudgeConsumer {
             reason: 'Judge connection closed before result persistence',
           })
         } else {
-          await transitionHackAttempts(prisma, {
+          if (task.taskType === 'data_generation') await prisma.problemDataGenerationJob.updateMany({
+            where: { id: task.id, judgeId: this.judgeId, status: { in: ['running', 'finalizing'] } },
+            data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null },
+          })
+          else await transitionHackAttempts(prisma, {
             from: ['judging', 'finalizing'],
             to: 'queuing',
             where: { id: task.id, judgeId: this.judgeId },
@@ -337,7 +350,8 @@ interface HackTask {
   classifierSource?: string
 }
 
-type DispatchTask = JudgeTask | HackTask
+type DataGenerationTask = NonNullable<Awaited<ReturnType<typeof claimDataGenerationJob>>>
+type DispatchTask = JudgeTask | HackTask | DataGenerationTask
 
 /**
  * 初始化 WebSocket 服务器
@@ -392,11 +406,15 @@ export function initJudgeWebSocket() {
         where: { judgeStarted: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
         data: { judgeId: null, judgeStarted: null },
       })
+      const staleGeneration = await prisma.problemDataGenerationJob.updateMany({
+        where: { status: { in: ['running', 'finalizing'] }, leaseExpiresAt: { lt: new Date() } },
+        data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null },
+      })
 
-      if (staleSubmissionCount > 0 || staleHacks.count > 0) {
+      if (staleSubmissionCount > 0 || staleHacks.count > 0 || staleGeneration.count > 0) {
         logger.warn('stale_tasks_recovered', {
           action: 'judge_ws',
-          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count }
+          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count, dataGenerationCount: staleGeneration.count }
         })
       }
     } catch (e: any) {
@@ -539,11 +557,12 @@ async function recoverAllStaleTasks() {
       to: 'queuing',
       data: { judgeId: null, judgeStarted: null },
     })
+    const recoveredGeneration = await prisma.problemDataGenerationJob.updateMany({ where: { status: { in: ['running', 'finalizing'] } }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
 
-    if (recoveredCount > 0 || recoveredHacks.count > 0) {
+    if (recoveredCount > 0 || recoveredHacks.count > 0 || recoveredGeneration.count > 0) {
       logger.info('startup_recovered_stale_tasks', {
         action: 'judge_ws',
-        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count }
+        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count, dataGenerationCount: recoveredGeneration.count }
       })
     }
   } catch (e: any) {
@@ -583,12 +602,22 @@ async function handleMessage(ws: WebSocket, msg: any) {
     case 'hack_result':
       await handleHackResult(ws, msg.payload)
       break
+    case 'data_generation_result':
+      await handleDataGenerationResult(ws, msg.payload)
+      break
     default:
       logger.warn('judge_ws_unknown_message', {
         action: 'judge_ws',
         metadata: { type: msg.type }
       })
   }
+}
+
+async function handleDataGenerationResult(ws: WebSocket, payload: any) {
+  const connection = judges.get(ws)
+  if (!connection) return
+  try { await finalizeDataGenerationJob(connection.judgeId, payload) }
+  finally { connection.consumer?.handleResult('data_generation', String(payload?.jobId || '')) }
 }
 
 /**

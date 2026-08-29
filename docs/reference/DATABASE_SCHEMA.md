@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-28
+last_verified: 2026-08-30
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -12,6 +12,9 @@ source_of_truth: apps/server/prisma/schema.prisma
 | 模型 | 说明 |
 |---|---|
 | `AiUsageLog` | 以 Prisma schema 为准 |
+| `AiTokenPool` | 平台唯一 DeepSeek Token 总池，保存可用、预占、已消费和 CAS 版本 |
+| `AiTokenLedgerEntry` | 充值、预占、结算、释放和人工调整的幂等不可变流水 |
+| `AiGenerationRequest` | Validator/翻译/格式化 AI 请求、父修复链、真实用量与编译结果 |
 | `CaritsAccount` | 以 Prisma schema 为准 |
 | `CaritsLedgerEntry` | 以 Prisma schema 为准 |
 | `CaritsTransaction` | 以 Prisma schema 为准 |
@@ -45,6 +48,10 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemChecker` | Lemon SPJ 源码与头文件记录 |
 | `ProblemHackAttempt` | 题目级 ACM/OI Hack 独立队列、前后 Verdict/分数、命中 Subtask 与落库状态 |
 | `ProblemHackConfig` | 题目级 Hack 开关、STD、Validator、OI Classifier 和配置 revision |
+| `ProblemJudgeProgram` | 题目的逻辑 STD、Validator、Classifier 或命名 Generator 及当前版本指针 |
+| `ProblemJudgeProgramVersion` | 不可变程序源码版本、哈希、语言、编译结果、作者和 AI 来源 |
+| `ProblemDataGenerationJob` | 独立数据生成队列、程序版本、基础 Revision、租约、fencing token 和晋升结果 |
+| `ProblemDataGenerationCase` | 一次参数/直接输入对应的候选测试点、逐阶段状态、内容对象与预览 |
 | `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask 与晋升状态 |
 | `ProblemTestcase` | 规范化测试点；一份输入/答案可关联多个 Test Group |
 | `ProblemSubtask` | OI 稳定数字 Subtask、满分和顺序 |

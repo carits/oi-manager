@@ -49,6 +49,7 @@ export const routePatterns = [
   '/personal/teams/[id]/trainings/[tid]',
   '/personal/teams/[id]/trainings/[tid]/statements',
   '/platform-admin',
+  '/platform-admin/ai',
   '/platform-admin/carits',
   '/platform-admin/contributions',
   '/platform-admin/oj-accounts',
