@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MONITOR_SCHEDULE="${MONITOR_SCHEDULE:-*/5 * * * *}"
@@ -7,6 +8,9 @@ LOG_FILE="${MONITOR_LOG_FILE:-/data/backups/oi-manager/monitor.log}"
 ENV_FILE="${MONITOR_ENV_FILE:-$HOME/.config/oi-manager/operations.env}"
 
 mkdir -p "$(dirname "$LOG_FILE")"
+chmod 700 "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 current="$(crontab -l 2>/dev/null || true)"
 filtered="$(printf '%s\n' "$current" | grep -v '/scripts/monitor-services.sh' || true)"
 env_prefix=""
@@ -18,7 +22,7 @@ if [[ -f "$ENV_FILE" ]]; then
     exit 2
   }
   [[ "$ENV_FILE" != *"'"* && "$ENV_FILE" != *$'\n'* ]] || { echo "Unsafe monitor environment path" >&2; exit 2; }
-  env_prefix=". '$ENV_FILE' && "
+  env_prefix="set -a; . '$ENV_FILE'; set +a; "
 fi
 entry="$MONITOR_SCHEDULE ${env_prefix}MONITOR_QUIET_SUCCESS=1 $ROOT_DIR/scripts/monitor-services.sh >> $LOG_FILE 2>&1"
 

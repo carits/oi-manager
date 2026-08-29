@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ARCHIVE_SCHEDULE="${LOG_ARCHIVE_SCHEDULE:-15 4 * * *}"
@@ -29,9 +30,12 @@ for command_path in "$LOG_ARCHIVE_COMMAND" "$LOG_ARCHIVE_VERIFY_COMMAND"; do
 done
 
 mkdir -p "$(dirname "$LOG_FILE")"
+chmod 700 "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 current="$(crontab -l 2>/dev/null || true)"
 filtered="$(printf '%s\n' "$current" | grep -v '/scripts/archive-operations-logs.sh' || true)"
-entry="$ARCHIVE_SCHEDULE . '$ENV_FILE' && $ROOT_DIR/scripts/archive-operations-logs.sh >> $LOG_FILE 2>&1"
+entry="$ARCHIVE_SCHEDULE set -a; . '$ENV_FILE'; set +a; $ROOT_DIR/scripts/archive-operations-logs.sh >> $LOG_FILE 2>&1"
 {
   printf '%s\n' "$filtered"
   printf '%s\n' "$entry"

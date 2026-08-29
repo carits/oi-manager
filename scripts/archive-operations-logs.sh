@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SPOOL_DIR="${LOG_ARCHIVE_SPOOL_DIR:-/data/backups/oi-manager/log-archive-spool}"
@@ -12,6 +13,7 @@ LOCK_FILE="${LOG_ARCHIVE_LOCK_FILE:-/tmp/oi-manager-log-archive.lock}"
 [[ "$SINCE_HOURS" =~ ^[1-9][0-9]*$ ]] || { echo "LOG_ARCHIVE_SINCE_HOURS must be positive" >&2; exit 2; }
 [[ "$KEEP_DAYS" =~ ^[0-9]+$ ]] || { echo "LOG_ARCHIVE_KEEP_DAYS must be non-negative" >&2; exit 2; }
 mkdir -p "$SPOOL_DIR"
+chmod 700 "$SPOOL_DIR"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "Another log archive is already running; skipped"
@@ -79,6 +81,7 @@ tar -C "$work_dir" -czf "$archive_tmp" .
 [[ -s "$archive_tmp" ]] || { echo "Log archive is empty" >&2; exit 1; }
 mv -- "$archive_tmp" "$archive"
 sha256sum "$archive" > "$archive.sha256"
+chmod 600 "$archive" "$archive.sha256"
 
 if [[ -z "$UPLOAD_COMMAND" ]]; then
   echo "Log archive retained locally but no LOG_ARCHIVE_COMMAND is configured: $archive" >&2

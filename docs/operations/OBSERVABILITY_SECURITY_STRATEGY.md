@@ -26,8 +26,8 @@ source_of_truth: scripts/monitor-services.sh, runtime telemetry snapshots, incid
 | Scheduler/Executor | 领取、执行、重试、终态、陈旧任务 | operational snapshot、journald | drain 后重启单个执行单元 |
 | Judge | WebSocket 连接/认证、最后消息、在途任务、任务耗时、缓存、RSS、事件循环 | `.run/judge-metrics.json`、Judge/go-judge 日志 | 停止领取、重连或受控重启 |
 | 数据域 | JudgeRun/Attempt/Batch/Hack/Candidate/OJ Fetch 状态、陈旧记录、Revision 投影差异 | `.run/operational-state.json` | 先取证，再按状态机恢复 |
-| 数据库 | readiness、备份新鲜度、恢复校验、迁移清单 | verified custom dump、恢复演练报告 | 按 DR 手册恢复到隔离库并校验 |
-| 主机 | 磁盘/ inode/内存/进程/端口/重启/内核、systemd restart count | incident evidence bundle | 隔离故障单元，禁止盲目清理数据 |
+| 数据库 | readiness、连接利用率、长事务/锁等待、容量、备份新鲜度、真实恢复校验 | verified custom dump、`restore-verification.json`、恢复演练报告 | 按 DR 手册恢复到隔离库并校验 |
+| 主机 | 磁盘/inode/内存/进程/端口暴露/重启/内核、全部 systemd 单元及 restart delta | incident evidence bundle | 隔离故障单元，禁止盲目清理数据 |
 | 安全 | SSH、Session/CSRF、文件权限、Secret 长度与轮换可行性、依赖漏洞 | security audit、配置哈希、SSH journal | 收敛入口、吊销/轮换、保留证据 |
 
 ## 快照契约
@@ -39,8 +39,10 @@ source_of_truth: scripts/monitor-services.sh, runtime telemetry snapshots, incid
 - Judge：`.run/judge-metrics.json`。
 - 业务状态：`.run/operational-state.json`。
 
-API/Judge 快照是进程生命周期累计值和最近有限窗口的延迟样本，不是长期时序库。长期趋势由结构化日志和
-异机归档承担；未来接入 Prometheus/云监控时必须保留相同字段语义，避免出现第二套定义。
+API 使用 5 分钟滚动窗口，Judge 使用 1 分钟滚动窗口；窗口结束时把状态族、延迟、错误、安全事件、客户端
+错误、基础设施重试和连接异常写入快照与结构化日志，然后清空窗口计数。这样单次事故会在下一窗口恢复，
+不会永久污染进程生命周期比例。长期趋势由结构化日志和异机归档承担；未来接入 Prometheus/云监控时必须
+保留相同字段语义，避免出现第二套定义。
 
 ## 告警等级和默认阈值
 
@@ -52,7 +54,9 @@ API/Judge 快照是进程生命周期累计值和最近有限窗口的延迟样�
 | SEV-4 | 非阻断安全/依赖提醒、容量趋势、低频客户端错误 | 下个维护窗口 | 纳入待办和复核周期 |
 
 默认机器阈值由 `deploy/observability/operations.env.example` 记录：快照新鲜度、API/Judge RSS、事件循环
-P99、端点最小样本、5xx 比例、端点 P99、备份年龄和磁盘占用。阈值只能依据至少一周的真实基线调整，
+P99、端点最小样本、5xx 比例、端点 P99、浏览器/安全/服务端错误、Judge 基础设施错误、业务队列、数据库
+连接/长事务/锁等待、备份与真实恢复年龄、systemd 重启、磁盘和 inode。受限端口必须只监听回环地址，新增
+公网监听必须进入显式允许清单。阈值只能依据至少一周的真实基线调整，
 调整必须在变更记录中说明原因。一次状态转换只发一次故障/恢复通知；通知失败不推进状态，从而自动重试。
 
 ## 自动事故取证
@@ -64,7 +68,7 @@ P99、端点最小样本、5xx 比例、端点 P99、备份年龄和磁盘占用
 - 应用与基础设施 systemd 状态/journal、Docker 状态/日志；
 - health/readiness、SLO、投影、运行态和安全审计；
 - API/Judge/业务状态快照；
-- systemd/Nginx 配置哈希和备份清单。
+- 网络暴露审计、systemd/Nginx 配置哈希、备份清单和最近真实恢复状态。
 
 证据包不包含环境文件、凭据、数据库内容、源码提交内容或测试数据。包内文件有独立校验清单，包外有
 SHA-256；文件权限为 `0600`。自动取证失败不能阻止告警，但必须在监控日志中显式报告。
@@ -94,10 +98,11 @@ volume、覆盖当前数据库或批量重测来“试试看”。恢复后依�
 | 数据 | 建议保留 | 删除条件 |
 |---|---:|---|
 | systemd/Docker 本机日志 | 7–14 天（受磁盘上限约束） | 已归档且远端独立读回校验成功 |
-| 每日数据库备份 | 至少 14 天 | 新备份通过 `pg_restore -l` 且保留策略命中 |
+| 每日数据库备份 | 14 天 | 新备份通过 `pg_restore -l` 且保留策略命中；目录 `0700`、文件 `0600` |
 | 事故证据包 | 90 天；SEV-1/安全事件 1 年 | 所有者确认 RCA/合规要求结束且校验无误 |
 | 监控快照 | 仅当前原子快照 | 新快照替换；长期趋势来自归档日志 |
 | 浏览器错误指纹 | 随应用日志策略 | 不得转存原始堆栈/凭据 |
+| 周安全基线报告 | 90 天 | 新报告、状态和 SHA-256 均验证成功后按明确文件模式清理 |
 
 删除只能针对明确目录和明确文件模式。异机上传成功本身不足以删除本地副本，必须由独立 verifier 下载或读取
 远端对象并核对大小和 SHA-256 后才创建 `.uploaded` 标记。
@@ -108,6 +113,7 @@ volume、覆盖当前数据库或批量重测来“试试看”。恢复后依�
 
 ```bash
 pnpm security:verify
+pnpm network:audit
 pnpm operations:check
 pnpm monitor
 pnpm docs:check
@@ -118,14 +124,16 @@ pnpm docs:check
 
 ### 每周
 
-- 检查监控失败/恢复通知、systemd restart count、端点错误与延迟、队列陈旧、磁盘/inode 和备份年龄。
+- 检查监控失败/恢复通知、systemd restart delta、端点错误与延迟、队列陈旧、数据库连接/锁、磁盘/inode 和备份年龄。
+- 每周日自动把最新备份恢复到隔离临时数据库，核验表、迁移和用户计数，清理临时库后原子更新私有恢复状态。
 - 复核客户端错误指纹前十和新出现的资源加载失败。
 - 运行生产依赖审计并对可利用性分级，不能只按 CVE 数量判断。
+- 周一自动执行运行时安全契约、OJ 密文解密、网络暴露、资源限制、TLS 工具和生产依赖审计；结果、逐项日志和 SHA-256 以 `0700/0600` 私有报告保存并受监控。
 - 确认本地日志归档确实由远端 verifier 读回。
 
 ### 每月
 
-- 执行一次隔离数据库恢复验证和一次故障/恢复告警注入。
+- 执行一次包含核心业务的扩展恢复演练，并复核每周隔离恢复记录；执行一次故障/恢复告警注入。
 - 抽查事故证据包校验与恢复手册可执行性。
 - 复核管理员账号、SSH key、OJ 绑定、系统服务权限、端口暴露和安全响应头。
 - 审查容量趋势与阈值，任何调整进入变更记录。

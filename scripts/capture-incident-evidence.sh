@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SPOOL_DIR="${INCIDENT_EVIDENCE_DIR:-/data/backups/oi-manager/incidents}"
@@ -9,6 +10,7 @@ LOCK_FILE="${INCIDENT_EVIDENCE_LOCK_FILE:-/tmp/oi-manager-incident-evidence.lock
 
 [[ "$SINCE_HOURS" =~ ^[1-9][0-9]*$ ]] || { echo 'INCIDENT_SINCE_HOURS must be positive' >&2; exit 2; }
 mkdir -p "$SPOOL_DIR"
+chmod 700 "$SPOOL_DIR"
 exec 9>"$LOCK_FILE"
 flock -n 9 || { echo 'Another incident evidence capture is already running' >&2; exit 2; }
 
@@ -97,6 +99,7 @@ capture "$work_dir/application/slo.json" bash -lc "cd '$ROOT_DIR' && pnpm --sile
 capture "$work_dir/application/operational-state.json" bash -lc "cd '$ROOT_DIR' && pnpm --silent operations:snapshot"
 capture "$work_dir/security/runtime-audit.json" bash -lc "cd '$ROOT_DIR' && pnpm --silent security:audit"
 capture "$work_dir/security/runtime-limits.json" bash -lc "cd '$ROOT_DIR' && pnpm --silent runtime:audit"
+capture "$work_dir/security/network-exposure.json" bash -lc "cd '$ROOT_DIR' && pnpm --silent network:audit"
 
 find "$ROOT_DIR/.run" -maxdepth 1 -type f \( -name 'metrics-*.json' -o -name 'operational-state.json' \) \
   -exec cp -- {} "$work_dir/application/" \; 2>/dev/null || true
@@ -121,6 +124,18 @@ find /etc/nginx/sites-enabled -maxdepth 1 -type f -print0 2>/dev/null \
   | sort -z | xargs -0 -r sha256sum > "$work_dir/configuration/nginx-sites.sha256"
 find /data/backups/oi-manager/automatic -maxdepth 1 -type f -name 'oi_manager_*.dump' \
   -printf '%T@ %s %f\n' 2>/dev/null | sort -nr | head -n 20 > "$work_dir/backups/inventory.txt"
+if [ -s /data/backups/oi-manager/automatic/restore-verification.json ]; then
+  cp -- /data/backups/oi-manager/automatic/restore-verification.json "$work_dir/backups/restore-verification.json"
+else
+  printf '{"status":"unavailable","reason":"restore verification state missing"}\n' \
+    > "$work_dir/backups/restore-verification.json"
+fi
+if [ -s /data/backups/oi-manager/security-baseline/security-baseline.json ]; then
+  cp -- /data/backups/oi-manager/security-baseline/security-baseline.json "$work_dir/security/security-baseline.json"
+else
+  printf '{"status":"unavailable","reason":"security baseline state missing"}\n' \
+    > "$work_dir/security/security-baseline.json"
+fi
 
 (cd "$work_dir" && find . -type f ! -name 'evidence.sha256' -print0 | sort -z | xargs -0 sha256sum > evidence.sha256)
 tar -C "$work_dir" -czf "$archive_tmp" .

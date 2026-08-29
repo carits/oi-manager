@@ -10,6 +10,7 @@ export class JudgeTelemetry {
   private readonly eventLoopDelay = monitorEventLoopDelay({ resolution: 20 })
   private interval: NodeJS.Timeout | null = null
   private startedAt = Date.now()
+  private windowStartedAt = Date.now()
   private inFlight = 0
   private connected = false
   private authenticated = false
@@ -81,8 +82,12 @@ export class JudgeTelemetry {
     const memory = process.memoryUsage()
     const eventLoopP99 = this.eventLoopDelay.percentile(99)
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: new Date().toISOString(),
+      window: {
+        startedAt: new Date(this.windowStartedAt).toISOString(),
+        durationSeconds: Math.max(0, Math.floor((Date.now() - this.windowStartedAt) / 1000)),
+      },
       judgeId: this.judgeId,
       process: {
         pid: process.pid,
@@ -115,12 +120,12 @@ export class JudgeTelemetry {
     return path.join(root, '.run', 'judge-metrics.json')
   }
 
-  flush(): string | null {
+  private writeSnapshot(snapshot: ReturnType<JudgeTelemetry['snapshot']>): string | null {
     const target = this.targetPath()
     const temporary = `${target}.next.${process.pid}`
     try {
       fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.writeFileSync(temporary, `${JSON.stringify(this.snapshot(), null, 2)}\n`, { mode: 0o600 })
+      fs.writeFileSync(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o600 })
       fs.renameSync(temporary, target)
       return target
     } catch (error) {
@@ -130,12 +135,25 @@ export class JudgeTelemetry {
     }
   }
 
+  flush(): string | null {
+    return this.writeSnapshot(this.snapshot())
+  }
+
+  private resetWindow(): void {
+    this.counters.clear()
+    this.taskDurations.submission.length = 0
+    this.taskDurations.hack.length = 0
+    this.windowStartedAt = Date.now()
+    this.eventLoopDelay.reset()
+  }
+
   start(intervalMs = 60_000): void {
     if (this.interval) return
     this.flush()
     this.interval = setInterval(() => {
       const snapshot = this.snapshot()
-      this.flush()
+      this.writeSnapshot(snapshot)
+      this.resetWindow()
       console.log(JSON.stringify({ type: 'judge_metrics_summary', ...snapshot }))
     }, intervalMs)
     this.interval.unref()

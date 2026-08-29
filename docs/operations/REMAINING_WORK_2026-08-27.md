@@ -80,6 +80,9 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 ### 3. 外部告警、日志与故障注入
 
 - [x] API、Judge、业务状态和浏览器错误四层遥测已落地；快照使用原子 `0600` 文件，监控覆盖端点 5xx/P99、事件循环、内存、Judge 连接/认证/心跳、六类陈旧工作流和 Revision 投影差异。
+- [x] API/Judge 指标已改为 5 分钟/1 分钟滚动窗口，并纳入浏览器/安全/服务端错误、Judge 基础设施重试、所有 systemd 单元、重启增量、数据库连接/长事务/锁等待、端口暴露、inode 和新鲜队列阈值；合成故障会被 fail-closed 检出。
+- [x] 每日备份默认保留 14 天且目录/文件权限收紧为 `0700/0600`；每周真实恢复到隔离临时库并生成受监控的恢复证明，失败状态不会被旧成功掩盖。
+- [x] 每周长期安全基线已覆盖运行时 Secret/CSRF 契约、存量 OJ 密文解密、网络暴露、systemd/Docker 限制、TLS 工具和生产依赖；报告、逐项日志、哈希与健康状态以私有文件保存 90 天并由 5 分钟监控校验。
 - [x] 首次故障状态转换会在告警前自动生成事故证据包；包内/包外 SHA-256、权限、必需诊断和敏感路径排除均有故障注入验证。SEV、阈值、保留期、RTO/RPO 和周/月/季度安全周期统一记录在 `OBSERVABILITY_SECURITY_STRATEGY.md`。
 - [ ] 接通 `MONITOR_ALERT_COMMAND` 的真实外部通知，并验证故障与恢复消息。
 - [x] 告警适配器和失败重试契约已完成：URL 从 mode-600 文件读取，failed/recovered 回环 HTTP 通过；没有真实收件人时不标记外部送达完成。

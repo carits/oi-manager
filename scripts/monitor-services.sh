@@ -15,10 +15,12 @@ DB_NAME="${MONITOR_DB_NAME:-oi_manager}"
 BACKUP_DIR="${MONITOR_BACKUP_DIR:-/data/backups/oi-manager/automatic}"
 BACKUP_MAX_AGE_HOURS="${MONITOR_BACKUP_MAX_AGE_HOURS:-26}"
 DISK_MAX_PERCENT="${MONITOR_DISK_MAX_PERCENT:-85}"
+INODE_MAX_PERCENT="${MONITOR_INODE_MAX_PERCENT:-85}"
 STATE_FILE="${MONITOR_STATE_FILE:-$ROOT_DIR/.run/service-monitor.state}"
 QUIET_SUCCESS="${MONITOR_QUIET_SUCCESS:-0}"
 ALERT_COMMAND="${MONITOR_ALERT_COMMAND:-}"
 JUDGE_PROJECTION_CHECK="${MONITOR_JUDGE_PROJECTION_CHECK:-1}"
+JUDGE_SLO_CHECK="${MONITOR_JUDGE_SLO_CHECK:-1}"
 METRICS_CHECK="${MONITOR_METRICS_CHECK:-1}"
 METRICS_MAX_AGE_SECONDS="${MONITOR_METRICS_MAX_AGE_SECONDS:-600}"
 API_RSS_MAX_MB="${MONITOR_API_RSS_MAX_MB:-1024}"
@@ -30,14 +32,31 @@ JUDGE_METRICS_CHECK="${MONITOR_JUDGE_METRICS_CHECK:-1}"
 JUDGE_METRICS_MAX_AGE_SECONDS="${MONITOR_JUDGE_METRICS_MAX_AGE_SECONDS:-180}"
 JUDGE_RSS_MAX_MB="${MONITOR_JUDGE_RSS_MAX_MB:-2048}"
 OPERATIONAL_STATE_CHECK="${MONITOR_OPERATIONAL_STATE_CHECK:-1}"
+SYSTEMD_CHECK="${MONITOR_SYSTEMD_CHECK:-1}"
+SERVICE_RESTART_MAX_DELTA="${MONITOR_SERVICE_RESTART_MAX_DELTA:-3}"
+RESTART_STATE_FILE="${MONITOR_RESTART_STATE_FILE:-$ROOT_DIR/.run/service-restarts.state}"
+RESTORE_VERIFY_CHECK="${MONITOR_RESTORE_VERIFY_CHECK:-1}"
+RESTORE_VERIFY_STATE_FILE="${MONITOR_RESTORE_VERIFY_STATE_FILE:-$BACKUP_DIR/restore-verification.json}"
+RESTORE_VERIFY_MAX_AGE_HOURS="${MONITOR_RESTORE_VERIFY_MAX_AGE_HOURS:-192}"
+NETWORK_EXPOSURE_CHECK="${MONITOR_NETWORK_EXPOSURE_CHECK:-1}"
+SECURITY_BASELINE_CHECK="${MONITOR_SECURITY_BASELINE_CHECK:-1}"
+SECURITY_BASELINE_DIR="${MONITOR_SECURITY_BASELINE_DIR:-/data/backups/oi-manager/security-baseline}"
+SECURITY_BASELINE_STATE_FILE="${MONITOR_SECURITY_BASELINE_STATE_FILE:-$SECURITY_BASELINE_DIR/security-baseline.json}"
+SECURITY_BASELINE_MAX_AGE_HOURS="${MONITOR_SECURITY_BASELINE_MAX_AGE_HOURS:-192}"
 INCIDENT_CAPTURE_COMMAND="${MONITOR_INCIDENT_CAPTURE_COMMAND:-$ROOT_DIR/scripts/capture-incident-evidence.sh}"
+LOCK_FILE="${MONITOR_LOCK_FILE:-/tmp/oi-manager-service-monitor.lock}"
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || { echo "[$(date --iso-8601=seconds)] service monitor already running; skipped"; exit 0; }
 
 failures=()
+restart_state_lines=()
 
 write_state() {
   local value="$1"
   local temp="${STATE_FILE}.next.$$"
   printf '%s\n' "$value" > "$temp"
+  chmod 600 "$temp"
   mv -- "$temp" "$STATE_FILE"
 }
 
@@ -80,6 +99,99 @@ check_disk() {
   fi
 }
 
+check_inodes() {
+  local mount="$1"
+  local usage
+  usage="$(df -Pi "$mount" | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')"
+  if ! [[ "$usage" =~ ^[0-9]+$ ]]; then
+    fail "cannot read inode usage for $mount"
+  elif [ "$usage" -ge "$INODE_MAX_PERCENT" ]; then
+    fail "inode usage for $mount is ${usage}% (limit ${INODE_MAX_PERCENT}%)"
+  fi
+}
+
+check_unit() {
+  local unit="$1"
+  if ! systemctl is-active --quiet "$unit"; then
+    fail "systemd unit is not active: $unit"
+  fi
+  local current previous delta
+  current="$(systemctl show "$unit" --property=NRestarts --value 2>/dev/null || echo 0)"
+  [[ "$current" =~ ^[0-9]+$ ]] || current=0
+  previous="$(awk -v unit="$unit" '$1 == unit { print $2 }' "$RESTART_STATE_FILE" 2>/dev/null || true)"
+  if [[ "$previous" =~ ^[0-9]+$ ]] && [ "$current" -ge "$previous" ]; then
+    delta="$((current - previous))"
+    if [ "$delta" -gt "$SERVICE_RESTART_MAX_DELTA" ]; then
+      fail "systemd unit restarted ${delta} times since last check: $unit"
+    fi
+  fi
+  restart_state_lines+=("$unit $current")
+}
+
+write_restart_state() {
+  local temporary="${RESTART_STATE_FILE}.next.$$"
+  mkdir -p "$(dirname "$RESTART_STATE_FILE")"
+  printf '%s\n' "${restart_state_lines[@]}" > "$temporary"
+  chmod 600 "$temporary"
+  mv -- "$temporary" "$RESTART_STATE_FILE"
+}
+
+check_restore_verification() {
+  local output
+  if [ ! -s "$RESTORE_VERIFY_STATE_FILE" ]; then
+    fail "database restore verification state is missing: $RESTORE_VERIFY_STATE_FILE"
+    return
+  fi
+  if ! output="$(node - "$RESTORE_VERIFY_STATE_FILE" "$RESTORE_VERIFY_MAX_AGE_HOURS" "$BACKUP_DIR" <<'NODE'
+const fs = require('node:fs')
+const path = require('node:path')
+const crypto = require('node:crypto')
+const [file, maxAgeHours, backupDir] = process.argv.slice(2)
+const state = JSON.parse(fs.readFileSync(file, 'utf8'))
+const ageHours = (Date.now() - Date.parse(state.verifiedAt || state.checkedAt)) / 3_600_000
+if (state.status !== 'healthy') throw new Error(`status=${state.status}`)
+if (!Number.isFinite(ageHours) || ageHours < 0 || ageHours > Number(maxAgeHours)) throw new Error(`age=${ageHours.toFixed(1)}h`)
+if (!/^[a-f0-9]{64}$/.test(state.backupSha256 || '')) throw new Error('backupSha256=invalid')
+if (!state.backupName || path.basename(state.backupName) !== state.backupName) throw new Error('backupName=invalid')
+const backupPath = path.join(backupDir, state.backupName)
+if (!fs.existsSync(backupPath)) throw new Error('verifiedBackup=missing')
+const actualHash = crypto.createHash('sha256').update(fs.readFileSync(backupPath)).digest('hex')
+if (actualHash !== state.backupSha256) throw new Error('verifiedBackup=hash-mismatch')
+console.log(`age=${ageHours.toFixed(1)}h backup=${state.backupName}`)
+NODE
+  )"; then
+    fail "database restore verification failed: ${output:-validation error}"
+  fi
+}
+
+check_security_baseline() {
+  local output
+  if [ ! -s "$SECURITY_BASELINE_STATE_FILE" ]; then
+    fail "security baseline state is missing: $SECURITY_BASELINE_STATE_FILE"
+    return
+  fi
+  if ! output="$(node - "$SECURITY_BASELINE_STATE_FILE" "$SECURITY_BASELINE_MAX_AGE_HOURS" "$SECURITY_BASELINE_DIR" <<'NODE'
+const fs = require('node:fs')
+const path = require('node:path')
+const crypto = require('node:crypto')
+const [file, maxAgeHours, reportDir] = process.argv.slice(2)
+const state = JSON.parse(fs.readFileSync(file, 'utf8'))
+const ageHours = (Date.now() - Date.parse(state.checkedAt)) / 3_600_000
+if (state.status !== 'healthy') throw new Error(`status=${state.status} failed=${(state.failedChecks || []).join(',')}`)
+if (!Number.isFinite(ageHours) || ageHours < 0 || ageHours > Number(maxAgeHours)) throw new Error(`age=${ageHours.toFixed(1)}h`)
+if (!state.reportName || path.basename(state.reportName) !== state.reportName) throw new Error('reportName=invalid')
+if (!/^[a-f0-9]{64}$/.test(state.reportSha256 || '')) throw new Error('reportSha256=invalid')
+const reportPath = path.join(reportDir, state.reportName)
+if (!fs.existsSync(reportPath)) throw new Error('report=missing')
+const actualHash = crypto.createHash('sha256').update(fs.readFileSync(reportPath)).digest('hex')
+if (actualHash !== state.reportSha256) throw new Error('report=hash-mismatch')
+console.log(`age=${ageHours.toFixed(1)}h report=${state.reportName}`)
+NODE
+  )"; then
+    fail "security baseline failed: ${output:-validation error}"
+  fi
+}
+
 check_metrics_snapshot() {
   local active_port metrics_file output
   active_port="$(cat "$ROOT_DIR/.run/api-active-upstream" 2>/dev/null || echo 3002)"
@@ -88,28 +200,7 @@ check_metrics_snapshot() {
     fail "API metrics snapshot is missing: $metrics_file"
     return
   fi
-  if ! output="$(node - "$metrics_file" "$METRICS_MAX_AGE_SECONDS" "$API_RSS_MAX_MB" "$EVENT_LOOP_P99_MAX_MS" "$API_ENDPOINT_MIN_REQUESTS" "$API_ENDPOINT_5XX_MAX_PERCENT" "$API_ENDPOINT_P99_MAX_MS" <<'NODE'
-const fs = require('node:fs')
-const [file, maxAgeRaw, maxRssRaw, maxLoopRaw, minRequestsRaw, max5xxRaw, maxP99Raw] = process.argv.slice(2)
-const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'))
-const ageSeconds = (Date.now() - Date.parse(snapshot.generatedAt)) / 1000
-const rssMb = Number(snapshot.process?.rssBytes || 0) / 1024 / 1024
-const eventLoopP99 = Number(snapshot.process?.eventLoopDelayP99Ms || 0)
-const violations = []
-if (!Number.isFinite(ageSeconds) || ageSeconds < 0 || ageSeconds > Number(maxAgeRaw)) violations.push(`age=${ageSeconds.toFixed(1)}s`)
-if (!Number.isFinite(rssMb) || rssMb > Number(maxRssRaw)) violations.push(`rss=${rssMb.toFixed(1)}MiB`)
-if (!Number.isFinite(eventLoopP99) || eventLoopP99 > Number(maxLoopRaw)) violations.push(`eventLoopP99=${eventLoopP99.toFixed(3)}ms`)
-if (Number(snapshot.runtimeEvents?.droppedSeries || 0) > 0) violations.push(`droppedSeries=${snapshot.runtimeEvents.droppedSeries}`)
-for (const endpoint of snapshot.endpoints || []) {
-  if (Number(endpoint.count) < Number(minRequestsRaw)) continue
-  const rate5xx = Number(endpoint.status5xx || 0) * 100 / Number(endpoint.count)
-  if (rate5xx > Number(max5xxRaw)) violations.push(`${endpoint.endpoint}:5xx=${rate5xx.toFixed(1)}%`)
-  if (Number(endpoint.p99Ms || 0) > Number(maxP99Raw)) violations.push(`${endpoint.endpoint}:p99=${endpoint.p99Ms}ms`)
-}
-if (violations.length) throw new Error(violations.join(', '))
-console.log(`age=${ageSeconds.toFixed(1)}s rss=${rssMb.toFixed(1)}MiB eventLoopP99=${eventLoopP99.toFixed(3)}ms`)
-NODE
-  )"; then
+  if ! output="$(node "$ROOT_DIR/scripts/validate-runtime-snapshot.mjs" api "$metrics_file" 2>&1)"; then
     fail "API metrics snapshot failed: ${output:-validation error}"
   fi
 }
@@ -121,27 +212,7 @@ check_judge_metrics_snapshot() {
     fail "Judge metrics snapshot is missing: $metrics_file"
     return
   fi
-  if ! output="$(node - "$metrics_file" "$JUDGE_METRICS_MAX_AGE_SECONDS" "$JUDGE_RSS_MAX_MB" "$EVENT_LOOP_P99_MAX_MS" <<'NODE'
-const fs = require('node:fs')
-const [file, maxAgeRaw, maxRssRaw, maxLoopRaw] = process.argv.slice(2)
-const snapshot = JSON.parse(fs.readFileSync(file, 'utf8'))
-const ageSeconds = (Date.now() - Date.parse(snapshot.generatedAt)) / 1000
-const messageAge = snapshot.connection?.lastMessageAt
-  ? (Date.now() - Date.parse(snapshot.connection.lastMessageAt)) / 1000
-  : Number.POSITIVE_INFINITY
-const rssMb = Number(snapshot.process?.rssBytes || 0) / 1024 / 1024
-const eventLoopP99 = Number(snapshot.process?.eventLoopDelayP99Ms || 0)
-const violations = []
-if (!Number.isFinite(ageSeconds) || ageSeconds < 0 || ageSeconds > Number(maxAgeRaw)) violations.push(`age=${ageSeconds.toFixed(1)}s`)
-if (!snapshot.connection?.connected) violations.push('disconnected')
-if (!snapshot.connection?.authenticated) violations.push('unauthenticated')
-if (!Number.isFinite(messageAge) || messageAge > Number(maxAgeRaw)) violations.push(`lastMessageAge=${messageAge.toFixed(1)}s`)
-if (!Number.isFinite(rssMb) || rssMb > Number(maxRssRaw)) violations.push(`rss=${rssMb.toFixed(1)}MiB`)
-if (!Number.isFinite(eventLoopP99) || eventLoopP99 > Number(maxLoopRaw)) violations.push(`eventLoopP99=${eventLoopP99.toFixed(3)}ms`)
-if (violations.length) throw new Error(violations.join(', '))
-console.log(`age=${ageSeconds.toFixed(1)}s messageAge=${messageAge.toFixed(1)}s rss=${rssMb.toFixed(1)}MiB`)
-NODE
-  )"; then
+  if ! output="$(node "$ROOT_DIR/scripts/validate-runtime-snapshot.mjs" judge "$metrics_file" 2>&1)"; then
     fail "Judge metrics snapshot failed: ${output:-validation error}"
   fi
 }
@@ -153,14 +224,43 @@ fi
 check_http "API" "$API_URL" '"status":"ok"'
 check_http "go-judge" "$JUDGE_URL"
 
+if [ "$SYSTEMD_CHECK" = "1" ]; then
+  active_api_port="$(cat "$ROOT_DIR/.run/api-active-upstream" 2>/dev/null || true)"
+  check_unit oi-manager-web.service
+  check_unit oi-manager-api-router.service
+  check_unit oi-manager-worker.service
+  check_unit oi-manager-executor@1.service
+  check_unit oi-manager-judge.service
+  if [[ "$active_api_port" =~ ^330[23]$ ]]; then
+    check_unit "oi-manager-server@${active_api_port}.service"
+  else
+    fail "active API slot is invalid: ${active_api_port:-missing}"
+  fi
+  write_restart_state
+fi
+
 if ! docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
   fail "PostgreSQL is not ready in $DB_CONTAINER"
+fi
+
+if [ "$NETWORK_EXPOSURE_CHECK" = "1" ]; then
+  if ! network_output="$(node "$ROOT_DIR/scripts/audit-network-exposure.mjs" 2>&1)"; then
+    network_summary="$(tail -n 20 <<<"$network_output" | tr '\n' ' ' | cut -c1-1200)"
+    fail "Network exposure audit failed: $network_summary"
+  fi
 fi
 
 if [ "$JUDGE_PROJECTION_CHECK" = "1" ]; then
   if ! projection_output="$(cd "$ROOT_DIR" && pnpm --silent judge:projection:check 2>&1)"; then
     projection_summary="$(tail -n 20 <<<"$projection_output" | tr '\n' ' ' | cut -c1-1200)"
     fail "JudgeRun/Submission projection mismatch: $projection_summary"
+  fi
+fi
+
+if [ "$JUDGE_SLO_CHECK" = "1" ]; then
+  if ! slo_output="$(cd "$ROOT_DIR" && pnpm --silent judge:slo 2>&1)"; then
+    slo_summary="$(tail -n 30 <<<"$slo_output" | tr '\n' ' ' | cut -c1-1600)"
+    fail "Judge SLO violated: $slo_summary"
   fi
 fi
 
@@ -177,6 +277,14 @@ if [ "$OPERATIONAL_STATE_CHECK" = "1" ]; then
     operational_summary="$(tail -n 30 <<<"$operational_output" | tr '\n' ' ' | cut -c1-1600)"
     fail "Operational state degraded: $operational_summary"
   fi
+fi
+
+if [ "$RESTORE_VERIFY_CHECK" = "1" ]; then
+  check_restore_verification
+fi
+
+if [ "$SECURITY_BASELINE_CHECK" = "1" ]; then
+  check_security_baseline
 fi
 
 build_id_file="$ROOT_DIR/apps/web/.next-current/BUILD_ID"
@@ -202,7 +310,11 @@ else
 fi
 
 check_disk /
-if [ -d /data ]; then check_disk /data; fi
+check_inodes /
+if [ -d /data ]; then
+  check_disk /data
+  check_inodes /data
+fi
 
 mkdir -p "$(dirname "$STATE_FILE")"
 timestamp="$(date --iso-8601=seconds)"

@@ -33,6 +33,82 @@ printf 'http://127.0.0.1:%s/alert\n' "$port" > "$url_file"
 chmod 600 "$url_file"
 for _ in {1..20}; do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 0.1; done
 
+node - "$TEST_ROOT" <<'NODE'
+const fs = require('node:fs')
+const root = process.argv[2]
+const base = {
+  schemaVersion: 2,
+  generatedAt: new Date().toISOString(),
+  window: { startedAt: new Date(Date.now() - 60_000).toISOString(), durationSeconds: 60 },
+  process: { rssBytes: 64 * 1024 * 1024, eventLoopDelayP99Ms: 10 },
+}
+fs.writeFileSync(`${root}/api-healthy.json`, JSON.stringify({ ...base, endpoints: [], runtimeEvents: { series: [], droppedSeries: 0 } }))
+fs.writeFileSync(`${root}/api-unhealthy.json`, JSON.stringify({
+  ...base,
+  endpoints: [{ endpoint: 'GET:/api/test', count: 20, status5xx: 4, p99Ms: 7000 }],
+  runtimeEvents: { series: [{ kind: 'error', action: 'failure', count: 11 }, { kind: 'warn', action: 'client_telemetry', count: 21 }], droppedSeries: 0 },
+}))
+fs.writeFileSync(`${root}/judge-unhealthy.json`, JSON.stringify({
+  ...base,
+  judgeId: 'unknown',
+  connection: { connected: false, authenticated: false, lastMessageAt: null },
+  counters: { 'task.submission.infrastructure_retry': 6 },
+}))
+NODE
+node "$ROOT_DIR/scripts/validate-runtime-snapshot.mjs" api "$TEST_ROOT/api-healthy.json" >/dev/null
+if node "$ROOT_DIR/scripts/validate-runtime-snapshot.mjs" api "$TEST_ROOT/api-unhealthy.json" >/dev/null 2>&1; then
+  echo 'Unhealthy API snapshot passed validation' >&2
+  exit 1
+fi
+
+cat > "$TEST_ROOT/listeners-safe.txt" <<'EOF'
+LISTEN 0 511 127.0.0.1:5432 0.0.0.0:*
+LISTEN 0 511 0.0.0.0:80 0.0.0.0:*
+EOF
+cat > "$TEST_ROOT/listeners-unsafe.txt" <<'EOF'
+LISTEN 0 511 0.0.0.0:5432 0.0.0.0:*
+EOF
+NETWORK_AUDIT_INPUT_FILE="$TEST_ROOT/listeners-safe.txt" node "$ROOT_DIR/scripts/audit-network-exposure.mjs" >/dev/null
+if NETWORK_AUDIT_INPUT_FILE="$TEST_ROOT/listeners-unsafe.txt" node "$ROOT_DIR/scripts/audit-network-exposure.mjs" >/dev/null 2>&1; then
+  echo 'Public PostgreSQL listener passed the network exposure audit' >&2
+  exit 1
+fi
+if node "$ROOT_DIR/scripts/validate-runtime-snapshot.mjs" judge "$TEST_ROOT/judge-unhealthy.json" >/dev/null 2>&1; then
+  echo 'Unhealthy Judge snapshot passed validation' >&2
+  exit 1
+fi
+
+mkdir -p "$TEST_ROOT/empty-backups"
+if RESTORE_BACKUP_DIR="$TEST_ROOT/empty-backups" \
+  RESTORE_VERIFICATION_STATE_FILE="$TEST_ROOT/empty-backups/restore-verification.json" \
+  RESTORE_VERIFICATION_LOCK_FILE="$TEST_ROOT/empty-restore.lock" \
+  "$ROOT_DIR/scripts/verify-backup-restore.sh" >/dev/null 2>&1; then
+  echo 'Restore verification without a backup incorrectly succeeded' >&2
+  exit 1
+fi
+node - "$TEST_ROOT/empty-backups/restore-verification.json" <<'NODE'
+const fs = require('node:fs')
+const state = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+if (state.status !== 'failed' || state.verifiedAt !== null) throw new Error(`Unexpected failed restore state: ${JSON.stringify(state)}`)
+if ((fs.statSync(process.argv[2]).mode & 0o077) !== 0) throw new Error('Restore verification state is not private')
+NODE
+
+mkdir -p "$TEST_ROOT/fake-bin" "$TEST_ROOT/fake-home/.config/oi-manager"
+cron_capture="$TEST_ROOT/installed-crontab"
+cat > "$TEST_ROOT/fake-bin/crontab" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == '-l' ]]; then exit 0; fi
+cat > "$CRONTAB_CAPTURE"
+SH
+chmod 700 "$TEST_ROOT/fake-bin/crontab"
+monitor_env="$TEST_ROOT/fake-home/.config/oi-manager/operations.env"
+printf 'MONITOR_CLIENT_ERRORS_MAX=7\n' > "$monitor_env"
+chmod 600 "$monitor_env"
+CRONTAB_CAPTURE="$cron_capture" PATH="$TEST_ROOT/fake-bin:$PATH" HOME="$TEST_ROOT/fake-home" \
+  MONITOR_ENV_FILE="$monitor_env" MONITOR_LOG_FILE="$TEST_ROOT/monitor-cron.log" \
+  "$ROOT_DIR/scripts/install-monitor-cron.sh" >/dev/null
+grep -Fq "set -a; . '$monitor_env'; set +a;" "$cron_capture"
+
 MONITOR_STATUS=failed MONITOR_MESSAGE='fault injection' \
 MONITOR_ALERT_WEBHOOK_URL_FILE="$url_file" MONITOR_ALERT_ALLOW_HTTP=1 \
   "$ROOT_DIR/scripts/send-monitor-alert.sh"
@@ -51,6 +127,10 @@ NODE
 monitor_state="$TEST_ROOT/monitor.state"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_JUDGE_SLO_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_NETWORK_EXPOSURE_CHECK=0 \
+  MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND= \
   MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND=/usr/bin/false \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
@@ -69,6 +149,10 @@ chmod 700 "$incident_capture"
 incident_state="$TEST_ROOT/incident-monitor.state"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_JUDGE_SLO_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_NETWORK_EXPOSURE_CHECK=0 \
+  MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND="$incident_capture" MONITOR_STATE_FILE="$incident_state" \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
   echo 'Expected incident-capture monitor failure was reported as healthy' >&2
@@ -87,6 +171,10 @@ SH
 chmod 700 "$alert_command"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_JUDGE_SLO_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_NETWORK_EXPOSURE_CHECK=0 \
+  MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND= \
   MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND="$alert_command" \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
@@ -95,6 +183,10 @@ if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
 fi
 MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND="$alert_command" MONITOR_QUIET_SUCCESS=1 \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_JUDGE_SLO_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_NETWORK_EXPOSURE_CHECK=0 \
+  MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND= \
   "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null
 node - "$transition_capture" <<'NODE'
@@ -157,4 +249,4 @@ if find "$TEST_ROOT/failed-spool" -maxdepth 1 -type f -name '*.tar.gz.uploaded' 
   exit 1
 fi
 
-echo "Observability verification passed: alert transitions, incident capture, remote archive readback, and failure retention"
+echo "Observability verification passed: rolling snapshot alerts, service transitions, incident capture, remote archive readback, and failure retention"

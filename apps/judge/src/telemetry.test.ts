@@ -32,6 +32,8 @@ describe('Judge telemetry', () => {
 
     expect(telemetry.flush()).toBe(target)
     const snapshot = JSON.parse(fs.readFileSync(target, 'utf8'))
+    expect(snapshot.schemaVersion).toBe(2)
+    expect(snapshot.window.durationSeconds).toBeGreaterThanOrEqual(0)
     expect(snapshot.judgeId).toBe('judge-observability-test')
     expect(snapshot.connection).toMatchObject({ connected: true, authenticated: true })
     expect(snapshot.tasks.inFlight).toBe(0)

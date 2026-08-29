@@ -23,8 +23,11 @@ crontab -l
 tail -n 50 /data/backups/oi-manager/automatic/backup.log
 ```
 
-Default schedule is daily at 03:00. Override with `BACKUP_SCHEDULE`, `BACKUP_DIR` and
-`BACKUP_KEEP_DAYS` when provisioning. A zero-byte or unverified archive is never promoted to the final filename.
+Default schedule is daily at 03:00 with 14-day retention. A weekly Sunday 04:00 job restores the newest archive into
+an isolated temporary database and atomically writes mode-600 `restore-verification.json`; the service monitor rejects
+missing, failed or older-than-eight-day proof. Override with `BACKUP_SCHEDULE`, `BACKUP_VERIFY_SCHEDULE`, `BACKUP_DIR`
+and `BACKUP_KEEP_DAYS` when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
+zero-byte or unverified archive is never promoted to the final filename.
 `backup:verify` restores the newest archive into an exact `oi_manager_restore_audit_<pid>` temporary database,
 validates tables, migrations and users, then removes both the temporary database and copied container archive. It never
 restores over `oi_manager`.
@@ -56,8 +59,9 @@ the local monitor log. Do not mark external alerting complete until a real recip
 failure and its recovery. `pnpm monitor:verify` uses a loopback HTTP receiver solely to verify payload and retry
 contracts; it is not external-delivery evidence.
 
-The monitor also validates the active API metrics snapshot, Judge connection/authentication and metrics freshness,
-endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision projection consistency. On the first
+The monitor also validates rolling API/Judge metrics, browser/security/server error spikes, Judge infrastructure errors,
+every required systemd unit, restart deltas, loopback-only restricted ports, database connection/transaction/lock state,
+backup restore proof, endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision consistency. On the first
 transition into failure it captures a mode-600 incident evidence bundle before alert delivery. Thresholds and the
 capture command are configured in `deploy/observability/operations.env.example`; do not disable a check merely to
 silence an alert.
@@ -65,6 +69,8 @@ silence an alert.
 ```bash
 pnpm operations:snapshot
 pnpm operations:check
+pnpm network:audit
+pnpm backup:verify
 jq . .run/operational-state.json
 jq . ".run/metrics-$(cat .run/api-active-upstream).json"
 jq . .run/judge-metrics.json
@@ -74,6 +80,18 @@ pnpm incident:verify
 
 The complete signal, severity, retention, RTO/RPO and long-term security contract is documented in
 [`OBSERVABILITY_SECURITY_STRATEGY.md`](OBSERVABILITY_SECURITY_STRATEGY.md).
+
+The weekly security baseline records an independently hash-checked private report for runtime secret contracts,
+stored OJ credential decryption, network exposure, service limits, TLS tooling and production dependencies:
+
+```bash
+pnpm security:baseline
+pnpm security:baseline:install
+cat /data/backups/oi-manager/security-baseline/security-baseline.json
+```
+
+The monitor rejects a failed, missing, stale or hash-mismatched report. Detailed reports are mode 600 and retained for
+90 days; they contain audit output but never secret values.
 The optimized production preview has no HMR listener; development environments may explicitly set
 `MONITOR_HMR_URL=http://127.0.0.1:3001` when HMR is intentionally running. The current host has no SLS Logtail,
 CloudMonitor Agent or ECS RAM Role, so cloud contacts, thresholds and log delivery must be provisioned explicitly.

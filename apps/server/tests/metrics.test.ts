@@ -35,9 +35,11 @@ describe('runtime metrics snapshots', () => {
 
     expect(collector.flushSnapshot()).toBe(target)
     const snapshot = JSON.parse(fs.readFileSync(target, 'utf8'))
-    expect(snapshot.schemaVersion).toBe(1)
+    expect(snapshot.schemaVersion).toBe(2)
+    expect(snapshot.window.durationSeconds).toBeGreaterThanOrEqual(0)
     expect(snapshot.process.rssBytes).toBeGreaterThan(0)
     expect(snapshot.endpoints).toHaveLength(1)
+    expect(snapshot.externalCalls[0]).toMatchObject({ count: 1, successCount: 1, errorCount: 0 })
     expect(snapshot.endpoints[0]).toMatchObject({
       endpoint: 'GET:/api/problems/:id',
       count: 3,
@@ -52,5 +54,23 @@ describe('runtime metrics snapshots', () => {
       expect.objectContaining({ kind: 'security', action: 'permission_denied', count: 1 }),
     ]))
     expect(fs.statSync(target).mode & 0o077).toBe(0)
+
+    collector.logSummary()
+    collector.recordEndpoint('GET', '/api/problems/999', 7, true, 200)
+    collector.flushSnapshot()
+    const nextWindow = JSON.parse(fs.readFileSync(target, 'utf8'))
+    expect(nextWindow.endpoints).toEqual([
+      expect.objectContaining({ endpoint: 'GET:/api/problems/:id', count: 1, status5xx: 0 }),
+    ])
+    expect(nextWindow.runtimeEvents.series).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'permission_denied' }),
+    ]))
+
+    collector.reset()
+    for (let index = 0; index < 520; index += 1) {
+      collector.recordEndpoint('GET', `/scanner/path-${index}`, 1, false, 404)
+    }
+    expect(collector.getSnapshot().endpoints).toHaveLength(512)
+    expect(collector.getSnapshot().droppedEndpointSeries).toBe(8)
   })
 })

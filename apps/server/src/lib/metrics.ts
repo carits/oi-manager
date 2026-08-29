@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks'
 import logger from './logger'
-import { getRuntimeEventSummary } from './runtimeTelemetry'
+import { getRuntimeEventSummary, resetRuntimeTelemetry } from './runtimeTelemetry'
 
 interface EndpointMetric {
   count: number
@@ -60,12 +60,15 @@ interface EndpointSummary {
 interface ExternalCallSummary {
   name: string
   count: number
+  successCount: number
+  errorCount: number
   avgMs: number
   maxMs: number
   successRate: string
 }
 
 const MAX_LATENCIES = 100 // 用于计算百分位的样本数
+const MAX_ENDPOINT_SERIES = 512
 
 /**
  * 计算百分位数
@@ -97,8 +100,9 @@ function normalizePath(method: string, path: string): string {
 }
 
 export interface MetricsSnapshot {
-  schemaVersion: 1
+  schemaVersion: 2
   generatedAt: string
+  window: { startedAt: string; durationSeconds: number }
   instance: { pid: number; port: string; appEnv: string; nodeEnv: string }
   process: {
     uptimeSeconds: number
@@ -111,6 +115,7 @@ export interface MetricsSnapshot {
     eventLoopDelayP99Ms: number
   }
   endpoints: EndpointSummary[]
+  droppedEndpointSeries: number
   externalCalls: ExternalCallSummary[]
   caches: Array<{ name: string; hitCount: number; missCount: number; hitRate: string; size: number }>
   runtimeEvents: ReturnType<typeof getRuntimeEventSummary>
@@ -120,7 +125,8 @@ export class MetricsCollector {
   private endpoints = new Map<string, EndpointMetric>()
   private externalCalls = new Map<string, ExternalCallMetric>()
   private cacheMetrics = new Map<string, CacheMetric>()
-  private startTime = Date.now()
+  private droppedEndpointSeries = 0
+  private windowStartedAt = Date.now()
   private interval: NodeJS.Timeout | null = null
   private readonly eventLoopDelay: IntervalHistogram
 
@@ -134,7 +140,12 @@ export class MetricsCollector {
    */
   recordEndpoint(method: string, path: string, durationMs: number, success: boolean, statusCode = success ? 200 : 500): void {
     const endpoint = normalizePath(method, path)
-    const existing = this.endpoints.get(endpoint) || {
+    let existing = this.endpoints.get(endpoint)
+    if (!existing && this.endpoints.size >= MAX_ENDPOINT_SERIES) {
+      this.droppedEndpointSeries += 1
+      return
+    }
+    existing ||= {
       count: 0,
       successCount: 0,
       errorCount: 0,
@@ -239,6 +250,8 @@ export class MetricsCollector {
       .map(([endpoint, m]) => ({
         endpoint,
         count: m.count,
+        successCount: m.successCount,
+        errorCount: m.errorCount,
         avgMs: Math.round(m.totalMs / m.count),
         minMs: m.minMs === Infinity ? 0 : m.minMs,
         maxMs: m.maxMs,
@@ -264,6 +277,8 @@ export class MetricsCollector {
       .map(([name, m]) => ({
         name,
         count: m.count,
+        successCount: m.successCount,
+        errorCount: m.errorCount,
         avgMs: Math.round(m.totalMs / m.count),
         maxMs: m.maxMs,
         successRate: `${((m.successCount / m.count) * 100).toFixed(1)}%`
@@ -294,8 +309,12 @@ export class MetricsCollector {
       : 0
 
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: new Date().toISOString(),
+      window: {
+        startedAt: new Date(this.windowStartedAt).toISOString(),
+        durationSeconds: Math.max(0, Math.floor((Date.now() - this.windowStartedAt) / 1000)),
+      },
       instance: {
         pid: process.pid,
         port: process.env.PORT || '3002',
@@ -313,6 +332,7 @@ export class MetricsCollector {
         eventLoopDelayP99Ms: toMilliseconds(this.eventLoopDelay.percentile(99)),
       },
       endpoints: this.getEndpointSummary(),
+      droppedEndpointSeries: this.droppedEndpointSeries,
       externalCalls: this.getExternalCallSummary(),
       caches: this.getCacheSummary(),
       runtimeEvents: getRuntimeEventSummary(),
@@ -325,12 +345,12 @@ export class MetricsCollector {
     return path.join(root, '.run', `metrics-${process.env.PORT || '3002'}.json`)
   }
 
-  flushSnapshot(): string | null {
+  private writeSnapshot(snapshot: MetricsSnapshot): string | null {
     const target = this.snapshotPath()
     const temporary = `${target}.next.${process.pid}`
     try {
       fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.writeFileSync(temporary, `${JSON.stringify(this.getSnapshot(), null, 2)}\n`, { mode: 0o600 })
+      fs.writeFileSync(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o600 })
       fs.renameSync(temporary, target)
       return target
     } catch (error) {
@@ -343,32 +363,37 @@ export class MetricsCollector {
     }
   }
 
+  flushSnapshot(): string | null {
+    return this.writeSnapshot(this.getSnapshot())
+  }
+
   /**
    * 输出汇总日志
    */
   logSummary(): void {
-    const uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000)
-
-    const endpointSummary = this.getEndpointSummary()
-    const externalSummary = this.getExternalCallSummary()
-    const cacheSummary = this.getCacheSummary()
-    const snapshotPath = this.flushSnapshot()
+    const snapshot = this.getSnapshot()
+    const endpointSummary = snapshot.endpoints
+    const externalSummary = snapshot.externalCalls
+    const cacheSummary = snapshot.caches
+    const snapshotPath = this.writeSnapshot(snapshot)
 
     // 只输出有数据的指标
     const hasData = endpointSummary.length > 0 || externalSummary.length > 0 || cacheSummary.length > 0
+
+    this.resetWindow()
 
     if (hasData) {
       logger.info('metrics_summary', {
         action: 'metrics',
         metadata: {
-          uptimeSeconds,
+          window: snapshot.window,
           endpoints: endpointSummary.slice(0, 20), // 限制输出前 20 个高频端点
           externalCalls: externalSummary,
           caches: cacheSummary,
           totalEndpoints: endpointSummary.length,
           totalExternalCalls: externalSummary.length,
-          runtimeEvents: getRuntimeEventSummary(),
-          process: this.getSnapshot().process,
+          runtimeEvents: snapshot.runtimeEvents,
+          process: snapshot.process,
           snapshotPath,
         }
       })
@@ -400,10 +425,20 @@ export class MetricsCollector {
    * 清空指标（用于测试）
    */
   reset(): void {
+    this.resetWindow()
+  }
+
+  private resetWindow(): void {
     this.endpoints.clear()
+    this.droppedEndpointSeries = 0
     this.externalCalls.clear()
-    this.cacheMetrics.clear()
-    this.startTime = Date.now()
+    for (const metric of this.cacheMetrics.values()) {
+      metric.hitCount = 0
+      metric.missCount = 0
+    }
+    this.windowStartedAt = Date.now()
+    this.eventLoopDelay.reset()
+    resetRuntimeTelemetry()
   }
 }
 

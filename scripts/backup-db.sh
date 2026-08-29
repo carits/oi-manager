@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-/data/backups/oi-manager/automatic}"
 DB_NAME="${DB_NAME:-oi_manager}"
 DB_USER="${DB_USER:-oi}"
 CONTAINER="${DB_CONTAINER:-oi-postgres}"
-KEEP_DAYS="${BACKUP_KEEP_DAYS:-7}"
+KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 LOCK_FILE="${BACKUP_LOCK_FILE:-/tmp/oi-manager-db-backup.lock}"
 
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "[$(date --iso-8601=seconds)] another database backup is already running; skipped"
@@ -46,6 +48,7 @@ if [ ! -s "$temp_file" ]; then
 fi
 docker exec -i "$CONTAINER" pg_restore -l < "$temp_file" >/dev/null
 mv -- "$temp_file" "$backup_file"
+chmod 600 "$backup_file"
 trap - EXIT
 
 # Retention is intentionally limited to automatic backups in this exact directory.
