@@ -11,6 +11,12 @@ source_of_truth: Git history
 
 ## 2026-08-29
 
+### HTTPS 前置 CSRF 严格模式
+
+- 生产环境中，携带 Session Cookie 的写请求现在默认必须提供可信 `Origin`；缺失来源返回 `CSRF_ORIGIN_REQUIRED`，不再只依赖 SameSite Cookie。
+- 新增 `CSRF_REQUIRE_ORIGIN` 显式开关，当前 HTTP 部署继续使用兼容模式，生产模板和 TLS 手册固定为严格模式。
+- 运行时安全审计新增 Cookie/CSRF 联合配置、通配来源和 HTTPS 来源校验；Server 58 文件 513/513、生产构建、安全审计与文档门禁通过。
+
 ### 离站日志归档远端确认
 
 - 日志归档不再执行任意 shell 命令片段；上传和远端校验均要求配置为绝对路径可执行文件。

@@ -60,6 +60,7 @@ CSP_VERIFY_URL=https://oj.example.edu.cn/login pnpm csp:verify
 ```text
 APP_ENV=production
 COOKIE_SECURE=true
+CSRF_REQUIRE_ORIGIN=true
 CORS_ORIGINS=https://oj.example.edu.cn
 CSRF_TRUSTED_ORIGINS=https://oj.example.edu.cn
 FRONTEND_URL=https://oj.example.edu.cn

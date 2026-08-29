@@ -54,6 +54,9 @@ const secrets = {
 }
 const secretValues = [server.JWT_SECRET, server.JUDGE_TOKEN, server.ACCOUNT_ENCRYPT_KEY].filter(Boolean)
 const origins = (server.CORS_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean)
+const csrfOrigins = (server.CSRF_TRUSTED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean)
+const csrfRequiresOrigin = server.CSRF_REQUIRE_ORIGIN === 'true' ||
+  (!Object.hasOwn(server, 'CSRF_REQUIRE_ORIGIN') && server.APP_ENV === 'production')
 const violations = []
 const warnings = []
 
@@ -69,6 +72,16 @@ if (!serverFile.ownerIsCurrentUser || !judgeFile.ownerIsCurrentUser) violations.
 if (origins.some(origin => origin === '*' || origin.includes('*'))) violations.push('CORS_ORIGINS must not contain wildcards')
 if (origins.length === 0) warnings.push('CORS_ORIGINS is empty; cross-origin requests remain blocked')
 if (server.COOKIE_SECURE !== 'true') warnings.push('COOKIE_SECURE is not true; enable it together with HTTPS')
+if (!csrfRequiresOrigin) warnings.push('CSRF strict Origin requirement is not enabled; enable it together with HTTPS')
+if (server.COOKIE_SECURE === 'true' && !csrfRequiresOrigin) {
+  violations.push('COOKIE_SECURE=true requires strict CSRF Origin validation')
+}
+if (csrfOrigins.some(origin => origin === '*' || origin.includes('*'))) {
+  violations.push('CSRF_TRUSTED_ORIGINS must not contain wildcards')
+}
+if (server.COOKIE_SECURE === 'true' && csrfOrigins.some(origin => !origin.startsWith('https://'))) {
+  violations.push('Secure-cookie CSRF trusted origins must use HTTPS')
+}
 if (!serverFile.resolvedInsideRepository) warnings.push('Server env still resolves outside the current deployment repository')
 
 const report = {
@@ -78,6 +91,11 @@ const report = {
   judgeTokenMatchesServer: Boolean(judge.JUDGE_TOKEN) && judge.JUDGE_TOKEN === server.JUDGE_TOKEN,
   cors: { configuredOriginCount: origins.length, containsWildcard: origins.some(origin => origin.includes('*')) },
   cookieSecure: server.COOKIE_SECURE === 'true',
+  csrf: {
+    requireOrigin: csrfRequiresOrigin,
+    configuredOriginCount: csrfOrigins.length,
+    containsWildcard: csrfOrigins.some(origin => origin.includes('*')),
+  },
   violations,
   warnings,
 }

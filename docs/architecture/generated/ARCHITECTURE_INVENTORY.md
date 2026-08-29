@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 35 |
 | systemd units | 7 |
-| Referenced environment keys | 306 |
+| Referenced environment keys | 307 |
 
 ## HTTP adapter ownership
 
@@ -267,6 +267,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CORS_ORIGINS`
 - `CSP_MODE`
 - `CSP_VERIFY_URL`
+- `CSRF_REQUIRE_ORIGIN`
 - `CSRF_TRUSTED_ORIGINS`
 - `CURRENT`
 - `CURRENT_DIR`

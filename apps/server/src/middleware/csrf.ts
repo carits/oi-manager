@@ -37,6 +37,12 @@ function hasSessionCookie(req: Request): boolean {
   )
 }
 
+function requiresOriginForCookieRequest(): boolean {
+  if (process.env.CSRF_REQUIRE_ORIGIN === 'true') return true
+  if (process.env.CSRF_REQUIRE_ORIGIN === 'false') return false
+  return process.env.APP_ENV === 'production'
+}
+
 export function verifyCookieOrigin(req: Request, res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method) || !hasSessionCookie(req)) {
     next()
@@ -45,7 +51,17 @@ export function verifyCookieOrigin(req: Request, res: Response, next: NextFuncti
 
   const origin = req.headers.origin
   if (!origin) {
-    // Server-to-server and test clients commonly omit Origin. SameSite protects browser requests.
+    if (requiresOriginForCookieRequest()) {
+      res.status(403).json({
+        success: false,
+        code: 'CSRF_ORIGIN_REQUIRED',
+        message: '使用会话凭据的状态修改请求必须提供来源',
+      })
+      return
+    }
+
+    // Compatibility mode is retained only for the current HTTP deployment and
+    // explicit non-production clients. HTTPS production defaults to strict.
     next()
     return
   }

@@ -5,6 +5,8 @@ last_verified: 2026-08-29
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-29: HTTPS 切换前的 CSRF 契约完成收口：生产模式下带 Session Cookie 的非安全请求缺少 `Origin` 会默认返回 `403 CSRF_ORIGIN_REQUIRED`，显式兼容模式仅保留给当前 HTTP/非生产客户端；可信来源仍逐值匹配。安全审计会拒绝 `COOKIE_SECURE=true` 但未启用严格 Origin 校验、通配来源或 Secure Cookie 搭配 HTTP 来源。Server 58 文件 513/513、生产构建、安全审计和文档/架构门禁通过；当前 HTTP 环境继续保持兼容，待域名和证书到位后与 TLS 一起启用。
+
 - 2026-08-29: 离站日志归档改为双阶段确认：上传器与远端校验器都必须是绝对路径可执行文件，归档只有在独立远端读取校验大小和 SHA-256 成功后才创建 `.uploaded` 保留标记；校验失败时本地归档和校验和继续保留，不能进入自动清理。故障注入覆盖成功读回和校验失败无标记路径。生产仍缺真实异机/对象存储目标，因此外部验收保持未完成。
 
 - 2026-08-29: Judge 用户可见读取完成 Switch read：全局/活动/题目提交列表与详情、结果筛选、题目状态、个人概览、OI/ICPC 排名、平台/校园解题排名、管理统计和重测预览统一读取 CurrentJudgeRun，远程归档与无 Run 历史记录才回退兼容列。故意破坏 Submission 兼容字段的回归仍返回 Run 的 AC/100；Server 57 文件 509/509、Web 36/36、Judge 17/17、三端生产构建和文档/架构门禁通过。提交 `c554aa8` 已推送 `main` 并蓝绿提升至 API 3303；生产 2518/2518 投影对账零差异。

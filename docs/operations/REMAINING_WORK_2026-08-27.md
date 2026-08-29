@@ -75,6 +75,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] 不输出原文的安全审计已验证 JWT、Judge 和账号加密密钥均为 64 字符、互相独立、Judge Token 一致，两个环境文件及备份为 mode 600；两个 OJ 账号已事务重加密并完成二次解密。
 - [x] CORS 已固定为当前单一 HTTP 来源且无通配符；PostgreSQL、go-judge、Router 和蓝绿 API 均只监听回环地址。
 - [ ] Cookie Secure、CSRF 最终跨域复验和 CSP Report-Only/严格策略必须与 HTTPS/TLS 一起完成。
+- [x] 严格 CSRF Origin 模式、生产默认值、Cookie/CSRF 联合安全审计和缺失/可信/恶意来源回归已完成；当前 HTTP 环境保持显式兼容，最终启用仍由上一项随 TLS 验收。
 
 ### 3. 外部告警、日志与故障注入
 
