@@ -101,6 +101,20 @@ capture "$work_dir/security/runtime-limits.json" bash -lc "cd '$ROOT_DIR' && pnp
 find "$ROOT_DIR/.run" -maxdepth 1 -type f \( -name 'metrics-*.json' -o -name 'operational-state.json' \) \
   -exec cp -- {} "$work_dir/application/" \; 2>/dev/null || true
 
+active_api="$(cat "$ROOT_DIR/.run/api-active-upstream" 2>/dev/null || true)"
+if [[ "$active_api" =~ ^[0-9]+$ ]] && [ -s "$ROOT_DIR/.run/metrics-${active_api}.json" ]; then
+  cp -- "$ROOT_DIR/.run/metrics-${active_api}.json" "$work_dir/application/api-metrics.json"
+else
+  printf '{"status":"unavailable","reason":"active API metrics snapshot missing"}\n' \
+    > "$work_dir/application/api-metrics.json"
+fi
+if [ -s "$ROOT_DIR/.run/judge-metrics.json" ]; then
+  cp -- "$ROOT_DIR/.run/judge-metrics.json" "$work_dir/application/judge-metrics.json"
+else
+  printf '{"status":"unavailable","reason":"Judge metrics snapshot missing"}\n' \
+    > "$work_dir/application/judge-metrics.json"
+fi
+
 find /etc/systemd/system -maxdepth 1 -type f -name 'oi-manager-*.service' -print0 2>/dev/null \
   | sort -z | xargs -0 -r sha256sum > "$work_dir/configuration/systemd.sha256"
 find /etc/nginx/sites-enabled -maxdepth 1 -type f -print0 2>/dev/null \

@@ -23,6 +23,8 @@ for required in \
   ./application/readiness.json \
   ./application/projection.json \
   ./application/operational-state.json \
+  ./application/api-metrics.json \
+  ./application/judge-metrics.json \
   ./security/runtime-audit.json \
   ./services/oi-manager-judge.service.state; do
   grep -Fxq "$required" "$TEST_ROOT/list.txt"
