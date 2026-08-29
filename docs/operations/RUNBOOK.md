@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-27
+last_verified: 2026-08-29
 source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints
 
 ---
@@ -252,7 +252,7 @@ pstree -ap <PID>
 | 优化预览 | `tail -f /tmp/oi-web-preview.log` |
 | PostgreSQL | `docker logs -f oi-postgres` |
 | go-judge | `docker logs -f oi-judge` |
-| PM2 模板 | `pm2 logs` |
+| 生产 Web / Router / API / Scheduler / Executor / Judge | `journalctl -u 'oi-manager-*'` |
 
 日志可记录请求 ID、用户 ID、资源 ID 和 Judge ID，不应打印 Cookie、JWT、Judge
 Token、账号密码或完整源码。

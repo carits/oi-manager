@@ -27,6 +27,7 @@ source_of_truth: Git history
 - Capability 批次提交 `8776b5e` 已推送 `main`，preview 构建 `pLLd_bBuL87zHDakelxvi` 已提升到公网 `3000`。Web、Router、API 3303、Worker、Executor、Judge 与 health/readiness 均正常；Codex 内置浏览器确认登录页可访问且页面控制台无 warning/error。
 - 新增架构收口逐项完成审计，把原评审的产品边界、Judge 生命周期、状态机、Candidate、Strangler、BlobStore、Scheduler/Executor、SLO、API 契约和 capability UI 分别映射到当前实现与验证证据；外部生产 P0 和观察期事项继续保持未完成，不以本地模拟替代。
 - 重新检查 ECS 元数据和可用浏览器会话：实例/地域元数据正常，但 RAM Role 端点仍为 404；阿里云控制台在内置浏览器和 Edge 中都要求登录。已保留 Edge 登录页供所有者接管，未读取浏览器秘密或改动云端配置。
+- 删除失效的 PM2 `start:production` 和旧 ecosystem manifest，生产日志文档改为 journald；自动架构检查新增 PM2 生产入口防回退规则，使仓库可执行入口与 systemd + API Router 蓝绿拓扑保持一致。Server 57 文件 509/509、文档与架构门禁通过；该批不改变运行进程，无需重启服务。
 
 ## 2026-08-28
 

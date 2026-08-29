@@ -1,13 +1,15 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-28
+last_verified: 2026-08-29
 source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh
 ---
 
 # 部署与回滚
 
 当前线上使用 systemd 管理 Web、稳定 API Router、蓝绿 API、单例 Scheduler、可并行 Executor 和 Judge。PM2/Nix/开发 watch 进程不属于现行部署链。详细 unit 参数见 [SYSTEMD_DEPLOYMENT.md](SYSTEMD_DEPLOYMENT.md)。
+
+仓库不再提供旧 PM2 ecosystem manifest 或 `start:production` 入口；`architecture:check` 会拒绝重新引入 PM2 生产脚本或 manifest。生产安装、提升和回滚必须使用 `deploy/systemd` 与对应脚本。
 
 ## 服务拓扑
 

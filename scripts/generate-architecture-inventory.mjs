@@ -5,6 +5,27 @@ const root = path.resolve(import.meta.dirname, '..')
 const output = path.join(root, 'docs/architecture/generated/ARCHITECTURE_INVENTORY.md')
 const check = process.argv.includes('--check')
 
+function assertCurrentProductionTopology() {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  const legacyScripts = Object.entries(packageJson.scripts ?? {}).filter(([, command]) =>
+    /(?:^|\s)pm2(?:\s|$)|ecosystem\.config\.js/.test(String(command)),
+  )
+  const legacyManifest = path.join(root, 'ecosystem.config.js')
+
+  if (legacyScripts.length > 0 || fs.existsSync(legacyManifest)) {
+    const details = [
+      ...legacyScripts.map(([name]) => `package script ${name}`),
+      ...(fs.existsSync(legacyManifest) ? ['ecosystem.config.js'] : []),
+    ]
+    throw new Error(
+      `Obsolete PM2 production topology detected: ${details.join(', ')}. ` +
+        'Production is managed by deploy/systemd and the blue-green API router.',
+    )
+  }
+}
+
+assertCurrentProductionTopology()
+
 function walk(directory) {
   if (!fs.existsSync(directory)) return []
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
