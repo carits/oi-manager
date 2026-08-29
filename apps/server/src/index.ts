@@ -40,6 +40,7 @@ import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { metrics } from './lib/metrics'
+import { isInvalidJsonBodyError } from './lib/httpErrors'
 import path from 'path'
 import { requestLogger } from './middleware/requestLogger'
 import { globalLimiter } from './middleware/rateLimiter'
@@ -175,6 +176,15 @@ app.use((req, res) => {
 
 // 全局错误处理中间件
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (isInvalidJsonBodyError(err)) {
+    logger.warn('invalid_json_body', {
+      requestId: req.requestId,
+      action: 'request_rejected',
+      metadata: { path: req.path, method: req.method },
+    })
+    return res.status(400).json({ success: false, message: '请求 JSON 格式无效' })
+  }
+
   // 处理 Multer 上传错误
   if (err instanceof MulterError) {
     let message = '文件上传失败'

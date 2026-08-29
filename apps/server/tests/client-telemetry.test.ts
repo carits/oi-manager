@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import logger from '../src/lib/logger'
 import { recordClientError } from '../src/modules/telemetry/client-telemetry.service'
 import { telemetryRouter } from '../src/modules/telemetry/telemetry.routes'
+import { isInvalidJsonBodyError } from '../src/lib/httpErrors'
 
 describe('client telemetry', () => {
   beforeEach(() => vi.restoreAllMocks())
@@ -48,5 +49,15 @@ describe('client telemetry', () => {
     expect(payload.metadata.message).toBe('failed?token=[redacted]')
     expect(payload.metadata.route).toBe('/callback?code=[redacted]')
     expect(JSON.stringify(payload)).not.toContain('raw-secret-token')
+  })
+
+  it('classifies body-parser JSON syntax failures as client errors', () => {
+    const error = Object.assign(new SyntaxError('invalid json'), {
+      status: 400,
+      type: 'entity.parse.failed',
+      body: '{broken',
+    })
+    expect(isInvalidJsonBodyError(error)).toBe(true)
+    expect(isInvalidJsonBodyError(new SyntaxError('application bug'))).toBe(false)
   })
 })

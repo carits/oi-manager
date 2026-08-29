@@ -5,7 +5,7 @@ last_verified: 2026-08-29
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-29: 全链路可观测性与事故恢复基线完成：API 原子快照覆盖端点状态族/P95/P99、内存和事件循环，Judge 快照覆盖连接、认证、心跳、任务耗时和编译缓存，业务快照覆盖 JudgeRun/Attempt/Rejudge/Hack/Candidate/OJ Fetch 陈旧状态及 Revision 投影；浏览器 error/unhandled rejection/资源失败通过匿名限流端点按构建 ID 和脱敏指纹聚合。监控首次故障会在告警前自动生成 `0600` 事故证据包，包内/包外 SHA-256、敏感路径排除、远端日志独立读回及故障/恢复通知均有自动验证。Server 60 文件 517/517、Web 12 文件 45/45、Judge 7 文件 18/18、三端生产构建、UI/架构/文档门禁、依赖零已知漏洞及 security/operations/incident/monitor 验证通过。外部告警接收人、异机存储、域名/TLS、云监控和更高频数据库 RPO 仍明确依赖所有者资源，不伪造完成。
+- 2026-08-29: 全链路可观测性与事故恢复基线完成：API 原子快照覆盖端点状态族/P95/P99、内存和事件循环，Judge 快照覆盖连接、认证、心跳、任务耗时和编译缓存，业务快照覆盖 JudgeRun/Attempt/Rejudge/Hack/Candidate/OJ Fetch 陈旧状态及 Revision 投影；浏览器 error/unhandled rejection/资源失败通过匿名限流端点按构建 ID 和脱敏指纹聚合。监控首次故障会在告警前自动生成 `0600` 事故证据包，包内/包外 SHA-256、敏感路径排除、远端日志独立读回及故障/恢复通知均有自动验证；部署探针发现并修复畸形 JSON 被错误归为 500 的问题。Server 60 文件 518/518、Web 12 文件 45/45、Judge 7 文件 18/18、三端生产构建、UI/架构/文档门禁、依赖零已知漏洞及 security/operations/incident/monitor 验证通过。外部告警接收人、异机存储、域名/TLS、云监控和更高频数据库 RPO 仍明确依赖所有者资源，不伪造完成。
 
 - 2026-08-29: HTTPS 切换前的 CSRF 契约完成收口：生产模式下带 Session Cookie 的非安全请求缺少 `Origin` 会默认返回 `403 CSRF_ORIGIN_REQUIRED`，显式兼容模式仅保留给当前 HTTP/非生产客户端；可信来源仍逐值匹配。安全审计会拒绝 `COOKIE_SECURE=true` 但未启用严格 Origin 校验、通配来源或 Secure Cookie 搭配 HTTP 来源。Server 58 文件 513/513、生产构建、安全审计和文档/架构门禁通过；当前 HTTP 环境继续保持兼容，待域名和证书到位后与 TLS 一起启用。
 
