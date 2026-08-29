@@ -26,6 +26,7 @@ source_of_truth: Git history
 - 新增账号级 UI capability 矩阵，统一全局管理员工作区、个人/校园工作区、全量评测记录、组织管理和平台密钥入口判断；动态资源权限继续由后端响应决定。登录、身份选择、RoleLayout、Shell、工作区切换器和提交列表已迁移，UI 门禁拒绝重新拼接全局管理员复合角色判断。
 - Capability 批次提交 `8776b5e` 已推送 `main`，preview 构建 `pLLd_bBuL87zHDakelxvi` 已提升到公网 `3000`。Web、Router、API 3303、Worker、Executor、Judge 与 health/readiness 均正常；Codex 内置浏览器确认登录页可访问且页面控制台无 warning/error。
 - 新增架构收口逐项完成审计，把原评审的产品边界、Judge 生命周期、状态机、Candidate、Strangler、BlobStore、Scheduler/Executor、SLO、API 契约和 capability UI 分别映射到当前实现与验证证据；外部生产 P0 和观察期事项继续保持未完成，不以本地模拟替代。
+- 重新检查 ECS 元数据和可用浏览器会话：实例/地域元数据正常，但 RAM Role 端点仍为 404；阿里云控制台在内置浏览器和 Edge 中都要求登录。已保留 Edge 登录页供所有者接管，未读取浏览器秘密或改动云端配置。
 
 ## 2026-08-28
 

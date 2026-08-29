@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-28
+last_verified: 2026-08-29
 source_of_truth: production host read-only audit and Aliyun console login state
 ---
 
@@ -23,9 +23,15 @@ Known host-side evidence:
   collection configuration contains no process, HTTP, TCP or ping monitors.
 - The host has no cloud API credentials or RAM role that can query ActionTrail,
   ECS instance events, alarm contacts or security-group rules.
-- The controlled browser remains on the official Aliyun login page.
+- The ECS metadata endpoint was rechecked on 2026-08-29: instance and region
+  metadata resolve normally, while `ram/security-credentials/` still returns
+  `404`, confirming that no RAM role is attached.
+- The Codex in-app browser and the user's available Edge extension session both
+  redirect the Aliyun console to the official login page. The Edge login tab is
+  retained for owner handoff; no password, cookie or browser storage was read.
 
-Required next action: the owner signs in to the retained Aliyun console tab.
+Required next action: the owner signs in to the retained Aliyun console tab and
+then tells Codex that the session is ready.
 The read-only audit will then inspect the 2026-08-19 instance event timeline,
 ActionTrail, CloudMonitor contacts/thresholds/reboot notifications and the
 security group. No cloud setting will be changed without separate approval.
