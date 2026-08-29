@@ -5,7 +5,7 @@ last_verified: 2026-08-29
 source_of_truth: package.json, deploy/systemd/*.service, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-08-29: 全链路可观测性与事故恢复基线完成两轮反向审计：API/Judge 使用 5 分钟/1 分钟滚动快照，覆盖端点状态族/P95/P99、外部依赖、浏览器/安全/服务端错误、内存/事件循环、Judge 认证/心跳/基础设施错误；业务快照覆盖队列积压、陈旧任务、近期失败、数据库连接/长事务/锁等待和 Revision 投影。监控直接检查 Web/Router/API/Worker/Executor/Judge、重启增量、端口暴露、磁盘/inode、备份和每周真实隔离恢复证明；首次故障先生成含 API/Judge/业务/网络/恢复状态的 `0600` 事故包。每周安全基线另外验证存量密文解密、TLS 工具和生产依赖并保留 90 天私有哈希报告。部署探针同时修复畸形 JSON 被误记为 500。Server 60 文件 518/518、Web 12 文件 45/45、Judge 7 文件 18/18、三端生产构建、UI/架构/文档门禁、依赖零已知漏洞及 security/operations/incident/monitor 验证通过。外部告警接收人、异机存储、域名/TLS、云监控和 WAL/PITR 仍明确依赖所有者资源，不伪造完成。
+- 2026-08-29: 全链路可观测性与事故恢复基线完成两轮反向审计：API/Judge 使用 5 分钟/1 分钟滚动快照，覆盖端点状态族/P95/P99、外部依赖、浏览器/安全/服务端错误、内存/事件循环、Judge 认证/心跳/基础设施错误；业务快照覆盖队列积压、陈旧任务、近期失败、数据库连接/长事务/锁等待和 Revision 投影。监控直接检查 Web/Router/API/Worker/Executor/Judge、真实 `NODE_ENV=production`、重启增量、端口暴露、磁盘/inode、备份和每周真实隔离恢复证明；首次故障先生成含 API/Judge/业务/网络/恢复状态的 `0600` 事故包。每周安全基线另外验证存量密文解密、TLS 工具和生产依赖并保留 90 天私有哈希报告。部署探针同时修复畸形 JSON 被误记为 500。Server 60 文件 518/518、Web 12 文件 45/45、Judge 7 文件 18/18、三端生产构建、UI/架构/文档门禁、依赖零已知漏洞及 security/operations/incident/monitor 验证通过。当前 `APP_ENV=development` 仅保留 HTTP 兼容语义；外部告警接收人、异机存储、域名/TLS、云监控和 WAL/PITR 仍明确依赖所有者资源，不伪造完成。
 
 - 2026-08-29: HTTPS 切换前的 CSRF 契约完成收口：生产模式下带 Session Cookie 的非安全请求缺少 `Origin` 会默认返回 `403 CSRF_ORIGIN_REQUIRED`，显式兼容模式仅保留给当前 HTTP/非生产客户端；可信来源仍逐值匹配。安全审计会拒绝 `COOKIE_SECURE=true` 但未启用严格 Origin 校验、通配来源或 Secure Cookie 搭配 HTTP 来源。Server 58 文件 513/513、生产构建、安全审计和文档/架构门禁通过；当前 HTTP 环境继续保持兼容，待域名和证书到位后与 TLS 一起启用。
 

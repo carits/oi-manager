@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 36 |
 | systemd units | 7 |
-| Referenced environment keys | 373 |
+| Referenced environment keys | 375 |
 
 ## HTTP adapter ownership
 
@@ -418,6 +418,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MONITOR_PAYLOAD_MESSAGE`
 - `MONITOR_PAYLOAD_STATUS`
 - `MONITOR_QUIET_SUCCESS`
+- `MONITOR_REQUIRED_NODE_ENV`
 - `MONITOR_RESTART_STATE_FILE`
 - `MONITOR_RESTORE_VERIFY_CHECK`
 - `MONITOR_RESTORE_VERIFY_MAX_AGE_HOURS`
@@ -475,6 +476,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `REASON`
 - `REPORT_DIR`
 - `REQUESTS`
+- `REQUIRED_NODE_ENV`
 - `RESET`
 - `RESTART_STATE_FILE`
 - `RESTORE_ALLOW_ISOLATED`

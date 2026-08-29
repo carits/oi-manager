@@ -33,6 +33,7 @@ JUDGE_METRICS_MAX_AGE_SECONDS="${MONITOR_JUDGE_METRICS_MAX_AGE_SECONDS:-180}"
 JUDGE_RSS_MAX_MB="${MONITOR_JUDGE_RSS_MAX_MB:-2048}"
 OPERATIONAL_STATE_CHECK="${MONITOR_OPERATIONAL_STATE_CHECK:-1}"
 SYSTEMD_CHECK="${MONITOR_SYSTEMD_CHECK:-1}"
+REQUIRED_NODE_ENV="${MONITOR_REQUIRED_NODE_ENV:-production}"
 SERVICE_RESTART_MAX_DELTA="${MONITOR_SERVICE_RESTART_MAX_DELTA:-3}"
 RESTART_STATE_FILE="${MONITOR_RESTART_STATE_FILE:-$ROOT_DIR/.run/service-restarts.state}"
 RESTORE_VERIFY_CHECK="${MONITOR_RESTORE_VERIFY_CHECK:-1}"
@@ -115,7 +116,16 @@ check_unit() {
   if ! systemctl is-active --quiet "$unit"; then
     fail "systemd unit is not active: $unit"
   fi
-  local current previous delta
+  local current previous delta main_pid node_env
+  main_pid="$(systemctl show "$unit" --property=MainPID --value 2>/dev/null || echo 0)"
+  if [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] && [ -r "/proc/$main_pid/environ" ]; then
+    node_env="$(xargs -0 -n1 -a "/proc/$main_pid/environ" 2>/dev/null | awk -F= '$1 == "NODE_ENV" { print $2; exit }')"
+    if [ "$node_env" != "$REQUIRED_NODE_ENV" ]; then
+      fail "systemd unit NODE_ENV is ${node_env:-missing}, expected $REQUIRED_NODE_ENV: $unit"
+    fi
+  else
+    fail "systemd unit has no readable main process: $unit"
+  fi
   current="$(systemctl show "$unit" --property=NRestarts --value 2>/dev/null || echo 0)"
   [[ "$current" =~ ^[0-9]+$ ]] || current=0
   previous="$(awk -v unit="$unit" '$1 == unit { print $2 }' "$RESTART_STATE_FILE" 2>/dev/null || true)"

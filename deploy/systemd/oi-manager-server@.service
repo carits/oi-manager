@@ -13,7 +13,7 @@ User=ecs-user
 Group=ecs-user
 WorkingDirectory=/data/oi-manager-response-refactor/apps/server
 EnvironmentFile=/data/oi-manager-response-refactor/apps/server/.env
-Environment=NODE_ENV=development
+Environment=NODE_ENV=production
 Environment=APP_ENV=development
 Environment=HOME=/home/ecs-user
 Environment=PORT=%i

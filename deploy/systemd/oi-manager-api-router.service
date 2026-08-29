@@ -10,6 +10,7 @@ Type=simple
 User=ecs-user
 Group=ecs-user
 WorkingDirectory=/data/oi-manager-response-refactor
+Environment=NODE_ENV=production
 Environment=API_ROUTER_HOST=127.0.0.1
 Environment=API_ROUTER_PORT=3002
 Environment=API_ACTIVE_UPSTREAM_FILE=/data/oi-manager-response-refactor/.run/api-active-upstream

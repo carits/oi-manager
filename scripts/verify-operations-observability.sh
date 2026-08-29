@@ -40,6 +40,7 @@ const base = {
   schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   window: { startedAt: new Date(Date.now() - 60_000).toISOString(), durationSeconds: 60 },
+  instance: { nodeEnv: 'production' },
   process: { rssBytes: 64 * 1024 * 1024, eventLoopDelayP99Ms: 10 },
 }
 fs.writeFileSync(`${root}/api-healthy.json`, JSON.stringify({ ...base, endpoints: [], runtimeEvents: { series: [], droppedSeries: 0 } }))

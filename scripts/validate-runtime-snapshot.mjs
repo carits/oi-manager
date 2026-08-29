@@ -42,6 +42,11 @@ export function validateApiSnapshot(snapshot) {
   const maxClientErrors = threshold('MONITOR_CLIENT_ERRORS_MAX', 20)
   const externalMinCalls = threshold('MONITOR_EXTERNAL_MIN_CALLS', 5)
   const externalMaxErrorPercent = threshold('MONITOR_EXTERNAL_ERROR_MAX_PERCENT', 50)
+  const requiredNodeEnv = process.env.MONITOR_REQUIRED_NODE_ENV || 'production'
+
+  if (snapshot.instance?.nodeEnv !== requiredNodeEnv) {
+    common.violations.push(`nodeEnv=${snapshot.instance?.nodeEnv || 'missing'}`)
+  }
 
   if (Number(snapshot.runtimeEvents?.droppedSeries || 0) > 0) {
     common.violations.push(`droppedSeries=${snapshot.runtimeEvents.droppedSeries}`)
