@@ -20,6 +20,7 @@ source_of_truth: Git history
 - 新增私有 Wrong Behavior Corpus 的安全回填骨架、固定 80/20 Evaluation/Holdout 分层、Candidate Pool/Selector 预览与策略页面。当前行为聚类仍处于 bootstrap/观察能力：历史本地错误提交只生成不暴露源码的代表簇；非 Hack Candidate 在完整分级评测器上线前不会自动晋升。技术有效 Hack 可按自动策略与每题每小时 3 次上限晋升，既有活动固定 Revision 和历史成绩不变。
 - 题目页对所有可提交用户提供“贡献数据”；即使未启用 Hack，也可提交直接数据或 `oj.generator/v1` 的 C++17/Python3 Generator。Generator 使用 JSON stdin，并以相同 Seed 连续执行两次校验确定性；服务端限制每用户同时一个贡献任务、每题一个数据生成任务和单点 16 MiB。
 - 平台 AI 管理页增加 Candidate Credits、HOT 数据、全局 Blob/孤儿对象和用户消耗视图。生产扩展迁移 `20260830_bounded_candidate_pipeline` 与默认策略迁移 `20260830_candidate_selector_auto_default` 已在可恢复备份后应用。
+- Server 全量 529/529 与最终边界定向 10/10、Judge 20/20、Web 45/45、三端生产构建及 UI/API/架构/文档门禁通过。提交 `9c95028` 已推送并蓝绿提升到 API 3302；Judge 完成重连注册，前端 BUILD_ID `U5-dMerIgwkJMw9v0A8Xb` 已提升到公网 3000。
 
 ### GitHub 异机公网探针（等待 Actions 账单恢复）
 
