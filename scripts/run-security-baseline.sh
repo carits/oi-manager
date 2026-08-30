@@ -39,6 +39,7 @@ run_check runtime-security-contract pnpm --silent security:verify
 run_check secret-decryption pnpm --silent security:rotate:check
 run_check network-exposure pnpm --silent network:audit
 run_check runtime-limits pnpm --silent runtime:audit
+run_check operation-timers pnpm --silent operations:timers:verify
 run_check asset-backup-contract pnpm --silent backup:assets:test
 run_check tls-tooling pnpm --silent tls:verify
 run_check production-dependencies pnpm audit --prod --audit-level low

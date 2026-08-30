@@ -33,6 +33,8 @@ JUDGE_METRICS_MAX_AGE_SECONDS="${MONITOR_JUDGE_METRICS_MAX_AGE_SECONDS:-180}"
 JUDGE_RSS_MAX_MB="${MONITOR_JUDGE_RSS_MAX_MB:-2048}"
 OPERATIONAL_STATE_CHECK="${MONITOR_OPERATIONAL_STATE_CHECK:-1}"
 SYSTEMD_CHECK="${MONITOR_SYSTEMD_CHECK:-1}"
+SCHEDULER_CHECK="${MONITOR_SCHEDULER_CHECK:-auto}"
+REQUIRED_OPERATION_TIMERS="${MONITOR_REQUIRED_OPERATION_TIMERS:-oi-manager-monitor.timer oi-manager-backup-db.timer oi-manager-backup-assets.timer oi-manager-verify-db.timer oi-manager-verify-assets.timer oi-manager-security-baseline.timer}"
 REQUIRED_NODE_ENV="${MONITOR_REQUIRED_NODE_ENV:-production}"
 SERVICE_RESTART_MAX_DELTA="${MONITOR_SERVICE_RESTART_MAX_DELTA:-3}"
 RESTART_STATE_FILE="${MONITOR_RESTART_STATE_FILE:-$ROOT_DIR/.run/service-restarts.state}"
@@ -145,6 +147,26 @@ check_unit() {
     fi
   fi
   restart_state_lines+=("$unit $current")
+}
+
+check_operation_timer() {
+  local timer="$1"
+  local trigger result
+  if ! systemctl is-enabled --quiet "$timer"; then
+    fail "operation-timer-disabled:$timer" "operation timer is not enabled: $timer"
+  fi
+  if ! systemctl is-active --quiet "$timer"; then
+    fail "operation-timer-inactive:$timer" "operation timer is not active: $timer"
+  fi
+  trigger="$(systemctl show "$timer" --property=Triggers --value 2>/dev/null | awk '{ print $1 }')"
+  if [[ "$trigger" != oi-manager-operations@*.service ]]; then
+    fail "operation-timer-trigger:$timer" "operation timer has an unexpected trigger: $timer -> ${trigger:-missing}"
+    return
+  fi
+  result="$(systemctl show "$trigger" --property=Result --value 2>/dev/null || true)"
+  if [[ -n "$result" && "$result" != success ]]; then
+    fail "operation-task-result:$trigger" "operation task last result is $result: $trigger"
+  fi
 }
 
 write_restart_state() {
@@ -326,6 +348,19 @@ if [ "$SYSTEMD_CHECK" = "1" ]; then
     fail "active-api-slot-invalid" "active API slot is invalid: ${active_api_port:-missing}"
   fi
   write_restart_state
+fi
+
+scheduler_check_active=0
+case "$SCHEDULER_CHECK" in
+  1) scheduler_check_active=1 ;;
+  0) scheduler_check_active=0 ;;
+  auto)
+    if systemctl cat oi-manager-monitor.timer >/dev/null 2>&1; then scheduler_check_active=1; fi
+    ;;
+  *) fail "operation-scheduler-config" "MONITOR_SCHEDULER_CHECK must be 0, 1 or auto" ;;
+esac
+if [[ "$scheduler_check_active" == 1 ]]; then
+  for timer in $REQUIRED_OPERATION_TIMERS; do check_operation_timer "$timer"; done
 fi
 
 if ! docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then

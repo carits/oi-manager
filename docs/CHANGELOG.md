@@ -11,6 +11,14 @@ source_of_truth: Git history
 
 ## 2026-08-30
 
+### 持久化运维调度
+
+- 将五分钟服务监控、每日数据库/资产备份、每周数据库/资产恢复验证和安全基线从用户 Cron 迁移到六个 `Persistent=true` systemd timers；主机停机错过的日历任务会在恢复后补跑，最近执行结果、下次时间和日志统一由 systemd/journald 查询。
+- 新增受限的 `oi-manager-operations@.service` 与任务白名单分发器，固定以 `ecs-user`、`NoNewPrivileges`、资源上限和只读仓库运行，仅允许写 `.run` 与私有备份根。安装器先启动一次监控并确认成功，再移除重复 Cron，失败时保留旧调度作为回滚路径。
+- 生产监控新增 Timer 启用、活动状态、触发服务和最近结果检查；运行时审计与安全基线覆盖全部必需 Timer。故障注入验证缺失 Timer 会 fail closed，当前生产六个 Timer 均已启用且监控健康。
+- 运维任务仅 `Wants/After` Docker 而不 `Requires` Docker，确保 Docker 故障时监控本身仍能启动、取证和告警；事故与日志采集先使用 `ecs-user` 已有的 `adm/systemd-journal/docker` 权限直接读取，再在交互式回退场景尝试 sudo，与 `NoNewPrivileges` 沙箱兼容。
+- 生产以真实 systemd 沙箱逐项运行六类任务：监控、安全基线、31MiB 数据库备份、2920 文件资产快照、90 表数据库恢复和约 1.53GB 资产恢复全部 `Result=success`；Timer 随后自动触发的监控同样成功，不以手工脚本结果代替调度验收。
+
 ### 评测资产、数据生成与 DeepSeek Validator
 
 - 新增不可变 `ProblemJudgeProgram` / `ProblemJudgeProgramVersion`，统一管理 C++17 STD、Validator、OI Classifier 以及 C++17/Python3 Generator。源码上传和编辑共用沙箱编译检查，拒绝二进制、NUL、超限源码和跨题目版本引用；Hack 配置可引用程序版本并保留旧源码双读兼容。

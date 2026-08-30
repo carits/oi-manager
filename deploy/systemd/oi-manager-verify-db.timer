@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify OI Manager database restore every week
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+AccuracySec=2min
+RandomizedDelaySec=2min
+Persistent=true
+Unit=oi-manager-operations@verify-db.service
+
+[Install]
+WantedBy=timers.target

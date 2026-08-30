@@ -30,7 +30,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 run_privileged() {
-  if [[ "$(id -u)" == 0 ]]; then "$@"; else sudo -n "$@"; fi
+  if "$@"; then return 0; fi
+  [[ "$(id -u)" != 0 ]] || return 1
+  sudo -n "$@"
 }
 
 capture() {

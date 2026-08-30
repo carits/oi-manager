@@ -1,0 +1,13 @@
+[Unit]
+Description=Run OI Manager service monitor every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=15s
+Persistent=true
+Unit=oi-manager-operations@monitor.service
+
+[Install]
+WantedBy=timers.target

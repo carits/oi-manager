@@ -20,6 +20,8 @@
     "stop": "bash scripts/stop-dev.sh",
     "monitor": "bash scripts/monitor-services.sh",
     "monitor:install": "bash scripts/install-monitor-cron.sh",
+    "operations:timers:install": "sudo bash scripts/install-operation-timers.sh",
+    "operations:timers:verify": "bash scripts/verify-operation-timers.sh",
     "monitor:verify": "bash scripts/verify-operations-observability.sh",
     "logs:archive": "bash scripts/archive-operations-logs.sh",
     "logs:archive:install": "bash scripts/install-log-archive-cron.sh",

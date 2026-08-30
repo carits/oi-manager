@@ -1,9 +1,30 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-29
-source_of_truth: deploy/systemd/*.service and scripts/install-systemd-services.sh
+last_verified: 2026-08-30
+source_of_truth: deploy/systemd/*.service, deploy/systemd/*.timer, scripts/install-systemd-services.sh
 ---
+
+## Persistent operation timers
+
+Monitoring and backup schedules are installed with the application services and run through the allowlisted
+`oi-manager-operations@.service` template. Six timers are enabled in production: five-minute monitoring, daily
+database and asset backups, weekly database and asset restore verification, and the weekly security baseline.
+Every timer uses `Persistent=true`, so missed calendar work is resumed after a host outage. The task service runs as
+`ecs-user`, applies resource limits and `NoNewPrivileges`, mounts the repository read-only, and only permits writes to
+`.run` and `/data/backups/oi-manager`.
+
+```bash
+sudo pnpm operations:timers:install
+systemctl list-timers --all 'oi-manager-*.timer'
+systemctl show oi-manager-operations@monitor.service --property=Result,ExecMainStatus
+pnpm operations:timers:verify
+pnpm runtime:audit
+```
+
+The off-host log archive timer is installed but remains disabled until both a real upload command and an independent
+remote read-back verifier are configured. The installer runs the monitor successfully before removing the matching
+legacy Cron entries, so a failed migration retains the previous scheduler.
 
 # systemd 恢复部署
 

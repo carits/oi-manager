@@ -15,17 +15,17 @@ automatic `.dump` files in that exact directory; migration/pre-change backups el
 
 ```bash
 cd /data/oi-manager-response-refactor
-bash -n scripts/backup-db.sh scripts/backup-assets.sh scripts/verify-backup-restore.sh scripts/verify-assets-restore.sh scripts/install-backup-cron.sh
+bash -n scripts/backup-db.sh scripts/backup-assets.sh scripts/verify-backup-restore.sh scripts/verify-assets-restore.sh scripts/install-operation-timers.sh
 scripts/backup-db.sh
 pnpm backup:verify
 pnpm backup:assets
 pnpm backup:assets:verify
-scripts/install-backup-cron.sh
-crontab -l
+sudo pnpm operations:timers:install
+systemctl list-timers --all 'oi-manager-*.timer'
 tail -n 50 /data/backups/oi-manager/automatic/backup.log
 ```
 
-Default schedule is a database dump at 03:00 and an incremental attachment/testdata snapshot at 03:15, both with 14-day retention. Weekly Sunday 04:00/04:30 jobs restore the newest database and the complete asset snapshot into isolated temporary locations and atomically write mode-600 verification states; the service monitor rejects missing, failed or older-than-eight-day proof. Override the documented `BACKUP_*` and `ASSET_*` variables when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
+The production schedule is provided by persistent systemd timers: a database dump at 03:00 and an incremental attachment/testdata snapshot at 03:15, both with 14-day retention. Weekly Sunday 04:00/04:30 jobs restore the newest database and the complete asset snapshot into isolated temporary locations and atomically write mode-600 verification states; missed calendar runs are executed after the host returns. The service monitor rejects disabled/failed timers as well as missing, failed or stale proof. Override the documented `BACKUP_*` and `ASSET_*` variables in the mode-600 operations environment when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
 zero-byte or unverified archive is never promoted to the final filename.
 `backup:verify` restores the newest archive into an exact `oi_manager_restore_audit_<pid>` temporary database,
 validates the dump SHA-256 and creation-time counts for tables, migrations, users, problems, submissions, files and TestSet Revisions, then removes both the temporary database and copied container archive. Asset verification copies all files and checks every manifest SHA-256. Neither verifier
@@ -56,12 +56,12 @@ It exits non-zero on any failure and records state changes in `.run/service-moni
 
 ```bash
 pnpm monitor
-pnpm monitor:install
-crontab -l
-tail -n 50 /data/backups/oi-manager/monitor.log
+sudo pnpm operations:timers:install
+systemctl list-timers --all 'oi-manager-*.timer'
+journalctl -u oi-manager-operations@monitor.service -n 50 --no-pager
 ```
 
-The cron installer runs every five minutes and suppresses repeated healthy lines. It reads an optional mode-600
+The persistent monitor timer runs every five minutes and suppresses repeated healthy lines. Its sandbox reads an optional mode-600
 `$HOME/.config/oi-manager/operations.env` before invoking the monitor. Set `MONITOR_ALERT_COMMAND` to
 `/data/oi-manager-response-refactor/scripts/send-monitor-alert.sh` and store the HTTPS endpoint in a separate mode-600
 file referenced by `MONITOR_ALERT_WEBHOOK_URL_FILE`; the secret URL is read inside Node and is never placed in process
@@ -70,10 +70,11 @@ receives `MONITOR_STATUS` and `MONITOR_MESSAGE` and is invoked only when the sta
 changes. A failed delivery does not advance the state file, so the next monitor run retries both failure and recovery
 notifications.
 
-No external alert channel is configured on the current development server, so cron failures are currently retained in
-the local monitor log. Do not mark external alerting complete until a real recipient has confirmed both an injected
+No external alert channel is configured on the current server, so failures are currently retained in journald and incident evidence. Do not mark external alerting complete until a real recipient has confirmed both an injected
 failure and its recovery. `pnpm monitor:verify` uses a loopback HTTP receiver solely to verify payload and retry
 contracts; it is not external-delivery evidence.
+
+The legacy `install-*-cron.sh` commands remain only as a rollback path. Do not run Cron and the systemd timers together; `install-operation-timers.sh` removes only the known duplicate entries after a successful monitor execution.
 
 The monitor also validates rolling API/Judge metrics, browser/security/server error spikes, Judge infrastructure errors,
 every required systemd unit, restart deltas, loopback-only restricted ports, database connection/transaction/lock state,

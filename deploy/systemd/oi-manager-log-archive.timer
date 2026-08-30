@@ -1,0 +1,12 @@
+[Unit]
+Description=Archive OI Manager logs to the configured off-host target
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+AccuracySec=2min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=oi-manager-operations@logs-archive.service
+
+[Install]
+WantedBy=timers.target

@@ -33,7 +33,9 @@ cleanup() {
 trap cleanup EXIT
 
 run_privileged() {
-  if [[ "$(id -u)" == "0" ]]; then "$@"; else sudo -n "$@"; fi
+  if "$@"; then return 0; fi
+  [[ "$(id -u)" != "0" ]] || return 1
+  sudo -n "$@"
 }
 
 mkdir -p "$work_dir/journal" "$work_dir/docker" "$work_dir/nginx" "$work_dir/local"
@@ -45,6 +47,13 @@ units=(
   oi-manager-executor@1.service
   oi-manager-judge.service
   oi-manager-web.service
+  oi-manager-operations@monitor.service
+  oi-manager-operations@backup-db.service
+  oi-manager-operations@backup-assets.service
+  oi-manager-operations@verify-db.service
+  oi-manager-operations@verify-assets.service
+  oi-manager-operations@security-baseline.service
+  oi-manager-operations@logs-archive.service
 )
 for unit in "${units[@]}"; do
   run_privileged journalctl --no-pager --utc --since "$SINCE_HOURS hours ago" -u "$unit" \

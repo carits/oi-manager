@@ -77,6 +77,44 @@ for (const [unit, expected] of Object.entries(expectedUnits)) {
   }
 }
 
+const operationService = Object.fromEntries(command('systemctl', [
+  'show', 'oi-manager-operations@monitor.service',
+  '--property=MemoryMax,TasksMax,LimitNOFILE,TimeoutStartUSec,NoNewPrivileges,User,Group,Result,Requires,Wants',
+  '--no-pager',
+]).split('\n').filter(Boolean).map(line => line.split(/=(.*)/s).slice(0, 2)))
+assert(Number(operationService.MemoryMax) === 1536 * 1024 * 1024, 'operation tasks must have a 1536 MiB memory limit', failures)
+assert(operationService.TasksMax === '512', 'operation tasks must have TasksMax=512', failures)
+assert(operationService.LimitNOFILE === '65536', 'operation tasks must have LimitNOFILE=65536', failures)
+assert(systemdDurationToMicroseconds(operationService.TimeoutStartUSec) === 7_200_000_000, 'operation tasks must have a two-hour timeout', failures)
+assert(operationService.NoNewPrivileges === 'yes', 'operation tasks must enable NoNewPrivileges', failures)
+assert(operationService.User === 'ecs-user' && operationService.Group === 'ecs-user', 'operation tasks must run as ecs-user', failures)
+assert(operationService.Result === 'success', 'the latest monitor operation must have succeeded', failures)
+assert(!operationService.Requires?.split(/\s+/).includes('docker.service'), 'monitor operations must still run when Docker is down', failures)
+assert(operationService.Wants?.split(/\s+/).includes('docker.service'), 'operation tasks should order Docker startup without requiring it', failures)
+
+const expectedOperationTimers = {
+  'oi-manager-monitor.timer': 'oi-manager-operations@monitor.service',
+  'oi-manager-backup-db.timer': 'oi-manager-operations@backup-db.service',
+  'oi-manager-backup-assets.timer': 'oi-manager-operations@backup-assets.service',
+  'oi-manager-verify-db.timer': 'oi-manager-operations@verify-db.service',
+  'oi-manager-verify-assets.timer': 'oi-manager-operations@verify-assets.service',
+  'oi-manager-security-baseline.timer': 'oi-manager-operations@security-baseline.service',
+}
+const operationTimers = {}
+for (const [timer, trigger] of Object.entries(expectedOperationTimers)) {
+  const values = Object.fromEntries(command('systemctl', [
+    'show', timer,
+    '--property=ActiveState,UnitFileState,Persistent,Triggers,NextElapseUSecRealtime,NextElapseUSecMonotonic',
+    '--no-pager',
+  ]).split('\n').filter(Boolean).map(line => line.split(/=(.*)/s).slice(0, 2)))
+  operationTimers[timer] = values
+  assert(values.ActiveState === 'active', `${timer} must be active`, failures)
+  assert(values.UnitFileState === 'enabled', `${timer} must be enabled`, failures)
+  assert(values.Persistent === 'yes', `${timer} must be persistent`, failures)
+  assert(values.Triggers?.split(/\s+/).includes(trigger), `${timer} must trigger ${trigger}`, failures)
+  assert(Boolean(values.NextElapseUSecRealtime || values.NextElapseUSecMonotonic), `${timer} must have a next scheduled run`, failures)
+}
+
 console.log(JSON.stringify({
   ok: failures.length === 0,
   judge: {
@@ -97,6 +135,8 @@ console.log(JSON.stringify({
     restartPolicy: database.HostConfig?.RestartPolicy?.Name || null,
   },
   units,
+  operationService,
+  operationTimers,
   failures,
   warnings,
 }, null, 2))

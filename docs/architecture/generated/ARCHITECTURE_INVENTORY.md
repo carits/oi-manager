@@ -17,8 +17,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
 | Module route adapters | 39 |
-| systemd units | 7 |
-| Referenced environment keys | 423 |
+| systemd units | 8 |
+| Referenced environment keys | 436 |
 
 ## HTTP adapter ownership
 
@@ -198,6 +198,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `oi-manager-api-router.service`
 - `oi-manager-executor@.service`
 - `oi-manager-judge.service`
+- `oi-manager-operations@.service`
 - `oi-manager-server.service`
 - `oi-manager-server@.service`
 - `oi-manager-web.service`
@@ -345,6 +346,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `E2E_DATABASE_URL`
 - `EMAIL_TO`
 - `ENABLE_DEMO_SCENARIO_API`
+- `ENABLE_LOG_ARCHIVE`
 - `ENABLE_MAINTENANCE_API`
 - `ENV_FILE`
 - `EXECUTOR_INSTANCE`
@@ -471,11 +473,13 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MONITOR_PAYLOAD_STATUS`
 - `MONITOR_QUIET_SUCCESS`
 - `MONITOR_REQUIRED_NODE_ENV`
+- `MONITOR_REQUIRED_OPERATION_TIMERS`
 - `MONITOR_RESTART_STATE_FILE`
 - `MONITOR_RESTORE_VERIFY_CHECK`
 - `MONITOR_RESTORE_VERIFY_MAX_AGE_HOURS`
 - `MONITOR_RESTORE_VERIFY_STATE_FILE`
 - `MONITOR_SCHEDULE`
+- `MONITOR_SCHEDULER_CHECK`
 - `MONITOR_SECURITY_BASELINE_CHECK`
 - `MONITOR_SECURITY_BASELINE_DIR`
 - `MONITOR_SECURITY_BASELINE_MAX_AGE_HOURS`
@@ -501,6 +505,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OI_ORG`
 - `OI_SOURCE_ROOT`
 - `OPERATIONAL_STATE_CHECK`
+- `OPERATIONS_ENABLE_LOG_ARCHIVE_TIMER`
+- `OPERATIONS_ENV_FILE`
+- `OPERATIONS_REMOVE_CRON`
+- `OPERATIONS_SERVICE_GROUP`
+- `OPERATIONS_SERVICE_USER`
 - `OTHER_KEY`
 - `OUTPUT`
 - `PATH`
@@ -527,9 +536,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `RATE_LIMIT_MAX`
 - `READY_FILE`
 - `REASON`
+- `REMOVE_CRON`
 - `REPORT_DIR`
 - `REQUESTS`
 - `REQUIRED_NODE_ENV`
+- `REQUIRED_OPERATION_TIMERS`
 - `RESET`
 - `RESTART_STATE_FILE`
 - `RESTORE_ALLOW_ISOLATED`
@@ -561,6 +572,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SANDBOX_PORT`
 - `SANDBOX_STARTED`
 - `SCHEDULE`
+- `SCHEDULER_CHECK`
 - `SECURITY_BASELINE_CHECK`
 - `SECURITY_BASELINE_DIR`
 - `SECURITY_BASELINE_KEEP_DAYS`
@@ -571,7 +583,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SECURITY_BASELINE_STATE_FILE`
 - `SERVER_PID`
 - `SERVER_ROOT`
+- `SERVICE_GROUP`
 - `SERVICE_RESTART_MAX_DELTA`
+- `SERVICE_USER`
 - `SESSION_COOKIE_NAME`
 - `SINCE_HOURS`
 - `SITE`

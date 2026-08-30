@@ -1,0 +1,27 @@
+[Unit]
+Description=OI Manager operation task %i
+Documentation=file:///data/oi-manager-response-refactor/docs/operations/RUNBOOK.md
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=ecs-user
+Group=ecs-user
+WorkingDirectory=/data/oi-manager-response-refactor
+Environment=HOME=/home/ecs-user
+Environment=NODE_ENV=production
+EnvironmentFile=-/home/ecs-user/.config/oi-manager/operations.env
+ExecStart=/data/oi-manager-response-refactor/scripts/run-operation-task.sh %i
+UMask=0077
+TimeoutStartSec=2h
+MemoryMax=1536M
+TasksMax=512
+LimitNOFILE=65536
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadOnlyPaths=/data/oi-manager-response-refactor
+ReadWritePaths=/data/oi-manager-response-refactor/.run /data/backups/oi-manager

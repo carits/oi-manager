@@ -1,0 +1,12 @@
+[Unit]
+Description=Run OI Manager security baseline every week
+
+[Timer]
+OnCalendar=Mon *-*-* 05:00:00
+AccuracySec=2min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=oi-manager-operations@security-baseline.service
+
+[Install]
+WantedBy=timers.target

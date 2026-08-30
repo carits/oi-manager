@@ -154,6 +154,18 @@ if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
 fi
 [[ ! -e "$monitor_state" ]]
 
+scheduler_state="$TEST_ROOT/scheduler-monitor.state"
+if MONITOR_SCHEDULER_CHECK=1 MONITOR_REQUIRED_OPERATION_TIMERS='missing-operation.timer' \
+  MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_JUDGE_SLO_CHECK=0 MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_ASSET_BACKUP_CHECK=0 MONITOR_NETWORK_EXPOSURE_CHECK=0 MONITOR_SECURITY_BASELINE_CHECK=0 \
+  MONITOR_INCIDENT_CAPTURE_COMMAND= MONITOR_STATE_FILE="$scheduler_state" \
+  "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
+  echo 'Missing operation timer was reported as healthy' >&2
+  exit 1
+fi
+grep -Fq 'operation-timer-disabled:missing-operation.timer' "$scheduler_state"
+
 incident_capture="$TEST_ROOT/capture-incident.sh"
 incident_result="$TEST_ROOT/incident-reason.txt"
 cat > "$incident_capture" <<SH

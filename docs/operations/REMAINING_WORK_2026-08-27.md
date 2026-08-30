@@ -83,6 +83,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] API/Judge 指标已改为 5 分钟/1 分钟滚动窗口，并纳入浏览器/安全/服务端错误、Judge 基础设施重试、所有 systemd 单元、重启增量、数据库连接/长事务/锁等待、端口暴露、inode 和新鲜队列阈值；合成故障会被 fail-closed 检出。
 - [x] 每日备份默认保留 14 天且目录/文件权限收紧为 `0700/0600`；每周真实恢复到隔离临时库并生成受监控的恢复证明，失败状态不会被旧成功掩盖。
 - [x] 测试数据和上传资产纳入 14 天增量快照；快照逐文件验签并绑定数据库 dump，每周完整恢复到隔离目录。数据库 dump 自带创建时业务计数清单，恢复结果必须逐项精确匹配。
+- [x] 五分钟监控、每日数据库/资产备份、每周恢复验证和安全基线已迁移为 `Persistent=true` systemd timers；任务白名单、资源/写路径限制、最近结果、Timer 活性和缺失 Timer 故障注入均已验证，重复用户 Cron 已安全移除。
 - [x] 每周长期安全基线已覆盖运行时 Secret/CSRF 契约、存量 OJ 密文解密、网络暴露、systemd/Docker 限制、TLS 工具和生产依赖；报告、逐项日志、哈希与健康状态以私有文件保存 90 天并由 5 分钟监控校验。
 - [x] 首次故障状态转换会在告警前自动生成事故证据包；包内/包外 SHA-256、权限、必需诊断和敏感路径排除均有故障注入验证。SEV、阈值、保留期、RTO/RPO 和周/月/季度安全周期统一记录在 `OBSERVABILITY_SECURITY_STRATEGY.md`。
 - [ ] 接通 `MONITOR_ALERT_COMMAND` 的真实外部通知，并验证故障与恢复消息。

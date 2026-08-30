@@ -50,6 +50,7 @@ fi
 systemctl disable --now oi-manager-server.service 2>/dev/null || true
 systemctl restart oi-manager-judge.service
 systemctl restart oi-manager-web.service
+bash "$ROOT_DIR/scripts/install-operation-timers.sh"
 
 echo "Installed OI Manager systemd services; active API slot: ${ACTIVE}."
 systemctl --no-pager --full status oi-manager-api-router.service "oi-manager-server@${ACTIVE}.service" oi-manager-worker.service oi-manager-executor@1.service oi-manager-judge.service oi-manager-web.service
