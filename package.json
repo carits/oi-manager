@@ -23,6 +23,7 @@
     "operations:timers:install": "sudo bash scripts/install-operation-timers.sh",
     "operations:timers:verify": "bash scripts/verify-operation-timers.sh",
     "monitor:verify": "bash scripts/verify-operations-observability.sh",
+    "monitor:external:verify": "bash scripts/verify-external-uptime-workflow.sh",
     "logs:archive": "bash scripts/archive-operations-logs.sh",
     "logs:archive:install": "bash scripts/install-log-archive-cron.sh",
     "backup:verify": "bash scripts/verify-backup-restore.sh",

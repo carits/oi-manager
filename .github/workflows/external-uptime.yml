@@ -1,0 +1,97 @@
+name: External uptime monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: external-uptime-monitor
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe public OI Manager endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Probe health and login endpoints
+        id: probe
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          failures=()
+
+          probe() {
+            local label="$1"
+            local url="$2"
+            local marker="$3"
+            local body code
+            body="$(mktemp)"
+            code=000
+            if ! code="$(curl --silent --show-error --location --retry 2 --retry-delay 2 \
+              --retry-connrefused --connect-timeout 8 --max-time 15 \
+              --user-agent 'oi-manager-external-monitor/1.0' \
+              --output "$body" --write-out '%{http_code}' "$url")"; then
+              failures+=("$label: request failed")
+            elif [[ "$code" != 200 ]]; then
+              failures+=("$label: HTTP $code")
+            elif ! grep -Fq "$marker" "$body"; then
+              failures+=("$label: expected response marker missing")
+            fi
+            rm -f -- "$body"
+          }
+
+          probe 'stable API through Nginx' 'http://47.99.222.76/api/health' '"status":"ok"'
+          probe 'public Web login through Nginx' 'http://47.99.222.76/login' '登录'
+          probe 'documented preview login' 'http://47.99.222.76:3000/login' '登录'
+
+          if (( ${#failures[@]} > 0 )); then
+            printf '%s\n' "${failures[@]}" | tee /tmp/oi-manager-uptime-failures.txt
+            exit 1
+          fi
+          printf 'All public probes are healthy at %s\n' "$(date -u --iso-8601=seconds)"
+
+      - name: Record incident or recovery
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+          INCIDENT_TITLE: '[monitor] OI Manager public endpoint unavailable'
+        run: |
+          set -Eeuo pipefail
+          issue_number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json number,title | jq -r --arg title "$INCIDENT_TITLE" \
+            '.[] | select(.title == $title) | .number' | head -n 1)"
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          timestamp="$(date -u --iso-8601=seconds)"
+
+          if [[ "$PROBE_OUTCOME" == failure ]]; then
+            if [[ -z "$issue_number" ]]; then
+              body_file="$(mktemp)"
+              {
+                printf 'The external GitHub runner could not validate one or more public endpoints.\n\n'
+                printf '**Detected:** `%s`\n\n' "$timestamp"
+                printf '**Workflow:** %s\n\n' "$run_url"
+                printf '```text\n'
+                cat /tmp/oi-manager-uptime-failures.txt 2>/dev/null || printf 'Probe failed without a detail file.\n'
+                printf '```\n'
+              } > "$body_file"
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$INCIDENT_TITLE" --body-file "$body_file"
+              rm -f -- "$body_file"
+            fi
+          elif [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" \
+              --body "Recovered at \`$timestamp\`. External probes are healthy again. Workflow: $run_url"
+            gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY" --reason completed
+          fi
+
+      - name: Preserve failed workflow status
+        if: steps.probe.outcome == 'failure'
+        run: exit 1
