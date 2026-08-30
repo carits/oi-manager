@@ -60,6 +60,15 @@ providing another external runner) is therefore an additional required input;
 afterward the workflow must be enabled and its healthy plus failure/recovery
 Issue paths executed for real.
 
+The account currently has one public repository, `carits/codeforces_codes`, and
+the authenticated operator has admin access with Actions enabled. It is not an
+appropriate monitoring destination without owner approval because adding OJ
+operations workflows would mix unrelated responsibilities. The recommended
+alternative is a dedicated public repository such as `carits/oi-manager-monitor`.
+Required owner decision: repair private-repository Billing, explicitly authorize
+reuse of `codeforces_codes`, or authorize creation of the dedicated public
+monitoring repository. No cross-repository write has been performed.
+
 ## Off-host log retention
 
 Local collection, manifests, SHA-256 checks, spool retention, trusted upload
