@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-29
+last_verified: 2026-08-30
 source_of_truth: production host read-only audit and Aliyun console login state
 ---
 
@@ -23,7 +23,7 @@ Known host-side evidence:
   collection configuration contains no process, HTTP, TCP or ping monitors.
 - The host has no cloud API credentials or RAM role that can query ActionTrail,
   ECS instance events, alarm contacts or security-group rules.
-- The ECS metadata endpoint was rechecked on 2026-08-29: instance and region
+- The ECS metadata endpoint was rechecked on 2026-08-30: instance and region
   metadata resolve normally, while `ram/security-credentials/` still returns
   `404`, confirming that no RAM role is attached.
 - The Codex in-app browser and the user's available Edge extension session both
@@ -41,6 +41,10 @@ security group. No cloud setting will be changed without separate approval.
 The repository alert adapter, retry behavior and failed/recovered loopback
 contract are verified. Production has no real Webhook/SMTP recipient configured,
 so delivery to a person or external incident system is not proven.
+The 2026-08-30 host audit confirms that `MONITOR_ALERT_COMMAND` and
+`MONITOR_ALERT_WEBHOOK_URL_FILE` are both absent. The persistent systemd monitor
+timer is active and healthy, but an on-host timer cannot prove external delivery
+or detect a complete host outage by itself.
 
 Required input: one real alert destination, preferably an HTTPS Webhook URL
 stored in a mode-600 file, plus permission to send one synthetic failure and
@@ -55,6 +59,10 @@ Shell command fragments are rejected, and retention markers are created only
 after both absolute executables succeed. The production host has no SLS/file-store
 configuration, no object-storage credentials and no second-host target. Local
 spool is not off-host disaster recovery.
+The off-host archive systemd timer is installed but intentionally disabled;
+`LOG_ARCHIVE_COMMAND` and `LOG_ARCHIVE_VERIFY_COMMAND` remain absent. It must not
+be enabled until both a real uploader and an independent remote read-back
+verifier have been installed and tested.
 
 Required input: either an OSS/S3-compatible bucket and scoped credentials, or
 an SSH destination and host key. The owner must also choose the retention
