@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 39 |
 | systemd units | 7 |
-| Referenced environment keys | 384 |
+| Referenced environment keys | 423 |
 
 ## HTTP adapter ownership
 
@@ -232,6 +232,30 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `APPLY`
 - `APP_ENV`
 - `ARCHIVE_SCHEDULE`
+- `ASSET_BACKUP_CHECK`
+- `ASSET_BACKUP_DIR`
+- `ASSET_BACKUP_KEEP_DAYS`
+- `ASSET_BACKUP_LOCK_FILE`
+- `ASSET_BACKUP_LOG_FILE`
+- `ASSET_BACKUP_MAX_AGE_HOURS`
+- `ASSET_BACKUP_SCHEDULE`
+- `ASSET_DB_BACKUP_DIR`
+- `ASSET_DISABLE_LINK_DEST`
+- `ASSET_LOG_FILE`
+- `ASSET_RESTORE_ALLOW_ISOLATED`
+- `ASSET_RESTORE_AUDIT_DIR`
+- `ASSET_RESTORE_LOCK_FILE`
+- `ASSET_RESTORE_MAX_AGE_HOURS`
+- `ASSET_RESTORE_SERVER_ROOT`
+- `ASSET_RESTORE_SKIP_SERVICE_CONTROL`
+- `ASSET_RESTORE_STATE_FILE`
+- `ASSET_RESTORE_TESTDATA_DIR`
+- `ASSET_RESTORE_TRACE`
+- `ASSET_RESTORE_UPLOADS_DIR`
+- `ASSET_TESTDATA_DIR`
+- `ASSET_UPLOADS_DIR`
+- `ASSET_VERIFY_LOG_FILE`
+- `ASSET_VERIFY_SCHEDULE`
 - `AUDIT_DIR`
 - `BACKEND_URL`
 - `BACKGROUND_WORKER_LOCK_NAME`
@@ -279,6 +303,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CLIENT_TELEMETRY_RATE_LIMIT_MAX`
 - `CONCURRENCY`
 - `CONFIRM_DATABASE`
+- `CONFIRM_ROOT`
 - `CONTAINER`
 - `CONTAINER_LABEL`
 - `CONTAINER_NAME`
@@ -294,6 +319,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `DATABASE_URL`
 - `DATA_GENERATION_LEASE_MS`
 - `DATA_GENERATION_MAX_CASES`
+- `DB_BACKUP_DIR`
 - `DB_CONTAINER`
 - `DB_CONTROL_PORT`
 - `DB_NAME`
@@ -313,6 +339,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `DEMO_TEACHER_USERNAME`
 - `DEMO_V2_STUDENT_USERNAME`
 - `DEV_LOG_FILE`
+- `DISABLE_LINK_DEST`
 - `DISK_MAX_PERCENT`
 - `DOMAIN`
 - `E2E_DATABASE_URL`
@@ -322,6 +349,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ENV_FILE`
 - `EXECUTOR_INSTANCE`
 - `EXPECTED_BUILD_ID`
+- `EXPECTED_DATABASE_SHA256`
 - `EXPECTED_SHA256`
 - `FAILED_DIR`
 - `FAULT_PROXY_PORT`
@@ -342,6 +370,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `HOST_LABEL`
 - `INCIDENT_CAPTURE_COMMAND`
 - `INCIDENT_EVIDENCE_DIR`
+- `INCIDENT_EVIDENCE_KEEP_DAYS`
 - `INCIDENT_EVIDENCE_LOCK_FILE`
 - `INCIDENT_REASON`
 - `INCIDENT_SINCE_HOURS`
@@ -406,6 +435,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MONITOR_API_ENDPOINT_P99_MAX_MS`
 - `MONITOR_API_RSS_MAX_MB`
 - `MONITOR_API_URL`
+- `MONITOR_ASSET_BACKUP_CHECK`
+- `MONITOR_ASSET_BACKUP_DIR`
+- `MONITOR_ASSET_BACKUP_MAX_AGE_HOURS`
+- `MONITOR_ASSET_RESTORE_MAX_AGE_HOURS`
+- `MONITOR_ASSET_RESTORE_STATE_FILE`
 - `MONITOR_BACKUP_DIR`
 - `MONITOR_BACKUP_MAX_AGE_HOURS`
 - `MONITOR_DB_CONTAINER`
@@ -536,6 +570,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SECURITY_BASELINE_SCHEDULE`
 - `SECURITY_BASELINE_STATE_FILE`
 - `SERVER_PID`
+- `SERVER_ROOT`
 - `SERVICE_RESTART_MAX_DELTA`
 - `SESSION_COOKIE_NAME`
 - `SINCE_HOURS`
@@ -543,6 +578,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SKIP_JUDGE_RECOVERY`
 - `SKIP_MIGRATE`
 - `SKIP_SERVICE_CONTROL`
+- `SNAPSHOT`
+- `SNAPSHOT_DIR`
+- `SNAPSHOT_ROOT`
 - `SOURCE_FILE`
 - `SPOOL_DIR`
 - `SSH_HARDENING_LOGIN_USER`
@@ -577,6 +615,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TRANSLATION_ENABLE_CACHE`
 - `TRASH_RETENTION_DAYS`
 - `UNIT_DIR`
+- `UPLOADS_DIR`
 - `UPLOAD_COMMAND`
 - `USE_SYSTEMD`
 - `VERIFY_COMMAND`

@@ -94,6 +94,20 @@ if (state.status !== 'failed' || state.verifiedAt !== null) throw new Error(`Une
 if ((fs.statSync(process.argv[2]).mode & 0o077) !== 0) throw new Error('Restore verification state is not private')
 NODE
 
+mkdir -p "$TEST_ROOT/tampered-backups"
+printf 'not-a-real-dump\n' > "$TEST_ROOT/tampered-backups/oi_manager_20260829_000000.dump"
+cat > "$TEST_ROOT/tampered-backups/oi_manager_20260829_000000.dump.manifest.json" <<'JSON'
+{"schemaVersion":1,"backupName":"oi_manager_20260829_000000.dump","backupSha256":"0000000000000000000000000000000000000000000000000000000000000000","backupSize":16,"counts":{"tables":1,"migrations":1,"users":1,"problems":1,"submissions":1,"files":1,"testSetRevisions":1}}
+JSON
+if RESTORE_BACKUP_DIR="$TEST_ROOT/tampered-backups" \
+  RESTORE_VERIFICATION_STATE_FILE="$TEST_ROOT/tampered-backups/restore-verification.json" \
+  RESTORE_VERIFICATION_LOCK_FILE="$TEST_ROOT/tampered-restore.lock" \
+  "$ROOT_DIR/scripts/verify-backup-restore.sh" >/dev/null 2>&1; then
+  echo 'Tampered database backup incorrectly passed manifest validation' >&2
+  exit 1
+fi
+grep -Fq '"status": "failed"' "$TEST_ROOT/tampered-backups/restore-verification.json"
+
 mkdir -p "$TEST_ROOT/fake-bin" "$TEST_ROOT/fake-home/.config/oi-manager"
 cron_capture="$TEST_ROOT/installed-crontab"
 cat > "$TEST_ROOT/fake-bin/crontab" <<'SH'
@@ -129,7 +143,7 @@ monitor_state="$TEST_ROOT/monitor.state"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
   MONITOR_JUDGE_SLO_CHECK=0 \
-  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 MONITOR_ASSET_BACKUP_CHECK=0 \
   MONITOR_NETWORK_EXPOSURE_CHECK=0 \
   MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND= \
@@ -151,7 +165,7 @@ incident_state="$TEST_ROOT/incident-monitor.state"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
   MONITOR_JUDGE_SLO_CHECK=0 \
-  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 MONITOR_ASSET_BACKUP_CHECK=0 \
   MONITOR_NETWORK_EXPOSURE_CHECK=0 \
   MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND="$incident_capture" MONITOR_STATE_FILE="$incident_state" \
@@ -173,7 +187,7 @@ chmod 700 "$alert_command"
 if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
   MONITOR_JUDGE_SLO_CHECK=0 \
-  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 MONITOR_ASSET_BACKUP_CHECK=0 \
   MONITOR_NETWORK_EXPOSURE_CHECK=0 \
   MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND= \
@@ -182,10 +196,24 @@ if MONITOR_API_URL='http://127.0.0.1:1/unavailable' \
   echo 'Expected monitor failure was reported as healthy' >&2
   exit 1
 fi
+# The detail text changed, but the failing check identity did not. This must
+# not emit another incident transition or duplicate alert.
+if MONITOR_API_URL='http://127.0.0.1:2/still-unavailable' \
+  MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
+  MONITOR_JUDGE_SLO_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 MONITOR_ASSET_BACKUP_CHECK=0 \
+  MONITOR_NETWORK_EXPOSURE_CHECK=0 \
+  MONITOR_SECURITY_BASELINE_CHECK=0 \
+  MONITOR_INCIDENT_CAPTURE_COMMAND= \
+  MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND="$alert_command" \
+  "$ROOT_DIR/scripts/monitor-services.sh" >/dev/null 2>&1; then
+  echo 'Expected repeated monitor failure was reported as healthy' >&2
+  exit 1
+fi
 MONITOR_STATE_FILE="$monitor_state" MONITOR_ALERT_COMMAND="$alert_command" MONITOR_QUIET_SUCCESS=1 \
   MONITOR_METRICS_CHECK=0 MONITOR_JUDGE_METRICS_CHECK=0 MONITOR_OPERATIONAL_STATE_CHECK=0 \
   MONITOR_JUDGE_SLO_CHECK=0 \
-  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 \
+  MONITOR_SYSTEMD_CHECK=0 MONITOR_RESTORE_VERIFY_CHECK=0 MONITOR_ASSET_BACKUP_CHECK=0 \
   MONITOR_NETWORK_EXPOSURE_CHECK=0 \
   MONITOR_SECURITY_BASELINE_CHECK=0 \
   MONITOR_INCIDENT_CAPTURE_COMMAND= \

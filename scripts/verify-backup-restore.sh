@@ -17,28 +17,39 @@ flock -n 9 || { echo 'Another restore verification is already running; skipped';
 backup_name=""
 backup_sha256=""
 backup_size=0
+manifest_sha256=""
 table_count=0
 migration_count=0
 user_count=0
+problem_count=0
+submission_count=0
+file_count=0
+revision_count=0
 
 write_state() {
   local status="$1"
-  node - "$STATE_FILE" "$status" "$backup_name" "$backup_sha256" "$backup_size" "$table_count" "$migration_count" "$user_count" <<'NODE'
+  node - "$STATE_FILE" "$status" "$backup_name" "$backup_sha256" "$backup_size" "$manifest_sha256" \
+    "$table_count" "$migration_count" "$user_count" "$problem_count" "$submission_count" "$file_count" "$revision_count" <<'NODE'
 const fs = require('node:fs')
 const path = require('node:path')
-const [file, status, backupName, backupSha256, backupSize, tables, migrations, users] = process.argv.slice(2)
+const [file, status, backupName, backupSha256, backupSize, manifestSha256, tables, migrations, users, problems, submissions, files, revisions] = process.argv.slice(2)
 const now = new Date().toISOString()
 const payload = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status,
   checkedAt: now,
   verifiedAt: status === 'healthy' ? now : null,
   backupName: backupName || null,
   backupSha256: backupSha256 || null,
   backupSize: Number(backupSize || 0),
+  manifestSha256: manifestSha256 || null,
   tables: Number(tables || 0),
   migrations: Number(migrations || 0),
   users: Number(users || 0),
+  problems: Number(problems || 0),
+  submissions: Number(submissions || 0),
+  files: Number(files || 0),
+  testSetRevisions: Number(revisions || 0),
 }
 fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
 const temporary = `${file}.next.${process.pid}`
@@ -59,6 +70,36 @@ fi
 backup_name="$(basename "$BACKUP_FILE")"
 backup_sha256="$(sha256sum "$BACKUP_FILE" | cut -d' ' -f1)"
 backup_size="$(stat -c '%s' "$BACKUP_FILE")"
+manifest_file="${BACKUP_FILE}.manifest.json"
+if [ ! -s "$manifest_file" ]; then
+  write_state failed
+  echo "Backup manifest is missing: $manifest_file" >&2
+  exit 1
+fi
+manifest_sha256="$(sha256sum "$manifest_file" | cut -d' ' -f1)"
+if ! IFS=$'\t' read -r expected_sha expected_size expected_tables expected_migrations expected_users \
+  expected_problems expected_submissions expected_files expected_revisions < <(node - "$manifest_file" "$backup_name" <<'NODE'
+const fs = require('node:fs')
+const [file, expectedName] = process.argv.slice(2)
+const value = JSON.parse(fs.readFileSync(file, 'utf8'))
+if (value.schemaVersion !== 1 || value.backupName !== expectedName) throw new Error('Backup manifest identity mismatch')
+const counts = value.counts || {}
+const fields = [value.backupSha256, value.backupSize, counts.tables, counts.migrations, counts.users, counts.problems, counts.submissions, counts.files, counts.testSetRevisions]
+if (!/^[a-f0-9]{64}$/.test(String(fields[0])) || fields.slice(1).some(item => !Number.isInteger(Number(item)) || Number(item) < 0)) {
+  throw new Error('Backup manifest contains invalid values')
+}
+process.stdout.write(`${fields.join('\t')}\n`)
+NODE
+); then
+  write_state failed
+  echo 'Backup manifest could not be parsed.' >&2
+  exit 1
+fi
+if [ "$backup_sha256" != "$expected_sha" ] || [ "$backup_size" != "$expected_size" ]; then
+  write_state failed
+  echo 'Backup bytes do not match their creation manifest.' >&2
+  exit 1
+fi
 
 restore_db="oi_manager_restore_audit_${$}"
 if ! [[ "$restore_db" =~ ^oi_manager_restore_audit_[0-9]+$ ]]; then
@@ -98,11 +139,22 @@ migration_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_d
   'SELECT count(*) FROM public._prisma_migrations')"
 user_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
   'SELECT count(*) FROM public."User"')"
+problem_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
+  'SELECT count(*) FROM public."Problem"')"
+submission_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
+  'SELECT count(*) FROM public."Submission"')"
+file_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
+  'SELECT count(*) FROM public."File"')"
+revision_count="$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$restore_db" -tAc \
+  'SELECT count(*) FROM public."ProblemTestSetRevision"')"
 
-if [ "$table_count" -le 0 ] || [ "$migration_count" -le 0 ]; then
-  echo "Restored database failed structural validation." >&2
+actual_counts="$table_count $migration_count $user_count $problem_count $submission_count $file_count $revision_count"
+expected_counts="$expected_tables $expected_migrations $expected_users $expected_problems $expected_submissions $expected_files $expected_revisions"
+if [ "$table_count" -le 0 ] || [ "$migration_count" -le 0 ] || [ "$actual_counts" != "$expected_counts" ]; then
+  echo "Restored database failed manifest validation: expected=[$expected_counts] actual=[$actual_counts]" >&2
   exit 1
 fi
 
-printf 'backup=%s temporary_database=%s tables=%s migrations=%s users=%s\n' \
-  "$BACKUP_FILE" "$restore_db" "$table_count" "$migration_count" "$user_count"
+printf 'backup=%s temporary_database=%s tables=%s migrations=%s users=%s problems=%s submissions=%s files=%s revisions=%s\n' \
+  "$BACKUP_FILE" "$restore_db" "$table_count" "$migration_count" "$user_count" "$problem_count" \
+  "$submission_count" "$file_count" "$revision_count"

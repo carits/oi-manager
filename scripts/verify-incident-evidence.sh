@@ -4,12 +4,18 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "$TEST_ROOT"' EXIT INT TERM
+mkdir -p "$TEST_ROOT/spool"
+touch "$TEST_ROOT/spool/incident-20200101T000000Z-old.tar.gz" "$TEST_ROOT/spool/incident-20200101T000000Z-old.tar.gz.sha256"
+touch -d '100 days ago' "$TEST_ROOT/spool/incident-20200101T000000Z-old.tar.gz" "$TEST_ROOT/spool/incident-20200101T000000Z-old.tar.gz.sha256"
 
 INCIDENT_EVIDENCE_DIR="$TEST_ROOT/spool" \
 INCIDENT_EVIDENCE_LOCK_FILE="$TEST_ROOT/incident.lock" \
 INCIDENT_SINCE_HOURS=1 \
 INCIDENT_REASON='verification capture' \
   "$ROOT_DIR/scripts/capture-incident-evidence.sh"
+
+[[ ! -e "$TEST_ROOT/spool/incident-20200101T000000Z-old.tar.gz" ]]
+[[ ! -e "$TEST_ROOT/spool/incident-20200101T000000Z-old.tar.gz.sha256" ]]
 
 archive="$(find "$TEST_ROOT/spool" -maxdepth 1 -type f -name 'incident-*.tar.gz' -print -quit)"
 [[ -n "$archive" && -s "$archive" ]]
@@ -26,6 +32,8 @@ for required in \
   ./application/api-metrics.json \
   ./application/judge-metrics.json \
   ./backups/restore-verification.json \
+  ./backups/asset-inventory.txt \
+  ./backups/asset-restore-verification.json \
   ./security/runtime-audit.json \
   ./security/network-exposure.json \
   ./security/security-baseline.json \

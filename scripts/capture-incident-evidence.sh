@@ -7,8 +7,10 @@ SPOOL_DIR="${INCIDENT_EVIDENCE_DIR:-/data/backups/oi-manager/incidents}"
 SINCE_HOURS="${INCIDENT_SINCE_HOURS:-6}"
 REASON="${INCIDENT_REASON:-manual_capture}"
 LOCK_FILE="${INCIDENT_EVIDENCE_LOCK_FILE:-/tmp/oi-manager-incident-evidence.lock}"
+KEEP_DAYS="${INCIDENT_EVIDENCE_KEEP_DAYS:-90}"
 
 [[ "$SINCE_HOURS" =~ ^[1-9][0-9]*$ ]] || { echo 'INCIDENT_SINCE_HOURS must be positive' >&2; exit 2; }
+[[ "$KEEP_DAYS" =~ ^[0-9]+$ ]] || { echo 'INCIDENT_EVIDENCE_KEEP_DAYS must be non-negative' >&2; exit 2; }
 mkdir -p "$SPOOL_DIR"
 chmod 700 "$SPOOL_DIR"
 exec 9>"$LOCK_FILE"
@@ -124,11 +126,19 @@ find /etc/nginx/sites-enabled -maxdepth 1 -type f -print0 2>/dev/null \
   | sort -z | xargs -0 -r sha256sum > "$work_dir/configuration/nginx-sites.sha256"
 find /data/backups/oi-manager/automatic -maxdepth 1 -type f -name 'oi_manager_*.dump' \
   -printf '%T@ %s %f\n' 2>/dev/null | sort -nr | head -n 20 > "$work_dir/backups/inventory.txt"
+find /data/backups/oi-manager/assets/snapshots -mindepth 1 -maxdepth 1 -type d -name 'snapshot-*' \
+  -printf '%T@ %f\n' 2>/dev/null | sort -nr | head -n 20 > "$work_dir/backups/asset-inventory.txt"
 if [ -s /data/backups/oi-manager/automatic/restore-verification.json ]; then
   cp -- /data/backups/oi-manager/automatic/restore-verification.json "$work_dir/backups/restore-verification.json"
 else
   printf '{"status":"unavailable","reason":"restore verification state missing"}\n' \
     > "$work_dir/backups/restore-verification.json"
+fi
+if [ -s /data/backups/oi-manager/assets/asset-restore-verification.json ]; then
+  cp -- /data/backups/oi-manager/assets/asset-restore-verification.json "$work_dir/backups/asset-restore-verification.json"
+else
+  printf '{"status":"unavailable","reason":"asset restore verification state missing"}\n' \
+    > "$work_dir/backups/asset-restore-verification.json"
 fi
 if [ -s /data/backups/oi-manager/security-baseline/security-baseline.json ]; then
   cp -- /data/backups/oi-manager/security-baseline/security-baseline.json "$work_dir/security/security-baseline.json"
@@ -144,5 +154,8 @@ mv -- "$archive_tmp" "$archive"
 chmod 600 "$archive"
 sha256sum "$archive" > "$archive.sha256"
 chmod 600 "$archive.sha256"
+
+find "$SPOOL_DIR" -maxdepth 1 -type f -name 'incident-20??????T??????Z-*.tar.gz' -mtime "+$KEEP_DAYS" -delete
+find "$SPOOL_DIR" -maxdepth 1 -type f -name 'incident-20??????T??????Z-*.tar.gz.sha256' -mtime "+$KEEP_DAYS" -delete
 
 echo "Incident evidence captured: $archive"

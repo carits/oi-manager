@@ -20,9 +20,17 @@ fi
 timestamp="$(date +%Y%m%d_%H%M%S)"
 backup_file="$BACKUP_DIR/${DB_NAME}_${timestamp}.dump"
 temp_file="${backup_file}.tmp.$$"
+manifest_file="${backup_file}.manifest.json"
+manifest_temp="${manifest_file}.tmp.$$"
+audit_db="oi_manager_backup_audit_${$}"
+[[ "$audit_db" =~ ^oi_manager_backup_audit_[0-9]+$ ]] || { echo 'Unsafe backup audit database name' >&2; exit 2; }
 
 cleanup() {
   rm -f -- "$temp_file"
+  rm -f -- "$manifest_temp"
+  if [ -n "${audit_db:-}" ]; then
+    docker exec "$CONTAINER" dropdb -U "$DB_USER" --if-exists "$audit_db" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -47,12 +55,57 @@ if [ ! -s "$temp_file" ]; then
   exit 1
 fi
 docker exec -i "$CONTAINER" pg_restore -l < "$temp_file" >/dev/null
+backup_sha256="$(sha256sum "$temp_file" | cut -d' ' -f1)"
+backup_size="$(stat -c '%s' "$temp_file")"
+
+query_count() {
+  docker exec "$CONTAINER" psql -U "$DB_USER" -d "$audit_db" -tAc "$1" | tr -d '[:space:]'
+}
+
+docker exec "$CONTAINER" createdb -U "$DB_USER" "$audit_db"
+docker exec -i "$CONTAINER" pg_restore -U "$DB_USER" -d "$audit_db" --no-owner --no-privileges < "$temp_file"
+
+table_count="$(query_count "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")"
+migration_count="$(query_count 'SELECT count(*) FROM public._prisma_migrations')"
+user_count="$(query_count 'SELECT count(*) FROM public."User"')"
+problem_count="$(query_count 'SELECT count(*) FROM public."Problem"')"
+submission_count="$(query_count 'SELECT count(*) FROM public."Submission"')"
+file_count="$(query_count 'SELECT count(*) FROM public."File"')"
+revision_count="$(query_count 'SELECT count(*) FROM public."ProblemTestSetRevision"')"
+docker exec "$CONTAINER" dropdb -U "$DB_USER" "$audit_db"
+audit_db=""
+
+node - "$manifest_temp" "$(basename "$backup_file")" "$backup_sha256" "$backup_size" \
+  "$table_count" "$migration_count" "$user_count" "$problem_count" "$submission_count" "$file_count" "$revision_count" <<'NODE'
+const fs = require('node:fs')
+const [file, backupName, backupSha256, backupSize, tables, migrations, users, problems, submissions, files, revisions] = process.argv.slice(2)
+const payload = {
+  schemaVersion: 1,
+  createdAt: new Date().toISOString(),
+  backupName,
+  backupSha256,
+  backupSize: Number(backupSize),
+  counts: {
+    tables: Number(tables),
+    migrations: Number(migrations),
+    users: Number(users),
+    problems: Number(problems),
+    submissions: Number(submissions),
+    files: Number(files),
+    testSetRevisions: Number(revisions),
+  },
+}
+fs.writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
+NODE
+
 mv -- "$temp_file" "$backup_file"
-chmod 600 "$backup_file"
+mv -- "$manifest_temp" "$manifest_file"
+chmod 600 "$backup_file" "$manifest_file"
 trap - EXIT
 
 # Retention is intentionally limited to automatic backups in this exact directory.
 find "$BACKUP_DIR" -maxdepth 1 -type f -name "${DB_NAME}_*.dump" -mtime "+$KEEP_DAYS" -delete
+find "$BACKUP_DIR" -maxdepth 1 -type f -name "${DB_NAME}_*.dump.manifest.json" -mtime "+$KEEP_DAYS" -delete
 
 size="$(du -h "$backup_file" | cut -f1)"
-echo "[$(date --iso-8601=seconds)] backup verified: $backup_file ($size)"
+echo "[$(date --iso-8601=seconds)] backup verified: $backup_file ($size, sha256=$backup_sha256, manifest=$(basename "$manifest_file"))"

@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-29
+last_verified: 2026-08-30
 source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints
 
 ---
@@ -15,22 +15,38 @@ automatic `.dump` files in that exact directory; migration/pre-change backups el
 
 ```bash
 cd /data/oi-manager-response-refactor
-bash -n scripts/backup-db.sh scripts/install-backup-cron.sh
+bash -n scripts/backup-db.sh scripts/backup-assets.sh scripts/verify-backup-restore.sh scripts/verify-assets-restore.sh scripts/install-backup-cron.sh
 scripts/backup-db.sh
 pnpm backup:verify
+pnpm backup:assets
+pnpm backup:assets:verify
 scripts/install-backup-cron.sh
 crontab -l
 tail -n 50 /data/backups/oi-manager/automatic/backup.log
 ```
 
-Default schedule is daily at 03:00 with 14-day retention. A weekly Sunday 04:00 job restores the newest archive into
-an isolated temporary database and atomically writes mode-600 `restore-verification.json`; the service monitor rejects
-missing, failed or older-than-eight-day proof. Override with `BACKUP_SCHEDULE`, `BACKUP_VERIFY_SCHEDULE`, `BACKUP_DIR`
-and `BACKUP_KEEP_DAYS` when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
+Default schedule is a database dump at 03:00 and an incremental attachment/testdata snapshot at 03:15, both with 14-day retention. Weekly Sunday 04:00/04:30 jobs restore the newest database and the complete asset snapshot into isolated temporary locations and atomically write mode-600 verification states; the service monitor rejects missing, failed or older-than-eight-day proof. Override the documented `BACKUP_*` and `ASSET_*` variables when provisioning. Backup directories are mode 700 and dumps/logs/state are mode 600. A
 zero-byte or unverified archive is never promoted to the final filename.
 `backup:verify` restores the newest archive into an exact `oi_manager_restore_audit_<pid>` temporary database,
-validates tables, migrations and users, then removes both the temporary database and copied container archive. It never
+validates the dump SHA-256 and creation-time counts for tables, migrations, users, problems, submissions, files and TestSet Revisions, then removes both the temporary database and copied container archive. Asset verification copies all files and checks every manifest SHA-256. Neither verifier
 restores over `oi_manager`.
+
+For an actual disaster restore, select a database dump and an asset snapshot whose `metadata.json.databaseBackupSha256`
+matches that dump. Restore the database using the existing guarded `pnpm disaster:restore -- ...` workflow, then restore
+the paired assets:
+
+```bash
+sudo pnpm disaster:restore:assets -- \
+  --snapshot /data/backups/oi-manager/assets/snapshots/snapshot-YYYYMMDDTHHMMSSZ \
+  --database-sha256 <the-selected-dump-sha256> \
+  --confirm-root /data/oi-manager-response-refactor/apps/server \
+  --apply
+```
+
+The asset command first performs a full isolated verification, creates a pre-restore asset snapshot, stops application
+writes, replaces only the exact `testdata` and `uploads` roots, verifies every file and symlink, and restarts readiness.
+If replacement or readiness fails it restores the pre-restore snapshot before restarting services. Never mix an asset
+snapshot with a database dump whose SHA-256 does not match its metadata.
 
 ## Service monitor
 
@@ -61,7 +77,7 @@ contracts; it is not external-delivery evidence.
 
 The monitor also validates rolling API/Judge metrics, browser/security/server error spikes, Judge infrastructure errors,
 every required systemd unit, restart deltas, loopback-only restricted ports, database connection/transaction/lock state,
-backup restore proof, endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision consistency. On the first
+database and asset snapshot/restore proofs, endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision consistency. On the first
 transition into failure it captures a mode-600 incident evidence bundle before alert delivery. Thresholds and the
 capture command are configured in `deploy/observability/operations.env.example`; do not disable a check merely to
 silence an alert.
@@ -71,6 +87,7 @@ pnpm operations:snapshot
 pnpm operations:check
 pnpm network:audit
 pnpm backup:verify
+pnpm backup:assets:verify
 jq . .run/operational-state.json
 jq . ".run/metrics-$(cat .run/api-active-upstream).json"
 jq . .run/judge-metrics.json
