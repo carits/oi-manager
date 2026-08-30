@@ -5,6 +5,8 @@ last_verified: 2026-08-30
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-30: GitHub 异机公网探针及去重 Issue 故障/恢复状态机已提交，静态契约验证通过；真实 workflow_dispatch Run `33290187717` 在任何步骤启动前被 GitHub Billing 拒绝，注解明确为近期付款失败或消费上限不足。工作流当前安全禁用，未宣称异机探针已运行；修复 Actions Billing 后需重新启用并完成一次健康运行及一次受控故障/恢复。
+
 - 2026-08-30: 主机内运维调度已从不可观测的用户 Cron 迁移为六个持久化 systemd timers：五分钟监控、每日数据库/资产备份、每周数据库/资产恢复验证和安全基线均记录最近结果、下次执行与 journald 日志，主机停机错过的日历任务可补跑。任务通过白名单 dispatcher 以 `ecs-user` 和只读仓库沙箱运行；生产安装先成功执行监控再移除重复 Cron。六类任务已在真实沙箱逐项执行成功，Timer 也已连续自动触发健康监控。Timer fail-closed 故障注入、运行时审计、监控和文档门禁通过。日志异机归档 Timer 已安装但未启用，等待真实上传与独立验证目标。
 
 - 2026-08-30: 题目评测资产与数据生成闭环已完成：STD/Validator/Classifier/Generator 使用不可变程序版本，C++17/Python3 Generator 与直接输入通过独立 Judge 队列生成候选点，管理员检查后以 CAS 发布下一 TestSet Revision；ACM 顺序、OI Official Group、Hack Gate 只读、固定活动和历史提交边界保持不变。DeepSeek Validator 仅从官方 Markdown 生成并使用内置 testlib 编译，AI 翻译/格式化/Validator 已统一按真实供应商 Token 经平台总池预占、结算和审计。平台管理员新增 Token 管理页，题目评测设置新增程序、导入、生成、候选和正式版本工作台。迁移前 31 MiB 备份已恢复校验，生产和测试 schema 均已更新；Server 全量 520/520 + 最新定向 19/19、Web 45/45、Judge 20/20、三端类型检查及 UI/路由/文档/架构门禁通过。

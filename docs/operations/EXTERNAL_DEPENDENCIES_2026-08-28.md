@@ -51,6 +51,15 @@ stored in a mode-600 file, plus permission to send one synthetic failure and
 one recovery notification. An email destination also requires SMTP host,
 port, sender and credentials.
 
+A repository-native GitHub Actions uptime workflow was added as a possible
+off-host detector. Manual Run `33290187717` on commit `2725cf9` was rejected
+before runner allocation with GitHub's billing annotation: recent account
+payments failed or the spending limit must be increased. The workflow is now
+`disabled_manually` to prevent queued failures. Restoring Actions billing (or
+providing another external runner) is therefore an additional required input;
+afterward the workflow must be enabled and its healthy plus failure/recovery
+Issue paths executed for real.
+
 ## Off-host log retention
 
 Local collection, manifests, SHA-256 checks, spool retention, trusted upload

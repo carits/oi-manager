@@ -87,6 +87,7 @@ source_of_truth: remote main worktree, production runtime inspection, current te
 - [x] 每周长期安全基线已覆盖运行时 Secret/CSRF 契约、存量 OJ 密文解密、网络暴露、systemd/Docker 限制、TLS 工具和生产依赖；报告、逐项日志、哈希与健康状态以私有文件保存 90 天并由 5 分钟监控校验。
 - [x] 首次故障状态转换会在告警前自动生成事故证据包；包内/包外 SHA-256、权限、必需诊断和敏感路径排除均有故障注入验证。SEV、阈值、保留期、RTO/RPO 和周/月/季度安全周期统一记录在 `OBSERVABILITY_SECURITY_STRATEGY.md`。
 - [ ] 接通 `MONITOR_ALERT_COMMAND` 的真实外部通知，并验证故障与恢复消息。
+- [ ] 修复私有仓库 GitHub Actions Billing/消费上限，或提供其他异机 Runner；当前异机公网探针实现已完成，但真实 Run `33290187717` 在分配 Runner 前被账单策略拒绝并已安全禁用。
 - [x] 告警适配器和失败重试契约已完成：URL 从 mode-600 文件读取，failed/recovered 回环 HTTP 通过；没有真实收件人时不标记外部送达完成。
 - [ ] 在云控制台复核告警联系人、阈值、主机重启通知和安全组。
 - [ ] 将 journald、Docker、Nginx 与部署日志复制到异机或对象存储，配置明确保留期。

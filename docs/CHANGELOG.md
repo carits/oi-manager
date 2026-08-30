@@ -11,6 +11,11 @@ source_of_truth: Git history
 
 ## 2026-08-30
 
+### GitHub 异机公网探针（等待 Actions 账单恢复）
+
+- 新增私有仓库 GitHub Actions 异机探针，每五分钟从 GitHub Runner 检查 Nginx API、Nginx 登录页和公开 `3000` 登录页；失败时只创建一个固定标题 Issue，持续故障不刷屏，恢复后自动评论并关闭，且不依赖仓库 Secret。
+- 工作流语法、调度、权限、探针和 Issue 状态机静态门禁已加入安全基线。真实手动 Run `33290187717` 在分配 Runner 前被 GitHub 拒绝，官方注解为账号近期付款失败或消费上限不足；为避免无效计划任务堆积，工作流已设为 `disabled_manually`，待所有者修复 Billing 后再启用并完成实际故障/恢复验收。
+
 ### 持久化运维调度
 
 - 将五分钟服务监控、每日数据库/资产备份、每周数据库/资产恢复验证和安全基线从用户 Cron 迁移到六个 `Persistent=true` systemd timers；主机停机错过的日历任务会在恢复后补跑，最近执行结果、下次时间和日志统一由 systemd/journald 查询。

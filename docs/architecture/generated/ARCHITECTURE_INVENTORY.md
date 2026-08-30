@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 39 |
 | systemd units | 8 |
-| Referenced environment keys | 436 |
+| Referenced environment keys | 437 |
 
 ## HTTP adapter ownership
 
@@ -642,3 +642,4 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `WORKER_PID`
 - `WORKER_SECONDARY_EXIT`
 - `WORKER_SECONDARY_PID`
+- `WORKFLOW`

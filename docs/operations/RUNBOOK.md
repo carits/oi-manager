@@ -76,6 +76,19 @@ contracts; it is not external-delivery evidence.
 
 The legacy `install-*-cron.sh` commands remain only as a rollback path. Do not run Cron and the systemd timers together; `install-operation-timers.sh` removes only the known duplicate entries after a successful monitor execution.
 
+### GitHub off-host uptime workflow
+
+`.github/workflows/external-uptime.yml` provides a five-minute external HTTP probe and a deduplicated GitHub Issue for failure/recovery. It is currently disabled because GitHub refused Run `33290187717` before runner allocation due to account Billing/spending-limit status. Do not describe it as active until Billing is repaired and the following commands succeed:
+
+```bash
+gh workflow enable external-uptime.yml
+gh workflow run external-uptime.yml --ref main
+gh run list --workflow external-uptime.yml --limit 1
+gh run watch <run-id> --exit-status
+```
+
+After a healthy run, perform one approved failure/recovery injection and confirm the workflow creates exactly one incident Issue and closes it on recovery. If Billing remains unavailable, keep the workflow disabled and use a real external monitor instead.
+
 The monitor also validates rolling API/Judge metrics, browser/security/server error spikes, Judge infrastructure errors,
 every required systemd unit, restart deltas, loopback-only restricted ports, database connection/transaction/lock state,
 database and asset snapshot/restore proofs, endpoint 5xx/P99 thresholds, stale domain workflows and immutable Revision consistency. On the first
