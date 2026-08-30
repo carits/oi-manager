@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: Git history
 ---
 
@@ -10,6 +10,16 @@ source_of_truth: Git history
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
 ## 2026-08-30
+
+### 有界 Candidate Pool 与评估资源边界
+
+- 数据贡献、Generator、管理员导入与技术有效 Hack 统一写入 `TestcaseCandidate`；Candidate 具有来源、目标角色、基础 Revision、程序版本、阶段、价值、语义指纹、生命周期和晋升指针。Hack 不再绕过候选记录直接写测试数据，正式晋升仍复用不可变 Revision、题目锁和 CAS。
+- 新增用户/平台双层 Evaluation Credits，预占、真实结算和失败释放均使用幂等流水；普通用户与题目管理者分别受日额度约束，平台总池提供额外硬上限。当前 2 核生产拓扑的 Candidate 数据生成全局并发固定为 1，Judge 调度采用提交/Hack/Candidate `8:1:1` 权重。
+- 新增全局 SHA-256 `BlobObject/BlobReference` 双写兼容层。Candidate 原始输入和答案去重保存，引用释放后等待 30 天才可 GC；GC 与写入使用同一 advisory lock，仍有 Candidate、Revision 或其他业务引用的对象不会删除。
+- 新增版本化 Validator DSL、Feature 定义和 Subtask Rule。DSL 由可信模板生成 C++17/testlib Validator，支持标量、数组、矩阵、边集及常用数组/图断言；真实沙箱编译回归发现并修复 `readLong` 重载歧义。DeepSeek 默认返回 DSL，C++ Validator 保留为显式 fallback，AI 结果仍需人工保存和激活。
+- 新增私有 Wrong Behavior Corpus 的安全回填骨架、固定 80/20 Evaluation/Holdout 分层、Candidate Pool/Selector 预览与策略页面。当前行为聚类仍处于 bootstrap/观察能力：历史本地错误提交只生成不暴露源码的代表簇；非 Hack Candidate 在完整分级评测器上线前不会自动晋升。技术有效 Hack 可按自动策略与每题每小时 3 次上限晋升，既有活动固定 Revision 和历史成绩不变。
+- 题目页对所有可提交用户提供“贡献数据”；即使未启用 Hack，也可提交直接数据或 `oj.generator/v1` 的 C++17/Python3 Generator。Generator 使用 JSON stdin，并以相同 Seed 连续执行两次校验确定性；服务端限制每用户同时一个贡献任务、每题一个数据生成任务和单点 16 MiB。
+- 平台 AI 管理页增加 Candidate Credits、HOT 数据、全局 Blob/孤儿对象和用户消耗视图。生产扩展迁移 `20260830_bounded_candidate_pipeline` 与默认策略迁移 `20260830_candidate_selector_auto_default` 已在可恢复备份后应用。
 
 ### GitHub 异机公网探针（等待 Actions 账单恢复）
 

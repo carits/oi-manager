@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: Prisma JudgeRun/JudgeAttempt models and judge domain services
 ---
 
@@ -12,6 +12,14 @@ source_of_truth: Prisma JudgeRun/JudgeAttempt models and judge domain services
 `Submission` 表达不可变用户行为；`JudgeRun` 表达一次逻辑判定；`JudgeAttempt` 表达一次物理执行；`RejudgeBatch` 聚合一次范围重测请求。
 
 一个 Run 固定 `testSetRevisionId` 与 `judgeConfigHash`。一个 Attempt 只属于一个 Run，拥有唯一 `fencingToken`。`Submission.currentJudgeRunId` 和 `JudgeRun.currentAttemptId` 是读取指针，不改变历史记录。
+
+## Candidate 评估车道
+
+普通提交、Hack 与 Candidate 共用 Judge 连接但使用独立持久化领域记录。调度成功次数按 `8:1:1` 轮转；首选车道为空时可借用空闲容量，因此 Candidate 不能让普通提交饥饿。当前生产资源只允许一个贡献型数据生成任务处于 `running/finalizing`。
+
+Candidate 的技术验证顺序为 Generator/直接输入、Validator、STD 和 Checker；通过后进入有界池，不创建 Submission 或 JudgeRun。技术有效 Hack 还必须保存前后 Verdict/分数证据。正式发布只能由 Selector 或审计紧急发布调用 Revision CAS，不能从 Judge 回调直接修改活动快照。
+
+Evaluation Credits 在任务创建前同时预占用户日账户和平台日账户，完成后按执行次数、CPU 毫秒和生成字节结算。任一账户不足都使整个事务回滚。Generator v1 使用服务器选择的 Seed 和 JSON stdin；同一请求重复执行所得 SHA-256 不一致时以 `GENERATOR_NON_DETERMINISTIC` 终止。
 
 Attempt 终态同时保存 Queue、Dispatch、Compile、Run、Persist、Total 六段真实延迟；缺少采集能力的历史记录保持 `null`，禁止根据总耗时反推伪造。SLO 口径见 [Judge SLO](../operations/JUDGE_SLO.md)。
 

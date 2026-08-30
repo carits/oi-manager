@@ -788,12 +788,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             >
               提交记录
             </Button>
-            {problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
+            {problem.hack && (problem.permissions.canSubmit || canModify()) && (
               <Button variant="ghost"
                 onClick={() => handleTabChange('hack')}
                 className={unifiedStyles.tabButton} aria-selected={activeTab === 'hack'}
               >
-                Hack{problem.hack.acceptedCount > 0 ? ` ${problem.hack.acceptedCount}` : ''}
+                {problem.hack.enabled ? `Hack${problem.hack.acceptedCount > 0 ? ` ${problem.hack.acceptedCount}` : ''}` : '贡献数据'}
               </Button>
             )}
           </div>
@@ -936,8 +936,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             <UserProblemContentPanel problemId={problemId} />
           )}
 
-          {activeTab === 'hack' && problem.hack?.enabled && (problem.hack.canHack || canModify()) && (
-            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} mode={problem.hack.mode} />
+          {activeTab === 'hack' && problem.hack && (problem.permissions.canSubmit || canModify()) && (
+            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} mode={problem.hack.mode} hackEnabled={problem.hack.enabled} />
           )}
 
           {/* 提交记录 Tab */}

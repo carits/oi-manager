@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 ---
 
@@ -32,6 +32,7 @@ source_of_truth: e2e/fixtures/ux-matrix.ts and apps/web/src
 | 提交 | 平台管理员、教师、全角色个人工作区 | 定位提交并理解结果 | 多条件筛选、性能、代码、复制 |
 | 学校与用户 | 超管、负责人、平台管理员 | 查找并维护组织和账号 | 列表、详情、编辑、状态操作 |
 | AI Token | 平台管理员 | 管理 DeepSeek 总池并审计真实用量 | 汇总、正负调整、不可变流水 |
+| Candidate 与评估资源 | 可提交用户、题目管理者、平台管理员 | 贡献数据、观察候选价值并限制计算/存储成本 | 阶段、预算、Corpus 摘要、Selector、Blob/GC |
 | 导入 | 教师 | 按步骤导入学生或团队 | 输入、预览、冲突处理、结果 |
 | 资料与安全 | 全部角色 | 维护自己的资料和凭据 | 字段校验、保存反馈、危险操作确认 |
 

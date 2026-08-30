@@ -6,6 +6,7 @@ import { execute } from './sandbox/client'
 import { config } from './config'
 import { judge } from './judge'
 import type { DataGenerationRequest, DataGenerationResult, ProblemConfig } from './types'
+import crypto from 'node:crypto'
 
 const MAX_DATA = 1024 * 1024
 function testlib() { return { 'testlib.h': fs.readFileSync(path.join(config.checkerIncludeDir, 'testlib.h'), 'utf8') } }
@@ -30,11 +31,22 @@ export async function generateTestdata(request: DataGenerationRequest): Promise<
     for (const [index, item] of request.cases.entries()) {
       let input = item.inputData || '', generatorTimeMs = 0
       if (request.sourceMode === 'generator') {
-        const run = await execute({ language: request.generator!.language, timeLimit: 5000, memoryLimit: 262_144, outputLimit: MAX_DATA, compileFileId: generator!.result.fileId, workDir: generator!.result.workDir, args: item.args || [], env: { CASE_INDEX: String(index + 1), CASE_SEED: item.seed || '' } })
+        const protocol = request.generator!.protocol || 'legacy-args-v1'
+        const generatorInput = protocol === 'json-stdin-v1' ? JSON.stringify({ seed: item.seed || '', caseId: index + 1, profile: item.profile || item.name, params: item.params || {} }) : undefined
+        const runGenerator = () => execute({ language: request.generator!.language, stdin: generatorInput, timeLimit: 5000, memoryLimit: 262_144, outputLimit: MAX_DATA, compileFileId: generator!.result.fileId, workDir: generator!.result.workDir, args: protocol === 'json-stdin-v1' ? [] : (item.args || []), env: { CASE_INDEX: String(index + 1), CASE_SEED: item.seed || '' } })
+        const run = await runGenerator()
         generatorTimeMs = run.time
         if (run.infrastructureError) return { jobId: request.jobId, fencingToken: request.fencingToken, retryable: true, cases: results }
         if (run.status !== 'Accepted') { results.push({ id: item.id, status: 'failed', failureStage: 'generator', message: `${run.status}${run.stderr ? `：${run.stderr.slice(0, 1000)}` : ''}`, generatorTimeMs }); continue }
         input = run.stdout || ''
+        if (protocol === 'json-stdin-v1') {
+          const verify = await runGenerator()
+          generatorTimeMs += verify.time
+          if (verify.infrastructureError) return { jobId: request.jobId, fencingToken: request.fencingToken, retryable: true, cases: results }
+          if (verify.status !== 'Accepted' || crypto.createHash('sha256').update(input).digest('hex') !== crypto.createHash('sha256').update(verify.stdout || '').digest('hex')) {
+            results.push({ id: item.id, status: 'failed', failureStage: 'generator', message: 'GENERATOR_NON_DETERMINISTIC：相同 seed 与参数产生了不同输出', generatorTimeMs }); continue
+          }
+        }
       }
       if (!input.trim() || Buffer.byteLength(input) > MAX_DATA) { results.push({ id: item.id, status: 'failed', failureStage: 'input', message: '输入为空或超过 1 MiB', generatorTimeMs }); continue }
       const validated = await execute({ language: 'cpp17', stdin: input, timeLimit: 2000, memoryLimit: 262_144, outputLimit: 64 * 1024, compileFileId: validator!.result.fileId, workDir: validator!.result.workDir })

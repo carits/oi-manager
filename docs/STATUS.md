@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-08-31: 有界 Candidate 基础链路已落地并进入兼容发布：数据贡献/Generator/Hack 共用 Candidate、用户与平台双层 Evaluation Credits、Candidate 全局并发 1、Judge `8:1:1` 调度、全局 Blob 引用与延迟 GC、Validator DSL/Feature/Subtask Rule、私有 Corpus bootstrap、Selector 预览和平台资源视图均已实现。技术有效 Hack 通过 Selector 策略与每题每小时 3 次上限晋升；其他 Candidate 在行为 Corpus 的渐进 L1/L2/Holdout 执行器完成前只停留于有界池，不会误发布。生产 schema 已安全扩展；正式部署仍以本条最终测试、文档门禁、提交和蓝绿/preview 提升结果为准。
 
 - 2026-08-30: GitHub 异机公网探针及去重 Issue 故障/恢复状态机已提交，静态契约验证通过；真实 workflow_dispatch Run `33290187717` 在任何步骤启动前被 GitHub Billing 拒绝，注解明确为近期付款失败或消费上限不足。工作流当前安全禁用，未宣称异机探针已运行；修复 Actions Billing 后需重新启用并完成一次健康运行及一次受控故障/恢复。
 

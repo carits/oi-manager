@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -53,6 +53,20 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemDataGenerationJob` | 独立数据生成队列、程序版本、基础 Revision、租约、fencing token 和晋升结果 |
 | `ProblemDataGenerationCase` | 一次参数/直接输入对应的候选测试点、逐阶段状态、内容对象与预览 |
 | `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask 与晋升状态 |
+| `WrongSolutionSample` | 私有历史/人工错误程序样本索引；源码访问仍遵守原提交权限 |
+| `WrongBehaviorCluster` | 错误行为代表簇、权重、类别及 Evaluation/Holdout 分区 |
+| `WrongCorpusRevision` | 一次不可变 Corpus 构建摘要与固定分层 |
+| `BugCategory` | 管理员维护的错误类型与权重 |
+| `CandidateEvaluationRun` | Candidate 的 L1/L2/Holdout 阶段、预算和评估摘要 |
+| `CanonicalSelectionRun` | Selector 输入、输出、质量差值、状态和晋升 Revision |
+| `ProblemCandidatePolicy` | 题目候选池、Top-K、正式点数、发布阈值与 observe/auto 策略 |
+| `EvaluationCreditAccount` | 用户或平台按日 Evaluation Credits 的可用、预占和消费账户 |
+| `EvaluationCreditLedgerEntry` | Evaluation Credits 预占/结算/释放不可变幂等流水 |
+| `ValidatorSpec` | Validator DSL AST、模板生成源码、编译/验证和激活状态 |
+| `ProblemFeatureDefinition` | 题目 Feature 注册表和提取配置 |
+| `ProblemSubtaskRule` | Feature 到 OI Subtask 的声明式规则 |
+| `BlobObject` | 全局 SHA-256 内容对象、存储层级与延迟删除时间 |
+| `BlobReference` | Blob 到 Candidate/Revision/程序等业务 owner 的权限引用 |
 | `ProblemTestcase` | 规范化测试点；一份输入/答案可关联多个 Test Group |
 | `ProblemSubtask` | OI 稳定数字 Subtask、满分和顺序 |
 | `ProblemSubtaskDependency` | Subtask 有向无环依赖关系 |

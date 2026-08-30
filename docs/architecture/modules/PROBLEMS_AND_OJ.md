@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -66,9 +66,10 @@ AI 翻译、格式整理和 Validator 助手只对题目管理者开放，并在
 `AiTokenPool`、追加式 `AiTokenLedgerEntry` 和逐次调用的 `AiGenerationRequest` 组成；
 `AiUsageLog` 通过 request ID 关联真实输入、输出和总 Token 数。
 
-Validator 助手只接受官方 Markdown 题面。题面以不可信分隔区传入模型，返回结构化约束、
-EOF 规则、假设和 C++17 `validator.cpp`，随后必须在 go-judge 中使用系统 `testlib.h`
-编译。AI 结果不会自动启用或发布；管理员审阅后才能保存为新的不可变程序版本。
+Validator 助手只接受官方 Markdown 题面。题面以不可信分隔区传入模型，默认返回受 JSON
+Schema 约束的 Validator DSL、Feature、Subtask Rule 建议和边界样例；服务端以可信模板生成
+C++17/testlib Validator 并在 go-judge 编译。DSL 无法表达时保留 C++17 fallback。AI 结果不会
+自动启用或发布；管理员审阅后才能保存、验证和激活不可变版本。
 
 ## 评测资产与数据生成
 
@@ -87,10 +88,18 @@ EOF 规则、假设和 C++17 `validator.cpp`，随后必须在 go-judge 中使�
 Checker 自检。成功输入、答案、参数、种子、程序版本、耗时和内容哈希进入候选池，失败点
 保留阶段与错误，不影响同批其他点。
 
-候选测试点只有在管理员显式发布时才进入正式数据。ACM 按选定顺序追加；OI 只能加入
-Official Group，不能写入系统 Hack Gate。发布携带 `expectedLatestRevisionId`，在题目事务锁
-和 CAS 下生成下一不可变 TestSet Revision；冲突保留候选数据，固定旧 Revision 的比赛、训练、
-作业和历史提交不受影响。
+所有可提交用户都可以贡献直接输入或 `oj.generator/v1` Generator。贡献任务先预占用户与平台
+双层 Evaluation Credits，并受单用户、单题、全局并发、数据体积和 Candidate HOT 池硬上限。
+Generator 从 JSON stdin 读取服务器选择的 Seed/Profile/参数；同一输入连续两次输出哈希不一致时拒绝。
+
+Candidate 通过技术验证后进入有界池。技术有效 Hack 仍需保留证明程序与前后结果，但不会绕过
+Candidate 记录直接改正式数据。Selector 负责按价值、语义冗余、成本和发布 Token Bucket 选择；
+管理员紧急发布也必须遵守结构、预算和 CAS。ACM 正式点按顺序选择，OI 的用户贡献只能进入
+Hack Gate，只有题目管理者资产可以分配 Official Group。固定旧 Revision 的活动和历史提交不受影响。
+
+Wrong Behavior Corpus 只使用本站本地错误/部分分源码与人工错误程序，并只向题目管理者暴露聚类、
+类别、权重和覆盖汇总。当前 bootstrap 阶段已完成去重和固定 80/20 Evaluation/Holdout 分层；完整
+L1/L2/Holdout 行为执行器上线前，普通 Candidate 保持 `ELIGIBLE` 而不自动发布，避免用占位指标改数据。
 
 外部平台研究和旧实现方案保存在[研究归档](../../archive/research/)和
 [计划归档](../../archive/plans/)。

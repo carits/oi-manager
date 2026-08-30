@@ -7,7 +7,7 @@ import { execute } from './sandbox/client'
 import { acquireCompiledProgram } from './compiled-program-cache'
 import type { HackJudgeRequest, HackJudgeTaskResult, JudgeResult, ProblemConfig, TestCaseConfig } from './types'
 
-const MAX_DATA_BYTES = 1024 * 1024
+const MAX_DATA_BYTES = 16 * 1024 * 1024
 const VALID_DIFFERENCE_RESULTS = new Set<JudgeResult>([
   'Accepted', 'Wrong Answer', 'Presentation Error', 'Time Limit Exceeded',
   'Memory Limit Exceeded', 'Runtime Error', 'Output Limit Exceeded',
@@ -172,7 +172,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
     return isInfrastructureError(error) ? retryableSystemError(request, stage, error.message) : rejected(request, stage, error.message)
   }
   if (!candidateInput.trim()) return rejected(request, 'input', '候选输入不能为空')
-  if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, 'input', '候选输入超过 1 MiB')
+  if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, 'input', '候选输入超过 16 MiB')
 
   let validator
   try { validator = await acquireCompiledProgram({ language: 'cpp17', code: request.validatorSource, extraCopyIn: checkerDependencies() }, true) }
@@ -223,7 +223,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   if (standardRun.status !== 'Accepted') return systemError(request, 'standard', `标准程序运行失败：${standardRun.status}${standardRun.stderr ? `；${standardRun.stderr.slice(0, 1000)}` : ''}`)
   if (!hasStandardOutput(standardRun.stdout)) return systemError(request, 'standard', '标准程序没有生成答案输出')
   const candidateOutput = standardRun.stdout
-  if (Buffer.byteLength(candidateOutput, 'utf8') > MAX_DATA_BYTES) return systemError(request, 'standard', '标准答案输出超过 1 MiB')
+  if (Buffer.byteLength(candidateOutput, 'utf8') > MAX_DATA_BYTES) return systemError(request, 'standard', '标准答案输出超过 16 MiB')
 
   const pendingStem = `.hack_pending_${request.hackAttemptId}`
   const inputName = `${pendingStem}.in`, outputName = `${pendingStem}.out`

@@ -17,6 +17,8 @@ import { problemTestGraphRouter } from './problem.test-graph.routes'
 import { problemTestSetRevisionRouter } from './problem.testset-revision.routes'
 import { problemJudgeProgramRouter } from './problem.judge-program.routes'
 import { problemDataGenerationRouter } from './problem.data-generation.routes'
+import { problemCandidateRouter } from './problem.candidate.routes'
+import { problemWrongCorpusRouter } from './problem.wrong-corpus.routes'
 
 export const problemsRouter = Router()
 
@@ -29,6 +31,8 @@ problemsRouter.use(problemTestGraphRouter)
 problemsRouter.use(problemTestSetRevisionRouter)
 problemsRouter.use(problemJudgeProgramRouter)
 problemsRouter.use(problemDataGenerationRouter)
+problemsRouter.use(problemCandidateRouter)
+problemsRouter.use(problemWrongCorpusRouter)
 problemsRouter.use(problemFilesRouter)
 problemsRouter.use(problemNotesRouter)
 problemsRouter.use(problemAiRouter)

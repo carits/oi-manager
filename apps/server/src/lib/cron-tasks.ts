@@ -6,6 +6,18 @@ import cron from 'node-cron'
 import { fetchMissingCfCodes } from './cf-code-fetcher'
 import logger from './logger'
 import { collectOrphanTestdataObjects } from './testdata-object-gc'
+import { collectOrphanContentBlobs, releaseBlobReferences } from '../modules/storage/content-blob.service'
+import { prisma } from '../prisma'
+
+async function expireCandidateData() {
+  const now = new Date(), rejectedBefore = new Date(Date.now() - 24 * 60 * 60_000)
+  const candidates = await prisma.testcaseCandidate.findMany({ where: { promotedRevisionId: null, OR: [{ expiresAt: { lte: now } }, { status: { in: ['REJECTED', 'REDUNDANT', 'FAILED', 'STALE'] }, updatedAt: { lte: rejectedBefore } }] }, take: 500, select: { id: true } })
+  for (const item of candidates) {
+    await releaseBlobReferences('testcase_candidate', item.id)
+    await prisma.testcaseCandidate.updateMany({ where: { id: item.id, promotedRevisionId: null }, data: { status: 'EXPIRED', inputObjectId: null, outputObjectId: null, evaluationStage: 'metadata_only' } })
+  }
+  return { expired: candidates.length }
+}
 
 let isRunning = false
 let cronStopper: (() => void) | null = null
@@ -51,6 +63,9 @@ export function startCronTasks() {
     try {
       const result = await collectOrphanTestdataObjects()
       logger.info('testdata_object_gc_done', { action: 'testdata_object_gc', metadata: result })
+      const lifecycle = await expireCandidateData()
+      const blobs = await collectOrphanContentBlobs()
+      logger.info('candidate_blob_gc_done', { action: 'candidate_blob_gc', metadata: { ...lifecycle, ...blobs } })
     } catch (error) {
       logger.error('testdata_object_gc_error', { action: 'testdata_object_gc', metadata: { error: (error as Error).message } })
     }

@@ -13,10 +13,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 89 |
+| Prisma models | 103 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
-| Module route adapters | 39 |
+| Module route adapters | 41 |
 | systemd units | 8 |
 | Referenced environment keys | 437 |
 
@@ -58,6 +58,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/notification/notification.routes.ts`
 - `apps/server/src/modules/platform-binding/platform-binding.routes.ts`
 - `apps/server/src/modules/problem/problem.ai.routes.ts`
+- `apps/server/src/modules/problem/problem.candidate.routes.ts`
 - `apps/server/src/modules/problem/problem.crud.routes.ts`
 - `apps/server/src/modules/problem/problem.data-generation.routes.ts`
 - `apps/server/src/modules/problem/problem.files.routes.ts`
@@ -71,6 +72,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/problem/problem.test-graph.routes.ts`
 - `apps/server/src/modules/problem/problem.testset-revision.routes.ts`
 - `apps/server/src/modules/problem/problem.user-content.routes.ts`
+- `apps/server/src/modules/problem/problem.wrong-corpus.routes.ts`
 - `apps/server/src/modules/ranking/ranking.routes.ts`
 - `apps/server/src/modules/school/school.routes.ts`
 - `apps/server/src/modules/team-import/team-import.routes.ts`
@@ -98,6 +100,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AiTokenLedgerEntry`
 - `AiTokenPool`
 - `AiUsageLog`
+- `BlobObject`
+- `BlobReference`
+- `BugCategory`
+- `CandidateEvaluationRun`
+- `CanonicalSelectionRun`
 - `CaritsAccount`
 - `CaritsLedgerEntry`
 - `CaritsTransaction`
@@ -110,6 +117,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ContestUserProblemStatus`
 - `ContributionEvent`
 - `ContributionProject`
+- `EvaluationCreditAccount`
+- `EvaluationCreditLedgerEntry`
 - `File`
 - `JudgeAttempt`
 - `JudgeRun`
@@ -128,9 +137,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PrincipalTransferLog`
 - `Problem`
 - `ProblemAttachment`
+- `ProblemCandidatePolicy`
 - `ProblemChecker`
 - `ProblemDataGenerationCase`
 - `ProblemDataGenerationJob`
+- `ProblemFeatureDefinition`
 - `ProblemHackAttempt`
 - `ProblemHackConfig`
 - `ProblemJudgeProgram`
@@ -143,6 +154,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemStatement`
 - `ProblemSubtask`
 - `ProblemSubtaskDependency`
+- `ProblemSubtaskRule`
 - `ProblemTestGroup`
 - `ProblemTestSetRevision`
 - `ProblemTestSetRevisionCase`
@@ -182,6 +194,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `UserPlatformBinding`
 - `UserProblemContent`
 - `UserStatusLog`
+- `ValidatorSpec`
+- `WrongBehaviorCluster`
+- `WrongCorpusRevision`
+- `WrongSolutionSample`
 - `carits_sequence`
 
 ## Prisma enums

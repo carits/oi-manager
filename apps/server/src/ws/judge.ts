@@ -27,6 +27,7 @@ import {
   retryOwnedJudgeAttempt,
 } from '../modules/judge/application/judge-run.service'
 import { claimDataGenerationJob, finalizeDataGenerationJob } from '../modules/problem/problem.data-generation.service'
+import { judgeLaneForDispatch } from '../modules/judge/domain/judge-lane-policy'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -62,8 +63,7 @@ class JudgeConsumer {
   notify: ((value?: unknown) => void) | null = null
   ws: WebSocket
   judgeId: string
-  preferHack = true
-  preferGeneration = true
+  laneCursor = 0
 
   constructor(ws: WebSocket, judgeId: string, concurrency: number = 1) {
     this.ws = ws
@@ -115,21 +115,18 @@ class JudgeConsumer {
   }
 
   async fetchNextTask(): Promise<DispatchTask | null> {
-    if (this.preferGeneration) {
-      this.preferGeneration = false
-      const generated = await claimDataGenerationJob(this.judgeId)
-      if (generated) return generated
+    const preferred = judgeLaneForDispatch(this.laneCursor)
+    this.laneCursor = (this.laneCursor + 1) % 10
+    const lanes = [preferred, ...['submission', 'hack', 'generation'].filter(lane => lane !== preferred)]
+    for (const lane of lanes) {
+      const task = lane === 'submission'
+        ? await this.fetchNextSubmissionTask()
+        : lane === 'hack'
+          ? await this.fetchNextHackTask()
+          : await claimDataGenerationJob(this.judgeId)
+      if (task) return task
     }
-    const first = this.preferHack ? await this.fetchNextHackTask() : await this.fetchNextSubmissionTask()
-    if (first) {
-      this.preferHack = !this.preferHack
-      this.preferGeneration = true
-      return first
-    }
-    const second = this.preferHack ? await this.fetchNextSubmissionTask() : await this.fetchNextHackTask()
-    if (second) { this.preferHack = !this.preferHack; this.preferGeneration = true; return second }
-    this.preferGeneration = true
-    return claimDataGenerationJob(this.judgeId)
+    return null
   }
 
   async fetchNextSubmissionTask(): Promise<JudgeTask | null> {

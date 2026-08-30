@@ -7,6 +7,10 @@ import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
 import { ingestTestdataObject, loadRevisionSpec, publishTestSetRevision, TestSetRevisionConflict, type RevisionCaseSpec } from './problem.testset-revision.service'
 import { requireProgramProblem } from './problem.judge-program.service'
 import yaml from 'js-yaml'
+import { canModifyProblem, canViewProblem } from './problem.access'
+import { compileJudgeProgram } from './problem.judge-program.service'
+import { createAdmittedCandidate } from './problem.testcase-candidate.service'
+import { EVALUATION_LIMITS, releaseEvaluationCredits, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from './problem.evaluation-budget.service'
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const MAX_CASES = Number(process.env.DATA_GENERATION_MAX_CASES || 50)
@@ -22,7 +26,7 @@ async function loadVersion(problemId: string, versionId: string, expectedKind: s
   return { version, program }
 }
 
-type GenerationCaseInput = { name: string; args: string[]; seed: string | null; inputData?: string }
+type GenerationCaseInput = { name: string; args: string[]; seed: string | null; inputData?: string; profile?: string; params?: Record<string, unknown> }
 function normalizeCases(body: any): GenerationCaseInput[] {
   const cases = Array.isArray(body?.cases) ? body.cases : []
   if (!cases.length || cases.length > MAX_CASES) fail(400, 'GENERATION_CASES_INVALID', `每个任务需要 1～${MAX_CASES} 个参数项`)
@@ -32,36 +36,66 @@ function normalizeCases(body: any): GenerationCaseInput[] {
     const seed = item?.seed === undefined ? null : String(item.seed)
     const inputData = body?.sourceMode === 'input' ? String(item?.inputData || '') : undefined
     if (!name || name.length > 80 || args.length > 64 || args.some((arg: string) => Buffer.byteLength(arg) > 4096)) fail(400, 'GENERATION_PARAMETER_INVALID', `参数项 #${index + 1} 无效`)
-    if (body?.sourceMode === 'input' && (!inputData?.trim() || Buffer.byteLength(inputData) > 1024 * 1024)) fail(400, 'GENERATION_INPUT_INVALID', `输入 #${index + 1} 为空或超过 1 MiB`)
-    return { name, args, seed, inputData }
+    const maxInputBytes = body?.contribution === true ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024
+    if (body?.sourceMode === 'input' && (!inputData?.trim() || Buffer.byteLength(inputData) > maxInputBytes)) fail(400, 'GENERATION_INPUT_INVALID', `输入 #${index + 1} 为空或超过 ${body?.contribution === true ? '16 MiB' : '1 MiB'}`)
+    return { name, args, seed, inputData, profile: typeof item?.profile === 'string' ? item.profile : undefined, params: item?.params && typeof item.params === 'object' ? item.params : undefined }
   })
 }
 
+async function currentProgramVersion(problemId: string, kind: string) {
+  const hackConfig = await prisma.problemHackConfig.findUnique({ where: { problemId }, select: { standardProgramVersionId: true, validatorProgramVersionId: true, classifierProgramVersionId: true } })
+  const configuredVersionId = kind === 'standard' ? hackConfig?.standardProgramVersionId : kind === 'validator' ? hackConfig?.validatorProgramVersionId : kind === 'classifier' ? hackConfig?.classifierProgramVersionId : null
+  if (configuredVersionId) return loadVersion(problemId, configuredVersionId, kind)
+  const program = await prisma.problemJudgeProgram.findFirst({ where: { problemId, kind, status: 'active', currentVersionId: { not: null } }, orderBy: { updatedAt: 'desc' } })
+  if (!program?.currentVersionId) fail(409, 'PROGRAM_VERSION_REQUIRED', `该题尚未配置可用的 ${kind} 程序`)
+  return loadVersion(problemId, program.currentVersionId, kind)
+}
+
 export async function createDataGenerationJob(input: { user: JwtPayload; problemId: string; body: any }) {
-  const problem = await requireProgramProblem(input.user, input.problemId)
+  const contribution = input.body?.contribution === true
+  const found = contribution ? await prisma.problem.findUnique({ where: { id: input.problemId } }) : null
+  const problem = contribution
+    ? (found && found.status === 'published' && canViewProblem(input.user, found) ? found : fail(404, 'PROBLEM_NOT_FOUND', '题目不存在或当前身份不能贡献数据'))
+    : await requireProgramProblem(input.user, input.problemId)
+  const manager = canModifyProblem(input.user, problem)
   const sourceMode = input.body?.sourceMode === 'input' ? 'input' : 'generator'
-  const cases = normalizeCases({ ...input.body, sourceMode })
+  const cases = normalizeCases({ ...input.body, sourceMode, contribution })
+  if (contribution && cases.length > (sourceMode === 'input' ? 1 : 8)) fail(400, 'CONTRIBUTION_CASE_LIMIT', '普通贡献每次最多提交 1 个直接数据或 8 个生成参数')
+  const ephemeralGenerator = contribution && sourceMode === 'generator' && typeof input.body?.generatorSource === 'string'
+    ? { language: input.body?.generatorLanguage === 'python3' ? 'python3' as const : 'cpp17' as const, source: String(input.body.generatorSource), protocol: 'json-stdin-v1' as const }
+    : null
+  if (ephemeralGenerator) await compileJudgeProgram(ephemeralGenerator.source, ephemeralGenerator.language, '候选数据生成器')
   const [standard, validator, generator] = await Promise.all([
-    loadVersion(problem.id, String(input.body?.standardVersionId || ''), 'standard'),
-    loadVersion(problem.id, String(input.body?.validatorVersionId || ''), 'validator'),
-    sourceMode === 'generator' ? loadVersion(problem.id, String(input.body?.generatorVersionId || ''), 'generator') : null,
+    contribution ? currentProgramVersion(problem.id, 'standard') : loadVersion(problem.id, String(input.body?.standardVersionId || ''), 'standard'),
+    contribution ? currentProgramVersion(problem.id, 'validator') : loadVersion(problem.id, String(input.body?.validatorVersionId || ''), 'validator'),
+    sourceMode === 'generator' && !ephemeralGenerator ? (contribution ? currentProgramVersion(problem.id, 'generator') : loadVersion(problem.id, String(input.body?.generatorVersionId || ''), 'generator')) : null,
   ])
   const jobId = crypto.randomUUID()
-  const config = { sourceMode, filename: (() => { try { return (require('js-yaml').load(problem.judgeConfig || '') as any)?.filename || null } catch { return null } })(), cases }
-  return prisma.$transaction(async tx => {
+  const reservedCredits = contribution ? (sourceMode === 'generator' ? 4_000 : 400) : 0
+  if (reservedCredits) await reserveEvaluationCredits({ userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
+  const config: any = { sourceMode, filename: (() => { try { return (require('js-yaml').load(problem.judgeConfig || '') as any)?.filename || null } catch { return null } })(), cases, generator: ephemeralGenerator }
+  try { return await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`data-generation:${problem.id}`}, 0)) IS NULL AS locked`
     const activeCount = await tx.problemDataGenerationJob.count({
       where: { problemId: problem.id, status: { in: ACTIVE } },
     })
     if (activeCount > 0) fail(409, 'GENERATION_JOB_ACTIVE', '该题已有数据生成任务正在执行')
+    if (contribution) {
+      const userActive = await tx.problemDataGenerationJob.count({ where: { createdBy: input.user.userId, contribution: true, status: { in: ACTIVE } } })
+      if (userActive > 0) fail(409, 'CONTRIBUTION_TASK_ACTIVE', '每位用户同时只能执行一个 Candidate 贡献任务')
+    }
     const job = await tx.problemDataGenerationJob.create({ data: {
       id: jobId, problemId: problem.id, createdBy: input.user.userId, baseTestSetRevisionId: problem.latestTestSetRevisionId,
       expectedLatestRevisionId: problem.latestTestSetRevisionId, generatorVersionId: generator?.version.id || null,
       standardVersionId: standard.version.id, validatorVersionId: validator.version.id, config,
+      contribution, targetRole: manager && input.body?.targetRole === 'official' ? 'official' : 'hack_gate', reservedCredits,
     } })
     await tx.problemDataGenerationCase.createMany({ data: cases.map((item, orderIndex) => ({ id: crypto.randomUUID(), jobId, problemId: problem.id, orderIndex, name: item.name, args: item.args, seed: item.seed })) })
     return job
-  })
+  }) } catch (error) {
+    if (reservedCredits) await releaseEvaluationCredits({ taskType: 'candidate_generation', taskId: jobId, reserved: reservedCredits, reason: '任务创建失败' }).catch(() => undefined)
+    throw error
+  }
 }
 
 export async function listDataGenerationJobs(user: JwtPayload, problemId: string) {
@@ -86,6 +120,9 @@ export async function cancelDataGenerationJob(user: JwtPayload, problemId: strin
 
 export async function claimDataGenerationJob(judgeId: string) {
   return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('candidate-evaluation-global-lane', 0)) IS NULL AS locked`
+    const contributionRunning = await tx.problemDataGenerationJob.count({ where: { contribution: true, status: { in: ['running', 'finalizing'] } } })
+    if (contributionRunning >= 1) return null
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "ProblemDataGenerationJob" WHERE status = 'queued' ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1`
     if (!rows[0]) return null
     const fencingToken = crypto.randomUUID(), leaseExpiresAt = new Date(Date.now() + Number(process.env.DATA_GENERATION_LEASE_MS || 60 * 60_000))
@@ -100,7 +137,8 @@ export async function claimDataGenerationJob(judgeId: string) {
     ])
     const config = job.config as any
     const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } })
-    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, filename: config.filename, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generator ? { language: generator.language, source: generator.source } : null, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData })) }
+    const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: 'legacy-args-v1' } : null)
+    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, filename: config.filename, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
   })
 }
 
@@ -123,17 +161,29 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
       const input = Buffer.from(String(result.inputData || '')), output = Buffer.from(String(result.outputData || ''))
       if (!input.length || input.length > 1024 * 1024 || output.length > 1024 * 1024) throw new Error('Judge 返回的测试数据为空或超过 1 MiB')
       const [inputObject, outputObject] = await Promise.all([ingestTestdataObject(job.problemId, input), ingestTestdataObject(job.problemId, output)])
+      let candidateId: string | null = null
+      if (job.contribution) {
+        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, generatorVersionId: job.generatorVersionId })
+        candidateId = admitted.candidate.id
+      }
       await prisma.problemDataGenerationCase.update({ where: { id: current.id }, data: {
         status: 'validated', inputObjectId: inputObject.id, outputObjectId: outputObject.id,
         inputSha256: inputObject.sha256, outputSha256: outputObject.sha256, inputSize: input.length, outputSize: output.length,
         inputPreview: input.toString('utf8').slice(0, 8192), outputPreview: output.toString('utf8').slice(0, 8192),
         generatorTimeMs: result.generatorTimeMs, validatorTimeMs: result.validatorTimeMs, standardTimeMs: result.standardTimeMs,
+        candidateId,
       } })
     }
     await prisma.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'completed', judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
+    if (job.reservedCredits) {
+      const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id } })
+      const actual = usageCredits({ executions: cases.length * 4, cpuMs: cases.reduce((sum, item) => sum + (item.generatorTimeMs || 0) + (item.validatorTimeMs || 0) + (item.standardTimeMs || 0), 0), generatedBytes: cases.reduce((sum, item) => sum + (item.inputSize || 0) + (item.outputSize || 0), 0) })
+      await settleEvaluationCredits({ taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual, metadata: { status: 'completed' } })
+    }
     return { stale: false }
   } catch (error) {
     await prisma.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'failed', errorCode: 'GENERATION_PERSIST_FAILED', errorMessage: String((error as Error).message).slice(0, 4000), judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
+    if (job.reservedCredits) await settleEvaluationCredits({ taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual: Math.min(job.reservedCredits, 1), metadata: { status: 'failed' } }).catch(() => undefined)
     throw error
   }
 }

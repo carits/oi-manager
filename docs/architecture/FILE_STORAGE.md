@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-29
+last_verified: 2026-08-31
 source_of_truth: storage config, BlobStore implementations, TestSet Revision services and file HTTP adapters
 ---
 
@@ -72,6 +72,8 @@ TestSet Revision、Checker、Validator、Classifier 与 Hack 晋升数据不直�
 对象以 SHA-256 内容寻址，键形如 `objects/<sha256>`；Revision 保存不可变 manifest、投影哈希和
 对象引用，不覆盖旧对象。多个 Revision 可以复用同一对象。数据库事务失败或发布竞争失败时不会产生
 可见半成品 Revision，超过保留时间且无引用的孤儿对象由 GC 清理。
+
+Candidate、程序源码、Kill vector 和 Feature fingerprint 使用全局 `BlobObject + BlobReference` 引用层，物理键为 `global/objects/<sha256>`。Blob 本身不携带访问权限，读取权限始终来自 owner 业务记录。Candidate 被拒绝、判重或过期时先删除引用；Blob 至少再等待 30 天，并在同一内容锁内重新确认零引用后删除。迁移期间题目级 `TestdataObject` 与全局 Blob 双写，正式 Revision 仍由原不可变对象关系保证可复现。
 
 从 Local 切换到 OSS/S3 只替换 BlobStore 配置和物化策略，不允许业务服务自行拼接云厂商路径。
 当前尚未获得真实对象存储凭据，所以异机留存验收仍由运维未完成事项跟踪。

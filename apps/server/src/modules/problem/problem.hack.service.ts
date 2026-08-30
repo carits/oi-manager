@@ -17,7 +17,7 @@ import {
 import { transitionHackAttempt } from './problem.hack-state'
 
 export const HACK_SOURCE_LIMIT = 256 * 1024
-export const HACK_INPUT_LIMIT = 1024 * 1024
+export const HACK_INPUT_LIMIT = 16 * 1024 * 1024
 const HACK_TARGET_LANGUAGES = new Set(['c', 'c11', 'cpp', 'cpp11', 'cpp14', 'cpp17', 'cpp20', 'python3'])
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
@@ -317,7 +317,7 @@ export async function finalizeHackResult(
     const inputData = payload.inputData || ''
     const outputData = payload.outputData ?? ''
     if (!inputData.trim() || Buffer.byteLength(inputData, 'utf8') > HACK_INPUT_LIMIT || Buffer.byteLength(outputData, 'utf8') > HACK_INPUT_LIMIT) {
-      await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'system_error', data: { failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 1 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() } })
+      await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'system_error', data: { failureStage: 'persist', message: 'Judge 返回的 Hack 数据无效或超过 16 MiB', judgeId: null, judgeStarted: null, finishedAt: new Date() } })
       return
     }
     const inputSha256 = crypto.createHash('sha256').update(inputData).digest('hex')
@@ -378,6 +378,19 @@ export async function finalizeHackResult(
       ])
       return
     }
+    await prisma.testcaseCandidate.update({ where: { id: candidate.id }, data: { status: 'ELIGIBLE', evaluationStage: 'holdout_passed', currentValue: 1000, marginalValue: 1000, featureFingerprint: JSON.stringify({ source: 'hack', affectedSubtasks: affected, verdictChange: `${payload.baselineResult || ''}->${payload.candidateResult || ''}` }) } })
+    const policy = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`candidate-policy:${problem.id}`}, 0)) IS NULL AS locked`
+      return tx.problemCandidatePolicy.upsert({ where: { problemId: problem.id }, update: {}, create: { id: crypto.randomUUID(), problemId: problem.id, updatedBy: current.userId } })
+    })
+    const recentPublishes = await prisma.canonicalSelectionRun.count({ where: { problemId: problem.id, status: 'promoted', createdAt: { gte: new Date(Date.now() - 60 * 60_000) } } })
+    if (policy.selectorMode !== 'auto' || recentPublishes >= Math.min(policy.maxAutoPublishesPerHour, 3)) {
+      await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'accepted', data: { canonicalStatus: 'pending', ...resultFields, failureStage: null, message: recentPublishes >= 3 ? '有效 Hack；自动发布额度已用尽，候选数据等待下一轮 Selector' : '有效 Hack；候选数据已进入有界 Candidate Pool，Selector 当前处于观察模式', inputSha256, outputSha256, candidateTestcaseId: candidate.id, judgeId: null, judgeStarted: null, finishedAt: new Date() } })
+      return
+    }
+    const selectionRunId = crypto.randomUUID()
+    await prisma.canonicalSelectionRun.create({ data: { id: selectionRunId, problemId: problem.id, baseTestSetRevisionId: problem.latestTestSetRevisionId!, policyRevision: policy.revision, status: 'running', mode: 'auto', baselineQuality: 0, candidateQuality: 0.01, qualityDelta: 0.01, selectedCandidateIds: [candidate.id], publishReason: '有效 Hack 覆盖新的错误行为，达到 1% 自动发布阈值' } })
+    await prisma.testcaseCandidate.update({ where: { id: candidate.id }, data: { status: 'SELECTED', selectedAt: new Date() } })
     if (!await beginCandidatePromotion(candidate.id)) return
     const inputFileId = crypto.randomUUID(), outputFileId = crypto.randomUUID()
     const testcaseId = crypto.randomUUID()
@@ -435,6 +448,7 @@ export async function finalizeHackResult(
             message: `Promoted from R${baseRevision.revisionNumber} to R${revision.revisionNumber}`,
           })
           if (promoted.count !== 1) throw new Error('Testcase candidate promotion ownership was lost')
+          await tx.canonicalSelectionRun.update({ where: { id: selectionRunId }, data: { status: 'promoted', promotedRevisionId: revision.id, finishedAt: new Date() } })
           const finalized = await transitionHackAttempt(tx, {
             id: current.id,
             from: 'finalizing',
@@ -463,6 +477,7 @@ export async function finalizeHackResult(
         } })
       }
       await setCandidateStatus(candidate.id, error instanceof TestSetRevisionConflict ? 'STALE' : 'FAILED', String((error as Error)?.message || error)).catch(() => {})
+      await prisma.canonicalSelectionRun.updateMany({ where: { id: selectionRunId, status: 'running' }, data: { status: 'failed', errorCode: error instanceof TestSetRevisionConflict ? 'TEST_SET_REVISION_STALE' : 'PROMOTION_FAILED', errorMessage: String((error as Error)?.message || error).slice(0, 2000), finishedAt: new Date() } }).catch(() => {})
       if (testcaseCreated) await prisma.problemTestcase.deleteMany({ where: { id: testcaseId } }).catch(() => {})
       await prisma.testdataFile.deleteMany({ where: { id: { in: [inputFileId, outputFileId] } } }).catch(() => {})
       await Promise.allSettled([

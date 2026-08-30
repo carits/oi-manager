@@ -10,6 +10,8 @@ const unreferenced = {
   AcmOutputs: { none: {} },
   GroupInputs: { none: {} },
   GroupOutputs: { none: {} },
+  CandidateInputs: { none: {} },
+  CandidateOutputs: { none: {} },
 }
 
 export async function collectOrphanTestdataObjects(options: { olderThanMs?: number; limit?: number } = {}) {

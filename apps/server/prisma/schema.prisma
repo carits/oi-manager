@@ -43,11 +43,20 @@ enum RejudgeBatchStatus {
 }
 
 enum TestcaseCandidateStatus {
+  UPLOADED
+  ADMITTED
+  VALIDATING
+  EVALUATING_L1
+  EVALUATING_L2
+  EVALUATING_HOLDOUT
+  ELIGIBLE
+  SELECTED
   VALIDATED
   PROMOTING
   PROMOTED
   REDUNDANT
   REJECTED
+  EXPIRED
   FAILED
   STALE
 }
@@ -597,6 +606,9 @@ model ProblemDataGenerationJob {
   promotedRevisionId       String?
   errorCode                String?
   errorMessage             String?  @db.Text
+  contribution             Boolean  @default(false)
+  targetRole               String   @default("official")
+  reservedCredits          Int      @default(0)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -628,12 +640,14 @@ model ProblemDataGenerationCase {
   validatorTimeMs    Int?
   standardTimeMs     Int?
   promotedTestcaseId String?
+  candidateId       String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@unique([jobId, orderIndex])
   @@index([problemId, status])
   @@index([inputSha256])
+  @@index([candidateId])
 }
 
 model ProblemHackAttempt {
@@ -691,7 +705,9 @@ model TestcaseCandidate {
   problemId              String
   hackAttemptId          String?                 @unique
   source                 String                  @default("hack")
+  targetRole             String                  @default("hack_gate")
   status                 TestcaseCandidateStatus @default(VALIDATED)
+  evaluationStage        String                  @default("admission")
   baseTestSetRevisionId  String?
   inputObjectId          String?
   outputObjectId         String?
@@ -702,6 +718,20 @@ model TestcaseCandidate {
   inputFileName          String
   outputFileName         String
   affectedSubtaskIds     String?
+  standardVersionId      String?
+  validatorVersionId     String?
+  classifierVersionId    String?
+  generatorVersionId     String?
+  corpusRevisionId       String?
+  killVectorObjectId     String?
+  featureFingerprint     String?                 @db.Text
+  semanticFingerprint    String?
+  currentValue           Float                   @default(0)
+  marginalValue          Float                   @default(0)
+  runtimeCost            Float                   @default(0)
+  isProtected            Boolean                 @default(false)
+  expiresAt              DateTime?
+  selectedAt             DateTime?
   createdBy              String
   promotedTestcaseId     String?
   promotedRevisionId     String?
@@ -717,10 +747,262 @@ model TestcaseCandidate {
   PromotedRevision       ProblemTestSetRevision? @relation("CandidatePromotedRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
 
   @@index([problemId, status, createdAt])
+  @@index([problemId, targetRole, status, marginalValue])
+  @@index([createdBy, createdAt])
+  @@index([expiresAt])
   @@index([baseTestSetRevisionId])
   @@index([inputObjectId])
   @@index([outputObjectId])
   @@index([promotedRevisionId])
+}
+
+model WrongSolutionSample {
+  id             String   @id
+  problemId      String
+  source         String
+  submissionId   Int?
+  language       String
+  sourceSha256   String
+  sourceObjectId String?
+  result         String?
+  score          Int?
+  status         String   @default("pending")
+  behaviorHash   String?
+  clusterId      String?
+  categoryId     String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([problemId, sourceSha256])
+  @@index([problemId, status, createdAt])
+  @@index([clusterId])
+  @@index([submissionId])
+}
+
+model WrongBehaviorCluster {
+  id                     String   @id
+  problemId              String
+  corpusRevisionId       String?
+  representativeSampleId String
+  behaviorHash           String
+  categoryId             String?
+  weight                 Int      @default(1)
+  frequency              Int      @default(1)
+  partition              String   @default("evaluation")
+  status                 String   @default("active")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([problemId, behaviorHash])
+  @@index([problemId, status, partition])
+  @@index([corpusRevisionId])
+}
+
+model WrongCorpusRevision {
+  id              String   @id
+  problemId       String
+  revisionNumber  Int
+  status          String   @default("building")
+  sampleCount     Int      @default(0)
+  clusterCount    Int      @default(0)
+  evaluationCount Int      @default(0)
+  holdoutCount    Int      @default(0)
+  corpusHash      String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  activatedAt     DateTime?
+
+  @@unique([problemId, revisionNumber])
+  @@index([problemId, status, createdAt])
+}
+
+model BugCategory {
+  id        String   @id
+  problemId String
+  key       String
+  name      String
+  weight    Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([problemId, key])
+  @@index([problemId])
+}
+
+model CandidateEvaluationRun {
+  id               String   @id
+  candidateId      String
+  problemId        String
+  corpusRevisionId String?
+  stage            String
+  status           String   @default("queued")
+  executionCount   Int      @default(0)
+  cpuMilliseconds  Int      @default(0)
+  generatedBytes   BigInt   @default(0)
+  newClusterWeight Int      @default(0)
+  newCategoryCount Int      @default(0)
+  newFeatureCount  Int      @default(0)
+  similarity       Float    @default(0)
+  value            Float    @default(0)
+  message          String?  @db.Text
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([candidateId, stage])
+  @@index([problemId, status, createdAt])
+}
+
+model CanonicalSelectionRun {
+  id                       String   @id
+  problemId                String
+  baseTestSetRevisionId    String
+  corpusRevisionId         String?
+  policyRevision           Int
+  status                   String   @default("queued")
+  mode                     String   @default("observe")
+  baselineQuality          Float    @default(0)
+  candidateQuality         Float    @default(0)
+  qualityDelta             Float    @default(0)
+  holdoutRegressed         Boolean  @default(false)
+  selectedCandidateIds     Json?
+  promotedRevisionId       String?
+  publishReason            String?
+  errorCode                String?
+  errorMessage             String?  @db.Text
+  createdAt                DateTime @default(now())
+  finishedAt               DateTime?
+
+  @@index([problemId, status, createdAt])
+  @@index([promotedRevisionId])
+}
+
+model ProblemCandidatePolicy {
+  id                       String   @id
+  problemId                String   @unique
+  revision                 Int      @default(1)
+  selectorMode             String   @default("auto")
+  maxHotCandidates         Int      @default(2000)
+  maxHotBytes              BigInt   @default(1073741824)
+  topK                     Int      @default(500)
+  maxCanonicalCases        Int      @default(100)
+  maxOiCanonicalCases      Int      @default(300)
+  qualityThreshold         Float    @default(0.01)
+  maxAutoPublishesPerHour  Int      @default(3)
+  updatedBy                String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model EvaluationCreditAccount {
+  id              String   @id
+  subjectType     String
+  subjectId       String
+  periodStart     DateTime
+  limitCredits    Int
+  availableCredits Int
+  reservedCredits Int      @default(0)
+  consumedCredits Int      @default(0)
+  version         Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([subjectType, subjectId, periodStart])
+  @@index([periodStart])
+}
+
+model EvaluationCreditLedgerEntry {
+  id             String   @id
+  accountId      String
+  type           String
+  amount         Int
+  idempotencyKey String   @unique
+  taskType       String
+  taskId         String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([taskType, taskId])
+}
+
+model ValidatorSpec {
+  id              String   @id
+  problemId       String
+  versionNumber   Int
+  spec            Json
+  specHash        String
+  generatedSource String   @db.Text
+  templateVersion String
+  compileStatus   String
+  compileMessage  String?  @db.Text
+  verification    Json?
+  origin          String   @default("manual")
+  aiRequestId     String?
+  status          String   @default("draft")
+  createdBy       String
+  createdAt       DateTime @default(now())
+  activatedAt     DateTime?
+
+  @@unique([problemId, versionNumber])
+  @@index([problemId, status])
+  @@index([aiRequestId])
+}
+
+model ProblemFeatureDefinition {
+  id        String   @id
+  problemId String
+  key       String
+  name      String
+  kind      String
+  config    Json
+  orderIndex Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([problemId, key])
+  @@index([problemId, orderIndex])
+}
+
+model ProblemSubtaskRule {
+  id         String   @id
+  problemId  String
+  subtaskId  Int
+  rule       Json
+  revision   Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([problemId, subtaskId])
+  @@index([problemId])
+}
+
+model BlobObject {
+  id          String   @id
+  sha256      String   @unique
+  size        BigInt
+  storageKey  String   @unique
+  storageTier String   @default("hot")
+  contentType String?
+  createdAt   DateTime @default(now())
+  deleteAfter DateTime?
+  References  BlobReference[]
+
+  @@index([storageTier, deleteAfter])
+}
+
+model BlobReference {
+  id        String   @id
+  blobId    String
+  ownerType String
+  ownerId   String
+  role      String
+  createdAt DateTime @default(now())
+  Blob      BlobObject @relation(fields: [blobId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerType, ownerId, role])
+  @@index([blobId])
+  @@index([ownerType, ownerId])
 }
 
 model ProblemAttachment {

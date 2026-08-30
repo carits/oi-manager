@@ -45,11 +45,12 @@ const FAILURE_STAGE: Record<string, string> = {
   baseline: '原始完整评测', candidate: '加入候选点后评测', persist: '测试数据入库', stale: '配置一致性检查',
 }
 
-export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: {
+export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, hackEnabled }: {
   problemId: string
   acceptedCount: number
   languages: string[]
   mode: 'acm' | 'oi'
+  hackEnabled: boolean
 }) {
   const toast = useToast()
   const [choice, setChoice] = useState<InputChoice>('data')
@@ -85,7 +86,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
 
   const readFile = async (file: File | undefined, setter: (value: string) => void, limit: number) => {
     if (!file) return
-    if (file.size > limit) return toast.error(`文件不能超过 ${limit === 1024 * 1024 ? '1 MiB' : '256 KiB'}`)
+    if (file.size > limit) return toast.error(`文件不能超过 ${limit >= 16 * 1024 * 1024 ? '16 MiB' : limit >= 1024 * 1024 ? '1 MiB' : '256 KiB'}`)
     setter(await file.text())
   }
 
@@ -109,6 +110,18 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const contribute = async () => {
+    if (!candidate.trim()) return toast.error('请填写候选输入或 Generator 源码')
+    setSubmitting(true)
+    try {
+      const result = choice === 'data'
+        ? await apiClient.post(`/api/problems/${problemId}/candidates/data`, { name: '用户贡献', inputData: candidate })
+        : await apiClient.post(`/api/problems/${problemId}/candidates/generator`, { language: choice, source: candidate, manifest: { apiVersion: 'oj.generator/v1', protocol: 'json-stdin-v1', profiles: [{ id: 'default', params: {} }] } })
+      if (!result.success) return toast.error(result.message || 'Candidate 提交失败')
+      toast.success('Candidate 已进入隔离评估池，不会直接修改正式测试集'); setCandidate('')
+    } finally { setSubmitting(false) }
   }
 
   const retry = async (id: string) => {
@@ -138,8 +151,8 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
   return (
     <div className={styles.root}>
       <div className={styles.hero}>
-        <div><h2 className={styles.title}>题目级 {mode === 'oi' ? 'OI / IOI' : 'ACM'} Hack</h2><p className={styles.description}>{mode === 'oi' ? 'Classifier 会自动确定候选数据命中的 Subtask。系统分别按当前测试图和加入 Hack Gate 后的测试图完整评测；总分下降才会把数据加入正式测试。' : '提交候选输入和一份用于证明数据有效性的程序。系统会先运行当前完整数据，再将候选点放在最前面重新完整评测；最终 Verdict 发生变化才会把数据加入正式测试。'}</p></div>
-        <span className={styles.count}>已加入 {totalAccepted} 个有效 Hack</span>
+        <div><h2 className={styles.title}>{hackEnabled ? `题目级 ${mode === 'oi' ? 'OI / IOI' : 'ACM'} Hack 与数据贡献` : '贡献候选测试数据'}</h2><p className={styles.description}>{hackEnabled ? (mode === 'oi' ? 'Classifier 会确定候选数据命中的 Subtask。证明程序总分下降只说明技术 Hack 有效，数据仍需进入有界 Candidate Pool，通过私有错误语料和 Selector 后才可能纳入正式版本。' : '提交候选输入和证明程序可发起 Hack，也可以只贡献数据。Verdict 变化只说明技术 Hack 有效，候选数据不会绕过 Candidate Pool 直接写入正式测试集。') : '提交直接输入或确定性 Generator。数据会经过 Validator、STD 和有界 Candidate Pool，不会直接修改正式测试版本。'}</p></div>
+        {hackEnabled && <span className={styles.count}>技术有效 Hack {totalAccepted} 个</span>}
       </div>
 
       <div className={styles.form}>
@@ -156,23 +169,23 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
         </div>
 
         <div className={styles.field}>
-          <div className={styles.labelRow}><span className={styles.label}>{choice === 'data' ? '候选输入数据' : `${choice === 'cpp17' ? 'C++17' : 'Python3'} 数据生成器`}</span><label className={styles.upload}>上传文件<Input type="file" accept={choice === 'data' ? '.in,.txt,text/plain' : choice === 'cpp17' ? '.cpp,.cc,.cxx,text/plain' : '.py,text/plain'} onChange={event => readFile(event.target.files?.[0], setCandidate, choice === 'data' ? 1024 * 1024 : 256 * 1024)} /></label></div>
+          <div className={styles.labelRow}><span className={styles.label}>{choice === 'data' ? '候选输入数据' : `${choice === 'cpp17' ? 'C++17' : 'Python3'} 数据生成器`}</span><label className={styles.upload}>上传文件<Input type="file" accept={choice === 'data' ? '.in,.txt,text/plain' : choice === 'cpp17' ? '.cpp,.cc,.cxx,text/plain' : '.py,text/plain'} onChange={event => readFile(event.target.files?.[0], setCandidate, choice === 'data' ? 16 * 1024 * 1024 : 256 * 1024)} /></label></div>
           <Textarea className={styles.textarea} spellCheck={false} value={candidate} onChange={event => setCandidate(event.target.value)} placeholder={choice === 'data' ? '填写完整输入数据…' : '填写生成器源码，程序应将一组完整输入输出到 stdout…'} />
         </div>
 
-        <div className={styles.twoColumns}>
+        {hackEnabled && <div className={styles.twoColumns}>
           <div className={styles.field}><span className={styles.label}>被 Hack 程序语言</span><Select className={styles.select} value={hackLanguage} disabled={languages.length === 0} onChange={event => setHackLanguage(event.target.value)}>{languages.length === 0 ? <option value="">题目没有可用的本地语言</option> : languages.map(language => <option key={language} value={language}>{getLanguageLabel(language)}</option>)}</Select></div>
-          <div className={styles.warning}>有效 Hack 会直接加入题目测试数据。普通训练和未开始活动自动同步；进行中或已结束比赛由管理员手动同步。历史提交、成绩和排行榜不会自动重测。</div>
-        </div>
+          <div className={styles.warning}>所有输入和 Generator 都先进入 Candidate Pool。只有达到质量阈值的候选才会生成新的题库 TestSet Revision；既有比赛、训练、作业和历史成绩不会变化。</div>
+        </div>}
 
-        <div className={styles.field}>
+        {hackEnabled && <div className={styles.field}>
           <div className={styles.labelRow}><span className={styles.label}>用于证明的被 Hack 程序</span><label className={styles.upload}>上传源码<Input type="file" accept=".c,.cc,.cpp,.cxx,.py,text/plain" onChange={event => readFile(event.target.files?.[0], setHackSource, 256 * 1024)} /></label></div>
           <Textarea className={styles.textarea} spellCheck={false} value={hackSource} onChange={event => setHackSource(event.target.value)} placeholder={mode === 'oi' ? '填写加入候选数据后总分会下降的证明程序…' : '填写在加入候选数据前后会产生不同最终 Verdict 的程序…'} />
-        </div>
-        <div className={styles.submitRow}><Button variant="ghost" type="button" className={styles.submit} disabled={submitting || hasActive || !candidate.trim() || !hackSource.trim() || !hackLanguage} onClick={submit}>{hasActive ? '已有 Hack 正在处理' : submitting ? '正在提交…' : '发起 Hack'}</Button></div>
+        </div>}
+        <div className={styles.submitRow}><Button variant="outline" type="button" disabled={submitting || !candidate.trim()} onClick={contribute}>{submitting ? '正在提交…' : hackEnabled ? '仅贡献 Candidate' : '贡献 Candidate'}</Button>{hackEnabled && <Button variant="ghost" type="button" className={styles.submit} disabled={submitting || hasActive || !candidate.trim() || !hackSource.trim() || !hackLanguage} onClick={submit}>{hasActive ? '已有 Hack 正在处理' : submitting ? '正在提交…' : '发起 Hack'}</Button>}</div>
       </div>
 
-      <section className={styles.history}>
+      {hackEnabled && <section className={styles.history}>
         <h3 className={styles.historyTitle}>{canManage ? '本题全部 Hack 记录' : '我的 Hack 记录'}</h3>
         {loading ? <div className={styles.empty}>正在加载…</div> : attempts.length === 0 ? <div className={styles.empty}>暂无 Hack 记录</div> : (
           <div className={styles.tableWrap}><TableRoot className={styles.table}><TableHead><TableRow><TableHeaderCell>时间</TableHeaderCell>{canManage && <TableHeaderCell>用户</TableHeaderCell>}<TableHeaderCell>输入方式</TableHeaderCell><TableHeaderCell>程序语言</TableHeaderCell><TableHeaderCell>Hack 程序</TableHeaderCell><TableHeaderCell>前后 Verdict</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>失败阶段</TableHeaderCell><TableHeaderCell>说明</TableHeaderCell></TableRow></TableHead><TableBody>{attempts.map(item => {
@@ -181,7 +194,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode }: 
             return <Fragment key={item.id}><TableRow><TableCell>{new Date(item.createdAt).toLocaleString('zh-CN')}</TableCell>{canManage && <TableCell>{item.username || '-'}</TableCell>}<TableCell>{item.inputMode === 'data' ? '直接数据' : item.generatorLanguage}</TableCell><TableCell>{getLanguageLabel(item.hackLanguage)}</TableCell><TableCell><div className={styles.actions}><Button variant="ghost" type="button" className={styles.retry} disabled={loadingDetailId === item.id} onClick={() => toggleDetails(item)}>{loadingDetailId === item.id ? '读取中…' : expandedAttemptId === item.id ? '收起程序' : '查看程序'}</Button>{canManage && item.status === 'system_error' && <Button variant="ghost" type="button" className={styles.retry} onClick={() => retry(item.id)}>重新执行</Button>}</div></TableCell><TableCell>{comparison}</TableCell><TableCell><span className={`${styles.status} ${item.status === 'accepted' ? styles.accepted : item.status === 'rejected' ? styles.rejected : item.status === 'system_error' || item.status === 'stale' ? styles.error : ''}`}>{STATUS[item.status] || item.status}</span></TableCell><TableCell>{item.failureStage ? FAILURE_STAGE[item.failureStage] || item.failureStage : '—'}</TableCell><TableCell title={item.message || ''}>{item.message || '—'}</TableCell></TableRow>{expandedAttemptId === item.id && <TableRow><TableCell colSpan={canManage ? 9 : 8} className={styles.detailCell}>{detail ? <div className={styles.detailGrid}><section><strong>{detail.inputMode === 'data' ? '候选输入' : `${detail.generatorLanguage} 生成器`}</strong><pre>{detail.inputMode === 'data' ? detail.inputData : detail.generatorSource}</pre></section><section><strong>被 Hack 程序（{getLanguageLabel(detail.hackLanguage)}）</strong><pre>{detail.hackSource}</pre></section></div> : <div className={styles.detailLoading}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="Hack 详情正在准备" /></div>}</TableCell></TableRow>}</Fragment>
           })}</TableBody></TableRoot></div>
         )}
-      </section>
+      </section>}
     </div>
   )
 }

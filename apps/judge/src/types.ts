@@ -212,10 +212,10 @@ export interface DataGenerationRequest {
   sourceMode: 'generator' | 'input'
   filename?: string | null
   problemConfig: ProblemConfig
-  generator?: { language: 'cpp17' | 'python3'; source: string } | null
+  generator?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'legacy-args-v1' | 'json-stdin-v1' } | null
   standard: { language: 'cpp17'; source: string }
   validator: { language: 'cpp17'; source: string }
-  cases: Array<{ id: string; name: string; args: string[]; seed?: string | null; inputData?: string }>
+  cases: Array<{ id: string; name: string; args: string[]; seed?: string | null; inputData?: string; profile?: string; params?: Record<string, unknown> }>
 }
 
 export interface DataGenerationResult {

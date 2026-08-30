@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -28,6 +28,26 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/data-generation-jobs/:jobId` | 读取任务、逐点阶段和内容预览 |
 | `POST` | `/api/problems/:id/data-generation-jobs/:jobId/cancel` | 取消尚未完成的数据生成任务 |
 | `POST` | `/api/problems/:id/data-generation-jobs/:jobId/promote` | 以 CAS 发布选中候选点到下一 TestSet Revision |
+| `POST` | `/api/problems/:id/candidates/data` | 可提交用户贡献直接 Candidate 数据 |
+| `POST` | `/api/problems/:id/candidates/generator` | 可提交用户按 `oj.generator/v1` 贡献 C++17/Python3 Generator |
+| `GET` | `/api/problems/:id/candidates/mine` | 贡献者读取自己的 Candidate 粗粒度阶段与结论 |
+| `GET` | `/api/problems/:id/candidates/:candidateId` | 本人或题目管理者读取 Candidate；普通用户不返回 Kill/隐藏 Feature |
+| `POST` | `/api/problems/:id/candidates/:candidateId/cancel` | 取消尚未开始评估的自己的 Candidate |
+| `GET` | `/api/problems/:id/candidate-pool` | 题目管理者读取有界 Candidate Pool、容量和策略 |
+| `PUT` | `/api/problems/:id/candidate-policy` | 题目管理者以 revision CAS 更新 observe/auto 与容量策略 |
+| `GET` | `/api/problems/:id/wrong-corpus` | 题目管理者读取私有错误语料的聚类汇总，不返回历史源码 |
+| `POST` | `/api/problems/:id/wrong-corpus/rebuild` | 从本地错误/部分分提交幂等重建 bootstrap Corpus |
+| `GET` | `/api/problems/:id/selector-runs` | 题目管理者读取 Selector 运行历史 |
+| `POST` | `/api/problems/:id/selector-runs/preview` | 预览当前有界池的去重与价值选择结果，不发布 |
+| `GET` | `/api/problems/:id/feature-definitions` | 读取题目 Feature 注册表 |
+| `PUT` | `/api/problems/:id/feature-definitions` | 保存最多 128 个声明式 Feature |
+| `GET` | `/api/problems/:id/subtask-rules` | 读取 OI 声明式 Subtask Rule |
+| `PUT` | `/api/problems/:id/subtask-rules` | 保存最多 64 条 Subtask Rule |
+| `GET` | `/api/problems/:id/validator-specs` | 题目管理者列出不可变 Validator DSL 版本 |
+| `POST` | `/api/problems/:id/validator-specs` | 校验 DSL、生成可信 C++ 并执行真实沙箱编译 |
+| `POST` | `/api/problems/:id/validator-specs/:specId/activate` | 激活已通过编译的 Validator Spec |
+| `POST` | `/api/problems/:id/ai/validator-spec` | 通过统一 Token 池让 DeepSeek 生成 Validator DSL 草案 |
+| `POST` | `/api/problems/:id/ai/validator-spec/:requestId/save` | 审阅后保存 AI DSL 为不可变 Validator Spec |
 | `POST` | `/api/problems/:id/ai/validator` | 从官方 Markdown 题面生成并编译 Validator 草案 |
 | `GET` | `/api/problems/:id/ai/validator/:requestId` | 读取自己的 Validator 生成请求和真实 Token 用量 |
 | `POST` | `/api/problems/:id/ai/validator/:requestId/repair` | 最多两轮关联修复并重新编译 Validator |
@@ -35,6 +55,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/platform-admin/ai/token-pool` | 平台管理员读取统一 Token 总池 |
 | `GET` | `/api/platform-admin/ai/token-usage` | 平台管理员分页读取不可变 Token 流水 |
 | `POST` | `/api/platform-admin/ai/token-pool/adjust` | 平台管理员按幂等键充值或人工调整 Token |
+| `GET` | `/api/platform-admin/ai/evaluation-budget` | 平台管理员读取 Evaluation Credits、Candidate、Blob 和孤儿对象概览 |
 | `GET` | `/api/problems/:id/hack-config` | 题目管理者读取 ACM/OI Hack 配置 |
 | `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator、Classifier 和 Hack 开关 |
 | `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |
