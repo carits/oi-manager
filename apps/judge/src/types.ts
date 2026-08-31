@@ -211,10 +211,12 @@ export interface DataGenerationRequest {
   fencingToken: string
   sourceMode: 'generator' | 'input'
   filename?: string | null
+  maxDataBytes?: number
   problemConfig: ProblemConfig
   generator?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'legacy-args-v1' | 'json-stdin-v1' } | null
   standard: { language: 'cpp17'; source: string }
   validator: { language: 'cpp17'; source: string }
+  classifier?: { language: 'cpp17'; source: string } | null
   cases: Array<{ id: string; name: string; args: string[]; seed?: string | null; inputData?: string; profile?: string; params?: Record<string, unknown> }>
 }
 
@@ -222,7 +224,7 @@ export interface DataGenerationResult {
   jobId: string
   fencingToken: string
   retryable?: boolean
-  cases: Array<{ id: string; status: 'validated' | 'failed'; failureStage?: string; message?: string; inputData?: string; outputData?: string; generatorTimeMs?: number; validatorTimeMs?: number; standardTimeMs?: number }>
+  cases: Array<{ id: string; status: 'validated' | 'failed'; failureStage?: string; message?: string; inputData?: string; outputData?: string; generatorTimeMs?: number; validatorTimeMs?: number; standardTimeMs?: number; classificationStatus?: 'classified' | 'missing' | 'failed' | 'not_required'; classificationMessage?: string; affectedSubtaskIds?: number[] }>
 }
 
 // ==================== 语言配置 ====================

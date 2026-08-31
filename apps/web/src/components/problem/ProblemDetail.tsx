@@ -937,7 +937,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           )}
 
           {activeTab === 'hack' && problem.hack && (problem.permissions.canSubmit || canModify()) && (
-            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} mode={problem.hack.mode} hackEnabled={problem.hack.enabled} />
+            <ProblemHackPanel problemId={problemId} acceptedCount={problem.hack.acceptedCount} languages={hackLanguages} mode={problem.hack.mode} hackEnabled={problem.hack.enabled} onConfigureAssets={() => router.push(`${pathPrefix}/problems/${problemId}/edit?section=judge-assets`)} />
           )}
 
           {/* 提交记录 Tab */}

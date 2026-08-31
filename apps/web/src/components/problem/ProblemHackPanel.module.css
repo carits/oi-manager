@@ -4,6 +4,21 @@
 .description { margin: 0; max-width: 760px; color: var(--gray-600); font-size: 14px; line-height: 1.7; }
 .count { flex: none; padding: 8px 12px; border-radius: 999px; background: white; border: 1px solid var(--primary-light); color: var(--primary); font-weight: 700; font-size: 13px; }
 .form { display: grid; gap: 18px; }
+.readiness { display: grid; gap: 14px; padding: 18px 20px; border: 1px solid var(--gray-200); border-radius: 12px; background: white; }
+.readinessTitle { display: flex; justify-content: space-between; gap: 16px; color: var(--gray-600); font-size: 13px; }
+.readinessTitle strong { color: var(--gray-900); font-size: 15px; }
+.readinessGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.readinessItem { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; min-width: 0; padding: 11px 12px; border-radius: 9px; background: var(--gray-50); font-size: 12px; }
+.readinessItem > span:last-child { grid-column: 2; color: var(--gray-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ok { display: inline-flex; color: var(--success-text); }
+.bad { display: inline-flex; color: var(--error-text); }
+.pending { display: inline-flex; color: var(--warning-text); }
+.blocked { display: flex; align-items: flex-start; gap: 14px; padding: 20px; border: 1px solid var(--error-light); border-left: 4px solid var(--error); border-radius: 10px; background: color-mix(in srgb, var(--error-light) 55%, white); color: var(--error-text); }
+.blocked h3 { margin: 0 0 7px; color: var(--gray-900); font-size: 17px; }
+.blocked p { margin: 4px 0; line-height: 1.6; }
+.configureActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.notice { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border-left: 3px solid var(--warning); border-radius: 8px; background: var(--warning-light); color: var(--warning-text); font-size: 13px; line-height: 1.6; }
+.notice svg { flex: none; margin-top: 1px; }
 .modeGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .mode { text-align: left; padding: 14px 15px; border: 1px solid var(--gray-200); border-radius: 10px; background: white; cursor: pointer; }
 .modeActive { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, white); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 12%, transparent); }
@@ -19,10 +34,30 @@
 .twoColumns { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); gap: 16px; }
 .select { min-height: 40px; border: 1px solid var(--gray-300); border-radius: 8px; padding: 0 10px; background: white; }
 .warning { padding: 13px 15px; border-left: 4px solid var(--warning); border-radius: 8px; background: var(--warning-light); color: var(--warning-text); font-size: 13px; line-height: 1.65; }
+.pipeline { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 12px 14px; border-radius: 9px; background: var(--bg-muted); color: var(--gray-600); font-size: 13px; }
+.pipeline strong { color: var(--gray-900); }
+.submitArea { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.disabledReason { color: var(--error-text); font-size: 13px; }
+.readyReason { color: var(--success-text); font-size: 13px; font-weight: 600; }
 .submitRow { display: flex; justify-content: flex-end; }
 .submit { border: 0; border-radius: 9px; padding: 10px 20px; background: var(--primary); color: white; font-weight: 700; cursor: pointer; }
 .submit:disabled { opacity: .55; cursor: not-allowed; }
 .history { border-top: 1px solid var(--gray-200); padding-top: 20px; }
+.contributions { border-top: 1px solid var(--gray-200); padding-top: 20px; }
+.taskList { display: grid; gap: 10px; }
+.task { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--gray-200); border-radius: 10px; background: white; }
+.taskHeader { display: flex; justify-content: space-between; gap: 14px; color: var(--gray-500); font-size: 12px; }
+.taskHeader strong { color: var(--gray-900); font-size: 14px; }
+.taskStage { display: flex; align-items: center; gap: 8px; color: var(--gray-600); font-size: 13px; }
+.timeline { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.timeline li { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 999px; background: var(--gray-50); color: var(--gray-400); font-size: 11px; }
+.timelineDone { background: var(--success-light) !important; color: var(--success-text) !important; }
+.timelineCurrent { background: var(--primary-light) !important; color: var(--primary) !important; font-weight: 700; }
+.timelineFailed { background: var(--error-light) !important; color: var(--error-text) !important; font-weight: 700; }
+.caseList { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--gray-100); }
+.caseItem { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(150px, 1fr) auto auto; gap: 10px; align-items: center; color: var(--gray-600); font-size: 12px; }
+.caseItem > span:first-child { color: var(--gray-900); font-weight: 600; }
+.caseMessage { grid-column: 1 / -1; color: var(--error-text); }
 .historyTitle { margin: 0 0 12px; font-size: 16px; }
 .tableWrap { overflow-x: auto; border: 1px solid var(--gray-200); border-radius: 10px; }
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -41,4 +76,5 @@
 .detailGrid section { min-width: 0; color: var(--gray-700); }
 .detailGrid pre { max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 12px; border-radius: 8px; background: var(--gray-900); color: var(--gray-200); white-space: pre; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .detailLoading { padding: 22px; text-align: center; color: var(--gray-500); }
-@media (max-width: 850px) { .hero { flex-direction: column; } .modeGrid, .twoColumns, .detailGrid { grid-template-columns: 1fr; } .root { padding: 16px; } }
+@media (max-width: 1000px) { .readinessGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 850px) { .hero { flex-direction: column; } .modeGrid, .twoColumns, .detailGrid, .readinessGrid { grid-template-columns: 1fr; } .root { padding: 16px; } .submitArea { align-items: stretch; flex-direction: column; } .submitRow { justify-content: stretch; } .submitRow > button { flex: 1; } .caseItem { grid-template-columns: 1fr; } .taskHeader { flex-direction: column; gap: 4px; } }

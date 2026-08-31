@@ -41,6 +41,8 @@ export async function createAdmittedCandidate(params: {
   classifierVersionId?: string | null
   generatorVersionId?: string | null
   hackAttemptId?: string | null
+  status?: 'ADMITTED' | 'ELIGIBLE'
+  evaluationStage?: string
 }) {
   if (!params.input.length || !params.output.length || params.input.length > EVALUATION_LIMITS.maxCandidateBytes || params.output.length > EVALUATION_LIMITS.maxCandidateBytes) {
     throw new EvaluationBudgetError(413, 'CANDIDATE_DATA_TOO_LARGE', '候选输入或答案为空，或超过 16 MiB')
@@ -64,7 +66,7 @@ export async function createAdmittedCandidate(params: {
   const [inputObject, outputObject] = await Promise.all([ingestTestdataObject(params.problemId, params.input), ingestTestdataObject(params.problemId, params.output)])
   const candidate = await prisma.testcaseCandidate.create({ data: {
     id: params.id || crypto.randomUUID(), problemId: params.problemId, hackAttemptId: params.hackAttemptId || null,
-    source: params.source, targetRole: params.targetRole, status: 'ELIGIBLE', evaluationStage: 'technical_validated',
+    source: params.source, targetRole: params.targetRole, status: params.status || 'ADMITTED', evaluationStage: params.evaluationStage || 'awaiting_evaluator',
     baseTestSetRevisionId: params.baseTestSetRevisionId || null, inputObjectId: inputObject.id, outputObjectId: outputObject.id,
     inputSha256, outputSha256, inputSize: params.input.length, outputSize: params.output.length,
     inputFileName: params.inputFileName, outputFileName: params.outputFileName,

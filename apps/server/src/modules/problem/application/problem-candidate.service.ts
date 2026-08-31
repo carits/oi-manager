@@ -5,6 +5,7 @@ import { canModifyProblem, canViewProblem } from '../problem.access'
 import { createDataGenerationJob } from '../problem.data-generation.service'
 import { EVALUATION_LIMITS } from '../problem.evaluation-budget.service'
 import { ACTIVE_CANDIDATE_STATUSES } from '../problem.testcase-candidate.service'
+import { resolveContributionContext } from '../problem.contribution-readiness.service'
 
 export class ProblemCandidateError extends Error { constructor(public statusCode: number, public code: string, message: string) { super(message) } }
 function fail(status: number, code: string, message: string): never { throw new ProblemCandidateError(status, code, message) }
@@ -17,16 +18,94 @@ async function problemFor(user: JwtPayload, problemId: string, manager = false) 
 export async function contributeCandidateData(user: JwtPayload, problemId: string, body: any) {
   await problemFor(user, problemId); const inputData = String(body?.inputData || '')
   if (!inputData.trim() || Buffer.byteLength(inputData) > EVALUATION_LIMITS.maxCandidateBytes) fail(413, 'CANDIDATE_DATA_TOO_LARGE', '候选数据为空或超过 16 MiB')
-  return createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'input', cases: [{ name: String(body?.name || 'candidate').slice(0, 80), inputData }] } })
+  const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'input', cases: [{ name: String(body?.name || 'candidate').slice(0, 80), inputData }] } })
+  return { jobId: job.id, status: job.status }
 }
 export async function contributeCandidateGenerator(user: JwtPayload, problemId: string, body: any) {
   await problemFor(user, problemId); const source = String(body?.source || ''), language = body?.language === 'python3' ? 'python3' : 'cpp17', manifest = body?.manifest
   if (!source.trim() || Buffer.byteLength(source) > 1024 * 1024) fail(413, 'GENERATOR_SOURCE_TOO_LARGE', 'Generator 源码为空或超过 1 MiB')
   if (manifest?.apiVersion !== 'oj.generator/v1' || manifest?.protocol !== 'json-stdin-v1' || !Array.isArray(manifest?.profiles) || !manifest.profiles.length || manifest.profiles.length > 64) fail(400, 'GENERATOR_MANIFEST_INVALID', 'Generator Manifest 必须使用 oj.generator/v1，并提供 1～64 个 Profile')
   const profiles = manifest.profiles.slice(0, 8).map((item: any, index: number) => ({ name: String(item?.id || `profile-${index + 1}`).slice(0, 80), profile: String(item?.id || `profile-${index + 1}`), params: item?.params && typeof item.params === 'object' ? item.params : {}, args: [], seed: crypto.createHash('sha256').update(`${user.userId}:${Date.now()}:${index}`).digest('hex').slice(0, 16) }))
-  return createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'generator', generatorSource: source, generatorLanguage: language, cases: profiles } })
+  const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'generator', generatorSource: source, generatorLanguage: language, cases: profiles } })
+  return { jobId: job.id, status: job.status }
 }
 export async function listMyCandidates(user: JwtPayload, problemId: string) { await problemFor(user, problemId); return prisma.testcaseCandidate.findMany({ where: { problemId, createdBy: user.userId }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, source: true, targetRole: true, status: true, evaluationStage: true, currentValue: true, marginalValue: true, message: true, createdAt: true, updatedAt: true, promotedRevisionId: true } }) }
+
+function safeMessage(value: string | null | undefined, manager: boolean) {
+  if (!value) return null
+  const cleaned = value.replace(/(?:[A-Za-z]:\\|\/)(?:[^\s:]+[\\/])+[^\s:]*/g, '[path]').slice(0, manager ? 4000 : 500)
+  if (!manager && /duplicate|重复/i.test(cleaned)) return '与现有候选或正式测试数据完全重复'
+  return cleaned
+}
+
+function publicContributionStage(job: any, item?: any) {
+  if (item?.candidate?.evaluationStage) return item.candidate.evaluationStage
+  if (item?.status === 'failed') return item.failureStage || 'failed'
+  if (item?.status === 'duplicate') return 'deduplication'
+  if (item?.status === 'validated') return 'candidate_pool'
+  if (job.status === 'queued') return 'received'
+  if (job.status === 'running') return job.config?.sourceMode === 'generator' ? 'generator_compile' : 'validator'
+  if (job.status === 'finalizing') return 'deduplication'
+  if (job.status === 'failed' || job.status === 'cancelled') return 'failed'
+  return job.status === 'completed' ? 'completed' : 'received'
+}
+
+function serializeContribution(job: any, manager: boolean) {
+  return {
+    jobId: job.id,
+    status: job.status,
+    sourceMode: job.config?.sourceMode || 'input',
+    stage: publicContributionStage(job),
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    finishedAt: job.finishedAt,
+    errorCode: job.errorCode,
+    message: safeMessage(job.errorMessage, manager),
+    cases: (job.cases || []).map((item: any) => ({
+      caseId: item.id,
+      name: item.name,
+      status: item.status,
+      stage: publicContributionStage(job, item),
+      candidateId: item.candidate?.id || item.candidateId || undefined,
+      candidateStatus: item.candidate?.status,
+      promotedRevisionId: item.candidate?.promotedRevisionId || undefined,
+      message: safeMessage(item.message || item.candidate?.message, manager),
+    })),
+  }
+}
+
+export async function getContributionReadiness(user: JwtPayload, problemId: string) {
+  return (await resolveContributionContext(user, problemId)).public
+}
+
+export async function listMyContributions(user: JwtPayload, problemId: string) {
+  const context = await resolveContributionContext(user, problemId)
+  const jobs = await prisma.problemDataGenerationJob.findMany({
+    where: { problemId, contribution: true, ...(context.canManage ? {} : { createdBy: user.userId }) },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  })
+  const cases = jobs.length ? await prisma.problemDataGenerationCase.findMany({ where: { jobId: { in: jobs.map(job => job.id) } }, orderBy: [{ jobId: 'asc' }, { orderIndex: 'asc' }] }) : []
+  const casesByJob = new Map<string, typeof cases>()
+  for (const item of cases) casesByJob.set(item.jobId, [...(casesByJob.get(item.jobId) || []), item])
+  const candidateIds = cases.map(item => item.candidateId).filter((id): id is string => Boolean(id))
+  const candidates = candidateIds.length ? await prisma.testcaseCandidate.findMany({ where: { id: { in: candidateIds } }, select: { id: true, status: true, evaluationStage: true, message: true, promotedRevisionId: true } }) : []
+  const byId = new Map(candidates.map(item => [item.id, item]))
+  return jobs.map(job => serializeContribution({ ...job, cases: (casesByJob.get(job.id) || []).map(item => ({ ...item, candidate: item.candidateId ? byId.get(item.candidateId) : null })) }, context.canManage))
+}
+
+export async function getContribution(user: JwtPayload, problemId: string, jobId: string) {
+  const context = await resolveContributionContext(user, problemId)
+  const job = await prisma.problemDataGenerationJob.findFirst({
+    where: { id: jobId, problemId, contribution: true, ...(context.canManage ? {} : { createdBy: user.userId }) },
+  })
+  if (!job) fail(404, 'CONTRIBUTION_NOT_FOUND', '贡献任务不存在')
+  const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id }, orderBy: { orderIndex: 'asc' } })
+  const candidateIds = cases.map(item => item.candidateId).filter((id): id is string => Boolean(id))
+  const candidates = candidateIds.length ? await prisma.testcaseCandidate.findMany({ where: { id: { in: candidateIds } }, select: { id: true, status: true, evaluationStage: true, message: true, promotedRevisionId: true } }) : []
+  const byId = new Map(candidates.map(item => [item.id, item]))
+  return serializeContribution({ ...job, cases: cases.map(item => ({ ...item, candidate: item.candidateId ? byId.get(item.candidateId) : null })) }, context.canManage)
+}
 export async function getCandidateDetail(user: JwtPayload, problemId: string, candidateId: string) {
   const problem = await problemFor(user, problemId), manager = canModifyProblem(user, problem), data = await prisma.testcaseCandidate.findFirst({ where: { id: candidateId, problemId, ...(manager ? {} : { createdBy: user.userId }) } })
   if (!data) fail(404, 'CANDIDATE_NOT_FOUND', '候选数据不存在')

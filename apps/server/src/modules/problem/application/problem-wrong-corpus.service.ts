@@ -3,6 +3,7 @@ import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../../prisma'
 import { canModifyProblem } from '../problem.access'
 import { EVALUATION_LIMITS } from '../problem.evaluation-budget.service'
+import { refreshAdmittedCandidateStages } from '../problem.contribution-readiness.service'
 
 const WRONG_RESULTS = ['Wrong Answer', 'Presentation Error', 'Time Limit Exceeded', 'Memory Limit Exceeded', 'Runtime Error', 'Output Limit Exceeded']
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex')
@@ -35,5 +36,6 @@ export async function rebuildWrongCorpus(user: JwtPayload, problemId: string) {
     const holdoutCount = selected.filter(([sourceSha256, item]) => parseInt(hash(`${item.language}\0${item.result}\0${item.score ?? ''}\0${sourceSha256}`).slice(0, 2), 16) % 5 === 0).length
     await tx.wrongCorpusRevision.create({ data: { id: revisionId, problemId, revisionNumber, status: 'active', sampleCount: selected.length, clusterCount: selected.length, evaluationCount: selected.length - holdoutCount, holdoutCount, corpusHash: hash(selected.map(([key]) => key).sort().join('\n')), createdBy: user.userId, activatedAt: new Date() } })
   })
+  await refreshAdmittedCandidateStages(problemId)
   return { revisionNumber, samples: selected.length }
 }

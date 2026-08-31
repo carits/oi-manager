@@ -7,10 +7,11 @@ import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
 import { ingestTestdataObject, loadRevisionSpec, publishTestSetRevision, TestSetRevisionConflict, type RevisionCaseSpec } from './problem.testset-revision.service'
 import { requireProgramProblem } from './problem.judge-program.service'
 import yaml from 'js-yaml'
-import { canModifyProblem, canViewProblem } from './problem.access'
+import { canModifyProblem } from './problem.access'
 import { compileJudgeProgram } from './problem.judge-program.service'
 import { createAdmittedCandidate } from './problem.testcase-candidate.service'
 import { EVALUATION_LIMITS, releaseEvaluationCredits, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from './problem.evaluation-budget.service'
+import { requireContributionReady, resolveActiveProgramVersion } from './problem.contribution-readiness.service'
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const MAX_CASES = Number(process.env.DATA_GENERATION_MAX_CASES || 50)
@@ -42,21 +43,10 @@ function normalizeCases(body: any): GenerationCaseInput[] {
   })
 }
 
-async function currentProgramVersion(problemId: string, kind: string) {
-  const hackConfig = await prisma.problemHackConfig.findUnique({ where: { problemId }, select: { standardProgramVersionId: true, validatorProgramVersionId: true, classifierProgramVersionId: true } })
-  const configuredVersionId = kind === 'standard' ? hackConfig?.standardProgramVersionId : kind === 'validator' ? hackConfig?.validatorProgramVersionId : kind === 'classifier' ? hackConfig?.classifierProgramVersionId : null
-  if (configuredVersionId) return loadVersion(problemId, configuredVersionId, kind)
-  const program = await prisma.problemJudgeProgram.findFirst({ where: { problemId, kind, status: 'active', currentVersionId: { not: null } }, orderBy: { updatedAt: 'desc' } })
-  if (!program?.currentVersionId) fail(409, 'PROGRAM_VERSION_REQUIRED', `该题尚未配置可用的 ${kind} 程序`)
-  return loadVersion(problemId, program.currentVersionId, kind)
-}
-
 export async function createDataGenerationJob(input: { user: JwtPayload; problemId: string; body: any }) {
   const contribution = input.body?.contribution === true
-  const found = contribution ? await prisma.problem.findUnique({ where: { id: input.problemId } }) : null
-  const problem = contribution
-    ? (found && found.status === 'published' && canViewProblem(input.user, found) ? found : fail(404, 'PROBLEM_NOT_FOUND', '题目不存在或当前身份不能贡献数据'))
-    : await requireProgramProblem(input.user, input.problemId)
+  const readiness = contribution ? await requireContributionReady(input.user, input.problemId) : null
+  const problem = readiness?.problem || await requireProgramProblem(input.user, input.problemId)
   const manager = canModifyProblem(input.user, problem)
   const sourceMode = input.body?.sourceMode === 'input' ? 'input' : 'generator'
   const cases = normalizeCases({ ...input.body, sourceMode, contribution })
@@ -66,14 +56,14 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
     : null
   if (ephemeralGenerator) await compileJudgeProgram(ephemeralGenerator.source, ephemeralGenerator.language, '候选数据生成器')
   const [standard, validator, generator] = await Promise.all([
-    contribution ? currentProgramVersion(problem.id, 'standard') : loadVersion(problem.id, String(input.body?.standardVersionId || ''), 'standard'),
-    contribution ? currentProgramVersion(problem.id, 'validator') : loadVersion(problem.id, String(input.body?.validatorVersionId || ''), 'validator'),
-    sourceMode === 'generator' && !ephemeralGenerator ? (contribution ? currentProgramVersion(problem.id, 'generator') : loadVersion(problem.id, String(input.body?.generatorVersionId || ''), 'generator')) : null,
+    contribution ? Promise.resolve(readiness!.standardProgram!) : loadVersion(problem.id, String(input.body?.standardVersionId || ''), 'standard'),
+    contribution ? Promise.resolve(readiness!.validatorProgram!) : loadVersion(problem.id, String(input.body?.validatorVersionId || ''), 'validator'),
+    sourceMode === 'generator' && !ephemeralGenerator ? (contribution ? resolveActiveProgramVersion(problem.id, 'generator').then(value => value || fail(409, 'GENERATOR_NOT_ACTIVE', '该题尚未配置已激活的 Generator')) : loadVersion(problem.id, String(input.body?.generatorVersionId || ''), 'generator')) : null,
   ])
   const jobId = crypto.randomUUID()
   const reservedCredits = contribution ? (sourceMode === 'generator' ? 4_000 : 400) : 0
   if (reservedCredits) await reserveEvaluationCredits({ userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
-  const config: any = { sourceMode, filename: (() => { try { return (require('js-yaml').load(problem.judgeConfig || '') as any)?.filename || null } catch { return null } })(), cases, generator: ephemeralGenerator }
+  const config: any = { sourceMode, filename: (() => { try { return (require('js-yaml').load(problem.judgeConfig || '') as any)?.filename || null } catch { return null } })(), cases, generator: ephemeralGenerator, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
   try { return await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`data-generation:${problem.id}`}, 0)) IS NULL AS locked`
     const activeCount = await tx.problemDataGenerationJob.count({
@@ -129,16 +119,18 @@ export async function claimDataGenerationJob(judgeId: string) {
     const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: rows[0].id, status: 'queued' }, data: { status: 'running', judgeId, fencingToken, leaseExpiresAt, startedAt: new Date() } })
     if (!changed.count) return null
     const job = await tx.problemDataGenerationJob.findUniqueOrThrow({ where: { id: rows[0].id } })
-    const [generator, standard, validator, cases] = await Promise.all([
+    const classifierVersionId = typeof (job.config as any)?.classifierVersionId === 'string' ? (job.config as any).classifierVersionId : null
+    const [generator, standard, validator, classifier, cases] = await Promise.all([
       job.generatorVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: job.generatorVersionId } }) : null,
       tx.problemJudgeProgramVersion.findUniqueOrThrow({ where: { id: job.standardVersionId } }),
       tx.problemJudgeProgramVersion.findUniqueOrThrow({ where: { id: job.validatorVersionId } }),
+      classifierVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: classifierVersionId } }) : null,
       tx.problemDataGenerationCase.findMany({ where: { jobId: job.id }, orderBy: { orderIndex: 'asc' } }),
     ])
     const config = job.config as any
     const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } })
     const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: 'legacy-args-v1' } : null)
-    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, filename: config.filename, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
+    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, filename: config.filename, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, classifier: classifier ? { language: classifier.language, source: classifier.source } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
   })
 }
 
@@ -159,19 +151,29 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
         continue
       }
       const input = Buffer.from(String(result.inputData || '')), output = Buffer.from(String(result.outputData || ''))
-      if (!input.length || input.length > 1024 * 1024 || output.length > 1024 * 1024) throw new Error('Judge 返回的测试数据为空或超过 1 MiB')
+      const maxDataBytes = job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024
+      if (!input.length || input.length > maxDataBytes || output.length > maxDataBytes) throw new Error(`Judge 返回的测试数据为空或超过 ${Math.ceil(maxDataBytes / (1024 * 1024))} MiB`)
       const [inputObject, outputObject] = await Promise.all([ingestTestdataObject(job.problemId, input), ingestTestdataObject(job.problemId, output)])
-      let candidateId: string | null = null
+      let candidateId: string | null = null, duplicateCandidate = false
       if (job.contribution) {
-        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, generatorVersionId: job.generatorVersionId })
-        candidateId = admitted.candidate.id
+        const mode = (job.config as any)?.mode === 'oi' ? 'oi' : 'acm'
+        const affectedSubtaskIds = Array.isArray(result.affectedSubtaskIds) ? result.affectedSubtaskIds.map(Number).filter(Number.isInteger) : []
+        const corpus = await prisma.wrongCorpusRevision.findFirst({ where: { problemId: job.problemId, status: 'active' } })
+        const evaluationStage = mode === 'oi' && (!result.classificationStatus || result.classificationStatus !== 'classified' || !affectedSubtaskIds.length)
+          ? 'awaiting_classifier'
+          : !corpus?.clusterCount
+            ? 'awaiting_corpus'
+            : 'awaiting_evaluator'
+        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage })
+        duplicateCandidate = admitted.duplicate
+        candidateId = admitted.duplicate ? null : admitted.candidate.id
       }
       await prisma.problemDataGenerationCase.update({ where: { id: current.id }, data: {
-        status: 'validated', inputObjectId: inputObject.id, outputObjectId: outputObject.id,
+        status: duplicateCandidate ? 'duplicate' : 'validated', inputObjectId: inputObject.id, outputObjectId: outputObject.id,
         inputSha256: inputObject.sha256, outputSha256: outputObject.sha256, inputSize: input.length, outputSize: output.length,
         inputPreview: input.toString('utf8').slice(0, 8192), outputPreview: output.toString('utf8').slice(0, 8192),
         generatorTimeMs: result.generatorTimeMs, validatorTimeMs: result.validatorTimeMs, standardTimeMs: result.standardTimeMs,
-        candidateId,
+        candidateId, failureStage: duplicateCandidate ? 'deduplication' : null, message: duplicateCandidate ? '与现有候选或正式测试数据完全重复' : (result.classificationMessage || null),
       } })
     }
     await prisma.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'completed', judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })

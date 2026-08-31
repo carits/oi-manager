@@ -16,6 +16,7 @@ import {
 } from '../problem.hack.service'
 import { ensureInitialTestSetRevision } from '../problem.testset-revision.service'
 import { transitionHackAttempt } from '../problem.hack-state'
+import { resolveContributionContext } from '../problem.contribution-readiness.service'
 
 const ACTIVE_STATUSES = ['queuing', 'judging', 'finalizing']
 
@@ -246,6 +247,13 @@ export async function createProblemHackAttempt(input: {
     || !isHackableJudgeConfig(parseJudgeConfig(problem.LatestTestSetRevision.judgeConfig))
   ) {
     fail(409, 'HACK_NOT_ENABLED', '该题未启用 Hack')
+  }
+  const readiness = await resolveContributionContext(input.user, input.problemId)
+  if (!readiness.standardProgram) fail(409, 'STD_NOT_ACTIVE', '当前题目未配置已激活的标准程序 STD')
+  if (!readiness.validatorProgram) fail(409, 'VALIDATOR_NOT_ACTIVE', '当前题目未配置已激活的 Validator')
+  if (readiness.mode === 'oi' && !readiness.classifierProgram) fail(409, 'CLASSIFIER_NOT_ACTIVE', 'OI / IOI Hack 需要已激活的 Classifier')
+  if (hackConfig.standardProgramVersionId !== readiness.standardProgram.version.id || hackConfig.validatorProgramVersionId !== readiness.validatorProgram.version.id || (readiness.mode === 'oi' && hackConfig.classifierProgramVersionId !== readiness.classifierProgram?.version.id)) {
+    fail(409, 'HACK_ASSET_SELECTION_REQUIRED', 'Hack 配置尚未固定到当前激活的评测程序版本，请由管理员重新保存 Hack 设置')
   }
 
   const inputMode = input.body?.inputMode === 'generator'

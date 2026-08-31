@@ -38,4 +38,23 @@ describe('data generation task', () => {
     const result = await generateTestdata(request)
     expect(result.cases[0]).toMatchObject({ status: 'validated', inputData: '1 2\n', outputData: '3\n' })
   })
+
+  it('keeps an OI candidate valid but marks it unclassified when Classifier is missing', async () => {
+    vi.mocked(execute)
+      .mockResolvedValueOnce({ status: 'Accepted', time: 1, memory: 1, exitCode: 0 })
+      .mockResolvedValueOnce({ status: 'Accepted', time: 2, memory: 1, exitCode: 0, stdout: '3\n' })
+    vi.mocked(judge).mockResolvedValue({ submissionId: 'self', result: 'Accepted', time: 1, memory: 1, score: 100, cases: [] })
+    const result = await generateTestdata({ ...request, problemConfig: { mode: 'oi', subtasks: [{ id: 1, score: 100, type: 'min' }] } })
+    expect(result.cases[0]).toMatchObject({ status: 'validated', classificationStatus: 'missing' })
+  })
+
+  it('classifies an OI candidate with the active Classifier', async () => {
+    vi.mocked(execute)
+      .mockResolvedValueOnce({ status: 'Accepted', time: 1, memory: 1, exitCode: 0 })
+      .mockResolvedValueOnce({ status: 'Accepted', time: 2, memory: 1, exitCode: 0, stdout: '3\n' })
+      .mockResolvedValueOnce({ status: 'Accepted', time: 1, memory: 1, exitCode: 0, stdout: '{"subtasks":[2,1,2]}' })
+    vi.mocked(judge).mockResolvedValue({ submissionId: 'self', result: 'Accepted', time: 1, memory: 1, score: 100, cases: [] })
+    const result = await generateTestdata({ ...request, classifier: { language: 'cpp17', source: 'classifier' }, problemConfig: { mode: 'oi', subtasks: [{ id: 1, score: 30, type: 'min' }, { id: 2, score: 70, type: 'min' }] } })
+    expect(result.cases[0]).toMatchObject({ status: 'validated', classificationStatus: 'classified', affectedSubtaskIds: [1, 2] })
+  })
 })

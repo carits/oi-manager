@@ -3,6 +3,7 @@ import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
 import { canModifyProblem } from './problem.access'
 import { validateHackCppSource } from './problem.hack.service'
+import { refreshAdmittedCandidateStages } from './problem.contribution-readiness.service'
 
 export const JUDGE_PROGRAM_KINDS = ['standard', 'validator', 'classifier', 'generator'] as const
 export class JudgeProgramError extends Error { constructor(public statusCode: number, public code: string, message: string) { super(message) } }
@@ -53,12 +54,14 @@ export async function createJudgeProgram(input: { user: JwtPayload; problemId: s
   if (!name || name.length > 80) throw new JudgeProgramError(400, 'PROGRAM_NAME_INVALID', '程序名称长度必须为 1～80')
   await compileJudgeProgram(input.source, language, name)
   const sourceSha256 = crypto.createHash('sha256').update(input.source).digest('hex')
-  return prisma.$transaction(async tx => {
+  const created = await prisma.$transaction(async tx => {
     const id = crypto.randomUUID(), versionId = crypto.randomUUID()
     const program = await tx.problemJudgeProgram.create({ data: { id, problemId: input.problemId, kind: input.kind, name, language, currentVersionId: versionId, createdBy: input.user.userId } })
     const version = await tx.problemJudgeProgramVersion.create({ data: { id: versionId, programId: id, problemId: input.problemId, versionNumber: 1, language, source: input.source, sourceSha256, origin: input.origin || 'manual', aiRequestId: input.aiRequestId || null, compileStatus: 'passed', createdBy: input.user.userId } })
     return { program, version }
   })
+  if (input.kind === 'classifier' || input.kind === 'validator' || input.kind === 'standard') await refreshAdmittedCandidateStages(input.problemId)
+  return created
 }
 
 export async function createJudgeProgramVersion(input: { user: JwtPayload; problemId: string; programId: string; language?: string; source: string; origin?: string; aiRequestId?: string }) {
@@ -66,13 +69,15 @@ export async function createJudgeProgramVersion(input: { user: JwtPayload; probl
   const program = await prisma.problemJudgeProgram.findFirst({ where: { id: input.programId, problemId: input.problemId, status: 'active' } })
   if (!program) throw new JudgeProgramError(404, 'PROGRAM_NOT_FOUND', '评测程序不存在')
   const language = input.language || program.language; validateKindLanguage(program.kind, language); await compileJudgeProgram(input.source, language, program.name)
-  return prisma.$transaction(async tx => {
+  const version = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`judge-program:${program.id}`}, 0)) IS NULL AS locked`
     const max = await tx.problemJudgeProgramVersion.aggregate({ where: { programId: program.id }, _max: { versionNumber: true } })
-    const version = await tx.problemJudgeProgramVersion.create({ data: { id: crypto.randomUUID(), programId: program.id, problemId: input.problemId, versionNumber: (max._max.versionNumber || 0) + 1, language, source: input.source, sourceSha256: crypto.createHash('sha256').update(input.source).digest('hex'), origin: input.origin || 'manual', aiRequestId: input.aiRequestId || null, compileStatus: 'passed', createdBy: input.user.userId } })
-    await tx.problemJudgeProgram.update({ where: { id: program.id }, data: { currentVersionId: version.id, language } })
-    return version
+    const created = await tx.problemJudgeProgramVersion.create({ data: { id: crypto.randomUUID(), programId: program.id, problemId: input.problemId, versionNumber: (max._max.versionNumber || 0) + 1, language, source: input.source, sourceSha256: crypto.createHash('sha256').update(input.source).digest('hex'), origin: input.origin || 'manual', aiRequestId: input.aiRequestId || null, compileStatus: 'passed', createdBy: input.user.userId } })
+    await tx.problemJudgeProgram.update({ where: { id: program.id }, data: { currentVersionId: created.id, language } })
+    return created
   })
+  if (program.kind === 'classifier' || program.kind === 'validator' || program.kind === 'standard') await refreshAdmittedCandidateStages(input.problemId)
+  return version
 }
 
 export async function updateJudgeProgram(input: { user: JwtPayload; problemId: string; programId: string; currentVersionId?: string; name?: string; status?: string }) {
@@ -80,5 +85,7 @@ export async function updateJudgeProgram(input: { user: JwtPayload; problemId: s
   const program = await prisma.problemJudgeProgram.findFirst({ where: { id: input.programId, problemId: input.problemId } })
   if (!program) throw new JudgeProgramError(404, 'PROGRAM_NOT_FOUND', '评测程序不存在')
   if (input.currentVersionId && !await prisma.problemJudgeProgramVersion.findFirst({ where: { id: input.currentVersionId, programId: program.id } })) throw new JudgeProgramError(400, 'PROGRAM_VERSION_INVALID', '程序版本不属于当前程序')
-  return prisma.problemJudgeProgram.update({ where: { id: program.id }, data: { ...(input.currentVersionId ? { currentVersionId: input.currentVersionId } : {}), ...(input.name?.trim() ? { name: input.name.trim() } : {}), ...(input.status === 'archived' ? { status: 'archived' } : {}) } })
+  const updated = await prisma.problemJudgeProgram.update({ where: { id: program.id }, data: { ...(input.currentVersionId ? { currentVersionId: input.currentVersionId } : {}), ...(input.name?.trim() ? { name: input.name.trim() } : {}), ...(input.status === 'archived' ? { status: 'archived' } : {}) } })
+  if (program.kind === 'classifier' || program.kind === 'validator' || program.kind === 'standard') await refreshAdmittedCandidateStages(input.problemId)
+  return updated
 }

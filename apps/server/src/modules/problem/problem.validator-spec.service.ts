@@ -3,6 +3,7 @@ import { prisma } from '../../prisma'
 import type { JwtPayload } from '@oi-manager/shared'
 import { compileJudgeProgram, requireProgramProblem } from './problem.judge-program.service'
 import { EVALUATION_LIMITS } from './problem.evaluation-budget.service'
+import { refreshAdmittedCandidateStages } from './problem.contribution-readiness.service'
 
 export class ValidatorSpecError extends Error { constructor(public statusCode: number, public code: string, message: string, public data?: unknown) { super(message) } }
 function fail(status: number, code: string, message: string, data?: unknown): never { throw new ValidatorSpecError(status, code, message, data) }
@@ -73,5 +74,20 @@ export async function listValidatorSpecs(user: JwtPayload, problemId: string) { 
 export async function activateValidatorSpec(input: { user: JwtPayload; problemId: string; specId: string }) {
   await requireProgramProblem(input.user, input.problemId)
   const spec = await prisma.validatorSpec.findFirst({ where: { id: input.specId, problemId: input.problemId, compileStatus: 'passed' } }); if (!spec) fail(404, 'VALIDATOR_SPEC_NOT_FOUND', 'Validator Spec 不存在或未通过编译')
-  return prisma.$transaction(async tx => { await tx.validatorSpec.updateMany({ where: { problemId: input.problemId, status: 'active' }, data: { status: 'archived' } }); return tx.validatorSpec.update({ where: { id: spec.id }, data: { status: 'active', activatedAt: new Date() } }) })
+  const activated = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`validator-spec:${input.problemId}`}, 0)) IS NULL AS locked`
+    let program = await tx.problemJudgeProgram.findUnique({ where: { problemId_kind_name: { problemId: input.problemId, kind: 'validator', name: 'Validator DSL' } } })
+    const versionId = crypto.randomUUID()
+    if (!program) {
+      program = await tx.problemJudgeProgram.create({ data: { id: crypto.randomUUID(), problemId: input.problemId, kind: 'validator', name: 'Validator DSL', language: 'cpp17', currentVersionId: versionId, createdBy: input.user.userId } })
+    }
+    const max = await tx.problemJudgeProgramVersion.aggregate({ where: { programId: program.id }, _max: { versionNumber: true } })
+    await tx.problemJudgeProgramVersion.create({ data: { id: versionId, programId: program.id, problemId: input.problemId, versionNumber: (max._max.versionNumber || 0) + 1, language: 'cpp17', source: spec.generatedSource, sourceSha256: crypto.createHash('sha256').update(spec.generatedSource).digest('hex'), origin: 'validator_dsl', aiRequestId: spec.aiRequestId, compileStatus: 'passed', createdBy: input.user.userId } })
+    await tx.problemJudgeProgram.update({ where: { id: program.id }, data: { status: 'active', currentVersionId: versionId, language: 'cpp17' } })
+    await tx.problemHackConfig.updateMany({ where: { problemId: input.problemId }, data: { validatorProgramVersionId: versionId, validatorSource: spec.generatedSource, validatorLanguage: 'cpp17', revision: { increment: 1 }, updatedBy: input.user.userId } })
+    await tx.validatorSpec.updateMany({ where: { problemId: input.problemId, status: 'active' }, data: { status: 'archived' } })
+    return tx.validatorSpec.update({ where: { id: spec.id }, data: { status: 'active', activatedAt: new Date() } })
+  })
+  await refreshAdmittedCandidateStages(input.problemId)
+  return activated
 }
