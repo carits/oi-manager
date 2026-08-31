@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
+import dynamic from 'next/dynamic'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -21,12 +22,19 @@ import { Toolbar, ToolbarGroup } from '@/components/ui/Toolbar'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import styles from './SubmissionList.module.css'
 
+const SubmissionDetailModal = dynamic(
+  () => import('./SubmissionDetailModal').then(module => module.SubmissionDetailModal),
+  { ssr: false },
+)
+
 interface Submission { id: number; userId?: string; userType?: 'student' | 'teacher' | 'user'; username: string; oj: string; problemId: string; problemInternalId?: string; problemVisibility?: string | null; result: string; timeUsed: number | null; memoryUsed: number | null; codeLength: number | null; language: string; submittedAt: string }
 interface SubmissionPayload { submissions?: Submission[]; totalPages?: number; total?: number; scope?: 'all' | 'personal' | 'campus' }
 interface SubmissionListProps { viewRole: 'teacher' | 'student' | 'admin' }
 
 const fields = ['username', 'oj', 'problemId', 'result', 'language'] as const
 type FilterField = typeof fields[number]
+
+const stopRowActivation = (event: SyntheticEvent) => event.stopPropagation()
 
 function externalProblemUrl(oj: string, problemId: string) {
   if (oj === 'luogu') return `https://www.luogu.com.cn/problem/${problemId}`
@@ -55,6 +63,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     ? requestedPageSize
     : 20
   const [draft, setDraft] = useState<Record<FilterField, string>>(() => Object.fromEntries(fields.map(field => [field, searchParams.get(field) || ''])) as Record<FilterField, string>)
+  const [detailSubmissionId, setDetailSubmissionId] = useState<number | null>(null)
 
   useEffect(() => {
     setDraft(Object.fromEntries(fields.map(field => [field, searchParams.get(field) || ''])) as Record<FilterField, string>)
@@ -95,9 +104,9 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
     // linking the problem cell to /org/:id/problems/:id only bounces them back
     // to the overview and presents a false interactive affordance.
     const canOpenLocal = !campusStudentView && submission.problemInternalId && ['public', 'private'].includes(submission.problemVisibility || '')
-    if (canOpenLocal) return <Link className={styles.link} href={`${pathPrefix}/problems/${submission.problemInternalId}`}>{submission.problemId}</Link>
+    if (canOpenLocal) return <Link className={styles.link} href={`${pathPrefix}/problems/${submission.problemInternalId}`} onClick={stopRowActivation} onKeyDown={stopRowActivation}>{submission.problemId}</Link>
     const external = externalProblemUrl(submission.oj, submission.problemId)
-    return external ? <a className={styles.link} href={external} target="_blank" rel="noreferrer">{submission.problemId}</a> : submission.problemId
+    return external ? <a className={styles.link} href={external} target="_blank" rel="noreferrer" onClick={stopRowActivation} onKeyDown={stopRowActivation}>{submission.problemId}</a> : submission.problemId
   }
 
   return (
@@ -122,10 +131,10 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         onRetry={resource.retry}
         emptyText="暂无评测记录"
         rowKey={item => String(item.id)}
-        onRowClick={item => router.push(`${pathPrefix}/submissions/${item.id}`)}
+        onRowClick={item => setDetailSubmissionId(item.id)}
         columns={[
           { key: 'id', label: '提交', width: '86px', render: item => <span className={styles.link}>#{item.id}</span> },
-          ...(viewRole === 'student' ? [] : [{ key: 'username', label: '用户', width: '120px', render: (item: Submission) => <UserIdentityLink id={item.userId} userType={item.userType} username={item.username} /> }]),
+          ...(viewRole === 'student' ? [] : [{ key: 'username', label: '用户', width: '120px', render: (item: Submission) => <span onClick={stopRowActivation} onKeyDown={stopRowActivation}><UserIdentityLink id={item.userId} userType={item.userType} username={item.username} /></span> }]),
           { key: 'oj', label: '平台', width: '110px', render: item => item.oj === 'carits' ? 'Carits' : OJ_PLATFORM_LABEL_MAP[item.oj] || item.oj.toUpperCase() },
           { key: 'problemId', label: '题目', render: problemCell },
           { key: 'result', label: '结果', width: '120px', render: item => <StatusBadge variant={getResultVariant(item.result)}>{JUDGE_RESULT_LABEL_MAP[item.result] || item.result}</StatusBadge> },
@@ -136,6 +145,13 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         ]}
       />
       {total > 0 && <Pagination currentPage={page} totalPages={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={isAdminView ? setPageSize : undefined} pageSizeOptions={pageSizeOptions} />}
+      <SubmissionDetailModal
+        isOpen={detailSubmissionId !== null}
+        onClose={() => setDetailSubmissionId(null)}
+        submissionId={detailSubmissionId}
+        viewRole={isAdminView ? 'admin' : viewRole}
+        submissionPathPrefix={pathPrefix}
+      />
     </PageFrame>
   )
 }

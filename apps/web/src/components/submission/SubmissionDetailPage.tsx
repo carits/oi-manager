@@ -19,6 +19,7 @@ import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { useAuth } from '@/components/AuthProvider'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
 import { SubmissionJudgeResult } from './SubmissionJudgeResult'
+import { shouldPollSubmissionDetail, shouldRetrySubmissionPoll } from './submission-polling'
 
 interface CaseResult {
   caseId: number | string
@@ -101,45 +102,69 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [showCode, setShowCode] = useState(true)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     if (!submissionId) return
 
-    const fetchDetail = async () => {
-      setError(null)
+    let cancelled = false
+    const requestController = new AbortController()
+
+    function clearPollTimer() {
+      if (!pollTimerRef.current) return
+      clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+
+    function schedulePoll() {
+      clearPollTimer()
+      pollTimerRef.current = setTimeout(() => { void fetchDetail() }, 2000)
+    }
+
+    async function fetchDetail() {
       try {
-        const data = await apiClient.query<SubmissionDetail>(`/api/submissions/${submissionId}`)
-          setDetail(data)
-          if (data.result !== 'queuing' && data.result !== 'judging') {
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current)
-              intervalRef.current = null
+        const data = await apiClient.query<SubmissionDetail>(
+          `/api/submissions/${submissionId}`,
+          { signal: requestController.signal },
+        )
+        if (cancelled) return
+
+        setDetail(data)
+        setError(null)
+        if (shouldPollSubmissionDetail(data)) schedulePoll()
+        else clearPollTimer()
+
+        // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
+        if (data.oj === 'codeforces' && (!data.code || data.code.length === 0) && data.submitMethod === 'archive') {
+          apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`, undefined, { signal: requestController.signal }).then(fetchRes => {
+            if (!cancelled && fetchRes.success && fetchRes.data?.code) {
+              setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
             }
-          }
-          // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
-          if (data.oj === 'codeforces' && (!data.code || data.code.length === 0) && data.submitMethod === 'archive') {
-            apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`).then(fetchRes => {
-              if (fetchRes.success && fetchRes.data?.code) {
-                setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
-              }
-            }).catch(() => {})
-          }
+          }).catch(() => {})
+        }
       } catch (loadError) {
+        if (cancelled) return
         setError(loadError instanceof Error ? loadError.message : '评测详情获取失败')
+        if (shouldRetrySubmissionPoll(loadError)) {
+          schedulePoll()
+        } else {
+          clearPollTimer()
+          setDetail(null)
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
-    fetchDetail()
-    intervalRef.current = setInterval(fetchDetail, 2000)
+    setLoading(true)
+    setDetail(null)
+    setError(null)
+    void fetchDetail()
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      cancelled = true
+      requestController.abort()
+      clearPollTimer()
     }
   }, [submissionId])
 

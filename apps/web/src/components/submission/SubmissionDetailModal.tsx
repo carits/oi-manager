@@ -13,6 +13,7 @@ import 'highlight.js/styles/github.css'
 import { LoadError } from '@/components/ui/LoadError'
 import { SkeletonRegion } from '@/components/ui/AsyncRegion'
 import { SubmissionJudgeResult } from './SubmissionJudgeResult'
+import { shouldPollSubmissionDetail, shouldRetrySubmissionPoll } from './submission-polling'
 
 interface SubmissionDetail {
   id: number
@@ -159,54 +160,74 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    if (isOpen && submissionId) {
-      setLoading(true)
-      setDetail(null)
-      setError(null)
-      const fetchDetail = async () => {
+    if (!isOpen || !submissionId) return
+
+    let cancelled = false
+    const requestController = new AbortController()
+
+    function clearPollTimer() {
+      if (!pollTimerRef.current) return
+      clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+
+    function schedulePoll() {
+      clearPollTimer()
+      pollTimerRef.current = setTimeout(() => { void fetchDetail() }, 2000)
+    }
+
+    async function fetchDetail() {
+      try {
+        const data = trainingId
+          ? await apiClient.query<SubmissionDetail>(
+              `/api/trainings/${trainingId}/submissions/${submissionId}`,
+              { signal: requestController.signal },
+            )
+          : await apiClient.query<SubmissionDetail>(
+              `/api/submissions/${submissionId}`,
+              { signal: requestController.signal },
+            )
+        if (cancelled) return
+
+        setDetail(data)
         setError(null)
-        try {
-          const data = trainingId
-            ? await apiClient.query<SubmissionDetail>(`/api/trainings/${trainingId}/submissions/${submissionId}`)
-            : await apiClient.query<SubmissionDetail>(`/api/submissions/${submissionId}`)
+        if (shouldPollSubmissionDetail(data)) schedulePoll()
+        else clearPollTimer()
 
-          setDetail(data)
-          // OI 赛中非管理员（hidden=true）或不再是 queuing 状态，停止轮询
-          if ((data.hidden || (data.result !== 'queuing' && data.result !== 'judging')) && intervalRef.current) {
-            clearInterval(intervalRef.current)
-            intervalRef.current = null
-          }
-          // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
-          if (!trainingId && data.oj === 'codeforces' && (!data.code || data.code.length === 0) && data.submitMethod === 'archive') {
-            apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`).then(fetchRes => {
-              if (fetchRes.success && fetchRes.data?.code) {
-                setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
-              }
-            }).catch(() => {})
-          }
-        } catch (loadError) {
-          setError(loadError instanceof Error ? loadError.message : '评测详情获取失败')
-        } finally {
-          setLoading(false)
+        // 按需抓取：CF 归档提交代码为空时，自动触发 fetch-code API
+        if (!trainingId && data.oj === 'codeforces' && (!data.code || data.code.length === 0) && data.submitMethod === 'archive') {
+          apiClient.post<{ code: string; codeLength: number }>(`/api/submissions/${submissionId}/fetch-code`, undefined, { signal: requestController.signal }).then(fetchRes => {
+            if (!cancelled && fetchRes.success && fetchRes.data?.code) {
+              setDetail(prev => prev ? { ...prev, code: fetchRes.data!.code, codeLength: fetchRes.data!.codeLength } : prev)
+            }
+          }).catch(() => {})
         }
-      }
-
-      fetchDetail() // 立即加载一次
-
-      // 如果是 queuing 状态且未隐藏，启动轮询
-      if (detail?.result === 'queuing' && !detail?.hidden || !detail) {
-        intervalRef.current = setInterval(fetchDetail, 2000)
-      }
-
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current)
-          intervalRef.current = null
+      } catch (loadError) {
+        if (cancelled) return
+        setError(loadError instanceof Error ? loadError.message : '评测详情获取失败')
+        if (shouldRetrySubmissionPoll(loadError)) {
+          schedulePoll()
+        } else {
+          clearPollTimer()
+          setDetail(null)
         }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
+    }
+
+    setLoading(true)
+    setDetail(null)
+    setError(null)
+    void fetchDetail()
+
+    return () => {
+      cancelled = true
+      requestController.abort()
+      clearPollTimer()
     }
   }, [isOpen, submissionId, trainingId])
 

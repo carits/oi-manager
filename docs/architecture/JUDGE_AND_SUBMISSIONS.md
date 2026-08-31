@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -31,6 +31,19 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 训练提交列表、详情和排行榜使用同一套 `Submission.result` 状态事实，不以 `cases` 是否存在作为“已评测”
 的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
 可显示为进行中。比赛题目标识统一返回 `TrainingProblem.id`，源题号仅用于兼容旧记录。
+
+## 提交列表详情与个人工作区权限
+
+评测记录列表的非交互区域点击在当前列表页打开详情弹窗；题目和用户链接保持各自导航，不触发行弹窗。
+`/personal/submissions/[id]`、组织和管理端对应的独立详情页继续作为可分享、可书签的深链入口。
+
+个人工作区对普通账号统一执行“仅本人提交”规则，不因账号的全局角色是学生、教师或校园负责人而扩大；
+查看他人个人提交统一返回 404。校园工作区仍按当前组织隔离：学生只看本人，教师和校园负责人可查看
+当前组织的有效成员提交，全局管理员继续使用全量管理视图。
+
+列表弹窗和独立详情页只在 Queuing/Judging 状态轮询；终态或 OI 隐藏状态立即停止。401/403/404 等
+永久失败同样停止，避免无权限、已删除或不存在的提交持续产生重复请求；网络、超时、限流和 5xx
+临时错误会继续定时重试，不把一次瞬时故障误判为终态。
 
 ## 提交级文件 IO Adapter
 

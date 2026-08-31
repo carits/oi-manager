@@ -175,11 +175,11 @@ async function requireVisibleSubmission(context: SubmissionQueryContext, submiss
       submission.workspaceScope !== context.workspaceScope
       || (context.workspaceScope === 'campus' && submission.organizationId !== context.organizationId)
     ) throw notFound()
-    if (context.isPersonal && submission.userId !== context.userId) throw notFound()
-    if (context.role === 'student' && submission.userId !== context.userId) {
+    if (context.isPersonal) {
+      if (submission.userId !== context.userId) throw notFound()
+    } else if (context.role === 'student' && submission.userId !== context.userId) {
       throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
-    }
-    if (context.role === 'teacher' || context.role === 'school_principal') {
+    } else if (context.role === 'teacher' || context.role === 'school_principal') {
       if (!context.organizationId) throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
       const membership = await prisma.organizationMembership.findFirst({
         where: { organizationId: context.organizationId, userId: submission.userId, status: 'active' },

@@ -1,13 +1,22 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-09-01
+
+### 评测记录列表弹窗与个人提交详情权限
+
+- 评测记录列表恢复整行打开详情弹窗，保留题目、用户链接和 `/submissions/[id]` 独立深链；弹窗与独立详情对 401/403/404 等永久错误停止轮询，对网络、超时、限流和 5xx 临时错误继续定时重试。
+- 修复个人工作区教师和校园负责人查看本人提交仍落入校园成员校验的问题。个人区现在对普通账号统一仅允许本人提交，查看他人返回 404；校园学生、校园教师/负责人和全局管理员原有边界保持不变。
+- 新增 teacher/school_principal 个人列表与详情权限回归、轮询策略单测，以及个人提交列表实际点击弹窗 E2E。Server 69 文件 550/550、Web 13 文件 55/55、Judge 10 文件 30/30、隔离 Playwright 7/7 通过；Server/Web/Judge 构建、导航与 UI 契约、运行时及安全审计通过。
+- 发布前 `pnpm db:install-paths:verify` 暴露与本改动无关的现存安装路径差异：空库与正式备份升级库在 4 个外键和 `TestcaseCandidateStatus` 枚举顺序上不一致。本批未修改 Prisma 或迁移；在该门禁得到处理或明确发布授权前，修复尚未部署到公网运行环境。
 
 ## 2026-08-31
 

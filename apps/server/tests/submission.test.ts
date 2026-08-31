@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
-import { createTestUser, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
+import { createTestUser, createTestSchool, createTestSchoolWithPrincipal, createTestTeam } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
 
@@ -447,6 +447,61 @@ describe('提交详情权限', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.data.code).toBeDefined()
+  })
+})
+
+describe('个人工作区提交详情权限', () => {
+  it.each(['teacher', 'school_principal'] as const)('%s 在个人工作区只能查看自己的提交详情', async role => {
+    const school = await createTestSchool({ name: `个人工作区-${role}` })
+    const owner = await createTestUser({ role, schoolId: school.id })
+    const other = await createTestUser({ role, schoolId: school.id })
+    const ownerToken = generateTestToken({
+      userId: owner.user.id,
+      role,
+      username: owner.user.username,
+      teacherId: owner.teacherId!,
+      schoolId: school.id,
+      workspaceMode: 'personal',
+    })
+
+    const createPersonalSubmission = (userId: string, problemId: string) => prisma.submission.create({
+      data: {
+        userId,
+        organizationId: null,
+        workspaceScope: 'personal',
+        problemId,
+        oj: 'carits',
+        language: 'cpp',
+        code: 'int main() { return 0; }',
+        codeLength: 24,
+        submitMethod: 'local',
+        result: 'accepted',
+        score: 100,
+        submitScope: 'problem',
+        isGlobalVisible: true,
+      },
+    })
+    const ownSubmission = await createPersonalSubmission(owner.user.id, `PERSONAL-${role}-OWN`)
+    const otherSubmission = await createPersonalSubmission(other.user.id, `PERSONAL-${role}-OTHER`)
+
+    const list = await createAuthenticatedRequest(app, ownerToken).get('/api/submissions')
+    expect(list.status, JSON.stringify(list.body)).toBe(200)
+    expect(list.body.data.submissions).toContainEqual(expect.objectContaining({ id: ownSubmission.id }))
+    expect(list.body.data.submissions.some((submission: any) => submission.id === otherSubmission.id)).toBe(false)
+
+    const ownDetail = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/submissions/${ownSubmission.id}`)
+    expect(ownDetail.status, JSON.stringify(ownDetail.body)).toBe(200)
+    expect(ownDetail.body.data).toMatchObject({
+      id: ownSubmission.id,
+      username: owner.user.username,
+      result: 'accepted',
+    })
+
+    const otherDetail = await createAuthenticatedRequest(app, ownerToken)
+      .get(`/api/submissions/${otherSubmission.id}`)
+    expect(otherDetail.status).toBe(404)
+    expect(otherDetail.body.code).toBe('SUBMISSION_NOT_FOUND')
   })
 })
 
