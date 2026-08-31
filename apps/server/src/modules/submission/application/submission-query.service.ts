@@ -1,4 +1,5 @@
 import { prisma } from '../../../prisma'
+import yaml from 'js-yaml'
 import { fetchAndStoreCfCode } from '../../../lib/cf-code-fetcher'
 import { resolveJudgePresentationConfig } from '../../../lib/judge-mode'
 import { canManageTraining } from '../../training/training.helpers'
@@ -7,6 +8,7 @@ import {
   currentJudgeResultWhere,
   projectSubmissionJudgeResult,
 } from '../../judge/application/judge-read-projection'
+import { resolveSubmissionIoSnapshot, submissionIoDto } from '../../judge/domain/submission-io'
 
 export interface SubmissionQueryContext {
   userId: string
@@ -240,6 +242,9 @@ export async function getSubmissionDetail(context: SubmissionQueryContext, submi
   }
 
   const judgePresentation = resolveJudgePresentationConfig(problemJudgeConfig)
+  let judgeConfig: any = {}
+  try { judgeConfig = yaml.load(problemJudgeConfig || '{}') || {} } catch {}
+  const resolvedIo = resolveSubmissionIoSnapshot(submission, judgeConfig)
   return {
     id: submission.id,
     username: submission.User.username,
@@ -272,6 +277,7 @@ export async function getSubmissionDetail(context: SubmissionQueryContext, submi
     problemAlias,
     problemOrderIndex,
     contestFormat,
+    io: submissionIoDto(resolvedIo.inputFile, resolvedIo.outputFile),
   }
 }
 

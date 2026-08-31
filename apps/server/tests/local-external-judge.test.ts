@@ -94,6 +94,30 @@ describe('external-source local judging', () => {
     expect(await prisma.submission.count({ where: { problemInternalId: problem.id } })).toBe(0)
   })
 
+  it('persists independent submission IO in Submission and JudgeRun', async () => {
+    const { token, problem } = await fixture()
+    const response = await request(app).post('/api/submit').set('Authorization', `Bearer ${token}`).send({
+      problemId: problem.problemId, oj: problem.platform, language: 'cpp',
+      code: 'int main() { return 0; }', submitMethod: 'local',
+      inputFilename: 'travel.in', outputFilename: 'answer.txt',
+    })
+    expect(response.status, JSON.stringify(response.body)).toBe(200)
+    const submission = await prisma.submission.findUniqueOrThrow({ where: { id: response.body.data.submissionId }, include: { CurrentJudgeRun: true } })
+    expect(submission).toMatchObject({ inputFilename: 'travel.in', outputFilename: 'answer.txt', ioAdapterVersion: 1 })
+    expect(submission.CurrentJudgeRun).toMatchObject({ inputFilename: 'travel.in', outputFilename: 'answer.txt', ioAdapterVersion: 1 })
+  })
+
+  it('rejects unsafe submission IO before creating a record', async () => {
+    const { token, problem } = await fixture()
+    const response = await request(app).post('/api/submit').set('Authorization', `Bearer ${token}`).send({
+      problemId: problem.problemId, oj: problem.platform, language: 'cpp',
+      code: 'int main() { return 0; }', inputFilename: '../travel.in',
+    })
+    expect(response.status).toBe(422)
+    expect(response.body.code).toBe('INVALID_SUBMISSION_IO')
+    expect(await prisma.submission.count({ where: { problemInternalId: problem.id } })).toBe(0)
+  })
+
   it('rejects code submission when the judge config has no local testdata', async () => {
     const { token, problem } = await fixture('mode: acm\ncases: []\n', false)
     const response = await request(app)

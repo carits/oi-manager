@@ -304,16 +304,21 @@ export async function localExecute(params: {
   stdin?: string
   timeLimit: number   // ms
   memoryLimit: number // KB
+  outputLimit?: number
   workDir: string
   skipCompile?: boolean // 是否跳过编译（已编译过）
   /** File IO 模式：程序通过 {filename}.in / {filename}.out 读写 */
   filename?: string
+  inputFile?: string | null
+  outputFile?: string | null
   /** 额外需要拷入执行环境的文件 */
   extraCopyIn?: Record<string, string>
   args?: string[]
   env?: Record<string, string>
 }): Promise<SandboxResult> {
-  const { language, code, stdin, timeLimit, workDir, skipCompile = false, filename, extraCopyIn, args = [], env = {} } = params
+  const { language, code, stdin, timeLimit, outputLimit = 65536, workDir, skipCompile = false, filename, extraCopyIn, args = [], env = {} } = params
+  const inputFile = params.inputFile ?? (filename ? `${filename}.in` : null)
+  const outputFile = params.outputFile ?? (filename ? `${filename}.out` : null)
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -328,7 +333,7 @@ export async function localExecute(params: {
 
   // 写入源代码文件
   const codeFile = path.join(workDir, langConfig.code_file)
-  fs.writeFileSync(codeFile, code, 'utf-8')
+  if (!skipCompile || code) fs.writeFileSync(codeFile, code, 'utf-8')
 
   // 如果需要编译（且未跳过）
   if (langConfig.compile && !skipCompile) {
@@ -361,8 +366,8 @@ export async function localExecute(params: {
   }
 
   // File IO 模式：写入输入文件（即使 stdin 为空也要写入，与 go-judge 模式保持一致）
-  if (filename) {
-    fs.writeFileSync(path.join(workDir, `${filename}.in`), stdin || '', 'utf-8')
+  if (inputFile) {
+    fs.writeFileSync(path.join(workDir, inputFile), stdin || '', 'utf-8')
   }
 
   // 执行程序
@@ -394,7 +399,7 @@ export async function localExecute(params: {
       }
     })
 
-    if (!filename && stdin) {
+    if (!inputFile && stdin) {
       execProcess.stdin.write(stdin, (err) => {
         if (err && (err as NodeJS.ErrnoException).code !== 'EPIPE') {
           stderr += (err as Error).message
@@ -447,14 +452,35 @@ export async function localExecute(params: {
         return
       }
 
-      // File IO 模式：从输出文件读取 stdout
-      if (filename) {
-        const outPath = path.join(workDir, `${filename}.out`)
+      const capturedStdout = stdout
+      let outputFileMissing = false
+      if (outputFile) {
+        const outPath = path.join(workDir, outputFile)
         if (fs.existsSync(outPath)) {
-          stdout = fs.readFileSync(outPath, 'utf-8')
+          try {
+            stdout = fs.readFileSync(outPath, 'utf-8')
+          } catch (error: any) {
+            resolve({
+              status: 'System Error', time: elapsed, cpuTime: elapsed, wallTime: elapsed,
+              memory: null, timeoutReason: null, metricSource: 'local-unavailable', exitCode: 0,
+              stdout: '', capturedStdout, stderr: `无法读取程序输出文件：${error.message}`,
+              infrastructureError: true,
+            })
+            return
+          }
         } else {
           stdout = ''
+          outputFileMissing = true
         }
+      }
+
+      if ([stdout, capturedStdout, stderr].some(value => value && Buffer.byteLength(value, 'utf8') > outputLimit)) {
+        resolve({
+          status: 'Output Limit Exceeded', time: elapsed, cpuTime: elapsed, wallTime: elapsed,
+          memory: null, timeoutReason: null, metricSource: 'local-unavailable', exitCode: 0,
+          stdout, capturedStdout: outputFile ? capturedStdout : undefined, outputFileMissing, stderr,
+        })
+        return
       }
 
       resolve({
@@ -467,6 +493,8 @@ export async function localExecute(params: {
         metricSource: 'local-unavailable',
         exitCode: 0,
         stdout,
+        capturedStdout: outputFile ? capturedStdout : undefined,
+        outputFileMissing,
         stderr
       })
     })

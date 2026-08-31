@@ -55,7 +55,7 @@ export async function generateTestdata(request: DataGenerationRequest): Promise<
       const validated = await execute({ language: 'cpp17', stdin: input, timeLimit: 2000, memoryLimit: 262_144, outputLimit: 64 * 1024, compileFileId: validator!.result.fileId, workDir: validator!.result.workDir })
       if (validated.infrastructureError) return { jobId: request.jobId, fencingToken: request.fencingToken, retryable: true, cases: results }
       if (validated.status !== 'Accepted' || validated.exitCode !== 0) { results.push({ id: item.id, status: 'failed', failureStage: 'validator', message: `Validator 拒绝输入${validated.stderr ? `：${validated.stderr.slice(0, 1000)}` : ''}`, generatorTimeMs, validatorTimeMs: validated.time }); continue }
-      const answered = await execute({ language: 'cpp17', stdin: input, filename: request.filename || undefined, timeLimit: 30_000, memoryLimit: 524_288, outputLimit: maxData, compileFileId: standard!.result.fileId, workDir: standard!.result.workDir })
+      const answered = await execute({ language: 'cpp17', stdin: input, timeLimit: 30_000, memoryLimit: 524_288, outputLimit: maxData, compileFileId: standard!.result.fileId, workDir: standard!.result.workDir })
       if (answered.infrastructureError) return { jobId: request.jobId, fencingToken: request.fencingToken, retryable: true, cases: results }
       const output = answered.stdout || ''
       if (answered.status !== 'Accepted' || !output.length || Buffer.byteLength(output) > maxData) { results.push({ id: item.id, status: 'failed', failureStage: 'standard', message: `STD 运行失败：${answered.status}${answered.stderr ? `；${answered.stderr.slice(0, 1000)}` : ''}`, generatorTimeMs, validatorTimeMs: validated.time, standardTimeMs: answered.time }); continue }

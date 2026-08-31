@@ -77,7 +77,8 @@ export interface ProblemConfig {
   memory?: string        // "256MB"
   outputLimit?: string | number // "64MB" or bytes
   output_limit?: string | number
-  filename?: string      // 文件 IO 题型的文件名
+  /** @deprecated Legacy submission IO prefix; new tasks carry JudgeRequest.io. */
+  filename?: string
   checker_type?: string  // 'default' | 'strict' | 'testlib' | 'lemon' | ...
   checker?: CompilableSource
   interactor?: CompilableSource
@@ -108,6 +109,8 @@ export interface JudgeRequest {
   code: string
   language: string
   config: ProblemConfig
+  ioAdapterVersion?: number
+  io?: { inputFile: string | null; outputFile: string | null }
   testdataPath: string
   /** @deprecated Use config instead */
   problemConfig?: ProblemConfig
@@ -130,6 +133,7 @@ export interface JudgeCaseResult {
   message?: string
   /** Infrastructure failure: the task must be retried, never scored. */
   infrastructureError?: boolean
+  outputFileMissing?: boolean
 }
 
 export interface SubtaskResult {
@@ -179,6 +183,8 @@ export interface HackJudgeRequest {
   generatorLanguage?: 'cpp17' | 'python3'
   hackSource: string
   hackLanguage: string
+  inputFilename?: string | null
+  outputFilename?: string | null
   standardSource: string
   validatorSource: string
   classifierSource?: string
@@ -210,7 +216,6 @@ export interface DataGenerationRequest {
   problemId: string
   fencingToken: string
   sourceMode: 'generator' | 'input'
-  filename?: string | null
   maxDataBytes?: number
   problemConfig: ProblemConfig
   generator?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'legacy-args-v1' | 'json-stdin-v1' } | null
@@ -248,7 +253,7 @@ export interface SandboxConfig {
 }
 
 export interface SandboxResult {
-  status: 'Accepted' | 'Time Limit Exceeded' | 'Memory Limit Exceeded' | 'Runtime Error' | 'Output Limit Exceeded' | 'Compilation Error'
+  status: 'Accepted' | 'Time Limit Exceeded' | 'Memory Limit Exceeded' | 'Runtime Error' | 'Output Limit Exceeded' | 'Compilation Error' | 'System Error'
   /** Backward compatible CPU time, ms */
   time: number
   cpuTime?: number
@@ -259,6 +264,9 @@ export interface SandboxResult {
   metricSource?: MetricSource
   exitCode: number
   stdout?: string
+  /** Actual stdout when candidate output was read from a file. */
+  capturedStdout?: string
+  outputFileMissing?: boolean
   stderr?: string
   infrastructureError?: boolean
 }

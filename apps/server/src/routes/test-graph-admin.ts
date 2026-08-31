@@ -6,8 +6,22 @@ import { inspectTestSetRevisionMigration, migrateProblemTestSetRevisions } from 
 import { ActivityRevisionRepairError, repairActivityRevisionPins } from '../modules/problem/problem.activity-revision-repair.service'
 import { logger } from '../lib/logger'
 import { applyLegacyTestGraphMigration } from '../modules/maintenance/application/test-graph-migration-route.service'
+import { applySubmissionIoMigration, inspectSubmissionIoMigration } from '../modules/maintenance/application/submission-io-migration.service'
 
 export const testGraphAdminRouter = Router()
+
+testGraphAdminRouter.get('/submission-io/migration', authenticate, asyncHandler(async (req, res) => {
+  if (req.user?.role !== 'super_admin') return res.status(403).json({ success: false, message: '仅超级管理员可执行提交 IO 迁移' })
+  res.json({ success: true, data: await inspectSubmissionIoMigration() })
+}))
+
+testGraphAdminRouter.post('/submission-io/migration', authenticate, asyncHandler(async (req, res) => {
+  if (req.user?.role !== 'super_admin') return res.status(403).json({ success: false, message: '仅超级管理员可执行提交 IO 迁移' })
+  if (req.body?.action !== 'apply') return res.status(400).json({ success: false, message: 'action 必须为 apply' })
+  const data = await applySubmissionIoMigration()
+  logger.warn('submission_io_migration_applied', { action: 'submission_io_migration', userId: req.user!.userId, metadata: data })
+  res.json({ success: true, data, message: `已迁移 ${data.migrated} 条提交 IO 快照` })
+}))
 
 testGraphAdminRouter.get('/problem-test-set-revisions/migration', authenticate, asyncHandler(async (req, res) => {
   if (req.user?.role !== 'super_admin') return res.status(403).json({ success: false, message: '仅超级管理员可执行测试版本迁移' })

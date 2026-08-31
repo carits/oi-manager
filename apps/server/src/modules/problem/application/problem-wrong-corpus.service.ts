@@ -22,18 +22,23 @@ export async function getWrongCorpus(user: JwtPayload, problemId: string) {
 
 export async function rebuildWrongCorpus(user: JwtPayload, problemId: string) {
   await managed(user, problemId)
-  const submissions = await prisma.submission.findMany({ where: { problemInternalId: problemId, submitMethod: 'local', OR: [{ result: { in: WRONG_RESULTS } }, { score: { lt: 100 } }] }, orderBy: { createdAt: 'desc' }, take: 10_000, select: { id: true, language: true, code: true, result: true, score: true } })
+  const submissions = await prisma.submission.findMany({ where: { problemInternalId: problemId, submitMethod: 'local', OR: [{ result: { in: WRONG_RESULTS } }, { score: { lt: 100 } }] }, orderBy: { createdAt: 'desc' }, take: 10_000, select: { id: true, language: true, code: true, result: true, score: true, inputFilename: true, outputFilename: true } })
   const unique = new Map<string, typeof submissions[number]>()
-  for (const item of submissions) { const sourceSha256 = hash(`${item.language}\0${normalizedSource(item.code)}`); if (!unique.has(sourceSha256)) unique.set(sourceSha256, item) }
+  for (const item of submissions) {
+    const sourceSha256 = hash(`${item.language}\0${normalizedSource(item.code)}`)
+    const executionFingerprint = hash(`${sourceSha256}\0${item.inputFilename || 'stdin'}\0${item.outputFilename || 'stdout'}`)
+    if (!unique.has(executionFingerprint)) unique.set(executionFingerprint, item)
+  }
   const selected = [...unique.entries()].slice(0, EVALUATION_LIMITS.maxCorpusClusters), previous = await prisma.wrongCorpusRevision.aggregate({ where: { problemId }, _max: { revisionNumber: true } }), revisionId = crypto.randomUUID(), revisionNumber = (previous._max.revisionNumber || 0) + 1
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`wrong-corpus:${problemId}`}, 0)) IS NULL AS locked`
     await tx.wrongCorpusRevision.updateMany({ where: { problemId, status: 'active' }, data: { status: 'archived' } }); await tx.wrongBehaviorCluster.updateMany({ where: { problemId, status: 'active' }, data: { status: 'archived' } })
-    for (const [sourceSha256, item] of selected) {
-      const sample = await tx.wrongSolutionSample.upsert({ where: { problemId_sourceSha256: { problemId, sourceSha256 } }, update: { result: item.result, score: item.score, status: 'active' }, create: { id: crypto.randomUUID(), problemId, source: 'historical_submission', submissionId: item.id, language: item.language, sourceSha256, result: item.result, score: item.score, status: 'active' } }), behaviorHash = hash(`${item.language}\0${item.result}\0${item.score ?? ''}\0${sourceSha256}`), partition = parseInt(behaviorHash.slice(0, 2), 16) % 5 === 0 ? 'holdout' : 'evaluation'
+    for (const [executionFingerprint, item] of selected) {
+      const sourceSha256 = hash(`${item.language}\0${normalizedSource(item.code)}`)
+      const sample = await tx.wrongSolutionSample.upsert({ where: { problemId_executionFingerprint: { problemId, executionFingerprint } }, update: { result: item.result, score: item.score, status: 'active', inputFilename: item.inputFilename, outputFilename: item.outputFilename }, create: { id: crypto.randomUUID(), problemId, source: 'historical_submission', submissionId: item.id, language: item.language, sourceSha256, executionFingerprint, inputFilename: item.inputFilename, outputFilename: item.outputFilename, result: item.result, score: item.score, status: 'active' } }), behaviorHash = hash(`${item.language}\0${item.result}\0${item.score ?? ''}\0${executionFingerprint}`), partition = parseInt(behaviorHash.slice(0, 2), 16) % 5 === 0 ? 'holdout' : 'evaluation'
       await tx.wrongBehaviorCluster.upsert({ where: { problemId_behaviorHash: { problemId, behaviorHash } }, update: { corpusRevisionId: revisionId, representativeSampleId: sample.id, partition, status: 'active' }, create: { id: crypto.randomUUID(), problemId, corpusRevisionId: revisionId, representativeSampleId: sample.id, behaviorHash, partition } })
     }
-    const holdoutCount = selected.filter(([sourceSha256, item]) => parseInt(hash(`${item.language}\0${item.result}\0${item.score ?? ''}\0${sourceSha256}`).slice(0, 2), 16) % 5 === 0).length
+    const holdoutCount = selected.filter(([executionFingerprint, item]) => parseInt(hash(`${item.language}\0${item.result}\0${item.score ?? ''}\0${executionFingerprint}`).slice(0, 2), 16) % 5 === 0).length
     await tx.wrongCorpusRevision.create({ data: { id: revisionId, problemId, revisionNumber, status: 'active', sampleCount: selected.length, clusterCount: selected.length, evaluationCount: selected.length - holdoutCount, holdoutCount, corpusHash: hash(selected.map(([key]) => key).sort().join('\n')), createdBy: user.userId, activatedAt: new Date() } })
   })
   await refreshAdmittedCandidateStages(problemId)

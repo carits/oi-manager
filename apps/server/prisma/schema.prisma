@@ -661,6 +661,8 @@ model ProblemHackAttempt {
   generatorLanguage     String?
   hackSource            String                  @db.Text
   hackLanguage          String
+  inputFilename         String?
+  outputFilename        String?
   hackConfigRevision    Int
   judgeConfigHash       String
   baselineResult        String?
@@ -763,6 +765,9 @@ model WrongSolutionSample {
   submissionId   Int?
   language       String
   sourceSha256   String
+  inputFilename  String?
+  outputFilename String?
+  executionFingerprint String
   sourceObjectId String?
   result         String?
   score          Int?
@@ -774,7 +779,7 @@ model WrongSolutionSample {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([problemId, sourceSha256])
+  @@unique([problemId, executionFingerprint])
   @@index([problemId, status, createdAt])
   @@index([clusterId])
   @@index([submissionId])
@@ -1451,6 +1456,9 @@ model JudgeRun {
   status               JudgeRunStatus          @default(QUEUED)
   testSetRevisionId    String?
   judgeConfigHash      String?
+  inputFilename        String?
+  outputFilename       String?
+  ioAdapterVersion     Int                     @default(1)
   rejudgeBatchId       String?
   requestedBy          String?
   result               String?
@@ -1560,6 +1568,9 @@ model Submission {
   contestProblemId  String?
   testSetRevisionId String?
   judgeConfigHash   String?
+  inputFilename     String?
+  outputFilename    String?
+  ioAdapterVersion  Int                     @default(1)
   currentJudgeRunId String?                 @unique
   OjAccount         OjAccount?              @relation(fields: [ojAccountId], references: [id])
   Training          Training?               @relation(fields: [trainingId], references: [id])

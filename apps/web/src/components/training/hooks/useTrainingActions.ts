@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import apiClient from '@/lib/apiClient'
 import { createClientUUID } from '@/lib/uuid'
@@ -6,6 +6,7 @@ import { saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import type { TrainingInfo, TrainingProblem, Attachment } from '../types'
 import { listHref } from '@/components/workspace/workspaceRouting'
+import type { SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
 
 export function useTrainingActions(
   trainingId: string,
@@ -15,6 +16,7 @@ export function useTrainingActions(
   selectedProblemId: string | null,
   problems: TrainingProblem[],
   activeTab: string,
+  legacyIoSuggestion?: SubmissionIoValue | null,
 ) {
   const router = useRouter()
   const toast = useToast()
@@ -23,8 +25,12 @@ export function useTrainingActions(
   const [showSubmitModal, setShowSubmitModal] = useState(false)
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [submitCode, setSubmitCode] = useState('')
+  const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>(legacyIoSuggestion || { inputFilename: null, outputFilename: null })
   const [submitting, setSubmitting] = useState(false)
   const submitKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    setSubmissionIo(legacyIoSuggestion || { inputFilename: null, outputFilename: null })
+  }, [selectedProblemId, legacyIoSuggestion?.inputFilename, legacyIoSuggestion?.outputFilename])
 
   // Edit/delete state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -47,6 +53,8 @@ export function useTrainingActions(
           language: submitLanguage,
           code: submitCode,
           submitMethod: 'local',
+          inputFilename: submissionIo.inputFilename || null,
+          outputFilename: submissionIo.outputFilename || null,
         },
         { headers: { 'Idempotency-Key': submitKeyRef.current } },
       )
@@ -54,6 +62,7 @@ export function useTrainingActions(
         submitKeyRef.current = null
         toast.success('提交成功')
         setSubmitCode('')
+        setSubmissionIo(legacyIoSuggestion || { inputFilename: null, outputFilename: null })
         setShowSubmitModal(false)
         // 打开提交详情
         if (result.data?.submissionId) {
@@ -72,7 +81,7 @@ export function useTrainingActions(
     } finally {
       setSubmitting(false)
     }
-  }, [selectedProblemId, submitCode, submitLanguage, trainingId, toast])
+  }, [selectedProblemId, submitCode, submitLanguage, submissionIo, legacyIoSuggestion, trainingId, toast])
 
   const handleDelete = useCallback(async () => {
     if (!training) return false
@@ -112,6 +121,7 @@ export function useTrainingActions(
     showSubmitModal, setShowSubmitModal,
     submitLanguage, setSubmitLanguage,
     submitCode, setSubmitCode,
+    submissionIo, setSubmissionIo,
     submitting,
     handleSubmitCode,
     // Edit/delete

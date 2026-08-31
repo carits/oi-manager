@@ -16,6 +16,7 @@ import { onSubmissionJudged } from '../lib/submission-sync'
 import { normalizeResult } from '../lib/result-enum'
 import path from 'path'
 import yaml from 'js-yaml'
+import { resolveSubmissionIoSnapshot } from '../modules/judge/domain/submission-io'
 import { getHeartbeatAction } from './judge-protocol'
 import { finalizeHackResult } from '../modules/problem/problem.hack.service'
 import { transitionHackAttempt, transitionHackAttempts } from '../modules/problem/problem.hack-state'
@@ -152,6 +153,8 @@ class JudgeConsumer {
           })
         : null
       const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
+      const config = yaml.load(revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}') as any
+      const io = resolveSubmissionIoSnapshot(claimed, config)
       return {
         taskType: 'submission' as const,
         submissionId: String(claimed.submissionId),
@@ -164,7 +167,9 @@ class JudgeConsumer {
         testdataPath: revision
           ? path.join(testdataRoot, claimed.problemInternalId, revision.testdataPath)
           : path.join(testdataRoot, claimed.problemInternalId),
-        config: yaml.load(revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}'),
+        config,
+        ioAdapterVersion: io.ioAdapterVersion,
+        io: { inputFile: io.inputFile, outputFile: io.outputFile },
       }
     } catch (e: any) {
       if (claimed) {
@@ -245,6 +250,8 @@ class JudgeConsumer {
           generatorLanguage: attempt.generatorLanguage || undefined,
           hackSource: attempt.hackSource,
           hackLanguage: attempt.hackLanguage,
+          inputFilename: attempt.inputFilename,
+          outputFilename: attempt.outputFilename,
           standardSource: hackConfig.standardSource,
           validatorSource: hackConfig.validatorSource,
           classifierSource: hackConfig.classifierSource || undefined,
@@ -324,6 +331,8 @@ interface JudgeTask {
   dispatchedAt?: number
   testdataPath: string
   config: any
+  ioAdapterVersion: number
+  io: { inputFile: string | null; outputFile: string | null }
 }
 
 interface HackTask {
@@ -342,6 +351,8 @@ interface HackTask {
   generatorLanguage?: string
   hackSource: string
   hackLanguage: string
+  inputFilename?: string | null
+  outputFilename?: string | null
   standardSource: string
   validatorSource: string
   classifierSource?: string

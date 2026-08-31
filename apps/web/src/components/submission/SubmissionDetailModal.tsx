@@ -46,6 +46,7 @@ interface SubmissionDetail {
   problemAlias?: string | null
   problemOrderIndex?: number | null
   contestFormat?: string | null
+  io?: { input: { type: 'stdin' } | { type: 'file'; filename: string }; output: { type: 'stdout' } | { type: 'file'; filename: string } }
 }
 
 interface SubmissionDetailModalProps {
@@ -351,6 +352,14 @@ export function SubmissionDetailModal({ isOpen, onClose, submissionId, viewRole,
             <div>
               <div className={unifiedStyles.u7}>语言</div>
               <div className={unifiedStyles.u8}>{getLanguageLabelLocal(detail.language)}</div>
+            </div>
+            <div>
+              <div className={unifiedStyles.u7}>输入</div>
+              <div className={unifiedStyles.u8}>{detail.io?.input.type === 'file' ? detail.io.input.filename : 'stdin'}</div>
+            </div>
+            <div>
+              <div className={unifiedStyles.u7}>输出</div>
+              <div className={unifiedStyles.u8}>{detail.io?.output.type === 'file' ? detail.io.output.filename : 'stdout'}</div>
             </div>
           </div>
 

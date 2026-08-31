@@ -10,10 +10,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 359 个端点中 350 个必须认证，9 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 361 个端点中 352 个必须认证，9 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 359 个无会话请求：350 个受保护端点必须返回
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 361 个无会话请求：352 个受保护端点必须返回
 401，9 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
@@ -62,7 +62,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/hack-config` | 题目管理者读取 ACM/OI Hack 配置 |
 | `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator、Classifier 和 Hack 开关 |
 | `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |
-| `POST` | `/api/problems/:id/hacks` | 以直接数据或生成器发起题目级 Hack |
+| `POST` | `/api/problems/:id/hacks` | 以直接数据或生成器发起题目级 Hack；证明程序支持提交级文件 IO |
 | `GET` | `/api/problems/:id/hacks/:hackId` | 查看有权限的 Hack 详情 |
 | `POST` | `/api/problems/:id/hacks/:hackId/retry` | 题目管理者重新执行系统错误任务 |
 | `GET` | `/api/problems/:id/test-graph` | 题目管理者读取规范化 OI 测试图和迁移检查结果 |
@@ -76,6 +76,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/admin/problem-test-graph/migration` | 超级管理员通过 API 幂等迁移合法题目 |
 | `GET` | `/api/admin/problem-test-set-revisions/migration` | 超级管理员检查历史题目和活动快照能否安全固定 Revision |
 | `POST` | `/api/admin/problem-test-set-revisions/migration` | 超级管理员通过 API 幂等生成 Revision 并固定活动/提交 |
+| `GET` | `/api/admin/submission-io/migration` | 超级管理员检查旧题文件名前缀可回填的 Submission/JudgeRun |
+| `POST` | `/api/admin/submission-io/migration` | 超级管理员幂等固化历史提交实际文件 IO，不改变评测结果 |
 | `POST` | `/api/admin/problem-test-set-revisions/activity-pin-repair` | 超级管理员预览/执行冻结活动的安全版本恢复；仅允许相同测试数据布局、相同非计分配置的直接 `admin_edit` 或历史迁移 `initial` 后继 Revision，并同步活动题与历史提交指针 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
 | `POST` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
@@ -294,7 +296,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/problems/:id/testdata/auto` | 见对应路由实现 |
 | `POST` | `/api/resolve-problems` | 见对应路由实现 |
 | `POST` | `/api/submissions/:id/refetch-code` | 见对应路由实现 |
-| `POST` | `/api/submit` | 见对应路由实现 |
+| `POST` | `/api/submit` | 创建题库本地提交；可用 `inputFilename/outputFilename` 独立选择提交级文件 IO |
 | `POST` | `/api/submit/rejudge` | 见对应路由实现 |
 | `POST` | `/api/telemetry/client-errors` | 匿名、限流的浏览器运行时错误指纹上报；不保存原始堆栈或凭据 |
 | `POST` | `/api/team-import/:batchId/confirm` | 见对应路由实现 |
@@ -329,7 +331,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/trainings/:id/submission-users` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/rejudge` | 见对应路由实现 |
 | `POST` | `/api/trainings/:id/start` | 见对应路由实现 |
-| `POST` | `/api/trainings/:id/submit` | 见对应路由实现 |
+| `POST` | `/api/trainings/:id/submit` | 创建活动本地提交；可用 `inputFilename/outputFilename` 独立选择提交级文件 IO |
 | `POST` | `/api/users/:id/reset-password` | 见对应路由实现 |
 | `POST` | `/api/users/platform-admin` | 见对应路由实现 |
 | `POST` | `/api/workspaces/organization-invitations/:id/:action` | 见对应路由实现 |

@@ -19,6 +19,9 @@ export interface QueuedTrainingSubmissionInput {
   language: string
   code: string
   submitMethod: string
+  inputFilename?: string | null
+  outputFilename?: string | null
+  ioAdapterVersion?: number
   createdAt?: Date
   sourceId?: string
 }
@@ -44,6 +47,9 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
       trainingProblemId: input.trainingProblem.id,
       testSetRevisionId: input.trainingProblem.testSetRevisionId || input.trainingProblem.Problem.latestTestSetRevisionId || null,
       judgeConfigHash: input.trainingProblem.TestSetRevision?.judgeConfigHash || input.trainingProblem.Problem.LatestTestSetRevision?.judgeConfigHash || null,
+      inputFilename: input.inputFilename || null,
+      outputFilename: input.outputFilename || null,
+      ioAdapterVersion: input.ioAdapterVersion ?? 1,
       ...(input.training.type === 'contest' ? { contestId: input.training.id, contestProblemId: input.trainingProblem.id } : {}),
       isGlobalVisible: input.training.type === 'contest' ? false : true,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),

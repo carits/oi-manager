@@ -24,6 +24,7 @@ import { Copy } from 'lucide-react'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
 import { StatementVersionWorkspace } from './StatementVersionWorkspace'
 import { ProblemHackPanel } from './ProblemHackPanel'
+import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
 
 interface Statement {
   id: string
@@ -64,6 +65,7 @@ interface Problem {
     canSubmit?: boolean
   }
   hack?: { enabled: boolean; acceptedCount: number; canHack: boolean; mode: 'acm' | 'oi' }
+  legacyIoSuggestion?: SubmissionIoValue | null
   // 多版本字段
   statements: Statement[]
   solutions: Statement[]
@@ -199,6 +201,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [showSubmitPanel, setShowSubmitPanel] = useState(false)
   const [submitMethod, setSubmitMethod] = useState<'local' | 'archive'>('local')
+  const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [submitCode, setSubmitCode] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
   const submitKeyRef = useRef<string | null>(null)
@@ -242,6 +245,10 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
     setSubmitMethod('local')
   }, [problemId])
+
+  useEffect(() => {
+    setSubmissionIo(problem?.legacyIoSuggestion || { inputFilename: null, outputFilename: null })
+  }, [problem?.id, problem?.legacyIoSuggestion?.inputFilename, problem?.legacyIoSuggestion?.outputFilename])
 
   // Archive is a separate remote-history import and is never a code submit.
   useEffect(() => {
@@ -380,6 +387,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           language: submitLanguage,
           code: submitCode,
           submitMethod: 'local',
+          inputFilename: submissionIo.inputFilename || null,
+          outputFilename: submissionIo.outputFilename || null,
         },
         { headers: { 'Idempotency-Key': submitKeyRef.current } },
       )
@@ -389,6 +398,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         toast.success('提交成功')
         setShowSubmitPanel(false)
         setSubmitCode('')
+        setSubmissionIo(problem.legacyIoSuggestion || { inputFilename: null, outputFilename: null })
         // 刷新提交记录
         fetchProblemSubmissions()
         // 打开状态弹窗
@@ -1154,12 +1164,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
 
           {/* 代码输入框 - 归档模式下隐藏 */}
           {submitMethod !== 'archive' && (
-          <Textarea
-            placeholder="在此输入代码..."
-            value={submitCode}
-            onChange={e => setSubmitCode(e.target.value)}
-            className={unifiedStyles.codeInput}
-          />
+          <>
+            <Textarea
+              placeholder="在此输入代码..."
+              value={submitCode}
+              onChange={e => setSubmitCode(e.target.value)}
+              className={unifiedStyles.codeInput}
+            />
+            <SubmissionIoFields value={submissionIo} onChange={setSubmissionIo} legacySuggested={Boolean(problem.legacyIoSuggestion)} />
+          </>
           )}
 
           {/* 提交按钮 */}
@@ -1177,7 +1190,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             ) : (
               <Button variant="primary"
                 onClick={handleSubmitCode}
-                disabled={submitLoading || !submitCode.trim()}
+                disabled={submitLoading || !submitCode.trim() || submissionIo.inputFilename === '' || submissionIo.outputFilename === ''}
               >
                 {submitLoading ? '提交中...' : '提交'}
               </Button>

@@ -42,6 +42,24 @@ function buildLimits(timeLimitMs: number) {
   }
 }
 
+export function buildSubmissionIoSandboxPlan(input: {
+  execute: string
+  args?: string[]
+  testcaseInput?: string
+  inputFile?: string | null
+  outputFile?: string | null
+}) {
+  const copyIn: Record<string, any> = {
+    stdin: { content: input.inputFile ? '' : (input.testcaseInput || '') },
+  }
+  if (input.inputFile) copyIn[input.inputFile] = { content: input.testcaseInput || '' }
+  return {
+    copyIn,
+    execCommand: `${input.execute} ${(input.args || []).map(shellQuote).join(' ')} <stdin >stdout 2>stderr`,
+    copyOutFiles: ['stdout', 'stderr', ...(input.outputFile ? [input.outputFile] : [])],
+  }
+}
+
 let useLocalMode = false
 
 /**
@@ -215,6 +233,8 @@ export async function execute(params: {
   workDir?: string
   /** File IO 模式：当设置时，程序通过 {filename}.in/{filename}.out 文件读写，而非 stdin/stdout */
   filename?: string
+  inputFile?: string | null
+  outputFile?: string | null
   /** 额外需要拷入执行环境的文件（如 user_extra_files） */
   extraCopyIn?: Record<string, string>
   /** 启用地址空间限制（RLIMIT_AS），默认 false（使用 cgroup 内存限制） */
@@ -225,6 +245,8 @@ export async function execute(params: {
   // addressSpaceLimit 默认 false，让 cgroup 内存限制生效
   // RLIMIT_AS 会导致 malloc 提前失败，无法正确检测 MLE
   const { language, stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, workDir: providedWorkDir, filename, extraCopyIn, addressSpaceLimit = false, args, env } = params
+  const inputFile = params.inputFile ?? (filename ? `${filename}.in` : null)
+  const outputFile = params.outputFile ?? (filename ? `${filename}.out` : null)
 
   const langConfig = getLanguageConfig(language)
   if (!langConfig) {
@@ -243,10 +265,9 @@ export async function execute(params: {
 
   // Local execution is only allowed for explicit development fallback.
   if ((useLocalMode || (providedWorkDir && !compileFileId)) && ALLOW_LOCAL_FALLBACK) {
-    const uniqueDir = providedWorkDir || path.join(os.tmpdir(), `judge_exec_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-    if (!providedWorkDir) {
-      fs.mkdirSync(uniqueDir, { recursive: true })
-    }
+    const uniqueDir = path.join(os.tmpdir(), `judge_exec_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+    fs.mkdirSync(uniqueDir, { recursive: true })
+    if (providedWorkDir) fs.cpSync(providedWorkDir, uniqueDir, { recursive: true })
 
     // 本地模式下需要重新编译（因为工作目录不同）
     // 写入源代码并编译
@@ -263,19 +284,20 @@ export async function execute(params: {
         stdin,
         timeLimit,
         memoryLimit,
+        outputLimit,
         workDir: uniqueDir,
         skipCompile: !!providedWorkDir, // 如果提供了 workDir（已编译过），跳过编译
         filename,
+        inputFile,
+        outputFile,
         extraCopyIn
         , args, env
       })
     } finally {
-      if (!providedWorkDir) {
-        try {
-          fs.rmSync(uniqueDir, { recursive: true, force: true })
-        } catch {
-          // ignore
-        }
+      try {
+        fs.rmSync(uniqueDir, { recursive: true, force: true })
+      } catch {
+        // ignore
       }
     }
   }
@@ -297,6 +319,8 @@ async function sandboxExecute(
     compileFileId?: string
     workDir?: string
     filename?: string
+    inputFile?: string | null
+    outputFile?: string | null
     extraCopyIn?: Record<string, string>
     addressSpaceLimit?: boolean
     args?: string[]
@@ -304,6 +328,8 @@ async function sandboxExecute(
   }
 ): Promise<SandboxResult> {
   const { stdin, timeLimit, memoryLimit, outputLimit = 65536, compileFileId, filename, extraCopyIn, addressSpaceLimit = false, args = [], env = {} } = params
+  const inputFile = params.inputFile ?? (filename ? `${filename}.in` : null)
+  const outputFile = params.outputFile ?? (filename ? `${filename}.out` : null)
 
   try {
     // 构建 copyIn：如果有编译产物 fileId，用 fileId 传入
@@ -322,22 +348,11 @@ async function sandboxExecute(
       }
     }
 
-    let execCommand: string
-    let copyOutFiles: string[]
-
-    if (filename) {
-      // File IO 模式：程序通过 {filename}.in / {filename}.out 读写
-      copyIn[`${filename}.in`] = { content: stdin || '' }
-      execCommand = `${langConfig.execute} ${args.map(shellQuote).join(' ')} 2>stderr`
-      copyOutFiles = [`${filename}.out`, 'stderr']
-    } else {
-      // 标准 stdin/stdout 模式
-      // The shell command always redirects from `stdin`; create the file even
-      // for empty-input programs such as Hack data generators.
-      copyIn['stdin'] = { content: stdin || '' }
-      execCommand = `${langConfig.execute} ${args.map(shellQuote).join(' ')} <stdin >stdout 2>stderr`
-      copyOutFiles = ['stdout', 'stderr']
-    }
+    // stdin is always explicit and empty in file-input mode. stdout is always
+    // captured separately even when the checker consumes a named output file.
+    const ioPlan = buildSubmissionIoSandboxPlan({ execute: langConfig.execute, args, testcaseInput: stdin, inputFile, outputFile })
+    Object.assign(copyIn, ioPlan.copyIn)
+    const { execCommand, copyOutFiles } = ioPlan
 
     const limits = buildLimits(timeLimit)
     const result = await runCommand({
@@ -370,13 +385,9 @@ async function sandboxExecute(
     let stdout: string | undefined
     let stderr: string | undefined
 
-    if (filename) {
-      // File IO 模式：从输出文件获取 stdout
-      stdout = result.files?.[`${filename}.out`]
-    } else {
-      // go-judge v1.8+ returns copyOut file contents as plain strings (not base64)
-      stdout = result.files?.stdout
-    }
+    const capturedStdout = result.files?.stdout
+    const outputFileMissing = Boolean(outputFile && !Object.prototype.hasOwnProperty.call(result.files || {}, outputFile))
+    stdout = outputFile ? (result.files?.[outputFile] || '') : capturedStdout
     stderr = result.files?.stderr
 
     // 检测内存分配失败的信号（bad_alloc、OOM、memory allocation failed 等）
@@ -424,7 +435,7 @@ async function sandboxExecute(
 
     // 手动检测 OLE：go-judge 的 outputLimit 在 copyOut 模式下不自动触发 OLE
     // 需要检查输出大小是否超过限制
-    if (status === 'Accepted' && stdout && stdout.length > outputLimit) {
+    if (status === 'Accepted' && [stdout, capturedStdout, stderr].some(value => value && Buffer.byteLength(value, 'utf8') > outputLimit)) {
       status = 'Output Limit Exceeded'
     }
 
@@ -444,11 +455,13 @@ async function sandboxExecute(
       metricSource: 'go-judge-cgroup',
       exitCode: result.exitStatus,
       stdout,
+      capturedStdout: outputFile ? capturedStdout : undefined,
+      outputFileMissing,
       stderr
     }
   } catch (e: any) {
     return {
-      status: 'Runtime Error',
+      status: 'System Error',
       time: 0,
       cpuTime: 0,
       wallTime: 0,

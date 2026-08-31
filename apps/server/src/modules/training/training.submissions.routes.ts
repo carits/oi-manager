@@ -4,6 +4,7 @@
  */
 
 import { Router } from 'express'
+import yaml from 'js-yaml'
 import { authenticate } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
@@ -25,6 +26,7 @@ import { createQueuedTrainingSubmission } from './training.submission.service'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
 import { resolveJudgePresentationConfig } from '../../lib/judge-mode'
 import { createRejudgeBatch } from '../judge/application/judge-run.service'
+import { normalizeSubmissionIo, resolveSubmissionIoSnapshot, submissionIoDto, SubmissionIoError } from '../judge/domain/submission-io'
 import { findTrainingForProblemAccess } from './application/training-problem-query.service'
 import {
   buildRejudgeTarget,
@@ -46,7 +48,7 @@ export const trainingSubmissionsRouter = Router()
 trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandler(async (req: AuthRequest, res) => {
     const id = parseTrainingId(req.params.id)
     const userId = req.user!.userId
-    const { trainingProblemId, language, code, submitMethod } = req.body
+    const { trainingProblemId, language, code, submitMethod, inputFilename, outputFilename } = req.body
 
     if (!trainingProblemId || !language || !code) {
       return res.status(400).json({ success: false, message: '缺少必要参数' })
@@ -62,13 +64,6 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
     // Legacy robot/myAccount payloads remain accepted, but always run locally.
     const method = 'local'
     const idempotencyKey = readIdempotencyKey(req)
-    const fingerprint = requestFingerprint({
-      trainingProblemId,
-      language,
-      code,
-      submitMethod: method,
-    })
-
     const training = await findTrainingForProblemAccess(id, true)
     if (!training) {
       return res.status(404).json({ success: false, message: '训练不存在' })
@@ -101,13 +96,25 @@ trainingSubmissionsRouter.post('/trainings/:id/submit', authenticate, asyncHandl
       })
     }
 
+    let submissionIo
+    try {
+      const config = yaml.load(judgeConfig || '{}') as any
+      submissionIo = normalizeSubmissionIo({ inputFilename, outputFilename, problemType: config?.type })
+    } catch (error) {
+      if (error instanceof SubmissionIoError) {
+        return res.status(422).json({ success: false, code: error.code, message: error.message })
+      }
+      throw error
+    }
+    const fingerprint = requestFingerprint({ trainingProblemId, language, code, submitMethod: method, ...submissionIo })
+
     let submissionResult
     try {
       submissionResult = await runIdempotent(
         `training-submit:${userId}:${id}`,
         idempotencyKey,
         fingerprint,
-        () => createQueuedTrainingSubmission({ userId, training, trainingProblem, language, code, submitMethod: method }),
+        () => createQueuedTrainingSubmission({ userId, training, trainingProblem, language, code, submitMethod: method, ...submissionIo }),
       )
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
@@ -290,6 +297,9 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
     const ojPlatform = trainingProblem?.Problem?.platform || submission.oj || 'carits'
     const judgeConfigText = trainingProblem?.judgeConfigSnapshot || trainingProblem?.Problem?.judgeConfig || null
     const judgePresentation = resolveJudgePresentationConfig(judgeConfigText)
+    let judgeConfig: any = {}
+    try { judgeConfig = yaml.load(judgeConfigText || '{}') || {} } catch {}
+    const resolvedIo = resolveSubmissionIoSnapshot(submission, judgeConfig)
 
     // OI 赛制：赛中非管理员隐藏评测详情
     const detailStatus = getTrainingRuntimeStatus(training)
@@ -332,6 +342,7 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authen
         score: hideOiDetail ? null : submission.score,
         cases: hideOiDetail ? null : cases,
         subtasks: hideOiDetail ? null : subtasks,
+        io: submissionIoDto(resolvedIo.inputFile, resolvedIo.outputFile),
       },
     })
 }, '查询失败'))

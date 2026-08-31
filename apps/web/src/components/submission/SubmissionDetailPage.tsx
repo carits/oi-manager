@@ -65,6 +65,7 @@ interface SubmissionDetail {
   problemAlias?: string | null
   problemOrderIndex?: number | null
   contestFormat?: string | null
+  io?: { input: { type: 'stdin' } | { type: 'file'; filename: string }; output: { type: 'stdout' } | { type: 'file'; filename: string } }
 }
 
 interface SubmissionDetailPageProps {
@@ -296,6 +297,11 @@ export function SubmissionDetailPage({ role, submissionId }: SubmissionDetailPag
                 <div className={unifiedStyles.u5}>
                   <div className={unifiedStyles.u6}>代码长度</div>
                   <div className={unifiedStyles.u10}>{detail.codeLength}B</div>
+                </div>
+
+                <div className={unifiedStyles.u5}>
+                  <div className={unifiedStyles.u6}>输入 / 输出</div>
+                  <div className={unifiedStyles.u10}>{detail.io?.input.type === 'file' ? detail.io.input.filename : 'stdin'} → {detail.io?.output.type === 'file' ? detail.io.output.filename : 'stdout'}</div>
                 </div>
 
                 {/* Submit At */}

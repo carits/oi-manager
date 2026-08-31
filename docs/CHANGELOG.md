@@ -11,6 +11,14 @@ source_of_truth: Git history
 
 ## 2026-08-31
 
+### 提交级文件 IO Adapter 与旧 FileIO 安全迁移
+
+- 题库、比赛/训练提交和 Hack 证明程序新增独立输入/输出文件选择；文件名固化在 Submission，并在每个 JudgeRun 创建时复制，重测继续沿用原执行意图。文件名参与幂等指纹，路径、保留名、输入输出同名及不支持题型统一返回 422。
+- Judge 将旧单一 `{prefix}.in/.out` 分支重构为四组合 IO Adapter。每个测试点和本地 fallback 使用独立运行目录；文件输出缺失按空输出进入 Checker并记录点级诊断，stdout、stderr 与文件输出分别按 UTF-8 字节数限制，基础设施读取失败与用户 Verdict 分开处理。
+- STD、Validator、Generator、Classifier 和 Checker固定使用标准 IO；Hack baseline/candidate 共用证明程序 IO。Wrong Corpus 执行指纹加入输入/输出文件名，防止同源码不同执行方式错误去重。
+- 新增超级管理员 `check/apply` 迁移接口，按提交固定 Revision 的旧 `filename` 幂等回填 Submission/JudgeRun；旧 Revision 保持不可变，历史结果、成绩和排行榜不重测。评测设置不再写入源码题 FileIO 前缀，旧题仅向提交框提供可修改建议。
+- Server/Judge/Web 类型检查、Web 45/45、Judge 新增 IO 定向 9/9、UI 契约和三端生产构建已通过；Linux 全量 Server/Judge、生产迁移及公网发布结果在部署完成后补记。
+
 ### 贡献数据就绪状态与任务进度
 
 - 新增统一贡献 readiness，STD、Validator 只有编译通过且激活后才能接收 Candidate；OI 缺 Classifier 时允许完成技术验证，但安全停留在等待分类，Wrong Corpus/渐进评估器未就绪时不会用占位价值晋升。

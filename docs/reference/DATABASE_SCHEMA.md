@@ -29,7 +29,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ContributionProject` | 以 Prisma schema 为准 |
 | `File` | 以 Prisma schema 为准 |
 | `JudgeAttempt` | 一次 JudgeRun 的物理执行尝试，保存状态、执行者、fencing token、租约、阶段结果与六段延迟；终态不可重新打开 |
-| `JudgeRun` | 一次逻辑评测运行，固定测试版本/配置哈希并聚合可重试的 JudgeAttempt |
+| `JudgeRun` | 一次逻辑评测运行，固定测试版本、配置哈希与提交级输入/输出文件 IO，并聚合可重试的 JudgeAttempt |
 | `LoginLog` | 以 Prisma schema 为准 |
 | `Milestone` | 以 Prisma schema 为准 |
 | `OjAccount` | 以 Prisma schema 为准 |
@@ -46,14 +46,14 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `Problem` | 以 Prisma schema 为准 |
 | `ProblemAttachment` | 以 Prisma schema 为准 |
 | `ProblemChecker` | Lemon SPJ 源码与头文件记录 |
-| `ProblemHackAttempt` | 题目级 ACM/OI Hack 独立队列、前后 Verdict/分数、命中 Subtask 与落库状态 |
+| `ProblemHackAttempt` | 题目级 ACM/OI Hack 独立队列、证明程序提交级文件 IO、前后 Verdict/分数、命中 Subtask 与落库状态 |
 | `ProblemHackConfig` | 题目级 Hack 开关、STD、Validator、OI Classifier 和配置 revision |
 | `ProblemJudgeProgram` | 题目的逻辑 STD、Validator、Classifier 或命名 Generator 及当前版本指针 |
 | `ProblemJudgeProgramVersion` | 不可变程序源码版本、哈希、语言、编译结果、作者和 AI 来源 |
 | `ProblemDataGenerationJob` | 独立数据生成队列、程序版本、基础 Revision、租约、fencing token 和晋升结果 |
 | `ProblemDataGenerationCase` | 一次参数/直接输入对应的候选测试点、逐阶段状态、内容对象与预览 |
 | `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask 与晋升状态 |
-| `WrongSolutionSample` | 私有历史/人工错误程序样本索引；源码访问仍遵守原提交权限 |
+| `WrongSolutionSample` | 私有历史/人工错误程序样本索引；执行指纹同时包含语言、源码和提交级 IO，源码访问仍遵守原提交权限 |
 | `WrongBehaviorCluster` | 错误行为代表簇、权重、类别及 Evaluation/Holdout 分区 |
 | `WrongCorpusRevision` | 一次不可变 Corpus 构建摘要与固定分层 |
 | `BugCategory` | 管理员维护的错误类型与权重 |
@@ -88,7 +88,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `RejudgeBatch` | 一次范围重测请求及其作用域、请求者、计数和关联 JudgeRun |
 | `School` | 以 Prisma schema 为准 |
 | `SchoolProblemList` | 以 Prisma schema 为准 |
-| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
+| `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |
 | `TeamMember` | 以 Prisma schema 为准 |

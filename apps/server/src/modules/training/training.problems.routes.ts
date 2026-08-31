@@ -30,6 +30,8 @@ import {
   getTrainingProblemStatusData,
   listTrainingProblems,
 } from './application/training-problem-query.service'
+import yaml from 'js-yaml'
+import { legacySubmissionIoSuggestion } from '../judge/domain/submission-io'
 
 function sendManagementError(error: unknown, res: any) {
   if (!(error instanceof TrainingProblemManagementError)) throw error
@@ -353,6 +355,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
     const detail = await getTrainingProblemDetailData(id, problemId, userId, userType)
     if (!detail) return res.status(403).json({ success: false, message: '题目不属于该训练' })
     const { trainingProblem, note, statementSet, legacyStatementSnapshot } = detail
+    const legacyIo = legacySubmissionIoSuggestion(yaml.load(trainingProblem.judgeConfigSnapshot || '{}') as any)
 
     const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdmin)
     const defaultStatement = statementSet?.Snapshot.find(item => item.isDefault) || statementSet?.Snapshot[0]
@@ -395,6 +398,7 @@ trainingProblemsRouter.get('/trainings/:id/problems/:problemId/detail', authenti
         noteContent: note?.content ?? '',
         contentRevision: statementSet?.revision ?? legacyStatementSnapshot?.revision ?? null,
         contentSource: defaultStatement?.sourceType ?? legacyStatementSnapshot?.sourceType ?? 'canonical',
+        legacyIoSuggestion: legacyIo ? { inputFilename: legacyIo.inputFilename, outputFilename: legacyIo.outputFilename } : null,
         ...(isAdmin && (defaultStatement?.authorUsernameSnapshot || legacyStatementSnapshot?.authorUsernameSnapshot)
           ? { authorUsername: defaultStatement?.authorUsernameSnapshot || legacyStatementSnapshot?.authorUsernameSnapshot }
           : {}),

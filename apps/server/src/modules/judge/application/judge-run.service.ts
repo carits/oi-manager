@@ -23,6 +23,9 @@ export interface ClaimedSubmissionLifecycle {
   testSetRevisionId: string | null
   code: string
   language: string
+  inputFilename: string | null
+  outputFilename: string | null
+  ioAdapterVersion: number
   judgeRunId: string
   judgeAttemptId: string
   fencingToken: string
@@ -102,6 +105,9 @@ export async function createQueuedSubmissionWithRun(
         status: 'QUEUED',
         testSetRevisionId: submission.testSetRevisionId,
         judgeConfigHash: submission.judgeConfigHash,
+        inputFilename: submission.inputFilename,
+        outputFilename: submission.outputFilename,
+        ioAdapterVersion: submission.ioAdapterVersion,
         requestedBy: options.requestedBy ?? submission.userId,
       },
     })
@@ -193,6 +199,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
         testSetRevisionId: true,
         code: true,
         language: true,
+        CurrentJudgeRun: { select: { inputFilename: true, outputFilename: true, ioAdapterVersion: true } },
       },
     })
     if (!submission.problemInternalId) throw new Error('Queued local submission has no internal problem')
@@ -203,6 +210,9 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
       testSetRevisionId: submission.testSetRevisionId,
       code: submission.code,
       language: submission.language,
+      inputFilename: submission.CurrentJudgeRun?.inputFilename || null,
+      outputFilename: submission.CurrentJudgeRun?.outputFilename || null,
+      ioAdapterVersion: submission.CurrentJudgeRun?.ioAdapterVersion ?? 0,
       judgeRunId: candidate.judgeRunId,
       judgeAttemptId: candidate.judgeAttemptId,
       fencingToken: candidate.fencingToken,
@@ -451,6 +461,9 @@ async function queueRejudgeRun(
       status: 'QUEUED',
       testSetRevisionId: submission.testSetRevisionId,
       judgeConfigHash: submission.judgeConfigHash,
+      inputFilename: submission.inputFilename,
+      outputFilename: submission.outputFilename,
+      ioAdapterVersion: submission.ioAdapterVersion,
       rejudgeBatchId: input.rejudgeBatchId || null,
       requestedBy: input.requestedBy,
     },

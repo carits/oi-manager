@@ -69,6 +69,7 @@ export interface ProblemDetail {
   platform?: string
   platformProblemId?: string
   noteContent?: string
+  legacyIoSuggestion?: { inputFilename: string | null; outputFilename: string | null } | null
 }
 
 export interface SubmissionRow {

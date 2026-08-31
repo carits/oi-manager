@@ -293,7 +293,6 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
       } else {
         config.checker_type = 'default'
       }
-      if (fileioPrefix) config.filename = fileioPrefix
       if (!ignoreTrailingSpace) config.ignore_trailing_space = false
     }
 
@@ -1057,10 +1056,10 @@ export const JudgeSettingsTab = forwardRef<JudgeSettingsTabHandle, JudgeSettings
           {/* FileIO */}
           {problemType === 'default' && (
             <div style={cardStyle}>
-              <div style={sectionTitle}>FileIO 配置</div>
-              <div className={unifiedStyles.u18}>
-                <Input type="text" value={fileioPrefix} onChange={(e) => setFileioPrefix(e.target.value)} placeholder="如: f（生成 f.in / f.out）" style={inputStyle} />
-                {fileioPrefix && <span className={unifiedStyles.u19}>.in / .out</span>}
+              <div style={sectionTitle}>提交级文件 IO</div>
+              <div className={unifiedStyles.u18}>{fileioPrefix
+                ? <span>旧配置 <strong>{fileioPrefix}.in / {fileioPrefix}.out</strong> 仅用于历史迁移和提交框预填；新评测由每次提交自行选择。</span>
+                : <span>文件名由每次提交单独配置；题目和测试版本只保存标准 input / answer。</span>}
               </div>
             </div>
           )}

@@ -1,4 +1,5 @@
 import { prisma } from '../../../prisma'
+import yaml from 'js-yaml'
 import { logger } from '../../../lib/logger'
 import {
   IdempotencyConflictError,
@@ -11,6 +12,7 @@ import {
   createQueuedSubmissionWithRun,
   rejudgeSubmissionWithRun,
 } from '../../judge/application/judge-run.service'
+import { normalizeSubmissionIo, SubmissionIoError } from '../../judge/domain/submission-io'
 
 export interface SubmissionCommandContext {
   userId: string
@@ -38,6 +40,8 @@ export interface LocalSubmissionInput {
   language?: unknown
   code?: unknown
   submitMethod?: unknown
+  inputFilename?: unknown
+  outputFilename?: unknown
   idempotencyKey?: string | null
 }
 
@@ -70,7 +74,22 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
     throw new SubmissionCommandError(409, 'TEST_SET_REVISION_REQUIRED', error.message)
   }
 
-  const fingerprint = requestFingerprint({ problemId, oj, language, code, submitMethod: 'local' })
+  let submissionIo
+  try {
+    const config = yaml.load(revision?.judgeConfig || problem.judgeConfig || '{}') as any
+    submissionIo = normalizeSubmissionIo({
+      inputFilename: input.inputFilename,
+      outputFilename: input.outputFilename,
+      problemType: config?.type,
+    })
+  } catch (error) {
+    if (error instanceof SubmissionIoError) {
+      throw new SubmissionCommandError(422, error.code, error.message)
+    }
+    throw error
+  }
+
+  const fingerprint = requestFingerprint({ problemId, oj, language, code, submitMethod: 'local', ...submissionIo })
   let submissionResult
   try {
     submissionResult = await runIdempotent(
@@ -93,6 +112,7 @@ export async function submitLocalCode(context: SubmissionCommandContext, input: 
         isGlobalVisible: true,
         testSetRevisionId: revision?.id || null,
         judgeConfigHash: revision?.judgeConfigHash || null,
+        ...submissionIo,
       }, { requestedBy: context.userId }),
     )
   } catch (error) {

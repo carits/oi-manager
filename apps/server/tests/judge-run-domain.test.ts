@@ -73,6 +73,7 @@ describe('Submission and Judge lifecycle creation', () => {
       userId, oj: 'carits', problemId, problemInternalId: problemId,
       language: 'cpp', code: 'int main(){}', codeLength: 12,
       result: 'queuing', submitMethod: 'local', submitScope: 'problem',
+      inputFilename: 'travel.in', outputFilename: 'travel.out', ioAdapterVersion: 1,
     })
     const stored = await prisma.submission.findUniqueOrThrow({
       where: { id: submission.id },
@@ -80,6 +81,7 @@ describe('Submission and Judge lifecycle creation', () => {
     })
     expect(stored.CurrentJudgeRun).toMatchObject({
       runNumber: 1, runType: 'NORMAL', status: 'QUEUED', requestedBy: userId,
+      inputFilename: 'travel.in', outputFilename: 'travel.out', ioAdapterVersion: 1,
     })
     expect(stored.CurrentJudgeRun?.CurrentAttempt).toMatchObject({ attemptNumber: 1, state: 'QUEUED' })
     expect(stored.CurrentJudgeRun?.Attempts).toHaveLength(1)

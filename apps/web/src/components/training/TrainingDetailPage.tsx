@@ -34,6 +34,7 @@ import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Tabs } from '@/components/ui/Tabs'
+import { SubmissionIoFields } from '@/components/submission/SubmissionIoFields'
 import styles from './TrainingDetail.module.css'
 
 const TrainingProblemDetail = dynamic(
@@ -152,7 +153,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
 
   const actions = useTrainingActions(
     trainingId, training, basePath, teamId,
-    selectedProblemId, problems, activeTab,
+    selectedProblemId, problems, activeTab, problemDetail?.legacyIoSuggestion,
   )
 
   const solutionsResource = useResource<Record<string, {
@@ -588,6 +589,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             onChange={e => actions.setSubmitCode(e.target.value)}
             className={unifiedStyles.codeInput}
           />
+          <SubmissionIoFields value={actions.submissionIo} onChange={actions.setSubmissionIo} legacySuggested={Boolean(problemDetail?.legacyIoSuggestion)} />
 
           {/* Submit button */}
           <div className={unifiedStyles.u7}>
@@ -596,7 +598,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             </span>
             <Button variant="primary"
               onClick={handleSubmitCode}
-              disabled={actions.submitting || !actions.submitCode.trim()}
+              disabled={actions.submitting || !actions.submitCode.trim() || actions.submissionIo.inputFilename === '' || actions.submissionIo.outputFilename === ''}
             >
               {actions.submitting ? '提交中...' : '提交'}
             </Button>

@@ -74,6 +74,7 @@
 .detailCell { padding: 0 !important; background: var(--bg-muted); white-space: normal !important; }
 .detailGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 14px; }
 .detailGrid section { min-width: 0; color: var(--gray-700); }
+.programIo { margin-top: 6px; color: var(--text-muted); font-size: var(--text-sm); }
 .detailGrid pre { max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 12px; border-radius: 8px; background: var(--gray-900); color: var(--gray-200); white-space: pre; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .detailLoading { padding: 22px; text-align: center; color: var(--gray-500); }
 @media (max-width: 1000px) { .readinessGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

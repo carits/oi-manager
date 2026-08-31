@@ -215,7 +215,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   let standardRun
   try {
     standardRun = await execute({
-      language: 'cpp17', stdin: candidateInput, filename: request.config.filename,
+      language: 'cpp17', stdin: candidateInput,
       timeLimit, memoryLimit, outputLimit: MAX_DATA_BYTES, compileFileId: standard.result.fileId, workDir: standard.result.workDir,
     })
   } finally { await standard.release() }
@@ -240,6 +240,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
       const selfCheck = await judge({
         submissionId: `hack-standard-${request.hackAttemptId}`, problemId: request.problemId,
         code: request.standardSource, language: 'cpp17', config: candidateConfig, testdataPath: request.testdataPath,
+        ioAdapterVersion: 1, io: { inputFile: null, outputFile: null },
       })
       if (selfCheck.retryable) return retryableSystemError(request, 'checker', selfCheck.message || 'Checker 沙箱基础设施失败')
       if (selfCheck.result === 'System Error' || selfCheck.score !== 100) {
@@ -250,6 +251,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
     const baseline = await judge({
       submissionId: `hack-baseline-${request.hackAttemptId}`, problemId: request.problemId,
       code: request.hackSource, language: request.hackLanguage, config: request.config, testdataPath: request.testdataPath,
+      ioAdapterVersion: 1, io: { inputFile: request.inputFilename || null, outputFile: request.outputFilename || null },
     })
     if (baseline.retryable) return retryableSystemError(request, 'baseline', baseline.message || '原始评测沙箱基础设施失败')
     if (baseline.result === 'Compilation Error') return rejected(request, 'baseline', `被 Hack 程序编译失败：${baseline.message || ''}`, { baselineResult: baseline.result, baselineScore: baseline.score })
@@ -258,6 +260,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
     const candidate = await judge({
       submissionId: `hack-candidate-${request.hackAttemptId}`, problemId: request.problemId,
       code: request.hackSource, language: request.hackLanguage, config: candidateConfig, testdataPath: request.testdataPath,
+      ioAdapterVersion: 1, io: { inputFile: request.inputFilename || null, outputFile: request.outputFilename || null },
     })
     if (candidate.retryable) return retryableSystemError(request, 'candidate', candidate.message || '候选评测沙箱基础设施失败')
     if (!VALID_DIFFERENCE_RESULTS.has(candidate.result)) return systemError(request, 'candidate', `加入候选点后的完整评测未得到可比较结果：${candidate.result}`, { baselineResult: baseline.result, baselineScore: baseline.score, candidateResult: candidate.result, candidateScore: candidate.score, affectedSubtaskIds })

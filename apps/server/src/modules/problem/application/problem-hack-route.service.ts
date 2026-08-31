@@ -14,6 +14,7 @@ import {
   serializeHackAttempt,
   validateHackCppSource,
 } from '../problem.hack.service'
+import { normalizeSubmissionIo, SubmissionIoError } from '../../judge/domain/submission-io'
 import { ensureInitialTestSetRevision } from '../problem.testset-revision.service'
 import { transitionHackAttempt } from '../problem.hack-state'
 import { resolveContributionContext } from '../problem.contribution-readiness.service'
@@ -293,6 +294,18 @@ export async function createProblemHackAttempt(input: {
   if (!allowedProblemLanguages(problem).includes(hackLanguage)) {
     fail(400, 'LANGUAGE_NOT_ALLOWED', '被 Hack 程序语言不在题目允许范围内')
   }
+  let submissionIo
+  try {
+    const judgeConfig = parseJudgeConfig(problem.LatestTestSetRevision.judgeConfig)
+    submissionIo = normalizeSubmissionIo({
+      inputFilename: input.body?.inputFilename,
+      outputFilename: input.body?.outputFilename,
+      problemType: judgeConfig.type,
+    })
+  } catch (error) {
+    if (error instanceof SubmissionIoError) fail(422, error.code, error.message)
+    throw error
+  }
 
   const active = await prisma.problemHackAttempt.findFirst({
     where: {
@@ -319,6 +332,8 @@ export async function createProblemHackAttempt(input: {
         generatorLanguage: inputMode === 'generator' ? generatorLanguage : null,
         hackSource,
         hackLanguage,
+        inputFilename: submissionIo.inputFilename,
+        outputFilename: submissionIo.outputFilename,
         hackConfigRevision: hackConfig.revision,
         judgeConfigHash: problem.LatestTestSetRevision.judgeConfigHash,
         testGraphRevision: problem.testGraphRevision,

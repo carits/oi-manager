@@ -63,7 +63,7 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
   const jobId = crypto.randomUUID()
   const reservedCredits = contribution ? (sourceMode === 'generator' ? 4_000 : 400) : 0
   if (reservedCredits) await reserveEvaluationCredits({ userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
-  const config: any = { sourceMode, filename: (() => { try { return (require('js-yaml').load(problem.judgeConfig || '') as any)?.filename || null } catch { return null } })(), cases, generator: ephemeralGenerator, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
+  const config: any = { sourceMode, cases, generator: ephemeralGenerator, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
   try { return await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`data-generation:${problem.id}`}, 0)) IS NULL AS locked`
     const activeCount = await tx.problemDataGenerationJob.count({
@@ -130,7 +130,7 @@ export async function claimDataGenerationJob(judgeId: string) {
     const config = job.config as any
     const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } })
     const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: 'legacy-args-v1' } : null)
-    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, filename: config.filename, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, classifier: classifier ? { language: classifier.language, source: classifier.source } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
+    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, classifier: classifier ? { language: classifier.language, source: classifier.source } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
   })
 }
 

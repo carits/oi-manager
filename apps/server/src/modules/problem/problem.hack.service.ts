@@ -60,6 +60,8 @@ export function serializeHackAttempt(attempt: any, includePrivate: boolean) {
     data.inputData = attempt.inputData
     data.generatorSource = attempt.generatorSource
     data.hackSource = attempt.hackSource
+    data.inputFilename = attempt.inputFilename
+    data.outputFilename = attempt.outputFilename
   }
   return data
 }

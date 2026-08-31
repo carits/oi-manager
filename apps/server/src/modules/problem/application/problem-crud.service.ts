@@ -16,6 +16,7 @@ import {
 } from '../problem.access'
 import { copyPlatformProblemToSchool } from '../problem.copy'
 import { isHackableJudgeConfig, parseJudgeConfig, resolveJudgeMode } from '../problem.hack.service'
+import { legacySubmissionIoSuggestion } from '../../judge/domain/submission-io'
 
 export class ProblemCrudError extends Error {
   constructor(
@@ -385,6 +386,7 @@ export async function getProblemDetail(user: JwtPayload, problemId: string) {
   const permissions = problemPermissions(user, data)
   const judgeConfig = parseJudgeConfig(data.judgeConfig)
   const hackable = isHackableJudgeConfig(judgeConfig)
+  const legacyIo = legacySubmissionIoSuggestion(judgeConfig)
   return {
     ...data,
     judgeConfig: canEdit ? data.judgeConfig : null,
@@ -407,6 +409,7 @@ export async function getProblemDetail(user: JwtPayload, problemId: string) {
         && permissions.canView,
       mode: resolveJudgeMode(judgeConfig),
     },
+    legacyIoSuggestion: legacyIo ? { inputFilename: legacyIo.inputFilename, outputFilename: legacyIo.outputFilename } : null,
   }
 }
 

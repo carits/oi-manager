@@ -166,6 +166,9 @@ Web、Router、活动 API slot、单例后台 Worker 和 Judge 均由 systemd �
   为每题选择多份题面和唯一默认项，内容以不可变 revision 快照固化。
 - 所有来源题统一使用本地提交、评测队列、Judge WebSocket、详情和重新评测；来源平台不再决定
   评测后端，比赛提交优先使用 `judgeConfigSnapshot`。
+- 普通批处理源码提交与 Hack 证明程序支持提交级 stdin/stdout、文件输入和文件输出任意组合；
+  Submission 与 JudgeRun 双重固化 IO，重测不改变原文件名。旧题文件名前缀只用于迁移和首次提交建议，
+  新任务不再由 TestSet Revision 的 `filename` 决定执行方式。
 - 超级管理员和平台管理员的评测记录页提供全平台全量视图，包含所有用户、个人区、校园区和比赛提交，支持总数、范围提示和 20/50/100 条分页浏览。
 - 题目评测支持 ACM / OI 双赛制；ACM 首个失败后跳过未执行测试点并按 0/100 计分，OI 保留子任务部分分及依赖语义，同时兼容未声明 mode 的历史配置。
 - OI 题目的关系型 Test Graph 是 Subtask、Official Group、Hack Gate 与 Testcase 的唯一编辑事实源；题目管理者通过三栏工作台上传/配对数据、注册测试点、设置依赖和聚合方式，YAML 仅由服务端生成 Judge 投影。

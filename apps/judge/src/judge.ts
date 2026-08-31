@@ -87,7 +87,12 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
   const memoryLimit = parseMemory((cfg as any).memory || (cfg as any).memoryLimit || '256MB')
   const outputLimit = parseOutputLimit((cfg as any).output_limit ?? (cfg as any).outputLimit ?? '64MB')
   let checkerType = (cfg as any).checker_type || 'default'
-  const filename = (cfg as any).filename || undefined
+  const legacyPrefix = typeof (cfg as any).filename === 'string' ? (cfg as any).filename : null
+  const submissionIo = request.io
+    ? { inputFile: request.io.inputFile || null, outputFile: request.io.outputFile || null }
+    : legacyPrefix
+      ? { inputFile: `${legacyPrefix}.in`, outputFile: `${legacyPrefix}.out` }
+      : { inputFile: null, outputFile: null }
   const ignoreTrailingSpace = (cfg as any).ignore_trailing_space !== false // 默认 true
 
   // Lemon 的 score/message 协议用于 OI 部分分；ACM 只接受布尔判定型 checker。
@@ -105,8 +110,8 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
 
   console.log(`[Judge] timeLimit: ${timeLimit}ms, memoryLimit: ${memoryLimit}KB, outputLimit: ${outputLimit}B`)
   console.log(`[Judge] checkerType: ${checkerType}, ignoreTrailingSpace: ${ignoreTrailingSpace}`)
-  if (filename) {
-    console.log(`[Judge] FileIO mode: ${filename}.in / ${filename}.out`)
+  if (submissionIo.inputFile || submissionIo.outputFile) {
+    console.log(`[Judge] Submission IO: ${submissionIo.inputFile || 'stdin'} / ${submissionIo.outputFile || 'stdout'}`)
   }
 
   // 语言限制检查
@@ -412,7 +417,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
             testdataPath,
             compileResult.fileId,
             workDir,
-            filename,
+            submissionIo,
             cfg.user_extra_files
           )
           caseResult.caseId = caseIndex
@@ -513,7 +518,7 @@ export async function judge(request: JudgeRequest): Promise<JudgeTaskResult> {
           testdataPath,
           compileResult.fileId,
           workDir,
-          filename,
+          submissionIo,
           cfg.user_extra_files
         )
         caseResult.caseId = i
@@ -605,7 +610,7 @@ async function runTestCase(
   testdataPath: string,
   compileFileId?: string,
   workDir?: string,
-  filename?: string,
+  io?: { inputFile: string | null; outputFile: string | null },
   userExtraFiles?: Record<string, string>
 ): Promise<JudgeCaseResult> {
   // 读取输入
@@ -641,7 +646,8 @@ async function runTestCase(
     outputLimit,
     compileFileId,
     workDir,
-    filename,  // 当设置时，程序通过 {filename}.in / {filename}.out 文件读写
+    inputFile: io?.inputFile,
+    outputFile: io?.outputFile,
     extraCopyIn: userExtraFiles  // 额外文件（如辅助数据文件）
   })
 
@@ -661,14 +667,21 @@ async function runTestCase(
   }
 
   const userOutput = execResult.stdout || ''
+  const addIoDiagnostic = (result: JudgeCaseResult): JudgeCaseResult => execResult.outputFileMissing
+    ? {
+        ...result,
+        outputFileMissing: true,
+        message: [result.message, `期望的输出文件 ${io?.outputFile} 未创建，已按空输出校验`].filter(Boolean).join('；'),
+      }
+    : result
 
   // 校验输出
   // 如果有编译后的 checker（沙箱执行模式），使用沙箱 checker
   if (checkerCtx.checkerFileId || checkerCtx.checkerWorkDir) {
-    return await runCheckerInSandbox(
+    return addIoDiagnostic(await runCheckerInSandbox(
       checkerCtx, input, expectedOutput, userOutput,
       testCase.score || 0, execResult.time, execResult.memory ?? 0
-    )
+    ))
   }
 
   // JS checker（default/strict 模式）
@@ -676,7 +689,7 @@ async function runTestCase(
   const checkResult = checker(userOutput, expectedOutput)
 
   if (checkResult.accepted) {
-    return {
+    return addIoDiagnostic({
       caseId: 0,
       result: 'Accepted',
       time: execResult.time,
@@ -686,10 +699,10 @@ async function runTestCase(
       timeoutReason: execResult.timeoutReason,
       metricSource: execResult.metricSource,
       score: testCase.score
-    }
+    })
   }
 
-  return {
+  return addIoDiagnostic({
     caseId: 0,
     result: 'Wrong Answer',
     time: execResult.time,
@@ -699,7 +712,7 @@ async function runTestCase(
     timeoutReason: execResult.timeoutReason,
     metricSource: execResult.metricSource,
     message: checkResult.message
-  }
+  })
 }
 
 /**

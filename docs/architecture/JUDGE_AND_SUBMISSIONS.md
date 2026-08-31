@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-27
+last_verified: 2026-08-31
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -31,6 +31,27 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 训练提交列表、详情和排行榜使用同一套 `Submission.result` 状态事实，不以 `cases` 是否存在作为“已评测”
 的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
 可显示为进行中。比赛题目标识统一返回 `TrainingProblem.id`，源题号仅用于兼容旧记录。
+
+## 提交级文件 IO Adapter
+
+传统 `freopen` 程序的文件名属于一次提交的执行意图，不属于测试数据或 TestSet Revision。题库提交、
+活动提交和 Hack 证明程序都可独立选择标准输入/文件输入与标准输出/文件输出；四种组合均由同一
+IO Adapter 执行。`Submission` 固化用户选择，创建 `JudgeRun` 时再次复制，任务领取后只读取
+`JudgeRun` 快照；重新评测沿用原 Submission 的 IO，不允许改变历史执行意图。
+
+文件名只允许 1～128 位 ASCII 字母、数字、点、下划线和连字符，禁止路径、`..`、输入输出同名以及
+`main`、`stdin`、`stdout`、`stderr` 等沙箱保留文件。交互、通信、提交答案和客观题传入文件名会返回
+`422 SUBMISSION_IO_UNSUPPORTED`。文件输出缺失时以空 Candidate Output 进入 Checker，并在对应测试点
+记录 `outputFileMissing`；TLE/MLE/RE 优先保留，已确认存在却无法读取才是 System Error。stdout、stderr
+和命名输出分别按 UTF-8 字节数执行输出上限，命名输出不能绕过 OLE。
+
+每个测试点拥有独立沙箱文件系统，本地开发 fallback 也会复制编译产物到独立临时目录，避免上一个
+测试点遗留输出污染后续结果。命名输出模式下 `stdout` 仍表示交给 Checker 的内容，程序真实标准输出
+限长保存在 `capturedStdout` 供诊断。STD、Validator、Generator、Classifier 和 Checker 始终使用标准 IO。
+
+历史 `judgeConfig.filename` 仅供 `ioAdapterVersion=0` 的旧任务兜底。超级管理员通过
+`GET/POST /api/admin/submission-io/migration` 检查并幂等回填旧 Submission/JudgeRun；新任务为 version 1，
+完全忽略 Revision 中的旧文件名前缀。迁移不修改 Revision、活动快照、历史结果、成绩或排行榜。
 
 ## 比赛远程提交 ID 可见性
 
