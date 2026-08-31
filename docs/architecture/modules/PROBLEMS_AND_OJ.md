@@ -92,6 +92,13 @@ Checker 自检。成功输入、答案、参数、种子、程序版本、耗时
 双层 Evaluation Credits，并受单用户、单题、全局并发、数据体积和 Candidate HOT 池硬上限。
 Generator 从 JSON stdin 读取服务器选择的 Seed/Profile/参数；同一输入连续两次输出哈希不一致时拒绝。
 
+贡献页面和写接口共用 `resolveContributionReadiness`：只有已激活的 STD、Validator 才能接收任务，
+Validator DSL 激活时物化为不可变程序版本。Classifier 对 ACM 不需要；OI 普通贡献缺少 Classifier
+时仍可完成 Validator、STD 与去重，但 Candidate 保持 `ADMITTED/awaiting_classifier`。Wrong Corpus
+或渐进评估器尚未就绪时分别保持 `awaiting_corpus`、`awaiting_evaluator`，不得用占位价值发布。
+页面立即展示贡献任务 ID，Generator 产生的 Candidate 作为逐点子结果返回；普通用户看不到其他贡献者、
+Kill Vector、Holdout 或隐藏 Feature。
+
 Candidate 通过技术验证后进入有界池。技术有效 Hack 仍需保留证明程序与前后结果，但不会绕过
 Candidate 记录直接改正式数据。Selector 负责按价值、语义冗余、成本和发布 Token Bucket 选择；
 管理员紧急发布也必须遵守结构、预算和 CAS。ACM 正式点按顺序选择，OI 的用户贡献只能进入
@@ -99,7 +106,7 @@ Hack Gate，只有题目管理者资产可以分配 Official Group。固定旧 R
 
 Wrong Behavior Corpus 只使用本站本地错误/部分分源码与人工错误程序，并只向题目管理者暴露聚类、
 类别、权重和覆盖汇总。当前 bootstrap 阶段已完成去重和固定 80/20 Evaluation/Holdout 分层；完整
-L1/L2/Holdout 行为执行器上线前，普通 Candidate 保持 `ELIGIBLE` 而不自动发布，避免用占位指标改数据。
+L1/L2/Holdout 行为执行器上线前，普通 Candidate 保持 `ADMITTED/awaiting_evaluator` 而不自动发布，避免用占位指标改数据。
 
 外部平台研究和旧实现方案保存在[研究归档](../../archive/research/)和
 [计划归档](../../archive/plans/)。

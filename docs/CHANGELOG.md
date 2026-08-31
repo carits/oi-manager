@@ -9,6 +9,15 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
+## 2026-08-31
+
+### 贡献数据就绪状态与任务进度
+
+- 新增统一贡献 readiness，STD、Validator 只有编译通过且激活后才能接收 Candidate；OI 缺 Classifier 时允许完成技术验证，但安全停留在等待分类，Wrong Corpus/渐进评估器未就绪时不会用占位价值晋升。
+- Candidate POST 立即返回贡献任务 ID；新增本人/题目管理者任务查询，按 Generator、Validator、STD、去重、分类、价值评估和 Candidate Pool 展示安全阶段，普通用户不获得其他贡献者、Kill Vector、Holdout 或隐藏 Feature。
+- Validator DSL 激活会同步物化不可变 Validator 程序版本；普通贡献统一使用激活资产，OI 数据生成可运行 Classifier 并记录 Subtask，Hack 仅在固定到当前程序版本时开放。
+- 题目页增加贡献条件卡、明确阻断与警告、管理员配置入口、直接数据/Generator 流程说明、禁用原因和任务时间线；缺少硬前置时不再展示可填写但无法提交的编辑区。
+
 ## 2026-08-30
 
 ### 有界 Candidate Pool 与评估资源边界

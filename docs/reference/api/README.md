@@ -10,10 +10,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 335 个端点中 326 个必须认证，9 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 359 个端点中 350 个必须认证，9 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 335 个无会话请求：326 个受保护端点必须返回
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 359 个无会话请求：350 个受保护端点必须返回
 401，9 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
@@ -30,6 +30,9 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/problems/:id/data-generation-jobs/:jobId/promote` | 以 CAS 发布选中候选点到下一 TestSet Revision |
 | `POST` | `/api/problems/:id/candidates/data` | 可提交用户贡献直接 Candidate 数据 |
 | `POST` | `/api/problems/:id/candidates/generator` | 可提交用户按 `oj.generator/v1` 贡献 C++17/Python3 Generator |
+| `GET` | `/api/problems/:id/contribution-readiness` | 返回 STD、Validator、Classifier、Corpus 的统一贡献就绪状态与阻断原因 |
+| `GET` | `/api/problems/:id/contributions/mine` | 贡献者读取自己的任务；题目管理者读取本题任务及安全阶段摘要 |
+| `GET` | `/api/problems/:id/contributions/:jobId` | 本人或题目管理者读取贡献任务、逐点阶段与 Candidate 子结果 |
 | `GET` | `/api/problems/:id/candidates/mine` | 贡献者读取自己的 Candidate 粗粒度阶段与结论 |
 | `GET` | `/api/problems/:id/candidates/:candidateId` | 本人或题目管理者读取 Candidate；普通用户不返回 Kill/隐藏 Feature |
 | `POST` | `/api/problems/:id/candidates/:candidateId/cancel` | 取消尚未开始评估的自己的 Candidate |
