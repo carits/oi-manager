@@ -5,7 +5,7 @@ last_verified: 2026-09-01
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-01: 评测记录列表弹窗和个人提交详情权限修复已完成但尚未部署。列表点击保持原 URL 并打开详情，个人模式下 teacher/school_principal 本人详情恢复 200、他人保持 404，校园权限不变；永久权限/不存在错误停止轮询，网络、超时、限流和 5xx 临时错误继续定时重试。Server 550/550、Web 55/55、Judge 30/30、隔离 Playwright 7/7、三端构建、导航/UI/运行时/安全门禁通过；`db:install-paths:verify` 因现存空库/备份升级 Schema 差异失败，本批没有 Prisma 或迁移改动。
+- 2026-09-01: 评测记录列表弹窗、筛选布局和个人提交详情权限修复已完成但尚未部署。筛选字段恢复桌面并排与窄屏两列/单列，补齐可见标签及中文空选项；列表点击保持原 URL 并打开详情，个人模式下 teacher/school_principal 本人详情恢复 200、他人保持 404，校园权限不变；永久权限/不存在错误停止轮询，网络、超时、限流和 5xx 临时错误继续定时重试。Server 550/550、Web 55/55、Judge 30/30、隔离 Playwright 8/8、三端构建、导航/UI/运行时/安全门禁通过；`db:install-paths:verify` 因现存空库/备份升级 Schema 差异失败，本批没有 Prisma 或迁移改动。
 
 - 2026-08-31: 提交级文件 IO Adapter 已部署。题库、活动提交和 Hack 证明程序可分别选择 stdin/文件输入与 stdout/文件输出；Submission/JudgeRun 固化实际 IO，重测沿用原配置。生产迁移检查为 2518 条可解析、183 条 FileIO、0 条异常，apply 与二次检查后 version 0 为 0；迁移前后 2586 条历史提交的 Verdict/分数分布完全一致。真实题库 1041 四组合均 Accepted，三条文件模式通过重测验证原 IO 快照不变；缺失命名输出按空输出得到 WA 并记录点级诊断，路径穿越返回 422。Server 全量 547/547 + 当前迁移/IO 定向 32/32、Judge 30/30、Web 45/45、三端生产构建、361 端点匿名审计和监控均通过。提交 `2f85f61` 已推送 `main`，API 活动 slot 为 3302，Judge 已重启注册，Web BUILD_ID `2lhep8Ied7CIZOrw7KVGm` 已提升至公网 3000。
 

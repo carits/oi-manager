@@ -111,17 +111,50 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
   return (
     <PageFrame>
-      <PageHeader title="评测记录" description={isGlobalAdminView ? '查看全平台所有用户、个人区、校园区和比赛提交。' : '按用户、题目、结果和语言定位提交。'} />
+      <PageHeader
+        title="评测记录"
+        description={isGlobalAdminView
+          ? '查看全平台所有用户、个人区、校园区和比赛提交。'
+          : viewRole === 'student'
+            ? '按平台、题号、结果和语言定位提交。'
+            : '按用户、平台、题号、结果和语言定位提交。'}
+      />
       {isGlobalAdminView && <div className={styles.scopeSummary} role="status"><strong>管理员全量视图</strong><span>全平台所有用户、个人区、校园区和比赛提交</span>{total > 0 && <span>当前显示第 {displayStart}–{displayEnd} 条，共 {total} 条</span>}</div>}
-      <Toolbar>
+      <Toolbar className={styles.filterToolbar} role="search" aria-label="筛选评测记录">
         <ToolbarGroup className={styles.filters}>
-          {(viewRole !== 'student' || isGlobalAdmin) && <Input className={styles.input} aria-label="用户名" placeholder="用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />}
-          <Select className={styles.select} aria-label="OJ 平台" value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>{SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
-          <Input className={styles.input} aria-label="题号" placeholder="题号" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
-          <Select className={styles.select} aria-label="评测结果" value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>{JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
-          <Select className={styles.select} aria-label="语言" value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value }))}>{LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
+          {(viewRole !== 'student' || isGlobalAdmin) && (
+            <label className={styles.filterField}>
+              <span>用户</span>
+              <Input className={styles.input} placeholder="输入用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
+            </label>
+          )}
+          <label className={styles.filterField}>
+            <span>平台</span>
+            <Select className={styles.select} value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>
+              {SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </Select>
+          </label>
+          <label className={styles.filterField}>
+            <span>题号</span>
+            <Input className={styles.input} placeholder="输入题号" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
+          </label>
+          <label className={styles.filterField}>
+            <span>结果</span>
+            <Select className={styles.select} value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>
+              {JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.value ? option.label : '全部结果'}</option>)}
+            </Select>
+          </label>
+          <label className={styles.filterField}>
+            <span>语言</span>
+            <Select className={styles.select} value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value }))}>
+              {LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.value ? option.label : '全部语言'}</option>)}
+            </Select>
+          </label>
         </ToolbarGroup>
-        <ToolbarGroup><Button variant="secondary" icon={<RotateCcw size={16} />} onClick={reset}>重置</Button><Button icon={<Search size={16} />} onClick={applyFilters}>筛选</Button></ToolbarGroup>
+        <ToolbarGroup className={styles.filterActions}>
+          <Button variant="secondary" icon={<RotateCcw size={16} />} onClick={reset}>重置</Button>
+          <Button icon={<Search size={16} />} onClick={applyFilters}>筛选</Button>
+        </ToolbarGroup>
       </Toolbar>
       <Table
         data={submissions}
