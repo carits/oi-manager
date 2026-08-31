@@ -5,6 +5,8 @@ last_verified: 2026-08-31
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-08-31: 贡献数据前置状态与任务进度已统一并部署：readiness、Candidate POST、Hack POST 与任务执行共用 STD/Validator/Classifier/Corpus 判定；STD/Validator 非 ACTIVE 时硬阻断，OI 缺 Classifier、Corpus 或渐进评估器时分别安全停在等待分类、等待语料或等待评估，不再伪造价值晋升。Validator DSL 激活会物化不可变程序版本；直接数据与 Generator 立即返回贡献任务 ID并展示逐阶段、逐子结果时间线，普通用户响应不暴露其他贡献者、Kill Vector、Holdout 或隐藏 Feature。Server 全量 533/533、Judge 22/22、Web 45/45、三端生产构建、UI/API/架构/文档门禁均通过；真实 `teacher1` 会话验证 readiness 与任务接口 200 且阻断信息正确。提交 `4fc8ff6` 已推送 `main`，API 蓝绿由 3302 提升至 3303，Judge 重新认证注册，Web BUILD_ID `1wwzeAwMoc3rMfesRogTc` 已提升至公网 3000。
+
 - 2026-08-31: 有界 Candidate 基础链路已部署：数据贡献/Generator/Hack 共用 Candidate、用户与平台双层 Evaluation Credits、Candidate 全局并发 1、Judge `8:1:1` 调度、全局 Blob 引用与延迟 GC、Validator DSL/Feature/Subtask Rule、私有 Corpus bootstrap、Selector 预览和平台资源视图均已实现。技术有效 Hack 通过 Selector 策略与每题每小时 3 次上限晋升；其他 Candidate 在行为 Corpus 的渐进 L1/L2/Holdout 执行器完成前只停留于有界池，不会误发布。生产 schema 迁移正常，Server 全量 529/529 + 最终边界定向 10/10、Judge 20/20、Web 45/45、三端构建与 UI/API/架构/文档门禁通过。提交 `9c95028` 已推送 `main`，API 蓝绿由 3303 提升至 3302，Judge 重新注册，Web BUILD_ID `U5-dMerIgwkJMw9v0A8Xb` 已提升至公网 3000。
 
 - 2026-08-30: GitHub 异机公网探针及去重 Issue 故障/恢复状态机已提交，静态契约验证通过；真实 workflow_dispatch Run `33290187717` 在任何步骤启动前被 GitHub Billing 拒绝，注解明确为近期付款失败或消费上限不足。工作流当前安全禁用，未宣称异机探针已运行；修复 Actions Billing 后需重新启用并完成一次健康运行及一次受控故障/恢复。
