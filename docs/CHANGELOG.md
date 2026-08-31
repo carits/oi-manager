@@ -17,7 +17,8 @@ source_of_truth: Git history
 - Judge 将旧单一 `{prefix}.in/.out` 分支重构为四组合 IO Adapter。每个测试点和本地 fallback 使用独立运行目录；文件输出缺失按空输出进入 Checker并记录点级诊断，stdout、stderr 与文件输出分别按 UTF-8 字节数限制，基础设施读取失败与用户 Verdict 分开处理。
 - STD、Validator、Generator、Classifier 和 Checker固定使用标准 IO；Hack baseline/candidate 共用证明程序 IO。Wrong Corpus 执行指纹加入输入/输出文件名，防止同源码不同执行方式错误去重。
 - 新增超级管理员 `check/apply` 迁移接口，按提交固定 Revision 的旧 `filename` 幂等回填 Submission/JudgeRun；旧 Revision 保持不可变，历史结果、成绩和排行榜不重测。评测设置不再写入源码题 FileIO 前缀，旧题仅向提交框提供可修改建议。
-- Server/Judge/Web 类型检查、Web 45/45、Judge 新增 IO 定向 9/9、UI 契约和三端生产构建已通过；Linux 全量 Server/Judge、生产迁移及公网发布结果在部署完成后补记。
+- Linux 隔离回归为 Server 68 文件 547/547、Judge 29/29、Web 45/45；新增迁移与 IO 定向 32/32 通过。真实上线四组合首轮发现 WebSocket Judge Client 丢弃新增 IO 字段，补充协议映射回归后 Judge 30/30，文件输入/输出三种模式重测均 Accepted。
+- 生产迁移检查为 2518 条可解析、183 条 FileIO、0 条异常；apply 迁移 2518 条并二次检查保持 0 待处理，迁移前后原 2586 条 Submission 的 Verdict/分数分布不变。缺失命名输出真实返回 WA 且点级 `outputFileMissing=true`，非法路径返回 422。提交 `2f85f61` 已推送 `main`，API 蓝绿提升到 3302，Judge 重启，Web BUILD_ID `2lhep8Ied7CIZOrw7KVGm` 已提升到公网 3000；361 端点匿名审计和生产监控通过。
 
 ### 贡献数据就绪状态与任务进度
 
