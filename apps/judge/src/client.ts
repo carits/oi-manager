@@ -12,11 +12,18 @@ import WebSocket from 'ws'
 import { config } from './config'
 import { judge } from './judge'
 import { judgeHack } from './hack'
-import type { HackMessage, HackResultMessage, JudgeMessage, ResultMessage, RegisterMessage, WSMessage } from './types'
+import type { HackMessage, HackResultMessage, JudgeMessage, JudgeRequest, ResultMessage, RegisterMessage, WSMessage } from './types'
 import { getClientHeartbeatReply } from './protocol'
 import { judgeTelemetry } from './telemetry'
 import { generateTestdata } from './data-generation'
 import type { DataGenerationMessage, DataGenerationResultMessage } from './types'
+
+export function buildJudgeRequest(payload: JudgeMessage['payload']): JudgeRequest {
+  return {
+    ...payload,
+    config: payload.config ?? payload.problemConfig ?? {},
+  }
+}
 
 class JudgeClient {
   private ws: WebSocket | null = null
@@ -179,7 +186,7 @@ class JudgeClient {
   }
 
   private async handleJudgeTask(msg: JudgeMessage) {
-    // 兼容旧字段名 problemConfig 和新字段名 config
+    const request = buildJudgeRequest(msg.payload)
     const {
       submissionId,
       judgeRunId,
@@ -190,8 +197,7 @@ class JudgeClient {
       code,
       language,
       testdataPath,
-    } = msg.payload
-    const config = msg.payload.config ?? msg.payload.problemConfig ?? {}
+    } = request
 
     console.log(`[Judge] Received task: submission=${submissionId}, problem=${problemId}, lang=${language}`)
     const telemetryStartedAt = judgeTelemetry.startTask('submission')
@@ -200,18 +206,7 @@ class JudgeClient {
 
     // 直接执行评测任务（无 PQueue，并发由服务端 Consumer 控制）
     try {
-      const result = await judge({
-        submissionId,
-        judgeRunId,
-        judgeAttemptId,
-        fencingToken,
-        dispatchedAt,
-        problemId,
-        code,
-        language,
-        config: config,
-        testdataPath
-      })
+      const result = await judge(request)
 
       if (result.retryable) {
         judgeTelemetry.finishTask('submission', 'infrastructure_retry', telemetryStartedAt)
