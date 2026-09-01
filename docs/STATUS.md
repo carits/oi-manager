@@ -5,6 +5,8 @@ last_verified: 2026-09-01
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-01: 比赛、训练和作业内的评测记录筛选布局已修复并部署。全宽控件逐项占行改为带“题目、用户名、评测结果、语言”持续标签的响应式 Grid；管理员桌面端单行紧凑排列，`960px` 以下两列、`560px` 以下单列等宽，参与者继续按权限省略用户名或隐藏题目来源。Web 57/57、类型检查、生产构建、UI/文档/架构门禁通过；服务器隔离 Chromium 的独立桌面/手机筛选回归连同登录准备 7/7 通过且无页面横向溢出。提交 `ee84792`、`c457f3d` 已推送 `main`，Web BUILD_ID `L7aAQfpP-KxwfX5ZZ3uc_` 已提升至公网 3000；本批未修改 API，readiness 与 Web/Router/Worker/Executor/Judge 服务健康。
+
 - 2026-09-01: 提交详情测试点折叠与来源信息优化已部署。ACM/OI 测试点默认折叠，保留总 Verdict、OI 总分和 ACM 首个失败点，Disclosure 支持鼠标、Enter、Space 与 ARIA；来源显示活动固定快照或题库来源的“平台 · 原始题号”，隐藏比赛不返回来源，界面不再显示远端记录但后端远程 ID 保持。Server 权限/详情 21/21、OI 原题隐藏 1/1、Web 57/57、隔离 Chromium 10/10、三端构建和 UI/文档/架构门禁通过；提交 `ba6ee1a` 已推送 `main`，API 3303→3302，Web BUILD_ID `4rLL5mW5zC7ZWDwN5JxWr` 已提升至公网 3000。生产 #3677 只读验证来源为 `Carits平台 · 1033`、20 个测试点且远程 ID 仍保留；readiness、全部服务和监控健康。
 
 - 2026-09-01: 评测记录与提交详情强一致性重构已部署。全局与活动详情共用同一访问/脱敏 DTO，修复全局端点绕过 OI 赛中隐藏和 teacher1 个人提交 #3824 弹窗错误返回 403；弹窗与独立页共用 Hook/内容组件，403/404 不再提供误导重试，代码使用弹窗外层单纵向滚动，进行中列表自动同步。Server 提交权限 21/21、OI 原题隐藏定向 1/1、Web 57/57、隔离 Chromium 10/10、Server/Web 构建及 UI/文档/架构门禁通过；提交 `4e4b19d` 已推送 `main`。生产 Schema 37 个迁移均为最新，API 蓝绿由 3302 提升到 3303，Web BUILD_ID `VxV3DoXrP-Ole9yMHoVa5` 已提升至公网 3000；真实生产数据只读验证 teacher1 的 #3824 返回 Accepted，readiness、全部服务和监控健康。
