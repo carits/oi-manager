@@ -10,7 +10,7 @@ export interface SelectOption {
 
 /** 评测结果选项 */
 export const JUDGE_RESULT_OPTIONS: readonly SelectOption[] = [
-  { value: '', label: 'All' },
+  { value: '', label: '全部结果' },
   { value: 'accepted', label: 'Accepted' },
   { value: 'pe', label: 'Presentation Error' },
   { value: 'wa', label: 'Wrong Answer' },
@@ -30,7 +30,7 @@ export const JUDGE_RESULT_OPTIONS: readonly SelectOption[] = [
 
 /** 编程语言选项 */
 export const LANGUAGE_OPTIONS: readonly SelectOption[] = [
-  { value: '', label: 'All' },
+  { value: '', label: '全部语言' },
   { value: 'c', label: 'C' },
   { value: 'cpp', label: 'C++' },
   { value: 'cpp98', label: 'C++98' },

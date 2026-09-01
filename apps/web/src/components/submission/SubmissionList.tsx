@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type SyntheticEvent } from 'react'
 import dynamic from 'next/dynamic'
-import { Input, Select, Textarea } from '@/components/ui/FormControls'
+import { Input, Select } from '@/components/ui/FormControls'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { RotateCcw, Search } from 'lucide-react'
@@ -18,7 +18,6 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Pagination } from '@/components/ui/Pagination'
 import { StatusBadge, getResultVariant } from '@/components/ui/StatusBadge'
 import { Table } from '@/components/ui/Table'
-import { Toolbar, ToolbarGroup } from '@/components/ui/Toolbar'
 import { UserIdentityLink } from '@/components/profile/UserIdentityLink'
 import styles from './SubmissionList.module.css'
 
@@ -79,8 +78,14 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   const total = resource.data?.total || 0
   const totalPages = resource.data?.totalPages || 1
   const isGlobalAdminView = isAdminView && (resource.data?.scope === 'all' || resource.data?.scope == null)
+  const showUsernameFilter = viewRole !== 'student' || isGlobalAdmin
   const displayStart = total > 0 ? (page - 1) * pageSize + 1 : 0
   const displayEnd = total > 0 ? Math.min(page * pageSize, total) : 0
+  const pageDescription = isGlobalAdminView
+    ? '查看全平台所有用户、个人区、校园区和比赛提交。'
+    : showUsernameFilter
+      ? '按用户、平台、题目、结果和语言定位提交。'
+      : '按平台、题目、结果和语言定位自己的提交。'
 
   const navigate = (next: URLSearchParams) => router.replace(`${pathPrefix}/submissions${next.size ? `?${next}` : ''}`, { scroll: false })
   const applyFilters = () => {
@@ -111,52 +116,45 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
 
   return (
     <PageFrame>
-      <PageHeader
-        title="评测记录"
-        description={isGlobalAdminView
-          ? '查看全平台所有用户、个人区、校园区和比赛提交。'
-          : viewRole === 'student'
-            ? '按平台、题号、结果和语言定位提交。'
-            : '按用户、平台、题号、结果和语言定位提交。'}
-      />
+      <PageHeader title="评测记录" description={pageDescription} />
       {isGlobalAdminView && <div className={styles.scopeSummary} role="status"><strong>管理员全量视图</strong><span>全平台所有用户、个人区、校园区和比赛提交</span>{total > 0 && <span>当前显示第 {displayStart}–{displayEnd} 条，共 {total} 条</span>}</div>}
-      <Toolbar className={styles.filterToolbar} role="search" aria-label="筛选评测记录">
-        <ToolbarGroup className={styles.filters}>
-          {(viewRole !== 'student' || isGlobalAdmin) && (
-            <label className={styles.filterField}>
-              <span>用户</span>
-              <Input className={styles.input} placeholder="输入用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
+      <form
+        className={styles.filterPanel}
+        role="search"
+        aria-label="评测记录筛选"
+        onSubmit={event => { event.preventDefault(); applyFilters() }}
+      >
+        <div className={`${styles.filterGrid} ${showUsernameFilter ? styles.filterGridWithUser : styles.filterGridPersonal}`}>
+          {showUsernameFilter && (
+            <label className={styles.filterField} htmlFor="submission-filter-username">
+              <span>用户名</span>
+              <Input id="submission-filter-username" className={styles.filterControl} placeholder="输入用户名" value={draft.username} onChange={event => setDraft(current => ({ ...current, username: event.target.value }))} />
             </label>
           )}
-          <label className={styles.filterField}>
+          <label className={styles.filterField} htmlFor="submission-filter-platform">
             <span>平台</span>
-            <Select className={styles.select} value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>
-              {SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
+            <Select id="submission-filter-platform" className={styles.filterControl} value={draft.oj} onChange={event => setDraft(current => ({ ...current, oj: event.target.value }))}>{SUBMISSION_OJ_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
           </label>
-          <label className={styles.filterField}>
+          <label className={styles.filterField} htmlFor="submission-filter-problem">
             <span>题号</span>
-            <Input className={styles.input} placeholder="输入题号" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} onKeyDown={event => { if (event.key === 'Enter') applyFilters() }} />
+            <Input id="submission-filter-problem" className={styles.filterControl} placeholder="例如 1041" value={draft.problemId} onChange={event => setDraft(current => ({ ...current, problemId: event.target.value }))} />
           </label>
-          <label className={styles.filterField}>
-            <span>结果</span>
-            <Select className={styles.select} value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>
-              {JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.value ? option.label : '全部结果'}</option>)}
-            </Select>
+          <label className={styles.filterField} htmlFor="submission-filter-result">
+            <span>评测结果</span>
+            <Select id="submission-filter-result" className={styles.filterControl} value={draft.result} onChange={event => setDraft(current => ({ ...current, result: event.target.value }))}>{JUDGE_RESULT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
           </label>
-          <label className={styles.filterField}>
+          <label className={styles.filterField} htmlFor="submission-filter-language">
             <span>语言</span>
-            <Select className={styles.select} value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value }))}>
-              {LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.value ? option.label : '全部语言'}</option>)}
-            </Select>
+            <Select id="submission-filter-language" className={styles.filterControl} value={draft.language} onChange={event => setDraft(current => ({ ...current, language: event.target.value }))}>{LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
           </label>
-        </ToolbarGroup>
-        <ToolbarGroup className={styles.filterActions}>
-          <Button variant="secondary" icon={<RotateCcw size={16} />} onClick={reset}>重置</Button>
-          <Button icon={<Search size={16} />} onClick={applyFilters}>筛选</Button>
-        </ToolbarGroup>
-      </Toolbar>
+          <div className={styles.filterActions}>
+            <Button type="button" variant="secondary" icon={<RotateCcw size={16} />} onClick={reset}>重置</Button>
+            <Button type="submit" icon={<Search size={16} />}>筛选</Button>
+          </div>
+        </div>
+      </form>
       <Table
+        caption="评测记录列表"
         data={submissions}
         loading={resource.state.state === 'pending' && !resource.state.previousData}
         refreshing={resource.state.state === 'ready' && resource.state.refreshing}

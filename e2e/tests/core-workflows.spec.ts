@@ -31,6 +31,14 @@ test.describe('core role workflows @smoke', () => {
 
     await page.goto(`/platform-admin/problems/${ids.problem}`)
     await expect(page.locator('body')).toContainText('E2E A Plus B')
+    await page.goto('/platform-admin/submissions')
+    const submissionFilters = page.getByRole('search', { name: '评测记录筛选' })
+    await expect(submissionFilters).toBeVisible()
+    await expect(submissionFilters.getByLabel('用户名')).toBeVisible()
+    await expect(submissionFilters.getByLabel('平台')).toBeVisible()
+    await expect(submissionFilters.getByLabel('题号')).toBeVisible()
+    await expect(submissionFilters.getByLabel('评测结果')).toBeVisible()
+    await expect(submissionFilters.getByLabel('语言')).toBeVisible()
     await page.goto(`/platform-admin/submissions/${ids.submission}`)
     await expect(page.locator('body')).toContainText(/accepted|通过/i)
 

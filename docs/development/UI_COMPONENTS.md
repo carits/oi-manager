@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-25
+last_verified: 2026-09-01
 source_of_truth: apps/web/src/components/ui
 ---
 
@@ -13,7 +13,7 @@ source_of_truth: apps/web/src/components/ui
 |---|---|---|
 | 页面 | `PageFrame`、`PageHeader` | Shell 是宽度和页面边距唯一所有者 |
 | 区域 | `Section` | 标题、说明、操作和正文顺序固定 |
-| 筛选 | `Toolbar`、`TableToolbar` | 筛选在左，主要或批量操作在右 |
+| 筛选 | `Toolbar`、`TableToolbar`，或带 `role="search"` 的显式 Grid | 简单筛选在左、操作在右；多字段全宽控件必须有可见标签和响应式列定义 |
 | 表单 | `FormField` + `Input/Textarea/Select` | 错误与字段关联，不自行写标签间距 |
 | 选择 | `Checkbox/RadioGroup/Switch/Combobox` | 布尔、互斥、开关和可搜索集合分别使用对应组件 |
 | 数据 | `DataTable`、`Pagination` | 普通数据表负责加载、错误、空数据、键盘行操作 |
@@ -50,3 +50,7 @@ pnpm ui:state-check
 当前零基线规则包括业务层原生按钮、表单标签、表格标签、自定义 Dialog、直接 Modal 和任意弹窗宽度。
 `staticInlineStyle` 只登记 174 处经过复核的动态尺寸、坐标、可视化状态和 CSS 自定义变量；静态视觉值必须
 进入 CSS Modules。`Input` 对文本控件应用统一外观，对 checkbox、radio 和 file 保留原生交互尺寸。
+
+`Input`、`Select` 和 `Textarea` 默认占满所属字段容器。需要同排展示四个以上筛选项时，业务组件必须
+使用 CSS Grid 明确列宽与断点，并通过 `<label>` 或 `htmlFor` 提供持续可见的名称；不能依赖覆盖控件
+宽度的旧 Flex 样式，也不能只给屏幕阅读器设置标签后让视觉用户猜测字段含义。

@@ -36,18 +36,18 @@ test.describe('评测记录列表详情弹窗 @smoke', () => {
     const page = await context.newPage()
 
     await page.goto('/personal/submissions')
-    const toolbar = page.getByRole('search', { name: '筛选评测记录' })
+    const toolbar = page.getByRole('search', { name: '评测记录筛选' })
     await expect(toolbar).toBeVisible()
 
     const controls = [
-      page.getByLabel('平台'),
-      page.getByLabel('题号'),
-      page.getByLabel('结果'),
-      page.getByLabel('语言'),
+      toolbar.getByLabel('平台'),
+      toolbar.getByLabel('题号'),
+      toolbar.getByLabel('评测结果'),
+      toolbar.getByLabel('语言'),
     ]
-    await expect(page.getByLabel('平台')).toHaveValue('')
-    await expect(page.getByLabel('结果')).toContainText('全部结果')
-    await expect(page.getByLabel('语言')).toContainText('全部语言')
+    await expect(toolbar.getByLabel('平台')).toHaveValue('')
+    await expect(toolbar.getByLabel('评测结果')).toContainText('全部结果')
+    await expect(toolbar.getByLabel('语言')).toContainText('全部语言')
 
     const desktopBoxes = await Promise.all(controls.map(control => control.boundingBox()))
     expect(desktopBoxes.every(box => box && box.width >= 150)).toBe(true)

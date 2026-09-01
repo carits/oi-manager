@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-27
+last_verified: 2026-09-01
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -28,6 +28,12 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 颜色、间距、字号、圆角、阴影和层级只使用全局语义 Token；业务 CSS 不新增等价硬编码值。
 - 业务 TSX 和 CSS Module 不得声明十六进制或 `rgb/rgba` 值；竞赛奖牌、热力图、代码区、遮罩与阴影
   同样必须使用 `globals.css` 中的已命名语义 Token，不在业务模块内重建局部色板。
+- 筛选字段必须使用持续可见的字段标签，不得只用 placeholder 或空选项表达字段含义。基础表单控件默认
+  `width: 100%`，因此多字段筛选必须放入显式响应式 Grid；不得把全宽控件直接放回可换行 Flex 工具栏。
+- 空筛选项使用“全部结果”“全部语言”等业务语义，不使用脱离上下文的 `All`。筛选区在桌面保持紧凑对齐，
+  `1180px / 760px / 520px` 以下依次降为三列、两列和单列，操作按钮始终作为同一网格的末项。
+- 可点击表格行必须提供 `focus-visible` 样式，并覆盖浏览器对 `tr` 的默认黑色 outline；不能通过直接移除
+  焦点反馈解决视觉问题。
 
 ### Dialog 契约
 
