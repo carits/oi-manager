@@ -56,23 +56,6 @@ test.describe('core role workflows @smoke', () => {
     await expect(page.locator('body')).toContainText('E2E Active Homework')
     await page.goto(`${organizationBase}/contests/${ids.contest}`)
     await expect(page.locator('body')).toContainText('E2E Finished Contest')
-    await page.getByRole('tab', { name: '评测记录', exact: true }).click()
-    const contestSubmissionFilters = page.getByRole('search', { name: '比赛评测记录筛选' })
-    await expect(contestSubmissionFilters).toBeVisible()
-    await expect(contestSubmissionFilters.getByLabel('题目')).toBeVisible()
-    await expect(contestSubmissionFilters.getByLabel('用户名')).toBeVisible()
-    await expect(contestSubmissionFilters.getByLabel('评测结果')).toBeVisible()
-    await expect(contestSubmissionFilters.getByLabel('语言')).toBeVisible()
-    const desktopFilterMetrics = await contestSubmissionFilters.locator('select, input, button').evaluateAll(elements => (
-      elements.map(element => {
-        const rect = element.getBoundingClientRect()
-        return { top: rect.top, width: rect.width }
-      })
-    ))
-    expect(Math.max(...desktopFilterMetrics.map(metric => metric.top)) - Math.min(...desktopFilterMetrics.map(metric => metric.top)))
-      .toBeLessThanOrEqual(2)
-    expect(Math.min(...desktopFilterMetrics.slice(0, 4).map(metric => metric.width))).toBeGreaterThan(140)
-
     await page.getByRole('tab', { name: /排名/ }).click()
     await expect(page.locator('body')).toContainText('E2E Campus Student')
     await expect(page.getByText('首 A', { exact: true })).toHaveCount(0)
@@ -191,25 +174,58 @@ test.describe('core role workflows @smoke', () => {
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     )
     expect(pageHasHorizontalOverflow).toBe(false)
+    await mobileContext.close()
+  })
 
-    await mobilePage.getByRole('tab', { name: '评测记录', exact: true }).click()
-    const mobileSubmissionFilters = mobilePage.getByRole('search', { name: '比赛评测记录筛选' })
-    await expect(mobileSubmissionFilters).toBeVisible()
-    const mobileFilterMetrics = await mobileSubmissionFilters.locator('select, input, button').evaluateAll(elements => (
+  test('contest submission filters stay compact and responsive @smoke', async ({ browser }) => {
+    const desktopContext = await browser.newContext({
+      storageState: accounts.principal.storageState,
+      viewport: { width: 1440, height: 900 },
+    })
+    const desktopPage = await desktopContext.newPage()
+    await desktopPage.goto(`${organizationBase}/contests/${ids.contest}?tab=submissions`)
+    const desktopFilters = desktopPage.getByRole('search', { name: '比赛评测记录筛选' })
+    await expect(desktopFilters).toBeVisible()
+    await expect(desktopFilters.getByLabel('题目')).toBeVisible()
+    await expect(desktopFilters.getByLabel('用户名')).toBeVisible()
+    await expect(desktopFilters.getByLabel('评测结果')).toBeVisible()
+    await expect(desktopFilters.getByLabel('语言')).toBeVisible()
+    const desktopMetrics = await desktopFilters.locator('select, input, button').evaluateAll(elements => (
+      elements.map(element => {
+        const rect = element.getBoundingClientRect()
+        return { top: rect.top, width: rect.width }
+      })
+    ))
+    expect(desktopMetrics).toHaveLength(5)
+    expect(Math.max(...desktopMetrics.map(metric => metric.top)) - Math.min(...desktopMetrics.map(metric => metric.top)))
+      .toBeLessThanOrEqual(2)
+    expect(Math.min(...desktopMetrics.slice(0, 4).map(metric => metric.width))).toBeGreaterThan(140)
+    await desktopContext.close()
+
+    const mobileContext = await browser.newContext({
+      storageState: accounts.principal.storageState,
+      viewport: { width: 390, height: 844 },
+    })
+    const mobilePage = await mobileContext.newPage()
+    await mobilePage.goto(`${organizationBase}/contests/${ids.contest}?tab=submissions`)
+    const mobileFilters = mobilePage.getByRole('search', { name: '比赛评测记录筛选' })
+    await expect(mobileFilters).toBeVisible()
+    const mobileMetrics = await mobileFilters.locator('select, input, button').evaluateAll(elements => (
       elements.map(element => {
         const rect = element.getBoundingClientRect()
         return { top: rect.top, left: rect.left, width: rect.width }
       })
     ))
-    expect(new Set(mobileFilterMetrics.map(metric => Math.round(metric.top))).size).toBe(mobileFilterMetrics.length)
-    expect(Math.max(...mobileFilterMetrics.map(metric => metric.left)) - Math.min(...mobileFilterMetrics.map(metric => metric.left)))
+    expect(mobileMetrics).toHaveLength(5)
+    expect(new Set(mobileMetrics.map(metric => Math.round(metric.top))).size).toBe(mobileMetrics.length)
+    expect(Math.max(...mobileMetrics.map(metric => metric.left)) - Math.min(...mobileMetrics.map(metric => metric.left)))
       .toBeLessThanOrEqual(2)
-    expect(Math.max(...mobileFilterMetrics.map(metric => metric.width)) - Math.min(...mobileFilterMetrics.map(metric => metric.width)))
+    expect(Math.max(...mobileMetrics.map(metric => metric.width)) - Math.min(...mobileMetrics.map(metric => metric.width)))
       .toBeLessThanOrEqual(2)
-    const submissionsPageHasHorizontalOverflow = await mobilePage.evaluate(
+    const pageHasHorizontalOverflow = await mobilePage.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     )
-    expect(submissionsPageHasHorizontalOverflow).toBe(false)
+    expect(pageHasHorizontalOverflow).toBe(false)
     await mobileContext.close()
   })
 
