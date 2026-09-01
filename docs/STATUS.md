@@ -5,7 +5,9 @@ last_verified: 2026-09-01
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-01: 评测记录筛选和列表详情弹窗 Web 部分已部署。个人页显示平台/题号/评测结果/语言，管理员按权限增加用户名；字段在宽屏同排、1180/760/520px 以下依次降为三列/两列/单列，空选项中文化，Enter 与按钮共用 URL 筛选，表格行焦点不再出现浏览器默认黑线。Web 57/57、隔离 Chromium 10/10、类型检查、构建、导航/UI/文档门禁均通过；提交 `09204f5` 已推送，BUILD_ID `Y6VnrxGmIxELCjtl3BKge` 已提升至公网 3000，服务监控和外部健康正常。个人模式 teacher/school_principal 详情权限的 Server 改动仍因现存安装路径 Schema 差异未提升，本次 Web 发布没有修改 API 或数据库。
+- 2026-09-01: 评测记录与提交详情强一致性重构已部署。全局与活动详情共用同一访问/脱敏 DTO，修复全局端点绕过 OI 赛中隐藏和 teacher1 个人提交 #3824 弹窗错误返回 403；弹窗与独立页共用 Hook/内容组件，403/404 不再提供误导重试，代码使用弹窗外层单纵向滚动，进行中列表自动同步。Server 提交权限 21/21、OI 原题隐藏定向 1/1、Web 57/57、隔离 Chromium 10/10、Server/Web 构建及 UI/文档/架构门禁通过；提交 `4e4b19d` 已推送 `main`。生产 Schema 37 个迁移均为最新，API 蓝绿由 3302 提升到 3303，Web BUILD_ID `VxV3DoXrP-Ole9yMHoVa5` 已提升至公网 3000；真实生产数据只读验证 teacher1 的 #3824 返回 Accepted，readiness、全部服务和监控健康。
+
+- 2026-09-01: 评测记录筛选和列表详情弹窗首批 Web 部分已部署。个人页显示平台/题号/评测结果/语言，管理员按权限增加用户名；字段在宽屏同排、1180/760/520px 以下依次降为三列/两列/单列，空选项中文化，Enter 与按钮共用 URL 筛选，表格行焦点不再出现浏览器默认黑线。Web 57/57、隔离 Chromium 10/10、类型检查、构建、导航/UI/文档门禁均通过；提交 `09204f5` 已推送，BUILD_ID `Y6VnrxGmIxELCjtl3BKge` 已提升至公网 3000。该批次未提升的个人 teacher/school_principal Server 权限修复，已由上方 `4e4b19d` 完成部署。
 
 - 2026-08-31: 提交级文件 IO Adapter 已部署。题库、活动提交和 Hack 证明程序可分别选择 stdin/文件输入与 stdout/文件输出；Submission/JudgeRun 固化实际 IO，重测沿用原配置。生产迁移检查为 2518 条可解析、183 条 FileIO、0 条异常，apply 与二次检查后 version 0 为 0；迁移前后 2586 条历史提交的 Verdict/分数分布完全一致。真实题库 1041 四组合均 Accepted，三条文件模式通过重测验证原 IO 快照不变；缺失命名输出按空输出得到 WA 并记录点级诊断，路径穿越返回 422。Server 全量 547/547 + 当前迁移/IO 定向 32/32、Judge 30/30、Web 45/45、三端生产构建、361 端点匿名审计和监控均通过。提交 `2f85f61` 已推送 `main`，API 活动 slot 为 3302，Judge 已重启注册，Web BUILD_ID `2lhep8Ied7CIZOrw7KVGm` 已提升至公网 3000。
 

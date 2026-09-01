@@ -18,6 +18,7 @@ source_of_truth: Git history
 - 弹窗与独立详情页改为共用 Hook、类型、状态机和内容组件；修复 Codeforces 归档代码重抓路径。403/404 不再显示误导性的重试，临时错误使用局部重试并保留请求编号。
 - 详情摘要、结果、文件 IO、代码权限和空状态统一；代码内容使用弹窗最外层纵向滚动，仅保留超长行横向滚动。列表含 Queuing/Judging 时自动刷新，详情终态会同步回列表。
 - 新增 OI 双端点脱敏、永久错误无重试和单纵向滚动条回归；个人工作区 teacher/school_principal 本人详情权限修复随本批 API 一并发布。
+- Server 提交权限 21/21、OI 原题隐藏定向 1/1、Web 57/57、隔离 Chromium 10/10 通过。提交 `4e4b19d` 已推送 `main`，API 3302→3303 蓝绿提升，Web BUILD_ID `VxV3DoXrP-Ole9yMHoVa5` 已提升至公网 3000；生产 #3824 只读验证、readiness 与服务监控正常。
 
 ### 评测记录列表弹窗与个人提交详情权限
 
