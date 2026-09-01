@@ -69,4 +69,45 @@ test.describe('评测记录列表详情弹窗 @smoke', () => {
 
     await context.close()
   })
+
+  test('永久权限错误不显示误导性的重试操作', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.personalStudent.storageState })
+    const page = await context.newPage()
+    await page.route(`**/api/submissions/${ids.personalSubmission}`, route => route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: false, code: 'SUBMISSION_FORBIDDEN', message: '无权查看该提交记录' }),
+    }))
+
+    await page.goto('/personal/submissions')
+    const row = page.locator('tbody tr').filter({ hasText: `#${ids.personalSubmission}` })
+    await row.getByText(`#${ids.personalSubmission}`, { exact: true }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: '无法查看该提交' })).toBeVisible()
+    await expect(dialog).toContainText('无权查看该提交记录')
+    await expect(dialog.getByRole('button', { name: '重试' })).toHaveCount(0)
+    await expect(dialog.getByRole('button', { name: '关闭', exact: true })).toBeVisible()
+    await context.close()
+  })
+
+  test('长内容详情只使用弹窗最外层纵向滚动', async ({ browser }) => {
+    const context = await browser.newContext({
+      storageState: accounts.personalStudent.storageState,
+      viewport: { width: 1280, height: 720 },
+    })
+    const page = await context.newPage()
+    await page.goto('/personal/submissions')
+    const row = page.locator('tbody tr').filter({ hasText: `#${ids.personalSubmission}` })
+    await row.getByText(`#${ids.personalSubmission}`, { exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    const nestedVerticalScrollers = await dialog.locator('pre, [aria-label="源代码"]').evaluateAll(elements => elements.filter(element => {
+      const style = getComputedStyle(element)
+      return ['auto', 'scroll'].includes(style.overflowY) && element.scrollHeight > element.clientHeight + 1
+    }).length)
+    expect(nestedVerticalScrollers).toBe(0)
+    await context.close()
+  })
 })

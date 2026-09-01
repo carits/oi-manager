@@ -5,7 +5,7 @@
 
 import { Router } from 'express'
 import yaml from 'js-yaml'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, getResourceScope, isAdmin, isPersonalContext } from '../../middleware/auth'
 import { logger } from '../../lib/logger'
 import { parsePagination, paginatedResponse } from '../../lib/pagination'
 import { asyncHandler } from '../../lib/asyncHandler'
@@ -24,9 +24,13 @@ import {
 } from '../../lib/idempotency'
 import { createQueuedTrainingSubmission } from './training.submission.service'
 import { getTrainingRuntimeStatus, shouldHideTrainingProblemSource } from './training.visibility'
-import { resolveJudgePresentationConfig } from '../../lib/judge-mode'
 import { createRejudgeBatch } from '../judge/application/judge-run.service'
-import { normalizeSubmissionIo, resolveSubmissionIoSnapshot, submissionIoDto, SubmissionIoError } from '../judge/domain/submission-io'
+import { normalizeSubmissionIo, SubmissionIoError } from '../judge/domain/submission-io'
+import {
+  getSubmissionDetail,
+  SubmissionQueryError,
+  type SubmissionQueryContext,
+} from '../submission/application/submission-query.service'
 import { findTrainingForProblemAccess } from './application/training-problem-query.service'
 import {
   buildRejudgeTarget,
@@ -34,7 +38,6 @@ import {
   listRejudgeCandidates,
   listTrainingSubmissionUsers,
   loadTrainingProblemForSubmission,
-  loadTrainingSubmissionDetail,
   previewRejudgeTarget,
   queryTrainingSubmissions,
 } from './application/training-submission-query.service'
@@ -250,101 +253,31 @@ trainingSubmissionsRouter.get('/trainings/:id/submissions', authenticate, asyncH
  * 获取提交详情（返回格式与题库提交详情一致）
  */
 trainingSubmissionsRouter.get('/trainings/:id/submissions/:submissionId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
-    const id = parseTrainingId(req.params.id), submissionId = req.params.submissionId
-    const userId = req.user!.userId
-
-    const training = await findTrainingForProblemAccess(id)
-    if (!training) {
-      return res.status(404).json({ success: false, message: '训练不存在' })
+    const id = parseTrainingId(req.params.id)
+    const submissionId = Number(req.params.submissionId)
+    const user = req.user!
+    const context: SubmissionQueryContext = {
+      userId: user.userId,
+      role: user.role,
+      workspaceScope: getResourceScope(user),
+      organizationId: user.organizationId || null,
+      isGlobalAdmin: isAdmin(user.role),
+      isPersonal: isPersonalContext(user),
     }
 
-    if (!await canAccessTraining(userId, training)) {
-      return res.status(403).json({ success: false, message: '无权限' })
+    try {
+      const detail = await getSubmissionDetail(context, submissionId, id)
+      return res.json({ success: true, data: detail })
+    } catch (error) {
+      if (error instanceof SubmissionQueryError) {
+        return res.status(error.statusCode).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+        })
+      }
+      throw error
     }
-
-    const notStarted = await requireTrainingStarted(training, userId)
-    if (notStarted) {
-      return res.status(403).json({ success: false, message: notStarted })
-    }
-
-    const isAdminUser = await canManageTraining(userId, training)
-
-    const expectedSubmitScope = training.type === 'contest' ? 'contest' : 'training'
-    const detail = await loadTrainingSubmissionDetail(id, parseInt(submissionId), expectedSubmitScope)
-    if (!detail) {
-      return res.status(404).json({ success: false, message: '提交不存在' })
-    }
-    const { submission, trainingProblem, submitter } = detail
-
-    // 非管理员只能查看自己的提交详情
-    if (!isAdminUser && submission.userId !== userId) {
-      return res.status(403).json({ success: false, message: '无权限查看他人评测记录' })
-    }
-
-    // Only show code to the submitter or admin
-    const showCode = submission.userId === userId || isAdminUser
-
-    let cases = null
-    if (submission.cases) {
-      try { cases = JSON.parse(submission.cases) } catch { cases = null }
-    }
-    let subtasks = null
-    if (submission.subtasks) {
-      try { subtasks = JSON.parse(submission.subtasks) } catch { subtasks = null }
-    }
-
-    const problemAlias = trainingProblem?.alias || submission.problemId
-    const ojPlatform = trainingProblem?.Problem?.platform || submission.oj || 'carits'
-    const judgeConfigText = trainingProblem?.judgeConfigSnapshot || trainingProblem?.Problem?.judgeConfig || null
-    const judgePresentation = resolveJudgePresentationConfig(judgeConfigText)
-    let judgeConfig: any = {}
-    try { judgeConfig = yaml.load(judgeConfigText || '{}') || {} } catch {}
-    const resolvedIo = resolveSubmissionIoSnapshot(submission, judgeConfig)
-
-    // OI 赛制：赛中非管理员隐藏评测详情
-    const detailStatus = getTrainingRuntimeStatus(training)
-    const hideOiDetail = training.format === 'oi' && detailStatus !== 'finished' && !isAdminUser
-    const hideProblemIdentity = shouldHideTrainingProblemSource(training, isAdminUser)
-    // Contest/training remote IDs are operational identifiers. Only managers may see them.
-    const hideRemoteSubmissionId = !isAdminUser
-
-    // 返回格式与 SubmissionDetailModal 一致
-    res.json({
-      success: true,
-      data: {
-        id: submission.id,
-        username: submitter?.username || '未知',
-        problemSourceHidden: hideProblemIdentity,
-        problemId: problemAlias,
-        ...(hideProblemIdentity ? {} : { oj: ojPlatform }),
-        result: hideOiDetail ? 'submitted' : submission.result,
-        timeUsed: hideOiDetail ? null : submission.timeUsed,
-        memoryUsed: hideOiDetail ? null : submission.memoryUsed,
-        wallTimeUsed: hideOiDetail ? null : submission.wallTimeUsed,
-        timeoutReason: hideOiDetail ? null : submission.timeoutReason,
-        metricSource: hideOiDetail ? null : submission.metricSource,
-        codeLength: submission.codeLength,
-        language: submission.language,
-        code: showCode ? submission.code : null,
-        submitMethod: submission.submitMethod || 'code',
-        ojRemoteId: hideRemoteSubmissionId ? null : submission.ojRemoteId,
-        hideRemoteId: hideRemoteSubmissionId,
-        ojAccountUsername: null,
-        submittedAt: submission.createdAt.toISOString(),
-        errorMessage: hideOiDetail ? null : submission.errorMessage,
-        judgeMode: judgePresentation.mode,
-        judgeConfig: judgeConfigText ? { mode: judgePresentation.mode } : undefined,
-        trainingId: id,
-        trainingProblemId: trainingProblem?.id || submission.trainingProblemId || null,
-        problemAlias,
-        problemOrderIndex: trainingProblem?.orderIndex ?? null,
-        contestFormat: training.format,
-        score: hideOiDetail ? null : submission.score,
-        cases: hideOiDetail ? null : cases,
-        subtasks: hideOiDetail ? null : subtasks,
-        io: submissionIoDto(resolvedIo.inputFile, resolvedIo.outputFile),
-      },
-    })
 }, '查询失败'))
 
 /**

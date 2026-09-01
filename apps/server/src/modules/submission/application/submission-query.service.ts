@@ -2,7 +2,15 @@ import { prisma } from '../../../prisma'
 import yaml from 'js-yaml'
 import { fetchAndStoreCfCode } from '../../../lib/cf-code-fetcher'
 import { resolveJudgePresentationConfig } from '../../../lib/judge-mode'
-import { canManageTraining } from '../../training/training.helpers'
+import {
+  canAccessTraining,
+  canManageTraining,
+  requireTrainingStarted,
+} from '../../training/training.helpers'
+import {
+  getTrainingRuntimeStatus,
+  shouldHideTrainingProblemSource,
+} from '../../training/training.visibility'
 import {
   CURRENT_JUDGE_RUN_SELECT,
   currentJudgeResultWhere,
@@ -150,7 +158,11 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
   }
 }
 
-async function requireVisibleSubmission(context: SubmissionQueryContext, submissionId: number) {
+async function requireVisibleSubmission(
+  context: SubmissionQueryContext,
+  submissionId: number,
+  expectedTrainingId?: number,
+) {
   if (!Number.isSafeInteger(submissionId) || submissionId <= 0) throw notFound()
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
@@ -162,15 +174,54 @@ async function requireVisibleSubmission(context: SubmissionQueryContext, submiss
   })
   if (!submission) throw notFound()
 
+  if (expectedTrainingId !== undefined && submission.trainingId !== expectedTrainingId) throw notFound()
+
+  let training: {
+    id: number
+    teamId: string | null
+    organizationId: string | null
+    createdBy: string
+    format: string
+    type: string
+    status: string
+    startTime: Date
+    endTime: Date
+    problemIdVisible: boolean
+  } | null = null
   let hasContestManagerAccess = false
   if (submission.trainingId) {
-    const training = await prisma.training.findUnique({
+    training = await prisma.training.findUnique({
       where: { id: submission.trainingId },
-      select: { id: true, teamId: true, organizationId: true, createdBy: true },
+      select: {
+        id: true,
+        teamId: true,
+        organizationId: true,
+        createdBy: true,
+        format: true,
+        type: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+        problemIdVisible: true,
+      },
     })
-    if (training) hasContestManagerAccess = await canManageTraining(context.userId, training)
+    if (!training) throw notFound()
+    hasContestManagerAccess = context.isGlobalAdmin || await canManageTraining(context.userId, training)
+
+    if (!hasContestManagerAccess) {
+      if (!await canAccessTraining(context.userId, training)) {
+        throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
+      }
+      const notStarted = await requireTrainingStarted(training, context.userId)
+      if (notStarted) {
+        throw new SubmissionQueryError(403, 'TRAINING_NOT_STARTED', notStarted)
+      }
+      if (submission.userId !== context.userId) {
+        throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看他人评测记录')
+      }
+    }
   }
-  if (!context.isGlobalAdmin && !hasContestManagerAccess) {
+  if (!submission.trainingId && !context.isGlobalAdmin) {
     if (
       submission.workspaceScope !== context.workspaceScope
       || (context.workspaceScope === 'campus' && submission.organizationId !== context.organizationId)
@@ -188,7 +239,7 @@ async function requireVisibleSubmission(context: SubmissionQueryContext, submiss
       if (!membership) throw new SubmissionQueryError(403, 'SUBMISSION_FORBIDDEN', '无权查看该提交记录')
     }
   }
-  return submission
+  return { submission, training, hasContestManagerAccess }
 }
 
 function parseJson(value: string | null) {
@@ -196,8 +247,13 @@ function parseJson(value: string | null) {
   try { return JSON.parse(value) } catch { return null }
 }
 
-export async function getSubmissionDetail(context: SubmissionQueryContext, submissionId: number) {
-  const submission = projectSubmissionJudgeResult(await requireVisibleSubmission(context, submissionId))
+export async function getSubmissionDetail(
+  context: SubmissionQueryContext,
+  submissionId: number,
+  expectedTrainingId?: number,
+) {
+  const access = await requireVisibleSubmission(context, submissionId, expectedTrainingId)
+  const submission = projectSubmissionJudgeResult(access.submission)
   let problemTitle: string | null = null
   let problemJudgeConfig: string | null = null
   let problemAlias: string | null = null
@@ -220,24 +276,23 @@ export async function getSubmissionDetail(context: SubmissionQueryContext, submi
     problemJudgeConfig = problem?.judgeConfig || null
   }
 
-  if (submission.trainingId) {
-    const training = await prisma.training.findUnique({ where: { id: submission.trainingId }, select: { format: true } })
-    contestFormat = training?.format || null
+  if (submission.trainingId && access.training) {
+    contestFormat = access.training.format || null
     const trainingProblem = submission.trainingProblemId
       ? await prisma.trainingProblem.findFirst({
           where: { id: submission.trainingProblemId, trainingId: submission.trainingId },
-          select: { id: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
+          select: { id: true, alias: true, orderIndex: true, titleSnapshot: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
         })
       : await prisma.trainingProblem.findFirst({
           where: { trainingId: submission.trainingId, Problem: { problemId: submission.problemId } },
-          select: { id: true, alias: true, orderIndex: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
+          select: { id: true, alias: true, orderIndex: true, titleSnapshot: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
         })
     if (trainingProblem) {
       trainingProblemId = trainingProblem.id
       problemAlias = trainingProblem.alias
       problemOrderIndex = trainingProblem.orderIndex
       problemJudgeConfig = trainingProblem.judgeConfigSnapshot || trainingProblem.Problem.judgeConfig || problemJudgeConfig
-      problemTitle ||= trainingProblem.Problem.title || null
+      problemTitle = trainingProblem.titleSnapshot || trainingProblem.Problem.title || problemTitle
     }
   }
 
@@ -245,31 +300,51 @@ export async function getSubmissionDetail(context: SubmissionQueryContext, submi
   let judgeConfig: any = {}
   try { judgeConfig = yaml.load(problemJudgeConfig || '{}') || {} } catch {}
   const resolvedIo = resolveSubmissionIoSnapshot(submission, judgeConfig)
+  const hideOiDetail = Boolean(
+    access.training
+    && access.training.format === 'oi'
+    && getTrainingRuntimeStatus(access.training) !== 'finished'
+    && !access.hasContestManagerAccess,
+  )
+  const hideProblemIdentity = access.training
+    ? shouldHideTrainingProblemSource(access.training, access.hasContestManagerAccess)
+    : false
+  const canViewCode = !submission.trainingId
+    || submission.userId === context.userId
+    || access.hasContestManagerAccess
+  const hideRemoteId = Boolean(submission.trainingId && !access.hasContestManagerAccess)
+
   return {
     id: submission.id,
+    userId: submission.userId,
     username: submission.User.username,
     submitterName: submission.User.username,
     submitterAvatar: submission.User.avatar,
-    oj: submission.oj,
-    problemId: submission.problemId,
-    problemTitle,
-    result: submission.result,
-    timeUsed: submission.timeUsed,
-    memoryUsed: submission.memoryUsed,
-    wallTimeUsed: submission.wallTimeUsed,
-    timeoutReason: submission.timeoutReason,
-    metricSource: submission.metricSource,
-    score: submission.score,
-    cases: parseJson(submission.cases),
-    subtasks: parseJson(submission.subtasks),
+    oj: hideProblemIdentity ? undefined : submission.oj,
+    problemId: problemAlias || submission.problemId,
+    problemTitle: hideProblemIdentity ? null : problemTitle,
+    problemSourceHidden: hideProblemIdentity,
+    hidden: hideOiDetail,
+    displayResult: hideOiDetail ? 'pending' : submission.result,
+    result: hideOiDetail ? null : submission.result,
+    timeUsed: hideOiDetail ? null : submission.timeUsed,
+    memoryUsed: hideOiDetail ? null : submission.memoryUsed,
+    wallTimeUsed: hideOiDetail ? null : submission.wallTimeUsed,
+    timeoutReason: hideOiDetail ? null : submission.timeoutReason,
+    metricSource: hideOiDetail ? null : submission.metricSource,
+    score: hideOiDetail ? null : submission.score,
+    cases: hideOiDetail ? null : parseJson(submission.cases),
+    subtasks: hideOiDetail ? null : parseJson(submission.subtasks),
     codeLength: submission.codeLength,
     language: submission.language,
-    code: submission.code,
+    code: canViewCode ? submission.code : null,
+    canViewCode,
     submitMethod: submission.submitMethod,
-    ojRemoteId: submission.ojRemoteId,
-    ojAccountUsername: submission.OjAccount?.username,
+    ojRemoteId: hideRemoteId ? null : submission.ojRemoteId,
+    hideRemoteId,
+    ojAccountUsername: hideRemoteId ? null : submission.OjAccount?.username,
     submittedAt: submission.createdAt.toISOString(),
-    errorMessage: submission.errorMessage,
+    errorMessage: hideOiDetail ? null : submission.errorMessage,
     judgeMode: judgePresentation.mode,
     judgeConfig: problemJudgeConfig ? { mode: judgePresentation.mode } : undefined,
     trainingId: submission.trainingId,
@@ -282,18 +357,11 @@ export async function getSubmissionDetail(context: SubmissionQueryContext, submi
 }
 
 export async function refetchSubmissionCode(context: SubmissionQueryContext, submissionId: number) {
-  const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
-    select: { id: true, oj: true, ojRemoteId: true, userId: true, workspaceScope: true, organizationId: true, code: true, codeLength: true },
-  })
-  if (
-    !submission
-    || (!context.isGlobalAdmin && (
-      submission.workspaceScope !== context.workspaceScope
-      || (context.workspaceScope === 'campus' && submission.organizationId !== context.organizationId)
-      || submission.userId !== context.userId
-    ))
-  ) throw notFound()
+  const access = await requireVisibleSubmission(context, submissionId)
+  const submission = access.submission
+  // 查看权限不等于修改归档记录权限。校园教师可以查看成员提交，
+  // 但只有提交本人或全局管理员能触发远端抓取并改写保存的源码。
+  if (!context.isGlobalAdmin && submission.userId !== context.userId) throw notFound()
   if (submission.oj !== 'codeforces') throw new SubmissionQueryError(400, 'UNSUPPORTED_OJ', '仅支持 Codeforces 提交的代码抓取')
   if (!submission.ojRemoteId) throw new SubmissionQueryError(400, 'REMOTE_ID_REQUIRED', '缺少远程提交 ID')
 

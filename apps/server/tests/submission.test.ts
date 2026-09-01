@@ -650,14 +650,44 @@ describe('训练提交隔离', () => {
     })
   })
 
-  it('TI1: 训练提交不能通过全局提交详情API访问', async () => {
+  it('TI1: 全局详情端点也执行训练权限策略', async () => {
     const res = await createAuthenticatedRequest(app, studentToken)
       .get(`/api/submissions/${trainingSubmission.id}`)
 
-    // 训练提交的 submitScope='training'，全局详情 API 应拦截
-    // 但当前实现允许学生查看自己的提交（无论 submitScope），所以 200 也是合理行为
-    // 如果后端添加了 submitScope 限制，这里应改为 expect(res.status).toBe(403)
     expect(res.status).toBe(200)
+    expect(res.body.data).toMatchObject({
+      id: trainingSubmission.id,
+      trainingId: training.id,
+      result: 'accepted',
+    })
+  })
+
+  it('TI1.1: OI 赛中通过任意详情端点都不会泄露真实评测结果', async () => {
+    await prisma.training.update({
+      where: { id: training.id },
+      data: { format: 'oi' },
+    })
+
+    for (const path of [
+      `/api/submissions/${trainingSubmission.id}`,
+      `/api/trainings/${training.id}/submissions/${trainingSubmission.id}`,
+    ]) {
+      const res = await createAuthenticatedRequest(app, studentToken).get(path)
+      expect(res.status, `${path}: ${JSON.stringify(res.body)}`).toBe(200)
+      expect(res.body.data).toMatchObject({
+        id: trainingSubmission.id,
+        hidden: true,
+        displayResult: 'pending',
+        result: null,
+        score: null,
+        timeUsed: null,
+        memoryUsed: null,
+        cases: null,
+        subtasks: null,
+        ojRemoteId: null,
+        errorMessage: null,
+      })
+    }
   })
 
   it('TI2: 训练提交可以通过训练端点访问', async () => {

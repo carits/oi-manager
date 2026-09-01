@@ -87,6 +87,12 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
       ? '按用户、平台、题目、结果和语言定位提交。'
       : '按平台、题目、结果和语言定位自己的提交。'
 
+  useEffect(() => {
+    if (!submissions.some(item => item.result === 'queuing' || item.result === 'judging')) return
+    const timer = window.setInterval(() => { void resource.mutate() }, 5000)
+    return () => window.clearInterval(timer)
+  }, [resource, submissions])
+
   const navigate = (next: URLSearchParams) => router.replace(`${pathPrefix}/submissions${next.size ? `?${next}` : ''}`, { scroll: false })
   const applyFilters = () => {
     const next = new URLSearchParams()
@@ -165,7 +171,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         onRowClick={item => setDetailSubmissionId(item.id)}
         columns={[
           { key: 'id', label: '提交', width: '86px', render: item => <span className={styles.link}>#{item.id}</span> },
-          ...(viewRole === 'student' ? [] : [{ key: 'username', label: '用户', width: '120px', render: (item: Submission) => <span onClick={stopRowActivation} onKeyDown={stopRowActivation}><UserIdentityLink id={item.userId} userType={item.userType} username={item.username} /></span> }]),
+          ...(!showUsernameFilter ? [] : [{ key: 'username', label: '用户', width: '120px', render: (item: Submission) => <span onClick={stopRowActivation} onKeyDown={stopRowActivation}><UserIdentityLink id={item.userId} userType={item.userType} username={item.username} /></span> }]),
           { key: 'oj', label: '平台', width: '110px', render: item => item.oj === 'carits' ? 'Carits' : OJ_PLATFORM_LABEL_MAP[item.oj] || item.oj.toUpperCase() },
           { key: 'problemId', label: '题目', render: problemCell },
           { key: 'result', label: '结果', width: '120px', render: item => <StatusBadge variant={getResultVariant(item.result)}>{JUDGE_RESULT_LABEL_MAP[item.result] || item.result}</StatusBadge> },
@@ -182,6 +188,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
         submissionId={detailSubmissionId}
         viewRole={isAdminView ? 'admin' : viewRole}
         submissionPathPrefix={pathPrefix}
+        onSubmissionUpdated={() => { void resource.mutate() }}
       />
     </PageFrame>
   )

@@ -1,0 +1,22 @@
+.content { display: grid; gap: var(--space-4); }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); padding: var(--space-4); background: var(--bg-muted); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.metric { min-width: 0; display: grid; gap: 4px; }
+.metricLabel { color: var(--text-muted); font-size: var(--text-xs); }
+.metricValue { min-width: 0; color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-secondary); font-size: var(--text-sm); }
+.warning { padding: var(--space-3) var(--space-4); border-left: 3px solid var(--warning); background: var(--warning-light); color: var(--warning-text); border-radius: var(--radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.codePanel { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
+.codeToolbar { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); background: var(--bg-card); }
+.codeTitle { margin: 0; color: var(--text-primary); font-size: var(--text-sm); font-weight: 650; }
+.code { margin: 0; padding: var(--space-4); min-width: max-content; max-width: 100%; overflow-x: auto; overflow-y: visible; font: var(--text-sm)/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+.emptyCode { padding: var(--space-8); text-align: center; color: var(--text-muted); }
+.errorState { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-10) var(--space-4); text-align: center; }
+.errorTitle { margin: 0; color: var(--text-primary); font-size: var(--text-lg); }
+.errorMessage { margin: 0; max-width: 560px; color: var(--text-secondary); }
+.requestId { color: var(--text-muted); font-size: var(--text-xs); }
+.errorActions { display: flex; gap: var(--space-2); }
+.link { color: var(--primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+@media (max-width: 760px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .meta { display: grid; gap: var(--space-2); } }
+@media (max-width: 420px) { .summary { grid-template-columns: 1fr; } }
+
