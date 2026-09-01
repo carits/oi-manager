@@ -8,9 +8,22 @@
 .u2 {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
   padding: 0.8rem 1rem;
   background: var(--bg-muted);
+}
+
+.summaryInfo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.disclosureButton {
+  flex: 0 0 auto;
 }
 
 .u3 {
@@ -81,3 +94,10 @@
 .tone_accepted { color: var(--success-text); }
 .tone_skipped { color: var(--text-muted); }
 .tone_failed { color: var(--error-text); }
+
+@media (max-width: 520px) {
+  .u2 {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

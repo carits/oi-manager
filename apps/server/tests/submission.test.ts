@@ -336,7 +336,8 @@ describe('提交详情权限', () => {
       data: {
         userId: studentA.user.id,
         organizationId: schoolA.school.organizationId,
-        problemId: problem.id,
+        problemId: problem.problemId,
+        problemInternalId: problem.id,
         oj: 'carits',
         language: 'cpp',
         code: '#include <iostream>\nint main() { std::cout << "Hello"; return 0; }',
@@ -360,6 +361,10 @@ describe('提交详情权限', () => {
     expect(res.body.success).toBe(true)
     expect(res.body.data.code).toBeDefined()
     expect(res.body.data.result).toBe('accepted')
+    expect(res.body.data).toMatchObject({
+      sourcePlatform: 'carits',
+      sourceProblemId: submissionA.problemId,
+    })
   })
 
   it('D1.1: 全局列表、筛选与详情优先读取 CurrentJudgeRun', async () => {
@@ -651,6 +656,13 @@ describe('训练提交隔离', () => {
   })
 
   it('TI1: 全局详情端点也执行训练权限策略', async () => {
+    await prisma.trainingProblem.update({
+      where: { id: trainingProblem.id },
+      data: {
+        sourcePlatformSnapshot: 'codeforces',
+        sourceProblemIdSnapshot: '1454E',
+      },
+    })
     const res = await createAuthenticatedRequest(app, studentToken)
       .get(`/api/submissions/${trainingSubmission.id}`)
 
@@ -659,6 +671,8 @@ describe('训练提交隔离', () => {
       id: trainingSubmission.id,
       trainingId: training.id,
       result: 'accepted',
+      sourcePlatform: 'codeforces',
+      sourceProblemId: '1454E',
     })
   })
 

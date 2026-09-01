@@ -260,11 +260,13 @@ export async function getSubmissionDetail(
   let problemOrderIndex: number | null = null
   let trainingProblemId: string | null = submission.trainingProblemId || null
   let contestFormat: string | null = null
+  let sourcePlatform: string | null = submission.oj || null
+  let sourceProblemId: string | null = submission.problemId || null
 
   if (submission.problemInternalId) {
     const problem = await prisma.problem.findUnique({
       where: { id: submission.problemInternalId },
-      select: { title: true, libraryScope: true, organizationId: true, judgeConfig: true },
+      select: { title: true, platform: true, problemId: true, libraryScope: true, organizationId: true, judgeConfig: true },
     })
     if (
       problem?.libraryScope === 'school'
@@ -274,6 +276,8 @@ export async function getSubmissionDetail(
     ) throw notFound()
     problemTitle = problem?.title || null
     problemJudgeConfig = problem?.judgeConfig || null
+    sourcePlatform = problem?.platform || sourcePlatform
+    sourceProblemId = problem?.problemId || sourceProblemId
   }
 
   if (submission.trainingId && access.training) {
@@ -281,11 +285,29 @@ export async function getSubmissionDetail(
     const trainingProblem = submission.trainingProblemId
       ? await prisma.trainingProblem.findFirst({
           where: { id: submission.trainingProblemId, trainingId: submission.trainingId },
-          select: { id: true, alias: true, orderIndex: true, titleSnapshot: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
+          select: {
+            id: true,
+            alias: true,
+            orderIndex: true,
+            titleSnapshot: true,
+            judgeConfigSnapshot: true,
+            sourcePlatformSnapshot: true,
+            sourceProblemIdSnapshot: true,
+            Problem: { select: { judgeConfig: true, title: true, platform: true, problemId: true } },
+          },
         })
       : await prisma.trainingProblem.findFirst({
           where: { trainingId: submission.trainingId, Problem: { problemId: submission.problemId } },
-          select: { id: true, alias: true, orderIndex: true, titleSnapshot: true, judgeConfigSnapshot: true, Problem: { select: { judgeConfig: true, title: true } } },
+          select: {
+            id: true,
+            alias: true,
+            orderIndex: true,
+            titleSnapshot: true,
+            judgeConfigSnapshot: true,
+            sourcePlatformSnapshot: true,
+            sourceProblemIdSnapshot: true,
+            Problem: { select: { judgeConfig: true, title: true, platform: true, problemId: true } },
+          },
         })
     if (trainingProblem) {
       trainingProblemId = trainingProblem.id
@@ -293,6 +315,8 @@ export async function getSubmissionDetail(
       problemOrderIndex = trainingProblem.orderIndex
       problemJudgeConfig = trainingProblem.judgeConfigSnapshot || trainingProblem.Problem.judgeConfig || problemJudgeConfig
       problemTitle = trainingProblem.titleSnapshot || trainingProblem.Problem.title || problemTitle
+      sourcePlatform = trainingProblem.sourcePlatformSnapshot || trainingProblem.Problem.platform || sourcePlatform
+      sourceProblemId = trainingProblem.sourceProblemIdSnapshot || trainingProblem.Problem.problemId || sourceProblemId
     }
   }
 
@@ -324,6 +348,8 @@ export async function getSubmissionDetail(
     problemId: problemAlias || submission.problemId,
     problemTitle: hideProblemIdentity ? null : problemTitle,
     problemSourceHidden: hideProblemIdentity,
+    sourcePlatform: hideProblemIdentity ? undefined : sourcePlatform,
+    sourceProblemId: hideProblemIdentity ? undefined : sourceProblemId,
     hidden: hideOiDetail,
     displayResult: hideOiDetail ? 'pending' : submission.result,
     result: hideOiDetail ? null : submission.result,

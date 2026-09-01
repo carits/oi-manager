@@ -32,17 +32,6 @@ function copyText(value: string) {
   return Promise.resolve()
 }
 
-function remoteUrl(detail: SubmissionDetailDto) {
-  if (!detail.ojRemoteId) return null
-  if (detail.oj === 'hdu') return `https://acm.hdu.edu.cn/status.php?first=${detail.ojRemoteId}`
-  if (detail.oj === 'luogu') return `https://www.luogu.com.cn/record/${detail.ojRemoteId}`
-  if (detail.oj === 'codeforces') {
-    const contest = detail.problemId?.match(/^(\d+)/)?.[1]
-    return contest ? `https://codeforces.com/contest/${contest}/submission/${detail.ojRemoteId}` : null
-  }
-  return null
-}
-
 export function submissionDetailTitle(detail: SubmissionDetailDto) {
   const problem = detail.problemSourceHidden || detail.problemIdentityHidden
     ? '比赛题目'
@@ -80,7 +69,9 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
   const resultLabel = detail.hidden || detail.displayResult === 'pending'
     ? '已提交'
     : JUDGE_RESULT_LABEL_MAP[detail.result || ''] || detail.result || '-'
-  const url = remoteUrl(detail)
+  const sourceLabel = detail.sourcePlatform
+    ? OJ_PLATFORM_LABEL_MAP[detail.sourcePlatform] || detail.sourcePlatform
+    : null
 
   return (
     <div className={styles.content}>
@@ -98,12 +89,11 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
       <section className={styles.meta} aria-label="提交信息">
         <span>提交人：{detail.submitterName || detail.username}</span>
         <span>提交时间：{new Date(detail.submittedAt).toLocaleString('zh-CN')}</span>
-        {!detail.problemSourceHidden && detail.oj && <span>来源：{OJ_PLATFORM_LABEL_MAP[detail.oj] || detail.oj}</span>}
-        {!detail.hideRemoteId && detail.ojRemoteId && <span>远端记录：{url ? <a className={styles.link} href={url} target="_blank" rel="noopener noreferrer">{detail.ojRemoteId}</a> : detail.ojRemoteId}</span>}
+        {!detail.problemSourceHidden && sourceLabel && detail.sourceProblemId && <span>来源：{sourceLabel} · {detail.sourceProblemId}</span>}
       </section>
 
       {detail.errorMessage && <div className={styles.warning}>{detail.errorMessage}</div>}
-      <SubmissionJudgeResult judgeMode={detail.judgeMode} result={detail.result} score={detail.score} cases={detail.cases} subtasks={detail.subtasks} hidden={detail.hidden} />
+      <SubmissionJudgeResult key={detail.id} judgeMode={detail.judgeMode} result={detail.result} score={detail.score} cases={detail.cases} subtasks={detail.subtasks} hidden={detail.hidden} />
 
       <section className={styles.codePanel} aria-label="源代码">
         <div className={styles.codeToolbar}>
@@ -117,4 +107,3 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
     </div>
   )
 }
-

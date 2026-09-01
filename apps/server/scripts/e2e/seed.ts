@@ -606,9 +606,14 @@ async function main() {
         timeUsed: 1,
         memoryUsed: 512,
         score: 100,
+        cases: JSON.stringify([
+          { result: 'Accepted', time: 1, memory: 512 },
+          { result: 'Accepted', time: 1, memory: 512 },
+        ]),
         submitMethod: 'local',
         submitScope: 'problem',
         isGlobalVisible: true,
+        ojRemoteId: '123456789',
       },
     })
     await prisma.submission.create({

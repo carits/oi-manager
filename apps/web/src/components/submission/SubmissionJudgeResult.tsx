@@ -1,7 +1,10 @@
 'use client'
 
+import { useId, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { JUDGE_RESULT_LABEL_MAP } from '@/lib/judge-constants'
 import unifiedStyles from './SubmissionJudgeResult.unified.module.css'
+import { Button } from '@/components/ui/Button'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import {
   buildJudgeResultRows,
@@ -39,20 +42,38 @@ export function SubmissionJudgeResult({
   subtasks,
   hidden,
 }: SubmissionJudgeResultProps) {
+  const [expanded, setExpanded] = useState(false)
+  const detailId = useId()
   if (hidden) return null
   const rows = buildJudgeResultRows(judgeMode, cases, subtasks)
   const failedIndex = firstFailedCaseIndex(cases)
+  const testCaseCount = rows.filter(row => row.kind === 'case').length
 
   return (
     <section aria-label="评测详情" className={unifiedStyles.u1}>
       <div className={unifiedStyles.u2}>
-        {judgeMode === 'oi' && score != null && (
-          <strong className={score >= 100 ? unifiedStyles.scoreFull : unifiedStyles.scorePartial}>{score} / 100</strong>
+        <div className={unifiedStyles.summaryInfo}>
+          {judgeMode === 'oi' && score != null && (
+            <strong className={score >= 100 ? unifiedStyles.scoreFull : unifiedStyles.scorePartial}>{score} / 100</strong>
+          )}
+          <strong>{verdictLabel(result)}</strong>
+          {judgeMode === 'acm' && failedIndex >= 0 && <span className={unifiedStyles.u3}>失败测试点 #{failedIndex + 1}</span>}
+        </div>
+        {testCaseCount > 0 && (
+          <Button
+            size="sm"
+            variant="text"
+            icon={expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            aria-expanded={expanded}
+            aria-controls={detailId}
+            onClick={() => setExpanded(current => !current)}
+            className={unifiedStyles.disclosureButton}
+          >
+            {expanded ? `收起测试点（${testCaseCount}）` : `详细测试点（${testCaseCount}）`}
+          </Button>
         )}
-        <strong>{verdictLabel(result)}</strong>
-        {judgeMode === 'acm' && failedIndex >= 0 && <span className={unifiedStyles.u3}>失败测试点 #{failedIndex + 1}</span>}
       </div>
-      {rows.length > 0 && <div className={unifiedStyles.u4}>
+      {testCaseCount > 0 && expanded && <div id={detailId} className={unifiedStyles.u4}>
         <TableRoot className={unifiedStyles.u5}>
           <TableHead>
             <TableRow className={unifiedStyles.u6}>

@@ -15,8 +15,5 @@
 .errorMessage { margin: 0; max-width: 560px; color: var(--text-secondary); }
 .requestId { color: var(--text-muted); font-size: var(--text-xs); }
 .errorActions { display: flex; gap: var(--space-2); }
-.link { color: var(--primary); text-decoration: none; }
-.link:hover { text-decoration: underline; }
 @media (max-width: 760px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .meta { display: grid; gap: var(--space-2); } }
 @media (max-width: 420px) { .summary { grid-template-columns: 1fr; } }
-

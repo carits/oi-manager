@@ -11,6 +11,8 @@ export interface SubmissionDetailDto {
   problemTitle?: string | null
   problemSourceHidden?: boolean
   problemIdentityHidden?: boolean
+  sourcePlatform?: string | null
+  sourceProblemId?: string | null
   result: string | null
   displayResult?: string
   hidden?: boolean
@@ -43,4 +45,3 @@ export interface SubmissionDetailDto {
     output: { type: 'stdout' } | { type: 'file'; filename: string }
   }
 }
-
