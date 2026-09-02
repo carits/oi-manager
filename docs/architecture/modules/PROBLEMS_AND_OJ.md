@@ -24,6 +24,11 @@ source_of_truth: problem modules, OJ routes, adapter registry
 导入同一道外部 OJ 题并独立修改。教师可将已发布的平台题复制为本校草稿；
 题面、题解、Judge 配置、附件和测试数据一并复制，后续不与平台副本同步。
 
+平台题库的用户浏览入口按主来源再次分为“Carits 平台题库”和“其他题库”。
+`GET /api/problems?library=platform&sourceGroup=carits|external` 在数据库查询和分页前完成分组；
+不传 `sourceGroup` 时保留全部来源的兼容查询。分组只依据 `Problem.platform`，不会因附加 OJ 绑定改变。
+教师校内题库和平台管理员管理工作台不使用该浏览分区。
+
 归档代替物理删除。教师转校后题目仍属于原学校，由原学校负责人继续管理。
 `visibility` 仅保留旧请求兼容，不得用于判断学校边界。
 

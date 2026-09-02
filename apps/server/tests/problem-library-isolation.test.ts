@@ -219,6 +219,62 @@ describe('学校私有题库隔离', () => {
     expect(otherSchoolCopy.body.data.problem.organizationId).toBe(schoolB.school.organizationId)
   })
 
+  it('平台题库按 Carits 与其他来源在数据库查询层分组', async () => {
+    const client = createAuthenticatedRequest(app, platformAdminToken)
+    const carits = await client.post('/api/problems').send({
+      title: 'Carits 分组题',
+      status: 'published',
+      statements: [{ format: 'markdown', language: 'zh', content: 'Carits 题面', isVisible: true }],
+    })
+    const codeforces = await client.post('/api/problems').send({
+      title: 'Codeforces 分组题',
+      status: 'published',
+      ojBindings: [{ platform: 'codeforces', problemId: 'GROUP-1000A' }],
+      statements: [{ format: 'markdown', language: 'zh', content: 'Codeforces 题面', isVisible: true }],
+    })
+    const luogu = await client.post('/api/problems').send({
+      title: '洛谷分组题',
+      status: 'published',
+      ojBindings: [{ platform: 'luogu', problemId: 'GROUP-P1000' }],
+      statements: [{ format: 'markdown', language: 'zh', content: '洛谷题面', isVisible: true }],
+    })
+    expect(carits.status).toBe(201)
+    expect(codeforces.status).toBe(201)
+    expect(luogu.status).toBe(201)
+
+    const viewer = createAuthenticatedRequest(app, tokenFor(ownerA, 'personal'))
+    const legacy = await viewer.get('/api/problems?library=platform&pageSize=100')
+    const caritsGroup = await viewer.get('/api/problems?library=platform&sourceGroup=carits&pageSize=100')
+    const externalGroup = await viewer.get('/api/problems?library=platform&sourceGroup=external&pageSize=100')
+    const luoguOnly = await viewer.get('/api/problems?library=platform&sourceGroup=external&platform=luogu&pageSize=100')
+    const externalSearch = await viewer.get('/api/problems?library=platform&sourceGroup=external&keyword=Codeforces&pageSize=100')
+
+    const idsOf = (response: { body: { data: { data: Array<{ id: string }> } } }) => response.body.data.data.map(item => item.id)
+    expect(idsOf(legacy)).toEqual(expect.arrayContaining([carits.body.data.id, codeforces.body.data.id, luogu.body.data.id]))
+    expect(idsOf(caritsGroup)).toContain(carits.body.data.id)
+    expect(idsOf(caritsGroup)).not.toContain(codeforces.body.data.id)
+    expect(idsOf(caritsGroup)).not.toContain(luogu.body.data.id)
+    expect(idsOf(externalGroup)).toEqual(expect.arrayContaining([codeforces.body.data.id, luogu.body.data.id]))
+    expect(idsOf(externalGroup)).not.toContain(carits.body.data.id)
+    expect(idsOf(luoguOnly)).toContain(luogu.body.data.id)
+    expect(idsOf(luoguOnly)).not.toContain(codeforces.body.data.id)
+    expect(idsOf(externalSearch)).toContain(codeforces.body.data.id)
+    expect(idsOf(externalSearch)).not.toContain(luogu.body.data.id)
+    expect(caritsGroup.body.data.total).toBe(caritsGroup.body.data.data.length)
+    expect(externalGroup.body.data.total).toBe(externalGroup.body.data.data.length)
+
+    for (const url of [
+      '/api/problems?library=platform&sourceGroup=unknown',
+      '/api/problems?library=platform&sourceGroup=carits&platform=luogu',
+      '/api/problems?library=platform&sourceGroup=external&platform=carits',
+      '/api/problems?library=school&sourceGroup=carits',
+    ]) {
+      const response = await viewer.get(url)
+      expect(response.status).toBe(400)
+      expect(response.body.code).toBe('INVALID_PROBLEM_SOURCE_GROUP')
+    }
+  })
+
   it('附件、文件元数据、测试数据与 AI 操作沿用同一学校边界', async () => {
     const created = await createSchoolProblem('published')
     const problemId = created.body.data.id as string

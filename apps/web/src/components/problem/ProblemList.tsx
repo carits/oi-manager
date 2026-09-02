@@ -8,7 +8,7 @@ import { Copy, Eye, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useResource } from '@/hooks/useResource'
 import apiClient from '@/lib/apiClient'
-import { OJ_PLATFORMS, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
+import { OJ_PLATFORMS, OJ_PLATFORMS_NO_ALL, OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemList.module.css'
 
 type LibraryScope = 'school' | 'platform'
+type PlatformSourceGroup = 'carits' | 'external'
 
 interface ProblemPermissions {
   canEdit: boolean
@@ -62,6 +63,11 @@ const statusOptions = [
   { value: 'archived', label: '已归档' },
 ]
 
+const externalPlatformOptions = [
+  { value: '', label: '全部其他平台' },
+  ...OJ_PLATFORMS_NO_ALL.filter(option => option.value !== 'carits'),
+]
+
 const statusBadge = (status: Problem['status']) => {
   if (status === 'published') return <StatusBadge variant="success">已发布</StatusBadge>
   if (status === 'archived') return <StatusBadge variant="neutral">已归档</StatusBadge>
@@ -86,10 +92,13 @@ export function ProblemList({ role }: ProblemListProps) {
   const library: LibraryScope = isTeacherWorkspace && searchParams.get('library') !== 'platform'
     ? 'school'
     : 'platform'
+  const sourceGroup: PlatformSourceGroup = library === 'platform' && searchParams.get('source') === 'external'
+    ? 'external'
+    : 'carits'
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const pageSize = Math.max(10, Number(searchParams.get('pageSize')) || 20)
   const keyword = searchParams.get('keyword') || ''
-  const platform = searchParams.get('platform') || ''
+  const platform = library === 'platform' && sourceGroup === 'carits' ? '' : searchParams.get('platform') || ''
   const status = library === 'school' ? searchParams.get('status') || '' : ''
   const ownerId = library === 'school' ? searchParams.get('ownerId') || '' : ''
   const [searchInput, setSearchInput] = useState(keyword)
@@ -99,6 +108,7 @@ export function ProblemList({ role }: ProblemListProps) {
   useEffect(() => setSearchInput(keyword), [keyword])
 
   const query = new URLSearchParams({ library, page: String(page), pageSize: String(pageSize) })
+  if (library === 'platform') query.set('sourceGroup', sourceGroup)
   if (keyword) query.set('keyword', keyword)
   if (platform) query.set('platform', platform)
   if (status) query.set('status', status)
@@ -125,8 +135,18 @@ export function ProblemList({ role }: ProblemListProps) {
   const switchLibrary = (nextLibrary: LibraryScope) => {
     navigate({
       library: nextLibrary === 'school' ? null : 'platform',
+      source: null,
+      platform: null,
       status: null,
       ownerId: null,
+      page: null,
+    })
+  }
+
+  const switchSourceGroup = (nextSourceGroup: PlatformSourceGroup) => {
+    navigate({
+      source: nextSourceGroup === 'carits' ? null : 'external',
+      platform: null,
       page: null,
     })
   }
@@ -168,9 +188,11 @@ export function ProblemList({ role }: ProblemListProps) {
         title={library === 'school' ? '校内题库' : role === 'student' ? '题库' : '平台题库'}
         description={library === 'school'
           ? '维护本校教学题目。草稿仅创建教师与学校负责人可见。'
-          : isTeacherWorkspace
-            ? '浏览平台已发布题目，复制后可在本校独立修改。'
-            : '浏览平台已发布题目。'}
+          : sourceGroup === 'carits'
+            ? '浏览 Carits 平台发布的本地题目。'
+            : isTeacherWorkspace
+              ? '浏览其他 OJ 来源题目，复制后可在本校独立修改。'
+              : '浏览洛谷、Codeforces 等其他平台题目。'}
         actions={isTeacherWorkspace && library === 'school'
           ? <Button icon={<Plus size={17} />} onClick={() => router.push(newProblemHref)}>新建题目</Button>
           : undefined}
@@ -188,11 +210,25 @@ export function ProblemList({ role }: ProblemListProps) {
         />
       )}
 
+      {library === 'platform' && (
+        <Tabs
+          label="平台题库来源"
+          value={sourceGroup}
+          onChange={switchSourceGroup}
+          items={[
+            { value: 'carits', label: 'Carits 平台题库' },
+            { value: 'external', label: '其他题库' },
+          ]}
+        />
+      )}
+
       <Toolbar>
         <ToolbarGroup>
-          <Select className={[(styles.search), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="来源平台" value={platform} onChange={event => navigate({ platform: event.target.value || null, page: null })}>
-            {OJ_PLATFORMS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </Select>
+          {(library === 'school' || sourceGroup === 'external') && (
+            <Select className={[(styles.search), collisionStyles.u1].filter(Boolean).join(' ')} aria-label="来源平台" value={platform} onChange={event => navigate({ platform: event.target.value || null, page: null })}>
+              {(library === 'school' ? OJ_PLATFORMS : externalPlatformOptions).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </Select>
+          )}
           {library === 'school' && (
             <Select className={[(styles.search), collisionStyles.u2].filter(Boolean).join(' ')}  aria-label="题目状态" value={status} onChange={event => navigate({ status: event.target.value || null, page: null })}>
               {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -226,7 +262,11 @@ export function ProblemList({ role }: ProblemListProps) {
         error={resource.state.state === 'error' && !resource.state.previousData ? resource.state.error.message : undefined}
         onRetry={resource.retry}
         emptyText="暂无题目"
-        emptyDescription={library === 'school' ? '新建题目，或从平台题库复制一份到本校。' : '当前筛选条件下没有平台题目。'}
+        emptyDescription={library === 'school'
+          ? '新建题目，或从平台题库复制一份到本校。'
+          : sourceGroup === 'carits'
+            ? '当前筛选条件下没有 Carits 平台题目。'
+            : '当前筛选条件下没有其他平台题目。'}
         rowKey={problem => problem.id}
         onRowClick={problem => router.push(`${pathPrefix}/problems/${problem.id}`)}
         actions={isTeacherWorkspace
@@ -242,7 +282,14 @@ export function ProblemList({ role }: ProblemListProps) {
               </>
           : undefined}
         columns={[
-          { key: 'platform', label: '来源', width: '140px', render: problem => (problem.platforms || [problem.platform]).filter(Boolean).map(value => OJ_PLATFORM_LABEL_MAP[value] || value).join(', ') || '-' },
+          ...(library === 'school' || sourceGroup === 'external' ? [{
+            key: 'platform',
+            label: library === 'school' ? '来源' : '来源平台',
+            width: '140px',
+            render: (problem: Problem) => library === 'platform'
+              ? OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform || '-'
+              : (problem.platforms || [problem.platform]).filter(Boolean).map(value => OJ_PLATFORM_LABEL_MAP[value] || value).join(', ') || '-',
+          }] : []),
           { key: 'problemId', label: '题号', width: '130px', render: problem => <span className={styles.titleLink}>{problem.problemId}</span> },
           { key: 'title', label: '标题' },
           ...(library === 'school' ? [

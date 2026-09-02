@@ -1,13 +1,21 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-09-02
+
+### Carits 平台题库与其他题库恢复分区
+
+- 个人题库和教师的平台题库恢复“Carits 平台题库 / 其他题库”两级来源标签；默认进入 Carits，其他题库再按洛谷、Codeforces 等主来源筛选，列表和分页不再混合。
+- 服务端 `GET /api/problems` 增加 `sourceGroup=carits|external` 数据库级过滤；缺少参数保持旧混合查询兼容，非法分组和冲突平台返回明确 400。来源分组只依据 `Problem.platform`，外部绑定不会移动 Carits 本地题。
+- 校内题库和平台管理员题库管理保持不变；搜索关键词在来源标签间保留，平台筛选与页码在切换时清除。
 
 ## 2026-09-01
 

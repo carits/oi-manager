@@ -91,6 +91,19 @@ export async function listProblems(input: {
       }
 
   const { status, keyword, platform, ownerId } = input.query
+  const sourceGroup = input.query.sourceGroup
+  if (sourceGroup !== undefined && sourceGroup !== 'carits' && sourceGroup !== 'external') {
+    fail(400, 'INVALID_PROBLEM_SOURCE_GROUP', '题库来源分组无效')
+  }
+  if (sourceGroup !== undefined && library !== 'platform') {
+    fail(400, 'INVALID_PROBLEM_SOURCE_GROUP', '校内题库不支持平台来源分组')
+  }
+  if (sourceGroup === 'carits' && typeof platform === 'string' && platform && platform !== 'carits') {
+    fail(400, 'INVALID_PROBLEM_SOURCE_GROUP', 'Carits 平台题库不能筛选其他平台')
+  }
+  if (sourceGroup === 'external' && platform === 'carits') {
+    fail(400, 'INVALID_PROBLEM_SOURCE_GROUP', '其他题库不能筛选 Carits 平台')
+  }
   if (typeof status === 'string' && ['draft', 'published', 'archived'].includes(status)) {
     where.status = status
   }
@@ -106,7 +119,13 @@ export async function listProblems(input: {
       },
     ]
   }
-  if (typeof platform === 'string' && platform) where.platform = platform
+  if (sourceGroup === 'carits') {
+    where.platform = 'carits'
+  } else if (sourceGroup === 'external' && !(typeof platform === 'string' && platform)) {
+    where.platform = { not: 'carits' }
+  } else if (typeof platform === 'string' && platform) {
+    where.platform = platform
+  }
 
   const [problems, total] = await Promise.all([
     prisma.problem.findMany({
