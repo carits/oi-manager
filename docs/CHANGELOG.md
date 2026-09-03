@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 source_of_truth: Git history
 ---
 
@@ -9,7 +9,7 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
-## 2026-09-02
+## 2026-09-03
 
 ### Carits 平台题库与其他题库恢复分区
 

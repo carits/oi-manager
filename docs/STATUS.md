@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-01
+last_verified: 2026-09-03
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-03: Carits 平台题库与其他题库分区已恢复并部署。个人题库默认进入“Carits 平台题库”，教师在“校内题库 / 平台题库”之下使用相同来源分区；“其他题库”单独提供洛谷、Codeforces 等平台筛选，关键词跨标签保留，平台筛选与页码重置。服务端 `sourceGroup=carits|external` 在数据库分页前过滤，旧无参数请求继续兼容混合结果；校内题库和平台管理后台未改变。Server 定向 11/11、Web 57/57、隔离 Chromium 桌面/紧凑视口 10/10、Server/Web 构建及 UI/文档/架构门禁通过。提交 `23759aa`、`8c2853d` 已推送 `main`，API 3302→3303，Web BUILD_ID `1OkXkhjAW_xrnoWvmGEG3` 已提升至公网 3000；无数据库迁移，readiness 和后台服务健康。
 
 - 2026-09-01: 比赛、训练和作业内的评测记录筛选布局已修复并部署。全宽控件逐项占行改为带“题目、用户名、评测结果、语言”持续标签的响应式 Grid；管理员桌面端单行紧凑排列，`960px` 以下两列、`560px` 以下单列等宽，参与者继续按权限省略用户名或隐藏题目来源。Web 57/57、类型检查、生产构建、UI/文档/架构门禁通过；服务器隔离 Chromium 的独立桌面/手机筛选回归连同登录准备 7/7 通过且无页面横向溢出。提交 `ee84792`、`c457f3d` 已推送 `main`，Web BUILD_ID `L7aAQfpP-KxwfX5ZZ3uc_` 已提升至公网 3000；本批未修改 API，readiness 与 Web/Router/Worker/Executor/Judge 服务健康。
 
