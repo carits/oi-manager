@@ -267,12 +267,15 @@ describe('学校私有题库隔离', () => {
       '/api/problems?library=platform&sourceGroup=unknown',
       '/api/problems?library=platform&sourceGroup=carits&platform=luogu',
       '/api/problems?library=platform&sourceGroup=external&platform=carits',
-      '/api/problems?library=school&sourceGroup=carits',
     ]) {
       const response = await viewer.get(url)
       expect(response.status).toBe(400)
       expect(response.body.code).toBe('INVALID_PROBLEM_SOURCE_GROUP')
     }
+    const schoolGroup = await createAuthenticatedRequest(app, ownerAToken)
+      .get('/api/problems?library=school&sourceGroup=carits')
+    expect(schoolGroup.status).toBe(400)
+    expect(schoolGroup.body.code).toBe('INVALID_PROBLEM_SOURCE_GROUP')
   })
 
   it('附件、文件元数据、测试数据与 AI 操作沿用同一学校边界', async () => {
