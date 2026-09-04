@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-31
+last_verified: 2026-09-04
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -38,6 +38,9 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `Organization` | 以 Prisma schema 为准 |
 | `OrganizationContributionAttribution` | 以 Prisma schema 为准 |
 | `OrganizationMembership` | 以 Prisma schema 为准 |
+| `OrganizationJoinApplication` | 用户主动加入学校的申请、审核结果及内外分离备注 |
+| `OrganizationInvitation` | 学校向现有账号发送的独立邀请与响应状态 |
+| `OrganizationAuditLog` | 加入策略、申请审批、邀请和成员恢复的持久化审计 |
 | `OrganizationStudentProfile` | 以 Prisma schema 为准 |
 | `OrganizationTeacherProfile` | 以 Prisma schema 为准 |
 | `PasswordResetLog` | 以 Prisma schema 为准 |

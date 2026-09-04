@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-03
+last_verified: 2026-09-04
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-04: 组织申请与加入功能已在工作树完成，尚未部署。新增学校加入策略、主动申请、独立邀请、组织审计、账号/组织通知上下文、个人组织页、学校审核/邀请管理和消息中心；旧 pending Membership 与 campus 通知提供受保护的 check/apply 迁移。Server/Web 构建、Web 57/57、API/路由/UI 门禁通过；本机 PostgreSQL 5432 未运行，因此数据库迁移和新增 4 条集成测试尚未执行，禁止在完成隔离数据库验证前标记上线。
 
 - 2026-09-03: Carits 平台题库与其他题库分区已恢复并部署。个人题库默认进入“Carits 平台题库”，教师在“校内题库 / 平台题库”之下使用相同来源分区；“其他题库”单独提供洛谷、Codeforces 等平台筛选，关键词跨标签保留，平台筛选与页码重置。服务端 `sourceGroup=carits|external` 在数据库分页前过滤，旧无参数请求继续兼容混合结果；校内题库和平台管理后台未改变。Server 定向 11/11、Web 57/57、隔离 Chromium 桌面/紧凑视口 10/10、Server/Web 构建及 UI/文档/架构门禁通过。提交 `23759aa`、`8c2853d` 已推送 `main`，API 3302→3303，Web BUILD_ID `1OkXkhjAW_xrnoWvmGEG3` 已提升至公网 3000；无数据库迁移，readiness 和后台服务健康。
 

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { prisma } from '../../../prisma'
 import { notificationService } from '../../notification/notification.service'
+import { createOrganizationInvitation, respondToInvitation } from '../../organization-join/organization-join.service'
 
 const allModules = ['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings']
 const platformModules = ['overview', 'schools', 'users', 'problems', 'submissions', 'oj-accounts']
@@ -16,6 +17,7 @@ export interface WorkspaceActor {
   userId: string
   role: string
   organizationId?: string | null
+  organizationMembershipId?: string | null
 }
 
 function modulesForRole(role: string) {
@@ -66,45 +68,17 @@ export async function listWorkspaces(actor: WorkspaceActor) {
 }
 
 export async function inviteOrganizationMember(actor: WorkspaceActor, organizationId: string, body: any) {
-  if (actor.organizationId !== organizationId) throw new WorkspaceError(403, 'organization context is required')
-  const sender = await prisma.organizationMembership.findFirst({
-    where: { organizationId, userId: actor.userId, status: 'active' },
-  })
-  if (!sender || sender.memberRole !== 'school_principal') throw new WorkspaceError(403, '只有学校负责人可以邀请成员')
-  const username = typeof body.username === 'string' ? body.username.trim() : ''
-  const memberRole = body.memberRole === 'teacher' ? 'teacher' : 'student'
-  if (!username) throw new WorkspaceError(400, '请输入用户名')
-  const target = await prisma.user.findUnique({ where: { username }, select: { id: true, username: true } })
-  if (!target) throw new WorkspaceError(404, '用户不存在')
-  const existing = await prisma.organizationMembership.findUnique({
-    where: { organizationId_userId: { organizationId, userId: target.id } },
-    select: { status: true, memberRole: true },
-  })
-  if (existing?.status === 'active') throw new WorkspaceError(409, `该账号已是本校园${relationLabel(existing.memberRole, 'enrolled')}`)
-  if (existing?.status === 'pending') throw new WorkspaceError(409, '该账号已有待处理的校园邀请')
-  const membership = await prisma.organizationMembership.upsert({
-    where: { organizationId_userId: { organizationId, userId: target.id } },
-    create: {
-      id: crypto.randomUUID(), organizationId, userId: target.id, memberRole,
-      relationType: memberRole === 'teacher' ? 'employee' : 'enrolled', status: 'pending', invitedBy: actor.userId,
-    },
-    update: {
-      memberRole, relationType: memberRole === 'teacher' ? 'employee' : 'enrolled',
-      status: 'pending', invitedBy: actor.userId, joinedAt: null,
-    },
-  })
-  const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } })
-  await notificationService.create({
-    userId: target.id, scope: 'campus', type: 'organization_invitation', title: '收到学校邀请',
-    body: `你受邀加入「${organization.name}」`, href: `organization:${organizationId}`,
-    sourceType: 'organization_invitation', sourceId: membership.id,
-  })
-  return { id: membership.id }
+  return createOrganizationInvitation(actor, organizationId, body || {})
 }
 
 export async function respondToOrganizationInvitation(actor: WorkspaceActor, invitationId: string, action: string) {
   const accept = action === 'accept'
   if (!accept && action !== 'reject') throw new WorkspaceError(400, '无效操作')
+  const currentInvitation = await prisma.organizationInvitation.findUnique({ where: { id: invitationId }, select: { id: true } })
+  if (currentInvitation) {
+    await respondToInvitation(actor, invitationId, accept ? 'accept' : 'decline')
+    return
+  }
   const invitation = await prisma.organizationMembership.findFirst({
     where: { id: invitationId, userId: actor.userId, status: 'pending' },
   })

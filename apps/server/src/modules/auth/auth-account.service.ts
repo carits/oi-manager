@@ -129,13 +129,13 @@ export async function loadCurrentAccount(
       })
   const organizationId = requestedOrganizationId || membership?.organizationId
   let profile: any = null
-  if (membership?.StudentProfile) {
+  if (membership?.memberRole === 'student' && membership.StudentProfile) {
     profile = {
       id: membership.StudentProfile.id, name: membership.StudentProfile.name,
       avatar: membership.StudentProfile.avatar, rating: membership.StudentProfile.rating,
       enrollmentYear: membership.StudentProfile.enrollmentYear,
     }
-  } else if (membership?.TeacherProfile) {
+  } else if (membership && membership.memberRole !== 'student' && membership.TeacherProfile) {
     profile = {
       id: membership.TeacherProfile.id, name: membership.TeacherProfile.name,
       avatar: membership.TeacherProfile.avatar, organizationRole: membership.memberRole,

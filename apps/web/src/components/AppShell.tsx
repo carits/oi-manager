@@ -3,8 +3,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { Activity, Bell, BookOpen, Check, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserPlus, UserRound, WalletCards, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserRound, WalletCards, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
 import { getAssetUrl } from '@/lib/assets'
@@ -12,30 +12,11 @@ import { getSidebarNavigationOpen, setSidebarNavigationOpen } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
-import { apiClient } from '@/lib/apiClient'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import { notificationTeamHref } from '@/components/workspace/workspaceRouting'
+import { NotificationBell } from '@/components/notification/NotificationBell'
 import styles from './AppShell.module.css'
 
 interface AppShellProps { children: ReactNode }
-
-interface UserNotification {
-  id: string
-  type: string
-  title: string
-  body: string
-  href?: string | null
-  sourceType: string
-  sourceId: string
-  actionable: boolean
-  readAt?: string | null
-  createdAt: string
-}
-
-interface NotificationPayload {
-  notifications: UserNotification[]
-  unreadCount: number
-}
 
 const accountPaths = {
   profile: '/account/profile',
@@ -47,6 +28,7 @@ const accountPaths = {
 const labelIcons: Record<string, LucideIcon> = {
   '首页': Home, '概览': Home, '校园': School, '学校管理': School, '教师管理': GraduationCap, '教师': GraduationCap,
   '学生管理': Users, '学生': Users, '管理': ShieldCheck, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
+  '组织': School,
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
   '题库管理': Library, '排名': Activity, '评测记录': BookOpen, 'OJ账号': Link2, '平台绑定': Link2,
   'AI Token': WalletCards,
@@ -60,18 +42,11 @@ function isWorkbenchPath(pathname: string): boolean {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const { user, logout } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [notifications, setNotifications] = useState<UserNotification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [notificationError, setNotificationError] = useState('')
-  const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null)
   const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const userMenuRef = useRef<HTMLDivElement>(null)
-  const notificationRef = useRef<HTMLDivElement>(null)
 
   // Workspace context is URL-derived; it must not come from a persisted mode.
   const contextKind = pathname === '/personal'
@@ -86,38 +61,13 @@ export function AppShell({ children }: AppShellProps) {
     setShowUserMenu(false)
   }, [organizationId, contextKind, user?.role, user?.userId])
 
-  const loadNotifications = async () => {
-    const response = await apiClient.get<NotificationPayload>('/api/notifications')
-    if (response.success && response.data) {
-      setNotifications(response.data.notifications)
-      setUnreadCount(response.data.unreadCount)
-      setNotificationError('')
-    } else {
-      setNotificationError(response.message || '通知加载失败')
-    }
-  }
-
-  useEffect(() => {
-    if (!user) return
-    void loadNotifications()
-    const timer = window.setInterval(() => void loadNotifications(), 45000)
-    const handleFocus = () => void loadNotifications()
-    window.addEventListener('focus', handleFocus)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [contextKind, user?.userId])
-
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) setShowUserMenu(false)
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) setShowNotifications(false)
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      if (showNotifications) setShowNotifications(false)
-      else if (showUserMenu) setShowUserMenu(false)
+      if (showUserMenu) setShowUserMenu(false)
       else if (sidebarOpen) setSidebarOpen(false)
     }
     document.addEventListener('mousedown', handlePointerDown)
@@ -126,7 +76,7 @@ export function AppShell({ children }: AppShellProps) {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [showNotifications, showUserMenu, sidebarOpen])
+  }, [showUserMenu, sidebarOpen])
 
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
@@ -157,47 +107,6 @@ export function AppShell({ children }: AppShellProps) {
     setSidebarOpen(open)
     setSidebarNavigationOpen(user.userId, user.role, organizationId || context, open)
     if (!open) setShowUserMenu(false)
-  }
-
-  const markRead = async (notificationId: string) => {
-    const response = await apiClient.patch(`/api/notifications/${notificationId}/read`)
-    if (response.success) {
-      setNotifications(current => current.map(item => item.id === notificationId ? { ...item, readAt: item.readAt || new Date().toISOString() } : item))
-      setUnreadCount(current => Math.max(0, current - 1))
-    }
-  }
-
-  const markAllRead = async () => {
-    const response = await apiClient.post('/api/notifications/read-all')
-    if (response.success) {
-      setNotifications(current => current.map(item => ({ ...item, readAt: item.readAt || new Date().toISOString() })))
-      setUnreadCount(0)
-    }
-  }
-
-  const handleNotificationClick = async (notification: UserNotification) => {
-    await markRead(notification.id)
-    const href = notificationTeamHref(context, organizationId, notification.href)
-    if (href) {
-      setShowNotifications(false)
-      router.push(href)
-    }
-  }
-
-  const handleNotificationAction = async (notification: UserNotification, action: 'accept' | 'reject' | 'approve') => {
-    setProcessingNotificationId(notification.id)
-    const endpoint = notification.type === 'organization_invitation'
-      ? `/api/workspaces/organization-invitations/${notification.sourceId}/${action === 'accept' ? 'accept' : 'reject'}`
-      : notification.type === 'team_invitation'
-      ? `/api/teams/invitations/${notification.sourceId}/${action === 'accept' ? 'accept' : 'reject'}`
-      : `/api/teams/join-requests/${notification.sourceId}/${action === 'approve' ? 'approve' : 'reject'}`
-    const response = await apiClient.post(endpoint)
-    setProcessingNotificationId(null)
-    if (response.success) await loadNotifications()
-    else if (response.message?.includes('不存在') || response.message?.includes('已处理')) {
-      setNotificationError('')
-      await loadNotifications()
-    } else setNotificationError(response.message || '操作失败，请重试')
   }
 
   const navLinks = resolvedNavConfig.items.map(item => {
@@ -245,40 +154,7 @@ export function AppShell({ children }: AppShellProps) {
             <Link className={styles.brandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
           <div className={styles.headerEnd}>
-            <div className={styles.notificationRoot} ref={notificationRef}>
-              <Button variant="ghost" type="button" className={styles.notificationButton} onClick={() => setShowNotifications(current => !current)} aria-expanded={showNotifications} aria-haspopup="true" aria-label={unreadCount ? `打开通知，${unreadCount} 条未读` : '打开通知'} title="通知">
-                <Bell size={20} aria-hidden="true" />
-                {unreadCount > 0 && <span className={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
-              </Button>
-              {showNotifications && (
-                <div className={styles.notificationPanel} role="region" aria-label="通知">
-                  <div className={styles.notificationHeader}>
-                    <strong>通知</strong>
-                    <Button variant="ghost" type="button" className={styles.readAllButton} onClick={() => void markAllRead()} disabled={unreadCount === 0}>全部已读</Button>
-                  </div>
-                  <div className={styles.notificationList}>
-                    {notificationError && <p className={styles.notificationError} role="status">{notificationError}</p>}
-                    {!notificationError && notifications.length === 0 && <p className={styles.notificationEmpty}>暂时没有新通知</p>}
-                    {notifications.map(notification => {
-                      const isActionable = notification.actionable
-                      const processing = processingNotificationId === notification.id
-                      return <article key={notification.id} className={`${styles.notificationItem} ${!notification.readAt ? styles.notificationUnread : ''}`}>
-                        <Button variant="ghost" type="button" className={styles.notificationContent} onClick={() => void handleNotificationClick(notification)}>
-                          <span className={styles.notificationIcon} aria-hidden="true">{notification.type === 'team_join_request' ? <UserPlus size={17} /> : <Bell size={17} />}</span>
-                          <span className={styles.notificationText}><strong>{notification.title}</strong><span>{notification.body}</span><time>{new Date(notification.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></span>
-                          {!notification.readAt && <span className={styles.unreadDot} aria-label="未读" />}
-                        </Button>
-                        {isActionable && <div className={styles.notificationActions}>
-                          {notification.type === 'team_invitation' || notification.type === 'organization_invitation'
-                            ? <><Button variant="ghost" type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</Button><Button variant="ghost" type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'accept')}>接受</Button></>
-                            : <><Button variant="ghost" type="button" className={styles.secondaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'reject')}>拒绝</Button><Button variant="ghost" type="button" className={styles.primaryAction} disabled={processing} onClick={() => void handleNotificationAction(notification, 'approve')}>同意</Button></>}
-                        </div>}
-                      </article>
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <NotificationBell />
             <WorkspaceSwitcher />
           </div>
         </div>

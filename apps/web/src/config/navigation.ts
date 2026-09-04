@@ -88,6 +88,7 @@ export const personalNav: NavConfig = {
   role: 'student',
   items: [
     { label: '首页', href: '/personal' },
+    { label: '组织', href: '/personal/organizations' },
     { label: '团队', href: '/personal/teams' },
     { label: '题库', href: '/personal/problems' },
     { label: '比赛', href: '/personal/contests' },

@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development
-last_verified: 2026-08-18
+last_verified: 2026-09-04
 source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 ---
 
@@ -30,6 +30,12 @@ source_of_truth: packages/shared/src/index.ts and apps/web/src/lib/apiClient.ts
 
 前端 `ApiResponse<T>` 额外带客户端解析出的 `status`。网络错误或超时为 `0`，HTTP
 响应保留真实状态。服务端不应把错误包在 `200 success:false` 中。
+
+## 组织加入
+
+组织目录返回公开学校资料和当前用户的一种聚合关系：`membership/application/invitation/null`。申请身份仅允许 `student/teacher`；成员类型按身份分别限定为 `enrolled/preselected` 和 `employee/external_coach`。审核结果分别使用申请人可见的 `decisionMessage` 与仅组织审核人员可见的 `internalReviewNote`。
+
+通知返回 `contextType/contextKey/organizationId`，并由服务端计算 `actionable` 与 `actions`。客户端不得根据通知类型自行假定业务仍可处理。
 
 ## 状态码
 

@@ -5,6 +5,7 @@ import {
   migrateLegacyProblemStatuses,
   migrateLegacySubmissionScopes,
 } from '../modules/maintenance/application/legacy-submission-migration.service'
+import { applyOrganizationJoinMigration, inspectOrganizationJoinMigration } from '../modules/maintenance/application/organization-join-migration.service'
 
 export const migrationRouter = Router()
 
@@ -49,6 +50,26 @@ migrationRouter.post('/migrate-problem-status', async (_req, res) => {
     })
   } catch (error: any) {
     logger.error('migration_problem_status_error', { action: 'migration', metadata: { error: error.message } })
+    return res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+migrationRouter.get('/organization-join', async (_req, res) => {
+  try {
+    return res.json({ success: true, data: await inspectOrganizationJoinMigration() })
+  } catch (error: any) {
+    logger.error('organization_join_migration_check_error', { action: 'migration', metadata: { error: error.message } })
+    return res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+migrationRouter.post('/organization-join', async (_req, res) => {
+  try {
+    const data = await applyOrganizationJoinMigration()
+    logger.audit('organization_join_migration_applied', { action: 'migration', metadata: data })
+    return res.json({ success: true, data })
+  } catch (error: any) {
+    logger.error('organization_join_migration_apply_error', { action: 'migration', metadata: { error: error.message } })
     return res.status(500).json({ success: false, message: error.message })
   }
 })

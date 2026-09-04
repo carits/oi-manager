@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-08-21
+last_verified: 2026-09-04
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -13,6 +13,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 |---|---|---|
 | `/` | 见页面权限布局 | 当前页面 |
 | `/account/platform-bindings` | 见页面权限布局 | 当前页面 |
+| `/account/notifications` | 已登录账号 | 完整消息中心 |
 | `/account/profile` | 见页面权限布局 | 当前页面 |
 | `/account/security` | 见页面权限布局 | 当前页面 |
 | `/account/wallet` | 见页面权限布局 | 当前页面 |
@@ -34,6 +35,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/org/[organizationId]/[module]` | 见页面权限布局 | 当前页面 |
 | `/org/[organizationId]/[module]/[...segments]` | 见页面权限布局 | 当前页面 |
 | `/personal` | 见页面权限布局 | 当前页面 |
+| `/personal/organizations` | 普通账号个人空间 | 我的组织、申请和邀请 |
 | `/personal/campus` | 见页面权限布局 | 当前页面 |
 | `/personal/carits` | 见页面权限布局 | 当前页面 |
 | `/personal/contests` | 见页面权限布局 | 当前页面 |

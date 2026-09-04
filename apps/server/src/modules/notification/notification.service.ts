@@ -1,11 +1,14 @@
 import crypto from 'crypto'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import { getUserDisplayName } from '../team/team.utils'
 import type { MemberType, TeamScope } from '../team/team.types'
 
 type NotificationInput = {
   userId: string
-  scope: TeamScope
+  scope?: TeamScope
+  contextType?: 'account' | 'organization'
+  organizationId?: string | null
   type: string
   title: string
   body: string
@@ -14,15 +17,33 @@ type NotificationInput = {
   sourceId: string
 }
 
+type NotificationDb = typeof prisma | Prisma.TransactionClient
+
+function notificationContext(input: NotificationInput) {
+  const contextType = input.contextType || (input.scope === 'campus' && input.organizationId ? 'organization' : 'account')
+  const organizationId = contextType === 'organization' ? input.organizationId || null : null
+  return {
+    scope: contextType === 'organization' ? 'campus' as const : 'personal' as const,
+    contextType,
+    contextKey: contextType === 'organization' && organizationId ? `organization:${organizationId}` : 'account',
+    organizationId,
+  }
+}
+
 function teamHref(teamId: string) {
   return `team:${teamId}`
 }
 
 export const notificationService = {
-  async create(input: NotificationInput) {
-    return prisma.userNotification.upsert({
-      where: { userId_scope_sourceType_sourceId: { userId: input.userId, scope: input.scope, sourceType: input.sourceType, sourceId: input.sourceId } },
-      create: { id: crypto.randomUUID(), ...input },
+  async create(input: NotificationInput, db: NotificationDb = prisma) {
+    const context = notificationContext(input)
+    const data = {
+      userId: input.userId, type: input.type, title: input.title, body: input.body,
+      href: input.href, sourceType: input.sourceType, sourceId: input.sourceId, ...context,
+    }
+    return db.userNotification.upsert({
+      where: { userId_contextKey_type_sourceType_sourceId: { userId: input.userId, contextKey: context.contextKey, type: input.type, sourceType: input.sourceType, sourceId: input.sourceId } },
+      create: { id: crypto.randomUUID(), ...data },
       update: { type: input.type, title: input.title, body: input.body, href: input.href, readAt: null }
     })
   },
@@ -37,7 +58,8 @@ export const notificationService = {
       body: `${inviterName} 邀请你加入「${input.teamName}」`,
       href: teamHref(input.teamId),
       sourceType: 'team_invitation',
-      sourceId: input.invitationId
+      sourceId: input.invitationId,
+      organizationId: input.organizationId,
     })
   },
 
@@ -51,7 +73,8 @@ export const notificationService = {
       body: `${applicantName} 申请加入「${input.teamName}」`,
       href: teamHref(input.teamId),
       sourceType: 'team_join_request',
-      sourceId: input.requestId
+      sourceId: input.requestId,
+      organizationId: input.organizationId,
     })))
   },
 
@@ -64,7 +87,8 @@ export const notificationService = {
       body: input.approved ? `你已加入「${input.teamName}」` : `「${input.teamName}」未通过你的加入申请`,
       href: teamHref(input.teamId),
       sourceType: 'team_join_decision',
-      sourceId: input.requestId
+      sourceId: input.requestId,
+      organizationId: input.organizationId,
     })
   },
 
@@ -78,7 +102,8 @@ export const notificationService = {
       body: input.accepted ? `${memberName} 已加入「${input.teamName}」` : `${memberName} 拒绝加入「${input.teamName}」`,
       href: teamHref(input.teamId),
       sourceType: 'team_invitation_response',
-      sourceId: input.invitationId
+      sourceId: input.invitationId,
+      organizationId: input.organizationId,
     })
   },
 

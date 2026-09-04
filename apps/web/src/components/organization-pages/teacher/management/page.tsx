@@ -12,9 +12,10 @@ import StudentsManagementContent from '@/components/management/StudentsManagemen
 import TeachersManagementContent from '@/components/management/TeachersManagementContent'
 import { WalletPage } from '@/components/wallet/WalletPage'
 import { apiClient } from '@/lib/apiClient'
+import { JoinApplicationsManagement, OrganizationInvitationsManagement } from '@/components/organization/OrganizationJoinManagement'
 import styles from '@/components/ranking/RankingPage.module.css'
 
-type Tab = 'students' | 'teachers' | 'wallet'
+type Tab = 'students' | 'teachers' | 'applications' | 'invitations' | 'wallet'
 
 export default function CampusManagementPage() {
   const { user } = useAuth()
@@ -26,8 +27,9 @@ export default function CampusManagementPage() {
   const role = user?.organizationRole || user?.role
   const isPrincipal = role === 'school_principal'
   const requestedTab = searchParams.get('tab')
-  const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'wallet' ? 'wallet' : 'students'
+  const resolvedTab: Tab = requestedTab === 'teachers' && isPrincipal ? 'teachers' : requestedTab === 'applications' || requestedTab === 'invitations' || requestedTab === 'wallet' ? requestedTab : 'students'
   const [activeTab, setActiveTab] = useState<Tab>(resolvedTab)
+  const [pending, setPending] = useState({ applications: 0, invitations: 0 })
 
   useEffect(() => {
     if (params.organizationId) return
@@ -41,8 +43,18 @@ export default function CampusManagementPage() {
   const items = useMemo(() => [
     { value: 'students', label: '学生' },
     ...(isPrincipal ? [{ value: 'teachers', label: '教师' }] : []),
+    { value: 'applications', label: `加入申请${pending.applications ? ` ${pending.applications}` : ''}` },
+    { value: 'invitations', label: `邀请记录${pending.invitations ? ` ${pending.invitations}` : ''}` },
     { value: 'wallet', label: '校园资产' },
-  ], [isPrincipal])
+  ], [isPrincipal, pending])
+
+  useEffect(() => {
+    if (!organizationId) return
+    void Promise.all([
+      apiClient.get<{ pending: number }>(`/api/organizations/${organizationId}/join-applications?pageSize=1`),
+      apiClient.get<{ pending: number }>(`/api/organizations/${organizationId}/invitations?pageSize=1`),
+    ]).then(([applications, invitations]) => setPending({ applications: applications.data?.pending || 0, invitations: invitations.data?.pending || 0 }))
+  }, [organizationId, activeTab])
 
   useEffect(() => { setActiveTab(resolvedTab) }, [resolvedTab])
 
@@ -64,6 +76,8 @@ export default function CampusManagementPage() {
         <SegmentedControl label="管理内容" value={activeTab} onChange={setTab} items={items} />
         {activeTab === 'students' && <StudentsManagementContent />}
         {activeTab === 'teachers' && isPrincipal && <TeachersManagementContent />}
+        {activeTab === 'applications' && organizationId && <JoinApplicationsManagement organizationId={organizationId} isPrincipal={isPrincipal} initialApplicationId={searchParams.get('applicationId')} />}
+        {activeTab === 'invitations' && organizationId && <OrganizationInvitationsManagement organizationId={organizationId} isPrincipal={isPrincipal} />}
         {activeTab === 'wallet' && organizationId && <WalletPage embedded scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />}
         {activeTab === 'wallet' && !organizationId && <Empty title="未找到校园" description="当前账号没有可访问的校园资产。" />}
       </div>

@@ -23,7 +23,7 @@ function notificationEndpoint(handler: (req: AuthRequest, res: Response) => Prom
 }
 
 notificationRouter.get('/', notificationEndpoint(async (req, res) => {
-  res.json({ success: true, data: await listNotifications(req.user!) })
+  res.json({ success: true, data: await listNotifications(req.user!, req.query) })
 }))
 
 notificationRouter.patch('/:id/read', notificationEndpoint(async (req, res) => {

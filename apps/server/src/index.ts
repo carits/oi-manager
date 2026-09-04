@@ -34,6 +34,7 @@ import { archivedProblemsRouter } from './routes/archived-problems'
 import { rankingRouter } from './modules/ranking/ranking.routes'
 import { meRouter } from './routes/me'
 import { notificationRouter } from './modules/notification/notification.routes'
+import { organizationJoinRouter } from './modules/organization-join/organization-join.routes'
 import { caritsRouter } from './modules/carits/carits.routes'
 import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
 import { contributionRouter } from './modules/contribution/contribution.routes'
@@ -140,6 +141,7 @@ app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目
 app.use('/api/rankings', rankingRouter)
 app.use('/api/me', meRouter)
 app.use('/api/notifications', authenticate, notificationRouter)
+app.use('/api', organizationJoinRouter)
 app.use('/api/carits', authenticate, caritsRouter)
 app.use('/api/platform-admin/ai', authenticate, aiTokenAdminRouter)
 app.use('/api/contributions', authenticate, contributionRouter)

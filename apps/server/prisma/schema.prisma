@@ -1212,11 +1212,15 @@ model Organization {
   name                     String
   type                     String                                @default("school")
   status                   String                                @default("active")
+  joinPolicy               String                                @default("invite_only")
   description              String?
   createdAt                DateTime                              @default(now())
   updatedAt                DateTime                              @updatedAt
   School                   School?
   Membership               OrganizationMembership[]
+  JoinApplications         OrganizationJoinApplication[]
+  Invitations              OrganizationInvitation[]
+  AuditLogs                OrganizationAuditLog[]
   CaritsAccount            CaritsAccount?                        @relation("CaritsAccountOrganization")
   CaritsTransactions       CaritsTransaction[]                   @relation("CaritsTransactionOrganization")
   ContributionAttributions OrganizationContributionAttribution[]
@@ -1251,10 +1255,84 @@ model OrganizationMembership {
   TeacherMilestones        Milestone[]                 @relation("MilestoneTeacherMembership")
   FormerPrincipalTransfers PrincipalTransferLog[]      @relation("FormerPrincipalMembership")
   NewPrincipalTransfers    PrincipalTransferLog[]      @relation("NewPrincipalMembership")
+  ReviewedJoinApplications OrganizationJoinApplication[] @relation("JoinApplicationReviewerMembership")
+  SentInvitations          OrganizationInvitation[]     @relation("InvitationSenderMembership")
+  AssignedInvitations      OrganizationInvitation[]     @relation("InvitationHeadTeacherMembership")
 
   @@unique([organizationId, userId])
   @@index([userId, status])
   @@index([organizationId, status])
+}
+
+model OrganizationJoinApplication {
+  id                         String                 @id
+  organizationId             String
+  userId                     String
+  requestedRole              String
+  requestedRelationType      String
+  realName                    String
+  profileData                 Json?
+  message                     String?
+  status                      String                 @default("pending")
+  reviewedByUserId            String?
+  reviewedByMembershipId      String?
+  reviewedAt                  DateTime?
+  decisionMessage             String?
+  internalReviewNote          String?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  Organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  User                       User                   @relation("JoinApplicationApplicant", fields: [userId], references: [id], onDelete: Restrict)
+  ReviewedByUser             User?                  @relation("JoinApplicationReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  ReviewedByMembership       OrganizationMembership? @relation("JoinApplicationReviewerMembership", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([userId, status, createdAt])
+}
+
+model OrganizationInvitation {
+  id                       String                  @id
+  organizationId           String
+  userId                   String
+  memberRole               String
+  relationType             String
+  invitedByUserId          String
+  invitedByMembershipId    String
+  headTeacherMembershipId  String?
+  profileData              Json?
+  message                  String?
+  status                   String                  @default("pending")
+  expiresAt                DateTime?
+  respondedAt              DateTime?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  Organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  User                     User                    @relation("OrganizationInvitee", fields: [userId], references: [id], onDelete: Restrict)
+  InvitedByUser            User                    @relation("OrganizationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  InvitedByMembership      OrganizationMembership  @relation("InvitationSenderMembership", fields: [invitedByMembershipId], references: [id], onDelete: Restrict)
+  HeadTeacherMembership    OrganizationMembership? @relation("InvitationHeadTeacherMembership", fields: [headTeacherMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([expiresAt, status])
+}
+
+model OrganizationAuditLog {
+  id              String       @id
+  organizationId  String
+  actorUserId     String?
+  actorMembershipId String?
+  action          String
+  targetUserId    String?
+  sourceType      String?
+  sourceId        String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+  Organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([targetUserId, createdAt])
 }
 
 model OrganizationStudentProfile {
@@ -2242,6 +2320,10 @@ model User {
   UserNotification          UserNotification[]
   UserProblemContent        UserProblemContent[]
   OrganizationMembership    OrganizationMembership[]
+  OrganizationJoinApplications OrganizationJoinApplication[] @relation("JoinApplicationApplicant")
+  ReviewedOrganizationJoinApplications OrganizationJoinApplication[] @relation("JoinApplicationReviewer")
+  OrganizationInvitations   OrganizationInvitation[] @relation("OrganizationInvitee")
+  SentOrganizationInvitations OrganizationInvitation[] @relation("OrganizationInviter")
   CaritsAccount             CaritsAccount?              @relation("CaritsAccountUser")
   CaritsTransactions        CaritsTransaction[]         @relation("CaritsTransactionOperator")
   ContributionEvents        ContributionEvent[]         @relation("ContributionActor")
@@ -2255,6 +2337,9 @@ model UserNotification {
   id         String    @id
   userId     String
   scope      String
+  contextType String    @default("account")
+  contextKey  String    @default("account")
+  organizationId String?
   type       String
   title      String
   body       String
@@ -2265,9 +2350,10 @@ model UserNotification {
   createdAt  DateTime  @default(now())
   User       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, scope, sourceType, sourceId])
+  @@unique([userId, contextKey, type, sourceType, sourceId])
   @@index([userId, scope, readAt, createdAt])
   @@index([userId, scope, createdAt])
+  @@index([userId, contextKey, readAt, createdAt])
 }
 
 model UserArchivedProblem {

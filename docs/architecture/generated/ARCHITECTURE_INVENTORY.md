@@ -13,10 +13,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 103 |
+| Prisma models | 106 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
-| Module route adapters | 41 |
+| Module route adapters | 42 |
 | systemd units | 8 |
 | Referenced environment keys | 437 |
 
@@ -56,6 +56,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/carits/carits.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
+- `apps/server/src/modules/organization-join/organization-join.routes.ts`
 - `apps/server/src/modules/platform-binding/platform-binding.routes.ts`
 - `apps/server/src/modules/problem/problem.ai.routes.ts`
 - `apps/server/src/modules/problem/problem.candidate.routes.ts`
@@ -128,7 +129,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OjFetchJob`
 - `OjPlatformConfig`
 - `Organization`
+- `OrganizationAuditLog`
 - `OrganizationContributionAttribution`
+- `OrganizationInvitation`
+- `OrganizationJoinApplication`
 - `OrganizationMembership`
 - `OrganizationStudentProfile`
 - `OrganizationTeacherProfile`

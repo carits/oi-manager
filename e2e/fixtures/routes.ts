@@ -6,6 +6,7 @@ export type RouteOwner = AuthRole | 'public'
 export const routePatterns = [
   '/',
   '/account/platform-bindings',
+  '/account/notifications',
   '/account/profile',
   '/account/security',
   '/account/wallet',
@@ -33,6 +34,7 @@ export const routePatterns = [
   '/personal/contests/[id]',
   '/personal/contests/[id]/statements',
   '/personal/contributions',
+  '/personal/organizations',
   '/personal/problem-lists',
   '/personal/problem-lists/[id]',
   '/personal/problem-lists/[id]/edit',

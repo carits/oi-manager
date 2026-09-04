@@ -61,12 +61,14 @@ async function schoolFor(organizationId: string) {
 
 export async function getCampus(actor: OrganizationActor) {
   const school = await schoolFor(actor.organizationId)
+  const organization = await prisma.organization.findUnique({ where: { id: actor.organizationId }, select: { joinPolicy: true } })
   const principal = school.currentPrincipalMembershipId
     ? await prisma.organizationTeacherProfile.findUnique({ where: { membershipId: school.currentPrincipalMembershipId }, select: { name: true, title: true } })
     : null
   const canViewContact = actor.role === 'school_principal'
   return {
     ...school,
+    joinPolicy: organization?.joinPolicy || 'invite_only',
     principal,
     contactPhone: canViewContact ? school.contactPhone : maskContact(school.contactPhone),
     contactEmail: canViewContact ? school.contactEmail : maskEmail(school.contactEmail),

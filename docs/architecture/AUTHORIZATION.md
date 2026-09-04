@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-27
+last_verified: 2026-09-04
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -50,6 +50,8 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 `organizationId` 是 `Organization.id`，用于请求头 `X-OI-Organization-ID` 和成员关系查询；
 `schoolId` 是 `School.id`，仅在组织具有关联学校时返回。二者不能互换。
+
+组织加入申请和邀请不会改变账号全局角色。普通账号始终以 `user` 作为平台身份，进入学校 URL 后才从有效 Membership 解析学生、教师或负责人身份。完整状态机、审批边界和通知上下文见 [组织申请、邀请与成员关系](ORGANIZATION_JOIN.md)。
 
 ### 提交组织归属
 

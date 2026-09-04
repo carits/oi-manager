@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-01
+last_verified: 2026-09-04
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -45,6 +45,7 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 底部固定“取消 → 主操作”；提交中禁用重复操作、ESC、遮罩关闭和关闭按钮。
 - dirty 表单关闭前确认；嵌套弹窗只有顶层处理 Escape/Tab，关闭后恢复触发点焦点。
 - 640px 以下 Dialog 全屏，关键操作保持可见；桌面完整验收 1440×900 与 1280×720。
+- 组织申请、邀请和审核统一使用 FormDialog；不为该业务新增 Drawer。学校管理继续在同一页面使用 SegmentedControl 切换学生、教师、申请、邀请和资产。
 - 提交详情等长代码 Dialog 使用 page 滚动：纵向滚动条只允许出现在浏览器最右侧的 Dialog 外层；代码区
   只在超长单行时横向滚动，不得再设置固定高度或内部纵向滚动。弹窗和独立详情页必须复用同一内容组件。
 - 403/404 属于永久详情状态，展示明确原因和关闭/返回操作，不显示“重试”；网络、限流和 5xx 才提供

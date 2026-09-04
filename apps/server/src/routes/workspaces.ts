@@ -8,11 +8,12 @@ import {
   WorkspaceActor,
   WorkspaceError,
 } from '../modules/workspace/application/workspace.service'
+import { OrganizationJoinError } from '../modules/organization-join/organization-join.service'
 
 export const workspaceRouter = Router()
 
 function actor(req: AuthRequest): WorkspaceActor {
-  return { userId: req.user!.userId, role: req.user!.role, organizationId: req.user!.organizationId }
+  return { userId: req.user!.userId, role: req.user!.role, organizationId: req.user!.organizationId, organizationMembershipId: req.user!.organizationMembershipId }
 }
 
 function endpoint(label: string, handler: (req: AuthRequest, res: Response) => Promise<unknown>) {
@@ -26,6 +27,9 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
           ...(error.code ? { code: error.code } : {}),
           message: error.message,
         })
+      }
+      if (error instanceof OrganizationJoinError) {
+        return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
       }
       throw error
     }
