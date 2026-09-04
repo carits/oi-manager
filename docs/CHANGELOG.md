@@ -18,6 +18,7 @@ source_of_truth: Git history
 - 通知改为账号级与具体组织级上下文聚合，学校邀请在个人空间可见；未读通知与待审核业务数分别计算。
 - 新增“我的组织”、学校管理申请/邀请标签、WorkspaceSwitcher 加入入口和完整消息中心，所有表单复用统一 FormDialog。
 - Prisma、Server/Web/Judge 生产构建、Web 57/57、API 鉴权审计、路由及 UI 门禁通过。生产备份克隆成功应用新增迁移，组织加入与旧邀请迁移 5/5 通过；验证同时修复 clean bootstrap 缺少组织 partial unique index、数据生成关系外键及 Candidate 枚举顺序与升级库不一致的问题。全新安装与生产备份升级均得到 107 张表，规范结构签名一致（SHA-256 `ab451b69…5a6e5d00`）。
+- 发布探针发现并修复组织 Router 的无路径认证中间件误拦 `/api/readiness`；新增公开后继路由回归后，提交 `591fc36` 已推送 `main`。迁移前 31 MiB 备份 `oi_manager_20260904_231337.dump` 已校验，生产迁移与通知 check/apply 完成：0 条旧 Membership 邀请、43 条通知解析到组织、43 条不可可靠归属通知安全退役、复查遗留 0。API 3303→3302，Web BUILD_ID `O-16nqPRAhL2BZapkVbku` 已提升，组织目录/本人组织/通知接口均为 200，Judge 1012 重连认证成功。
 
 ## 2026-09-03
 

@@ -5,7 +5,7 @@ last_verified: 2026-09-04
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-04: 组织申请与加入功能已完成并通过隔离验证，尚未部署。新增学校加入策略、主动申请、独立邀请、组织审计、账号/组织通知上下文、个人组织页、学校审核/邀请管理和消息中心；旧 pending Membership 与 campus 通知提供受保护的 check/apply 迁移。生产备份克隆成功应用新增迁移，组织加入与旧邀请幂等迁移 5/5 通过；clean bootstrap 已补齐组织 partial unique index、数据生成关系外键和 Candidate 枚举历史顺序。全新安装与备份升级均为 107 张表，结构 SHA-256 `ab451b69cf0c87784d71dfe055eaf97a8ecabe7fc57ef9f5bd71e7c55a6e5d00`，Server/Web/Judge 远端生产构建通过。
+- 2026-09-04: 组织申请与加入功能已部署。新增学校加入策略、主动申请、独立邀请、组织审计、账号/组织通知上下文、个人组织页、学校审核/邀请管理和消息中心；旧 pending Membership 与 campus 通知提供受保护的 check/apply 迁移。生产备份克隆迁移和 5/5 定向测试通过，全新安装与备份升级均为 107 张表，结构 SHA-256 `ab451b69cf0c87784d71dfe055eaf97a8ecabe7fc57ef9f5bd71e7c55a6e5d00`；发布探针发现的 Router 认证越界已由 `591fc36` 修复并增加回归。迁移前 31 MiB 备份已校验；生产 check/apply 为旧邀请 0、组织通知解析 43、安全退役 43、遗留 0。API 活动 slot 为 3302，Web BUILD_ID `O-16nqPRAhL2BZapkVbku`，组织三类读取接口 200，Worker/Executor/Judge/Web/Router 健康且 Judge 已重新认证注册。
 
 - 2026-09-03: Carits 平台题库与其他题库分区已恢复并部署。个人题库默认进入“Carits 平台题库”，教师在“校内题库 / 平台题库”之下使用相同来源分区；“其他题库”单独提供洛谷、Codeforces 等平台筛选，关键词跨标签保留，平台筛选与页码重置。服务端 `sourceGroup=carits|external` 在数据库分页前过滤，旧无参数请求继续兼容混合结果；校内题库和平台管理后台未改变。Server 定向 11/11、Web 57/57、隔离 Chromium 桌面/紧凑视口 10/10、Server/Web 构建及 UI/文档/架构门禁通过。提交 `23759aa`、`8c2853d` 已推送 `main`，API 3302→3303，Web BUILD_ID `1OkXkhjAW_xrnoWvmGEG3` 已提升至公网 3000；无数据库迁移，readiness 和后台服务健康。
 
