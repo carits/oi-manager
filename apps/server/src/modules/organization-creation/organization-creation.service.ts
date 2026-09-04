@@ -199,7 +199,9 @@ export async function decideOrganizationApplication(actor: CreationActor, id: st
     }, { isolationLevel: 'Serializable' })
   } catch (error) {
     if (error instanceof SchoolNameConflictError) fail(409, 'ORGANIZATION_NAME_CONFLICT', error.message)
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') fail(409, 'ORGANIZATION_CREATION_APPLICATION_ALREADY_PROCESSED', '该创建申请已被其他审核操作处理')
+    if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === 'P2034' || (error.code === 'P2010' && String(error.meta?.code) === '40001'))) {
+      fail(409, 'ORGANIZATION_CREATION_APPLICATION_ALREADY_PROCESSED', '该创建申请已被其他审核操作处理')
+    }
     throw error
   }
 }
