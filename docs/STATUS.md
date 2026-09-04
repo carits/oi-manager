@@ -5,6 +5,8 @@ last_verified: 2026-09-04
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-05: 组织创建申请已上线。普通账号可在个人组织页提交/撤销学校创建申请，超管在学校管理中审核；批准使用 Serializable 事务和 advisory lock 原子创建 Organization、School、`school_principal/employee` Membership、TeacherProfile、负责人指针、平台/组织审计与通知，不改写申请人全局角色。支持单 pending、24 小时 3 次限制、拒绝同名 24 小时冷却、名称 NFKC 防重和并发审批 409；生产历史 `student/teacher/school_principal` 账号作为普通账号兼容。学校管理的加入策略已从邀请列表拆到独立“加入设置”。空库安装为 109 表/39 迁移，隔离创建流程 7/7、加入回归 6/6、Web 57/57、三端构建、Prisma/UI/API/架构/文档门禁通过。正式迁移前备份 `oi_manager_20260905_070802.dump` 为 31 MiB，SHA-256 `0368dada7d72bbf614d72296b731df40e3160fb672e107abf7b0b88de62e4ee7`；备份克隆检测到 4,903 条历史 School 中 8 组/875 条标准化重名，因此按规则未回填、未合并，新写入以有界旧名扫描防止绕过。API 活动 slot 为 3302，Web BUILD_ID `l6pi2JoGHAEMSgUVVb4uA`，真实超管/历史负责人列表均 200，readiness 与服务健康。
+
 - 2026-09-04: 组织申请与加入功能已部署。新增学校加入策略、主动申请、独立邀请、组织审计、账号/组织通知上下文、个人组织页、学校审核/邀请管理和消息中心；旧 pending Membership 与 campus 通知提供受保护的 check/apply 迁移。生产备份克隆迁移和 5/5 定向测试通过，全新安装与备份升级均为 107 张表，结构 SHA-256 `ab451b69cf0c87784d71dfe055eaf97a8ecabe7fc57ef9f5bd71e7c55a6e5d00`；发布探针发现的 Router 认证越界已由 `591fc36` 修复并增加回归。迁移前 31 MiB 备份已校验；生产 check/apply 为旧邀请 0、组织通知解析 43、安全退役 43、遗留 0。API 活动 slot 为 3302，Web BUILD_ID `O-16nqPRAhL2BZapkVbku`，组织三类读取接口 200，Worker/Executor/Judge/Web/Router 健康且 Judge 已重新认证注册。
 
 - 2026-09-03: Carits 平台题库与其他题库分区已恢复并部署。个人题库默认进入“Carits 平台题库”，教师在“校内题库 / 平台题库”之下使用相同来源分区；“其他题库”单独提供洛谷、Codeforces 等平台筛选，关键词跨标签保留，平台筛选与页码重置。服务端 `sourceGroup=carits|external` 在数据库分页前过滤，旧无参数请求继续兼容混合结果；校内题库和平台管理后台未改变。Server 定向 11/11、Web 57/57、隔离 Chromium 桌面/紧凑视口 10/10、Server/Web 构建及 UI/文档/架构门禁通过。提交 `23759aa`、`8c2853d` 已推送 `main`，API 3302→3303，Web BUILD_ID `1OkXkhjAW_xrnoWvmGEG3` 已提升至公网 3000；无数据库迁移，readiness 和后台服务健康。
