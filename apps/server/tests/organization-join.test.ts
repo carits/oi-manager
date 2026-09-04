@@ -13,6 +13,7 @@ import { generateTestToken } from './helpers/testToken'
 const app = express()
 app.use(express.json())
 app.use('/api', organizationJoinRouter)
+app.get('/api/readiness', (_req, res) => res.json({ status: 'ready' }))
 app.use('/api/notifications', authenticate, notificationRouter)
 
 let organizationId = '', principalToken = '', teacherToken = '', applicantToken = '', applicantId = '', teacherMembershipId = ''
@@ -35,6 +36,12 @@ beforeEach(async () => {
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
 
 describe('organization join workflow', () => {
+  it('does not intercept unrelated public API routes', async () => {
+    const response = await request(app).get('/api/readiness')
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('ready')
+  })
+
   it('accepts a student application and makes a teacher the assigned teacher', async () => {
     const created = await request(app).post('/api/organization-join-applications').set(auth(applicantToken)).send({ organizationId, requestedRole: 'student', requestedRelationType: 'enrolled', realName: '申请学生', profileData: { enrollmentYear: 2026 } })
     expect(created.status).toBe(201)

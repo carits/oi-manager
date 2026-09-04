@@ -37,52 +37,50 @@ function endpoint(handler: (req: AuthRequest, res: Response) => Promise<unknown>
   }, '组织加入操作失败')
 }
 
-organizationJoinRouter.use(authenticate)
-
-organizationJoinRouter.get('/organizations', endpoint(async (req, res) => {
+organizationJoinRouter.get('/organizations', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await listOrganizationDirectory(actor(req), req.query) })
 }))
-organizationJoinRouter.get('/me/organizations', endpoint(async (req, res) => {
+organizationJoinRouter.get('/me/organizations', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await listMyOrganizations(actor(req)) })
 }))
-organizationJoinRouter.get('/me/organization-join-applications', endpoint(async (req, res) => {
+organizationJoinRouter.get('/me/organization-join-applications', authenticate, endpoint(async (req, res) => {
   const data = await listMyOrganizations(actor(req)); res.json({ success: true, data: data.applications })
 }))
-organizationJoinRouter.post('/organization-join-applications', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organization-join-applications', authenticate, endpoint(async (req, res) => {
   res.status(201).json({ success: true, data: await createJoinApplication(actor(req), req.body || {}) })
 }))
-organizationJoinRouter.post('/organization-join-applications/:id/cancel', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organization-join-applications/:id/cancel', authenticate, endpoint(async (req, res) => {
   await cancelJoinApplication(actor(req), req.params.id); res.json({ success: true })
 }))
 
-organizationJoinRouter.get('/organizations/:organizationId/join-applications', endpoint(async (req, res) => {
+organizationJoinRouter.get('/organizations/:organizationId/join-applications', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await listJoinApplications(actor(req), req.params.organizationId, req.query) })
 }))
-organizationJoinRouter.get('/organizations/:organizationId/join-applications/:id', endpoint(async (req, res) => {
+organizationJoinRouter.get('/organizations/:organizationId/join-applications/:id', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await getJoinApplication(actor(req), req.params.organizationId, req.params.id) })
 }))
-organizationJoinRouter.post('/organizations/:organizationId/join-applications/:id/approve', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organizations/:organizationId/join-applications/:id/approve', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await decideJoinApplication(actor(req), req.params.organizationId, req.params.id, 'approve', req.body || {}) })
 }))
-organizationJoinRouter.post('/organizations/:organizationId/join-applications/:id/reject', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organizations/:organizationId/join-applications/:id/reject', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await decideJoinApplication(actor(req), req.params.organizationId, req.params.id, 'reject', req.body || {}) })
 }))
 
-organizationJoinRouter.get('/organizations/:organizationId/invitations', endpoint(async (req, res) => {
+organizationJoinRouter.get('/organizations/:organizationId/invitations', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await listOrganizationInvitations(actor(req), req.params.organizationId, req.query) })
 }))
-organizationJoinRouter.post('/organizations/:organizationId/invitations', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organizations/:organizationId/invitations', authenticate, endpoint(async (req, res) => {
   res.status(201).json({ success: true, data: await createOrganizationInvitation(actor(req), req.params.organizationId, req.body || {}) })
 }))
-organizationJoinRouter.post('/organizations/:organizationId/invitations/:id/revoke', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organizations/:organizationId/invitations/:id/revoke', authenticate, endpoint(async (req, res) => {
   await revokeOrganizationInvitation(actor(req), req.params.organizationId, req.params.id); res.json({ success: true })
 }))
-organizationJoinRouter.post('/organization-invitations/:id/accept', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organization-invitations/:id/accept', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await respondToInvitation(actor(req), req.params.id, 'accept') })
 }))
-organizationJoinRouter.post('/organization-invitations/:id/decline', endpoint(async (req, res) => {
+organizationJoinRouter.post('/organization-invitations/:id/decline', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await respondToInvitation(actor(req), req.params.id, 'decline') })
 }))
-organizationJoinRouter.patch('/organizations/:organizationId/join-policy', endpoint(async (req, res) => {
+organizationJoinRouter.patch('/organizations/:organizationId/join-policy', authenticate, endpoint(async (req, res) => {
   res.json({ success: true, data: await updateJoinPolicy(actor(req), req.params.organizationId, req.body?.joinPolicy) })
 }))
