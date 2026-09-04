@@ -83,4 +83,12 @@ describe('organization creation applications', () => {
     expect((await prisma.school.findUniqueOrThrow({where:{id:school.id}})).nameKey).toBe('演示 学校')
     expect((await applySchoolNameKeyMigration()).updated).toBe(0)
   })
+
+  it('blocks a new application that matches a legacy school without nameKey', async () => {
+    const organization=await prisma.organization.create({data:{id:crypto.randomUUID(),name:'历史 学校',type:'school'}})
+    await prisma.school.create({data:{id:crypto.randomUUID(),name:'ｌｅｇａｃｙ　Ｓｃｈｏｏｌ',organizationId:organization.id,nameKey:null}})
+    const response=await request(app).post('/api/organization-creation-applications').set(auth(applicantToken)).send(payload('legacy school'))
+    expect(response.status).toBe(409)
+    expect(response.body.code).toBe('ORGANIZATION_NAME_CONFLICT')
+  })
 })

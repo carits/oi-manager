@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { paginatedResponse } from '../../lib/pagination'
 import { prisma } from '../../prisma'
 import { notificationService } from '../notification/notification.service'
-import { createSchoolOrganizationCore, normalizeSchoolName, SchoolNameConflictError } from '../organization/application/school-creation.service'
+import { createSchoolOrganizationCore, findLegacySchoolNameConflict, normalizeSchoolName, SchoolNameConflictError } from '../organization/application/school-creation.service'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const SCHOOL_TYPES = new Set(['小学', '初中', '高中', '小学+初中', '初中+高中', '小学+初中+高中'])
@@ -76,7 +76,7 @@ export async function createOrganizationApplication(actor: CreationActor, body: 
     return await prisma.$transaction(async tx => {
       const user = await tx.user.findUnique({ where: { id: actor.userId }, select: { status: true, role: true } })
       if (!user || user.status !== 'active' || user.role !== 'user') fail(409, 'ORGANIZATION_CREATION_APPLICANT_INVALID', '当前账号不能申请创建学校')
-      if (await tx.school.findUnique({ where: { nameKey: input.nameKey }, select: { organizationId: true } })) {
+      if (await tx.school.findUnique({ where: { nameKey: input.nameKey }, select: { organizationId: true } }) || await findLegacySchoolNameConflict(tx, input.nameKey)) {
         fail(409, 'ORGANIZATION_NAME_CONFLICT', '该学校已存在，请在学校目录中申请加入')
       }
       if (await tx.organizationCreationApplication.findFirst({ where: { applicantUserId: actor.userId, status: 'pending' }, select: { id: true } })) {

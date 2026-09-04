@@ -36,6 +36,14 @@ export async function lockSchoolCreation(tx: Prisma.TransactionClient) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SCHOOL_CREATION_LOCK})`
 }
 
+export async function findLegacySchoolNameConflict(tx: Prisma.TransactionClient, nameKey: string, excludeId?: string) {
+  const rows = await tx.school.findMany({
+    where: { nameKey: null, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    select: { id: true, name: true },
+  })
+  return rows.find(row => normalizeSchoolName(row.name) === nameKey) || null
+}
+
 export async function createSchoolOrganizationCore(
   tx: Prisma.TransactionClient,
   input: SchoolCreationInput,
@@ -43,7 +51,7 @@ export async function createSchoolOrganizationCore(
 ) {
   await lockSchoolCreation(tx)
   const nameKey = normalizeSchoolName(input.name)
-  if (!nameKey || await tx.school.findUnique({ where: { nameKey }, select: { id: true } })) {
+  if (!nameKey || await tx.school.findUnique({ where: { nameKey }, select: { id: true } }) || await findLegacySchoolNameConflict(tx, nameKey)) {
     throw new SchoolNameConflictError()
   }
 

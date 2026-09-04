@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
-import { createSchoolOrganizationCore, lockSchoolCreation, normalizeSchoolName, SchoolNameConflictError } from './school-creation.service'
+import { createSchoolOrganizationCore, findLegacySchoolNameConflict, lockSchoolCreation, normalizeSchoolName, SchoolNameConflictError } from './school-creation.service'
 
 export class PlatformOrganizationError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -141,7 +141,7 @@ export async function updatePlatformOrganization(organizationId: string, body: a
     if (name) {
       await lockSchoolCreation(tx)
       nameKey = normalizeSchoolName(name)
-      const duplicate = await tx.school.findFirst({ where: { nameKey, id: { not: school.id } }, select: { id: true } })
+      const duplicate = await tx.school.findFirst({ where: { nameKey, id: { not: school.id } }, select: { id: true } }) || await findLegacySchoolNameConflict(tx, nameKey, school.id)
       if (duplicate) throw new SchoolNameConflictError()
     }
     await tx.school.update({
