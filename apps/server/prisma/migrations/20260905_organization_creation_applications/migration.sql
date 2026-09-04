@@ -1,4 +1,4 @@
-+ALTER TABLE "School" ADD COLUMN "nameKey" TEXT;
+ALTER TABLE "School" ADD COLUMN "nameKey" TEXT;
 
 CREATE TABLE "OrganizationCreationApplication" (
   "id" TEXT NOT NULL,
@@ -71,5 +71,4 @@ ALTER TABLE "OrganizationCreationApplication"
 ALTER TABLE "PlatformAuditLog"
   ADD CONSTRAINT "PlatformAuditLog_actorUserId_fkey"
   FOREIGN KEY ("actorUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
 
