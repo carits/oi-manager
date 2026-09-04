@@ -22,6 +22,12 @@ CREATE UNIQUE INDEX "UserProblemContent_active_statement_name_key"
 CREATE UNIQUE INDEX "UserProblemContent_active_solution_owner_key"
   ON "UserProblemContent"("problemId", "userId", "kind")
   WHERE "kind" = 'solution' AND "deletedAt" IS NULL;
+CREATE UNIQUE INDEX "OrganizationJoinApplication_pending_unique"
+  ON "OrganizationJoinApplication"("organizationId", "userId")
+  WHERE "status" = 'pending';
+CREATE UNIQUE INDEX "OrganizationInvitation_pending_unique"
+  ON "OrganizationInvitation"("organizationId", "userId")
+  WHERE "status" = 'pending';
 
 CREATE OR REPLACE FUNCTION "carits_prevent_posted_transaction_mutation"()
 RETURNS TRIGGER AS $$
