@@ -17,7 +17,7 @@ source_of_truth: Git history
 - 普通教师只能邀请和审批学生，批准后学生固定归属该教师；教师申请仅负责人可处理。active/disabled/archived Membership 分别执行阻止、禁止自助恢复和原位恢复。
 - 通知改为账号级与具体组织级上下文聚合，学校邀请在个人空间可见；未读通知与待审核业务数分别计算。
 - 新增“我的组织”、学校管理申请/邀请标签、WorkspaceSwitcher 加入入口和完整消息中心，所有表单复用统一 FormDialog。
-- Prisma、Server/Web 生产构建、Web 57/57、API 鉴权审计、路由及 UI 门禁通过。生产备份克隆成功应用新增迁移，组织加入与旧邀请迁移 5/5 通过；验证同时修复 clean bootstrap 缺少组织 partial unique index、数据生成关系外键及 Candidate 枚举顺序与升级库不一致的问题。
+- Prisma、Server/Web/Judge 生产构建、Web 57/57、API 鉴权审计、路由及 UI 门禁通过。生产备份克隆成功应用新增迁移，组织加入与旧邀请迁移 5/5 通过；验证同时修复 clean bootstrap 缺少组织 partial unique index、数据生成关系外键及 Candidate 枚举顺序与升级库不一致的问题。全新安装与生产备份升级均得到 107 张表，规范结构签名一致（SHA-256 `ab451b69…5a6e5d00`）。
 
 ## 2026-09-03
 
