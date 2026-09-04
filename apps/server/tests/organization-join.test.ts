@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { organizationJoinRouter } from '../src/modules/organization-join/organization-join.routes'
 import { notificationRouter } from '../src/modules/notification/notification.routes'
 import { authenticate } from '../src/middleware/auth'
+import { applyOrganizationJoinMigration, inspectOrganizationJoinMigration } from '../src/modules/maintenance/application/organization-join-migration.service'
 import { prisma } from '../src/prisma'
 import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
@@ -75,5 +76,39 @@ describe('organization join workflow', () => {
     const reapplied = await request(app).post('/api/organization-join-applications').set(auth(applicantToken)).send({ organizationId, requestedRole: 'student', realName: '申请学生' })
     expect(reapplied.status).toBe(409)
     expect(reapplied.body.code).toBe('ORGANIZATION_MEMBERSHIP_DISABLED')
+  })
+
+  it('migrates legacy pending memberships to invitations idempotently', async () => {
+    const principalMembership = await prisma.organizationMembership.findFirstOrThrow({
+      where: { organizationId, memberRole: 'school_principal', status: 'active' },
+    })
+    const legacyId = crypto.randomUUID()
+    await prisma.organizationMembership.create({
+      data: {
+        id: legacyId,
+        organizationId,
+        userId: applicantId,
+        memberRole: 'student',
+        relationType: 'school_student',
+        status: 'pending',
+        invitedBy: principalMembership.userId,
+      },
+    })
+
+    const check = await inspectOrganizationJoinMigration()
+    expect(check.legacyInvitations).toBe(1)
+    expect(check.migratableInvitations).toBe(1)
+
+    const first = await applyOrganizationJoinMigration()
+    const second = await applyOrganizationJoinMigration()
+    expect(first.invitationsMigrated).toBe(1)
+    expect(first.relationsNormalized).toBeGreaterThanOrEqual(1)
+    expect(second.invitationsMigrated).toBe(0)
+    expect(second.relationsNormalized).toBe(0)
+
+    const invitation = await prisma.organizationInvitation.findUniqueOrThrow({ where: { id: legacyId } })
+    expect(invitation.status).toBe('pending')
+    expect(invitation.relationType).toBe('enrolled')
+    expect(invitation.invitedByMembershipId).toBe(principalMembership.id)
   })
 })
