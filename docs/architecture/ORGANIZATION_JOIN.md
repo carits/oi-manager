@@ -29,7 +29,7 @@ source_of_truth: Prisma schema, organization-join and organization-creation appl
 
 ## 创建学校
 
-只有状态正常且全局角色为 `user` 的账号能提交学校创建申请。一个账号可以同时加入或负责多个学校，但同时最多一条 pending 创建申请，滚动 24 小时最多提交 3 次。被拒绝的同一规范化学校名称对原申请人冷却 24 小时。
+状态正常的普通账号能提交学校创建申请，`super_admin/platform_admin` 不使用个人申请入口。新账号的全局角色为 `user`；生产库中尚未归一的 `student/teacher/school_principal` 历史角色也按普通账号兼容，不在本流程中改写其角色。一个账号可以同时加入或负责多个学校，但同时最多一条 pending 创建申请，滚动 24 小时最多提交 3 次。被拒绝的同一规范化学校名称对原申请人冷却 24 小时。
 
 正式学校名称按 NFKC、去除首尾空白、合并连续空白和小写化生成 `School.nameKey`，数据库全局唯一。超管批准和直接创建共用 `createSchoolOrganizationCore()`：一次事务内创建 Organization、School、`school_principal/employee` Membership、TeacherProfile、负责人指针和审计。批准只增加组织身份，申请人的 `User.role` 仍为 `user`，工作区由 `/api/workspaces` 动态读取。
 

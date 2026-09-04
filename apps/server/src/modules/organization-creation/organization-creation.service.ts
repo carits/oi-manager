@@ -9,6 +9,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const SCHOOL_TYPES = new Set(['小学', '初中', '高中', '小学+初中', '初中+高中', '小学+初中+高中'])
 const SCHOOL_NATURES = new Set(['公办', '民办', '其他'])
 const EDUCATION_SYSTEMS = new Set(['6-3-3', '5-4-3'])
+const LEGACY_ACCOUNT_ROLES = new Set(['user', 'student', 'teacher', 'school_principal'])
 
 export type CreationActor = { userId: string; role: string }
 
@@ -68,14 +69,14 @@ async function writePlatformAudit(tx: Prisma.TransactionClient, actorUserId: str
 }
 
 export async function createOrganizationApplication(actor: CreationActor, body: Record<string, unknown>) {
-  if (actor.role !== 'user') fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '平台管理员不能使用个人组织创建申请')
+  if (!LEGACY_ACCOUNT_ROLES.has(actor.role)) fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '平台管理员不能使用个人组织创建申请')
   const input = validateInput(body)
   const now = new Date()
   const since = new Date(now.getTime() - DAY_MS)
   try {
     return await prisma.$transaction(async tx => {
       const user = await tx.user.findUnique({ where: { id: actor.userId }, select: { status: true, role: true } })
-      if (!user || user.status !== 'active' || user.role !== 'user') fail(409, 'ORGANIZATION_CREATION_APPLICANT_INVALID', '当前账号不能申请创建学校')
+      if (!user || user.status !== 'active' || !LEGACY_ACCOUNT_ROLES.has(user.role)) fail(409, 'ORGANIZATION_CREATION_APPLICANT_INVALID', '当前账号不能申请创建学校')
       if (await tx.school.findUnique({ where: { nameKey: input.nameKey }, select: { organizationId: true } }) || await findLegacySchoolNameConflict(tx, input.nameKey)) {
         fail(409, 'ORGANIZATION_NAME_CONFLICT', '该学校已存在，请在学校目录中申请加入')
       }
@@ -109,7 +110,7 @@ export async function createOrganizationApplication(actor: CreationActor, body: 
 }
 
 export async function listMyOrganizationApplications(actor: CreationActor, query: Record<string, unknown>) {
-  if (actor.role !== 'user') fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '无权查看个人组织创建申请')
+  if (!LEGACY_ACCOUNT_ROLES.has(actor.role)) fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '无权查看个人组织创建申请')
   const page = Math.max(1, Number(query.page) || 1)
   const pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 20))
   const [rows, total] = await Promise.all([
@@ -120,14 +121,14 @@ export async function listMyOrganizationApplications(actor: CreationActor, query
 }
 
 export async function getMyOrganizationApplication(actor: CreationActor, id: string) {
-  if (actor.role !== 'user') fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '无权查看个人组织创建申请')
+  if (!LEGACY_ACCOUNT_ROLES.has(actor.role)) fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '无权查看个人组织创建申请')
   const row = await prisma.organizationCreationApplication.findFirst({ where: { id, applicantUserId: actor.userId }, select: publicSelection() })
   if (!row) fail(404, 'ORGANIZATION_CREATION_APPLICATION_NOT_FOUND', '创建申请不存在')
   return row
 }
 
 export async function cancelOrganizationApplication(actor: CreationActor, id: string) {
-  if (actor.role !== 'user') fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '无权撤销个人组织创建申请')
+  if (!LEGACY_ACCOUNT_ROLES.has(actor.role)) fail(403, 'ORGANIZATION_CREATION_APPLICATION_FORBIDDEN', '无权撤销个人组织创建申请')
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "OrganizationCreationApplication" WHERE id = ${id} FOR UPDATE`
     const current = await tx.organizationCreationApplication.findFirst({ where: { id, applicantUserId: actor.userId } })
@@ -184,7 +185,7 @@ export async function decideOrganizationApplication(actor: CreationActor, id: st
         await notificationService.create({ userId: current.applicantUserId, contextType: 'account', type: 'organization_creation_application_rejected', title: '组织创建申请未通过', body: decisionMessage ? `「${current.name}」未通过：${decisionMessage}` : `「${current.name}」的创建申请未通过`, href: '/personal/organizations', sourceType: 'organization_creation_application', sourceId: id }, tx)
         return updated
       }
-      if (current.Applicant.status !== 'active' || current.Applicant.role !== 'user') fail(409, 'ORGANIZATION_CREATION_APPLICANT_INVALID', '申请人账号状态或角色已变化，不能创建学校')
+      if (current.Applicant.status !== 'active' || !LEGACY_ACCOUNT_ROLES.has(current.Applicant.role)) fail(409, 'ORGANIZATION_CREATION_APPLICANT_INVALID', '申请人账号状态或角色已变化，不能创建学校')
       const created = await createSchoolOrganizationCore(tx, {
         name: current.name, shortName: current.shortName, region: current.region, schoolType: current.schoolType,
         schoolNature: current.schoolNature, educationSystem: current.educationSystem,

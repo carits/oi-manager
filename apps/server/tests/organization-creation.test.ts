@@ -67,6 +67,14 @@ describe('organization creation applications', () => {
     expect((await request(app).get('/api/me/organization-creation-applications').set(auth(superAdminToken))).status).toBe(403)
   })
 
+  it('allows a legacy school principal account to apply for another school without changing its role', async () => {
+    await prisma.user.update({where:{id:applicantId},data:{role:'school_principal'}})
+    const principalToken=generateTestToken({userId:applicantId,username:'legacy-principal',role:'school_principal'})
+    const created=await request(app).post('/api/organization-creation-applications').set(auth(principalToken)).send(payload())
+    expect(created.status).toBe(201)
+    expect((await prisma.user.findUniqueOrThrow({where:{id:applicantId}})).role).toBe('school_principal')
+  })
+
   it('processes concurrent approvals only once', async () => {
     const created=await request(app).post('/api/organization-creation-applications').set(auth(applicantToken)).send(payload())
     const responses=await Promise.all([1,2].map(()=>request(app).post(`/api/platform/organization-creation-applications/${created.body.data.id}/approve`).set(auth(superAdminToken)).send({})))
