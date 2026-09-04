@@ -116,7 +116,7 @@ export async function listMyOrganizationApplications(actor: CreationActor, query
     prisma.organizationCreationApplication.findMany({ where: { applicantUserId: actor.userId }, select: publicSelection(), orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.organizationCreationApplication.count({ where: { applicantUserId: actor.userId } }),
   ])
-  return paginatedResponse(rows, total, page, pageSize)
+  return { ...paginatedResponse(rows, total, page, pageSize), items: rows }
 }
 
 export async function getMyOrganizationApplication(actor: CreationActor, id: string) {
@@ -158,7 +158,7 @@ export async function listOrganizationApplications(actor: CreationActor, query: 
     prisma.organizationCreationApplication.count({ where }),
     prisma.organizationCreationApplication.count({ where: { status: 'pending' } }),
   ])
-  return { ...paginatedResponse(rows, total, page, pageSize), pending }
+  return { ...paginatedResponse(rows, total, page, pageSize), items: rows, pending }
 }
 
 export async function getOrganizationApplication(actor: CreationActor, id: string) {

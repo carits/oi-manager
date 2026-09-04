@@ -32,6 +32,8 @@ describe('organization creation applications', () => {
   it('creates an application and atomically promotes the applicant to principal without changing global role', async () => {
     const created=await request(app).post('/api/organization-creation-applications').set(auth(applicantToken)).send(payload('Ａ　示例学校'))
     expect(created.status).toBe(201)
+    const mine=await request(app).get('/api/me/organization-creation-applications').set(auth(applicantToken))
+    expect(mine.body.data.items).toEqual([expect.objectContaining({id:created.body.data.id,status:'pending'})])
     const approved=await request(app).post(`/api/platform/organization-creation-applications/${created.body.data.id}/approve`).set(auth(superAdminToken)).send({decisionMessage:'资料齐全'})
     expect(approved.status).toBe(200)
     const application=await prisma.organizationCreationApplication.findUniqueOrThrow({where:{id:created.body.data.id}})
