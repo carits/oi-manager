@@ -48,7 +48,7 @@ platformOrganizationRouter.get('/:organizationId', ...superAdminOnly, endpoint('
 }))
 
 platformOrganizationRouter.post('/', ...superAdminOnly, endpoint('创建学校失败', async (req, res) => {
-  res.status(201).json({ success: true, data: await createPlatformOrganization(req.body) })
+  res.status(201).json({ success: true, data: await createPlatformOrganization(req.body, req.user!.userId) })
 }))
 
 platformOrganizationRouter.post('/:organizationId/principal', ...superAdminOnly, endpoint('创建学校负责人失败', async (req, res) => {

@@ -28,6 +28,18 @@ CREATE UNIQUE INDEX "OrganizationJoinApplication_pending_unique"
 CREATE UNIQUE INDEX "OrganizationInvitation_pending_unique"
   ON "OrganizationInvitation"("organizationId", "userId")
   WHERE "status" = 'pending';
+CREATE UNIQUE INDEX "OrganizationCreationApplication_pending_user_unique"
+  ON "OrganizationCreationApplication"("applicantUserId")
+  WHERE "status" = 'pending';
+CREATE UNIQUE INDEX "OrganizationCreationApplication_pending_name_unique"
+  ON "OrganizationCreationApplication"("nameKey")
+  WHERE "status" = 'pending';
+ALTER TABLE "OrganizationCreationApplication"
+  ADD CONSTRAINT "OrganizationCreationApplication_status_check"
+  CHECK ("status" IN ('pending', 'approved', 'rejected', 'cancelled'));
+ALTER TABLE "OrganizationCreationApplication"
+  ADD CONSTRAINT "OrganizationCreationApplication_type_check"
+  CHECK ("organizationType" = 'school');
 
 CREATE OR REPLACE FUNCTION "carits_prevent_posted_transaction_mutation"()
 RETURNS TRIGGER AS $$

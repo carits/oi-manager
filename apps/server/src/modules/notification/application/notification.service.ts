@@ -28,7 +28,8 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
   const joinRequestIds = rows.filter(row => row.type === 'team_join_request').map(row => row.sourceId)
   const organizationInvitationIds = rows.filter(row => row.type === 'organization_invitation').map(row => row.sourceId)
   const joinApplicationIds = rows.filter(row => row.type === 'organization_join_application_received').map(row => row.sourceId)
-  const [teamMembers, administratorMemberships, organizationInvitations, legacyOrganizationInvitations, joinApplications] = await Promise.all([
+  const creationApplicationIds = rows.filter(row => row.type === 'organization_creation_application_received').map(row => row.sourceId)
+  const [teamMembers, administratorMemberships, organizationInvitations, legacyOrganizationInvitations, joinApplications, creationApplications] = await Promise.all([
     teamInvitationIds.length || joinRequestIds.length
       ? prisma.teamMember.findMany({
           where: { id: { in: [...teamInvitationIds, ...joinRequestIds] } },
@@ -52,11 +53,15 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
     joinApplicationIds.length ? prisma.organizationJoinApplication.findMany({
       where: { id: { in: joinApplicationIds }, organizationId: user.organizationId || '__none__' }, select: { id: true, status: true },
     }) : [],
+    creationApplicationIds.length && user.role === 'super_admin' ? prisma.organizationCreationApplication.findMany({
+      where: { id: { in: creationApplicationIds } }, select: { id: true, status: true },
+    }) : [],
   ])
   const teamMemberById = new Map(teamMembers.map(member => [member.id, member]))
   const administratorTeamIds = new Set(administratorMemberships.map(member => member.teamId))
   const organizationInvitationById = new Map([...legacyOrganizationInvitations, ...organizationInvitations].map(invitation => [invitation.id, invitation]))
   const joinApplicationById = new Map(joinApplications.map(application => [application.id, application]))
+  const creationApplicationById = new Map(creationApplications.map(application => [application.id, application]))
   const actionableIds = new Set(rows.flatMap(row => {
     if (row.type === 'team_invitation') {
       const invitation = teamMemberById.get(row.sourceId)
@@ -75,10 +80,13 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
     if (row.type === 'organization_join_application_received') {
       return joinApplicationById.get(row.sourceId)?.status === 'pending' ? [row.id] : []
     }
+    if (row.type === 'organization_creation_application_received') {
+      return creationApplicationById.get(row.sourceId)?.status === 'pending' ? [row.id] : []
+    }
     return []
   }))
   const staleIds = rows.filter(row =>
-    ['team_invitation', 'team_join_request', 'organization_invitation', 'organization_join_application_received'].includes(row.type) &&
+    ['team_invitation', 'team_join_request', 'organization_invitation', 'organization_join_application_received', 'organization_creation_application_received'].includes(row.type) &&
     !actionableIds.has(row.id) && !row.readAt).map(row => row.id)
   const markedAt = new Date()
   if (staleIds.length) {
@@ -91,7 +99,7 @@ export async function listNotifications(user: AuthUser, query: Record<string, un
     actionable: actionableIds.has(row.id),
     actions: !actionableIds.has(row.id) ? [] : row.type === 'organization_invitation' || row.type === 'team_invitation'
       ? [{ key: 'decline', label: '拒绝', style: 'secondary' }, { key: 'accept', label: '接受', style: 'primary' }]
-      : row.type === 'organization_join_application_received'
+      : row.type === 'organization_join_application_received' || row.type === 'organization_creation_application_received'
         ? [{ key: 'view', label: '查看', style: 'primary' }]
         : [{ key: 'reject', label: '拒绝', style: 'secondary' }, { key: 'approve', label: '同意', style: 'primary' }],
   }))

@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 106 |
+| Prisma models | 108 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
-| Module route adapters | 42 |
+| Module route adapters | 43 |
 | systemd units | 8 |
-| Referenced environment keys | 437 |
+| Referenced environment keys | 438 |
 
 ## HTTP adapter ownership
 
@@ -56,6 +56,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/carits/carits.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
+- `apps/server/src/modules/organization-creation/organization-creation.routes.ts`
 - `apps/server/src/modules/organization-join/organization-join.routes.ts`
 - `apps/server/src/modules/platform-binding/platform-binding.routes.ts`
 - `apps/server/src/modules/problem/problem.ai.routes.ts`
@@ -131,6 +132,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `Organization`
 - `OrganizationAuditLog`
 - `OrganizationContributionAttribution`
+- `OrganizationCreationApplication`
 - `OrganizationInvitation`
 - `OrganizationJoinApplication`
 - `OrganizationMembership`
@@ -138,6 +140,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OrganizationTeacherProfile`
 - `PasswordResetLog`
 - `PersonalProfile`
+- `PlatformAuditLog`
 - `PrincipalTransferLog`
 - `Problem`
 - `ProblemAttachment`
@@ -593,6 +596,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SANDBOX_STARTED`
 - `SCHEDULE`
 - `SCHEDULER_CHECK`
+- `SCHOOL_CREATION_LOCK`
 - `SECURITY_BASELINE_CHECK`
 - `SECURITY_BASELINE_DIR`
 - `SECURITY_BASELINE_KEEP_DAYS`

@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
+import { createSchoolOrganizationCore, lockSchoolCreation, normalizeSchoolName, SchoolNameConflictError } from './school-creation.service'
 
 export class PlatformOrganizationError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -72,7 +73,7 @@ function optionalText(body: any, key: string) {
   return body[key] === undefined ? undefined : typeof body[key] === 'string' ? body[key].trim() || null : null
 }
 
-export async function createPlatformOrganization(body: any) {
+export async function createPlatformOrganization(body: any, actorUserId?: string) {
   const name = trimmed(body, 'name')
   const username = trimmed(body, 'username')
   const teacherName = trimmed(body, 'teacherName')
@@ -80,37 +81,27 @@ export async function createPlatformOrganization(body: any) {
   if (!name || !username || !teacherName || !password) badRequest('请填写学校名称、负责人账号和姓名')
   if (await prisma.user.findUnique({ where: { username }, select: { id: true } })) conflict('用户名已存在')
 
-  const organizationId = await prisma.$transaction(async tx => {
-    const organizationId = crypto.randomUUID()
-    const userId = crypto.randomUUID()
-    const membershipId = crypto.randomUUID()
-    await tx.organization.create({ data: { id: organizationId, name, type: 'school', status: 'active' } })
-    await tx.user.create({ data: { id: userId, username, passwordHash: await bcrypt.hash(password, 10), role: 'user' } })
-    await tx.organizationMembership.create({
-      data: { id: membershipId, organizationId, userId, memberRole: 'school_principal', relationType: 'employed', status: 'active', joinedAt: new Date() },
-    })
-    await tx.organizationTeacherProfile.create({
-      data: {
-        id: crypto.randomUUID(), membershipId, name: teacherName,
-        title: trimmed(body, 'teacherTitle') || null,
-        email: trimmed(body, 'contactEmail') || null,
-        phone: trimmed(body, 'contactPhone') || null,
-      },
-    })
-    await tx.school.create({
-      data: {
-        id: crypto.randomUUID(), name, organizationId, currentPrincipalMembershipId: membershipId,
-        region: trimmed(body, 'region') || null,
-        schoolType: trimmed(body, 'schoolType') || null,
+  const passwordHash = await bcrypt.hash(password, 10)
+  try {
+    return await prisma.$transaction(async tx => {
+      const result = await createSchoolOrganizationCore(tx, {
+        name, shortName: trimmed(body, 'shortName') || null, region: trimmed(body, 'region'),
+        schoolType: trimmed(body, 'schoolType'), schoolNature: trimmed(body, 'schoolNature') || null,
         educationSystem: typeof body.educationSystem === 'string' ? body.educationSystem : '6-3-3',
-        contactPerson: trimmed(body, 'contactPerson') || null,
-        contactPhone: trimmed(body, 'contactPhone') || null,
-        contactEmail: trimmed(body, 'contactEmail') || null,
-      },
-    })
-    return organizationId
-  })
-  return { organizationId }
+        contactPerson: trimmed(body, 'contactPerson') || null, contactPhone: trimmed(body, 'contactPhone') || null,
+        contactEmail: trimmed(body, 'contactEmail') || null, principalName: teacherName,
+        principalTitle: trimmed(body, 'teacherTitle') || null,
+      }, { type: 'new', userId: crypto.randomUUID(), username, passwordHash })
+      await tx.platformAuditLog.create({ data: {
+        id: crypto.randomUUID(), actorUserId: actorUserId || null, action: 'organization_created_directly', targetType: 'organization',
+        targetId: result.organizationId, metadata: { nameKey: result.nameKey },
+      } })
+      return { organizationId: result.organizationId }
+    }, { isolationLevel: 'Serializable' })
+  } catch (error) {
+    if (error instanceof SchoolNameConflictError) conflict(error.message)
+    throw error
+  }
 }
 
 export async function createPlatformOrganizationPrincipal(organizationId: string, body: any) {
@@ -127,7 +118,7 @@ export async function createPlatformOrganizationPrincipal(organizationId: string
     const user = await tx.user.create({ data: { id: userId, username, passwordHash: await bcrypt.hash(password, 10), role: 'user' } })
     await tx.organizationMembership.updateMany({ where: { organizationId, memberRole: 'school_principal' }, data: { memberRole: 'teacher' } })
     await tx.organizationMembership.create({
-      data: { id: membershipId, organizationId, userId, memberRole: 'school_principal', relationType: 'employed', status: 'active', joinedAt: new Date() },
+      data: { id: membershipId, organizationId, userId, memberRole: 'school_principal', relationType: 'employee', status: 'active', joinedAt: new Date() },
     })
     const profile = await tx.organizationTeacherProfile.create({
       data: {
@@ -145,11 +136,18 @@ export async function createPlatformOrganizationPrincipal(organizationId: string
 export async function updatePlatformOrganization(organizationId: string, body: any) {
   const school = await findSchool(organizationId)
   const name = typeof body.name === 'string' ? body.name.trim() : undefined
-  await prisma.$transaction([
-    prisma.school.update({
+  await prisma.$transaction(async tx => {
+    let nameKey: string | undefined
+    if (name) {
+      await lockSchoolCreation(tx)
+      nameKey = normalizeSchoolName(name)
+      const duplicate = await tx.school.findFirst({ where: { nameKey, id: { not: school.id } }, select: { id: true } })
+      if (duplicate) throw new SchoolNameConflictError()
+    }
+    await tx.school.update({
       where: { id: school.id },
       data: {
-        name,
+        name, nameKey,
         region: optionalText(body, 'region'),
         schoolType: optionalText(body, 'schoolType'),
         educationSystem: body.educationSystem === undefined ? undefined : body.educationSystem,
@@ -157,9 +155,12 @@ export async function updatePlatformOrganization(organizationId: string, body: a
         contactPhone: optionalText(body, 'contactPhone'),
         contactEmail: optionalText(body, 'contactEmail'),
       },
-    }),
-    ...(name ? [prisma.organization.update({ where: { id: organizationId }, data: { name } })] : []),
-  ])
+    })
+    if (name) await tx.organization.update({ where: { id: organizationId }, data: { name } })
+  }, { isolationLevel: 'Serializable' }).catch(error => {
+    if (error instanceof SchoolNameConflictError) conflict(error.message)
+    throw error
+  })
 }
 
 export async function listPlatformOrganizationStudents(organizationId: string, page: number, pageSize: number, skip: number) {

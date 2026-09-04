@@ -225,6 +225,7 @@ const routerPrefixes = {
   workspaceRouter: '/api/workspaces',
   organizationMemberRouter: '/api/organizations/:organizationId/members',
   organizationJoinRouter: '/api',
+  organizationCreationRouter: '/api',
   platformOrganizationRouter: '/api/platform/organizations',
   demoScenarioRouter: '/api/admin/demo-scenario',
   telemetryRouter: '/api/telemetry',

@@ -1192,6 +1192,7 @@ model UserProblemContent {
 model School {
   id                           String        @id
   name                         String
+  nameKey                      String?       @unique
   shortName                    String?
   description                  String?
   announcement                 String?
@@ -1227,6 +1228,7 @@ model Organization {
   School                   School?
   Membership               OrganizationMembership[]
   JoinApplications         OrganizationJoinApplication[]
+  CreationApplications     OrganizationCreationApplication[]
   Invitations              OrganizationInvitation[]
   AuditLogs                OrganizationAuditLog[]
   CaritsAccount            CaritsAccount?                        @relation("CaritsAccountOrganization")
@@ -1341,6 +1343,56 @@ model OrganizationAuditLog {
   @@index([organizationId, createdAt])
   @@index([actorUserId, createdAt])
   @@index([targetUserId, createdAt])
+}
+
+model OrganizationCreationApplication {
+  id                    String        @id
+  applicantUserId       String
+  organizationType      String        @default("school")
+  name                  String
+  nameKey               String
+  shortName             String?
+  region                String
+  schoolType            String
+  schoolNature          String?
+  educationSystem       String?
+  contactPerson         String?
+  contactPhone          String?
+  contactEmail          String?
+  applicantRealName     String
+  applicantTitle        String?
+  description           String        @db.Text
+  evidenceData          Json?
+  status                String        @default("pending")
+  reviewedByUserId      String?
+  reviewedAt            DateTime?
+  decisionMessage       String?
+  internalReviewNote    String?
+  createdOrganizationId String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  Applicant             User          @relation("OrganizationCreationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
+  ReviewedBy            User?         @relation("OrganizationCreationReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  CreatedOrganization   Organization? @relation(fields: [createdOrganizationId], references: [id], onDelete: SetNull)
+
+  @@index([applicantUserId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([nameKey, status])
+}
+
+model PlatformAuditLog {
+  id          String   @id
+  actorUserId String?
+  action      String
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  Actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
 }
 
 model OrganizationStudentProfile {
@@ -2303,38 +2355,41 @@ model TrainingUserProblemStatus {
 }
 
 model User {
-  id                                   String                        @id
-  username                             String                        @unique
-  passwordHash                         String
+  id                                       String                            @id
+  username                                 String                            @unique
+  passwordHash                             String
   // 平台角色仅表达平台级权限；校园身份由 OrganizationMembership 决定。
-  role                                 String                        @default("user")
-  status                               String                        @default("active")
-  avatar                               String?
-  phone                                String?
-  email                                String?
-  bio                                  String?
-  createdAt                            DateTime                      @default(now())
-  updatedAt                            DateTime                      @default(now())
-  PersonalProfile                      PersonalProfile?
-  Problem                              Problem[]                     @relation("ProblemOwner")
-  ProblemHackAttempt                   ProblemHackAttempt[]
-  ContestUserProblemStatus             ContestUserProblemStatus[]
-  Submission                           Submission[]
-  TeamJoinRequest                      TeamJoinRequest[]
-  TeamMember                           TeamMember[]
-  TrainingUserProblemStatus            TrainingUserProblemStatus[]
-  UserArchivedProblem                  UserArchivedProblem[]
-  UserPlatformBinding                  UserPlatformBinding[]
-  UserNotification                     UserNotification[]
-  UserProblemContent                   UserProblemContent[]
-  OrganizationMembership               OrganizationMembership[]
-  OrganizationJoinApplications         OrganizationJoinApplication[] @relation("JoinApplicationApplicant")
-  ReviewedOrganizationJoinApplications OrganizationJoinApplication[] @relation("JoinApplicationReviewer")
-  OrganizationInvitations              OrganizationInvitation[]      @relation("OrganizationInvitee")
-  SentOrganizationInvitations          OrganizationInvitation[]      @relation("OrganizationInviter")
-  CaritsAccount                        CaritsAccount?                @relation("CaritsAccountUser")
-  CaritsTransactions                   CaritsTransaction[]           @relation("CaritsTransactionOperator")
-  ContributionEvents                   ContributionEvent[]           @relation("ContributionActor")
+  role                                     String                            @default("user")
+  status                                   String                            @default("active")
+  avatar                                   String?
+  phone                                    String?
+  email                                    String?
+  bio                                      String?
+  createdAt                                DateTime                          @default(now())
+  updatedAt                                DateTime                          @default(now())
+  PersonalProfile                          PersonalProfile?
+  Problem                                  Problem[]                         @relation("ProblemOwner")
+  ProblemHackAttempt                       ProblemHackAttempt[]
+  ContestUserProblemStatus                 ContestUserProblemStatus[]
+  Submission                               Submission[]
+  TeamJoinRequest                          TeamJoinRequest[]
+  TeamMember                               TeamMember[]
+  TrainingUserProblemStatus                TrainingUserProblemStatus[]
+  UserArchivedProblem                      UserArchivedProblem[]
+  UserPlatformBinding                      UserPlatformBinding[]
+  UserNotification                         UserNotification[]
+  UserProblemContent                       UserProblemContent[]
+  OrganizationMembership                   OrganizationMembership[]
+  OrganizationJoinApplications             OrganizationJoinApplication[]     @relation("JoinApplicationApplicant")
+  ReviewedOrganizationJoinApplications     OrganizationJoinApplication[]     @relation("JoinApplicationReviewer")
+  OrganizationCreationApplications         OrganizationCreationApplication[] @relation("OrganizationCreationApplicant")
+  ReviewedOrganizationCreationApplications OrganizationCreationApplication[] @relation("OrganizationCreationReviewer")
+  PlatformAuditLogs                        PlatformAuditLog[]
+  OrganizationInvitations                  OrganizationInvitation[]          @relation("OrganizationInvitee")
+  SentOrganizationInvitations              OrganizationInvitation[]          @relation("OrganizationInviter")
+  CaritsAccount                            CaritsAccount?                    @relation("CaritsAccountUser")
+  CaritsTransactions                       CaritsTransaction[]               @relation("CaritsTransactionOperator")
+  ContributionEvents                       ContributionEvent[]               @relation("ContributionActor")
 
   @@index([createdAt])
   @@index([role])
