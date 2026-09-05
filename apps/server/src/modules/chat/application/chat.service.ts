@@ -40,7 +40,10 @@ function decodeConversationCursor(value: unknown): ConversationCursor | undefine
 }
 
 async function notify(tx: Prisma.TransactionClient, userIds: string[], eventType: string, conversationId?: string, messageId?: string, payload?: Prisma.InputJsonValue) {
-  for (const userId of [...new Set(userIds)]) {
+  // Always acquire user foreign-key/index locks in a deterministic order.
+  // This matters when two participants send concurrently: the two transactions
+  // must never insert their per-user events in opposite orders.
+  for (const userId of [...new Set(userIds)].sort()) {
     const event = await tx.chatUserEvent.create({ data: { userId, eventType, conversationId, messageId, payload, expiresAt: eventExpiry() } })
     await tx.$executeRaw`SELECT pg_notify('chat_user_events', ${JSON.stringify({ userId, eventId: event.id.toString() })})`
   }
@@ -322,6 +325,11 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
       const conversation = locked[0]
       if (!conversation || ![conversation.userLowId, conversation.userHighId].includes(userId)) fail(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
       const otherId = conversation.userLowId === userId ? conversation.userHighId : conversation.userLowId
+      const memberIds = [userId, otherId].sort()
+      // Lock both member rows in the same order used by every message sender.
+      // The subsequent unread/archive updates then cannot deadlock with a
+      // concurrent send from the other participant.
+      await tx.$queryRaw`SELECT id FROM "DirectConversationMember" WHERE "conversationId"=${conversationId} AND "userId" IN (${memberIds[0]}, ${memberIds[1]}) ORDER BY "userId" FOR UPDATE`
       const users = await tx.user.findMany({ where: { id: { in: [userId, otherId] } }, select: { id: true, status: true } })
       if (users.find(user => user.id === userId)?.status !== 'active') fail(403, 'CHAT_USER_DISABLED', '当前账号无法发送消息')
       if (users.find(user => user.id === otherId)?.status !== 'active') fail(409, 'CHAT_TARGET_UNAVAILABLE', '联系人当前不可用')
@@ -335,8 +343,14 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
       const seq = conversation.lastMessageSeq + 1
       const message = await tx.directMessage.create({ data: { id: randomUUID(), conversationId, senderUserId: userId, clientMessageId, seq, content } })
       await tx.directConversation.update({ where: { id: conversationId }, data: { lastMessageSeq: seq, lastMessagePreview: content.slice(0, 120), lastMessageAt: message.createdAt, lastActivityAt: message.createdAt } })
-      await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId: otherId } }, data: { unreadCount: { increment: 1 }, archivedAt: null } })
-      await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: null } })
+      const otherMember = { conversationId_userId: { conversationId, userId: otherId } }
+      const senderMember = { conversationId_userId: { conversationId, userId } }
+      // Keep writes deterministic too, while preserving the sender/recipient
+      // semantics of unreadCount.
+      for (const memberId of memberIds) {
+        if (memberId === otherId) await tx.directConversationMember.update({ where: otherMember, data: { unreadCount: { increment: 1 }, archivedAt: null } })
+        else await tx.directConversationMember.update({ where: senderMember, data: { archivedAt: null } })
+      }
       await notify(tx, [userId, otherId], 'message_created', conversationId, message.id, { seq })
       return message
     })
@@ -351,10 +365,28 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
   }
 }
 
+function isTransientTransactionError(error: any) {
+  return error?.code === '40P01' || error?.code === '40001' || error?.code === 'P2034'
+}
+
+async function withTransientTransactionRetry<T>(operation: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+      if (!isTransientTransactionError(error) || attempt === maxAttempts) throw error
+      await new Promise(resolve => setTimeout(resolve, 10 * attempt * attempt))
+    }
+  }
+  throw lastError
+}
+
 export async function sendMessage(userId: string, conversationId: string, body: any) {
   const startedAt = Date.now()
   try {
-    const result = await sendMessageImpl(userId, conversationId, body)
+    const result = await withTransientTransactionRetry(() => sendMessageImpl(userId, conversationId, body))
     chatMetrics.messageSend(Date.now() - startedAt, true)
     return result
   } catch (error) {

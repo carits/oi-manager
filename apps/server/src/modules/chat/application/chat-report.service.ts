@@ -46,7 +46,15 @@ export async function reviewReport(actorUserId: string, reportId: string, status
   if (!resolutionNote) fail(422, 'REPORT_RESOLUTION_REQUIRED', '请填写处理说明')
   return prisma.$transaction(async tx => {
     const changed = await tx.chatReport.updateMany({ where: { id: reportId, status: 'pending' }, data: { status, resolutionNote, reviewedByUserId: actorUserId, reviewedAt: new Date() } })
-    if (!changed.count) fail(409, 'CHAT_REPORT_ALREADY_PROCESSED', '举报已处理或不存在')
+    if (!changed.count) {
+      const existing = await tx.chatReport.findUnique({ where: { id: reportId } })
+      if (!existing) throw new ChatError(404, 'CHAT_REPORT_NOT_FOUND', '举报不存在')
+      // Terminal review is idempotent. A retry (including a concurrent retry
+      // after the winner commits) returns the stored decision without writing
+      // a second audit event.
+      if (existing.status === 'resolved' || existing.status === 'dismissed') return existing
+      fail(409, 'CHAT_REPORT_ALREADY_PROCESSED', '举报已处理或不存在')
+    }
     await tx.platformAuditLog.create({ data: { id: randomUUID(), actorUserId, action: `chat_report_${status}`, targetType: 'ChatReport', targetId: reportId, metadata: { resolutionNote } } })
     return tx.chatReport.findUnique({ where: { id: reportId } })
   })
