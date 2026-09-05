@@ -4,6 +4,7 @@ import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { organizationJoinRouter } from '../src/modules/organization-join/organization-join.routes'
 import { notificationRouter } from '../src/modules/notification/notification.routes'
+import { workspaceRouter } from '../src/routes/workspaces'
 import { authenticate } from '../src/middleware/auth'
 import { applyOrganizationJoinMigration, inspectOrganizationJoinMigration } from '../src/modules/maintenance/application/organization-join-migration.service'
 import { prisma } from '../src/prisma'
@@ -13,6 +14,7 @@ import { generateTestToken } from './helpers/testToken'
 const app = express()
 app.use(express.json())
 app.use('/api', organizationJoinRouter)
+app.use('/api/workspaces', workspaceRouter)
 app.get('/api/readiness', (_req, res) => res.json({ status: 'ready' }))
 app.use('/api/notifications', authenticate, notificationRouter)
 
@@ -83,6 +85,26 @@ describe('organization join workflow', () => {
     const reapplied = await request(app).post('/api/organization-join-applications').set(auth(applicantToken)).send({ organizationId, requestedRole: 'student', realName: '申请学生' })
     expect(reapplied.status).toBe(409)
     expect(reapplied.body.code).toBe('ORGANIZATION_MEMBERSHIP_DISABLED')
+  })
+
+  it('removes legacy schools from the directory, personal organizations and workspaces', async () => {
+    await prisma.school.update({ where: { organizationId }, data: { directoryStatus: 'legacy', nameKey: null } })
+
+    const directory = await request(app).get('/api/organizations').set(auth(applicantToken))
+    expect(directory.status).toBe(200)
+    expect(directory.body.data.items).toHaveLength(0)
+
+    const mine = await request(app).get('/api/me/organizations').set(auth(principalToken))
+    expect(mine.status).toBe(200)
+    expect(mine.body.data.memberships).toHaveLength(0)
+
+    const workspaces = await request(app).get('/api/workspaces').set(auth(principalToken))
+    expect(workspaces.status).toBe(200)
+    expect(workspaces.body.data.workspaces).toEqual([expect.objectContaining({ type: 'personal' })])
+
+    const direct = await request(app).get('/api/notifications').set(auth(principalToken)).set('X-OI-Organization-ID', organizationId)
+    expect(direct.status).toBe(404)
+    expect(direct.body.code).toBe('ORGANIZATION_NOT_AVAILABLE')
   })
 
   it('migrates legacy pending memberships to invitations idempotently', async () => {

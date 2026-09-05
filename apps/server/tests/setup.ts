@@ -47,8 +47,9 @@ async function ensurePlatformFixture() {
       organizationId: PLATFORM_ORGANIZATION_ID,
       currentPrincipalMembershipId: PLATFORM_MEMBERSHIP_ID,
       status: 'active',
+      directoryStatus: 'hidden',
     },
-    update: { status: 'active', currentPrincipalMembershipId: PLATFORM_MEMBERSHIP_ID },
+    update: { status: 'active', directoryStatus: 'hidden', currentPrincipalMembershipId: PLATFORM_MEMBERSHIP_ID },
   })
   await prisma.organizationTeacherProfile.upsert({
     where: { membershipId: PLATFORM_MEMBERSHIP_ID },

@@ -62,9 +62,9 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     ) {
       const legacySchool = await prisma.school.findUnique({
         where: { id: decoded.schoolId },
-        select: { organizationId: true, status: true },
+        select: { organizationId: true, status: true, directoryStatus: true },
       })
-      if (legacySchool?.status === 'active' && legacySchool.organizationId) {
+      if (legacySchool?.status === 'active' && legacySchool.directoryStatus !== 'legacy' && legacySchool.organizationId) {
         organizationId = legacySchool.organizationId
       }
     }
@@ -74,9 +74,13 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         select: {
           id: true,
           memberRole: true,
+          Organization: { select: { type: true, School: { select: { directoryStatus: true } } } },
         }
       })
       if (!membership) return res.status(403).json({ success: false, code: 'ORGANIZATION_ACCESS_DENIED', message: '无权访问该组织' })
+      if (membership.Organization.type === 'school' && membership.Organization.School?.directoryStatus === 'legacy') {
+        return res.status(404).json({ success: false, code: 'ORGANIZATION_NOT_AVAILABLE', message: '该组织不可用' })
+      }
       decoded.organizationId = organizationId
       decoded.organizationMembershipId = membership.id
       // 平台管理员/超级管理员是全局身份，进入学校上下文时仍须保留管理员权限。

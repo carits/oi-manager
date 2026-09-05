@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { useSWRConfig } from 'swr'
 import { usePathname } from 'next/navigation'
-import apiClient, { AUTH_UNAUTHORIZED_EVENT } from '@/lib/apiClient'
+import apiClient, { AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
 import { clearAuth, setAdminId, setRole, setUserId } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import type { WorkspaceSummary } from '@oi-manager/shared'
@@ -98,6 +98,15 @@ export function AuthProvider({
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
   }, [mutateCache, user])
+
+  useEffect(() => {
+    const handleUnavailableOrganization = () => {
+      void mutateCache(() => true, undefined, { revalidate: false })
+      window.location.assign('/personal/overview?organizationUnavailable=1')
+    }
+    window.addEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)
+    return () => window.removeEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)
+  }, [mutateCache])
 
 
   const login = async (

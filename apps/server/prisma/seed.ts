@@ -111,9 +111,9 @@ async function main() {
   })
   await prisma.school.upsert({
     where: { id: SCHOOL_ID },
-    update: { name: '第一中学', organizationId: ORGANIZATION_ID, status: 'active' },
+    update: { name: '第一中学', organizationId: ORGANIZATION_ID, status: 'active', directoryStatus: 'verified' },
     create: {
-      id: SCHOOL_ID, name: '第一中学', organizationId: ORGANIZATION_ID, status: 'active',
+      id: SCHOOL_ID, name: '第一中学', organizationId: ORGANIZATION_ID, status: 'active', directoryStatus: 'verified',
       announcement: '# 欢迎来到第一中学\n\n这是一所信息学竞赛重点学校。',
     },
   })

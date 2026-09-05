@@ -2,7 +2,7 @@ import { prisma } from '../../../prisma'
 import { lockSchoolCreation, normalizeSchoolName } from '../../organization/application/school-creation.service'
 
 export async function inspectSchoolNameKeyMigration() {
-  const schools = await prisma.school.findMany({ select: { id: true, name: true, nameKey: true, organizationId: true }, orderBy: { createdAt: 'asc' } })
+  const schools = await prisma.school.findMany({ where: { directoryStatus: { not: 'legacy' } }, select: { id: true, name: true, nameKey: true, organizationId: true }, orderBy: { createdAt: 'asc' } })
   const groups = new Map<string, typeof schools>()
   for (const school of schools) {
     const key = normalizeSchoolName(school.name)
@@ -27,7 +27,7 @@ export async function inspectSchoolNameKeyMigration() {
 export async function applySchoolNameKeyMigration() {
   return prisma.$transaction(async tx => {
     await lockSchoolCreation(tx)
-    const schools = await tx.school.findMany({ select: { id: true, name: true, nameKey: true } })
+    const schools = await tx.school.findMany({ where: { directoryStatus: { not: 'legacy' } }, select: { id: true, name: true, nameKey: true } })
     const seen = new Map<string, string>()
     for (const school of schools) {
       const key = normalizeSchoolName(school.name)

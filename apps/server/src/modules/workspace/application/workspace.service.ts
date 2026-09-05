@@ -44,7 +44,10 @@ export async function listWorkspaces(actor: WorkspaceActor) {
     }]
   }
   const rows = await prisma.organizationMembership.findMany({
-    where: { userId: actor.userId, status: 'active', Organization: { status: 'active' } },
+    where: { userId: actor.userId, status: 'active', Organization: { status: 'active', OR: [
+      { type: { not: 'school' } },
+      { School: { is: { directoryStatus: { not: 'legacy' } } } },
+    ] } },
     include: { Organization: { include: { School: { select: { id: true, shortName: true } } } } },
     orderBy: { joinedAt: 'asc' },
   })
@@ -81,8 +84,12 @@ export async function respondToOrganizationInvitation(actor: WorkspaceActor, inv
   }
   const invitation = await prisma.organizationMembership.findFirst({
     where: { id: invitationId, userId: actor.userId, status: 'pending' },
+    include: { Organization: { include: { School: { select: { directoryStatus: true } } } } },
   })
   if (!invitation) throw new WorkspaceError(404, '邀请不存在或已处理')
+  if (invitation.Organization.type === 'school' && invitation.Organization.School?.directoryStatus === 'legacy') {
+    throw new WorkspaceError(404, '该组织不可用', 'ORGANIZATION_NOT_AVAILABLE')
+  }
   await prisma.$transaction(async tx => {
     await tx.organizationMembership.update({
       where: { id: invitation.id },

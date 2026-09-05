@@ -7,6 +7,7 @@ import {
 } from '../modules/maintenance/application/legacy-submission-migration.service'
 import { applyOrganizationJoinMigration, inspectOrganizationJoinMigration } from '../modules/maintenance/application/organization-join-migration.service'
 import { applySchoolNameKeyMigration, inspectSchoolNameKeyMigration } from '../modules/maintenance/application/school-name-key-migration.service'
+import { applySchoolDirectoryStatusMigration, inspectSchoolDirectoryStatusMigration } from '../modules/maintenance/application/school-directory-status-migration.service'
 
 export const migrationRouter = Router()
 
@@ -92,5 +93,25 @@ migrationRouter.post('/school-name-keys', async (_req, res) => {
   } catch (error: any) {
     logger.error('school_name_key_migration_apply_error', { action: 'migration', metadata: { error: error.message } })
     return res.status(409).json({ success: false, message: error.message })
+  }
+})
+
+migrationRouter.get('/school-directory-status', async (_req, res) => {
+  try {
+    return res.json({ success: true, data: await inspectSchoolDirectoryStatusMigration() })
+  } catch (error: any) {
+    logger.error('school_directory_status_migration_check_error', { action: 'migration', metadata: { error: error.message } })
+    return res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+migrationRouter.post('/school-directory-status', async (req, res) => {
+  try {
+    const data = await applySchoolDirectoryStatusMigration(String(req.body?.reportHash || ''), req.user!.userId)
+    logger.audit('school_directory_status_migration_applied', { action: 'migration', metadata: data })
+    return res.json({ success: true, data })
+  } catch (error: any) {
+    logger.error('school_directory_status_migration_apply_error', { action: 'migration', metadata: { error: error.message } })
+    return res.status(409).json({ success: false, code: 'SCHOOL_DIRECTORY_MIGRATION_STALE_OR_INVALID', message: error.message })
   }
 })

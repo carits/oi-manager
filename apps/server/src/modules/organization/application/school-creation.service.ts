@@ -38,7 +38,7 @@ export async function lockSchoolCreation(tx: Prisma.TransactionClient) {
 
 export async function findLegacySchoolNameConflict(tx: Prisma.TransactionClient, nameKey: string, excludeId?: string) {
   const rows = await tx.school.findMany({
-    where: { nameKey: null, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    where: { nameKey: null, directoryStatus: { not: 'legacy' }, ...(excludeId ? { id: { not: excludeId } } : {}) },
     select: { id: true, name: true },
   })
   return rows.find(row => normalizeSchoolName(row.name) === nameKey) || null
@@ -77,6 +77,7 @@ export async function createSchoolOrganizationCore(
   const school = await tx.school.create({
     data: {
       id: crypto.randomUUID(), name: input.name.trim(), nameKey, shortName: input.shortName || null,
+      directoryStatus: 'verified',
       description: input.description || null, organizationId, currentPrincipalMembershipId: membershipId,
       region: input.region || null, schoolType: input.schoolType || null, schoolNature: input.schoolNature || null,
       educationSystem: input.educationSystem || '6-3-3', contactPerson: input.contactPerson || null,

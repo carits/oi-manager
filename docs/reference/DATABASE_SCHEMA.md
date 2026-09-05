@@ -91,7 +91,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemNote` | 以 Prisma schema 为准 |
 | `ProblemStatement` | 以 Prisma schema 为准 |
 | `RejudgeBatch` | 一次范围重测请求及其作用域、请求者、计数和关联 JudgeRun |
-| `School` | 学校资料；`nameKey` 保存 NFKC/空白规范化后的全局唯一正式名称 |
+| `School` | 学校资料；`directoryStatus` 区分待核验、正式、隐藏和历史隔离；`nameKey` 仅由非 legacy 学校占用并保存全局唯一正式名称 |
 | `SchoolProblemList` | 以 Prisma schema 为准 |
 | `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
 | `Team` | 以 Prisma schema 为准 |

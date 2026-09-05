@@ -25,4 +25,24 @@ describe('platform organization authorization', () => {
     expect(platformResponse.status).toBe(403)
     expect(superResponse.status).toBe(200)
   })
+
+  it('creates verified schools and lets only super admins govern directory status', async () => {
+    const superToken = await tokenFor('super_admin')
+    const platformToken = await tokenFor('platform_admin')
+    const suffix = crypto.randomUUID()
+    const created = await request(app).post('/api/platform/organizations').set('Authorization', `Bearer ${superToken}`).send({
+      name: `目录治理学校-${suffix}`, username: `directory-principal-${suffix}`, teacherName: '目录负责人', password: 'test-password',
+    })
+    expect(created.status).toBe(201)
+    const organizationId = created.body.data.organizationId
+    const list = await request(app).get('/api/platform/organizations?directoryStatus=verified').set('Authorization', `Bearer ${superToken}`)
+    const school = list.body.data.data.find((item: any) => item.id === organizationId)
+    expect(school.directoryStatus).toBe('verified')
+
+    const forbidden = await request(app).patch(`/api/platform/organizations/${organizationId}/directory-status`).set('Authorization', `Bearer ${platformToken}`).send({ status: 'hidden', reason: '内部学校', expectedUpdatedAt: school.updatedAt })
+    expect(forbidden.status).toBe(403)
+    const hidden = await request(app).patch(`/api/platform/organizations/${organizationId}/directory-status`).set('Authorization', `Bearer ${superToken}`).send({ status: 'hidden', reason: '内部学校', expectedUpdatedAt: school.updatedAt })
+    expect(hidden.status).toBe(200)
+    expect(hidden.body.data.school.directoryStatus).toBe('hidden')
+  })
 })

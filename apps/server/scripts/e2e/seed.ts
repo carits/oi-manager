@@ -59,8 +59,8 @@ async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
   })
   await prisma.school.createMany({
     data: [
-      { id: ids.platformSchool, name: 'E2E Platform', region: 'system', schoolType: 'platform', educationSystem: '6-3-3', status: 'active', organizationId: ids.platformOrganization },
-      { id: ids.school, name: 'E2E School', region: 'Zhejiang/Hangzhou', schoolType: 'middle', educationSystem: '6-3-3', status: 'active', organizationId: ids.organization },
+      { id: ids.platformSchool, name: 'E2E Platform', region: 'system', schoolType: 'platform', educationSystem: '6-3-3', status: 'active', directoryStatus: 'hidden', organizationId: ids.platformOrganization },
+      { id: ids.school, name: 'E2E School', region: 'Zhejiang/Hangzhou', schoolType: 'middle', educationSystem: '6-3-3', status: 'active', directoryStatus: 'verified', organizationId: ids.organization },
     ],
   })
   await prisma.organizationMembership.createMany({

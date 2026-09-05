@@ -40,6 +40,9 @@ ALTER TABLE "OrganizationCreationApplication"
 ALTER TABLE "OrganizationCreationApplication"
   ADD CONSTRAINT "OrganizationCreationApplication_type_check"
   CHECK ("organizationType" = 'school');
+ALTER TABLE "School"
+  ADD CONSTRAINT "School_directoryStatus_check"
+  CHECK ("directoryStatus" IN ('pending', 'verified', 'hidden', 'legacy'));
 
 CREATE OR REPLACE FUNCTION "carits_prevent_posted_transaction_mutation"()
 RETURNS TRIGGER AS $$

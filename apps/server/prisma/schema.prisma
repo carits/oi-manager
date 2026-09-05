@@ -1209,11 +1209,14 @@ model School {
   contactPhone                 String?
   contactEmail                 String?
   status                       String        @default("active")
+  directoryStatus              String        @default("pending")
   currentPrincipalMembershipId String?       @unique
   createdAt                    DateTime      @default(now())
   updatedAt                    DateTime      @default(now())
   organizationId               String?       @unique
   Organization                 Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([directoryStatus, status])
 }
 
 model Organization {

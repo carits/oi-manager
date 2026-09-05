@@ -173,7 +173,7 @@ export async function createTestSchool(options: { name?: string; principalTeache
     data: { id: organizationId, name, type: 'school', status: 'active' },
   })
   const school = await prisma.school.create({
-    data: { id: schoolId, name, organizationId, status: 'active' },
+    data: { id: schoolId, name, organizationId, status: 'active', directoryStatus: 'verified' },
   })
 
   if (options.principalTeacherId) {

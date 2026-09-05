@@ -74,6 +74,7 @@ export interface DownloadResult {
 }
 
 export const AUTH_UNAUTHORIZED_EVENT = 'oi-manager:auth-unauthorized'
+export const ORGANIZATION_UNAVAILABLE_EVENT = 'oi-manager:organization-unavailable'
 
 function isRetryableStatus(status: number, kind: ApiErrorKind): boolean {
   if (kind === 'network') return true
@@ -221,6 +222,9 @@ class ApiClient {
         !endpoint.startsWith('/api/auth/session/migrate')
       ) {
         window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT))
+      }
+      if (parsed.code === 'ORGANIZATION_NOT_AVAILABLE' && typeof window !== 'undefined' && window.location.pathname.startsWith('/org/')) {
+        window.dispatchEvent(new CustomEvent(ORGANIZATION_UNAVAILABLE_EVENT))
       }
       return parsed
     } catch (error) {

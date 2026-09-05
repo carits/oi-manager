@@ -4,6 +4,7 @@ import { authenticate, authorize, type AuthRequest } from '../middleware/auth'
 import { parsePagination } from '../lib/pagination'
 import {
   createPlatformOrganization,
+  changePlatformOrganizationDirectoryStatus,
   createPlatformOrganizationPrincipal,
   getPlatformOrganization,
   listPlatformOrganizationStudents,
@@ -40,7 +41,7 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
 
 platformOrganizationRouter.get('/', ...superAdminOnly, endpoint('获取学校列表失败', async (req, res) => {
   const { page, pageSize, skip } = parsePagination(req.query)
-  res.json({ success: true, data: await listPlatformOrganizations(page, pageSize, skip) })
+  res.json({ success: true, data: await listPlatformOrganizations(page, pageSize, skip, req.query) })
 }))
 
 platformOrganizationRouter.get('/:organizationId', ...superAdminOnly, endpoint('获取学校详情失败', async (req, res) => {
@@ -59,6 +60,10 @@ platformOrganizationRouter.post('/:organizationId/principal', ...superAdminOnly,
 platformOrganizationRouter.put('/:organizationId', ...superAdminOnly, endpoint('更新学校失败', async (req, res) => {
   await updatePlatformOrganization(req.params.organizationId, req.body)
   res.json({ success: true })
+}))
+
+platformOrganizationRouter.patch('/:organizationId/directory-status', ...superAdminOnly, endpoint('更新学校目录状态失败', async (req, res) => {
+  res.json({ success: true, data: await changePlatformOrganizationDirectoryStatus(req.params.organizationId, req.body, req.user!.userId) })
 }))
 
 platformOrganizationRouter.get('/:organizationId/students', ...superAdminOnly, endpoint('获取学校学生失败', async (req, res) => {

@@ -40,7 +40,7 @@ async function expireInvitations() {
 
 async function managerMembership(actor: JoinActor, organizationId: string) {
   if (actor.organizationId !== organizationId) error(403, 'ORGANIZATION_CONTEXT_REQUIRED', '请从对应校园身份进入')
-  const membership = await prisma.organizationMembership.findFirst({ where: { id: actor.organizationMembershipId || '', organizationId, userId: actor.userId, status: 'active' } })
+  const membership = await prisma.organizationMembership.findFirst({ where: { id: actor.organizationMembershipId || '', organizationId, userId: actor.userId, status: 'active', Organization: { School: { is: { directoryStatus: { not: 'legacy' } } } } } })
   if (!membership || !['teacher', 'school_principal'].includes(membership.memberRole)) error(403, 'JOIN_APPLICATION_FORBIDDEN', '无权管理该学校的加入流程')
   return membership
 }
@@ -61,7 +61,7 @@ export async function listOrganizationDirectory(actor: JoinActor, query: Record<
   const pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 20))
   const q = text(query.q, 100)
   const where: Prisma.OrganizationWhereInput = {
-    type: 'school', status: 'active', School: { is: { status: 'active' } },
+    type: 'school', status: 'active', School: { is: { status: 'active', directoryStatus: 'verified' } },
     ...(q ? { OR: [
       { name: { contains: q, mode: 'insensitive' } },
       { School: { is: { shortName: { contains: q, mode: 'insensitive' } } } },
@@ -92,9 +92,9 @@ export async function listMyOrganizations(actor: JoinActor) {
   requirePersonalActor(actor)
   await expireInvitations()
   const [memberships, applications, invitations] = await Promise.all([
-    prisma.organizationMembership.findMany({ where: { userId: actor.userId, status: { in: ['active', 'disabled', 'archived'] } }, include: { Organization: { include: { School: true } } }, orderBy: { updatedAt: 'desc' } }),
-    prisma.organizationJoinApplication.findMany({ where: { userId: actor.userId }, include: { Organization: { include: { School: true } } }, orderBy: { createdAt: 'desc' }, take: 50 }),
-    prisma.organizationInvitation.findMany({ where: { userId: actor.userId }, include: { Organization: { include: { School: true } } }, orderBy: { createdAt: 'desc' }, take: 50 }),
+    prisma.organizationMembership.findMany({ where: { userId: actor.userId, status: { in: ['active', 'disabled', 'archived'] }, Organization: { School: { is: { directoryStatus: { not: 'legacy' } } } } }, include: { Organization: { include: { School: true } } }, orderBy: { updatedAt: 'desc' } }),
+    prisma.organizationJoinApplication.findMany({ where: { userId: actor.userId, Organization: { School: { is: { directoryStatus: { not: 'legacy' } } } } }, include: { Organization: { include: { School: true } } }, orderBy: { createdAt: 'desc' }, take: 50 }),
+    prisma.organizationInvitation.findMany({ where: { userId: actor.userId, Organization: { School: { is: { directoryStatus: { not: 'legacy' } } } } }, include: { Organization: { include: { School: true } } }, orderBy: { createdAt: 'desc' }, take: 50 }),
   ])
   return { memberships, applications, invitations }
 }
@@ -108,7 +108,7 @@ export async function createJoinApplication(actor: JoinActor, body: Record<strin
   const requestedRelationType = relationForRole(requestedRole, body.requestedRelationType ?? body.relationType)
   const recentCount = await prisma.organizationJoinApplication.count({ where: { userId: actor.userId, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } } })
   if (recentCount >= 10) error(429, 'JOIN_APPLICATION_RATE_LIMITED', '今日申请次数已达上限')
-  const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', status: 'active', School: { is: { status: 'active' } } } })
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', status: 'active', School: { is: { status: 'active', directoryStatus: 'verified' } } } })
   if (!organization) error(404, 'ORGANIZATION_NOT_FOUND', '学校不存在')
   if (organization.joinPolicy !== 'approval') error(409, 'ORGANIZATION_JOIN_CLOSED', organization.joinPolicy === 'invite_only' ? '该学校仅支持邀请加入' : '该学校暂不接受加入申请')
   const membership = await prisma.organizationMembership.findUnique({ where: { organizationId_userId: { organizationId, userId: actor.userId } } })
@@ -232,7 +232,7 @@ export async function createOrganizationInvitation(actor: JoinActor, organizatio
   const manager = await managerMembership(actor, organizationId)
   const memberRole = text(body.memberRole, 20) === 'teacher' ? 'teacher' : 'student'
   if (manager.memberRole === 'teacher' && memberRole !== 'student') error(403, 'ORGANIZATION_INVITATION_FORBIDDEN', '教师只能邀请学生')
-  const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', status: 'active' } })
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', status: 'active', School: { is: { directoryStatus: { not: 'legacy' } } } } })
   if (!organization) error(404, 'ORGANIZATION_NOT_FOUND', '学校不存在')
   if (organization.joinPolicy === 'closed') error(409, 'ORGANIZATION_JOIN_CLOSED', '该学校已关闭加入和邀请')
   const username = text(body.username, 80)
@@ -296,6 +296,8 @@ export async function respondToInvitation(actor: JoinActor, id: string, decision
     if (!invitation) error(404, 'ORGANIZATION_INVITATION_NOT_FOUND', '邀请不存在')
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${invitation.organizationId}))`
     const current = await tx.organizationInvitation.findUniqueOrThrow({ where: { id } })
+    const available = await tx.school.findFirst({ where: { organizationId: current.organizationId, directoryStatus: { not: 'legacy' } }, select: { id: true } })
+    if (!available) error(404, 'ORGANIZATION_NOT_AVAILABLE', '该组织不可用')
     if (current.status !== 'pending') error(409, 'ORGANIZATION_INVITATION_ALREADY_PROCESSED', '该邀请已经被处理')
     if (current.expiresAt && current.expiresAt <= new Date()) {
       await tx.organizationInvitation.update({ where: { id }, data: { status: 'expired', respondedAt: new Date() } })
@@ -326,7 +328,7 @@ export async function updateJoinPolicy(actor: JoinActor, organizationId: string,
     const manager = await managerMembership(actor, organizationId)
     if (manager.memberRole !== 'school_principal') error(403, 'ORGANIZATION_JOIN_POLICY_FORBIDDEN', '只有学校负责人可以修改加入策略')
   }
-  const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school' } })
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId, type: 'school', School: { is: { directoryStatus: { not: 'legacy' } } } } })
   if (!organization) error(404, 'ORGANIZATION_NOT_FOUND', '学校不存在')
   await prisma.$transaction([
     prisma.organization.update({ where: { id: organizationId }, data: { joinPolicy: policy } }),

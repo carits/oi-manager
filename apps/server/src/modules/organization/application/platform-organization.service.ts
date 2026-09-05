@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
 import { createSchoolOrganizationCore, findLegacySchoolNameConflict, lockSchoolCreation, normalizeSchoolName, SchoolNameConflictError } from './school-creation.service'
+import { getSchoolReferenceSummaries, getSchoolReferenceSummary, SCHOOL_DIRECTORY_STATUSES, SchoolDirectoryGovernanceError, updateSchoolDirectoryStatus } from './school-directory-governance.service'
 
 export class PlatformOrganizationError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -23,7 +24,7 @@ async function findSchool(organizationId: string) {
   return school
 }
 
-async function serializeSchool(school: Awaited<ReturnType<typeof findSchool>>) {
+async function serializeSchool(school: Awaited<ReturnType<typeof findSchool>>, prefetchedReferenceSummary?: Awaited<ReturnType<typeof getSchoolReferenceSummary>>) {
   const principal = school.currentPrincipalMembershipId
     ? await prisma.organizationTeacherProfile.findUnique({
         where: { membershipId: school.currentPrincipalMembershipId },
@@ -35,6 +36,9 @@ async function serializeSchool(school: Awaited<ReturnType<typeof findSchool>>) {
         where: { Membership: { organizationId: school.organizationId, status: 'active' } },
       })
     : 0
+  const referenceSummary = school.directoryStatus === 'legacy' && school.organizationId
+    ? prefetchedReferenceSummary || await getSchoolReferenceSummary(school.organizationId)
+    : undefined
   return {
     ...school,
     schoolId: school.id,
@@ -48,16 +52,32 @@ async function serializeSchool(school: Awaited<ReturnType<typeof findSchool>>) {
       user: principal.Membership.User,
     } : null,
     _count: { students },
+    ...(referenceSummary ? { referenceSummary } : {}),
   }
 }
 
-export async function listPlatformOrganizations(page: number, pageSize: number, skip: number) {
-  const where = { Organization: { type: 'school' } }
+export async function listPlatformOrganizations(page: number, pageSize: number, skip: number, query: Record<string, unknown> = {}) {
+  const requestedStatus = typeof query.directoryStatus === 'string' ? query.directoryStatus : ''
+  if (requestedStatus && !SCHOOL_DIRECTORY_STATUSES.includes(requestedStatus as any)) throw new PlatformOrganizationError(400, '目录状态无效', 'SCHOOL_DIRECTORY_STATUS_INVALID')
+  const q = typeof query.q === 'string' ? query.q.trim().slice(0, 100) : ''
+  const where = {
+    Organization: { type: 'school' },
+    directoryStatus: requestedStatus || { not: 'legacy' },
+    ...(q ? { OR: [
+      { name: { contains: q, mode: 'insensitive' as const } },
+      { shortName: { contains: q, mode: 'insensitive' as const } },
+      { id: { contains: q, mode: 'insensitive' as const } },
+      { organizationId: { contains: q, mode: 'insensitive' as const } },
+    ] } : {}),
+  }
   const [schools, total] = await Promise.all([
     prisma.school.findMany({ where, skip, take: pageSize, orderBy: { createdAt: 'desc' } }),
     prisma.school.count({ where }),
   ])
-  const rows = await Promise.all(schools.map(school => serializeSchool(school as Awaited<ReturnType<typeof findSchool>>)))
+  const referenceSummaries = requestedStatus === 'legacy'
+    ? await getSchoolReferenceSummaries(schools.map(school => school.organizationId).filter((id): id is string => Boolean(id)))
+    : new Map()
+  const rows = await Promise.all(schools.map(school => serializeSchool(school as Awaited<ReturnType<typeof findSchool>>, school.organizationId ? referenceSummaries.get(school.organizationId) : undefined)))
   return paginatedResponse(rows, total, page, pageSize)
 }
 
@@ -137,12 +157,16 @@ export async function updatePlatformOrganization(organizationId: string, body: a
   const school = await findSchool(organizationId)
   const name = typeof body.name === 'string' ? body.name.trim() : undefined
   await prisma.$transaction(async tx => {
-    let nameKey: string | undefined
+    let nameKey: string | null | undefined
     if (name) {
       await lockSchoolCreation(tx)
-      nameKey = normalizeSchoolName(name)
-      const duplicate = await tx.school.findFirst({ where: { nameKey, id: { not: school.id } }, select: { id: true } }) || await findLegacySchoolNameConflict(tx, nameKey, school.id)
-      if (duplicate) throw new SchoolNameConflictError()
+      if (school.directoryStatus === 'legacy') {
+        nameKey = null
+      } else {
+        nameKey = normalizeSchoolName(name)
+        const duplicate = await tx.school.findFirst({ where: { nameKey, id: { not: school.id }, directoryStatus: { not: 'legacy' } }, select: { id: true } }) || await findLegacySchoolNameConflict(tx, nameKey, school.id)
+        if (duplicate) throw new SchoolNameConflictError()
+      }
     }
     await tx.school.update({
       where: { id: school.id },
@@ -161,6 +185,19 @@ export async function updatePlatformOrganization(organizationId: string, body: a
     if (error instanceof SchoolNameConflictError) conflict(error.message)
     throw error
   })
+}
+
+export async function changePlatformOrganizationDirectoryStatus(organizationId: string, body: any, actorUserId: string) {
+  try {
+    const result = await updateSchoolDirectoryStatus({
+      organizationId, actorUserId, status: body?.status, reason: body?.reason,
+      expectedUpdatedAt: body?.expectedUpdatedAt, confirmLegacy: body?.confirmLegacy,
+    })
+    return { school: await serializeSchool(result.school as Awaited<ReturnType<typeof findSchool>>), references: result.references }
+  } catch (error) {
+    if (error instanceof SchoolDirectoryGovernanceError) throw new PlatformOrganizationError(error.statusCode, error.message, error.code)
+    throw error
+  }
 }
 
 export async function listPlatformOrganizationStudents(organizationId: string, page: number, pageSize: number, skip: number) {

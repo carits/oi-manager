@@ -147,7 +147,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/me/homeworks` | 见对应路由实现 |
 | `GET` | `/api/me/overview` | 见对应路由实现 |
 | `GET` | `/api/notifications` | 见对应路由实现 |
-| `GET` | `/api/organizations` | 登录用户搜索公开学校及当前关系 |
+| `GET` | `/api/organizations` | 登录用户搜索 `verified` 公开学校及当前关系 |
 | `GET` | `/api/me/organizations` | 当前用户的成员、申请与邀请 |
 | `GET` | `/api/me/organization-join-applications` | 当前用户的组织申请历史 |
 | `GET` | `/api/me/organization-creation-applications` | 当前用户的学校创建申请 |
@@ -170,10 +170,11 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/platform-bindings/:platform` | 见对应路由实现 |
 | `GET` | `/api/platform-bindings/:platform/config-schema` | 见对应路由实现 |
 | `GET` | `/api/platform-bindings/platforms` | 见对应路由实现 |
-| `GET` | `/api/platform/organizations` | 见对应路由实现 |
+| `GET` | `/api/platform/organizations` | 超管按目录状态和关键词分页查询学校；默认排除 legacy |
 | `GET` | `/api/platform/organizations/:organizationId` | 见对应路由实现 |
 | `GET` | `/api/platform/organizations/:organizationId/students` | 见对应路由实现 |
 | `GET` | `/api/platform/organizations/:organizationId/teachers` | 见对应路由实现 |
+| `PATCH` | `/api/platform/organizations/:organizationId/directory-status` | 超管以并发版本和原因变更学校目录状态 |
 | `GET` | `/api/platform/organization-creation-applications` | 超管分页查询学校创建申请 |
 | `GET` | `/api/platform/organization-creation-applications/:id` | 超管查看创建申请完整审核资料 |
 | `GET` | `/api/problem-lists` | 见对应路由实现 |
@@ -283,6 +284,8 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/admin/migration/organization-join` | 超管幂等执行旧组织邀请与通知迁移 |
 | `GET` | `/api/admin/migration/school-name-keys` | 超管检查历史学校名称标准化迁移 |
 | `POST` | `/api/admin/migration/school-name-keys` | 超管幂等回填历史学校 `nameKey` |
+| `GET` | `/api/admin/migration/school-directory-status` | 超管检查历史学校隔离范围、引用和报告哈希 |
+| `POST` | `/api/admin/migration/school-directory-status` | 超管按报告哈希幂等应用目录状态迁移 |
 | `POST` | `/api/platform/organization-creation-applications/:id/approve` | 超管批准申请并原子创建学校 |
 | `POST` | `/api/platform/organization-creation-applications/:id/reject` | 超管拒绝学校创建申请 |
 | `POST` | `/api/oj-accounts` | 见对应路由实现 |
