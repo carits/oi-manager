@@ -70,12 +70,21 @@ export async function applySchoolDirectoryStatusMigration(expectedReportHash: st
     if (collisions.length) throw new Error('非隔离学校仍存在标准化重名，本次未修改任何记录')
 
     const changed = { pending: 0, verified: 0, hidden: 0, legacy: 0 }
+    const legacyRows = rows.filter(row => classifyHistoricalSchool(row.id) === 'legacy')
     for (const row of rows) {
       const status = classifyHistoricalSchool(row.id)
       const nameKey = status === 'legacy' ? null : normalizeSchoolName(row.name)
       if (row.directoryStatus === status && row.nameKey === nameKey) continue
-      await tx.school.update({ where: { id: row.id }, data: { directoryStatus: status, nameKey } })
       changed[status] += 1
+    }
+    if (changed.legacy) {
+      await tx.school.updateMany({ where: { id: { in: legacyRows.map(row => row.id) } }, data: { directoryStatus: 'legacy', nameKey: null } })
+    }
+    for (const row of rows.filter(row => classifyHistoricalSchool(row.id) !== 'legacy')) {
+      const status = classifyHistoricalSchool(row.id)
+      const nameKey = normalizeSchoolName(row.name)
+      if (row.directoryStatus === status && row.nameKey === nameKey) continue
+      await tx.school.update({ where: { id: row.id }, data: { directoryStatus: status, nameKey } })
     }
     const now = new Date()
     const legacyOrganizationIds = rows.filter(row => classifyHistoricalSchool(row.id) === 'legacy').map(row => row.organizationId).filter((id): id is string => Boolean(id))
@@ -90,5 +99,5 @@ export async function applySchoolDirectoryStatusMigration(expectedReportHash: st
       metadata: { reportHash: currentHash, changed, legacyCount: legacyOrganizationIds.length, references, cancelledApplications: cancelledApplications.count, revokedInvitations: revokedInvitations.count, readNotifications: readNotifications.count },
     } })
     return { total: rows.length, changed, legacyCount: legacyOrganizationIds.length, references, cancelledApplications: cancelledApplications.count, revokedInvitations: revokedInvitations.count, readNotifications: readNotifications.count }
-  }, { isolationLevel: 'Serializable' })
+  }, { isolationLevel: 'Serializable', maxWait: 10_000, timeout: 60_000 })
 }

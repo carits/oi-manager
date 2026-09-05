@@ -13,17 +13,18 @@ async function createSchool(id: string, name: string) {
 describe('school directory governance', () => {
   it('quarantines historical test schools without deleting their references', async () => {
     const legacy = await createSchool(`school-test-${crypto.randomUUID()}`, 'School 1')
+    await createSchool(`school-temp-${crypto.randomUUID()}`, 'School 1')
     const canonical = await createSchool('school-default', '第一中学')
     const user = await prisma.user.create({ data: { id: crypto.randomUUID(), username: `legacy-member-${crypto.randomUUID()}`, passwordHash: 'test', role: 'user' } })
     await prisma.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId: legacy.organizationId!, userId: user.id, memberRole: 'student', relationType: 'enrolled', status: 'active' } })
 
     const check = await inspectSchoolDirectoryStatusMigration()
-    expect(check.proposed.legacy.count).toBe(1)
+    expect(check.proposed.legacy.count).toBe(2)
     expect(check.proposed.verified.count).toBe(1)
     expect(check.legacyReferences.memberships).toBe(1)
 
     const applied = await applySchoolDirectoryStatusMigration(check.reportHash, user.id)
-    expect(applied.legacyCount).toBe(1)
+    expect(applied.legacyCount).toBe(2)
     expect((await prisma.school.findUniqueOrThrow({ where: { id: legacy.id } })).directoryStatus).toBe('legacy')
     expect((await prisma.school.findUniqueOrThrow({ where: { id: canonical.id } })).directoryStatus).toBe('verified')
     expect(await prisma.organizationMembership.count({ where: { organizationId: legacy.organizationId! } })).toBe(1)
