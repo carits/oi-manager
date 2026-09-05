@@ -15,6 +15,7 @@ source_of_truth: Git history
 
 - 修复线上 HTTP 页面缺少 `crypto.randomUUID()` 时，私信发送在浏览器端抛错且请求未到达 API 的问题；所有浏览器侧幂等键统一改用带 Web Crypto 降级路径的 `createClientUUID()`。
 - 私信发送流程增加异常兜底和 `finally` 状态恢复，客户端异常会明确提示，不再表现为点击后无响应。
+- 提交 `476a66f` 已推送并提升 Web BUILD_ID `v_dHMnaNbaYLtspzJb-VK`；Web 63/63、生产构建及全部静态门禁通过。
 
 ### 私信正确性、实时性与生命周期整改
 

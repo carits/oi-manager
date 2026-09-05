@@ -5,7 +5,7 @@ last_verified: 2026-09-05
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-05: 修复 HTTP 部署下私信发送无响应：生产客户端遥测确认 `crypto.randomUUID is not a function`，且 teacher1/teacher2 会话已创建但消息和事件均未落库。消息及其他浏览器幂等请求改用兼容 HTTP 的 `createClientUUID()`，发送异常保证恢复 loading 并显示错误；增加 Web Crypto 降级回归测试。
+- 2026-09-05: 修复并部署 HTTP 环境私信发送无响应：生产客户端遥测确认 `crypto.randomUUID is not a function`，且 teacher1/teacher2 会话已创建但消息和事件均未落库。消息及其他浏览器幂等请求改用兼容 HTTP 的 `createClientUUID()`，发送异常保证恢复 loading 并显示错误；Web 63/63、生产构建及 UI/文档/架构门禁通过。提交 `476a66f` 已推送，Web BUILD_ID `v_dHMnaNbaYLtspzJb-VK` 已提升。
 
 - 2026-09-05: 一对一聊天正确性、实时性与生命周期完成最终并发审计并部署：消息事件及双方成员按稳定顺序加锁，已读/清空/归档与发送共享会话锁序，联系申请处理与拉黑共享有序用户对 advisory lock；消息、联系申请和举报的持久限流在事务内串行计数，数据库瞬态冲突仅对完整幂等消息事务有界重试。举报终态重试保持幂等且不重复审计。Server 73 文件/584 用例、聊天 15/15、竞态重复 5 轮、Web 61/61、Server/Judge/Web 构建及 UI/API/架构/文档门禁通过。提交 `ea87788` 已推送 `main`，API 活动 slot 为 3302，Judge/Worker/Executor 已重启，Web BUILD_ID `5E91W4lE0MwI1SKTCKElt` 已提升；线上 readiness、登录态会话/未读接口和 SSE ready/heartbeat 均正常，发布后无数据库死锁、未处理异常或 5xx。
 
