@@ -13,6 +13,7 @@ describe('parseApiResponse', () => {
       location: { pathname: '/org/org-school/overview' },
       dispatchEvent: vi.fn(),
     })
+    vi.stubGlobal('localStorage', { getItem: () => 'account-token' })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ success: true, data: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     await apiClient.get('/api/chat/unread', { accountScoped: true })
     const options = fetchMock.mock.calls[0][1] as RequestInit
