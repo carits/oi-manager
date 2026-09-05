@@ -132,9 +132,10 @@ export default function MessagesPage() {
     }
     if (!collected.length) return
     setMessages(current => mergeMessages(current, collected))
-    if (nearBottomRef.current) requestAnimationFrame(() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight })
-    else setNewMessageCount(current => current + collected.filter(message => message.senderUserId !== user?.userId).length)
-    await markVisibleRead(conversationId, afterSeq)
+    if (nearBottomRef.current) {
+      requestAnimationFrame(() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight })
+      await markVisibleRead(conversationId, afterSeq)
+    } else setNewMessageCount(current => current + collected.filter(message => message.senderUserId !== user?.userId).length)
   }, [markVisibleRead, user?.userId])
 
   useEffect(() => subscribe(events => {
@@ -248,7 +249,7 @@ export default function MessagesPage() {
       <section className={`${styles.chat} ${!selectedId ? styles.mobileHiddenDetail : ''}`}>
         {!selected ? <Empty title="选择一个会话" description="消息内容只对会话双方可见。" /> : <>
           <header className={styles.chatHeader}><Button variant="ghost" className={styles.back} onClick={() => setSelectedId(undefined)}>返回</Button><div><strong>{selected.other.username}</strong><span>{selected.canSend ? '联系人' : '当前不是联系人，无法发送'}</span></div><Menu trigger={<IconButton variant="ghost" aria-label="会话操作"><MoreHorizontal size={18} /></IconButton>} items={[{ key: 'archive', label: selected.archivedAt ? '恢复归档' : '归档会话', onSelect: () => setConfirmAction('archive') }, { key: 'clear', label: '清空聊天记录', danger: true, onSelect: () => setConfirmAction('clear') }, { key: 'remove', label: '移除联系人', danger: true, disabled: !selected.canSend, onSelect: () => setConfirmAction('remove') }, { key: 'block', label: '拉黑', danger: true, onSelect: () => setConfirmAction('block') }]} /></header>
-          <div className={styles.messageList} ref={messageListRef} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; if (nearBottomRef.current) setNewMessageCount(0) }}>
+          <div className={styles.messageList} ref={messageListRef} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; if (nearBottomRef.current) { setNewMessageCount(0); void markVisibleRead(selected.id, messagesRef.current.at(-1)?.seq) } }}>
             {hasMoreBefore && <Button variant="ghost" loading={loadingBefore} onClick={() => void loadOlder()}>加载更早消息</Button>}
             {messages.length === 0 ? <Empty title="还没有消息" description="发送第一条消息开始交流。" /> : messages.map(message => <article key={message.id} className={`${styles.message} ${message.senderUserId === user?.userId ? styles.mine : ''}`}><div>{message.content}</div><footer><time>{new Date(message.createdAt).toLocaleString('zh-CN')}</time>{message.senderUserId !== user?.userId && <Button variant="ghost" onClick={() => setReportMessage(message)}>举报</Button>}</footer></article>)}
             {newMessageCount > 0 && <Button className={styles.newMessages} onClick={() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight; setNewMessageCount(0) }}>↓ {newMessageCount} 条新消息</Button>}

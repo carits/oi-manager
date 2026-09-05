@@ -115,6 +115,19 @@ describe('account direct chat', () => {
     expect((await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(bobToken)).send({ clientMessageId: crypto.randomUUID(), content: 'disabled target' })).status).toBe(409)
   })
 
+  it('paginates active and archived conversations and clears history only for the actor', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'kept for peer' })
+    expect((await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/archive`).set(auth(aliceToken))).status).toBe(200)
+    expect((await request(app).get('/api/chat/conversations?pagination=v2&scope=active').set(auth(aliceToken))).body.data.items).toHaveLength(0)
+    expect((await request(app).get('/api/chat/conversations?pagination=v2&scope=archived').set(auth(aliceToken))).body.data.items).toHaveLength(1)
+    expect((await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/unarchive`).set(auth(aliceToken))).status).toBe(200)
+    expect((await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/clear`).set(auth(aliceToken))).status).toBe(200)
+    expect((await request(app).get(`/api/chat/conversations/${conversation.body.data.id}/messages?pagination=v2`).set(auth(aliceToken))).body.data.items).toHaveLength(0)
+    expect((await request(app).get(`/api/chat/conversations/${conversation.body.data.id}/messages?pagination=v2`).set(auth(bobToken))).body.data.items).toHaveLength(1)
+  })
+
   it('advances maintenance beyond the first 500 members', async () => {
     const peers = Array.from({ length: 700 }, (_, index) => ({ id: `maintenance-user-${String(index).padStart(4, '0')}`, username: `maintenance-${crypto.randomUUID()}`, passwordHash: 'test', role: 'user' }))
     await prisma.user.createMany({ data: peers })
