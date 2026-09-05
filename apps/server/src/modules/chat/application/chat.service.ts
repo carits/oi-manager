@@ -138,7 +138,7 @@ export async function respondFriendRequest(userId: string, requestId: string, ac
     }
     await notify(tx, [request.requesterId, request.addresseeId], `friend_request_${status}`, undefined, undefined, { requestId })
     return { status }
-  }, { isolationLevel: 'Serializable' })
+  })
 }
 
 export async function listFriends(userId: string) {
@@ -207,13 +207,18 @@ export async function listConversations(userId: string, includeArchived = false)
     include: { Conversation: { include: { LowUser: { select: { id: true, username: true, avatar: true } }, HighUser: { select: { id: true, username: true, avatar: true } } } } },
     orderBy: { Conversation: { lastMessageAt: 'desc' } }, take: 100,
   })
-  return Promise.all(members.map(async member => {
+  const otherIds = members.map(member => member.Conversation.userLowId === userId ? member.Conversation.userHighId : member.Conversation.userLowId)
+  const [friendships, blocks] = await Promise.all([
+    prisma.friendship.findMany({ where: { status: 'active', OR: [{ userLowId: userId, userHighId: { in: otherIds } }, { userHighId: userId, userLowId: { in: otherIds } }] }, select: { userLowId: true, userHighId: true } }),
+    prisma.userBlock.findMany({ where: { OR: [{ blockerId: userId, blockedId: { in: otherIds } }, { blockedId: userId, blockerId: { in: otherIds } }] }, select: { blockerId: true, blockedId: true } }),
+  ])
+  const friendIds = new Set(friendships.map(item => item.userLowId === userId ? item.userHighId : item.userLowId))
+  const blockedIds = new Set(blocks.map(item => item.blockerId === userId ? item.blockedId : item.blockerId))
+  return members.map(member => {
     const conversation = member.Conversation
     const other = conversation.userLowId === userId ? conversation.HighUser : conversation.LowUser
-    const friendship = await activeFriendship(userId, other.id)
-    const blocked = await blockedBetween(userId, other.id)
-    return { id: conversation.id, other: safeUser(other), lastMessageSeq: conversation.lastMessageSeq, lastMessagePreview: conversation.lastMessageSeq > member.clearedThroughSeq ? conversation.lastMessagePreview : null, lastMessageAt: conversation.lastMessageAt, unreadCount: member.unreadCount, archivedAt: member.archivedAt, canSend: friendship?.status === 'active' && !blocked }
-  }))
+    return { id: conversation.id, other: safeUser(other), lastMessageSeq: conversation.lastMessageSeq, lastMessagePreview: conversation.lastMessageSeq > member.clearedThroughSeq ? conversation.lastMessagePreview : null, lastMessageAt: conversation.lastMessageAt, unreadCount: member.unreadCount, archivedAt: member.archivedAt, canSend: friendIds.has(other.id) && !blockedIds.has(other.id) }
+  })
 }
 
 export async function listMessages(userId: string, conversationId: string, query: any) {
@@ -263,7 +268,7 @@ export async function sendMessage(userId: string, conversationId: string, body: 
       await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: null } })
       await notify(tx, [userId, otherId], 'message_created', conversationId, message.id, { seq })
       return message
-    }, { isolationLevel: 'Serializable' })
+    })
   } catch (error: any) {
     if (error?.code === 'P2002') return prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
     throw error

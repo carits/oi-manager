@@ -62,6 +62,16 @@ describe('account direct chat', () => {
     expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(0)
   })
 
+  it('serializes concurrent sends into one ordered conversation sequence', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const responses = await Promise.all(Array.from({ length: 10 }, (_, index) => request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: `message-${index}` })))
+    expect(responses.every(response => response.status === 201)).toBe(true)
+    const rows = await prisma.directMessage.findMany({ where: { conversationId: conversation.body.data.id }, orderBy: { seq: 'asc' } })
+    expect(rows.map(row => row.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(10)
+  })
+
   it('block removes friendship and closes pending requests', async () => {
     await befriend()
     expect((await request(app).post(`/api/chat/blocks/${bob.id}`).set(auth(aliceToken)).send({})).status).toBe(200)

@@ -37,6 +37,10 @@ class ChatRealtimeHub {
       void listener.end().catch(() => undefined)
       this.scheduleReconnect()
     })
+    listener.on('end', () => {
+      if (this.listener === listener) this.listener = null
+      this.scheduleReconnect()
+    })
     try {
       await listener.connect()
       await listener.query('LISTEN chat_user_events')
