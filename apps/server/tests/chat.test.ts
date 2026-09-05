@@ -102,6 +102,26 @@ describe('account direct chat', () => {
     expect(await resolveEventCursor(alice.id, event.id.toString())).toEqual({ cursor: 0n, resync: true })
   })
 
+  it('starts a fresh SSE connection at the current tail without replaying old events', async () => {
+    const event = await prisma.chatUserEvent.create({ data: { userId: alice.id, eventType: 'message_created', payload: { old: true }, expiresAt: new Date(Date.now() + 60_000) } })
+    const server = app.listen(0)
+    await new Promise<void>(resolve => server.once('listening', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('test server did not bind')
+    const controller = new AbortController()
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/chat/events`, { headers: auth(aliceToken), signal: controller.signal })
+      expect(response.status).toBe(200)
+      const chunk = await response.body!.getReader().read()
+      const text = new TextDecoder().decode(chunk.value)
+      expect(text).toContain(`event: ready\ndata: {"cursor":"${event.id.toString()}"}`)
+      expect(text).not.toContain('event: message_created')
+    } finally {
+      controller.abort()
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
+  })
+
   it('checks idempotency before rate limits and rejects disabled recipients', async () => {
     await befriend()
     const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
