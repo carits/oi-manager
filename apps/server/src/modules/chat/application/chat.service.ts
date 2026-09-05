@@ -15,7 +15,7 @@ const safeUser = (user: { id: string; username: string; avatar: string | null })
 async function notify(tx: Prisma.TransactionClient, userIds: string[], eventType: string, conversationId?: string, messageId?: string, payload?: Prisma.InputJsonValue) {
   for (const userId of [...new Set(userIds)]) {
     const event = await tx.chatUserEvent.create({ data: { userId, eventType, conversationId, messageId, payload, expiresAt: eventExpiry() } })
-    await tx.$queryRaw`SELECT pg_notify('chat_user_events', ${JSON.stringify({ userId, eventId: event.id.toString() })})`
+    await tx.$executeRaw`SELECT pg_notify('chat_user_events', ${JSON.stringify({ userId, eventId: event.id.toString() })})`
   }
 }
 
