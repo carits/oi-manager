@@ -152,9 +152,12 @@ export async function listFriends(userId: string) {
 
 export async function removeFriend(userId: string, otherId: string) {
   const [userLowId, userHighId] = ordered(userId, otherId)
-  const changed = await prisma.friendship.updateMany({ where: { userLowId, userHighId, status: 'active' }, data: { status: 'removed', removedAt: new Date(), removedById: userId } })
-  if (!changed.count) fail(404, 'FRIENDSHIP_NOT_FOUND', '好友关系不存在')
-  return { removed: true }
+  return prisma.$transaction(async tx => {
+    const changed = await tx.friendship.updateMany({ where: { userLowId, userHighId, status: 'active' }, data: { status: 'removed', removedAt: new Date(), removedById: userId } })
+    if (!changed.count) fail(404, 'FRIENDSHIP_NOT_FOUND', '好友关系不存在')
+    await notify(tx, [userId, otherId], 'friendship_removed', undefined, undefined, {})
+    return { removed: true }
+  })
 }
 
 export async function listBlocks(userId: string) {

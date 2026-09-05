@@ -21,7 +21,7 @@ export function ChatButton() {
     const timer = window.setInterval(load, 45_000)
     const source = new EventSource(`${ENV.API_URL}/api/chat/events`, { withCredentials: true })
     const refresh = () => void load()
-    ;['message_created', 'conversation_read', 'friend_request_created', 'friend_request_accepted', 'friend_request_rejected', 'friend_request_cancelled', 'friend_request_blocked', 'service_restart'].forEach(type => source.addEventListener(type, refresh))
+    ;['message_created', 'conversation_read', 'friend_request_created', 'friend_request_accepted', 'friend_request_rejected', 'friend_request_cancelled', 'friend_request_blocked', 'friendship_removed', 'service_restart', 'resync_required'].forEach(type => source.addEventListener(type, refresh))
     return () => { window.clearInterval(timer); source.close() }
   }, [load])
 

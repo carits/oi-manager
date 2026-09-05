@@ -75,7 +75,7 @@ export default function MessagesPage() {
   useEffect(() => {
     const source = new EventSource(`${ENV.API_URL}/api/chat/events`, { withCredentials: true })
     const refresh = () => { void loadCore(); if (selectedId) void loadMessages(selectedId) }
-    ;['message_created', 'friend_request_created', 'friend_request_accepted', 'friend_request_rejected', 'friend_request_cancelled', 'friend_request_blocked'].forEach(type => source.addEventListener(type, refresh))
+    ;['message_created', 'friend_request_created', 'friend_request_accepted', 'friend_request_rejected', 'friend_request_cancelled', 'friend_request_blocked', 'friendship_removed', 'resync_required'].forEach(type => source.addEventListener(type, refresh))
     return () => source.close()
   }, [loadCore, loadMessages, selectedId])
 
