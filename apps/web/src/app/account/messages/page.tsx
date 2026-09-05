@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { apiClient } from '@/lib/apiClient'
+import { createClientUUID } from '@/lib/uuid'
 import { useAuth } from '@/components/AuthProvider'
 import { useChat } from '@/components/chat/ChatProvider'
 import { Button } from '@/components/ui/Button'
@@ -191,15 +192,20 @@ export default function MessagesPage() {
     const content = conversationId ? drafts[conversationId]?.trim() : ''
     if (!conversationId || !content) return
     setBusy(true)
-    const response = await apiClient.post<Message>(`/api/chat/conversations/${conversationId}/messages`, { content, clientMessageId: crypto.randomUUID() }, account)
-    setBusy(false)
-    if (!response.success || !response.data) return toast.error(response.message || '发送失败')
-    setDrafts(current => ({ ...current, [conversationId]: '' }))
-    if (selectedRef.current === conversationId) {
-      setMessages(current => mergeMessages(current, [response.data!]))
-      requestAnimationFrame(() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight })
+    try {
+      const response = await apiClient.post<Message>(`/api/chat/conversations/${conversationId}/messages`, { content, clientMessageId: createClientUUID() }, account)
+      if (!response.success || !response.data) return toast.error(response.message || '发送失败')
+      setDrafts(current => ({ ...current, [conversationId]: '' }))
+      if (selectedRef.current === conversationId) {
+        setMessages(current => mergeMessages(current, [response.data!]))
+        requestAnimationFrame(() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight })
+      }
+      await loadConversations(scope)
+    } catch {
+      toast.error('发送失败，请稍后重试')
+    } finally {
+      setBusy(false)
     }
-    await loadConversations(scope)
   }
   const submitReport = async () => {
     if (!reportMessage) return

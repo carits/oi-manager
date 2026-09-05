@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Building2, Search } from 'lucide-react'
 import { apiClient } from '@/lib/apiClient'
+import { createClientUUID } from '@/lib/uuid'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
@@ -88,14 +89,14 @@ export default function PersonalOrganizationsPage() {
     setCreationSubmitting(true)
     const response = await apiClient.post<CreationApplication>('/api/organization-creation-applications', {
       organizationType: 'school', ...creationForm, region,
-    }, { headers: { 'Idempotency-Key': crypto.randomUUID() } })
+    }, { headers: { 'Idempotency-Key': createClientUUID() } })
     setCreationSubmitting(false)
     if (!response.success || !response.data) return toast.error(response.message || '申请提交失败')
     setCreationResult(response.data)
     await loadCreationApplications()
   }
   const cancelCreation = async (id: string) => {
-    const response = await apiClient.post(`/api/organization-creation-applications/${id}/cancel`, {}, { headers: { 'Idempotency-Key': crypto.randomUUID() } })
+    const response = await apiClient.post(`/api/organization-creation-applications/${id}/cancel`, {}, { headers: { 'Idempotency-Key': createClientUUID() } })
     if (!response.success) return toast.error(response.message || '撤销失败')
     toast.success('已撤销创建申请')
     await loadCreationApplications()

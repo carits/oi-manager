@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/FormControls'
 import { TableRoot, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/ui/TablePrimitives'
 import apiClient from '@/lib/apiClient'
+import { createClientUUID } from '@/lib/uuid'
 import { useToast } from '@/components/ui/Toast'
 import styles from './page.module.css'
 
@@ -43,7 +44,7 @@ export default function PlatformAiPage() {
     setSaving(true)
     try {
       const result = await apiClient.post('/api/platform-admin/ai/token-pool/adjust', {
-        amount: Number(amount), reason, idempotencyKey: `admin:${Date.now()}:${crypto.randomUUID()}`,
+        amount: Number(amount), reason, idempotencyKey: `admin:${Date.now()}:${createClientUUID()}`,
       })
       if (!result.success) return toast.error(result.message || 'Token 调整失败')
       setAmount(''); setReason(''); toast.success('Token 总池已调整'); await load()

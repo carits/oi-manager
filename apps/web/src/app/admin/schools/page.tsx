@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/apiClient'
+import { createClientUUID } from '@/lib/uuid'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -50,7 +51,7 @@ export default function AdminSchoolsPage() {
   useEffect(() => { const id=params.get('applicationId'); if (!id || tab !== 'applications') return; void apiClient.get<Application>(`/api/platform/organization-creation-applications/${id}`).then(r => { if (r.success && r.data) openReview(r.data) }) },[params,tab])
   const openReview = (item:Application) => { setSelected(item); setDecision(item.decisionMessage || ''); setNote(item.internalReviewNote || ''); if (params.get('applicationId') !== item.id) setUrl({applicationId:item.id}) }
   const closeReview = () => { setSelected(null); setUrl({applicationId:null}) }
-  const review = async (action:'approve'|'reject') => { if (!selected) return; if (action === 'reject' && !decision.trim()) return toast.error('请填写申请人可见的拒绝说明'); setReviewing(true); const response=await apiClient.post(`/api/platform/organization-creation-applications/${selected.id}/${action}`,{decisionMessage:decision,internalReviewNote:note},{headers:{'Idempotency-Key':crypto.randomUUID()}}); setReviewing(false); if(!response.success)return toast.error(response.message||'审核失败'); toast.success(action==='approve'?'已同意并创建学校':'已拒绝申请'); closeReview(); await loadApplications() }
+  const review = async (action:'approve'|'reject') => { if (!selected) return; if (action === 'reject' && !decision.trim()) return toast.error('请填写申请人可见的拒绝说明'); setReviewing(true); const response=await apiClient.post(`/api/platform/organization-creation-applications/${selected.id}/${action}`,{decisionMessage:decision,internalReviewNote:note},{headers:{'Idempotency-Key':createClientUUID()}}); setReviewing(false); if(!response.success)return toast.error(response.message||'审核失败'); toast.success(action==='approve'?'已同意并创建学校':'已拒绝申请'); closeReview(); await loadApplications() }
   const openDirectoryChange=(school:School,target:School['directoryStatus'])=>{setDirectorySchool(school);setDirectoryTarget(target);setDirectoryReason('')}
   const saveDirectoryChange=async()=>{if(!directorySchool||!directoryReason.trim())return toast.error('请填写状态变更原因');setDirectorySaving(true);const response=await apiClient.patch(`/api/platform/organizations/${directorySchool.id}/directory-status`,{status:directoryTarget,reason:directoryReason,expectedUpdatedAt:directorySchool.updatedAt,confirmLegacy:directoryTarget==='legacy'});setDirectorySaving(false);if(!response.success)return toast.error(response.message||'状态更新失败');toast.success(`已更新为${directoryLabels[directoryTarget]}`);setDirectorySchool(null);await reloadSchools()}
   const total = tab === 'schools' ? data?.total || 0 : applicationTotal; const totalPages=Math.ceil(total/pageSize)

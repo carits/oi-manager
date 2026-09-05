@@ -33,5 +33,8 @@ describe('chat event client', () => {
     expect(page).toContain('afterSeq=${afterSeq}')
     expect(page).toContain('useState<Record<string, string>>({})')
     expect(page).toContain('event.nativeEvent.isComposing')
+    expect(page).toContain('clientMessageId: createClientUUID()')
+    expect(page).not.toContain('clientMessageId: crypto.randomUUID()')
+    expect(page).toContain('finally {')
   })
 })
