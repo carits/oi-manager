@@ -9,18 +9,19 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 校园身份与档案唯一来源为组织成员关系、学生组织档案与教师组织档案。全局账号不再保存校园归属，旧学生、教师和管理员模型已删除。学校资料通过学校资料表关联学校组织。
 
-好友与私信域由 `ChatPrivacySetting`、`FriendRequest`、`Friendship`、`UserBlock`、`DirectConversation`、`DirectConversationMember`、`DirectMessage`、`ChatUserEvent` 和 `ChatReport` 组成。有序用户对和数据库约束保证唯一好友与会话；消息不可编辑，举报保存独立证据快照。
+联系人和私信域由 `ChatPrivacySetting`、`FriendRequest`、`Friendship`、`UserBlock`、`DirectConversation`、`DirectConversationMember`、`DirectMessage`、`ChatUserEvent`、`ChatReport` 和 `ChatMaintenanceCursor` 组成。有序用户对和数据库约束保证唯一关系与会话；消息不可编辑，举报先保存独立证据快照，终态满一年后最小化证据并释放可清理消息引用。
 
 | 模型 | 说明 |
 |---|---|
 | `ChatPrivacySetting` | 账号级聊天发现隐私设置 |
 | `ChatReport` | 举报、有限上下文证据与审核状态 |
+| `ChatMaintenanceCursor` | 未读修复、消息 GC 和举报证据释放的持久扫描位置 |
 | `ChatUserEvent` | 支持 SSE 补偿的七天持久事件 |
 | `DirectConversation` | 有序用户对唯一的一对一会话 |
 | `DirectConversationMember` | 用户侧已读、未读、归档和清空位置 |
 | `DirectMessage` | 会话内有序、幂等且不可编辑的文本消息 |
-| `FriendRequest` | 可过期的好友申请状态机 |
-| `Friendship` | 可删除和恢复的账号级好友关系 |
+| `FriendRequest` | 可过期的联系申请状态机 |
+| `Friendship` | 可移除和恢复的账号级联系人关系（内部兼容名称） |
 | `UserBlock` | 方向性账号拉黑关系 |
 | `AiUsageLog` | 以 Prisma schema 为准 |
 | `AiTokenPool` | 平台唯一 DeepSeek Token 总池，保存可用、预占、已消费和 CAS 版本 |

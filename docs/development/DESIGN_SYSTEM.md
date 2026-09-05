@@ -9,7 +9,7 @@ source_of_truth: apps/web/src/styles/globals.css and UI components
 
 ## 2026-09-05 私信工作台
 
-一对一私信使用标准 PageHeader、Tabs、Button、表单控件、Empty 和 FormDialog。桌面端使用会话列表与消息区双栏，窄屏降级为列表/详情分步视图；纯文本消息保留换行并允许长内容断行，不得产生页面横向溢出。好友申请和举报使用统一 FormDialog，不自行实现遮罩。
+一对一私信使用标准 PageHeader、Tabs、Button、Menu、表单控件、Empty、FormDialog 和 ConfirmDialog。桌面端使用会话列表与消息区双栏，窄屏降级为列表/详情分步视图；纯文本消息保留换行并允许长内容断行，不得产生页面横向溢出。联系申请和举报使用统一 FormDialog；归档、清空、移除联系人和拉黑使用统一确认语义，不自行实现遮罩。加载历史时保留滚动位置，用户查看历史时新消息只显示提示，不能强制滚动到底部。
 
 ## 2026-08-25 统一组件契约
 

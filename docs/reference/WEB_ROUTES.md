@@ -14,7 +14,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/` | 见页面权限布局 | 当前页面 |
 | `/account/platform-bindings` | 见页面权限布局 | 当前页面 |
 | `/account/notifications` | 已登录账号 | 完整消息中心 |
-| `/account/messages` | 已登录账号 | 好友、好友申请、黑名单和一对一私信 |
+| `/account/messages` | 已登录账号 | 联系人、联系申请、黑名单和一对一私信；支持历史分页、归档与单方清空 |
 | `/account/profile` | 见页面权限布局 | 当前页面 |
 | `/account/security` | 见页面权限布局 | 当前页面 |
 | `/account/wallet` | 见页面权限布局 | 当前页面 |

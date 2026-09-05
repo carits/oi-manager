@@ -243,7 +243,7 @@ export async function listConversations(userId: string, query: any = {}) {
       ...(scope === 'active' ? { archivedAt: null } : scope === 'archived' ? { archivedAt: { not: null } } : {}),
       ...(cursor ? { Conversation: { OR: [{ lastActivityAt: { lt: activityBefore } }, { lastActivityAt: activityBefore, id: { lt: cursor.id } }] } } : {}),
     },
-    include: { Conversation: { include: { LowUser: { select: { id: true, username: true, avatar: true } }, HighUser: { select: { id: true, username: true, avatar: true } } } } },
+    include: { Conversation: { include: { LowUser: { select: { id: true, username: true, avatar: true, status: true } }, HighUser: { select: { id: true, username: true, avatar: true, status: true } } } } },
     orderBy: [{ Conversation: { lastActivityAt: 'desc' } }, { Conversation: { id: 'desc' } }], take: pageSize + (v2 ? 1 : 0),
   })
   const pageMembers = v2 && members.length > pageSize ? members.slice(0, pageSize) : members
@@ -257,7 +257,7 @@ export async function listConversations(userId: string, query: any = {}) {
   const items = pageMembers.map(member => {
     const conversation = member.Conversation
     const other = conversation.userLowId === userId ? conversation.HighUser : conversation.LowUser
-    return { id: conversation.id, other: safeUser(other), lastMessageSeq: conversation.lastMessageSeq, lastMessagePreview: conversation.lastMessageSeq > member.clearedThroughSeq ? conversation.lastMessagePreview : null, lastMessageAt: conversation.lastMessageAt, unreadCount: member.unreadCount, archivedAt: member.archivedAt, canSend: friendIds.has(other.id) && !blockedIds.has(other.id) }
+    return { id: conversation.id, other: safeUser(other), lastMessageSeq: conversation.lastMessageSeq, lastMessagePreview: conversation.lastMessageSeq > member.clearedThroughSeq ? conversation.lastMessagePreview : null, lastMessageAt: conversation.lastMessageAt, unreadCount: member.unreadCount, archivedAt: member.archivedAt, canSend: other.status === 'active' && friendIds.has(other.id) && !blockedIds.has(other.id) }
   })
   if (!v2) return items
   const last = pageMembers.at(-1)?.Conversation
@@ -341,7 +341,12 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
       return message
     })
   } catch (error: any) {
-    if (error?.code === 'P2002') return prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+    if (error?.code === 'P2002') {
+      const existing = await prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+      if (!existing) throw error
+      if (existing.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+      return existing
+    }
     throw error
   }
 }

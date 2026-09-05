@@ -22,8 +22,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/chat/privacy` | 读取账号的跨关系完整用户名发现设置 |
 | `PATCH` | `/api/chat/privacy` | 修改账号的跨关系完整用户名发现设置 |
 | `GET` | `/api/chat/users/search` | 按共享关系模糊搜索或按隐私设置精确搜索账号 |
-| `GET` | `/api/chat/friend-requests` | 查询好友申请 |
-| `POST` | `/api/chat/friend-requests` | 创建好友申请 |
+| `GET` | `/api/chat/friend-requests` | 查询联系申请（内部兼容路径） |
+| `POST` | `/api/chat/friend-requests` | 创建联系申请（内部兼容路径） |
 | `POST` | `/api/chat/friend-requests/:id/accept` | 接受好友申请 |
 | `POST` | `/api/chat/friend-requests/:id/reject` | 拒绝好友申请 |
 | `POST` | `/api/chat/friend-requests/:id/cancel` | 撤销好友申请 |
@@ -32,12 +32,13 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/chat/blocks` | 查询本人黑名单 |
 | `POST` | `/api/chat/blocks/:userId` | 拉黑用户并解除好友关系 |
 | `DELETE` | `/api/chat/blocks/:userId` | 解除本人发起的拉黑 |
-| `GET` | `/api/chat/conversations` | 查询本人会话 |
+| `GET` | `/api/chat/conversations` | 按 active/archived 与 opaque cursor 分页查询本人会话；旧数组响应暂时兼容 |
 | `POST` | `/api/chat/conversations` | 为现有好友创建或恢复唯一会话 |
-| `GET` | `/api/chat/conversations/:id/messages` | 分页读取本人会话消息 |
-| `POST` | `/api/chat/conversations/:id/messages` | 幂等发送纯文本消息 |
+| `GET` | `/api/chat/conversations/:id/messages` | 读取最新消息页，或通过 beforeSeq/afterSeq 分页；V2 返回页元数据 |
+| `POST` | `/api/chat/conversations/:id/messages` | 幂等发送纯文本消息并重新校验双方账号、联系人和拉黑状态 |
 | `POST` | `/api/chat/conversations/:id/read` | 单调推进已读序号并修正未读投影 |
 | `POST` | `/api/chat/conversations/:id/archive` | 仅为本人归档会话 |
+| `POST` | `/api/chat/conversations/:id/unarchive` | 恢复本人归档的会话 |
 | `POST` | `/api/chat/conversations/:id/clear` | 仅为本人清空当前历史视图 |
 | `GET` | `/api/chat/unread` | 查询私信未读和待处理好友申请数 |
 | `GET` | `/api/chat/events` | 账号级持久事件 SSE；支持 `Last-Event-ID` 补偿 |

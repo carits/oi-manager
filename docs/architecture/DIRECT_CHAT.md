@@ -5,9 +5,9 @@ last_verified: 2026-09-05
 source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages, apps/server/prisma/schema.prisma
 ---
 
-# 好友与一对一私信
+# 联系人与一对一私信
 
-私信是账号级能力，不携带 `X-OI-Organization-ID`。只有有效好友可以创建会话和发送消息；删除好友保留历史并禁发，拉黑同时解除好友并关闭待处理申请。
+私信是账号级能力，不携带 `X-OI-Organization-ID`。产品界面使用“联系人”，数据库为兼容继续使用 Friendship 命名。只有有效联系人可以创建会话和发送消息；移除联系人保留历史并禁发，拉黑同时解除关系并关闭待处理申请。
 
 ## 用户发现与隐私
 
@@ -18,9 +18,13 @@ source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages
 ## 一致性与实时链路
 
 - 会话按有序用户对唯一；消息使用会话内递增 `seq` 和发送者级 `clientMessageId` 幂等。
+- 无游标消息读取返回当前用户可见的最新页，`beforeSeq` 加载历史，`afterSeq` 补偿实时增量；V2 返回游标元数据，旧数组响应在蓝绿兼容期保留。
+- 会话使用 `lastActivityAt + id` opaque cursor 分页，active 与 archived 列表分离。
 - 发送事务锁定会话，同时写消息、摘要、接收方未读投影和 `ChatUserEvent`。
 - `lastReadSeq` 是事实，`unreadCount` 是可修复投影；Worker 每小时执行一致性修复。
-- SSE 通过独立 PostgreSQL LISTEN 连接接收 `pg_notify`，同时周期扫描持久事件表补偿通知丢失；事件保留 7 天。
+- 每个浏览器标签页由 `ChatProvider` 维护一条 SSE；页头和消息页订阅 Provider，不重复连接。Cursor 保存于用户级 sessionStorage，事件在 100ms 窗口合并并按类型局部刷新。
+- SSE 通过独立 PostgreSQL LISTEN 连接接收 `pg_notify`，同时每 30 秒扫描持久事件表补偿通知丢失；首次连接从当前事件尾部开始，只有真实重连才补发，过期 cursor 要求 REST resync。事件保留 7 天。
+- RealtimeHub 对定时器、用户和单 stream 失败逐级隔离，不允许后台 Promise rejection 终止 API。
 - API 退出先发送 `service_restart` 并关闭 SSE，再执行 Judge 和 HTTP drain。
 
 ## 举报和保留
@@ -28,7 +32,15 @@ source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages
 - 用户只能举报对方向自己会话发送的消息；证据保存举报点前后各十条的不可变快照。
 - 超级管理员和平台管理员可审核。读取证据必须提交原因并写 `PlatformAuditLog`，不能浏览未举报会话。
 - 单方清空推进自己的 `clearedThroughSeq`。双方均清空且超过 30 天后，未被举报引用的消息由 Worker 清理。
+- Pending 举报持续保全证据；终态举报满一年后将证据最小化为哈希摘要并释放原消息引用，使其重新服从双方清空后的 GC 规则。
+- 未读修复、消息 GC 和证据释放使用持久 keyset cursor，正确记录也推进扫描位置，不会被前 500 条长期阻塞。
+
+## 产品边界
+
+- 后端维护已读位置以保证未读一致性，但不向联系人展示对方已读回执。
+- UI 提供归档、恢复、单方清空、移除联系人和拉黑；`mutedUntil` 仍是预留字段，不宣称支持静音。
+- 当前只支持纯文本；附件、引用、撤回、编辑、在线状态和聊天处罚不属于本轮能力。
 
 ## API
 
-账号端统一使用 `/api/chat`；举报审核使用 `/api/platform/chat-reports`。
+账号端统一使用 `/api/chat`；举报审核使用 `/api/platform/chat-reports`。消息和会话分页新客户端携带 `pagination=v2`，部署兼容期内旧调用仍返回数组。
