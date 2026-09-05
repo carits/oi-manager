@@ -76,6 +76,17 @@ describe('account direct chat', () => {
     expect((await request(app).get(`/api/chat/users/search?q=${encodeURIComponent(bob.username)}`).set(auth(aliceToken))).body.data[0].id).toBe(bob.id)
   })
 
+  it('allows shared active schools to search but excludes legacy schools', async () => {
+    const organizationId = crypto.randomUUID()
+    await prisma.organization.create({ data: { id: organizationId, name: '聊天共享学校', type: 'school' } })
+    await prisma.school.create({ data: { id: crypto.randomUUID(), name: `聊天共享学校-${crypto.randomUUID()}`, organizationId, directoryStatus: 'verified' } })
+    for (const member of [alice, bob]) await prisma.organizationMembership.create({ data: { id: crypto.randomUUID(), organizationId, userId: member.id, memberRole: 'student', relationType: 'enrolled', status: 'active' } })
+    const partial = bob.username.slice(0, 8)
+    expect((await request(app).get(`/api/chat/users/search?q=${encodeURIComponent(partial)}`).set(auth(aliceToken))).body.data[0].id).toBe(bob.id)
+    await prisma.school.update({ where: { organizationId }, data: { directoryStatus: 'legacy' } })
+    expect((await request(app).get(`/api/chat/users/search?q=${encodeURIComponent(partial)}`).set(auth(aliceToken))).body.data).toHaveLength(0)
+  })
+
   it('restricts messages to members and audits report evidence access', async () => {
     await befriend()
     const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
