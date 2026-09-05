@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-04
+last_verified: 2026-09-05
 source_of_truth: Git history
 ---
 
@@ -17,6 +17,8 @@ source_of_truth: Git history
 - 新增账号级一对一会话、幂等文本消息、事务未读、归档/单方清空，以及 PostgreSQL 持久事件与 SSE 断线补偿。
 - 新增用户消息中心、页头独立私信未读入口和平台举报工作台；举报证据有限快照，管理员每次查看均写平台审计。
 - 增加每小时好友过期、事件回收、未读修复和双方清空消息延迟清理；Nginx 与 API drain 已适配 SSE 长连接。
+- SSE 浏览器客户端改为可恢复的流式请求，同时支持 Cookie 和旧 Bearer 会话，重连携带 `Last-Event-ID`，账号级连接不会发送组织作用域请求头。
+- 生产数据库迁移、API 蓝绿和 Web canary/promote 已完成；当前 API slot 为 3302，Web BUILD_ID 为 `WjaW8nMU1yJrXhTenAtpR`。Web 58/58、Chat/Notification 定向 10/10、三端构建及全部静态门禁通过，线上认证接口与公网 SSE `ready` 探针正常。
 
 ### 学校历史数据隔离与目录治理
 
