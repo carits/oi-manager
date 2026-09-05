@@ -182,7 +182,7 @@ export async function unblockUser(userId: string, blockedId: string) {
 
 async function requireConversationMember(userId: string, conversationId: string) {
   const member = await prisma.directConversationMember.findUnique({ where: { conversationId_userId: { conversationId, userId } }, include: { Conversation: true } })
-  if (!member) fail(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
+  if (!member) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
   return member
 }
 
@@ -225,7 +225,7 @@ export async function listMessages(userId: string, conversationId: string, query
 }
 
 function validateMessageContent(value: unknown) {
-  if (typeof value !== 'string') fail(422, 'INVALID_MESSAGE', '消息内容不能为空')
+  if (typeof value !== 'string') throw new ChatError(422, 'INVALID_MESSAGE', '消息内容不能为空')
   const content = value.trim()
   if (!content || [...content].length > 5000 || Buffer.byteLength(content, 'utf8') > 10240) fail(422, 'INVALID_MESSAGE', '消息最多 5000 个字符且不超过 10 KiB')
   return content
@@ -272,7 +272,7 @@ export async function markRead(userId: string, conversationId: string, rawThroug
   if (!Number.isSafeInteger(requested) || requested < 0) fail(422, 'INVALID_READ_SEQUENCE', '已读位置无效')
   return prisma.$transaction(async tx => {
     const member = await tx.directConversationMember.findUnique({ where: { conversationId_userId: { conversationId, userId } }, include: { Conversation: true } })
-    if (!member) fail(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
+    if (!member) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
     const throughSeq = Math.min(requested, member.Conversation.lastMessageSeq)
     if (throughSeq <= member.lastReadSeq) return { lastReadSeq: member.lastReadSeq, unreadCount: member.unreadCount }
     const unreadCount = await tx.directMessage.count({ where: { conversationId, senderUserId: { not: userId }, seq: { gt: throughSeq } } })
@@ -310,7 +310,8 @@ export async function createReport(userId: string, body: any) {
   if (!messageId || !reason) fail(422, 'INVALID_CHAT_REPORT', '请选择举报原因')
   if (await prisma.chatReport.count({ where: { reporterUserId: userId, createdAt: { gte: new Date(Date.now() - 86400000) } } }) >= 10) fail(429, 'CHAT_REPORT_RATE_LIMITED', '举报提交过于频繁')
   const message = await prisma.directMessage.findUnique({ where: { id: messageId }, include: { Conversation: true } })
-  if (!message || ![message.Conversation.userLowId, message.Conversation.userHighId].includes(userId) || message.senderUserId === userId) fail(404, 'MESSAGE_NOT_REPORTABLE', '消息不存在或不可举报')
+  if (!message) throw new ChatError(404, 'MESSAGE_NOT_REPORTABLE', '消息不存在或不可举报')
+  if (![message.Conversation.userLowId, message.Conversation.userHighId].includes(userId) || message.senderUserId === userId) fail(404, 'MESSAGE_NOT_REPORTABLE', '消息不存在或不可举报')
   const context = await prisma.directMessage.findMany({ where: { conversationId: message.conversationId, seq: { gte: Math.max(1, message.seq - 10), lte: message.seq + 10 } }, orderBy: { seq: 'asc' }, select: { id: true, senderUserId: true, seq: true, content: true, createdAt: true, Sender: { select: { username: true } } } })
   try {
     return await prisma.chatReport.create({ data: { id: randomUUID(), conversationId: message.conversationId, messageId, reporterUserId: userId, targetUserId: message.senderUserId, reason, details, evidenceSnapshot: context as unknown as Prisma.InputJsonValue, evidenceHoldUntil: new Date(Date.now() + 365 * 86400000) } })
