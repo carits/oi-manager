@@ -1,0 +1,90 @@
+import crypto from 'node:crypto'
+import express from 'express'
+import request from 'supertest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { chatRouter, chatReportAdminRouter } from '../src/modules/chat/chat.routes'
+import { prisma } from '../src/prisma'
+import { generateTestToken } from './helpers/testToken'
+
+const app = express()
+app.use(express.json())
+app.use('/api/chat', chatRouter)
+app.use('/api/platform/chat-reports', chatReportAdminRouter)
+
+const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
+let alice: any, bob: any, outsider: any, admin: any
+let aliceToken = '', bobToken = '', outsiderToken = '', adminToken = ''
+
+async function user(username: string, role = 'user') {
+  const created = await prisma.user.create({ data: { id: crypto.randomUUID(), username: `${username}-${crypto.randomUUID()}`, passwordHash: 'test', role } })
+  await prisma.personalProfile.create({ data: { userId: created.id } })
+  return created
+}
+
+beforeEach(async () => {
+  alice = await user('chat-alice'); bob = await user('chat-bob'); outsider = await user('chat-outsider'); admin = await user('chat-admin', 'platform_admin')
+  aliceToken = generateTestToken({ userId: alice.id, username: alice.username, role: 'user', workspaceMode: 'personal' })
+  bobToken = generateTestToken({ userId: bob.id, username: bob.username, role: 'user', workspaceMode: 'personal' })
+  outsiderToken = generateTestToken({ userId: outsider.id, username: outsider.username, role: 'user', workspaceMode: 'personal' })
+  adminToken = generateTestToken({ userId: admin.id, username: admin.username, role: 'platform_admin', workspaceMode: 'work' })
+})
+
+async function befriend() {
+  await prisma.chatPrivacySetting.upsert({ where: { userId: bob.id }, create: { userId: bob.id, allowExactUsernameDiscovery: true }, update: { allowExactUsernameDiscovery: true } })
+  const pending = await request(app).post('/api/chat/friend-requests').set(auth(aliceToken)).send({ addresseeId: bob.id, message: '你好' })
+  expect(pending.status).toBe(201)
+  expect((await request(app).post(`/api/chat/friend-requests/${pending.body.data.id}/accept`).set(auth(bobToken)).send({})).status).toBe(200)
+}
+
+describe('account direct chat', () => {
+  it('requires friendship and restores the same conversation after re-adding', async () => {
+    expect((await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })).status).toBe(403)
+    await befriend()
+    const first = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    expect(first.status).toBe(201)
+    await request(app).delete(`/api/chat/friends/${bob.id}`).set(auth(aliceToken))
+    expect((await request(app).post(`/api/chat/conversations/${first.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'blocked' })).status).toBe(403)
+    await befriend()
+    const restored = await request(app).post('/api/chat/conversations').set(auth(bobToken)).send({ userId: alice.id })
+    expect(restored.body.data.id).toBe(first.body.data.id)
+  })
+
+  it('keeps message idempotency and unread state monotonic', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const clientMessageId = crypto.randomUUID()
+    const first = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId, content: 'hello' })
+    const duplicate = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId, content: 'hello' })
+    expect(first.body.data.id).toBe(duplicate.body.data.id)
+    expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(1)
+    const read = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/read`).set(auth(bobToken)).send({ throughSeq: 999 })
+    expect(read.body.data.lastReadSeq).toBe(1)
+    expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(0)
+  })
+
+  it('block removes friendship and closes pending requests', async () => {
+    await befriend()
+    expect((await request(app).post(`/api/chat/blocks/${bob.id}`).set(auth(aliceToken)).send({})).status).toBe(200)
+    expect((await request(app).post('/api/chat/friend-requests').set(auth(bobToken)).send({ addresseeId: alice.id })).status).toBe(404)
+    expect((await request(app).get('/api/chat/friends').set(auth(aliceToken))).body.data).toHaveLength(0)
+  })
+
+  it('requires explicit exact discovery and never returns partial global matches', async () => {
+    expect((await request(app).get(`/api/chat/users/search?q=${encodeURIComponent(bob.username)}`).set(auth(aliceToken))).body.data).toHaveLength(0)
+    await request(app).patch('/api/chat/privacy').set(auth(bobToken)).send({ allowExactUsernameDiscovery: true })
+    expect((await request(app).get(`/api/chat/users/search?q=${encodeURIComponent(bob.username.slice(0, 8))}`).set(auth(aliceToken))).body.data).toHaveLength(0)
+    expect((await request(app).get(`/api/chat/users/search?q=${encodeURIComponent(bob.username)}`).set(auth(aliceToken))).body.data[0].id).toBe(bob.id)
+  })
+
+  it('restricts messages to members and audits report evidence access', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const message = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'bad message' })
+    expect((await request(app).get(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(outsiderToken))).status).toBe(404)
+    const report = await request(app).post('/api/chat/reports').set(auth(bobToken)).send({ messageId: message.body.data.id, reason: '骚扰' })
+    expect(report.status).toBe(201)
+    expect((await request(app).get(`/api/platform/chat-reports/${report.body.data.id}`).set(auth(adminToken))).status).toBe(422)
+    expect((await request(app).get(`/api/platform/chat-reports/${report.body.data.id}?reason=审核`).set(auth(adminToken))).status).toBe(200)
+    expect(await prisma.platformAuditLog.count({ where: { action: 'chat_report_evidence_viewed', targetId: report.body.data.id } })).toBe(1)
+  })
+})

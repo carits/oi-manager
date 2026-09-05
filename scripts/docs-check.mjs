@@ -226,6 +226,8 @@ const routerPrefixes = {
   organizationMemberRouter: '/api/organizations/:organizationId/members',
   organizationJoinRouter: '/api',
   organizationCreationRouter: '/api',
+  chatRouter: '/api/chat',
+  chatReportAdminRouter: '/api/platform/chat-reports',
   platformOrganizationRouter: '/api/platform/organizations',
   demoScenarioRouter: '/api/admin/demo-scenario',
   telemetryRouter: '/api/telemetry',

@@ -22,6 +22,7 @@ export const superAdminNav: NavConfig = {
     { label: '学校管理', href: '/admin/schools' },
     { label: '账号管理', href: '/admin/users' },
     { label: '评测记录', href: '/admin/submissions' },
+    { label: '私信举报', href: '/admin/chat-reports' },
   ]
 }
 
@@ -35,6 +36,7 @@ export const platformAdminNav: NavConfig = {
     { label: '评测记录', href: '/platform-admin/submissions' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
     { label: 'AI Token', href: '/platform-admin/ai' },
+    { label: '私信举报', href: '/platform-admin/chat-reports' },
   ]
 }
 

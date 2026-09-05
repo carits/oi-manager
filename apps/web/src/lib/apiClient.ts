@@ -16,6 +16,8 @@ export interface ApiClientOptions extends Omit<RequestInit, 'body'> {
   timeout?: number  // 自定义超时时间（毫秒），默认 10000
   /** Public telemetry/probes that must not copy session or workspace identity. */
   anonymous?: boolean
+  /** Account-level APIs must not inherit the organization URL context. */
+  accountScoped?: boolean
 }
 
 export type ApiErrorKind =
@@ -155,7 +157,7 @@ class ApiClient {
     this.baseURL = baseURL
   }
 
-  private getHeaders(): Record<string, string> {
+  private getHeaders(accountScoped = false): Record<string, string> {
     const headers: Record<string, string> = {}
 
     // 从 localStorage 获取 token
@@ -165,7 +167,7 @@ class ApiClient {
         headers['Authorization'] = `Bearer ${token}`
       }
       const organizationMatch = window.location.pathname.match(/^\/org\/([^/]+)/)
-      if (organizationMatch) headers['X-OI-Organization-ID'] = organizationMatch[1]
+      if (!accountScoped && organizationMatch) headers['X-OI-Organization-ID'] = organizationMatch[1]
     }
 
     return headers
@@ -175,14 +177,14 @@ class ApiClient {
     endpoint: string,
     options: ApiClientOptions = {}
   ): Promise<ApiResponse<T>> {
-    const { signal, body, timeout, anonymous = false, ...fetchOptions } = options
+    const { signal, body, timeout, anonymous = false, accountScoped = false, ...fetchOptions } = options
     const url = `${this.baseURL}${endpoint}`
 
     // 判断是否为 FormData
     const isFormData = body instanceof FormData
 
     const headers: Record<string, string> = {
-      ...(anonymous ? {} : this.getHeaders()),
+      ...(anonymous ? {} : this.getHeaders(accountScoped)),
       ...(fetchOptions.headers as Record<string, string>)
     }
 

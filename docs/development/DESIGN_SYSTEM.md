@@ -1,11 +1,15 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-04
+last_verified: 2026-09-05
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
 # 设计系统
+
+## 2026-09-05 私信工作台
+
+一对一私信使用标准 PageHeader、Tabs、Button、表单控件、Empty 和 FormDialog。桌面端使用会话列表与消息区双栏，窄屏降级为列表/详情分步视图；纯文本消息保留换行并允许长内容断行，不得产生页面横向溢出。好友申请和举报使用统一 FormDialog，不自行实现遮罩。
 
 ## 2026-08-25 统一组件契约
 

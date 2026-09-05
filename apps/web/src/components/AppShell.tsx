@@ -14,6 +14,7 @@ import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
 import { NotificationBell } from '@/components/notification/NotificationBell'
+import { ChatButton } from '@/components/chat/ChatButton'
 import styles from './AppShell.module.css'
 
 interface AppShellProps { children: ReactNode }
@@ -23,6 +24,7 @@ const accountPaths = {
   security: '/account/security',
   binding: '/account/platform-bindings',
   wallet: '/account/wallet',
+  messages: '/account/messages',
 }
 
 const labelIcons: Record<string, LucideIcon> = {
@@ -32,6 +34,7 @@ const labelIcons: Record<string, LucideIcon> = {
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
   '题库管理': Library, '排名': Activity, '评测记录': BookOpen, 'OJ账号': Link2, '平台绑定': Link2,
   'AI Token': WalletCards,
+  '私信举报': ShieldCheck,
 
 }
 
@@ -136,6 +139,7 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.security} role="menuitem" onClick={() => setShowUserMenu(false)}><ShieldCheck size={17} aria-hidden="true" />账号安全</Link>
           <Link className={styles.menuItem} href={accountPaths.wallet} role="menuitem" onClick={() => setShowUserMenu(false)}><WalletCards size={17} aria-hidden="true" />我的钱包</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
+          <Link className={styles.menuItem} href={accountPaths.messages} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />好友与私信</Link>
           <div className={styles.menuDivider} />
           <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</Button>
         </div>
@@ -154,6 +158,7 @@ export function AppShell({ children }: AppShellProps) {
             <Link className={styles.brandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
           <div className={styles.headerEnd}>
+            <ChatButton />
             <NotificationBell />
             <WorkspaceSwitcher />
           </div>

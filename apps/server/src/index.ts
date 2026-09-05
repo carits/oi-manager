@@ -41,6 +41,8 @@ import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
 import { contributionRouter } from './modules/contribution/contribution.routes'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
+import { chatRouter, chatReportAdminRouter } from './modules/chat/chat.routes'
+import { chatRealtimeHub } from './modules/chat/chat-realtime'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { metrics } from './lib/metrics'
 import { isInvalidJsonBodyError } from './lib/httpErrors'
@@ -149,6 +151,8 @@ app.use('/api/platform-admin/ai', authenticate, aiTokenAdminRouter)
 app.use('/api/contributions', authenticate, contributionRouter)
 app.use('/api/telemetry', telemetryRouter)
 app.use('/api/workspaces', workspaceRouter)
+app.use('/api/chat', chatRouter)
+app.use('/api/platform/chat-reports', chatReportAdminRouter)
 app.use('/api/admin/demo-scenario', demoScenarioRouter)
 
 // 健康检查
@@ -263,6 +267,9 @@ const gracefulShutdown = async (signal: string) => {
   if (shutdownPromise) return shutdownPromise
   shutdownPromise = (async () => {
     logger.info('server_shutting_down', { action: 'server_shutdown', metadata: { signal } })
+    await chatRealtimeHub.stop().catch(error => {
+      logger.error('chat_realtime_drain_failed', error, { action: 'server_shutdown' })
+    })
     await drainJudgeWebSocket(Number.parseInt(process.env.API_DRAIN_TIMEOUT_MS || '30000', 10)).catch(error => {
       logger.error('judge_drain_failed', error, { action: 'server_shutdown' })
     })
@@ -303,6 +310,12 @@ const httpServer = app.listen(PORT, API_HOST, () => {
   // 初始化评测机 WebSocket 服务器
   ;(global as any).httpServer = httpServer
   initJudgeWebSocket()
+  void chatRealtimeHub.start().catch(error => {
+    logger.error('chat_realtime_start_failed', error, { action: 'server_start' })
+  })
+  const chatEventCatchup = setInterval(() => void chatRealtimeHub.refreshAll(), 5_000)
+  chatEventCatchup.unref()
+  httpServer.once('close', () => clearInterval(chatEventCatchup))
 })
 
 export { httpServer }

@@ -13,10 +13,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 108 |
+| Prisma models | 117 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
-| Module route adapters | 43 |
+| Module route adapters | 44 |
 | systemd units | 8 |
 | Referenced environment keys | 438 |
 
@@ -54,6 +54,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 - `apps/server/src/modules/ai/ai-token.routes.ts`
 - `apps/server/src/modules/carits/carits.routes.ts`
+- `apps/server/src/modules/chat/chat.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
 - `apps/server/src/modules/organization-creation/organization-creation.routes.ts`
@@ -110,6 +111,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CaritsAccount`
 - `CaritsLedgerEntry`
 - `CaritsTransaction`
+- `ChatPrivacySetting`
+- `ChatReport`
+- `ChatUserEvent`
 - `Contest`
 - `ContestProblem`
 - `ContestProblemScore`
@@ -119,9 +123,14 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ContestUserProblemStatus`
 - `ContributionEvent`
 - `ContributionProject`
+- `DirectConversation`
+- `DirectConversationMember`
+- `DirectMessage`
 - `EvaluationCreditAccount`
 - `EvaluationCreditLedgerEntry`
 - `File`
+- `FriendRequest`
+- `Friendship`
 - `JudgeAttempt`
 - `JudgeRun`
 - `LoginLog`
@@ -197,6 +206,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingUserProblemStatus`
 - `User`
 - `UserArchivedProblem`
+- `UserBlock`
 - `UserNotification`
 - `UserPlatformBinding`
 - `UserProblemContent`

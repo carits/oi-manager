@@ -5,6 +5,8 @@ last_verified: 2026-09-05
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-05: 好友前置的一对一私信已实现：账号级用户发现默认保护跨关系账号，好友申请通过后才能建立会话；删除好友保留历史并禁发，拉黑解除好友和待处理申请。消息使用会话内序号、幂等键、事务未读投影和持久 `ChatUserEvent`，PostgreSQL LISTEN/NOTIFY + 周期补偿驱动 SSE，蓝绿退出发送重启事件。普通用户拥有消息/好友/申请/黑名单工作台；超级管理员和平台管理员可审核举报，但证据访问必须写平台审计。单方清空只影响自己，双方清空 30 天后由 Worker 清理未举报消息。
+
 - 2026-09-05: 学校目录治理已部署：`School.directoryStatus` 区分 verified/pending/hidden/legacy，公开目录、本人组织、工作区、组织认证和加入流程统一隔离 legacy。生产 check/apply 将 4,901 个测试/临时学校隔离、第一中学设为 verified、平台内部学校设为 hidden，18,865 个成员关系、942 个团队、552 个活动和 780 个题单引用保持不变；二次 apply 变更为 0。超管学校页支持状态筛选、引用摘要和有审计的恢复/隐藏/隔离。定向 Server 11/11、三端构建、Prisma/UI/API/架构/文档门禁通过；备份 `oi_manager_20260905_115001.dump`（SHA-256 `e98e804c…a25f26a2bde`）已校验，API 活动 slot 为 3303，Web BUILD_ID `qfGQBna1fp-VWGNOvhZXc`。线上目录只返回第一中学，legacy 直接组织上下文返回 404。
 
 - 2026-09-05: 组织创建申请已上线。普通账号可在个人组织页提交/撤销学校创建申请，超管在学校管理中审核；批准使用 Serializable 事务和 advisory lock 原子创建 Organization、School、`school_principal/employee` Membership、TeacherProfile、负责人指针、平台/组织审计与通知，不改写申请人全局角色。支持单 pending、24 小时 3 次限制、拒绝同名 24 小时冷却、名称 NFKC 防重和并发审批 409；生产历史 `student/teacher/school_principal` 账号作为普通账号兼容。学校管理的加入策略已从邀请列表拆到独立“加入设置”。空库安装为 109 表/39 迁移，隔离创建流程 7/7、加入回归 6/6、Web 57/57、三端构建、Prisma/UI/API/架构/文档门禁通过。正式迁移前备份 `oi_manager_20260905_070802.dump` 为 31 MiB，SHA-256 `0368dada7d72bbf614d72296b731df40e3160fb672e107abf7b0b88de62e4ee7`；备份克隆检测到 4,903 条历史 School 中 8 组/875 条标准化重名，因此按规则未回填、未合并，新写入以有界旧名扫描防止绕过。API 活动 slot 为 3302，Web BUILD_ID `l6pi2JoGHAEMSgUVVb4uA`，真实超管/历史负责人列表均 200，readiness 与服务健康。

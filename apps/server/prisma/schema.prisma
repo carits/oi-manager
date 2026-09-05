@@ -2393,10 +2393,180 @@ model User {
   CaritsAccount                            CaritsAccount?                    @relation("CaritsAccountUser")
   CaritsTransactions                       CaritsTransaction[]               @relation("CaritsTransactionOperator")
   ContributionEvents                       ContributionEvent[]               @relation("ContributionActor")
+  ChatPrivacySetting                      ChatPrivacySetting?
+  SentFriendRequests                      FriendRequest[]                    @relation("FriendRequestSender")
+  ReceivedFriendRequests                  FriendRequest[]                    @relation("FriendRequestReceiver")
+  LowFriendships                          Friendship[]                       @relation("FriendshipLowUser")
+  HighFriendships                         Friendship[]                       @relation("FriendshipHighUser")
+  RemovedFriendships                      Friendship[]                       @relation("FriendshipRemovedBy")
+  BlocksCreated                           UserBlock[]                        @relation("UserBlockBlocker")
+  BlocksReceived                          UserBlock[]                        @relation("UserBlockBlocked")
+  LowDirectConversations                  DirectConversation[]              @relation("DirectConversationLowUser")
+  HighDirectConversations                 DirectConversation[]              @relation("DirectConversationHighUser")
+  DirectConversationMembers               DirectConversationMember[]
+  SentDirectMessages                      DirectMessage[]
+  ChatUserEvents                          ChatUserEvent[]
+  ChatReportsFiled                        ChatReport[]                       @relation("ChatReportReporter")
+  ChatReportsAgainst                      ChatReport[]                       @relation("ChatReportTarget")
+  ChatReportsReviewed                     ChatReport[]                       @relation("ChatReportReviewer")
 
   @@index([createdAt])
   @@index([role])
   @@index([status])
+}
+
+model ChatPrivacySetting {
+  userId                      String   @id
+  allowExactUsernameDiscovery Boolean  @default(false)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  User                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FriendRequest {
+  id          String   @id
+  requesterId String
+  addresseeId String
+  message     String?  @db.VarChar(500)
+  status      String   @default("pending")
+  respondedAt DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Requester   User     @relation("FriendRequestSender", fields: [requesterId], references: [id], onDelete: Restrict)
+  Addressee   User     @relation("FriendRequestReceiver", fields: [addresseeId], references: [id], onDelete: Restrict)
+
+  @@index([requesterId, status, createdAt])
+  @@index([addresseeId, status, createdAt])
+  @@index([expiresAt, status])
+}
+
+model Friendship {
+  id          String    @id
+  userLowId   String
+  userHighId  String
+  status      String    @default("active")
+  acceptedAt  DateTime  @default(now())
+  removedAt   DateTime?
+  removedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  LowUser     User      @relation("FriendshipLowUser", fields: [userLowId], references: [id], onDelete: Restrict)
+  HighUser    User      @relation("FriendshipHighUser", fields: [userHighId], references: [id], onDelete: Restrict)
+  RemovedBy   User?     @relation("FriendshipRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+
+  @@unique([userLowId, userHighId])
+  @@index([userLowId, status])
+  @@index([userHighId, status])
+}
+
+model UserBlock {
+  id        String   @id
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  Blocker   User     @relation("UserBlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  Blocked   User     @relation("UserBlockBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model DirectConversation {
+  id                 String                     @id
+  userLowId          String
+  userHighId         String
+  lastMessageSeq     Int                        @default(0)
+  lastMessagePreview String?
+  lastMessageAt      DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  LowUser            User                       @relation("DirectConversationLowUser", fields: [userLowId], references: [id], onDelete: Restrict)
+  HighUser           User                       @relation("DirectConversationHighUser", fields: [userHighId], references: [id], onDelete: Restrict)
+  Members            DirectConversationMember[]
+  Messages           DirectMessage[]
+  Reports            ChatReport[]
+
+  @@unique([userLowId, userHighId])
+  @@index([lastMessageAt])
+}
+
+model DirectConversationMember {
+  id                String             @id
+  conversationId    String
+  userId            String
+  lastReadSeq       Int                @default(0)
+  unreadCount       Int                @default(0)
+  archivedAt        DateTime?
+  mutedUntil        DateTime?
+  clearedThroughSeq Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  Conversation      DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  User              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([conversationId, userId])
+  @@index([userId, archivedAt, updatedAt])
+}
+
+model DirectMessage {
+  id              String             @id
+  conversationId  String
+  senderUserId    String
+  clientMessageId String
+  seq             Int
+  content         String             @db.Text
+  createdAt       DateTime           @default(now())
+  Conversation    DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  Sender          User               @relation(fields: [senderUserId], references: [id], onDelete: Restrict)
+  Reports         ChatReport[]
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, senderUserId, clientMessageId])
+  @@index([senderUserId, createdAt])
+}
+
+model ChatUserEvent {
+  id             BigInt   @id @default(autoincrement())
+  userId         String
+  eventType      String
+  conversationId String?
+  messageId      String?
+  payload        Json?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  User           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, id])
+  @@index([expiresAt])
+}
+
+model ChatReport {
+  id                 String              @id
+  conversationId     String
+  messageId          String
+  reporterUserId     String
+  targetUserId       String
+  reason             String
+  details            String?             @db.Text
+  evidenceSnapshot   Json
+  status             String              @default("pending")
+  reviewedByUserId   String?
+  reviewedAt         DateTime?
+  resolutionNote     String?             @db.Text
+  evidenceHoldUntil  DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  Conversation       DirectConversation  @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  Message            DirectMessage       @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  Reporter           User                @relation("ChatReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  Target             User                @relation("ChatReportTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  ReviewedBy         User?               @relation("ChatReportReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([reporterUserId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([messageId, reporterUserId, status])
 }
 
 model UserNotification {

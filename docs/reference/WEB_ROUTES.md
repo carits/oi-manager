@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-04
+last_verified: 2026-09-05
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -14,10 +14,13 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/` | 见页面权限布局 | 当前页面 |
 | `/account/platform-bindings` | 见页面权限布局 | 当前页面 |
 | `/account/notifications` | 已登录账号 | 完整消息中心 |
+| `/account/messages` | 已登录账号 | 好友、好友申请、黑名单和一对一私信 |
 | `/account/profile` | 见页面权限布局 | 当前页面 |
 | `/account/security` | 见页面权限布局 | 当前页面 |
 | `/account/wallet` | 见页面权限布局 | 当前页面 |
 | `/admin` | 见页面权限布局 | 当前页面 |
+| `/admin/chat-reports` | 超级管理员 | 私信举报审核 |
+| `/platform-admin/chat-reports` | 平台管理员 | 私信举报审核 |
 | `/admin/platform-bindings` | 见页面权限布局 | 当前页面 |
 | `/admin/profile` | 见页面权限布局 | 当前页面 |
 | `/admin/schools` | 见页面权限布局 | 当前页面 |
