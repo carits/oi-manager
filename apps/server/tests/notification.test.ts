@@ -53,7 +53,7 @@ describe('notification application service', () => {
     expect(row?.readAt).not.toBeNull()
   })
 
-  it('read-all only affects notifications in the current workspace scope', async () => {
+  it('read-all includes account notifications visible in the current workspace', async () => {
     const campus = await createNotification('campus')
     const personal = await prisma.userNotification.create({
       data: {
@@ -68,7 +68,7 @@ describe('notification application service', () => {
       prisma.userNotification.findUnique({ where: { id: personal.id } }),
     ])
     expect(campusRow?.readAt).not.toBeNull()
-    expect(personalRow?.readAt).toBeNull()
+    expect(personalRow?.readAt).not.toBeNull()
   })
 
   it('does not reveal another user notification when marking it read', async () => {
