@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/apiClient'
-import { ENV } from '@/config/env'
+import { connectChatEvents } from '@/lib/chatEvents'
 import { useAuth } from '@/components/AuthProvider'
 import { Button } from '@/components/ui/Button'
 import { Input, SearchField, Switch, Textarea } from '@/components/ui/FormControls'
@@ -73,10 +73,11 @@ export default function MessagesPage() {
   useEffect(() => { void loadCore() }, [loadCore])
   useEffect(() => { if (selectedId) void loadMessages(selectedId); else setMessages([]) }, [selectedId, loadMessages])
   useEffect(() => {
-    const source = new EventSource(`${ENV.API_URL}/api/chat/events`, { withCredentials: true })
     const refresh = () => { void loadCore(); if (selectedId) void loadMessages(selectedId) }
-    ;['message_created', 'friend_request_created', 'friend_request_accepted', 'friend_request_rejected', 'friend_request_cancelled', 'friend_request_blocked', 'friendship_removed', 'resync_required'].forEach(type => source.addEventListener(type, refresh))
-    return () => source.close()
+    const refreshEvents = new Set(['message_created', 'friend_request_created', 'friend_request_accepted', 'friend_request_rejected', 'friend_request_cancelled', 'friend_request_blocked', 'friendship_removed', 'resync_required'])
+    return connectChatEvents(event => {
+      if (refreshEvents.has(event.type)) refresh()
+    })
   }, [loadCore, loadMessages, selectedId])
 
   const search = async () => {
