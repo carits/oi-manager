@@ -43,7 +43,7 @@ async function sharedContextIds(userId: string) {
       where: { userId, status: 'active', Organization: { status: 'active', OR: [{ type: { not: 'school' } }, { School: { directoryStatus: { not: 'legacy' }, status: 'active' } }] } },
       select: { organizationId: true },
     }),
-    prisma.teamMember.findMany({ where: { userId, status: 'active' }, select: { teamId: true } }),
+    prisma.teamMember.findMany({ where: { userId, status: 'active', Team: { OR: [{ organizationId: null }, { Organization: { status: 'active', OR: [{ type: { not: 'school' } }, { School: { directoryStatus: { not: 'legacy' }, status: 'active' } }] } }] } }, select: { teamId: true } }),
   ])
   return { organizationIds: memberships.map(item => item.organizationId), teamIds: teams.map(item => item.teamId) }
 }
@@ -311,7 +311,7 @@ export async function createReport(userId: string, body: any) {
   if (await prisma.chatReport.count({ where: { reporterUserId: userId, createdAt: { gte: new Date(Date.now() - 86400000) } } }) >= 10) fail(429, 'CHAT_REPORT_RATE_LIMITED', '举报提交过于频繁')
   const message = await prisma.directMessage.findUnique({ where: { id: messageId }, include: { Conversation: true } })
   if (!message || ![message.Conversation.userLowId, message.Conversation.userHighId].includes(userId) || message.senderUserId === userId) fail(404, 'MESSAGE_NOT_REPORTABLE', '消息不存在或不可举报')
-  const context = await prisma.directMessage.findMany({ where: { conversationId: message.conversationId, seq: { gte: Math.max(1, message.seq - 10), lte: message.seq + 10 } }, orderBy: { seq: 'asc' }, select: { id: true, senderUserId: true, seq: true, content: true, createdAt: true } })
+  const context = await prisma.directMessage.findMany({ where: { conversationId: message.conversationId, seq: { gte: Math.max(1, message.seq - 10), lte: message.seq + 10 } }, orderBy: { seq: 'asc' }, select: { id: true, senderUserId: true, seq: true, content: true, createdAt: true, Sender: { select: { username: true } } } })
   try {
     return await prisma.chatReport.create({ data: { id: randomUUID(), conversationId: message.conversationId, messageId, reporterUserId: userId, targetUserId: message.senderUserId, reason, details, evidenceSnapshot: context as unknown as Prisma.InputJsonValue, evidenceHoldUntil: new Date(Date.now() + 365 * 86400000) } })
   } catch (error: any) {
@@ -353,4 +353,9 @@ export async function reviewReport(actorUserId: string, reportId: string, status
 
 export async function eventBacklog(userId: string, afterId: bigint, take = 200) {
   return prisma.chatUserEvent.findMany({ where: { userId, id: { gt: afterId }, expiresAt: { gt: new Date() } }, orderBy: { id: 'asc' }, take })
+}
+
+export async function isEventCursorExpired(userId: string, cursor: bigint) {
+  if (cursor <= 0n) return false
+  return !await prisma.chatUserEvent.findFirst({ where: { userId, id: cursor, expiresAt: { gt: new Date() } }, select: { id: true } })
 }

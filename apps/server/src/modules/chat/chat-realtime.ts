@@ -1,7 +1,8 @@
 import type { Response } from 'express'
 import { Client } from 'pg'
 import logger from '../../lib/logger'
-import { eventBacklog } from './application/chat.service'
+import { prisma } from '../../prisma'
+import { eventBacklog, isEventCursorExpired } from './application/chat.service'
 
 type Stream = { response: Response; cursor: bigint; closed: boolean }
 
@@ -15,11 +16,7 @@ class ChatRealtimeHub {
   async start() {
     this.stopping = false
     await this.connectListener()
-    this.heartbeat = setInterval(() => {
-      for (const streams of this.streams.values()) for (const stream of streams) {
-        if (!stream.closed) stream.response.write(': heartbeat\n\n')
-      }
-    }, 20_000)
+    this.heartbeat = setInterval(() => void this.heartbeatTick(), 20_000)
     this.heartbeat.unref()
   }
 
@@ -68,7 +65,21 @@ class ChatRealtimeHub {
     set.add(stream)
     this.streams.set(userId, set)
     response.once('close', () => this.remove(userId, stream))
+    if (await isEventCursorExpired(userId, cursor)) response.write('event: resync_required\ndata: {}\n\n')
     await this.flush(userId, stream)
+  }
+
+  private async heartbeatTick() {
+    const userIds = [...this.streams.keys()]
+    if (!userIds.length) return
+    const activeUsers = new Set((await prisma.user.findMany({ where: { id: { in: userIds }, status: 'active' }, select: { id: true } })).map(user => user.id))
+    for (const [userId, streams] of this.streams) for (const stream of streams) {
+      if (stream.closed) continue
+      if (!activeUsers.has(userId)) {
+        stream.response.write('event: auth_revoked\ndata: {}\n\n')
+        stream.response.end()
+      } else stream.response.write(': heartbeat\n\n')
+    }
   }
 
   async refreshAll() {
