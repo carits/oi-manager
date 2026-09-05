@@ -2,9 +2,10 @@ import type { Response } from 'express'
 import { Client } from 'pg'
 import logger from '../../lib/logger'
 import { prisma } from '../../prisma'
-import { eventBacklog, isEventCursorExpired } from './application/chat.service'
+import { eventBacklog } from './application/chat.service'
+import { chatMetrics } from './chat-metrics'
 
-type Stream = { response: Response; cursor: bigint; closed: boolean }
+type Stream = { response: Response; cursor: bigint; closed: boolean; flushing: boolean; pending: boolean }
 
 class ChatRealtimeHub {
   private streams = new Map<string, Set<Stream>>()
@@ -16,7 +17,9 @@ class ChatRealtimeHub {
   async start() {
     this.stopping = false
     await this.connectListener()
-    this.heartbeat = setInterval(() => void this.heartbeatTick(), 20_000)
+    this.heartbeat = setInterval(() => {
+      void this.heartbeatTick().catch(error => logger.error('chat_heartbeat_failed', error as Error, { action: 'chat_sse' }))
+    }, 20_000)
     this.heartbeat.unref()
   }
 
@@ -26,7 +29,7 @@ class ChatRealtimeHub {
     listener.on('notification', notification => {
       try {
         const payload = JSON.parse(notification.payload || '{}')
-        if (typeof payload.userId === 'string') void this.flushUser(payload.userId)
+        if (typeof payload.userId === 'string') void this.flushUser(payload.userId).catch(error => logger.error('chat_event_flush_failed', error as Error, { action: 'chat_sse', metadata: { userId: payload.userId } }))
       } catch (error) {
         logger.warn('chat_event_notification_invalid', { action: 'chat_sse', metadata: { error: String(error) } })
       }
@@ -57,19 +60,20 @@ class ChatRealtimeHub {
     if (this.stopping || this.reconnectTimer) return
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
+      chatMetrics.reconnect()
       void this.connectListener()
     }, 2_000)
     this.reconnectTimer.unref()
   }
 
   async add(userId: string, response: Response, cursor: bigint) {
-    const stream: Stream = { response, cursor, closed: false }
+    const stream: Stream = { response, cursor, closed: false, flushing: false, pending: false }
     const set = this.streams.get(userId) || new Set<Stream>()
     if (set.size >= 8) throw new Error('CHAT_STREAM_LIMIT')
     set.add(stream)
+    chatMetrics.connectionOpened()
     this.streams.set(userId, set)
     response.once('close', () => this.remove(userId, stream))
-    if (await isEventCursorExpired(userId, cursor)) response.write('event: resync_required\ndata: {}\n\n')
     await this.flush(userId, stream)
   }
 
@@ -77,41 +81,67 @@ class ChatRealtimeHub {
     const userIds = [...this.streams.keys()]
     if (!userIds.length) return
     const activeUsers = new Set((await prisma.user.findMany({ where: { id: { in: userIds }, status: 'active' }, select: { id: true } })).map(user => user.id))
-    for (const [userId, streams] of this.streams) for (const stream of streams) {
+    for (const [userId, streams] of this.streams) for (const stream of [...streams]) {
       if (stream.closed) continue
-      if (!activeUsers.has(userId)) {
-        stream.response.write('event: auth_revoked\ndata: {}\n\n')
-        stream.response.end()
-      } else stream.response.write(': heartbeat\n\n')
+      try {
+        if (!activeUsers.has(userId)) {
+          stream.response.write('event: auth_revoked\ndata: {}\n\n')
+          stream.response.end()
+          this.remove(userId, stream)
+        } else stream.response.write(': heartbeat\n\n')
+      } catch (error) {
+        logger.warn('chat_stream_heartbeat_write_failed', { action: 'chat_sse', metadata: { userId, error: String(error) } })
+        this.remove(userId, stream)
+      }
     }
   }
 
   async refreshAll() {
-    await Promise.all([...this.streams.keys()].map(userId => this.flushUser(userId)))
+    const results = await Promise.allSettled([...this.streams.keys()].map(userId => this.flushUser(userId)))
+    for (const result of results) if (result.status === 'rejected') logger.error('chat_event_catchup_user_failed', result.reason as Error, { action: 'chat_sse' })
   }
 
   private remove(userId: string, stream: Stream) {
+    if (stream.closed) return
     stream.closed = true
     const set = this.streams.get(userId)
     set?.delete(stream)
     if (!set?.size) this.streams.delete(userId)
+    chatMetrics.connectionClosed()
   }
 
   private async flushUser(userId: string) {
     const streams = this.streams.get(userId)
     if (!streams) return
-    await Promise.all([...streams].map(stream => this.flush(userId, stream)))
+    const results = await Promise.allSettled([...streams].map(stream => this.flush(userId, stream)))
+    for (const result of results) if (result.status === 'rejected') logger.error('chat_event_stream_flush_failed', result.reason as Error, { action: 'chat_sse', metadata: { userId } })
   }
 
   private async flush(userId: string, stream: Stream) {
     if (stream.closed) return
-    const events = await eventBacklog(userId, stream.cursor)
-    for (const event of events) {
-      if (stream.closed) return
-      stream.response.write(`id: ${event.id.toString()}\n`)
-      stream.response.write(`event: ${event.eventType}\n`)
-      stream.response.write(`data: ${JSON.stringify({ eventType: event.eventType, conversationId: event.conversationId, messageId: event.messageId, payload: event.payload, createdAt: event.createdAt })}\n\n`)
-      stream.cursor = event.id
+    if (stream.flushing) { stream.pending = true; return }
+    stream.flushing = true
+    try {
+      do {
+        stream.pending = false
+        const events = await eventBacklog(userId, stream.cursor)
+        chatMetrics.backlog(events.length)
+        for (const event of events) {
+          if (stream.closed) return
+          stream.response.write(`id: ${event.id.toString()}\n`)
+          stream.response.write(`event: ${event.eventType}\n`)
+          stream.response.write(`data: ${JSON.stringify({ eventType: event.eventType, conversationId: event.conversationId, messageId: event.messageId, payload: event.payload, createdAt: event.createdAt })}\n\n`)
+          stream.cursor = event.id
+        }
+        if (events.length === 200) stream.pending = true
+      } while (stream.pending && !stream.closed)
+    } catch (error) {
+      chatMetrics.flushFailure()
+      this.remove(userId, stream)
+      try { stream.response.end() } catch { /* stream already closed */ }
+      throw error
+    } finally {
+      stream.flushing = false
     }
   }
 

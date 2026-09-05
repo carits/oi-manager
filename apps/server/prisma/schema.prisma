@@ -2479,6 +2479,7 @@ model DirectConversation {
   lastMessageSeq     Int                        @default(0)
   lastMessagePreview String?
   lastMessageAt      DateTime?
+  lastActivityAt     DateTime                   @default(now())
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   LowUser            User                       @relation("DirectConversationLowUser", fields: [userLowId], references: [id], onDelete: Restrict)
@@ -2489,6 +2490,7 @@ model DirectConversation {
 
   @@unique([userLowId, userHighId])
   @@index([lastMessageAt])
+  @@index([lastActivityAt, id])
 }
 
 model DirectConversationMember {
@@ -2544,7 +2546,7 @@ model ChatUserEvent {
 model ChatReport {
   id                 String              @id
   conversationId     String
-  messageId          String
+  messageId          String?
   reporterUserId     String
   targetUserId       String
   reason             String
@@ -2555,10 +2557,11 @@ model ChatReport {
   reviewedAt         DateTime?
   resolutionNote     String?             @db.Text
   evidenceHoldUntil  DateTime?
+  evidenceReleasedAt DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   Conversation       DirectConversation  @relation(fields: [conversationId], references: [id], onDelete: Restrict)
-  Message            DirectMessage       @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  Message            DirectMessage?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
   Reporter           User                @relation("ChatReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
   Target             User                @relation("ChatReportTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
   ReviewedBy         User?               @relation("ChatReportReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
@@ -2567,6 +2570,12 @@ model ChatReport {
   @@index([reporterUserId, createdAt])
   @@index([targetUserId, createdAt])
   @@index([messageId, reporterUserId, status])
+}
+
+model ChatMaintenanceCursor {
+  name      String   @id
+  cursor    String?
+  updatedAt DateTime @updatedAt
 }
 
 model UserNotification {

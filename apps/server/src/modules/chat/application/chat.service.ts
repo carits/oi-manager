@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
+import { chatMetrics } from '../chat-metrics'
 
 export class ChatError extends Error {
   constructor(public statusCode: number, public code: string, message: string) { super(message) }
@@ -11,6 +12,36 @@ const ordered = (a: string, b: string) => a < b ? [a, b] as const : [b, a] as co
 const eventExpiry = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 const requestExpiry = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 const safeUser = (user: { id: string; username: string; avatar: string | null }) => ({ id: user.id, username: user.username, avatar: user.avatar })
+
+function parsePageSize(value: unknown, fallback: number, maximum: number) {
+  if (value === undefined) return fallback
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) fail(422, 'CHAT_MESSAGE_PAGE_INVALID', `分页大小必须为 1～${maximum}`)
+  return parsed
+}
+
+function parseSequence(value: unknown, field: string, allowZero = false) {
+  if (value === undefined) return undefined
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < (allowZero ? 0 : 1)) fail(422, 'CHAT_MESSAGE_PAGE_INVALID', `${field} 无效`)
+  return parsed
+}
+
+type ConversationCursor = { activityAt: string; id: string }
+function encodeConversationCursor(cursor: ConversationCursor) {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
+}
+function decodeConversationCursor(value: unknown): ConversationCursor | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value.length > 512) fail(422, 'CHAT_INVALID_CURSOR', '会话游标无效')
+  try {
+    const parsed = JSON.parse(Buffer.from(value as string, 'base64url').toString('utf8'))
+    if (!parsed || typeof parsed.id !== 'string' || typeof parsed.activityAt !== 'string' || !Number.isFinite(Date.parse(parsed.activityAt))) throw new Error('invalid')
+    return parsed
+  } catch {
+    fail(422, 'CHAT_INVALID_CURSOR', '会话游标无效')
+  }
+}
 
 async function notify(tx: Prisma.TransactionClient, userIds: string[], eventType: string, conversationId?: string, messageId?: string, payload?: Prisma.InputJsonValue) {
   for (const userId of [...new Set(userIds)]) {
@@ -191,6 +222,8 @@ async function requireConversationMember(userId: string, conversationId: string)
 
 export async function createConversation(userId: string, body: any) {
   const otherId = typeof body.userId === 'string' ? body.userId : ''
+  const activeUsers = await prisma.user.count({ where: { id: { in: [userId, otherId] }, status: 'active' } })
+  if (activeUsers !== 2) fail(404, 'CHAT_TARGET_UNAVAILABLE', '联系人当前不可用')
   const friendship = await activeFriendship(userId, otherId)
   if (!friendship || friendship.status !== 'active' || await blockedBetween(userId, otherId)) fail(403, 'FRIENDSHIP_REQUIRED', '只有好友可以发起聊天')
   const [userLowId, userHighId] = ordered(userId, otherId)
@@ -201,35 +234,66 @@ export async function createConversation(userId: string, body: any) {
   })
 }
 
-export async function listConversations(userId: string, includeArchived = false) {
+export async function listConversations(userId: string, query: any = {}) {
+  const v2 = query.pagination === 'v2'
+  const scope = v2 ? (query.scope || 'active') : (query.archived === true || query.archived === 'true' ? 'all' : 'active')
+  if (!['active', 'archived', 'all'].includes(scope)) fail(422, 'CHAT_INVALID_CURSOR', '会话范围无效')
+  const pageSize = v2 ? parsePageSize(query.pageSize, 30, 100) : 100
+  const cursor = v2 ? decodeConversationCursor(query.cursor) : undefined
+  const activityBefore = cursor ? new Date(cursor.activityAt) : undefined
   const members = await prisma.directConversationMember.findMany({
-    where: { userId, ...(includeArchived ? {} : { archivedAt: null }) },
+    where: {
+      userId,
+      ...(scope === 'active' ? { archivedAt: null } : scope === 'archived' ? { archivedAt: { not: null } } : {}),
+      ...(cursor ? { Conversation: { OR: [{ lastActivityAt: { lt: activityBefore } }, { lastActivityAt: activityBefore, id: { lt: cursor.id } }] } } : {}),
+    },
     include: { Conversation: { include: { LowUser: { select: { id: true, username: true, avatar: true } }, HighUser: { select: { id: true, username: true, avatar: true } } } } },
-    orderBy: { Conversation: { lastMessageAt: 'desc' } }, take: 100,
+    orderBy: [{ Conversation: { lastActivityAt: 'desc' } }, { Conversation: { id: 'desc' } }], take: pageSize + (v2 ? 1 : 0),
   })
-  const otherIds = members.map(member => member.Conversation.userLowId === userId ? member.Conversation.userHighId : member.Conversation.userLowId)
+  const pageMembers = v2 && members.length > pageSize ? members.slice(0, pageSize) : members
+  const otherIds = pageMembers.map(member => member.Conversation.userLowId === userId ? member.Conversation.userHighId : member.Conversation.userLowId)
   const [friendships, blocks] = await Promise.all([
     prisma.friendship.findMany({ where: { status: 'active', OR: [{ userLowId: userId, userHighId: { in: otherIds } }, { userHighId: userId, userLowId: { in: otherIds } }] }, select: { userLowId: true, userHighId: true } }),
     prisma.userBlock.findMany({ where: { OR: [{ blockerId: userId, blockedId: { in: otherIds } }, { blockedId: userId, blockerId: { in: otherIds } }] }, select: { blockerId: true, blockedId: true } }),
   ])
   const friendIds = new Set(friendships.map(item => item.userLowId === userId ? item.userHighId : item.userLowId))
   const blockedIds = new Set(blocks.map(item => item.blockerId === userId ? item.blockedId : item.blockerId))
-  return members.map(member => {
+  const items = pageMembers.map(member => {
     const conversation = member.Conversation
     const other = conversation.userLowId === userId ? conversation.HighUser : conversation.LowUser
     return { id: conversation.id, other: safeUser(other), lastMessageSeq: conversation.lastMessageSeq, lastMessagePreview: conversation.lastMessageSeq > member.clearedThroughSeq ? conversation.lastMessagePreview : null, lastMessageAt: conversation.lastMessageAt, unreadCount: member.unreadCount, archivedAt: member.archivedAt, canSend: friendIds.has(other.id) && !blockedIds.has(other.id) }
   })
+  if (!v2) return items
+  const last = pageMembers.at(-1)?.Conversation
+  return { items, nextCursor: members.length > pageSize && last ? encodeConversationCursor({ activityAt: last.lastActivityAt.toISOString(), id: last.id }) : null }
 }
 
 export async function listMessages(userId: string, conversationId: string, query: any) {
   const member = await requireConversationMember(userId, conversationId)
-  const afterSeq = Number.isSafeInteger(Number(query.afterSeq)) ? Math.max(member.clearedThroughSeq, Number(query.afterSeq)) : member.clearedThroughSeq
-  const beforeSeq = Number.isSafeInteger(Number(query.beforeSeq)) ? Number(query.beforeSeq) : undefined
+  const v2 = query.pagination === 'v2'
+  const pageSize = v2 ? parsePageSize(query.pageSize, 50, 100) : 100
+  const parsedAfter = parseSequence(query.afterSeq, 'afterSeq', true)
+  const beforeSeq = parseSequence(query.beforeSeq, 'beforeSeq')
+  if (parsedAfter !== undefined && beforeSeq !== undefined) fail(422, 'CHAT_MESSAGE_PAGE_INVALID', 'beforeSeq 与 afterSeq 不能同时使用')
+  const afterSeq = Math.max(member.clearedThroughSeq, parsedAfter || member.clearedThroughSeq)
+  const isLatestPage = parsedAfter === undefined && beforeSeq === undefined
   const rows = await prisma.directMessage.findMany({
     where: { conversationId, seq: { gt: afterSeq, ...(beforeSeq ? { lt: beforeSeq } : {}) } },
-    orderBy: { seq: beforeSeq ? 'desc' : 'asc' }, take: 100,
+    orderBy: { seq: beforeSeq || isLatestPage ? 'desc' : 'asc' }, take: pageSize + (v2 ? 1 : 0),
   })
-  return (beforeSeq ? rows.reverse() : rows).map(row => ({ ...row, seq: row.seq }))
+  const hasExtra = v2 && rows.length > pageSize
+  const pageRows = hasExtra ? rows.slice(0, pageSize) : rows
+  const items = (beforeSeq || isLatestPage ? pageRows.reverse() : pageRows).map(row => ({ ...row, seq: row.seq }))
+  if (!v2) return items
+  return {
+    items,
+    page: {
+      hasMoreBefore: beforeSeq !== undefined || isLatestPage ? hasExtra : Boolean(items[0] && items[0].seq > member.clearedThroughSeq + 1),
+      hasMoreAfter: parsedAfter !== undefined ? hasExtra : false,
+      oldestSeq: items[0]?.seq,
+      newestSeq: items.at(-1)?.seq,
+    },
+  }
 }
 
 function validateMessageContent(value: unknown) {
@@ -239,9 +303,14 @@ function validateMessageContent(value: unknown) {
   return content
 }
 
-export async function sendMessage(userId: string, conversationId: string, body: any) {
+async function sendMessageImpl(userId: string, conversationId: string, body: any) {
   const content = validateMessageContent(body.content)
   const clientMessageId = typeof body.clientMessageId === 'string' && /^[0-9a-f-]{16,64}$/i.test(body.clientMessageId) ? body.clientMessageId : fail(422, 'INVALID_CLIENT_MESSAGE_ID', '消息幂等标识无效')
+  const existingBeforeLimit = await prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+  if (existingBeforeLimit) {
+    if (existingBeforeLimit.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+    return existingBeforeLimit
+  }
   const minute = new Date(Date.now() - 60000)
   const hour = new Date(Date.now() - 3600000)
   const tenSeconds = new Date(Date.now() - 10000)
@@ -257,13 +326,19 @@ export async function sendMessage(userId: string, conversationId: string, body: 
       const conversation = locked[0]
       if (!conversation || ![conversation.userLowId, conversation.userHighId].includes(userId)) fail(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
       const otherId = conversation.userLowId === userId ? conversation.userHighId : conversation.userLowId
+      const users = await tx.user.findMany({ where: { id: { in: [userId, otherId] } }, select: { id: true, status: true } })
+      if (users.find(user => user.id === userId)?.status !== 'active') fail(403, 'CHAT_USER_DISABLED', '当前账号无法发送消息')
+      if (users.find(user => user.id === otherId)?.status !== 'active') fail(409, 'CHAT_TARGET_UNAVAILABLE', '联系人当前不可用')
       const friendship = await activeFriendship(userId, otherId, tx)
       if (!friendship || friendship.status !== 'active' || await blockedBetween(userId, otherId, tx)) fail(403, 'FRIENDSHIP_REQUIRED', '当前不是好友，无法发送消息')
       const existing = await tx.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
-      if (existing) return existing
+      if (existing) {
+        if (existing.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+        return existing
+      }
       const seq = conversation.lastMessageSeq + 1
       const message = await tx.directMessage.create({ data: { id: randomUUID(), conversationId, senderUserId: userId, clientMessageId, seq, content } })
-      await tx.directConversation.update({ where: { id: conversationId }, data: { lastMessageSeq: seq, lastMessagePreview: content.slice(0, 120), lastMessageAt: message.createdAt } })
+      await tx.directConversation.update({ where: { id: conversationId }, data: { lastMessageSeq: seq, lastMessagePreview: content.slice(0, 120), lastMessageAt: message.createdAt, lastActivityAt: message.createdAt } })
       await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId: otherId } }, data: { unreadCount: { increment: 1 }, archivedAt: null } })
       await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: null } })
       await notify(tx, [userId, otherId], 'message_created', conversationId, message.id, { seq })
@@ -271,6 +346,18 @@ export async function sendMessage(userId: string, conversationId: string, body: 
     })
   } catch (error: any) {
     if (error?.code === 'P2002') return prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+    throw error
+  }
+}
+
+export async function sendMessage(userId: string, conversationId: string, body: any) {
+  const startedAt = Date.now()
+  try {
+    const result = await sendMessageImpl(userId, conversationId, body)
+    chatMetrics.messageSend(Date.now() - startedAt, true)
+    return result
+  } catch (error) {
+    chatMetrics.messageSend(Date.now() - startedAt, false)
     throw error
   }
 }
@@ -293,14 +380,29 @@ export async function markRead(userId: string, conversationId: string, rawThroug
 
 export async function archiveConversation(userId: string, conversationId: string) {
   await requireConversationMember(userId, conversationId)
-  await prisma.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: new Date() } })
-  return { archived: true }
+  return prisma.$transaction(async tx => {
+    await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: new Date() } })
+    await notify(tx, [userId], 'conversation_archived', conversationId)
+    return { archived: true }
+  })
+}
+
+export async function unarchiveConversation(userId: string, conversationId: string) {
+  await requireConversationMember(userId, conversationId)
+  return prisma.$transaction(async tx => {
+    await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: null } })
+    await notify(tx, [userId], 'conversation_unarchived', conversationId)
+    return { archived: false }
+  })
 }
 
 export async function clearConversation(userId: string, conversationId: string) {
   const member = await requireConversationMember(userId, conversationId)
-  await prisma.directConversationMember.update({ where: { id: member.id }, data: { clearedThroughSeq: member.Conversation.lastMessageSeq, lastReadSeq: member.Conversation.lastMessageSeq, unreadCount: 0 } })
-  return { clearedThroughSeq: member.Conversation.lastMessageSeq }
+  return prisma.$transaction(async tx => {
+    await tx.directConversationMember.update({ where: { id: member.id }, data: { clearedThroughSeq: member.Conversation.lastMessageSeq, lastReadSeq: member.Conversation.lastMessageSeq, unreadCount: 0 } })
+    await notify(tx, [userId], 'conversation_cleared', conversationId, undefined, { throughSeq: member.Conversation.lastMessageSeq })
+    return { clearedThroughSeq: member.Conversation.lastMessageSeq }
+  })
 }
 
 export async function unreadSummary(userId: string) {
@@ -367,4 +469,17 @@ export async function eventBacklog(userId: string, afterId: bigint, take = 200) 
 export async function isEventCursorExpired(userId: string, cursor: bigint) {
   if (cursor <= 0n) return false
   return !await prisma.chatUserEvent.findFirst({ where: { userId, id: cursor, expiresAt: { gt: new Date() } }, select: { id: true } })
+}
+
+export async function latestEventCursor(userId: string) {
+  return (await prisma.chatUserEvent.findFirst({ where: { userId, expiresAt: { gt: new Date() } }, orderBy: { id: 'desc' }, select: { id: true } }))?.id || 0n
+}
+
+export async function resolveEventCursor(userId: string, rawCursor?: string) {
+  let cursor = 0n
+  try { cursor = rawCursor === undefined ? await latestEventCursor(userId) : BigInt(rawCursor) }
+  catch { fail(422, 'INVALID_EVENT_CURSOR', '实时事件游标无效') }
+  if (cursor < 0n) fail(422, 'INVALID_EVENT_CURSOR', '实时事件游标无效')
+  const resync = rawCursor !== undefined && await isEventCursorExpired(userId, cursor)
+  return { cursor: resync ? await latestEventCursor(userId) : cursor, resync }
 }

@@ -1,8 +1,9 @@
 import { ENV } from '@/config/env'
 
-export type ChatEventHandler = (event: { id?: string; type: string; data: string }) => void
+export type ChatEvent = { id?: string; type: string; data: string }
+export type ChatEventHandler = (event: ChatEvent) => void
 
-function parseEventBlock(block: string): { id?: string; type: string; data: string } | null {
+export function parseChatEventBlock(block: string): ChatEvent | null {
   let id: string | undefined
   let type = 'message'
   const data: string[] = []
@@ -26,9 +27,10 @@ function parseEventBlock(block: string): { id?: string; type: string; data: stri
  * EventSource so legacy Bearer sessions can authenticate without putting a token
  * in the URL. No organization header is ever copied to this account-level API.
  */
-export function connectChatEvents(onEvent: ChatEventHandler): () => void {
+export function connectChatEvents(userId: string, onEvent: ChatEventHandler): () => void {
   const controller = new AbortController()
-  let lastEventId = ''
+  const storageKey = `oi-chat-last-event-id:${userId}`
+  let lastEventId = typeof window === 'undefined' ? '' : window.sessionStorage.getItem(storageKey) || ''
 
   void (async () => {
     let retryMs = 1_000
@@ -57,10 +59,18 @@ export function connectChatEvents(onEvent: ChatEventHandler): () => void {
           const blocks = buffer.split(/\r?\n\r?\n/)
           buffer = blocks.pop() || ''
           for (const block of blocks) {
-            const event = parseEventBlock(block)
+            const event = parseChatEventBlock(block)
             if (!event) continue
             if (event.id) lastEventId = event.id
+            if (event.type === 'ready' || event.type === 'resync_required') {
+              try {
+                const cursor = JSON.parse(event.data)?.cursor
+                if (typeof cursor === 'string') lastEventId = cursor
+              } catch { /* malformed control data is handled by the next resync */ }
+            }
+            if (lastEventId) window.sessionStorage.setItem(storageKey, lastEventId)
             onEvent(event)
+            if (event.type === 'auth_revoked') controller.abort()
           }
           if (done) break
         }
@@ -82,4 +92,3 @@ export function connectChatEvents(onEvent: ChatEventHandler): () => void {
 
   return () => controller.abort()
 }
-

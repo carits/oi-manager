@@ -1,6 +1,9 @@
 .workspace { min-height: 620px; display: grid; grid-template-columns: 300px minmax(0, 1fr); overflow: hidden; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .panel { padding: var(--space-4); border-right: 1px solid var(--border); }
 .panel h2, .stack h2 { margin: 0 0 var(--space-4); font-size: var(--text-lg); }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+.panelHeader h2 { margin: 0; }
+.loadMore { width: 100%; margin-top: var(--space-3); }
 .conversation { position: relative; width: 100%; display: grid; gap: 4px; justify-items: start; padding: var(--space-3); text-align: left; }
 .conversation strong, .conversation span { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation span { color: var(--text-muted); font-size: var(--text-xs); }
@@ -8,10 +11,11 @@
 .conversation.active { color: var(--primary-text); background: var(--primary-light); }
 .chat { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; }
 .chatHeader { min-height: 64px; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border); }
-.chatHeader div { display: grid; gap: 2px; }
+.chatHeader > div:nth-child(2) { min-width: 0; display: grid; flex: 1; gap: 2px; }
 .chatHeader span { color: var(--text-muted); font-size: var(--text-xs); }
 .back { display: none; }
 .messageList { min-height: 0; max-height: 520px; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); overflow-y: auto; }
+.newMessages { position: sticky; bottom: var(--space-2); align-self: center; z-index: 1; }
 .message { max-width: min(72%, 680px); align-self: flex-start; }
 .message > div { padding: var(--space-3) var(--space-4); color: var(--text-primary); background: var(--bg-subtle); border-radius: var(--radius-md); white-space: pre-wrap; overflow-wrap: anywhere; }
 .message.mine { align-self: flex-end; }

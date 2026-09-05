@@ -2,12 +2,13 @@ import { Router, type Response } from 'express'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { authenticate, authorize, type AuthRequest } from '../../middleware/auth'
 import { chatRealtimeHub } from './chat-realtime'
+import { chatMetrics } from './chat-metrics'
 import {
   ChatError, archiveConversation, blockUser, clearConversation, createConversation,
   createFriendRequest, createReport, getPrivacy, getReport, listBlocks, listConversations,
   listFriendRequests, listFriends, listMessages, listReports, markRead, removeFriend,
   respondFriendRequest, reviewReport, searchChatUsers, sendMessage, unblockUser,
-  unreadSummary, updatePrivacy,
+  unreadSummary, unarchiveConversation, updatePrivacy, resolveEventCursor,
 } from './application/chat.service'
 
 export const chatRouter = Router()
@@ -41,20 +42,20 @@ chatRouter.get('/blocks', endpoint('获取黑名单失败', async (req, res) => 
 chatRouter.post('/blocks/:userId', endpoint('拉黑用户失败', async (req, res) => res.json({ success: true, data: await blockUser(req.user!.userId, req.params.userId) })))
 chatRouter.delete('/blocks/:userId', endpoint('解除拉黑失败', async (req, res) => res.json({ success: true, data: await unblockUser(req.user!.userId, req.params.userId) })))
 
-chatRouter.get('/conversations', endpoint('获取会话列表失败', async (req, res) => res.json({ success: true, data: await listConversations(req.user!.userId, req.query.archived === 'true') })))
+chatRouter.get('/conversations', endpoint('获取会话列表失败', async (req, res) => res.json({ success: true, data: await listConversations(req.user!.userId, req.query) })))
 chatRouter.post('/conversations', endpoint('创建会话失败', async (req, res) => res.status(201).json({ success: true, data: await createConversation(req.user!.userId, req.body) })))
 chatRouter.get('/conversations/:id/messages', endpoint('获取消息失败', async (req, res) => res.json({ success: true, data: await listMessages(req.user!.userId, req.params.id, req.query) })))
 chatRouter.post('/conversations/:id/messages', endpoint('发送消息失败', async (req, res) => res.status(201).json({ success: true, data: await sendMessage(req.user!.userId, req.params.id, req.body) })))
 chatRouter.post('/conversations/:id/read', endpoint('更新已读状态失败', async (req, res) => res.json({ success: true, data: await markRead(req.user!.userId, req.params.id, req.body.throughSeq) })))
 chatRouter.post('/conversations/:id/archive', endpoint('归档会话失败', async (req, res) => res.json({ success: true, data: await archiveConversation(req.user!.userId, req.params.id) })))
+chatRouter.post('/conversations/:id/unarchive', endpoint('恢复归档会话失败', async (req, res) => res.json({ success: true, data: await unarchiveConversation(req.user!.userId, req.params.id) })))
 chatRouter.post('/conversations/:id/clear', endpoint('清空会话失败', async (req, res) => res.json({ success: true, data: await clearConversation(req.user!.userId, req.params.id) })))
 chatRouter.get('/unread', endpoint('获取聊天未读数失败', async (req, res) => res.json({ success: true, data: await unreadSummary(req.user!.userId) })))
 chatRouter.post('/reports', endpoint('提交举报失败', async (req, res) => res.status(201).json({ success: true, data: await createReport(req.user!.userId, req.body) })))
 
 chatRouter.get('/events', endpoint('建立聊天实时连接失败', async (req, res) => {
-  let cursor = 0n
-  const rawCursor = req.get('last-event-id') || (typeof req.query.afterEventId === 'string' ? req.query.afterEventId : '0')
-  try { cursor = BigInt(rawCursor) } catch { throw new ChatError(422, 'INVALID_EVENT_CURSOR', '实时事件游标无效') }
+  const suppliedCursor = req.get('last-event-id') || (typeof req.query.afterEventId === 'string' ? req.query.afterEventId : undefined)
+  const { cursor, resync } = await resolveEventCursor(req.user!.userId, suppliedCursor)
   res.status(200)
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
   res.setHeader('Cache-Control', 'no-cache, no-transform')
@@ -62,7 +63,11 @@ chatRouter.get('/events', endpoint('建立聊天实时连接失败', async (req,
   res.setHeader('X-Accel-Buffering', 'no')
   res.setHeader('X-No-Compression', '1')
   res.flushHeaders()
-  res.write('event: ready\ndata: {}\n\n')
+  if (resync) {
+    chatMetrics.resync()
+    res.write(`event: resync_required\ndata: ${JSON.stringify({ cursor: cursor.toString() })}\n\n`)
+  }
+  res.write(`event: ready\ndata: ${JSON.stringify({ cursor: cursor.toString() })}\n\n`)
   try { await chatRealtimeHub.add(req.user!.userId, res, cursor) }
   catch (error) {
     if ((error as Error).message === 'CHAT_STREAM_LIMIT') {

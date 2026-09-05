@@ -7,6 +7,7 @@ import { SessionUnavailable } from './SessionUnavailable'
 import { getServerSession } from '@/lib/serverSession'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
+import { ChatProvider } from './chat/ChatProvider'
 
 interface RoleLayoutProps {
   children: ReactNode
@@ -67,9 +68,11 @@ export async function RoleLayout({
 
   return (
     <AuthProvider initialUser={session.user}>
-      <RoleShell homePath={homePath} contentClassName={contentClassName}>
-        {children}
-      </RoleShell>
+      <ChatProvider>
+        <RoleShell homePath={homePath} contentClassName={contentClassName}>
+          {children}
+        </RoleShell>
+      </ChatProvider>
     </AuthProvider>
   )
 }

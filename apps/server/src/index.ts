@@ -313,7 +313,11 @@ const httpServer = app.listen(PORT, API_HOST, () => {
   void chatRealtimeHub.start().catch(error => {
     logger.error('chat_realtime_start_failed', error, { action: 'server_start' })
   })
-  const chatEventCatchup = setInterval(() => void chatRealtimeHub.refreshAll(), 5_000)
+  const chatEventCatchup = setInterval(() => {
+    void chatRealtimeHub.refreshAll().catch(error => {
+      logger.error('chat_event_catchup_failed', error, { action: 'chat_sse' })
+    })
+  }, 30_000)
   chatEventCatchup.unref()
   httpServer.once('close', () => clearInterval(chatEventCatchup))
 })

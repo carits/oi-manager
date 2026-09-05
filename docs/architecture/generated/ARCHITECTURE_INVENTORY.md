@@ -13,7 +13,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 117 |
+| Prisma models | 118 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
 | Module route adapters | 44 |
@@ -111,6 +111,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CaritsAccount`
 - `CaritsLedgerEntry`
 - `CaritsTransaction`
+- `ChatMaintenanceCursor`
 - `ChatPrivacySetting`
 - `ChatReport`
 - `ChatUserEvent`
