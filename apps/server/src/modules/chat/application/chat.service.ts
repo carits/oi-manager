@@ -58,6 +58,15 @@ async function activeFriendship(a: string, b: string, tx: Prisma.TransactionClie
   return tx.friendship.findUnique({ where: { userLowId_userHighId: { userLowId, userHighId } } })
 }
 
+async function lockChatRelation(tx: Prisma.TransactionClient, a: string, b: string) {
+  const [userLowId, userHighId] = ordered(a, b)
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`chat-relation:${userLowId}:${userHighId}`}, 0))`
+}
+
+async function lockChatActorBudget(tx: Prisma.TransactionClient, purpose: 'friend-request' | 'message', userId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`chat-${purpose}:${userId}`}, 0))`
+}
+
 export async function getPrivacy(userId: string) {
   return prisma.chatPrivacySetting.upsert({ where: { userId }, create: { userId }, update: {} })
 }
@@ -120,13 +129,18 @@ export async function createFriendRequest(userId: string, body: any) {
   const discoverable = await hasSharedContext(userId, addresseeId) || Boolean(await prisma.chatPrivacySetting.findFirst({ where: { userId: addresseeId, allowExactUsernameDiscovery: true }, select: { userId: true } }))
   if (!discoverable) fail(404, 'CHAT_USER_NOT_AVAILABLE', '用户不存在或不可联系')
   if ((await activeFriendship(userId, addresseeId))?.status === 'active') fail(409, 'ALREADY_FRIENDS', '你们已经是好友')
-  const [dayCount, pendingCount] = await Promise.all([
-    prisma.friendRequest.count({ where: { requesterId: userId, createdAt: { gte: new Date(Date.now() - 86400000) } } }),
-    prisma.friendRequest.count({ where: { requesterId: userId, status: 'pending', expiresAt: { gt: new Date() } } }),
-  ])
-  if (dayCount >= 20 || pendingCount >= 50) fail(429, 'FRIEND_REQUEST_RATE_LIMITED', '好友申请过于频繁，请稍后再试')
   try {
     return await prisma.$transaction(async tx => {
+      await lockChatActorBudget(tx, 'friend-request', userId)
+      const now = new Date()
+      const [dayCount, pendingCount] = await Promise.all([
+        tx.friendRequest.count({ where: { requesterId: userId, createdAt: { gte: new Date(now.getTime() - 86400000) } } }),
+        tx.friendRequest.count({ where: { requesterId: userId, status: 'pending', expiresAt: { gt: now } } }),
+      ])
+      if (dayCount >= 20 || pendingCount >= 50) fail(429, 'FRIEND_REQUEST_RATE_LIMITED', '好友申请过于频繁，请稍后再试')
+      await lockChatRelation(tx, userId, addresseeId)
+      if (await blockedBetween(userId, addresseeId, tx)) fail(404, 'CHAT_USER_NOT_AVAILABLE', '用户不存在或不可联系')
+      if ((await activeFriendship(userId, addresseeId, tx))?.status === 'active') fail(409, 'ALREADY_FRIENDS', '你们已经是好友')
       const request = await tx.friendRequest.create({ data: { id: randomUUID(), requesterId: userId, addresseeId, message, expiresAt: requestExpiry() } })
       await notify(tx, [addresseeId], 'friend_request_created', undefined, undefined, { requestId: request.id })
       return request
@@ -149,6 +163,9 @@ export async function listFriendRequests(userId: string) {
 
 export async function respondFriendRequest(userId: string, requestId: string, action: 'accept' | 'reject' | 'cancel') {
   return prisma.$transaction(async tx => {
+    const candidate = await tx.friendRequest.findUnique({ where: { id: requestId }, select: { requesterId: true, addresseeId: true } })
+    if (!candidate) throw new ChatError(404, 'FRIEND_REQUEST_NOT_FOUND', '好友申请不存在')
+    await lockChatRelation(tx, candidate.requesterId, candidate.addresseeId)
     const rows = await tx.$queryRaw<Array<{ id: string; requesterId: string; addresseeId: string; status: string; expiresAt: Date }>>`SELECT id, "requesterId", "addresseeId", status, "expiresAt" FROM "FriendRequest" WHERE id=${requestId} FOR UPDATE`
     const request = rows[0]
     if (!request) fail(404, 'FRIEND_REQUEST_NOT_FOUND', '好友申请不存在')
@@ -183,6 +200,7 @@ export async function listFriends(userId: string) {
 export async function removeFriend(userId: string, otherId: string) {
   const [userLowId, userHighId] = ordered(userId, otherId)
   return prisma.$transaction(async tx => {
+    await lockChatRelation(tx, userId, otherId)
     const changed = await tx.friendship.updateMany({ where: { userLowId, userHighId, status: 'active' }, data: { status: 'removed', removedAt: new Date(), removedById: userId } })
     if (!changed.count) fail(404, 'FRIENDSHIP_NOT_FOUND', '好友关系不存在')
     await notify(tx, [userId, otherId], 'friendship_removed', undefined, undefined, {})
@@ -197,6 +215,7 @@ export async function listBlocks(userId: string) {
 export async function blockUser(userId: string, blockedId: string) {
   if (!blockedId || blockedId === userId) fail(422, 'INVALID_BLOCK_TARGET', '不能拉黑该用户')
   return prisma.$transaction(async tx => {
+    await lockChatRelation(tx, userId, blockedId)
     const target = await tx.user.findUnique({ where: { id: blockedId }, select: { id: true } })
     if (!target) fail(404, 'CHAT_USER_NOT_AVAILABLE', '用户不存在')
     await tx.userBlock.upsert({ where: { blockerId_blockedId: { blockerId: userId, blockedId } }, create: { id: randomUUID(), blockerId: userId, blockedId }, update: {} })
@@ -209,8 +228,11 @@ export async function blockUser(userId: string, blockedId: string) {
 }
 
 export async function unblockUser(userId: string, blockedId: string) {
-  await prisma.userBlock.deleteMany({ where: { blockerId: userId, blockedId } })
-  return { blocked: false }
+  return prisma.$transaction(async tx => {
+    await lockChatRelation(tx, userId, blockedId)
+    await tx.userBlock.deleteMany({ where: { blockerId: userId, blockedId } })
+    return { blocked: false }
+  })
 }
 
 async function requireConversationMember(userId: string, conversationId: string) {
@@ -310,17 +332,21 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
     if (existingBeforeLimit.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
     return existingBeforeLimit
   }
-  const minute = new Date(Date.now() - 60000)
-  const hour = new Date(Date.now() - 3600000)
-  const tenSeconds = new Date(Date.now() - 10000)
-  const [minuteCount, hourCount, conversationCount] = await Promise.all([
-    prisma.directMessage.count({ where: { senderUserId: userId, createdAt: { gte: minute } } }),
-    prisma.directMessage.count({ where: { senderUserId: userId, createdAt: { gte: hour } } }),
-    prisma.directMessage.count({ where: { senderUserId: userId, conversationId, createdAt: { gte: tenSeconds } } }),
-  ])
-  if (minuteCount >= 20 || hourCount >= 300 || conversationCount >= 10) fail(429, 'CHAT_RATE_LIMITED', '消息发送过于频繁，请稍后再试')
   try {
     return await prisma.$transaction(async tx => {
+      await lockChatActorBudget(tx, 'message', userId)
+      const existing = await tx.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+      if (existing) {
+        if (existing.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+        return existing
+      }
+      const now = new Date()
+      const [minuteCount, hourCount, conversationCount] = await Promise.all([
+        tx.directMessage.count({ where: { senderUserId: userId, createdAt: { gte: new Date(now.getTime() - 60000) } } }),
+        tx.directMessage.count({ where: { senderUserId: userId, createdAt: { gte: new Date(now.getTime() - 3600000) } } }),
+        tx.directMessage.count({ where: { senderUserId: userId, conversationId, createdAt: { gte: new Date(now.getTime() - 10000) } } }),
+      ])
+      if (minuteCount >= 20 || hourCount >= 300 || conversationCount >= 10) fail(429, 'CHAT_RATE_LIMITED', '消息发送过于频繁，请稍后再试')
       const locked = await tx.$queryRaw<Array<{ id: string; userLowId: string; userHighId: string; lastMessageSeq: number }>>`SELECT id, "userLowId", "userHighId", "lastMessageSeq" FROM "DirectConversation" WHERE id=${conversationId} FOR UPDATE`
       const conversation = locked[0]
       if (!conversation || ![conversation.userLowId, conversation.userHighId].includes(userId)) fail(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
@@ -335,11 +361,6 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
       if (users.find(user => user.id === otherId)?.status !== 'active') fail(409, 'CHAT_TARGET_UNAVAILABLE', '联系人当前不可用')
       const friendship = await activeFriendship(userId, otherId, tx)
       if (!friendship || friendship.status !== 'active' || await blockedBetween(userId, otherId, tx)) fail(403, 'FRIENDSHIP_REQUIRED', '当前不是好友，无法发送消息')
-      const existing = await tx.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
-      if (existing) {
-        if (existing.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
-        return existing
-      }
       const seq = conversation.lastMessageSeq + 1
       const message = await tx.directMessage.create({ data: { id: randomUUID(), conversationId, senderUserId: userId, clientMessageId, seq, content } })
       await tx.directConversation.update({ where: { id: conversationId }, data: { lastMessageSeq: seq, lastMessagePreview: content.slice(0, 120), lastMessageAt: message.createdAt, lastActivityAt: message.createdAt } })
@@ -366,7 +387,8 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
 }
 
 function isTransientTransactionError(error: any) {
-  return error?.code === '40P01' || error?.code === '40001' || error?.code === 'P2034'
+  const databaseCode = error?.meta?.code || error?.meta?.database_error_code
+  return error?.code === '40P01' || error?.code === '40001' || error?.code === 'P2034' || databaseCode === '40P01' || databaseCode === '40001'
 }
 
 async function withTransientTransactionRetry<T>(operation: () => Promise<T>, maxAttempts = 3): Promise<T> {
@@ -399,21 +421,26 @@ export async function markRead(userId: string, conversationId: string, rawThroug
   const requested = Number(rawThroughSeq)
   if (!Number.isSafeInteger(requested) || requested < 0) fail(422, 'INVALID_READ_SEQUENCE', '已读位置无效')
   return prisma.$transaction(async tx => {
-    const member = await tx.directConversationMember.findUnique({ where: { conversationId_userId: { conversationId, userId } }, include: { Conversation: true } })
+    const conversations = await tx.$queryRaw<Array<{ id: string; userLowId: string; userHighId: string; lastMessageSeq: number }>>`SELECT id, "userLowId", "userHighId", "lastMessageSeq" FROM "DirectConversation" WHERE id=${conversationId} FOR UPDATE`
+    const conversation = conversations[0]
+    if (!conversation || ![conversation.userLowId, conversation.userHighId].includes(userId)) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
+    const members = await tx.$queryRaw<Array<{ id: string; lastReadSeq: number; unreadCount: number }>>`SELECT id, "lastReadSeq", "unreadCount" FROM "DirectConversationMember" WHERE "conversationId"=${conversationId} AND "userId"=${userId} FOR UPDATE`
+    const member = members[0]
     if (!member) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
-    const throughSeq = Math.min(requested, member.Conversation.lastMessageSeq)
+    const throughSeq = Math.min(requested, conversation.lastMessageSeq)
     if (throughSeq <= member.lastReadSeq) return { lastReadSeq: member.lastReadSeq, unreadCount: member.unreadCount }
     const unreadCount = await tx.directMessage.count({ where: { conversationId, senderUserId: { not: userId }, seq: { gt: throughSeq } } })
     const updated = await tx.directConversationMember.update({ where: { id: member.id }, data: { lastReadSeq: throughSeq, unreadCount } })
-    const otherId = member.Conversation.userLowId === userId ? member.Conversation.userHighId : member.Conversation.userLowId
+    const otherId = conversation.userLowId === userId ? conversation.userHighId : conversation.userLowId
     await notify(tx, [userId, otherId], 'conversation_read', conversationId, undefined, { userId, throughSeq })
     return { lastReadSeq: updated.lastReadSeq, unreadCount: updated.unreadCount }
   })
 }
 
 export async function archiveConversation(userId: string, conversationId: string) {
-  await requireConversationMember(userId, conversationId)
   return prisma.$transaction(async tx => {
+    const conversations = await tx.$queryRaw<Array<{ id: string; userLowId: string; userHighId: string }>>`SELECT id, "userLowId", "userHighId" FROM "DirectConversation" WHERE id=${conversationId} FOR UPDATE`
+    if (!conversations[0] || ![conversations[0].userLowId, conversations[0].userHighId].includes(userId)) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
     await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: new Date() } })
     await notify(tx, [userId], 'conversation_archived', conversationId)
     return { archived: true }
@@ -421,8 +448,9 @@ export async function archiveConversation(userId: string, conversationId: string
 }
 
 export async function unarchiveConversation(userId: string, conversationId: string) {
-  await requireConversationMember(userId, conversationId)
   return prisma.$transaction(async tx => {
+    const conversations = await tx.$queryRaw<Array<{ id: string; userLowId: string; userHighId: string }>>`SELECT id, "userLowId", "userHighId" FROM "DirectConversation" WHERE id=${conversationId} FOR UPDATE`
+    if (!conversations[0] || ![conversations[0].userLowId, conversations[0].userHighId].includes(userId)) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
     await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { archivedAt: null } })
     await notify(tx, [userId], 'conversation_unarchived', conversationId)
     return { archived: false }
@@ -430,11 +458,13 @@ export async function unarchiveConversation(userId: string, conversationId: stri
 }
 
 export async function clearConversation(userId: string, conversationId: string) {
-  const member = await requireConversationMember(userId, conversationId)
   return prisma.$transaction(async tx => {
-    await tx.directConversationMember.update({ where: { id: member.id }, data: { clearedThroughSeq: member.Conversation.lastMessageSeq, lastReadSeq: member.Conversation.lastMessageSeq, unreadCount: 0 } })
-    await notify(tx, [userId], 'conversation_cleared', conversationId, undefined, { throughSeq: member.Conversation.lastMessageSeq })
-    return { clearedThroughSeq: member.Conversation.lastMessageSeq }
+    const conversations = await tx.$queryRaw<Array<{ id: string; userLowId: string; userHighId: string; lastMessageSeq: number }>>`SELECT id, "userLowId", "userHighId", "lastMessageSeq" FROM "DirectConversation" WHERE id=${conversationId} FOR UPDATE`
+    const conversation = conversations[0]
+    if (!conversation || ![conversation.userLowId, conversation.userHighId].includes(userId)) throw new ChatError(404, 'CONVERSATION_NOT_FOUND', '会话不存在')
+    await tx.directConversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data: { clearedThroughSeq: conversation.lastMessageSeq, lastReadSeq: conversation.lastMessageSeq, unreadCount: 0 } })
+    await notify(tx, [userId], 'conversation_cleared', conversationId, undefined, { throughSeq: conversation.lastMessageSeq })
+    return { clearedThroughSeq: conversation.lastMessageSeq }
   })
 }
 

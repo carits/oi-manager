@@ -5,6 +5,8 @@ last_verified: 2026-09-05
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-05: 一对一聊天正确性、实时性与生命周期完成最终并发审计：消息事件及双方成员按稳定顺序加锁，已读/清空/归档与发送共享会话锁序，联系申请处理与拉黑共享有序用户对 advisory lock；消息、联系申请和举报的持久限流在事务内串行计数，数据库瞬态冲突仅对完整幂等消息事务有界重试。举报终态重试保持幂等且不重复审计。Server 73 文件/584 用例、聊天 15/15、竞态重复 5 轮、Web 61/61、Server/Judge/Web 构建及 UI/API/架构/文档门禁通过；线上发布信息在本轮部署完成后核对。
+
 - 2026-09-05: 好友前置的一对一私信已实现并部署：账号级用户发现默认保护跨关系账号，好友申请通过后才能建立会话；删除好友保留历史并禁发，拉黑解除好友和待处理申请。消息使用会话内序号、幂等键、事务未读投影和持久 `ChatUserEvent`，PostgreSQL LISTEN/NOTIFY + 周期补偿驱动 SSE，流式客户端同时支持 Cookie 与 Bearer、携带恢复游标且不继承组织请求头，蓝绿退出发送重启事件。普通用户拥有消息/好友/申请/黑名单工作台；超级管理员和平台管理员可审核举报，但证据访问必须写平台审计。单方清空只影响自己，双方清空 30 天后由 Worker 清理未举报消息。生产迁移前备份 `oi_manager_20260905_142831.dump`（SHA-256 `e43dfda…38a0e3`）已校验，迁移 41/41；Server 全量回归中 574/575 通过，唯一陈旧通知断言修正后 Chat/Notification 定向 10/10，Web 58/58、三端生产构建及 UI/API/架构/文档门禁通过。API 活动 slot 为 3302，Web BUILD_ID `WjaW8nMU1yJrXhTenAtpR` 已提升；线上 readiness、七项服务、账号级未读/隐私接口及公网 SSE `ready` 事件均正常。浏览器扩展因公网仍为 HTTP 而被企业安全策略禁止访问，未绕过安全控制。
 
 - 2026-09-05: 学校目录治理已部署：`School.directoryStatus` 区分 verified/pending/hidden/legacy，公开目录、本人组织、工作区、组织认证和加入流程统一隔离 legacy。生产 check/apply 将 4,901 个测试/临时学校隔离、第一中学设为 verified、平台内部学校设为 hidden，18,865 个成员关系、942 个团队、552 个活动和 780 个题单引用保持不变；二次 apply 变更为 0。超管学校页支持状态筛选、引用摘要和有审计的恢复/隐藏/隔离。定向 Server 11/11、三端构建、Prisma/UI/API/架构/文档门禁通过；备份 `oi_manager_20260905_115001.dump`（SHA-256 `e98e804c…a25f26a2bde`）已校验，API 活动 slot 为 3303，Web BUILD_ID `qfGQBna1fp-VWGNOvhZXc`。线上目录只返回第一中学，legacy 直接组织上下文返回 404。

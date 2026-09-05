@@ -18,10 +18,12 @@ source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages
 ## 一致性与实时链路
 
 - 会话按有序用户对唯一；消息使用会话内递增 `seq` 和发送者级 `clientMessageId` 幂等。
+- 联系申请创建/处理、移除联系人、拉黑和解除拉黑对同一有序用户对使用数据库事务 advisory lock；接受申请与拉黑并发时，拉黑完成后不得遗留 active 联系关系。
 - 无游标消息读取返回当前用户可见的最新页，`beforeSeq` 加载历史，`afterSeq` 补偿实时增量；V2 返回游标元数据，旧数组响应在蓝绿兼容期保留。
 - 会话使用 `lastActivityAt + id` opaque cursor 分页，active 与 archived 列表分离。
-- 发送事务锁定会话，同时写消息、摘要、接收方未读投影和 `ChatUserEvent`。
-- `lastReadSeq` 是事实，`unreadCount` 是可修复投影；Worker 每小时执行一致性修复。
+- 发送事务先锁定发送者消息额度，再锁定会话和双方成员；同时写消息、摘要、接收方未读投影和 `ChatUserEvent`。事件和成员写入始终按用户 ID 排序，瞬态死锁/序列化冲突只对完整幂等事务做最多三次重试。
+- 消息、联系申请和举报的硬限流在数据库事务内按操作者串行计数，多实例和并发请求不能穿透上限。
+- `lastReadSeq` 是事实，`unreadCount` 是可修复投影；已读、清空和归档先锁定会话，与新消息按同一顺序串行。Worker 每小时执行一致性修复。
 - 每个浏览器标签页由 `ChatProvider` 维护一条 SSE；页头和消息页订阅 Provider，不重复连接。Cursor 保存于用户级 sessionStorage，事件在 100ms 窗口合并并按类型局部刷新。
 - SSE 通过独立 PostgreSQL LISTEN 连接接收 `pg_notify`，同时每 30 秒扫描持久事件表补偿通知丢失；首次连接从当前事件尾部开始，只有真实重连才补发，过期 cursor 要求 REST resync。事件保留 7 天。
 - RealtimeHub 对定时器、用户和单 stream 失败逐级隔离，不允许后台 Promise rejection 终止 API。

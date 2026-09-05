@@ -64,11 +64,27 @@ describe('account direct chat', () => {
     expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(0)
   })
 
-  it('serializes concurrent sends into one ordered conversation sequence', async () => {
+  it('serializes a read update with a concurrent incoming message', async () => {
     await befriend()
     const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
-    const responses = await Promise.all(Array.from({ length: 10 }, (_, index) => request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: `message-${index}` })))
-    expect(responses.every(response => response.status === 201)).toBe(true)
+    await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'first' })
+    const [read, sent] = await Promise.all([
+      request(app).post(`/api/chat/conversations/${conversation.body.data.id}/read`).set(auth(bobToken)).send({ throughSeq: 1 }),
+      request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'second' }),
+    ])
+    expect(read.status).toBe(200)
+    expect(sent.status).toBe(201)
+    const member = await prisma.directConversationMember.findUniqueOrThrow({ where: { conversationId_userId: { conversationId: conversation.body.data.id, userId: bob.id } } })
+    expect(member.lastReadSeq).toBe(1)
+    expect(member.unreadCount).toBe(1)
+  })
+
+  it('serializes concurrent sends and enforces the hard conversation rate limit', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const responses = await Promise.all(Array.from({ length: 25 }, (_, index) => request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: `message-${index}` })))
+    expect(responses.filter(response => response.status === 201)).toHaveLength(10)
+    expect(responses.filter(response => response.status === 429)).toHaveLength(15)
     const rows = await prisma.directMessage.findMany({ where: { conversationId: conversation.body.data.id }, orderBy: { seq: 'asc' } })
     expect(rows.map(row => row.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(10)
@@ -165,6 +181,22 @@ describe('account direct chat', () => {
     expect((await request(app).post(`/api/chat/blocks/${bob.id}`).set(auth(aliceToken)).send({})).status).toBe(200)
     expect((await request(app).post('/api/chat/friend-requests').set(auth(bobToken)).send({ addresseeId: alice.id })).status).toBe(404)
     expect((await request(app).get('/api/chat/friends').set(auth(aliceToken))).body.data).toHaveLength(0)
+  })
+
+  it('keeps block authoritative when it races with accepting a contact request', async () => {
+    await prisma.chatPrivacySetting.upsert({ where: { userId: bob.id }, create: { userId: bob.id, allowExactUsernameDiscovery: true }, update: { allowExactUsernameDiscovery: true } })
+    const pending = await request(app).post('/api/chat/friend-requests').set(auth(aliceToken)).send({ addresseeId: bob.id })
+    expect(pending.status).toBe(201)
+    const [accepted, blocked] = await Promise.all([
+      request(app).post(`/api/chat/friend-requests/${pending.body.data.id}/accept`).set(auth(bobToken)).send({}),
+      request(app).post(`/api/chat/blocks/${bob.id}`).set(auth(aliceToken)).send({}),
+    ])
+    expect([200, 409]).toContain(accepted.status)
+    expect(blocked.status).toBe(200)
+    const [userLowId, userHighId] = [alice.id, bob.id].sort()
+    expect((await prisma.friendship.findUnique({ where: { userLowId_userHighId: { userLowId, userHighId } } }))?.status).not.toBe('active')
+    expect(await prisma.friendRequest.count({ where: { status: 'pending', OR: [{ requesterId: alice.id, addresseeId: bob.id }, { requesterId: bob.id, addresseeId: alice.id }] } })).toBe(0)
+    expect(await prisma.userBlock.count({ where: { blockerId: alice.id, blockedId: bob.id } })).toBe(1)
   })
 
   it('requires explicit exact discovery and never returns partial global matches', async () => {
