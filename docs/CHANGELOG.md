@@ -18,7 +18,7 @@ source_of_truth: Git history
 - 新增消息事务、SSE 新事件、双向并发序号和失败无半写入集成测试；四项关键竞态固定重复 10 轮。
 - 修复普通全局 `user` 无法进入账号和个人页面的权限壳遗漏。
 - 新增两个无组织、团队或发现能力的生产探针账号；Web 候选和正式提升均真实执行发送、SSE 接收、已读和回复，失败会阻断提升或恢复上一版本，探针日志不输出正文和凭据。
-- 验证结果：Server 588/588、Chat 19/19、Web 64/64、Chromium 桌面 8/8、紧凑视口 7/7、Firefox 8/8；候选 BUILD_ID 为 `QdHV_MBCtFlhP4XDwex_m`。
+- 验证结果：Server 588/588、Chat 19/19、Web 64/64、Chromium 桌面 8/8、紧凑视口 7/7、Firefox 8/8；提交 `4037aea` 已推送，Web BUILD_ID `QdHV_MBCtFlhP4XDwex_m` 已通过候选和正式两轮消息探针并提升。
 
 ## 2026-09-05
 

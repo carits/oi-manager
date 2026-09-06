@@ -5,7 +5,7 @@ last_verified: 2026-09-05
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-06: 一对一聊天动作级验证已收口：E2E 使用 `chat_sender/chat_receiver/chat_outsider` 隔离账号执行搜索、联系申请、SSE 接收、接受、建会话、发送、未读、回复、已读和刷新恢复，并在浏览器移除 `crypto.randomUUID` 验证 HTTP 降级；响应已成功但客户端收到 503 时保留草稿并复用幂等键，数据库只落一条消息。修复普通全局 `user` 被账号/个人页面权限壳错误重定向的问题。生产发布探针使用两个无组织/团队、不可被发现的专用账号，候选和正式 Web 均须通过真实发送闭环，否则阻断或回滚。Server 73 文件/588 用例、Chat 19/19、四项竞态 10 轮、Web 64/64、Chromium 桌面 8/8、紧凑视口 7/7、Firefox 8/8、三端构建及 UI/API/架构/文档门禁通过；候选 BUILD_ID `QdHV_MBCtFlhP4XDwex_m`。
+- 2026-09-06: 一对一聊天动作级验证已收口并部署：E2E 使用 `chat_sender/chat_receiver/chat_outsider` 隔离账号执行搜索、联系申请、SSE 接收、接受、建会话、发送、未读、回复、已读和刷新恢复，并在浏览器移除 `crypto.randomUUID` 验证 HTTP 降级；响应已成功但客户端收到 503 时保留草稿并复用幂等键，数据库只落一条消息。修复普通全局 `user` 被账号/个人页面权限壳错误重定向的问题。生产发布探针使用两个无组织/团队、不可被发现的专用账号，候选和正式 Web 均真实完成发送、SSE 接收、回复与已读闭环。Server 73 文件/588 用例、Chat 19/19、四项竞态 10 轮、Web 64/64、Chromium 桌面 8/8、紧凑视口 7/7、Firefox 8/8、三端构建及 UI/API/架构/文档门禁通过；提交 `4037aea` 已推送，Web BUILD_ID `QdHV_MBCtFlhP4XDwex_m` 已提升。
 
 - 2026-09-05: 修复并部署 HTTP 环境私信发送无响应：生产客户端遥测确认 `crypto.randomUUID is not a function`，且 teacher1/teacher2 会话已创建但消息和事件均未落库。消息及其他浏览器幂等请求改用兼容 HTTP 的 `createClientUUID()`，发送异常保证恢复 loading 并显示错误；Web 63/63、生产构建及 UI/文档/架构门禁通过。提交 `476a66f` 已推送，Web BUILD_ID `v_dHMnaNbaYLtspzJb-VK` 已提升。
 
