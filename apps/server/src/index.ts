@@ -41,7 +41,7 @@ import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
 import { contributionRouter } from './modules/contribution/contribution.routes'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
-import { chatRouter, chatReportAdminRouter } from './modules/chat/chat.routes'
+import { chatRouter, chatReportAdminRouter, chatStickerAdminRouter } from './modules/chat/chat.routes'
 import { chatRealtimeHub } from './modules/chat/chat-realtime'
 import { demoScenarioRouter } from './routes/demo-scenario'
 import { metrics } from './lib/metrics'
@@ -153,6 +153,7 @@ app.use('/api/telemetry', telemetryRouter)
 app.use('/api/workspaces', workspaceRouter)
 app.use('/api/chat', chatRouter)
 app.use('/api/platform/chat-reports', chatReportAdminRouter)
+app.use('/api/platform', chatStickerAdminRouter)
 app.use('/api/admin/demo-scenario', demoScenarioRouter)
 
 // 健康检查

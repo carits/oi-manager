@@ -228,6 +228,7 @@ const routerPrefixes = {
   organizationCreationRouter: '/api',
   chatRouter: '/api/chat',
   chatReportAdminRouter: '/api/platform/chat-reports',
+  chatStickerAdminRouter: '/api/platform',
   platformOrganizationRouter: '/api/platform/organizations',
   demoScenarioRouter: '/api/admin/demo-scenario',
   telemetryRouter: '/api/telemetry',

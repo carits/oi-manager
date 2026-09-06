@@ -9,4 +9,5 @@
 .evidence article { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); }
 .evidence p { margin: var(--space-2) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .evidence time { color: var(--text-muted); font-size: var(--text-xs); }
+.sticker { display: block; width: auto; height: auto; max-width: 120px; max-height: 120px; margin: var(--space-2) 0; object-fit: contain; }
 @media (max-width: 640px) { .detail dl { grid-template-columns: 1fr; } }

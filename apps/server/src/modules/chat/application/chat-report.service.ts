@@ -15,7 +15,7 @@ export async function createReport(userId: string, body: any) {
       const message = await tx.directMessage.findUnique({ where: { id: messageId }, include: { Conversation: true } })
       if (!message) throw new ChatError(404, 'MESSAGE_NOT_REPORTABLE', '消息不存在或不可举报')
       if (![message.Conversation.userLowId, message.Conversation.userHighId].includes(userId) || message.senderUserId === userId) fail(404, 'MESSAGE_NOT_REPORTABLE', '消息不存在或不可举报')
-      const context = await tx.directMessage.findMany({ where: { conversationId: message.conversationId, seq: { gte: Math.max(1, message.seq - 10), lte: message.seq + 10 } }, orderBy: { seq: 'asc' }, select: { id: true, senderUserId: true, seq: true, content: true, createdAt: true, Sender: { select: { username: true } } } })
+      const context = await tx.directMessage.findMany({ where: { conversationId: message.conversationId, seq: { gte: Math.max(1, message.seq - 10), lte: message.seq + 10 } }, orderBy: { seq: 'asc' }, select: { id: true, senderUserId: true, seq: true, messageType: true, stickerId: true, content: true, createdAt: true, Sender: { select: { username: true } }, Sticker: { select: { id: true, label: true, sha256: true, Pack: { select: { key: true, version: true } } } } } })
       return tx.chatReport.create({ data: { id: randomUUID(), conversationId: message.conversationId, messageId, reporterUserId: userId, targetUserId: message.senderUserId, reason, details, evidenceSnapshot: context as unknown as Prisma.InputJsonValue, evidenceHoldUntil: new Date(Date.now() + 365 * 86400000) } })
     })
   } catch (error: any) {

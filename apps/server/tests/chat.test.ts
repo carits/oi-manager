@@ -3,6 +3,8 @@ import express from 'express'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { chatRouter, chatReportAdminRouter } from '../src/modules/chat/chat.routes'
+import { chatStickerAdminRouter } from '../src/modules/chat/chat.routes'
+import yazl from 'yazl'
 import { chatRealtimeHub } from '../src/modules/chat/chat-realtime'
 import { resolveEventCursor } from '../src/modules/chat/application/chat.service'
 import { runChatMaintenance } from '../src/modules/chat/application/chat-maintenance.service'
@@ -13,6 +15,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/chat', chatRouter)
 app.use('/api/platform/chat-reports', chatReportAdminRouter)
+app.use('/api/platform', chatStickerAdminRouter)
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
 let alice: any, bob: any, outsider: any, admin: any
@@ -39,7 +42,42 @@ async function befriend() {
   expect((await request(app).post(`/api/chat/friend-requests/${pending.body.data.id}/accept`).set(auth(bobToken)).send({})).status).toBe(200)
 }
 
+async function stickerArchive() {
+  const zip = new yazl.ZipFile()
+  zip.addBuffer(Buffer.from(JSON.stringify({ schemaVersion: 1, pack: { key: `test-${crypto.randomUUID()}`, name: '测试表情', version: 1 }, stickers: [{ key: 'happy', label: '开心', file: 'stickers/happy.png', order: 1 }] })), 'manifest.json')
+  zip.addBuffer(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3pT2WQAAAABJRU5ErkJggg==', 'base64'), 'stickers/happy.png')
+  zip.end()
+  const chunks: Buffer[] = []
+  for await (const chunk of zip.outputStream) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
+}
+
 describe('account direct chat', () => {
+  it('imports, publishes, sends and retires an immutable platform sticker pack', async () => {
+    const superAdmin = await user('sticker-super-admin', 'super_admin')
+    const superToken = generateTestToken({ userId: superAdmin.id, username: superAdmin.username, role: 'super_admin', workspaceMode: 'work' })
+    const staged = await request(app).post('/api/platform/chat-sticker-imports').set(auth(superToken)).attach('archive', await stickerArchive(), 'stickers.zip')
+    expect(staged.status).toBe(201)
+    expect(staged.body.data.report.totals).toMatchObject({ count: 1 })
+    const published = await request(app).post(`/api/platform/chat-sticker-imports/${staged.body.data.importId}/publish`).set(auth(superToken)).send({ reportHash: staged.body.data.reportHash })
+    expect(published.status).toBe(200)
+    const packs = await request(app).get('/api/chat/sticker-packs').set(auth(aliceToken))
+    expect(packs.status).toBe(200)
+    const sticker = packs.body.data[0].stickers[0]
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const clientMessageId = crypto.randomUUID()
+    const sent = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ type: 'sticker', stickerId: sticker.id, clientMessageId })
+    const retried = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ type: 'sticker', stickerId: sticker.id, clientMessageId })
+    expect(sent.status).toBe(201)
+    expect(sent.body.data).toMatchObject({ id: retried.body.data.id, type: 'sticker', content: '[表情：开心]', sticker: { id: sticker.id, animated: false } })
+    expect((await request(app).get(`/api/chat/stickers/${sticker.id}/content`).set(auth(bobToken))).headers['content-type']).toContain('image/webp')
+    await request(app).post(`/api/platform/chat-sticker-packs/${published.body.data.packId}/retire`).set(auth(superToken)).send({})
+    expect((await request(app).get('/api/chat/sticker-packs').set(auth(aliceToken))).body.data).toEqual([])
+    expect((await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ type: 'sticker', stickerId: sticker.id, clientMessageId: crypto.randomUUID() })).status).toBe(422)
+    expect((await request(app).get(`/api/chat/stickers/${sticker.id}/content`).set(auth(bobToken))).status).toBe(200)
+  })
+
   it('requires friendship and restores the same conversation after re-adding', async () => {
     expect((await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })).status).toBe(403)
     await befriend()

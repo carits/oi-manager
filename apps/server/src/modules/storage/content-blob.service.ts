@@ -18,7 +18,7 @@ export async function releaseBlobReferences(ownerType: string, ownerId: string) 
   return prisma.$transaction(async tx => {
     const refs = await tx.blobReference.findMany({ where: { ownerType, ownerId }, select: { blobId: true } })
     await tx.blobReference.deleteMany({ where: { ownerType, ownerId } })
-    if (refs.length) await tx.blobObject.updateMany({ where: { id: { in: refs.map(item => item.blobId) } }, data: { deleteAfter: new Date(Date.now() + 30 * 24 * 60 * 60_000) } })
+    if (refs.length) await tx.blobObject.updateMany({ where: { id: { in: refs.map(item => item.blobId) }, References: { none: {} } }, data: { deleteAfter: new Date(Date.now() + 30 * 24 * 60 * 60_000) } })
     return refs.length
   })
 }

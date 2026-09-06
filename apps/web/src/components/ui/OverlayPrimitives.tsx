@@ -5,6 +5,10 @@ import styles from './primitives.module.css'
 
 const PopoverCloseContext = createContext<() => void>(() => {})
 
+export function usePopoverClose() {
+  return useContext(PopoverCloseContext)
+}
+
 export function IconButton({ 'aria-label': label, ...props }: Omit<ButtonProps, 'iconOnly'> & { 'aria-label': string }) {
   return <Button {...props} aria-label={label} iconOnly />
 }

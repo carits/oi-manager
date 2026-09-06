@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 118 |
+| Prisma models | 121 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
 | Module route adapters | 44 |
 | systemd units | 8 |
-| Referenced environment keys | 445 |
+| Referenced environment keys | 446 |
 
 ## HTTP adapter ownership
 
@@ -114,6 +114,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ChatMaintenanceCursor`
 - `ChatPrivacySetting`
 - `ChatReport`
+- `ChatSticker`
+- `ChatStickerImport`
+- `ChatStickerPack`
 - `ChatUserEvent`
 - `Contest`
 - `ContestProblem`
@@ -462,6 +465,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MAX_BATCH_PROBLEM_IDS`
 - `MAX_CASES`
 - `MAX_CONCURRENT`
+- `MAX_STICKERS`
 - `MESSAGE`
 - `METRICS_CHECK`
 - `METRICS_SNAPSHOT_PATH`

@@ -9,6 +9,7 @@ import { collectOrphanTestdataObjects } from './testdata-object-gc'
 import { collectOrphanContentBlobs, releaseBlobReferences } from '../modules/storage/content-blob.service'
 import { prisma } from '../prisma'
 import { runChatMaintenance } from '../modules/chat/application/chat-maintenance.service'
+import { expireStagedStickerImports } from '../modules/chat/application/chat-sticker.service'
 
 async function expireCandidateData() {
   const now = new Date(), rejectedBefore = new Date(Date.now() - 24 * 60 * 60_000)
@@ -75,7 +76,8 @@ export function startCronTasks() {
   const chatTask = cron.schedule('23 * * * *', async () => {
     try {
       const result = await runChatMaintenance()
-      logger.info('chat_maintenance_done', { action: 'chat_maintenance', metadata: result })
+      const expiredStickerImports = await expireStagedStickerImports()
+      logger.info('chat_maintenance_done', { action: 'chat_maintenance', metadata: { ...result, expiredStickerImports } })
     } catch (error) {
       logger.error('chat_maintenance_failed', error as Error, { action: 'chat_maintenance' })
     }

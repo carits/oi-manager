@@ -1,4 +1,5 @@
 import { Router, type Response } from 'express'
+import multer from 'multer'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { authenticate, authorize, type AuthRequest } from '../../middleware/auth'
 import { chatRealtimeHub } from './chat-realtime'
@@ -10,9 +11,12 @@ import {
   respondFriendRequest, reviewReport, searchChatUsers, sendMessage, unblockUser,
   unreadSummary, unarchiveConversation, updatePrivacy, resolveEventCursor,
 } from './application/chat.service'
+import { getStickerContent, listActiveStickerPacks, listStickerPacksForAdmin, publishStickerImport, retireStickerPack, stageStickerImport } from './application/chat-sticker.service'
 
 export const chatRouter = Router()
 export const chatReportAdminRouter = Router()
+export const chatStickerAdminRouter = Router()
+const stickerUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024, files: 1 } })
 
 function endpoint(label: string, handler: (req: AuthRequest, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -27,6 +31,15 @@ function endpoint(label: string, handler: (req: AuthRequest, res: Response) => P
 chatRouter.use(authenticate)
 
 chatRouter.get('/privacy', endpoint('获取聊天隐私设置失败', async (req, res) => res.json({ success: true, data: await getPrivacy(req.user!.userId) })))
+chatRouter.get('/sticker-packs', endpoint('获取聊天表情包失败', async (_req, res) => res.json({ success: true, data: await listActiveStickerPacks() })))
+chatRouter.get('/stickers/:stickerId/content', endpoint('获取聊天表情失败', async (req, res) => {
+  const result = await getStickerContent(req.params.stickerId, false)
+  res.setHeader('Content-Type', result.contentType); res.setHeader('ETag', `"${result.sha256}"`); res.setHeader('Cache-Control', 'private, max-age=31536000, immutable'); res.send(result.content)
+}))
+chatRouter.get('/stickers/:stickerId/poster', endpoint('获取聊天表情预览失败', async (req, res) => {
+  const result = await getStickerContent(req.params.stickerId, true)
+  res.setHeader('Content-Type', result.contentType); res.setHeader('ETag', `"${result.sha256}"`); res.setHeader('Cache-Control', 'private, max-age=31536000, immutable'); res.send(result.content)
+}))
 chatRouter.patch('/privacy', endpoint('更新聊天隐私设置失败', async (req, res) => res.json({ success: true, data: await updatePrivacy(req.user!.userId, req.body) })))
 chatRouter.get('/users/search', endpoint('搜索用户失败', async (req, res) => res.json({ success: true, data: await searchChatUsers(req.user!.userId, req.query.q) })))
 
@@ -84,3 +97,12 @@ chatReportAdminRouter.get('/', endpoint('获取聊天举报失败', async (req, 
 chatReportAdminRouter.get('/:id', endpoint('获取聊天举报详情失败', async (req, res) => res.json({ success: true, data: await getReport(req.user!.userId, req.params.id, req.query.reason) })))
 chatReportAdminRouter.post('/:id/resolve', endpoint('处理聊天举报失败', async (req, res) => res.json({ success: true, data: await reviewReport(req.user!.userId, req.params.id, 'resolved', req.body.note) })))
 chatReportAdminRouter.post('/:id/dismiss', endpoint('驳回聊天举报失败', async (req, res) => res.json({ success: true, data: await reviewReport(req.user!.userId, req.params.id, 'dismissed', req.body.note) })))
+
+chatStickerAdminRouter.use(authenticate, authorize('super_admin'))
+chatStickerAdminRouter.post('/chat-sticker-imports', stickerUpload.single('archive'), endpoint('导入聊天表情包失败', async (req, res) => {
+  if (!req.file) throw new ChatError(422, 'STICKER_ARCHIVE_REQUIRED', '请选择表情包 ZIP')
+  res.status(201).json({ success: true, data: await stageStickerImport(req.user!.userId, req.file.buffer) })
+}))
+chatStickerAdminRouter.post('/chat-sticker-imports/:id/publish', endpoint('发布聊天表情包失败', async (req, res) => res.json({ success: true, data: await publishStickerImport(req.user!.userId, req.params.id, req.body.reportHash) })))
+chatStickerAdminRouter.get('/chat-sticker-packs', endpoint('获取表情包管理列表失败', async (_req, res) => res.json({ success: true, data: await listStickerPacksForAdmin() })))
+chatStickerAdminRouter.post('/chat-sticker-packs/:id/retire', endpoint('停用聊天表情包失败', async (req, res) => res.json({ success: true, data: await retireStickerPack(req.user!.userId, req.params.id) })))

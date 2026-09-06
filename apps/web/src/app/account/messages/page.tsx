@@ -17,12 +17,14 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toast'
 import { UserAvatar } from '@/components/user/UserAvatar'
+import { StickerPicker, type ChatSticker, type ChatStickerPack } from '@/components/chat/StickerPicker'
+import { StickerMessage } from '@/components/chat/StickerMessage'
 import styles from './page.module.css'
 
 type User = { id: string; username: string; avatar?: string | null; discovery?: string }
 type Conversation = { id: string; other: User; lastMessageSeq: number; lastMessagePreview?: string | null; lastMessageAt?: string | null; unreadCount: number; archivedAt?: string | null; canSend: boolean }
 type ConversationPage = { items: Conversation[]; nextCursor?: string | null }
-type Message = { id: string; conversationId: string; senderUserId: string; seq: number; content: string; createdAt: string }
+type Message = { id: string; conversationId: string; senderUserId: string; seq: number; content: string; type?: 'text' | 'sticker'; sticker?: ChatSticker; createdAt: string }
 type MessagePage = { items: Message[]; page: { hasMoreBefore: boolean; hasMoreAfter: boolean; oldestSeq?: number; newestSeq?: number } }
 type Friend = { friendshipId: string; since: string; user: User }
 type FriendRequest = { id: string; requesterId: string; addresseeId: string; message?: string; status: string; createdAt: string; Requester: User; Addressee: User }
@@ -102,6 +104,9 @@ export default function MessagesPage() {
   const [reportReason, setReportReason] = useState('骚扰或不当内容')
   const [privacy, setPrivacy] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [stickerPacks, setStickerPacks] = useState<ChatStickerPack[]>([])
+  const [recentStickerIds, setRecentStickerIds] = useState<string[]>([])
+  const [sendingStickerId, setSendingStickerId] = useState<string>()
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
   const [actionTarget, setActionTarget] = useState<User>()
   const messagesRef = useRef<Message[]>([])
@@ -111,6 +116,7 @@ export default function MessagesPage() {
   const nearBottomRef = useRef(true)
   const sendingRef = useRef(false)
   const pendingSendRef = useRef<Record<string, { content: string; clientMessageId: string }>>({})
+  const pendingStickerRef = useRef<Record<string, { stickerId: string; clientMessageId: string }>>({})
   const composerRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { messagesRef.current = messages }, [messages])
@@ -157,6 +163,18 @@ export default function MessagesPage() {
   }, [refreshUnread])
 
   useEffect(() => { void loadConversations(scope); void loadRelations() }, [loadConversations, loadRelations, scope])
+  useEffect(() => {
+    void apiClient.get<ChatStickerPack[]>('/api/chat/sticker-packs', account).then(response => {
+      if (!response.success) return
+      const packs = response.data || []
+      setStickerPacks(packs)
+      const valid = new Set(packs.flatMap(pack => pack.stickers.map(sticker => sticker.id)))
+      try {
+        const stored = JSON.parse(localStorage.getItem(`chat-recent-stickers:${user?.userId || 'anonymous'}`) || '[]')
+        if (Array.isArray(stored)) setRecentStickerIds(stored.filter(id => typeof id === 'string' && valid.has(id)).slice(0, 24))
+      } catch { setRecentStickerIds([]) }
+    })
+  }, [user?.userId])
   useEffect(() => {
     if (!selectedId) { setMessages([]); setHasMoreBefore(false); return }
     const controller = new AbortController()
@@ -266,6 +284,30 @@ export default function MessagesPage() {
       setBusy(false)
     }
   }
+  const sendSticker = async (sticker: ChatSticker) => {
+    const conversationId = selectedId
+    if (!conversationId || sendingRef.current) return false
+    const pending = pendingStickerRef.current[conversationId]
+    const clientMessageId = pending?.stickerId === sticker.id ? pending.clientMessageId : createClientUUID()
+    pendingStickerRef.current[conversationId] = { stickerId: sticker.id, clientMessageId }
+    sendingRef.current = true
+    setSendingStickerId(sticker.id)
+    try {
+      const response = await apiClient.post<Message>(`/api/chat/conversations/${conversationId}/messages`, { type: 'sticker', stickerId: sticker.id, clientMessageId }, account)
+      if (!response.success || !response.data) { toast.error(response.message || '表情发送失败'); return false }
+      delete pendingStickerRef.current[conversationId]
+      if (selectedRef.current === conversationId) {
+        setMessages(current => mergeMessages(current, [response.data!]))
+        requestAnimationFrame(() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight })
+      }
+      const nextRecent = [sticker.id, ...recentStickerIds.filter(id => id !== sticker.id)].slice(0, 24)
+      setRecentStickerIds(nextRecent)
+      try { localStorage.setItem(`chat-recent-stickers:${user?.userId || 'anonymous'}`, JSON.stringify(nextRecent)) } catch { /* storage unavailable */ }
+      await loadConversations(scope)
+      return true
+    } catch { toast.error('表情发送失败，请稍后重试'); return false }
+    finally { sendingRef.current = false; setSendingStickerId(undefined) }
+  }
   const submitReport = async () => {
     if (!reportMessage) return
     setBusy(true)
@@ -317,11 +359,11 @@ export default function MessagesPage() {
           <div className={styles.messageList} ref={messageListRef} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; if (nearBottomRef.current) { setNewMessageCount(0); void markVisibleRead(selected.id, messagesRef.current.at(-1)?.seq) } }}>
             <div className={`${styles.messageFlow} ${messages.length === 0 ? styles.emptyFlow : ''}`}>
               {hasMoreBefore && <Button variant="ghost" loading={loadingBefore} onClick={() => void loadOlder()}>加载更早消息</Button>}
-              {messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''}`}><div>{message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }, { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>)}</div></section> })}
+              {messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => { const isSticker = message.type === 'sticker' && message.sticker; return <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''} ${isSticker ? styles.stickerMessage : ''}`}><div>{isSticker ? <StickerMessage sticker={message.sticker!} fallback={message.content} /> : message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[...(isSticker ? [] : [{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }]), { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>})}</div></section> })}
             </div>
             {newMessageCount > 0 && <Button className={styles.newMessages} onClick={() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight; setNewMessageCount(0) }}>↓ {newMessageCount} 条新消息</Button>}
           </div>
-          <div className={styles.composer}><Textarea ref={composerRef} className={styles.composerInput} aria-label="消息内容" rows={1} maxLength={5000} value={draft} disabled={!selected.canSend || busy} onChange={event => setDrafts(current => ({ ...current, [selected.id]: event.target.value }))} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }} placeholder={selected.canSend ? '输入消息，Enter 发送，Shift+Enter 换行' : '重新成为联系人后才能继续发送'} /><Button disabled={!selected.canSend || !draft.trim()} loading={busy} onClick={() => void send()}>发送</Button></div>
+          <div className={styles.composer}><StickerPicker packs={stickerPacks} recentIds={recentStickerIds} sending={sendingStickerId} disabled={!selected.canSend} onSelect={sendSticker} /><Textarea ref={composerRef} className={styles.composerInput} aria-label="消息内容" rows={1} maxLength={5000} value={draft} disabled={!selected.canSend || busy} onChange={event => setDrafts(current => ({ ...current, [selected.id]: event.target.value }))} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }} placeholder={selected.canSend ? '输入消息，Enter 发送，Shift+Enter 换行' : '重新成为联系人后才能继续发送'} /><Button disabled={!selected.canSend || !draft.trim()} loading={busy} onClick={() => void send()}>发送</Button></div>
         </>}
       </section>
     </div>}

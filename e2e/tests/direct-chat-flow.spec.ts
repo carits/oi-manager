@@ -141,6 +141,21 @@ test.describe.serial('direct chat browser workflow', () => {
         return (await response.json()).data.messageUnread
       }).toBe(0)
 
+      await sender.page.getByRole('button', { name: '选择表情' }).click()
+      const [stickerResponse] = await Promise.all([
+        sender.page.waitForResponse(response => response.request().method() === 'POST' && /\/api\/chat\/conversations\/[^/]+\/messages$/.test(response.url())),
+        sender.page.getByRole('button', { name: '发送表情：测试开心' }).click(),
+      ])
+      expect(stickerResponse.status()).toBe(201)
+      await expect(sender.page.getByRole('img', { name: '测试开心' })).toBeVisible()
+      await expect(receiver.page.getByRole('img', { name: '测试开心' })).toBeVisible()
+      const stickerMessage = receiver.page.locator('article').filter({ has: receiver.page.getByRole('img', { name: '测试开心' }) })
+      await stickerMessage.hover()
+      await stickerMessage.getByRole('button', { name: '消息操作' }).click()
+      await expect(receiver.page.getByRole('menuitem', { name: '举报' })).toBeVisible()
+      await expect(receiver.page.getByRole('menuitem', { name: '复制' })).toHaveCount(0)
+      await receiver.page.keyboard.press('Escape')
+
       const reply = `browser-reply-${Date.now()}`
       await receiver.page.getByLabel('消息内容').fill(reply)
       expect((await receiver.page.getByLabel('消息内容').boundingBox())?.height).toBeLessThanOrEqual(140)

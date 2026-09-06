@@ -61,4 +61,15 @@ describe('chat event client', () => {
     expect(page.match(/<UserAvatar/g)?.length).toBeGreaterThanOrEqual(7)
     expect(page).not.toContain("toLocaleString('zh-CN')")
   })
+
+  it('supports platform sticker packs without weakening text message compatibility', () => {
+    const page = fs.readFileSync(new URL('../app/account/messages/page.tsx', import.meta.url), 'utf8')
+    const picker = fs.readFileSync(new URL('../components/chat/StickerPicker.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("apiClient.get<ChatStickerPack[]>('/api/chat/sticker-packs'")
+    expect(page).toContain("{ type: 'sticker', stickerId: sticker.id, clientMessageId }")
+    expect(page).toContain('<StickerMessage')
+    expect(picker).toContain('prefers-reduced-motion: reduce')
+    expect(picker).toContain('if (!packs.length) return null')
+    expect(picker).toContain('if (await onSelect(sticker)) close()')
+  })
 })

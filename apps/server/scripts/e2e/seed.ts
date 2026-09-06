@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import sharp from 'sharp'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
@@ -41,6 +42,26 @@ const ids = {
   personalProblemListSection: 'e2e-personal-problem-list-section',
   platformOrganization: 'org_platform-school-00000000',
   organization: 'org_school-default',
+  stickerPack: 'e2e-sticker-pack',
+  sticker: 'e2e-sticker-happy',
+}
+
+async function seedChatSticker(prisma: PrismaClient) {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3pT2WQAAAABJRU5ErkJggg==', 'base64')
+  const webp = await sharp(png).webp().toBuffer()
+  const sha256 = createHash('sha256').update(webp).digest('hex')
+  const storageKey = `global/objects/${sha256}`
+  const blobId = 'e2e-sticker-blob'
+  const target = path.join(testdataRoot!, ...storageKey.split('/'))
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(target, webp)
+  await prisma.blobObject.create({ data: { id: blobId, sha256, size: webp.length, storageKey, contentType: 'image/webp' } })
+  await prisma.chatStickerPack.create({ data: { id: ids.stickerPack, key: 'e2e-default', name: 'E2E 表情', version: 1, status: 'active', createdByUserId: ids.superAdmin, publishedAt: new Date() } })
+  await prisma.chatSticker.create({ data: { id: ids.sticker, packId: ids.stickerPack, key: 'happy', label: '测试开心', assetBlobId: blobId, posterBlobId: blobId, mimeType: 'image/webp', width: 1, height: 1, sha256 } })
+  await prisma.blobReference.createMany({ data: [
+    { id: 'e2e-sticker-asset-ref', blobId, ownerType: 'chat_sticker', ownerId: ids.sticker, role: 'asset' },
+    { id: 'e2e-sticker-poster-ref', blobId, ownerType: 'chat_sticker', ownerId: ids.sticker, role: 'poster' },
+  ] })
 }
 
 async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
@@ -110,6 +131,7 @@ async function main() {
         ids.chatOutsider,
       ].map(userId => ({ userId })),
     })
+    await seedChatSticker(prisma)
     await prisma.team.createMany({
       data: [
         {

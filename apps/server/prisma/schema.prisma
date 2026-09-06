@@ -1000,6 +1000,8 @@ model BlobObject {
   createdAt   DateTime        @default(now())
   deleteAfter DateTime?
   References  BlobReference[]
+  StickerAssets ChatSticker[] @relation("ChatStickerAsset")
+  StickerPosters ChatSticker[] @relation("ChatStickerPoster")
 
   @@index([storageTier, deleteAfter])
 }
@@ -2409,6 +2411,8 @@ model User {
   ChatReportsFiled                        ChatReport[]                       @relation("ChatReportReporter")
   ChatReportsAgainst                      ChatReport[]                       @relation("ChatReportTarget")
   ChatReportsReviewed                     ChatReport[]                       @relation("ChatReportReviewer")
+  CreatedChatStickerPacks                 ChatStickerPack[]                  @relation("ChatStickerPackCreator")
+  ChatStickerImports                     ChatStickerImport[]                @relation("ChatStickerImportUploader")
 
   @@index([createdAt])
   @@index([role])
@@ -2518,14 +2522,83 @@ model DirectMessage {
   clientMessageId String
   seq             Int
   content         String             @db.Text
+  messageType     String             @default("text")
+  stickerId       String?
   createdAt       DateTime           @default(now())
   Conversation    DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   Sender          User               @relation(fields: [senderUserId], references: [id], onDelete: Restrict)
+  Sticker         ChatSticker?       @relation(fields: [stickerId], references: [id], onDelete: Restrict)
   Reports         ChatReport[]
 
   @@unique([conversationId, seq])
   @@unique([conversationId, senderUserId, clientMessageId])
   @@index([senderUserId, createdAt])
+  @@index([stickerId])
+}
+
+model ChatStickerPack {
+  id              String              @id
+  key             String
+  name            String
+  version         Int
+  status          String              @default("staged")
+  sortOrder       Int                 @default(0)
+  createdByUserId String
+  publishedAt     DateTime?
+  retiredAt       DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  CreatedBy       User                @relation("ChatStickerPackCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  Stickers        ChatSticker[]
+  PublishedImports ChatStickerImport[] @relation("ChatStickerImportPublishedPack")
+
+  @@unique([key, version])
+  @@index([status, sortOrder, createdAt])
+}
+
+model ChatSticker {
+  id          String          @id
+  packId      String
+  key         String
+  label       String
+  assetBlobId String
+  posterBlobId String
+  mimeType    String
+  width       Int
+  height      Int
+  frameCount  Int             @default(1)
+  durationMs  Int             @default(0)
+  sha256      String
+  sortOrder   Int             @default(0)
+  status      String          @default("active")
+  createdAt   DateTime        @default(now())
+  Pack        ChatStickerPack @relation(fields: [packId], references: [id], onDelete: Restrict)
+  AssetBlob   BlobObject      @relation("ChatStickerAsset", fields: [assetBlobId], references: [id], onDelete: Restrict)
+  PosterBlob  BlobObject      @relation("ChatStickerPoster", fields: [posterBlobId], references: [id], onDelete: Restrict)
+  Messages    DirectMessage[]
+
+  @@unique([packId, key])
+  @@index([packId, status, sortOrder])
+  @@index([assetBlobId])
+  @@index([posterBlobId])
+}
+
+model ChatStickerImport {
+  id                String           @id
+  uploadedByUserId  String
+  status            String           @default("staged")
+  reportHash        String
+  manifest          Json
+  report            Json
+  publishedPackId   String?
+  expiresAt         DateTime
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  UploadedBy        User             @relation("ChatStickerImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  PublishedPack     ChatStickerPack? @relation("ChatStickerImportPublishedPack", fields: [publishedPackId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([expiresAt])
 }
 
 model ChatUserEvent {

@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { chatMetrics } from '../chat-metrics'
 import { ChatError, fail } from './chat-errors'
+import { resolveSendableSticker, serializeChatMessage } from './chat-sticker.service'
 export { ChatError, fail } from './chat-errors'
 const ordered = (a: string, b: string) => a < b ? [a, b] as const : [b, a] as const
 const eventExpiry = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -300,11 +301,12 @@ export async function listMessages(userId: string, conversationId: string, query
   const isLatestPage = parsedAfter === undefined && beforeSeq === undefined
   const rows = await prisma.directMessage.findMany({
     where: { conversationId, seq: { gt: afterSeq, ...(beforeSeq ? { lt: beforeSeq } : {}) } },
+    include: { Sticker: { select: { id: true, label: true, width: true, height: true, frameCount: true } } },
     orderBy: { seq: beforeSeq || isLatestPage ? 'desc' : 'asc' }, take: pageSize + (v2 ? 1 : 0),
   })
   const hasExtra = v2 && rows.length > pageSize
   const pageRows = hasExtra ? rows.slice(0, pageSize) : rows
-  const items = (beforeSeq || isLatestPage ? pageRows.reverse() : pageRows).map(row => ({ ...row, seq: row.seq }))
+  const items = (beforeSeq || isLatestPage ? pageRows.reverse() : pageRows).map(serializeChatMessage)
   if (!v2) return items
   return {
     items,
@@ -325,20 +327,29 @@ function validateMessageContent(value: unknown) {
 }
 
 async function sendMessageImpl(userId: string, conversationId: string, body: any) {
-  const content = validateMessageContent(body.content)
+  const messageType = body.type === undefined ? 'text' : body.type
+  if (messageType !== 'text' && messageType !== 'sticker') fail(422, 'INVALID_MESSAGE_TYPE', '消息类型无效')
+  const stickerId = messageType === 'sticker' && typeof body.stickerId === 'string' ? body.stickerId : null
+  if (messageType === 'sticker' && (!stickerId || stickerId.length > 128)) fail(422, 'INVALID_STICKER', '请选择有效表情')
+  const textContent = messageType === 'text' ? validateMessageContent(body.content) : null
   const clientMessageId = typeof body.clientMessageId === 'string' && /^[0-9a-f-]{16,64}$/i.test(body.clientMessageId) ? body.clientMessageId : fail(422, 'INVALID_CLIENT_MESSAGE_ID', '消息幂等标识无效')
-  const existingBeforeLimit = await prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+  const samePayload = (message: { messageType: string; stickerId: string | null; content: string }) => message.messageType === messageType && (messageType === 'sticker' ? message.stickerId === stickerId : message.content === textContent)
+  const existingBeforeLimit = await prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } }, include: { Sticker: { select: { id: true, label: true, width: true, height: true, frameCount: true } } } })
   if (existingBeforeLimit) {
-    if (existingBeforeLimit.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
-    return existingBeforeLimit
+    if (!samePayload(existingBeforeLimit)) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+    return serializeChatMessage(existingBeforeLimit)
   }
+  const sticker = stickerId ? await resolveSendableSticker(stickerId) : null
+  if (messageType === 'sticker' && !sticker) fail(422, 'STICKER_NOT_SENDABLE', '该表情已停用或不存在')
+  const content = textContent || `[表情：${sticker!.label}]`
+  const preview = messageType === 'sticker' ? '[表情]' : content.slice(0, 120)
   try {
     return await prisma.$transaction(async tx => {
       await lockChatActorBudget(tx, 'message', userId)
-      const existing = await tx.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+      const existing = await tx.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } }, include: { Sticker: { select: { id: true, label: true, width: true, height: true, frameCount: true } } } })
       if (existing) {
-        if (existing.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
-        return existing
+        if (!samePayload(existing)) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+        return serializeChatMessage(existing)
       }
       const now = new Date()
       const [minuteCount, hourCount, conversationCount] = await Promise.all([
@@ -362,8 +373,9 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
       const friendship = await activeFriendship(userId, otherId, tx)
       if (!friendship || friendship.status !== 'active' || await blockedBetween(userId, otherId, tx)) fail(403, 'FRIENDSHIP_REQUIRED', '当前不是好友，无法发送消息')
       const seq = conversation.lastMessageSeq + 1
-      const message = await tx.directMessage.create({ data: { id: randomUUID(), conversationId, senderUserId: userId, clientMessageId, seq, content } })
-      await tx.directConversation.update({ where: { id: conversationId }, data: { lastMessageSeq: seq, lastMessagePreview: content.slice(0, 120), lastMessageAt: message.createdAt, lastActivityAt: message.createdAt } })
+      if (stickerId && !(await tx.chatSticker.findFirst({ where: { id: stickerId, status: 'active', Pack: { status: 'active' } }, select: { id: true } }))) fail(422, 'STICKER_NOT_SENDABLE', '该表情已停用或不存在')
+      const message = await tx.directMessage.create({ data: { id: randomUUID(), conversationId, senderUserId: userId, clientMessageId, seq, content, messageType, stickerId }, include: { Sticker: { select: { id: true, label: true, width: true, height: true, frameCount: true } } } })
+      await tx.directConversation.update({ where: { id: conversationId }, data: { lastMessageSeq: seq, lastMessagePreview: preview, lastMessageAt: message.createdAt, lastActivityAt: message.createdAt } })
       const otherMember = { conversationId_userId: { conversationId, userId: otherId } }
       const senderMember = { conversationId_userId: { conversationId, userId } }
       // Keep writes deterministic too, while preserving the sender/recipient
@@ -373,14 +385,14 @@ async function sendMessageImpl(userId: string, conversationId: string, body: any
         else await tx.directConversationMember.update({ where: senderMember, data: { archivedAt: null } })
       }
       await notify(tx, [userId, otherId], 'message_created', conversationId, message.id, { seq })
-      return message
+      return serializeChatMessage(message)
     })
   } catch (error: any) {
     if (error?.code === 'P2002') {
-      const existing = await prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } } })
+      const existing = await prisma.directMessage.findUnique({ where: { conversationId_senderUserId_clientMessageId: { conversationId, senderUserId: userId, clientMessageId } }, include: { Sticker: { select: { id: true, label: true, width: true, height: true, frameCount: true } } } })
       if (!existing) throw error
-      if (existing.content !== content) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
-      return existing
+      if (!samePayload(existing)) fail(409, 'CHAT_IDEMPOTENCY_CONFLICT', '同一消息标识不能用于不同内容')
+      return serializeChatMessage(existing)
     }
     throw error
   }

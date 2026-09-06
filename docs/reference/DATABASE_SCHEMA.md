@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-05
+last_verified: 2026-09-06
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -9,7 +9,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 
 校园身份与档案唯一来源为组织成员关系、学生组织档案与教师组织档案。全局账号不再保存校园归属，旧学生、教师和管理员模型已删除。学校资料通过学校资料表关联学校组织。
 
-联系人和私信域由 `ChatPrivacySetting`、`FriendRequest`、`Friendship`、`UserBlock`、`DirectConversation`、`DirectConversationMember`、`DirectMessage`、`ChatUserEvent`、`ChatReport` 和 `ChatMaintenanceCursor` 组成。有序用户对和数据库约束保证唯一关系与会话；消息不可编辑，举报先保存独立证据快照，终态满一年后最小化证据并释放可清理消息引用。
+联系人和私信域由 `ChatPrivacySetting`、`FriendRequest`、`Friendship`、`UserBlock`、`DirectConversation`、`DirectConversationMember`、`DirectMessage`、`ChatUserEvent`、`ChatReport`、`ChatMaintenanceCursor`、`ChatStickerPack`、`ChatSticker` 和 `ChatStickerImport` 组成。有序用户对和数据库约束保证唯一关系与会话；消息不可编辑，举报先保存独立证据快照，终态满一年后最小化证据并释放可清理消息引用。表情包版本和资源不可变，退役版本继续服务历史消息。
 
 | 模型 | 说明 |
 |---|---|
@@ -19,7 +19,10 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ChatUserEvent` | 支持 SSE 补偿的七天持久事件 |
 | `DirectConversation` | 有序用户对唯一的一对一会话 |
 | `DirectConversationMember` | 用户侧已读、未读、归档和清空位置 |
-| `DirectMessage` | 会话内有序、幂等且不可编辑的文本消息 |
+| `DirectMessage` | 会话内有序、幂等且不可编辑的文字或平台表情消息 |
+| `ChatStickerPack` | 版本化且可退役的平台表情包 |
+| `ChatSticker` | 内容寻址的不可变动画/静态表情资源 |
+| `ChatStickerImport` | 有时限、带检查报告哈希的表情包发布暂存记录 |
 | `FriendRequest` | 可过期的联系申请状态机 |
 | `Friendship` | 可移除和恢复的账号级联系人关系（内部兼容名称） |
 | `UserBlock` | 方向性账号拉黑关系 |

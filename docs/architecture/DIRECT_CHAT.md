@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-05
+last_verified: 2026-09-06
 source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages, apps/server/prisma/schema.prisma
 ---
 
@@ -37,11 +37,19 @@ source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages
 - Pending 举报持续保全证据；终态举报满一年后将证据最小化为哈希摘要并释放原消息引用，使其重新服从双方清空后的 GC 规则。
 - 未读修复、消息 GC 和证据释放使用持久 keyset cursor，正确记录也推进扫描位置，不会被前 500 条长期阻塞。
 
+## 平台表情包
+
+- 消息类型为 `text | sticker`。表情是独立消息，服务端根据已发布 `stickerId` 生成 `[表情：名称]` 降级文本；客户端不能提交资源 URL、Blob ID或标签。
+- `ChatStickerPack` 按 key/version 不可变，`ChatSticker` 引用内容寻址的动画 WebP 与静态 poster。退役只阻止新发送，历史消息和举报证据继续可读。
+- 超管通过 ZIP + `manifest.json` 分两阶段导入和发布。导入检查路径、加密、文件数量、解压体积、真实图片格式、尺寸、帧数和时长，解码后统一重编码以清除元数据。
+- 表情发送复用文字消息的会话锁、幂等键、限流、序号、未读和 SSE 事务；会话摘要固定为 `[表情]`。
+- 举报证据固化消息类型、表情 ID、包版本、标签和资源哈希。表情 Blob 由不可变表情引用保护，暂存导入 24 小时过期后释放。
+
 ## 产品边界
 
 - 后端维护已读位置以保证未读一致性，但不向联系人展示对方已读回执。
 - UI 提供归档、恢复、单方清空、移除联系人和拉黑；`mutedUntil` 仍是预留字段，不宣称支持静音。
-- 当前只支持纯文本；附件、引用、撤回、编辑、在线状态和聊天处罚不属于本轮能力。
+- 当前支持纯文本和平台内置表情包；用户表情上传、Unicode Emoji 选择器、附件、引用、撤回、编辑、在线状态和聊天处罚不属于本轮能力。
 
 ## API
 

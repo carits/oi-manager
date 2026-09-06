@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-05
+last_verified: 2026-09-06
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -35,7 +35,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/chat/conversations` | 按 active/archived 与 opaque cursor 分页查询本人会话；旧数组响应暂时兼容 |
 | `POST` | `/api/chat/conversations` | 为现有好友创建或恢复唯一会话 |
 | `GET` | `/api/chat/conversations/:id/messages` | 读取最新消息页，或通过 beforeSeq/afterSeq 分页；V2 返回页元数据 |
-| `POST` | `/api/chat/conversations/:id/messages` | 幂等发送纯文本消息并重新校验双方账号、联系人和拉黑状态 |
+| `POST` | `/api/chat/conversations/:id/messages` | 幂等发送文字或平台表情消息并重新校验双方账号、联系人、拉黑和表情发布状态 |
+| `GET` | `/api/chat/sticker-packs` | 查询当前已发布表情包；没有表情时返回空数组 |
+| `GET` | `/api/chat/stickers/:stickerId/content` | 读取不可变表情 WebP |
+| `GET` | `/api/chat/stickers/:stickerId/poster` | 读取减少动态效果和审核使用的静态 poster |
 | `POST` | `/api/chat/conversations/:id/read` | 单调推进已读序号并修正未读投影 |
 | `POST` | `/api/chat/conversations/:id/archive` | 仅为本人归档会话 |
 | `POST` | `/api/chat/conversations/:id/unarchive` | 恢复本人归档的会话 |
@@ -47,6 +50,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/platform/chat-reports/:id` | 填写原因并审计读取举报证据 |
 | `POST` | `/api/platform/chat-reports/:id/resolve` | 确认处理举报 |
 | `POST` | `/api/platform/chat-reports/:id/dismiss` | 驳回举报 |
+| `POST` | `/api/platform/chat-sticker-imports` | 超管上传 ZIP 并获得表情包检查报告及 reportHash |
+| `POST` | `/api/platform/chat-sticker-imports/:id/publish` | 超管按 reportHash 原子发布已检查表情包 |
+| `GET` | `/api/platform/chat-sticker-packs` | 超管查询全部表情包版本和状态 |
+| `POST` | `/api/platform/chat-sticker-packs/:id/retire` | 超管退役表情包，历史消息保持可读 |
 | `GET` | `/api/problems/:id/judge-programs` | 列出题目的版本化 STD、Validator、Classifier 与 Generator |
 | `POST` | `/api/problems/:id/judge-programs` | 编译并创建评测程序及首个不可变版本 |
 | `POST` | `/api/problems/:id/judge-programs/:programId/versions` | 编译并追加新的不可变程序版本 |
