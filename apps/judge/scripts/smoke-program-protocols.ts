@@ -1,10 +1,9 @@
-process.env.JUDGE_TOKEN ||= 'judge-program-protocol-smoke'
-
-const { generateTestdata } = await import('../src/data-generation')
-const { initializeSandbox } = await import('../src/sandbox/client')
-
-await initializeSandbox()
-const result = await generateTestdata({
+async function main() {
+  process.env.JUDGE_TOKEN ||= 'judge-program-protocol-smoke'
+  const { generateTestdata } = await import('../src/data-generation')
+  const { initializeSandbox } = await import('../src/sandbox/client')
+  await initializeSandbox()
+  const result = await generateTestdata({
   taskType: 'data_generation', jobId: 'judge-program-protocol-smoke', problemId: 'protocol-smoke', fencingToken: 'smoke', sourceMode: 'generator',
   problemConfig: { mode: 'oi', checker_type: 'default', subtasks: [{ id: 1, score: 100, type: 'min' }] },
   generator: { language: 'python3', protocol: 'oj.generator/v1', source: `import json
@@ -28,11 +27,15 @@ int main() {
 }
 ` },
   cases: [{ id: 'case-1', name: 'smoke', args: [], seed: '123', profile: 'random', params: {} }],
-})
+  })
 
-const candidate = result.cases[0]
-if (candidate?.status !== 'validated' || candidate.classificationStatus !== 'classified' || candidate.outputData !== '5\n' || candidate.affectedSubtaskIds?.[0] !== 1) {
-  console.error(JSON.stringify(result))
-  process.exit(1)
+  const candidate = result.cases[0]
+  if (candidate?.status !== 'validated' || candidate.classificationStatus !== 'classified' || candidate.outputData !== '5\n' || candidate.affectedSubtaskIds?.[0] !== 1) {
+    console.error(JSON.stringify(result))
+    process.exitCode = 1
+    return
+  }
+  console.log(JSON.stringify({ status: candidate.status, classificationStatus: candidate.classificationStatus, subtasks: candidate.affectedSubtaskIds, output: candidate.outputData.trim() }))
 }
-console.log(JSON.stringify({ status: candidate.status, classificationStatus: candidate.classificationStatus, subtasks: candidate.affectedSubtaskIds, output: candidate.outputData.trim() }))
+
+main().catch(error => { console.error(error); process.exitCode = 1 })
