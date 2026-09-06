@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation'
 import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, School, ShieldCheck, Trophy, UserRound, WalletCards, Users, UsersRound, X, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
-import { getAssetUrl } from '@/lib/assets'
 import { getSidebarNavigationOpen, setSidebarNavigationOpen } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
@@ -15,6 +14,7 @@ import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
 import { NotificationBell } from '@/components/notification/NotificationBell'
 import { ChatButton } from '@/components/chat/ChatButton'
+import { UserAvatar } from '@/components/user/UserAvatar'
 import styles from './AppShell.module.css'
 
 interface AppShellProps { children: ReactNode }
@@ -129,7 +129,7 @@ export function AppShell({ children }: AppShellProps) {
   const userMenu = (
     <div className={styles.userMenuRoot} ref={userMenuRef}>
       <Button variant="ghost" type="button" className={styles.accountCard} onClick={() => setShowUserMenu(current => !current)} aria-expanded={showUserMenu} aria-haspopup="menu" aria-label="打开账号菜单">
-        {user.avatar ? <img className={styles.avatar} src={getAssetUrl(user.avatar)} alt="" /> : <span className={styles.avatarFallback} aria-hidden="true">{visibleName.charAt(0).toUpperCase() || '?'}</span>}
+        <UserAvatar avatar={user.avatar} username={user.username} name={visibleName} decorative />
         <span className={styles.userText}><span className={styles.userName}>{visibleName}</span><span className={styles.userContext}>{userContext}</span></span>
         <ChevronDown className={styles.chevron} size={16} aria-hidden="true" />
       </Button>

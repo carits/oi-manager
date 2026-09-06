@@ -55,6 +55,7 @@ async function establishContact(sender: Page, receiver: Page) {
   await sender.getByRole('searchbox', { name: '搜索用户' }).fill(chatAccounts.receiver.username)
   await sender.getByRole('button', { name: '搜索', exact: true }).click()
   const result = sender.locator('article').filter({ hasText: chatAccounts.receiver.username })
+  await expect(result.locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
   await result.getByRole('button', { name: '添加联系人' }).click()
   await sender.getByRole('dialog').getByRole('button', { name: '发送申请' }).click()
   await expect(sender.getByText('联系申请已发送')).toBeVisible()
@@ -69,6 +70,7 @@ async function establishContact(sender: Page, receiver: Page) {
   await expect(contact.getByRole('button', { name: '发消息' })).toBeVisible()
   await contact.getByRole('button', { name: '发消息' }).click()
   await expect(sender.getByLabel('消息内容')).toBeEnabled()
+  await expect(sender.locator('header').filter({ hasText: `@${chatAccounts.receiver.username}` }).locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
 }
 
 async function clearConversation(context: BrowserContext, conversationId: string) {
@@ -110,6 +112,7 @@ test.describe.serial('direct chat browser workflow', () => {
       await receiver.page.getByRole('tab', { name: /^消息/ }).click()
       const incomingConversation = receiver.page.getByRole('button').filter({ hasText: chatAccounts.sender.username }).first()
       await expect(incomingConversation).toContainText(firstMessage)
+      await expect(incomingConversation.locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
       await expect(incomingConversation.locator('b')).toHaveText('1')
       await incomingConversation.click()
       await expect(visibleMessage(receiver.page, firstMessage)).toBeVisible()
@@ -124,6 +127,10 @@ test.describe.serial('direct chat browser workflow', () => {
       await expect(receiver.page.getByLabel('消息内容')).toHaveValue(reply)
       await receiver.page.getByRole('button', { name: '发送', exact: true }).click()
       await expect(visibleMessage(sender.page, reply)).toBeVisible()
+
+      for (const page of [sender.page, receiver.page]) {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+      }
 
       await sender.page.reload()
       await sender.page.getByRole('button').filter({ hasText: chatAccounts.receiver.username }).first().click()

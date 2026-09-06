@@ -45,4 +45,15 @@ describe('chat event client', () => {
     expect(accountLayout).toContain("'student', 'user'")
     expect(personalLayout).toContain("'student', 'user'")
   })
+
+  it('renders the shared avatar and compact chat presentation in every identity surface', () => {
+    const avatar = fs.readFileSync(new URL('../components/user/UserAvatar.tsx', import.meta.url), 'utf8')
+    const page = fs.readFileSync(new URL('../app/account/messages/page.tsx', import.meta.url), 'utf8')
+    expect(avatar).toContain("onError={() => setFailed(true)}")
+    expect(avatar).toContain('firstCharacter(label)')
+    expect(page).toContain('formatConversationTime(item.lastMessageAt)')
+    expect(page).toContain('groupMessages(messages)')
+    expect(page.match(/<UserAvatar/g)?.length).toBeGreaterThanOrEqual(7)
+    expect(page).not.toContain("toLocaleString('zh-CN')")
+  })
 })

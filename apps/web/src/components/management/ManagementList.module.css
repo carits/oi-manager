@@ -4,8 +4,6 @@
 .select { min-height: 36px; padding: 0 28px 0 10px; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); }
 .count { margin-left: auto; color: var(--text-secondary); font-size: var(--text-sm); white-space: nowrap; }
 .identity { display: flex; align-items: center; gap: 10px; min-width: 180px; }
-.avatar, .avatarFallback { width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 50%; object-fit: cover; }
-.avatarFallback { display: grid; place-items: center; color: var(--text-inverse); background: var(--primary); border: 0; font-size: 13px; font-weight: 650; }
 .identityText, .contact { display: grid; gap: 2px; min-width: 0; }
 .identityName { overflow: hidden; color: var(--text-primary); font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .identityUsername, .contactSecondary { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

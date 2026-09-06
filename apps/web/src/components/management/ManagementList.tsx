@@ -4,7 +4,7 @@ import { createContext, type ReactNode, useContext, useEffect, useLayoutEffect, 
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { getAssetUrl } from '@/lib/assets'
+import { UserAvatar } from '@/components/user/UserAvatar'
 import styles from './ManagementList.module.css'
 
 const ActionMenuContext = createContext<() => void>(() => {})
@@ -14,7 +14,7 @@ export function ManagementToolbar({ children, total, noun }: { children: ReactNo
 }
 
 export function IdentityCell({ name, username, avatar }: { name: string; username?: string; avatar?: string | null }) {
-  return <div className={styles.identity}>{avatar ? <img className={styles.avatar} src={getAssetUrl(avatar)} alt="" /> : <span className={styles.avatarFallback}>{name.charAt(0) || '?'}</span>}<span className={styles.identityText}><span className={styles.identityName}>{name}</span>{username && <span className={styles.identityUsername}>{username}</span>}</span></div>
+  return <div className={styles.identity}><UserAvatar avatar={avatar} username={username} name={name} size="sm" decorative /><span className={styles.identityText}><span className={styles.identityName}>{name}</span>{username && <span className={styles.identityUsername}>{username}</span>}</span></div>
 }
 
 export function ActionMenu({ children }: { children: ReactNode }) {
