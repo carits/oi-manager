@@ -58,8 +58,10 @@ test('production chat send, SSE receive, read and reply probe', async ({ browser
     await Promise.all([senderSession.page.goto('/account/messages'), receiverSession.page.goto('/account/messages')])
     const senderConversation = senderSession.page.getByRole('button').filter({ hasText: receiver.username }).first()
     await expect(senderConversation).toBeVisible()
+    await expect(senderConversation.locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
     await senderConversation.click()
     await expect(senderSession.page.getByLabel('消息内容')).toBeEnabled()
+    await expect(senderSession.page.locator('header').filter({ hasText: `@${receiver.username}` }).locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
 
     const marker = `chat-probe:${buildId}:${randomUUID()}`
     await senderSession.page.getByLabel('消息内容').fill(marker)
@@ -76,6 +78,7 @@ test('production chat send, SSE receive, read and reply probe', async ({ browser
 
     const receiverConversation = receiverSession.page.getByRole('button').filter({ hasText: sender.username }).first()
     await expect(receiverConversation).toContainText(marker)
+    await expect(receiverConversation.locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
     await expect(receiverConversation.locator('b')).toHaveText('1')
     await receiverConversation.click()
     await expect(visibleMessage(receiverSession.page, marker)).toBeVisible()
@@ -93,6 +96,9 @@ test('production chat send, SSE receive, read and reply probe', async ({ browser
     expect(replyResponse.status()).toBe(201)
     replySeq = (await replyResponse.json()).data.seq
     await expect(visibleMessage(senderSession.page, reply)).toBeVisible()
+    for (const page of [senderSession.page, receiverSession.page]) {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+    }
     expect(errors).toEqual([])
     console.log(JSON.stringify({ type: 'chat_probe', buildId, requestId, conversationId, sentSeq, replySeq, durationMs: Date.now() - startedAt }))
   } finally {
