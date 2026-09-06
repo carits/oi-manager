@@ -23,13 +23,14 @@ import { problemWrongCorpusRouter } from './problem.wrong-corpus.routes'
 export const problemsRouter = Router()
 
 // 挂载子路由
+// Global template routes must precede the generic GET /:id problem route.
+problemsRouter.use(problemJudgeProgramRouter)
 problemsRouter.use(problemCrudRouter)
 problemsRouter.use(problemUserContentRouter)
 problemsRouter.use(problemStatementVersionRouter)
 problemsRouter.use(problemHackRouter)
 problemsRouter.use(problemTestGraphRouter)
 problemsRouter.use(problemTestSetRevisionRouter)
-problemsRouter.use(problemJudgeProgramRouter)
 problemsRouter.use(problemDataGenerationRouter)
 problemsRouter.use(problemCandidateRouter)
 problemsRouter.use(problemWrongCorpusRouter)
