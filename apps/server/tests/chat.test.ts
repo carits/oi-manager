@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { chatRouter, chatReportAdminRouter } from '../src/modules/chat/chat.routes'
 import { chatStickerAdminRouter } from '../src/modules/chat/chat.routes'
 import yazl from 'yazl'
+import sharp from 'sharp'
 import { chatRealtimeHub } from '../src/modules/chat/chat-realtime'
 import { resolveEventCursor } from '../src/modules/chat/application/chat.service'
 import { runChatMaintenance } from '../src/modules/chat/application/chat-maintenance.service'
@@ -45,7 +46,7 @@ async function befriend() {
 async function stickerArchive() {
   const zip = new yazl.ZipFile()
   zip.addBuffer(Buffer.from(JSON.stringify({ schemaVersion: 1, pack: { key: `test-${crypto.randomUUID()}`, name: '测试表情', version: 1 }, stickers: [{ key: 'happy', label: '开心', file: 'stickers/happy.png', order: 1 }] })), 'manifest.json')
-  zip.addBuffer(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3pT2WQAAAABJRU5ErkJggg==', 'base64'), 'stickers/happy.png')
+  zip.addBuffer(await sharp({ create: { width: 64, height: 64, channels: 4, background: { r: 72, g: 99, b: 235, alpha: 1 } } }).png().toBuffer(), 'stickers/happy.png')
   zip.end()
   const chunks: Buffer[] = []
   for await (const chunk of zip.outputStream) chunks.push(Buffer.from(chunk))
