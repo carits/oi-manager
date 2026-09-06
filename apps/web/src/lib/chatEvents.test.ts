@@ -33,8 +33,16 @@ describe('chat event client', () => {
     expect(page).toContain('afterSeq=${afterSeq}')
     expect(page).toContain('useState<Record<string, string>>({})')
     expect(page).toContain('event.nativeEvent.isComposing')
-    expect(page).toContain('clientMessageId: createClientUUID()')
+    expect(page).toContain('const clientMessageId = pending?.content === content ? pending.clientMessageId : createClientUUID()')
+    expect(page).toContain('{ content, clientMessageId }, account')
     expect(page).not.toContain('clientMessageId: crypto.randomUUID()')
     expect(page).toContain('finally {')
+  })
+
+  it('lets account-level users enter personal and messaging shells', () => {
+    const accountLayout = fs.readFileSync(new URL('../app/account/layout.tsx', import.meta.url), 'utf8')
+    const personalLayout = fs.readFileSync(new URL('../app/personal/layout.tsx', import.meta.url), 'utf8')
+    expect(accountLayout).toContain("'student', 'user'")
+    expect(personalLayout).toContain("'student', 'user'")
   })
 })

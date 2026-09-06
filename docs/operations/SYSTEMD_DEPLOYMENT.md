@@ -130,3 +130,4 @@ API 回滚时将 `.run/api-active-upstream` 原子改回仍在运行的旧端口
 固定文件名。这避免 Linux `fs.protected_regular` 在粘滞目录中拒绝跨用户覆盖旧日志。
 已安装 `oi-manager-web.service` 时，`promote-preview.sh` 和 `rollback-preview.sh` 必须使用 `sudo`；脚本会先停止
 systemd Web，原子切换 `.next-current/.next-previous`，再重启并按 BUILD_ID 校验，不再依赖旧 PID 文件。
+正式提升还要求 `.run/chat-probe.env` 存在且启用。`promote-preview.sh` 在候选和正式端口执行专用账号消息发送、SSE 接收、已读与回复闭环；正式探针失败沿用同一回滚分支恢复上一 BUILD_ID，并保留 Playwright 失败证据。

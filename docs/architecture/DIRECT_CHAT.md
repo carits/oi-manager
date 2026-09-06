@@ -46,3 +46,10 @@ source_of_truth: apps/server/src/modules/chat, apps/web/src/app/account/messages
 ## API
 
 账号端统一使用 `/api/chat`；举报审核使用 `/api/platform/chat-reports`。消息和会话分页新客户端携带 `pagination=v2`，部署兼容期内旧调用仍返回数组。
+
+## 验证与发布门禁
+
+- Server 集成测试必须真实创建联系人、会话和消息，并核对消息、摘要、未读和双方持久事件的同事务结果；关键已读、发送和拉黑竞态重复十轮。
+- 隔离 Playwright 使用独立 `chat_sender/chat_receiver/chat_outsider`，两个 BrowserContext 完成申请、接受、发送、SSE 接收、已读和回复，不复用 teacher1/teacher2。
+- Chromium 核心闭环进入每次 PR；Firefox、紧凑视口、响应丢失和幂等重试进入发布前测试。
+- 生产 Web 提升前后均使用两个无组织关系的专用探针账号执行消息闭环；候选失败阻止提升，提升后失败自动恢复上一构建。探针双方清空本轮历史，凭据只保存在权限为 0600 的 `.run/chat-probe.env`。

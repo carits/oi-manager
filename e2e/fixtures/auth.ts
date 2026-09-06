@@ -60,3 +60,9 @@ export const accounts: Record<AuthRole, AuthAccount> = {
     storageState: path.join(authDir, 'personal-student.json'),
   },
 }
+
+export const chatAccounts = {
+  sender: { username: 'chat_sender', password: accountPassword, workspaceMode: 'personal' as const },
+  receiver: { username: 'chat_receiver', password: accountPassword, workspaceMode: 'personal' as const },
+  outsider: { username: 'chat_outsider', password: accountPassword, workspaceMode: 'personal' as const },
+}

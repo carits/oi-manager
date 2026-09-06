@@ -67,6 +67,8 @@ export default function MessagesPage() {
   const loadVersion = useRef(0)
   const messageListRef = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
+  const sendingRef = useRef(false)
+  const pendingSendRef = useRef<Record<string, { content: string; clientMessageId: string }>>({})
 
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { selectedRef.current = selectedId }, [selectedId])
@@ -190,11 +192,16 @@ export default function MessagesPage() {
   const send = async () => {
     const conversationId = selectedId
     const content = conversationId ? drafts[conversationId]?.trim() : ''
-    if (!conversationId || !content) return
+    if (!conversationId || !content || sendingRef.current) return
+    const pending = pendingSendRef.current[conversationId]
+    const clientMessageId = pending?.content === content ? pending.clientMessageId : createClientUUID()
+    pendingSendRef.current[conversationId] = { content, clientMessageId }
+    sendingRef.current = true
     setBusy(true)
     try {
-      const response = await apiClient.post<Message>(`/api/chat/conversations/${conversationId}/messages`, { content, clientMessageId: createClientUUID() }, account)
+      const response = await apiClient.post<Message>(`/api/chat/conversations/${conversationId}/messages`, { content, clientMessageId }, account)
       if (!response.success || !response.data) return toast.error(response.message || '发送失败')
+      delete pendingSendRef.current[conversationId]
       setDrafts(current => ({ ...current, [conversationId]: '' }))
       if (selectedRef.current === conversationId) {
         setMessages(current => mergeMessages(current, [response.data!]))
@@ -204,6 +211,7 @@ export default function MessagesPage() {
     } catch {
       toast.error('发送失败，请稍后重试')
     } finally {
+      sendingRef.current = false
       setBusy(false)
     }
   }

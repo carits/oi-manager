@@ -123,5 +123,15 @@ export default defineConfig({
         viewport: { width: 1440, height: 900 },
       },
     },
+    {
+      name: 'firefox-chat',
+      dependencies: ['setup'],
+      testMatch: /direct-chat-flow\.spec\.ts/,
+      grep: /@chat-release/,
+      use: {
+        ...devices['Desktop Firefox'],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
   ],
 })

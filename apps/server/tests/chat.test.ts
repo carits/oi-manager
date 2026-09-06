@@ -3,6 +3,7 @@ import express from 'express'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { chatRouter, chatReportAdminRouter } from '../src/modules/chat/chat.routes'
+import { chatRealtimeHub } from '../src/modules/chat/chat-realtime'
 import { resolveEventCursor } from '../src/modules/chat/application/chat.service'
 import { runChatMaintenance } from '../src/modules/chat/application/chat-maintenance.service'
 import { prisma } from '../src/prisma'
@@ -62,6 +63,76 @@ describe('account direct chat', () => {
     const read = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/read`).set(auth(bobToken)).send({ throughSeq: 999 })
     expect(read.body.data.lastReadSeq).toBe(1)
     expect((await request(app).get('/api/chat/unread').set(auth(bobToken))).body.data.messageUnread).toBe(0)
+  })
+
+  it('commits the message, conversation projection, member counters and both user events atomically', async () => {
+    await befriend()
+    const conversationResponse = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const conversationId = conversationResponse.body.data.id
+    const sent = await request(app).post(`/api/chat/conversations/${conversationId}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'atomic-state' })
+    expect(sent.status).toBe(201)
+    const [conversation, members, events] = await Promise.all([
+      prisma.directConversation.findUniqueOrThrow({ where: { id: conversationId } }),
+      prisma.directConversationMember.findMany({ where: { conversationId }, orderBy: { userId: 'asc' } }),
+      prisma.chatUserEvent.findMany({ where: { conversationId, messageId: sent.body.data.id }, orderBy: { userId: 'asc' } }),
+    ])
+    expect(conversation).toMatchObject({ lastMessageSeq: 1, lastMessagePreview: 'atomic-state' })
+    expect(conversation.lastMessageAt).not.toBeNull()
+    expect(members.find(member => member.userId === alice.id)?.unreadCount).toBe(0)
+    expect(members.find(member => member.userId === bob.id)?.unreadCount).toBe(1)
+    expect(events).toHaveLength(2)
+    expect(events.map(event => event.eventType)).toEqual(['message_created', 'message_created'])
+  })
+
+  it('delivers a newly committed message to an already connected SSE receiver', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const server = app.listen(0)
+    await new Promise<void>(resolve => server.once('listening', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('test server did not bind')
+    const controller = new AbortController()
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/chat/events`, { headers: auth(bobToken), signal: controller.signal })
+      const reader = response.body!.getReader()
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain('event: ready')
+      const sent = await request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'live-event' })
+      expect(sent.status).toBe(201)
+      await chatRealtimeHub.refreshAll()
+      const event = new TextDecoder().decode((await reader.read()).value)
+      expect(event).toContain('event: message_created')
+      expect(event).toContain(sent.body.data.id)
+    } finally {
+      controller.abort()
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
+  })
+
+  it('serializes bidirectional sends without duplicate sequence numbers', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const responses = await Promise.all(Array.from({ length: 8 }, (_, index) => {
+      const token = index % 2 ? bobToken : aliceToken
+      return request(app).post(`/api/chat/conversations/${conversation.body.data.id}/messages`).set(auth(token)).send({ clientMessageId: crypto.randomUUID(), content: `bidirectional-${index}` })
+    }))
+    expect(responses.every(response => response.status === 201)).toBe(true)
+    const messages = await prisma.directMessage.findMany({ where: { conversationId: conversation.body.data.id }, orderBy: { seq: 'asc' } })
+    expect(messages.map(message => message.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(new Set(messages.map(message => message.clientMessageId)).size).toBe(8)
+  })
+
+  it('leaves no partial writes when validation or relationship checks reject a message', async () => {
+    await befriend()
+    const conversation = await request(app).post('/api/chat/conversations').set(auth(aliceToken)).send({ userId: bob.id })
+    const conversationId = conversation.body.data.id
+    expect((await request(app).post(`/api/chat/conversations/${conversationId}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: '😀'.repeat(3000) })).status).toBe(422)
+    await request(app).delete(`/api/chat/friends/${bob.id}`).set(auth(aliceToken))
+    expect((await request(app).post(`/api/chat/conversations/${conversationId}/messages`).set(auth(aliceToken)).send({ clientMessageId: crypto.randomUUID(), content: 'must-not-commit' })).status).toBe(403)
+    expect(await prisma.directMessage.count({ where: { conversationId } })).toBe(0)
+    expect(await prisma.chatUserEvent.count({ where: { conversationId, eventType: 'message_created' } })).toBe(0)
+    const current = await prisma.directConversation.findUniqueOrThrow({ where: { id: conversationId } })
+    expect(current).toMatchObject({ lastMessageSeq: 0, lastMessagePreview: null, lastMessageAt: null })
+    expect((await prisma.directConversationMember.findMany({ where: { conversationId } })).every(member => member.unreadCount === 0)).toBe(true)
   })
 
   it('serializes a read update with a concurrent incoming message', async () => {

@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 44 |
 | systemd units | 8 |
-| Referenced environment keys | 438 |
+| Referenced environment keys | 445 |
 
 ## HTTP adapter ownership
 
@@ -334,6 +334,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CERT`
 - `CERTIFICATE`
 - `CF_BASE_URL`
+- `CHAT_PROBE_ENABLED`
+- `CHAT_PROBE_ENV`
+- `CHAT_PROBE_RECEIVER_PASSWORD`
+- `CHAT_PROBE_RECEIVER_USERNAME`
+- `CHAT_PROBE_SENDER_PASSWORD`
+- `CHAT_PROBE_SENDER_USERNAME`
 - `CHECKER_INCLUDE_DIR`
 - `CLIENT_TELEMETRY_RATE_LIMIT_MAX`
 - `CONCURRENCY`
@@ -547,6 +553,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OTHER_KEY`
 - `OUTPUT`
 - `PATH`
+- `PATTERN`
 - `PG_DATABASE_URL`
 - `PIDS`
 - `PID_FILE`

@@ -33,6 +33,9 @@ Router 活动端口由 `.run/api-active-upstream` 原子文件决定，只接受
 pnpm install --frozen-lockfile
 pnpm --filter server test
 pnpm --filter @oi-manager/judge test
+pnpm --filter server exec vitest run tests/chat.test.ts
+pnpm test:chat:race
+pnpm test:chat:release
 pnpm test:stress:blue-green
 pnpm db:install-paths:verify
 pnpm build
@@ -57,6 +60,15 @@ pnpm security:audit
 
 ## Web 发布
 
+生产机首次启用消息闭环探针时执行：
+
+```bash
+pnpm chat:probe:provision
+pnpm exec playwright install chromium
+```
+
+该命令幂等创建两个无组织/团队关系的专用账号，并将随机凭据以 `0600` 权限保存到 `.run/chat-probe.env`，不得复制到仓库、日志或普通用户环境。
+
 ```bash
 pnpm preview:build
 pnpm preview:canary
@@ -64,7 +76,7 @@ pnpm preview:health
 pnpm preview:promote
 ```
 
-提升后核对 `.next-current/BUILD_ID` 与候选构建 ID 完全一致。Web 失败使用 `pnpm preview:rollback`，不会修改 API 指针或数据库。
+生产 systemd 环境中的 `preview:promote` 会在 3200 候选和 3000 正式端口各执行一次双浏览器消息闭环；候选失败时不切换，正式探针失败时自动恢复 `.next-previous`。提升后核对 `.next-current/BUILD_ID` 与候选构建 ID 完全一致。Web 失败使用 `pnpm preview:rollback`，不会修改 API 指针或数据库。
 
 ## 回滚
 

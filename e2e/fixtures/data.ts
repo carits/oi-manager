@@ -9,6 +9,9 @@ export interface FixtureIds {
     teacher: string
     campusStudent: string
     personalStudent: string
+    chatSender: string
+    chatReceiver: string
+    chatOutsider: string
   }
   school: string
   team: string

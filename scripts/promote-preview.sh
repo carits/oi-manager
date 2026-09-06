@@ -9,6 +9,7 @@ PREVIOUS_DIR="$WEB_DIR/.next-previous"
 CANARY_PID_FILE="$ROOT_DIR/.run/oi-web-canary.pid"
 WEB_UNIT="oi-manager-web.service"
 USE_SYSTEMD=false
+CHAT_PROBE_ENV="$ROOT_DIR/.run/chat-probe.env"
 
 if systemctl cat "$WEB_UNIT" >/dev/null 2>&1; then
   USE_SYSTEMD=true
@@ -17,6 +18,39 @@ if systemctl cat "$WEB_UNIT" >/dev/null 2>&1; then
     exit 1
   fi
 fi
+
+run_chat_probe() {
+  local url="$1"
+  local build_id="$2"
+  if [[ "$USE_SYSTEMD" != "true" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$CHAT_PROBE_ENV" ]]; then
+    echo "Production chat probe credentials are missing: $CHAT_PROBE_ENV" >&2
+    return 1
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "$CHAT_PROBE_ENV"
+  set +a
+  if [[ "${CHAT_PROBE_ENABLED:-false}" != "true" ]]; then
+    echo "Production chat probe must be enabled before promotion." >&2
+    return 1
+  fi
+  (
+    cd "$ROOT_DIR"
+    local runner="${SUDO_USER:-$(stat -c '%U' "$ROOT_DIR")}"
+    local pnpm_bin
+    pnpm_bin="$(command -v pnpm)"
+    runuser -u "$runner" -- env \
+      CHAT_PROBE_SENDER_USERNAME="$CHAT_PROBE_SENDER_USERNAME" \
+      CHAT_PROBE_SENDER_PASSWORD="$CHAT_PROBE_SENDER_PASSWORD" \
+      CHAT_PROBE_RECEIVER_USERNAME="$CHAT_PROBE_RECEIVER_USERNAME" \
+      CHAT_PROBE_RECEIVER_PASSWORD="$CHAT_PROBE_RECEIVER_PASSWORD" \
+      E2E_LIVE_BASE_URL="$url" E2E_LIVE_BUILD_ID="$build_id" \
+      "$pnpm_bin" exec playwright test chat-probe.spec.ts --config=playwright.live.config.ts
+  )
+}
 
 test -f "$CANDIDATE_DIR/BUILD_ID"
 
@@ -59,6 +93,8 @@ cleanup_canary() {
 }
 trap cleanup_canary EXIT
 wait_for_preview http://127.0.0.1:3200/login "$(cat "$CANDIDATE_DIR/BUILD_ID")"
+if [[ "$USE_SYSTEMD" == "true" ]]; then sleep 11; fi
+run_chat_probe http://127.0.0.1:3200 "$(cat "$CANDIDATE_DIR/BUILD_ID")"
 "$ROOT_DIR/scripts/stop-preview-canary.sh"
 trap - EXIT
 
@@ -79,7 +115,8 @@ fi
 mv "$CANDIDATE_DIR" "$CURRENT_DIR"
 
 if ! start_published_preview ||
-  ! wait_for_preview http://127.0.0.1:3000/login "$(cat "$CURRENT_DIR/BUILD_ID")"; then
+  ! wait_for_preview http://127.0.0.1:3000/login "$(cat "$CURRENT_DIR/BUILD_ID")" ||
+  ! run_chat_probe http://127.0.0.1:3000 "$(cat "$CURRENT_DIR/BUILD_ID")"; then
   stop_published_preview || true
   current_path="$(readlink -f "$CURRENT_DIR")"
   expected_current_path="$(readlink -f "$WEB_DIR")/.next-current"

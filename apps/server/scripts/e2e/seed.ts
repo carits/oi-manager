@@ -25,6 +25,9 @@ const ids = {
   teacher: 'e2e-teacher',
   campusStudent: 'e2e-campus-student',
   personalStudent: 'e2e-personal-student',
+  chatSender: 'e2e-chat-sender',
+  chatReceiver: 'e2e-chat-receiver',
+  chatOutsider: 'e2e-chat-outsider',
   team: 'e2e-team',
   personalTeam: 'e2e-personal-team',
   browseTeam: 'e2e-browse-team',
@@ -49,6 +52,9 @@ async function seedIdentityGraph(prisma: PrismaClient, passwordHash: string) {
       { id: ids.teacher, username: 'teacher2', passwordHash, role: 'teacher', status: 'active', email: 'teacher@e2e.test' },
       { id: ids.campusStudent, username: 'student1', passwordHash, role: 'student', status: 'active', email: 'student@e2e.test' },
       { id: ids.personalStudent, username: 'personal_student1', passwordHash, role: 'student', status: 'active', email: 'personal@e2e.test' },
+      { id: ids.chatSender, username: 'chat_sender', passwordHash, role: 'user', status: 'active', email: 'chat-sender@e2e.test' },
+      { id: ids.chatReceiver, username: 'chat_receiver', passwordHash, role: 'user', status: 'active', email: 'chat-receiver@e2e.test' },
+      { id: ids.chatOutsider, username: 'chat_outsider', passwordHash, role: 'user', status: 'active', email: 'chat-outsider@e2e.test' },
     ],
   })
   await prisma.organization.createMany({
@@ -99,6 +105,9 @@ async function main() {
         ids.teacher,
         ids.campusStudent,
         ids.personalStudent,
+        ids.chatSender,
+        ids.chatReceiver,
+        ids.chatOutsider,
       ].map(userId => ({ userId })),
     })
     await prisma.team.createMany({

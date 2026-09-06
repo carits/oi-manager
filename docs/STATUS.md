@@ -5,6 +5,8 @@ last_verified: 2026-09-05
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-06: 一对一聊天动作级验证已收口：E2E 使用 `chat_sender/chat_receiver/chat_outsider` 隔离账号执行搜索、联系申请、SSE 接收、接受、建会话、发送、未读、回复、已读和刷新恢复，并在浏览器移除 `crypto.randomUUID` 验证 HTTP 降级；响应已成功但客户端收到 503 时保留草稿并复用幂等键，数据库只落一条消息。修复普通全局 `user` 被账号/个人页面权限壳错误重定向的问题。生产发布探针使用两个无组织/团队、不可被发现的专用账号，候选和正式 Web 均须通过真实发送闭环，否则阻断或回滚。Server 73 文件/588 用例、Chat 19/19、四项竞态 10 轮、Web 64/64、Chromium 桌面 8/8、紧凑视口 7/7、Firefox 8/8、三端构建及 UI/API/架构/文档门禁通过；候选 BUILD_ID `QdHV_MBCtFlhP4XDwex_m`。
+
 - 2026-09-05: 修复并部署 HTTP 环境私信发送无响应：生产客户端遥测确认 `crypto.randomUUID is not a function`，且 teacher1/teacher2 会话已创建但消息和事件均未落库。消息及其他浏览器幂等请求改用兼容 HTTP 的 `createClientUUID()`，发送异常保证恢复 loading 并显示错误；Web 63/63、生产构建及 UI/文档/架构门禁通过。提交 `476a66f` 已推送，Web BUILD_ID `v_dHMnaNbaYLtspzJb-VK` 已提升。
 
 - 2026-09-05: 一对一聊天正确性、实时性与生命周期完成最终并发审计并部署：消息事件及双方成员按稳定顺序加锁，已读/清空/归档与发送共享会话锁序，联系申请处理与拉黑共享有序用户对 advisory lock；消息、联系申请和举报的持久限流在事务内串行计数，数据库瞬态冲突仅对完整幂等消息事务有界重试。举报终态重试保持幂等且不重复审计。Server 73 文件/584 用例、聊天 15/15、竞态重复 5 轮、Web 61/61、Server/Judge/Web 构建及 UI/API/架构/文档门禁通过。提交 `ea87788` 已推送 `main`，API 活动 slot 为 3302，Judge/Worker/Executor 已重启，Web BUILD_ID `5E91W4lE0MwI1SKTCKElt` 已提升；线上 readiness、登录态会话/未读接口和 SSE ready/heartbeat 均正常，发布后无数据库死锁、未处理异常或 5xx。
