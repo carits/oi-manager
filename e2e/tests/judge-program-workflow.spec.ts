@@ -38,8 +38,9 @@ raise SystemExit(0 if -100 <= a <= 100 and -100 <= b <= 100 else 1)
   expect(earlyActivation.status()).toBe(409)
 
   const preflight = await request.post(`/api/problems/${problemId}/judge-programs/${body.program.id}/versions/${body.version.id}/preflight`, { headers, data: { fixtures: [{ name: 'valid', stdin: '1 2\n', expectedExitCode: 0 }, { name: 'invalid-extra', stdin: '1 2 3\n', expectedExitCode: 1 }] } })
-  expect(preflight.status()).toBe(200)
-  expect((await preflight.json()).data.lifecycleStatus).toBe('verified')
+  const preflightBody = await preflight.json()
+  expect(preflight.status(), JSON.stringify(preflightBody)).toBe(200)
+  expect(preflightBody.data.lifecycleStatus).toBe('verified')
 
   const activation = await request.patch(`/api/problems/${problemId}/judge-programs/${body.program.id}`, { headers, data: { currentVersionId: body.version.id } })
   expect(activation.status()).toBe(200)
