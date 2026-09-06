@@ -135,7 +135,7 @@ export async function stageStickerImport(userId: string, archive: Buffer) {
       const normalized = await normalizeImage(source, item.file)
       const assetBlob = await putReferencedBlob({ content: normalized.asset, ownerType: 'chat_sticker_import', ownerId: importId, role: `asset:${item.key}`, contentType: 'image/webp' })
       const posterBlob = normalized.frameCount === 1 && normalized.asset.equals(normalized.poster) ? assetBlob : await putReferencedBlob({ content: normalized.poster, ownerType: 'chat_sticker_import', ownerId: importId, role: `poster:${item.key}`, contentType: 'image/webp' })
-      staged.push({ ...item, ...normalized, assetBlobId: assetBlob.id, posterBlobId: posterBlob.id, mimeType: 'image/webp', size: normalized.asset.length })
+      staged.push({ ...item, assetBlobId: assetBlob.id, posterBlobId: posterBlob.id, mimeType: 'image/webp', width: normalized.width, height: normalized.height, frameCount: normalized.frameCount, durationMs: normalized.durationMs, sha256: normalized.sha256, size: normalized.asset.length })
     }
     const report = { pack: manifest.pack, stickers: staged, totals: { count: staged.length, bytes: staged.reduce((sum, item) => sum + item.size, 0), animated: staged.filter(item => item.frameCount > 1).length } }
     const reportHash = crypto.createHash('sha256').update(canonical(report)).digest('hex')
