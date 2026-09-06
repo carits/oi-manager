@@ -29,7 +29,7 @@ export async function resolveActiveProgramVersion(problemId: string, kind: Asset
         : null
   if (configuredId) {
     const version = await prisma.problemJudgeProgramVersion.findFirst({
-      where: { id: configuredId, problemId, compileStatus: 'passed' },
+      where: { id: configuredId, problemId, compileStatus: 'passed', lifecycleStatus: 'active' },
     })
     if (version) {
       const program = await prisma.problemJudgeProgram.findFirst({
@@ -44,7 +44,7 @@ export async function resolveActiveProgramVersion(problemId: string, kind: Asset
   })
   for (const program of programs) {
     const version = await prisma.problemJudgeProgramVersion.findFirst({
-      where: { id: program.currentVersionId!, programId: program.id, problemId, compileStatus: 'passed' },
+      where: { id: program.currentVersionId!, programId: program.id, problemId, compileStatus: 'passed', lifecycleStatus: 'active' },
     })
     if (version) return { version, program }
   }
@@ -57,9 +57,11 @@ async function assetStatus(problemId: string, kind: AssetKind, active: Awaited<R
     where: { problemId, ...(kind ? { programId: { in: (await prisma.problemJudgeProgram.findMany({ where: { problemId, kind }, select: { id: true } })).map(item => item.id) } } : {}) },
     orderBy: { createdAt: 'desc' },
     take: 1,
-    select: { compileStatus: true },
+    select: { compileStatus: true, lifecycleStatus: true },
   })
-  const status = versions[0]?.compileStatus === 'failed'
+  const status = versions[0]?.lifecycleStatus === 'verified'
+    ? 'ready'
+    : versions[0]?.compileStatus === 'failed'
     ? 'failed'
     : versions[0]?.compileStatus === 'verifying' || versions[0]?.compileStatus === 'pending'
       ? 'verifying'

@@ -8,6 +8,7 @@ import {
 import { applyOrganizationJoinMigration, inspectOrganizationJoinMigration } from '../modules/maintenance/application/organization-join-migration.service'
 import { applySchoolNameKeyMigration, inspectSchoolNameKeyMigration } from '../modules/maintenance/application/school-name-key-migration.service'
 import { applySchoolDirectoryStatusMigration, inspectSchoolDirectoryStatusMigration } from '../modules/maintenance/application/school-directory-status-migration.service'
+import { applyJudgeProgramProtocolMigration, inspectJudgeProgramProtocolMigration } from '../modules/maintenance/application/judge-program-protocol-migration.service'
 
 export const migrationRouter = Router()
 
@@ -113,5 +114,20 @@ migrationRouter.post('/school-directory-status', async (req, res) => {
   } catch (error: any) {
     logger.error('school_directory_status_migration_apply_error', { action: 'migration', metadata: { error: error.message } })
     return res.status(409).json({ success: false, code: 'SCHOOL_DIRECTORY_MIGRATION_STALE_OR_INVALID', message: error.message })
+  }
+})
+
+migrationRouter.get('/judge-program-protocols', async (_req, res) => {
+  try { return res.json({ success: true, data: await inspectJudgeProgramProtocolMigration() }) }
+  catch (error: any) { return res.status(500).json({ success: false, message: error.message }) }
+})
+
+migrationRouter.post('/judge-program-protocols', async (req, res) => {
+  try {
+    const data = await applyJudgeProgramProtocolMigration(String(req.body?.reportHash || ''))
+    logger.audit('judge_program_protocol_migration_applied', { action: 'migration', metadata: data })
+    return res.json({ success: true, data })
+  } catch (error: any) {
+    return res.status(409).json({ success: false, code: 'JUDGE_PROGRAM_PROTOCOL_MIGRATION_STALE_OR_INVALID', message: error.message })
   }
 })

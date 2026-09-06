@@ -8,8 +8,10 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemJudgeAssetsPanel.module.css'
 
-type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; createdAt: string }
+type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
+type ProgramTemplate = { id: string; version: number; kind: string; language: string; protocol: string; title: string; description: string; recommended: boolean; source?: string; protocolHelp: string[]; examples: Array<{ name: string; stdin: string; expectedExitCode?: number; expectedStdout?: string }> }
+type ProgramCatalog = { capabilities: Record<string, { title: string; description: string; defaultLanguage: string; languages: Record<string, string[]>; quickProtocol: string[] }>; templates: ProgramTemplate[] }
 type JobCase = { id: string; name: string; status: string; failureStage?: string; message?: string; inputPreview?: string; outputPreview?: string }
 type Job = { id: string; status: string; expectedLatestRevisionId?: string; promotedRevisionId?: string; createdAt: string; cases?: JobCase[] }
 type Graph = { revisionId?: string; subtasks: Array<{ id: number; groups: Array<{ key: string; name: string; kind: string }> }> }
@@ -28,6 +30,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const [graph, setGraph] = useState<Graph | null>(null)
   const [saving, setSaving] = useState(false)
   const [kind, setKind] = useState('standard'), [name, setName] = useState(''), [language, setLanguage] = useState('cpp17'), [source, setSource] = useState('')
+  const [catalog, setCatalog] = useState<ProgramCatalog | null>(null), [templateId, setTemplateId] = useState(''), [protocol, setProtocol] = useState('oj.standard/v1')
+  const [fixtures, setFixtures] = useState('[\n  {"name":"样例","stdin":"","expectedExitCode":0}\n]')
   const [standardId, setStandardId] = useState(''), [validatorId, setValidatorId] = useState(''), [generatorId, setGeneratorId] = useState('')
   const [sourceMode, setSourceMode] = useState<'generator' | 'input'>('generator')
   const [rows, setRows] = useState('small-1 | 1 | 10 100\nsmall-2 | 2 | 100 1000')
@@ -41,13 +45,14 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const [corpus, setCorpus] = useState<Corpus | null>(null)
 
   const load = useCallback(async () => {
-    const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult] = await Promise.all([
+    const [programResult, jobResult, graphResult, aiUsageResult, poolResult, corpusResult, templateResult] = await Promise.all([
       apiClient.get<Program[]>(`/api/problems/${problemId}/judge-programs`),
       apiClient.get<Job[]>(`/api/problems/${problemId}/data-generation-jobs`),
       judgeMode === 'oi' ? apiClient.get<Graph>(`/api/problems/${problemId}/test-graph`) : Promise.resolve(null),
       apiClient.get<AiUsage>(`/api/problems/${problemId}/ai/usage`),
       apiClient.get<CandidatePool>(`/api/problems/${problemId}/candidate-pool`),
       apiClient.get<Corpus>(`/api/problems/${problemId}/wrong-corpus`),
+      apiClient.get<ProgramCatalog>('/api/problems/judge-program-templates'),
     ])
     if (programResult.success && programResult.data) setPrograms(programResult.data)
     if (jobResult.success && jobResult.data) setJobs(jobResult.data)
@@ -58,6 +63,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
     }
     if (poolResult.success && poolResult.data) setCandidatePool(poolResult.data)
     if (corpusResult.success && corpusResult.data) setCorpus(corpusResult.data)
+    if (templateResult.success && templateResult.data) setCatalog(templateResult.data)
   }, [problemId, judgeMode])
   useEffect(() => { void load() }, [load])
 
@@ -65,16 +71,54 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
   const currentStandard = versions('standard'), currentValidator = versions('validator'), currentGenerator = versions('generator')
   const officialGroups = useMemo(() => graph?.subtasks.flatMap(subtask => subtask.groups.filter(group => group.kind === 'official').map(group => ({ value: `${subtask.id}:${group.key}`, label: `Subtask ${subtask.id} · ${group.name}` }))) || [], [graph])
 
+  const chooseTemplate = async (id: string) => {
+    setTemplateId(id)
+    if (!id) return
+    const result = await apiClient.get<ProgramTemplate>(`/api/problems/judge-program-templates/${id}`)
+    if (!result.success || !result.data) return toast.error(result.message || '模板加载失败')
+    setLanguage(result.data.language); setProtocol(result.data.protocol); setSource(result.data.source || '')
+    setFixtures(JSON.stringify(result.data.examples.length ? result.data.examples : [{ name: '协议样例', stdin: '', expectedExitCode: 0 }], null, 2))
+  }
+  useEffect(() => {
+    if (!catalog || templateId || source) return
+    const initial = catalog.templates.find(item => item.kind === 'standard' && item.recommended) || catalog.templates[0]
+    if (initial) void chooseTemplate(initial.id)
+  }, [catalog, templateId, source])
+  const changeKind = (nextKind: string) => {
+    setKind(nextKind); setName('')
+    const candidates = catalog?.templates.filter(item => item.kind === nextKind) || []
+    const selected = candidates.find(item => item.recommended) || candidates[0]
+    if (selected) void chooseTemplate(selected.id)
+  }
+  const changeLanguage = (nextLanguage: string) => {
+    const selected = catalog?.templates.find(item => item.kind === kind && item.language === nextLanguage)
+    if (source.trim() && selected?.id !== templateId && !window.confirm('切换语言将更换推荐模板；当前源码不会保存。确定切换吗？')) return
+    if (selected) void chooseTemplate(selected.id)
+  }
+
   const saveProgram = async () => {
     setSaving(true)
     try {
-      const result = await apiClient.post(`/api/problems/${problemId}/judge-programs`, { kind, name: name || KIND_LABEL[kind], language, source })
+      const selectedTemplate = catalog?.templates.find(item => item.id === templateId)
+      const result = await apiClient.post<{ program: Program; version: Version }>(`/api/problems/${problemId}/judge-programs`, { kind, name: name || KIND_LABEL[kind], language, protocol, templateId: templateId || undefined, templateVersion: selectedTemplate?.version, source })
       if (!result.success) return toast.error(result.message || '评测程序保存失败')
-      setSource(''); setName(''); toast.success('评测程序已编译并保存'); await load()
+      toast.success('源码已编译并保存；请运行协议预检后再激活'); await load()
     } finally { setSaving(false) }
   }
 
   const readFile = async (file?: File) => { if (file) setSource(await file.text()) }
+  const preflight = async (program: Program, version: Version) => {
+    let parsed: unknown
+    try { parsed = JSON.parse(fixtures) } catch { return toast.error('测试样例必须是合法 JSON 数组') }
+    const result = await apiClient.post(`/api/problems/${problemId}/judge-programs/${program.id}/versions/${version.id}/preflight`, { fixtures: parsed })
+    if (!result.success) return toast.error(result.message || '协议预检失败')
+    toast.success('协议预检通过，可以激活'); await load()
+  }
+  const activate = async (program: Program, version: Version) => {
+    const result = await apiClient.patch(`/api/problems/${problemId}/judge-programs/${program.id}`, { currentVersionId: version.id })
+    if (!result.success) return toast.error(result.message || '激活失败')
+    toast.success('评测程序版本已激活'); await load()
+  }
   const generateValidator = async (parentRequestId?: string) => {
     setSaving(true)
     try {
@@ -162,8 +206,8 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
     ].map(([value, label]) => <Button key={value} variant="ghost" aria-selected={tab === value} onClick={() => setTab(value as any)}>{label}</Button>)}</div>
 
     {tab === 'programs' && <div className={styles.columns}>
-      <section className={styles.card}><h3>已有程序</h3>{programs.length ? programs.map(program => <div className={styles.program} key={program.id}><strong>{KIND_LABEL[program.kind]} · {program.name}</strong><span>{program.language} · 当前 v{program.versions.find(version => version.id === program.currentVersionId)?.versionNumber || '—'}</span></div>) : <p className={styles.muted}>暂无评测程序</p>}</section>
-      <section className={styles.card}><h3>上传或填写程序</h3><div className={styles.formRow}><Select aria-label="程序类型" value={kind} onChange={event => { setKind(event.target.value); setLanguage(event.target.value === 'generator' ? language : 'cpp17') }}>{Object.entries(KIND_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select><Input value={name} onChange={event => setName(event.target.value)} placeholder="程序名称" /><Select aria-label="程序语言" value={language} onChange={event => setLanguage(event.target.value)}><option value="cpp17">C++17</option>{kind === 'generator' && <option value="python3">Python3</option>}</Select></div><Input type="file" accept=".cpp,.cc,.cxx,.py,.txt" onChange={event => void readFile(event.target.files?.[0])} /><Textarea rows={14} value={source} onChange={event => setSource(event.target.value)} placeholder="填写源码；保存前会在沙箱中编译" /><Button variant="primary" disabled={saving || !source.trim()} onClick={saveProgram}>{saving ? '编译中…' : '编译并保存'}</Button></section>
+      <section className={styles.card}><h3>评测基础设施</h3><p className={styles.muted}>STD 生成答案，Validator 检查输入，Classifier 负责 OI 子任务分类；Generator 只生成输入。编译通过后仍需协议预检和人工激活。</p>{programs.length ? programs.map(program => <div className={styles.programBlock} key={program.id}><div className={styles.program}><strong>{catalog?.capabilities[program.kind]?.title || `${KIND_LABEL[program.kind]} · ${program.name}`}</strong><span>{program.currentVersionId ? `已激活 v${program.versions.find(version => version.id === program.currentVersionId)?.versionNumber}` : '尚未激活'}</span></div>{program.versions.map(version => <div className={styles.version} key={version.id}><span>v{version.versionNumber} · {version.language} · {version.protocol} · {version.lifecycleStatus}</span><div className={styles.actions}>{version.lifecycleStatus === 'compiled' && <Button variant="outline" onClick={() => preflight(program, version)}>运行协议预检</Button>}{version.lifecycleStatus === 'verified' && <Button variant="primary" onClick={() => activate(program, version)}>激活</Button>}</div></div>)}</div>) : <p className={styles.muted}>暂无评测程序</p>}</section>
+      <section className={styles.card}><h3>新增评测程序</h3><div className={styles.kindGrid}>{Object.entries(catalog?.capabilities || {}).filter(([value]) => judgeMode === 'oi' || value !== 'classifier').map(([value, capability]) => <Button key={value} variant={kind === value ? 'primary' : 'outline'} className={styles.kindButton} onClick={() => changeKind(value)}><strong>{capability.title}</strong><span>{capability.description}</span></Button>)}</div>{catalog?.capabilities[kind] && <div className={styles.protocolCard}><strong>{catalog.capabilities[kind].description}</strong>{catalog.capabilities[kind].quickProtocol.map(item => <span key={item}>{item}</span>)}</div>}<div className={styles.formRow}><Input value={name} onChange={event => setName(event.target.value)} placeholder="程序名称" /><Select aria-label="程序语言" value={language} onChange={event => changeLanguage(event.target.value)}>{Object.keys(catalog?.capabilities[kind]?.languages || {}).filter(value => value !== 'validator-dsl').map(value => <option value={value} key={value}>{value === 'cpp17' ? 'C++17' : 'Python3'}</option>)}</Select><Select aria-label="推荐模板" value={templateId} onChange={event => void chooseTemplate(event.target.value)}><option value="">不使用模板</option>{catalog?.templates.filter(item => item.kind === kind && item.language === language).map(item => <option value={item.id} key={item.id}>{item.title}{item.recommended ? '（推荐）' : ''}</option>)}</Select></div><div className={styles.meta}>协议：<code>{protocol}</code>{templateId && <> · 模板：<code>{templateId}</code></>}</div><Input type="file" accept=".cpp,.cc,.cxx,.py,.txt" onChange={event => void readFile(event.target.files?.[0])} /><Textarea rows={14} value={source} onChange={event => setSource(event.target.value)} placeholder="选择模板或上传源码；文件只会读入编辑器，不会立即保存" /><label>协议预检样例（保存后用于验证；Validator 必须同时包含应通过与应拒绝样例）</label><Textarea rows={8} value={fixtures} onChange={event => setFixtures(event.target.value)} /><Button variant="primary" disabled={saving || !source.trim()} onClick={saveProgram}>{saving ? '编译中…' : '编译并保存草稿'}</Button></section>
       <section className={styles.card}><h3>DeepSeek Validator DSL</h3><p className={styles.muted}>默认生成受限 DSL、Feature 与 Subtask Rule 建议；不会自动启用或发布数据。复杂题仍可使用 C++ fallback。</p><Select aria-label="Markdown 题面" value={statementId} onChange={event => setStatementId(event.target.value)}><option value="">选择 Markdown 题面</option>{aiUsage?.markdownStatements.map((item, index) => <option key={item.id} value={item.id}>{item.language || '未标注语言'} · 版本 {index + 1} · 最多预占 {item.maxReservedTokens} Token</option>)}</Select><div className={styles.actions}><Button variant="primary" disabled={saving || !statementId} onClick={generateValidatorDsl}>{saving ? '生成中…' : '生成 Validator DSL'}</Button><Button variant="outline" disabled={saving || !statementId} onClick={() => generateValidator()}>生成 C++ fallback</Button></div>{aiRequest && <div className={styles.aiResult}><strong>Token：{aiRequest.promptTokens || 0} + {aiRequest.completionTokens || 0} = {aiRequest.totalTokens || 0}</strong><span>编译：{aiRequest.compileStatus === 'passed' ? '通过' : '失败'}</span>{aiRequest.response?.assumptions?.length > 0 && <p>需确认：{aiRequest.response.assumptions.join('；')}</p>}<Textarea rows={12} readOnly value={aiRequest.dsl ? JSON.stringify(aiRequest.response?.spec || {}, null, 2) : (aiRequest.response?.validatorSource || '')} />{aiRequest.compileMessage && <pre>{aiRequest.compileMessage}</pre>}<div className={styles.actions}>{aiRequest.compileStatus === 'passed' && <Button variant="primary" onClick={aiRequest.dsl ? saveAiDsl : saveAi}>{aiRequest.dsl ? '保存 DSL 草稿' : '保存为 Validator'}</Button>}{!aiRequest.dsl && aiRequest.repairDepth < 2 && <Button variant="outline" onClick={() => generateValidator(aiRequest.id)}>让 AI 修复</Button>}</div></div>}</section>
     </div>}
 

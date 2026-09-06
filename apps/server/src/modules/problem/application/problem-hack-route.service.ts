@@ -12,12 +12,12 @@ import {
   parseJudgeConfig,
   resolveJudgeMode,
   serializeHackAttempt,
-  validateHackCppSource,
 } from '../problem.hack.service'
 import { normalizeSubmissionIo, SubmissionIoError } from '../../judge/domain/submission-io'
 import { ensureInitialTestSetRevision } from '../problem.testset-revision.service'
 import { transitionHackAttempt } from '../problem.hack-state'
 import { resolveContributionContext } from '../problem.contribution-readiness.service'
+import { compileJudgeProgram } from '../problem.judge-program.service'
 
 const ACTIVE_STATUSES = ['queuing', 'judging', 'finalizing']
 
@@ -76,6 +76,7 @@ export async function saveProblemHackConfig(input: {
   let classifierSource = typeof input.body?.classifierSource === 'string'
     ? input.body.classifierSource
     : ''
+  let standardLanguage = 'cpp17', validatorLanguage = 'cpp17', classifierLanguage = 'cpp17'
   const programVersionIds = {
     standard: typeof input.body?.standardProgramVersionId === 'string' ? input.body.standardProgramVersionId : null,
     validator: typeof input.body?.validatorProgramVersionId === 'string' ? input.body.validatorProgramVersionId : null,
@@ -84,10 +85,10 @@ export async function saveProblemHackConfig(input: {
   for (const [kind, versionId] of Object.entries(programVersionIds)) if (versionId) {
     const version = await prisma.problemJudgeProgramVersion.findFirst({ where: { id: versionId, problemId: problem.id } })
     const program = version ? await prisma.problemJudgeProgram.findFirst({ where: { id: version.programId, problemId: problem.id, kind } }) : null
-    if (!version || !program) fail(400, 'HACK_PROGRAM_VERSION_INVALID', `${kind} 程序版本无效`)
-    if (kind === 'standard') standardSource = version.source
-    if (kind === 'validator') validatorSource = version.source
-    if (kind === 'classifier') classifierSource = version.source
+    if (!version || !program || version.lifecycleStatus !== 'active' || program.currentVersionId !== version.id) fail(400, 'HACK_PROGRAM_VERSION_INVALID', `${kind} 程序版本尚未激活或无效`)
+    if (kind === 'standard') { standardSource = version.source; standardLanguage = version.language }
+    if (kind === 'validator') { validatorSource = version.source; validatorLanguage = version.language }
+    if (kind === 'classifier') { classifierSource = version.source; classifierLanguage = version.language }
   }
   const sourceLengths = [standardSource, validatorSource, classifierSource]
     .map(source => Buffer.byteLength(source, 'utf8'))
@@ -132,9 +133,9 @@ export async function saveProblemHackConfig(input: {
       )
     }
     try {
-      await validateHackCppSource(standardSource, '标准程序')
-      await validateHackCppSource(validatorSource, 'Validator')
-      if (mode === 'oi') await validateHackCppSource(classifierSource, 'Classifier')
+      await compileJudgeProgram(standardSource, standardLanguage, '标准程序')
+      await compileJudgeProgram(validatorSource, validatorLanguage, 'Validator')
+      if (mode === 'oi') await compileJudgeProgram(classifierSource, classifierLanguage, 'Classifier')
     } catch (error) {
       fail(
         422,
@@ -166,9 +167,9 @@ export async function saveProblemHackConfig(input: {
         standardSource,
         validatorSource,
         classifierSource,
-        standardLanguage: 'cpp17',
-        validatorLanguage: 'cpp17',
-        classifierLanguage: 'cpp17',
+        standardLanguage,
+        validatorLanguage,
+        classifierLanguage,
         updatedBy: input.user.userId,
         standardProgramVersionId: programVersionIds.standard,
         validatorProgramVersionId: programVersionIds.validator,
@@ -330,6 +331,7 @@ export async function createProblemHackAttempt(input: {
         inputData: inputMode === 'data' ? inputData : null,
         generatorSource: inputMode === 'generator' ? generatorSource : null,
         generatorLanguage: inputMode === 'generator' ? generatorLanguage : null,
+        generatorProtocol: inputMode === 'generator' ? 'oj.generator/v1' : null,
         hackSource,
         hackLanguage,
         inputFilename: submissionIo.inputFilename,

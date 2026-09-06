@@ -24,8 +24,8 @@ export async function contributeCandidateData(user: JwtPayload, problemId: strin
 export async function contributeCandidateGenerator(user: JwtPayload, problemId: string, body: any) {
   await problemFor(user, problemId); const source = String(body?.source || ''), language = body?.language === 'python3' ? 'python3' : 'cpp17', manifest = body?.manifest
   if (!source.trim() || Buffer.byteLength(source) > 1024 * 1024) fail(413, 'GENERATOR_SOURCE_TOO_LARGE', 'Generator 源码为空或超过 1 MiB')
-  if (manifest?.apiVersion !== 'oj.generator/v1' || manifest?.protocol !== 'json-stdin-v1' || !Array.isArray(manifest?.profiles) || !manifest.profiles.length || manifest.profiles.length > 64) fail(400, 'GENERATOR_MANIFEST_INVALID', 'Generator Manifest 必须使用 oj.generator/v1，并提供 1～64 个 Profile')
-  const profiles = manifest.profiles.slice(0, 8).map((item: any, index: number) => ({ name: String(item?.id || `profile-${index + 1}`).slice(0, 80), profile: String(item?.id || `profile-${index + 1}`), params: item?.params && typeof item.params === 'object' ? item.params : {}, args: [], seed: crypto.createHash('sha256').update(`${user.userId}:${Date.now()}:${index}`).digest('hex').slice(0, 16) }))
+  if (manifest?.apiVersion !== 'oj.generator/v1' || manifest?.protocol !== 'oj.generator/v1' || !Array.isArray(manifest?.profiles) || !manifest.profiles.length || manifest.profiles.length > 64) fail(400, 'GENERATOR_MANIFEST_INVALID', 'Generator Manifest 必须使用 oj.generator/v1 协议，并提供 1～64 个 Profile')
+  const profiles = manifest.profiles.slice(0, 8).map((item: any, index: number) => ({ name: String(item?.id || `profile-${index + 1}`).slice(0, 80), profile: String(item?.id || `profile-${index + 1}`), params: item?.params && typeof item.params === 'object' ? item.params : {}, args: [], seed: BigInt(`0x${crypto.createHash('sha256').update(`${user.userId}:${Date.now()}:${index}`).digest('hex').slice(0, 15)}`).toString(10) }))
   const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'generator', generatorSource: source, generatorLanguage: language, cases: profiles } })
   return { jobId: job.id, status: job.status }
 }

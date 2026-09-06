@@ -583,12 +583,22 @@ model ProblemJudgeProgramVersion {
   aiRequestId    String?
   compileStatus  String
   compileMessage String?             @db.Text
+  protocol       String              @default("legacy")
+  protocolVersion Int                @default(1)
+  templateId     String?
+  templateVersion Int?
+  lifecycleStatus String             @default("compiled")
+  runtimeMetadata Json?
+  preflightReport Json?
+  verifiedAt     DateTime?
+  activatedAt    DateTime?
   createdBy      String
   createdAt      DateTime            @default(now())
   Program        ProblemJudgeProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@unique([programId, versionNumber])
   @@index([problemId, createdAt])
+  @@index([problemId, lifecycleStatus, createdAt])
   @@index([aiRequestId])
 }
 
@@ -667,6 +677,7 @@ model ProblemHackAttempt {
   inputData             String?                 @db.Text
   generatorSource       String?                 @db.Text
   generatorLanguage     String?
+  generatorProtocol     String?
   hackSource            String                  @db.Text
   hackLanguage          String
   inputFilename         String?

@@ -82,9 +82,11 @@ C++17/testlib Validator 并在 go-judge 编译。DSL 无法表达时保留 C++17
 的统一入口。`ProblemJudgeProgram` 表示逻辑程序，`ProblemJudgeProgramVersion` 保存每次
 上传或编辑产生的不可变源码版本、哈希、编译状态、作者和来源：
 
-- STD、Validator、Classifier 首版固定 C++17；Validator/Classifier 可引用系统 `testlib.h`。
-- Generator 可创建多个，支持 C++17 与 Python3。
+- 协议、语言能力、机器 Schema、帮助文本和编辑器模板由共享 Protocol Registry 唯一维护；详细约定见[评测程序协议](../JUDGE_PROGRAM_PROTOCOLS.md)。
+- STD 使用 C++17；Validator、Classifier 支持 C++17 与 Python3，Validator 另支持 DSL 的可信 C++ 投影。
+- Generator 可创建多个，C++17/Python3 新版本统一使用 `oj.generator/v1`；旧 `legacy-args-v1` 只读兼容。
 - 只接受有大小上限的文本源码；二进制和可执行文件被拒绝。
+- ProgramVersion 依次经过 `compiled → verified → active → retired`，编译成功不能直接成为活动版本。
 - Hack 配置可以引用程序版本，同时保留旧源码字段双读兼容。
 
 数据生成不是普通 Submission。`ProblemDataGenerationJob` 通过 Judge WebSocket 持久队列领取，
@@ -95,7 +97,7 @@ Checker 自检。成功输入、答案、参数、种子、程序版本、耗时
 
 所有可提交用户都可以贡献直接输入或 `oj.generator/v1` Generator。贡献任务先预占用户与平台
 双层 Evaluation Credits，并受单用户、单题、全局并发、数据体积和 Candidate HOT 池硬上限。
-Generator 从 JSON stdin 读取服务器选择的 Seed/Profile/参数；同一输入连续两次输出哈希不一致时拒绝。
+Generator 从 JSON stdin 读取服务器选择的十进制 Seed/Profile/参数；C++ 由平台注入 helper，同一 Context 连续两次输出哈希不一致时拒绝。
 
 贡献页面和写接口共用 `resolveContributionReadiness`：只有已激活的 STD、Validator 才能接收任务，
 Validator DSL 激活时物化为不可变程序版本。Classifier 对 ACM 不需要；OI 普通贡献缺少 Classifier

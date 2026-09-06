@@ -3,9 +3,10 @@ import fs from 'fs'
 import path from 'path'
 import { config } from './config'
 import { judge } from './judge'
-import { execute } from './sandbox/client'
 import { acquireCompiledProgram } from './compiled-program-cache'
 import type { HackJudgeRequest, HackJudgeTaskResult, JudgeResult, ProblemConfig, TestCaseConfig } from './types'
+import { OJ_GENERATOR_CPP_HEADER } from '@oi-manager/shared'
+import { runClassifierProgram, runGeneratorProgram, runStandardProgram, runValidatorProgram } from './judge-program-runner'
 
 const MAX_DATA_BYTES = 16 * 1024 * 1024
 const VALID_DIFFERENCE_RESULTS = new Set<JudgeResult>([
@@ -77,18 +78,20 @@ async function createCandidateInput(request: HackJudgeRequest): Promise<string> 
   if (request.inputMode === 'data') return request.inputData || ''
   if (!request.generatorSource || !request.generatorLanguage) throw new Error('生成器源码或语言缺失')
   let compiled
-  try { compiled = await acquireCompiledProgram({ language: request.generatorLanguage, code: request.generatorSource }, false) }
+  const isV1 = request.generatorProtocol === 'oj.generator/v1'
+  try { compiled = await acquireCompiledProgram({ language: request.generatorLanguage, code: request.generatorSource, extraCopyIn: isV1 && request.generatorLanguage === 'cpp17' ? { 'oj_generator.hpp': OJ_GENERATOR_CPP_HEADER } : undefined }, false) }
   catch (error: any) {
     if (isInfrastructureError(error)) throw infrastructureError(`生成器编译基础设施失败：${error.message}`)
     throw new Error(`生成器编译失败：${error.message}`)
   }
   try {
-    const result = await execute({
-      language: request.generatorLanguage, timeLimit: 5000, memoryLimit: 262_144,
-      outputLimit: MAX_DATA_BYTES, compileFileId: compiled.result.fileId, workDir: compiled.result.workDir,
-    })
+    const seed = BigInt(`0x${crypto.createHash('sha256').update(request.hackAttemptId).digest('hex').slice(0, 15)}`).toString(10)
+    const stdin = isV1 ? JSON.stringify({ protocol: 'oj.generator/v1', seed, caseId: 1, profile: 'hack', params: {} }) : ''
+    const generated = await runGeneratorProgram({ language: request.generatorLanguage, stdin, timeLimit: 5000, memoryLimit: 262_144, outputLimit: MAX_DATA_BYTES, artifact: compiled.result, deterministic: isV1 })
+    const result = generated.first
     if (result.infrastructureError) throw infrastructureError(`生成器沙箱基础设施失败：${result.stderr || result.status}`)
     if (result.status !== 'Accepted') throw new Error(`生成器运行失败：${result.status}${result.stderr ? `；${result.stderr.slice(0, 1000)}` : ''}`)
+    if (!generated.deterministic) throw new Error('GENERATOR_NON_DETERMINISTIC：相同 Context 运行两次输出不同')
     return result.stdout || ''
   } finally { await compiled.release() }
 }
@@ -142,25 +145,17 @@ export function buildCandidateConfig(
 
 async function classifyInput(request: HackJudgeRequest, candidateInput: string): Promise<number[]> {
   if (!request.classifierSource?.trim()) throw new Error('Classifier 源码缺失')
-  const compiled = await acquireCompiledProgram({ language: 'cpp17', code: request.classifierSource, extraCopyIn: checkerDependencies() }, true)
-  let run
+  const language = request.classifierLanguage || 'cpp17'
+  const compiled = await acquireCompiledProgram({ language, code: request.classifierSource, extraCopyIn: language === 'cpp17' ? checkerDependencies() : undefined }, true)
+  let classified
   try {
-    run = await execute({
-      language: 'cpp17', stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144,
-      outputLimit: 65_536, compileFileId: compiled.result.fileId, workDir: compiled.result.workDir,
-    })
+    classified = await runClassifierProgram({ language, stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144, outputLimit: 65_536, artifact: compiled.result, knownSubtaskIds: (request.config.subtasks || []).map((subtask, index) => Number(subtask.id || index + 1)) })
   } finally { await compiled.release() }
+  const run = classified.result
   if (run.infrastructureError) throw infrastructureError(`Classifier 沙箱基础设施失败：${run.stderr || run.status}`)
   if (run.status !== 'Accepted' || run.exitCode !== 0) throw new Error(`Classifier 运行失败：${run.status}${run.stderr ? `；${run.stderr.slice(0, 1000)}` : ''}`)
-  let parsed: any
-  try { parsed = JSON.parse(run.stdout || '') } catch { throw new Error('Classifier 必须输出严格 JSON') }
-  if (!parsed || !Array.isArray(parsed.subtasks)) throw new Error('Classifier 输出必须包含 subtasks 数组')
-  const ids: number[] = [...new Set<number>((parsed.subtasks as unknown[]).map(value => Number(value)))]
-  if (ids.length === 0 || ids.some(id => !Number.isInteger(id) || id <= 0)) throw new Error('Classifier 返回的 Subtask 集合无效')
-  const configured = new Set((request.config.subtasks || []).map((subtask, index) => Number(subtask.id || index + 1)))
-  const unknown = ids.filter(id => !configured.has(id))
-  if (unknown.length > 0) throw new Error(`Classifier 返回未知 Subtask：${unknown.join(', ')}`)
-  return ids.sort((a, b) => a - b)
+  if (!classified.subtasks) throw new Error(classified.error || 'Classifier 协议错误')
+  return classified.subtasks
 }
 
 export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTaskResult> {
@@ -175,7 +170,8 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   if (Buffer.byteLength(candidateInput, 'utf8') > MAX_DATA_BYTES) return rejected(request, 'input', '候选输入超过 16 MiB')
 
   let validator
-  try { validator = await acquireCompiledProgram({ language: 'cpp17', code: request.validatorSource, extraCopyIn: checkerDependencies() }, true) }
+  const validatorLanguage = request.validatorLanguage || 'cpp17'
+  try { validator = await acquireCompiledProgram({ language: validatorLanguage, code: request.validatorSource, extraCopyIn: validatorLanguage === 'cpp17' ? checkerDependencies() : undefined }, true) }
   catch (error: any) {
     return isInfrastructureError(error)
       ? retryableSystemError(request, 'validator', `Validator 编译基础设施失败：${error.message}`)
@@ -183,10 +179,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   }
   let validation
   try {
-    validation = await execute({
-      language: 'cpp17', stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144,
-      outputLimit: 65_536, compileFileId: validator.result.fileId, workDir: validator.result.workDir,
-    })
+    validation = (await runValidatorProgram({ language: validatorLanguage, stdin: candidateInput, timeLimit: 2000, memoryLimit: 262_144, outputLimit: 65_536, artifact: validator.result })).result
   } finally { await validator.release() }
   if (validation.infrastructureError) return retryableSystemError(request, 'validator', `Validator 沙箱基础设施失败：${validation.stderr || validation.status}`)
   if (validation.status !== 'Accepted' || validation.exitCode !== 0) {
@@ -214,10 +207,7 @@ export async function judgeHack(request: HackJudgeRequest): Promise<HackJudgeTas
   const memoryLimit = Math.max(262_144, parseMemory(request.config.memory))
   let standardRun
   try {
-    standardRun = await execute({
-      language: 'cpp17', stdin: candidateInput,
-      timeLimit, memoryLimit, outputLimit: MAX_DATA_BYTES, compileFileId: standard.result.fileId, workDir: standard.result.workDir,
-    })
+    standardRun = (await runStandardProgram({ language: 'cpp17', stdin: candidateInput, timeLimit, memoryLimit, outputLimit: MAX_DATA_BYTES, artifact: standard.result })).result
   } finally { await standard.release() }
   if (standardRun.infrastructureError) return retryableSystemError(request, 'standard', `标准程序沙箱基础设施失败：${standardRun.stderr || standardRun.status}`)
   if (standardRun.status !== 'Accepted') return systemError(request, 'standard', `标准程序运行失败：${standardRun.status}${standardRun.stderr ? `；${standardRun.stderr.slice(0, 1000)}` : ''}`)

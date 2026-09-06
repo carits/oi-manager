@@ -11,6 +11,14 @@ source_of_truth: Git history
 
 ## 2026-09-06
 
+### 评测程序协议、模板与 Python 执行链
+
+- 新增共享 Judge Program Protocol Registry，统一四类程序职责、语言能力、机器 Schema、帮助文本和 7 个版本化编辑器模板；C++ Generator 使用平台注入 `oj_generator.hpp`。
+- ProgramVersion 记录协议、模板、运行元数据和预检报告，改为编译、Fixture 验证、人工激活、退役四段式生命周期；新建不再自动成为活动版本，创建/验证/激活分别审计。
+- 数据生成与 Hack 共用 Judge Program Runner；Python3 Validator/Classifier 全链路可用，Classifier 输出执行严格 JSON/ID 校验。新 Generator 统一 `oj.generator/v1`，旧 `legacy-args-v1` 仅兼容历史。
+- 管理端改为职责卡、推荐模板、协议说明、源码编辑、预检和激活工作流；普通贡献端明确无需提交 STD/Validator/Classifier，并为两种 Generator 自动填充模板。
+- 增加超管 check/reportHash/apply 协议迁移、模板编译 CI 门禁和协议/Runner 定向测试。三端生产构建、7 个模板编译和 Judge 15/15 定向测试通过。
+
 ### 平台内置聊天表情包
 
 - 新增不可变 `ChatStickerPack/ChatSticker` 和带 `reportHash` 的暂存导入；ZIP 素材经过路径、体积、格式、尺寸、帧数及时长检查，并统一重编码为 WebP 与静态 poster 后进入内容寻址 Blob。

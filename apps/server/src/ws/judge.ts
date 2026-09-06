@@ -248,13 +248,17 @@ class JudgeConsumer {
           inputData: attempt.inputData || undefined,
           generatorSource: attempt.generatorSource || undefined,
           generatorLanguage: attempt.generatorLanguage || undefined,
+          generatorProtocol: (attempt.generatorProtocol || 'legacy-empty-stdin-v1') as 'oj.generator/v1' | 'legacy-empty-stdin-v1',
           hackSource: attempt.hackSource,
           hackLanguage: attempt.hackLanguage,
           inputFilename: attempt.inputFilename,
           outputFilename: attempt.outputFilename,
           standardSource: hackConfig.standardSource,
+          standardLanguage: hackConfig.standardLanguage as 'cpp17',
           validatorSource: hackConfig.validatorSource,
+          validatorLanguage: hackConfig.validatorLanguage as 'cpp17' | 'python3',
           classifierSource: hackConfig.classifierSource || undefined,
+          classifierLanguage: hackConfig.classifierLanguage as 'cpp17' | 'python3',
         }
       })
     } catch (error: any) {

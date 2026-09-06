@@ -55,9 +55,12 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/platform/chat-sticker-packs` | 超管查询全部表情包版本和状态 |
 | `POST` | `/api/platform/chat-sticker-packs/:id/retire` | 超管退役表情包，历史消息保持可读 |
 | `GET` | `/api/problems/:id/judge-programs` | 列出题目的版本化 STD、Validator、Classifier 与 Generator |
-| `POST` | `/api/problems/:id/judge-programs` | 编译并创建评测程序及首个不可变版本 |
+| `GET` | `/api/problems/judge-program-templates` | 返回共享能力矩阵、机器 Schema 和不含源码的模板目录 |
+| `GET` | `/api/problems/judge-program-templates/:templateId` | 返回模板源码、协议帮助和官方样例 |
+| `POST` | `/api/problems/:id/judge-programs` | 编译并创建评测程序及首个不可变 compiled 版本，不自动激活 |
 | `POST` | `/api/problems/:id/judge-programs/:programId/versions` | 编译并追加新的不可变程序版本 |
-| `PATCH` | `/api/problems/:id/judge-programs/:programId` | 切换当前程序版本或归档逻辑程序 |
+| `POST` | `/api/problems/:id/judge-programs/:programId/versions/:versionId/preflight` | 运行协议 Fixture；Validator 要求正负样例，Generator 检查确定性，Classifier 严格验证 Schema 与 Subtask |
+| `PATCH` | `/api/problems/:id/judge-programs/:programId` | 仅激活 verified 版本或归档逻辑程序 |
 | `POST` | `/api/problems/:id/data-generation-jobs` | 创建直接输入或 Generator 参数批次 |
 | `GET` | `/api/problems/:id/data-generation-jobs` | 列出题目的候选数据生成任务 |
 | `GET` | `/api/problems/:id/data-generation-jobs/:jobId` | 读取任务、逐点阶段和内容预览 |
@@ -98,6 +101,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/problems/:id/hack-config` | 编译检查并保存 STD、Validator、Classifier 和 Hack 开关 |
 | `GET` | `/api/problems/:id/hacks` | 查看自己的 Hack 记录；题目管理者查看全部 |
 | `POST` | `/api/problems/:id/hacks` | 以直接数据或生成器发起题目级 Hack；证明程序支持提交级文件 IO |
+| `GET` | `/api/admin/migration/judge-program-protocols` | 超管检查旧程序协议并生成 reportHash，列出歧义版本 |
+| `POST` | `/api/admin/migration/judge-program-protocols` | 超管按 reportHash 幂等迁移旧程序协议；歧义记录不修改 |
 | `GET` | `/api/problems/:id/hacks/:hackId` | 查看有权限的 Hack 详情 |
 | `POST` | `/api/problems/:id/hacks/:hackId/retry` | 题目管理者重新执行系统错误任务 |
 | `GET` | `/api/problems/:id/test-graph` | 题目管理者读取规范化 OI 测试图和迁移检查结果 |

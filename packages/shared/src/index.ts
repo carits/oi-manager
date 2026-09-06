@@ -220,6 +220,8 @@ export interface UserDetailResponse {
   }
 }
 
+export * from './judge-program-protocol'
+
 // 全局统计数据
 export interface GlobalStatsResponse {
   totalSchools: number

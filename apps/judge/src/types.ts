@@ -181,13 +181,17 @@ export interface HackJudgeRequest {
   inputData?: string
   generatorSource?: string
   generatorLanguage?: 'cpp17' | 'python3'
+  generatorProtocol?: 'oj.generator/v1' | 'legacy-empty-stdin-v1'
   hackSource: string
   hackLanguage: string
   inputFilename?: string | null
   outputFilename?: string | null
   standardSource: string
+  standardLanguage?: 'cpp17'
   validatorSource: string
+  validatorLanguage?: 'cpp17' | 'python3'
   classifierSource?: string
+  classifierLanguage?: 'cpp17' | 'python3'
   hackMode?: 'acm' | 'oi'
   testGraphRevision?: number
 }
@@ -218,10 +222,10 @@ export interface DataGenerationRequest {
   sourceMode: 'generator' | 'input'
   maxDataBytes?: number
   problemConfig: ProblemConfig
-  generator?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'legacy-args-v1' | 'json-stdin-v1' } | null
+  generator?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'legacy-args-v1' | 'json-stdin-v1' | 'oj.generator/v1' } | null
   standard: { language: 'cpp17'; source: string }
-  validator: { language: 'cpp17'; source: string }
-  classifier?: { language: 'cpp17'; source: string } | null
+  validator: { language: 'cpp17' | 'python3'; source: string; protocol?: 'oj.validator/v1' }
+  classifier?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'oj.classifier/v1' } | null
   cases: Array<{ id: string; name: string; args: string[]; seed?: string | null; inputData?: string; profile?: string; params?: Record<string, unknown> }>
 }
 

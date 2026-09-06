@@ -20,7 +20,7 @@ export class DataGenerationError extends Error { constructor(public statusCode: 
 function fail(statusCode: number, code: string, message: string, data?: unknown): never { throw new DataGenerationError(statusCode, code, message, data) }
 
 async function loadVersion(problemId: string, versionId: string, expectedKind: string) {
-  const version = await prisma.problemJudgeProgramVersion.findFirst({ where: { id: versionId, problemId } })
+  const version = await prisma.problemJudgeProgramVersion.findFirst({ where: { id: versionId, problemId, lifecycleStatus: { in: ['verified', 'active'] } } })
   if (!version) fail(400, 'PROGRAM_VERSION_INVALID', '评测程序版本不存在或不属于当前题目')
   const program = await prisma.problemJudgeProgram.findFirst({ where: { id: version.programId, problemId, kind: expectedKind, status: 'active' } })
   if (!program) fail(400, 'PROGRAM_KIND_INVALID', `需要 ${expectedKind} 程序版本`)
@@ -52,9 +52,9 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
   const cases = normalizeCases({ ...input.body, sourceMode, contribution })
   if (contribution && cases.length > (sourceMode === 'input' ? 1 : 8)) fail(400, 'CONTRIBUTION_CASE_LIMIT', '普通贡献每次最多提交 1 个直接数据或 8 个生成参数')
   const ephemeralGenerator = contribution && sourceMode === 'generator' && typeof input.body?.generatorSource === 'string'
-    ? { language: input.body?.generatorLanguage === 'python3' ? 'python3' as const : 'cpp17' as const, source: String(input.body.generatorSource), protocol: 'json-stdin-v1' as const }
+    ? { language: input.body?.generatorLanguage === 'python3' ? 'python3' as const : 'cpp17' as const, source: String(input.body.generatorSource), protocol: 'oj.generator/v1' as const }
     : null
-  if (ephemeralGenerator) await compileJudgeProgram(ephemeralGenerator.source, ephemeralGenerator.language, '候选数据生成器')
+  if (ephemeralGenerator) await compileJudgeProgram(ephemeralGenerator.source, ephemeralGenerator.language, '候选数据生成器', { protocol: ephemeralGenerator.protocol })
   const [standard, validator, generator] = await Promise.all([
     contribution ? Promise.resolve(readiness!.standardProgram!) : loadVersion(problem.id, String(input.body?.standardVersionId || ''), 'standard'),
     contribution ? Promise.resolve(readiness!.validatorProgram!) : loadVersion(problem.id, String(input.body?.validatorVersionId || ''), 'validator'),
@@ -129,8 +129,8 @@ export async function claimDataGenerationJob(judgeId: string) {
     ])
     const config = job.config as any
     const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } })
-    const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: 'legacy-args-v1' } : null)
-    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source }, classifier: classifier ? { language: classifier.language, source: classifier.source } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
+    const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: generator.protocol || 'legacy-args-v1' } : null)
+    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source, protocol: validator.protocol }, classifier: classifier ? { language: classifier.language, source: classifier.source, protocol: classifier.protocol } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
   })
 }
 
