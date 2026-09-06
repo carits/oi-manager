@@ -74,6 +74,10 @@ async function main() {
     { encoding: 'utf8', mode: 0o600 },
   )
 
+  // E2E preparation must remain self-contained after schema changes. A stale
+  // generated client can successfully push the database and then fail while
+  // seeding newly added models.
+  run('pnpm', ['exec', 'prisma', 'generate'])
   run('pnpm', ['exec', 'prisma', 'db', 'push', '--skip-generate'])
   run('pnpm', ['exec', 'tsx', 'scripts/e2e/seed.ts'])
   run('pnpm', ['exec', 'tsx', 'scripts/e2e/write-fixtures.ts'])
