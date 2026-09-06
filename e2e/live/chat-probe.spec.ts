@@ -81,7 +81,19 @@ test('production chat send, SSE receive, read and reply probe', async ({ browser
     await expect(receiverConversation.locator('[data-size="md"][aria-hidden="true"]')).toBeVisible()
     await expect(receiverConversation.locator('b')).toHaveText('1')
     await receiverConversation.click()
-    await expect(visibleMessage(receiverSession.page, marker)).toBeVisible()
+    const receivedMessage = receiverSession.page.locator('article').filter({ hasText: marker })
+    await expect(receivedMessage).toBeVisible()
+    const receivedGroup = receivedMessage.locator('xpath=ancestor::section[1]')
+    const [avatarBox, bubbleBox] = await Promise.all([
+      receivedGroup.locator('[data-size="sm"][aria-hidden="true"]').boundingBox(),
+      receivedMessage.locator(':scope > div').first().boundingBox(),
+    ])
+    expect(Math.abs((avatarBox?.y || 0) - (bubbleBox?.y || 0))).toBeLessThanOrEqual(2)
+    await expect(receivedMessage.getByRole('button', { name: '举报' })).toHaveCount(0)
+    await receivedMessage.hover()
+    await receivedMessage.getByRole('button', { name: '消息操作' }).click()
+    await expect(receiverSession.page.getByRole('menuitem', { name: '复制' })).toBeVisible()
+    await receiverSession.page.keyboard.press('Escape')
     await expect.poll(async () => {
       const unread = await receiverSession.context.request.get('/api/chat/unread')
       return (await unread.json()).data.messageUnread

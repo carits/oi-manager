@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, MoreHorizontal } from 'lucide-react'
 import { apiClient } from '@/lib/apiClient'
 import { createClientUUID } from '@/lib/uuid'
+import { copyText } from '@/lib/clipboard'
 import { useAuth } from '@/components/AuthProvider'
 import { useChat } from '@/components/chat/ChatProvider'
 import { Button } from '@/components/ui/Button'
@@ -110,12 +111,20 @@ export default function MessagesPage() {
   const nearBottomRef = useRef(true)
   const sendingRef = useRef(false)
   const pendingSendRef = useRef<Record<string, { content: string; clientMessageId: string }>>({})
+  const composerRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { selectedRef.current = selectedId }, [selectedId])
   const selected = useMemo(() => conversations.find(item => item.id === selectedId), [conversations, selectedId])
   const messageGroups = useMemo(() => groupMessages(messages), [messages])
   const draft = selectedId ? drafts[selectedId] || '' : ''
+
+  useEffect(() => {
+    const element = composerRef.current
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${Math.min(element.scrollHeight, 140)}px`
+  }, [draft, selectedId])
 
   const loadConversations = useCallback(async (nextScope = scope, append = false, cursor?: string | null) => {
     const params = new URLSearchParams({ pagination: 'v2', pageSize: '30', scope: nextScope })
@@ -306,11 +315,13 @@ export default function MessagesPage() {
         {!selected ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="选择一个会话" description="消息内容只对会话双方可见。" /></div> : <>
           <header className={styles.chatHeader}><Button variant="ghost" className={styles.back} onClick={() => setSelectedId(undefined)}>返回</Button><UserAvatar avatar={selected.other.avatar} username={selected.other.username} decorative /><div className={styles.peerSummary}><strong>{selected.other.username}</strong><span>@{selected.other.username} · {selected.canSend ? '联系人' : '当前不是联系人，无法发送'}</span></div><Menu trigger={<IconButton variant="ghost" aria-label="会话操作"><MoreHorizontal size={18} /></IconButton>} items={[{ key: 'archive', label: selected.archivedAt ? '恢复归档' : '归档会话', onSelect: () => setConfirmAction('archive') }, { key: 'clear', label: '清空聊天记录', danger: true, onSelect: () => setConfirmAction('clear') }, { key: 'remove', label: '移除联系人', danger: true, disabled: !selected.canSend, onSelect: () => setConfirmAction('remove') }, { key: 'block', label: '拉黑', danger: true, onSelect: () => setConfirmAction('block') }]} /></header>
           <div className={styles.messageList} ref={messageListRef} onScroll={event => { const element = event.currentTarget; nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; if (nearBottomRef.current) { setNewMessageCount(0); void markVisibleRead(selected.id, messagesRef.current.at(-1)?.seq) } }}>
-            {hasMoreBefore && <Button variant="ghost" loading={loadingBefore} onClick={() => void loadOlder()}>加载更早消息</Button>}
-            {messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''}`}><div>{message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Button variant="ghost" onClick={() => setReportMessage(message)}>举报</Button>}</footer></article>)}</div></section> })}
+            <div className={`${styles.messageFlow} ${messages.length === 0 ? styles.emptyFlow : ''}`}>
+              {hasMoreBefore && <Button variant="ghost" loading={loadingBefore} onClick={() => void loadOlder()}>加载更早消息</Button>}
+              {messages.length === 0 ? <div className={styles.chatEmpty}><Empty icon={<MessageCircle size={30} />} title="还没有消息" description="发条消息开始交流。" /></div> : messageGroups.map(group => { const mine = group.senderUserId === user?.userId; return <section key={group.messages[0].id} className={`${styles.messageGroup} ${mine ? styles.mine : ''}`}>{!mine && <UserAvatar avatar={selected.other.avatar} username={selected.other.username} size="sm" decorative />}<div className={styles.groupMessages}>{group.messages.map(message => <article key={message.id} className={`${styles.message} ${mine ? styles.mine : ''}`}><div>{message.content}</div><footer><time>{formatMessageTime(message.createdAt)}</time>{!mine && <Menu label="消息操作" side="top" trigger={<IconButton className={styles.messageAction} variant="ghost" aria-label="消息操作"><MoreHorizontal size={14} /></IconButton>} items={[{ key: 'copy', label: '复制', onSelect: () => { void copyText(message.content).then(() => toast.success('消息已复制')).catch(() => toast.error('当前浏览器无法复制')) } }, { key: 'report', label: '举报', danger: true, onSelect: () => setReportMessage(message) }]} />}</footer></article>)}</div></section> })}
+            </div>
             {newMessageCount > 0 && <Button className={styles.newMessages} onClick={() => { if (messageListRef.current) messageListRef.current.scrollTop = messageListRef.current.scrollHeight; setNewMessageCount(0) }}>↓ {newMessageCount} 条新消息</Button>}
           </div>
-          <div className={styles.composer}><Textarea aria-label="消息内容" rows={2} maxLength={5000} value={draft} disabled={!selected.canSend || busy} onChange={event => setDrafts(current => ({ ...current, [selected.id]: event.target.value }))} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }} placeholder={selected.canSend ? '输入消息，Enter 发送，Shift+Enter 换行' : '重新成为联系人后才能继续发送'} /><Button disabled={!selected.canSend || !draft.trim()} loading={busy} onClick={() => void send()}>发送</Button></div>
+          <div className={styles.composer}><Textarea ref={composerRef} className={styles.composerInput} aria-label="消息内容" rows={1} maxLength={5000} value={draft} disabled={!selected.canSend || busy} onChange={event => setDrafts(current => ({ ...current, [selected.id]: event.target.value }))} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() } }} placeholder={selected.canSend ? '输入消息，Enter 发送，Shift+Enter 换行' : '重新成为联系人后才能继续发送'} /><Button disabled={!selected.canSend || !draft.trim()} loading={busy} onClick={() => void send()}>发送</Button></div>
         </>}
       </section>
     </div>}
