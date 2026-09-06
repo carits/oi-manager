@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-05
+last_verified: 2026-09-06
 source_of_truth: Git history
 ---
 
@@ -16,7 +16,8 @@ source_of_truth: Git history
 - 新增不可变 `ChatStickerPack/ChatSticker` 和带 `reportHash` 的暂存导入；ZIP 素材经过路径、体积、格式、尺寸、帧数及时长检查，并统一重编码为 WebP 与静态 poster 后进入内容寻址 Blob。
 - 私信发送兼容 `text/sticker` 判别类型，表情点击即发并复用现有幂等、序号、限流、未读与 SSE；会话摘要和旧客户端使用安全降级文本，退役只禁止新发。
 - 消息页新增统一 Popover 表情选择器、账号隔离最近使用、减少动态效果、加载失败回退；表情消息无复制操作但可举报，举报证据保存不可变表情身份。
-- Server/Web 生产构建通过；本机隔离 PostgreSQL 未运行，因此数据库集成与 Playwright 验证保持待执行，未宣称部署。
+- 隔离 Chat API 20/20、Chromium/紧凑视口/Firefox 11/11、Web 66/66、干净库 122 表/43 迁移、三端构建和 UI/API/架构/文档门禁通过；跨平台测试素材改由 Sharp 生成，避免固定 PNG 在 Linux 严格解码器中失败。
+- 提交 `bd66ec0`、`a72367a`、`4a01006`、`536027e` 已推送。生产迁移前备份 `oi_manager_20260906_172435.dump`（SHA-256 `53bdb5be…c9b13da`）已校验；API 已提升至 3303，Web BUILD_ID `hqzO1qRwh2oQdWom08XiR` 经候选和正式消息探针后提升。当前未导入正式表情包，用户端入口保持隐藏。
 
 ### 私信消息气泡与操作收口
 
