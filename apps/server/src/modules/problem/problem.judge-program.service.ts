@@ -56,13 +56,13 @@ export async function compileJudgeProgram(source: string, language: string, labe
   if (language !== 'python3') throw new JudgeProgramError(400, 'PROGRAM_LANGUAGE_INVALID', '不支持的程序语言')
   const response = await fetch(`${process.env.SANDBOX_HOST || 'http://127.0.0.1:5050'}/run`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cmd: [{
-      args: ['python3', '-m', 'py_compile', 'main.py'], copyIn: { 'main.py': { content: source } }, copyOut: ['stderr?'],
+      args: ['python3', '-m', 'py_compile', 'main.py'], env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'PYTHONDONTWRITEBYTECODE=1'], copyIn: { 'main.py': { content: source } }, copyOut: ['stderr?'],
       cpuLimit: 10_000_000_000, clockLimit: 15_000_000_000, memoryLimit: 268_435_456, procLimit: 20,
     }] }),
   })
   if (!response.ok) throw new JudgeProgramError(503, 'SANDBOX_UNAVAILABLE', `沙箱返回 HTTP ${response.status}`)
   const result = (await response.json() as any[])?.[0]
-  if (!result || result.exitStatus !== 0) throw new JudgeProgramError(422, 'PROGRAM_COMPILE_ERROR', String(result?.files?.stderr || result?.status || 'Python 语法检查失败').slice(0, 4000))
+  if (!result || result.status !== 'Accepted' || result.exitStatus !== 0) throw new JudgeProgramError(422, result?.status === 'Internal Error' ? 'PROGRAM_COMPILE_INFRA_ERROR' : 'PROGRAM_COMPILE_ERROR', String(result?.files?.stderr || result?.error || result?.status || 'Python 语法检查失败').slice(0, 4000))
 }
 
 export function listJudgeProgramTemplates() { return JUDGE_PROGRAM_TEMPLATES.map(({ source: _source, ...template }) => template) }
@@ -143,7 +143,7 @@ async function runSandboxProgram(source: string, language: string, stdin: string
     ].filter(Boolean).find(candidate => fs.existsSync(candidate as string)) as string | undefined
     if (testlibPath) copyIn['testlib.h'] = { content: fs.readFileSync(testlibPath, 'utf8') }
   }
-  const response = await fetch(`${process.env.SANDBOX_HOST || 'http://127.0.0.1:5050'}/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cmd: [{ args: ['sh', '-c', command], copyIn, copyOut: ['stdout?', 'stderr?', 'compile.stderr?'], cpuLimit: 10_000_000_000, clockLimit: 15_000_000_000, memoryLimit: 268_435_456, procLimit: 20, outputLimit: 65_536 }] }) })
+  const response = await fetch(`${process.env.SANDBOX_HOST || 'http://127.0.0.1:5050'}/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cmd: [{ args: ['sh', '-c', command], env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'PYTHONDONTWRITEBYTECODE=1', 'TZ=UTC', 'LC_ALL=C.UTF-8'], copyIn, copyOut: ['stdout?', 'stderr?', 'compile.stderr?'], cpuLimit: 10_000_000_000, clockLimit: 15_000_000_000, memoryLimit: 268_435_456, procLimit: 20, outputLimit: 65_536 }] }) })
   if (!response.ok) throw new JudgeProgramError(503, 'SANDBOX_UNAVAILABLE', `沙箱返回 HTTP ${response.status}`)
   const result = (await response.json() as any[])?.[0]
   return { status: String(result?.status || ''), signal: Number(result?.signal || 0), exitCode: Number(result?.exitStatus ?? -1), stdout: String(result?.files?.stdout || ''), stderr: String(result?.files?.stderr || result?.files?.['compile.stderr'] || '').slice(0, 4096) }
@@ -165,21 +165,21 @@ export async function preflightJudgeProgramVersion(input: { user: JwtPayload; pr
     let passed = true, message = ''
     if (program.kind === 'validator') {
       const expectsSuccess = fixture.expectedExitCode === 0
-      passed = run.signal === 0 && (expectsSuccess ? run.exitCode === 0 : run.exitCode !== 0)
+      passed = run.signal === 0 && !['Internal Error', 'Time Limit Exceeded', 'Memory Limit Exceeded', 'Output Limit Exceeded'].includes(run.status) && (expectsSuccess ? run.status === 'Accepted' && run.exitCode === 0 : run.exitCode !== 0)
       message = expectsSuccess ? '应接受输入' : '应拒绝输入'
     } else if (program.kind === 'generator') {
       const second = await runSandboxProgram(version.source, version.language, String(fixture.stdin || ''))
-      passed = run.exitCode === 0 && Boolean(run.stdout) && crypto.createHash('sha256').update(run.stdout).digest('hex') === crypto.createHash('sha256').update(second.stdout).digest('hex')
+      passed = run.status === 'Accepted' && second.status === 'Accepted' && run.exitCode === 0 && Boolean(run.stdout) && crypto.createHash('sha256').update(run.stdout).digest('hex') === crypto.createHash('sha256').update(second.stdout).digest('hex')
       message = passed ? '双运行输出一致' : '相同 Context 输出不一致或为空'
     } else if (program.kind === 'classifier') {
       try {
         const actual = parseClassifierOutput(run.stdout, knownSubtasks)
         const expected = fixture.expectedSubtasks ? [...fixture.expectedSubtasks].sort((a, b) => a - b) : null
-        passed = run.exitCode === 0 && (!expected || JSON.stringify(actual) === JSON.stringify(expected))
+        passed = run.status === 'Accepted' && run.exitCode === 0 && (!expected || JSON.stringify(actual) === JSON.stringify(expected))
         message = expected ? `期望 ${expected.join(',')}，实际 ${actual.join(',')}` : `分类为 ${actual.join(',')}`
       } catch (error) { passed = false; message = error instanceof Error ? error.message : 'Classifier 协议错误' }
     } else {
-      passed = run.exitCode === (fixture.expectedExitCode ?? 0) && Boolean(run.stdout.length) && (fixture.expectedStdout === undefined || run.stdout === fixture.expectedStdout)
+      passed = run.status === 'Accepted' && run.exitCode === (fixture.expectedExitCode ?? 0) && Boolean(run.stdout.length) && (fixture.expectedStdout === undefined || run.stdout === fixture.expectedStdout)
       message = passed ? '标准程序样例输出检查通过' : '标准程序必须成功运行并产生非空答案'
     }
     reports.push({ name: String(fixture.name || `样例 ${reports.length + 1}`).slice(0, 80), passed, message, exitCode: run.exitCode, stderr: run.stderr })
