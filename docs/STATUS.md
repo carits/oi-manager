@@ -5,6 +5,8 @@ last_verified: 2026-09-05
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-06: 私信消息气泡排版已整改并部署：对方头像与首个消息气泡顶部对齐，对方气泡使用可辨识的卡片背景和边框，自己的主色气泡收紧到消息密度；少量消息靠近输入区。常驻“举报”改为桌面 hover/focus、移动端常显的上翻 `⋯` 菜单，提供 HTTP 兼容复制与举报，统一 Menu 选择后自动关闭。输入框默认 58px 并随内容增长到最多 140px。浏览器回归直接断言头像/气泡纵向差不超过 2px、气泡与背景有对比、消息距输入区小于 100px、无常驻举报和菜单复制成功；Chromium/紧凑视口/Firefox 11/11、Web 65/65、生产构建及 UI/API/架构/文档门禁通过。提交 `b20da3b` 已推送，候选与正式生产探针均验证消息排版和操作菜单，Web BUILD_ID `d8rPI4GL7PPkELpvrrR-i` 已提升。
+
 - 2026-09-06: 私信人物识别与聊天视觉已优化并部署：新增统一 `UserAvatar`，处理头像资源、Unicode 首字符和图片失败回退，供 AppShell、管理身份单元格及私信复用。最近会话、聊天头部、搜索结果、联系人、联系申请和黑名单均显示头像；会话增加降噪时间、摘要和轻量左侧选中指示，聊天使用弱背景、紧凑空状态与相对日期，三分钟内连续对方消息按组只显示一个头像。输入仍严格保持纯文本范围，未展示不可用附件入口。Web 65/65、生产构建、UI/API/架构/文档门禁及聊天发布回归 11/11 通过；提交 `cbc909d` 已推送，候选与正式两轮真实消息探针通过，Web BUILD_ID `dPUk9Ykw9jXrMCwuyiA8F` 已提升。
 
 - 2026-09-06: 一对一聊天动作级验证已收口并部署：E2E 使用 `chat_sender/chat_receiver/chat_outsider` 隔离账号执行搜索、联系申请、SSE 接收、接受、建会话、发送、未读、回复、已读和刷新恢复，并在浏览器移除 `crypto.randomUUID` 验证 HTTP 降级；响应已成功但客户端收到 503 时保留草稿并复用幂等键，数据库只落一条消息。修复普通全局 `user` 被账号/个人页面权限壳错误重定向的问题。生产发布探针使用两个无组织/团队、不可被发现的专用账号，候选和正式 Web 均真实完成发送、SSE 接收、回复与已读闭环。Server 73 文件/588 用例、Chat 19/19、四项竞态 10 轮、Web 64/64、Chromium 桌面 8/8、紧凑视口 7/7、Firefox 8/8、三端构建及 UI/API/架构/文档门禁通过；提交 `4037aea` 已推送，Web BUILD_ID `QdHV_MBCtFlhP4XDwex_m` 已提升。
