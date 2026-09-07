@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 import { bearer, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
 import { ensureInitialTestSetRevision, transitionJudgeMode } from '../../apps/server/src/modules/problem/problem.testset-revision.service'
@@ -19,9 +22,20 @@ test('judge program workspace exposes complete templates and blocks unknown Clas
   })
   expect(created.status()).toBe(201)
   const problemId = String((await created.json()).data.id)
+  const testdataDir = path.join(process.env.TESTDATA_DIR!, problemId)
+  await fs.promises.mkdir(testdataDir, { recursive: true })
+  for (const [filename, content] of [['1.in', '1\n0\n'], ['1.out', '0\n']] as const) {
+    const body = Buffer.from(content)
+    await fs.promises.writeFile(path.join(testdataDir, filename), body)
+    await prisma.testdataFile.create({ data: {
+      id: crypto.randomUUID(), problemId, filename, size: body.length,
+      md5: crypto.createHash('md5').update(body).digest('hex'),
+      sha256: crypto.createHash('sha256').update(body).digest('hex'),
+    } })
+  }
   await prisma.problem.update({
     where: { id: problemId },
-    data: { judgeConfig: 'mode: acm\ntime_limit: 1000\nmemory_limit: 262144\nchecker_type: default\ncases: []\n' },
+    data: { judgeConfig: 'mode: acm\ntime_limit: 1000\nmemory_limit: 262144\nchecker_type: default\ncases:\n  - input: 1.in\n    output: 1.out\n' },
   })
   const initialRevision = await ensureInitialTestSetRevision(problemId, manager.userId)
   expect(initialRevision).toBeTruthy()
