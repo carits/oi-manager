@@ -80,6 +80,7 @@
     "judge:projection:check": "pnpm --filter server exec tsx scripts/audit-judge-projection.ts --enforce",
     "judge:templates:check": "pnpm --filter @oi-manager/shared build && node scripts/check-judge-program-templates.mjs",
     "judge:protocols:smoke": "pnpm --filter @oi-manager/shared build && pnpm --filter @oi-manager/judge smoke:program-protocols",
+    "judge:workflow:live": "node scripts/verify-live-judge-program-workflow.mjs",
     "operations:snapshot": "pnpm --filter server exec tsx scripts/collect-operational-state.ts",
     "operations:check": "pnpm --filter server exec tsx scripts/collect-operational-state.ts --enforce",
     "incident:capture": "bash scripts/capture-incident-evidence.sh",

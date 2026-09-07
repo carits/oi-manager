@@ -76,6 +76,19 @@ pnpm preview:health
 pnpm preview:promote
 ```
 
+Validator / Classifier / STD / Generator 改动发布后，使用短期超级管理员
+Bearer Token 在不可见的草稿题上执行一次完整线上闭环。探针会创建初始 OI
+Revision、异步编译并预检四类程序、激活版本、生成正式测试点并发布下一
+Revision，最后提交一个 Generator Candidate 并确认 Classifier 命中 Subtask：
+
+```bash
+BASE_URL=http://127.0.0.1:3002 AUTH_TOKEN='<short-lived token>' pnpm judge:workflow:live
+```
+
+探针不输出认证信息或程序源码，只输出草稿题 ID、版本号、程序版本 ID 和候选
+阶段。草稿题保留为发布审计证据，不出现在普通题库；不得使用真实用户题目代替
+探针题。
+
 生产 systemd 环境中的 `preview:promote` 会在 3200 候选和 3000 正式端口各执行一次双浏览器消息闭环；候选失败时不切换，正式探针失败时自动恢复 `.next-previous`。提升后核对 `.next-current/BUILD_ID` 与候选构建 ID 完全一致。Web 失败使用 `pnpm preview:rollback`，不会修改 API 指针或数据库。
 
 ## 回滚
