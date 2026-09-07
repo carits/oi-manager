@@ -52,7 +52,7 @@ describe('Judge program template API', () => {
       language: 'cpp17',
       version: 2,
     })
-    expect(response.body.data.source).toContain('{\"subtasks\"')
+    expect(response.body.data.source).toContain('{\\\"subtasks\\\"')
     expect(response.body.data.examples).toHaveLength(3)
     expect(response.body.data.examples.map((item: { expectedSubtasks: number[] }) => item.expectedSubtasks)).toEqual([[1, 2, 3], [1, 3], [3]])
     expect(response.body.data.learningNotes.length).toBeGreaterThan(0)
