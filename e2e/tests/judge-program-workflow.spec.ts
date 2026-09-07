@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { bearer, loginAs } from '../fixtures/api'
 import { accounts } from '../fixtures/auth'
 import { ensureInitialTestSetRevision, transitionJudgeMode } from '../../apps/server/src/modules/problem/problem.testset-revision.service'
+import { prisma } from '../../apps/server/src/prisma'
 
 test('judge program workspace exposes complete templates and blocks unknown Classifier subtasks @compact', async ({ browser, request }) => {
   const manager = await loginAs(request, 'platformAdmin')
@@ -18,6 +19,10 @@ test('judge program workspace exposes complete templates and blocks unknown Clas
   })
   expect(created.status()).toBe(201)
   const problemId = String((await created.json()).data.id)
+  await prisma.problem.update({
+    where: { id: problemId },
+    data: { judgeConfig: 'mode: acm\ntime_limit: 1000\nmemory_limit: 262144\nchecker_type: default\ncases: []\n' },
+  })
   const initialRevision = await ensureInitialTestSetRevision(problemId, manager.userId)
   expect(initialRevision).toBeTruthy()
   await transitionJudgeMode({
