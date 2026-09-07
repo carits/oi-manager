@@ -18,7 +18,8 @@ source_of_truth: Git history
 - Classifier 预览和编辑持续展示当前 Test Graph 的 ID、分值与依赖，Fixture 引用未知 Subtask 时立即阻断协议预检；模板仍只创建草稿，不能跳过 Judge 编译、Fixture 预检和人工激活。
 - 模板目录响应收口为摘要，详情接口返回完整包；新增 API 契约、Web 模板契约和双视口浏览器流程，真实协议 smoke 扩展为执行全部非 DSL 内置模板。
 - 新增线上 P1345 只读模板探针，使用短时会话验证桌面和手机界面，并保证探针前后活动 STD/Validator 身份不变。
-- 验收结果：模板静态检查 8/8、API 5/5、Web 69/69、真实 go-judge 非 DSL 模板 7/7、隔离 Chromium 双视口含登录准备 8/8，Shared/Server/Judge/Web 生产构建和全部 UI/API/架构/文档门禁通过。API 已由 3303 提升至 3302，Web BUILD_ID `5xEScE0an2z9BgXl8_pkF` 经候选与正式消息探针提升；线上 P1345 在 1440×900 和 390×844 均显示 Classifier 完整示例、`当前题目 Subtask：1（100 分）` 及未知 ID 2、3 阻断，原活动 STD/Validator 未改变。
+- 已有模板草稿继续保留原 `templateVersion`，读取当前模板详情只用于展示和明确恢复，不会把 v1 草稿静默冒充或覆盖为 v2。
+- 验收结果：模板静态检查 8/8、API 5/5、Web 69/69、真实 go-judge 非 DSL 模板 7/7、隔离 Chromium 双视口含登录准备 8/8，Shared/Server/Judge/Web 生产构建和全部 UI/API/架构/文档门禁通过。API 已由 3303 提升至 3302，Web BUILD_ID `4mA3AetlUgd8pw8CvNZOy` 经候选与正式消息探针提升；线上 P1345 在 1440×900 和 390×844 均显示 Classifier 完整示例、`当前题目 Subtask：1（100 分）` 及未知 ID 2、3 阻断，原活动 STD/Validator 未改变。
 
 ### 评测程序生命周期与协议链最终收口
 
