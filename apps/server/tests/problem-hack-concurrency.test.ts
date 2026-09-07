@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { finalizeHackResult, type HackJudgeResultPayload } from '../src/modules/problem/problem.hack.service'
+import { maybeAutoSelectCandidate } from '../src/modules/problem/problem.candidate-selector.service'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
 import { loadTestGraphWorkspace, replaceTestGraph } from '../src/modules/problem/problem.test-graph.service'
 import { persistOwnedSubmissionResult } from '../src/ws/judge'
@@ -269,5 +270,67 @@ describe('concurrent Hack promotion', () => {
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(0)
     const files = await fs.promises.readdir(context.directory)
     expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
+  }, 60_000)
+
+  it('keeps a LIMITED corpus Candidate observable without classifying it as redundant', async () => {
+    const context = await fixture('oi')
+    const attempt = await createAttempt(context)
+    await finalizeHackResult({
+      ...acceptedPayload(attempt.id, '19 23\n'),
+      baselineScore: 100,
+      candidateScore: 0,
+      affectedSubtaskIds: [1],
+    })
+    const corpusId = crypto.randomUUID()
+    const sampleId = crypto.randomUUID()
+    const clusterId = crypto.randomUUID()
+    await prisma.wrongCorpusRevision.create({ data: {
+      id: corpusId,
+      problemId: context.problem.id,
+      revisionNumber: 1,
+      status: 'active',
+      sampleCount: 1,
+      clusterCount: 1,
+      evaluationCount: 1,
+      holdoutCount: 0,
+      createdBy: context.owner.user.id,
+      activatedAt: new Date(),
+    } })
+    await prisma.wrongSolutionSample.create({ data: {
+      id: sampleId,
+      problemId: context.problem.id,
+      source: 'manual',
+      language: 'cpp17',
+      sourceSha256: crypto.randomUUID(),
+      executionFingerprint: crypto.randomUUID(),
+      status: 'active',
+      subtaskIds: '[1]',
+      behaviorHash: crypto.randomUUID(),
+      createdBy: context.owner.user.id,
+    } })
+    await prisma.wrongBehaviorCluster.create({ data: {
+      id: clusterId,
+      problemId: context.problem.id,
+      corpusRevisionId: corpusId,
+      representativeSampleId: sampleId,
+      behaviorHash: crypto.randomUUID(),
+      subtaskIds: '[1]',
+      status: 'active',
+    } })
+    const candidate = await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: attempt.id } })
+    await prisma.testcaseCandidate.update({ where: { id: candidate.id }, data: {
+      status: 'ELIGIBLE',
+      evaluationStage: 'observed_limited',
+      corpusRevisionId: corpusId,
+      selectionOutcome: { evaluation: { clusters: [{ clusterId, weight: 1, killedCaseKeys: ['candidate'] }] } },
+    } })
+
+    const result = await maybeAutoSelectCandidate(candidate.id)
+
+    expect(result.reason).toBe('observe_limited')
+    expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { id: candidate.id } })).toMatchObject({ status: 'ELIGIBLE', evaluationStage: 'observed_limited' })
+    expect(await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({ status: 'accepted', canonicalStatus: 'pending' })
+    expect(await prisma.canonicalSelectionRun.count({ where: { problemId: context.problem.id } })).toBe(0)
+    expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(1)
   }, 60_000)
 })
