@@ -19,6 +19,8 @@ source_of_truth: Git history
 - 技术有效 Hack 不再直接创建正式测试版本，而是进入共享 Candidate Pool。Selector 按错误簇覆盖、语义多样性、Feature、Hack 证据和成本计算集合价值；Subtask 满 10 点时执行 11 选 10，保护至少三个 Official Core、手工保护点、新点 7 天和有效 Hack 14 天，并要求替换增益达到 `max(50, 当前质量的 5%)`。
 - 入选只创建下一不可变 Revision，退出成员写入追加式 `TestcaseMembershipRetirement` 审计而不删除旧数据。自动发布每题每小时最多三次；管理员紧急发布必须填写原因，且不能绕过结构、保护、Official Core 或 CAS。
 - Candidate 管理页增加逐 Subtask readiness、真实 Selector dry-run、紧急发布标准 Dialog、永久保护测试点和成员替换历史。普通贡献者仍只获得安全的粗粒度状态，不返回 Corpus 源码、Kill Vector、Holdout 或内部权重。
+- 最终回归中发现并修复两个状态机边界：LIMITED Corpus 仅保留观察结果，不会误建 `not_selected` Selection Run 或将有效 Hack 记为冗余；再次提交已进入正式 Revision 的 Hack 数据会持久化 `REDUNDANT` Candidate 与 Hack 终态，而不是在 Admission Gateway 提前中断审计链。
+- 生产迁移前备份 `/data/backups/oi-manager/manual-release-20260908/oi_manager_20260908_021924.dump` 已验证（SHA-256 `e14e4578d8068b7a264a01fd68388a3e932d5b084ef711611677dce285dc0e09`）；46/46 migrations 已应用。Server 75 文件/606 项、最终并发 6/6、Judge 42/42、Web 69/69 和生产构建通过；API 已提升到 3303，Web BUILD_ID `BC8fg3mXA_gDllqfnwdve` 经候选/正式消息闭环探针后提升。
 
 ## 2026-09-07
 
