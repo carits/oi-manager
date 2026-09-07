@@ -5,7 +5,7 @@ const serverRequire = createRequire(new URL('../apps/server/package.json', impor
 const { PrismaClient } = serverRequire('@prisma/client')
 const dotenv = serverRequire('dotenv')
 const jwt = serverRequire('jsonwebtoken')
-const { chromium } = await import('playwright')
+const { chromium } = serverRequire('playwright')
 
 dotenv.config({ path: fileURLToPath(new URL('../apps/server/.env', import.meta.url)) })
 
