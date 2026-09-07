@@ -40,6 +40,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
   const [blankChosen, setBlankChosen] = useState(false)
   const templates = useMemo(() => catalog?.templates.filter(item => item.kind === kind) || [], [catalog, kind])
   const selectedTemplate = loadedTemplate?.id === templateId ? loadedTemplate : null
+  const selectedTemplateVersion = draft?.templateId === templateId ? draft.templateVersion : selectedTemplate?.version
 
   const loadTemplate = useCallback(async (id: string) => {
     const result = await apiClient.get<ProgramTemplate>(`/api/judge-program-templates/${id}`)
@@ -65,7 +66,10 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
     if (initialTemplateId) { void loadTemplate(initialTemplateId); return }
     void apiClient.get<Draft[]>(`/api/problems/${problemId}/judge-program-drafts`).then(result => {
       const existing = result.data?.find(item => item.kind === 'standard')
-      if (existing) { setKind(existing.kind); setDraft(existing); setName(existing.name); setLanguage(existing.language); setProtocol(existing.protocol); setTemplateId(existing.templateId || ''); setSource(existing.source); setFixtures(existing.fixtures || []); setProtocolConfig(existing.protocolConfig || DEFAULT_CONFIG); setLoadedTemplate(null); setBlankChosen(!existing.templateId) }
+      if (existing) {
+        setKind(existing.kind); setDraft(existing); setName(existing.name); setLanguage(existing.language); setProtocol(existing.protocol); setTemplateId(existing.templateId || ''); setSource(existing.source); setFixtures(existing.fixtures || []); setProtocolConfig(existing.protocolConfig || DEFAULT_CONFIG); setLoadedTemplate(null); setBlankChosen(!existing.templateId)
+        if (existing.templateId) void apiClient.get<ProgramTemplate>(`/api/judge-program-templates/${existing.templateId}`).then(templateResult => { if (templateResult.success && templateResult.data) setLoadedTemplate(templateResult.data) })
+      }
       else selectKind('standard')
     })
   }, [open, catalog, problemId, initialTemplateId, loadTemplate, selectKind])
@@ -73,7 +77,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
   useEffect(() => {
     if (!open || !source.trim() || method === 'dsl') return
     const timer = window.setTimeout(async () => {
-      const result = await apiClient.post<Draft>(`/api/problems/${problemId}/judge-program-drafts`, { kind, name: name || catalog?.capabilities[kind]?.title, language, protocol, templateId, templateVersion: selectedTemplate?.version, source, fixtures, protocolConfig, expectedRevision: draft?.revision })
+      const result = await apiClient.post<Draft>(`/api/problems/${problemId}/judge-program-drafts`, { kind, name: name || catalog?.capabilities[kind]?.title, language, protocol, templateId, templateVersion: selectedTemplateVersion, source, fixtures, protocolConfig, expectedRevision: draft?.revision })
       if (result.success && result.data) setDraft(result.data)
     }, 900)
     return () => window.clearTimeout(timer)
@@ -145,7 +149,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
         if (!materialized.success || !materialized.data) return toast.error(materialized.message || 'DSL 生成程序版本失败')
         created = materialized.data
       } else {
-        const response = await apiClient.post<any>(`/api/problems/${problemId}/judge-programs`, { kind, name: name || catalog?.capabilities[kind].title, language, protocol, templateId, templateVersion: selectedTemplate?.version, source, fixtures, protocolConfig })
+        const response = await apiClient.post<any>(`/api/problems/${problemId}/judge-programs`, { kind, name: name || catalog?.capabilities[kind].title, language, protocol, templateId, templateVersion: selectedTemplateVersion, source, fixtures, protocolConfig })
         if (!response.success || !response.data) return toast.error(response.message || '程序版本创建失败')
         created = response.data
       }
@@ -221,7 +225,7 @@ export function JudgeProgramWizard({ open, onClose, initialTemplateId, problemId
     </div>}
 
     {step === 2 && <div className={styles.section}>
-      {selectedTemplate && <aside className={styles.templateBanner}><strong>正在使用：{selectedTemplate.title} v{selectedTemplate.version}</strong><span>这是教学示例，必须按当前题目修改。</span></aside>}
+      {selectedTemplate && <aside className={styles.templateBanner}><strong>正在使用：{selectedTemplate.title} v{selectedTemplateVersion ?? selectedTemplate.version}</strong><span>这是教学示例，必须按当前题目修改。</span></aside>}
       <div className={styles.editorHeader}><div><strong>{method === 'dsl' ? 'Validator DSL 示例（可修改）' : selectedTemplate ? '模板源码示例（可修改）' : '程序源码'}</strong><span>协议：{protocol} · 模板：{selectedTemplate ? selectedTemplate.title : '空白开始'}</span></div><div className={styles.actions}>{selectedTemplate && <Button variant="ghost" onClick={resetTemplate}><RotateCcw size={15} />恢复完整模板</Button>}<Button variant="ghost" onClick={() => setProtocolOpen(value => !value)}>查看协议</Button><label className={styles.upload}><Upload size={15} />上传源码<Input type="file" accept={method === 'dsl' ? '.json' : language === 'python3' ? '.py,.txt' : '.cpp,.cc,.cxx,.txt'} onChange={event => void upload(event.target.files?.[0])} /></label><Button variant="ghost" onClick={() => downloadSource(name, language, source)}><Download size={15} />下载</Button></div></div>
       {protocolOpen && <div className={styles.protocol}>{catalog?.capabilities[kind]?.quickProtocol.map(item => <span key={item}>{item}</span>)}</div>}
       <label>程序名称<Input value={name} maxLength={80} onChange={event => setName(event.target.value)} placeholder={catalog?.capabilities[kind]?.title} /></label>
