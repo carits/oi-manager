@@ -85,3 +85,5 @@ Validator 通过后先按输入 SHA-256 去重，重复输入不再运行 STD。
 - ProgramVersion 保存协议、模板、源码哈希、运行元数据、预检报告和激活时间，便于复现与审计。
 - `pnpm judge:templates:check` 校验 8 个模板的静态契约与本地编译；`pnpm judge:protocols:smoke`
   通过真实 go-judge Runner 执行全部非 DSL 模板 Fixture、Generator 双运行确定性及联调链。
+- `node scripts/verify-live-judge-template-ui.mjs` 使用五分钟短时管理员会话只读检查线上 P1345 的
+  桌面/手机模板入口、Classifier 完整示例与 Subtask 阻断，并在检查前后对比活动 STD/Validator 身份。
