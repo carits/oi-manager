@@ -3,7 +3,7 @@ async function main() {
   const { JUDGE_PROGRAM_TEMPLATES, getJudgeProgramTemplate } = await import('@oi-manager/shared')
   const { generateTestdata } = await import('../src/data-generation')
   const { verifyJudgeProgram } = await import('../src/judge-program-verification')
-  const { disposeCompiledProgramCache } = await import('../src/compiled-program-cache')
+  const { disposeHackCompileCache } = await import('../src/compiled-program-cache')
   const { initializeSandbox } = await import('../src/sandbox/client')
   await initializeSandbox()
   const result = await generateTestdata({
@@ -71,7 +71,7 @@ int main() {
       verified.push(template.id)
     }
   } finally {
-    await disposeCompiledProgramCache()
+    await disposeHackCompileCache()
   }
   console.log(JSON.stringify({ status: candidate.status, classificationStatus: candidate.classificationStatus, subtasks: candidate.affectedSubtaskIds, output: candidate.outputData.trim(), verifiedTemplates: verified }))
 }
