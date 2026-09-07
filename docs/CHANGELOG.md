@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-09-07
 
+### 评测程序模板与完整示例显性化
+
+- 共享 Registry 的 8 个模板升级为 v2 完整教学包：STD 提供可运行的数组求和与期望输出，三类 Validator 提供合法、边界、越界、少 Token 和多 Token Fixture，两种 Classifier 提供单项、重叠和完整 JSON 示例，两种 Generator 同时提供源码、Parameter Schema、random/max Profile 与固定 Context。
+- 评测资产首页新增常驻模板区，支持按四类职责查看完整示例、复制源码、下载完整包和一键载入；新增向导不再静默填入模板，必须明确选择模板或空白开始，Generator 配置与源码一起载入。
+- Classifier 预览和编辑持续展示当前 Test Graph 的 ID、分值与依赖，Fixture 引用未知 Subtask 时立即阻断协议预检；模板仍只创建草稿，不能跳过 Judge 编译、Fixture 预检和人工激活。
+- 模板目录响应收口为摘要，详情接口返回完整包；新增 API 契约、Web 模板契约和双视口浏览器流程，真实协议 smoke 扩展为执行全部非 DSL 内置模板。
+
 ### 评测程序生命周期与协议链最终收口
 
 - STD、Validator、Classifier、Generator 改为不可变版本和 `draft → compiled → verified → active → retired` 生命周期；创建源码不再同步激活，编译与 Fixture 预检使用带租约和 fencing token 的持久 Judge 队列。

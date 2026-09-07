@@ -24,6 +24,7 @@ import { testdataRouter } from '../../src/routes/testdata'
 import { filesRouter } from '../../src/routes/files'
 import { organizationMemberRouter } from '../../src/routes/organization-members'
 import { platformOrganizationRouter } from '../../src/routes/platform-organizations'
+import { judgeProgramTemplateRouter } from '../../src/modules/problem/problem.judge-program.routes'
 import { verifyCookieOrigin } from '../../src/middleware/csrf'
 
 /**
@@ -61,6 +62,7 @@ export function createTestApp() {
   app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
   app.use('/api/submissions', submissionsRouter)
   app.use('/api/problems', problemsRouter)
+  app.use('/api', judgeProgramTemplateRouter)
   app.use('/api', testdataRouter)
   app.use('/api/files', filesRouter)
   app.use('/api/organizations/:organizationId/members', organizationMemberRouter)

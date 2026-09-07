@@ -60,7 +60,29 @@ export type JudgeProgramTemplate = {
   recommended: boolean
   source: string
   protocolHelp: readonly string[]
-  examples: readonly { name: string; stdin: string; expectedExitCode?: number; expectedStdout?: string }[]
+  examples: readonly JudgeProgramFixture[]
+  protocolConfig?: GeneratorProtocolConfig
+  learningNotes: readonly string[]
+  requiredChanges: readonly string[]
+}
+
+export type JudgeProgramFixture = {
+  name: string
+  stdin: string
+  expectedExitCode?: number
+  expectedStdout?: string
+  expectedSubtasks?: number[]
+}
+
+export type GeneratorProtocolConfig = {
+  profiles: readonly { id: string; label: string; params: Record<string, string | number | boolean> }[]
+  parameterSchema: Record<string, {
+    type: 'integer' | 'number' | 'string' | 'boolean'
+    default?: string | number | boolean
+    minimum?: number
+    maximum?: number
+    enum?: readonly (string | number | boolean)[]
+  }>
 }
 
 const PY_GENERATOR = `import json
@@ -190,25 +212,79 @@ int main() {
 `
 
 const CPP_STANDARD = `#include <iostream>
+#include <vector>
 using namespace std;
 
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-    // 读取题目输入并输出标准答案。
+
+    int n;
+    if (!(cin >> n)) return 1;
+    vector<long long> values(n);
+    long long sum = 0;
+    for (long long &value : values) {
+        cin >> value;
+        sum += value;
+    }
+    cout << sum << '\\n';
     return 0;
 }
 `
 
+const VALIDATOR_DSL = JSON.stringify({
+  version: 1,
+  input: [
+    { type: 'int', name: 'n', min: 1, max: 200000 },
+    { type: 'array', name: 'a', length: 'n', element: { type: 'int', min: -1000000000, max: 1000000000 } },
+  ],
+  assertions: [],
+  strictEof: true,
+}, null, 2)
+
+const GENERATOR_PROTOCOL_CONFIG: GeneratorProtocolConfig = {
+  parameterSchema: {
+    nMin: { type: 'integer', default: 1, minimum: 1, maximum: 200000 },
+    nMax: { type: 'integer', default: 10, minimum: 1, maximum: 200000 },
+  },
+  profiles: [
+    { id: 'random', label: '随机规模', params: { nMin: 1, nMax: 10 } },
+    { id: 'max', label: '最大规模', params: { nMin: 1, nMax: 200000 } },
+  ],
+}
+
+const ARRAY_VALIDATOR_FIXTURES: readonly JudgeProgramFixture[] = [
+  { name: '合法普通输入', stdin: '3\n1 2 3\n', expectedExitCode: 0 },
+  { name: '合法边界输入', stdin: '1\n-1000000000\n', expectedExitCode: 0 },
+  { name: '越界 n', stdin: '0\n', expectedExitCode: 1 },
+  { name: '少一个数组元素', stdin: '3\n1 2\n', expectedExitCode: 1 },
+  { name: '多余 Token', stdin: '2\n1 2 3\n', expectedExitCode: 1 },
+]
+
+const CLASSIFIER_FIXTURES: readonly JudgeProgramFixture[] = [
+  { name: '小规模且全零', stdin: '3\n0 0 0\n', expectedSubtasks: [1, 2, 3] },
+  { name: '小规模一般数据', stdin: '3\n1 2 3\n', expectedSubtasks: [1, 3] },
+  { name: '超过小规模限制', stdin: `101\n${Array.from({ length: 101 }, (_, index) => index + 1).join(' ')}\n`, expectedSubtasks: [3] },
+]
+
+const GENERATOR_FIXTURES: readonly JudgeProgramFixture[] = [
+  { name: '固定 Seed 随机数据', stdin: '{"protocol":"oj.generator/v1","seed":"1","caseId":1,"profile":"random","params":{"nMin":1,"nMax":5}}' },
+  { name: '最大规模 Profile', stdin: '{"protocol":"oj.generator/v1","seed":"2","caseId":2,"profile":"max","params":{"nMin":1,"nMax":20}}' },
+]
+
+const ARRAY_EXAMPLE_NOTES = ['示例题输入为 n 和长度为 n 的整数数组。', '模板展示协议结构，不会根据当前题面自动推导算法或约束。'] as const
+const ARRAY_REQUIRED_CHANGES = ['按当前题目改写输入解析、范围和算法。', '使用题面合法样例与边界数据替换示例 Fixture。'] as const
+const CLASSIFIER_REQUIRED_CHANGES = ['按当前题目改写输入解析和每个 Subtask 的判定条件。', '将示例中的 1、2、3 替换为当前 Test Graph 的真实 Subtask ID。', 'Fixture 必须列出输入满足的全部 Subtask。'] as const
+
 export const JUDGE_PROGRAM_TEMPLATES: readonly JudgeProgramTemplate[] = [
-  { id: 'standard-cpp17-v1', version: 1, kind: 'standard', language: 'cpp17', protocol: 'oj.standard/v1', title: 'C++17 标准程序', description: JUDGE_PROGRAM_CAPABILITIES.standard.description, recommended: true, source: CPP_STANDARD, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.standard.quickProtocol, examples: [] },
-  { id: 'generator-python3-v1', version: 1, kind: 'generator', language: 'python3', protocol: 'oj.generator/v1', title: 'Python3 数据生成器', description: JUDGE_PROGRAM_CAPABILITIES.generator.description, recommended: true, source: PY_GENERATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.generator.quickProtocol, examples: [{ name: '随机小数据', stdin: '{"protocol":"oj.generator/v1","seed":"1","caseId":1,"profile":"random","params":{"nMin":1,"nMax":5}}' }] },
-  { id: 'generator-cpp17-v1', version: 1, kind: 'generator', language: 'cpp17', protocol: 'oj.generator/v1', title: 'C++17 数据生成器', description: JUDGE_PROGRAM_CAPABILITIES.generator.description, recommended: false, source: CPP_GENERATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.generator.quickProtocol, examples: [{ name: '随机小数据', stdin: '{"protocol":"oj.generator/v1","seed":"1","caseId":1,"profile":"random","params":{"nMin":1,"nMax":5}}' }] },
-  { id: 'validator-python3-v1', version: 1, kind: 'validator', language: 'python3', protocol: 'oj.validator/v1', title: 'Python3 输入校验器', description: JUDGE_PROGRAM_CAPABILITIES.validator.description, recommended: false, source: PY_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: [{ name: '应通过', stdin: '3\n1 2 3\n', expectedExitCode: 0 }, { name: '应拒绝', stdin: '0\n', expectedExitCode: 1 }] },
-  { id: 'validator-dsl-v1', version: 1, kind: 'validator', language: 'cpp17', protocol: 'oj.validator/v1', title: 'Validator DSL 编译产物', description: '由平台可信 DSL 编译器生成的 C++17 + testlib Validator。', recommended: false, source: CPP_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: [{ name: '应通过', stdin: '3\n1 2 3\n', expectedExitCode: 0 }, { name: '应拒绝', stdin: '0\n', expectedExitCode: 1 }] },
-  { id: 'validator-cpp17-v1', version: 1, kind: 'validator', language: 'cpp17', protocol: 'oj.validator/v1', title: 'C++17 + testlib 输入校验器', description: JUDGE_PROGRAM_CAPABILITIES.validator.description, recommended: false, source: CPP_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: [{ name: '应通过', stdin: '3\n1 2 3\n', expectedExitCode: 0 }, { name: '应拒绝', stdin: '0\n', expectedExitCode: 1 }] },
-  { id: 'classifier-python3-v1', version: 1, kind: 'classifier', language: 'python3', protocol: 'oj.classifier/v1', title: 'Python3 子任务分类器', description: JUDGE_PROGRAM_CAPABILITIES.classifier.description, recommended: false, source: PY_CLASSIFIER, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.classifier.quickProtocol, examples: [] },
-  { id: 'classifier-cpp17-v1', version: 1, kind: 'classifier', language: 'cpp17', protocol: 'oj.classifier/v1', title: 'C++17 子任务分类器', description: JUDGE_PROGRAM_CAPABILITIES.classifier.description, recommended: true, source: CPP_CLASSIFIER, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.classifier.quickProtocol, examples: [] },
+  { id: 'standard-cpp17-v1', version: 2, kind: 'standard', language: 'cpp17', protocol: 'oj.standard/v1', title: 'C++17 标准程序', description: '完整的整数数组求和 STD 教学示例。', recommended: true, source: CPP_STANDARD, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.standard.quickProtocol, examples: [{ name: '普通输入', stdin: '3\n1 2 3\n', expectedStdout: '6\n' }, { name: '边界与负数', stdin: '1\n-1000000000\n', expectedStdout: '-1000000000\n' }], learningNotes: ARRAY_EXAMPLE_NOTES, requiredChanges: ARRAY_REQUIRED_CHANGES },
+  { id: 'generator-python3-v1', version: 2, kind: 'generator', language: 'python3', protocol: 'oj.generator/v1', title: 'Python3 数据生成器', description: '带固定 Seed、Parameter Schema 和 random/max Profile 的完整示例。', recommended: true, source: PY_GENERATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.generator.quickProtocol, examples: GENERATOR_FIXTURES, protocolConfig: GENERATOR_PROTOCOL_CONFIG, learningNotes: [...ARRAY_EXAMPLE_NOTES, '相同 Context 连续运行两次必须产生完全相同的输出。'], requiredChanges: [...ARRAY_REQUIRED_CHANGES, '按题目规模设计 Profile，不要让用户直接控制 Seed。'] },
+  { id: 'generator-cpp17-v1', version: 2, kind: 'generator', language: 'cpp17', protocol: 'oj.generator/v1', title: 'C++17 数据生成器', description: '使用平台 oj_generator.hpp 的确定性 Generator 完整示例。', recommended: false, source: CPP_GENERATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.generator.quickProtocol, examples: GENERATOR_FIXTURES, protocolConfig: GENERATOR_PROTOCOL_CONFIG, learningNotes: [...ARRAY_EXAMPLE_NOTES, '平台会注入 oj_generator.hpp 并解析严格 Context。'], requiredChanges: [...ARRAY_REQUIRED_CHANGES, '按题目规模设计 Profile，不要让用户直接控制 Seed。'] },
+  { id: 'validator-python3-v1', version: 2, kind: 'validator', language: 'python3', protocol: 'oj.validator/v1', title: 'Python3 输入校验器', description: '严格检查数组长度、整数范围和额外 Token 的完整示例。', recommended: false, source: PY_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: ARRAY_VALIDATOR_FIXTURES, learningNotes: [...ARRAY_EXAMPLE_NOTES, '合法输入退出 0，任何格式或约束错误必须非 0。'], requiredChanges: ARRAY_REQUIRED_CHANGES },
+  { id: 'validator-dsl-v1', version: 2, kind: 'validator', language: 'validator-dsl', protocol: 'oj.validator/v1', title: 'Validator DSL（推荐）', description: '动态数组长度、整数范围和 strictEof 的完整 DSL 示例。', recommended: true, source: VALIDATOR_DSL, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: ARRAY_VALIDATOR_FIXTURES, learningNotes: [...ARRAY_EXAMPLE_NOTES, 'DSL 由平台可信模板编译为 C++17 Validator。'], requiredChanges: ARRAY_REQUIRED_CHANGES },
+  { id: 'validator-cpp17-v1', version: 2, kind: 'validator', language: 'cpp17', protocol: 'oj.validator/v1', title: 'C++17 + testlib 输入校验器', description: '使用 testlib 严格行结构、数值范围和 EOF 的完整示例。', recommended: false, source: CPP_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: ARRAY_VALIDATOR_FIXTURES, learningNotes: [...ARRAY_EXAMPLE_NOTES, '系统在编译时提供 testlib.h。'], requiredChanges: ARRAY_REQUIRED_CHANGES },
+  { id: 'classifier-python3-v1', version: 2, kind: 'classifier', language: 'python3', protocol: 'oj.classifier/v1', title: 'Python3 子任务分类器', description: '演示单 Subtask、重叠 Subtask 和严格 JSON 输出。', recommended: false, source: PY_CLASSIFIER, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.classifier.quickProtocol, examples: CLASSIFIER_FIXTURES, learningNotes: [...ARRAY_EXAMPLE_NOTES, 'Classifier 只处理已经通过 Validator 的输入。'], requiredChanges: CLASSIFIER_REQUIRED_CHANGES },
+  { id: 'classifier-cpp17-v1', version: 2, kind: 'classifier', language: 'cpp17', protocol: 'oj.classifier/v1', title: 'C++17 子任务分类器', description: '演示单 Subtask、重叠 Subtask、去重排序和严格 JSON 输出。', recommended: true, source: CPP_CLASSIFIER, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.classifier.quickProtocol, examples: CLASSIFIER_FIXTURES, learningNotes: [...ARRAY_EXAMPLE_NOTES, 'Classifier 只处理已经通过 Validator 的输入。'], requiredChanges: CLASSIFIER_REQUIRED_CHANGES },
 ]
 
 export function getJudgeProgramTemplate(id: string) {

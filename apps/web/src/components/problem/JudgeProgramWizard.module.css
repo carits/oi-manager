@@ -6,9 +6,26 @@
 .kindGrid, .methodGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .kindCard, .methodGrid button { min-height: 104px; align-items: flex-start; flex-direction: column; text-align: left; white-space: normal; }
 .kindCard span, .methodGrid button span { font-weight: 400; opacity: .85; }
+.templateGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.templateCard { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); }
+.templateCard[data-selected="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.templateCard > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.templateCard p { margin: 0; color: var(--text-secondary); }
+.templateCard > span { color: var(--text-muted); font-size: var(--font-size-sm); }
+.recommended { display: inline-flex; align-items: center; padding: 2px var(--space-2); color: var(--primary); font-size: var(--font-size-xs); background: var(--primary-light); border-radius: 999px; }
+.templatePreview { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-muted); }
+.templatePreview pre { max-height: 280px; overflow: auto; margin: 0; padding: var(--space-3); color: var(--text-primary); white-space: pre-wrap; word-break: break-word; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.templatePreview code { display: block; padding: var(--space-2) var(--space-3); color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.templatePreview ul { margin: 0; padding-left: var(--space-5); }
+.blankStart { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 220px) auto; align-items: center; gap: var(--space-3); padding: var(--space-4); border: 1px dashed var(--border-hover); border-radius: var(--radius-lg); }
+.blankStart > div { display: grid; gap: var(--space-1); }
+.blankStart span { color: var(--text-muted); font-size: var(--font-size-sm); }
 .section { display: grid; gap: var(--space-4); }
 .section label { display: grid; gap: var(--space-2); font-weight: 600; }
 .protocol { display: grid; gap: var(--space-1); padding: var(--space-3); color: var(--text-secondary); background: var(--bg-muted); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.templateBanner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); color: var(--warning-text); background: var(--warning-light); border: 1px solid var(--warning); border-radius: var(--radius-md); }
+.templateBanner span { font-size: var(--font-size-sm); }
+.blocker { margin: 0; padding: var(--space-3); color: var(--error-text); background: var(--error-light); border: 1px solid var(--error); border-radius: var(--radius-md); }
 .editorHeader, .fixtureHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .editorHeader > div:first-child { display: grid; gap: var(--space-1); }
 .editorHeader span { color: var(--text-muted); font-size: var(--font-size-sm); }
@@ -24,10 +41,12 @@
 .fixtureHeader p { margin-top: var(--space-1); color: var(--text-muted); }
 .fixture { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .fixture > div:first-child { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); }
+.fixtureName { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.fixtureName span { padding: 2px var(--space-2); color: var(--text-muted); font-size: var(--font-size-xs); background: var(--bg-muted); border-radius: 999px; }
 .pending, .success, .failure { display: flex; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.success { color: var(--success-text); background: var(--success-bg); }
-.failure { color: var(--danger-text); background: var(--danger-bg); }
+.success { color: var(--success-text); background: var(--success-light); }
+.failure { color: var(--error-text); background: var(--error-light); }
 .warning { color: var(--warning-text); }
 .report { display: grid; gap: var(--space-1); padding: var(--space-3); background: var(--bg-muted); border-radius: var(--radius-md); }
 .report pre { max-height: 140px; overflow: auto; margin: 0; white-space: pre-wrap; }
-@media (max-width: 720px) { .steps { grid-template-columns: 1fr; } .steps li:not([data-active="true"]) { display: none; } .kindGrid, .methodGrid, .profiles > div, .parameter { grid-template-columns: 1fr; } .editorHeader, .fixtureHeader { flex-direction: column; } }
+@media (max-width: 720px) { .steps { grid-template-columns: 1fr; } .steps li:not([data-active="true"]) { display: none; } .kindGrid, .methodGrid, .templateGrid, .profiles > div, .parameter, .blankStart { grid-template-columns: 1fr; } .editorHeader, .fixtureHeader, .templateBanner { align-items: stretch; flex-direction: column; } .fixtureName { grid-template-columns: 1fr; } }

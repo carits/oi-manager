@@ -64,7 +64,16 @@ export async function compileJudgeProgram(source: string, language: string, labe
   if (!result || result.status !== 'Accepted' || result.exitStatus !== 0) throw new JudgeProgramError(422, result?.status === 'Internal Error' ? 'PROGRAM_COMPILE_INFRA_ERROR' : 'PROGRAM_COMPILE_ERROR', String(result?.files?.stderr || result?.error || result?.status || 'Python 语法检查失败').slice(0, 4000))
 }
 
-export function listJudgeProgramTemplates() { return JUDGE_PROGRAM_TEMPLATES.map(({ source: _source, ...template }) => template) }
+export function listJudgeProgramTemplates() {
+  return JUDGE_PROGRAM_TEMPLATES.map(({ source: _source, examples, protocolConfig, learningNotes, requiredChanges, ...template }) => ({
+    ...template,
+    fixtureCount: examples.length,
+    profileCount: protocolConfig?.profiles.length || 0,
+    hasProtocolConfig: Boolean(protocolConfig),
+    learningNoteCount: learningNotes.length,
+    requiredChangeCount: requiredChanges.length,
+  }))
+}
 export function readJudgeProgramTemplate(id: string) {
   const template = getJudgeProgramTemplate(id)
   if (!template) throw new JudgeProgramError(404, 'PROGRAM_TEMPLATE_NOT_FOUND', '评测程序模板不存在')

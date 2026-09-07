@@ -55,10 +55,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/platform/chat-sticker-packs` | 超管查询全部表情包版本和状态 |
 | `POST` | `/api/platform/chat-sticker-packs/:id/retire` | 超管退役表情包，历史消息保持可读 |
 | `GET` | `/api/problems/:id/judge-programs` | 列出题目的版本化 STD、Validator、Classifier 与 Generator |
-| `GET` | `/api/problems/judge-program-templates` | 返回共享能力矩阵、机器 Schema 和不含源码的模板目录 |
-| `GET` | `/api/problems/judge-program-templates/:templateId` | 返回模板源码、协议帮助和官方样例 |
-| `GET` | `/api/judge-program-templates` | 模板目录的稳定账号级别名，供管理向导使用 |
-| `GET` | `/api/judge-program-templates/:templateId` | 模板详情的稳定账号级别名，供管理向导使用 |
+| `GET` | `/api/problems/judge-program-templates` | 返回共享能力矩阵、机器 Schema 和模板摘要；摘要仅含 Fixture/Profile/教学项数量，不含源码、Fixture 或 Generator 配置 |
+| `GET` | `/api/problems/judge-program-templates/:templateId` | 返回完整版本化模板包：源码或 DSL、协议、Fixture、Generator Schema/Profile、教学说明和必须修改项 |
+| `GET` | `/api/judge-program-templates` | 模板摘要目录的稳定账号级别名，供管理工作台与向导使用 |
+| `GET` | `/api/judge-program-templates/:templateId` | 完整模板详情的稳定账号级别名，供预览、复制、下载和草稿初始化使用 |
 | `GET` | `/api/problems/:id/judge-program-drafts` | 读取当前管理员按程序类型保存的服务端草稿 |
 | `POST` | `/api/problems/:id/judge-program-drafts` | 新建或按程序类型更新带 revision 的服务端草稿 |
 | `PATCH` | `/api/problems/:id/judge-program-drafts/:draftId` | 以 expectedRevision 更新指定服务端草稿 |

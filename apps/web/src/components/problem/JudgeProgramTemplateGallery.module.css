@@ -1,0 +1,28 @@
+.gallery { display: grid; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.heading { display: flex; justify-content: space-between; gap: var(--space-3); color: var(--primary); }
+.heading h3, .heading p, .detail h4, .detail p { margin: 0; }
+.heading p { margin-top: var(--space-1); color: var(--text-secondary); }
+.kindTabs, .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.kindTabs button { flex: 1 1 180px; }
+.templateGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-3); }
+.templateCard { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
+.templateCard p { margin: 0; color: var(--text-secondary); }
+.cardTitle { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.cardTitle > div { display: grid; gap: var(--space-1); }
+.cardTitle span { color: var(--text-muted); font-size: var(--font-size-sm); }
+.recommended { padding: var(--space-1) var(--space-2); color: var(--primary); background: var(--primary-light); border-radius: 999px; font-size: var(--font-size-xs); font-weight: 700; }
+.inclusions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.inclusions span { padding: var(--space-1) var(--space-2); color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; font-size: var(--font-size-xs); }
+.detail { display: grid; gap: var(--space-5); }
+.detail section { display: grid; gap: var(--space-2); }
+.detail h4 { font-size: var(--font-size-md); }
+.detail ul { margin: 0; padding-left: var(--space-5); }
+.detail pre { max-height: 420px; overflow: auto; margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-secondary); white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: var(--font-size-sm); }
+.notice, .currentSubtasks, .requiredChanges { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
+.notice span, .currentSubtasks span { color: var(--text-secondary); }
+.currentSubtasks p { color: var(--danger-text); }
+.requiredChanges { color: var(--warning-text); }
+.fixtureGrid { display: grid; gap: var(--space-3); }
+.fixtureGrid article { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.fixtureGrid article > span { color: var(--text-secondary); white-space: pre-wrap; }
+@media (max-width: 720px) { .heading, .cardTitle { flex-direction: column; } .actions > button { flex: 1 1 100%; } }

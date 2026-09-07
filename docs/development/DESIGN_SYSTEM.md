@@ -70,6 +70,16 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - 顶部“历史版本”使用统一 DetailDialog 展示只读 Revision 列表与当时 Judge 投影；查看历史不能切换当前版本，也不能修改活动固定版本。
 - 离开含未保存草稿的工作台必须确认，revision 冲突保留本地草稿并提示刷新，不自动覆盖。
 
+## 2026-09-07 评测程序模板工作台
+
+- “评测资产与生成”的评测程序首页常驻展示 STD、Validator、Classifier、Generator 四类模板；已有活动程序时也不能隐藏模板入口。
+- 模板卡只显示语言、协议、版本和 Fixture/Profile/Schema 摘要；完整源码、协议、Fixture、教学说明与 Generator 配置使用统一 `DetailDialog` 按需展示。
+- 新增程序向导必须明确选择“使用模板”或“空白开始”，不得在切换类型或语言时静默覆盖源码。恢复模板或 Fixture 前存在修改时必须确认。
+- 模板载入后持续显示“教学示例，必须按当前题目修改”；源码编辑器标题必须区分模板源码、Validator DSL 与空白程序。
+- Classifier 同屏展示当前题目 Subtask ID、分值和依赖；未知 ID 使用错误状态明确阻断预检，不把问题延迟到 Judge 日志。
+- Generator 模板是源码、Parameter Schema、Profile 和 Fixture Context 的完整包，界面不得只加载其中一部分。
+- 详情 Dialog 代码区可独立横向滚动，但页面继续只有 Dialog 外层一个纵向滚动；720px 以下模板卡与空白入口降为单列。
+
 ## 2026-08-01 UX 审查结论
 
 当前界面的问题不是单一配色或某个页面样式，而是信息架构、页面布局和组件约束没有形成

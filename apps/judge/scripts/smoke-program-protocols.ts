@@ -1,6 +1,9 @@
 async function main() {
   process.env.JUDGE_TOKEN ||= 'judge-program-protocol-smoke'
+  const { JUDGE_PROGRAM_TEMPLATES, getJudgeProgramTemplate } = await import('@oi-manager/shared')
   const { generateTestdata } = await import('../src/data-generation')
+  const { verifyJudgeProgram } = await import('../src/judge-program-verification')
+  const { disposeCompiledProgramCache } = await import('../src/compiled-program-cache')
   const { initializeSandbox } = await import('../src/sandbox/client')
   await initializeSandbox()
   const result = await generateTestdata({
@@ -35,7 +38,42 @@ int main() {
     process.exitCode = 1
     return
   }
-  console.log(JSON.stringify({ status: candidate.status, classificationStatus: candidate.classificationStatus, subtasks: candidate.affectedSubtaskIds, output: candidate.outputData.trim() }))
+  const validator = getJudgeProgramTemplate('validator-cpp17-v1')!
+  const standard = getJudgeProgramTemplate('standard-cpp17-v1')!
+  const verified: string[] = []
+  try {
+    for (const template of JUDGE_PROGRAM_TEMPLATES.filter(item => item.language !== 'validator-dsl')) {
+      const verification = await verifyJudgeProgram({
+        taskType: 'judge_program_verification',
+        jobId: `template-smoke-${template.id}`,
+        problemId: 'template-smoke',
+        programId: template.id,
+        versionId: `${template.id}-v${template.version}`,
+        fixtureSetId: `${template.id}-fixtures`,
+        fencingToken: 'template-smoke',
+        mode: 'preflight',
+        kind: template.kind,
+        language: template.language,
+        protocol: template.protocol,
+        source: template.source,
+        fixtures: template.examples.map(item => ({ ...item })),
+        knownSubtaskIds: [1, 2, 3],
+        problemConfig: {
+          mode: 'oi', checker_type: 'default',
+          subtasks: [1, 2, 3].map(id => ({ id, score: id === 3 ? 34 : 33, type: 'min', cases: [] })),
+        },
+        integration: {
+          ...(template.kind === 'generator' || template.kind === 'classifier' ? { validator: { language: validator.language as 'cpp17', source: validator.source } } : {}),
+          ...(template.kind === 'generator' ? { standard: { language: 'cpp17' as const, source: standard.source } } : {}),
+        },
+      })
+      if (verification.outcome !== 'success') throw new Error(`${template.id}: ${verification.code} ${verification.message}`)
+      verified.push(template.id)
+    }
+  } finally {
+    await disposeCompiledProgramCache()
+  }
+  console.log(JSON.stringify({ status: candidate.status, classificationStatus: candidate.classificationStatus, subtasks: candidate.affectedSubtaskIds, output: candidate.outputData.trim(), verifiedTemplates: verified }))
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1 })
