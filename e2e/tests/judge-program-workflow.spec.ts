@@ -75,7 +75,7 @@ test('judge program workspace exposes complete templates and blocks unknown Clas
   await wizard.getByRole('button', { name: /下一步/ }).click()
   await expect(wizard.getByText('正在使用：C++17 子任务分类器 v2')).toBeVisible()
   await expect(wizard.getByText('这是教学示例，必须按当前题目修改。')).toBeVisible()
-  await expect(wizard.getByLabel('模板源码示例（可修改）')).toContainText('"subtasks"')
+  await expect(wizard.getByLabel('模板源码示例（可修改）')).toHaveValue(/subtasks/)
   await expect(wizard.getByText('当前题目 Subtask：1（100 分）', { exact: true })).toBeVisible()
   await expect(wizard.getByText('Subtask 1（100 分）', { exact: true })).toBeVisible()
 
