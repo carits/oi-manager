@@ -237,6 +237,36 @@ export interface DataGenerationResult {
   cases: Array<{ id: string; status: 'validated' | 'failed'; failureStage?: string; message?: string; inputData?: string; outputData?: string; generatorTimeMs?: number; validatorTimeMs?: number; standardTimeMs?: number; classificationStatus?: 'classified' | 'missing' | 'failed' | 'not_required'; classificationMessage?: string; affectedSubtaskIds?: number[] }>
 }
 
+export interface CandidateEvaluationRequest {
+  taskType: 'candidate_evaluation'
+  runId: string
+  candidateId: string
+  problemId: string
+  fencingToken: string
+  stage: 'l1' | 'l2' | 'holdout'
+  testdataPath: string
+  problemConfig: ProblemConfig
+  candidateInputBase64: string
+  candidateOutputBase64: string
+  maxExecutionCount: number
+  maxCpuMilliseconds: number
+  cases: Array<{ key: string; input: string; output: string }>
+  samples: Array<{ sampleId: string; clusterId: string; weight: number; language: string; source: string; inputFilename?: string | null; outputFilename?: string | null }>
+}
+
+export interface CandidateEvaluationResult {
+  runId: string
+  candidateId: string
+  fencingToken: string
+  stage: 'l1' | 'l2' | 'holdout'
+  retryable?: boolean
+  executionCount: number
+  cpuMilliseconds: number
+  clusters: Array<{ clusterId: string; weight: number; killedCaseKeys: string[] }>
+  unstableSampleIds: string[]
+  message?: string
+}
+
 export type JudgeProgramFixture = {
   name: string
   stdin: string
@@ -336,7 +366,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'judge_program_verification' | 'judge_program_verification_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
+  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'candidate_evaluation' | 'candidate_evaluation_result' | 'judge_program_verification' | 'judge_program_verification_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
   payload: any
 }
 
@@ -385,5 +415,7 @@ export interface HackResultMessage {
 
 export interface DataGenerationMessage { type: 'data_generation'; payload: DataGenerationRequest }
 export interface DataGenerationResultMessage { type: 'data_generation_result'; payload: DataGenerationResult }
+export interface CandidateEvaluationMessage { type: 'candidate_evaluation'; payload: CandidateEvaluationRequest }
+export interface CandidateEvaluationResultMessage { type: 'candidate_evaluation_result'; payload: CandidateEvaluationResult }
 export interface JudgeProgramVerificationMessage { type: 'judge_program_verification'; payload: JudgeProgramVerificationRequest }
 export interface JudgeProgramVerificationResultMessage { type: 'judge_program_verification_result'; payload: JudgeProgramVerificationResult }

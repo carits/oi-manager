@@ -57,6 +57,8 @@ enum TestcaseCandidateStatus {
   EVALUATING_L2
   EVALUATING_HOLDOUT
   ELIGIBLE
+  ELIGIBLE_NOT_SELECTED
+  WAITING_REPLACEMENT
   SELECTED
   EXPIRED
 }
@@ -462,64 +464,64 @@ model PrincipalTransferLog {
 }
 
 model Problem {
-  id                       String                     @id
-  platform                 String
-  problemId                String
-  title                    String
-  description              String?
-  statementType            String                     @default("none")
-  statementPdfUrl          String?
-  solutionType             String                     @default("none")
-  solutionMarkdown         String?
-  solutionPdfUrl           String?
-  solutionVisible          Boolean                    @default(false)
-  difficulty               String?
-  timeLimit                Int?
-  memoryLimit              Int?
-  judgeConfig              String?
-  problemType              String                     @default("default")
-  visibility               String                     @default("private")
-  ownerType                String                     @default("teacher")
-  ownerId                  String
-  libraryScope             String                     @default("platform")
-  libraryKey               String                     @default("platform")
-  organizationId           String?
-  sourceProblemId          String?
-  status                   String                     @default("draft")
-  publishedAt              DateTime?
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @default(now())
-  testGraphRevision        Int                        @default(0)
-  latestTestSetRevisionId  String?
-  allowedLanguages         String?
-  ojBindings               String?
-  ProblemAttachment        ProblemAttachment[]
-  ProblemListEntry         ProblemListEntry[]
-  ProblemNote              ProblemNote[]
-  ProblemStatement         ProblemStatement[]
-  UserProblemContent       UserProblemContent[]
-  TestdataFile             TestdataFile[]
-  ProblemChecker           ProblemChecker[]
-  ProblemHackConfig        ProblemHackConfig?
-  ProblemHackAttempt       ProblemHackAttempt[]
-  ProblemJudgeProgram      ProblemJudgeProgram[]
-  ProblemJudgeProgramDraft ProblemJudgeProgramDraft[]
-  ProblemJudgeProgramFixtureSet ProblemJudgeProgramFixtureSet[]
+  id                                 String                               @id
+  platform                           String
+  problemId                          String
+  title                              String
+  description                        String?
+  statementType                      String                               @default("none")
+  statementPdfUrl                    String?
+  solutionType                       String                               @default("none")
+  solutionMarkdown                   String?
+  solutionPdfUrl                     String?
+  solutionVisible                    Boolean                              @default(false)
+  difficulty                         String?
+  timeLimit                          Int?
+  memoryLimit                        Int?
+  judgeConfig                        String?
+  problemType                        String                               @default("default")
+  visibility                         String                               @default("private")
+  ownerType                          String                               @default("teacher")
+  ownerId                            String
+  libraryScope                       String                               @default("platform")
+  libraryKey                         String                               @default("platform")
+  organizationId                     String?
+  sourceProblemId                    String?
+  status                             String                               @default("draft")
+  publishedAt                        DateTime?
+  createdAt                          DateTime                             @default(now())
+  updatedAt                          DateTime                             @default(now())
+  testGraphRevision                  Int                                  @default(0)
+  latestTestSetRevisionId            String?
+  allowedLanguages                   String?
+  ojBindings                         String?
+  ProblemAttachment                  ProblemAttachment[]
+  ProblemListEntry                   ProblemListEntry[]
+  ProblemNote                        ProblemNote[]
+  ProblemStatement                   ProblemStatement[]
+  UserProblemContent                 UserProblemContent[]
+  TestdataFile                       TestdataFile[]
+  ProblemChecker                     ProblemChecker[]
+  ProblemHackConfig                  ProblemHackConfig?
+  ProblemHackAttempt                 ProblemHackAttempt[]
+  ProblemJudgeProgram                ProblemJudgeProgram[]
+  ProblemJudgeProgramDraft           ProblemJudgeProgramDraft[]
+  ProblemJudgeProgramFixtureSet      ProblemJudgeProgramFixtureSet[]
   ProblemJudgeProgramVerificationJob ProblemJudgeProgramVerificationJob[]
-  ProblemJudgeProgramAuditLog ProblemJudgeProgramAuditLog[]
-  ProblemDataGenerationJob ProblemDataGenerationJob[]
-  TestcaseCandidate        TestcaseCandidate[]
-  ProblemTestcase          ProblemTestcase[]
-  ProblemSubtask           ProblemSubtask[]
-  ProblemTestGroup         ProblemTestGroup[]
-  TestdataObject           TestdataObject[]
-  TestSetRevision          ProblemTestSetRevision[]   @relation("ProblemTestSetRevisions")
-  LatestTestSetRevision    ProblemTestSetRevision?    @relation("ProblemLatestTestSetRevision", fields: [latestTestSetRevisionId], references: [id], onDelete: SetNull)
-  TrainingProblem          TrainingProblem[]
-  Owner                    User                       @relation("ProblemOwner", fields: [ownerId], references: [id])
-  Organization             Organization?              @relation(fields: [organizationId], references: [id])
-  SourceProblem            Problem?                   @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
-  CopiedProblems           Problem[]                  @relation("ProblemCopies")
+  ProblemJudgeProgramAuditLog        ProblemJudgeProgramAuditLog[]
+  ProblemDataGenerationJob           ProblemDataGenerationJob[]
+  TestcaseCandidate                  TestcaseCandidate[]
+  ProblemTestcase                    ProblemTestcase[]
+  ProblemSubtask                     ProblemSubtask[]
+  ProblemTestGroup                   ProblemTestGroup[]
+  TestdataObject                     TestdataObject[]
+  TestSetRevision                    ProblemTestSetRevision[]             @relation("ProblemTestSetRevisions")
+  LatestTestSetRevision              ProblemTestSetRevision?              @relation("ProblemLatestTestSetRevision", fields: [latestTestSetRevisionId], references: [id], onDelete: SetNull)
+  TrainingProblem                    TrainingProblem[]
+  Owner                              User                                 @relation("ProblemOwner", fields: [ownerId], references: [id])
+  Organization                       Organization?                        @relation(fields: [organizationId], references: [id])
+  SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
+  CopiedProblems                     Problem[]                            @relation("ProblemCopies")
 
   @@unique([libraryKey, platform, problemId])
   @@index([createdAt])
@@ -557,17 +559,17 @@ model ProblemHackConfig {
 }
 
 model ProblemJudgeProgram {
-  id               String                       @id
+  id               String                               @id
   problemId        String
   kind             String
   name             String
   language         String
   currentVersionId String?
-  status           String                       @default("active")
+  status           String                               @default("active")
   createdBy        String
-  createdAt        DateTime                     @default(now())
-  updatedAt        DateTime                     @updatedAt
-  Problem          Problem                      @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  createdAt        DateTime                             @default(now())
+  updatedAt        DateTime                             @updatedAt
+  Problem          Problem                              @relation(fields: [problemId], references: [id], onDelete: Cascade)
   Versions         ProblemJudgeProgramVersion[]
   Drafts           ProblemJudgeProgramDraft[]
   FixtureSets      ProblemJudgeProgramFixtureSet[]
@@ -580,34 +582,34 @@ model ProblemJudgeProgram {
 }
 
 model ProblemJudgeProgramVersion {
-  id             String              @id
-  programId      String
-  problemId      String
-  versionNumber  Int
-  language       String
-  source         String              @db.Text
-  sourceSha256   String
-  origin         String              @default("manual")
-  aiRequestId    String?
-  compileStatus  String
-  compileMessage String?             @db.Text
-  protocol       String              @default("legacy")
-  protocolVersion Int                @default(1)
-  templateId     String?
-  templateVersion Int?
-  lifecycleStatus String             @default("compiled")
-  runtimeMetadata Json?
-  protocolConfig  Json?
-  preflightReport Json?
-  fixtureSetId    String?
-  verifiedAt     DateTime?
-  activatedAt    DateTime?
-  createdBy      String
-  createdAt      DateTime            @default(now())
-  Program        ProblemJudgeProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
-  FixtureSet     ProblemJudgeProgramFixtureSet? @relation("ProgramVersionFixtureSet", fields: [fixtureSetId], references: [id], onDelete: SetNull)
+  id               String                               @id
+  programId        String
+  problemId        String
+  versionNumber    Int
+  language         String
+  source           String                               @db.Text
+  sourceSha256     String
+  origin           String                               @default("manual")
+  aiRequestId      String?
+  compileStatus    String
+  compileMessage   String?                              @db.Text
+  protocol         String                               @default("legacy")
+  protocolVersion  Int                                  @default(1)
+  templateId       String?
+  templateVersion  Int?
+  lifecycleStatus  String                               @default("compiled")
+  runtimeMetadata  Json?
+  protocolConfig   Json?
+  preflightReport  Json?
+  fixtureSetId     String?
+  verifiedAt       DateTime?
+  activatedAt      DateTime?
+  createdBy        String
+  createdAt        DateTime                             @default(now())
+  Program          ProblemJudgeProgram                  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  FixtureSet       ProblemJudgeProgramFixtureSet?       @relation("ProgramVersionFixtureSet", fields: [fixtureSetId], references: [id], onDelete: SetNull)
   VerificationJobs ProblemJudgeProgramVerificationJob[]
-  AuditLogs      ProblemJudgeProgramAuditLog[]
+  AuditLogs        ProblemJudgeProgramAuditLog[]
 
   @@unique([programId, versionNumber])
   @@index([problemId, createdAt])
@@ -617,7 +619,7 @@ model ProblemJudgeProgramVersion {
 }
 
 model ProblemJudgeProgramDraft {
-  id              String              @id
+  id              String               @id
   problemId       String
   programId       String?
   userId          String
@@ -627,13 +629,13 @@ model ProblemJudgeProgramDraft {
   protocol        String
   templateId      String?
   templateVersion Int?
-  source          String              @db.Text
+  source          String               @db.Text
   protocolConfig  Json?
   fixtures        Json
-  revision        Int                 @default(1)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  Problem         Problem             @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  revision        Int                  @default(1)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  Problem         Problem              @relation(fields: [problemId], references: [id], onDelete: Cascade)
   Program         ProblemJudgeProgram? @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@unique([problemId, userId, kind])
@@ -642,17 +644,17 @@ model ProblemJudgeProgramDraft {
 }
 
 model ProblemJudgeProgramFixtureSet {
-  id          String                       @id
-  problemId   String
-  programId   String
-  revision    Int
-  fixtures    Json
-  fixtureHash String
-  createdBy   String
-  createdAt   DateTime                     @default(now())
-  Problem     Problem                      @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  Program     ProblemJudgeProgram          @relation(fields: [programId], references: [id], onDelete: Cascade)
-  Versions    ProblemJudgeProgramVersion[] @relation("ProgramVersionFixtureSet")
+  id               String                               @id
+  problemId        String
+  programId        String
+  revision         Int
+  fixtures         Json
+  fixtureHash      String
+  createdBy        String
+  createdAt        DateTime                             @default(now())
+  Problem          Problem                              @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Program          ProblemJudgeProgram                  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  Versions         ProblemJudgeProgramVersion[]         @relation("ProgramVersionFixtureSet")
   VerificationJobs ProblemJudgeProgramVerificationJob[]
 
   @@unique([programId, revision])
@@ -661,29 +663,29 @@ model ProblemJudgeProgramFixtureSet {
 }
 
 model ProblemJudgeProgramVerificationJob {
-  id              String                        @id
-  problemId       String
-  programId       String
-  versionId       String
-  fixtureSetId    String
-  mode            String
-  status          String                        @default("queued")
-  judgeId         String?
-  fencingToken    String?                       @unique
-  leaseExpiresAt  DateTime?
-  attemptCount    Int                           @default(0)
-  report          Json?
-  errorCode       String?
-  errorMessage    String?                       @db.Text
-  createdBy       String
-  startedAt       DateTime?
-  finishedAt      DateTime?
-  createdAt       DateTime                      @default(now())
-  updatedAt       DateTime                      @updatedAt
-  Problem         Problem                      @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  Program         ProblemJudgeProgram          @relation(fields: [programId], references: [id], onDelete: Cascade)
-  Version         ProblemJudgeProgramVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  FixtureSet      ProblemJudgeProgramFixtureSet @relation(fields: [fixtureSetId], references: [id], onDelete: Restrict)
+  id             String                        @id
+  problemId      String
+  programId      String
+  versionId      String
+  fixtureSetId   String
+  mode           String
+  status         String                        @default("queued")
+  judgeId        String?
+  fencingToken   String?                       @unique
+  leaseExpiresAt DateTime?
+  attemptCount   Int                           @default(0)
+  report         Json?
+  errorCode      String?
+  errorMessage   String?                       @db.Text
+  createdBy      String
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  Problem        Problem                       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Program        ProblemJudgeProgram           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  Version        ProblemJudgeProgramVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  FixtureSet     ProblemJudgeProgramFixtureSet @relation(fields: [fixtureSetId], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
   @@index([problemId, createdAt])
@@ -859,6 +861,7 @@ model TestcaseCandidate {
   marginalValue         Float                   @default(0)
   runtimeCost           Float                   @default(0)
   isProtected           Boolean                 @default(false)
+  protectedUntil        DateTime?
   expiresAt             DateTime?
   selectedAt            DateTime?
   createdBy             String
@@ -866,6 +869,7 @@ model TestcaseCandidate {
   promotedRevisionId    String?
   message               String?                 @db.Text
   provenance            Json?
+  selectionOutcome      Json?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
   promotedAt            DateTime?
@@ -901,6 +905,7 @@ model WrongSolutionSample {
   score                Int?
   status               String   @default("pending")
   behaviorHash         String?
+  subtaskIds           String?
   clusterId            String?
   categoryId           String?
   createdBy            String?
@@ -919,6 +924,7 @@ model WrongBehaviorCluster {
   corpusRevisionId       String?
   representativeSampleId String
   behaviorHash           String
+  subtaskIds             String?
   categoryId             String?
   weight                 Int      @default(1)
   frequency              Int      @default(1)
@@ -969,6 +975,8 @@ model CandidateEvaluationRun {
   corpusRevisionId String?
   stage            String
   status           String    @default("queued")
+  budgetTaskId     String?
+  budgetCredits    Int       @default(400)
   executionCount   Int       @default(0)
   cpuMilliseconds  Int       @default(0)
   generatedBytes   BigInt    @default(0)
@@ -978,12 +986,18 @@ model CandidateEvaluationRun {
   similarity       Float     @default(0)
   value            Float     @default(0)
   message          String?   @db.Text
+  judgeId          String?
+  fencingToken     String?
+  leaseExpiresAt   DateTime?
+  attempts         Int       @default(0)
   startedAt        DateTime?
   finishedAt       DateTime?
   createdAt        DateTime  @default(now())
 
   @@index([candidateId, stage])
+  @@index([budgetTaskId])
   @@index([problemId, status, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model CanonicalSelectionRun {
@@ -1060,23 +1074,23 @@ model EvaluationCreditLedgerEntry {
 }
 
 model ValidatorSpec {
-  id              String    @id
-  problemId       String
-  versionNumber   Int
-  spec            Json
-  specHash        String
-  generatedSource String    @db.Text
-  templateVersion String
-  compileStatus   String
-  compileMessage  String?   @db.Text
-  verification    Json?
-  origin          String    @default("manual")
-  aiRequestId     String?
+  id               String    @id
+  problemId        String
+  versionNumber    Int
+  spec             Json
+  specHash         String
+  generatedSource  String    @db.Text
+  templateVersion  String
+  compileStatus    String
+  compileMessage   String?   @db.Text
+  verification     Json?
+  origin           String    @default("manual")
+  aiRequestId      String?
   programVersionId String?
-  status          String    @default("draft")
-  createdBy       String
-  createdAt       DateTime  @default(now())
-  activatedAt     DateTime?
+  status           String    @default("draft")
+  createdBy        String
+  createdAt        DateTime  @default(now())
+  activatedAt      DateTime?
 
   @@unique([problemId, versionNumber])
   @@index([problemId, status])
@@ -1113,17 +1127,17 @@ model ProblemSubtaskRule {
 }
 
 model BlobObject {
-  id          String          @id
-  sha256      String          @unique
-  size        BigInt
-  storageKey  String          @unique
-  storageTier String          @default("hot")
-  contentType String?
-  createdAt   DateTime        @default(now())
-  deleteAfter DateTime?
-  References  BlobReference[]
-  StickerAssets ChatSticker[] @relation("ChatStickerAsset")
-  StickerPosters ChatSticker[] @relation("ChatStickerPoster")
+  id             String          @id
+  sha256         String          @unique
+  size           BigInt
+  storageKey     String          @unique
+  storageTier    String          @default("hot")
+  contentType    String?
+  createdAt      DateTime        @default(now())
+  deleteAfter    DateTime?
+  References     BlobReference[]
+  StickerAssets  ChatSticker[]   @relation("ChatStickerAsset")
+  StickerPosters ChatSticker[]   @relation("ChatStickerPoster")
 
   @@index([storageTier, deleteAfter])
 }
@@ -2071,28 +2085,55 @@ model TestdataObject {
 }
 
 model ProblemTestcase {
-  id                 String                            @id
-  problemId          String
-  inputFileId        String
-  outputFileId       String
-  source             String                            @default("official")
-  hackerId           String?
-  hackAttemptId      String?
-  inputSha256        String?
-  outputSha256       String?
-  enabled            Boolean                           @default(true)
-  orderIndex         Int                               @default(0)
-  createdAt          DateTime                          @default(now())
-  Problem            Problem                           @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  InputFile          TestdataFile                      @relation("ProblemTestcaseInput", fields: [inputFileId], references: [id], onDelete: Restrict)
-  OutputFile         TestdataFile                      @relation("ProblemTestcaseOutput", fields: [outputFileId], references: [id], onDelete: Restrict)
-  GroupLinks         ProblemTestcaseGroup[]
-  RevisionCases      ProblemTestSetRevisionCase[]
-  RevisionGroupCases ProblemTestSetRevisionGroupCase[]
+  id                  String                            @id
+  problemId           String
+  inputFileId         String
+  outputFileId        String
+  source              String                            @default("official")
+  hackerId            String?
+  hackAttemptId       String?
+  inputSha256         String?
+  outputSha256        String?
+  semanticFingerprint String?
+  enabled             Boolean                           @default(true)
+  orderIndex          Int                               @default(0)
+  isProtected         Boolean                           @default(false)
+  protectionReason    String?
+  protectedUntil      DateTime?
+  createdAt           DateTime                          @default(now())
+  Problem             Problem                           @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  InputFile           TestdataFile                      @relation("ProblemTestcaseInput", fields: [inputFileId], references: [id], onDelete: Restrict)
+  OutputFile          TestdataFile                      @relation("ProblemTestcaseOutput", fields: [outputFileId], references: [id], onDelete: Restrict)
+  GroupLinks          ProblemTestcaseGroup[]
+  RevisionCases       ProblemTestSetRevisionCase[]
+  RevisionGroupCases  ProblemTestSetRevisionGroupCase[]
 
   @@unique([problemId, inputFileId, outputFileId])
   @@index([problemId, source, enabled])
   @@index([hackAttemptId])
+}
+
+model TestcaseMembershipRetirement {
+  id                     String   @id
+  problemId              String
+  testcaseId             String
+  subtaskId              Int
+  groupKey               String
+  replacementCandidateId String?
+  replacementTestcaseId  String?
+  fromRevisionId         String
+  toRevisionId           String
+  oldMarginalValue       Float    @default(0)
+  newMarginalValue       Float    @default(0)
+  reason                 String
+  metadata               Json?
+  createdBy              String?
+  createdAt              DateTime @default(now())
+
+  @@index([problemId, createdAt])
+  @@index([testcaseId])
+  @@index([replacementCandidateId])
+  @@index([fromRevisionId, toRevisionId])
 }
 
 model ProblemSubtask {
@@ -2517,24 +2558,24 @@ model User {
   CaritsAccount                            CaritsAccount?                    @relation("CaritsAccountUser")
   CaritsTransactions                       CaritsTransaction[]               @relation("CaritsTransactionOperator")
   ContributionEvents                       ContributionEvent[]               @relation("ContributionActor")
-  ChatPrivacySetting                      ChatPrivacySetting?
-  SentFriendRequests                      FriendRequest[]                    @relation("FriendRequestSender")
-  ReceivedFriendRequests                  FriendRequest[]                    @relation("FriendRequestReceiver")
-  LowFriendships                          Friendship[]                       @relation("FriendshipLowUser")
-  HighFriendships                         Friendship[]                       @relation("FriendshipHighUser")
-  RemovedFriendships                      Friendship[]                       @relation("FriendshipRemovedBy")
-  BlocksCreated                           UserBlock[]                        @relation("UserBlockBlocker")
-  BlocksReceived                          UserBlock[]                        @relation("UserBlockBlocked")
-  LowDirectConversations                  DirectConversation[]              @relation("DirectConversationLowUser")
-  HighDirectConversations                 DirectConversation[]              @relation("DirectConversationHighUser")
-  DirectConversationMembers               DirectConversationMember[]
-  SentDirectMessages                      DirectMessage[]
-  ChatUserEvents                          ChatUserEvent[]
-  ChatReportsFiled                        ChatReport[]                       @relation("ChatReportReporter")
-  ChatReportsAgainst                      ChatReport[]                       @relation("ChatReportTarget")
-  ChatReportsReviewed                     ChatReport[]                       @relation("ChatReportReviewer")
-  CreatedChatStickerPacks                 ChatStickerPack[]                  @relation("ChatStickerPackCreator")
-  ChatStickerImports                     ChatStickerImport[]                @relation("ChatStickerImportUploader")
+  ChatPrivacySetting                       ChatPrivacySetting?
+  SentFriendRequests                       FriendRequest[]                   @relation("FriendRequestSender")
+  ReceivedFriendRequests                   FriendRequest[]                   @relation("FriendRequestReceiver")
+  LowFriendships                           Friendship[]                      @relation("FriendshipLowUser")
+  HighFriendships                          Friendship[]                      @relation("FriendshipHighUser")
+  RemovedFriendships                       Friendship[]                      @relation("FriendshipRemovedBy")
+  BlocksCreated                            UserBlock[]                       @relation("UserBlockBlocker")
+  BlocksReceived                           UserBlock[]                       @relation("UserBlockBlocked")
+  LowDirectConversations                   DirectConversation[]              @relation("DirectConversationLowUser")
+  HighDirectConversations                  DirectConversation[]              @relation("DirectConversationHighUser")
+  DirectConversationMembers                DirectConversationMember[]
+  SentDirectMessages                       DirectMessage[]
+  ChatUserEvents                           ChatUserEvent[]
+  ChatReportsFiled                         ChatReport[]                      @relation("ChatReportReporter")
+  ChatReportsAgainst                       ChatReport[]                      @relation("ChatReportTarget")
+  ChatReportsReviewed                      ChatReport[]                      @relation("ChatReportReviewer")
+  CreatedChatStickerPacks                  ChatStickerPack[]                 @relation("ChatStickerPackCreator")
+  ChatStickerImports                       ChatStickerImport[]               @relation("ChatStickerImportUploader")
 
   @@index([createdAt])
   @@index([role])
@@ -2550,17 +2591,17 @@ model ChatPrivacySetting {
 }
 
 model FriendRequest {
-  id          String   @id
+  id          String    @id
   requesterId String
   addresseeId String
-  message     String?  @db.VarChar(500)
-  status      String   @default("pending")
+  message     String?   @db.VarChar(500)
+  status      String    @default("pending")
   respondedAt DateTime?
   expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  Requester   User     @relation("FriendRequestSender", fields: [requesterId], references: [id], onDelete: Restrict)
-  Addressee   User     @relation("FriendRequestReceiver", fields: [addresseeId], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  Requester   User      @relation("FriendRequestSender", fields: [requesterId], references: [id], onDelete: Restrict)
+  Addressee   User      @relation("FriendRequestReceiver", fields: [addresseeId], references: [id], onDelete: Restrict)
 
   @@index([requesterId, status, createdAt])
   @@index([addresseeId, status, createdAt])
@@ -2659,19 +2700,19 @@ model DirectMessage {
 }
 
 model ChatStickerPack {
-  id              String              @id
-  key             String
-  name            String
-  version         Int
-  status          String              @default("staged")
-  sortOrder       Int                 @default(0)
-  createdByUserId String
-  publishedAt     DateTime?
-  retiredAt       DateTime?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  CreatedBy       User                @relation("ChatStickerPackCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  Stickers        ChatSticker[]
+  id               String              @id
+  key              String
+  name             String
+  version          Int
+  status           String              @default("staged")
+  sortOrder        Int                 @default(0)
+  createdByUserId  String
+  publishedAt      DateTime?
+  retiredAt        DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  CreatedBy        User                @relation("ChatStickerPackCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  Stickers         ChatSticker[]
   PublishedImports ChatStickerImport[] @relation("ChatStickerImportPublishedPack")
 
   @@unique([key, version])
@@ -2679,25 +2720,25 @@ model ChatStickerPack {
 }
 
 model ChatSticker {
-  id          String          @id
-  packId      String
-  key         String
-  label       String
-  assetBlobId String
+  id           String          @id
+  packId       String
+  key          String
+  label        String
+  assetBlobId  String
   posterBlobId String
-  mimeType    String
-  width       Int
-  height      Int
-  frameCount  Int             @default(1)
-  durationMs  Int             @default(0)
-  sha256      String
-  sortOrder   Int             @default(0)
-  status      String          @default("active")
-  createdAt   DateTime        @default(now())
-  Pack        ChatStickerPack @relation(fields: [packId], references: [id], onDelete: Restrict)
-  AssetBlob   BlobObject      @relation("ChatStickerAsset", fields: [assetBlobId], references: [id], onDelete: Restrict)
-  PosterBlob  BlobObject      @relation("ChatStickerPoster", fields: [posterBlobId], references: [id], onDelete: Restrict)
-  Messages    DirectMessage[]
+  mimeType     String
+  width        Int
+  height       Int
+  frameCount   Int             @default(1)
+  durationMs   Int             @default(0)
+  sha256       String
+  sortOrder    Int             @default(0)
+  status       String          @default("active")
+  createdAt    DateTime        @default(now())
+  Pack         ChatStickerPack @relation(fields: [packId], references: [id], onDelete: Restrict)
+  AssetBlob    BlobObject      @relation("ChatStickerAsset", fields: [assetBlobId], references: [id], onDelete: Restrict)
+  PosterBlob   BlobObject      @relation("ChatStickerPoster", fields: [posterBlobId], references: [id], onDelete: Restrict)
+  Messages     DirectMessage[]
 
   @@unique([packId, key])
   @@index([packId, status, sortOrder])
@@ -2706,18 +2747,18 @@ model ChatSticker {
 }
 
 model ChatStickerImport {
-  id                String           @id
-  uploadedByUserId  String
-  status            String           @default("staged")
-  reportHash        String
-  manifest          Json
-  report            Json
-  publishedPackId   String?
-  expiresAt         DateTime
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  UploadedBy        User             @relation("ChatStickerImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
-  PublishedPack     ChatStickerPack? @relation("ChatStickerImportPublishedPack", fields: [publishedPackId], references: [id], onDelete: SetNull)
+  id               String           @id
+  uploadedByUserId String
+  status           String           @default("staged")
+  reportHash       String
+  manifest         Json
+  report           Json
+  publishedPackId  String?
+  expiresAt        DateTime
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  UploadedBy       User             @relation("ChatStickerImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  PublishedPack    ChatStickerPack? @relation("ChatStickerImportPublishedPack", fields: [publishedPackId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([expiresAt])
@@ -2739,27 +2780,27 @@ model ChatUserEvent {
 }
 
 model ChatReport {
-  id                 String              @id
+  id                 String             @id
   conversationId     String
   messageId          String?
   reporterUserId     String
   targetUserId       String
   reason             String
-  details            String?             @db.Text
+  details            String?            @db.Text
   evidenceSnapshot   Json
-  status             String              @default("pending")
+  status             String             @default("pending")
   reviewedByUserId   String?
   reviewedAt         DateTime?
-  resolutionNote     String?             @db.Text
+  resolutionNote     String?            @db.Text
   evidenceHoldUntil  DateTime?
   evidenceReleasedAt DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  Conversation       DirectConversation  @relation(fields: [conversationId], references: [id], onDelete: Restrict)
-  Message            DirectMessage?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
-  Reporter           User                @relation("ChatReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
-  Target             User                @relation("ChatReportTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
-  ReviewedBy         User?               @relation("ChatReportReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  Conversation       DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  Message            DirectMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  Reporter           User               @relation("ChatReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  Target             User               @relation("ChatReportTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  ReviewedBy         User?              @relation("ChatReportReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([reporterUserId, createdAt])

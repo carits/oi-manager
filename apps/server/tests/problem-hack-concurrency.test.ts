@@ -185,7 +185,7 @@ describe('concurrent Hack promotion', () => {
     })
   }, 60_000)
 
-  it('promotes one of ten simultaneous results and safely requeues every loser', async () => {
+  it('promotes one of ten simultaneous results and leaves every stale Candidate auditable', async () => {
     const context = await fixture()
     const attempts = await Promise.all(Array.from({ length: 10 }, () => createAttempt(context)))
 
@@ -195,7 +195,7 @@ describe('concurrent Hack promotion', () => {
 
     const rows = await prisma.problemHackAttempt.findMany({ where: { problemId: context.problem.id } })
     expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'promoted')).toHaveLength(1)
-    expect(rows.filter(row => row.status === 'queuing' && row.promotionRetries === 1)).toHaveLength(9)
+    expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'pending')).toHaveLength(9)
     expect(await prisma.testcaseCandidate.count({ where: { problemId: context.problem.id, status: 'STALE' } })).toBe(9)
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
@@ -205,21 +205,18 @@ describe('concurrent Hack promotion', () => {
     expect(files.filter(name => /^hack_.+\.(?:in|out)$/.test(name))).toHaveLength(2)
   }, 60_000)
 
-  it('turns the requeued duplicate into redundant without publishing another revision', async () => {
+  it('turns a later duplicate into redundant without publishing another revision', async () => {
     const context = await fixture()
     const attempts = await Promise.all([createAttempt(context), createAttempt(context)])
     const payloads = attempts.map(attempt => acceptedPayload(attempt.id, '40 2\n'))
 
     await Promise.all(payloads.map(payload => finalizeHackResult(payload)))
-    const queued = await prisma.problemHackAttempt.findFirstOrThrow({
-      where: { problemId: context.problem.id, status: 'queuing' },
-    })
-    await prisma.problemHackAttempt.update({ where: { id: queued.id }, data: { status: 'judging' } })
-    await finalizeHackResult(payloads.find(payload => payload.hackAttemptId === queued.id)!)
+    const duplicateAttempt = await createAttempt(context)
+    await finalizeHackResult(acceptedPayload(duplicateAttempt.id, '40 2\n'))
 
-    const redundant = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: queued.id } })
+    const redundant = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: duplicateAttempt.id } })
     expect(redundant).toMatchObject({ status: 'rejected', canonicalStatus: 'redundant', failureStage: 'input' })
-    expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: queued.id } })).toMatchObject({ status: 'REDUNDANT' })
+    expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: duplicateAttempt.id } })).toMatchObject({ status: 'REDUNDANT' })
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
     const files = await fs.promises.readdir(context.directory)
@@ -227,7 +224,7 @@ describe('concurrent Hack promotion', () => {
     expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
   }, 60_000)
 
-  it('serializes an OI Test Graph save against Hack promotion without a partial revision', async () => {
+  it('keeps an OI technical Hack in the Candidate pool while a Test Graph save creates the only new revision', async () => {
     const context = await fixture('oi')
     const attempt = await createAttempt(context)
     const workspace = await loadTestGraphWorkspace(context.problem.id)
@@ -261,16 +258,11 @@ describe('concurrent Hack promotion', () => {
     })
     expect(revisions).toHaveLength(2)
     const finalAttempt = await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })
-    if (graphResult.ok) {
-      expect(revisions[1].source).toBe('admin_edit')
-      expect(finalAttempt).toMatchObject({ status: 'queuing', promotionRetries: 1 })
-      expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(0)
-    } else {
-      expect(graphResult.code).toBe('TEST_GRAPH_STALE')
-      expect(revisions[1].source).toBe('hack')
-      expect(finalAttempt).toMatchObject({ status: 'accepted', canonicalStatus: 'promoted' })
-      expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
-    }
+    expect(graphResult.ok).toBe(true)
+    expect(revisions[1].source).toBe('admin_edit')
+    expect(finalAttempt).toMatchObject({ status: 'accepted', canonicalStatus: 'pending' })
+    expect(await prisma.testcaseCandidate.findUniqueOrThrow({ where: { hackAttemptId: attempt.id } })).toMatchObject({ evaluationStage: 'awaiting_corpus' })
+    expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(0)
     const files = await fs.promises.readdir(context.directory)
     expect(files.filter(name => name.endsWith('.pending'))).toHaveLength(0)
   }, 60_000)

@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-07
+last_verified: 2026-09-08
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -76,12 +76,13 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemJudgeProgramAuditLog` | 程序创建、编译、预检、激活、退役等操作的题目级不可变审计 |
 | `ProblemDataGenerationJob` | 独立数据生成队列、程序版本、基础 Revision、租约、fencing token 和晋升结果 |
 | `ProblemDataGenerationCase` | 一次参数/直接输入对应的候选测试点、逐阶段状态、内容对象与预览 |
-| `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask 与晋升状态 |
+| `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask、语义指纹、保护期与逐 Subtask 选择结果 |
 | `WrongSolutionSample` | 私有历史/人工错误程序样本索引；执行指纹同时包含语言、源码和提交级 IO，源码访问仍遵守原提交权限 |
 | `WrongBehaviorCluster` | 错误行为代表簇、权重、类别及 Evaluation/Holdout 分区 |
 | `WrongCorpusRevision` | 一次不可变 Corpus 构建摘要与固定分层 |
 | `BugCategory` | 管理员维护的错误类型与权重 |
-| `CandidateEvaluationRun` | Candidate 的 L1/L2/Holdout 阶段、预算和评估摘要 |
+| `CandidateEvaluationRun` | Candidate 的 L1/L2/Holdout 持久阶段；同一评估轮共享预算 ID，保存租约、fencing token、重试和真实资源用量 |
+| `TestcaseMembershipRetirement` | 新 Revision 以高价值 Candidate 替换旧成员时的追加式审计；不删除旧 Revision、Testcase 或 Blob |
 | `CanonicalSelectionRun` | Selector 输入、输出、质量差值、状态和晋升 Revision |
 | `ProblemCandidatePolicy` | 题目候选池、Top-K、正式点数、发布阈值与 observe/auto 策略 |
 | `EvaluationCreditAccount` | 用户或平台按日 Evaluation Credits 的可用、预占和消费账户 |

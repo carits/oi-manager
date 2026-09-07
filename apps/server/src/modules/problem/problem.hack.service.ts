@@ -4,17 +4,16 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { prisma } from '../../prisma'
 import {
-  TestSetRevisionConflict,
   loadRevisionSpec,
-  publishTestSetRevision,
 } from './problem.testset-revision.service'
 import {
-  beginCandidatePromotion,
-  completeCandidatePromotion,
   createValidatedHackCandidate,
   setCandidateStatus,
 } from './problem.testcase-candidate.service'
 import { transitionHackAttempt } from './problem.hack-state'
+import { OI_CANDIDATE_LIMITS, uniqueSubtaskCases } from './problem.oi-candidate-policy'
+import { queueCandidateEvaluation } from './problem.candidate-evaluation.service'
+import { maybeAutoSelectCandidate } from './problem.candidate-selector.service'
 
 export const HACK_SOURCE_LIMIT = 256 * 1024
 export const HACK_INPUT_LIMIT = 16 * 1024 * 1024
@@ -380,7 +379,35 @@ export async function finalizeHackResult(
       ])
       return
     }
-    await prisma.testcaseCandidate.update({ where: { id: candidate.id }, data: { status: 'ELIGIBLE', evaluationStage: 'holdout_passed', currentValue: 1000, marginalValue: 1000, featureFingerprint: JSON.stringify({ source: 'hack', affectedSubtasks: affected, verdictChange: `${payload.baselineResult || ''}->${payload.candidateResult || ''}` }) } })
+    const currentSpec = await loadRevisionSpec(problem.latestTestSetRevisionId!)
+    const subtaskCapacity = mode === 'oi'
+      ? (currentSpec?.subtasks || []).filter(subtask => affected.includes(subtask.id)).map(subtask => ({ subtaskId: subtask.id, caseCount: uniqueSubtaskCases(subtask).length, caseLimit: OI_CANDIDATE_LIMITS.MAX_CASES_PER_SUBTASK }))
+      : []
+    const requiresReplacement = mode === 'acm'
+      ? (currentSpec?.mode === 'acm' && (currentSpec.cases?.length || 0) >= 100)
+      : subtaskCapacity.some(item => item.caseCount >= item.caseLimit)
+    await prisma.testcaseCandidate.update({ where: { id: candidate.id }, data: {
+      status: requiresReplacement ? 'WAITING_REPLACEMENT' : 'ELIGIBLE',
+      evaluationStage: mode === 'acm' ? (requiresReplacement ? 'waiting_replacement' : 'technical_hack_evidence') : 'awaiting_evaluator',
+      currentValue: 0,
+      marginalValue: 0,
+      selectionOutcome: { technicalHackAccepted: true, subtaskCapacity, requiresReplacement },
+      protectedUntil: new Date(Date.now() + OI_CANDIDATE_LIMITS.SUCCESSFUL_HACK_PROTECTION_DAYS * 24 * 60 * 60_000),
+    } })
+    await transitionHackAttempt(prisma, { id: current.id, from: 'finalizing', to: 'accepted', data: {
+      canonicalStatus: 'pending', ...resultFields, failureStage: null,
+      message: requiresReplacement
+        ? `${payload.message || '有效 Hack'}；正式测试点已满，候选数据等待 Selector 执行${mode === 'oi' ? ' 11 选 10' : '有界替换'}`
+        : `${payload.message || '有效 Hack'}；候选数据已进入评估队列，技术成功不代表自动纳入正式版本`,
+      inputSha256, outputSha256, candidateTestcaseId: candidate.id,
+      judgeId: null, judgeStarted: null, finishedAt: new Date(),
+    } })
+    if (mode === 'oi') await queueCandidateEvaluation(candidate.id).catch(() => undefined)
+    else await maybeAutoSelectCandidate(candidate.id).catch(() => undefined)
+    return
+    /* The former direct-promotion flow intentionally remains disabled. A
+       technically valid Hack must be evaluated by the shared Candidate
+       Selector before it can create a canonical TestSet Revision.
     const policy = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`candidate-policy:${problem.id}`}, 0)) IS NULL AS locked`
       return tx.problemCandidatePolicy.upsert({ where: { problemId: problem.id }, update: {}, create: { id: crypto.randomUUID(), problemId: problem.id, updatedBy: current.userId } })
@@ -500,5 +527,6 @@ export async function finalizeHackResult(
       })
       return
     }
+    */
   }
 }

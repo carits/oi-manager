@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-31
+last_verified: 2026-09-08
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -106,14 +106,23 @@ Validator DSL 激活时物化为不可变程序版本。Classifier 对 ACM 不�
 页面立即展示贡献任务 ID，Generator 产生的 Candidate 作为逐点子结果返回；普通用户看不到其他贡献者、
 Kill Vector、Holdout 或隐藏 Feature。
 
-Candidate 通过技术验证后进入有界池。技术有效 Hack 仍需保留证明程序与前后结果，但不会绕过
-Candidate 记录直接改正式数据。Selector 负责按价值、语义冗余、成本和发布 Token Bucket 选择；
-管理员紧急发布也必须遵守结构、预算和 CAS。ACM 正式点按顺序选择，OI 的用户贡献只能进入
-Hack Gate，只有题目管理者资产可以分配 Official Group。固定旧 Revision 的活动和历史提交不受影响。
+Candidate 通过技术验证后进入有界池。OI 每题最多 15 个 Subtask，每个 Subtask 在全部 Official
+Group 与系统 Hack Gate 中合计最多 10 个唯一测试点；前三个管理员正式点作为最小 Official Core。
+各 Subtask 独立按错误程序和行为簇数量进入 `CLOSED / LIMITED / OPEN`：无错误程序时只允许管理员
+Bootstrap，至少 1 个错误程序后允许观察评估，达到 5 个错误程序且至少 3 个行为簇后才允许自动选择。
 
-Wrong Behavior Corpus 只使用本站本地错误/部分分源码与人工错误程序，并只向题目管理者暴露聚类、
-类别、权重和覆盖汇总。当前 bootstrap 阶段已完成去重和固定 80/20 Evaluation/Holdout 分层；完整
-L1/L2/Holdout 行为执行器上线前，普通 Candidate 保持 `ADMITTED/awaiting_evaluator` 而不自动发布，避免用占位指标改数据。
+Wrong Behavior Corpus 使用本站稳定可复现的本地错误/部分分源码与人工错误程序，按当前判定行为
+聚类并固定为 80% Evaluation 与 20% Hidden Holdout。Candidate 评估由独立持久任务依次执行
+L1（24 个代表簇）、L2（最多 96 个）和 Holdout（最多 256 个），任务具有租约、fencing token、
+执行/CPU 硬预算和幂等预算流水。未覆盖 Holdout 的任务不会自动晋升。普通贡献者只获得粗粒度结论；
+题目管理者可查看每个 Subtask 的 readiness、dry-run 决策和成员替换审计，但不能绕过硬结构约束。
+
+技术有效 Hack 只会产生带 14 天保护期的 Candidate，不再从 Judge 回调直接改正式数据。Selector
+以错误簇覆盖、语义多样性、Feature、Hack 证据和运行成本计算集合价值；满 10 点时执行 11 选 10，
+遵守手工保护、7/14 天新点保护、至少 3 个 Official Core 和同语义簇最多 2 点，并要求替换增益达到
+`max(50, 当前质量的 5%)`。入选后只创建下一不可变 TestSet Revision，旧成员只记录 retirement
+审计而不删除 Blob。题目级每小时最多自动发布 3 个 Revision；紧急发布需要原因和平台审计，仍须
+通过结构、保护和 Revision CAS。固定旧 Revision 的活动、历史提交和排名永远不受影响。
 
 外部平台研究和旧实现方案保存在[研究归档](../../archive/research/)和
 [计划归档](../../archive/plans/)。

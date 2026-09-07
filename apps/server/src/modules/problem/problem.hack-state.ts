@@ -75,3 +75,18 @@ export async function transitionHackAttempts(
     data: { ...input.data, status: input.to },
   })
 }
+
+/**
+ * Update canonical-promotion metadata after the technical Hack state has
+ * already reached a terminal state. This deliberately keeps all
+ * ProblemHackAttempt writes behind the state-machine boundary.
+ */
+export async function updateTerminalHackAttempt(
+  db: HackPersistence,
+  input: { id: string; state: Extract<HackAttemptState, 'accepted' | 'rejected' | 'system_error' | 'stale'>; data: Record<string, unknown> },
+) {
+  return db.problemHackAttempt.updateMany({
+    where: { id: input.id, status: input.state },
+    data: input.data,
+  })
+}

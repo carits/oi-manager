@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-07
+last_verified: 2026-09-08
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -79,6 +79,14 @@ DetailDialog。迁移中的旧实现登记在 `scripts/ui-legacy-baseline.json`�
 - Classifier 同屏展示当前题目 Subtask ID、分值和依赖；未知 ID 使用错误状态明确阻断预检，不把问题延迟到 Judge 日志。
 - Generator 模板是源码、Parameter Schema、Profile 和 Fixture Context 的完整包，界面不得只加载其中一部分。
 - 详情 Dialog 代码区可独立横向滚动，但页面继续只有 Dialog 外层一个纵向滚动；720px 以下模板卡与空白入口降为单列。
+
+## 2026-09-08 Candidate 与 Selector 工作台
+
+- 普通贡献者只展示“等待分类、等待语料、评估中、技术有效、低价值、等待替换、已纳入 Rxx”等粗粒度结果，不展示 Kill Vector、Holdout、历史错误源码或内部权重。
+- 题目管理者的 Candidate Pool 必须按 Subtask 同屏显示正式点 `x/10`、错误程序数、行为簇数及 `CLOSED/LIMITED/OPEN`；自动发布按钮在没有 OPEN Subtask 时禁用并说明原因。
+- Selector 预览必须调用服务端真实 dry-run，展示每个命中 Subtask 的基线质量、候选质量、增益、门槛和拟替换点；不得用 Candidate 单项分数冒充集合选择结果。
+- 紧急发布使用 `FormDialog` 收集 10～1000 字审计原因，并明确说明它不能绕过结构、保护期、Official Core 和 Revision CAS。
+- 测试点永久保护同样使用标准 `FormDialog`，不得调用浏览器 prompt；历史成员替换默认折叠但必须可追溯。
 
 ## 2026-08-01 UX 审查结论
 

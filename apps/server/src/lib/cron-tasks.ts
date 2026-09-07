@@ -10,6 +10,7 @@ import { collectOrphanContentBlobs, releaseBlobReferences } from '../modules/sto
 import { prisma } from '../prisma'
 import { runChatMaintenance } from '../modules/chat/application/chat-maintenance.service'
 import { expireStagedStickerImports } from '../modules/chat/application/chat-sticker.service'
+import { maybeAutoSelectCandidate } from '../modules/problem/problem.candidate-selector.service'
 
 async function expireCandidateData() {
   const now = new Date(), rejectedBefore = new Date(Date.now() - 24 * 60 * 60_000)
@@ -83,11 +84,25 @@ export function startCronTasks() {
     }
   })
 
+  // Eligible candidates can be left waiting when the per-problem publish
+  // bucket is exhausted. Re-run the idempotent selector after tokens recover.
+  const selectorTask = cron.schedule('*/10 * * * *', async () => {
+    try {
+      const candidates = await prisma.testcaseCandidate.findMany({ where: { OR: [{ status: 'ELIGIBLE', evaluationStage: 'evaluated' }, { status: 'WAITING_REPLACEMENT', evaluationStage: 'waiting_replacement', updatedAt: { lte: new Date(Date.now() - 24 * 60 * 60_000) } }] }, orderBy: [{ marginalValue: 'desc' }, { createdAt: 'asc' }], take: 100, select: { id: true } })
+      let promoted = 0
+      for (const candidate of candidates) if ((await maybeAutoSelectCandidate(candidate.id).catch(() => ({ promoted: false }))).promoted) promoted++
+      logger.info('candidate_selector_sweep_done', { action: 'candidate_selector', metadata: { scanned: candidates.length, promoted } })
+    } catch (error) {
+      logger.error('candidate_selector_sweep_failed', error as Error, { action: 'candidate_selector' })
+    }
+  })
+
   logger.info('cron_tasks_started', { action: 'cron_start' })
   cronStopper = () => {
     task.stop()
     gcTask.stop()
     chatTask.stop()
+    selectorTask.stop()
     cronStopper = null
     logger.info('cron_tasks_stopped', { action: 'cron_stop' })
   }

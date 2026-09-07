@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-01
+last_verified: 2026-09-08
 source_of_truth: apps/server/src/ws/judge.ts, apps/judge/src/client.ts
 ---
 
@@ -211,10 +211,10 @@ OI Hack 由 Classifier 返回候选数据命中的全部 Subtask，并把通过 
 
 ## 不可变 TestSet Revision
 
-- `Problem.latestTestSetRevisionId` 指向题库 Practice 使用的最新版；管理员保存数据、显式 ACM/OI 转换或有效 Hack 都创建下一 Revision，禁止原地修改。
+- `Problem.latestTestSetRevisionId` 指向题库 Practice 使用的最新版；管理员保存数据、显式 ACM/OI 转换或经 Selector 入选的 Candidate 才创建下一 Revision，禁止原地修改。技术有效 Hack 本身不等于正式版本变更。
 - 测试输入/答案使用 `(problemId, sha256)` 内容寻址对象；Revision 目录固化逻辑文件名和文件型 Checker/Interactor/Manager。输入输出由 `TestdataFile` 管理，Checker 由独立 `ProblemChecker` 管理，迁移审计不会混用两类元数据；旧 Revision 永久保持可复现。
 - `TrainingProblem.testSetRevisionId` 在活动添加题目时固定。活动未开始且无提交时管理员可以手动更新；开始、结束或已有提交后统一返回 `409 TEST_SET_REVISION_FROZEN`。
-- 发布使用 `pg_advisory_xact_lock(problemId)` 与 expected-latest CAS；Test Graph、Judge 投影、最新版指针和兼容 `Problem.judgeConfig` 在同一事务提交。并发 Hack 冲突最多基于最新版重评三次。
+- 发布使用 `pg_advisory_xact_lock(problemId)` 与 expected-latest CAS；Test Graph、Judge 投影、最新版指针、Candidate/Hack 状态和成员替换审计在同一事务提交。并发写入只能有一个 CAS 成功，不允许 Judge 回调直接拼接 YAML 或活动快照。
 - 普通 Judge Config PUT 不允许隐式改变模式；`POST /api/problems/:id/judge-mode-transition` 创建保留历史的转换 Revision，并关闭 Hack 等待重新配置。
 - 历史迁移接受数字测试点简写 `cases: [1]` 并映射为 `1.in/1.ans`，旧 `scoring` 字段与当前
   `type` 等价；其他缺少明确输入/答案文件名的结构拒绝迁移，不猜测文件。
@@ -233,3 +233,8 @@ Validator 和 Classifier。未迁移历史题必须先查看检查结果并显�
 Official Group。被 Group 或 Hack Gate 引用的文件返回 `409 TESTDATA_IN_USE`，不能直接删除；同名替换
 保留文件 ID 并同步 Testcase 哈希。整图保存携带 revision，陈旧写入返回 `409 TEST_GRAPH_STALE`，结构
 错误返回 `422 INVALID_TEST_GRAPH`，成功后重新生成 YAML 投影。
+
+OI 正式图还有不可绕过的产品边界：最多 15 个 Subtask；每个 Subtask 在全部 Group 中去重后最多
+10 个测试点；至少保留 3 个 Official Core。题目管理者可填写原因永久保护测试点。自动 Selector 在
+Subtask 达到 10 点时执行 11 选 10，并保护手工点、新增 7 天点、有效 Hack 14 天点；退出成员只在
+`TestcaseMembershipRetirement` 中记录，不删除旧 Revision 或内容对象。

@@ -4,13 +4,14 @@ import { prisma } from '../../prisma'
 import { ingestTestdataObject } from './problem.testset-revision.service'
 import { EVALUATION_LIMITS, EvaluationBudgetError } from './problem.evaluation-budget.service'
 import { putReferencedBlob } from '../storage/content-blob.service'
+import { genericInputFeatures, semanticInputFingerprint } from './problem.oi-candidate-policy'
 
 function digest(content: Buffer) {
   return crypto.createHash('sha256').update(content).digest('hex')
 }
 
 export const ACTIVE_CANDIDATE_STATUSES: TestcaseCandidateStatus[] = [
-  'UPLOADED', 'ADMITTED', 'VALIDATING', 'EVALUATING_L1', 'EVALUATING_L2', 'EVALUATING_HOLDOUT', 'ELIGIBLE', 'SELECTED', 'VALIDATED', 'PROMOTING',
+  'UPLOADED', 'ADMITTED', 'VALIDATING', 'EVALUATING_L1', 'EVALUATING_L2', 'EVALUATING_HOLDOUT', 'ELIGIBLE', 'ELIGIBLE_NOT_SELECTED', 'WAITING_REPLACEMENT', 'SELECTED', 'VALIDATED', 'PROMOTING',
 ]
 
 export async function assertCandidatePoolCapacity(problemId: string, additionalBytes: number) {
@@ -50,38 +51,46 @@ export async function createAdmittedCandidate(params: {
   }
   await assertCandidatePoolCapacity(params.problemId, params.input.length + params.output.length)
   const inputSha256 = digest(params.input), outputSha256 = digest(params.output)
-  const duplicate = await prisma.testcaseCandidate.findFirst({ where: { problemId: params.problemId, inputSha256, status: { in: ACTIVE_CANDIDATE_STATUSES } } })
-  if (duplicate) return { candidate: duplicate, duplicate: true }
-  const latest = await prisma.problem.findUnique({ where: { id: params.problemId }, select: { latestTestSetRevisionId: true } })
-  const canonicalDuplicate = latest?.latestTestSetRevisionId ? await prisma.testdataObject.findFirst({
-    where: {
-      problemId: params.problemId,
-      sha256: inputSha256,
-      OR: [
-        { AcmInputs: { some: { revisionId: latest.latestTestSetRevisionId } } },
-        { GroupInputs: { some: { revisionId: latest.latestTestSetRevisionId } } },
-      ],
-    },
-  }) : null
-  if (canonicalDuplicate) throw new EvaluationBudgetError(409, 'CANDIDATE_CANONICAL_DUPLICATE', '候选输入已存在于正式测试版本')
   const [inputObject, outputObject] = await Promise.all([ingestTestdataObject(params.problemId, params.input), ingestTestdataObject(params.problemId, params.output)])
-  const candidate = await prisma.testcaseCandidate.create({ data: {
-    id: params.id || crypto.randomUUID(), problemId: params.problemId, hackAttemptId: params.hackAttemptId || null,
-    source: params.source, targetRole: params.targetRole, status: params.status || 'ADMITTED', evaluationStage: params.evaluationStage || 'awaiting_evaluator',
-    baseTestSetRevisionId: params.baseTestSetRevisionId || null, inputObjectId: inputObject.id, outputObjectId: outputObject.id,
-    inputSha256, outputSha256, inputSize: params.input.length, outputSize: params.output.length,
-    inputFileName: params.inputFileName, outputFileName: params.outputFileName,
-    affectedSubtaskIds: params.affectedSubtaskIds?.length ? JSON.stringify(params.affectedSubtaskIds) : null,
-    standardVersionId: params.standardVersionId || null, validatorVersionId: params.validatorVersionId || null,
-    classifierVersionId: params.classifierVersionId || null, generatorVersionId: params.generatorVersionId || null, provenance: params.provenance as any,
-    semanticFingerprint: digest(Buffer.from(`${inputSha256}\0${outputSha256}`)), createdBy: params.createdBy,
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
-  } })
-  await Promise.all([
-    putReferencedBlob({ content: params.input, ownerType: 'testcase_candidate', ownerId: candidate.id, role: 'input', contentType: 'application/octet-stream' }),
-    putReferencedBlob({ content: params.output, ownerType: 'testcase_candidate', ownerId: candidate.id, role: 'answer', contentType: 'application/octet-stream' }),
-  ])
-  return { candidate, duplicate: false }
+  const result = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`candidate-input:${params.problemId}:${inputSha256}`}, 0)) IS NULL AS locked`
+    const duplicate = await tx.testcaseCandidate.findFirst({ where: { problemId: params.problemId, inputSha256, status: { in: ACTIVE_CANDIDATE_STATUSES } } })
+    if (duplicate) return { candidate: duplicate, duplicate: true as const }
+    const [count, size, latest] = await Promise.all([
+      tx.testcaseCandidate.count({ where: { problemId: params.problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } } }),
+      tx.testcaseCandidate.aggregate({ where: { problemId: params.problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } }, _sum: { inputSize: true, outputSize: true } }),
+      tx.problem.findUnique({ where: { id: params.problemId }, select: { latestTestSetRevisionId: true } }),
+    ])
+    const bytes = Number(size._sum.inputSize || 0) + Number(size._sum.outputSize || 0)
+    if (count >= EVALUATION_LIMITS.maxHotCandidates || bytes + params.input.length + params.output.length > EVALUATION_LIMITS.maxHotBytes) throw new EvaluationBudgetError(429, 'CANDIDATE_POOL_CAPACITY_EXCEEDED', '该题候选池已达到硬上限，请等待低价值候选淘汰')
+    const canonicalDuplicate = latest?.latestTestSetRevisionId ? await tx.testdataObject.findFirst({ where: { problemId: params.problemId, sha256: inputSha256, OR: [{ AcmInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }, { GroupInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }] } }) : null
+    if (canonicalDuplicate) throw new EvaluationBudgetError(409, 'CANDIDATE_CANONICAL_DUPLICATE', '候选输入已存在于正式测试版本')
+    const candidate = await tx.testcaseCandidate.create({ data: {
+      id: params.id || crypto.randomUUID(), problemId: params.problemId, hackAttemptId: params.hackAttemptId || null,
+      source: params.source, targetRole: params.targetRole, status: params.status || 'ADMITTED', evaluationStage: params.evaluationStage || 'awaiting_evaluator',
+      baseTestSetRevisionId: params.baseTestSetRevisionId || null, inputObjectId: inputObject.id, outputObjectId: outputObject.id,
+      inputSha256, outputSha256, inputSize: params.input.length, outputSize: params.output.length,
+      inputFileName: params.inputFileName, outputFileName: params.outputFileName,
+      affectedSubtaskIds: params.affectedSubtaskIds?.length ? JSON.stringify(params.affectedSubtaskIds) : null,
+      standardVersionId: params.standardVersionId || null, validatorVersionId: params.validatorVersionId || null,
+      classifierVersionId: params.classifierVersionId || null, generatorVersionId: params.generatorVersionId || null, provenance: params.provenance as any,
+      semanticFingerprint: semanticInputFingerprint(params.input), featureFingerprint: JSON.stringify({ features: genericInputFeatures(params.input) }), createdBy: params.createdBy,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
+    } })
+    return { candidate, duplicate: false as const }
+  })
+  if (result.duplicate) return result
+  const candidate = result.candidate
+  try {
+    await Promise.all([
+      putReferencedBlob({ content: params.input, ownerType: 'testcase_candidate', ownerId: candidate.id, role: 'input', contentType: 'application/octet-stream' }),
+      putReferencedBlob({ content: params.output, ownerType: 'testcase_candidate', ownerId: candidate.id, role: 'answer', contentType: 'application/octet-stream' }),
+    ])
+  } catch (error) {
+    await prisma.testcaseCandidate.updateMany({ where: { id: candidate.id, status: { in: ACTIVE_CANDIDATE_STATUSES } }, data: { status: 'FAILED', evaluationStage: 'blob_persist_failed', message: 'Candidate 内容引用保存失败' } }).catch(() => undefined)
+    throw error
+  }
+  return { candidate, duplicate: false as const }
 }
 
 export async function createValidatedHackCandidate(params: {

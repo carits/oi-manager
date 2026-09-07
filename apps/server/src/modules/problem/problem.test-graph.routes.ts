@@ -8,6 +8,7 @@ import {
   registerProblemTestcases,
   saveProblemTestGraph,
 } from './application/problem-route.service'
+import { setProblemTestcaseProtection } from './problem.test-graph.service'
 
 export const problemTestGraphRouter = Router()
 
@@ -43,6 +44,14 @@ problemTestGraphRouter.post('/:id/test-graph/testcases', authenticate, asyncHand
     })
   }
   res.json({ success: true, data: result.workspace, message: `已注册 ${result.registeredCount} 个测试点` })
+}))
+
+problemTestGraphRouter.patch('/:id/test-graph/testcases/:testcaseId/protection', authenticate, asyncHandler(async (req, res) => {
+  const problem = await findManageableProblem(req.user!, req.params.id)
+  if (!problem) return res.status(404).json({ success: false, message: '题目不存在' })
+  const result = await setProblemTestcaseProtection({ problemId: problem.id, testcaseId: req.params.testcaseId, isProtected: req.body?.isProtected === true, reason: req.body?.reason, userId: req.user!.userId })
+  if (!result.ok) return res.status(result.code === 'TESTCASE_NOT_FOUND' ? 404 : 422).json({ success: false, code: result.code, message: result.issues.join('；') })
+  res.json({ success: true, data: result.testcase, message: result.testcase.isProtected ? '测试点已设为永久保护' : '已解除测试点永久保护' })
 }))
 
 problemTestGraphRouter.put('/:id/test-graph', authenticate, asyncHandler(async (req, res) => {

@@ -13,6 +13,7 @@ import { logger } from '../../lib/logger'
 import { canModifyProblem } from './problem.access'
 import { validateHackCppSource } from './problem.hack.service'
 import { refreshAdmittedCandidateStages } from './problem.contribution-readiness.service'
+import { queueAwaitingCandidateEvaluations } from './problem.candidate-evaluation.service'
 
 export { JUDGE_PROGRAM_KINDS }
 export class JudgeProgramError extends Error { constructor(public statusCode: number, public code: string, message: string, public data?: unknown) { super(message) } }
@@ -429,6 +430,9 @@ export async function updateJudgeProgram(input: { user: JwtPayload; problemId: s
     return result
   })
   if (selected) logger.audit('judge_program_version_activated', { userId: input.user.userId, role: input.user.role, problemId: input.problemId, programId: program.id, versionId: selected.id, kind: program.kind })
-  if (program.kind === 'classifier' || program.kind === 'validator' || program.kind === 'standard') await refreshAdmittedCandidateStages(input.problemId)
+  if (program.kind === 'classifier' || program.kind === 'validator' || program.kind === 'standard') {
+    await refreshAdmittedCandidateStages(input.problemId)
+    await queueAwaitingCandidateEvaluations(input.problemId)
+  }
   return updated
 }

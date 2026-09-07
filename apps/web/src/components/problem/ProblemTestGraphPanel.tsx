@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Copy, Download, GripVertical, History, Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { ConfirmDialog, DetailDialog } from '@/components/ui/Dialogs'
+import { ConfirmDialog, DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { Input, SearchField, Select } from '@/components/ui/FormControls'
 import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemTestGraphPanel.unified.module.css'
+
+const MAX_SUBTASKS = 15
+const MAX_CASES_PER_SUBTASK = 10
 
 type TestcaseRef = {
   testcaseId: string
@@ -40,6 +43,9 @@ type TestcasePoolItem = {
   output: string
   source: string
   enabled: boolean
+  isProtected: boolean
+  protectionReason?: string | null
+  protectedUntil?: string | null
   assignments: Array<{ subtaskId: number; groupId: string; groupKey: string; groupName: string; groupKind: string }>
 }
 type DetectedPair = { inputFileId: string; outputFileId: string; input: string; output: string; testcaseId: string | null }
@@ -76,6 +82,7 @@ function validateGraph(subtasks: Subtask[]): ValidationIssue[] {
   const ids = new Set<number>()
   const add = (path: string, message: string, subtaskId?: number, groupKey?: string) => issues.push({ path, message, subtaskId, groupKey })
   if (!subtasks.length) add('subtasks', '至少需要一个 Subtask')
+  if (subtasks.length > MAX_SUBTASKS) add('subtasks', `每道 OI 题最多允许 ${MAX_SUBTASKS} 个 Subtask`)
   let total = 0
   for (const subtask of subtasks) {
     if (!Number.isInteger(subtask.id) || subtask.id <= 0 || ids.has(subtask.id)) add('subtask.id', `Subtask ID ${subtask.id || '—'} 无效或重复`, subtask.id)
@@ -88,14 +95,17 @@ function validateGraph(subtasks: Subtask[]): ValidationIssue[] {
     if (gates.length !== 1) add('subtask.groups', `Subtask ${subtask.id} 必须恰好有一个 Hack Gate`, subtask.id)
     if (official.reduce((sum, group) => sum + Number(group.score || 0), 0) !== Number(subtask.score)) add('subtask.groups', `Subtask ${subtask.id} 的 Official Group 分值之和必须等于 ${subtask.score}`, subtask.id)
     const keys = new Set<string>()
+    const uniqueCases = new Set<string>()
     for (const group of subtask.groups) {
       if (!group.key || keys.has(group.key)) add('group.key', `Subtask ${subtask.id} 存在空或重复 Group key`, subtask.id, group.key)
       keys.add(group.key)
       if (!group.name.trim()) add('group.name', 'Group 名称不能为空', subtask.id, group.key)
       if (group.kind === 'official' && !group.cases.length) add('group.cases', `${group.name || group.key} 至少需要一个 Testcase`, subtask.id, group.key)
       const caseIds = group.cases.map(item => item.testcaseId)
+      caseIds.forEach(id => uniqueCases.add(id))
       if (new Set(caseIds).size !== caseIds.length) add('group.cases', `${group.name || group.key} 存在重复 Testcase`, subtask.id, group.key)
     }
+    if (uniqueCases.size > MAX_CASES_PER_SUBTASK) add('subtask.groups', `Subtask ${subtask.id} 包含 ${uniqueCases.size} 个唯一正式测试点，最多允许 ${MAX_CASES_PER_SUBTASK} 个`, subtask.id)
   }
   if (total !== 100) add('subtasks.score', `Subtask 总分为 ${total}，必须为 100`)
   for (const subtask of subtasks) for (const dependency of subtask.if || []) {
@@ -151,6 +161,9 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const [revisionHistory, setRevisionHistory] = useState<RevisionSummary[]>([])
   const [revisionDetail, setRevisionDetail] = useState<RevisionDetail | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [protectingTestcase, setProtectingTestcase] = useState<TestcasePoolItem | null>(null)
+  const [protectionReason, setProtectionReason] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -226,6 +239,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
         revision: graph.revision,
         expectedLatestRevisionId: graph.revisionId,
         subtasks,
+        overrideReason: overrideReason.trim() || undefined,
       })
       if (!result.success || !result.data) {
         if (result.code === 'TEST_GRAPH_STALE') toast.error('测试图已被其他管理员修改；当前草稿仍保留，请导出或刷新后重新调整')
@@ -233,11 +247,13 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
         return
       }
       replaceGraphData(result.data)
+      setOverrideReason('')
       toast.success(`已发布正式测试版本 R${result.data.revision}`)
     } finally { setSaving(false) }
   }
 
   const addSubtask = () => {
+    if (subtasks.length >= MAX_SUBTASKS) return toast.error(`每道 OI 题最多允许 ${MAX_SUBTASKS} 个 Subtask`)
     const id = subtasks.length ? Math.max(...subtasks.map(item => item.id)) + 1 : 1
     const officialKey = `official-${id}-${Date.now()}`
     const next: Subtask = { id, score: 0, if: [], groups: [
@@ -250,6 +266,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   }
 
   const copySubtask = (source: Subtask) => {
+    if (subtasks.length >= MAX_SUBTASKS) return toast.error(`每道 OI 题最多允许 ${MAX_SUBTASKS} 个 Subtask`)
     const id = subtasks.length ? Math.max(...subtasks.map(item => item.id)) + 1 : 1
     const next: Subtask = {
       dbId: undefined, id, score: source.score, if: [...source.if],
@@ -294,8 +311,27 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
   const assignSelected = () => {
     if (!selectedGroup || selectedGroup.kind !== 'official' || !selectedTestcaseIds.size || !selectedSubtask) return
     const additions = (graph?.testcases || []).filter(item => selectedTestcaseIds.has(item.id) && !selectedGroup.cases.some(current => current.testcaseId === item.id)).map(item => ({ testcaseId: item.id, input: item.input, output: item.output, source: item.source }))
+    const currentUnique = new Set(selectedSubtask.groups.flatMap(group => group.cases.map(item => item.testcaseId)))
+    const newUnique = additions.filter(item => !currentUnique.has(item.testcaseId))
+    if (currentUnique.size + newUnique.length > MAX_CASES_PER_SUBTASK) return toast.error(`Subtask ${selectedSubtask.id} 最多允许 ${MAX_CASES_PER_SUBTASK} 个唯一测试点；满额后请通过 Candidate Selector 替换`)
     updateGroup(selectedGroup.key, group => ({ ...group, cases: [...group.cases, ...additions] }))
     setSelectedTestcaseIds(new Set())
+  }
+
+  const toggleProtection = async (item: TestcasePoolItem) => {
+    if (!item.isProtected) { setProtectingTestcase(item); setProtectionReason(''); return }
+    const reason = ''
+    const result = await apiClient.patch(`/api/problems/${problemId}/test-graph/testcases/${item.id}/protection`, { isProtected: !item.isProtected, reason })
+    if (!result.success) return toast.error(result.message || '测试点保护状态更新失败')
+    toast.success(result.message || '保护状态已更新')
+    await refreshPool()
+  }
+  const protectTestcase = async () => {
+    if (!protectingTestcase || protectionReason.trim().length < 5) return
+    const result = await apiClient.patch(`/api/problems/${problemId}/test-graph/testcases/${protectingTestcase.id}/protection`, { isProtected: true, reason: protectionReason.trim() })
+    if (!result.success) return toast.error(result.message || '测试点保护状态更新失败')
+    toast.success(result.message || '测试点已设为永久保护')
+    setProtectingTestcase(null); setProtectionReason(''); await refreshPool()
   }
 
   const registerPairs = async (pairs: Array<{ inputFileId: string; outputFileId: string }>) => {
@@ -382,12 +418,13 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
       <div className={styles.toolbarTitle}><strong>数据与分组</strong><span>正式版本 R{graph.revision}</span><span>{graph.source === 'hack' ? 'Hack 自动晋升' : graph.source === 'mode_transition' ? '模式迁移' : '管理员发布'}</span><span className={totalScore === 100 ? styles.scoreOk : styles.scoreError}>总分 {totalScore}/100</span><span className={issues.length ? styles.issueCount : styles.ready}>{issues.length ? `${issues.length} 个问题` : '配置有效'}</span></div>
       <div className={styles.toolbarActions}><label className={styles.uploadButton}><Upload size={16} aria-hidden="true" />{uploading ? '上传中…' : '上传数据'}<Input ref={uploadRef} type="file" multiple accept=".in,.out,.ans,.txt,.yaml,.yml,.zip" disabled={uploading} onChange={event => handleUpload(Array.from(event.target.files || []))} /></label><Button variant="outline" icon={<History size={16} />} onClick={openHistory}>历史版本</Button><Button variant="outline" icon={<RefreshCw size={16} />} disabled={saving} onClick={load}>重新加载</Button><Button variant="primary" icon={<Save size={16} />} loading={saving} disabled={!dirty || issues.length > 0} onClick={save}>发布 R{graph.revision + 1}</Button></div>
     </header>
+    <div className={styles.poolToolbar}><Input value={overrideReason} onChange={event => setOverrideReason(event.target.value)} placeholder="仅在 Wrong Corpus 不足且需超出 3 个基础核心点时填写强制发布原因（至少 10 字）" aria-label="强制发布原因" /></div>
     {issues.length > 0 && <div className={styles.validationBar}>{issues.slice(0, 4).map(issue => <Button variant="text" key={`${issue.path}-${issue.message}`} onClick={() => { if (issue.subtaskId) setSelectedSubtaskId(issue.subtaskId); if (issue.groupKey) setSelectedGroupKey(issue.groupKey) }}>{issue.message}</Button>)}{issues.length > 4 && <span>另有 {issues.length - 4} 个问题</span>}</div>}
 
     <div className={styles.workspace}>
       <section className={styles.column} aria-label="Subtask 列表">
-        <div className={styles.columnHeader}><div><strong>Subtask</strong><span>{subtasks.length} 项</span></div><Button variant="outline" size="sm" icon={<Plus size={15} />} onClick={addSubtask}>添加</Button></div>
-        <div className={styles.columnBody}>{subtasks.map((subtask, index) => <article key={`${subtask.id}-${index}`} draggable onDragStart={() => setDraggedSubtask(index)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedSubtask != null) setSubtasks(current => moveItem(current, draggedSubtask, index)); setDraggedSubtask(null) }} className={`${styles.subtaskCard} ${selectedSubtaskId === subtask.id ? styles.selectedCard : ''}`} onClick={() => setSelectedSubtaskId(subtask.id)}><div className={styles.cardTitle}><GripVertical size={15} aria-hidden="true" /><strong>Subtask {subtask.id}</strong><span>{subtask.score} 分</span></div><div className={styles.cardMeta}>{subtask.groups.filter(group => group.kind === 'official').length} Groups · {new Set(subtask.groups.flatMap(group => group.cases.map(item => item.testcaseId))).size} Testcases</div><div className={styles.cardMeta}>{subtask.if.length ? `依赖 S${subtask.if.join(', S')}` : '无依赖'}</div><div className={styles.cardActions}><Button variant="text" iconOnly aria-label="上移 Subtask" disabled={index === 0} onClick={event => { event.stopPropagation(); setSubtasks(current => moveItem(current, index, index - 1)) }}><ArrowUp size={15} /></Button><Button variant="text" iconOnly aria-label="下移 Subtask" disabled={index === subtasks.length - 1} onClick={event => { event.stopPropagation(); setSubtasks(current => moveItem(current, index, index + 1)) }}><ArrowDown size={15} /></Button><Button variant="text" iconOnly aria-label="复制 Subtask" onClick={event => { event.stopPropagation(); copySubtask(subtask) }}><Copy size={15} /></Button><Button variant="text" iconOnly aria-label="删除 Subtask" onClick={event => { event.stopPropagation(); deleteSubtask(subtask.id) }}><Trash2 size={15} /></Button></div></article>)}</div>
+        <div className={styles.columnHeader}><div><strong>Subtask</strong><span>{subtasks.length}/{MAX_SUBTASKS} 项</span></div><Button variant="outline" size="sm" icon={<Plus size={15} />} disabled={subtasks.length >= MAX_SUBTASKS} onClick={addSubtask}>添加</Button></div>
+        <div className={styles.columnBody}>{subtasks.map((subtask, index) => <article key={`${subtask.id}-${index}`} draggable onDragStart={() => setDraggedSubtask(index)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedSubtask != null) setSubtasks(current => moveItem(current, draggedSubtask, index)); setDraggedSubtask(null) }} className={`${styles.subtaskCard} ${selectedSubtaskId === subtask.id ? styles.selectedCard : ''}`} onClick={() => setSelectedSubtaskId(subtask.id)}><div className={styles.cardTitle}><GripVertical size={15} aria-hidden="true" /><strong>Subtask {subtask.id}</strong><span>{subtask.score} 分</span></div><div className={styles.cardMeta}>{subtask.groups.filter(group => group.kind === 'official').length} Groups · {new Set(subtask.groups.flatMap(group => group.cases.map(item => item.testcaseId))).size}/{MAX_CASES_PER_SUBTASK} Testcases</div><div className={styles.cardMeta}>{subtask.if.length ? `依赖 S${subtask.if.join(', S')}` : '无依赖'}</div><div className={styles.cardActions}><Button variant="text" iconOnly aria-label="上移 Subtask" disabled={index === 0} onClick={event => { event.stopPropagation(); setSubtasks(current => moveItem(current, index, index - 1)) }}><ArrowUp size={15} /></Button><Button variant="text" iconOnly aria-label="下移 Subtask" disabled={index === subtasks.length - 1} onClick={event => { event.stopPropagation(); setSubtasks(current => moveItem(current, index, index + 1)) }}><ArrowDown size={15} /></Button><Button variant="text" iconOnly aria-label="复制 Subtask" disabled={subtasks.length >= MAX_SUBTASKS} onClick={event => { event.stopPropagation(); copySubtask(subtask) }}><Copy size={15} /></Button><Button variant="text" iconOnly aria-label="删除 Subtask" onClick={event => { event.stopPropagation(); deleteSubtask(subtask.id) }}><Trash2 size={15} /></Button></div></article>)}</div>
       </section>
 
       <section className={styles.column} aria-label="Group 配置">
@@ -401,7 +438,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
       <section className={styles.column} aria-label="Testcase 测试点池">
         <div className={styles.columnHeader}><div><strong>Testcase 池</strong><span>{graph.testcases.length} 已注册</span></div>{unregisteredPairs.length > 0 && <Button variant="outline" size="sm" onClick={() => registerPairs(unregisteredPairs)}>注册全部 ({unregisteredPairs.length})</Button>}</div>
         <div className={styles.poolToolbar}><SearchField value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索输入或答案文件" /><Button variant="primary" size="sm" disabled={!selectedTestcaseIds.size || selectedGroup?.kind !== 'official'} onClick={assignSelected}>加入当前 Group ({selectedTestcaseIds.size})</Button>{unregisteredPairs.length > 0 && <div className={styles.unregistered}><strong>待注册输入/答案对</strong>{unregisteredPairs.slice(0, 8).map(pair => <span key={`${pair.inputFileId}-${pair.outputFileId}`}>{pair.input} → {pair.output}</span>)}{unregisteredPairs.length > 8 && <small>另有 {unregisteredPairs.length - 8} 对</small>}</div>}{graph.unmatchedFiles.length > 0 && <div className={styles.unmatched}>未匹配：{graph.unmatchedFiles.map(file => file.filename).join('、')}</div>}</div>
-        <div className={styles.columnBody}>{visibleTestcases.map(item => <label key={item.id} className={styles.testcaseCard}><Input type="checkbox" checked={selectedTestcaseIds.has(item.id)} onChange={event => setSelectedTestcaseIds(current => { const next = new Set(current); event.target.checked ? next.add(item.id) : next.delete(item.id); return next })} /><div><strong>{item.input}</strong><span>→ {item.output}</span><small>{item.source === 'hack' ? 'Hack 数据' : item.assignments.length ? item.assignments.map(assignment => `S${assignment.subtaskId}/${assignment.groupName}`).join(' · ') : '尚未分组'}</small></div></label>)}</div>
+        <div className={styles.columnBody}>{visibleTestcases.map(item => <div key={item.id} className={styles.testcaseCard}><Input type="checkbox" aria-label={`选择 ${item.input}`} checked={selectedTestcaseIds.has(item.id)} onChange={event => setSelectedTestcaseIds(current => { const next = new Set(current); event.target.checked ? next.add(item.id) : next.delete(item.id); return next })} /><div><strong>{item.input}{item.isProtected ? ' · 永久保护' : item.protectedUntil ? ' · 保护期内' : ''}</strong><span>→ {item.output}</span><small>{item.source === 'hack' ? 'Hack 数据' : item.assignments.length ? item.assignments.map(assignment => `S${assignment.subtaskId}/${assignment.groupName}`).join(' · ') : '尚未分组'}</small>{item.protectionReason && <small>{item.protectionReason}</small>}</div><Button variant="text" size="sm" onClick={() => toggleProtection(item)}>{item.isProtected ? '解除保护' : '永久保护'}</Button></div>)}</div>
         <div className={styles.registration}><div className={styles.sectionLabel}><strong>手动注册测试点</strong><span>用于无法按同名自动配对的文件</span></div><Select value={manualInputId} onChange={event => setManualInputId(event.target.value)}><option value="">选择输入文件</option>{graph.files.filter(file => file.filename.toLowerCase().endsWith('.in')).map(file => <option key={file.id} value={file.id}>{file.filename}</option>)}</Select><Select value={manualOutputId} onChange={event => setManualOutputId(event.target.value)}><option value="">选择答案文件</option>{graph.files.filter(file => /\.(out|ans)$/i.test(file.filename)).map(file => <option key={file.id} value={file.id}>{file.filename}</option>)}</Select><Button variant="outline" disabled={!manualInputId || !manualOutputId} onClick={() => registerPairs([{ inputFileId: manualInputId, outputFileId: manualOutputId }])}>注册配对</Button></div>
       </section>
     </div>
@@ -410,6 +447,7 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
     <ConfirmDialog isOpen={Boolean(replacementFiles)} onClose={() => setReplacementFiles(null)} onConfirm={replaceUpload} title="替换同名测试数据？" message="替换只更新当前编辑池；已发布 Revision 使用不可变内容对象，不会被覆盖。重新发布后新内容才进入下一正式版本。" confirmText="确认替换" danger loading={uploading} />
     <ConfirmDialog isOpen={Boolean(deleteFile)} onClose={() => setDeleteFile(null)} onConfirm={removeFile} title="删除测试数据文件？" message={deleteFile ? `确定删除 ${deleteFile.filename}？已被 Official Group 或 Hack Gate 使用的文件会由服务端拒绝删除。` : ''} confirmText="删除" danger />
+    <FormDialog isOpen={Boolean(protectingTestcase)} onClose={() => { setProtectingTestcase(null); setProtectionReason('') }} onSubmit={protectTestcase} title="永久保护测试点" description={protectingTestcase ? `${protectingTestcase.input} → ${protectingTestcase.output}` : ''} submitText="确认保护" dirty={Boolean(protectionReason)}><label>保护原因<Input value={protectionReason} onChange={event => setProtectionReason(event.target.value)} placeholder="至少 5 字，例如：覆盖题目唯一边界结构" /></label></FormDialog>
     <DetailDialog isOpen={historyOpen} onClose={() => setHistoryOpen(false)} title="正式测试版本历史" description="历史 Revision 只读；查看不会改变当前题目或任何活动。" size="wide">
       <div className={styles.historyLayout}>
         <div className={styles.historyList}>{historyLoading && !revisionHistory.length ? <p>正在加载…</p> : revisionHistory.map(revision => <Button key={revision.id} variant={revisionDetail?.id === revision.id ? 'primary' : 'outline'} onClick={() => inspectRevision(revision)}><span>R{revision.revisionNumber} · {revision.mode.toUpperCase()} · {revision.source}</span><small>{new Date(revision.createdAt).toLocaleString()}</small></Button>)}</div>

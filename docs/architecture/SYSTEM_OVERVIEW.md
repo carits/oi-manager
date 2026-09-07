@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-08-28
+last_verified: 2026-09-08
 source_of_truth: application entrypoints, deploy/systemd, runtime audit, Prisma schema
 ---
 
@@ -79,7 +79,7 @@ Submission (用户提交意图，基本不可变)
 
 - `ProblemTestSetRevision` 是不可变评测数据版本，活动固定 Revision，题库 Practice 使用最新版。
 - TestSet Revision 引用内容寻址 `TestdataObject`；Revision 目录只保存确定性 manifest/链接。
-- 有效 Hack 通过 Validator/Classifier/STD/双评测后先形成不可变 `TestcaseCandidate`，再由统一晋升事务创建下一 Revision；重复、陈旧或失败候选均保留可审计终态，且不传播到既有活动。
+- 有效 Hack 通过 Validator/Classifier/STD/双评测后只形成技术有效的 `TestcaseCandidate`；Candidate 还需经过私有错误语料 L1/L2/Holdout 评估和逐 Subtask 集合 Selector，入选后才由统一晋升事务创建下一 Revision。重复、低边际价值、等待替换、陈旧或失败候选均保留可审计终态，且不传播到既有活动。
 - BlobStore application port 将本地内容寻址实现与未来 OSS/S3/MinIO 隔离；外部存储上线前本地实现仍是事实源。
 
 ## 后台任务边界

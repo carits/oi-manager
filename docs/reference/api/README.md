@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-07
+last_verified: 2026-09-08
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -85,12 +85,13 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/candidates/mine` | 贡献者读取自己的 Candidate 粗粒度阶段与结论 |
 | `GET` | `/api/problems/:id/candidates/:candidateId` | 本人或题目管理者读取 Candidate；普通用户不返回 Kill/隐藏 Feature |
 | `POST` | `/api/problems/:id/candidates/:candidateId/cancel` | 取消尚未开始评估的自己的 Candidate |
-| `GET` | `/api/problems/:id/candidate-pool` | 题目管理者读取有界 Candidate Pool、容量和策略 |
+| `GET` | `/api/problems/:id/candidate-pool` | 题目管理者读取有界 Candidate Pool、逐 Subtask readiness、容量、策略和成员替换审计 |
 | `PUT` | `/api/problems/:id/candidate-policy` | 题目管理者以 revision CAS 更新 observe/auto 与容量策略 |
 | `GET` | `/api/problems/:id/wrong-corpus` | 题目管理者读取私有错误语料的聚类汇总，不返回历史源码 |
 | `POST` | `/api/problems/:id/wrong-corpus/rebuild` | 从本地错误/部分分提交幂等重建 bootstrap Corpus |
 | `GET` | `/api/problems/:id/selector-runs` | 题目管理者读取 Selector 运行历史 |
-| `POST` | `/api/problems/:id/selector-runs/preview` | 预览当前有界池的去重与价值选择结果，不发布 |
+| `POST` | `/api/problems/:id/selector-runs/preview` | 对至多 25 个待选 Candidate 执行相对当前正式 Revision 的真实 dry-run，不创建 Selection Run 或 Revision |
+| `POST` | `/api/problems/:id/canonical-emergency-publish` | 题目管理者填写原因后紧急发布 Hack Gate Candidate；不能绕过结构、保护、Official Core 或 Revision CAS |
 | `GET` | `/api/problems/:id/feature-definitions` | 读取题目 Feature 注册表 |
 | `PUT` | `/api/problems/:id/feature-definitions` | 保存最多 128 个声明式 Feature |
 | `GET` | `/api/problems/:id/subtask-rules` | 读取 OI 声明式 Subtask Rule |
@@ -121,6 +122,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/problems/:id/test-graph` | 校验并保存 Subtask/Group/Testcase 测试图 |
 | `POST` | `/api/problems/:id/test-graph/migrate` | 题目管理者显式检查并幂等迁移单题旧 OI 配置 |
 | `POST` | `/api/problems/:id/test-graph/testcases` | 将当前题目的输入与答案文件配对注册为稳定 Testcase |
+| `PATCH` | `/api/problems/:id/test-graph/testcases/:testcaseId/protection` | 题目管理者填写原因后永久保护测试点；写入平台审计 |
 | `GET` | `/api/problems/:id/test-set-revisions` | 题目管理者列出正式测试版本历史 |
 | `GET` | `/api/problems/:id/test-set-revisions/:revisionId` | 读取单个不可变 Revision 和只读 Judge 投影 |
 | `POST` | `/api/problems/:id/judge-mode-transition` | 显式创建 ACM/OI 模式转换 Revision 并关闭 Hack |

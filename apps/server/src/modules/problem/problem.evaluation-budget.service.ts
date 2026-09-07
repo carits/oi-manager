@@ -14,7 +14,7 @@ export const EVALUATION_LIMITS = Object.freeze({
   maxTopK: 1_000,
   maxCorpusClusters: 512,
   maxFeatures: 128,
-  maxSubtasks: 64,
+  maxSubtasks: 15,
   maxRevisions: 10_000,
 })
 

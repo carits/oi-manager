@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 125 |
+| Prisma models | 126 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
 | Module route adapters | 44 |
 | systemd units | 8 |
-| Referenced environment keys | 451 |
+| Referenced environment keys | 453 |
 
 ## HTTP adapter ownership
 
@@ -201,6 +201,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TeamOperationLog`
 - `TeamProblemList`
 - `TestcaseCandidate`
+- `TestcaseMembershipRetirement`
 - `TestdataFile`
 - `TestdataObject`
 - `Training`
@@ -397,6 +398,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ENABLE_LOG_ARCHIVE`
 - `ENABLE_MAINTENANCE_API`
 - `ENV_FILE`
+- `EVALUATION_LIMITS`
 - `EXECUTOR_INSTANCE`
 - `EXPECTED_BUILD_ID`
 - `EXPECTED_DATABASE_SHA256`
@@ -551,6 +553,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `NEXT_PUBLIC_API_URL`
 - `NODE_ENV`
 - `OI_API_BASE`
+- `OI_CANDIDATE_LIMITS`
 - `OI_DATA_ROOT`
 - `OI_DEPENDENCY_WAIT_SECONDS`
 - `OI_MANAGER_ROOT`

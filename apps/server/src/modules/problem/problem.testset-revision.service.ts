@@ -5,6 +5,7 @@ import yaml from 'js-yaml'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import { getTestdataBlobStore, problemBlobKey } from '../storage/blob-store'
+import { validateOiFormalLimits } from './problem.oi-candidate-policy'
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 
@@ -47,6 +48,29 @@ export class TestSetRevisionConflict extends Error {
   constructor() {
     super('题目测试版本已变化，请刷新后重试')
   }
+}
+
+export class TestSetRevisionValidationError extends Error {
+  statusCode = 422
+  code: string
+  issues: ReturnType<typeof validateOiFormalLimits>
+  constructor(issues: ReturnType<typeof validateOiFormalLimits>) {
+    super(issues[0]?.message || '正式测试版本不符合约束')
+    this.code = issues[0]?.code || 'INVALID_TEST_SET_REVISION'
+    this.issues = issues
+  }
+}
+
+export class TestSetRevisionLimitError extends Error {
+  statusCode = 409
+  code = 'TEST_SET_REVISION_LIMIT_REACHED'
+  constructor() { super('该题已达到 10000 个正式测试版本的硬上限，必须由平台管理员先完成审计') }
+}
+
+export class TestSetCaseLimitError extends Error {
+  statusCode = 422
+  code = 'ACM_CASE_LIMIT_REACHED'
+  constructor() { super('ACM 正式测试版本最多允许 100 个唯一测试点；满额后必须通过 Selector 替换') }
 }
 
 function problemRoot(problemId: string) {
@@ -381,6 +405,12 @@ export async function publishTestSetRevision(params: {
   spec: TestSetRevisionSpec
   transactionHook?: (tx: Prisma.TransactionClient, revision: { id: string; revisionNumber: number; judgeConfig: string }) => Promise<void>
 }) {
+  if (params.spec.mode === 'acm') {
+    const uniqueCases = new Set((params.spec.cases || []).map(item => item.testcaseId || `${item.inputObjectId}\0${item.outputObjectId}`))
+    if (uniqueCases.size > 100) throw new TestSetCaseLimitError()
+  }
+  const formalLimitIssues = validateOiFormalLimits(params.spec)
+  if (formalLimitIssues.length) throw new TestSetRevisionValidationError(formalLimitIssues)
   const revisionId = crypto.randomUUID()
   const judgeConfig = projectRevisionConfig(params.baseConfigText, params.spec)
   const graphHash = stableHash(params.spec)
@@ -392,6 +422,7 @@ export async function publishTestSetRevision(params: {
       const problem = await tx.problem.findUnique({ where: { id: params.problemId }, select: { latestTestSetRevisionId: true } })
       if (!problem || problem.latestTestSetRevisionId !== params.expectedLatestRevisionId) throw new TestSetRevisionConflict()
       const last = await tx.problemTestSetRevision.aggregate({ where: { problemId: params.problemId }, _max: { revisionNumber: true } })
+      if ((last._max.revisionNumber || 0) >= 10_000) throw new TestSetRevisionLimitError()
       const revisionNumber = (last._max.revisionNumber || 0) + 1
       await tx.problemTestSetRevision.create({
         data: {

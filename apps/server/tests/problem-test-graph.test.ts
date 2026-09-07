@@ -54,4 +54,28 @@ describe('OI Test Graph validation', () => {
     expect(errors.some(error => error.message.includes('恰好有一个 Hack Gate'))).toBe(true)
     expect(errors.some(error => error.message.includes('key 不能为空或重复'))).toBe(true)
   })
+
+  it('limits OI problems to 15 subtasks', () => {
+    const graph = validGraph()
+    graph.subtasks = Array.from({ length: 16 }, (_, index) => ({
+      ...graph.subtasks[0],
+      id: index + 1,
+      score: index === 0 ? 100 : 0,
+      groups: graph.subtasks[0].groups.map(group => ({ ...group, key: group.kind === 'official' ? `official-${index + 1}` : 'hack-gate', score: group.kind === 'official' ? (index === 0 ? 100 : 0) : 0 })),
+    }))
+    expect(validateTestGraphInput(graph).some(error => error.message.includes('最多允许 15 个 Subtask'))).toBe(true)
+  })
+
+  it('counts unique testcases across Official Groups and Hack Gate toward the limit', () => {
+    const graph = validGraph()
+    graph.subtasks[0].groups = [
+      { key: 'official-1', name: 'A', kind: 'official', score: 50, type: 'min', cases: Array.from({ length: 6 }, (_, index) => ({ testcaseId: `case-${index + 1}` })) },
+      { key: 'official-2', name: 'B', kind: 'official', score: 50, type: 'min', cases: Array.from({ length: 5 }, (_, index) => ({ testcaseId: `case-${index + 6}` })) },
+      { key: 'hack-gate', name: 'Hack', kind: 'hack_gate', score: 0, type: 'min', cases: [{ testcaseId: 'case-1' }] },
+    ]
+    expect(validateTestGraphInput(graph).some(error => error.message.includes('11 个唯一正式测试点'))).toBe(true)
+
+    graph.subtasks[0].groups[1].cases = Array.from({ length: 4 }, (_, index) => ({ testcaseId: `case-${index + 6}` }))
+    expect(validateTestGraphInput(graph).some(error => error.message.includes('唯一正式测试点'))).toBe(false)
+  })
 })

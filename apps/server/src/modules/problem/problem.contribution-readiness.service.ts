@@ -2,6 +2,8 @@ import type { JwtPayload } from '@oi-manager/shared'
 import { prisma } from '../../prisma'
 import { canModifyProblem, canViewProblem } from './problem.access'
 import { parseJudgeConfig, resolveJudgeMode } from './problem.hack.service'
+import { parseSubtaskIds, resolveCorpusMode } from './problem.oi-candidate-policy'
+import { resolveSubtaskReadiness } from './problem.subtask-readiness.service'
 
 export type ContributionAssetStatus = 'none' | 'draft' | 'verifying' | 'failed' | 'ready' | 'active'
 
@@ -83,13 +85,14 @@ export async function resolveContributionContext(user: JwtPayload, problemId: st
 
   const judgeConfig = problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || ''
   const mode = resolveJudgeMode(parseJudgeConfig(judgeConfig))
-  const [standardProgram, validatorProgram, classifierProgram, hackConfig, corpus, validatorSpec] = await Promise.all([
+  const [standardProgram, validatorProgram, classifierProgram, hackConfig, corpus, validatorSpec, subtaskReadiness] = await Promise.all([
     resolveActiveProgramVersion(problemId, 'standard'),
     resolveActiveProgramVersion(problemId, 'validator'),
     resolveActiveProgramVersion(problemId, 'classifier'),
     prisma.problemHackConfig.findUnique({ where: { problemId }, select: { enabled: true, standardProgramVersionId: true, validatorProgramVersionId: true, classifierProgramVersionId: true } }),
     prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' }, orderBy: { revisionNumber: 'desc' } }),
     prisma.validatorSpec.findFirst({ where: { problemId }, orderBy: { versionNumber: 'desc' }, select: { status: true, compileStatus: true } }),
+    mode === 'oi' ? resolveSubtaskReadiness(problemId, problem.latestTestSetRevisionId) : Promise.resolve([]),
   ])
   const [standard, validatorBase, classifier] = await Promise.all([
     assetStatus(problemId, 'standard', standardProgram),
@@ -108,12 +111,15 @@ export async function resolveContributionContext(user: JwtPayload, problemId: st
   if (!canManage && problem.status !== 'published') blockers.push({ code: 'CONTRIBUTION_NOT_AVAILABLE', message: '当前题目尚未发布，暂不能贡献数据' })
   if (!standardProgram) blockers.push({ code: 'STD_NOT_ACTIVE', message: '当前题目未配置已激活的标准程序 STD' })
   if (!validatorProgram) blockers.push({ code: 'VALIDATOR_NOT_ACTIVE', message: '当前题目未配置已激活的 Validator' })
+  if (!canManage && mode === 'oi' && subtaskReadiness.length > 0 && subtaskReadiness.every(item => item.contributionMode === 'closed')) {
+    blockers.push({ code: 'WRONG_CORPUS_REQUIRED', message: '当前题目正在建立错误程序样本，暂时无法可靠评估新增数据价值' })
+  }
 
   const warnings: Array<{ code: string; message: string }> = []
   if (mode === 'oi' && !classifierProgram) warnings.push({ code: 'CLASSIFIER_NOT_ACTIVE', message: 'Classifier 尚未激活；候选数据会完成校验并等待 Subtask 分类，不会晋升' })
   const wrongCorpusStatus: 'none' | 'bootstrap' | 'ready' = !corpus ? 'none' : corpus.corpusHash?.startsWith('ready:') ? 'ready' : 'bootstrap'
   if (wrongCorpusStatus !== 'ready') warnings.push({ code: 'WRONG_CORPUS_NOT_READY', message: 'Wrong Corpus 尚未完成行为评估；候选数据不会使用占位价值自动发布' })
-  warnings.push({ code: 'PROGRESSIVE_EVALUATOR_PENDING', message: '渐进价值评估器尚未上线；普通 Candidate 会安全停留在等待评估状态' })
+  if (mode === 'oi' && subtaskReadiness.some(item => item.contributionMode === 'limited')) warnings.push({ code: 'WRONG_CORPUS_INSUFFICIENT_FOR_AUTO_SELECTION', message: '部分 Subtask 处于 LIMITED 观察模式，可以接收 Candidate，但不会自动替换正式数据' })
   const hackAssetsSelected = Boolean(hackConfig?.standardProgramVersionId === standardProgram?.version.id && hackConfig?.validatorProgramVersionId === validatorProgram?.version.id && (mode !== 'oi' || hackConfig?.classifierProgramVersionId === classifierProgram?.version.id))
   if (hackConfig?.enabled && !hackAssetsSelected) warnings.push({ code: 'HACK_ASSET_SELECTION_REQUIRED', message: 'Hack 配置尚未固定到当前激活的评测程序版本，请由管理员重新保存 Hack 设置' })
 
@@ -126,13 +132,19 @@ export async function resolveContributionContext(user: JwtPayload, problemId: st
     classifierProgram,
     public: {
       canContribute: blockers.length === 0,
-      canHack: blockers.length === 0 && Boolean(hackConfig?.enabled) && (mode !== 'oi' || Boolean(classifierProgram)) && hackAssetsSelected,
+      canHack: blockers.filter(item => item.code !== 'WRONG_CORPUS_REQUIRED').length === 0 && Boolean(hackConfig?.enabled) && (mode !== 'oi' || Boolean(classifierProgram)) && hackAssetsSelected,
       canManage,
       mode,
       standard,
       validator,
       classifier: { ...classifier, requiredForHack: mode === 'oi', requiredForPromotion: mode === 'oi' },
-      wrongCorpus: { status: wrongCorpusStatus },
+      wrongCorpus: {
+        status: wrongCorpusStatus,
+        mode: mode === 'oi'
+          ? subtaskReadiness.some(item => item.contributionMode === 'open') ? 'open' : subtaskReadiness.some(item => item.contributionMode === 'limited') ? 'limited' : 'closed'
+          : resolveCorpusMode(corpus?.sampleCount || 0, corpus?.clusterCount || 0),
+      },
+      ...(canManage ? { subtasks: subtaskReadiness } : {}),
       blockers,
       warnings,
     },
@@ -150,14 +162,19 @@ export async function refreshAdmittedCandidateStages(problemId: string) {
   const problem = await prisma.problem.findUnique({ where: { id: problemId }, include: { LatestTestSetRevision: { select: { judgeConfig: true } } } })
   if (!problem) return { updated: 0 }
   const mode = resolveJudgeMode(parseJudgeConfig(problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || ''))
-  const [classifier, corpus] = await Promise.all([
+  const [classifier, corpus, subtasks] = await Promise.all([
     mode === 'oi' ? resolveActiveProgramVersion(problemId, 'classifier') : Promise.resolve(null),
     prisma.wrongCorpusRevision.findFirst({ where: { problemId, status: 'active' } }),
+    mode === 'oi' ? resolveSubtaskReadiness(problemId, problem.latestTestSetRevisionId) : Promise.resolve([]),
   ])
-  const evaluationStage = mode === 'oi' && !classifier ? 'awaiting_classifier' : !corpus?.clusterCount ? 'awaiting_corpus' : 'awaiting_evaluator'
-  const changed = await prisma.testcaseCandidate.updateMany({
-    where: { problemId, status: 'ADMITTED', evaluationStage: { in: ['awaiting_classifier', 'awaiting_corpus', 'awaiting_evaluator'] } },
-    data: { evaluationStage },
-  })
-  return { updated: changed.count }
+  const candidates = await prisma.testcaseCandidate.findMany({ where: { problemId, status: 'ADMITTED', evaluationStage: { in: ['awaiting_classifier', 'awaiting_corpus', 'awaiting_evaluator'] } }, select: { id: true, affectedSubtaskIds: true } })
+  let updated = 0
+  for (const candidate of candidates) {
+    const affected = parseSubtaskIds(candidate.affectedSubtaskIds)
+    const eligibleSubtask = mode !== 'oi' || subtasks.some(item => affected.includes(item.subtaskId) && item.contributionMode !== 'closed')
+    const evaluationStage = mode === 'oi' && !classifier ? 'awaiting_classifier' : !eligibleSubtask || !corpus?.clusterCount ? 'awaiting_corpus' : 'awaiting_evaluator'
+    const changed = await prisma.testcaseCandidate.updateMany({ where: { id: candidate.id, status: 'ADMITTED' }, data: { evaluationStage } })
+    updated += changed.count
+  }
+  return { updated }
 }

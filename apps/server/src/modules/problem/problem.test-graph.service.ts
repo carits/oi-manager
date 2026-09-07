@@ -5,9 +5,12 @@ import {
   TestSetRevisionConflict,
   ensureInitialTestSetRevision,
   loadLatestRevisionGraph,
+  loadRevisionSpec,
   publishTestSetRevision,
   resolveGraphDraft,
 } from './problem.testset-revision.service'
+import { OI_CANDIDATE_LIMITS, uniqueSubtaskCases } from './problem.oi-candidate-policy'
+import { resolveSubtaskReadiness } from './problem.subtask-readiness.service'
 
 export type TestGraphIssue = { problemId: string; problemNumber: string; title: string; issues: string[] }
 export type TestGraphValidationError = { path: string; message: string }
@@ -51,6 +54,7 @@ export async function inspectLegacyTestGraph(problemId: string) {
   const issues: string[] = []
   if (!isOiConfig(config)) issues.push('不是 OI 评测配置')
   if (!Array.isArray(config.subtasks) || config.subtasks.length === 0) issues.push('缺少 subtasks')
+  if (Array.isArray(config.subtasks) && config.subtasks.length > OI_CANDIDATE_LIMITS.MAX_SUBTASKS) issues.push(`每道 OI 题最多允许 ${OI_CANDIDATE_LIMITS.MAX_SUBTASKS} 个 Subtask`)
   if (problem.ProblemSubtask.length > 0) return { ok: true, issues: [], problem, config, alreadyMigrated: true }
 
   const files = new Set(problem.TestdataFile.map(file => file.filename))
@@ -65,12 +69,15 @@ export async function inspectLegacyTestGraph(problemId: string) {
     if (!Number.isInteger(score) || score < 0) issues.push(`Subtask ${id} 分值无效`)
     totalScore += score
     if (!Array.isArray(raw.cases) || raw.cases.length === 0) issues.push(`Subtask ${id} 没有测试点`)
+    const uniqueCaseKeys = new Set<string>()
     for (const item of raw.cases || []) {
       const testCase = normalizeCase(item)
+      if (testCase.input && testCase.output) uniqueCaseKeys.add(`${testCase.input}\0${testCase.output}`)
       if (!testCase.input || !testCase.output) issues.push(`Subtask ${id} 存在无效测试点`)
       if (testCase.input && !files.has(testCase.input)) issues.push(`缺少输入文件 ${testCase.input}`)
       if (testCase.output && !files.has(testCase.output)) issues.push(`缺少答案文件 ${testCase.output}`)
     }
+    if (uniqueCaseKeys.size > OI_CANDIDATE_LIMITS.MAX_CASES_PER_SUBTASK) issues.push(`Subtask ${id} 包含 ${uniqueCaseKeys.size} 个唯一正式测试点，最多允许 ${OI_CANDIDATE_LIMITS.MAX_CASES_PER_SUBTASK} 个`)
   }
   if (totalScore !== 100) issues.push(`Subtask 总分为 ${totalScore}，必须为 100`)
   for (const [index, raw] of (config.subtasks || []).entries()) {
@@ -281,6 +288,9 @@ export async function loadTestGraphWorkspace(problemId: string) {
       output: item.OutputFile.filename,
       source: item.source,
       enabled: item.enabled,
+      isProtected: item.isProtected,
+      protectionReason: item.protectionReason,
+      protectedUntil: item.protectedUntil,
       assignments: item.GroupLinks.map(link => ({
         subtaskId: link.Group.Subtask.subtaskId,
         groupId: link.Group.id,
@@ -290,6 +300,20 @@ export async function loadTestGraphWorkspace(problemId: string) {
       })),
     })),
   }
+}
+
+export async function setProblemTestcaseProtection(input: { problemId: string; testcaseId: string; isProtected: boolean; reason?: string; userId: string }) {
+  const testcase = await prisma.problemTestcase.findFirst({ where: { id: input.testcaseId, problemId: input.problemId } })
+  if (!testcase) return { ok: false as const, code: 'TESTCASE_NOT_FOUND', issues: ['测试点不存在'] }
+  const reason = String(input.reason || '').trim()
+  if (input.isProtected && reason.length < 5) return { ok: false as const, code: 'PROTECTION_REASON_REQUIRED', issues: ['永久保护测试点需要填写至少 5 字原因'] }
+  const updated = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`testcase-protection:${input.problemId}`}, 0)) IS NULL AS locked`
+    const item = await tx.problemTestcase.update({ where: { id: testcase.id }, data: { isProtected: input.isProtected, protectionReason: input.isProtected ? `manual:${reason.slice(0, 500)}` : null, protectedUntil: input.isProtected ? null : testcase.protectedUntil } })
+    await tx.platformAuditLog.create({ data: { id: crypto.randomUUID(), actorUserId: input.userId, action: input.isProtected ? 'testcase_protected' : 'testcase_unprotected', targetType: 'problem_testcase', targetId: testcase.id, metadata: { problemId: input.problemId, reason: reason.slice(0, 500) || null } } })
+    return item
+  })
+  return { ok: true as const, testcase: updated }
 }
 
 export async function registerOfficialTestcases(problemId: string, pairs: Array<{ inputFileId: string; outputFileId: string }>) {
@@ -393,6 +417,7 @@ export function validateTestGraphInput(input: any): TestGraphValidationError[] {
   const errors: TestGraphValidationError[] = []
   const add = (path: string, message: string) => errors.push({ path, message })
   if (subtasks.length === 0) add('subtasks', '至少需要一个 Subtask')
+  if (subtasks.length > OI_CANDIDATE_LIMITS.MAX_SUBTASKS) add('subtasks', `每道 OI 题最多允许 ${OI_CANDIDATE_LIMITS.MAX_SUBTASKS} 个 Subtask`)
   const ids = new Set<number>()
   let total = 0
   for (const [subtaskIndex, subtask] of subtasks.entries()) {
@@ -412,6 +437,7 @@ export function validateTestGraphInput(input: any): TestGraphValidationError[] {
       add(`${subtaskPath}.groups`, `Subtask ${id} 的 Official Group 分值之和必须等于 Subtask 分值`)
     }
     const groupKeys = new Set<string>()
+    const uniqueCases = new Set<string>()
     for (const [groupIndex, group] of groups.entries()) {
       const groupPath = `${subtaskPath}.groups.${groupIndex}`
       const key = String(group.key || '').trim()
@@ -424,9 +450,13 @@ export function validateTestGraphInput(input: any): TestGraphValidationError[] {
       const cases = Array.isArray(group.cases) ? group.cases : []
       if (group.kind === 'official' && cases.length === 0) add(`${groupPath}.cases`, `Subtask ${id} 的 Official Group ${group.name || key} 至少需要一个 Testcase`)
       const testcaseIds = cases.map((item: any) => String(item.testcaseId || ''))
+      testcaseIds.filter(Boolean).forEach((testcaseId: string) => uniqueCases.add(testcaseId))
       if (testcaseIds.some((testcaseId: string) => !testcaseId) || new Set(testcaseIds).size !== testcaseIds.length) {
         add(`${groupPath}.cases`, `Subtask ${id} Group ${group.name || key} 存在空或重复 Testcase`)
       }
+    }
+    if (uniqueCases.size > OI_CANDIDATE_LIMITS.MAX_CASES_PER_SUBTASK) {
+      add(`${subtaskPath}.groups`, `Subtask ${id} 包含 ${uniqueCases.size} 个唯一正式测试点，最多允许 ${OI_CANDIDATE_LIMITS.MAX_CASES_PER_SUBTASK} 个；满额后必须通过 Selector 替换`)
     }
   }
   if (total !== 100) add('subtasks', `Subtask 总分为 ${total}，必须为 100`)
@@ -450,7 +480,14 @@ export function validateTestGraphInput(input: any): TestGraphValidationError[] {
 export async function replaceTestGraph(problemId: string, input: any) {
   const subtasks = Array.isArray(input?.subtasks) ? input.subtasks : []
   const errors = validateTestGraphInput(input)
-  if (errors.length > 0) return { ok: false as const, code: 'INVALID_TEST_GRAPH', issues: errors.map(item => item.message), errors }
+  if (errors.length > 0) {
+    const code = errors.some(item => item.message.includes(`最多允许 ${OI_CANDIDATE_LIMITS.MAX_SUBTASKS} 个 Subtask`))
+      ? 'OI_SUBTASK_LIMIT_EXCEEDED'
+      : errors.some(item => item.message.includes('唯一正式测试点'))
+        ? 'OI_SUBTASK_CASE_LIMIT_REACHED'
+        : 'INVALID_TEST_GRAPH'
+    return { ok: false as const, code, issues: errors.map(item => item.message), errors }
+  }
 
   const testcaseIds = [...new Set(subtasks.flatMap((subtask: any) => (subtask.groups || []).flatMap((group: any) => (group.cases || []).map((item: any) => item.testcaseId))))]
   const testcaseCount = await prisma.problemTestcase.count({ where: { problemId, id: { in: testcaseIds as string[] } } })
@@ -489,6 +526,26 @@ export async function replaceTestGraph(problemId: string, input: any) {
     : ('revisionId' in (current || {}) ? String((current as any).revisionId) : currentProblem?.latestTestSetRevisionId || null)
   try {
     const spec = await resolveGraphDraft(problemId, input)
+    const previousSpec = currentProblem?.latestTestSetRevisionId ? await loadRevisionSpec(currentProblem.latestTestSetRevisionId) : null
+    const readiness = await resolveSubtaskReadiness(problemId, currentProblem?.latestTestSetRevisionId || null)
+    const bootstrapTestcaseIds = new Set<string>()
+    const overrideReason = String(input?.overrideReason || '').trim()
+    let usedOverride = false
+    if (spec.mode === 'oi') for (const subtask of spec.subtasks || []) {
+      const previousSubtask = previousSpec?.mode === 'oi' ? previousSpec.subtasks?.find(item => item.id === subtask.id) : null
+      const previousIds = new Set(previousSubtask ? uniqueSubtaskCases(previousSubtask).map(item => item.testcaseId).filter((id): id is string => Boolean(id)) : [])
+      const nextCases = uniqueSubtaskCases(subtask)
+      const additions = nextCases.filter(item => item.testcaseId && !previousIds.has(item.testcaseId))
+      if (!additions.length) continue
+      const state = readiness.find(item => item.subtaskId === subtask.id)
+      if (state?.contributionMode !== 'closed') continue
+      if ((state?.caseCount || 0) < OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES && nextCases.length <= OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES) {
+        additions.forEach(item => { if (item.testcaseId) bootstrapTestcaseIds.add(item.testcaseId) })
+        continue
+      }
+      if (overrideReason.length < 10) return { ok: false as const, code: 'WRONG_CORPUS_REQUIRED', issues: [`Subtask ${subtask.id} 已具备基础测试数据，但尚无可用于价值评估的错误程序；强制发布需填写至少 10 字原因`], errors: [{ path: `subtasks.${subtask.id}.groups`, message: `Subtask ${subtask.id} 缺少 Wrong Corpus` }] }
+      usedOverride = true
+    }
     await publishTestSetRevision({
       problemId,
       expectedLatestRevisionId: expectedRevisionId,
@@ -496,6 +553,10 @@ export async function replaceTestGraph(problemId: string, input: any) {
       createdBy: typeof input?.updatedBy === 'string' ? input.updatedBy : null,
       baseConfigText: currentProblem?.judgeConfig || null,
       spec,
+      transactionHook: async (tx, revision) => {
+        if (bootstrapTestcaseIds.size) await tx.problemTestcase.updateMany({ where: { id: { in: [...bootstrapTestcaseIds] }, problemId }, data: { isProtected: true, protectionReason: 'bootstrap_core', protectedUntil: null } })
+        if (usedOverride) await tx.platformAuditLog.create({ data: { id: crypto.randomUUID(), actorUserId: typeof input?.updatedBy === 'string' ? input.updatedBy : null, action: 'test_graph_force_published', targetType: 'problem', targetId: problemId, metadata: { reason: overrideReason.slice(0, 1000), fromRevisionId: currentProblem?.latestTestSetRevisionId, toRevisionId: revision.id } } })
+      },
     })
   } catch (error: any) {
     if (error instanceof TestSetRevisionConflict || error?.code === 'TEST_SET_REVISION_STALE') {

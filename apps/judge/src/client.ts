@@ -19,6 +19,8 @@ import { generateTestdata } from './data-generation'
 import type { DataGenerationMessage, DataGenerationResultMessage } from './types'
 import type { JudgeProgramVerificationMessage, JudgeProgramVerificationResultMessage } from './types'
 import { verifyJudgeProgram } from './judge-program-verification'
+import { evaluateCandidate } from './candidate-evaluation'
+import type { CandidateEvaluationMessage, CandidateEvaluationResultMessage } from './types'
 
 export function buildJudgeRequest(payload: JudgeMessage['payload']): JudgeRequest {
   return {
@@ -153,6 +155,9 @@ class JudgeClient {
       case 'data_generation':
         await this.handleDataGenerationTask(msg as DataGenerationMessage)
         break
+      case 'candidate_evaluation':
+        await this.handleCandidateEvaluationTask(msg as CandidateEvaluationMessage)
+        break
       case 'judge_program_verification':
         await this.handleJudgeProgramVerificationTask(msg as JudgeProgramVerificationMessage)
         break
@@ -166,6 +171,12 @@ class JudgeClient {
     const result = await generateTestdata(msg.payload)
     if (result.retryable) { this.ws?.close(1011, 'data generation infrastructure unavailable'); return }
     const response: DataGenerationResultMessage = { type: 'data_generation_result', payload: result }
+    this.send(response)
+  }
+
+  private async handleCandidateEvaluationTask(msg: CandidateEvaluationMessage) {
+    const result = await evaluateCandidate(msg.payload)
+    const response: CandidateEvaluationResultMessage = { type: 'candidate_evaluation_result', payload: result }
     this.send(response)
   }
 

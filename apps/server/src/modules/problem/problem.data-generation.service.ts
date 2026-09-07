@@ -11,6 +11,9 @@ import { canModifyProblem } from './problem.access'
 import { createAdmittedCandidate } from './problem.testcase-candidate.service'
 import { EVALUATION_LIMITS, releaseEvaluationCredits, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from './problem.evaluation-budget.service'
 import { requireContributionReady, resolveActiveProgramVersion } from './problem.contribution-readiness.service'
+import { resolveSubtaskReadiness } from './problem.subtask-readiness.service'
+import { OI_CANDIDATE_LIMITS, uniqueSubtaskCases, validateOiFormalLimits } from './problem.oi-candidate-policy'
+import { queueCandidateEvaluation } from './problem.candidate-evaluation.service'
 
 const TESTDATA_ROOT = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
 const MAX_CASES = Number(process.env.DATA_GENERATION_MAX_CASES || 50)
@@ -142,7 +145,8 @@ export async function claimDataGenerationJob(judgeId: string) {
   const task = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('candidate-evaluation-global-lane', 0)) IS NULL AS locked`
     const contributionRunning = await tx.problemDataGenerationJob.count({ where: { contribution: true, status: { in: ['running', 'finalizing'] } } })
-    if (contributionRunning >= 1) return null
+    const evaluationRunning = await tx.candidateEvaluationRun.count({ where: { status: 'running' } })
+    if (contributionRunning >= 1 || evaluationRunning >= 1) return null
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "ProblemDataGenerationJob" WHERE status = 'queued' ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1`
     if (!rows[0]) return null
     const job = await tx.problemDataGenerationJob.findUniqueOrThrow({ where: { id: rows[0].id } })
@@ -187,6 +191,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
     data: { status: 'finalizing' },
   })
   if (claimed.count !== 1) return { stale: true }
+  const candidatesToEvaluate: string[] = []
   try {
     for (const result of Array.isArray(payload?.cases) ? payload.cases : []) {
       const current = await prisma.problemDataGenerationCase.findFirst({ where: { id: String(result.id), jobId: job.id } })
@@ -203,15 +208,20 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
       if (job.contribution) {
         const mode = (job.config as any)?.mode === 'oi' ? 'oi' : 'acm'
         const affectedSubtaskIds = Array.isArray(result.affectedSubtaskIds) ? result.affectedSubtaskIds.map(Number).filter(Number.isInteger) : []
-        const corpus = await prisma.wrongCorpusRevision.findFirst({ where: { problemId: job.problemId, status: 'active' } })
+        const subtaskReadiness = mode === 'oi' ? await resolveSubtaskReadiness(job.problemId, job.baseTestSetRevisionId) : []
+        const eligibleSubtask = mode !== 'oi' || subtaskReadiness.some(item => affectedSubtaskIds.includes(item.subtaskId) && item.contributionMode !== 'closed')
+        const bootstrapReady = mode === 'oi' && job.targetRole === 'official' && subtaskReadiness.some(item => affectedSubtaskIds.includes(item.subtaskId) && item.bootstrapAvailable)
         const evaluationStage = mode === 'oi' && (!result.classificationStatus || result.classificationStatus !== 'classified' || !affectedSubtaskIds.length)
           ? 'awaiting_classifier'
-          : !corpus?.clusterCount
+          : bootstrapReady
+            ? 'bootstrap_ready'
+            : !eligibleSubtask
             ? 'awaiting_corpus'
             : 'awaiting_evaluator'
         const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage, provenance: { protocol: (job.config as any)?.generator?.protocol || null, context: (job.config as any)?.cases?.[current.orderIndex] || null, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, timings: { generatorMs: result.generatorTimeMs || 0, validatorMs: result.validatorTimeMs || 0, standardMs: result.standardTimeMs || 0 }, inputSha256: inputObject.sha256, outputSha256: outputObject.sha256 } })
         duplicateCandidate = admitted.duplicate
         candidateId = admitted.duplicate ? null : admitted.candidate.id
+        if (candidateId && evaluationStage === 'awaiting_evaluator') candidatesToEvaluate.push(candidateId)
       }
       await prisma.problemDataGenerationCase.update({ where: { id: current.id }, data: {
         status: duplicateCandidate ? 'duplicate' : 'validated', inputObjectId: inputObject.id, outputObjectId: outputObject.id,
@@ -227,6 +237,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
       const actual = usageCredits({ executions: cases.length * 4, cpuMs: cases.reduce((sum, item) => sum + (item.generatorTimeMs || 0) + (item.validatorTimeMs || 0) + (item.standardTimeMs || 0), 0), generatedBytes: cases.reduce((sum, item) => sum + (item.inputSize || 0) + (item.outputSize || 0), 0) })
       await settleEvaluationCredits({ taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual, metadata: { status: 'completed' } })
     }
+    for (const candidateId of candidatesToEvaluate) await queueCandidateEvaluation(candidateId).catch(() => undefined)
     return { stale: false }
   } catch (error) {
     await prisma.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'failed', errorCode: 'GENERATION_PERSIST_FAILED', errorMessage: String((error as Error).message).slice(0, 4000), judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
@@ -243,7 +254,7 @@ async function materializeCurrentFile(problemId: string, name: string, object: {
   return prisma.testdataFile.create({ data: { id: crypto.randomUUID(), problemId, filename: name, size: object.size, sha256: object.sha256 } })
 }
 
-export async function promoteDataGenerationJob(input: { user: JwtPayload; problemId: string; jobId: string; expectedLatestRevisionId: string; caseIds?: string[]; assignments?: Array<{ caseId: string; subtaskId: number; groupKey: string }> }) {
+export async function promoteDataGenerationJob(input: { user: JwtPayload; problemId: string; jobId: string; expectedLatestRevisionId: string; caseIds?: string[]; assignments?: Array<{ caseId: string; subtaskId: number; groupKey: string }>; overrideReason?: string }) {
   const problem = await requireProgramProblem(input.user, input.problemId)
   const job = await prisma.problemDataGenerationJob.findFirst({ where: { id: input.jobId, problemId: problem.id, status: 'completed' } })
   if (!job) fail(409, 'GENERATION_JOB_NOT_READY', '数据生成任务尚未完成或已经发布')
@@ -265,7 +276,7 @@ export async function promoteDataGenerationJob(input: { user: JwtPayload; proble
       const inputName = `${stem}.in`, outputName = `${stem}.out`, inputObject = byId.get(item.inputObjectId!)!, outputObject = byId.get(item.outputObjectId!)!
       const [inputFile, outputFile] = await Promise.all([materializeCurrentFile(problem.id, inputName, inputObject), materializeCurrentFile(problem.id, outputName, outputObject)])
       createdFiles.push(inputName, outputName); createdFileIds.push(inputFile.id, outputFile.id)
-      const testcase = await prisma.problemTestcase.create({ data: { id: crypto.randomUUID(), problemId: problem.id, inputFileId: inputFile.id, outputFileId: outputFile.id, source: 'generated', inputSha256: inputObject.sha256, outputSha256: outputObject.sha256, orderIndex: item.orderIndex } })
+      const testcase = await prisma.problemTestcase.create({ data: { id: crypto.randomUUID(), problemId: problem.id, inputFileId: inputFile.id, outputFileId: outputFile.id, source: 'generated', inputSha256: inputObject.sha256, outputSha256: outputObject.sha256, orderIndex: item.orderIndex, protectedUntil: new Date(Date.now() + OI_CANDIDATE_LIMITS.NEW_CASE_PROTECTION_DAYS * 24 * 60 * 60_000), protectionReason: 'new_case' } })
       createdTestcaseIds.push(testcase.id)
       candidateCases.push({ caseId: item.id, testcaseId: testcase.id, inputName, outputName, inputObjectId: inputObject.id, outputObjectId: outputObject.id, source: 'generated' as const, score: null })
     }
@@ -283,10 +294,30 @@ export async function promoteDataGenerationJob(input: { user: JwtPayload; proble
           group.cases.push(candidate)
         }
       }
+      const limitIssues = validateOiFormalLimits(spec)
+      if (limitIssues.length) fail(409, limitIssues[0].code, limitIssues[0].message, { issues: limitIssues })
+      const readiness = await resolveSubtaskReadiness(problem.id, problem.latestTestSetRevisionId)
+      const assignedSubtasks = [...new Set(assignments.map(item => Number(item.subtaskId)).filter(Number.isInteger))]
+      const overrideReason = String(input.overrideReason || '').trim()
+      const bootstrapSubtasks = new Set<number>()
+      for (const subtaskId of assignedSubtasks) {
+        const state = readiness.find(item => item.subtaskId === subtaskId)
+        const next = spec.subtasks?.find(item => item.id === subtaskId)
+        if (!state || !next) continue
+        const nextCount = uniqueSubtaskCases(next).length
+        if (state.contributionMode !== 'closed') continue
+        if (state.caseCount < OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES && nextCount <= OI_CANDIDATE_LIMITS.MIN_BOOTSTRAP_CASES) {
+          bootstrapSubtasks.add(subtaskId)
+          continue
+        }
+        if (overrideReason.length < 10) fail(409, 'WRONG_CORPUS_REQUIRED', `Subtask ${subtaskId} 已具备基础测试数据，但尚无可用于价值评估的错误程序；管理员强制发布需填写至少 10 字原因`)
+      }
+      if (bootstrapSubtasks.size) await prisma.problemTestcase.updateMany({ where: { id: { in: candidateCases.filter(candidate => assignments.some(link => link.caseId === candidate.caseId && bootstrapSubtasks.has(Number(link.subtaskId)))).map(candidate => candidate.testcaseId) } }, data: { isProtected: true, protectionReason: 'bootstrap_core', protectedUntil: null } })
     }
     const revision = await publishTestSetRevision({ problemId: problem.id, expectedLatestRevisionId: input.expectedLatestRevisionId, source: 'admin_edit', createdBy: input.user.userId, baseConfigText: problem.judgeConfig, spec, transactionHook: async (tx, next) => {
       await tx.problemDataGenerationJob.update({ where: { id: job.id }, data: { status: 'promoted', promotedRevisionId: next.id } })
       for (const candidate of candidateCases) await tx.problemDataGenerationCase.update({ where: { id: candidate.caseId }, data: { status: 'promoted', promotedTestcaseId: candidate.testcaseId } })
+      if (String(input.overrideReason || '').trim()) await tx.platformAuditLog.create({ data: { id: crypto.randomUUID(), actorUserId: input.user.userId, action: 'candidate_force_promoted', targetType: 'problem', targetId: problem.id, metadata: { reason: String(input.overrideReason).trim().slice(0, 1000), fromRevisionId: input.expectedLatestRevisionId, toRevisionId: next.id, testcaseIds: candidateCases.map(item => item.testcaseId) } } })
     } })
     return revision
   } catch (error) {

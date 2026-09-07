@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import { DataGenerationError } from './problem.data-generation.service'
-import { ProblemCandidateError, cancelCandidate, contributeCandidateData, contributeCandidateGenerator, getCandidateDetail, getCandidatePool, getContribution, getContributionReadiness, listFeatureDefinitions, listMyCandidates, listMyContributions, listSelectorRuns, listSubtaskRules, previewSelector, updateCandidatePolicy, updateFeatureDefinitions, updateSubtaskRules } from './application/problem-candidate.service'
+import { ProblemCandidateError, cancelCandidate, contributeCandidateData, contributeCandidateGenerator, emergencyPublish, getCandidateDetail, getCandidatePool, getContribution, getContributionReadiness, listFeatureDefinitions, listMyCandidates, listMyContributions, listSelectorRuns, listSubtaskRules, previewSelector, updateCandidatePolicy, updateFeatureDefinitions, updateSubtaskRules } from './application/problem-candidate.service'
 import { ContributionReadinessError } from './problem.contribution-readiness.service'
 
 export const problemCandidateRouter = Router()
@@ -21,6 +21,7 @@ problemCandidateRouter.get('/:id/candidate-pool', authenticate, asyncHandler(asy
 problemCandidateRouter.put('/:id/candidate-policy', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await updateCandidatePolicy(req.user!, req.params.id, req.body) })))
 problemCandidateRouter.get('/:id/selector-runs', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listSelectorRuns(req.user!, req.params.id) })))
 problemCandidateRouter.post('/:id/selector-runs/preview', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await previewSelector(req.user!, req.params.id) })))
+problemCandidateRouter.post('/:id/canonical-emergency-publish', authenticate, asyncHandler(async (req, res) => { try { res.json({ success: true, data: await emergencyPublish(req.user!, req.params.id, req.body) }) } catch (error) { return send(error, res) } }))
 problemCandidateRouter.get('/:id/feature-definitions', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listFeatureDefinitions(req.user!, req.params.id) })))
 problemCandidateRouter.put('/:id/feature-definitions', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await updateFeatureDefinitions(req.user!, req.params.id, req.body) })))
 problemCandidateRouter.get('/:id/subtask-rules', authenticate, asyncHandler(async (req, res) => res.json({ success: true, data: await listSubtaskRules(req.user!, req.params.id) })))
