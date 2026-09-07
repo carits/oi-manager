@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-06
+last_verified: 2026-09-07
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
