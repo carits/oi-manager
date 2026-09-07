@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-06
+last_verified: 2026-09-07
 source_of_truth: Git history
 ---
 
@@ -17,7 +17,9 @@ source_of_truth: Git history
 - 新增统一五步管理向导、服务端草稿、结构化 Fixture、Generator Profile/Parameter Schema、验证报告和显式激活；Validator DSL materialize 与激活拆分，旧路由仅保留兼容语义。
 - 正式数据生成只接受并在领取时复核当前 active 程序；普通 Generator 贡献强制完整 `oj.generator/v1` Manifest，Seed 由服务端生成并固化，旧 args 协议仅供历史管理员任务读取。
 - 修复 Validator 负 Fixture 的非零退出被沙箱映射为 Runtime Error 后误判失败，以及基础设施重试耗尽误把程序标为编译失败的问题；C++ Classifier 支持系统 `testlib.h`。
-- 增加 OI `Validator → Classifier → STD → Hack Gate → 100→0` 正向链、未知 Subtask fail-closed、资源释放与基础设施重试测试。发布前本地结果为 Judge 19/19、Web 68/68、模板 8/8、Server/Judge/Web 构建和 UI 门禁通过；本机缺 PostgreSQL/go-judge，真实数据库与沙箱验证将在隔离生产主机执行后再登记部署结果。
+- 增加 OI `Validator → Classifier → STD → Hack Gate → 100→0` 正向链、未知 Subtask fail-closed、资源释放与基础设施重试测试，并新增可重复运行的生产闭环探针；探针只创建不可见草稿题，不接触真实用户题目或输出认证信息。
+- 生产发布前备份 `oi_manager_20260907_135823.dump`（SHA-256 `0053738c…e0c99`）已校验；两条增量迁移应用后为 45/45，历史程序协议 check/apply 为 0 条待处理、0 条歧义。Linux Judge 38/38、隔离 Server 定向 9/9、Web 68/68、模板 8/8、三端构建和真实 go-judge 协议 smoke 通过。
+- 首轮线上探针发现 Candidate 管理 API 将 `affectedSubtaskIds` 暴露为 JSON 字符串；已统一修复为 `number[]` 并增加详情/池接口回归 7/7。复跑草稿题 #1043 完整完成 Validator、STD、Classifier、Generator 的异步编译、Fixture 预检和激活，正式生成数据发布 R1→R2，Generator Candidate 经分类命中 Subtask `[1]` 并安全停在 `awaiting_corpus`。提交 `75a5f6b`、`cfb71d8`、`05cc6f5` 已推送；API 活动 slot 为 3303，Web BUILD_ID `g9OnA4VVceF_lEBLM0QrE` 已提升。
 
 ## 2026-09-06
 
