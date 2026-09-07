@@ -89,4 +89,19 @@ describe('bounded Candidate HTTP boundary', () => {
     expect(response.status).toBe(409)
     expect(response.body.code).toBe('PROGRAM_VERSION_NOT_ACTIVE')
   })
+
+  it('serializes affected Subtask IDs as arrays for manager Candidate APIs', async () => {
+    const candidate = await prisma.testcaseCandidate.create({ data: {
+      id: crypto.randomUUID(), problemId: problem.id, source: 'generator', targetRole: 'hack_gate', status: 'ADMITTED', evaluationStage: 'awaiting_corpus',
+      inputSha256: '1'.repeat(64), outputSha256: '2'.repeat(64), inputSize: 4, outputSize: 2,
+      inputFileName: 'candidate.in', outputFileName: 'candidate.out', affectedSubtaskIds: '[1,2]', createdBy: manager.user.id,
+    } })
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(manager.user))
+    const detail = await client.get(`/api/problems/${problem.id}/candidates/${candidate.id}`)
+    expect(detail.status).toBe(200)
+    expect(detail.body.data.affectedSubtaskIds).toEqual([1, 2])
+    const pool = await client.get(`/api/problems/${problem.id}/candidate-pool`)
+    expect(pool.status).toBe(200)
+    expect(pool.body.data.candidates.find((item: any) => item.id === candidate.id)?.affectedSubtaskIds).toEqual([1, 2])
+  })
 })

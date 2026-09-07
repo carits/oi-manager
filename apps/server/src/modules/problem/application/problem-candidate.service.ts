@@ -42,6 +42,22 @@ function safeMessage(value: string | null | undefined, manager: boolean) {
   return cleaned
 }
 
+function parseAffectedSubtaskIds(value: string | null | undefined): number[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? parsed.map(Number).filter((id): id is number => Number.isSafeInteger(id) && id > 0)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function serializeCandidateForManager<T extends { affectedSubtaskIds: string | null }>(candidate: T) {
+  return { ...candidate, affectedSubtaskIds: parseAffectedSubtaskIds(candidate.affectedSubtaskIds) }
+}
+
 function publicContributionStage(job: any, item?: any) {
   if (item?.candidate?.evaluationStage) return item.candidate.evaluationStage
   if (item?.status === 'failed') return item.failureStage || 'failed'
@@ -113,7 +129,7 @@ export async function getContribution(user: JwtPayload, problemId: string, jobId
 export async function getCandidateDetail(user: JwtPayload, problemId: string, candidateId: string) {
   const problem = await problemFor(user, problemId), manager = canModifyProblem(user, problem), data = await prisma.testcaseCandidate.findFirst({ where: { id: candidateId, problemId, ...(manager ? {} : { createdBy: user.userId }) } })
   if (!data) fail(404, 'CANDIDATE_NOT_FOUND', '候选数据不存在')
-  return manager ? data : { ...data, killVectorObjectId: undefined, featureFingerprint: undefined, affectedSubtaskIds: undefined }
+  return manager ? serializeCandidateForManager(data) : { ...data, killVectorObjectId: undefined, featureFingerprint: undefined, affectedSubtaskIds: undefined }
 }
 export async function cancelCandidate(user: JwtPayload, problemId: string, candidateId: string) {
   await problemFor(user, problemId); const changed = await prisma.testcaseCandidate.updateMany({ where: { id: candidateId, problemId, createdBy: user.userId, status: { in: ['UPLOADED', 'ADMITTED'] } }, data: { status: 'REJECTED', evaluationStage: 'cancelled', message: '用户取消' } })
@@ -122,7 +138,7 @@ export async function cancelCandidate(user: JwtPayload, problemId: string, candi
 export async function getCandidatePool(user: JwtPayload, problemId: string) {
   await problemFor(user, problemId, true)
   const [policy, candidates, activeCount, hot] = await Promise.all([prisma.problemCandidatePolicy.upsert({ where: { problemId }, update: {}, create: { id: crypto.randomUUID(), problemId, updatedBy: user.userId } }), prisma.testcaseCandidate.findMany({ where: { problemId }, orderBy: [{ status: 'asc' }, { marginalValue: 'desc' }, { createdAt: 'desc' }], take: 500 }), prisma.testcaseCandidate.count({ where: { problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } } }), prisma.testcaseCandidate.aggregate({ where: { problemId, status: { in: ACTIVE_CANDIDATE_STATUSES } }, _sum: { inputSize: true, outputSize: true } })])
-  return { policy: { ...policy, maxHotBytes: policy.maxHotBytes.toString() }, activeCount, hotBytes: Number(hot._sum.inputSize || 0) + Number(hot._sum.outputSize || 0), candidates }
+  return { policy: { ...policy, maxHotBytes: policy.maxHotBytes.toString() }, activeCount, hotBytes: Number(hot._sum.inputSize || 0) + Number(hot._sum.outputSize || 0), candidates: candidates.map(serializeCandidateForManager) }
 }
 export async function updateCandidatePolicy(user: JwtPayload, problemId: string, body: any) {
   await problemFor(user, problemId, true); const current = await prisma.problemCandidatePolicy.upsert({ where: { problemId }, update: {}, create: { id: crypto.randomUUID(), problemId, updatedBy: user.userId } }), expected = Number(body?.expectedRevision)
