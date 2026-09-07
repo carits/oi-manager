@@ -2,10 +2,11 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const serverRequire = createRequire(new URL('../apps/server/package.json', import.meta.url))
+const rootRequire = createRequire(new URL('../package.json', import.meta.url))
 const { PrismaClient } = serverRequire('@prisma/client')
 const dotenv = serverRequire('dotenv')
 const jwt = serverRequire('jsonwebtoken')
-const { chromium } = serverRequire('playwright')
+const { chromium } = rootRequire('@playwright/test')
 
 dotenv.config({ path: fileURLToPath(new URL('../apps/server/.env', import.meta.url)) })
 
