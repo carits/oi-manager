@@ -43,7 +43,7 @@ export async function createAdmittedCandidate(params: {
   generatorVersionId?: string | null
   provenance?: unknown
   hackAttemptId?: string | null
-  status?: 'ADMITTED' | 'ELIGIBLE'
+  status?: 'ADMITTED' | 'ELIGIBLE' | 'REDUNDANT'
   evaluationStage?: string
 }) {
   if (!params.input.length || !params.output.length || params.input.length > EVALUATION_LIMITS.maxCandidateBytes || params.output.length > EVALUATION_LIMITS.maxCandidateBytes) {
@@ -63,7 +63,7 @@ export async function createAdmittedCandidate(params: {
     ])
     const bytes = Number(size._sum.inputSize || 0) + Number(size._sum.outputSize || 0)
     if (count >= EVALUATION_LIMITS.maxHotCandidates || bytes + params.input.length + params.output.length > EVALUATION_LIMITS.maxHotBytes) throw new EvaluationBudgetError(429, 'CANDIDATE_POOL_CAPACITY_EXCEEDED', '该题候选池已达到硬上限，请等待低价值候选淘汰')
-    const canonicalDuplicate = latest?.latestTestSetRevisionId ? await tx.testdataObject.findFirst({ where: { problemId: params.problemId, sha256: inputSha256, OR: [{ AcmInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }, { GroupInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }] } }) : null
+    const canonicalDuplicate = params.status !== 'REDUNDANT' && latest?.latestTestSetRevisionId ? await tx.testdataObject.findFirst({ where: { problemId: params.problemId, sha256: inputSha256, OR: [{ AcmInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }, { GroupInputs: { some: { revisionId: latest.latestTestSetRevisionId } } }] } }) : null
     if (canonicalDuplicate) throw new EvaluationBudgetError(409, 'CANDIDATE_CANONICAL_DUPLICATE', '候选输入已存在于正式测试版本')
     const candidate = await tx.testcaseCandidate.create({ data: {
       id: params.id || crypto.randomUUID(), problemId: params.problemId, hackAttemptId: params.hackAttemptId || null,
@@ -104,6 +104,7 @@ export async function createValidatedHackCandidate(params: {
   inputFileName: string
   outputFileName: string
   affectedSubtaskIds: number[]
+  canonicalDuplicate?: boolean
 }) {
   const inputSha256 = digest(params.input)
   const outputSha256 = digest(params.output)
@@ -112,7 +113,15 @@ export async function createValidatedHackCandidate(params: {
     throw new Error('Hack candidate content changed after validation')
   }
   if (!previous) {
-    const admitted = await createAdmittedCandidate({ ...params, source: 'hack', targetRole: 'hack_gate', hackAttemptId: params.hackAttemptId })
+    const admitted = await createAdmittedCandidate({
+      ...params,
+      source: 'hack',
+      targetRole: 'hack_gate',
+      hackAttemptId: params.hackAttemptId,
+      status: params.canonicalDuplicate ? 'REDUNDANT' : 'ADMITTED',
+      evaluationStage: params.canonicalDuplicate ? 'canonical_duplicate' : 'technical_validated',
+    })
+    if (params.canonicalDuplicate) return admitted.candidate
     return prisma.testcaseCandidate.update({ where: { id: admitted.candidate.id }, data: { status: 'ELIGIBLE', evaluationStage: 'technical_validated' } })
   }
   const [inputObject, outputObject] = await Promise.all([ingestTestdataObject(params.problemId, params.input), ingestTestdataObject(params.problemId, params.output)])

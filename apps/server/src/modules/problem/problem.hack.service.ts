@@ -366,6 +366,7 @@ export async function finalizeHackResult(
       inputFileName: inputFile,
       outputFileName: outputFile,
       affectedSubtaskIds: affected,
+      canonicalDuplicate: Boolean(duplicate),
     })
     if (duplicate) {
       await Promise.all([
