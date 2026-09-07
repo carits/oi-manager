@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 44 |
 | systemd units | 8 |
-| Referenced environment keys | 449 |
+| Referenced environment keys | 451 |
 
 ## HTTP adapter ownership
 
@@ -435,6 +435,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `JUDGE_PROJECTION_CHECK`
 - `JUDGE_RESULT_DB_RETRY_MS`
 - `JUDGE_SLO_CHECK`
+- `JUDGE_TEMPLATE_PROBE_BASE_URL`
+- `JUDGE_TEMPLATE_PROBE_PROBLEM_ID`
 - `JUDGE_TIMEOUT`
 - `JUDGE_TOKEN`
 - `JUDGE_TOOLCHAIN_VERSION`
