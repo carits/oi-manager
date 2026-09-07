@@ -16,6 +16,7 @@ import { statsRouter } from './routes/stats'
 import { organizationMemberRouter } from './routes/organization-members'
 import { platformOrganizationRouter } from './routes/platform-organizations'
 import { problemsRouter } from './modules/problem/problem.routes'
+import { judgeProgramTemplateRouter } from './modules/problem/problem.judge-program.routes'
 import { ojFetcherRouter } from './routes/oj-fetcher'
 import { filesRouter } from './routes/files'
 import { platformBindingRouter } from './modules/platform-binding/platform-binding.routes'
@@ -125,6 +126,7 @@ app.use('/api/users', authenticate, userRouter)
 app.use('/api/stats', authenticate, statsRouter)
 app.use('/api/teachers', authenticate, teacherRouter)
 app.use('/api/problems', problemsRouter)
+app.use('/api', judgeProgramTemplateRouter)
 app.use('/api/oj-fetcher', authenticate, ojFetcherRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/platform-bindings', platformBindingRouter)

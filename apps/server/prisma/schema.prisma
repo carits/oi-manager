@@ -503,6 +503,10 @@ model Problem {
   ProblemHackConfig        ProblemHackConfig?
   ProblemHackAttempt       ProblemHackAttempt[]
   ProblemJudgeProgram      ProblemJudgeProgram[]
+  ProblemJudgeProgramDraft ProblemJudgeProgramDraft[]
+  ProblemJudgeProgramFixtureSet ProblemJudgeProgramFixtureSet[]
+  ProblemJudgeProgramVerificationJob ProblemJudgeProgramVerificationJob[]
+  ProblemJudgeProgramAuditLog ProblemJudgeProgramAuditLog[]
   ProblemDataGenerationJob ProblemDataGenerationJob[]
   TestcaseCandidate        TestcaseCandidate[]
   ProblemTestcase          ProblemTestcase[]
@@ -565,6 +569,10 @@ model ProblemJudgeProgram {
   updatedAt        DateTime                     @updatedAt
   Problem          Problem                      @relation(fields: [problemId], references: [id], onDelete: Cascade)
   Versions         ProblemJudgeProgramVersion[]
+  Drafts           ProblemJudgeProgramDraft[]
+  FixtureSets      ProblemJudgeProgramFixtureSet[]
+  VerificationJobs ProblemJudgeProgramVerificationJob[]
+  AuditLogs        ProblemJudgeProgramAuditLog[]
 
   @@unique([problemId, kind, name])
   @@index([problemId, kind, status])
@@ -589,17 +597,117 @@ model ProblemJudgeProgramVersion {
   templateVersion Int?
   lifecycleStatus String             @default("compiled")
   runtimeMetadata Json?
+  protocolConfig  Json?
   preflightReport Json?
+  fixtureSetId    String?
   verifiedAt     DateTime?
   activatedAt    DateTime?
   createdBy      String
   createdAt      DateTime            @default(now())
   Program        ProblemJudgeProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  FixtureSet     ProblemJudgeProgramFixtureSet? @relation("ProgramVersionFixtureSet", fields: [fixtureSetId], references: [id], onDelete: SetNull)
+  VerificationJobs ProblemJudgeProgramVerificationJob[]
+  AuditLogs      ProblemJudgeProgramAuditLog[]
 
   @@unique([programId, versionNumber])
   @@index([problemId, createdAt])
   @@index([problemId, lifecycleStatus, createdAt])
+  @@index([fixtureSetId])
   @@index([aiRequestId])
+}
+
+model ProblemJudgeProgramDraft {
+  id              String              @id
+  problemId       String
+  programId       String?
+  userId          String
+  kind            String
+  name            String
+  language        String
+  protocol        String
+  templateId      String?
+  templateVersion Int?
+  source          String              @db.Text
+  protocolConfig  Json?
+  fixtures        Json
+  revision        Int                 @default(1)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  Problem         Problem             @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Program         ProblemJudgeProgram? @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, userId, kind])
+  @@index([programId])
+  @@index([userId, updatedAt])
+}
+
+model ProblemJudgeProgramFixtureSet {
+  id          String                       @id
+  problemId   String
+  programId   String
+  revision    Int
+  fixtures    Json
+  fixtureHash String
+  createdBy   String
+  createdAt   DateTime                     @default(now())
+  Problem     Problem                      @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Program     ProblemJudgeProgram          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  Versions    ProblemJudgeProgramVersion[] @relation("ProgramVersionFixtureSet")
+  VerificationJobs ProblemJudgeProgramVerificationJob[]
+
+  @@unique([programId, revision])
+  @@index([problemId, createdAt])
+  @@index([fixtureHash])
+}
+
+model ProblemJudgeProgramVerificationJob {
+  id              String                        @id
+  problemId       String
+  programId       String
+  versionId       String
+  fixtureSetId    String
+  mode            String
+  status          String                        @default("queued")
+  judgeId         String?
+  fencingToken    String?                       @unique
+  leaseExpiresAt  DateTime?
+  attemptCount    Int                           @default(0)
+  report          Json?
+  errorCode       String?
+  errorMessage    String?                       @db.Text
+  createdBy       String
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  Problem         Problem                      @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Program         ProblemJudgeProgram          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  Version         ProblemJudgeProgramVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  FixtureSet      ProblemJudgeProgramFixtureSet @relation(fields: [fixtureSetId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([problemId, createdAt])
+  @@index([programId, versionId])
+  @@index([judgeId, status])
+}
+
+model ProblemJudgeProgramAuditLog {
+  id          String                      @id
+  problemId   String
+  programId   String
+  versionId   String?
+  actorUserId String
+  action      String
+  metadata    Json?
+  createdAt   DateTime                    @default(now())
+  Problem     Problem                     @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  Program     ProblemJudgeProgram         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  Version     ProblemJudgeProgramVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+
+  @@index([problemId, createdAt])
+  @@index([programId, createdAt])
+  @@index([versionId])
+  @@index([actorUserId, createdAt])
 }
 
 model ProblemDataGenerationJob {
@@ -757,6 +865,7 @@ model TestcaseCandidate {
   promotedTestcaseId    String?
   promotedRevisionId    String?
   message               String?                 @db.Text
+  provenance            Json?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
   promotedAt            DateTime?
@@ -963,6 +1072,7 @@ model ValidatorSpec {
   verification    Json?
   origin          String    @default("manual")
   aiRequestId     String?
+  programVersionId String?
   status          String    @default("draft")
   createdBy       String
   createdAt       DateTime  @default(now())
@@ -971,6 +1081,7 @@ model ValidatorSpec {
   @@unique([problemId, versionNumber])
   @@index([problemId, status])
   @@index([aiRequestId])
+  @@index([programVersionId])
 }
 
 model ProblemFeatureDefinition {

@@ -1,9 +1,8 @@
 import crypto from 'node:crypto'
 import { prisma } from '../../prisma'
 import type { JwtPayload } from '@oi-manager/shared'
-import { compileJudgeProgram, requireProgramProblem } from './problem.judge-program.service'
+import { compileJudgeProgram, createJudgeProgram, createJudgeProgramVersion, requireProgramProblem } from './problem.judge-program.service'
 import { EVALUATION_LIMITS } from './problem.evaluation-budget.service'
-import { refreshAdmittedCandidateStages } from './problem.contribution-readiness.service'
 
 export class ValidatorSpecError extends Error { constructor(public statusCode: number, public code: string, message: string, public data?: unknown) { super(message) } }
 function fail(status: number, code: string, message: string, data?: unknown): never { throw new ValidatorSpecError(status, code, message, data) }
@@ -71,24 +70,27 @@ export async function createValidatorSpec(input: { user: JwtPayload; problemId: 
 }
 
 export async function listValidatorSpecs(user: JwtPayload, problemId: string) { await requireProgramProblem(user, problemId); return prisma.validatorSpec.findMany({ where: { problemId }, orderBy: { versionNumber: 'desc' } }) }
-export async function activateValidatorSpec(input: { user: JwtPayload; problemId: string; specId: string }) {
+export async function materializeValidatorSpec(input: { user: JwtPayload; problemId: string; specId: string }) {
   await requireProgramProblem(input.user, input.problemId)
   const spec = await prisma.validatorSpec.findFirst({ where: { id: input.specId, problemId: input.problemId, compileStatus: 'passed' } }); if (!spec) fail(404, 'VALIDATOR_SPEC_NOT_FOUND', 'Validator Spec 不存在或未通过编译')
-  const activated = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`validator-spec:${input.problemId}`}, 0)) IS NULL AS locked`
-    let program = await tx.problemJudgeProgram.findUnique({ where: { problemId_kind_name: { problemId: input.problemId, kind: 'validator', name: 'Validator DSL' } } })
-    const versionId = crypto.randomUUID()
-    if (!program) {
-      program = await tx.problemJudgeProgram.create({ data: { id: crypto.randomUUID(), problemId: input.problemId, kind: 'validator', name: 'Validator DSL', language: 'cpp17', currentVersionId: versionId, createdBy: input.user.userId } })
-    }
-    const max = await tx.problemJudgeProgramVersion.aggregate({ where: { programId: program.id }, _max: { versionNumber: true } })
-    await tx.problemJudgeProgramVersion.updateMany({ where: { programId: program.id, lifecycleStatus: 'active' }, data: { lifecycleStatus: 'retired' } })
-    await tx.problemJudgeProgramVersion.create({ data: { id: versionId, programId: program.id, problemId: input.problemId, versionNumber: (max._max.versionNumber || 0) + 1, language: 'cpp17', source: spec.generatedSource, sourceSha256: crypto.createHash('sha256').update(spec.generatedSource).digest('hex'), origin: 'validator_dsl', aiRequestId: spec.aiRequestId, compileStatus: 'passed', protocol: 'oj.validator/v1', protocolVersion: 1, templateId: 'validator-dsl-v1', templateVersion: 1, lifecycleStatus: 'active', runtimeMetadata: { runtime: 'cpp17', usesTestlib: true, generatedFromDsl: true }, preflightReport: spec.verification as any, verifiedAt: new Date(), activatedAt: new Date(), createdBy: input.user.userId } })
-    await tx.problemJudgeProgram.update({ where: { id: program.id }, data: { status: 'active', currentVersionId: versionId, language: 'cpp17' } })
-    await tx.problemHackConfig.updateMany({ where: { problemId: input.problemId }, data: { validatorProgramVersionId: versionId, validatorSource: spec.generatedSource, validatorLanguage: 'cpp17', revision: { increment: 1 }, updatedBy: input.user.userId } })
-    await tx.validatorSpec.updateMany({ where: { problemId: input.problemId, status: 'active' }, data: { status: 'archived' } })
-    return tx.validatorSpec.update({ where: { id: spec.id }, data: { status: 'active', activatedAt: new Date() } })
-  })
-  await refreshAdmittedCandidateStages(input.problemId)
-  return activated
+  if (spec.programVersionId) {
+    const existing = await prisma.problemJudgeProgramVersion.findUnique({ where: { id: spec.programVersionId }, include: { Program: true } })
+    if (existing) return { spec, program: existing.Program, version: existing, requiresVerification: existing.lifecycleStatus !== 'active' }
+  }
+  const program = await prisma.problemJudgeProgram.findUnique({ where: { problemId_kind_name: { problemId: input.problemId, kind: 'validator', name: 'Validator DSL' } } })
+  const fixtures = Array.isArray((spec.verification as any)?.fixtures) ? (spec.verification as any).fixtures : []
+  const created = program
+    ? { program, version: await createJudgeProgramVersion({ user: input.user, problemId: input.problemId, programId: program.id, language: 'cpp17', protocol: 'oj.validator/v1', templateId: 'validator-dsl-v1', templateVersion: 1, source: spec.generatedSource, fixtures, origin: 'validator_dsl', aiRequestId: spec.aiRequestId || undefined }) }
+    : await createJudgeProgram({ user: input.user, problemId: input.problemId, kind: 'validator', name: 'Validator DSL', language: 'cpp17', protocol: 'oj.validator/v1', templateId: 'validator-dsl-v1', templateVersion: 1, source: spec.generatedSource, fixtures, origin: 'validator_dsl', aiRequestId: spec.aiRequestId || undefined })
+  const updated = await prisma.validatorSpec.update({ where: { id: spec.id }, data: { status: 'materialized', programVersionId: created.version.id } })
+  return { spec: updated, ...created, requiresVerification: true }
+}
+
+/**
+ * Compatibility wrapper for clients deployed before the materialize endpoint.
+ * This does not activate the generated validator; the generated immutable
+ * program version must still pass Judge preflight and be explicitly activated.
+ */
+export async function activateValidatorSpec(input: { user: JwtPayload; problemId: string; specId: string }) {
+  return materializeValidatorSpec(input)
 }

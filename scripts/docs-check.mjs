@@ -189,6 +189,7 @@ const routerPrefixes = {
   problemTestSetRevisionRouter: '/api/problems',
   problemJudgeProgramRouter: '/api/problems',
   problemDataGenerationRouter: '/api/problems',
+  judgeProgramTemplateRouter: '/api',
   problemCandidateRouter: '/api/problems',
   problemWrongCorpusRouter: '/api/problems',
   aiTokenAdminRouter: '/api/platform-admin/ai',

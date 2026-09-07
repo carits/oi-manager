@@ -222,6 +222,7 @@ export interface DataGenerationRequest {
   sourceMode: 'generator' | 'input'
   maxDataBytes?: number
   problemConfig: ProblemConfig
+  knownInputSha256?: string[]
   generator?: { language: 'cpp17' | 'python3'; source: string; protocol?: 'legacy-args-v1' | 'json-stdin-v1' | 'oj.generator/v1' } | null
   standard: { language: 'cpp17'; source: string }
   validator: { language: 'cpp17' | 'python3'; source: string; protocol?: 'oj.validator/v1' }
@@ -234,6 +235,63 @@ export interface DataGenerationResult {
   fencingToken: string
   retryable?: boolean
   cases: Array<{ id: string; status: 'validated' | 'failed'; failureStage?: string; message?: string; inputData?: string; outputData?: string; generatorTimeMs?: number; validatorTimeMs?: number; standardTimeMs?: number; classificationStatus?: 'classified' | 'missing' | 'failed' | 'not_required'; classificationMessage?: string; affectedSubtaskIds?: number[] }>
+}
+
+export type JudgeProgramFixture = {
+  name: string
+  stdin: string
+  expectedExitCode?: number
+  expectedStdout?: string
+  expectedSubtasks?: number[]
+}
+
+export interface JudgeProgramVerificationRequest {
+  taskType: 'judge_program_verification'
+  jobId: string
+  problemId: string
+  programId: string
+  versionId: string
+  fixtureSetId: string
+  fencingToken: string
+  mode: 'compile' | 'preflight'
+  kind: 'standard' | 'validator' | 'classifier' | 'generator'
+  language: 'cpp17' | 'python3'
+  protocol: 'oj.standard/v1' | 'oj.validator/v1' | 'oj.classifier/v1' | 'oj.generator/v1'
+  source: string
+  fixtures: JudgeProgramFixture[]
+  knownSubtaskIds: number[]
+  problemConfig: ProblemConfig
+  integration?: {
+    validator?: { language: 'cpp17' | 'python3'; source: string }
+    standard?: { language: 'cpp17'; source: string }
+  }
+}
+
+export type JudgeProgramVerificationOutcome = 'success' | 'user_error' | 'program_error' | 'infrastructure_error'
+export type JudgeProgramVerificationStage = 'compile' | 'protocol' | 'fixture' | 'integration'
+
+export interface JudgeProgramVerificationResult {
+  jobId: string
+  fencingToken: string
+  outcome: JudgeProgramVerificationOutcome
+  code: string
+  stage: JudgeProgramVerificationStage
+  message: string
+  safeMessage: string
+  retryable?: boolean
+  report?: {
+    fixtures: Array<{
+      name: string
+      passed: boolean
+      message: string
+      timeMs: number
+      memoryKb: number
+      stdoutPreview?: string
+      stderrPreview?: string
+    }>
+    warnings: string[]
+    coveredSubtaskIds?: number[]
+  }
 }
 
 // ==================== 语言配置 ====================
@@ -278,7 +336,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
+  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'judge_program_verification' | 'judge_program_verification_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
   payload: any
 }
 
@@ -327,3 +385,5 @@ export interface HackResultMessage {
 
 export interface DataGenerationMessage { type: 'data_generation'; payload: DataGenerationRequest }
 export interface DataGenerationResultMessage { type: 'data_generation_result'; payload: DataGenerationResult }
+export interface JudgeProgramVerificationMessage { type: 'judge_program_verification'; payload: JudgeProgramVerificationRequest }
+export interface JudgeProgramVerificationResultMessage { type: 'judge_program_verification_result'; payload: JudgeProgramVerificationResult }

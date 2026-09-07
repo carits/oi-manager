@@ -55,7 +55,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
     if (!candidate.trim()) return toast.error('请填写候选输入或 Generator 源码')
     setSubmitting(true)
     try {
-      const result = choice === 'data' ? await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/data`, { name: '用户贡献', inputData: candidate }) : await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/generator`, { language: choice, source: candidate, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', profiles: [{ id: 'default', params: {} }] } })
+      const result = choice === 'data' ? await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/data`, { name: '用户贡献', inputData: candidate }) : await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/generator`, { language: choice, source: candidate, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language: choice, entry: choice === 'python3' ? 'main.py' : 'main.cpp', parameterSchema: {}, profiles: [{ id: 'default', label: '默认', params: {} }] } })
       if (!result.success) return toast.error(result.message || 'Candidate 提交失败')
       toast.success(`贡献任务 #${result.data?.jobId.slice(0, 8) || '—'} 已进入隔离队列`); setCandidate(''); await load()
     } finally { setSubmitting(false) }

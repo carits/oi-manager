@@ -1,11 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-06
+last_verified: 2026-09-07
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-06: 评测程序协议、模板和执行链完成收口：共享 Registry 提供 `oj.standard/validator/classifier/generator/v1`、能力矩阵、严格 Schema、版本化模板与 C++ Generator helper；新程序不再面对空白编辑器。ProgramVersion 增加协议、模板、运行元数据和 `compiled → verified → active → retired` 生命周期，编译后必须通过 Fixture Preflight 并人工激活。Python Validator/Classifier 已贯通数据生成和 Hack，Classifier 严格拒绝额外字段、空/重复/未知 ID；新 Generator 统一 `oj.generator/v1` 并双运行校验，旧 args 协议只读兼容。管理端展示职责、协议、模板、版本和激活操作，贡献端明确无需上传 STD/Validator/Classifier并自动加载 Generator 模板。三端生产构建和模板 7/7 编译门禁通过，定向 Judge 15/15 通过；待完成隔离数据库升级与线上发布验证。
+- 2026-09-07: Validator / Classifier / Generator / STD 收口实现已完成本地发布前验证：程序采用 `draft → compiled → verified → active → retired` 异步 Judge 生命周期，持久验证任务具备租约、fencing、断线/过期恢复和基础设施有界重试；DSL materialize 与真正激活已经分离。正式数据任务只执行当前 active 版本，并在领取时再次 fail closed；Generator v1 强制完整 Manifest、结构化 Profile/参数、服务端 Seed、双运行确定性、Validator 后去重。OI Hack 正向链及未知 Subtask fail-closed 已覆盖，Judge 定向 19/19、Web 68/68、模板 8/8、三端构建及 UI 门禁通过。当前本机没有 PostgreSQL/go-judge，Server DB 集成与真实协议 smoke 将使用隔离生产主机环境执行；生产数据库尚未迁移，公网仍为提交 `11629a1`。
 
 - 2026-09-06: 平台内置表情包功能已部署：新增不可变表情包/表情/导入模型、ZIP Manifest 检查、图片安全重编码、内容寻址 Blob、超管检查发布和退役接口。聊天支持独立表情消息，复用原序号/幂等/未读/SSE 事务；退役后禁止新发但历史及举报证据可读。Web 增加点击即发的 Popover、账号隔离最近使用、动态效果降级和加载失败回退。隔离 Chat API 20/20、Chromium/紧凑视口/Firefox 11/11、Web 66/66、干净库 122 表/43 迁移、三端构建和全部门禁通过。生产迁移前备份 `oi_manager_20260906_172435.dump`（SHA-256 `53bdb5be…c9b13da`）已校验，API 活动 slot 为 3303，Web BUILD_ID `hqzO1qRwh2oQdWom08XiR`；候选和正式消息探针通过。已发布 `小狐狸日常` v1，包含“你好、谢谢、好的、收到、OK”5 个表情；10 个内容/poster 资源读取和双账号真实表情发送、接收、已读、清理探针通过。
 

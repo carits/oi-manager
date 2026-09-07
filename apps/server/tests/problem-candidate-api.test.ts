@@ -15,7 +15,7 @@ describe('bounded Candidate HTTP boundary', () => {
     for (const kind of ['standard', 'validator']) {
       const programId = crypto.randomUUID(), versionId = crypto.randomUUID()
       await prisma.problemJudgeProgram.create({ data: { id: programId, problemId: problem.id, kind, name: kind, language: 'cpp17', currentVersionId: versionId, createdBy: manager.user.id } })
-      await prisma.problemJudgeProgramVersion.create({ data: { id: versionId, programId, problemId: problem.id, versionNumber: 1, language: 'cpp17', source: 'int main(){return 0;}', sourceSha256: kind.repeat(32).slice(0, 64), compileStatus: 'passed', createdBy: manager.user.id } })
+      await prisma.problemJudgeProgramVersion.create({ data: { id: versionId, programId, problemId: problem.id, versionNumber: 1, language: 'cpp17', source: 'int main(){return 0;}', sourceSha256: kind.repeat(32).slice(0, 64), compileStatus: 'passed', lifecycleStatus: 'active', protocol: kind === 'standard' ? 'oj.standard/v1' : 'oj.validator/v1', activatedAt: new Date(), createdBy: manager.user.id } })
     }
   })
 
@@ -54,5 +54,39 @@ describe('bounded Candidate HTTP boundary', () => {
     const second = await client.post(`/api/problems/${problem.id}/candidates/data`).send({ inputData: '5 6\n' })
     expect(second.status).toBe(409)
     expect(second.body.code).toBe('GENERATION_JOB_ACTIVE')
+  })
+
+  it('does not let a contributor turn the manager generation endpoint into a contribution endpoint', async () => {
+    const client = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' }))
+    const response = await client.post(`/api/problems/${problem.id}/data-generation-jobs`).send({ contribution: true, sourceMode: 'input', cases: [{ name: 'bypass', inputData: '1 2\n' }] })
+    expect(response.status).toBe(404)
+  })
+
+  it('requires a complete Generator v1 manifest and stores a server-generated seed', async () => {
+    const client = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' }))
+    const source = 'import json\nctx=json.load(__import__("sys").stdin)\nprint(ctx["seed"])\n'
+    const invalid = await client.post(`/api/problems/${problem.id}/candidates/generator`).send({ language: 'python3', source, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', profiles: [{ id: 'default', params: {} }] } })
+    expect(invalid.status).toBe(400)
+    expect(invalid.body.code).toBe('GENERATOR_MANIFEST_INVALID')
+
+    const accepted = await client.post(`/api/problems/${problem.id}/candidates/generator`).send({ language: 'python3', source, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language: 'python3', entry: 'main.py', parameterSchema: {}, profiles: [{ id: 'default', label: '默认', params: {} }] } })
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(202)
+    const generatedCase = await prisma.problemDataGenerationCase.findFirstOrThrow({ where: { jobId: accepted.body.data.jobId } })
+    expect(generatedCase.seed).toMatch(/^\d+$/)
+    const job = await prisma.problemDataGenerationJob.findUniqueOrThrow({ where: { id: accepted.body.data.jobId } })
+    expect((job.config as any).generatorManifest).toMatchObject({ language: 'python3', entry: 'main.py' })
+  })
+
+  it('rejects a verified but not active program version in a formal generation job', async () => {
+    const standard = await prisma.problemJudgeProgram.findFirstOrThrow({ where: { problemId: problem.id, kind: 'standard' } })
+    const validator = await prisma.problemJudgeProgram.findFirstOrThrow({ where: { problemId: problem.id, kind: 'validator' } })
+    await prisma.problemJudgeProgramVersion.update({ where: { id: standard.currentVersionId! }, data: { lifecycleStatus: 'verified' } })
+    const client = createAuthenticatedRequest(app, generateTokenFromUser(manager.user))
+    const response = await client.post(`/api/problems/${problem.id}/data-generation-jobs`).send({
+      sourceMode: 'input', standardVersionId: standard.currentVersionId, validatorVersionId: validator.currentVersionId,
+      cases: [{ name: 'formal', inputData: '1 2\n' }],
+    })
+    expect(response.status).toBe(409)
+    expect(response.body.code).toBe('PROGRAM_VERSION_NOT_ACTIVE')
   })
 })

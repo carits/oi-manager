@@ -9,7 +9,7 @@ import {
 } from './application/problem-ai-route.service'
 import { AiValidatorError, generateAiValidator, generateAiValidatorSpec, getAiValidatorRequest, saveAiValidator, saveAiValidatorSpec } from './application/problem-ai-validator.service'
 import { AiTokenError } from '../ai/ai-token.service'
-import { activateValidatorSpec, createValidatorSpec, listValidatorSpecs, ValidatorSpecError } from './problem.validator-spec.service'
+import { activateValidatorSpec, createValidatorSpec, listValidatorSpecs, materializeValidatorSpec, ValidatorSpecError } from './problem.validator-spec.service'
 
 export const problemAiRouter = Router()
 
@@ -36,6 +36,11 @@ problemAiRouter.get('/:id/validator-specs', authenticate, asyncHandler(async (re
 
 problemAiRouter.post('/:id/validator-specs/:specId/activate', authenticate, asyncHandler(async (req, res) => {
   try { res.json({ success: true, data: await activateValidatorSpec({ user: req.user!, problemId: req.params.id, specId: req.params.specId }) }) }
+  catch (error) { return sendAiError(error, res) }
+}))
+
+problemAiRouter.post('/:id/validator-specs/:specId/materialize', authenticate, asyncHandler(async (req, res) => {
+  try { res.json({ success: true, data: await materializeValidatorSpec({ user: req.user!, problemId: req.params.id, specId: req.params.specId }) }) }
   catch (error) { return sendAiError(error, res) }
 }))
 

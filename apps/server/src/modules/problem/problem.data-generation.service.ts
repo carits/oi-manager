@@ -8,7 +8,6 @@ import { ingestTestdataObject, loadRevisionSpec, publishTestSetRevision, TestSet
 import { requireProgramProblem } from './problem.judge-program.service'
 import yaml from 'js-yaml'
 import { canModifyProblem } from './problem.access'
-import { compileJudgeProgram } from './problem.judge-program.service'
 import { createAdmittedCandidate } from './problem.testcase-candidate.service'
 import { EVALUATION_LIMITS, releaseEvaluationCredits, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from './problem.evaluation-budget.service'
 import { requireContributionReady, resolveActiveProgramVersion } from './problem.contribution-readiness.service'
@@ -20,8 +19,8 @@ export class DataGenerationError extends Error { constructor(public statusCode: 
 function fail(statusCode: number, code: string, message: string, data?: unknown): never { throw new DataGenerationError(statusCode, code, message, data) }
 
 async function loadVersion(problemId: string, versionId: string, expectedKind: string) {
-  const version = await prisma.problemJudgeProgramVersion.findFirst({ where: { id: versionId, problemId, lifecycleStatus: { in: ['verified', 'active'] } } })
-  if (!version) fail(400, 'PROGRAM_VERSION_INVALID', '评测程序版本不存在或不属于当前题目')
+  const version = await prisma.problemJudgeProgramVersion.findFirst({ where: { id: versionId, problemId, compileStatus: 'passed', lifecycleStatus: 'active' } })
+  if (!version) fail(409, 'PROGRAM_VERSION_NOT_ACTIVE', '正式数据任务只能使用已完成预检并显式激活的评测程序版本')
   const program = await prisma.problemJudgeProgram.findFirst({ where: { id: version.programId, problemId, kind: expectedKind, status: 'active' } })
   if (!program) fail(400, 'PROGRAM_KIND_INVALID', `需要 ${expectedKind} 程序版本`)
   return { version, program }
@@ -43,27 +42,57 @@ function normalizeCases(body: any): GenerationCaseInput[] {
   })
 }
 
+function secureSeed() { return BigInt(`0x${crypto.randomBytes(8).toString('hex')}`).toString(10) }
+
+function normalizeGeneratorV1Cases(cases: GenerationCaseInput[], protocolConfig: unknown): GenerationCaseInput[] {
+  const config = protocolConfig && typeof protocolConfig === 'object' ? protocolConfig as any : null
+  const profiles = new Map<string, any>((Array.isArray(config?.profiles) ? config.profiles : []).map((item: any) => [String(item.id), item]))
+  const schema = config?.parameterSchema && typeof config.parameterSchema === 'object' && !Array.isArray(config.parameterSchema) ? config.parameterSchema as Record<string, any> : {}
+  return cases.map((item, index) => {
+    const profile = String(item.profile || '')
+    const profileConfig = profiles.get(profile)
+    if (!profileConfig) fail(422, 'GENERATOR_PROFILE_INVALID', `参数项 #${index + 1} 使用了不存在的 Profile`)
+    const merged: Record<string, unknown> = { ...(profileConfig.params || {}), ...(item.params || {}) }
+    for (const key of Object.keys(merged)) if (!Object.prototype.hasOwnProperty.call(schema, key)) fail(422, 'GENERATOR_PARAMETER_INVALID', `参数 ${key} 未在 Parameter Schema 中声明`)
+    for (const [key, rule] of Object.entries(schema)) {
+      let value = merged[key]
+      if (value === undefined && Object.prototype.hasOwnProperty.call(rule, 'default')) value = rule.default
+      if (value === undefined) fail(422, 'GENERATOR_PARAMETER_REQUIRED', `参数 ${key} 缺失`)
+      if (rule.type === 'integer' && (!Number.isSafeInteger(value) || typeof value !== 'number')) fail(422, 'GENERATOR_PARAMETER_INVALID', `参数 ${key} 必须是安全整数`)
+      if (rule.type === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) fail(422, 'GENERATOR_PARAMETER_INVALID', `参数 ${key} 必须是有限数字`)
+      if (rule.type === 'string' && typeof value !== 'string') fail(422, 'GENERATOR_PARAMETER_INVALID', `参数 ${key} 必须是字符串`)
+      if (rule.type === 'boolean' && typeof value !== 'boolean') fail(422, 'GENERATOR_PARAMETER_INVALID', `参数 ${key} 必须是布尔值`)
+      if (typeof value === 'number' && (typeof rule.minimum === 'number' && value < rule.minimum || typeof rule.maximum === 'number' && value > rule.maximum)) fail(422, 'GENERATOR_PARAMETER_OUT_OF_RANGE', `参数 ${key} 超出允许范围`)
+      if (Array.isArray(rule.enum) && !rule.enum.some((candidate: unknown) => Object.is(candidate, value))) fail(422, 'GENERATOR_PARAMETER_INVALID', `参数 ${key} 不在允许选项中`)
+      merged[key] = value
+    }
+    return { ...item, args: [], seed: secureSeed(), profile, params: merged }
+  })
+}
+
 export async function createDataGenerationJob(input: { user: JwtPayload; problemId: string; body: any }) {
   const contribution = input.body?.contribution === true
   const readiness = contribution ? await requireContributionReady(input.user, input.problemId) : null
   const problem = readiness?.problem || await requireProgramProblem(input.user, input.problemId)
   const manager = canModifyProblem(input.user, problem)
   const sourceMode = input.body?.sourceMode === 'input' ? 'input' : 'generator'
-  const cases = normalizeCases({ ...input.body, sourceMode, contribution })
+  let cases = normalizeCases({ ...input.body, sourceMode, contribution })
   if (contribution && cases.length > (sourceMode === 'input' ? 1 : 8)) fail(400, 'CONTRIBUTION_CASE_LIMIT', '普通贡献每次最多提交 1 个直接数据或 8 个生成参数')
   const ephemeralGenerator = contribution && sourceMode === 'generator' && typeof input.body?.generatorSource === 'string'
-    ? { language: input.body?.generatorLanguage === 'python3' ? 'python3' as const : 'cpp17' as const, source: String(input.body.generatorSource), protocol: 'oj.generator/v1' as const }
+    ? { language: input.body?.generatorLanguage === 'python3' ? 'python3' as const : 'cpp17' as const, source: String(input.body.generatorSource), protocol: 'oj.generator/v1' as const, protocolConfig: input.body?.generatorManifest }
     : null
-  if (ephemeralGenerator) await compileJudgeProgram(ephemeralGenerator.source, ephemeralGenerator.language, '候选数据生成器', { protocol: ephemeralGenerator.protocol })
   const [standard, validator, generator] = await Promise.all([
     contribution ? Promise.resolve(readiness!.standardProgram!) : loadVersion(problem.id, String(input.body?.standardVersionId || ''), 'standard'),
     contribution ? Promise.resolve(readiness!.validatorProgram!) : loadVersion(problem.id, String(input.body?.validatorVersionId || ''), 'validator'),
     sourceMode === 'generator' && !ephemeralGenerator ? (contribution ? resolveActiveProgramVersion(problem.id, 'generator').then(value => value || fail(409, 'GENERATOR_NOT_ACTIVE', '该题尚未配置已激活的 Generator')) : loadVersion(problem.id, String(input.body?.generatorVersionId || ''), 'generator')) : null,
   ])
+  if (sourceMode === 'generator' && ephemeralGenerator) cases = normalizeGeneratorV1Cases(cases, ephemeralGenerator.protocolConfig)
+  if (sourceMode === 'generator' && !ephemeralGenerator && generator?.version.protocol === 'oj.generator/v1') cases = normalizeGeneratorV1Cases(cases, generator.version.protocolConfig)
+  if (sourceMode === 'generator' && !ephemeralGenerator && generator?.version.protocol !== 'oj.generator/v1' && cases.some(item => item.profile || item.params)) fail(422, 'GENERATOR_PROTOCOL_MISMATCH', '历史 Generator 只能使用旧参数协议；请新建 Generator V1')
   const jobId = crypto.randomUUID()
   const reservedCredits = contribution ? (sourceMode === 'generator' ? 4_000 : 400) : 0
   if (reservedCredits) await reserveEvaluationCredits({ userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
-  const config: any = { sourceMode, cases, generator: ephemeralGenerator, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
+  const config: any = { sourceMode, cases, generator: ephemeralGenerator, generatorManifest: ephemeralGenerator?.protocolConfig || null, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
   try { return await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`data-generation:${problem.id}`}, 0)) IS NULL AS locked`
     const activeCount = await tx.problemDataGenerationJob.count({
@@ -109,29 +138,45 @@ export async function cancelDataGenerationJob(user: JwtPayload, problemId: strin
 }
 
 export async function claimDataGenerationJob(judgeId: string) {
-  return prisma.$transaction(async tx => {
+  const claimState: { rejected?: { jobId: string; reservedCredits: number } } = {}
+  const task = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('candidate-evaluation-global-lane', 0)) IS NULL AS locked`
     const contributionRunning = await tx.problemDataGenerationJob.count({ where: { contribution: true, status: { in: ['running', 'finalizing'] } } })
     if (contributionRunning >= 1) return null
     const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "ProblemDataGenerationJob" WHERE status = 'queued' ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1`
     if (!rows[0]) return null
-    const fencingToken = crypto.randomUUID(), leaseExpiresAt = new Date(Date.now() + Number(process.env.DATA_GENERATION_LEASE_MS || 60 * 60_000))
-    const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: rows[0].id, status: 'queued' }, data: { status: 'running', judgeId, fencingToken, leaseExpiresAt, startedAt: new Date() } })
-    if (!changed.count) return null
     const job = await tx.problemDataGenerationJob.findUniqueOrThrow({ where: { id: rows[0].id } })
     const classifierVersionId = typeof (job.config as any)?.classifierVersionId === 'string' ? (job.config as any).classifierVersionId : null
-    const [generator, standard, validator, classifier, cases] = await Promise.all([
-      job.generatorVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: job.generatorVersionId } }) : null,
-      tx.problemJudgeProgramVersion.findUniqueOrThrow({ where: { id: job.standardVersionId } }),
-      tx.problemJudgeProgramVersion.findUniqueOrThrow({ where: { id: job.validatorVersionId } }),
-      classifierVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: classifierVersionId } }) : null,
+    const [generator, standard, validator, classifier, cases, candidateHashes, testcaseHashes, problem, baseRevision] = await Promise.all([
+      job.generatorVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: job.generatorVersionId }, include: { Program: true } }) : null,
+      tx.problemJudgeProgramVersion.findUnique({ where: { id: job.standardVersionId }, include: { Program: true } }),
+      tx.problemJudgeProgramVersion.findUnique({ where: { id: job.validatorVersionId }, include: { Program: true } }),
+      classifierVersionId ? tx.problemJudgeProgramVersion.findUnique({ where: { id: classifierVersionId }, include: { Program: true } }) : null,
       tx.problemDataGenerationCase.findMany({ where: { jobId: job.id }, orderBy: { orderIndex: 'asc' } }),
+      tx.testcaseCandidate.findMany({ where: { problemId: job.problemId }, select: { inputSha256: true } }),
+      tx.problemTestcase.findMany({ where: { problemId: job.problemId, enabled: true, inputSha256: { not: null } }, select: { inputSha256: true } }),
+      tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } }),
+      job.baseTestSetRevisionId ? tx.problemTestSetRevision.findFirst({ where: { id: job.baseTestSetRevisionId, problemId: job.problemId } }) : null,
     ])
     const config = job.config as any
-    const problem = await tx.problem.findUnique({ where: { id: job.problemId }, include: { LatestTestSetRevision: true } })
+    const isExecutable = (version: typeof standard, kind: string) => Boolean(version && version.problemId === job.problemId && version.compileStatus === 'passed' && version.lifecycleStatus === 'active' && version.Program.kind === kind && version.Program.status === 'active' && version.Program.currentVersionId === version.id)
+    const assetsValid = isExecutable(standard, 'standard') && isExecutable(validator, 'validator') && (!generator || isExecutable(generator, 'generator')) && (!classifierVersionId || isExecutable(classifier, 'classifier'))
+    if (!problem || !assetsValid) {
+      const message = !problem ? '题目已不存在' : '任务固定的评测程序版本已停用；请使用当前激活版本重新创建任务'
+      await tx.problemDataGenerationJob.update({ where: { id: job.id }, data: { status: 'failed', errorCode: 'PROGRAM_VERSION_NOT_ACTIVE', errorMessage: message, finishedAt: new Date() } })
+      await tx.problemDataGenerationCase.updateMany({ where: { jobId: job.id, status: 'pending' }, data: { status: 'failed', failureStage: 'assets', message } })
+      claimState.rejected = { jobId: job.id, reservedCredits: job.reservedCredits }
+      return null
+    }
+    const fencingToken = crypto.randomUUID(), leaseExpiresAt = new Date(Date.now() + Number(process.env.DATA_GENERATION_LEASE_MS || 60 * 60_000))
+    const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'queued' }, data: { status: 'running', judgeId, fencingToken, leaseExpiresAt, startedAt: new Date() } })
+    if (!changed.count) return null
     const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: generator.protocol || 'legacy-args-v1' } : null)
-    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(problem?.LatestTestSetRevision?.judgeConfig || problem?.judgeConfig || '{}'), generator: generatorConfig, standard: { language: standard.language, source: standard.source }, validator: { language: validator.language, source: validator.source, protocol: validator.protocol }, classifier: classifier ? { language: classifier.language, source: classifier.source, protocol: classifier.protocol } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
+    return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(baseRevision?.judgeConfig || problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || '{}'), knownInputSha256: [...new Set([...candidateHashes.map(item => item.inputSha256), ...testcaseHashes.map(item => item.inputSha256).filter((value): value is string => Boolean(value))])], generator: generatorConfig, standard: { language: standard!.language, source: standard!.source }, validator: { language: validator!.language, source: validator!.source, protocol: validator!.protocol }, classifier: classifier ? { language: classifier.language, source: classifier.source, protocol: classifier.protocol } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
   })
+  const rejected = claimState.rejected
+  if (rejected?.reservedCredits) await releaseEvaluationCredits({ taskType: 'candidate_generation', taskId: rejected.jobId, reserved: rejected.reservedCredits, reason: '固定的评测程序版本已停用' }).catch(() => undefined)
+  return task
 }
 
 export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
@@ -147,7 +192,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
       const current = await prisma.problemDataGenerationCase.findFirst({ where: { id: String(result.id), jobId: job.id } })
       if (!current) continue
       if (result.status !== 'validated') {
-        await prisma.problemDataGenerationCase.update({ where: { id: current.id }, data: { status: 'failed', failureStage: result.failureStage || 'unknown', message: String(result.message || '').slice(0, 4000), generatorTimeMs: result.generatorTimeMs, validatorTimeMs: result.validatorTimeMs, standardTimeMs: result.standardTimeMs } })
+        await prisma.problemDataGenerationCase.update({ where: { id: current.id }, data: { status: result.failureStage === 'deduplication' ? 'duplicate' : 'failed', failureStage: result.failureStage || 'unknown', message: String(result.message || '').slice(0, 4000), generatorTimeMs: result.generatorTimeMs, validatorTimeMs: result.validatorTimeMs, standardTimeMs: result.standardTimeMs, inputSha256: result.failureStage === 'deduplication' && result.inputData ? crypto.createHash('sha256').update(String(result.inputData)).digest('hex') : null } })
         continue
       }
       const input = Buffer.from(String(result.inputData || '')), output = Buffer.from(String(result.outputData || ''))
@@ -164,7 +209,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
           : !corpus?.clusterCount
             ? 'awaiting_corpus'
             : 'awaiting_evaluator'
-        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage })
+        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage, provenance: { protocol: (job.config as any)?.generator?.protocol || null, context: (job.config as any)?.cases?.[current.orderIndex] || null, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, timings: { generatorMs: result.generatorTimeMs || 0, validatorMs: result.validatorTimeMs || 0, standardMs: result.standardTimeMs || 0 }, inputSha256: inputObject.sha256, outputSha256: outputObject.sha256 } })
         duplicateCandidate = admitted.duplicate
         candidateId = admitted.duplicate ? null : admitted.candidate.id
       }

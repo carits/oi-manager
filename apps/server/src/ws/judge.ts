@@ -28,6 +28,7 @@ import {
   retryOwnedJudgeAttempt,
 } from '../modules/judge/application/judge-run.service'
 import { claimDataGenerationJob, finalizeDataGenerationJob } from '../modules/problem/problem.data-generation.service'
+import { claimJudgeProgramVerificationJob, finalizeJudgeProgramVerificationJob, recoverJudgeProgramVerificationJobs } from '../modules/problem/problem.judge-program.service'
 import { judgeLaneForDispatch } from '../modules/judge/domain/judge-lane-policy'
 
 // 简单的随机 ID 生成（替代 nanoid）
@@ -54,7 +55,7 @@ let acceptingJudgeTasks = true
 class JudgeConsumer {
   consuming: boolean = false
   processing: Map<string, {
-    taskType: 'submission' | 'hack' | 'data_generation'
+    taskType: 'submission' | 'hack' | 'data_generation' | 'judge_program_verification'
     id: string
     startTime: number
     judgeAttemptId?: string
@@ -90,8 +91,8 @@ class JudgeConsumer {
         continue
       }
 
-      const taskType: 'submission' | 'hack' | 'data_generation' = task.taskType
-      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.taskType === 'data_generation' ? task.jobId : task.submissionId
+      const taskType: 'submission' | 'hack' | 'data_generation' | 'judge_program_verification' = task.taskType
+      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.taskType === 'data_generation' || task.taskType === 'judge_program_verification' ? task.jobId : task.submissionId
       const taskKey = `${taskType}:${taskId}`
       const dispatchedAt = Date.now()
       this.processing.set(taskKey, {
@@ -109,7 +110,7 @@ class JudgeConsumer {
 
       // 发送任务到评测机
       this.ws.send(JSON.stringify({
-        type: taskType === 'hack' ? 'hack' : taskType === 'data_generation' ? 'data_generation' : 'judge',
+        type: taskType === 'hack' ? 'hack' : taskType === 'data_generation' ? 'data_generation' : taskType === 'judge_program_verification' ? 'judge_program_verification' : 'judge',
         payload: taskType === 'submission' ? { ...task, dispatchedAt } : task
       }))
     }
@@ -124,7 +125,7 @@ class JudgeConsumer {
         ? await this.fetchNextSubmissionTask()
         : lane === 'hack'
           ? await this.fetchNextHackTask()
-          : await claimDataGenerationJob(this.judgeId)
+          : await claimJudgeProgramVerificationJob(this.judgeId) || await claimDataGenerationJob(this.judgeId)
       if (task) return task
     }
     return null
@@ -267,7 +268,7 @@ class JudgeConsumer {
     }
   }
 
-  handleResult(taskType: 'submission' | 'hack' | 'data_generation', id: string) {
+  handleResult(taskType: 'submission' | 'hack' | 'data_generation' | 'judge_program_verification', id: string) {
     this.processing.delete(`${taskType}:${id}`)
     this.notify?.()
   }
@@ -301,6 +302,7 @@ class JudgeConsumer {
             where: { id: task.id, judgeId: this.judgeId, status: { in: ['running', 'finalizing'] } },
             data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null },
           })
+          else if (task.taskType === 'judge_program_verification') await recoverJudgeProgramVerificationJobs(this.judgeId)
           else await transitionHackAttempts(prisma, {
             from: ['judging', 'finalizing'],
             to: 'queuing',
@@ -363,7 +365,8 @@ interface HackTask {
 }
 
 type DataGenerationTask = NonNullable<Awaited<ReturnType<typeof claimDataGenerationJob>>>
-type DispatchTask = JudgeTask | HackTask | DataGenerationTask
+type JudgeProgramVerificationTask = NonNullable<Awaited<ReturnType<typeof claimJudgeProgramVerificationJob>>>
+type DispatchTask = JudgeTask | HackTask | DataGenerationTask | JudgeProgramVerificationTask
 
 /**
  * 初始化 WebSocket 服务器
@@ -422,11 +425,15 @@ export function initJudgeWebSocket() {
         where: { status: { in: ['running', 'finalizing'] }, leaseExpiresAt: { lt: new Date() } },
         data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null },
       })
+      const staleVerification = await prisma.problemJudgeProgramVerificationJob.updateMany({
+        where: { status: 'running', leaseExpiresAt: { lt: new Date() } },
+        data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null },
+      })
 
-      if (staleSubmissionCount > 0 || staleHacks.count > 0 || staleGeneration.count > 0) {
+      if (staleSubmissionCount > 0 || staleHacks.count > 0 || staleGeneration.count > 0 || staleVerification.count > 0) {
         logger.warn('stale_tasks_recovered', {
           action: 'judge_ws',
-          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count, dataGenerationCount: staleGeneration.count }
+          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count, dataGenerationCount: staleGeneration.count, programVerificationCount: staleVerification.count }
         })
       }
     } catch (e: any) {
@@ -570,11 +577,12 @@ async function recoverAllStaleTasks() {
       data: { judgeId: null, judgeStarted: null },
     })
     const recoveredGeneration = await prisma.problemDataGenerationJob.updateMany({ where: { status: { in: ['running', 'finalizing'] } }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
+    const recoveredVerification = await prisma.problemJudgeProgramVerificationJob.updateMany({ where: { status: 'running' }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
 
-    if (recoveredCount > 0 || recoveredHacks.count > 0 || recoveredGeneration.count > 0) {
+    if (recoveredCount > 0 || recoveredHacks.count > 0 || recoveredGeneration.count > 0 || recoveredVerification.count > 0) {
       logger.info('startup_recovered_stale_tasks', {
         action: 'judge_ws',
-        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count, dataGenerationCount: recoveredGeneration.count }
+        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count, dataGenerationCount: recoveredGeneration.count, programVerificationCount: recoveredVerification.count }
       })
     }
   } catch (e: any) {
@@ -617,6 +625,9 @@ async function handleMessage(ws: WebSocket, msg: any) {
     case 'data_generation_result':
       await handleDataGenerationResult(ws, msg.payload)
       break
+    case 'judge_program_verification_result':
+      await handleJudgeProgramVerificationResult(ws, msg.payload)
+      break
     default:
       logger.warn('judge_ws_unknown_message', {
         action: 'judge_ws',
@@ -630,6 +641,13 @@ async function handleDataGenerationResult(ws: WebSocket, payload: any) {
   if (!connection) return
   try { await finalizeDataGenerationJob(connection.judgeId, payload) }
   finally { connection.consumer?.handleResult('data_generation', String(payload?.jobId || '')) }
+}
+
+async function handleJudgeProgramVerificationResult(ws: WebSocket, payload: any) {
+  const connection = judges.get(ws)
+  if (!connection) return
+  try { await finalizeJudgeProgramVerificationJob(connection.judgeId, payload) }
+  finally { connection.consumer?.handleResult('judge_program_verification', String(payload?.jobId || '')) }
 }
 
 /**

@@ -1,0 +1,33 @@
+.steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-2); padding: 0; margin: 0 0 var(--space-5); list-style: none; }
+.steps li { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--font-size-sm); }
+.steps li span { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px; }
+.steps li[data-active="true"] { color: var(--primary); font-weight: 700; }
+.steps li[data-active="true"] span, .steps li[data-done="true"] span { color: white; background: var(--primary); border-color: var(--primary); }
+.kindGrid, .methodGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.kindCard, .methodGrid button { min-height: 104px; align-items: flex-start; flex-direction: column; text-align: left; white-space: normal; }
+.kindCard span, .methodGrid button span { font-weight: 400; opacity: .85; }
+.section { display: grid; gap: var(--space-4); }
+.section label { display: grid; gap: var(--space-2); font-weight: 600; }
+.protocol { display: grid; gap: var(--space-1); padding: var(--space-3); color: var(--text-secondary); background: var(--bg-muted); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.editorHeader, .fixtureHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.editorHeader > div:first-child { display: grid; gap: var(--space-1); }
+.editorHeader span { color: var(--text-muted); font-size: var(--font-size-sm); }
+.actions, .footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+.upload { display: inline-flex !important; grid-auto-flow: column; align-items: center; gap: var(--space-1) !important; padding: var(--space-2) var(--space-3); color: var(--text-secondary); cursor: pointer; }
+.upload input { display: none; }
+.editor { min-height: 330px; font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.55; }
+.subtasks, .profiles { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.profiles > div { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.parameterEditor { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
+.parameter { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, .8fr) minmax(120px, 1fr) auto; gap: var(--space-2); align-items: center; }
+.fixtureHeader h3, .fixtureHeader p { margin: 0; }
+.fixtureHeader p { margin-top: var(--space-1); color: var(--text-muted); }
+.fixture { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.fixture > div:first-child { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); }
+.pending, .success, .failure { display: flex; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.success { color: var(--success-text); background: var(--success-bg); }
+.failure { color: var(--danger-text); background: var(--danger-bg); }
+.warning { color: var(--warning-text); }
+.report { display: grid; gap: var(--space-1); padding: var(--space-3); background: var(--bg-muted); border-radius: var(--radius-md); }
+.report pre { max-height: 140px; overflow: auto; margin: 0; white-space: pre-wrap; }
+@media (max-width: 720px) { .steps { grid-template-columns: 1fr; } .steps li:not([data-active="true"]) { display: none; } .kindGrid, .methodGrid, .profiles > div, .parameter { grid-template-columns: 1fr; } .editorHeader, .fixtureHeader { flex-direction: column; } }

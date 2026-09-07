@@ -13,7 +13,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 121 |
+| Prisma models | 125 |
 | Prisma enums | 6 |
 | Legacy route adapters | 25 |
 | Module route adapters | 44 |
@@ -165,6 +165,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemHackAttempt`
 - `ProblemHackConfig`
 - `ProblemJudgeProgram`
+- `ProblemJudgeProgramAuditLog`
+- `ProblemJudgeProgramDraft`
+- `ProblemJudgeProgramFixtureSet`
+- `ProblemJudgeProgramVerificationJob`
 - `ProblemJudgeProgramVersion`
 - `ProblemList`
 - `ProblemListEntry`

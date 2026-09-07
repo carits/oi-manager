@@ -205,6 +205,7 @@ export const JUDGE_PROGRAM_TEMPLATES: readonly JudgeProgramTemplate[] = [
   { id: 'generator-python3-v1', version: 1, kind: 'generator', language: 'python3', protocol: 'oj.generator/v1', title: 'Python3 数据生成器', description: JUDGE_PROGRAM_CAPABILITIES.generator.description, recommended: true, source: PY_GENERATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.generator.quickProtocol, examples: [{ name: '随机小数据', stdin: '{"protocol":"oj.generator/v1","seed":"1","caseId":1,"profile":"random","params":{"nMin":1,"nMax":5}}' }] },
   { id: 'generator-cpp17-v1', version: 1, kind: 'generator', language: 'cpp17', protocol: 'oj.generator/v1', title: 'C++17 数据生成器', description: JUDGE_PROGRAM_CAPABILITIES.generator.description, recommended: false, source: CPP_GENERATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.generator.quickProtocol, examples: [{ name: '随机小数据', stdin: '{"protocol":"oj.generator/v1","seed":"1","caseId":1,"profile":"random","params":{"nMin":1,"nMax":5}}' }] },
   { id: 'validator-python3-v1', version: 1, kind: 'validator', language: 'python3', protocol: 'oj.validator/v1', title: 'Python3 输入校验器', description: JUDGE_PROGRAM_CAPABILITIES.validator.description, recommended: false, source: PY_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: [{ name: '应通过', stdin: '3\n1 2 3\n', expectedExitCode: 0 }, { name: '应拒绝', stdin: '0\n', expectedExitCode: 1 }] },
+  { id: 'validator-dsl-v1', version: 1, kind: 'validator', language: 'cpp17', protocol: 'oj.validator/v1', title: 'Validator DSL 编译产物', description: '由平台可信 DSL 编译器生成的 C++17 + testlib Validator。', recommended: false, source: CPP_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: [{ name: '应通过', stdin: '3\n1 2 3\n', expectedExitCode: 0 }, { name: '应拒绝', stdin: '0\n', expectedExitCode: 1 }] },
   { id: 'validator-cpp17-v1', version: 1, kind: 'validator', language: 'cpp17', protocol: 'oj.validator/v1', title: 'C++17 + testlib 输入校验器', description: JUDGE_PROGRAM_CAPABILITIES.validator.description, recommended: false, source: CPP_VALIDATOR, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.validator.quickProtocol, examples: [{ name: '应通过', stdin: '3\n1 2 3\n', expectedExitCode: 0 }, { name: '应拒绝', stdin: '0\n', expectedExitCode: 1 }] },
   { id: 'classifier-python3-v1', version: 1, kind: 'classifier', language: 'python3', protocol: 'oj.classifier/v1', title: 'Python3 子任务分类器', description: JUDGE_PROGRAM_CAPABILITIES.classifier.description, recommended: false, source: PY_CLASSIFIER, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.classifier.quickProtocol, examples: [] },
   { id: 'classifier-cpp17-v1', version: 1, kind: 'classifier', language: 'cpp17', protocol: 'oj.classifier/v1', title: 'C++17 子任务分类器', description: JUDGE_PROGRAM_CAPABILITIES.classifier.description, recommended: true, source: CPP_CLASSIFIER, protocolHelp: JUDGE_PROGRAM_CAPABILITIES.classifier.quickProtocol, examples: [] },
@@ -229,6 +230,66 @@ export class ClassifierProtocolError extends Error {
   constructor(public readonly code: 'CLASSIFIER_INVALID_JSON' | 'CLASSIFIER_SCHEMA_INVALID' | 'CLASSIFIER_EMPTY_SUBTASKS' | 'CLASSIFIER_UNKNOWN_SUBTASK', message: string) { super(message) }
 }
 
+export class GeneratorProtocolError extends Error {
+  constructor(public readonly code: 'GENERATOR_INVALID_JSON' | 'GENERATOR_SCHEMA_INVALID', message: string) { super(message) }
+}
+
+export type GeneratorContextV1 = {
+  protocol: 'oj.generator/v1'
+  seed: string
+  caseId: number
+  profile: string
+  params: Record<string, string | number | boolean>
+}
+
+function duplicateTopLevelKeys(source: string) {
+  const keys: string[] = []
+  let depth = 0, index = 0, inString = false, escaped = false, current = '', stringDepth = 0
+  while (index < source.length) {
+    const character = source[index++]
+    if (inString) {
+      if (escaped) { escaped = false; continue }
+      if (character === '\\') { escaped = true; continue }
+      if (character === '"') {
+        inString = false
+        let cursor = index
+        while (/\s/.test(source[cursor] || '')) cursor++
+        if (stringDepth === 1 && source[cursor] === ':') keys.push(current)
+      } else current += character
+      continue
+    }
+    if (character === '"') { inString = true; current = ''; stringDepth = depth; continue }
+    if (character === '{' || character === '[') depth++
+    if (character === '}' || character === ']') depth--
+  }
+  return keys.filter((key, position) => keys.indexOf(key) !== position)
+}
+
+export function parseGeneratorContext(source: string): GeneratorContextV1 {
+  let parsed: unknown
+  try { parsed = JSON.parse(source) }
+  catch { throw new GeneratorProtocolError('GENERATOR_INVALID_JSON', 'Generator Context 必须是合法 JSON') }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'Generator Context 必须是对象')
+  const record = parsed as Record<string, unknown>
+  const expected = ['protocol', 'seed', 'caseId', 'profile', 'params']
+  if (Object.keys(record).sort().join('\0') !== [...expected].sort().join('\0') || duplicateTopLevelKeys(source).length) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'Generator Context 字段缺失、重复或包含额外字段')
+  if (record.protocol !== 'oj.generator/v1') throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'Generator Context 协议必须是 oj.generator/v1')
+  const normalizedSeed = typeof record.seed === 'string' ? record.seed.replace(/^0+(?=\d)/, '') : ''
+  if (
+    typeof record.seed !== 'string'
+    || !/^[0-9]+$/.test(record.seed)
+    || normalizedSeed.length > 20
+    || (normalizedSeed.length === 20 && normalizedSeed > '18446744073709551615')
+  ) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'seed 必须是 uint64 十进制字符串')
+  if (typeof record.caseId !== 'number' || !Number.isSafeInteger(record.caseId) || record.caseId < 1) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'caseId 必须是正整数')
+  if (typeof record.profile !== 'string' || !record.profile.trim() || record.profile.length > 80) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'profile 长度必须为 1～80')
+  if (!record.params || typeof record.params !== 'object' || Array.isArray(record.params)) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', 'params 必须是对象')
+  for (const [key, value] of Object.entries(record.params as Record<string, unknown>)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/.test(key) || !['string', 'number', 'boolean'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))) throw new GeneratorProtocolError('GENERATOR_SCHEMA_INVALID', `参数 ${key || '—'} 类型或名称无效`)
+  }
+  return record as GeneratorContextV1
+}
+
 export function parseClassifierOutput(output: string, knownSubtaskIds: readonly number[]): number[] {
   let parsed: unknown
   try { parsed = JSON.parse(output) } catch { throw new ClassifierProtocolError('CLASSIFIER_INVALID_JSON', 'Classifier 必须输出严格 JSON') }
@@ -246,34 +307,92 @@ export function parseClassifierOutput(output: string, knownSubtaskIds: readonly 
 
 export const OJ_GENERATOR_CPP_HEADER = String.raw`#pragma once
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 namespace oj {
-class GeneratorContext {
-  std::string raw_, seed_, profile_;
-  std::map<std::string, long long> ints_;
-  static std::string stringField(const std::string &raw, const std::string &key) {
-    const std::string needle = "\"" + key + "\""; auto pos = raw.find(needle);
-    if (pos == std::string::npos || (pos = raw.find(':', pos + needle.size())) == std::string::npos) throw std::runtime_error("missing context field: " + key);
-    pos = raw.find('"', pos + 1); if (pos == std::string::npos) throw std::runtime_error("invalid context field: " + key);
-    auto end = raw.find('"', pos + 1); if (end == std::string::npos) throw std::runtime_error("invalid context field: " + key);
-    return raw.substr(pos + 1, end - pos - 1);
+struct JsonValue {
+  enum Type { String, Number, Boolean, Object } type;
+  std::string text;
+  double number = 0;
+  bool boolean = false;
+  std::map<std::string, JsonValue> object;
+};
+class JsonParser {
+  const std::string &source_; std::size_t position_ = 0;
+  [[noreturn]] void fail(const std::string &message) const { throw std::runtime_error("invalid oj.generator/v1 context: " + message); }
+  void whitespace() { while (position_ < source_.size() && (source_[position_] == ' ' || source_[position_] == '\n' || source_[position_] == '\r' || source_[position_] == '\t')) ++position_; }
+  char take() { if (position_ >= source_.size()) fail("unexpected end"); return source_[position_++]; }
+  std::string string() {
+    if (take() != '"') fail("string expected"); std::string result;
+    while (position_ < source_.size()) {
+      char c = take(); if (c == '"') return result;
+      if (static_cast<unsigned char>(c) < 0x20) fail("control character in string");
+      if (c != '\\') { result += c; continue; }
+      char e = take();
+      if (e == '"' || e == '\\' || e == '/') result += e;
+      else if (e == 'b') result += '\b'; else if (e == 'f') result += '\f'; else if (e == 'n') result += '\n'; else if (e == 'r') result += '\r'; else if (e == 't') result += '\t';
+      else fail("unsupported string escape");
+    }
+    fail("unterminated string");
   }
-public:
-  explicit GeneratorContext(std::string raw): raw_(std::move(raw)), seed_(stringField(raw_, "seed")), profile_(stringField(raw_, "profile")) {
-    auto p = raw_.find("\"params\""); if (p != std::string::npos && (p = raw_.find('{', p)) != std::string::npos) {
-      auto end = raw_.find('}', p); std::string body = raw_.substr(p + 1, end - p - 1); std::stringstream stream(body); std::string item;
-      while (std::getline(stream, item, ',')) { auto colon = item.find(':'); if (colon == std::string::npos) continue; auto q1 = item.find('"'), q2 = item.find('"', q1 + 1); if (q1 == std::string::npos || q2 == std::string::npos) continue; try { ints_[item.substr(q1 + 1, q2 - q1 - 1)] = std::stoll(item.substr(colon + 1)); } catch (...) {} }
+  JsonValue number() {
+    std::size_t start = position_;
+    if (source_[position_] == '-') ++position_;
+    if (position_ >= source_.size() || source_[position_] < '0' || source_[position_] > '9') fail("number expected");
+    if (source_[position_] == '0') ++position_; else while (position_ < source_.size() && source_[position_] >= '0' && source_[position_] <= '9') ++position_;
+    if (position_ < source_.size() && source_[position_] == '.') { ++position_; if (position_ >= source_.size() || !std::isdigit(static_cast<unsigned char>(source_[position_]))) fail("fraction expected"); while (position_ < source_.size() && std::isdigit(static_cast<unsigned char>(source_[position_]))) ++position_; }
+    if (position_ < source_.size() && (source_[position_] == 'e' || source_[position_] == 'E')) { ++position_; if (position_ < source_.size() && (source_[position_] == '+' || source_[position_] == '-')) ++position_; if (position_ >= source_.size() || !std::isdigit(static_cast<unsigned char>(source_[position_]))) fail("exponent expected"); while (position_ < source_.size() && std::isdigit(static_cast<unsigned char>(source_[position_]))) ++position_; }
+    std::string text = source_.substr(start, position_ - start); char *end = nullptr; double value = std::strtod(text.c_str(), &end);
+    if (!end || *end || !std::isfinite(value)) fail("finite number required"); JsonValue result{JsonValue::Number}; result.text = text; result.number = value; return result;
+  }
+  JsonValue object() {
+    if (take() != '{') fail("object expected"); JsonValue result{JsonValue::Object}; whitespace(); if (position_ < source_.size() && source_[position_] == '}') { ++position_; return result; }
+    while (true) {
+      whitespace(); if (position_ >= source_.size() || source_[position_] != '"') fail("object key expected"); std::string key = string(); whitespace(); if (take() != ':') fail("colon expected"); whitespace();
+      if (result.object.count(key)) fail("duplicate key: " + key); result.object.emplace(key, value()); whitespace(); char delimiter = take(); if (delimiter == '}') return result; if (delimiter != ',') fail("comma expected");
     }
   }
-  std::uint64_t seed() const { return std::stoull(seed_); }
+public:
+  explicit JsonParser(const std::string &source): source_(source) {}
+  JsonValue value() {
+    whitespace(); if (position_ >= source_.size()) fail("value expected"); char c = source_[position_];
+    if (c == '"') { JsonValue result{JsonValue::String}; result.text = string(); return result; }
+    if (c == '{') return object();
+    if (source_.compare(position_, 4, "true") == 0) { position_ += 4; JsonValue result{JsonValue::Boolean}; result.boolean = true; return result; }
+    if (source_.compare(position_, 5, "false") == 0) { position_ += 5; JsonValue result{JsonValue::Boolean}; return result; }
+    if (c == '-' || (c >= '0' && c <= '9')) return number();
+    fail("unsupported value type");
+  }
+  JsonValue parse() { JsonValue result = value(); whitespace(); if (position_ != source_.size()) fail("trailing content"); return result; }
+};
+class GeneratorContext {
+  std::uint64_t seed_; std::uint64_t caseId_; std::string profile_; std::map<std::string, JsonValue> params_;
+  static const JsonValue &required(const std::map<std::string, JsonValue> &object, const std::string &key, JsonValue::Type type) { auto it = object.find(key); if (it == object.end() || it->second.type != type) throw std::runtime_error("invalid oj.generator/v1 context field: " + key); return it->second; }
+public:
+  explicit GeneratorContext(const std::string &raw) {
+    JsonValue root = JsonParser(raw).parse(); if (root.type != JsonValue::Object || root.object.size() != 5) throw std::runtime_error("oj.generator/v1 context must contain exactly protocol, seed, caseId, profile and params");
+    if (required(root.object, "protocol", JsonValue::String).text != "oj.generator/v1") throw std::runtime_error("unsupported generator protocol");
+    const std::string &seed = required(root.object, "seed", JsonValue::String).text; if (seed.empty() || seed.find_first_not_of("0123456789") != std::string::npos) throw std::runtime_error("seed must be uint64 decimal string");
+    std::size_t used = 0; try { seed_ = std::stoull(seed, &used); } catch (...) { throw std::runtime_error("seed out of uint64 range"); } if (used != seed.size()) throw std::runtime_error("seed out of uint64 range");
+    const JsonValue &caseId = required(root.object, "caseId", JsonValue::Number); if (caseId.number < 1 || caseId.number > 9007199254740991.0 || std::floor(caseId.number) != caseId.number) throw std::runtime_error("caseId must be a positive safe integer"); caseId_ = static_cast<std::uint64_t>(caseId.number);
+    profile_ = required(root.object, "profile", JsonValue::String).text; if (profile_.empty() || profile_.size() > 80) throw std::runtime_error("profile length must be 1..80");
+    params_ = required(root.object, "params", JsonValue::Object).object;
+    for (const auto &entry : params_) if (entry.second.type == JsonValue::Object) throw std::runtime_error("generator params must be primitive values");
+  }
+  std::uint64_t seed() const { return seed_; }
+  std::uint64_t caseId() const { return caseId_; }
   const std::string &profile() const { return profile_; }
-  long long paramInt(const std::string &key, long long fallback = 0) const { auto it = ints_.find(key); return it == ints_.end() ? fallback : it->second; }
+  long long paramInt(const std::string &key, long long fallback = 0) const { auto it = params_.find(key); if (it == params_.end()) return fallback; if (it->second.type != JsonValue::Number || std::floor(it->second.number) != it->second.number || it->second.number < static_cast<double>(std::numeric_limits<long long>::min()) || it->second.number > static_cast<double>(std::numeric_limits<long long>::max())) throw std::runtime_error("integer parameter required: " + key); return static_cast<long long>(it->second.number); }
+  double paramNumber(const std::string &key, double fallback = 0) const { auto it = params_.find(key); if (it == params_.end()) return fallback; if (it->second.type != JsonValue::Number) throw std::runtime_error("number parameter required: " + key); return it->second.number; }
+  bool paramBool(const std::string &key, bool fallback = false) const { auto it = params_.find(key); if (it == params_.end()) return fallback; if (it->second.type != JsonValue::Boolean) throw std::runtime_error("boolean parameter required: " + key); return it->second.boolean; }
+  std::string paramString(const std::string &key, const std::string &fallback = "") const { auto it = params_.find(key); if (it == params_.end()) return fallback; if (it->second.type != JsonValue::String) throw std::runtime_error("string parameter required: " + key); return it->second.text; }
 };
 }
 #define OJ_GENERATOR_MAIN(functionName) int main() { try { std::ostringstream input; input << std::cin.rdbuf(); oj::GeneratorContext context(input.str()); functionName(context); return 0; } catch (const std::exception &error) { std::cerr << error.what() << '\n'; return 1; } }

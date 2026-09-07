@@ -17,6 +17,8 @@ import { getClientHeartbeatReply } from './protocol'
 import { judgeTelemetry } from './telemetry'
 import { generateTestdata } from './data-generation'
 import type { DataGenerationMessage, DataGenerationResultMessage } from './types'
+import type { JudgeProgramVerificationMessage, JudgeProgramVerificationResultMessage } from './types'
+import { verifyJudgeProgram } from './judge-program-verification'
 
 export function buildJudgeRequest(payload: JudgeMessage['payload']): JudgeRequest {
   return {
@@ -151,6 +153,9 @@ class JudgeClient {
       case 'data_generation':
         await this.handleDataGenerationTask(msg as DataGenerationMessage)
         break
+      case 'judge_program_verification':
+        await this.handleJudgeProgramVerificationTask(msg as JudgeProgramVerificationMessage)
+        break
       default:
         judgeTelemetry.increment('message.unknown')
         console.log('[Judge] Unknown message type:', msg.type)
@@ -161,6 +166,13 @@ class JudgeClient {
     const result = await generateTestdata(msg.payload)
     if (result.retryable) { this.ws?.close(1011, 'data generation infrastructure unavailable'); return }
     const response: DataGenerationResultMessage = { type: 'data_generation_result', payload: result }
+    this.send(response)
+  }
+
+  private async handleJudgeProgramVerificationTask(msg: JudgeProgramVerificationMessage) {
+    const result = await verifyJudgeProgram(msg.payload)
+    if (result.retryable) { this.ws?.close(1011, 'program verification infrastructure unavailable'); return }
+    const response: JudgeProgramVerificationResultMessage = { type: 'judge_program_verification_result', payload: result }
     this.send(response)
   }
 

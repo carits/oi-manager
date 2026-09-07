@@ -1,4 +1,5 @@
 import fs from 'fs'
+import crypto from 'node:crypto'
 import os from 'os'
 import path from 'path'
 import { acquireCompiledProgram } from './compiled-program-cache'
@@ -55,6 +56,8 @@ export async function generateTestdata(request: DataGenerationRequest): Promise<
       const validated = validatorRun.result
       if (validated.infrastructureError) return { jobId: request.jobId, fencingToken: request.fencingToken, retryable: true, cases: results }
       if (!validatorRun.valid) { results.push({ id: item.id, status: 'failed', failureStage: 'validator', message: `Validator 拒绝输入${validated.stderr ? `：${validated.stderr.slice(0, 1000)}` : ''}`, generatorTimeMs, validatorTimeMs: validated.time }); continue }
+      const inputSha256 = crypto.createHash('sha256').update(input).digest('hex')
+      if (request.knownInputSha256?.includes(inputSha256)) { results.push({ id: item.id, status: 'failed', failureStage: 'deduplication', message: '与现有候选或正式测试数据完全重复', inputData: input, generatorTimeMs, validatorTimeMs: validated.time }); continue }
       const standardRun = await runStandardProgram({ language: 'cpp17', stdin: input, timeLimit: 30_000, memoryLimit: 524_288, outputLimit: maxData, artifact: standard!.result })
       const answered = standardRun.result
       if (answered.infrastructureError) return { jobId: request.jobId, fencingToken: request.fencingToken, retryable: true, cases: results }

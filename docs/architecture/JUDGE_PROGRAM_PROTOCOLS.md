@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-06
+last_verified: 2026-09-07
 source_of_truth: packages/shared/src/judge-program-protocol.ts, apps/judge/src/judge-program-runner.ts, ProblemJudgeProgramVersion
 ---
 
@@ -32,14 +32,28 @@ Classifier 必须返回数据满足的全部 Subtask。输出不允许额外字�
 
 ## 生命周期
 
-源码在浏览器中是草稿。保存后先创建不可变 `compiled` 版本；协议样例验证成功后转为 `verified`；
+源码在浏览器中是草稿。保存后先创建不可变 `draft` 版本；Judge 异步编译成功后转为 `compiled`，协议样例验证成功后转为 `verified`；
 只有管理员明确激活后才成为 `active`，旧活动版本转为 `retired`。Validator 激活前必须同时验证正、
 负样例；Generator 必须通过非空和双运行确定性检查；Classifier 必须通过严格 Schema、题目 Subtask
 ID 和可选期望分类检查。创建、验证、激活分别记录审计事件。
 
+编译和预检任务通过持久化队列分发给 Judge，并保存租约、Judge ID 与 fencing token。过期租约、断线
+和 API 重启可以重新排队；迟到或重复结果无法越过 fencing token。基础设施错误最多自动重试三次，
+达到上限只终止本次验证任务，不会把源码版本误标为程序编译失败，管理员可以重新发起验证。
+
+Validator DSL 的“物化”只生成不可变 C++ ProgramVersion，不等于激活。物化后的版本仍必须依次完成
+Judge 编译、正负 Fixture 预检和管理员显式激活。兼容的旧 `/activate` 路由保持相同物化语义，新客户端
+使用语义明确的 `/materialize` 路由。
+
 数据生成、普通贡献和 Hack 都通过统一 Judge Program Runner 执行 Python/C++ Validator、Classifier、
 Generator 与 STD。普通贡献者只提交直接输入或 Generator；STD、Validator、Classifier 永远使用题目
-管理员已激活的版本。
+管理员已激活的版本。正式任务在创建和领取时都会复核 `compileStatus=passed`、`lifecycleStatus=active`、
+逻辑程序仍 active 且 `currentVersionId` 一致，防止排队期间被退役的版本继续执行。
+
+普通用户上传 Generator 必须提供完整 `oj.generator/v1` Manifest，包括语言、入口、参数 Schema 和有限
+Profile；Seed 由服务端生成并和 Profile、参数、程序版本、基础 TestSet Revision 一起固化到任务。
+Validator 通过后先按输入 SHA-256 去重，重复输入不再运行 STD。管理员历史任务可以读取
+`legacy-args-v1`，新贡献接口不能创建旧协议任务。
 
 ## 安全与兼容
 

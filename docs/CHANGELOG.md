@@ -9,6 +9,16 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
+## 2026-09-07
+
+### 评测程序生命周期与协议链最终收口
+
+- STD、Validator、Classifier、Generator 改为不可变版本和 `draft → compiled → verified → active → retired` 生命周期；创建源码不再同步激活，编译与 Fixture 预检使用带租约和 fencing token 的持久 Judge 队列。
+- 新增统一五步管理向导、服务端草稿、结构化 Fixture、Generator Profile/Parameter Schema、验证报告和显式激活；Validator DSL materialize 与激活拆分，旧路由仅保留兼容语义。
+- 正式数据生成只接受并在领取时复核当前 active 程序；普通 Generator 贡献强制完整 `oj.generator/v1` Manifest，Seed 由服务端生成并固化，旧 args 协议仅供历史管理员任务读取。
+- 修复 Validator 负 Fixture 的非零退出被沙箱映射为 Runtime Error 后误判失败，以及基础设施重试耗尽误把程序标为编译失败的问题；C++ Classifier 支持系统 `testlib.h`。
+- 增加 OI `Validator → Classifier → STD → Hack Gate → 100→0` 正向链、未知 Subtask fail-closed、资源释放与基础设施重试测试。发布前本地结果为 Judge 19/19、Web 68/68、模板 8/8、Server/Judge/Web 构建和 UI 门禁通过；本机缺 PostgreSQL/go-judge，真实数据库与沙箱验证将在隔离生产主机执行后再登记部署结果。
+
 ## 2026-09-06
 
 ### 评测程序协议、模板与 Python 执行链

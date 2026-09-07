@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-06
+last_verified: 2026-09-07
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -10,10 +10,10 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 361 个端点中 352 个必须认证，9 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 443 个端点中 434 个必须认证，9 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 361 个无会话请求：352 个受保护端点必须返回
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 443 个无会话请求：434 个受保护端点必须返回
 401，9 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
@@ -57,9 +57,20 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/judge-programs` | 列出题目的版本化 STD、Validator、Classifier 与 Generator |
 | `GET` | `/api/problems/judge-program-templates` | 返回共享能力矩阵、机器 Schema 和不含源码的模板目录 |
 | `GET` | `/api/problems/judge-program-templates/:templateId` | 返回模板源码、协议帮助和官方样例 |
-| `POST` | `/api/problems/:id/judge-programs` | 编译并创建评测程序及首个不可变 compiled 版本，不自动激活 |
-| `POST` | `/api/problems/:id/judge-programs/:programId/versions` | 编译并追加新的不可变程序版本 |
+| `GET` | `/api/judge-program-templates` | 模板目录的稳定账号级别名，供管理向导使用 |
+| `GET` | `/api/judge-program-templates/:templateId` | 模板详情的稳定账号级别名，供管理向导使用 |
+| `GET` | `/api/problems/:id/judge-program-drafts` | 读取当前管理员按程序类型保存的服务端草稿 |
+| `POST` | `/api/problems/:id/judge-program-drafts` | 新建或按程序类型更新带 revision 的服务端草稿 |
+| `PATCH` | `/api/problems/:id/judge-program-drafts/:draftId` | 以 expectedRevision 更新指定服务端草稿 |
+| `DELETE` | `/api/problems/:id/judge-program-drafts/:draftId` | 删除本人的指定服务端草稿 |
+| `GET` | `/api/problems/:id/judge-program-audit-logs` | 题目管理者读取程序生命周期审计摘要 |
+| `POST` | `/api/problems/:id/judge-programs` | 创建逻辑程序及首个不可变 draft 版本，不同步编译、不自动激活 |
+| `POST` | `/api/problems/:id/judge-programs/:programId/versions` | 追加新的不可变 draft 程序版本 |
+| `POST` | `/api/problems/:id/judge-programs/:programId/versions/:versionId/compile` | 创建持久化异步 Judge 编译任务 |
 | `POST` | `/api/problems/:id/judge-programs/:programId/versions/:versionId/preflight` | 运行协议 Fixture；Validator 要求正负样例，Generator 检查确定性，Classifier 严格验证 Schema 与 Subtask |
+| `GET` | `/api/problems/:id/judge-programs/:programId/versions/:versionId/verification` | 查询编译/预检任务、报告和安全错误 |
+| `POST` | `/api/problems/:id/judge-programs/:programId/fixture-sets` | 保存或复用结构化 Fixture Set |
+| `GET` | `/api/problems/:id/judge-programs/:programId/fixture-sets` | 查询逻辑程序的 Fixture Set 历史 |
 | `PATCH` | `/api/problems/:id/judge-programs/:programId` | 仅激活 verified 版本或归档逻辑程序 |
 | `POST` | `/api/problems/:id/data-generation-jobs` | 创建直接输入或 Generator 参数批次 |
 | `GET` | `/api/problems/:id/data-generation-jobs` | 列出题目的候选数据生成任务 |
@@ -86,7 +97,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/problems/:id/subtask-rules` | 保存最多 64 条 Subtask Rule |
 | `GET` | `/api/problems/:id/validator-specs` | 题目管理者列出不可变 Validator DSL 版本 |
 | `POST` | `/api/problems/:id/validator-specs` | 校验 DSL、生成可信 C++ 并执行真实沙箱编译 |
-| `POST` | `/api/problems/:id/validator-specs/:specId/activate` | 激活已通过编译的 Validator Spec |
+| `POST` | `/api/problems/:id/validator-specs/:specId/materialize` | 将 DSL 物化为不可变 Validator ProgramVersion；仍需 Judge 编译、预检和显式激活 |
+| `POST` | `/api/problems/:id/validator-specs/:specId/activate` | 旧客户端兼容路由；行为同 materialize，不直接激活 |
 | `POST` | `/api/problems/:id/ai/validator-spec` | 通过统一 Token 池让 DeepSeek 生成 Validator DSL 草案 |
 | `POST` | `/api/problems/:id/ai/validator-spec/:requestId/save` | 审阅后保存 AI DSL 为不可变 Validator Spec |
 | `POST` | `/api/problems/:id/ai/validator` | 从官方 Markdown 题面生成并编译 Validator 草案 |

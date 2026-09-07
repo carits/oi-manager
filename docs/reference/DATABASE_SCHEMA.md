@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-06
+last_verified: 2026-09-07
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -70,6 +70,10 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ProblemHackConfig` | 题目级 Hack 开关、STD、Validator、OI Classifier 和配置 revision |
 | `ProblemJudgeProgram` | 题目的逻辑 STD、Validator、Classifier 或命名 Generator 及当前版本指针 |
 | `ProblemJudgeProgramVersion` | 不可变程序源码版本、哈希、语言、协议/模板、compiled/verified/active/retired 生命周期、预检报告、作者和 AI 来源 |
+| `ProblemJudgeProgramDraft` | 题目管理员按程序类型保存、带乐观锁 revision 的服务端编辑草稿 |
+| `ProblemJudgeProgramFixtureSet` | 不可变的结构化协议 Fixture 集合及内容哈希，可被程序版本和验证任务复用 |
+| `ProblemJudgeProgramVerificationJob` | Judge 异步编译/预检任务，保存租约、fencing token、尝试次数、报告和终态错误 |
+| `ProblemJudgeProgramAuditLog` | 程序创建、编译、预检、激活、退役等操作的题目级不可变审计 |
 | `ProblemDataGenerationJob` | 独立数据生成队列、程序版本、基础 Revision、租约、fencing token 和晋升结果 |
 | `ProblemDataGenerationCase` | 一次参数/直接输入对应的候选测试点、逐阶段状态、内容对象与预览 |
 | `TestcaseCandidate` | 已通过技术验证、等待或已经晋升的候选测试点；固定内容对象、基线 Revision、命中 Subtask 与晋升状态 |

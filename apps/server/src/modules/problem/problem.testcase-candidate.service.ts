@@ -40,6 +40,7 @@ export async function createAdmittedCandidate(params: {
   validatorVersionId?: string | null
   classifierVersionId?: string | null
   generatorVersionId?: string | null
+  provenance?: unknown
   hackAttemptId?: string | null
   status?: 'ADMITTED' | 'ELIGIBLE'
   evaluationStage?: string
@@ -72,7 +73,7 @@ export async function createAdmittedCandidate(params: {
     inputFileName: params.inputFileName, outputFileName: params.outputFileName,
     affectedSubtaskIds: params.affectedSubtaskIds?.length ? JSON.stringify(params.affectedSubtaskIds) : null,
     standardVersionId: params.standardVersionId || null, validatorVersionId: params.validatorVersionId || null,
-    classifierVersionId: params.classifierVersionId || null, generatorVersionId: params.generatorVersionId || null,
+    classifierVersionId: params.classifierVersionId || null, generatorVersionId: params.generatorVersionId || null, provenance: params.provenance as any,
     semanticFingerprint: digest(Buffer.from(`${inputSha256}\0${outputSha256}`)), createdBy: params.createdBy,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
   } })
