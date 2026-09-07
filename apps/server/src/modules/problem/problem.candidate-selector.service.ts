@@ -214,6 +214,13 @@ export async function maybeAutoSelectCandidate(candidateId: string, override?: {
     decisions,
     publishRateLimited: recentPublishes >= Math.min(3, policy.maxAutoPublishesPerHour),
   }
+  const hasAutomaticSubtask = affected.some(subtaskId => readiness.some(item => item.subtaskId === subtaskId && item.autoSelection))
+  if (!override && !hasAutomaticSubtask) {
+    // LIMITED/CLOSED corpus readiness is an observation state. Keep the
+    // evaluated Candidate eligible for a future corpus rebuild instead of
+    // falsely classifying it as redundant or below the selection threshold.
+    return { promoted: false, reason: 'observe_limited', decisions }
+  }
   const selectionRun = await prisma.canonicalSelectionRun.create({ data: { id: crypto.randomUUID(), problemId: candidate.problemId, baseTestSetRevisionId: candidate.baseTestSetRevisionId!, corpusRevisionId: candidate.corpusRevisionId, policyRevision: policy.revision, status: selected.length ? 'running' : 'not_selected', mode: override ? 'emergency' : 'auto', baselineQuality: decisions.reduce((sum, item) => sum + item.baselineQuality, 0), candidateQuality: decisions.reduce((sum, item) => sum + item.candidateQuality, 0), qualityDelta: decisions.reduce((sum, item) => sum + item.qualityGain, 0), selectedCandidateIds: selected.length ? [candidate.id] : [], publishReason: override ? `管理员强制发布：${override.reason}` : selected.length ? '按 Subtask 边际集合价值选择' : decisions.map(item => `S${item.subtaskId}:${item.reason}`).join('; '), finishedAt: selected.length ? null : new Date() } })
   if (!selected.length) {
     const waitingReplacement = (spec.subtasks || []).some(subtask => affected.includes(subtask.id) && uniqueSubtaskCases(subtask).length >= OI_CANDIDATE_LIMITS.MAX_CASES_PER_SUBTASK)
