@@ -42,7 +42,7 @@ describe('bounded OI candidate policy', () => {
 
   it('performs 11-choose-10 by evicting the redundant old membership', () => {
     const corpus = [{ id: 'a', weight: 1 }, { id: 'b', weight: 1 }]
-    const unique = Array.from({ length: 9 }, (_, index) => ({ id: `core-${index}`, semanticFingerprint: `core-${index}`, killedClusters: [] as Array<{ id: string; weight: number }> }))
+    const unique = Array.from({ length: 9 }, (_, index) => ({ id: `core-${index}`, semanticFingerprint: `core-${index}`, killedClusters: index === 0 ? [{ id: 'a', weight: 1 }] : [] as Array<{ id: string; weight: number }> }))
     const duplicate = { id: 'old-duplicate', semanticFingerprint: 'duplicate', killedClusters: [{ id: 'a', weight: 1 }] }
     const candidate = { id: 'candidate', semanticFingerprint: 'new', killedClusters: [{ id: 'b', weight: 1 }] }
     const best = chooseBestEviction({ pool: [...unique, duplicate, candidate], removableIds: new Set(['old-duplicate', 'candidate']), corpus, featureUniverse: [], preferCandidateId: 'candidate' })

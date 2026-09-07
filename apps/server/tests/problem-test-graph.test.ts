@@ -70,7 +70,7 @@ describe('OI Test Graph validation', () => {
     const graph = validGraph()
     graph.subtasks[0].groups = [
       { key: 'official-1', name: 'A', kind: 'official', score: 50, type: 'min', cases: Array.from({ length: 6 }, (_, index) => ({ testcaseId: `case-${index + 1}` })) },
-      { key: 'official-2', name: 'B', kind: 'official', score: 50, type: 'min', cases: Array.from({ length: 5 }, (_, index) => ({ testcaseId: `case-${index + 6}` })) },
+      { key: 'official-2', name: 'B', kind: 'official', score: 50, type: 'min', cases: Array.from({ length: 6 }, (_, index) => ({ testcaseId: `case-${index + 6}` })) },
       { key: 'hack-gate', name: 'Hack', kind: 'hack_gate', score: 0, type: 'min', cases: [{ testcaseId: 'case-1' }] },
     ]
     expect(validateTestGraphInput(graph).some(error => error.message.includes('11 个唯一正式测试点'))).toBe(true)

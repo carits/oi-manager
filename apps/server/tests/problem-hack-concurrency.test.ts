@@ -86,6 +86,7 @@ async function fixture(mode: 'acm' | 'oi' = 'acm') {
 }
 
 async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
+  const latestProblem = await prisma.problem.findUniqueOrThrow({ where: { id: fixture.problem.id }, include: { LatestTestSetRevision: true } })
   return prisma.problemHackAttempt.create({ data: {
     id: crypto.randomUUID(),
     problemId: fixture.problem.id,
@@ -96,9 +97,9 @@ async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
     hackSource: 'int main(){}',
     hackLanguage: 'cpp17',
     hackConfigRevision: 1,
-    judgeConfigHash: fixture.revision.judgeConfigHash,
-    testGraphRevision: fixture.problem.testGraphRevision,
-    baseTestSetRevisionId: fixture.revision.id,
+    judgeConfigHash: latestProblem.LatestTestSetRevision?.judgeConfigHash || fixture.revision.judgeConfigHash,
+    testGraphRevision: latestProblem.testGraphRevision,
+    baseTestSetRevisionId: latestProblem.latestTestSetRevisionId || fixture.revision.id,
   } })
 }
 
@@ -196,7 +197,10 @@ describe('concurrent Hack promotion', () => {
     const rows = await prisma.problemHackAttempt.findMany({ where: { problemId: context.problem.id } })
     expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'promoted')).toHaveLength(1)
     expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'pending')).toHaveLength(9)
-    expect(await prisma.testcaseCandidate.count({ where: { problemId: context.problem.id, status: 'STALE' } })).toBe(9)
+    const losingCandidates = await prisma.testcaseCandidate.findMany({ where: { problemId: context.problem.id, status: { not: 'PROMOTED' } } })
+    expect(losingCandidates).toHaveLength(9)
+    expect(losingCandidates.every(item => ['STALE', 'ELIGIBLE'].includes(item.status))).toBe(true)
+    expect(losingCandidates.some(item => ['SELECTED', 'PROMOTING'].includes(item.status))).toBe(false)
     expect(await prisma.problemTestSetRevision.count({ where: { problemId: context.problem.id } })).toBe(2)
     expect(await prisma.problemTestcase.count({ where: { problemId: context.problem.id, source: 'hack' } })).toBe(1)
 
