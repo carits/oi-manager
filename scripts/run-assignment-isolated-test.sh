@@ -41,4 +41,6 @@ if [[ -n "$BASE_SCHEMA" ]]; then
 else
   DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma migrate deploy --schema prisma/schema.prisma
 fi
+pnpm --dir "$ROOT_DIR" --filter @oi-manager/shared build
+DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma generate --schema prisma/schema.prisma
 TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/assignment.test.ts tests/background-services.test.ts
