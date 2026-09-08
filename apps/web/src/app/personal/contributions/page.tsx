@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import { ContributionPage } from '@/components/contribution/ContributionPage'
 
-export default function LegacyRedirectPage() {
-  redirect('/personal/rankings?tab=contribution')
+export default function PersonalContributionsPage() {
+  return <ContributionPage />
 }

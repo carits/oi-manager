@@ -12,6 +12,7 @@ import { getLanguageLabel } from '@/lib/judge-constants'
 import styles from './ProblemHackPanel.module.css'
 import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
 import { getJudgeProgramTemplate } from '@oi-manager/shared'
+import type { WorkspaceSummary } from '@oi-manager/shared'
 
 type InputChoice = 'data' | 'cpp17' | 'python3'
 interface Attempt { id: string; username?: string; status: string; inputMode: string; generatorLanguage?: string | null; hackLanguage: string; inputFilename?: string | null; outputFilename?: string | null; baselineResult?: string | null; baselineScore?: number | null; candidateResult?: string | null; candidateScore?: number | null; scoreDelta?: number | null; affectedSubtaskIds?: number[]; failureStage?: string | null; message?: string | null; createdAt: string; inputData?: string | null; generatorSource?: string | null; hackSource?: string | null }
@@ -30,19 +31,23 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
   const toast = useToast()
   const [choice, setChoice] = useState<InputChoice>('data'), [candidate, setCandidate] = useState(''), [hackSource, setHackSource] = useState(''), [hackLanguage, setHackLanguage] = useState(languages[0] || '')
   const [hackIo, setHackIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
+  const [contributionOrganizationId, setContributionOrganizationId] = useState('')
+  const [organizationWorkspaces, setOrganizationWorkspaces] = useState<WorkspaceSummary[]>([])
   const [attempts, setAttempts] = useState<Attempt[]>([]), [contributions, setContributions] = useState<ContributionTask[]>([]), [readiness, setReadiness] = useState<Readiness | null>(null)
   const [canManage, setCanManage] = useState(false), [totalAccepted, setTotalAccepted] = useState(acceptedCount), [loading, setLoading] = useState(true), [submitting, setSubmitting] = useState(false)
   const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null), [attemptDetails, setAttemptDetails] = useState<Record<string, Attempt>>({}), [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [hackResult, readinessResult, contributionResult] = await Promise.all([
+    const [hackResult, readinessResult, contributionResult, workspaceResult] = await Promise.all([
       apiClient.get<{ attempts: Attempt[]; acceptedCount: number; canManage: boolean }>(`/api/problems/${problemId}/hacks?pageSize=50`),
       apiClient.get<Readiness>(`/api/problems/${problemId}/contribution-readiness`),
       apiClient.get<ContributionTask[]>(`/api/problems/${problemId}/contributions/mine`),
+      apiClient.get<{ workspaces: WorkspaceSummary[] }>('/api/workspaces', { accountScoped: true }),
     ])
     if (hackResult.success && hackResult.data) { setAttempts(hackResult.data.attempts); setCanManage(hackResult.data.canManage); setTotalAccepted(hackResult.data.acceptedCount) }
     if (readinessResult.success && readinessResult.data) { setReadiness(readinessResult.data); setCanManage(readinessResult.data.canManage) }
     if (contributionResult.success && contributionResult.data) setContributions(contributionResult.data)
+    if (workspaceResult.success && workspaceResult.data) setOrganizationWorkspaces(workspaceResult.data.workspaces.filter(item => item.type === 'organization' && Boolean(item.organizationId)))
     setLoading(false)
   }, [problemId])
   useEffect(() => { load() }, [load])
@@ -55,7 +60,8 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
     if (!candidate.trim()) return toast.error('请填写候选输入或 Generator 源码')
     setSubmitting(true)
     try {
-      const result = choice === 'data' ? await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/data`, { name: '用户贡献', inputData: candidate }) : await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/generator`, { language: choice, source: candidate, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language: choice, entry: choice === 'python3' ? 'main.py' : 'main.cpp', parameterSchema: {}, profiles: [{ id: 'default', label: '默认', params: {} }] } })
+      const attribution = contributionOrganizationId ? { contributionOrganizationId } : {}
+      const result = choice === 'data' ? await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/data`, { name: '用户贡献', inputData: candidate, ...attribution }) : await apiClient.post<{ jobId: string }>(`/api/problems/${problemId}/candidates/generator`, { language: choice, source: candidate, ...attribution, manifest: { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language: choice, entry: choice === 'python3' ? 'main.py' : 'main.cpp', parameterSchema: {}, profiles: [{ id: 'default', label: '默认', params: {} }] } })
       if (!result.success) return toast.error(result.message || 'Candidate 提交失败')
       toast.success(`贡献任务 #${result.data?.jobId.slice(0, 8) || '—'} 已进入隔离队列`); setCandidate(''); await load()
     } finally { setSubmitting(false) }
@@ -64,7 +70,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
     if (!candidate.trim() || !hackSource.trim()) return toast.error('请完整填写候选输入和被 Hack 程序')
     setSubmitting(true)
     try {
-      const result = await apiClient.post<Attempt>(`/api/problems/${problemId}/hacks`, { inputMode: choice === 'data' ? 'data' : 'generator', inputData: choice === 'data' ? candidate : undefined, generatorSource: choice === 'data' ? undefined : candidate, generatorLanguage: choice === 'data' ? undefined : choice, hackSource, hackLanguage, inputFilename: hackIo.inputFilename || null, outputFilename: hackIo.outputFilename || null })
+      const result = await apiClient.post<Attempt>(`/api/problems/${problemId}/hacks`, { inputMode: choice === 'data' ? 'data' : 'generator', inputData: choice === 'data' ? candidate : undefined, generatorSource: choice === 'data' ? undefined : candidate, generatorLanguage: choice === 'data' ? undefined : choice, hackSource, hackLanguage, inputFilename: hackIo.inputFilename || null, outputFilename: hackIo.outputFilename || null, contributionOrganizationId: contributionOrganizationId || null })
       if (!result.success) return toast.error(result.message || 'Hack 提交失败')
       toast.success('Hack 已加入独立评测队列'); setCandidate(''); setHackSource(''); setHackIo({ inputFilename: null, outputFilename: null }); await load()
     } finally { setSubmitting(false) }
@@ -102,6 +108,7 @@ export function ProblemHackPanel({ problemId, acceptedCount, languages, mode, ha
     {readiness && !readiness.canContribute && !readiness.canHack ? <section className={styles.blocked}><XCircle size={24} aria-hidden="true" /><div><h3>当前暂不可贡献测试数据</h3>{readiness.blockers.map(item => <p key={item.code}>{item.message}</p>)}<p>STD 用于生成标准答案，Validator 用于确认候选输入满足题目格式与约束。</p>{readiness.canManage && onConfigureAssets && <div className={styles.configureActions}><Button variant="primary" onClick={onConfigureAssets}>AI 生成 Validator</Button><Button variant="outline" onClick={onConfigureAssets}>手动配置评测资产</Button></div>}</div></section> : <div className={styles.form}>
       <section className={styles.preparedTools} aria-label="系统已准备的评测工具"><div><strong>输入校验器已由题目管理员配置</strong><span>系统会自动判断数据是否合法，你不需要上传 Validator。</span></div><div><strong>标准程序已由题目管理员配置</strong><span>系统会自动生成正确答案，你只需要贡献输入。</span></div>{readiness?.mode === 'oi' && <div><strong>子任务分类由系统处理</strong><span>Classifier 会返回数据满足的全部 Subtask；你不需要自行提供。</span></div>}</section>
       {readiness?.warnings.map(item => <div className={styles.notice} key={item.code}><AlertTriangle size={18} aria-hidden="true" /><span>{item.message}</span></div>)}
+      {organizationWorkspaces.length > 0 && <div className={styles.attribution}><label htmlFor={`contribution-organization-${problemId}`}><strong>贡献归属（可选）</strong><span>默认为个人贡献；选择组织只用于声誉归因，首版不发放组织 Carits 奖励。</span></label><Select id={`contribution-organization-${problemId}`} value={contributionOrganizationId} onChange={event => setContributionOrganizationId(event.target.value)}><option value="">个人贡献</option>{organizationWorkspaces.map(item => <option key={item.organizationId} value={item.organizationId}>{item.organizationName || item.organizationId}</option>)}</Select></div>}
       {readiness && !readiness.canContribute && readiness.canHack && <div className={styles.notice}><AlertTriangle size={18} aria-hidden="true" /><span>普通数据贡献暂未开放，但 Hack 自带真实错误证据，仍可按技术判定流程提交。</span></div>}
       <div className={styles.modeGrid} role="radiogroup" aria-label="候选输入方式">{([['data', '直接数据', '填写或上传完整输入数据'], ['cpp17', 'C++17 生成器', '平台模板通过 oj.generator/v1 接收参数'], ['python3', 'Python3 生成器（推荐）', '平台模板通过 oj.generator/v1 接收参数']] as const).map(([value, title, hint]) => <Button variant="ghost" key={value} type="button" role="radio" aria-checked={choice === value} className={`${styles.mode} ${choice === value ? styles.modeActive : ''}`} onClick={() => { setChoice(value); setCandidate(value === 'data' ? '' : (getJudgeProgramTemplate(`generator-${value}-v1`)?.source || '')) }}><span className={styles.modeTitle}>{title}</span><span className={styles.modeHint}>{hint}</span></Button>)}</div>
       <div className={styles.field}><div className={styles.labelRow}><span className={styles.label}>{choice === 'data' ? '候选输入数据' : `${choice === 'cpp17' ? 'C++17' : 'Python3'} 数据生成器`}</span><label className={styles.upload}>上传文件<Input type="file" accept={choice === 'data' ? '.in,.txt,text/plain' : choice === 'cpp17' ? '.cpp,.cc,.cxx,text/plain' : '.py,text/plain'} onChange={event => readFile(event.target.files?.[0], setCandidate, choice === 'data' ? 16 * 1024 * 1024 : 256 * 1024)} /></label></div><Textarea className={styles.textarea} spellCheck={false} value={candidate} onChange={event => setCandidate(event.target.value)} placeholder={choice === 'data' ? '填写完整输入数据…' : '填写生成器源码，程序应将一组完整输入输出到 stdout…'} /></div>

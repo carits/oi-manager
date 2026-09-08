@@ -30,9 +30,9 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `AiTokenPool` | 平台唯一 DeepSeek Token 总池，保存可用、预占、已消费和 CAS 版本 |
 | `AiTokenLedgerEntry` | 充值、预占、结算、释放和人工调整的幂等不可变流水 |
 | `AiGenerationRequest` | Validator/翻译/格式化 AI 请求、父修复链、真实用量与编译结果 |
-| `CaritsAccount` | 以 Prisma schema 为准 |
-| `CaritsLedgerEntry` | 以 Prisma schema 为准 |
-| `CaritsTransaction` | 以 Prisma schema 为准 |
+| `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
+| `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
+| `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |
 | `Contest` | 以 Prisma schema 为准 |
 | `ContestProblem` | 以 Prisma schema 为准 |
 | `ContestProblemScore` | 以 Prisma schema 为准 |
@@ -40,7 +40,8 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `ContestResource` | 以 Prisma schema 为准 |
 | `ContestResult` | 以 Prisma schema 为准 |
 | `ContestUserProblemStatus` | 以 Prisma schema 为准 |
-| `ContributionEvent` | 以 Prisma schema 为准 |
+| `ContributionEvent` | Candidate/Hack 正式晋升产生的版本化声誉事实及证据快照 |
+| `ContributionRewardDelivery` | 贡献事件的 Carits 奖励投递，含租约、fencing、按毛发放统计的日预算、有界重试、入账与冲正引用 |
 | `ContributionProject` | 以 Prisma schema 为准 |
 | `File` | 以 Prisma schema 为准 |
 | `JudgeAttempt` | 一次 JudgeRun 的物理执行尝试，保存状态、执行者、fencing token、租约、阶段结果与六段延迟；终态不可重新打开 |
@@ -86,7 +87,11 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `CanonicalSelectionRun` | Selector 输入、输出、质量差值、状态和晋升 Revision |
 | `ProblemCandidatePolicy` | 题目候选池、Top-K、正式点数、发布阈值与 observe/auto 策略 |
 | `EvaluationCreditAccount` | 用户或平台按日 Evaluation Credits 的可用、预占和消费账户 |
-| `EvaluationCreditLedgerEntry` | Evaluation Credits 预占/结算/释放不可变幂等流水 |
+| `EvaluationCreditLedgerEntry` | Evaluation Credits 可用额度的不可变幂等流水；预占为负数，结算/释放记录未用额度退回 |
+| `EvaluationCreditWallet` | 用户长期有效的已购 Evaluation Credits 可用、预占和消费投影 |
+| `EvaluationCreditWalletEntry` | 已购额度的购买、预占、结算与释放流水 |
+| `EvaluationCreditReservation` | 任务对免费账户、已购钱包和平台日预算的固定分配与跨日结算记录；主路径事务结算并由 Scheduler 对账恢复孤儿/终态遗留 |
+| `ResourcePurchase` | 服务端固定套餐、Carits 交易和 Credits 钱包分录的幂等业务关联 |
 | `ValidatorSpec` | Validator DSL AST、模板生成源码、编译/验证和激活状态 |
 | `ProblemFeatureDefinition` | 题目 Feature 注册表和提取配置 |
 | `ProblemSubtaskRule` | Feature 到 OI Subtask 的声明式规则 |

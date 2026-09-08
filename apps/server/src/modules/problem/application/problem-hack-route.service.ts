@@ -17,6 +17,7 @@ import { normalizeSubmissionIo, SubmissionIoError } from '../../judge/domain/sub
 import { ensureInitialTestSetRevision } from '../problem.testset-revision.service'
 import { transitionHackAttempt } from '../problem.hack-state'
 import { resolveContributionContext } from '../problem.contribution-readiness.service'
+import { resolveContributionOrganization } from '../../contribution/application/contribution.service'
 import { compileJudgeProgram } from '../problem.judge-program.service'
 
 const ACTIVE_STATUSES = ['queuing', 'judging', 'finalizing']
@@ -320,12 +321,15 @@ export async function createProblemHackAttempt(input: {
     fail(409, 'HACK_ALREADY_ACTIVE', '你在这道题已有一个正在处理的 Hack')
   }
 
+  const contributionOrganizationId = await resolveContributionOrganization(input.user.userId, input.body?.contributionOrganizationId)
+
   try {
     const attempt = await prisma.problemHackAttempt.create({
       data: {
         id: crypto.randomUUID(),
         problemId: problem.id,
         userId: input.user.userId,
+        contributionOrganizationId,
         status: 'queuing',
         inputMode,
         inputData: inputMode === 'data' ? inputData : null,

@@ -55,11 +55,47 @@ export function startTrainingEngineScheduler(intervalMs = 5_000): () => void {
   return () => { stopped = true; clearInterval(timer) }
 }
 
+export function startContributionRewardScheduler(intervalMs = 5_000): () => void {
+  let stopped = false, running = false
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const { processContributionRewardDeliveries } = await import('../modules/contribution/application/contribution-reward.service')
+      const result = await processContributionRewardDeliveries()
+      if (result.posted) logger.info('contribution_rewards_posted', { action: 'contribution_reward', metadata: result })
+    } catch (error) { logger.error('contribution_reward_scheduler_failed', error, { action: 'contribution_reward' }) }
+    finally { running = false }
+  }
+  const timer = setInterval(() => void tick(), intervalMs)
+  timer.unref(); void tick()
+  return () => { stopped = true; clearInterval(timer) }
+}
+
+export function startEvaluationReservationReconciler(intervalMs = 30_000): () => void {
+  let stopped = false, running = false
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const { reconcileEvaluationCreditReservations } = await import('../modules/problem/problem.evaluation-budget.service')
+      const result = await reconcileEvaluationCreditReservations()
+      if (result.settled || result.released || result.failed) logger.info('evaluation_reservations_reconciled', { action: 'evaluation_budget', metadata: result })
+    } catch (error) { logger.error('evaluation_reservation_reconciler_failed', error, { action: 'evaluation_budget' }) }
+    finally { running = false }
+  }
+  const timer = setInterval(() => void tick(), intervalMs)
+  timer.unref(); void tick()
+  return () => { stopped = true; clearInterval(timer) }
+}
+
 export function startSchedulerServices(): BackgroundServicesHandle {
   const stopCronTasks = startCronTasks()
   const stopAutoVerify = startAutoVerifyScheduler()
   const stopOjFetchQueue = startOjFetchQueueScheduler()
   const stopTrainingEngine = startTrainingEngineScheduler()
+  const stopContributionRewards = startContributionRewardScheduler()
+  const stopEvaluationReservations = startEvaluationReservationReconciler()
   logger.info('scheduler_services_started', { action: 'background_scheduler' })
 
   let stopped = false
@@ -69,6 +105,8 @@ export function startSchedulerServices(): BackgroundServicesHandle {
       stopped = true
       stopOjFetchQueue()
       stopTrainingEngine()
+      stopContributionRewards()
+      stopEvaluationReservations()
       stopAutoVerify()
       stopCronTasks()
       logger.info('scheduler_services_stopped', { action: 'background_scheduler' })

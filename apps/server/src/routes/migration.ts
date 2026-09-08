@@ -10,6 +10,7 @@ import { applySchoolNameKeyMigration, inspectSchoolNameKeyMigration } from '../m
 import { applySchoolDirectoryStatusMigration, inspectSchoolDirectoryStatusMigration } from '../modules/maintenance/application/school-directory-status-migration.service'
 import { applyJudgeProgramProtocolMigration, inspectJudgeProgramProtocolMigration } from '../modules/maintenance/application/judge-program-protocol-migration.service'
 import { applyTrainingEngineMigration, inspectTrainingEngineMigration } from '../modules/maintenance/application/training-engine-migration.service'
+import { applyEconomyLoopMigration, inspectEconomyLoopMigration } from '../modules/maintenance/application/economy-loop-migration.service'
 
 export const migrationRouter = Router()
 
@@ -18,6 +19,16 @@ migrationRouter.use(authenticate, authorize('super_admin'), (_req, res, next) =>
     return res.status(404).json({ success: false, message: '接口不存在' })
   }
   next()
+})
+
+migrationRouter.get('/economy-loop', async (_req, res) => {
+  try { return res.json({ success: true, data: await inspectEconomyLoopMigration() }) }
+  catch (error: any) { return res.status(500).json({ success: false, message: error.message }) }
+})
+
+migrationRouter.post('/economy-loop', async (req, res) => {
+  try { return res.json({ success: true, data: await applyEconomyLoopMigration(String(req.body?.reportHash || ''), req.user!.userId) }) }
+  catch (error: any) { return res.status(409).json({ success: false, message: error.message }) }
 })
 
 migrationRouter.post('/migrate-submission-scope', async (_req, res) => {

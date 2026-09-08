@@ -10,16 +10,17 @@ import {
   retryProblemHackAttempt,
   saveProblemHackConfig,
 } from './application/problem-hack-route.service'
+import { ContributionApplicationError } from '../contribution/application/contribution.service'
 
 export const problemHackRouter = Router()
 
 function sendHackError(error: unknown, res: any) {
-  if (!(error instanceof ProblemHackRouteError)) throw error
+  if (!(error instanceof ProblemHackRouteError) && !(error instanceof ContributionApplicationError)) throw error
   return res.status(error.statusCode).json({
     success: false,
     code: error.code,
     message: error.message,
-    ...(error.data !== undefined ? { data: error.data } : {}),
+    ...((error as any).data !== undefined ? { data: (error as any).data } : {}),
   })
 }
 

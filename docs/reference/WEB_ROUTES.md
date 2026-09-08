@@ -20,6 +20,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/account/wallet` | 见页面权限布局 | 当前页面 |
 | `/admin` | 见页面权限布局 | 当前页面 |
 | `/admin/chat-reports` | 超级管理员 | 私信举报审核 |
+| `/admin/contributions` | 超级管理员 | 贡献审批、奖励冲正与经济账本审计 |
 | `/platform-admin/chat-reports` | 平台管理员 | 私信举报审核 |
 | `/admin/platform-bindings` | 见页面权限布局 | 当前页面 |
 | `/admin/profile` | 见页面权限布局 | 当前页面 |

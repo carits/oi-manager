@@ -21,10 +21,12 @@ describe('bounded Candidate HTTP boundary', () => {
 
   it('lets a submit-capable user contribute while keeping the management pool private', async () => {
     const studentClient = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' })), managerClient = createAuthenticatedRequest(app, generateTokenFromUser(manager.user))
-    const contribution = await studentClient.post(`/api/problems/${problem.id}/candidates/data`).send({ name: 'edge', inputData: '1 2\n' })
+    const membership = await prisma.organizationMembership.findFirstOrThrow({ where: { userId: student.user.id, status: 'active' } })
+    const contribution = await studentClient.post(`/api/problems/${problem.id}/candidates/data`).send({ name: 'edge', inputData: '1 2\n', contributionOrganizationId: membership.organizationId })
     expect(contribution.status, JSON.stringify(contribution.body)).toBe(202)
     expect(contribution.body.data).toMatchObject({ status: 'queued' })
     expect(contribution.body.data.jobId).toBeTruthy()
+    expect(await prisma.problemDataGenerationJob.findUniqueOrThrow({ where: { id: contribution.body.data.jobId } })).toMatchObject({ contributionOrganizationId: membership.organizationId })
     const readiness = await studentClient.get(`/api/problems/${problem.id}/contribution-readiness`)
     expect(readiness.body.data).toMatchObject({ canContribute: true, mode: 'acm', standard: { status: 'active' }, validator: { status: 'active' } })
     const mine = await studentClient.get(`/api/problems/${problem.id}/contributions/mine`)
@@ -33,6 +35,15 @@ describe('bounded Candidate HTTP boundary', () => {
     const pool = await managerClient.get(`/api/problems/${problem.id}/candidate-pool`)
     expect(pool.status).toBe(200)
     expect(pool.body.data.policy.selectorMode).toBe('auto')
+  })
+
+  it('rejects a forged contribution organization snapshot', async () => {
+    const stranger = await createTestUser()
+    const foreignMembership = await prisma.organizationMembership.findFirstOrThrow({ where: { userId: stranger.user.id, status: 'active' } })
+    const studentClient = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' }))
+    const contribution = await studentClient.post(`/api/problems/${problem.id}/candidates/data`).send({ inputData: '1 2\n', contributionOrganizationId: foreignMembership.organizationId })
+    expect(contribution.status).toBe(403)
+    expect(contribution.body.code).toBe('CONTRIBUTION_ORGANIZATION_INVALID')
   })
 
   it('reports an explicit blocker and rejects direct API calls when Validator is not active', async () => {
@@ -60,6 +71,17 @@ describe('bounded Candidate HTTP boundary', () => {
     const client = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' }))
     const response = await client.post(`/api/problems/${problem.id}/data-generation-jobs`).send({ contribution: true, sourceMode: 'input', cases: [{ name: 'bypass', inputData: '1 2\n' }] })
     expect(response.status).toBe(404)
+  })
+
+  it('does not let the legacy generation promoter bypass Candidate selection', async () => {
+    const studentClient = createAuthenticatedRequest(app, generateTokenFromUser({ ...student.user, workspaceMode: 'personal' }))
+    const managerClient = createAuthenticatedRequest(app, generateTokenFromUser(manager.user))
+    const contribution = await studentClient.post(`/api/problems/${problem.id}/candidates/data`).send({ inputData: '9 10\n' })
+    expect(contribution.status).toBe(202)
+    await prisma.problemDataGenerationJob.update({ where: { id: contribution.body.data.jobId }, data: { status: 'completed', finishedAt: new Date() } })
+    const response = await managerClient.post(`/api/problems/${problem.id}/data-generation-jobs/${contribution.body.data.jobId}/promote`).send({ expectedLatestRevisionId: problem.latestTestSetRevisionId })
+    expect(response.status).toBe(409)
+    expect(response.body.code).toBe('CONTRIBUTION_PROMOTION_MANAGED_BY_SELECTOR')
   })
 
   it('requires a complete Generator v1 manifest and stores a server-generated seed', async () => {

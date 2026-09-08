@@ -1,7 +1,7 @@
 // 统一导航配置
-// 角色: super_admin | platform_admin | school_principal | teacher | student
+// 角色: super_admin | platform_admin | school_principal | teacher | student | user
 
-export type UserRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+export type UserRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student' | 'user'
 
 export interface NavItem {
   label: string
@@ -22,6 +22,7 @@ export const superAdminNav: NavConfig = {
     { label: '学校管理', href: '/admin/schools' },
     { label: '账号管理', href: '/admin/users' },
     { label: '评测记录', href: '/admin/submissions' },
+    { label: '贡献审计', href: '/admin/contributions' },
     { label: '私信举报', href: '/admin/chat-reports' },
   ]
 }
@@ -34,6 +35,7 @@ export const platformAdminNav: NavConfig = {
     { label: '账号管理', href: '/platform-admin/users' },
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '评测记录', href: '/platform-admin/submissions' },
+    { label: '贡献审计', href: '/platform-admin/contributions' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
     { label: 'AI Token', href: '/platform-admin/ai' },
     { label: '私信举报', href: '/platform-admin/chat-reports' },
@@ -90,7 +92,7 @@ export const studentNav: NavConfig = {
 
 // 所有角色共享的个人工作区导航
 export const personalNav: NavConfig = {
-  role: 'student',
+  role: 'user',
   items: [
     { label: '首页', href: '/personal' },
     { label: '组织', href: '/personal/organizations' },
@@ -100,6 +102,8 @@ export const personalNav: NavConfig = {
     { label: '训练', href: '/personal/training-sessions' },
     { label: '题单', href: '/personal/problem-lists' },
     { label: '排名', href: '/personal/rankings' },
+    { label: '贡献', href: '/personal/contributions' },
+    { label: '钱包', href: '/account/wallet' },
     { label: '评测记录', href: '/personal/submissions' },
   ]
 }
@@ -111,6 +115,7 @@ export const roleNavMap: Record<UserRole, NavConfig> = {
   school_principal: schoolManagerNav,
   teacher: teacherNav,
   student: studentNav,
+  user: personalNav,
 }
 
 // 根据角色获取导航配置
@@ -161,6 +166,7 @@ export const roleLabels: Record<UserRole, string> = {
   school_principal: '学校负责人',
   teacher: '教师',
   student: '学生',
+  user: '用户',
 }
 
 // 角色中文名称
@@ -170,4 +176,5 @@ export const roleNames: Record<UserRole, string> = {
   school_principal: '学校负责人',
   teacher: '教师',
   student: '学生',
+  user: '普通用户',
 }

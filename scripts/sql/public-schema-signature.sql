@@ -38,7 +38,11 @@ WITH entries AS (
   WHERE n.nspname = 'public'
 
   UNION ALL
-  SELECT 'function|' || p.proname || '|' || pg_get_function_identity_arguments(p.oid) || '|' || md5(pg_get_functiondef(p.oid))
+  -- PostgreSQL preserves CRLF bytes inside dollar-quoted function bodies. The
+  -- line-ending style depends on the host that applied the SQL file, but it
+  -- has no effect on the executable function. Normalize CR so Windows and
+  -- Linux installation paths produce the same semantic signature.
+  SELECT 'function|' || p.proname || '|' || pg_get_function_identity_arguments(p.oid) || '|' || md5(replace(pg_get_functiondef(p.oid), E'\r', ''))
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
 

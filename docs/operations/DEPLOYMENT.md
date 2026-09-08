@@ -1,8 +1,8 @@
 ---
 status: current
 audience: operations
-last_verified: 2026-08-29
-source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh
+last_verified: 2026-09-08
+source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, scripts/promote-api.sh, scripts/promote-preview.sh, economy-loop migration and scheduler services
 ---
 
 # 部署与回滚
@@ -57,6 +57,19 @@ pnpm security:audit
 7. 旧实例收到 drain 信号后向 Judge 发送 1012，等待连接和在途请求退出。
 8. 重启唯一 `oi-manager-worker.service` Scheduler 和 Executor 实例；第二个 Scheduler 必须被 leader lock 拒绝，多个 Executor 通过逐任务 lease 协作。
 9. 验证 Judge 已重新注册、队列继续消费且没有残留 `judging/finalizing` 任务。
+
+### 经济闭环扩展发布
+
+涉及 Contribution Reward、Carits 账本或 Evaluation Credits Schema 时，必须在 API 提升前额外执行：
+
+1. 验证 `CaritsTransaction.requestFingerprint`、付费钱包/Reservation 表、外键和账本触发器已由新 migration 安全扩展。
+2. 只在候选 slot 开启维护 API，完成 `economy-loop` check/apply，然后立即关闭维护开关。
+3. 候选阶段使用 `CONTRIBUTION_REWARD_MODE=observe` 核对拟投递记录；核对通过前不得启用真实发币。
+4. 提升 API 后启用单例奖励 Worker，同时确认 Evaluation Reservation 30 秒对账器在 Scheduler 中正常运行。
+5. 发布验收必须包含：差异幂等请求被 409 拒绝、购买响应丢失重试不重复扣款、
+   终态/孤儿 Reservation 可对账、已冲正奖励仍计入当日毛发放上限。
+
+详细处置与不变性检查见 [Runbook](RUNBOOK.md#贡献奖励与-evaluation-credits)。
 
 ## Web 发布
 

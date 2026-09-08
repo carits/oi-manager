@@ -1,0 +1,9 @@
+.stack { display: grid; gap: var(--space-4); }
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.summary article { display: grid; gap: var(--space-1); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.summary span, .muted { color: var(--text-muted); }
+.summary strong { font-size: var(--text-xl); }
+.loadError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); color: var(--error-text); border: 1px solid color-mix(in srgb, var(--error) 22%, var(--border)); border-radius: var(--radius-md); background: var(--error-light); }
+.tableWrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.empty { padding: var(--space-6); color: var(--text-muted); text-align: center; }
+@media (max-width: 640px) { .summary { grid-template-columns: 1fr; } .loadError { align-items: stretch; flex-direction: column; } }

@@ -57,10 +57,10 @@ enum TestcaseCandidateStatus {
   EVALUATING_L2
   EVALUATING_HOLDOUT
   ELIGIBLE
-  ELIGIBLE_NOT_SELECTED
-  WAITING_REPLACEMENT
   SELECTED
   EXPIRED
+  ELIGIBLE_NOT_SELECTED
+  WAITING_REPLACEMENT
 }
 
 model AiUsageLog {
@@ -714,35 +714,38 @@ model ProblemJudgeProgramAuditLog {
 }
 
 model ProblemDataGenerationJob {
-  id                       String                      @id
-  problemId                String
-  createdBy                String
-  status                   String                      @default("queued")
-  baseTestSetRevisionId    String?
-  expectedLatestRevisionId String?
-  generatorVersionId       String?
-  standardVersionId        String
-  validatorVersionId       String
-  config                   Json
-  judgeId                  String?
-  fencingToken             String?                     @unique
-  leaseExpiresAt           DateTime?
-  startedAt                DateTime?
-  finishedAt               DateTime?
-  promotedRevisionId       String?
-  errorCode                String?
-  errorMessage             String?                     @db.Text
-  contribution             Boolean                     @default(false)
-  targetRole               String                      @default("official")
-  reservedCredits          Int                         @default(0)
-  createdAt                DateTime                    @default(now())
-  updatedAt                DateTime                    @updatedAt
-  Problem                  Problem                     @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  Cases                    ProblemDataGenerationCase[]
+  id                         String                      @id
+  problemId                  String
+  createdBy                  String
+  status                     String                      @default("queued")
+  baseTestSetRevisionId      String?
+  expectedLatestRevisionId   String?
+  generatorVersionId         String?
+  standardVersionId          String
+  validatorVersionId         String
+  config                     Json
+  judgeId                    String?
+  fencingToken               String?                     @unique
+  leaseExpiresAt             DateTime?
+  startedAt                  DateTime?
+  finishedAt                 DateTime?
+  promotedRevisionId         String?
+  errorCode                  String?
+  errorMessage               String?                     @db.Text
+  contribution               Boolean                     @default(false)
+  targetRole                 String                      @default("official")
+  reservedCredits            Int                         @default(0)
+  contributionOrganizationId String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  Problem                    Problem                     @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  ContributionOrganization   Organization?               @relation("DataGenerationContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
+  Cases                      ProblemDataGenerationCase[]
 
   @@index([problemId, createdAt])
   @@index([status, createdAt])
   @@index([judgeId, status])
+  @@index([contributionOrganizationId])
 }
 
 model ProblemDataGenerationCase {
@@ -780,106 +783,111 @@ model ProblemDataGenerationCase {
 }
 
 model ProblemHackAttempt {
-  id                    String                  @id
-  problemId             String
-  userId                String
-  status                String                  @default("queuing")
-  inputMode             String
-  inputData             String?                 @db.Text
-  generatorSource       String?                 @db.Text
-  generatorLanguage     String?
-  generatorProtocol     String?
-  hackSource            String                  @db.Text
-  hackLanguage          String
-  inputFilename         String?
-  outputFilename        String?
-  hackConfigRevision    Int
-  judgeConfigHash       String
-  baselineResult        String?
-  baselineScore         Int?
-  candidateResult       String?
-  candidateScore        Int?
-  scoreDelta            Int?
-  affectedSubtaskIds    String?
-  acceptedTestcaseId    String?
-  testGraphRevision     Int                     @default(0)
-  baseTestSetRevisionId String?
-  candidateTestcaseId   String?
-  promotedRevisionId    String?
-  canonicalStatus       String?
-  promotionRetries      Int                     @default(0)
-  failureStage          String?
-  message               String?                 @db.Text
-  inputSha256           String?
-  outputSha256          String?
-  acceptedInputFile     String?
-  acceptedOutputFile    String?
-  judgeId               String?
-  judgeStarted          DateTime?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  finishedAt            DateTime?
-  Problem               Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  BaseTestSetRevision   ProblemTestSetRevision? @relation("HackBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
-  PromotedRevision      ProblemTestSetRevision? @relation("HackPromotedTestSetRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
-  Candidate             TestcaseCandidate?
+  id                         String                  @id
+  problemId                  String
+  userId                     String
+  contributionOrganizationId String?
+  status                     String                  @default("queuing")
+  inputMode                  String
+  inputData                  String?                 @db.Text
+  generatorSource            String?                 @db.Text
+  generatorLanguage          String?
+  generatorProtocol          String?
+  hackSource                 String                  @db.Text
+  hackLanguage               String
+  inputFilename              String?
+  outputFilename             String?
+  hackConfigRevision         Int
+  judgeConfigHash            String
+  baselineResult             String?
+  baselineScore              Int?
+  candidateResult            String?
+  candidateScore             Int?
+  scoreDelta                 Int?
+  affectedSubtaskIds         String?
+  acceptedTestcaseId         String?
+  testGraphRevision          Int                     @default(0)
+  baseTestSetRevisionId      String?
+  candidateTestcaseId        String?
+  promotedRevisionId         String?
+  canonicalStatus            String?
+  promotionRetries           Int                     @default(0)
+  failureStage               String?
+  message                    String?                 @db.Text
+  inputSha256                String?
+  outputSha256               String?
+  acceptedInputFile          String?
+  acceptedOutputFile         String?
+  judgeId                    String?
+  judgeStarted               DateTime?
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+  finishedAt                 DateTime?
+  Problem                    Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  User                       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ContributionOrganization   Organization?           @relation("HackContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
+  BaseTestSetRevision        ProblemTestSetRevision? @relation("HackBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
+  PromotedRevision           ProblemTestSetRevision? @relation("HackPromotedTestSetRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
+  Candidate                  TestcaseCandidate?
 
   @@index([problemId, status, createdAt])
   @@index([status, judgeId])
   @@index([userId, problemId, createdAt])
   @@index([baseTestSetRevisionId])
   @@index([promotedRevisionId])
+  @@index([contributionOrganizationId])
 }
 
 model TestcaseCandidate {
-  id                    String                  @id
-  problemId             String
-  hackAttemptId         String?                 @unique
-  source                String                  @default("hack")
-  targetRole            String                  @default("hack_gate")
-  status                TestcaseCandidateStatus @default(VALIDATED)
-  evaluationStage       String                  @default("admission")
-  baseTestSetRevisionId String?
-  inputObjectId         String?
-  outputObjectId        String?
-  inputSha256           String
-  outputSha256          String
-  inputSize             Int
-  outputSize            Int
-  inputFileName         String
-  outputFileName        String
-  affectedSubtaskIds    String?
-  standardVersionId     String?
-  validatorVersionId    String?
-  classifierVersionId   String?
-  generatorVersionId    String?
-  corpusRevisionId      String?
-  killVectorObjectId    String?
-  featureFingerprint    String?                 @db.Text
-  semanticFingerprint   String?
-  currentValue          Float                   @default(0)
-  marginalValue         Float                   @default(0)
-  runtimeCost           Float                   @default(0)
-  isProtected           Boolean                 @default(false)
-  protectedUntil        DateTime?
-  expiresAt             DateTime?
-  selectedAt            DateTime?
-  createdBy             String
-  promotedTestcaseId    String?
-  promotedRevisionId    String?
-  message               String?                 @db.Text
-  provenance            Json?
-  selectionOutcome      Json?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  promotedAt            DateTime?
-  Problem               Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  HackAttempt           ProblemHackAttempt?     @relation(fields: [hackAttemptId], references: [id], onDelete: SetNull)
-  BaseTestSetRevision   ProblemTestSetRevision? @relation("CandidateBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
-  InputObject           TestdataObject?         @relation("CandidateInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
-  OutputObject          TestdataObject?         @relation("CandidateOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
-  PromotedRevision      ProblemTestSetRevision? @relation("CandidatePromotedRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
+  id                         String                  @id
+  problemId                  String
+  hackAttemptId              String?                 @unique
+  source                     String                  @default("hack")
+  targetRole                 String                  @default("hack_gate")
+  status                     TestcaseCandidateStatus @default(VALIDATED)
+  evaluationStage            String                  @default("admission")
+  baseTestSetRevisionId      String?
+  inputObjectId              String?
+  outputObjectId             String?
+  inputSha256                String
+  outputSha256               String
+  inputSize                  Int
+  outputSize                 Int
+  inputFileName              String
+  outputFileName             String
+  affectedSubtaskIds         String?
+  standardVersionId          String?
+  validatorVersionId         String?
+  classifierVersionId        String?
+  generatorVersionId         String?
+  corpusRevisionId           String?
+  killVectorObjectId         String?
+  featureFingerprint         String?                 @db.Text
+  semanticFingerprint        String?
+  currentValue               Float                   @default(0)
+  marginalValue              Float                   @default(0)
+  runtimeCost                Float                   @default(0)
+  isProtected                Boolean                 @default(false)
+  protectedUntil             DateTime?
+  expiresAt                  DateTime?
+  selectedAt                 DateTime?
+  createdBy                  String
+  contributionOrganizationId String?
+  promotedTestcaseId         String?
+  promotedRevisionId         String?
+  message                    String?                 @db.Text
+  provenance                 Json?
+  selectionOutcome           Json?
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+  promotedAt                 DateTime?
+  Problem                    Problem                 @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  ContributionOrganization   Organization?           @relation("CandidateContributionOrganization", fields: [contributionOrganizationId], references: [id], onDelete: SetNull)
+  HackAttempt                ProblemHackAttempt?     @relation(fields: [hackAttemptId], references: [id], onDelete: SetNull)
+  BaseTestSetRevision        ProblemTestSetRevision? @relation("CandidateBaseTestSetRevision", fields: [baseTestSetRevisionId], references: [id], onDelete: SetNull)
+  InputObject                TestdataObject?         @relation("CandidateInputObject", fields: [inputObjectId], references: [id], onDelete: Restrict)
+  OutputObject               TestdataObject?         @relation("CandidateOutputObject", fields: [outputObjectId], references: [id], onDelete: Restrict)
+  PromotedRevision           ProblemTestSetRevision? @relation("CandidatePromotedRevision", fields: [promotedRevisionId], references: [id], onDelete: SetNull)
 
   @@index([problemId, status, createdAt])
   @@index([problemId, targetRole, status, marginalValue])
@@ -889,6 +897,7 @@ model TestcaseCandidate {
   @@index([inputObjectId])
   @@index([outputObjectId])
   @@index([promotedRevisionId])
+  @@index([contributionOrganizationId])
 }
 
 model WrongSolutionSample {
@@ -1043,35 +1052,121 @@ model ProblemCandidatePolicy {
 }
 
 model EvaluationCreditAccount {
-  id               String   @id
-  subjectType      String
-  subjectId        String
-  periodStart      DateTime
-  limitCredits     Int
-  availableCredits Int
-  reservedCredits  Int      @default(0)
-  consumedCredits  Int      @default(0)
-  version          Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                   String                        @id
+  subjectType          String
+  subjectId            String
+  periodStart          DateTime
+  limitCredits         Int
+  availableCredits     Int
+  reservedCredits      Int                           @default(0)
+  consumedCredits      Int                           @default(0)
+  version              Int                           @default(0)
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+  LedgerEntries        EvaluationCreditLedgerEntry[]
+  FreeReservations     EvaluationCreditReservation[] @relation("EvaluationFreeAccount")
+  PlatformReservations EvaluationCreditReservation[] @relation("EvaluationPlatformAccount")
 
   @@unique([subjectType, subjectId, periodStart])
   @@index([periodStart])
 }
 
 model EvaluationCreditLedgerEntry {
-  id             String   @id
+  id             String                  @id
   accountId      String
   type           String
   amount         Int
-  idempotencyKey String   @unique
+  idempotencyKey String                  @unique
   taskType       String
   taskId         String
   metadata       Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime                @default(now())
+  Account        EvaluationCreditAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
   @@index([accountId, createdAt])
   @@index([taskType, taskId])
+}
+
+model EvaluationCreditWallet {
+  id               String                        @id
+  userId           String                        @unique
+  availableCredits Int                           @default(0)
+  reservedCredits  Int                           @default(0)
+  consumedCredits  BigInt                        @default(0)
+  version          Int                           @default(0)
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  User             User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Entries          EvaluationCreditWalletEntry[]
+  Reservations     EvaluationCreditReservation[]
+
+  @@index([updatedAt])
+}
+
+model EvaluationCreditWalletEntry {
+  id               String                 @id
+  walletId         String
+  type             String
+  amount           Int
+  balanceAfter     Int
+  idempotencyKey   String                 @unique
+  referenceType    String
+  referenceId      String
+  metadata         Json?
+  createdAt        DateTime               @default(now())
+  Wallet           EvaluationCreditWallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  ResourcePurchase ResourcePurchase?
+
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model EvaluationCreditReservation {
+  id                String                  @id
+  userId            String
+  taskType          String
+  taskId            String
+  periodStart       DateTime
+  freeAccountId     String
+  platformAccountId String
+  walletId          String?
+  freeReserved      Int                     @default(0)
+  paidReserved      Int                     @default(0)
+  platformReserved  Int
+  actualCredits     Int?
+  status            String                  @default("reserved")
+  idempotencyKey    String                  @unique
+  metadata          Json?
+  createdAt         DateTime                @default(now())
+  settledAt         DateTime?
+  User              User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  FreeAccount       EvaluationCreditAccount @relation("EvaluationFreeAccount", fields: [freeAccountId], references: [id], onDelete: Restrict)
+  PlatformAccount   EvaluationCreditAccount @relation("EvaluationPlatformAccount", fields: [platformAccountId], references: [id], onDelete: Restrict)
+  Wallet            EvaluationCreditWallet? @relation(fields: [walletId], references: [id], onDelete: Restrict)
+
+  @@unique([taskType, taskId])
+  @@index([userId, periodStart, status])
+  @@index([status, createdAt])
+}
+
+model ResourcePurchase {
+  id                  String                      @id
+  userId              String
+  packageCode         String
+  caritsAmount        BigInt
+  evaluationCredits   Int
+  policyCode          String
+  policyVersion       Int
+  status              String                      @default("posted")
+  idempotencyKey      String                      @unique
+  caritsTransactionId String                      @unique
+  walletEntryId       String                      @unique
+  createdAt           DateTime                    @default(now())
+  User                User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  CaritsTransaction   CaritsTransaction           @relation(fields: [caritsTransactionId], references: [id], onDelete: Restrict)
+  WalletEntry         EvaluationCreditWalletEntry @relation(fields: [walletEntryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
 }
 
 model ValidatorSpec {
@@ -1377,6 +1472,9 @@ model Organization {
   CaritsTransactions       CaritsTransaction[]                   @relation("CaritsTransactionOrganization")
   ContributionAttributions OrganizationContributionAttribution[]
   ContributionProjects     ContributionProject[]
+  ContributionDataJobs     ProblemDataGenerationJob[]            @relation("DataGenerationContributionOrganization")
+  ContributionHackAttempts ProblemHackAttempt[]                  @relation("HackContributionOrganization")
+  ContributionCandidates   TestcaseCandidate[]                   @relation("CandidateContributionOrganization")
   PrincipalTransferLog     PrincipalTransferLog[]
   Problem                  Problem[]
   ProblemList              ProblemList[]
@@ -1604,20 +1702,24 @@ model CaritsAccount {
 }
 
 model CaritsTransaction {
-  id             String              @id
-  type           String
-  status         String              @default("draft")
-  idempotencyKey String              @unique
-  referenceType  String?
-  referenceId    String?
-  operatorUserId String?
-  organizationId String?
-  metadata       Json?
-  createdAt      DateTime            @default(now())
-  postedAt       DateTime?
-  Operator       User?               @relation("CaritsTransactionOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
-  Organization   Organization?       @relation("CaritsTransactionOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
-  Entries        CaritsLedgerEntry[]
+  id                 String                       @id
+  type               String
+  status             String                       @default("draft")
+  idempotencyKey     String                       @unique
+  requestFingerprint String?
+  referenceType      String?
+  referenceId        String?
+  operatorUserId     String?
+  organizationId     String?
+  metadata           Json?
+  createdAt          DateTime                     @default(now())
+  postedAt           DateTime?
+  Operator           User?                        @relation("CaritsTransactionOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  Organization       Organization?                @relation("CaritsTransactionOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  Entries            CaritsLedgerEntry[]
+  RewardDeliveries   ContributionRewardDelivery[] @relation("ContributionRewardTransaction")
+  RewardReversals    ContributionRewardDelivery[] @relation("ContributionRewardReversal")
+  ResourcePurchase   ResourcePurchase?
 
   @@index([referenceType, referenceId])
   @@index([organizationId, createdAt])
@@ -1633,33 +1735,61 @@ model CaritsLedgerEntry {
   Transaction   CaritsTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   Account       CaritsAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
+  @@unique([transactionId, accountId])
   @@index([accountId, createdAt])
   @@index([transactionId])
 }
 
 model ContributionEvent {
-  id           String                               @id
-  actorUserId  String
-  type         String
-  sourceType   String
-  sourceId     String
-  score        Int
-  ruleCode     String
-  ruleVersion  Int
-  dedupeKey    String                               @unique
-  status       String                               @default("pending")
-  evidence     Json?
-  occurredAt   DateTime
-  acceptedAt   DateTime?
-  revokedAt    DateTime?
-  revokeReason String?
-  createdAt    DateTime                             @default(now())
-  Actor        User                                 @relation("ContributionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
-  Attribution  OrganizationContributionAttribution?
+  id             String                               @id
+  actorUserId    String
+  type           String
+  sourceType     String
+  sourceId       String
+  score          Int
+  ruleCode       String
+  ruleVersion    Int
+  dedupeKey      String                               @unique
+  status         String                               @default("pending")
+  evidence       Json?
+  occurredAt     DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  revokeReason   String?
+  createdAt      DateTime                             @default(now())
+  Actor          User                                 @relation("ContributionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  Attribution    OrganizationContributionAttribution?
+  RewardDelivery ContributionRewardDelivery?
 
   @@index([actorUserId, status, acceptedAt])
   @@index([sourceType, sourceId])
   @@index([status, acceptedAt])
+}
+
+model ContributionRewardDelivery {
+  id                    String             @id
+  contributionId        String             @unique
+  policyCode            String
+  policyVersion         Int
+  userCarits            BigInt
+  organizationCarits    BigInt             @default(0)
+  status                String             @default("pending")
+  transactionId         String?            @unique
+  reversalTransactionId String?            @unique
+  attemptCount          Int                @default(0)
+  fencingToken          String?            @unique
+  leaseExpiresAt        DateTime?
+  nextAttemptAt         DateTime?
+  errorMessage          String?            @db.Text
+  createdAt             DateTime           @default(now())
+  postedAt              DateTime?
+  reversedAt            DateTime?
+  Contribution          ContributionEvent  @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  Transaction           CaritsTransaction? @relation("ContributionRewardTransaction", fields: [transactionId], references: [id], onDelete: Restrict)
+  ReversalTransaction   CaritsTransaction? @relation("ContributionRewardReversal", fields: [reversalTransactionId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+  @@index([leaseExpiresAt])
 }
 
 model OrganizationContributionAttribution {
@@ -1813,59 +1943,59 @@ model JudgeAttempt {
 }
 
 model Submission {
-  id                Int                     @id @default(autoincrement())
-  userId            String
-  oj                String
-  problemId         String
-  language          String
-  code              String
-  codeLength        Int
-  result            String                  @default("queuing")
-  timeUsed          Int?
-  wallTimeUsed      Int?
-  memoryUsed        Int?
-  timeoutReason     String?
-  metricSource      String?
-  submitMethod      String
-  ojAccountId       String?
-  ojRemoteId        String?
-  errorMessage      String?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @default(now())
-  problemInternalId String?
-  cases             String?
-  score             Int?
-  subtasks          String?
-  isGlobalVisible   Boolean                 @default(true)
-  sourceId          String?
-  submitSource      String?
-  judgeId           String?
-  judgeStarted      DateTime?
-  submitScope       String                  @default("problem")
-  workspaceScope    String                  @default("campus")
-  organizationId    String?
-  trainingId        Int?
-  trainingProblemId String?
-  trainingSessionId String?
+  id                     Int                          @id @default(autoincrement())
+  userId                 String
+  oj                     String
+  problemId              String
+  language               String
+  code                   String
+  codeLength             Int
+  result                 String                       @default("queuing")
+  timeUsed               Int?
+  wallTimeUsed           Int?
+  memoryUsed             Int?
+  timeoutReason          String?
+  metricSource           String?
+  submitMethod           String
+  ojAccountId            String?
+  ojRemoteId             String?
+  errorMessage           String?
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @default(now())
+  problemInternalId      String?
+  cases                  String?
+  score                  Int?
+  subtasks               String?
+  isGlobalVisible        Boolean                      @default(true)
+  sourceId               String?
+  submitSource           String?
+  judgeId                String?
+  judgeStarted           DateTime?
+  submitScope            String                       @default("problem")
+  workspaceScope         String                       @default("campus")
+  organizationId         String?
+  trainingId             Int?
+  trainingProblemId      String?
+  trainingSessionId      String?
   trainingStageProblemId String?
-  contestId         Int?
-  contestProblemId  String?
-  testSetRevisionId String?
-  judgeConfigHash   String?
-  judgeConfigSnapshot String?                  @db.Text
-  inputFilename     String?
-  outputFilename    String?
-  ioAdapterVersion  Int                     @default(1)
-  currentJudgeRunId String?                 @unique
-  OjAccount         OjAccount?              @relation(fields: [ojAccountId], references: [id])
-  Training          Training?               @relation(fields: [trainingId], references: [id])
-  TrainingSession   TrainingSession?        @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
-  TrainingStageProblem TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
-  Organization      Organization?           @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  User              User                    @relation(fields: [userId], references: [id])
-  TestSetRevision   ProblemTestSetRevision? @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
-  JudgeRuns         JudgeRun[]              @relation("SubmissionJudgeRuns")
-  CurrentJudgeRun   JudgeRun?               @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
+  contestId              Int?
+  contestProblemId       String?
+  testSetRevisionId      String?
+  judgeConfigHash        String?
+  judgeConfigSnapshot    String?                      @db.Text
+  inputFilename          String?
+  outputFilename         String?
+  ioAdapterVersion       Int                          @default(1)
+  currentJudgeRunId      String?                      @unique
+  OjAccount              OjAccount?                   @relation(fields: [ojAccountId], references: [id])
+  Training               Training?                    @relation(fields: [trainingId], references: [id])
+  TrainingSession        TrainingSession?             @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
+  TrainingStageProblem   TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
+  Organization           Organization?                @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  User                   User                         @relation(fields: [userId], references: [id])
+  TestSetRevision        ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
+  JudgeRuns              JudgeRun[]                   @relation("SubmissionJudgeRuns")
+  CurrentJudgeRun        JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
 
   @@index([contestId])
   @@index([createdAt])
@@ -2231,7 +2361,7 @@ model ProblemTestSetRevision {
   AcmCases                        ProblemTestSetRevisionCase[]
   Subtasks                        ProblemTestSetRevisionSubtask[]
   TrainingProblems                TrainingProblem[]
-  TrainingSessionStageProblems   TrainingSessionStageProblem[]
+  TrainingSessionStageProblems    TrainingSessionStageProblem[]
   Submissions                     Submission[]
   HackAttemptsBasedOn             ProblemHackAttempt[]              @relation("HackBaseTestSetRevision")
   PromotedHackAttempts            ProblemHackAttempt[]              @relation("HackPromotedTestSetRevision")
@@ -2434,50 +2564,50 @@ enum TrainingEngineHintOpenMode {
 }
 
 model TrainingSession {
-  id                         String                      @id @default(uuid())
-  legacyTrainingId           Int?                        @unique
-  title                      String
-  description                String?                     @db.Text
-  sessionType                TrainingEngineSessionType  @default(GENERAL)
-  status                     TrainingEngineSessionStatus @default(DRAFT)
-  organizationId             String?
-  teamId                     String?
-  createdBy                  String
-  scheduledStartAt           DateTime?
-  startedAt                  DateTime?
-  runningSince               DateTime?
-  pausedAt                   DateTime?
-  endedAt                    DateTime?
-  archivedAt                 DateTime?
-  activeElapsedSeconds       Int                         @default(0)
-  currentStageId             String?
-  statusRevision             Int                         @default(0)
-  commandSeq                 Int                         @default(0)
-  eventSeq                   Int                         @default(0)
-  defaultProblemAccessMode   TrainingEngineProblemAccessMode @default(STAGE_ONLY)
-  defaultSubmissionMode      TrainingEngineSubmissionMode @default(ENABLED)
-  pauseMode                  TrainingEnginePauseMode?
-  allowHints                 Boolean                     @default(true)
-  allowSolution              Boolean                     @default(false)
-  allowDiscussion            Boolean                     @default(false)
-  rankingMode                TrainingEngineRankingMode   @default(PROGRESS_ONLY)
-  peerVisibility             TrainingEnginePeerVisibility @default(PROGRESS)
-  joinMode                   TrainingEngineJoinMode      @default(CURRENT_STAGE)
-  settings                   Json?
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  Organization               Organization?               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  Team                       Team?                       @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  Stages                     TrainingSessionStage[]
-  Participants               TrainingSessionParticipant[]
-  Groups                     TrainingSessionGroup[]
-  Commands                   TrainingSessionCommand[]
-  Overlays                   TrainingSessionOverlay[]
-  Drafts                     TrainingSessionProblemDraft[]
-  Hints                      TrainingSessionHint[]
-  Events                     TrainingSessionEvent[]
-  Overrides                  TrainingSessionUserOverride[]
-  Submissions                Submission[]
+  id                       String                          @id @default(uuid())
+  legacyTrainingId         Int?                            @unique
+  title                    String
+  description              String?                         @db.Text
+  sessionType              TrainingEngineSessionType       @default(GENERAL)
+  status                   TrainingEngineSessionStatus     @default(DRAFT)
+  organizationId           String?
+  teamId                   String?
+  createdBy                String
+  scheduledStartAt         DateTime?
+  startedAt                DateTime?
+  runningSince             DateTime?
+  pausedAt                 DateTime?
+  endedAt                  DateTime?
+  archivedAt               DateTime?
+  activeElapsedSeconds     Int                             @default(0)
+  currentStageId           String?
+  statusRevision           Int                             @default(0)
+  commandSeq               Int                             @default(0)
+  eventSeq                 Int                             @default(0)
+  defaultProblemAccessMode TrainingEngineProblemAccessMode @default(STAGE_ONLY)
+  defaultSubmissionMode    TrainingEngineSubmissionMode    @default(ENABLED)
+  pauseMode                TrainingEnginePauseMode?
+  allowHints               Boolean                         @default(true)
+  allowSolution            Boolean                         @default(false)
+  allowDiscussion          Boolean                         @default(false)
+  rankingMode              TrainingEngineRankingMode       @default(PROGRESS_ONLY)
+  peerVisibility           TrainingEnginePeerVisibility    @default(PROGRESS)
+  joinMode                 TrainingEngineJoinMode          @default(CURRENT_STAGE)
+  settings                 Json?
+  createdAt                DateTime                        @default(now())
+  updatedAt                DateTime                        @updatedAt
+  Organization             Organization?                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  Team                     Team?                           @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  Stages                   TrainingSessionStage[]
+  Participants             TrainingSessionParticipant[]
+  Groups                   TrainingSessionGroup[]
+  Commands                 TrainingSessionCommand[]
+  Overlays                 TrainingSessionOverlay[]
+  Drafts                   TrainingSessionProblemDraft[]
+  Hints                    TrainingSessionHint[]
+  Events                   TrainingSessionEvent[]
+  Overrides                TrainingSessionUserOverride[]
+  Submissions              Submission[]
 
   @@index([organizationId, status])
   @@index([teamId, status])
@@ -2486,34 +2616,34 @@ model TrainingSession {
 }
 
 model TrainingSessionStage {
-  id                        String                         @id @default(uuid())
-  sessionId                 String
-  name                      String
-  description               String?                        @db.Text
-  orderIndex                Int
-  mode                      TrainingEngineStageMode       @default(FREE)
-  durationSeconds           Int?
-  advanceMode               TrainingEngineAdvanceMode     @default(MANUAL)
-  problemAccessMode         TrainingEngineProblemAccessMode @default(STAGE_ONLY)
-  submissionMode            TrainingEngineSubmissionMode  @default(ENABLED)
-  targetScore               Int?
-  completionThreshold       Int?
-  minDurationSeconds        Int?
-  status                    String                         @default("pending")
-  rules                     Json?
-  startedAt                 DateTime?
-  endedAt                   DateTime?
-  createdAt                 DateTime                       @default(now())
-  updatedAt                 DateTime                       @updatedAt
-  Session                   TrainingSession                @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  Problems                  TrainingSessionStageProblem[]
+  id                  String                          @id @default(uuid())
+  sessionId           String
+  name                String
+  description         String?                         @db.Text
+  orderIndex          Int
+  mode                TrainingEngineStageMode         @default(FREE)
+  durationSeconds     Int?
+  advanceMode         TrainingEngineAdvanceMode       @default(MANUAL)
+  problemAccessMode   TrainingEngineProblemAccessMode @default(STAGE_ONLY)
+  submissionMode      TrainingEngineSubmissionMode    @default(ENABLED)
+  targetScore         Int?
+  completionThreshold Int?
+  minDurationSeconds  Int?
+  status              String                          @default("pending")
+  rules               Json?
+  startedAt           DateTime?
+  endedAt             DateTime?
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+  Session             TrainingSession                 @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Problems            TrainingSessionStageProblem[]
 
   @@unique([sessionId, orderIndex])
   @@index([sessionId, status])
 }
 
 model TrainingSessionStageProblem {
-  id                       String                 @id @default(uuid())
+  id                       String                            @id @default(uuid())
   stageId                  String
   problemId                String
   testSetRevisionId        String
@@ -2523,16 +2653,16 @@ model TrainingSessionStageProblem {
   targetScore              Int?
   timeLimitSeconds         Int?
   hintPolicy               Json?
-  judgeConfigProjection    String?                @db.Text
+  judgeConfigProjection    String?                           @db.Text
   allowedSubtaskIds        Json?
   strategyIntervalSeconds  Int?
   maxContinuousWorkSeconds Int?
-  forceSwitchOnTimeout     Boolean                @default(false)
-  createdAt                DateTime               @default(now())
-  updatedAt                DateTime               @updatedAt
-  Stage                    TrainingSessionStage   @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  Problem                  Problem                @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  TestSetRevision          ProblemTestSetRevision @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  forceSwitchOnTimeout     Boolean                           @default(false)
+  createdAt                DateTime                          @default(now())
+  updatedAt                DateTime                          @updatedAt
+  Stage                    TrainingSessionStage              @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  Problem                  Problem                           @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  TestSetRevision          ProblemTestSetRevision            @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
   Progress                 TrainingSessionProblemProgress[]
   Hints                    TrainingSessionHint[]
   ScoreEvents              TrainingSessionScoreEvent[]
@@ -2546,12 +2676,12 @@ model TrainingSessionStageProblem {
 }
 
 model TrainingSessionGroup {
-  id          String                       @id @default(uuid())
-  sessionId   String
-  name        String
-  orderIndex  Int                          @default(0)
-  createdAt   DateTime                     @default(now())
-  Session     TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id           String                       @id @default(uuid())
+  sessionId    String
+  name         String
+  orderIndex   Int                          @default(0)
+  createdAt    DateTime                     @default(now())
+  Session      TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   Participants TrainingSessionParticipant[]
 
   @@unique([sessionId, name])
@@ -2559,23 +2689,23 @@ model TrainingSessionGroup {
 }
 
 model TrainingSessionParticipant {
-  id                String                       @id @default(uuid())
+  id                String                            @id @default(uuid())
   sessionId         String
   userId            String
   groupId           String?
-  status            String                       @default("active")
+  status            String                            @default("active")
   currentStageId    String?
   currentProblemId  String?
   returnStageId     String?
   returnProblemId   String?
-  joinedAt          DateTime                     @default(now())
+  joinedAt          DateTime                          @default(now())
   lastHeartbeatAt   DateTime?
-  activeSeconds     Int                          @default(0)
-  createdAt         DateTime                     @default(now())
-  updatedAt         DateTime                     @updatedAt
-  Session           TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  User              User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
-  Group             TrainingSessionGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  activeSeconds     Int                               @default(0)
+  createdAt         DateTime                          @default(now())
+  updatedAt         DateTime                          @updatedAt
+  Session           TrainingSession                   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  User              User                              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Group             TrainingSessionGroup?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
   Progress          TrainingSessionProblemProgress[]
   HintAccess        TrainingSessionHintAccess[]
   ScoreEvents       TrainingSessionScoreEvent[]
@@ -2587,28 +2717,28 @@ model TrainingSessionParticipant {
 }
 
 model TrainingSessionProblemProgress {
-  id                 String                       @id @default(uuid())
-  participantId      String
-  stageProblemId     String
-  status             TrainingEngineProgressStatus @default(NOT_STARTED)
-  firstOpenedAt      DateTime?
-  lastOpenedAt       DateTime?
-  activeSeconds      Int                          @default(0)
-  continuousActiveSeconds Int                     @default(0)
-  attemptCount       Int                          @default(0)
-  bestScore          Int?
-  bestVerdict        String?
-  acAt               DateTime?
-  hintCount          Int                          @default(0)
-  highestHintLevel   Int                          @default(0)
-  lastSubmissionAt   DateTime?
-  lastScoreImprovedAt DateTime?
-  lastProgressAt     DateTime?
-  stuckDetectedAt    DateTime?
-  createdAt          DateTime                     @default(now())
-  updatedAt          DateTime                     @updatedAt
-  Participant        TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  StageProblem       TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+  id                      String                       @id @default(uuid())
+  participantId           String
+  stageProblemId          String
+  status                  TrainingEngineProgressStatus @default(NOT_STARTED)
+  firstOpenedAt           DateTime?
+  lastOpenedAt            DateTime?
+  activeSeconds           Int                          @default(0)
+  continuousActiveSeconds Int                          @default(0)
+  attemptCount            Int                          @default(0)
+  bestScore               Int?
+  bestVerdict             String?
+  acAt                    DateTime?
+  hintCount               Int                          @default(0)
+  highestHintLevel        Int                          @default(0)
+  lastSubmissionAt        DateTime?
+  lastScoreImprovedAt     DateTime?
+  lastProgressAt          DateTime?
+  stuckDetectedAt         DateTime?
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  Participant             TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  StageProblem            TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
 
   @@unique([participantId, stageProblemId])
   @@index([stageProblemId, status])
@@ -2616,16 +2746,16 @@ model TrainingSessionProblemProgress {
 }
 
 model TrainingSessionCommand {
-  id          String                   @id @default(uuid())
-  sessionId   String
-  seq         Int
-  type        String
-  targetType  TrainingEngineTargetType @default(ALL)
-  targetId    String?
-  payload     Json?
-  createdBy   String
-  createdAt   DateTime                 @default(now())
-  Session     TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id         String                   @id @default(uuid())
+  sessionId  String
+  seq        Int
+  type       String
+  targetType TrainingEngineTargetType @default(ALL)
+  targetId   String?
+  payload    Json?
+  createdBy  String
+  createdAt  DateTime                 @default(now())
+  Session    TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, seq])
   @@index([sessionId, createdAt])
@@ -2651,89 +2781,89 @@ model TrainingSessionOverlay {
 }
 
 model TrainingSessionUserOverride {
-  id                 String                   @id @default(uuid())
-  sessionId          String
-  userId             String
-  type               String
-  stageProblemId     String?
-  payload            Json?
-  expiresAt          DateTime?
-  revokedAt          DateTime?
-  createdBy          String
-  createdAt          DateTime                 @default(now())
-  Session            TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid())
+  sessionId      String
+  userId         String
+  type           String
+  stageProblemId String?
+  payload        Json?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdBy      String
+  createdAt      DateTime        @default(now())
+  Session        TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, userId, type])
   @@index([expiresAt])
 }
 
 model TrainingSessionProblemDraft {
-  id               String          @id @default(uuid())
-  sessionId        String
-  userId           String
-  problemId        String
-  language         String
-  code             String          @db.Text
-  inputFilename    String?
-  outputFilename   String?
-  revision         Int             @default(1)
-  editorFocused    Boolean         @default(false)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  Session          TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid())
+  sessionId      String
+  userId         String
+  problemId      String
+  language       String
+  code           String          @db.Text
+  inputFilename  String?
+  outputFilename String?
+  revision       Int             @default(1)
+  editorFocused  Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  Session        TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId, problemId])
   @@index([userId, updatedAt])
 }
 
 model TrainingSessionHint {
-  id                       String                       @id @default(uuid())
-  sessionId                String
-  stageProblemId           String
-  level                    Int
-  title                    String?
-  content                  String                       @db.Text
-  openMode                 TrainingEngineHintOpenMode   @default(MANUAL)
-  triggerSeconds           Int?
-  triggerAttempts          Int?
-  triggerScore             Int?
-  globallyOpenedAt         DateTime?
-  createdBy                String
-  createdAt                DateTime                     @default(now())
-  updatedAt                DateTime                     @updatedAt
-  Session                  TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  StageProblem             TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
-  Access                   TrainingSessionHintAccess[]
+  id               String                      @id @default(uuid())
+  sessionId        String
+  stageProblemId   String
+  level            Int
+  title            String?
+  content          String                      @db.Text
+  openMode         TrainingEngineHintOpenMode  @default(MANUAL)
+  triggerSeconds   Int?
+  triggerAttempts  Int?
+  triggerScore     Int?
+  globallyOpenedAt DateTime?
+  createdBy        String
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  Session          TrainingSession             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  StageProblem     TrainingSessionStageProblem @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+  Access           TrainingSessionHintAccess[]
 
   @@unique([stageProblemId, level])
   @@index([sessionId, level])
 }
 
 model TrainingSessionHintAccess {
-  id             String                     @id @default(uuid())
-  hintId         String
-  participantId  String
-  openedAt       DateTime                   @default(now())
-  source         String
-  openedBy       String?
-  Hint           TrainingSessionHint        @relation(fields: [hintId], references: [id], onDelete: Cascade)
-  Participant    TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  id            String                     @id @default(uuid())
+  hintId        String
+  participantId String
+  openedAt      DateTime                   @default(now())
+  source        String
+  openedBy      String?
+  Hint          TrainingSessionHint        @relation(fields: [hintId], references: [id], onDelete: Cascade)
+  Participant   TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@unique([hintId, participantId])
   @@index([participantId, openedAt])
 }
 
 model TrainingSessionScoreEvent {
-  id               String                       @id @default(uuid())
-  sessionId        String
-  participantId    String
-  stageProblemId   String
-  submissionId     Int
-  score            Int?
-  verdict          String?
-  createdAt        DateTime                     @default(now())
-  Participant      TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  StageProblem     TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+  id             String                      @id @default(uuid())
+  sessionId      String
+  participantId  String
+  stageProblemId String
+  submissionId   Int
+  score          Int?
+  verdict        String?
+  createdAt      DateTime                    @default(now())
+  Participant    TrainingSessionParticipant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  StageProblem   TrainingSessionStageProblem @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
 
   @@unique([submissionId])
   @@index([sessionId, participantId, createdAt])
@@ -2741,31 +2871,31 @@ model TrainingSessionScoreEvent {
 }
 
 model TrainingSessionStrategyDecision {
-  id               String                       @id @default(uuid())
-  sessionId        String
-  participantId    String
-  stageProblemId   String?
-  decision         String
-  reason           String?
-  activeSecondsAtDecision Int                     @default(0)
-  createdAt        DateTime                     @default(now())
-  Participant      TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  StageProblem     TrainingSessionStageProblem? @relation(fields: [stageProblemId], references: [id], onDelete: SetNull)
+  id                      String                       @id @default(uuid())
+  sessionId               String
+  participantId           String
+  stageProblemId          String?
+  decision                String
+  reason                  String?
+  activeSecondsAtDecision Int                          @default(0)
+  createdAt               DateTime                     @default(now())
+  Participant             TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  StageProblem            TrainingSessionStageProblem? @relation(fields: [stageProblemId], references: [id], onDelete: SetNull)
 
   @@index([sessionId, participantId, createdAt])
 }
 
 model TrainingSessionEvent {
-  id          BigInt          @id @default(autoincrement())
-  sessionId   String
-  seq         Int
-  type        String
-  targetType  TrainingEngineTargetType @default(ALL)
-  targetId    String?
-  payload     Json?
-  createdAt   DateTime        @default(now())
-  expiresAt   DateTime
-  Session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id         BigInt                   @id @default(autoincrement())
+  sessionId  String
+  seq        Int
+  type       String
+  targetType TrainingEngineTargetType @default(ALL)
+  targetId   String?
+  payload    Json?
+  createdAt  DateTime                 @default(now())
+  expiresAt  DateTime
+  Session    TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, seq])
   @@index([sessionId, createdAt])
@@ -2773,19 +2903,19 @@ model TrainingSessionEvent {
 }
 
 model TrainingSessionTemplate {
-  id          String                    @id @default(uuid())
+  id             String                         @id @default(uuid())
   organizationId String?
-  teamId      String?
-  key         String
-  name        String
-  sessionType TrainingEngineSessionType
-  description String?
-  settings    Json?
-  status      String                    @default("active")
-  createdBy   String
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
-  Stages      TrainingSessionTemplateStage[]
+  teamId         String?
+  key            String
+  name           String
+  sessionType    TrainingEngineSessionType
+  description    String?
+  settings       Json?
+  status         String                         @default("active")
+  createdBy      String
+  createdAt      DateTime                       @default(now())
+  updatedAt      DateTime                       @updatedAt
+  Stages         TrainingSessionTemplateStage[]
 
   @@unique([organizationId, teamId, key])
   @@index([organizationId, status])
@@ -2793,16 +2923,16 @@ model TrainingSessionTemplate {
 }
 
 model TrainingSessionTemplateStage {
-  id            String                         @id @default(uuid())
-  templateId    String
-  name          String
-  description   String?
-  orderIndex    Int
-  mode          TrainingEngineStageMode
+  id              String                    @id @default(uuid())
+  templateId      String
+  name            String
+  description     String?
+  orderIndex      Int
+  mode            TrainingEngineStageMode
   durationSeconds Int?
-  advanceMode   TrainingEngineAdvanceMode
-  rules         Json?
-  Template      TrainingSessionTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  advanceMode     TrainingEngineAdvanceMode
+  rules           Json?
+  Template        TrainingSessionTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, orderIndex])
 }
@@ -3038,6 +3168,9 @@ model User {
   CaritsAccount                            CaritsAccount?                    @relation("CaritsAccountUser")
   CaritsTransactions                       CaritsTransaction[]               @relation("CaritsTransactionOperator")
   ContributionEvents                       ContributionEvent[]               @relation("ContributionActor")
+  EvaluationCreditWallet                   EvaluationCreditWallet?
+  EvaluationCreditReservations             EvaluationCreditReservation[]
+  ResourcePurchases                        ResourcePurchase[]
   ChatPrivacySetting                       ChatPrivacySetting?
   SentFriendRequests                       FriendRequest[]                   @relation("FriendRequestSender")
   ReceivedFriendRequests                   FriendRequest[]                   @relation("FriendRequestReceiver")
@@ -3066,7 +3199,7 @@ model ChatPrivacySetting {
   userId                      String   @id
   allowExactUsernameDiscovery Boolean  @default(false)
   createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  updatedAt                   DateTime @default(now()) @updatedAt
   User                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -3079,7 +3212,7 @@ model FriendRequest {
   respondedAt DateTime?
   expiresAt   DateTime
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
   Requester   User      @relation("FriendRequestSender", fields: [requesterId], references: [id], onDelete: Restrict)
   Addressee   User      @relation("FriendRequestReceiver", fields: [addresseeId], references: [id], onDelete: Restrict)
 
@@ -3097,7 +3230,7 @@ model Friendship {
   removedAt   DateTime?
   removedById String?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
   LowUser     User      @relation("FriendshipLowUser", fields: [userLowId], references: [id], onDelete: Restrict)
   HighUser    User      @relation("FriendshipHighUser", fields: [userHighId], references: [id], onDelete: Restrict)
   RemovedBy   User?     @relation("FriendshipRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
@@ -3128,7 +3261,7 @@ model DirectConversation {
   lastMessageAt      DateTime?
   lastActivityAt     DateTime                   @default(now())
   createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
+  updatedAt          DateTime                   @default(now()) @updatedAt
   LowUser            User                       @relation("DirectConversationLowUser", fields: [userLowId], references: [id], onDelete: Restrict)
   HighUser           User                       @relation("DirectConversationHighUser", fields: [userHighId], references: [id], onDelete: Restrict)
   Members            DirectConversationMember[]
@@ -3150,7 +3283,7 @@ model DirectConversationMember {
   mutedUntil        DateTime?
   clearedThroughSeq Int                @default(0)
   createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  updatedAt         DateTime           @default(now()) @updatedAt
   Conversation      DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   User              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
 
@@ -3190,7 +3323,7 @@ model ChatStickerPack {
   publishedAt      DateTime?
   retiredAt        DateTime?
   createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  updatedAt        DateTime            @default(now()) @updatedAt
   CreatedBy        User                @relation("ChatStickerPackCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   Stickers         ChatSticker[]
   PublishedImports ChatStickerImport[] @relation("ChatStickerImportPublishedPack")
@@ -3236,7 +3369,7 @@ model ChatStickerImport {
   publishedPackId  String?
   expiresAt        DateTime
   createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  updatedAt        DateTime         @default(now()) @updatedAt
   UploadedBy       User             @relation("ChatStickerImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
   PublishedPack    ChatStickerPack? @relation("ChatStickerImportPublishedPack", fields: [publishedPackId], references: [id], onDelete: SetNull)
 
@@ -3275,7 +3408,7 @@ model ChatReport {
   evidenceHoldUntil  DateTime?
   evidenceReleasedAt DateTime?
   createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  updatedAt          DateTime           @default(now()) @updatedAt
   Conversation       DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
   Message            DirectMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
   Reporter           User               @relation("ChatReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
@@ -3291,7 +3424,7 @@ model ChatReport {
 model ChatMaintenanceCursor {
   name      String   @id
   cursor    String?
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model UserNotification {

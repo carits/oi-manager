@@ -13,12 +13,17 @@ import {
   createQueuedSubmissionWithRun,
 } from '../src/modules/judge/application/judge-run.service'
 import { createTestUser } from './helpers/testUser'
+import { processContributionRewardDeliveries } from '../src/modules/contribution/application/contribution-reward.service'
+import { purchaseEvaluationCredits } from '../src/modules/carits/application/resource-purchase.service'
+import { getPersonalCaritsAccount } from '../src/modules/carits/application/carits.service'
+import { reserveEvaluationCredits, settleEvaluationCredits } from '../src/modules/problem/problem.evaluation-budget.service'
 
 const root = path.join(process.cwd(), 'testdata')
 const createdDirectories: string[] = []
 
 async function fixture(mode: 'acm' | 'oi' = 'acm') {
   const owner = await createTestUser({ role: 'platform_admin' })
+  const contributor = await createTestUser()
   const problemId = crypto.randomUUID()
   const directory = path.join(root, problemId)
   createdDirectories.push(directory)
@@ -83,7 +88,7 @@ async function fixture(mode: 'acm' | 'oi' = 'acm') {
     classifierSource: mode === 'oi' ? 'int main(){}' : '',
     updatedBy: owner.user.id,
   } })
-  return { owner, problem, revision: revision!, directory, testcaseId }
+  return { owner, contributor, problem, revision: revision!, directory, testcaseId }
 }
 
 async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
@@ -91,7 +96,7 @@ async function createAttempt(fixture: Awaited<ReturnType<typeof fixture>>) {
   return prisma.problemHackAttempt.create({ data: {
     id: crypto.randomUUID(),
     problemId: fixture.problem.id,
-    userId: fixture.owner.user.id,
+    userId: fixture.contributor.user.id,
     status: 'judging',
     inputMode: 'data',
     inputData: 'candidate\n',
@@ -185,15 +190,45 @@ describe('concurrent Hack promotion', () => {
     expect(await prisma.problemHackAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject({
       status: 'accepted', canonicalStatus: 'promoted',
     })
+    const contribution = await prisma.contributionEvent.findFirstOrThrow({ where: { sourceType: 'testcase_candidate' }, include: { RewardDelivery: true } })
+    expect(contribution).toMatchObject({ actorUserId: context.contributor.user.id, type: 'hack_promoted', score: 150, status: 'accepted' })
+    expect(contribution.RewardDelivery).toMatchObject({ userCarits: 30n, organizationCarits: 0n, status: 'pending' })
+
+    const previousRewardMode = process.env.CONTRIBUTION_REWARD_MODE
+    try {
+      process.env.CONTRIBUTION_REWARD_MODE = 'enabled'
+      expect(await processContributionRewardDeliveries()).toMatchObject({ posted: 1 })
+      expect((await getPersonalCaritsAccount(context.contributor.user.id)).availableBalance).toBe('30')
+      await purchaseEvaluationCredits({ userId: context.contributor.user.id, packageCode: 'EVAL_5K', idempotencyKey: crypto.randomUUID() })
+      const nextTaskId = crypto.randomUUID()
+      const nextCandidateBudget = await reserveEvaluationCredits({ userId: context.contributor.user.id, manager: false, taskType: 'candidate', taskId: nextTaskId, credits: 12_000 })
+      expect(nextCandidateBudget).toMatchObject({ freeReserved: 10_000, paidReserved: 2_000, platformReserved: 12_000 })
+      await settleEvaluationCredits({ taskType: 'candidate', taskId: nextTaskId, reserved: 12_000, actual: 1 })
+    } finally {
+      if (previousRewardMode === undefined) delete process.env.CONTRIBUTION_REWARD_MODE
+      else process.env.CONTRIBUTION_REWARD_MODE = previousRewardMode
+    }
   }, 60_000)
 
   it('promotes one of ten simultaneous results and leaves every stale Candidate auditable', async () => {
     const context = await fixture()
-    const attempts = await Promise.all(Array.from({ length: 10 }, () => createAttempt(context)))
-
-    await Promise.all(attempts.map((attempt, index) =>
-      finalizeHackResult(acceptedPayload(attempt.id, `${index + 10} ${index + 20}\n`)),
-    ))
+    await prisma.problemCandidatePolicy.create({ data: {
+      id: crypto.randomUUID(), problemId: context.problem.id,
+      selectorMode: 'observe', updatedBy: context.owner.user.id,
+    } })
+    // Production intentionally permits only one judging/finalizing Hack per
+    // problem. Build the eligible pool through that real sequential boundary,
+    // then race the independent Selector workers that can finish concurrently.
+    const attempts = []
+    for (let index = 0; index < 10; index += 1) {
+      const attempt = await createAttempt(context)
+      attempts.push(attempt)
+      await finalizeHackResult(acceptedPayload(attempt.id, `${index + 10} ${index + 20}\n`))
+    }
+    const candidates = await prisma.testcaseCandidate.findMany({ where: { problemId: context.problem.id }, orderBy: { createdAt: 'asc' } })
+    expect(candidates).toHaveLength(10)
+    await prisma.problemCandidatePolicy.update({ where: { problemId: context.problem.id }, data: { selectorMode: 'auto' } })
+    await Promise.allSettled(candidates.map(candidate => maybeAutoSelectCandidate(candidate.id)))
 
     const rows = await prisma.problemHackAttempt.findMany({ where: { problemId: context.problem.id } })
     expect(rows.filter(row => row.status === 'accepted' && row.canonicalStatus === 'promoted')).toHaveLength(1)
@@ -212,10 +247,8 @@ describe('concurrent Hack promotion', () => {
 
   it('turns a later duplicate into redundant without publishing another revision', async () => {
     const context = await fixture()
-    const attempts = await Promise.all([createAttempt(context), createAttempt(context)])
-    const payloads = attempts.map(attempt => acceptedPayload(attempt.id, '40 2\n'))
-
-    await Promise.all(payloads.map(payload => finalizeHackResult(payload)))
+    const firstAttempt = await createAttempt(context)
+    await finalizeHackResult(acceptedPayload(firstAttempt.id, '40 2\n'))
     const duplicateAttempt = await createAttempt(context)
     await finalizeHackResult(acceptedPayload(duplicateAttempt.id, '40 2\n'))
 

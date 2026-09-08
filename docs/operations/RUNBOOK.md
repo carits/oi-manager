@@ -1,8 +1,8 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-08-30
-source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints
+last_verified: 2026-09-08
+source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints, economy-loop migration and scheduler services
 
 ---
 
@@ -344,6 +344,41 @@ pnpm --filter server exec prisma studio
 
 任何 `prisma push`、迁移、恢复或维护接口调用前先核对 `DATABASE_URL`。当前开发数据在
 `public` schema；测试只能使用 `test/e2e`。
+
+## 贡献奖励与 Evaluation Credits
+
+首次启用经济闭环必须采用 expand 迁移，不能跳过受保护的迁移检查：
+
+1. 按发布流程创建并验证数据库备份，再执行 Prisma `migrate deploy`。
+2. 只在候选 API slot 临时开启 `ENABLE_MAINTENANCE_API=true`，调用
+   `GET /api/admin/migration/economy-loop` 取得检查报告。
+3. 报告中存在孤儿 Evaluation Ledger、不平衡的 posted Carits 交易或无法解释的旧预占时停止；
+   不得手工改流水绕过检查。
+4. 复核报告后将原 `reportHash` 提交给 `POST /api/admin/migration/economy-loop`，
+   幂等创建 `REWARD_POOL` 和 `RESOURCE_SINK` 系统账户。
+5. 关闭候选 slot 的维护 API，先以 `CONTRIBUTION_REWARD_MODE=observe` 启动单例 Scheduler。
+   observe 模式只计数到期奖励，不领取、不入账。
+6. 对照贡献事件、待投递数、拟发金额和账本不变性后，再切换为 `enabled` 并重启单例 Scheduler。
+
+日常运行中：
+
+- `evaluation_reservations_reconciled` 表示 30 秒对账任务补做了结算/释放或遇到错误。
+  对账一轮最多 100 条；孤儿预占有 10 分钟安全窗口。
+- `evaluation_reservation_reconciler_failed` 是调度器级失败；应检查 Scheduler、数据库和对应任务终态，
+  不要直接改 `availableCredits/reservedCredits`。
+- 单日额度按毛发放统计；已冲正奖励仍占用当日额度。`deferred_budget` 属于预期延迟，不是投递故障。
+- 奖励连续失败 5 次后停在 `failed`。调查根因后，由超级管理员使用平台贡献审计页或
+  `POST /api/platform/contributions/:id/retry-reward` 重入队；不得手工把状态改回 pending。
+- 购买响应丢失后必须复用原 `Idempotency-Key`。如同键改了套餐或 Carits 交易载荷，
+  `IDEMPOTENCY_KEY_REUSED` 是正确的 fail-closed 结果，不应重置或删除原交易。
+
+对账时最低检查以下不变性：
+
+- 每条 posted Carits 交易至少有两条分录，且分录合计为 0。
+- 同一 Carits 幂等键不得对应不同 `requestFingerprint`。
+- 当日 Evaluation Credit 账户满足
+  `limitCredits + SUM(EvaluationCreditLedgerEntry.amount) = availableCredits`。
+- `reservedCredits` 与仍为 `reserved` 的 Reservation 投影一致；已结算/释放记录不得计入当前预占。
 
 ## 备份
 

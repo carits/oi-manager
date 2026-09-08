@@ -13,6 +13,7 @@ export const routePatterns = [
   '/account/wallet',
   '/admin',
   '/admin/chat-reports',
+  '/admin/contributions',
   '/admin/platform-bindings',
   '/admin/profile',
   '/admin/schools',

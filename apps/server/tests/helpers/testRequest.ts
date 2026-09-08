@@ -27,6 +27,10 @@ import { organizationMemberRouter } from '../../src/routes/organization-members'
 import { platformOrganizationRouter } from '../../src/routes/platform-organizations'
 import { judgeProgramTemplateRouter } from '../../src/modules/problem/problem.judge-program.routes'
 import { verifyCookieOrigin } from '../../src/middleware/csrf'
+import { authenticate } from '../../src/middleware/auth'
+import { contributionRouter, platformContributionRouter } from '../../src/modules/contribution/contribution.routes'
+import { resourceRouter } from '../../src/modules/carits/resource.routes'
+import { caritsRouter } from '../../src/modules/carits/carits.routes'
 
 /**
  * 创建测试用的 Express 应用
@@ -70,6 +74,10 @@ export function createTestApp() {
   app.use('/api/organizations/:organizationId/members', organizationMemberRouter)
   app.use('/api/platform/organizations', platformOrganizationRouter)
   app.use('/api/rankings', rankingRouter)
+  app.use('/api/contributions', authenticate, contributionRouter)
+  app.use('/api/platform/contributions', authenticate, platformContributionRouter)
+  app.use('/api/resources', authenticate, resourceRouter)
+  app.use('/api/carits', authenticate, caritsRouter)
 
   // 健康检查
   app.get('/api/health', (req, res) => {

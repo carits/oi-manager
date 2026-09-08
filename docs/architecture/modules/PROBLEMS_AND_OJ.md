@@ -95,8 +95,10 @@ C++17/testlib Validator 并在 go-judge 编译。DSL 无法表达时保留 C++17
 Checker 自检。成功输入、答案、参数、种子、程序版本、耗时和内容哈希进入候选池，失败点
 保留阶段与错误，不影响同批其他点。
 
-所有可提交用户都可以贡献直接输入或 `oj.generator/v1` Generator。贡献任务先预占用户与平台
-双层 Evaluation Credits，并受单用户、单题、全局并发、数据体积和 Candidate HOT 池硬上限。
+所有可提交用户都可以贡献直接输入或 `oj.generator/v1` Generator。贡献任务以单一 Reservation
+固化用户当日免费额度、已购钱包与平台日预算三层 Evaluation Credits，并受单用户、单题、
+全局并发、数据体积和 Candidate HOT 池硬上限。任务创建/终态与预占/结算为同事务，Scheduler
+另行对账异常中断留下的孤儿预占。
 Generator 从 JSON stdin 读取服务器选择的十进制 Seed/Profile/参数；C++ 由平台注入 helper，同一 Context 连续两次输出哈希不一致时拒绝。
 
 贡献页面和写接口共用 `resolveContributionReadiness`：只有已激活的 STD、Validator 才能接收任务，

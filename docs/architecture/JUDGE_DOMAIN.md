@@ -21,6 +21,8 @@ Candidate 的技术验证顺序为 Generator/直接输入、Validator、STD、Ch
 
 Evaluation Credits 在每轮持久评估创建后、进入可领取队列前，同时预占用户日账户和平台日账户；同一轮 L1/L2/Holdout 共享唯一预算 ID，完成后按执行次数、CPU 毫秒和生成字节结算。租约和 fencing token 拒绝迟到回传，基础设施错误最多重试三次。直接 Candidate/Hack 最多 400 次沙箱执行与 60 秒 CPU，Generator 最多 4000 次与 300 秒；非 Holdout 阶段会预留至少一个 Hidden Holdout 样本额度，未完成 Holdout 时 fail closed。Generator v1 使用服务器选择的 Seed 和 JSON stdin；同一请求重复执行所得 SHA-256 不一致时以 `GENERATOR_NON_DETERMINISTIC` 终止。
 
+新任务通过 `EvaluationCreditReservation` 固化三层预占：用户当日免费额度、长期有效的已购额度钱包、平台当日总预算。预占与任务创建在同一 Serializable 事务中；取消、配置过期和终态回传也与任务状态同事务释放或结算。结算始终优先消耗免费额度，未使用的已购额度通过不可变钱包流水释放；跨 UTC 日任务仍归属于创建时的 Reservation。Scheduler 每 30 秒幂等扫描终态遗留和超过 10 分钟的孤儿预占，作为异常恢复网；仍在运行或未知类型的任务不猜测结算。贡献等级只限制普通用户每日可使用的已购额度，题目管理者现有 100,000 Credits 上限和平台 250,000 Credits 硬上限保持不变。
+
 Attempt 终态同时保存 Queue、Dispatch、Compile、Run、Persist、Total 六段真实延迟；缺少采集能力的历史记录保持 `null`，禁止根据总耗时反推伪造。SLO 口径见 [Judge SLO](../operations/JUDGE_SLO.md)。
 
 ## 状态机

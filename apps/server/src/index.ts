@@ -40,7 +40,8 @@ import { organizationJoinRouter } from './modules/organization-join/organization
 import { organizationCreationRouter } from './modules/organization-creation/organization-creation.routes'
 import { caritsRouter } from './modules/carits/carits.routes'
 import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
-import { contributionRouter } from './modules/contribution/contribution.routes'
+import { contributionRouter, platformContributionRouter } from './modules/contribution/contribution.routes'
+import { resourceRouter } from './modules/carits/resource.routes'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
 import { chatRouter, chatReportAdminRouter, chatStickerAdminRouter } from './modules/chat/chat.routes'
@@ -153,6 +154,8 @@ app.use('/api', organizationCreationRouter)
 app.use('/api/carits', authenticate, caritsRouter)
 app.use('/api/platform-admin/ai', authenticate, aiTokenAdminRouter)
 app.use('/api/contributions', authenticate, contributionRouter)
+app.use('/api/platform/contributions', authenticate, platformContributionRouter)
+app.use('/api/resources', authenticate, resourceRouter)
 app.use('/api/telemetry', telemetryRouter)
 app.use('/api/workspaces', workspaceRouter)
 app.use('/api/chat', chatRouter)

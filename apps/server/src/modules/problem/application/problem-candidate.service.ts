@@ -8,6 +8,7 @@ import { ACTIVE_CANDIDATE_STATUSES } from '../problem.testcase-candidate.service
 import { resolveContributionContext } from '../problem.contribution-readiness.service'
 import { resolveSubtaskReadiness } from '../problem.subtask-readiness.service'
 import { emergencyPublishCandidate, previewCandidateSelection } from '../problem.candidate-selector.service'
+import { resolveContributionOrganization } from '../../contribution/application/contribution.service'
 
 export class ProblemCandidateError extends Error { constructor(public statusCode: number, public code: string, message: string) { super(message) } }
 function fail(status: number, code: string, message: string): never { throw new ProblemCandidateError(status, code, message) }
@@ -20,7 +21,8 @@ async function problemFor(user: JwtPayload, problemId: string, manager = false) 
 export async function contributeCandidateData(user: JwtPayload, problemId: string, body: any) {
   await problemFor(user, problemId); const inputData = String(body?.inputData || '')
   if (!inputData.trim() || Buffer.byteLength(inputData) > EVALUATION_LIMITS.maxCandidateBytes) fail(413, 'CANDIDATE_DATA_TOO_LARGE', '候选数据为空或超过 16 MiB')
-  const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'input', cases: [{ name: String(body?.name || 'candidate').slice(0, 80), inputData }] } })
+  const contributionOrganizationId = await resolveContributionOrganization(user.userId, body?.contributionOrganizationId)
+  const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, contributionOrganizationId, sourceMode: 'input', cases: [{ name: String(body?.name || 'candidate').slice(0, 80), inputData }] } })
   return { jobId: job.id, status: job.status }
 }
 export async function contributeCandidateGenerator(user: JwtPayload, problemId: string, body: any) {
@@ -32,7 +34,8 @@ export async function contributeCandidateGenerator(user: JwtPayload, problemId: 
   if (ids.some((id: string) => !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(id)) || new Set(ids).size !== ids.length) fail(400, 'GENERATOR_MANIFEST_INVALID', 'Generator Profile ID 无效或重复')
   const profiles = manifest.profiles.slice(0, 8).map((item: any) => ({ name: String(item.id).slice(0, 80), profile: String(item.id), params: item?.params && typeof item.params === 'object' && !Array.isArray(item.params) ? item.params : {}, args: [] }))
   const normalizedManifest = { apiVersion: 'oj.generator/v1', protocol: 'oj.generator/v1', language, entry: expectedEntry, parameterSchema: manifest?.parameterSchema && typeof manifest.parameterSchema === 'object' && !Array.isArray(manifest.parameterSchema) ? manifest.parameterSchema : {}, profiles: manifest.profiles.map((item: any) => ({ id: String(item.id), label: String(item.label || item.id).slice(0, 80), params: item?.params && typeof item.params === 'object' && !Array.isArray(item.params) ? item.params : {} })) }
-  const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, sourceMode: 'generator', generatorSource: source, generatorLanguage: language, generatorManifest: normalizedManifest, cases: profiles } })
+  const contributionOrganizationId = await resolveContributionOrganization(user.userId, body?.contributionOrganizationId)
+  const job = await createDataGenerationJob({ user, problemId, body: { contribution: true, contributionOrganizationId, sourceMode: 'generator', generatorSource: source, generatorLanguage: language, generatorManifest: normalizedManifest, cases: profiles } })
   return { jobId: job.id, status: job.status }
 }
 export async function listMyCandidates(user: JwtPayload, problemId: string) { await problemFor(user, problemId); return prisma.testcaseCandidate.findMany({ where: { problemId, createdBy: user.userId }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, source: true, targetRole: true, status: true, evaluationStage: true, message: true, createdAt: true, updatedAt: true, promotedRevisionId: true } }) }

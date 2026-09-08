@@ -19,6 +19,9 @@
 .configureActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .notice { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border-left: 3px solid var(--warning); border-radius: 8px; background: var(--warning-light); color: var(--warning-text); font-size: 13px; line-height: 1.6; }
 .notice svg { flex: none; margin-top: 1px; }
+.attribution { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 360px); gap: 16px; align-items: end; padding: 13px 14px; border: 1px solid var(--gray-200); border-radius: 9px; background: var(--gray-50); }
+.attribution label { display: grid; gap: 4px; }
+.attribution label span { color: var(--gray-600); font-size: 12px; line-height: 1.6; }
 .preparedTools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .preparedTools > div { display: grid; gap: 5px; padding: 13px 14px; border: 1px solid var(--gray-200); border-radius: 9px; background: var(--gray-50); }
 .preparedTools span, .generatorProtocol span { color: var(--gray-600); font-size: 12px; line-height: 1.6; }
@@ -82,4 +85,4 @@
 .detailGrid pre { max-height: 320px; overflow: auto; margin: 8px 0 0; padding: 12px; border-radius: 8px; background: var(--gray-900); color: var(--gray-200); white-space: pre; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .detailLoading { padding: 22px; text-align: center; color: var(--gray-500); }
 @media (max-width: 1000px) { .readinessGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 850px) { .hero { flex-direction: column; } .modeGrid, .twoColumns, .detailGrid, .readinessGrid, .preparedTools { grid-template-columns: 1fr; } .root { padding: 16px; } .submitArea { align-items: stretch; flex-direction: column; } .submitRow { justify-content: stretch; } .submitRow > button { flex: 1; } .caseItem { grid-template-columns: 1fr; } .taskHeader { flex-direction: column; gap: 4px; } }
+@media (max-width: 850px) { .hero { flex-direction: column; } .modeGrid, .twoColumns, .detailGrid, .readinessGrid, .preparedTools, .attribution { grid-template-columns: 1fr; } .root { padding: 16px; } .submitArea { align-items: stretch; flex-direction: column; } .submitRow { justify-content: stretch; } .submitRow > button { flex: 1; } .caseItem { grid-template-columns: 1fr; } .taskHeader { flex-direction: column; gap: 4px; } }

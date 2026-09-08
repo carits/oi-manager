@@ -360,6 +360,7 @@ export async function finalizeHackResult(
       problemId: problem.id,
       hackAttemptId: current.id,
       createdBy: current.userId,
+      contributionOrganizationId: current.contributionOrganizationId,
       baseTestSetRevisionId: baseRevision.id,
       input: Buffer.from(inputData),
       output: Buffer.from(outputData),

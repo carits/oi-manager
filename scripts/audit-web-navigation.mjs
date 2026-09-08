@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
@@ -72,6 +72,7 @@ for (const file of sourceFiles) {
 }
 
 const report = { generatedAt: new Date().toISOString(), pageRoutes: routes.sort(), findings }
+await mkdir(path.dirname(reportPath), { recursive: true })
 await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`)
 const errors = findings.filter(finding => finding.severity === 'error')
 console.log(`导航静态巡检：${routes.length} 个页面路由，${findings.length} 条发现，${errors.length} 条阻断问题。`)

@@ -92,6 +92,16 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/problems/:id/selector-runs` | 题目管理者读取 Selector 运行历史 |
 | `POST` | `/api/problems/:id/selector-runs/preview` | 对至多 25 个待选 Candidate 执行相对当前正式 Revision 的真实 dry-run，不创建 Selection Run 或 Revision |
 | `POST` | `/api/problems/:id/canonical-emergency-publish` | 题目管理者填写原因后紧急发布 Hack Gate Candidate；不能绕过结构、保护、Official Core 或 Revision CAS |
+| `GET` | `/api/resources/evaluation-credit-packages` | 读取服务端固定 Carits 兑换套餐 |
+| `GET` | `/api/resources/evaluation-credits` | 读取本人免费/已购 Credits、贡献等级、今日使用和预占 |
+| `GET` | `/api/resources/evaluation-credit-purchases` | 读取本人资源兑换流水 |
+| `POST` | `/api/resources/evaluation-credits/purchase` | 按固定 packageCode 与 Idempotency-Key 用 Carits 兑换长期 Credits |
+| `GET` | `/api/platform/contributions` | 超管/平台管理员读取贡献与奖励审计 |
+| `GET` | `/api/platform/contributions/:id/evidence` | 超管/平台管理员只读核验贡献绑定的 Candidate 或正式 TestSet Revision；`kind=candidate` 或 `kind=revision`，服务端校验事件、题目与晋升版本关系 |
+| `POST` | `/api/platform/contributions/:id/accept` | 超级管理员接受紧急发布的 pending 贡献 |
+| `POST` | `/api/platform/contributions/:id/reject` | 超级管理员填写原因并拒绝 pending 贡献 |
+| `POST` | `/api/platform/contributions/:id/revoke` | 超级管理员撤销已接受贡献；已发 Carits 通过新冲正交易处理 |
+| `POST` | `/api/platform/contributions/:id/retry-reward` | 超级管理员将连续失败的奖励投递审计重入队；仅 `failed` 状态允许 |
 | `GET` | `/api/problems/:id/feature-definitions` | 读取题目 Feature 注册表 |
 | `PUT` | `/api/problems/:id/feature-definitions` | 保存最多 128 个声明式 Feature |
 | `GET` | `/api/problems/:id/subtask-rules` | 读取 OI 声明式 Subtask Rule |
@@ -478,6 +488,8 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/strategy-decisions` | 记录 ACM 策略训练决策 |
 | `GET` | `/api/admin/migration/training-engine` | 超管检查旧训练迁移，不修改数据 |
 | `POST` | `/api/admin/migration/training-engine` | 超管以 reportHash 幂等迁移旧训练 |
+| `GET` | `/api/admin/migration/economy-loop` | 超管检查 Carits 账户、已入账交易、Evaluation Ledger 孤儿和旧预占 |
+| `POST` | `/api/admin/migration/economy-loop` | 超管携 reportHash 创建系统发行/资源沉淀账户并写迁移审计 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
 | `GET` | `/api/problems/:id/checker` | 题目 Checker 文件列表 |
 | `GET` | `/api/problems/:id/checker/:fileName/download` | 下载 Checker 源码 |

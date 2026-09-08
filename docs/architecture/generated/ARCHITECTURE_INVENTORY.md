@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 143 |
+| Prisma models | 148 |
 | Prisma enums | 19 |
 | Legacy route adapters | 25 |
-| Module route adapters | 45 |
+| Module route adapters | 46 |
 | systemd units | 8 |
-| Referenced environment keys | 453 |
+| Referenced environment keys | 455 |
 
 ## HTTP adapter ownership
 
@@ -54,6 +54,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 - `apps/server/src/modules/ai/ai-token.routes.ts`
 - `apps/server/src/modules/carits/carits.routes.ts`
+- `apps/server/src/modules/carits/resource.routes.ts`
 - `apps/server/src/modules/chat/chat.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
@@ -128,11 +129,15 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ContestUserProblemStatus`
 - `ContributionEvent`
 - `ContributionProject`
+- `ContributionRewardDelivery`
 - `DirectConversation`
 - `DirectConversationMember`
 - `DirectMessage`
 - `EvaluationCreditAccount`
 - `EvaluationCreditLedgerEntry`
+- `EvaluationCreditReservation`
+- `EvaluationCreditWallet`
+- `EvaluationCreditWalletEntry`
 - `File`
 - `FriendRequest`
 - `Friendship`
@@ -190,6 +195,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemTestcase`
 - `ProblemTestcaseGroup`
 - `RejudgeBatch`
+- `ResourcePurchase`
 - `School`
 - `SchoolProblemList`
 - `Submission`
@@ -388,6 +394,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CONTAINER`
 - `CONTAINER_LABEL`
 - `CONTAINER_NAME`
+- `CONTRIBUTION_REWARD_MODE`
 - `COOKIE_SECURE`
 - `CORS_ORIGINS`
 - `CRONTAB_CAPTURE`
@@ -605,6 +612,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PID_FILE`
 - `PLAYWRIGHT_BROWSERS_PATH`
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
+- `POLICY_VERSION`
 - `POOL_ID`
 - `PORT`
 - `POSTGRES_DB`

@@ -11,6 +11,21 @@ source_of_truth: Git history
 
 ## 2026-09-08
 
+### 贡献、Carits 与 Evaluation Credits 闭环
+
+- Candidate/Hack 被 Selector 正式晋升时在同一 Revision 事务写入版本化 `ContributionEvent`；普通 Candidate 记 100 贡献值/20 C，Hack 记 150 贡献值/30 C，紧急发布等待超管审核。
+- 新增持久 `ContributionRewardDelivery` Worker，使用租约、fencing、UTC 用户/平台日上限和延迟重试；撤销已发奖励只新增不可变冲正交易，不回退 TestSet Revision。
+- Carits 写入收口为排序加锁的平衡账本服务；数据库阻止 posted 交易追加分录，强制至少两条分录、总和为零和交易/账户聚合唯一。
+- 个人可按服务端固定的 5K/20K/50K 套餐以 `1 C = 500 Credits` 兑换长期 Evaluation Credits；任务按免费日额度、已购钱包、平台预算预占，结算优先免费并释放未用已购额度。
+- 贡献页展示 L0–L4、晋升事件和奖励状态；钱包页展示可用/负债 Carits、免费/已购 Credits 与购买弹窗；平台贡献审计对 platform_admin 只读、对 super_admin 开放处理。
+- 贡献者可明确选择个人或当时有效组织归因，生成任务、Hack Attempt 和 Candidate 固定快照；首版组织匹配奖励仍为 0。
+- 强一致审查后将数据生成/Candidate 评估任务与额度预占、取消及终态结算收进同一事务，并增加 30 秒 Reservation 对账器，幂等修复终态遗留、超过 10 分钟的孤儿预占和历史 `reserving` 记录。
+- Evaluation Ledger 统一记录预占扣减与未用额度退回，当前预占统计只包含 `reserved` Reservation；管理者当日账户可安全升级到 100,000 上限。
+- Carits 交易增加 `requestFingerprint`，相同幂等键只有在业务引用和聚合分录完全一致时才能重放，差异请求返回 409；购买 UI 在明确成功前稳定复用同一幂等键。
+- 奖励 Worker 的终态写入同时校验 fencing token，日上限按 `posted + reversed` 毛发放量计算；连续失败 5 次后由超级管理员通过审计接口显式重试。
+- 本条记录仓库实现与文档收口；生产迁移、启用奖励 Worker 和线上闭环验收尚待实际发布后补记，不据此宣称已部署。
+- 文档、API 认证和架构门禁已通过：59 份活动文档、73 个 Web 路由、148 个 Prisma 模型、484 个 HTTP 端点一致，路由边界和 Hack 状态写入违规均为 0。
+
 ### Training Engine 可视化顺序编排
 
 - 新增组织与个人团队 DRAFT 训练的独立设计路由，创建后直接进入“阶段时间线 → 题目链 → 可用题目池”三栏工作台；运行工作台不再承担结构编辑。

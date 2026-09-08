@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, operations
-last_verified: 2026-07-31
+last_verified: 2026-09-08
 source_of_truth: process.env usage, environment examples, Playwright configuration
 ---
 
@@ -32,6 +32,7 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `TEMP_FILE_CLEANUP_HOURS` | 否 | `24` | 临时文件保留 |
 | `TRASH_RETENTION_DAYS` | 否 | `7` | 回收站保留 |
 | `DISABLE_BACKGROUND_JOBS` | 否 | `false` | E2E 关闭后台任务 |
+| `CONTRIBUTION_REWARD_MODE` | 否 | `enabled` | `observe` 只统计到期待结算奖励且不领取租约；`enabled` 启用持久 Worker 入账 |
 | `ENV_FILE` | 否 | `.env` | 指定 dotenv 文件 |
 | `DEEPSEEK_API_KEY` | AI 功能必需 | 无 | AI 翻译 |
 | `DEEPSEEK_BASE_URL` | 否 | 服务默认 | AI API 地址 |

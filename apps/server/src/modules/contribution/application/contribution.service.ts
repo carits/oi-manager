@@ -1,5 +1,20 @@
 import { prisma } from '../../../prisma'
 
+export class ContributionApplicationError extends Error {
+  constructor(public statusCode: number, public code: string, message: string) { super(message) }
+}
+
+export async function resolveContributionOrganization(userId: string, value: unknown) {
+  const organizationId = typeof value === 'string' && value.trim() ? value.trim() : null
+  if (!organizationId) return null
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { userId, organizationId, status: 'active', Organization: { status: 'active', School: { is: { directoryStatus: { not: 'legacy' }, status: 'active' } } } },
+    select: { id: true },
+  })
+  if (!membership) throw new ContributionApplicationError(403, 'CONTRIBUTION_ORGANIZATION_INVALID', '贡献归属组织不可用或你不是该组织的有效成员')
+  return organizationId
+}
+
 async function rankingRows(organizationId?: string) {
   const groups = await prisma.contributionEvent.groupBy({
     by: ['actorUserId'],
@@ -26,19 +41,55 @@ async function rankingRows(organizationId?: string) {
 }
 
 export async function getContributionSummary(userId: string) {
-  const eventCount = await prisma.contributionEvent.count({
-    where: { actorUserId: userId, status: 'accepted', revokedAt: null },
-  })
-  return { eventCount }
+  const [eventCount, aggregate] = await Promise.all([
+    prisma.contributionEvent.count({ where: { actorUserId: userId, status: 'accepted', revokedAt: null } }),
+    prisma.contributionEvent.aggregate({ where: { actorUserId: userId, status: 'accepted', revokedAt: null }, _sum: { score: true } }),
+  ])
+  const contributionScore = aggregate._sum.score || 0
+  const level = contributionScore >= 10_000 ? 'L4' : contributionScore >= 2_000 ? 'L3' : contributionScore >= 500 ? 'L2' : contributionScore >= 100 ? 'L1' : 'L0'
+  return { eventCount, contributionScore, level }
 }
 
-export async function listMyContributionEvents(userId: string) {
-  const items = await prisma.contributionEvent.findMany({
-    where: { actorUserId: userId, status: 'accepted', revokedAt: null },
-    select: { id: true, type: true, sourceType: true, score: true, acceptedAt: true },
-    orderBy: { acceptedAt: 'desc' },
-  })
-  return { items }
+export async function listMyContributionEvents(
+  userId: string,
+  pagination: { page: number; pageSize: number; skip: number } = { page: 1, pageSize: 20, skip: 0 },
+) {
+  const where = { actorUserId: userId, status: 'accepted', revokedAt: null }
+  const [items, total] = await Promise.all([
+    prisma.contributionEvent.findMany({
+      where,
+      select: {
+        id: true,
+        type: true,
+        sourceType: true,
+        sourceId: true,
+        score: true,
+        status: true,
+        occurredAt: true,
+        acceptedAt: true,
+        RewardDelivery: { select: { status: true, userCarits: true } },
+      },
+      orderBy: [{ acceptedAt: 'desc' }, { id: 'desc' }],
+      skip: pagination.skip,
+      take: pagination.pageSize,
+    }),
+    prisma.contributionEvent.count({ where }),
+  ])
+  return {
+    items: items.map(item => ({
+      ...item,
+      // acceptedAt is nullable in the compatibility schema. An accepted legacy
+      // event still needs a stable display timestamp instead of "Invalid Date".
+      acceptedAt: item.acceptedAt || item.occurredAt,
+      RewardDelivery: item.RewardDelivery
+        ? { ...item.RewardDelivery, userCarits: item.RewardDelivery.userCarits.toString() }
+        : null,
+    })),
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    total,
+    totalPages: Math.ceil(total / pagination.pageSize),
+  }
 }
 
 export async function listContributionRanking(organizationId?: string) {

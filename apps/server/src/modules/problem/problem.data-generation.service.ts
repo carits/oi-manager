@@ -9,7 +9,7 @@ import { requireProgramProblem } from './problem.judge-program.service'
 import yaml from 'js-yaml'
 import { canModifyProblem } from './problem.access'
 import { createAdmittedCandidate } from './problem.testcase-candidate.service'
-import { EVALUATION_LIMITS, releaseEvaluationCredits, reserveEvaluationCredits, settleEvaluationCredits, usageCredits } from './problem.evaluation-budget.service'
+import { EVALUATION_LIMITS, releaseEvaluationCreditsInTransaction, reserveEvaluationCreditsInTransaction, settleEvaluationCreditsInTransaction, usageCredits } from './problem.evaluation-budget.service'
 import { requireContributionReady, resolveActiveProgramVersion } from './problem.contribution-readiness.service'
 import { resolveSubtaskReadiness } from './problem.subtask-readiness.service'
 import { OI_CANDIDATE_LIMITS, uniqueSubtaskCases, validateOiFormalLimits } from './problem.oi-candidate-policy'
@@ -94,9 +94,8 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
   if (sourceMode === 'generator' && !ephemeralGenerator && generator?.version.protocol !== 'oj.generator/v1' && cases.some(item => item.profile || item.params)) fail(422, 'GENERATOR_PROTOCOL_MISMATCH', '历史 Generator 只能使用旧参数协议；请新建 Generator V1')
   const jobId = crypto.randomUUID()
   const reservedCredits = contribution ? (sourceMode === 'generator' ? 4_000 : 400) : 0
-  if (reservedCredits) await reserveEvaluationCredits({ userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
   const config: any = { sourceMode, cases, generator: ephemeralGenerator, generatorManifest: ephemeralGenerator?.protocolConfig || null, mode: readiness?.mode, classifierVersionId: readiness?.classifierProgram?.version.id || null }
-  try { return await prisma.$transaction(async tx => {
+  return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`data-generation:${problem.id}`}, 0)) IS NULL AS locked`
     const activeCount = await tx.problemDataGenerationJob.count({
       where: { problemId: problem.id, status: { in: ACTIVE } },
@@ -106,18 +105,17 @@ export async function createDataGenerationJob(input: { user: JwtPayload; problem
       const userActive = await tx.problemDataGenerationJob.count({ where: { createdBy: input.user.userId, contribution: true, status: { in: ACTIVE } } })
       if (userActive > 0) fail(409, 'CONTRIBUTION_TASK_ACTIVE', '每位用户同时只能执行一个 Candidate 贡献任务')
     }
+    if (reservedCredits) await reserveEvaluationCreditsInTransaction(tx, { userId: input.user.userId, manager, taskType: 'candidate_generation', taskId: jobId, credits: reservedCredits, metadata: { problemId: problem.id, sourceMode } })
     const job = await tx.problemDataGenerationJob.create({ data: {
       id: jobId, problemId: problem.id, createdBy: input.user.userId, baseTestSetRevisionId: problem.latestTestSetRevisionId,
       expectedLatestRevisionId: problem.latestTestSetRevisionId, generatorVersionId: generator?.version.id || null,
       standardVersionId: standard.version.id, validatorVersionId: validator.version.id, config,
-      contribution, targetRole: manager && input.body?.targetRole === 'official' ? 'official' : 'hack_gate', reservedCredits,
+      contribution, contributionOrganizationId: contribution ? input.body?.contributionOrganizationId || null : null,
+      targetRole: manager && input.body?.targetRole === 'official' ? 'official' : 'hack_gate', reservedCredits,
     } })
     await tx.problemDataGenerationCase.createMany({ data: cases.map((item, orderIndex) => ({ id: crypto.randomUUID(), jobId, problemId: problem.id, orderIndex, name: item.name, args: item.args, seed: item.seed })) })
     return job
-  }) } catch (error) {
-    if (reservedCredits) await releaseEvaluationCredits({ taskType: 'candidate_generation', taskId: jobId, reserved: reservedCredits, reason: '任务创建失败' }).catch(() => undefined)
-    throw error
-  }
+  })
 }
 
 export async function listDataGenerationJobs(user: JwtPayload, problemId: string) {
@@ -135,14 +133,18 @@ export async function getDataGenerationJob(user: JwtPayload, problemId: string, 
 
 export async function cancelDataGenerationJob(user: JwtPayload, problemId: string, jobId: string) {
   await requireProgramProblem(user, problemId)
-  const changed = await prisma.problemDataGenerationJob.updateMany({ where: { id: jobId, problemId, status: { in: ['queued'] } }, data: { status: 'cancelled', finishedAt: new Date() } })
-  if (!changed.count) fail(409, 'GENERATION_JOB_NOT_CANCELLABLE', '任务已开始或已经结束')
-  return { cancelled: true }
+  return prisma.$transaction(async tx => {
+    const job = await tx.problemDataGenerationJob.findFirst({ where: { id: jobId, problemId } })
+    if (!job || job.status !== 'queued') fail(409, 'GENERATION_JOB_NOT_CANCELLABLE', '任务已开始或已经结束')
+    const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: jobId, problemId, status: 'queued' }, data: { status: 'cancelled', finishedAt: new Date() } })
+    if (!changed.count) fail(409, 'GENERATION_JOB_NOT_CANCELLABLE', '任务已开始或已经结束')
+    if (job.reservedCredits) await releaseEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, reason: '用户取消排队任务' })
+    return { cancelled: true }
+  })
 }
 
 export async function claimDataGenerationJob(judgeId: string) {
-  const claimState: { rejected?: { jobId: string; reservedCredits: number } } = {}
-  const task = await prisma.$transaction(async tx => {
+  return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('candidate-evaluation-global-lane', 0)) IS NULL AS locked`
     const contributionRunning = await tx.problemDataGenerationJob.count({ where: { contribution: true, status: { in: ['running', 'finalizing'] } } })
     const evaluationRunning = await tx.candidateEvaluationRun.count({ where: { status: 'running' } })
@@ -169,7 +171,7 @@ export async function claimDataGenerationJob(judgeId: string) {
       const message = !problem ? '题目已不存在' : '任务固定的评测程序版本已停用；请使用当前激活版本重新创建任务'
       await tx.problemDataGenerationJob.update({ where: { id: job.id }, data: { status: 'failed', errorCode: 'PROGRAM_VERSION_NOT_ACTIVE', errorMessage: message, finishedAt: new Date() } })
       await tx.problemDataGenerationCase.updateMany({ where: { jobId: job.id, status: 'pending' }, data: { status: 'failed', failureStage: 'assets', message } })
-      claimState.rejected = { jobId: job.id, reservedCredits: job.reservedCredits }
+      if (job.reservedCredits) await releaseEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, reason: '固定的评测程序版本已停用' })
       return null
     }
     const fencingToken = crypto.randomUUID(), leaseExpiresAt = new Date(Date.now() + Number(process.env.DATA_GENERATION_LEASE_MS || 60 * 60_000))
@@ -178,9 +180,6 @@ export async function claimDataGenerationJob(judgeId: string) {
     const generatorConfig = config.generator || (generator ? { language: generator.language, source: generator.source, protocol: generator.protocol || 'legacy-args-v1' } : null)
     return { taskType: 'data_generation' as const, jobId: job.id, problemId: job.problemId, fencingToken, sourceMode: config.sourceMode, maxDataBytes: job.contribution ? EVALUATION_LIMITS.maxCandidateBytes : 1024 * 1024, problemConfig: yaml.load(baseRevision?.judgeConfig || problem.LatestTestSetRevision?.judgeConfig || problem.judgeConfig || '{}'), knownInputSha256: [...new Set([...candidateHashes.map(item => item.inputSha256), ...testcaseHashes.map(item => item.inputSha256).filter((value): value is string => Boolean(value))])], generator: generatorConfig, standard: { language: standard!.language, source: standard!.source }, validator: { language: validator!.language, source: validator!.source, protocol: validator!.protocol }, classifier: classifier ? { language: classifier.language, source: classifier.source, protocol: classifier.protocol } : null, cases: cases.map((item, index) => ({ id: item.id, name: item.name, args: item.args, seed: item.seed, inputData: config.cases?.[index]?.inputData, profile: config.cases?.[index]?.profile, params: config.cases?.[index]?.params })) }
   })
-  const rejected = claimState.rejected
-  if (rejected?.reservedCredits) await releaseEvaluationCredits({ taskType: 'candidate_generation', taskId: rejected.jobId, reserved: rejected.reservedCredits, reason: '固定的评测程序版本已停用' }).catch(() => undefined)
-  return task
 }
 
 export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
@@ -218,7 +217,7 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
             : !eligibleSubtask
             ? 'awaiting_corpus'
             : 'awaiting_evaluator'
-        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage, provenance: { protocol: (job.config as any)?.generator?.protocol || null, context: (job.config as any)?.cases?.[current.orderIndex] || null, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, timings: { generatorMs: result.generatorTimeMs || 0, validatorMs: result.validatorTimeMs || 0, standardMs: result.standardTimeMs || 0 }, inputSha256: inputObject.sha256, outputSha256: outputObject.sha256 } })
+        const admitted = await createAdmittedCandidate({ problemId: job.problemId, createdBy: job.createdBy, contributionOrganizationId: job.contributionOrganizationId, source: (job.config as any)?.sourceMode === 'generator' ? 'generator' : 'direct_data', targetRole: job.targetRole as 'official' | 'hack_gate', baseTestSetRevisionId: job.baseTestSetRevisionId, input, output, inputFileName: `candidate_${current.id}.in`, outputFileName: `candidate_${current.id}.out`, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, affectedSubtaskIds, status: 'ADMITTED', evaluationStage, provenance: { protocol: (job.config as any)?.generator?.protocol || null, context: (job.config as any)?.cases?.[current.orderIndex] || null, standardVersionId: job.standardVersionId, validatorVersionId: job.validatorVersionId, classifierVersionId: (job.config as any)?.classifierVersionId || null, generatorVersionId: job.generatorVersionId, timings: { generatorMs: result.generatorTimeMs || 0, validatorMs: result.validatorTimeMs || 0, standardMs: result.standardTimeMs || 0 }, inputSha256: inputObject.sha256, outputSha256: outputObject.sha256 } })
         duplicateCandidate = admitted.duplicate
         candidateId = admitted.duplicate ? null : admitted.candidate.id
         if (candidateId && evaluationStage === 'awaiting_evaluator') candidatesToEvaluate.push(candidateId)
@@ -231,17 +230,20 @@ export async function finalizeDataGenerationJob(judgeId: string, payload: any) {
         candidateId, failureStage: duplicateCandidate ? 'deduplication' : null, message: duplicateCandidate ? '与现有候选或正式测试数据完全重复' : (result.classificationMessage || null),
       } })
     }
-    await prisma.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'completed', judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
-    if (job.reservedCredits) {
-      const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id } })
-      const actual = usageCredits({ executions: cases.length * 4, cpuMs: cases.reduce((sum, item) => sum + (item.generatorTimeMs || 0) + (item.validatorTimeMs || 0) + (item.standardTimeMs || 0), 0), generatedBytes: cases.reduce((sum, item) => sum + (item.inputSize || 0) + (item.outputSize || 0), 0) })
-      await settleEvaluationCredits({ taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual, metadata: { status: 'completed' } })
-    }
+    const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id } })
+    const actual = job.reservedCredits ? usageCredits({ executions: cases.length * 4, cpuMs: cases.reduce((sum, item) => sum + (item.generatorTimeMs || 0) + (item.validatorTimeMs || 0) + (item.standardTimeMs || 0), 0), generatedBytes: cases.reduce((sum, item) => sum + (item.inputSize || 0) + (item.outputSize || 0), 0) }) : 0
+    await prisma.$transaction(async tx => {
+      const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'completed', judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
+      if (!changed.count) throw new Error('数据生成任务终态已变化')
+      if (job.reservedCredits) await settleEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual, metadata: { status: 'completed' } })
+    })
     for (const candidateId of candidatesToEvaluate) await queueCandidateEvaluation(candidateId).catch(() => undefined)
     return { stale: false }
   } catch (error) {
-    await prisma.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'failed', errorCode: 'GENERATION_PERSIST_FAILED', errorMessage: String((error as Error).message).slice(0, 4000), judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
-    if (job.reservedCredits) await settleEvaluationCredits({ taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual: Math.min(job.reservedCredits, 1), metadata: { status: 'failed' } }).catch(() => undefined)
+    await prisma.$transaction(async tx => {
+      const changed = await tx.problemDataGenerationJob.updateMany({ where: { id: job.id, status: 'finalizing', fencingToken: job.fencingToken }, data: { status: 'failed', errorCode: 'GENERATION_PERSIST_FAILED', errorMessage: String((error as Error).message).slice(0, 4000), judgeId: null, leaseExpiresAt: null, finishedAt: new Date() } })
+      if (changed.count && job.reservedCredits) await settleEvaluationCreditsInTransaction(tx, { taskType: 'candidate_generation', taskId: job.id, reserved: job.reservedCredits, actual: Math.min(job.reservedCredits, 1), metadata: { status: 'failed' } })
+    })
     throw error
   }
 }
@@ -258,6 +260,7 @@ export async function promoteDataGenerationJob(input: { user: JwtPayload; proble
   const problem = await requireProgramProblem(input.user, input.problemId)
   const job = await prisma.problemDataGenerationJob.findFirst({ where: { id: input.jobId, problemId: problem.id, status: 'completed' } })
   if (!job) fail(409, 'GENERATION_JOB_NOT_READY', '数据生成任务尚未完成或已经发布')
+  if (job.contribution) fail(409, 'CONTRIBUTION_PROMOTION_MANAGED_BY_SELECTOR', '用户贡献数据只能由 Candidate Selector 选入正式版本')
   if (problem.latestTestSetRevisionId !== input.expectedLatestRevisionId) fail(409, 'TEST_SET_REVISION_STALE', '题目正式测试版本已变化')
   const selected = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id, status: 'validated', ...(input.caseIds?.length ? { id: { in: input.caseIds } } : {}) }, orderBy: { orderIndex: 'asc' } })
   if (!selected.length) fail(400, 'GENERATION_CASES_EMPTY', '没有选择可发布的候选测试点')

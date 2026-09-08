@@ -29,6 +29,7 @@ export async function createAdmittedCandidate(params: {
   id?: string
   problemId: string
   createdBy: string
+  contributionOrganizationId?: string | null
   source: 'direct_data' | 'generator' | 'hack' | 'admin_import'
   targetRole: 'official' | 'hack_gate'
   baseTestSetRevisionId?: string | null
@@ -53,7 +54,9 @@ export async function createAdmittedCandidate(params: {
   const inputSha256 = digest(params.input), outputSha256 = digest(params.output)
   const [inputObject, outputObject] = await Promise.all([ingestTestdataObject(params.problemId, params.input), ingestTestdataObject(params.problemId, params.output)])
   const result = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`candidate-input:${params.problemId}:${inputSha256}`}, 0)) IS NULL AS locked`
+    // Capacity is a problem-wide invariant. Serializing only identical hashes
+    // lets different inputs race past the count/byte hard limits.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`candidate-pool:${params.problemId}`}, 0)) IS NULL AS locked`
     const duplicate = await tx.testcaseCandidate.findFirst({ where: { problemId: params.problemId, inputSha256, status: { in: ACTIVE_CANDIDATE_STATUSES } } })
     if (duplicate) return { candidate: duplicate, duplicate: true as const }
     const [count, size, latest] = await Promise.all([
@@ -75,6 +78,7 @@ export async function createAdmittedCandidate(params: {
       standardVersionId: params.standardVersionId || null, validatorVersionId: params.validatorVersionId || null,
       classifierVersionId: params.classifierVersionId || null, generatorVersionId: params.generatorVersionId || null, provenance: params.provenance as any,
       semanticFingerprint: semanticInputFingerprint(params.input), featureFingerprint: JSON.stringify({ features: genericInputFeatures(params.input) }), createdBy: params.createdBy,
+      contributionOrganizationId: params.contributionOrganizationId || null,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
     } })
     return { candidate, duplicate: false as const }
@@ -98,6 +102,7 @@ export async function createValidatedHackCandidate(params: {
   problemId: string
   hackAttemptId: string
   createdBy: string
+  contributionOrganizationId?: string | null
   baseTestSetRevisionId: string
   input: Buffer
   output: Buffer
@@ -118,6 +123,7 @@ export async function createValidatedHackCandidate(params: {
       source: 'hack',
       targetRole: 'hack_gate',
       hackAttemptId: params.hackAttemptId,
+      contributionOrganizationId: params.contributionOrganizationId,
       status: params.canonicalDuplicate ? 'REDUNDANT' : 'ADMITTED',
       evaluationStage: params.canonicalDuplicate ? 'canonical_duplicate' : 'technical_validated',
     })
@@ -133,6 +139,7 @@ export async function createValidatedHackCandidate(params: {
       baseTestSetRevisionId: params.baseTestSetRevisionId,
       inputObjectId: inputObject.id,
       outputObjectId: outputObject.id,
+      contributionOrganizationId: params.contributionOrganizationId || null,
       affectedSubtaskIds: params.affectedSubtaskIds.length ? JSON.stringify(params.affectedSubtaskIds) : null,
       message: null,
     },
@@ -154,6 +161,7 @@ export async function createValidatedHackCandidate(params: {
       outputFileName: params.outputFileName,
       affectedSubtaskIds: params.affectedSubtaskIds.length ? JSON.stringify(params.affectedSubtaskIds) : null,
       createdBy: params.createdBy,
+      contributionOrganizationId: params.contributionOrganizationId || null,
     },
   })
 }

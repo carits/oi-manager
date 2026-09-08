@@ -222,6 +222,8 @@ const routerPrefixes = {
   archivedProblemsRouter: '/api/archived-problems',
   caritsRouter: '/api/carits',
   contributionRouter: '/api/contributions',
+  platformContributionRouter: '/api/platform/contributions',
+  resourceRouter: '/api/resources',
   rankingRouter: '/api/rankings',
   notificationRouter: '/api/notifications',
   workspaceRouter: '/api/workspaces',
