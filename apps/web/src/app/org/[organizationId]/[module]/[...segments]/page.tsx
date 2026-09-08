@@ -13,6 +13,7 @@ import ProblemListDetailPage from '@/components/problem/ProblemListDetailPage'
 import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { TrainingStatementManagementPage } from '@/components/training/TrainingStatementManagementPage'
 import { TrainingSessionWorkspace } from '@/components/training-engine/TrainingSessionWorkspace'
+import { TrainingSessionDesigner } from '@/components/training-engine/TrainingSessionDesigner'
 
 export default function OrganizationResourcePage() {
   const { organizationId, module, segments } = useParams<{ organizationId: string; module: string; segments: string[] }>()
@@ -26,7 +27,7 @@ export default function OrganizationResourcePage() {
     const supported =
       (module === 'teams' && (parts.length === 1 || ((parts.length === 3 || parts.length === 4) && ['contests', 'trainings', 'homeworks'].includes(parts[1])))) ||
       ((module === 'contests' || module === 'homeworks') && (parts.length === 1 || (parts.length === 2 && parts[1] === 'statements'))) ||
-      (module === 'training-sessions' && parts.length === 1) ||
+      (module === 'training-sessions' && (parts.length === 1 || (parts.length === 2 && parts[1] === 'design'))) ||
       (module === 'problems' && (
         parts.length === 1 ||
         (parts.length === 2 && ['edit', 'note'].includes(parts[1]))
@@ -51,6 +52,7 @@ export default function OrganizationResourcePage() {
     return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />
   }
   if (module === 'training-sessions' && parts.length === 1) return <TrainingSessionWorkspace sessionId={parts[0]} />
+  if (module === 'training-sessions' && parts.length === 2 && parts[1] === 'design') return <TrainingSessionDesigner sessionId={parts[0]} />
   if (module === 'problems' && parts.length === 1 && parts[0] === 'new') {
     return <ProblemForm mode="create" role={userType} />
   }

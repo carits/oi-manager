@@ -11,6 +11,13 @@ source_of_truth: Git history
 
 ## 2026-09-08
 
+### Training Engine 可视化顺序编排
+
+- 新增组织与个人团队 DRAFT 训练的独立设计路由，创建后直接进入“阶段时间线 → 题目链 → 可用题目池”三栏工作台；运行工作台不再承担结构编辑。
+- 阶段和阶段内题目均可拖动、上下移、复制和删除；题目可跨阶段移动或批量加入多个阶段。顺序链直接展示 AC/分数/时间/次数/教练放行及 ANY/ALL，OI 投影使用固定 Revision 中的真实 Subtask 多选。
+- 题目池按组织题库、Carits 和其他题库分区，执行服务端搜索和分页；加入时固定当前正式 TestSet Revision，只有管理员显式点击才会更新到最新版本。
+- 结构保存改为训练级 advisory lock + `statusRevision` CAS + 稳定 ID 差异更新，重排不再删除分配或 Hint；删除带 Hint 的分配必须显式确认。模板只创建阶段骨架，不再静默复制题目。
+
 ### 独立 Training Engine 教练流程收口
 
 - 新增独立 `TrainingSession` 聚合，不再把教练训练伪装成比赛；Stage、固定 TestSet Revision、学员进度、命令、Overlay、草稿、提示、分数轨迹、策略决策与可补偿事件分别持久化。

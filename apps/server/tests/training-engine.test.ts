@@ -7,7 +7,7 @@ import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.tes
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestTeam, createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
-import { executeTrainingCommand, getTrainingPeerProgress, getTrainingWorkspace, joinTrainingSession, listAvailableHints, listTrainingSessions, openTrainingHint, processDueTrainingSessions, recordHeartbeat, resolveTrainingPermission, saveTrainingDraft, syncTrainingEngineSubmission } from '../src/modules/training-engine/training-engine.service'
+import { executeTrainingCommand, getTrainingDesign, getTrainingPeerProgress, getTrainingWorkspace, joinTrainingSession, listAvailableHints, listTrainingSessions, openTrainingHint, processDueTrainingSessions, recordHeartbeat, resolveTrainingPermission, saveTrainingDraft, syncTrainingEngineSubmission } from '../src/modules/training-engine/training-engine.service'
 
 const app = createTestApp()
 const directories: string[] = []
@@ -39,7 +39,7 @@ describe('independent coach-directed training engine', () => {
     const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ title: '顺序训练', teamId: team.id, templateKey: 'acm-sequential', stages: [{ name: '顺序', mode: 'SEQUENTIAL', advanceMode: 'MANUAL', problemAccessMode: 'SEQUENTIAL', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }, { problemId: problem.id, alias: '重复不允许' }] }] })
     expect(created.status).toBe(422)
     const secondProblem = await configuredProblem(coach.user.id)
-    const valid = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ title: '顺序训练', teamId: team.id, stages: [{ name: '顺序', mode: 'SEQUENTIAL', advanceMode: 'MANUAL', problemAccessMode: 'SEQUENTIAL', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }, { problemId: secondProblem.id }] }] })
+    const valid = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ title: '顺序训练', teamId: team.id, stages: [{ name: '顺序', mode: 'SEQUENTIAL', advanceMode: 'MANUAL', problemAccessMode: 'SEQUENTIAL', submissionMode: 'ENABLED', problems: [{ problemId: problem.id }, { problemId: secondProblem.id, unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] } }] }] })
     expect(valid.status).toBe(201)
     const published = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${valid.body.data.id}/publish`).send({ expectedRevision: 0 })
     expect(published.status).toBe(200)
@@ -53,6 +53,43 @@ describe('independent coach-directed training engine', () => {
     await prisma.trainingSessionProblemProgress.create({ data: { participantId: participant.id, stageProblemId: session.Stages[0].Problems[0].id, status: 'COMPLETED', bestScore: 100, bestVerdict: 'accepted', acAt: new Date() } })
     expect((await resolveTrainingPermission(student.user.id, session.id, session.Stages[0].Problems[1].id)).canView).toBe(true)
     expect((await resolveTrainingPermission(outsider.user.id, session.id, session.Stages[0].Problems[0].id)).reason).toBe('NOT_PARTICIPANT')
+  })
+
+  it('returns the design DTO and preserves stable stage/problem ids while reordering', async () => {
+    const token = generateTokenFromUser(coach.user)
+    const secondProblem = await configuredProblem(coach.user.id)
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({ title: '编排稳定性', teamId: team.id, stages: [
+      { name: '阶段 A', mode: 'SEQUENTIAL', advanceMode: 'MANUAL', problemAccessMode: 'SEQUENTIAL', problems: [{ problemId: problem.id }, { problemId: secondProblem.id, unlockPolicy: { mode: 'ANY', conditions: [{ type: 'AC' }] } }] },
+      { name: '讲评', mode: 'TEACHING', advanceMode: 'MANUAL', problems: [] },
+    ] })
+    expect(created.status).toBe(201)
+    const sessionId = created.body.data.id
+    const designResponse = await createAuthenticatedRequest(app, token).get(`/api/training-sessions/${sessionId}/design`)
+    expect(designResponse.status).toBe(200)
+    expect((await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/training-sessions/${sessionId}/design`)).status).toBe(403)
+    expect(designResponse.body.data.issues).toEqual([])
+    const design = designResponse.body.data.stages
+    const originalStageId = design[0].id
+    const originalAssignmentIds = design[0].Problems.map((item: any) => item.assignmentId)
+    expect(design[0].Problems[0].latestRevision.revisionNumber).toBe(1)
+
+    const validate = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${sessionId}/structure/validate`).send({ stages: [{ ...design[1], problems: [] }, { ...design[0], problems: design[0].Problems.map((item: any) => ({ ...item, problemId: item.problemId, testSetRevisionId: item.testSetRevisionId })) }] })
+    expect(validate.status).toBe(200)
+    expect(validate.body.data.valid).toBe(true)
+    const saved = await createAuthenticatedRequest(app, token).put(`/api/training-sessions/${sessionId}/structure`).send({ expectedRevision: 0, stages: [{ ...design[1], problems: [] }, { ...design[0], problems: [...design[0].Problems].reverse().map((item: any, index: number) => ({ ...item, problemId: item.problemId, testSetRevisionId: item.testSetRevisionId, unlockPolicy: index ? item.unlockPolicy || { mode: 'ANY', conditions: [{ type: 'AC' }] } : item.unlockPolicy })) }] })
+    expect(saved.status).toBe(200)
+    const after = await getTrainingDesign(coach.user.id, sessionId)
+    expect(after.stages[1].id).toBe(originalStageId)
+    expect(after.stages[1].Problems.map(item => item.assignmentId)).toEqual([...originalAssignmentIds].reverse())
+
+    const stale = await createAuthenticatedRequest(app, token).put(`/api/training-sessions/${sessionId}/structure`).send({ expectedRevision: 0, stages: [] })
+    expect(stale.status).toBe(409)
+    expect(stale.body.code).toBe('TRAINING_SESSION_STALE')
+    const published = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${sessionId}/publish`).send({ expectedRevision: 1 })
+    expect(published.status).toBe(200)
+    const frozen = await createAuthenticatedRequest(app, token).put(`/api/training-sessions/${sessionId}/structure`).send({ expectedRevision: 2, stages: [] })
+    expect(frozen.status).toBe(409)
+    expect(frozen.body.code).toBe('TRAINING_STRUCTURE_FROZEN')
   })
 
   it('freezes projected judge config in Submission and JudgeRun', async () => {

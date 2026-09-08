@@ -68,11 +68,20 @@ TrainingSession
 
 ## API 与 UI
 
-主要接口为 `/api/training-sessions`、`/structure`、`/roster`、`/publish`、`/commands`、`/drafts`、`/heartbeat`、`/submit`、`/hints`、`/coach-dashboard`、`/peer-progress`、`/report` 和 `/events`。所有接口重新校验账号状态、学校/团队范围和训练身份。
+主要接口为 `/api/training-sessions`、`/design`、`/structure/validate`、`/structure`、`/roster`、`/publish`、`/commands`、`/drafts`、`/heartbeat`、`/submit`、`/hints`、`/coach-dashboard`、`/peer-progress`、`/report` 和 `/events`。所有接口重新校验账号状态、学校/团队范围和训练身份。
 
 - `/personal/training-sessions`：账号参与的训练列表。
 - `/org/:organizationId/training-sessions`：校园训练管理与参与入口。
 - `.../training-sessions/:id`：学员训练工作台与教练控制台共用权威状态。
+- `.../training-sessions/:id/design`：仅 DRAFT 和训练管理员可用的独立编排器。阶段时间线、阶段内题目链和可用题目池是结构编辑的唯一 UI；运行工作台只处理学员、提示与训练运行。
+
+### 设计一致性
+
+- 创建模板只产生 Stage 骨架，题目必须由管理员在题目池中显式分配。
+- Stage 与 StageProblem 使用稳定 ID 差异更新。同阶段重排或跨阶段移动不更换 Assignment ID，因此不会破坏 Hint 引用。
+- 保存使用 PostgreSQL advisory transaction lock 与 `statusRevision` CAS；客户端不提供 `orderIndex` 事实，服务端按数组顺序连续生成。
+- 题目加入时固定 TestSet Revision，题库出现更新只做提示；管理员显式更新前不改变训练评测语义。
+- 发布后结构永久冻结，调整顺序必须复制成新训练。
 
 工作台提供阶段/题目导航、题面、代码草稿、提交、实时进度、名单管理和课堂命令。它不复用比赛榜单、比赛题面选择或比赛时间冻结行为。
 

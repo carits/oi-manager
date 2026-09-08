@@ -9,6 +9,8 @@ import {
   createTrainingHint,
   createTrainingSession,
   executeTrainingCommand,
+  getTrainingDesign,
+  getTrainingDesignProblem,
   getCoachDashboard,
   getTrainingDraft,
   getTrainingReport,
@@ -27,12 +29,13 @@ import {
   replaceTrainingRoster,
   saveTrainingDraft,
   submitTrainingSolution,
+  validateTrainingStructure,
 } from './training-engine.service'
 
 export const trainingEngineRouter = Router()
 
 function sendError(error: unknown, res: any) {
-  if (error instanceof TrainingEngineError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message })
+  if (error instanceof TrainingEngineError) return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message, ...(error.details === undefined ? {} : { data: error.details }) })
   throw error
 }
 
@@ -48,6 +51,18 @@ trainingEngineRouter.post('/training-sessions', authenticate, asyncHandler(async
 
 trainingEngineRouter.get('/training-sessions/:id', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { res.json({ success: true, data: await getTrainingWorkspace(req.user!.userId, req.params.id) }) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.get('/training-sessions/:id/design', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { res.json({ success: true, data: await getTrainingDesign(req.user!.userId, req.params.id) }) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.get('/training-sessions/:id/design-problems/:problemId', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { res.json({ success: true, data: await getTrainingDesignProblem(req.user!.userId, req.params.id, req.params.problemId) }) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.post('/training-sessions/:id/structure/validate', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { res.json({ success: true, data: await validateTrainingStructure(req.user!.userId, req.params.id, req.body) }) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.put('/training-sessions/:id/structure', authenticate, asyncHandler(async (req: AuthRequest, res) => {

@@ -454,7 +454,10 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/training-sessions` | 查询独立教练训练 |
 | `POST` | `/api/training-sessions` | 创建独立教练训练 |
 | `GET` | `/api/training-sessions/:id` | 获取权威训练工作区、进度和权限 |
-| `PUT` | `/api/training-sessions/:id/structure` | 在草稿状态事务替换阶段结构并固定题目 Revision |
+| `GET` | `/api/training-sessions/:id/design` | 管理员获取 DRAFT 设计 DTO、稳定 ID、固定/最新 Revision 和 Subtask |
+| `GET` | `/api/training-sessions/:id/design-problems/:problemId` | 校验题目归属并返回可固定的最新正式 Revision |
+| `POST` | `/api/training-sessions/:id/structure/validate` | 无写入校验阶段、顺序解锁、Revision 和 Subtask 结构 |
+| `PUT` | `/api/training-sessions/:id/structure` | 按稳定 ID 差异更新 DRAFT 结构，使用训练锁和 Revision CAS |
 | `GET` | `/api/training-sessions/:id/roster` | 查询分组和可选学员名单 |
 | `PUT` | `/api/training-sessions/:id/roster` | 事务保存分组和学员名单 |
 | `POST` | `/api/training-sessions/:id/publish` | 发布并冻结训练结构 |
