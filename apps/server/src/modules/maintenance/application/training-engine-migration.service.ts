@@ -13,19 +13,21 @@ async function loadLegacyTrainings(db: typeof prisma | any) {
   })
 }
 
-function stableHash(rows: any[]) {
-  return crypto.createHash('sha256').update(JSON.stringify(rows.map(row => ({
+function stableHash(rows: any[], validUserIds: Set<string>) {
+  return crypto.createHash('sha256').update(JSON.stringify({ rows: rows.map(row => ({
     id: row.id, updatedAt: row.updatedAt, type: row.type, teamId: row.teamId, organizationId: row.organizationId,
     problems: row.TrainingProblem.map((problem: any) => [problem.id, problem.orderIndex, problem.testSetRevisionId, problem.Problem.latestTestSetRevisionId]),
     participants: row.TrainingParticipant.map((participant: any) => [participant.userId, participant.userType, participant.joinedAt]),
     progress: row.TrainingUserProblemStatus.map((item: any) => [item.userId, item.trainingProblemId, item.bestScore, item.bestResult, item.attemptCount, item.updatedAt]),
-  })))).digest('hex')
+  })), users: [...validUserIds].sort() })).digest('hex')
 }
 
-function reasonFor(row: any) {
+function reasonFor(row: any, validUserIds: Set<string>) {
   if (Boolean(row.teamId) === Boolean(row.organizationId)) return '训练必须且只能属于一个团队或学校'
   const missing = row.TrainingProblem.filter((problem: any) => !problem.testSetRevisionId && !problem.Problem.latestTestSetRevisionId)
   if (missing.length) return `${missing.length} 道题没有可固定的 TestSet Revision`
+  const orphanUsers = [...new Set<string>([...row.TrainingParticipant.map((item: any) => item.userId), ...row.TrainingUserProblemStatus.map((item: any) => item.userId)])].filter(id => !validUserIds.has(id))
+  if (orphanUsers.length) return `${orphanUsers.length} 个历史参与者已无有效 User 账号`
   return null
 }
 
@@ -37,14 +39,15 @@ function mappedStatus(row: any, now = new Date()) {
 
 export async function inspectTrainingEngineMigration() {
   const rows = await loadLegacyTrainings(prisma)
+  const validUserIds = new Set((await prisma.user.findMany({ select: { id: true } })).map(item => item.id))
   const existing = await prisma.trainingSession.findMany({ where: { legacyTrainingId: { in: rows.map((row: any) => row.id) } }, select: { legacyTrainingId: true } })
   const migrated = new Set(existing.map(item => item.legacyTrainingId))
-  const issues = rows.map((row: any) => ({ trainingId: row.id, title: row.title, reason: reasonFor(row) })).filter((item: any) => item.reason)
+  const issues = rows.map((row: any) => ({ trainingId: row.id, title: row.title, reason: reasonFor(row, validUserIds) })).filter((item: any) => item.reason)
   return {
-    reportHash: stableHash(rows),
+    reportHash: stableHash(rows, validUserIds),
     total: rows.length,
     alreadyMigrated: rows.filter((row: any) => migrated.has(row.id)).length,
-    migratable: rows.filter((row: any) => !migrated.has(row.id) && !reasonFor(row)).length,
+    migratable: rows.filter((row: any) => !migrated.has(row.id) && !reasonFor(row, validUserIds)).length,
     blocked: issues.length,
     issues: issues.slice(0, 100),
     issuesOmitted: Math.max(0, issues.length - 100),
@@ -55,13 +58,14 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('training-engine-migration', 0)) IS NULL AS locked`
     const rows = await loadLegacyTrainings(tx)
-    const currentHash = stableHash(rows)
+    const validUserIds = new Set((await tx.user.findMany({ select: { id: true } })).map(item => item.id))
+    const currentHash = stableHash(rows, validUserIds)
     if (!expectedReportHash || currentHash !== expectedReportHash) throw new Error('迁移检查结果已过期，请重新执行 check')
     let migrated = 0, submissionsLinked = 0
     const blocked: Array<{ trainingId: number; reason: string }> = []
     for (const row of rows) {
       if (await tx.trainingSession.findUnique({ where: { legacyTrainingId: row.id }, select: { id: true } })) continue
-      const reason = reasonFor(row)
+      const reason = reasonFor(row, validUserIds)
       if (reason) { blocked.push({ trainingId: row.id, reason }); continue }
       const status = mappedStatus(row) as any
       const session = await tx.trainingSession.create({ data: {
