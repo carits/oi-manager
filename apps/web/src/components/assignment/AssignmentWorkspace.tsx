@@ -52,9 +52,17 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const [saving, setSaving] = useState<string | null>(null)
   const [title, setTitle] = useState(assignment.title)
   const [description, setDescription] = useState(assignment.description || '')
+  const [learningObjectives, setLearningObjectives] = useState(assignment.learningObjectives || '')
   const [openAt, setOpenAt] = useState(toLocalInput(assignment.openAt))
   const [dueAt, setDueAt] = useState(toLocalInput(assignment.dueAt))
   const [closeAt, setCloseAt] = useState(toLocalInput(assignment.closeAt))
+  const [correctionDueAt, setCorrectionDueAt] = useState(toLocalInput(assignment.correctionDueAt))
+  const [rosterMode, setRosterMode] = useState(assignment.rosterMode)
+  const [gradingPolicy, setGradingPolicy] = useState(assignment.gradingPolicy)
+  const [latePolicy, setLatePolicy] = useState(assignment.latePolicy)
+  const [latePenaltyPercent, setLatePenaltyPercent] = useState(assignment.latePenaltyPercent ?? 0)
+  const [correctionPolicy, setCorrectionPolicy] = useState(assignment.correctionPolicy)
+  const [solutionReleasePolicy, setSolutionReleasePolicy] = useState(assignment.solutionReleasePolicy)
   const [problemDraft, setProblemDraft] = useState(assignment.Problems)
   const [rosterDraft, setRosterDraft] = useState(() => new Set(assignment.Recipients.map(item => item.userId)))
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -80,7 +88,12 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     return result.data
   }
 
-  const saveBasics = () => mutate(`/api/assignments/${assignment.id}`, 'PATCH', { expectedRevision: assignment.statusRevision, title, description, openAt, dueAt, closeAt }, 'basic')
+  const saveBasics = () => mutate(`/api/assignments/${assignment.id}`, 'PATCH', {
+    expectedRevision: assignment.statusRevision, title, description, learningObjectives, openAt, dueAt, closeAt,
+    correctionDueAt: correctionDueAt || null, rosterMode, gradingPolicy, latePolicy,
+    latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null,
+    correctionPolicy, solutionReleasePolicy,
+  }, 'basic')
   const saveProblems = () => mutate(`/api/assignments/${assignment.id}/problems`, 'PUT', { expectedRevision: assignment.statusRevision, problems: problemDraft.map(item => ({ id: item.id, problemId: item.problemId, testSetRevisionId: item.testSetRevisionId, category: item.category, required: item.required, maxScore: item.maxScore, targetScore: item.targetScore, weight: item.weight, completionPolicy: item.completionPolicy })) }, 'problems')
   const saveRoster = () => mutate(`/api/assignments/${assignment.id}/roster`, 'PUT', { expectedRevision: assignment.statusRevision, userIds: [...rosterDraft] }, 'roster')
 
@@ -132,7 +145,15 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
         <FormField label="开放时间" required><Input type="datetime-local" value={openAt} onChange={event => setOpenAt(event.target.value)} /></FormField>
         <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></FormField>
         <FormField label="关闭时间" required><Input type="datetime-local" value={closeAt} onChange={event => setCloseAt(event.target.value)} /></FormField>
+        <FormField label="订正截止时间" hint="留空表示不单独限制"><Input type="datetime-local" value={correctionDueAt} onChange={event => setCorrectionDueAt(event.target.value)} /></FormField>
+        <FormField label="名单模式"><Select value={rosterMode} onChange={event => setRosterMode(event.target.value as Assignment['rosterMode'])}><option value="SNAPSHOT">手动名单快照</option><option value="DYNAMIC">发布时按学校/团队生成</option></Select></FormField>
+        <FormField label="评分策略"><Select value={gradingPolicy} onChange={event => setGradingPolicy(event.target.value)}><option value="BEST_BEFORE_DUE">截止前最好成绩</option><option value="BEST">全部提交最好成绩</option><option value="LATEST">最后一次成绩</option><option value="FIRST_TARGET_MET">首次达标成绩</option></Select></FormField>
+        <FormField label="迟交策略"><Select value={latePolicy} onChange={event => setLatePolicy(event.target.value)}><option value="DISALLOW">不允许迟交</option><option value="ALLOW_MARK_LATE">允许并标记迟交</option><option value="ALLOW_NO_PENALTY">允许且不扣分</option><option value="ALLOW_WITH_PENALTY">允许并按比例扣分</option></Select></FormField>
+        {latePolicy === 'ALLOW_WITH_PENALTY' && <FormField label="迟交扣分比例" required hint="0～100%"><Input type="number" min={0} max={100} value={latePenaltyPercent} onChange={event => setLatePenaltyPercent(Number(event.target.value))} /></FormField>}
+        <FormField label="订正策略"><Select value={correctionPolicy} onChange={event => setCorrectionPolicy(event.target.value)}><option value="NONE">不自动要求订正</option><option value="BELOW_TARGET">未达目标分需订正</option><option value="NON_AC">未 AC 需订正</option><option value="TEACHER_ASSIGNED">仅教师指定</option></Select></FormField>
+        <FormField label="题解开放"><Select value={solutionReleasePolicy} onChange={event => setSolutionReleasePolicy(event.target.value)}><option value="NEVER">不开放</option><option value="AFTER_DUE">截止后</option><option value="AFTER_CLOSE">关闭后</option><option value="AFTER_RELEASE">发布成绩后</option></Select></FormField>
         <div className={styles.full}><FormField label="作业说明"><Textarea rows={3} value={description} onChange={event => setDescription(event.target.value)} /></FormField></div>
+        <div className={styles.full}><FormField label="学习目标"><Textarea rows={3} value={learningObjectives} onChange={event => setLearningObjectives(event.target.value)} /></FormField></div>
       </div>
     </Section>
     <Section title="题目与固定版本" description="调整题目顺序、分值和完成目标。" actions={<><Button variant="secondary" icon={<Plus size={16} />} onClick={() => setPickerOpen(true)}>添加题目</Button><Button loading={saving === 'problems'} onClick={() => void saveProblems()}>保存题目</Button></>}>
@@ -143,10 +164,10 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
         <span className={styles.actions}><Button iconOnly variant="ghost" aria-label="上移题目" disabled={index === 0} onClick={() => move(index, -1)} icon={<ArrowUp size={16} />} /><Button iconOnly variant="ghost" aria-label="下移题目" disabled={index === problemDraft.length - 1} onClick={() => move(index, 1)} icon={<ArrowDown size={16} />} /><Button iconOnly variant="ghost" aria-label="移除题目" onClick={() => setProblemDraft(current => current.filter(row => row.id !== item.id))} icon={<Trash2 size={16} />} /></span>
       </div>)}{problemDraft.length === 0 && <p className={styles.muted}>尚未添加题目。</p>}</div>
     </Section>
-    <Section title="学生名单" description="发布后名单形成快照，历史结果不会因成员变更漂移。" actions={<Button loading={saving === 'roster'} onClick={() => void saveRoster()}>保存名单（{rosterDraft.size}）</Button>}>
-      <AsyncRegion state={studentResource.state} onRetry={studentResource.retry} emptyText="当前学校没有可分配学生" skeletonRows={4}>
+    <Section title="学生名单" description={rosterMode === 'DYNAMIC' ? '发布时从当前学校或团队的有效学生生成一次性快照。' : '发布后名单形成快照，历史结果不会因成员变更漂移。'} actions={rosterMode === 'SNAPSHOT' ? <Button loading={saving === 'roster'} onClick={() => void saveRoster()}>保存名单（{rosterDraft.size}）</Button> : undefined}>
+      {rosterMode === 'DYNAMIC' ? <p className={styles.muted}>动态名单不在草稿中勾选学生；发布事务会固定当时符合范围的学生，之后的成员变更不会改写作业。</p> : <AsyncRegion state={studentResource.state} onRetry={studentResource.retry} emptyText="当前学校没有可分配学生" skeletonRows={4}>
         {data => <div className={styles.rosterList}>{data.items.filter(item => item.userId).map(item => <Checkbox key={item.userId!} label={item.name || item.user?.username || '未命名学生'} description={item.user?.username} checked={rosterDraft.has(item.userId!)} onChange={event => setRosterDraft(current => { const next = new Set(current); event.target.checked ? next.add(item.userId!) : next.delete(item.userId!); return next })} />)}</div>}
-      </AsyncRegion>
+      </AsyncRegion>}
     </Section>
     <Section title="发布检查" description="检查题目版本、时间范围和名单完整性。" actions={<><Button variant="secondary" loading={saving === 'validate'} onClick={() => void runValidation()}>运行检查</Button><Button icon={<CheckCircle2 size={16} />} onClick={() => setConfirmPublish(true)}>发布并冻结</Button></>}>
       {!validation ? <p className={styles.muted}>尚未运行发布检查。</p> : validation.valid ? <p>所有检查均已通过，可以发布。</p> : <ul className={styles.validationList}>{validation.issues.map(issue => <li key={`${issue.path}:${issue.code}`}>{issue.path}：{issue.message}</li>)}</ul>}
@@ -157,12 +178,12 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
         {data => <div className={styles.pickerList}>{data.data.map(problem => <div className={styles.pickerItem} key={problem.id}><span className={styles.problemIdentity}><strong>{problem.problemId} · {problem.title}</strong><span>{problem.platform} · {problem.difficulty || '未标注难度'}</span></span><Button size="sm" variant="secondary" disabled={problemDraft.some(item => item.problemId === problem.id)} onClick={() => void addProblem(problem)}>{problemDraft.some(item => item.problemId === problem.id) ? '已添加' : '添加'}</Button></div>)}</div>}
       </AsyncRegion>
     </FormDialog>
-    <ConfirmDialog isOpen={confirmPublish} onClose={() => setConfirmPublish(false)} onConfirm={() => void publish()} loading={saving === 'publish'} title="发布并冻结作业？" message={`发布后将固定 ${problemDraft.length} 道题和 ${rosterDraft.size} 名学生，不能再修改结构。请确认三个配置区域均已保存。`} confirmText="确认发布" />
+    <ConfirmDialog isOpen={confirmPublish} onClose={() => setConfirmPublish(false)} onConfirm={() => void publish()} loading={saving === 'publish'} title="发布并冻结作业？" message={`发布后将固定 ${problemDraft.length} 道题和${rosterMode === 'DYNAMIC' ? '发布时生成的学生名单' : ` ${rosterDraft.size} 名学生`}，不能再修改结构。请确认各配置区域均已保存。`} confirmText="确认发布" />
   </div>
 }
 
-const learningLabel: Record<string, string> = { NOT_STARTED: '未开始', ATTEMPTED: '已尝试', TARGET_MET: '已达标', COMPLETED: '已完成', WAIVED: '已免除' }
-const correctionLabel: Record<string, string> = { NONE: '无需订正', NEEDS_CORRECTION: '待订正', CORRECTING: '订正中', COMPLETED: '已完成', WAIVED: '已免除' }
+const learningLabel: Record<string, string> = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', SUBMITTED: '已提交', TARGET_MET: '已达标', COMPLETED: '已完成', EXEMPT: '已免除' }
+const correctionLabel: Record<string, string> = { NONE: '无需订正', NEEDS_CORRECTION: '待订正', CORRECTING: '订正中', CORRECTED: '已订正', WAIVED: '已免除', EXPIRED: '已过期' }
 
 function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: Assignment; workspace: AssignmentWorkspacePayload; onSubmitted: () => void }) {
   const toast = useToast()

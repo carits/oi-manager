@@ -36,11 +36,12 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
   const [dueAt, setDueAt] = useState(localInput(new Date(now.getTime() + 24 * 3_600_000)))
   const [closeAt, setCloseAt] = useState(localInput(new Date(now.getTime() + 48 * 3_600_000)))
   const [latePolicy, setLatePolicy] = useState('DISALLOW')
+  const [latePenaltyPercent, setLatePenaltyPercent] = useState(0)
   const [saving, setSaving] = useState(false)
 
   const submit = async () => {
     setSaving(true)
-    const result = await apiClient.mutate<Assignment>('/api/assignments', 'POST', { organizationId, title, description, openAt, dueAt, closeAt, latePolicy })
+    const result = await apiClient.mutate<Assignment>('/api/assignments', 'POST', { organizationId, title, description, openAt, dueAt, closeAt, latePolicy, latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null })
     setSaving(false)
     if (!result.ok) return toast.error(result.error.message)
     toast.success('作业草稿已创建，请继续配置题目和名单')
@@ -55,6 +56,7 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
       <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></FormField>
       <FormField label="关闭时间" required hint="关闭后不再接收提交"><Input type="datetime-local" value={closeAt} onChange={event => setCloseAt(event.target.value)} /></FormField>
       <FormField label="迟交策略"><Select value={latePolicy} onChange={event => setLatePolicy(event.target.value)}><option value="DISALLOW">不允许迟交</option><option value="ALLOW_MARK_LATE">允许并标记迟交</option><option value="ALLOW_NO_PENALTY">允许且不扣分</option><option value="ALLOW_WITH_PENALTY">允许并按比例扣分</option></Select></FormField>
+      {latePolicy === 'ALLOW_WITH_PENALTY' && <FormField label="迟交扣分比例" required hint="0～100%"><Input type="number" min={0} max={100} value={latePenaltyPercent} onChange={event => setLatePenaltyPercent(Number(event.target.value))} /></FormField>}
     </div>
   </FormDialog>
 }

@@ -78,6 +78,10 @@ describe('independent assignment domain', () => {
     expect(frozen.body.code).toBe('ASSIGNMENT_FROZEN')
     expect((await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/assignments/${assignmentId}`)).status).toBe(200)
     expect((await createAuthenticatedRequest(app, generateTokenFromUser(outsider.user)).get(`/api/assignments/${assignmentId}`)).status).toBe(404)
+    const peerTeacher = await createTestUser({ role: 'teacher', schoolId: teacher.schoolId })
+    const peerList = await createAuthenticatedRequest(app, generateTokenFromUser(peerTeacher.user)).get(`/api/assignments?organizationId=${organizationId}`)
+    expect(peerList.status).toBe(200)
+    expect(peerList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)
   })
 
   it('rejects stale edits and invalid cross-problem revisions', async () => {
