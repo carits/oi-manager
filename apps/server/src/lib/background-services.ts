@@ -11,7 +11,7 @@ export interface BackgroundServicesHandle {
   stop(): Promise<void>
 }
 
-export function startOjFetchQueueScheduler(intervalMs = 2_000): () => void {
+export function startOjFetchQueueScheduler(intervalMs = 2_000): () => Promise<void> {
   let stopped = false
   let running = false
   const tick = async () => {
@@ -30,13 +30,22 @@ export function startOjFetchQueueScheduler(intervalMs = 2_000): () => void {
       running = false
     }
   }
-  const timer = setInterval(() => { void tick() }, intervalMs)
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
   timer.unref()
-  void tick()
-  return () => { stopped = true; clearInterval(timer) }
+  run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
 }
 
-export function startTrainingEngineScheduler(intervalMs = 5_000): () => void {
+export function startTrainingEngineScheduler(intervalMs = 5_000): () => Promise<void> {
   let stopped = false, running = false
   const tick = async () => {
     if (stopped || running) return
@@ -49,13 +58,22 @@ export function startTrainingEngineScheduler(intervalMs = 5_000): () => void {
       logger.error('training_engine_scheduler_failed', error, { action: 'training_engine' })
     } finally { running = false }
   }
-  const timer = setInterval(() => void tick(), intervalMs)
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
   timer.unref()
-  void tick()
-  return () => { stopped = true; clearInterval(timer) }
+  run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
 }
 
-export function startContributionRewardScheduler(intervalMs = 5_000): () => void {
+export function startContributionRewardScheduler(intervalMs = 5_000): () => Promise<void> {
   let stopped = false, running = false
   const tick = async () => {
     if (stopped || running) return
@@ -67,12 +85,21 @@ export function startContributionRewardScheduler(intervalMs = 5_000): () => void
     } catch (error) { logger.error('contribution_reward_scheduler_failed', error, { action: 'contribution_reward' }) }
     finally { running = false }
   }
-  const timer = setInterval(() => void tick(), intervalMs)
-  timer.unref(); void tick()
-  return () => { stopped = true; clearInterval(timer) }
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
+  timer.unref(); run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
 }
 
-export function startEvaluationReservationReconciler(intervalMs = 30_000): () => void {
+export function startEvaluationReservationReconciler(intervalMs = 30_000): () => Promise<void> {
   let stopped = false, running = false
   const tick = async () => {
     if (stopped || running) return
@@ -84,9 +111,18 @@ export function startEvaluationReservationReconciler(intervalMs = 30_000): () =>
     } catch (error) { logger.error('evaluation_reservation_reconciler_failed', error, { action: 'evaluation_budget' }) }
     finally { running = false }
   }
-  const timer = setInterval(() => void tick(), intervalMs)
-  timer.unref(); void tick()
-  return () => { stopped = true; clearInterval(timer) }
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
+  timer.unref(); run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
 }
 
 export function startSchedulerServices(): BackgroundServicesHandle {
@@ -103,10 +139,12 @@ export function startSchedulerServices(): BackgroundServicesHandle {
     async stop() {
       if (stopped) return
       stopped = true
-      stopOjFetchQueue()
-      stopTrainingEngine()
-      stopContributionRewards()
-      stopEvaluationReservations()
+      await Promise.all([
+        stopOjFetchQueue(),
+        stopTrainingEngine(),
+        stopContributionRewards(),
+        stopEvaluationReservations(),
+      ])
       stopAutoVerify()
       stopCronTasks()
       logger.info('scheduler_services_stopped', { action: 'background_scheduler' })

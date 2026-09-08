@@ -21,7 +21,7 @@ vi.mock('../src/lib/submission-poller', () => ({
   startSubmissionPoller: mocks.startPoller,
   stopSubmissionPoller: mocks.stopPoller,
 }))
-vi.mock('../src/lib/logger', () => ({ default: { info: vi.fn() } }))
+vi.mock('../src/lib/logger', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 vi.mock('../src/modules/oj-fetcher/application/oj-fetcher-queue.service', () => ({
   listPendingOjFetchPlatforms: mocks.listPendingPlatforms.mockResolvedValue([]),
   recoverStaleOjFetchJobs: mocks.recoverStaleJobs.mockResolvedValue(0),
