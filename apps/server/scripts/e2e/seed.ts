@@ -502,7 +502,7 @@ async function main() {
         userId: ids.campusStudent,
         membershipId: 'e2e-membership-student',
         source: 'snapshot',
-        status: 'IN_PROGRESS',
+        status: 'ACTIVE',
         assignedAt: new Date(now - 60 * 60 * 1000),
         startedAt: new Date(now - 30 * 60 * 1000),
         dueAtEffective: new Date(now + 24 * 60 * 60 * 1000),
