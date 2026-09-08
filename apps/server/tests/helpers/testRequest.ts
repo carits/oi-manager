@@ -106,6 +106,8 @@ export function createAuthenticatedRequest(app: express.Application, token: stri
       request(app).post(url).set('Authorization', `Bearer ${token}`),
     put: (url: string) =>
       request(app).put(url).set('Authorization', `Bearer ${token}`),
+    patch: (url: string) =>
+      request(app).patch(url).set('Authorization', `Bearer ${token}`),
     delete: (url: string) =>
       request(app).delete(url).set('Authorization', `Bearer ${token}`)
   }
