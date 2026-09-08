@@ -18,7 +18,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Legacy route adapters | 25 |
 | Module route adapters | 47 |
 | systemd units | 8 |
-| Referenced environment keys | 462 |
+| Referenced environment keys | 464 |
 
 ## HTTP adapter ownership
 
@@ -363,6 +363,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ASSET_VERIFY_SCHEDULE`
 - `ASSIGNMENT_BASE_SCHEMA`
 - `ASSIGNMENT_TEST_SCHEMA`
+- `ASSIGNMENT_TEST_SCOPE`
 - `AUDIT_DIR`
 - `AUTH_TOKEN`
 - `BACKEND_URL`
@@ -752,6 +753,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TEST_MODE`
 - `TEST_ROOT`
 - `TEST_SCHEMA`
+- `TEST_SCOPE`
 - `TIMEOUT_SECONDS`
 - `TMP_DIR`
 - `TRANSLATION_ENABLE_CACHE`

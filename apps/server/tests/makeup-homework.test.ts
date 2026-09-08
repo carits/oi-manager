@@ -43,7 +43,7 @@ describe('补题作业使用独立 Assignment', () => {
     revisionId = crypto.randomUUID()
     await prisma.problemTestSetRevision.create({ data: {
       id: revisionId, problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'initial',
-      judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'makeup-config', graphHash: 'makeup-graph', createdBy: owner.user.id,
+      judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'makeup-config', graphHash: 'makeup-graph', testdataPath: '.', createdBy: owner.user.id,
     } })
     await prisma.problem.update({ where: { id: problem.id }, data: { latestTestSetRevisionId: revisionId } })
     const now = Date.now()

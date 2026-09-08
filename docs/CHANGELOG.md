@@ -9,6 +9,15 @@ source_of_truth: Git history
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
 
+## 2026-09-09
+
+### 独立 Assignment 作业域收口
+
+- 新作业使用独立 `Assignment`、固定 Revision 题目、名单快照、进度、订正/反馈、调分和版本成绩快照，不再用比赛排名模型承载作业。
+- 题单“创建作业草稿”和已结束活动“创建补题作业”已改为创建 `DRAFT Assignment`，题目固定当前不可变 TestSet Revision，再由教师在作业工作台完成名单和策略确认后发布。
+- 旧题单 `publish-homework` 和团队活动 `type=homework` 写入返回 `410 LEGACY_HOMEWORK_API_RETIRED`；旧数据继续可读并通过超管 check/apply 幂等迁移，不删历史记录或重评历史提交。
+- 产品列表、教师草稿工作台和学生作业页使用同一 Assignment API；E2E 固定数据也改为独立作业，不再用旧 homework 活动验证新流程。
+
 ## 2026-09-08
 
 ### 贡献、Carits 与 Evaluation Credits 闭环

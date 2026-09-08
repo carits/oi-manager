@@ -11,6 +11,8 @@ source_of_truth: apps/server/src/modules/assignment, apps/server/prisma/schema.p
 
 新作业由 `Assignment` 聚合承载，不再创建 `Training(type=homework)`。旧记录在受保护迁移完成前保持原样；迁移只建立新聚合和关联，不删除旧活动、不改历史评测结果。
 
+所有当前产品写入通道均进入该聚合：作业工作台直接创建、题单“创建作业草稿”和已结束活动的“创建补题作业”都创建 `DRAFT Assignment`并固定题目当前正式 TestSet Revision。旧 `publish-homework` 和团队训练 `type=homework` 写入统一返回 `410 LEGACY_HOMEWORK_API_RETIRED`；历史 `Training(type=homework)` 仅保留读兼容与受保护迁移。
+
 ```text
 Assignment
 ├─ AssignmentProblem → immutable ProblemTestSetRevision
@@ -56,7 +58,7 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 
 ## API 与 Web
 
-主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments` 和状态转换接口。
+主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/trainings/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
 
 组织端 `/org/:organizationId/homeworks` 使用独立作业列表。教师在草稿工作台分别保存基本信息、固定题目版本和学生名单，运行发布检查后冻结；学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
 

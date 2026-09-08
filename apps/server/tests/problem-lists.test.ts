@@ -416,7 +416,7 @@ describe('题单权限模块', () => {
       const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: ownerUser.user.id })
       const revision = await prisma.problemTestSetRevision.create({ data: {
         id: crypto.randomUUID(), problemId: testProblem.id, revisionNumber: 1, mode: 'acm', source: 'initial',
-        judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'problem-list-config', graphHash: 'problem-list-graph', createdBy: ownerUser.user.id,
+        judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'problem-list-config', graphHash: 'problem-list-graph', testdataPath: '.', createdBy: ownerUser.user.id,
       } })
       await prisma.problem.update({ where: { id: testProblem.id }, data: { latestTestSetRevisionId: revision.id } })
       await createAuthenticatedRequest(app, ownerToken)
