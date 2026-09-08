@@ -86,11 +86,7 @@ CREATE TABLE "RatingPool" (
   "status" TEXT NOT NULL DEFAULT 'active',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
-  CONSTRAINT "RatingPool_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "RatingPool_scope_shape" CHECK (
-    ("scopeType" = 'GLOBAL' AND "organizationId" IS NULL) OR
-    ("scopeType" = 'ORGANIZATION' AND "organizationId" IS NOT NULL)
-  )
+  CONSTRAINT "RatingPool_pkey" PRIMARY KEY ("id")
 );
 
 CREATE TABLE "RatingAccount" (
