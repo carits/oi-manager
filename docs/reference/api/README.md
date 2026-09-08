@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -10,15 +10,37 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 443 个端点中 434 个必须认证，9 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 507 个端点中 498 个必须认证，9 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 443 个无会话请求：434 个受保护端点必须返回
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 507 个无会话请求：498 个受保护端点必须返回
 401，9 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `GET` | `/api/assignments` | 按校园、团队和状态读取本人可见或可管理的独立作业 |
+| `POST` | `/api/assignments` | 教师或负责人创建校园作业草稿 |
+| `GET` | `/api/assignments/:id` | 读取按角色裁剪的作业、固定题目版本和本人名单 |
+| `GET` | `/api/assignments/:id/workspace` | 读取学生本人或管理者的进度、订正、反馈和成绩快照 |
+| `PATCH` | `/api/assignments/:id` | 以 revision CAS 修改 DRAFT 基本信息 |
+| `PUT` | `/api/assignments/:id/problems` | 固定题目 TestSet Revision、顺序和评分目标 |
+| `PUT` | `/api/assignments/:id/roster` | 保存 DRAFT 学生名单快照 |
+| `POST` | `/api/assignments/:id/validate` | 运行发布前结构检查 |
+| `POST` | `/api/assignments/:id/publish` | 原子生成名单/进度并冻结作业 |
+| `POST` | `/api/assignments/:id/submit` | 按固定 Revision 创建独立作业提交与 JudgeRun |
+| `GET` | `/api/assignments/:id/progress` | 管理者读取服务端成绩矩阵 |
+| `POST` | `/api/assignments/:id/corrections` | 原子创建订正事实和事件 |
+| `POST` | `/api/assignments/:id/feedback` | 原子创建学生可见或内部反馈 |
+| `POST` | `/api/assignments/:id/score-adjustments` | 追加人工调分事实 |
+| `POST` | `/api/assignments/:id/score-adjustments/:adjustmentId/reverse` | 追加调分冲正事实 |
+| `POST` | `/api/assignments/:id/close` | 手工关闭作业并生成成绩快照 |
+| `POST` | `/api/assignments/:id/review` | 进入批改状态 |
+| `POST` | `/api/assignments/:id/release` | 发布最终成绩快照 |
+| `POST` | `/api/assignments/:id/archive` | 归档已发布成绩的作业 |
+| `POST` | `/api/assignments/:id/cancel` | 取消尚未进入终态的作业 |
+| `GET` | `/api/admin/migration/assignments` | 超管检查旧 homework 到独立 Assignment 的幂等迁移并返回 reportHash |
+| `POST` | `/api/admin/migration/assignments` | 超管按 reportHash 在事务中迁移可确认的旧作业 |
 | `GET` | `/api/chat/privacy` | 读取账号的跨关系完整用户名发现设置 |
 | `PATCH` | `/api/chat/privacy` | 修改账号的跨关系完整用户名发现设置 |
 | `GET` | `/api/chat/users/search` | 按共享关系模糊搜索或按隐私设置精确搜索账号 |

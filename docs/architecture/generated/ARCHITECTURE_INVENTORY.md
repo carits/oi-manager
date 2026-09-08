@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 148 |
-| Prisma enums | 19 |
+| Prisma models | 158 |
+| Prisma enums | 32 |
 | Legacy route adapters | 25 |
-| Module route adapters | 46 |
+| Module route adapters | 47 |
 | systemd units | 8 |
-| Referenced environment keys | 455 |
+| Referenced environment keys | 462 |
 
 ## HTTP adapter ownership
 
@@ -53,6 +53,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 ### Domain module adapters
 
 - `apps/server/src/modules/ai/ai-token.routes.ts`
+- `apps/server/src/modules/assignment/assignment.routes.ts`
 - `apps/server/src/modules/carits/carits.routes.ts`
 - `apps/server/src/modules/carits/resource.routes.ts`
 - `apps/server/src/modules/chat/chat.routes.ts`
@@ -105,6 +106,16 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AiTokenLedgerEntry`
 - `AiTokenPool`
 - `AiUsageLog`
+- `Assignment`
+- `AssignmentCorrection`
+- `AssignmentEvent`
+- `AssignmentFeedback`
+- `AssignmentGradeSnapshot`
+- `AssignmentProblem`
+- `AssignmentProblemProgress`
+- `AssignmentRecipient`
+- `AssignmentRecipientOverride`
+- `AssignmentScoreAdjustment`
 - `BlobObject`
 - `BlobReference`
 - `BugCategory`
@@ -252,6 +263,19 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 ## Prisma enums
 
+- `AssignmentCompletionPolicy`
+- `AssignmentCorrectionPolicy`
+- `AssignmentCorrectionStatus`
+- `AssignmentGradeSnapshotType`
+- `AssignmentGradingPolicy`
+- `AssignmentLatePolicy`
+- `AssignmentLearningStatus`
+- `AssignmentProblemCategory`
+- `AssignmentRecipientStatus`
+- `AssignmentRosterMode`
+- `AssignmentSolutionReleasePolicy`
+- `AssignmentStatus`
+- `AssignmentTimelinessStatus`
 - `CaritsAccountOwnerType`
 - `JudgeAttemptState`
 - `JudgeRunStatus`
@@ -289,6 +313,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ACME_ROOT`
 - `ACTIVE`
 - `ACTIVE_FILE`
+- `ADMIN_DATABASE_URL`
 - `AI_MAX_ACTIVE_PER_USER`
 - `AI_MAX_HOURLY_PER_USER`
 - `AI_TOKEN_INITIAL_BALANCE`
@@ -336,6 +361,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ASSET_UPLOADS_DIR`
 - `ASSET_VERIFY_LOG_FILE`
 - `ASSET_VERIFY_SCHEDULE`
+- `ASSIGNMENT_BASE_SCHEMA`
+- `ASSIGNMENT_TEST_SCHEMA`
 - `AUDIT_DIR`
 - `AUTH_TOKEN`
 - `BACKEND_URL`
@@ -349,6 +376,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `BACKUP_SCHEDULE`
 - `BACKUP_VERIFY_LOG_FILE`
 - `BACKUP_VERIFY_SCHEDULE`
+- `BASE_SCHEMA`
 - `BASE_URL`
 - `BASH_SOURCE`
 - `BENCHMARK_BASE_URL`
@@ -405,6 +433,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `CURRENT`
 - `CURRENT_DIR`
 - `DATABASE_URL`
+- `DATABASE_URL_VALUE`
 - `DATA_GENERATION_LEASE_MS`
 - `DATA_GENERATION_MAX_CASES`
 - `DB_BACKUP_DIR`
@@ -719,8 +748,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TESTDATA_MAX_TOTAL_SIZE`
 - `TESTDATA_MAX_ZIP_DEPTH`
 - `TEST_CASES`
+- `TEST_DATABASE_URL`
 - `TEST_MODE`
 - `TEST_ROOT`
+- `TEST_SCHEMA`
 - `TIMEOUT_SECONDS`
 - `TMP_DIR`
 - `TRANSLATION_ENABLE_CACHE`

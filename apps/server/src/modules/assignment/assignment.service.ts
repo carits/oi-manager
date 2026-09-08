@@ -35,6 +35,7 @@ const CORRECTION_POLICIES = new Set(['NONE', 'BELOW_TARGET', 'NON_AC', 'TEACHER_
 const SOLUTION_POLICIES = new Set(['NEVER', 'AFTER_DUE', 'AFTER_CLOSE', 'AFTER_RELEASE'])
 const PROBLEM_CATEGORIES = new Set(['REQUIRED', 'OPTIONAL', 'CHALLENGE'])
 const COMPLETION_POLICIES = new Set(['AC', 'TARGET_SCORE', 'ATTEMPT', 'MANUAL'])
+const ASSIGNMENT_STATUSES = new Set(['DRAFT', 'SCHEDULED', 'OPEN', 'OVERDUE', 'CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED', 'CANCELLED'])
 
 function enumValue(value: unknown, values: Set<string>, fallback: string, field: string) {
   const normalized = String(value ?? fallback).toUpperCase()
@@ -197,7 +198,9 @@ export async function listAssignments(userId: string, query: any) {
   const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize) || 20))
   const organizationId = query?.organizationId ? String(query.organizationId) : undefined
   const teamId = query?.teamId ? String(query.teamId) : undefined
-  const status = query?.status ? String(query.status).toUpperCase() as AssignmentStatus : undefined
+  const rawStatus = query?.status ? String(query.status).toUpperCase() : undefined
+  if (rawStatus && !ASSIGNMENT_STATUSES.has(rawStatus)) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STATUS', '作业状态筛选不受支持')
+  const status = rawStatus as AssignmentStatus | undefined
   const [managedOrganizations, managedTeams, account] = await Promise.all([
     prisma.organizationMembership.findMany({
       where: { userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } },
@@ -603,7 +606,8 @@ export async function getAssignmentProgress(userId: string, assignmentId: string
 }
 
 export async function createAssignmentCorrection(userId: string, assignmentId: string, body: any) {
-  await assertManage(userId, assignmentId)
+  const assignment = await assertManage(userId, assignmentId)
+  if (['DRAFT', 'CANCELLED', 'ARCHIVED'].includes(assignment.status)) throw new AssignmentError(409, 'ASSIGNMENT_REVIEW_UNAVAILABLE', '当前作业状态不能布置订正')
   const assignmentProblemId = String(body?.assignmentProblemId || '')
   const recipientId = String(body?.recipientId || '')
   const dueAt = optionalDate(body?.dueAt, '订正截止时间')
@@ -625,7 +629,8 @@ export async function createAssignmentCorrection(userId: string, assignmentId: s
 }
 
 export async function createAssignmentFeedback(userId: string, assignmentId: string, body: any) {
-  await assertManage(userId, assignmentId)
+  const assignment = await assertManage(userId, assignmentId)
+  if (['DRAFT', 'CANCELLED', 'ARCHIVED'].includes(assignment.status)) throw new AssignmentError(409, 'ASSIGNMENT_REVIEW_UNAVAILABLE', '当前作业状态不能创建反馈')
   const recipientId = String(body?.recipientId || '')
   const assignmentProblemId = body?.assignmentProblemId ? String(body.assignmentProblemId) : null
   const visibility = enumValue(body?.visibility, new Set(['RECIPIENT', 'INTERNAL']), 'RECIPIENT', '反馈可见性').toLowerCase()
@@ -646,7 +651,8 @@ export async function createAssignmentFeedback(userId: string, assignmentId: str
 }
 
 export async function adjustAssignmentScore(userId: string, assignmentId: string, body: any) {
-  await assertManage(userId, assignmentId)
+  const assignment = await assertManage(userId, assignmentId)
+  if (['DRAFT', 'CANCELLED', 'ARCHIVED'].includes(assignment.status)) throw new AssignmentError(409, 'ASSIGNMENT_REVIEW_UNAVAILABLE', '当前作业状态不能人工调分')
   const recipientId = String(body?.recipientId || '')
   if (!await prisma.assignmentRecipient.findFirst({ where: { id: recipientId, assignmentId, status: { not: 'REMOVED' } } })) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '调分对象不属于当前作业')
   const assignmentProblemId = body?.assignmentProblemId ? String(body.assignmentProblemId) : null

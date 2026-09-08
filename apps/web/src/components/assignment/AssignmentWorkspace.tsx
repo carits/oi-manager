@@ -28,9 +28,19 @@ interface RevisionList { latestTestSetRevisionId: string | null; revisions: Revi
 interface StudentItem { userId: string | null; name: string; user?: { username: string } | null }
 interface StudentList { items: StudentItem[] }
 interface ValidationResult { valid: boolean; issues: Array<{ path: string; code: string; message: string }> }
-interface ProgressItem { assignmentProblemId: string; learningStatus: string; timelinessStatus: string; correctionStatus: string; finalScore?: number | null }
+interface ProgressItem { assignmentProblemId: string; learningStatus: string; timelinessStatus: string; correctionStatus: string; attemptCount?: number; bestScore?: number | null; bestVerdict?: string | null; finalScore?: number | null }
 interface ProgressRecipient { id: string; user: { id: string; username: string }; score: number; rawScore: number; adjustment: number; completedProblems: number; lateProblems: number; correctionProblems: number; progress: ProgressItem[] }
 interface ProgressPayload { recipients: ProgressRecipient[]; problems: AssignmentProblem[] }
+interface AssignmentCorrectionItem { id: string; assignmentProblemId: string; status: string; reason?: string | null; dueAt?: string | null; createdAt: string }
+interface AssignmentFeedbackItem { id: string; assignmentProblemId?: string | null; content: string; createdAt: string }
+interface AssignmentGradeSnapshotItem { id: string; type: string; revision: number; totalScore: number; maxScore: number; createdAt: string }
+interface AssignmentWorkspacePayload {
+  assignment: Assignment
+  progress: ProgressItem[]
+  corrections: AssignmentCorrectionItem[]
+  feedback: AssignmentFeedbackItem[]
+  gradeSnapshots: AssignmentGradeSnapshotItem[]
+}
 
 const toLocalInput = (value?: string | null) => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''
 
@@ -150,7 +160,10 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   </div>
 }
 
-function StudentWorkspace({ assignment }: { assignment: Assignment }) {
+const learningLabel: Record<string, string> = { NOT_STARTED: '未开始', ATTEMPTED: '已尝试', TARGET_MET: '已达标', COMPLETED: '已完成', WAIVED: '已免除' }
+const correctionLabel: Record<string, string> = { NONE: '无需订正', NEEDS_CORRECTION: '待订正', CORRECTING: '订正中', COMPLETED: '已完成', WAIVED: '已免除' }
+
+function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: Assignment; workspace: AssignmentWorkspacePayload; onSubmitted: () => void }) {
   const toast = useToast()
   const [selected, setSelected] = useState<AssignmentProblem | null>(null)
   const [language, setLanguage] = useState('cpp17')
@@ -166,41 +179,110 @@ function StudentWorkspace({ assignment }: { assignment: Assignment }) {
     if (!result.ok) return toast.error(result.error.message)
     toast.success(`提交 #${result.data.id} 已进入评测队列`)
     setSelected(null); setCode(''); setInputFilename(''); setOutputFilename('')
+    onSubmitted()
   }
+  const canSubmit = assignment.status === 'OPEN' || (assignment.status === 'OVERDUE' && assignment.latePolicy !== 'DISALLOW')
+  const progressByProblem = new Map(workspace.progress.map(item => [item.assignmentProblemId, item]))
+  const problemById = new Map(assignment.Problems.map(item => [item.id, item]))
+  const latestGrade = workspace.gradeSnapshots[0]
   return <>
-    <Section title="题目" description="每道题都使用作业发布时固定的测试版本。"><div className={styles.problemCards}>{assignment.Problems.map((item, index) => <div className={styles.problemCard} key={item.id}><span className={styles.problemOrder}>{index + 1}</span><span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.Problem.title}</strong><span>目标 {item.targetScore}/{item.maxScore} · R{item.TestSetRevision.revisionNumber}</span></span><Button icon={<Send size={16} />} onClick={() => setSelected(item)}>提交代码</Button></div>)}</div></Section>
+    {latestGrade && <Section title="已发布成绩" description={`成绩快照 v${latestGrade.revision} · ${formatAssignmentTime(latestGrade.createdAt)}`}><div className={styles.gradeSummary}><strong>{latestGrade.totalScore}</strong><span>/ {latestGrade.maxScore} 分</span></div></Section>}
+    <Section title="题目" description={canSubmit ? '每道题都使用作业发布时固定的测试版本。' : assignment.status === 'SCHEDULED' ? '作业尚未开放。' : '当前作业已经停止接收提交。'}><div className={styles.problemCards}>{assignment.Problems.map((item, index) => { const progress = progressByProblem.get(item.id); return <div className={styles.problemCard} key={item.id}><span className={styles.problemOrder}>{index + 1}</span><span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.Problem.title}</strong><span>目标 {item.targetScore}/{item.maxScore} · R{item.TestSetRevision.revisionNumber}</span>{progress && <span>{learningLabel[progress.learningStatus] || progress.learningStatus} · 得分 {progress.finalScore ?? progress.bestScore ?? 0} · 提交 {progress.attemptCount ?? 0} 次{progress.correctionStatus !== 'NONE' ? ` · ${correctionLabel[progress.correctionStatus] || progress.correctionStatus}` : ''}</span>}</span><Button icon={<Send size={16} />} disabled={!canSubmit} onClick={() => setSelected(item)}>提交代码</Button></div> })}</div></Section>
+    {(workspace.corrections.length > 0 || workspace.feedback.length > 0) && <Section title="订正与教师反馈" description="只显示与你本人有关的批改事实。"><div className={styles.reviewFeed}>
+      {workspace.corrections.map(item => <div className={styles.reviewItem} key={item.id}><strong>订正 · {problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}</strong><span>{correctionLabel[item.status] || item.status}{item.dueAt ? ` · 截止 ${formatAssignmentTime(item.dueAt)}` : ''}</span>{item.reason && <p>{item.reason}</p>}</div>)}
+      {workspace.feedback.map(item => <div className={styles.reviewItem} key={item.id}><strong>教师反馈{item.assignmentProblemId ? ` · ${problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}` : ''}</strong><span>{formatAssignmentTime(item.createdAt)}</span><p>{item.content}</p></div>)}
+    </div></Section>}
     <FormDialog isOpen={Boolean(selected)} onClose={() => setSelected(null)} onSubmit={() => void submit()} title={selected ? `提交 ${selected.Problem.problemId} · ${selected.Problem.title}` : '提交代码'} description="本次提交将永久记录作业、题目、名单与 TestSet Revision 上下文。" submitText="提交评测" loading={sending} dirty={Boolean(code)} submitDisabled={!code.trim()} size="lg">
       <div className={styles.stack}><FormField label="语言"><Select value={language} onChange={event => setLanguage(event.target.value)}><option value="cpp17">C++17</option><option value="c11">C11</option><option value="python3">Python3</option></Select></FormField><FormField label="源码" required><Textarea className={styles.codeEditor} value={code} onChange={event => setCode(event.target.value)} spellCheck={false} /></FormField><div className={styles.settingsGrid}><FormField label="输入文件名" hint="留空表示标准输入"><Input value={inputFilename} onChange={event => setInputFilename(event.target.value)} placeholder="例如 travel.in" /></FormField><FormField label="输出文件名" hint="留空表示标准输出"><Input value={outputFilename} onChange={event => setOutputFilename(event.target.value)} placeholder="例如 travel.out" /></FormField></div></div>
     </FormDialog>
   </>
 }
 
-function ManagerWorkspace({ assignment }: { assignment: Assignment }) {
+function ManagerWorkspace({ assignment, onChange }: { assignment: Assignment; onChange: (assignment: Assignment) => void }) {
   const { sessionKey } = useAuth()
+  const toast = useToast()
+  const [transitioning, setTransitioning] = useState(false)
+  const [reviewing, setReviewing] = useState<ProgressRecipient | null>(null)
+  const [reviewKind, setReviewKind] = useState<'feedback' | 'correction' | 'adjustment'>('feedback')
+  const [reviewProblemId, setReviewProblemId] = useState('')
+  const [reviewContent, setReviewContent] = useState('')
+  const [delta, setDelta] = useState(0)
+  const [savingReview, setSavingReview] = useState(false)
   const resource = useResource<ProgressPayload>(`/api/assignments/${assignment.id}/progress`, { sessionKey, isEmpty: data => data.recipients.length === 0, dedupingInterval: 10000 })
-  return <Section title="完成情况" description="成绩由评测事实、订正和不可变调分流水共同计算。"><Table data={resource.data?.recipients || []} loading={resource.state.state === 'pending'} error={resource.state.state === 'error' ? resource.state.error.message : undefined} onRetry={resource.retry} emptyText="暂无学生进度" columns={[{ key: 'user.username', label: '学生', render: item => item.user.username }, { key: 'completedProblems', label: '完成题数' }, { key: 'score', label: '当前分数', render: item => <span className={styles.score}>{item.score}</span> }, { key: 'lateProblems', label: '迟交' }, { key: 'correctionProblems', label: '待订正' }]} /></Section>
+  const transition = async (action: string) => {
+    setTransitioning(true)
+    const result = await apiClient.post<Assignment>(`/api/assignments/${assignment.id}/${action}`, { expectedRevision: assignment.statusRevision })
+    setTransitioning(false)
+    if (!result.success || !result.data) return toast.error(result.message || '状态更新失败')
+    onChange(result.data); toast.success('作业状态已更新')
+  }
+  const nextAction = assignment.status === 'OPEN' || assignment.status === 'OVERDUE'
+    ? { action: 'close', label: '关闭作业' }
+    : assignment.status === 'CLOSED'
+      ? { action: 'review', label: '进入批改' }
+      : assignment.status === 'REVIEWING'
+        ? { action: 'release', label: '发布成绩' }
+        : assignment.status === 'RELEASED'
+          ? { action: 'archive', label: '归档作业' }
+          : null
+  const submitReview = async () => {
+    if (!reviewing) return
+    setSavingReview(true)
+    const endpoint = reviewKind === 'feedback' ? 'feedback' : reviewKind === 'correction' ? 'corrections' : 'score-adjustments'
+    const body = reviewKind === 'feedback'
+      ? { recipientId: reviewing.id, assignmentProblemId: reviewProblemId || null, content: reviewContent, visibility: 'RECIPIENT' }
+      : reviewKind === 'correction'
+        ? { recipientId: reviewing.id, assignmentProblemId: reviewProblemId, reason: reviewContent }
+        : { recipientId: reviewing.id, assignmentProblemId: reviewProblemId || null, delta, reason: reviewContent }
+    const result = await apiClient.mutate(`/api/assignments/${assignment.id}/${endpoint}`, 'POST', body)
+    setSavingReview(false)
+    if (!result.ok) return toast.error(result.error.message)
+    toast.success(reviewKind === 'feedback' ? '反馈已保存' : reviewKind === 'correction' ? '订正任务已布置' : '调分流水已追加')
+    setReviewing(null); setReviewContent(''); setReviewProblemId(''); setDelta(0); void resource.retry()
+  }
+  return <div className={styles.stack}>
+    <Section title="作业控制" description="状态变化会写入持久事件；发布成绩时生成最终成绩快照。" actions={nextAction ? <Button loading={transitioning} onClick={() => void transition(nextAction.action)}>{nextAction.label}</Button> : undefined}><p className={styles.muted}>当前状态：{assignmentStatusMeta[assignment.status].label}。题目版本和名单已冻结。</p></Section>
+    <Section title="完成情况" description="成绩由评测事实、订正和不可变调分流水共同计算。"><Table data={resource.data?.recipients || []} loading={resource.state.state === 'pending'} error={resource.state.state === 'error' ? resource.state.error.message : undefined} onRetry={resource.retry} emptyText="暂无学生进度" actions={item => <Button size="sm" variant="secondary" onClick={() => setReviewing(item)}>批改与反馈</Button>} columns={[{ key: 'user.username', label: '学生', render: item => item.user.username }, { key: 'completedProblems', label: '完成题数' }, { key: 'score', label: '当前分数', render: item => <span className={styles.score}>{item.score}</span> }, { key: 'lateProblems', label: '迟交' }, { key: 'correctionProblems', label: '待订正' }]} /></Section>
+    <FormDialog isOpen={Boolean(reviewing)} onClose={() => setReviewing(null)} onSubmit={() => void submitReview()} title={reviewing ? `批改 · ${reviewing.user.username}` : '批改'} description="反馈、订正和调分均保存为可审计事实。" submitText="确认保存" loading={savingReview} dirty={Boolean(reviewContent || delta)} submitDisabled={!reviewContent.trim() || (reviewKind === 'correction' && !reviewProblemId) || (reviewKind === 'adjustment' && delta === 0)} size="md">
+      <div className={styles.stack}><Tabs label="批改动作" value={reviewKind} onChange={value => setReviewKind(value)} items={[{ value: 'feedback', label: '反馈' }, { value: 'correction', label: '布置订正' }, { value: 'adjustment', label: '人工调分' }]} /><FormField label={reviewKind === 'correction' ? '题目' : '关联题目（可选）'} required={reviewKind === 'correction'}><Select value={reviewProblemId} onChange={event => setReviewProblemId(event.target.value)}><option value="">{reviewKind === 'correction' ? '请选择题目' : '整份作业'}</option>{assignment.Problems.map(problem => <option value={problem.id} key={problem.id}>{problem.Problem.problemId} · {problem.Problem.title}</option>)}</Select></FormField>{reviewKind === 'adjustment' && <FormField label="调分值" required hint="负数表示扣分，冲正由独立流水完成"><Input type="number" min={-1000} max={1000} value={delta} onChange={event => setDelta(Number(event.target.value))} /></FormField>}<FormField label={reviewKind === 'feedback' ? '反馈内容' : '原因'} required><Textarea rows={5} value={reviewContent} onChange={event => setReviewContent(event.target.value)} /></FormField></div>
+    </FormDialog>
+  </div>
 }
 
 export function AssignmentWorkspace({ canManage }: { canManage: boolean }) {
-  const { assignmentId, segments } = useParams<{ assignmentId?: string; segments?: string[] }>()
   const router = useRouter()
-  const params = useParams<{ organizationId: string; segments?: string[] }>()
-  const id = assignmentId || params.segments?.[0] || ''
+  const params = useParams<{ organizationId: string; assignmentId?: string; segments?: string[] }>()
+  const id = params.assignmentId || params.segments?.[0] || ''
   const { sessionKey } = useAuth()
-  const resource = useResource<Assignment>(id ? `/api/assignments/${id}` : null, { sessionKey, isEmpty: () => false })
+  const resource = useResource<AssignmentWorkspacePayload>(id ? `/api/assignments/${id}/workspace` : null, { sessionKey, isEmpty: () => false })
   const [local, setLocal] = useState<Assignment | null>(null)
-  useEffect(() => { if (resource.data) setLocal(resource.data) }, [resource.data])
-  const assignment = local || resource.data
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const toast = useToast()
+  useEffect(() => { if (resource.data) setLocal(resource.data.assignment) }, [resource.data])
+  const assignment = local || resource.data?.assignment
   const status = assignment ? assignmentStatusMeta[assignment.status] : null
   const facts = useMemo(() => assignment ? [{ label: '开放', value: formatAssignmentTime(assignment.openAt) }, { label: '截止', value: formatAssignmentTime(assignment.dueAt) }, { label: '题目', value: `${assignment.problemCount} 道` }, { label: '名单', value: `${assignment.recipientCount} 人` }] : [], [assignment])
+  const canCancel = Boolean(canManage && assignment && ['DRAFT', 'SCHEDULED', 'OPEN', 'OVERDUE'].includes(assignment.status))
+  const cancel = async () => {
+    if (!assignment) return
+    setCancelling(true)
+    const result = await apiClient.post<Assignment>(`/api/assignments/${assignment.id}/cancel`, { expectedRevision: assignment.statusRevision })
+    setCancelling(false)
+    setConfirmCancel(false)
+    if (!result.success || !result.data) return toast.error(result.message || '取消作业失败')
+    setLocal(result.data)
+    toast.success('作业已取消')
+  }
   return <PageFrame>
-    <PageHeader title={assignment?.title || '作业'} description={assignment?.description || '独立作业工作台'} actions={<Button variant="secondary" icon={<ArrowLeft size={16} />} onClick={() => router.push(`/org/${params.organizationId}/homeworks`)}>返回列表</Button>} />
+    <PageHeader title={assignment?.title || '作业'} description={assignment?.description || '独立作业工作台'} actions={<><Button variant="secondary" icon={<ArrowLeft size={16} />} onClick={() => router.push(`/org/${params.organizationId}/homeworks`)}>返回列表</Button>{canCancel && <Button variant="danger" onClick={() => setConfirmCancel(true)}>取消作业</Button>}</>} />
     <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText="作业不存在" skeletonRows={6}>
       {() => assignment && <div className={styles.stack}>
         <div className={styles.summaryGrid}>{facts.map(item => <div className={styles.summaryItem} key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>)}</div>
         {status && <div><StatusBadge variant={status.variant}>{status.label}</StatusBadge></div>}
-        {canManage && assignment.status === 'DRAFT' ? <DraftEditor assignment={assignment} onChange={setLocal} /> : canManage ? <ManagerWorkspace assignment={assignment} /> : <StudentWorkspace assignment={assignment} />}
+        {canManage && assignment.status === 'DRAFT' ? <DraftEditor assignment={assignment} onChange={setLocal} /> : canManage ? <ManagerWorkspace assignment={assignment} onChange={setLocal} /> : resource.data ? <StudentWorkspace assignment={assignment} workspace={resource.data} onSubmitted={() => void resource.retry()} /> : null}
       </div>}
     </AsyncRegion>
+    <ConfirmDialog isOpen={confirmCancel} onClose={() => setConfirmCancel(false)} onConfirm={() => void cancel()} loading={cancelling} danger title="取消这份作业？" message="取消后将立即停止提交，题目版本、名单、历史提交和评测事实仍会保留。此状态不可撤销。" confirmText="确认取消" />
   </PageFrame>
 }

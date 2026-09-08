@@ -2,21 +2,22 @@
 status: current
 audience: development
 last_verified: 2026-09-08
-source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma
+source_of_truth: apps/server/src/modules/training-engine, apps/server/src/modules/assignment, apps/server/prisma/schema.prisma
 ---
 
 # 教练训练、作业与比赛
 
 ## 领域边界
 
-教练训练已经从旧 `Training.type` 拆为独立 `TrainingSession` 聚合。比赛与作业继续由旧活动模块承载，直到各自后续迁移；不得再为新教练训练写入 `Training(type=training)`。
+教练训练已经从旧 `Training.type` 拆为独立 `TrainingSession` 聚合，作业已拆为独立 `Assignment` 聚合。比赛暂时仍由旧活动模块承载。不得再为新教练训练或新作业写入 `Training(type=training|homework)`。
 
 | 领域 | 聚合根 | 用途 |
 |---|---|---|
 | 教练训练 | `TrainingSession` | 阶段、聚焦、课堂控制、草稿、提示、过程报告 |
-| 比赛/作业 | `Training` | 固定时间活动、榜单、赛后结果和补题 |
+| 独立作业 | `Assignment` | 固定 Revision、名单快照、迟交、订正、反馈与成绩发布 |
+| 比赛 | `Training` | 固定时间活动、榜单、赛后结果和补题（待独立迁移） |
 
-旧训练只读兼容，使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；不修改旧记录、成绩和提交。
+旧训练使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；旧作业使用 `/api/admin/migration/assignments` 幂等迁移为独立作业。两条迁移都不删除旧记录、不改历史成绩。
 
 ## 训练结构
 
@@ -87,4 +88,4 @@ TrainingSession
 
 ## 迁移与回退
 
-迁移 API 只选择 `type=training`，按固定 Revision 创建独立 Session/Stage/Participant/Progress，并给旧提交补充新训练关联；比赛和作业不进入迁移。异常范围或缺失 Revision 的训练进入报告，不猜测修复。迁移用 `legacyTrainingId` 唯一键保持幂等，旧活动表仍保留，因此可在切换期回退到旧页面且不会丢历史数据。
+Training Engine 迁移 API 只选择 `type=training`；Assignment 迁移 API 只选择 `type=homework`。两者分别按固定 Revision 创建新聚合，并给旧提交补充对应上下文。异常范围、失效成员或缺失 Revision 的记录进入报告，不猜测修复。迁移用各自的 `legacyTrainingId` 唯一键保持幂等，旧活动表仍保留，因此切换期不会丢历史数据。独立作业的详细约束见 [ASSIGNMENTS.md](ASSIGNMENTS.md)。

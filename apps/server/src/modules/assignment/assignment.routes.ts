@@ -108,9 +108,15 @@ assignmentRouter.post('/assignments/:id/score-adjustments/:adjustmentId/reverse'
   catch (error) { return sendError(error, res) }
 }))
 
-for (const action of ['close', 'review', 'release', 'archive', 'cancel']) {
-  assignmentRouter.post(`/assignments/:id/${action}`, asyncHandler(async (req: AuthRequest, res) => {
+function lifecycle(action: 'close' | 'review' | 'release' | 'archive' | 'cancel') {
+  return asyncHandler(async (req: AuthRequest, res) => {
     try { return res.json({ success: true, data: await transitionAssignment(req.user!.userId, req.params.id, action, Number(req.body?.expectedRevision)) }) }
     catch (error) { return sendError(error, res) }
-  }))
+  })
 }
+
+assignmentRouter.post('/assignments/:id/close', lifecycle('close'))
+assignmentRouter.post('/assignments/:id/review', lifecycle('review'))
+assignmentRouter.post('/assignments/:id/release', lifecycle('release'))
+assignmentRouter.post('/assignments/:id/archive', lifecycle('archive'))
+assignmentRouter.post('/assignments/:id/cancel', lifecycle('cancel'))

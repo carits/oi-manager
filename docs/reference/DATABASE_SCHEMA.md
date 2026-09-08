@@ -1,13 +1,15 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
 # 数据库模型
 
 校园身份与档案唯一来源为组织成员关系、学生组织档案与教师组织档案。全局账号不再保存校园归属，旧学生、教师和管理员模型已删除。学校资料通过学校资料表关联学校组织。
+
+独立作业由 `Assignment`、`AssignmentProblem`、`AssignmentRecipient`、`AssignmentRecipientOverride`、`AssignmentProblemProgress`、`AssignmentCorrection`、`AssignmentFeedback`、`AssignmentScoreAdjustment`、`AssignmentGradeSnapshot` 和 `AssignmentEvent` 组成。作业题目固定 `ProblemTestSetRevision`；`Submission/JudgeRun` 固定作业上下文，旧 `Training(type=homework)` 只作为迁移来源保留。
 
 联系人和私信域由 `ChatPrivacySetting`、`FriendRequest`、`Friendship`、`UserBlock`、`DirectConversation`、`DirectConversationMember`、`DirectMessage`、`ChatUserEvent`、`ChatReport`、`ChatMaintenanceCursor`、`ChatStickerPack`、`ChatSticker` 和 `ChatStickerImport` 组成。有序用户对和数据库约束保证唯一关系与会话；消息不可编辑，举报先保存独立证据快照，终态满一年后最小化证据并释放可清理消息引用。表情包版本和资源不可变，退役版本继续服务历史消息。
 
@@ -30,6 +32,16 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `AiTokenPool` | 平台唯一 DeepSeek Token 总池，保存可用、预占、已消费和 CAS 版本 |
 | `AiTokenLedgerEntry` | 充值、预占、结算、释放和人工调整的幂等不可变流水 |
 | `AiGenerationRequest` | Validator/翻译/格式化 AI 请求、父修复链、真实用量与编译结果 |
+| `Assignment` | 独立作业聚合根，保存学校/团队范围、生命周期、策略和乐观锁 revision |
+| `AssignmentCorrection` | 教师布置的逐学生逐题订正事实 |
+| `AssignmentEvent` | 作业内单调、追加式审计事件 |
+| `AssignmentFeedback` | 学生可见或教师内部的不可变作业反馈 |
+| `AssignmentGradeSnapshot` | 截止、关闭、订正后或发布时的版本化成绩快照 |
+| `AssignmentProblem` | 有序作业题目、固定 TestSet Revision、Judge 投影和评分目标 |
+| `AssignmentProblemProgress` | 收件人逐题的学习、时效、订正和分数投影，可由提交事实重建 |
+| `AssignmentRecipient` | 发布时固定的学生名单和个人有效截止时间 |
+| `AssignmentRecipientOverride` | 收件人的追加式延期、免交或状态覆盖事实 |
+| `AssignmentScoreAdjustment` | 只能追加和冲正的人工调分流水 |
 | `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
 | `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
 | `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |

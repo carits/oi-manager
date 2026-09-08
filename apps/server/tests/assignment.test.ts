@@ -149,6 +149,9 @@ describe('independent assignment domain', () => {
     const assignmentProblemId = withProblem.body.data.Problems[0].id
     const withRoster = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
     const recipientId = withRoster.body.data.Recipients[0].id
+    const draftCorrection = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/corrections`).send({ assignmentProblemId, recipientId, reason: '草稿不能批改' })
+    expect(draftCorrection.status).toBe(409)
+    expect(draftCorrection.body.code).toBe('ASSIGNMENT_REVIEW_UNAVAILABLE')
     await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
     const correction = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/corrections`).send({ assignmentProblemId, recipientId, reason: '请订正边界条件' })
     expect(correction.status).toBe(201)
