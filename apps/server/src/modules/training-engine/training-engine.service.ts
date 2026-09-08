@@ -43,6 +43,41 @@ const COMMANDS = new Set([
   'FOCUS_PROBLEM', 'END_FOCUS', 'LOCK_PROBLEM', 'UNLOCK_PROBLEM', 'ENABLE_SUBMISSION', 'DISABLE_SUBMISSION',
   'OPEN_HINT', 'CLOSE_HINT', 'EXTEND_TIME', 'UNLOCK_FOR_USER', 'SKIP_FOR_USER', 'SHOW_MESSAGE', 'CLEAR_MESSAGE',
 ])
+const SESSION_WIDE_COMMANDS = new Set([
+  'START_SESSION', 'PAUSE_SESSION', 'RESUME_SESSION', 'END_SESSION', 'ADVANCE_STAGE', 'BACK_STAGE', 'EXTEND_TIME',
+])
+const SESSION_TYPES = new Set(['OI', 'ACM', 'GENERAL'])
+const STAGE_MODES = new Set(['FREE', 'SEQUENTIAL', 'FOCUS', 'SCORE_PROGRESSIVE', 'TEACHING', 'REVIEW', 'MOCK_CONTEST'])
+const ADVANCE_MODES = new Set(['MANUAL', 'TIME', 'COMPLETION', 'HYBRID'])
+const ACCESS_MODES = new Set(['ALL', 'STAGE_ONLY', 'SEQUENTIAL', 'FOCUS_ONLY'])
+const SUBMISSION_MODES = new Set(['ENABLED', 'DISABLED'])
+const RANKING_MODES = new Set(['OFF', 'PROGRESS_ONLY', 'SCORE', 'ACM_RANKING'])
+const PEER_VISIBILITY = new Set(['NONE', 'PROGRESS', 'SCORE', 'FULL'])
+const JOIN_MODES = new Set(['CURRENT_STAGE', 'FROM_BEGINNING', 'TEACHER_ASSIGN'])
+const HINT_OPEN_MODES = new Set(['MANUAL', 'TIME', 'ATTEMPT', 'SCORE'])
+
+function enumValue(value: unknown, allowed: Set<string>, fallback: string, field: string) {
+  const normalized = String(value || fallback).toUpperCase()
+  if (!allowed.has(normalized)) throw new TrainingEngineError(422, 'INVALID_TRAINING_SESSION', `${field}不受支持`)
+  return normalized
+}
+
+function normalizeUnlockPolicy(value: unknown) {
+  if (value === undefined || value === null) return undefined
+  const policy = parseJsonObject(value)
+  const mode = enumValue(policy.mode, new Set(['ANY', 'ALL']), 'ANY', '解锁组合方式')
+  const conditions = Array.isArray(policy.conditions) ? policy.conditions : []
+  if (!conditions.length || conditions.length > 10) throw new TrainingEngineError(422, 'INVALID_TRAINING_UNLOCK_POLICY', '解锁规则必须包含 1～10 个条件')
+  return {
+    mode,
+    conditions: conditions.map((condition: any, index: number) => {
+      const type = enumValue(condition?.type, new Set(['AC', 'SCORE', 'TIME', 'ATTEMPTS', 'TEACHER']), 'AC', `第 ${index + 1} 个解锁条件`)
+      if (type === 'TEACHER' || type === 'AC') return { type }
+      const maximum = type === 'SCORE' ? 100 : type === 'ATTEMPTS' ? 1000 : 7 * 24 * 3600
+      return { type, value: boundedInteger(condition?.value, type === 'SCORE' ? 0 : 1, maximum, `第 ${index + 1} 个解锁条件值`, false) }
+    }),
+  }
+}
 
 function boundedText(value: unknown, max: number, field: string, min = 0) {
   const text = String(value ?? '').trim()
@@ -55,6 +90,13 @@ function boundedInteger(value: unknown, min: number, max: number, field: string,
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < min || parsed > max) throw new TrainingEngineError(422, 'INVALID_TRAINING_SESSION', `${field}必须为 ${min}～${max} 的整数`)
   return parsed
+}
+
+function optionalDate(value: unknown, field: string) {
+  if (value === null || value === undefined || value === '') return null
+  const date = new Date(String(value))
+  if (!Number.isFinite(date.getTime())) throw new TrainingEngineError(422, 'INVALID_TRAINING_SESSION', `${field}不是合法时间`)
+  return date
 }
 
 function asJson(value: unknown): Prisma.InputJsonValue | undefined {
@@ -126,6 +168,16 @@ async function hydrateStages(stages: StructureStage[]) {
   const byId = new Map(problems.map(item => [item.id, item]))
   return stages.map((stage, stageIndex) => {
     const name = boundedText(stage.name, 100, `阶段 ${stageIndex + 1} 名称`, 1)
+    const mode = enumValue(stage.mode, STAGE_MODES, 'FREE', `阶段 ${stageIndex + 1} 模式`)
+    const advanceMode = enumValue(stage.advanceMode, ADVANCE_MODES, 'MANUAL', `阶段 ${stageIndex + 1} 推进方式`)
+    const problemAccessMode = enumValue(stage.problemAccessMode, ACCESS_MODES, 'STAGE_ONLY', `阶段 ${stageIndex + 1} 题目访问方式`)
+    const submissionMode = enumValue(stage.submissionMode, SUBMISSION_MODES, 'ENABLED', `阶段 ${stageIndex + 1} 提交方式`)
+    const durationSeconds = boundedInteger(stage.durationSeconds, 60, 24 * 3600, '阶段时长')
+    const completionThreshold = boundedInteger(stage.completionThreshold ?? (['COMPLETION', 'HYBRID'].includes(advanceMode) ? 100 : null), 1, 100, '完成比例')
+    if (['TIME', 'HYBRID'].includes(advanceMode) && !durationSeconds) throw new TrainingEngineError(422, 'INVALID_TRAINING_STRUCTURE', `阶段 ${stageIndex + 1} 使用${advanceMode === 'TIME' ? '按时' : '混合'}推进时必须设置阶段时长`)
+    if (['COMPLETION', 'HYBRID'].includes(advanceMode) && !completionThreshold) throw new TrainingEngineError(422, 'INVALID_TRAINING_STRUCTURE', `阶段 ${stageIndex + 1} 使用${advanceMode === 'COMPLETION' ? '完成度' : '混合'}推进时必须设置完成比例`)
+    const rawRules = parseJsonObject(stage.rules)
+    const rules: Record<string, any> = { ...rawRules, ...(rawRules.defaultUnlock ? { defaultUnlock: normalizeUnlockPolicy(rawRules.defaultUnlock) } : {}) }
     const seen = new Set<string>()
     const stageProblems = (stage.problems || []).map((item, problemIndex) => {
       const problem = byId.get(String(item.problemId))
@@ -133,6 +185,7 @@ async function hydrateStages(stages: StructureStage[]) {
       if (seen.has(problem.id)) throw new TrainingEngineError(422, 'INVALID_TRAINING_STRUCTURE', `阶段 ${stageIndex + 1} 重复引用同一道题`)
       seen.add(problem.id)
       const allowedSubtaskIds = Array.isArray(item.allowedSubtaskIds) ? [...new Set(item.allowedSubtaskIds.map(Number))] : []
+      if (allowedSubtaskIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', 'Subtask ID 必须是正整数')
       if (allowedSubtaskIds.length && problem.LatestTestSetRevision.mode !== 'oi') throw new TrainingEngineError(422, 'SUBTASK_PROJECTION_UNSUPPORTED', '仅 OI Revision 支持按 Subtask 训练')
       let projection: string | null = null
       if (allowedSubtaskIds.length) {
@@ -141,9 +194,15 @@ async function hydrateStages(stages: StructureStage[]) {
         if (allowedSubtaskIds.some(id => !available.has(id))) throw new TrainingEngineError(422, 'UNKNOWN_TRAINING_SUBTASK', `训练投影包含不存在的 Subtask：${allowedSubtaskIds.filter(id => !available.has(id)).join(', ')}`)
         projection = yaml.dump({ ...config, subtasks: (config.subtasks || []).filter((subtask: any) => allowedSubtaskIds.includes(Number(subtask.id))) }, { noRefs: true, lineWidth: 120 })
       }
-      return { item, problem, revision: problem.LatestTestSetRevision, problemIndex, allowedSubtaskIds, projection }
+      return { item: {
+        ...item,
+        unlockPolicy: normalizeUnlockPolicy(item.unlockPolicy),
+        strategyIntervalSeconds: item.strategyIntervalSeconds ?? rules.strategyIntervalSeconds,
+        maxContinuousWorkSeconds: item.maxContinuousWorkSeconds ?? rules.maxContinuousWorkSeconds,
+        forceSwitchOnTimeout: item.forceSwitchOnTimeout ?? rules.forceSwitchOnTimeout,
+      }, problem, revision: problem.LatestTestSetRevision, problemIndex, allowedSubtaskIds, projection }
     })
-    return { stage, stageIndex, name, stageProblems }
+    return { stage: { ...stage, mode, advanceMode, problemAccessMode, submissionMode, durationSeconds, completionThreshold, rules }, stageIndex, name, stageProblems }
   })
 }
 
@@ -170,18 +229,26 @@ async function createStages(tx: Prisma.TransactionClient, sessionId: string, sta
 export async function createTrainingSession(userId: string, body: any) {
   const scope = await assertScopeManagement(userId, body || {})
   const template = getBuiltinTrainingTemplate(body?.templateKey)
-  const stages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '自由训练', mode: 'FREE', advanceMode: 'MANUAL', problemAccessMode: 'STAGE_ONLY', submissionMode: 'ENABLED', problems: [] }]
+  const sessionType = enumValue(body?.sessionType || template?.sessionType, SESSION_TYPES, 'GENERAL', '训练类型')
+  const defaultProblemAccessMode = enumValue(body?.defaultProblemAccessMode, ACCESS_MODES, 'STAGE_ONLY', '默认题目访问方式')
+  const defaultSubmissionMode = enumValue(body?.defaultSubmissionMode, SUBMISSION_MODES, 'ENABLED', '默认提交方式')
+  const rankingMode = enumValue(body?.rankingMode, RANKING_MODES, 'PROGRESS_ONLY', '训练榜单方式')
+  const peerVisibility = enumValue(body?.peerVisibility, PEER_VISIBILITY, 'PROGRESS', '同学状态可见性')
+  const joinMode = enumValue(body?.joinMode, JOIN_MODES, 'CURRENT_STAGE', '迟到加入方式')
+  const scheduledStartAt = optionalDate(body?.scheduledStartAt, '计划开始时间')
+  const rawStages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '自由训练', mode: 'FREE', advanceMode: 'MANUAL', problems: [] }]
+  const stages = rawStages.map((stage: StructureStage) => ({ ...stage, problemAccessMode: stage.problemAccessMode || defaultProblemAccessMode, submissionMode: stage.submissionMode || defaultSubmissionMode }))
   const hydrated = await hydrateStages(stages)
   const title = boundedText(body?.title, 200, '训练名称', 1)
   const id = crypto.randomUUID()
   await prisma.$transaction(async tx => {
     await tx.trainingSession.create({ data: {
       id, title, description: body?.description ? boundedText(body.description, 5000, '训练说明') : null,
-      sessionType: (body?.sessionType || template?.sessionType || 'GENERAL') as any, ...scope, createdBy: userId,
-      scheduledStartAt: body?.scheduledStartAt ? new Date(body.scheduledStartAt) : null,
-      defaultProblemAccessMode: (body?.defaultProblemAccessMode || 'STAGE_ONLY') as any, defaultSubmissionMode: (body?.defaultSubmissionMode || 'ENABLED') as any,
+      sessionType: sessionType as any, ...scope, createdBy: userId,
+      scheduledStartAt,
+      defaultProblemAccessMode: defaultProblemAccessMode as any, defaultSubmissionMode: defaultSubmissionMode as any,
       allowHints: body?.allowHints !== false, allowSolution: Boolean(body?.allowSolution), allowDiscussion: Boolean(body?.allowDiscussion),
-      rankingMode: (body?.rankingMode || 'PROGRESS_ONLY') as any, peerVisibility: (body?.peerVisibility || 'PROGRESS') as any, joinMode: (body?.joinMode || 'CURRENT_STAGE') as any,
+      rankingMode: rankingMode as any, peerVisibility: peerVisibility as any, joinMode: joinMode as any,
     } })
     // Reuse the validated structure without trusting client-side snapshots.
     for (const entry of hydrated) {
@@ -242,6 +309,56 @@ function targetApplies(targetType: TrainingEngineTargetType, targetId: string | 
   return false
 }
 
+async function normalizeCommandTarget(
+  tx: Prisma.TransactionClient,
+  session: { id: string; teamId: string | null },
+  targetType: TrainingEngineTargetType,
+  rawTargetId: string | null,
+) {
+  if (targetType === 'ALL') return null
+  if (targetType === 'TEAM') {
+    if (!session.teamId || rawTargetId && rawTargetId !== session.teamId) throw new TrainingEngineError(422, 'INVALID_TRAINING_COMMAND_TARGET', '当前训练不属于指定团队')
+    return session.teamId
+  }
+  if (!rawTargetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '该教练命令必须指定目标')
+  if (targetType === 'GROUP') {
+    const group = await tx.trainingSessionGroup.findFirst({ where: { id: rawTargetId, sessionId: session.id }, select: { id: true } })
+    if (!group) throw new TrainingEngineError(422, 'TRAINING_GROUP_NOT_FOUND', '训练分组不存在')
+    return group.id
+  }
+  const participant = await tx.trainingSessionParticipant.findFirst({ where: { sessionId: session.id, userId: rawTargetId, status: 'active' }, select: { userId: true } })
+  if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
+  return participant.userId
+}
+
+function sameOverlayTarget(targetType: TrainingEngineTargetType, targetId: string | null) {
+  return { targetType, targetId } as const
+}
+
+async function restoreFocusParticipants(
+  tx: Prisma.TransactionClient,
+  session: { id: string; teamId: string | null },
+  participants: Array<{ id: string; userId: string; groupId: string | null; returnStageId: string | null; returnProblemId: string | null }>,
+) {
+  const remaining = await tx.trainingSessionOverlay.findMany({
+    where: { sessionId: session.id, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+    orderBy: { startedAt: 'asc' },
+  })
+  for (const participant of participants) {
+    const activeFocus = [...remaining].reverse().find(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
+    if (activeFocus?.stageProblemId) {
+      await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { currentProblemId: activeFocus.stageProblemId } })
+      continue
+    }
+    await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: {
+      currentStageId: participant.returnStageId,
+      currentProblemId: participant.returnProblemId,
+      returnStageId: null,
+      returnProblemId: null,
+    } })
+  }
+}
+
 function conditionSatisfied(condition: any, progress: any) {
   if (condition?.type === 'TEACHER') return false
   if (condition?.type === 'AC') return Boolean(progress?.acAt) || String(progress?.bestVerdict || '').toLowerCase() === 'accepted'
@@ -273,6 +390,10 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
   if (overlays.some(item => item.type === 'DISABLE_SUBMISSION') && !submissionOverride) return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints, reason: 'SUBMISSION_DISABLED' }
   if (overlays.some(item => item.type === 'LOCK_PROBLEM' && item.stageProblemId === stageProblemId) && !unlocked) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'PROBLEM_LOCKED' }
   if (stage.problemAccessMode !== 'ALL' && stageProblem.stageId !== stage.id && !unlocked && focus?.stageProblemId !== stageProblemId) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'STAGE_LOCK' }
+  if (stage.problemAccessMode === 'FOCUS_ONLY' && !unlocked) {
+    const focusedStageProblemId = focus?.stageProblemId || participant.currentProblemId || stage.Problems[0]?.id
+    if (focusedStageProblemId !== stageProblemId) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'FOCUS_REQUIRED' }
+  }
   if ((stage.mode === 'SEQUENTIAL' || stage.problemAccessMode === 'SEQUENTIAL') && !unlocked) {
     const ordered = stage.Problems
     const index = ordered.findIndex(item => item.id === stageProblemId)
@@ -285,6 +406,12 @@ export async function resolveTrainingPermission(userId: string, sessionId: strin
       if (!passed) return { canView: false, canSubmit: false, canEdit: false, canOpenHint: false, reason: 'SEQUENTIAL_LOCK' }
     }
   }
+  if (stageProblem.forceSwitchOnTimeout && stageProblem.maxContinuousWorkSeconds && !unlocked) {
+    const progress = await prisma.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
+    if (progress && !progress.acAt && progress.continuousActiveSeconds >= stageProblem.maxContinuousWorkSeconds) {
+      return { canView: true, canSubmit: false, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: 'FORCED_SWITCH_REQUIRED' }
+    }
+  }
   const canSubmit = (stage.submissionMode === 'ENABLED' && session.defaultSubmissionMode === 'ENABLED') || submissionOverride
   return { canView: true, canSubmit, canEdit: true, canOpenHint: session.allowHints && focus?.type !== 'EXAM_FOCUS', reason: canSubmit ? 'ALLOWED' : 'SUBMISSION_DISABLED' }
 }
@@ -294,7 +421,9 @@ export async function joinTrainingSession(userId: string, sessionId: string) {
   if (!session || session.status === 'DRAFT' || session.status === 'ENDED' || session.status === 'ARCHIVED') throw new TrainingEngineError(404, 'TRAINING_SESSION_NOT_FOUND', '训练场次不可加入')
   const eligible = session.teamId ? await isTeamMember(userId, session.teamId) : session.organizationId ? await isOrganizationMember(userId, session.organizationId) : false
   if (!eligible) throw new TrainingEngineError(403, 'TRAINING_SESSION_FORBIDDEN', '不在该训练的成员范围内')
-  if (session.joinMode === 'TEACHER_ASSIGN') throw new TrainingEngineError(409, 'TRAINING_JOIN_REQUIRES_ASSIGNMENT', '迟到成员需要教练分配阶段')
+  const existing = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
+  if (existing?.status === 'active') return existing
+  if (session.joinMode === 'TEACHER_ASSIGN' || parseJsonObject(session.settings).rosterExplicit === true) throw new TrainingEngineError(409, 'TRAINING_JOIN_REQUIRES_ASSIGNMENT', '该训练需要教练将你加入名单并分配阶段')
   const stageId = session.joinMode === 'FROM_BEGINNING' ? session.Stages[0]?.id : session.currentStageId || session.Stages[0]?.id
   return prisma.trainingSessionParticipant.upsert({ where: { sessionId_userId: { sessionId, userId } }, update: { status: 'active', currentStageId: stageId }, create: { sessionId, userId, currentStageId: stageId } })
 }
@@ -308,10 +437,14 @@ export async function listTrainingSessions(userId: string, query: any) {
   const scopeManager = role.role === 'super_admin' || Boolean(teamId && await isTeamAdmin(userId, teamId)) || Boolean(organizationId && await isOrganizationContestAdmin(userId, organizationId))
   const where: Prisma.TrainingSessionWhereInput = {
     ...(teamId ? { teamId } : organizationId ? { organizationId } : {}),
-    ...(!scopeManager ? { OR: [{ createdBy: userId }, { status: { not: 'DRAFT' as const }, Participants: { some: { userId, status: 'active' } } }] } : {}),
+    ...(!scopeManager ? { OR: [{ createdBy: userId }, { Participants: { some: { userId, status: 'active' } } }, ...((teamId || organizationId) ? [{ status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] as any } }] : [])] } : {}),
     ...(query?.status ? { status: String(query.status).toUpperCase() as any } : {}),
   }
-  return prisma.trainingSession.findMany({ where, orderBy: [{ status: 'asc' }, { scheduledStartAt: 'desc' }, { createdAt: 'desc' }], include: { _count: { select: { Stages: true, Participants: true } } }, take: 100 })
+  const sessions = await prisma.trainingSession.findMany({ where, orderBy: [{ status: 'asc' }, { scheduledStartAt: 'desc' }, { createdAt: 'desc' }], include: { Participants: { where: { userId, status: 'active' }, select: { id: true } }, _count: { select: { Stages: true, Participants: true } } }, take: 100 })
+  return sessions.filter(item => {
+    if (scopeManager || item.createdBy === userId || item.Participants.length) return true
+    return item.joinMode !== 'TEACHER_ASSIGN' && parseJsonObject(item.settings).rosterExplicit !== true
+  }).map(({ Participants, ...item }) => ({ ...item, canJoin: !scopeManager && item.createdBy !== userId && !Participants.length }))
 }
 
 export async function getTrainingWorkspace(userId: string, sessionId: string) {
@@ -319,8 +452,25 @@ export async function getTrainingWorkspace(userId: string, sessionId: string) {
   const manager = await canManageSession(userId, session)
   const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   const progress = participant ? await prisma.trainingSessionProblemProgress.findMany({ where: { participantId: participant.id } }) : []
+  const decisions = participant ? await prisma.trainingSessionStrategyDecision.findMany({ where: { sessionId, participantId: participant.id }, orderBy: { createdAt: 'desc' } }) : []
+  const latestDecision = new Map<string, typeof decisions[number]>()
+  for (const decision of decisions) if (decision.stageProblemId && !latestDecision.has(decision.stageProblemId)) latestDecision.set(decision.stageProblemId, decision)
+  const progressByProblem = new Map(progress.map(item => [item.stageProblemId, item]))
+  const strategy = Object.fromEntries(session.Stages.flatMap(stage => stage.Problems).map(item => {
+    const itemProgress = progressByProblem.get(item.id)
+    const last = latestDecision.get(item.id)
+    return [item.id, {
+      intervalSeconds: item.strategyIntervalSeconds,
+      maxContinuousWorkSeconds: item.maxContinuousWorkSeconds,
+      forceSwitchOnTimeout: item.forceSwitchOnTimeout,
+      decisionDue: Boolean(item.strategyIntervalSeconds && (itemProgress?.activeSeconds || 0) - (last?.activeSecondsAtDecision || 0) >= item.strategyIntervalSeconds),
+      switchRecommended: Boolean(item.maxContinuousWorkSeconds && !itemProgress?.acAt && (itemProgress?.continuousActiveSeconds || 0) >= item.maxContinuousWorkSeconds),
+      lastDecision: last ? { decision: last.decision, reason: last.reason, createdAt: last.createdAt } : null,
+    }]
+  }))
   const permissions = Object.fromEntries((await Promise.all(session.Stages.flatMap(stage => stage.Problems).map(async item => [item.id, await resolveTrainingPermission(userId, sessionId, item.id)] as const))))
-  return { session, manager, participant, progress, permissions }
+  const visibleOverlays = manager || !participant ? session.Overlays : session.Overlays.filter(overlay => targetApplies(overlay.targetType, overlay.targetId, participant, session))
+  return { session: { ...session, Overlays: visibleOverlays }, manager, participant, progress, permissions, strategy }
 }
 
 export async function replaceTrainingRoster(userId: string, sessionId: string, body: any) {
@@ -342,7 +492,7 @@ export async function replaceTrainingRoster(userId: string, sessionId: string, b
   if (new Set(normalizedGroups.map(item => item.name.toLocaleLowerCase())).size !== normalizedGroups.length) throw new TrainingEngineError(422, 'DUPLICATE_TRAINING_GROUP', '训练分组名称不能重复')
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
-    const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, statusRevision: expectedRevision }, data: { statusRevision: { increment: 1 } } })
+    const claimed = await tx.trainingSession.updateMany({ where: { id: sessionId, statusRevision: expectedRevision }, data: { statusRevision: { increment: 1 }, settings: asJson({ ...parseJsonObject(session.settings), rosterExplicit: true }) } })
     if (!claimed.count) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练名单已变化，请刷新')
     const oldGroups = await tx.trainingSessionGroup.findMany({ where: { sessionId } })
     const groupIdsByClientKey = new Map<string, string>()
@@ -399,59 +549,79 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
   if (expectedRevision !== session.statusRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
   const targetType = String(body?.targetType || 'ALL').toUpperCase() as TrainingEngineTargetType
   if (!['ALL', 'GROUP', 'TEAM', 'USER'].includes(targetType)) throw new TrainingEngineError(422, 'INVALID_TRAINING_COMMAND_TARGET', '不支持的命令目标类型')
-  const targetId = body?.targetId ? String(body.targetId) : null
+  if (SESSION_WIDE_COMMANDS.has(type) && targetType !== 'ALL') throw new TrainingEngineError(422, 'INVALID_TRAINING_COMMAND_TARGET', '训练生命周期、阶段切换和延时命令只能作用于全员')
+  let targetId = body?.targetId ? String(body.targetId) : null
   const payload = parseJsonObject(body?.payload)
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${sessionId}`}, 0)) IS NULL AS locked`
     const current = await tx.trainingSession.findUniqueOrThrow({ where: { id: sessionId } })
     if (current.statusRevision !== expectedRevision) throw new TrainingEngineError(409, 'TRAINING_SESSION_STALE', '训练状态已变化，请刷新')
+    targetId = await normalizeCommandTarget(tx, session, targetType, targetId)
     let nextStatus: TrainingEngineSessionStatus | undefined
     const update: Prisma.TrainingSessionUpdateInput = { statusRevision: { increment: 1 }, commandSeq: { increment: 1 } }
     if (type === 'START_SESSION') {
       if (!['SCHEDULED', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能开始训练')
-      nextStatus = 'RUNNING'; update.status = nextStatus; update.startedAt = current.startedAt || new Date(); update.pausedAt = null
+      const at = new Date()
+      nextStatus = 'RUNNING'; update.status = nextStatus; update.startedAt = current.startedAt || at; update.runningSince = at; update.pausedAt = null
       const first = session.Stages.find(stage => stage.id === current.currentStageId) || session.Stages[0]
       if (!first) throw new TrainingEngineError(422, 'TRAINING_STRUCTURE_INCOMPLETE', '训练没有阶段')
       update.currentStageId = first.id
       await tx.trainingSessionStage.update({ where: { id: first.id }, data: { status: 'running', startedAt: first.startedAt || new Date() } })
     } else if (type === 'PAUSE_SESSION') {
       if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以暂停')
-      nextStatus = 'PAUSED'; update.status = nextStatus; update.pausedAt = new Date(); update.pauseMode = payload.mode === 'HARD' ? 'HARD' : 'SOFT'
+      const at = new Date()
+      nextStatus = 'PAUSED'; update.status = nextStatus; update.pausedAt = at; update.runningSince = null; update.pauseMode = payload.mode === 'HARD' ? 'HARD' : 'SOFT'
+      if (current.runningSince) update.activeElapsedSeconds = { increment: Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)) }
     } else if (type === 'RESUME_SESSION') {
       if (current.status !== 'PAUSED') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有暂停中的训练可以恢复')
-      nextStatus = 'RUNNING'; update.status = nextStatus; update.pausedAt = null; update.pauseMode = null
+      nextStatus = 'RUNNING'; update.status = nextStatus; update.pausedAt = null; update.runningSince = new Date(); update.pauseMode = null
       if (current.pausedAt && current.currentStageId) {
         const stage = await tx.trainingSessionStage.findUnique({ where: { id: current.currentStageId } })
         if (stage?.startedAt) await tx.trainingSessionStage.update({ where: { id: stage.id }, data: { startedAt: new Date(stage.startedAt.getTime() + (Date.now() - current.pausedAt.getTime())) } })
       }
     } else if (type === 'END_SESSION') {
       if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能结束训练')
-      nextStatus = 'ENDED'; update.status = nextStatus; update.endedAt = new Date(); update.pausedAt = null; update.pauseMode = null
+      const at = new Date()
+      nextStatus = 'ENDED'; update.status = nextStatus; update.endedAt = at; update.pausedAt = null; update.runningSince = null; update.pauseMode = null
+      if (current.status === 'RUNNING' && current.runningSince) update.activeElapsedSeconds = { increment: Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)) }
       await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active' }, data: { status: 'ended', endedAt: new Date() } })
     } else if (type === 'ADVANCE_STAGE' || type === 'BACK_STAGE') {
+      if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能切换训练阶段')
       const index = session.Stages.findIndex(stage => stage.id === current.currentStageId)
       const next = session.Stages[index + (type === 'ADVANCE_STAGE' ? 1 : -1)]
       if (!next) throw new TrainingEngineError(409, 'TRAINING_STAGE_BOUNDARY', '没有可切换的训练阶段')
       if (session.Stages[index]) await tx.trainingSessionStage.update({ where: { id: session.Stages[index].id }, data: { status: 'completed', endedAt: new Date() } })
       await tx.trainingSessionStage.update({ where: { id: next.id }, data: { status: 'running', startedAt: next.startedAt || new Date(), endedAt: null } })
       update.currentStageId = next.id
-      await tx.trainingSessionParticipant.updateMany({ where: { sessionId, status: 'active' }, data: { currentStageId: next.id } })
+      await tx.trainingSessionParticipant.updateMany({ where: { sessionId, status: 'active', currentStageId: session.Stages[index]?.id }, data: { currentStageId: next.id } })
     } else if (type === 'FOCUS_PROBLEM') {
+      if (current.status !== 'RUNNING') throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '只有进行中的训练可以聚焦题目')
       const stageProblemId = String(payload.stageProblemId || '')
       if (!session.Stages.some(stage => stage.Problems.some(problem => problem.id === stageProblemId))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_FOUND', '聚焦题目不属于当前训练')
-      await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] } }, data: { status: 'ended', endedAt: new Date() } })
+      await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] }, ...sameOverlayTarget(targetType, targetId) }, data: { status: 'ended', endedAt: new Date() } })
       await tx.trainingSessionOverlay.create({ data: { sessionId, type: ['SOFT_FOCUS', 'EXAM_FOCUS'].includes(String(payload.mode)) ? String(payload.mode) : 'LOCKED_FOCUS', targetType, targetId, stageProblemId, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' } })
-      for (const participant of participants.filter(item => targetApplies(targetType, targetId, item, session))) await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { returnStageId: participant.currentStageId, returnProblemId: participant.currentProblemId, currentProblemId: stageProblemId } })
+      for (const participant of participants.filter(item => targetApplies(targetType, targetId, item, session))) await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: {
+        returnStageId: participant.returnStageId || participant.currentStageId,
+        returnProblemId: participant.returnStageId || participant.returnProblemId ? participant.returnProblemId : participant.currentProblemId,
+        currentProblemId: stageProblemId,
+      } })
     } else if (type === 'END_FOCUS') {
-      await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] } }, data: { status: 'ended', endedAt: new Date() } })
-      const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active', returnProblemId: { not: null } } })
-      for (const participant of participants) await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { currentStageId: participant.returnStageId, currentProblemId: participant.returnProblemId, returnStageId: null, returnProblemId: null } })
+      if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能结束聚焦')
+      await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: { in: ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'] }, ...sameOverlayTarget(targetType, targetId) }, data: { status: 'ended', endedAt: new Date() } })
+      const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active', OR: [{ returnStageId: { not: null } }, { returnProblemId: { not: null } }] } })
+      await restoreFocusParticipants(tx, session, participants.filter(item => targetApplies(targetType, targetId, item, session)))
     } else if (type === 'DISABLE_SUBMISSION' || type === 'LOCK_PROBLEM' || type === 'SHOW_MESSAGE') {
+      if (!['RUNNING', 'PAUSED'].includes(current.status)) throw new TrainingEngineError(409, 'INVALID_TRAINING_TRANSITION', '当前状态不能应用实时规则')
+      if (type === 'LOCK_PROBLEM' && !payload.stageProblemId) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_REQUIRED', '锁题命令必须指定训练题目')
+      if (type === 'SHOW_MESSAGE') {
+        payload.message = boundedText(payload.message, 2000, '教练消息', 1)
+        payload.messageType = ['INFO', 'WARNING', 'INSTRUCTION', 'COUNTDOWN'].includes(String(payload.messageType || '').toUpperCase()) ? String(payload.messageType).toUpperCase() : 'INFO'
+      }
       await tx.trainingSessionOverlay.create({ data: { sessionId, type: type === 'SHOW_MESSAGE' ? 'MESSAGE' : type, targetType, targetId, stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
     } else if (type === 'ENABLE_SUBMISSION' || type === 'UNLOCK_PROBLEM' || type === 'CLEAR_MESSAGE') {
       const endingType = type === 'ENABLE_SUBMISSION' ? 'DISABLE_SUBMISSION' : type === 'UNLOCK_PROBLEM' ? 'LOCK_PROBLEM' : 'MESSAGE'
-      await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: endingType, ...(payload.stageProblemId ? { stageProblemId: String(payload.stageProblemId) } : {}) }, data: { status: 'ended', endedAt: new Date() } })
+      await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: endingType, ...sameOverlayTarget(targetType, targetId), ...(payload.stageProblemId ? { stageProblemId: String(payload.stageProblemId) } : {}) }, data: { status: 'ended', endedAt: new Date() } })
     } else if (type === 'EXTEND_TIME') {
       const seconds = boundedInteger(payload.seconds, 60, 24 * 3600, '延长时间', false)!
       const stageId = String(payload.stageId || current.currentStageId || '')
@@ -462,13 +632,20 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
       if (targetType !== 'USER' || !targetId) throw new TrainingEngineError(422, 'TRAINING_COMMAND_TARGET_REQUIRED', '个人干预必须指定用户')
       const participant = await tx.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId: targetId } } })
       if (!participant) throw new TrainingEngineError(422, 'TRAINING_PARTICIPANT_NOT_FOUND', '学员不在当前训练')
+      if (payload.stageProblemId && !session.Stages.some(stage => stage.Problems.some(problem => problem.id === String(payload.stageProblemId)))) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
       await tx.trainingSessionUserOverride.create({ data: { sessionId, userId: targetId, type: type === 'SKIP_FOR_USER' ? 'SKIP_PROBLEM' : 'UNLOCK_PROBLEM', stageProblemId: payload.stageProblemId ? String(payload.stageProblemId) : null, payload: asJson(payload), expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null, createdBy: userId } })
       if (type === 'SKIP_FOR_USER' && payload.stageProblemId) await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: String(payload.stageProblemId) } }, update: { status: 'SKIPPED', lastProgressAt: new Date() }, create: { participantId: participant.id, stageProblemId: String(payload.stageProblemId), status: 'SKIPPED', lastProgressAt: new Date() } })
     } else if (type === 'OPEN_HINT' || type === 'CLOSE_HINT') {
       const hintId = String(payload.hintId || '')
       const hint = await tx.trainingSessionHint.findFirst({ where: { id: hintId, sessionId } })
       if (!hint) throw new TrainingEngineError(422, 'TRAINING_HINT_NOT_FOUND', '提示不存在')
-      await tx.trainingSessionHint.update({ where: { id: hintId }, data: { globallyOpenedAt: type === 'OPEN_HINT' ? new Date() : null } })
+      if (targetType === 'ALL') await tx.trainingSessionHint.update({ where: { id: hintId }, data: { globallyOpenedAt: type === 'OPEN_HINT' ? new Date() : null } })
+      if (type === 'OPEN_HINT') {
+        const existing = await tx.trainingSessionOverlay.findFirst({ where: { sessionId, status: 'active', type: 'HINT_OPEN', ...sameOverlayTarget(targetType, targetId), payload: { path: ['hintId'], equals: hintId } }, select: { id: true } })
+        if (!existing) await tx.trainingSessionOverlay.create({ data: { sessionId, type: 'HINT_OPEN', targetType, targetId, stageProblemId: hint.stageProblemId, payload: { hintId }, createdBy: userId } })
+      } else {
+        await tx.trainingSessionOverlay.updateMany({ where: { sessionId, status: 'active', type: 'HINT_OPEN', ...sameOverlayTarget(targetType, targetId), payload: { path: ['hintId'], equals: hintId } }, data: { status: 'ended', endedAt: new Date() } })
+      }
     }
     const updated = await tx.trainingSession.update({ where: { id: sessionId }, data: update })
     await tx.trainingSessionCommand.create({ data: { sessionId, seq: updated.commandSeq, type, targetType, targetId, payload: asJson(payload), createdBy: userId } })
@@ -479,8 +656,16 @@ export async function executeTrainingCommand(userId: string, sessionId: string, 
 
 export async function saveTrainingDraft(userId: string, sessionId: string, problemId: string, body: any) {
   const session = await assertAccess(userId, sessionId)
-  const belongs = session.Stages.some(stage => stage.Problems.some(item => item.problemId === problemId))
-  if (!belongs) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '题目不属于当前训练')
+  const stageProblems = session.Stages.flatMap(stage => stage.Problems).filter(item => item.problemId === problemId)
+  if (!stageProblems.length) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '题目不属于当前训练')
+  if (!await canManageSession(userId, session)) {
+    const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
+    const stageProblem = stageProblems.find(item => item.id === participant?.currentProblemId)
+      || stageProblems.find(item => item.stageId === participant?.currentStageId)
+      || stageProblems[0]
+    const permission = await resolveTrainingPermission(userId, sessionId, stageProblem.id)
+    if (!permission.canEdit) throw new TrainingEngineError(403, permission.reason, '当前训练规则不允许编辑代码草稿')
+  }
   const code = String(body?.code ?? '')
   if (Buffer.byteLength(code, 'utf8') > 1024 * 1024) throw new TrainingEngineError(413, 'TRAINING_DRAFT_TOO_LARGE', '代码草稿不能超过 1 MiB')
   const existing = await prisma.trainingSessionProblemDraft.findUnique({ where: { sessionId_userId_problemId: { sessionId, userId, problemId } } })
@@ -502,12 +687,16 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
   const permission = await resolveTrainingPermission(userId, sessionId, stageProblemId)
   if (!permission.canView) throw new TrainingEngineError(403, permission.reason, '当前题目尚未开放')
   const now = new Date(), previous = participant.lastHeartbeatAt?.getTime() || now.getTime()
-  const elapsed = body?.pageVisible && body?.editorFocused ? Math.min(30, Math.max(0, Math.floor((now.getTime() - previous) / 1000))) : 0
+  const elapsed = session.status === 'RUNNING' && body?.pageVisible && body?.editorFocused ? Math.min(30, Math.max(0, Math.floor((now.getTime() - previous) / 1000))) : 0
   return prisma.$transaction(async tx => {
-    const updatedParticipant = await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { lastHeartbeatAt: now, activeSeconds: { increment: elapsed }, currentStageId: session.currentStageId, currentProblemId: stageProblemId } })
-    const current = await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } }, update: { lastOpenedAt: now, activeSeconds: { increment: elapsed }, lastProgressAt: now, status: { set: 'WORKING' } }, create: { participantId: participant.id, stageProblemId, status: 'WORKING', firstOpenedAt: now, lastOpenedAt: now, activeSeconds: elapsed, lastProgressAt: now } })
-    const stuck = current.activeSeconds >= 1800 && current.attemptCount >= 3 && (!current.lastScoreImprovedAt || now.getTime() - current.lastScoreImprovedAt.getTime() >= 15 * 60_000)
-    if (stuck && current.status === 'WORKING') await tx.trainingSessionProblemProgress.update({ where: { id: current.id }, data: { status: 'STUCK', stuckDetectedAt: now } })
+    const updatedParticipant = await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { lastHeartbeatAt: now, activeSeconds: { increment: elapsed }, currentProblemId: stageProblemId } })
+    const existing = await tx.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } })
+    const preservedStatus = existing && ['COMPLETED', 'SKIPPED', 'STUCK'].includes(existing.status) ? existing.status : 'WORKING'
+    const switchedProblem = Boolean(participant.currentProblemId && participant.currentProblemId !== stageProblemId)
+    const current = await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } }, update: { lastOpenedAt: now, activeSeconds: { increment: elapsed }, continuousActiveSeconds: switchedProblem ? elapsed : { increment: elapsed }, lastProgressAt: now, status: preservedStatus }, create: { participantId: participant.id, stageProblemId, status: 'WORKING', firstOpenedAt: now, lastOpenedAt: now, activeSeconds: elapsed, continuousActiveSeconds: elapsed, lastProgressAt: now } })
+    const terminal = ['COMPLETED', 'SKIPPED'].includes(current.status)
+    const stuck = !terminal && current.activeSeconds >= 1800 && current.attemptCount >= 3 && (!current.lastScoreImprovedAt || now.getTime() - current.lastScoreImprovedAt.getTime() >= 15 * 60_000)
+    if (stuck && current.status !== 'STUCK') await tx.trainingSessionProblemProgress.update({ where: { id: current.id }, data: { status: 'STUCK', stuckDetectedAt: now } })
     return { participant: updatedParticipant, progress: { ...current, status: stuck ? 'STUCK' : current.status } }
   })
 }
@@ -533,7 +722,14 @@ export async function createTrainingHint(userId: string, sessionId: string, body
   const stageProblemId = String(body?.stageProblemId || '')
   const belongs = await prisma.trainingSessionStageProblem.findFirst({ where: { id: stageProblemId, Stage: { sessionId } } })
   if (!belongs) throw new TrainingEngineError(404, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
-  return prisma.trainingSessionHint.create({ data: { sessionId, stageProblemId, level: boundedInteger(body?.level, 1, 20, '提示级别', false)!, title: body?.title ? boundedText(body.title, 100, '提示标题') : null, content: boundedText(body?.content, 5000, '提示内容', 1), openMode: (body?.openMode || 'MANUAL') as any, triggerSeconds: boundedInteger(body?.triggerSeconds, 60, 86400, '触发时间'), triggerAttempts: boundedInteger(body?.triggerAttempts, 1, 100, '触发提交数'), triggerScore: boundedInteger(body?.triggerScore, 0, 100, '触发分数'), createdBy: userId } })
+  const level = boundedInteger(body?.level, 1, 20, '提示级别', false)!
+  const openMode = enumValue(body?.openMode, HINT_OPEN_MODES, 'MANUAL', '提示开放方式')
+  const triggerSeconds = boundedInteger(body?.triggerSeconds, 60, 86400, '触发时间')
+  const triggerAttempts = boundedInteger(body?.triggerAttempts, 1, 100, '触发提交数')
+  const triggerScore = boundedInteger(body?.triggerScore, 0, 100, '触发分数')
+  if ((openMode === 'TIME' && triggerSeconds === null) || (openMode === 'ATTEMPT' && triggerAttempts === null) || (openMode === 'SCORE' && triggerScore === null)) throw new TrainingEngineError(422, 'TRAINING_HINT_TRIGGER_REQUIRED', '自动开放提示必须设置对应触发条件')
+  if (await prisma.trainingSessionHint.findUnique({ where: { stageProblemId_level: { stageProblemId, level } }, select: { id: true } })) throw new TrainingEngineError(409, 'TRAINING_HINT_LEVEL_EXISTS', '当前题目已存在相同级别的提示')
+  return prisma.trainingSessionHint.create({ data: { sessionId, stageProblemId, level, title: body?.title ? boundedText(body.title, 100, '提示标题') : null, content: boundedText(body?.content, 5000, '提示内容', 1), openMode: openMode as any, triggerSeconds, triggerAttempts, triggerScore, createdBy: userId } })
 }
 
 export async function listAvailableHints(userId: string, sessionId: string, stageProblemId: string) {
@@ -547,7 +743,8 @@ export async function listAvailableHints(userId: string, sessionId: string, stag
   if (manager) return hints.map(hint => ({ id: hint.id, level: hint.level, title: hint.title, content: hint.content, openMode: hint.openMode, globallyOpenedAt: hint.globallyOpenedAt, opened: Boolean(hint.globallyOpenedAt) }))
   const accesses = participant ? await prisma.trainingSessionHintAccess.findMany({ where: { participantId: participant.id, hintId: { in: hints.map(hint => hint.id) } }, select: { hintId: true } }) : []
   const accessed = new Set(accesses.map(item => item.hintId))
-  return hints.filter(hint => hint.globallyOpenedAt || hint.openMode === 'TIME' && Number(progress?.activeSeconds || 0) >= Number(hint.triggerSeconds || Infinity) || hint.openMode === 'ATTEMPT' && Number(progress?.attemptCount || 0) >= Number(hint.triggerAttempts || Infinity) || hint.openMode === 'SCORE' && Number(progress?.bestScore || 0) >= Number(hint.triggerScore || Infinity)).map(hint => ({ id: hint.id, level: hint.level, title: hint.title, opened: accessed.has(hint.id) }))
+  const targeted = new Set(session.Overlays.filter(overlay => overlay.type === 'HINT_OPEN' && participant && targetApplies(overlay.targetType, overlay.targetId, participant, session)).map(overlay => String(parseJsonObject(overlay.payload).hintId || '')))
+  return hints.filter(hint => accessed.has(hint.id) || targeted.has(hint.id) || hint.globallyOpenedAt || hint.openMode === 'TIME' && Number(progress?.activeSeconds || 0) >= Number(hint.triggerSeconds || Infinity) || hint.openMode === 'ATTEMPT' && Number(progress?.attemptCount || 0) >= Number(hint.triggerAttempts || Infinity) || hint.openMode === 'SCORE' && Number(progress?.bestScore || 0) >= Number(hint.triggerScore || Infinity)).map(hint => ({ id: hint.id, level: hint.level, title: hint.title, opened: accessed.has(hint.id) }))
 }
 
 export async function openTrainingHint(userId: string, sessionId: string, hintId: string) {
@@ -566,6 +763,27 @@ export async function openTrainingHint(userId: string, sessionId: string, hintId
 }
 
 export async function processDueTrainingSessions(now = new Date()) {
+  const expiredOverlaySessions = await prisma.trainingSessionOverlay.findMany({
+    where: { status: 'active', expiresAt: { lte: now } },
+    distinct: ['sessionId'],
+    select: { sessionId: true },
+    take: 100,
+  })
+  for (const item of expiredOverlaySessions) {
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${item.sessionId}`}, 0)) IS NULL AS locked`
+      const session = await tx.trainingSession.findUnique({ where: { id: item.sessionId }, select: { id: true, teamId: true } })
+      if (!session) return
+      const expired = await tx.trainingSessionOverlay.findMany({ where: { sessionId: item.sessionId, status: 'active', expiresAt: { lte: now } }, select: { id: true, type: true } })
+      if (!expired.length) return
+      await tx.trainingSessionOverlay.updateMany({ where: { id: { in: expired.map(overlay => overlay.id) }, status: 'active' }, data: { status: 'expired', endedAt: now } })
+      if (expired.some(overlay => ['SOFT_FOCUS', 'LOCKED_FOCUS', 'EXAM_FOCUS'].includes(overlay.type))) {
+        const participants = await tx.trainingSessionParticipant.findMany({ where: { sessionId: item.sessionId, status: 'active', OR: [{ returnStageId: { not: null } }, { returnProblemId: { not: null } }] } })
+        await restoreFocusParticipants(tx, session, participants)
+      }
+      await appendEvent(tx, item.sessionId, 'training.overlay.expired', 'ALL', null, { overlayIds: expired.map(overlay => overlay.id) })
+    })
+  }
   const scheduled = await prisma.trainingSession.findMany({ where: { status: 'SCHEDULED', scheduledStartAt: { lte: now } }, select: { id: true, statusRevision: true }, take: 50 })
   let started = 0, advanced = 0, ended = 0
   for (const item of scheduled) {
@@ -575,7 +793,7 @@ export async function processDueTrainingSessions(now = new Date()) {
         const session = await tx.trainingSession.findUnique({ where: { id: item.id }, include: { Stages: { orderBy: { orderIndex: 'asc' } } } })
         if (!session || session.status !== 'SCHEDULED' || !session.Stages[0]) return
         const at = new Date()
-        await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'RUNNING', startedAt: at, currentStageId: session.Stages[0].id, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+        await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'RUNNING', startedAt: at, runningSince: at, currentStageId: session.Stages[0].id, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
         await tx.trainingSessionStage.update({ where: { id: session.Stages[0].id }, data: { status: 'running', startedAt: at } })
         await appendEvent(tx, session.id, 'training.session.started', 'ALL', null, { automatic: true })
         started++
@@ -596,7 +814,7 @@ export async function processDueTrainingSessions(now = new Date()) {
     }).length
     const completionRate = session.Participants.length ? Math.floor(completed * 100 / session.Participants.length) : 0
     const completionReady = Boolean(stage.completionThreshold && completionRate >= stage.completionThreshold && elapsed >= (stage.minDurationSeconds || 0))
-    const due = stage.advanceMode === 'TIME' ? timeReady : stage.advanceMode === 'COMPLETION' ? completionReady : timeReady || completionReady
+    const due = stage.advanceMode === 'TIME' ? timeReady : stage.advanceMode === 'COMPLETION' ? completionReady : timeReady && completionReady
     if (!due) continue
     try {
       await prisma.$transaction(async tx => {
@@ -609,11 +827,12 @@ export async function processDueTrainingSessions(now = new Date()) {
         if (next) {
           await tx.trainingSessionStage.update({ where: { id: next.id }, data: { status: 'running', startedAt: at, endedAt: null } })
           await tx.trainingSession.update({ where: { id: session.id }, data: { currentStageId: next.id, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
-          await tx.trainingSessionParticipant.updateMany({ where: { sessionId: session.id, status: 'active' }, data: { currentStageId: next.id } })
+          await tx.trainingSessionParticipant.updateMany({ where: { sessionId: session.id, status: 'active', currentStageId: stage.id }, data: { currentStageId: next.id } })
           await appendEvent(tx, session.id, 'training.stage.advanced', 'ALL', null, { fromStageId: stage.id, toStageId: next.id, automatic: true, completionRate })
           advanced++
         } else {
-          await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'ENDED', endedAt: at, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+          const runningSeconds = current.runningSince ? Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)) : 0
+          await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'ENDED', endedAt: at, runningSince: null, activeElapsedSeconds: { increment: runningSeconds }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
           await appendEvent(tx, session.id, 'training.session.ended', 'ALL', null, { automatic: true, completionRate })
           ended++
         }
@@ -624,9 +843,15 @@ export async function processDueTrainingSessions(now = new Date()) {
 }
 
 export async function recordStrategyDecision(userId: string, sessionId: string, body: any) {
-  await assertAccess(userId, sessionId)
+  const session = await assertAccess(userId, sessionId)
+  if (session.status !== 'RUNNING') throw new TrainingEngineError(409, 'TRAINING_SESSION_NOT_RUNNING', '只有进行中的训练可以记录策略决策')
   const participant = await prisma.trainingSessionParticipant.findUniqueOrThrow({ where: { sessionId_userId: { sessionId, userId } } })
-  return prisma.trainingSessionStrategyDecision.create({ data: { sessionId, participantId: participant.id, stageProblemId: body?.stageProblemId || null, decision: boundedText(body?.decision, 50, '策略选择', 1), reason: body?.reason ? boundedText(body.reason, 1000, '策略说明') : null } })
+  const stageProblemId = body?.stageProblemId ? String(body.stageProblemId) : null
+  if (stageProblemId && !await prisma.trainingSessionStageProblem.findFirst({ where: { id: stageProblemId, Stage: { sessionId } }, select: { id: true } })) throw new TrainingEngineError(422, 'TRAINING_PROBLEM_NOT_FOUND', '训练题目不存在')
+  const progress = stageProblemId ? await prisma.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } }) : null
+  const decision = String(body?.decision || '').toUpperCase()
+  if (!['CONTINUE', 'SWITCH'].includes(decision)) throw new TrainingEngineError(422, 'INVALID_STRATEGY_DECISION', '策略选择只允许继续当前题或切题')
+  return prisma.trainingSessionStrategyDecision.create({ data: { sessionId, participantId: participant.id, stageProblemId, decision, reason: body?.reason ? boundedText(body.reason, 1000, '策略说明') : null, activeSecondsAtDecision: progress?.activeSeconds || 0 } })
 }
 
 export async function getCoachDashboard(userId: string, sessionId: string) {
@@ -634,6 +859,44 @@ export async function getCoachDashboard(userId: string, sessionId: string) {
   const participants = await prisma.trainingSessionParticipant.findMany({ where: { sessionId, status: 'active' }, include: { User: { select: { id: true, username: true, avatar: true } }, Progress: { include: { StageProblem: { include: { Problem: { select: { title: true, problemId: true } } } } } } } })
   const now = Date.now()
   return { session: { id: session.id, title: session.title, status: session.status, currentStageId: session.currentStageId }, participants: participants.map(item => ({ id: item.id, user: item.User, currentStageId: item.currentStageId, currentProblemId: item.currentProblemId, activeSeconds: item.activeSeconds, online: Boolean(item.lastHeartbeatAt && now - item.lastHeartbeatAt.getTime() < 90_000), progress: item.Progress.map(progress => ({ ...progress, code: undefined })) })), summary: { total: participants.length, working: participants.filter(item => item.Progress.some(progress => progress.status === 'WORKING')).length, stuck: participants.filter(item => item.Progress.some(progress => progress.status === 'STUCK')).length, completed: participants.filter(item => item.Progress.length > 0 && item.Progress.every(progress => ['COMPLETED', 'SKIPPED'].includes(progress.status))).length } }
+}
+
+export async function getTrainingPeerProgress(userId: string, sessionId: string) {
+  const session = await assertAccess(userId, sessionId)
+  const manager = await canManageSession(userId, session)
+  if (!manager && session.peerVisibility === 'NONE') return { rankingMode: session.rankingMode, peerVisibility: session.peerVisibility, entries: [] }
+  const participants = await prisma.trainingSessionParticipant.findMany({
+    where: { sessionId, status: 'active' },
+    include: {
+      User: { select: { id: true, username: true, avatar: true } },
+      Progress: { include: { StageProblem: { select: { alias: true, Problem: { select: { problemId: true, title: true } } } } } },
+    },
+  })
+  const visibility = manager ? 'FULL' : session.peerVisibility
+  const effectiveRanking = visibility === 'PROGRESS'
+    ? (session.rankingMode === 'OFF' ? 'OFF' : 'PROGRESS_ONLY')
+    : visibility === 'SCORE' && session.rankingMode === 'ACM_RANKING' ? 'SCORE' : session.rankingMode
+  const rows = participants.map(participant => {
+    const completed = participant.Progress.filter(progress => progress.status === 'COMPLETED').length
+    const score = participant.Progress.reduce((sum, progress) => sum + (progress.bestScore || 0), 0)
+    const attempts = participant.Progress.reduce((sum, progress) => sum + progress.attemptCount, 0)
+    const base: Record<string, unknown> = { user: participant.User, completed, total: session.Stages.reduce((sum, stage) => sum + stage.Problems.length, 0) }
+    if (['SCORE', 'FULL'].includes(visibility)) base.score = score
+    if (visibility === 'FULL') {
+      base.attempts = attempts
+      base.activeSeconds = participant.activeSeconds
+      base.currentProblem = participant.Progress.find(progress => progress.stageProblemId === participant.currentProblemId)?.StageProblem || null
+      base.progress = participant.Progress.map(progress => ({ stageProblemId: progress.stageProblemId, status: progress.status, bestScore: progress.bestScore, attemptCount: progress.attemptCount, activeSeconds: progress.activeSeconds, hintCount: progress.hintCount }))
+    }
+    return { base, completed, score, attempts, username: participant.User.username }
+  })
+  if (effectiveRanking !== 'OFF') rows.sort((left, right) => effectiveRanking === 'PROGRESS_ONLY'
+    ? right.completed - left.completed || left.username.localeCompare(right.username)
+    : effectiveRanking === 'SCORE'
+      ? right.score - left.score || right.completed - left.completed || left.username.localeCompare(right.username)
+      : right.completed - left.completed || left.attempts - right.attempts || left.username.localeCompare(right.username))
+  else rows.sort((left, right) => left.username.localeCompare(right.username))
+  return { rankingMode: effectiveRanking, peerVisibility: visibility, entries: rows.map((row, index) => ({ ...(effectiveRanking === 'OFF' ? {} : { rank: index + 1 }), ...row.base })) }
 }
 
 export async function getTrainingReport(userId: string, sessionId: string) {
@@ -651,18 +914,75 @@ export async function listTrainingEvents(userId: string, sessionId: string, afte
   return events.filter(event => !participant || targetApplies(event.targetType, event.targetId, participant, session))
 }
 
+async function advanceFromBeginningParticipant(
+  tx: Prisma.TransactionClient,
+  sessionId: string,
+  participantId: string,
+  userId: string,
+  completedStageId: string,
+) {
+  const session = await tx.trainingSession.findUnique({
+    where: { id: sessionId },
+    select: {
+      joinMode: true,
+      currentStageId: true,
+      Stages: {
+        orderBy: { orderIndex: 'asc' },
+        select: { id: true, orderIndex: true, Problems: { select: { id: true } } },
+      },
+    },
+  })
+  if (!session || session.joinMode !== 'FROM_BEGINNING') return
+  const participant = await tx.trainingSessionParticipant.findUnique({
+    where: { id: participantId },
+    select: { currentStageId: true },
+  })
+  if (participant?.currentStageId !== completedStageId) return
+  const currentIndex = session.Stages.findIndex(stage => stage.id === completedStageId)
+  const globalIndex = session.Stages.findIndex(stage => stage.id === session.currentStageId)
+  const next = session.Stages[currentIndex + 1]
+  if (currentIndex < 0 || !next || globalIndex < currentIndex + 1) return
+  const current = session.Stages[currentIndex]
+  if (!current.Problems.length) return
+  const completed = await tx.trainingSessionProblemProgress.count({
+    where: {
+      participantId,
+      stageProblemId: { in: current.Problems.map(problem => problem.id) },
+      status: { in: ['COMPLETED', 'SKIPPED'] },
+    },
+  })
+  if (completed !== current.Problems.length) return
+  await tx.trainingSessionParticipant.update({
+    where: { id: participantId },
+    data: { currentStageId: next.id, currentProblemId: null },
+  })
+  await appendEvent(tx, sessionId, 'training.participant.stage.advanced', 'USER', userId, {
+    fromStageId: current.id,
+    toStageId: next.id,
+    joinMode: 'FROM_BEGINNING',
+  })
+}
+
 export async function syncTrainingEngineSubmission(submission: { id: number; userId: string; trainingSessionId: string | null; trainingStageProblemId: string | null; result: string | null; score: number | null }) {
   if (!submission.trainingSessionId || !submission.trainingStageProblemId) return
-  const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId: submission.trainingSessionId, userId: submission.userId } } })
-  if (!participant) return
+  const [participant, stageProblem] = await Promise.all([
+    prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId: submission.trainingSessionId, userId: submission.userId } } }),
+    prisma.trainingSessionStageProblem.findUnique({ where: { id: submission.trainingStageProblemId }, include: { Stage: { select: { sessionId: true, targetScore: true } } } }),
+  ])
+  if (!participant || !stageProblem || stageProblem.Stage.sessionId !== submission.trainingSessionId) return
   const accepted = ['accepted', 'ac'].includes(String(submission.result || '').toLowerCase())
   await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-participant:${participant.id}`}, 0)) IS NULL AS locked`
     if (await tx.trainingSessionScoreEvent.findUnique({ where: { submissionId: submission.id }, select: { id: true } })) return
     const existing = await tx.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } } })
-    const bestScore = Math.max(existing?.bestScore || 0, submission.score || (accepted ? 100 : 0))
+    const score = submission.score ?? (accepted ? 100 : 0)
+    const bestScore = Math.max(existing?.bestScore || 0, score)
     const improved = bestScore > (existing?.bestScore ?? -1)
-    await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: accepted ? 'COMPLETED' : 'WORKING', stuckDetectedAt: improved ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: accepted ? 'COMPLETED' : 'WORKING' } })
+    const targetScore = stageProblem.targetScore ?? stageProblem.Stage.targetScore ?? 100
+    const completed = accepted || bestScore >= targetScore
+    await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: accepted || improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: completed ? 'COMPLETED' : 'WORKING', stuckDetectedAt: improved || completed ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: completed ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
     await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
+    if (completed) await advanceFromBeginningParticipant(tx, submission.trainingSessionId!, participant.id, submission.userId, stageProblem.stageId)
   })
 }

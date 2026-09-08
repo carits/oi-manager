@@ -464,6 +464,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `POST` | `/api/training-sessions/:id/heartbeat` | 上报可见且聚焦的有效训练时间 |
 | `POST` | `/api/training-sessions/:id/submit` | 使用固定 Revision/专项投影创建训练提交 |
 | `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度和卡题概览 |
+| `GET` | `/api/training-sessions/:id/peer-progress` | 按训练榜单模式和同学可见性返回服务端裁剪后的进度 |
 | `GET` | `/api/training-sessions/:id/report` | 学员过程、成绩、提示和耗时报告 |
 | `GET` | `/api/training-sessions/:id/events` | 可补偿的训练 SSE 事件流 |
 | `POST` | `/api/training-sessions/:id/join` | 范围内成员按迟到规则加入训练 |

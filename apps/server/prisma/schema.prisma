@@ -2445,6 +2445,7 @@ model TrainingSession {
   createdBy                  String
   scheduledStartAt           DateTime?
   startedAt                  DateTime?
+  runningSince               DateTime?
   pausedAt                   DateTime?
   endedAt                    DateTime?
   archivedAt                 DateTime?
@@ -2593,6 +2594,7 @@ model TrainingSessionProblemProgress {
   firstOpenedAt      DateTime?
   lastOpenedAt       DateTime?
   activeSeconds      Int                          @default(0)
+  continuousActiveSeconds Int                     @default(0)
   attemptCount       Int                          @default(0)
   bestScore          Int?
   bestVerdict        String?
@@ -2745,6 +2747,7 @@ model TrainingSessionStrategyDecision {
   stageProblemId   String?
   decision         String
   reason           String?
+  activeSecondsAtDecision Int                     @default(0)
   createdAt        DateTime                     @default(now())
   Participant      TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
   StageProblem     TrainingSessionStageProblem? @relation(fields: [stageProblemId], references: [id], onDelete: SetNull)

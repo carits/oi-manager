@@ -12,6 +12,7 @@ import {
   getCoachDashboard,
   getTrainingDraft,
   getTrainingReport,
+  getTrainingPeerProgress,
   getTrainingRoster,
   getTrainingWorkspace,
   joinTrainingSession,
@@ -115,6 +116,10 @@ trainingEngineRouter.get('/training-sessions/:id/coach-dashboard', authenticate,
 
 trainingEngineRouter.get('/training-sessions/:id/report', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try { res.json({ success: true, data: await getTrainingReport(req.user!.userId, req.params.id) }) } catch (error) { return sendError(error, res) }
+}))
+
+trainingEngineRouter.get('/training-sessions/:id/peer-progress', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try { res.json({ success: true, data: await getTrainingPeerProgress(req.user!.userId, req.params.id) }) } catch (error) { return sendError(error, res) }
 }))
 
 trainingEngineRouter.get('/training-sessions/:id/events', authenticate, asyncHandler(async (req: AuthRequest, res) => {

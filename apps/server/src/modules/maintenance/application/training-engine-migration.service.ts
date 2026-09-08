@@ -72,7 +72,8 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
         legacyTrainingId: row.id, title: row.title, description: row.description, sessionType: row.format === 'acm' ? 'ACM' : 'OI',
         status, teamId: row.teamId, organizationId: row.organizationId, createdBy: row.createdBy,
         scheduledStartAt: row.startTime, startedAt: status === 'RUNNING' || status === 'ENDED' ? row.startTime : null,
-        endedAt: status === 'ENDED' ? row.endTime : null, rankingMode: row.format === 'acm' ? 'ACM_RANKING' : 'SCORE',
+        runningSince: status === 'RUNNING' ? new Date() : null,
+        endedAt: status === 'ENDED' ? row.endTime : null, activeElapsedSeconds: status === 'ENDED' ? Math.max(0, Math.floor((row.endTime.getTime() - row.startTime.getTime()) / 1000)) : 0, rankingMode: row.format === 'acm' ? 'ACM_RANKING' : 'SCORE',
         peerVisibility: 'PROGRESS', joinMode: 'FROM_BEGINNING', settings: { migratedFromLegacyTrainingId: row.id },
       } })
       const stage = await tx.trainingSessionStage.create({ data: {

@@ -4,6 +4,7 @@
 .card h3, .card p { margin: 0; }
 .muted { color: var(--text-muted); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.targetBar { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 320px)); gap: var(--space-3); align-items: end; }
 .field { display: grid; gap: var(--space-2); font-weight: 600; }
 .field small { color: var(--text-muted); font-weight: 400; }
 .problemPicker { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2); display: grid; gap: var(--space-1); }
@@ -12,6 +13,9 @@
 .workspace { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr) minmax(250px, 340px); gap: var(--space-4); align-items: start; }
 .rail { display: grid; gap: var(--space-2); position: sticky; top: var(--space-4); }
 .stage { display: grid; gap: var(--space-2); }
+.stageProblemEditor { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
+.unlockEditor { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); }
+.conditionRow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, 180px) auto; gap: var(--space-2); align-items: center; }
 .problemButton { width: 100%; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface); cursor: pointer; color: var(--text-primary); }
 .problemButton[data-active='true'] { border-color: var(--primary); background: var(--primary-light); }
 .problemButton:disabled { cursor: not-allowed; opacity: .55; }
@@ -22,5 +26,8 @@
 .timeline { display: grid; gap: var(--space-2); }
 .timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
 .message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
+.peerGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-2); }
+.peerCard { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.peerCard strong { flex: 1; }
 @media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } }
-@media (max-width: 720px) { .workspace { grid-template-columns: 1fr; } .rail { position: static; } .actions > * { flex: 1 1 auto; } }
+@media (max-width: 720px) { .workspace { grid-template-columns: 1fr; } .rail { position: static; } .actions > * { flex: 1 1 auto; } .conditionRow { grid-template-columns: 1fr; } }

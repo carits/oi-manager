@@ -49,24 +49,26 @@ TrainingSession
 
 - DRAFT 仅管理者可见。
 - 发布时，如果已显式配置名单则只加入名单；否则以当前学校或团队有效成员为默认名单。
-- 非名单用户不可查看训练；迟到加入遵循 `CURRENT_STAGE/FROM_BEGINNING/TEACHER_ASSIGN`。
+- 未显式配置名单的已发布训练允许范围内迟到成员发现并加入；显式名单不能由手工 API 绕过。迟到加入遵循 `CURRENT_STAGE/FROM_BEGINNING/TEACHER_ASSIGN`。
 - 顺序模式默认要求前一题 AC，也可组合分数、时间、尝试次数或教练解锁条件。
 - 硬暂停禁止编辑与提交；软暂停允许保留编辑但禁止提交。
 - Locked/Exam Focus 会遮蔽非当前题，Exam Focus 同时禁止提示。
-- 教练对用户、组、团队或全员发布命令；命令使用 `statusRevision` 乐观锁和数据库事务。
+- 教练对用户、组、团队或全员发布命令；不同目标的 Focus、消息、禁交与提示 Overlay 相互隔离，结束后恢复每名学员原题。命令使用 `statusRevision` 乐观锁和数据库事务。
 
 ## 过程状态与可靠性
 
-- 草稿按用户和题目隔离，30 秒自动保存，切题与聚焦前主动保存，revision 冲突返回 409。
-- 心跳只在页面可见且编辑器聚焦时累计活跃时间；不会把后台挂页计为训练时长。
-- 提交使用 `submitScope=training_engine`，评测完成后幂等写入 Progress 与 ScoreEvent。
+- 草稿按用户和题目隔离，30 秒自动保存，切题、聚焦与页面离开前主动保存，revision 冲突返回 409；硬暂停在服务端禁止修改草稿。
+- 心跳只在训练运行、页面可见且编辑器聚焦时累计活跃时间；不会把暂停或后台挂页计为训练时长，也不会覆盖已经完成/跳过的状态。
+- 提交使用 `submitScope=training_engine`，评测完成后幂等写入 Progress 与 ScoreEvent；OI 达到阶段或题目目标分即视为完成，不要求最终 Verdict 必须 AC。
 - 当前最佳分、Verdict、尝试次数、首次 AC、提示层级和卡题状态形成训练报告。
-- Scheduler 只由单例后台进程运行，按计划启动训练，并按 TIME/COMPLETION/HYBRID 自动推进。
+- Scheduler 只由单例后台进程运行，按计划启动训练，并按 TIME/COMPLETION/HYBRID 自动推进；HYBRID 必须同时满足时长与完成度。
+- ACM 策略训练按有效做题时间提示重新评估，强制换题模式由服务端暂时停止当前题提交，打开其他题后才重置连续做题计时。
+- `rankingMode` 与 `peerVisibility` 分离：训练默认只展示完成进度，服务端按 NONE/PROGRESS/SCORE/FULL 裁剪同学数据，不能从 API 读取被隐藏的分数、提交次数或详细进度。
 - 命令和事件是追加式记录；SSE 支持 `Last-Event-ID`/`afterSeq` 补偿，客户端断线后重新读取权威 Workspace，不把前端缓存当事实源。
 
 ## API 与 UI
 
-主要接口为 `/api/training-sessions`、`/structure`、`/roster`、`/publish`、`/commands`、`/drafts`、`/heartbeat`、`/submit`、`/hints`、`/coach-dashboard`、`/report` 和 `/events`。所有接口重新校验账号状态、学校/团队范围和训练身份。
+主要接口为 `/api/training-sessions`、`/structure`、`/roster`、`/publish`、`/commands`、`/drafts`、`/heartbeat`、`/submit`、`/hints`、`/coach-dashboard`、`/peer-progress`、`/report` 和 `/events`。所有接口重新校验账号状态、学校/团队范围和训练身份。
 
 - `/personal/training-sessions`：账号参与的训练列表。
 - `/org/:organizationId/training-sessions`：校园训练管理与参与入口。

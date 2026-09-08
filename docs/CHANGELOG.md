@@ -11,6 +11,15 @@ source_of_truth: Git history
 
 ## 2026-09-08
 
+### 独立 Training Engine 教练流程收口
+
+- 新增独立 `TrainingSession` 聚合，不再把教练训练伪装成比赛；Stage、固定 TestSet Revision、学员进度、命令、Overlay、草稿、提示、分数轨迹、策略决策与可补偿事件分别持久化。
+- 教练可按全员、训练分组、团队或单个学员执行聚焦、锁题、禁交、消息、提示和个人放行；Focus 替换与结束会恢复每名学员原阶段/题目，服务端只向学员返回适用于本人的 Overlay 和事件。
+- 后端统一执行顺序/分数/时间/提交次数/教练放行、FOCUS_ONLY、软硬暂停、目标分、OI Subtask 投影和 ACM 强制换题；训练提交与 JudgeRun 固化实际 Stage 投影，不依赖前端隐藏按钮。
+- 心跳只累计 RUNNING、可见且编辑器聚焦的有效时间，分别记录会话、学员、题目和连续做题时间；完成/跳过状态不会被后续心跳覆盖。OI 达到目标分即可完成，HYBRID 推进必须同时满足时长和完成比例。
+- 迟到加入支持 `CURRENT_STAGE/FROM_BEGINNING/TEACHER_ASSIGN`；显式名单不能经手工加入绕过，`FROM_BEGINNING` 学员完成落后阶段后只推进到不超过全班当前阶段的位置。
+- 学生端增加自动草稿、提示、策略检查和按可见性裁剪的同学进度；教练端增加阶段规则、目标分、解锁条件、分组目标、暂停/推进/聚焦/提示/消息和个人干预入口。
+
 ### OI Candidate、Wrong Corpus 与 11 选 10 Selector 收口
 
 - OI 正式测试图增加不可绕过的结构上限：每题最多 15 个 Subtask，每个 Subtask 在全部 Official Group 与 Hack Gate 中去重后最多 10 个测试点；Test Graph、数据生成发布和 Revision 发布三层同时校验。管理员无错误语料时最多 Bootstrap 三个 Official Core，额外写入必须填写审计原因。

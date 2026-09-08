@@ -124,12 +124,12 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TeamProblemList` | 以 Prisma schema 为准 |
 | `TestdataFile` | 以 Prisma schema 为准 |
 | `Training` | 以 Prisma schema 为准 |
-| `TrainingSession` | 独立教练训练聚合根，保存范围、生命周期、当前阶段和命令/事件 revision |
+| `TrainingSession` | 独立教练训练聚合根，保存范围、生命周期、当前阶段、有效运行时间和命令/事件 revision |
 | `TrainingSessionStage` | 训练的有序阶段、模式、推进条件和课堂状态 |
 | `TrainingSessionStageProblem` | 阶段题目、固定 TestSet Revision、OI 专项投影和解锁规则 |
 | `TrainingSessionGroup` | 训练内教练分组 |
 | `TrainingSessionParticipant` | 学员当前阶段/题目、分组、心跳和有效活跃时间 |
-| `TrainingSessionProblemProgress` | 学员逐题最佳分、Verdict、尝试、提示和卡题状态 |
+| `TrainingSessionProblemProgress` | 学员逐题最佳分、Verdict、尝试、提示、连续有效时间和卡题状态 |
 | `TrainingSessionCommand` | 带会话单调序号的教练控制命令审计 |
 | `TrainingSessionOverlay` | 面向全员、组、团队或用户的聚焦、锁定、禁交和消息覆盖层 |
 | `TrainingSessionUserOverride` | 教练对单个学员的解锁、跳题和提交覆盖 |
