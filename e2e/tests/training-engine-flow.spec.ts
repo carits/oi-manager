@@ -5,7 +5,7 @@ import { loadFixtureIds } from '../fixtures/data'
 const ids = loadFixtureIds()
 const base = `/org/org_${ids.school}/training-sessions/${ids.trainingSession}`
 
-test.describe('coach-directed training engine @smoke', () => {
+test.describe('coach-directed training engine @smoke @compact', () => {
   test('coach starts, focuses and pauses while student keeps an isolated draft', async ({ browser }) => {
     const coachContext = await browser.newContext({ storageState: accounts.principal.storageState })
     const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
