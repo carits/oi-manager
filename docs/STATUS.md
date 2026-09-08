@@ -5,7 +5,7 @@ last_verified: 2026-09-08
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-08: Training Engine 的 DRAFT 顺序编排已从运行工作台拆分为独立设计器：阶段和题目可拖动/键盘排序、跨阶段分配，顺序连线可视化 AC/分数/时间/次数/教练放行与 ANY/ALL，OI Subtask 基于固定 Revision 真实多选。创建模板只生成阶段骨架，题目必须在组织/Carits/外部题池中显式分配。保存已改为 advisory lock + Revision CAS + 稳定 ID 差异更新，可保持 Assignment/Hint 身份。Training Engine 12/12、Web 69/69、Server/Web 生产构建与 UI/路由门禁通过。
+- 2026-09-08: Training Engine 的 DRAFT 顺序编排已从运行工作台拆分为独立五步设计器：阶段和题目可拖动/键盘排序、跨阶段分配，顺序连线可视化 AC/分数/时间/次数/教练放行与 ANY/ALL；阶段说明、单题目标分/时限、FOCUS 策略和 OI 固定 Revision Subtask 均可配置。创建模板只生成阶段骨架，题目必须在组织/Carits/外部题池中显式分配。保存已改为 advisory lock + Revision CAS + 稳定 ID 差异更新，可保持 Assignment/Hint 身份。Training Engine 12/12、Web 69/69、Server/Web 生产构建、UI 门禁及 Chromium 桌面/紧凑视口编排 E2E 2/2 通过；提交 `753eba6`、`c7adf0d` 已推送，API 活动 slot 为 3303，Web BUILD_ID `k_PCi8emq6NI2vNOMnQ-q` 已通过候选和正式双账号消息探针并提升。
 
 - 2026-09-08: 独立 Training Engine 已完成生产发布。训练由 Stage、不可变 TestSet Revision、学员进度、命令/Overlay、草稿、提示、策略决策、分数轨迹和可补偿事件组成；教练命令按全员/分组/团队/个人隔离，软硬暂停、聚焦恢复、顺序/目标分/混合推进、FOCUS_ONLY、迟到加入、OI Subtask 与 ACM 换题策略均由服务端强制。生产迁移前备份 `/data/backups/oi-manager/manual-release-20260908-training/oi_manager_20260908_124041.dump`（SHA-256 `1967736879c661ba8b923251acaa5905833415663e84c46c11a3fa27eb2113cc`）已恢复校验；50/50 migrations 完成。受保护 check/apply 将 384 条旧训练中的 378 条幂等迁移，6 条因缺 TestSet Revision 或历史账号失效保持旧模型并列入报告。Server 全量测试通过、Training Engine 11/11、Judge 42/42、Web 69/69、双视口训练 E2E 8/8、Shared/Server/Judge/Web 构建与全部门禁通过。提交 `9ebb1a8` 至 `b9a56cb` 已推送；API 活动 slot 为 3302，Judge/Worker/Executor 正常，Web BUILD_ID `VlK5d6fINiscMWP5LhkfH` 已通过候选及正式双账号消息探针并提升。线上读取 100 条迁移场次及阶段详情正常，维护迁移 API 已关闭；P1345 桌面/手机模板探针仍通过且未改变活动 STD/Validator。
 

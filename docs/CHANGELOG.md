@@ -16,7 +16,9 @@ source_of_truth: Git history
 - 新增组织与个人团队 DRAFT 训练的独立设计路由，创建后直接进入“阶段时间线 → 题目链 → 可用题目池”三栏工作台；运行工作台不再承担结构编辑。
 - 阶段和阶段内题目均可拖动、上下移、复制和删除；题目可跨阶段移动或批量加入多个阶段。顺序链直接展示 AC/分数/时间/次数/教练放行及 ANY/ALL，OI 投影使用固定 Revision 中的真实 Subtask 多选。
 - 题目池按组织题库、Carits 和其他题库分区，执行服务端搜索和分页；加入时固定当前正式 TestSet Revision，只有管理员显式点击才会更新到最新版本。
+- 设计流程补齐基本信息、学员与分组、提示配置和发布检查；阶段可填写说明，单题可覆盖目标分与时限，聚焦阶段可配置策略切换间隔、最长连续作答和超时强制切换。
 - 结构保存改为训练级 advisory lock + `statusRevision` CAS + 稳定 ID 差异更新，重排不再删除分配或 Hint；删除带 Hint 的分配必须显式确认。模板只创建阶段骨架，不再静默复制题目。
+- Server/Web 构建、Training Engine 12/12、Web 69/69、UI 契约与 Chromium 双尺寸编排 E2E 2/2 通过；提交 `753eba6`、`c7adf0d` 已推送，API 已切换至 3303，Web BUILD_ID `k_PCi8emq6NI2vNOMnQ-q` 经候选与正式消息探针提升。
 
 ### 独立 Training Engine 教练流程收口
 
