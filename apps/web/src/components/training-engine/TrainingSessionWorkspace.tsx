@@ -28,7 +28,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const toast = useToast()
   const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>(), [problemDetail, setProblemDetail] = useState<any>()
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
-  const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [rosterSaving, setRosterSaving] = useState(false), [structureSaving, setStructureSaving] = useState(false)
+  const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false), [structureSaving, setStructureSaving] = useState(false)
   const [roster, setRoster] = useState<Roster>(), [rosterOpen, setRosterOpen] = useState(false), [structure, setStructure] = useState<Stage[]>([]), [structureOpen, setStructureOpen] = useState(false)
   const [hints, setHints] = useState<Hint[]>([]), [hintOpen, setHintOpen] = useState(false), [hintTitle, setHintTitle] = useState(''), [hintContent, setHintContent] = useState(''), [hintLevel, setHintLevel] = useState(1), [openedHint, setOpenedHint] = useState<Hint>()
   const [hintMode, setHintMode] = useState('MANUAL'), [hintTrigger, setHintTrigger] = useState('')
@@ -36,10 +36,12 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [messageOpen, setMessageOpen] = useState(false), [message, setMessage] = useState(''), [messageType, setMessageType] = useState('INFO')
   const [report, setReport] = useState<any[]>(), [reportOpen, setReportOpen] = useState(false)
   const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<boolean>>(async () => false)
+  const commandInFlight = useRef(false), statusRevisionRef = useRef<number>()
 
   const load = useCallback(async () => {
     const response = await apiClient.get<Workspace>(`/api/training-sessions/${sessionId}`)
     if (!response.success || !response.data) return toast.error(response.message || '训练加载失败')
+    statusRevisionRef.current = response.data.session.statusRevision
     setData(response.data)
     setSelectedId(current => {
       const directed = response.data!.participant?.currentProblemId
@@ -113,12 +115,20 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }, [load, sessionId])
 
   const command = async (type: string, payload: Record<string, unknown> = {}, targetType = commandTargetType, targetId = commandTargetId) => {
-    if (!data) return false
-    await saveDraftRef.current(true)
-    const response = await apiClient.post(`/api/training-sessions/${sessionId}/commands`, { type, expectedRevision: data.session.statusRevision, targetType, targetId: targetType === 'ALL' ? null : targetId, payload })
-    if (!response.success) { toast.error(response.message || '训练指令失败'); return false }
-    await load(); await loadHints(selectedId)
-    return true
+    if (!data || commandInFlight.current) return false
+    commandInFlight.current = true
+    setCommandBusy(true)
+    try {
+      await saveDraftRef.current(true)
+      const response = await apiClient.post<Workspace['session']>(`/api/training-sessions/${sessionId}/commands`, { type, expectedRevision: statusRevisionRef.current ?? data.session.statusRevision, targetType, targetId: targetType === 'ALL' ? null : targetId, payload })
+      if (!response.success) { toast.error(response.message || '训练指令失败'); return false }
+      if (typeof response.data?.statusRevision === 'number') statusRevisionRef.current = response.data.statusRevision
+      await load(); await loadHints(selectedId)
+      return true
+    } finally {
+      commandInFlight.current = false
+      setCommandBusy(false)
+    }
   }
   const submit = async () => {
     if (!problem || !selectedId) return
@@ -158,6 +168,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   if (!data) return <PageFrame width="workbench"><PageHeader title="训练工作台" description="正在准备训练状态…" /></PageFrame>
   const status = data.session.status
   const activeStrategy = selectedId ? data.strategy[selectedId] : undefined
+  const targetedCommandDisabled = commandBusy || (commandTargetType !== 'ALL' && !commandTargetId)
   return <PageFrame width="workbench"><div className={styles.stack}>
     <PageHeader title={data.session.title} description={data.session.description || '教练训练工作台'} actions={<div className={styles.actions}><StatusBadge variant={status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : 'neutral'}>{status}</StatusBadge></div>} />
     {data.session.Overlays.filter(item => item.type === 'MESSAGE').map(item => <div className={styles.message} key={item.id}>{item.payload?.message || '教练消息'}</div>)}
@@ -168,14 +179,14 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {commandTargetType === 'USER' && <label className={styles.field}>学员<Select aria-label="目标学员" value={commandTargetId} onChange={event => setCommandTargetId(event.target.value)}><option value="">请选择</option>{dashboard?.participants.map(item => <option value={item.user.id} key={item.user.id}>{item.user.username}</option>)}</Select></label>}
       </div>
       <div className={styles.actions}>
-        {status === 'SCHEDULED' && <Button onClick={() => void command('START_SESSION', {}, 'ALL', '')}>开始</Button>}
-        {status === 'RUNNING' && <><Button variant="secondary" onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>软暂停</Button><Button variant="secondary" onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>硬暂停</Button></>}
-        {status === 'PAUSED' && <Button onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复</Button>}
-        {status === 'RUNNING' && <><Button variant="secondary" onClick={() => void command('BACK_STAGE', {}, 'ALL', '')}>上一阶段</Button><Button variant="secondary" onClick={() => void command('ADVANCE_STAGE', {}, 'ALL', '')}>下一阶段</Button></>}
-        {['RUNNING', 'PAUSED'].includes(status) && <Button variant="danger" onClick={() => void command('END_SESSION', {}, 'ALL', '')}>结束训练</Button>}
+        {status === 'SCHEDULED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('START_SESSION', {}, 'ALL', '')}>开始</Button>}
+        {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'SOFT' }, 'ALL', '')}>软暂停</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('PAUSE_SESSION', { mode: 'HARD' }, 'ALL', '')}>硬暂停</Button></>}
+        {status === 'PAUSED' && <Button disabled={commandBusy} loading={commandBusy} onClick={() => void command('RESUME_SESSION', {}, 'ALL', '')}>恢复</Button>}
+        {status === 'RUNNING' && <><Button variant="secondary" disabled={commandBusy} onClick={() => void command('BACK_STAGE', {}, 'ALL', '')}>上一阶段</Button><Button variant="secondary" disabled={commandBusy} onClick={() => void command('ADVANCE_STAGE', {}, 'ALL', '')}>下一阶段</Button></>}
+        {['RUNNING', 'PAUSED'].includes(status) && <Button variant="danger" disabled={commandBusy} onClick={() => void command('END_SESSION', {}, 'ALL', '')}>结束训练</Button>}
         {status === 'DRAFT' && <><Button variant="secondary" onClick={openStructure}>编辑阶段</Button><Button onClick={async () => { const response = await apiClient.post(`/api/training-sessions/${sessionId}/publish`, { expectedRevision: data.session.statusRevision }); if (!response.success) toast.error(response.message || '发布失败'); else void load() }}>发布训练</Button></>}
-        {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
-        {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" onClick={() => void command('EXTEND_TIME', { seconds: 600 }, 'ALL', '')}>延长 10 分钟</Button><Button variant="outline" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => setMessageOpen(true)}>广播消息</Button><Button variant="outline" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
+        {selectedId && status === 'RUNNING' && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('FOCUS_PROBLEM', { stageProblemId: selectedId, mode: 'LOCKED_FOCUS' })}>聚焦当前题</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('END_FOCUS')}>结束聚焦</Button></>}
+        {['RUNNING', 'PAUSED'].includes(status) && <><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('DISABLE_SUBMISSION')}>禁止提交</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('ENABLE_SUBMISSION')}>恢复提交</Button><Button variant="outline" disabled={commandBusy} onClick={() => void command('EXTEND_TIME', { seconds: 600 }, 'ALL', '')}>延长 10 分钟</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => setMessageOpen(true)}>广播消息</Button><Button variant="outline" disabled={targetedCommandDisabled} onClick={() => void command('CLEAR_MESSAGE')}>清除消息</Button></>}
         <Button variant="secondary" onClick={() => void openRoster()}>管理学员</Button><Button variant="secondary" onClick={() => void showReport()}>训练报告</Button><Button variant="ghost" onClick={() => void load()}>刷新</Button>
       </div>
     </div></Section>}
@@ -187,7 +198,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
         {data.session.sessionType === 'ACM' && status === 'RUNNING' && activeStrategy && (activeStrategy.decisionDue || activeStrategy.switchRecommended) && <Section title="策略检查" description={activeStrategy.switchRecommended ? activeStrategy.forceSwitchOnTimeout ? '已达到连续做题上限，请切换到其他题后再回来。' : '当前题已持续较久，建议重新评估是否切题。' : '到了本轮策略复盘时间，请记录你的决定。'}><div className={styles.actions}><Button variant="secondary" onClick={() => void recordStrategy('CONTINUE')}>继续当前题</Button><Button onClick={() => void recordStrategy('SWITCH')}>决定切题</Button></div></Section>}
         <Section title="分级提示" description="提示支持教练手动、训练时间、提交次数或分数条件开放；使用情况会进入训练报告。" actions={data.manager ? <Button variant="secondary" onClick={() => setHintOpen(true)}>新增提示</Button> : undefined}><div className={styles.actions}>{hints.length ? hints.map(hint => data.manager ? <span className={styles.actions} key={hint.id}><Button variant={hint.globallyOpenedAt ? 'secondary' : 'outline'} disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('OPEN_HINT', { hintId: hint.id })}>{hint.level} 级 · {hint.title || '提示'} · 开放</Button><Button variant="ghost" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLOSE_HINT', { hintId: hint.id })}>关闭</Button></span> : <Button key={hint.id} variant="outline" onClick={async () => { const response = await apiClient.post<Hint>(`/api/training-sessions/${sessionId}/hints/${hint.id}/open`, {}); if (response.success && response.data) setOpenedHint(response.data); else toast.error(response.message || '提示尚未开放') }}>{hint.opened ? '再次查看' : '打开'} {hint.level} 级提示</Button>) : <p className={styles.muted}>暂无已开放提示。</p>}</div></Section>
       </> : <Section title="请选择训练题目"><p className={styles.muted}>题目可能尚未按当前阶段开放。</p></Section>}</main>
-      {data.manager && <aside className={`${styles.stack} ${styles.coach}`}><Section title="实时概览"><div className={styles.summary}><div className={styles.metric}><strong>{dashboard?.summary.total || 0}</strong>学员</div><div className={styles.metric}><strong>{dashboard?.summary.working || 0}</strong>进行中</div><div className={styles.metric}><strong>{dashboard?.summary.stuck || 0}</strong>可能卡题</div><div className={styles.metric}><strong>{dashboard?.summary.completed || 0}</strong>完成</div></div></Section><Section title="学员状态" description="卡题只作为提醒，教练决定是否解锁或允许跳过。"><div className={styles.timeline}>{dashboard?.participants.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.user.username}</strong><br /><span className={styles.muted}>{item.online ? '在线' : '离线'} · {item.progress.filter(p => p.status === 'COMPLETED').length} 题完成</span>{selectedId && <div className={styles.actions}><Button variant="ghost" onClick={() => void command('UNLOCK_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>单独解锁</Button><Button variant="ghost" onClick={() => void command('SKIP_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>允许跳过</Button></div>}</div>)}</div></Section></aside>}
+      {data.manager && <aside className={`${styles.stack} ${styles.coach}`}><Section title="实时概览"><div className={styles.summary}><div className={styles.metric}><strong>{dashboard?.summary.total || 0}</strong>学员</div><div className={styles.metric}><strong>{dashboard?.summary.working || 0}</strong>进行中</div><div className={styles.metric}><strong>{dashboard?.summary.stuck || 0}</strong>可能卡题</div><div className={styles.metric}><strong>{dashboard?.summary.completed || 0}</strong>完成</div></div></Section><Section title="学员状态" description="卡题只作为提醒，教练决定是否解锁或允许跳过。"><div className={styles.timeline}>{dashboard?.participants.map(item => <div className={styles.timelineItem} key={item.id}><strong>{item.user.username}</strong><br /><span className={styles.muted}>{item.online ? '在线' : '离线'} · {item.progress.filter(p => p.status === 'COMPLETED').length} 题完成</span>{selectedId && <div className={styles.actions}><Button variant="ghost" disabled={commandBusy} onClick={() => void command('UNLOCK_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>单独解锁</Button><Button variant="ghost" disabled={commandBusy} onClick={() => void command('SKIP_FOR_USER', { stageProblemId: selectedId }, 'USER', item.user.id)}>允许跳过</Button></div>}</div>)}</div></Section></aside>}
     </div>
     {!data.manager && peerProgress && peerProgress.entries.length > 0 && <Section title="同学训练进度" description={`可见范围：${peerProgress.peerVisibility} · 展示方式：${peerProgress.rankingMode}`}><div className={styles.peerGrid}>{peerProgress.entries.map(item => <article className={styles.peerCard} key={item.user.id}>{item.rank && <span>#{item.rank}</span>}<strong>{item.user.username}</strong><span>完成 {item.completed}/{item.total}</span>{item.score !== undefined && <span>{item.score} 分</span>}{item.attempts !== undefined && <span>{item.attempts} 次提交</span>}</article>)}</div></Section>}
     <FormDialog isOpen={rosterOpen} onClose={() => setRosterOpen(false)} title="管理训练学员与分组" description="仅可选择当前学校或团队的有效成员。" size="lg" loading={rosterSaving} footer={<><Button variant="secondary" onClick={() => setRosterOpen(false)} disabled={rosterSaving}>取消</Button><Button onClick={() => void saveRoster()} loading={rosterSaving}>保存名单</Button></>}><div className={styles.stack}><div className={styles.actions}>{roster?.groups.map((group, index) => <Input key={group.id} aria-label={`分组 ${index + 1}`} value={group.name} onChange={event => setRoster(current => current ? { ...current, groups: current.groups.map(item => item.id === group.id ? { ...item, name: event.target.value } : item) } : current)} />)}<Button variant="secondary" onClick={() => setRoster(current => current ? { ...current, groups: [...current.groups, { id: `new-${Date.now()}`, name: `分组 ${current.groups.length + 1}` }] } : current)}>新增分组</Button></div><div className={styles.problemPicker}>{roster?.candidates.map(item => <div className={styles.actions} key={item.userId}><Checkbox label={item.displayName} description={`${item.username} · ${item.role}`} checked={item.selected} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, selected: event.target.checked } : candidate) } : current)} />{item.selected && <Select aria-label={`${item.displayName} 分组`} value={item.groupId || ''} onChange={event => setRoster(current => current ? { ...current, candidates: current.candidates.map(candidate => candidate.userId === item.userId ? { ...candidate, groupId: event.target.value || undefined } : candidate) } : current)}><option value="">未分组</option>{roster.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select>}</div>)}</div></div></FormDialog>
