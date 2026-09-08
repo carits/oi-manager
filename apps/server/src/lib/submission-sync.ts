@@ -234,6 +234,9 @@ export async function onSubmissionJudged(submission: {
   contestProblemId: string | null
   trainingSessionId?: string | null
   trainingStageProblemId?: string | null
+  assignmentId?: string | null
+  assignmentProblemId?: string | null
+  assignmentRecipientId?: string | null
 }): Promise<void> {
   const { submitScope } = submission
 
@@ -283,6 +286,16 @@ export async function onSubmissionJudged(submission: {
       trainingStageProblemId: submission.trainingStageProblemId || null,
       result: submission.result,
       score: submission.score,
+    })
+    if (isAcceptedResult(submission.result)) await syncProblemAC(submission.userId, submission.problemId, submission.id)
+  } else if (submitScope === 'assignment') {
+    const { syncAssignmentSubmission } = await import('../modules/assignment/assignment.service')
+    await syncAssignmentSubmission({
+      id: submission.id,
+      userId: submission.userId,
+      assignmentId: submission.assignmentId || null,
+      assignmentProblemId: submission.assignmentProblemId || null,
+      assignmentRecipientId: submission.assignmentRecipientId || null,
     })
     if (isAcceptedResult(submission.result)) await syncProblemAC(submission.userId, submission.problemId, submission.id)
   }

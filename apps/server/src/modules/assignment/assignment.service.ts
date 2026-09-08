@@ -1,0 +1,574 @@
+import crypto from 'node:crypto'
+import yaml from 'js-yaml'
+import { Prisma, type AssignmentStatus } from '@prisma/client'
+import { prisma } from '../../prisma'
+import { isOrganizationContestAdmin, isTeamAdmin } from '../training/training.helpers'
+import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
+import { normalizeSubmissionIo } from '../judge/domain/submission-io'
+
+export class AssignmentError extends Error {
+  constructor(public statusCode: number, public code: string, message: string, public details?: unknown) { super(message) }
+}
+
+const ASSIGNMENT_INCLUDE = {
+  CreatorMembership: { select: { id: true, userId: true, memberRole: true } },
+  Problems: {
+    orderBy: { orderIndex: 'asc' as const },
+    include: {
+      Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, allowedLanguages: true } },
+      TestSetRevision: { select: { id: true, revisionNumber: true, mode: true, judgeConfigHash: true } },
+    },
+  },
+  Recipients: {
+    orderBy: { assignedAt: 'asc' as const },
+    include: { User: { select: { id: true, username: true, avatar: true } } },
+  },
+} satisfies Prisma.AssignmentInclude
+
+type AssignmentShape = Prisma.AssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>
+type ValidationIssue = { path: string; code: string; message: string }
+
+const ROSTER_MODES = new Set(['SNAPSHOT', 'DYNAMIC'])
+const GRADING_POLICIES = new Set(['BEST_BEFORE_DUE', 'BEST', 'LATEST', 'FIRST_TARGET_MET', 'MANUAL'])
+const LATE_POLICIES = new Set(['DISALLOW', 'ALLOW_MARK_LATE', 'ALLOW_NO_PENALTY', 'ALLOW_WITH_PENALTY'])
+const CORRECTION_POLICIES = new Set(['NONE', 'BELOW_TARGET', 'NON_AC', 'TEACHER_ASSIGNED', 'ALL_INCOMPLETE'])
+const SOLUTION_POLICIES = new Set(['NEVER', 'AFTER_DUE', 'AFTER_CLOSE', 'AFTER_RELEASE'])
+const PROBLEM_CATEGORIES = new Set(['REQUIRED', 'OPTIONAL', 'CHALLENGE'])
+const COMPLETION_POLICIES = new Set(['AC', 'TARGET_SCORE', 'ATTEMPT', 'MANUAL'])
+
+function enumValue(value: unknown, values: Set<string>, fallback: string, field: string) {
+  const normalized = String(value ?? fallback).toUpperCase()
+  if (!values.has(normalized)) throw new AssignmentError(422, 'INVALID_ASSIGNMENT', `${field}不受支持`)
+  return normalized
+}
+
+function boundedText(value: unknown, max: number, field: string, min = 0) {
+  const text = String(value ?? '').trim()
+  if (text.length < min || text.length > max) throw new AssignmentError(422, 'INVALID_ASSIGNMENT', `${field}长度必须为 ${min}～${max} 个字符`)
+  return text
+}
+
+function boundedInteger(value: unknown, min: number, max: number, field: string, fallback?: number) {
+  const parsed = value === undefined && fallback !== undefined ? fallback : Number(value)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) throw new AssignmentError(422, 'INVALID_ASSIGNMENT', `${field}必须为 ${min}～${max} 的整数`)
+  return parsed
+}
+
+function requiredDate(value: unknown, field: string) {
+  const date = new Date(String(value ?? ''))
+  if (!Number.isFinite(date.getTime())) throw new AssignmentError(422, 'INVALID_ASSIGNMENT', `${field}不是合法时间`)
+  return date
+}
+
+function optionalDate(value: unknown, field: string) {
+  if (value === undefined || value === null || value === '') return null
+  return requiredDate(value, field)
+}
+
+function validateTimes(input: { publishAt: Date | null; openAt: Date; dueAt: Date; closeAt: Date; correctionDueAt: Date | null }) {
+  if (input.publishAt && input.publishAt > input.openAt) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_TIMELINE', '发布时间不能晚于开放时间')
+  if (input.openAt >= input.dueAt) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_TIMELINE', '截止时间必须晚于开放时间')
+  if (input.dueAt > input.closeAt) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_TIMELINE', '关闭时间不能早于截止时间')
+  if (input.correctionDueAt && input.correctionDueAt < input.closeAt) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_TIMELINE', '订正截止时间不能早于关闭时间')
+}
+
+function clientRevision(body: any) {
+  const revision = Number(body?.expectedRevision)
+  if (!Number.isInteger(revision) || revision < 0) throw new AssignmentError(422, 'ASSIGNMENT_REVISION_REQUIRED', '必须提供有效的 expectedRevision')
+  return revision
+}
+
+function serializeAssignment(item: AssignmentShape, recipients: 'all' | 'none' | string = 'all') {
+  const visibleRecipients = recipients === 'all' ? item.Recipients : recipients === 'none' ? [] : item.Recipients.filter(recipient => recipient.userId === recipients)
+  return {
+    ...item,
+    Problems: item.Problems.map(({ judgeConfigSnapshot: _judgeConfigSnapshot, ...problem }) => problem),
+    Recipients: visibleRecipients,
+    editable: item.status === 'DRAFT',
+    problemCount: item.Problems.length,
+    recipientCount: item.Recipients.filter(recipient => recipient.status !== 'REMOVED').length,
+  }
+}
+
+async function globalAccount(userId: string) {
+  return prisma.user.findUnique({ where: { id: userId }, select: { role: true, status: true } })
+}
+
+async function actorMembership(userId: string, organizationId: string) {
+  return prisma.organizationMembership.findUnique({
+    where: { organizationId_userId: { organizationId, userId } },
+    include: { Organization: { include: { School: { select: { directoryStatus: true } } } } },
+  })
+}
+
+async function assertCreatePermission(userId: string, organizationId: string, teamId: string | null) {
+  const membership = await actorMembership(userId, organizationId)
+  if (!membership || membership.status !== 'active' || !['teacher', 'school_principal'].includes(membership.memberRole)) {
+    throw new AssignmentError(403, 'ASSIGNMENT_FORBIDDEN', '需要当前学校的教师或负责人身份')
+  }
+  if (membership.Organization.status !== 'active' || membership.Organization.School?.directoryStatus === 'legacy') {
+    throw new AssignmentError(404, 'ORGANIZATION_NOT_AVAILABLE', '该组织不可用')
+  }
+  if (teamId) {
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { organizationId: true } })
+    if (!team || team.organizationId !== organizationId) throw new AssignmentError(422, 'ASSIGNMENT_SCOPE_INVALID', '团队不属于当前学校')
+    if (!await isTeamAdmin(userId, teamId)) throw new AssignmentError(403, 'ASSIGNMENT_FORBIDDEN', '需要团队管理员权限')
+  }
+  return membership
+}
+
+async function canManageAssignment(userId: string, assignment: Pick<AssignmentShape, 'organizationId' | 'teamId' | 'createdByMembershipId' | 'CreatorMembership'>) {
+  const account = await globalAccount(userId)
+  if (!account || account.status !== 'active') return false
+  if (account.role === 'super_admin') return true
+  if (assignment.teamId && await isTeamAdmin(userId, assignment.teamId)) return true
+  return isOrganizationContestAdmin(userId, assignment.organizationId, assignment.CreatorMembership.userId)
+}
+
+async function loadAssignment(id: string) {
+  return prisma.assignment.findUnique({ where: { id }, include: ASSIGNMENT_INCLUDE })
+}
+
+async function assertManage(userId: string, id: string) {
+  const assignment = await loadAssignment(id)
+  if (!assignment) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+  if (!await canManageAssignment(userId, assignment)) throw new AssignmentError(403, 'ASSIGNMENT_FORBIDDEN', '无权管理该作业')
+  return assignment
+}
+
+async function assertAccess(userId: string, id: string) {
+  const assignment = await loadAssignment(id)
+  if (!assignment) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+  if (await canManageAssignment(userId, assignment)) return assignment
+  const recipient = assignment.Recipients.find(item => item.userId === userId && item.status !== 'REMOVED')
+  if (!recipient || assignment.status === 'DRAFT') throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+  return assignment
+}
+
+async function appendEvent(tx: Prisma.TransactionClient, assignmentId: string, type: string, actorUserId: string | null, payload?: Prisma.InputJsonValue) {
+  const row = await tx.assignment.update({ where: { id: assignmentId }, data: { eventSeq: { increment: 1 } }, select: { eventSeq: true } })
+  return tx.assignmentEvent.create({ data: { assignmentId, seq: row.eventSeq, type, actorUserId, payload } })
+}
+
+function assignmentCreateInput(body: any) {
+  const publishAt = optionalDate(body?.publishAt, '发布时间')
+  const openAt = requiredDate(body?.openAt, '开放时间')
+  const dueAt = requiredDate(body?.dueAt, '截止时间')
+  const closeAt = requiredDate(body?.closeAt, '关闭时间')
+  const correctionDueAt = optionalDate(body?.correctionDueAt, '订正截止时间')
+  validateTimes({ publishAt, openAt, dueAt, closeAt, correctionDueAt })
+  const latePolicy = enumValue(body?.latePolicy, LATE_POLICIES, 'DISALLOW', '迟交策略')
+  const latePenaltyPercent = latePolicy === 'ALLOW_WITH_PENALTY'
+    ? boundedInteger(body?.latePenaltyPercent, 0, 100, '迟交扣分比例')
+    : null
+  return {
+    title: boundedText(body?.title, 200, '作业名称', 1),
+    description: body?.description ? boundedText(body.description, 10_000, '作业说明') : null,
+    learningObjectives: body?.learningObjectives ? boundedText(body.learningObjectives, 10_000, '学习目标') : null,
+    rosterMode: enumValue(body?.rosterMode, ROSTER_MODES, 'SNAPSHOT', '名单模式'),
+    gradingPolicy: enumValue(body?.gradingPolicy, GRADING_POLICIES, 'BEST_BEFORE_DUE', '评分策略'),
+    latePolicy,
+    correctionPolicy: enumValue(body?.correctionPolicy, CORRECTION_POLICIES, 'NONE', '订正策略'),
+    solutionReleasePolicy: enumValue(body?.solutionReleasePolicy, SOLUTION_POLICIES, 'AFTER_RELEASE', '题解开放策略'),
+    latePenaltyPercent,
+    publishAt, openAt, dueAt, closeAt, correctionDueAt,
+  }
+}
+
+export async function createAssignment(userId: string, body: any) {
+  const organizationId = String(body?.organizationId || '')
+  if (!organizationId) throw new AssignmentError(422, 'ASSIGNMENT_SCOPE_REQUIRED', '必须选择学校')
+  const teamId = body?.teamId ? String(body.teamId) : null
+  const membership = await assertCreatePermission(userId, organizationId, teamId)
+  const data = assignmentCreateInput(body)
+  const assignment = await prisma.$transaction(async tx => {
+    const created = await tx.assignment.create({
+      data: { ...data as any, organizationId, teamId, createdByMembershipId: membership.id, eventSeq: 1 },
+      include: ASSIGNMENT_INCLUDE,
+    })
+    await tx.assignmentEvent.create({ data: { assignmentId: created.id, seq: 1, type: 'assignment.created', actorUserId: userId, payload: { organizationId, teamId } } })
+    return created
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  return serializeAssignment(assignment)
+}
+
+export async function listAssignments(userId: string, query: any) {
+  const page = Math.max(1, Number(query?.page) || 1)
+  const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize) || 20))
+  const organizationId = query?.organizationId ? String(query.organizationId) : undefined
+  const teamId = query?.teamId ? String(query.teamId) : undefined
+  const status = query?.status ? String(query.status).toUpperCase() as AssignmentStatus : undefined
+  const managedOrganizations = await prisma.organizationMembership.findMany({
+    where: { userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } }, select: { organizationId: true },
+  })
+  const account = await globalAccount(userId)
+  const managerOrgIds = managedOrganizations.map(item => item.organizationId)
+  const where: Prisma.AssignmentWhereInput = {
+    ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}), ...(status ? { status } : {}),
+    ...(account?.role === 'super_admin' ? {} : {
+      OR: [
+        { organizationId: { in: managerOrgIds } },
+        { Recipients: { some: { userId, status: { not: 'REMOVED' } } }, status: { not: 'DRAFT' } },
+      ],
+    }),
+  }
+  const [total, rows] = await Promise.all([
+    prisma.assignment.count({ where }),
+    prisma.assignment.findMany({ where, include: ASSIGNMENT_INCLUDE, orderBy: [{ openAt: 'desc' }, { createdAt: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
+  ])
+  return { items: rows.map(row => serializeAssignment(row, 'none')), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+}
+
+export async function getAssignment(userId: string, assignmentId: string) {
+  const assignment = await assertAccess(userId, assignmentId)
+  return serializeAssignment(assignment, await canManageAssignment(userId, assignment) ? 'all' : userId)
+}
+
+export async function updateAssignment(userId: string, assignmentId: string, body: any) {
+  const assignment = await assertManage(userId, assignmentId)
+  if (assignment.status !== 'DRAFT') throw new AssignmentError(409, 'ASSIGNMENT_FROZEN', '作业发布后不能修改基本配置')
+  const expectedRevision = clientRevision(body)
+  const merged = assignmentCreateInput({
+    title: body?.title ?? assignment.title,
+    description: body?.description === undefined ? assignment.description : body.description,
+    learningObjectives: body?.learningObjectives === undefined ? assignment.learningObjectives : body.learningObjectives,
+    rosterMode: body?.rosterMode ?? assignment.rosterMode,
+    gradingPolicy: body?.gradingPolicy ?? assignment.gradingPolicy,
+    latePolicy: body?.latePolicy ?? assignment.latePolicy,
+    correctionPolicy: body?.correctionPolicy ?? assignment.correctionPolicy,
+    solutionReleasePolicy: body?.solutionReleasePolicy ?? assignment.solutionReleasePolicy,
+    latePenaltyPercent: body?.latePenaltyPercent ?? assignment.latePenaltyPercent,
+    publishAt: body?.publishAt === undefined ? assignment.publishAt : body.publishAt,
+    openAt: body?.openAt ?? assignment.openAt,
+    dueAt: body?.dueAt ?? assignment.dueAt,
+    closeAt: body?.closeAt ?? assignment.closeAt,
+    correctionDueAt: body?.correctionDueAt === undefined ? assignment.correctionDueAt : body.correctionDueAt,
+  })
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment:${assignmentId}`}, 0)) IS NULL AS locked`
+    const updated = await tx.assignment.updateMany({ where: { id: assignmentId, status: 'DRAFT', statusRevision: expectedRevision }, data: { ...merged as any, statusRevision: { increment: 1 } } })
+    if (updated.count !== 1) throw new AssignmentError(409, 'ASSIGNMENT_STALE', '作业已被其他管理员修改，请刷新')
+    await appendEvent(tx, assignmentId, 'assignment.updated', userId)
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  return serializeAssignment((await loadAssignment(assignmentId))!)
+}
+
+function validateProblemRows(rows: any[]) {
+  if (!Array.isArray(rows) || rows.length < 1 || rows.length > 100) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_PROBLEMS', '作业必须包含 1～100 道题')
+  const ids = rows.map(row => String(row?.problemId || ''))
+  if (ids.some(id => !id) || new Set(ids).size !== ids.length) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_PROBLEMS', '题目不能为空或重复')
+  return ids
+}
+
+export async function replaceAssignmentProblems(userId: string, assignmentId: string, body: any) {
+  const assignment = await assertManage(userId, assignmentId)
+  if (assignment.status !== 'DRAFT') throw new AssignmentError(409, 'ASSIGNMENT_FROZEN', '作业发布后不能修改题目')
+  const expectedRevision = clientRevision(body)
+  const rows = body?.problems
+  const problemIds = validateProblemRows(rows)
+  const requestedRevisionIds = rows.map((row: any) => row?.testSetRevisionId ? String(row.testSetRevisionId) : null).filter(Boolean) as string[]
+  const [problems, revisions] = await Promise.all([
+    prisma.problem.findMany({ where: { id: { in: problemIds }, status: { not: 'archived' } }, include: { LatestTestSetRevision: true } }),
+    prisma.problemTestSetRevision.findMany({ where: { id: { in: requestedRevisionIds } } }),
+  ])
+  const problemMap = new Map(problems.map(problem => [problem.id, problem]))
+  const revisionMap = new Map(revisions.map(revision => [revision.id, revision]))
+  const account = await globalAccount(userId)
+  const normalized = rows.map((row: any, index: number) => {
+    const problem = problemMap.get(String(row.problemId))
+    if (!problem || (account?.role !== 'super_admin' && problem.ownerId !== userId && !(problem.libraryScope === 'platform' && problem.status === 'published') && !(problem.libraryScope === 'school' && problem.organizationId === assignment.organizationId && problem.status === 'published'))) {
+      throw new AssignmentError(422, 'ASSIGNMENT_PROBLEM_UNAVAILABLE', `第 ${index + 1} 道题不可用`)
+    }
+    const revision = row.testSetRevisionId ? revisionMap.get(String(row.testSetRevisionId)) : problem.LatestTestSetRevision
+    if (!revision || revision.problemId !== problem.id) throw new AssignmentError(422, 'ASSIGNMENT_REVISION_INVALID', `第 ${index + 1} 道题没有合法 TestSet Revision`)
+    const maxScore = boundedInteger(row.maxScore, 1, 1000, `第 ${index + 1} 道题满分`, 100)
+    const targetScore = boundedInteger(row.targetScore, 0, maxScore, `第 ${index + 1} 道题目标分`, maxScore)
+    return {
+      id: row.id ? String(row.id) : null,
+      problemId: problem.id,
+      testSetRevisionId: revision.id,
+      orderIndex: index,
+      category: enumValue(row.category, PROBLEM_CATEGORIES, 'REQUIRED', '题目分类'),
+      required: row.required === undefined ? String(row.category || 'REQUIRED').toUpperCase() === 'REQUIRED' : Boolean(row.required),
+      maxScore, targetScore,
+      weight: boundedInteger(row.weight, 1, 10_000, `第 ${index + 1} 道题权重`, 100),
+      completionPolicy: enumValue(row.completionPolicy, COMPLETION_POLICIES, revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE', '完成条件'),
+      judgeConfigSnapshot: revision.judgeConfig,
+      judgeConfigHash: revision.judgeConfigHash,
+      settings: row.settings === undefined ? undefined : JSON.parse(JSON.stringify(row.settings)),
+    }
+  })
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment:${assignmentId}`}, 0)) IS NULL AS locked`
+    const current = await tx.assignment.findUnique({ where: { id: assignmentId }, select: { status: true, statusRevision: true } })
+    if (!current || current.status !== 'DRAFT') throw new AssignmentError(409, 'ASSIGNMENT_FROZEN', '作业发布后不能修改题目')
+    if (current.statusRevision !== expectedRevision) throw new AssignmentError(409, 'ASSIGNMENT_STALE', '作业已被其他管理员修改，请刷新')
+    const existing = await tx.assignmentProblem.findMany({ where: { assignmentId }, select: { id: true, problemId: true } })
+    const existingByProblem = new Map(existing.map(item => [item.problemId, item.id]))
+    const kept = new Set<string>()
+    if (existing.length) await tx.assignmentProblem.updateMany({ where: { assignmentId }, data: { orderIndex: { increment: 10_000 } } })
+    for (const row of normalized) {
+      const id = row.id && existing.some(item => item.id === row.id) ? row.id : existingByProblem.get(row.problemId)
+      const { id: _clientId, ...data } = row
+      if (id) {
+        kept.add(id)
+        await tx.assignmentProblem.update({ where: { id }, data })
+      } else {
+        const created = await tx.assignmentProblem.create({ data: { ...data, assignmentId } })
+        kept.add(created.id)
+      }
+    }
+    await tx.assignmentProblem.deleteMany({ where: { assignmentId, id: { notIn: [...kept] } } })
+    await tx.assignment.update({ where: { id: assignmentId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, assignmentId, 'assignment.problems_replaced', userId, { problemIds })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  return serializeAssignment((await loadAssignment(assignmentId))!)
+}
+
+export async function replaceAssignmentRoster(userId: string, assignmentId: string, body: any) {
+  const assignment = await assertManage(userId, assignmentId)
+  if (assignment.status !== 'DRAFT') throw new AssignmentError(409, 'ASSIGNMENT_FROZEN', '作业发布后不能修改名单')
+  const expectedRevision = clientRevision(body)
+  const userIds: string[] = [...new Set<string>((Array.isArray(body?.userIds) ? body.userIds : []).map((id: unknown) => String(id)).filter(Boolean))]
+  if (!userIds.length || userIds.length > 5000) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_ROSTER', '作业名单必须包含 1～5000 名成员')
+  const memberships = await prisma.organizationMembership.findMany({ where: { organizationId: assignment.organizationId, userId: { in: userIds }, status: 'active', memberRole: 'student' }, select: { id: true, userId: true } })
+  if (memberships.length !== userIds.length) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_ROSTER', '名单包含不属于当前学校的有效学生')
+  if (assignment.teamId) {
+    const teamUsers = new Set((await prisma.teamMember.findMany({ where: { teamId: assignment.teamId, userId: { in: userIds }, status: 'active' }, select: { userId: true } })).map(item => item.userId))
+    if (teamUsers.size !== userIds.length) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_ROSTER', '名单包含不属于当前团队的学生')
+  }
+  const membershipByUser = new Map(memberships.map(item => [item.userId, item.id]))
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment:${assignmentId}`}, 0)) IS NULL AS locked`
+    const current = await tx.assignment.findUnique({ where: { id: assignmentId }, select: { status: true, statusRevision: true } })
+    if (!current || current.status !== 'DRAFT') throw new AssignmentError(409, 'ASSIGNMENT_FROZEN', '作业发布后不能修改名单')
+    if (current.statusRevision !== expectedRevision) throw new AssignmentError(409, 'ASSIGNMENT_STALE', '作业已被其他管理员修改，请刷新')
+    const existing = await tx.assignmentRecipient.findMany({ where: { assignmentId }, select: { id: true, userId: true } })
+    const existingByUser = new Map(existing.map(item => [item.userId, item.id]))
+    for (const targetUserId of userIds) {
+      const data = { membershipId: membershipByUser.get(targetUserId)!, source: 'explicit', status: 'ASSIGNED' as const, dueAtEffective: assignment.dueAt, closeAtEffective: assignment.closeAt, exemptReason: null }
+      const id = existingByUser.get(targetUserId)
+      if (id) await tx.assignmentRecipient.update({ where: { id }, data })
+      else await tx.assignmentRecipient.create({ data: { assignmentId, userId: targetUserId, ...data } })
+    }
+    await tx.assignmentRecipient.deleteMany({ where: { assignmentId, userId: { notIn: userIds } } })
+    await tx.assignment.update({ where: { id: assignmentId }, data: { statusRevision: { increment: 1 } } })
+    await appendEvent(tx, assignmentId, 'assignment.roster_replaced', userId, { recipientCount: userIds.length })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  return serializeAssignment((await loadAssignment(assignmentId))!)
+}
+
+async function dynamicRecipients(tx: Prisma.TransactionClient, assignment: AssignmentShape) {
+  if (assignment.teamId) {
+    const members = await tx.teamMember.findMany({ where: { teamId: assignment.teamId, status: 'active' }, select: { userId: true } })
+    const ids = [...new Set(members.map(item => item.userId))]
+    return tx.organizationMembership.findMany({ where: { organizationId: assignment.organizationId, userId: { in: ids }, status: 'active', memberRole: 'student' }, select: { id: true, userId: true } })
+  }
+  return tx.organizationMembership.findMany({ where: { organizationId: assignment.organizationId, status: 'active', memberRole: 'student' }, select: { id: true, userId: true } })
+}
+
+export function validateAssignmentForPublish(assignment: AssignmentShape): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  if (!assignment.Problems.length) issues.push({ path: 'problems', code: 'PROBLEMS_REQUIRED', message: '至少配置一道题' })
+  if (assignment.rosterMode === 'SNAPSHOT' && !assignment.Recipients.length) issues.push({ path: 'recipients', code: 'RECIPIENTS_REQUIRED', message: '快照名单至少包含一名学生' })
+  if (assignment.openAt >= assignment.dueAt) issues.push({ path: 'dueAt', code: 'TIMELINE_INVALID', message: '截止时间必须晚于开放时间' })
+  if (assignment.dueAt > assignment.closeAt) issues.push({ path: 'closeAt', code: 'TIMELINE_INVALID', message: '关闭时间不能早于截止时间' })
+  for (const [index, problem] of assignment.Problems.entries()) {
+    if (problem.TestSetRevision.id !== problem.testSetRevisionId || problem.TestSetRevision.judgeConfigHash !== problem.judgeConfigHash) {
+      issues.push({ path: `problems.${index}.testSetRevisionId`, code: 'REVISION_SNAPSHOT_INVALID', message: '题目版本快照不一致' })
+    }
+  }
+  return issues
+}
+
+export async function validateAssignmentStructure(userId: string, assignmentId: string) {
+  const assignment = await assertManage(userId, assignmentId)
+  const issues = validateAssignmentForPublish(assignment)
+  return { assignmentId, statusRevision: assignment.statusRevision, valid: issues.length === 0, issues }
+}
+
+export async function publishAssignment(userId: string, assignmentId: string, expectedRevision: number) {
+  await assertManage(userId, assignmentId)
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new AssignmentError(422, 'ASSIGNMENT_REVISION_REQUIRED', '必须提供有效的 expectedRevision')
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment:${assignmentId}`}, 0)) IS NULL AS locked`
+    let assignment = await tx.assignment.findUnique({ where: { id: assignmentId }, include: ASSIGNMENT_INCLUDE })
+    if (!assignment) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+    if (assignment.status !== 'DRAFT') throw new AssignmentError(409, 'ASSIGNMENT_FROZEN', '作业已经发布或取消')
+    if (assignment.statusRevision !== expectedRevision) throw new AssignmentError(409, 'ASSIGNMENT_STALE', '作业已被其他管理员修改，请刷新')
+    if (assignment.rosterMode === 'DYNAMIC') {
+      const recipients = await dynamicRecipients(tx, assignment)
+      if (!recipients.length) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STRUCTURE', '动态名单当前没有可分配学生')
+      await tx.assignmentRecipient.createMany({ data: recipients.map(recipient => ({ assignmentId, userId: recipient.userId, membershipId: recipient.id, source: 'dynamic_publish', dueAtEffective: assignment!.dueAt, closeAtEffective: assignment!.closeAt })), skipDuplicates: true })
+      assignment = (await tx.assignment.findUnique({ where: { id: assignmentId }, include: ASSIGNMENT_INCLUDE }))!
+    }
+    const issues = validateAssignmentForPublish(assignment)
+    if (issues.length) throw new AssignmentError(422, 'INVALID_ASSIGNMENT_STRUCTURE', '作业发布检查未通过', { issues })
+    await tx.assignmentProblemProgress.createMany({ data: assignment.Recipients.map(recipient => assignment!.Problems.map(problem => ({ assignmentId, assignmentProblemId: problem.id, recipientId: recipient.id }))).flat(), skipDuplicates: true })
+    const now = new Date()
+    const status: AssignmentStatus = now < assignment.openAt ? 'SCHEDULED' : now < assignment.dueAt ? 'OPEN' : now < assignment.closeAt ? 'OVERDUE' : 'CLOSED'
+    const claimed = await tx.assignment.updateMany({ where: { id: assignmentId, status: 'DRAFT', statusRevision: expectedRevision }, data: { status, publishedAt: now, ...(status === 'CLOSED' ? { closedAt: now } : {}), statusRevision: { increment: 1 } } })
+    if (claimed.count !== 1) throw new AssignmentError(409, 'ASSIGNMENT_STALE', '作业已被其他管理员修改，请刷新')
+    await appendEvent(tx, assignmentId, 'assignment.published', userId, { status, problemCount: assignment.Problems.length, recipientCount: assignment.Recipients.length })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10_000, timeout: 30_000 })
+  return serializeAssignment((await loadAssignment(assignmentId))!)
+}
+
+const MANUAL_TRANSITIONS: Record<string, { from: AssignmentStatus[]; to: AssignmentStatus }> = {
+  close: { from: ['OPEN', 'OVERDUE'], to: 'CLOSED' },
+  review: { from: ['CLOSED'], to: 'REVIEWING' },
+  release: { from: ['CLOSED', 'REVIEWING'], to: 'RELEASED' },
+  archive: { from: ['RELEASED'], to: 'ARCHIVED' },
+  cancel: { from: ['DRAFT', 'SCHEDULED', 'OPEN', 'OVERDUE'], to: 'CANCELLED' },
+}
+
+export async function transitionAssignment(userId: string, assignmentId: string, action: string, expectedRevision: number) {
+  await assertManage(userId, assignmentId)
+  const transition = MANUAL_TRANSITIONS[action]
+  if (!transition) throw new AssignmentError(422, 'ASSIGNMENT_TRANSITION_INVALID', '不支持的作业状态操作')
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new AssignmentError(422, 'ASSIGNMENT_REVISION_REQUIRED', '必须提供有效的 expectedRevision')
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment:${assignmentId}`}, 0)) IS NULL AS locked`
+    const current = await tx.assignment.findUnique({ where: { id: assignmentId }, select: { status: true, statusRevision: true } })
+    if (!current) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+    if (current.statusRevision !== expectedRevision) throw new AssignmentError(409, 'ASSIGNMENT_STALE', '作业状态已变化，请刷新')
+    if (!transition.from.includes(current.status)) throw new AssignmentError(409, 'ASSIGNMENT_TRANSITION_INVALID', `当前状态 ${current.status} 不能执行该操作`)
+    const now = new Date()
+    const timestamps = transition.to === 'CLOSED' ? { closedAt: now } : transition.to === 'RELEASED' ? { releasedAt: now } : transition.to === 'ARCHIVED' ? { archivedAt: now } : transition.to === 'CANCELLED' ? { cancelledAt: now } : {}
+    await tx.assignment.update({ where: { id: assignmentId }, data: { status: transition.to, ...timestamps, statusRevision: { increment: 1 } } })
+    await appendEvent(tx, assignmentId, `assignment.${action}`, userId, { from: current.status, to: transition.to })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  return serializeAssignment((await loadAssignment(assignmentId))!)
+}
+
+function allowedLanguageList(value: string | null) {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.map(String) : null
+  } catch { return null }
+}
+
+export async function submitAssignmentSolution(userId: string, assignmentId: string, body: any) {
+  const assignment = await assertAccess(userId, assignmentId)
+  const recipient = assignment.Recipients.find(item => item.userId === userId && ['ASSIGNED', 'ACTIVE'].includes(item.status))
+  if (!recipient) throw new AssignmentError(403, 'ASSIGNMENT_RECIPIENT_REQUIRED', '当前账号不在作业名单中')
+  const assignmentProblemId = String(body?.assignmentProblemId || '')
+  const problem = assignment.Problems.find(item => item.id === assignmentProblemId)
+  if (!problem) throw new AssignmentError(404, 'ASSIGNMENT_PROBLEM_NOT_FOUND', '作业题目不存在')
+  const now = new Date()
+  if (assignment.status === 'CANCELLED' || assignment.status === 'DRAFT' || now < assignment.openAt) throw new AssignmentError(409, 'ASSIGNMENT_NOT_OPEN', '作业尚未开放')
+  if (['CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED'].includes(assignment.status) || now > recipient.closeAtEffective) throw new AssignmentError(409, 'ASSIGNMENT_CLOSED', '作业已关闭提交')
+  const correction = await prisma.assignmentCorrection.findFirst({ where: { assignmentId, assignmentProblemId, recipientId: recipient.id, status: { in: ['NEEDS_CORRECTION', 'CORRECTING'] }, OR: [{ dueAt: null }, { dueAt: { gte: now } }] }, orderBy: { createdAt: 'desc' } })
+  const submissionPhase = correction ? 'CORRECTION' : now > recipient.dueAtEffective ? 'LATE' : 'ORIGINAL'
+  if (submissionPhase === 'LATE' && assignment.latePolicy === 'DISALLOW') throw new AssignmentError(409, 'ASSIGNMENT_LATE_SUBMISSION_DISALLOWED', '本作业不允许迟交')
+  const language = boundedText(body?.language, 30, '语言', 1)
+  const languages = allowedLanguageList(problem.Problem.allowedLanguages)
+  if (languages?.length && !languages.includes(language)) throw new AssignmentError(422, 'ASSIGNMENT_LANGUAGE_NOT_ALLOWED', '该题不允许使用所选语言')
+  const code = String(body?.code || '')
+  if (!code.trim() || Buffer.byteLength(code, 'utf8') > 1024 * 1024) throw new AssignmentError(422, 'INVALID_SUBMISSION_CODE', '代码不能为空且不能超过 1 MiB')
+  const config = yaml.load(problem.judgeConfigSnapshot) as any
+  const io = normalizeSubmissionIo({ inputFilename: body?.inputFilename, outputFilename: body?.outputFilename, problemType: config?.type })
+  const created = await createQueuedSubmissionWithRun({
+    userId, workspaceScope: 'campus', organizationId: assignment.organizationId,
+    oj: problem.Problem.platform, problemId: problem.Problem.problemId, language, code,
+    codeLength: Buffer.byteLength(code, 'utf8'), result: 'queuing', submitMethod: 'local', problemInternalId: problem.problemId,
+    submitScope: 'assignment', assignmentId, assignmentProblemId, assignmentRecipientId: recipient.id, submissionPhase,
+    testSetRevisionId: problem.testSetRevisionId, judgeConfigHash: problem.judgeConfigHash, judgeConfigSnapshot: problem.judgeConfigSnapshot,
+    ...io, isGlobalVisible: true,
+  }, { requestedBy: userId })
+  if (recipient.status === 'ASSIGNED') await prisma.assignmentRecipient.updateMany({ where: { id: recipient.id, status: 'ASSIGNED' }, data: { status: 'ACTIVE', startedAt: now } })
+  if (correction?.status === 'NEEDS_CORRECTION') await prisma.assignmentCorrection.updateMany({ where: { id: correction.id, status: 'NEEDS_CORRECTION' }, data: { status: 'CORRECTING' } })
+  return created
+}
+
+function normalizedScore(submission: { score: number | null; result: string | null }, maxScore: number) {
+  if (submission.score !== null) return Math.max(0, Math.min(maxScore, submission.score))
+  return ['accepted', 'ac'].includes(String(submission.result || '').toLowerCase()) ? maxScore : 0
+}
+
+export async function syncAssignmentSubmission(submission: { id: number; userId: string; assignmentId: string | null; assignmentProblemId: string | null; assignmentRecipientId: string | null }) {
+  if (!submission.assignmentId || !submission.assignmentProblemId || !submission.assignmentRecipientId) return
+  const lockKey = `assignment-progress:${submission.assignmentProblemId}:${submission.assignmentRecipientId}`
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0)) IS NULL AS locked`
+    const [assignment, problem, recipient] = await Promise.all([
+      tx.assignment.findUnique({ where: { id: submission.assignmentId! } }),
+      tx.assignmentProblem.findUnique({ where: { id: submission.assignmentProblemId! } }),
+      tx.assignmentRecipient.findUnique({ where: { id: submission.assignmentRecipientId! } }),
+    ])
+    if (!assignment || !problem || !recipient || problem.assignmentId !== assignment.id || recipient.assignmentId !== assignment.id || recipient.userId !== submission.userId) return
+    const submissions = await tx.submission.findMany({
+      where: { assignmentProblemId: problem.id, assignmentRecipientId: recipient.id, result: { notIn: ['queuing', 'judging', 'compiling'] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, result: true, score: true, submissionPhase: true, createdAt: true },
+    })
+    if (!submissions.length) return
+    const originals = submissions.filter(item => item.submissionPhase !== 'CORRECTION')
+    const corrections = submissions.filter(item => item.submissionPhase === 'CORRECTION')
+    const scoreOf = (item: typeof submissions[number]) => normalizedScore(item, problem.maxScore)
+    const bestOf = (items: typeof submissions) => items.reduce<typeof submissions[number] | null>((best, item) => !best || scoreOf(item) > scoreOf(best) ? item : best, null)
+    let selectedOriginal: typeof submissions[number] | null = null
+    if (assignment.gradingPolicy === 'LATEST') selectedOriginal = originals.at(-1) || null
+    else if (assignment.gradingPolicy === 'FIRST_TARGET_MET') selectedOriginal = originals.find(item => scoreOf(item) >= problem.targetScore) || bestOf(originals)
+    else if (assignment.gradingPolicy === 'BEST_BEFORE_DUE') selectedOriginal = bestOf(originals.filter(item => item.submissionPhase === 'ORIGINAL'))
+    else selectedOriginal = bestOf(originals)
+    const selectedCorrection = bestOf(corrections)
+    let originalScore = selectedOriginal ? scoreOf(selectedOriginal) : null
+    if (originalScore !== null && selectedOriginal?.submissionPhase === 'LATE' && assignment.latePolicy === 'ALLOW_WITH_PENALTY') originalScore = Math.floor(originalScore * (100 - (assignment.latePenaltyPercent || 0)) / 100)
+    const correctionScore = selectedCorrection ? scoreOf(selectedCorrection) : null
+    const finalScore = assignment.gradingPolicy === 'MANUAL' ? null : Math.max(originalScore ?? 0, correctionScore ?? 0)
+    const bestSubmission = bestOf(submissions)
+    const targetMet = (finalScore ?? 0) >= problem.targetScore
+    const accepted = submissions.some(item => ['accepted', 'ac'].includes(String(item.result || '').toLowerCase()))
+    const completed = problem.completionPolicy === 'ATTEMPT' ? true : problem.completionPolicy === 'MANUAL' ? false : problem.completionPolicy === 'AC' ? accepted : targetMet
+    const common = {
+      learningStatus: completed ? 'COMPLETED' as const : targetMet ? 'TARGET_MET' as const : 'SUBMITTED' as const,
+      timelinessStatus: originals.some(item => item.submissionPhase === 'LATE') ? 'LATE' as const : 'ON_TIME' as const,
+      attemptCount: submissions.length, originalAttemptCount: originals.length, correctionAttemptCount: corrections.length,
+      bestScore: bestSubmission ? scoreOf(bestSubmission) : null, bestVerdict: bestSubmission?.result,
+      originalScore, correctionScore, finalScore, firstSubmissionId: submissions[0].id,
+      bestSubmissionId: bestSubmission?.id, latestSubmissionId: submissions.at(-1)!.id,
+      targetMetAt: targetMet ? submissions.find(item => scoreOf(item) >= problem.targetScore)?.createdAt || new Date() : null,
+      completedAt: completed ? new Date() : null, firstSubmittedAt: submissions[0].createdAt, lastSubmittedAt: submissions.at(-1)!.createdAt,
+    }
+    await tx.assignmentProblemProgress.upsert({
+      where: { assignmentProblemId_recipientId: { assignmentProblemId: problem.id, recipientId: recipient.id } },
+      create: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, correctionStatus: selectedCorrection ? 'CORRECTED' : corrections.length ? 'CORRECTING' : 'NONE', ...common },
+      update: { correctionStatus: selectedCorrection ? 'CORRECTED' : corrections.length ? 'CORRECTING' : undefined, ...common },
+    })
+    if (selectedCorrection) await tx.assignmentCorrection.updateMany({ where: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, status: { in: ['NEEDS_CORRECTION', 'CORRECTING'] } }, data: { status: 'CORRECTED', completedAt: new Date() } })
+    const progress = await tx.assignmentProblemProgress.findMany({ where: { assignmentId: assignment.id, recipientId: recipient.id }, select: { learningStatus: true } })
+    if (progress.length && progress.every(item => ['COMPLETED', 'EXEMPT'].includes(item.learningStatus))) await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+}
+
+export async function processDueAssignments(now = new Date()) {
+  const candidates = await prisma.assignment.findMany({
+    where: { OR: [{ status: 'SCHEDULED', openAt: { lte: now } }, { status: 'OPEN', dueAt: { lte: now } }, { status: { in: ['OPEN', 'OVERDUE'] }, closeAt: { lte: now } }] },
+    select: { id: true }, take: 200,
+  })
+  const result = { opened: 0, overdue: 0, closed: 0 }
+  for (const candidate of candidates) {
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment:${candidate.id}`}, 0)) IS NULL AS locked`
+      const current = await tx.assignment.findUnique({ where: { id: candidate.id }, select: { status: true, openAt: true, dueAt: true, closeAt: true } })
+      if (!current) return
+      let next: AssignmentStatus | null = null
+      if (['OPEN', 'OVERDUE'].includes(current.status) && current.closeAt <= now) next = 'CLOSED'
+      else if (current.status === 'OPEN' && current.dueAt <= now) next = 'OVERDUE'
+      else if (current.status === 'SCHEDULED' && current.openAt <= now) next = now >= current.closeAt ? 'CLOSED' : now >= current.dueAt ? 'OVERDUE' : 'OPEN'
+      if (!next || next === current.status) return
+      await tx.assignment.update({ where: { id: candidate.id }, data: { status: next, ...(next === 'CLOSED' ? { closedAt: now } : {}), statusRevision: { increment: 1 } } })
+      await appendEvent(tx, candidate.id, `assignment.${next.toLowerCase()}`, null, { automatic: true, at: now.toISOString() })
+      if (next === 'OPEN') result.opened++
+      else if (next === 'OVERDUE') result.overdue++
+      else result.closed++
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  }
+  return result
+}
+
+export function hashLegacyAssignments(rows: unknown) {
+  return crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex')
+}

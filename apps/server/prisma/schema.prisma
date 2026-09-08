@@ -63,6 +63,105 @@ enum TestcaseCandidateStatus {
   WAITING_REPLACEMENT
 }
 
+enum AssignmentStatus {
+  DRAFT
+  SCHEDULED
+  OPEN
+  OVERDUE
+  CLOSED
+  REVIEWING
+  RELEASED
+  ARCHIVED
+  CANCELLED
+}
+
+enum AssignmentRosterMode {
+  SNAPSHOT
+  DYNAMIC
+}
+
+enum AssignmentProblemCategory {
+  REQUIRED
+  OPTIONAL
+  CHALLENGE
+}
+
+enum AssignmentCompletionPolicy {
+  AC
+  TARGET_SCORE
+  ATTEMPT
+  MANUAL
+}
+
+enum AssignmentRecipientStatus {
+  ASSIGNED
+  ACTIVE
+  COMPLETED
+  EXEMPT
+  REMOVED
+}
+
+enum AssignmentLearningStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  TARGET_MET
+  COMPLETED
+  EXEMPT
+}
+
+enum AssignmentTimelinessStatus {
+  ON_TIME
+  LATE
+}
+
+enum AssignmentCorrectionStatus {
+  NONE
+  NEEDS_CORRECTION
+  CORRECTING
+  CORRECTED
+  WAIVED
+  EXPIRED
+}
+
+enum AssignmentGradingPolicy {
+  BEST_BEFORE_DUE
+  BEST
+  LATEST
+  FIRST_TARGET_MET
+  MANUAL
+}
+
+enum AssignmentLatePolicy {
+  DISALLOW
+  ALLOW_MARK_LATE
+  ALLOW_NO_PENALTY
+  ALLOW_WITH_PENALTY
+}
+
+enum AssignmentCorrectionPolicy {
+  NONE
+  BELOW_TARGET
+  NON_AC
+  TEACHER_ASSIGNED
+  ALL_INCOMPLETE
+}
+
+enum AssignmentSolutionReleasePolicy {
+  NEVER
+  AFTER_DUE
+  AFTER_CLOSE
+  AFTER_RELEASE
+}
+
+enum AssignmentGradeSnapshotType {
+  DUE
+  CLOSE
+  POST_CORRECTION
+  FINAL_RELEASE
+  REGRADE
+}
+
 model AiUsageLog {
   id               String   @id
   userId           String
@@ -519,6 +618,7 @@ model Problem {
   LatestTestSetRevision              ProblemTestSetRevision?              @relation("ProblemLatestTestSetRevision", fields: [latestTestSetRevisionId], references: [id], onDelete: SetNull)
   TrainingProblem                    TrainingProblem[]
   TrainingSessionStageProblem        TrainingSessionStageProblem[]
+  AssignmentProblem                  AssignmentProblem[]
   Owner                              User                                 @relation("ProblemOwner", fields: [ownerId], references: [id])
   Organization                       Organization?                        @relation(fields: [organizationId], references: [id])
   SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
@@ -1482,6 +1582,7 @@ model Organization {
   Team                     Team[]
   Training                 Training[]
   TrainingSession          TrainingSession[]
+  Assignment               Assignment[]
   Submission               Submission[]
 
   @@index([type, status])
@@ -1509,6 +1610,8 @@ model OrganizationMembership {
   ReviewedJoinApplications OrganizationJoinApplication[] @relation("JoinApplicationReviewerMembership")
   SentInvitations          OrganizationInvitation[]      @relation("InvitationSenderMembership")
   AssignedInvitations      OrganizationInvitation[]      @relation("InvitationHeadTeacherMembership")
+  CreatedAssignments       Assignment[]                  @relation("AssignmentCreatorMembership")
+  AssignmentRecipients     AssignmentRecipient[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -1978,6 +2081,10 @@ model Submission {
   trainingProblemId      String?
   trainingSessionId      String?
   trainingStageProblemId String?
+  assignmentId           String?
+  assignmentProblemId    String?
+  assignmentRecipientId  String?
+  submissionPhase        String?
   contestId              Int?
   contestProblemId       String?
   testSetRevisionId      String?
@@ -1991,6 +2098,9 @@ model Submission {
   Training               Training?                    @relation(fields: [trainingId], references: [id])
   TrainingSession        TrainingSession?             @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
   TrainingStageProblem   TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
+  Assignment             Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  AssignmentProblem      AssignmentProblem?           @relation(fields: [assignmentProblemId], references: [id], onDelete: SetNull)
+  AssignmentRecipient    AssignmentRecipient?         @relation(fields: [assignmentRecipientId], references: [id], onDelete: SetNull)
   Organization           Organization?                @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   User                   User                         @relation(fields: [userId], references: [id])
   TestSetRevision        ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
@@ -2018,6 +2128,9 @@ model Submission {
   @@index([trainingProblemId])
   @@index([trainingSessionId])
   @@index([trainingStageProblemId])
+  @@index([assignmentId, createdAt])
+  @@index([assignmentProblemId, createdAt])
+  @@index([assignmentRecipientId, createdAt])
   @@index([userId, contestId])
   @@index([userId])
   @@index([userId, oj, problemId])
@@ -2046,6 +2159,7 @@ model Team {
   TeamProblemList           TeamProblemList[]
   Training                  Training[]
   TrainingSession           TrainingSession[]
+  Assignment                Assignment[]
 
   @@index([createdAt])
   @@index([isPublic])
@@ -2362,6 +2476,7 @@ model ProblemTestSetRevision {
   Subtasks                        ProblemTestSetRevisionSubtask[]
   TrainingProblems                TrainingProblem[]
   TrainingSessionStageProblems    TrainingSessionStageProblem[]
+  AssignmentProblems              AssignmentProblem[]
   Submissions                     Submission[]
   HackAttemptsBasedOn             ProblemHackAttempt[]              @relation("HackBaseTestSetRevision")
   PromotedHackAttempts            ProblemHackAttempt[]              @relation("HackPromotedTestSetRevision")
@@ -2937,6 +3052,266 @@ model TrainingSessionTemplateStage {
   @@unique([templateId, orderIndex])
 }
 
+model Assignment {
+  id                    String                          @id @default(uuid())
+  legacyTrainingId      Int?                            @unique
+  organizationId        String
+  teamId                String?
+  title                 String
+  description           String?                         @db.Text
+  learningObjectives    String?                         @db.Text
+  status                AssignmentStatus                @default(DRAFT)
+  rosterMode            AssignmentRosterMode            @default(SNAPSHOT)
+  gradingPolicy         AssignmentGradingPolicy         @default(BEST_BEFORE_DUE)
+  latePolicy            AssignmentLatePolicy            @default(DISALLOW)
+  correctionPolicy      AssignmentCorrectionPolicy      @default(NONE)
+  solutionReleasePolicy AssignmentSolutionReleasePolicy @default(AFTER_RELEASE)
+  latePenaltyPercent    Int?
+  publishAt             DateTime?
+  openAt                DateTime
+  dueAt                 DateTime
+  closeAt               DateTime
+  correctionDueAt       DateTime?
+  createdByMembershipId String
+  statusRevision        Int                             @default(0)
+  eventSeq              Int                             @default(0)
+  publishedAt           DateTime?
+  closedAt              DateTime?
+  releasedAt            DateTime?
+  archivedAt            DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  Organization          Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  Team                  Team?                           @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  CreatorMembership     OrganizationMembership          @relation("AssignmentCreatorMembership", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+  LegacyTraining        Training?                       @relation(fields: [legacyTrainingId], references: [id], onDelete: SetNull)
+  Problems              AssignmentProblem[]
+  Recipients            AssignmentRecipient[]
+  RecipientOverrides    AssignmentRecipientOverride[]
+  Progress              AssignmentProblemProgress[]
+  Corrections           AssignmentCorrection[]
+  Feedback              AssignmentFeedback[]
+  ScoreAdjustments      AssignmentScoreAdjustment[]
+  GradeSnapshots        AssignmentGradeSnapshot[]
+  Events                AssignmentEvent[]
+  Submissions           Submission[]
+
+  @@index([organizationId, status, openAt])
+  @@index([teamId, status, openAt])
+  @@index([createdByMembershipId, createdAt])
+  @@index([status, publishAt])
+  @@index([status, dueAt])
+  @@index([status, closeAt])
+}
+
+model AssignmentProblem {
+  id                  String                      @id @default(uuid())
+  assignmentId        String
+  problemId           String
+  testSetRevisionId   String
+  orderIndex          Int
+  category            AssignmentProblemCategory   @default(REQUIRED)
+  required            Boolean                     @default(true)
+  maxScore            Int                         @default(100)
+  targetScore         Int                         @default(100)
+  weight              Int                         @default(100)
+  completionPolicy    AssignmentCompletionPolicy  @default(TARGET_SCORE)
+  judgeConfigSnapshot String                      @db.Text
+  judgeConfigHash     String
+  settings            Json?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  Assignment          Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  Problem             Problem                     @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  TestSetRevision     ProblemTestSetRevision      @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  Progress            AssignmentProblemProgress[]
+  Corrections         AssignmentCorrection[]
+  Feedback            AssignmentFeedback[]
+  ScoreAdjustments    AssignmentScoreAdjustment[]
+  Submissions         Submission[]
+
+  @@unique([assignmentId, problemId])
+  @@unique([assignmentId, orderIndex])
+  @@index([problemId])
+  @@index([testSetRevisionId])
+}
+
+model AssignmentRecipient {
+  id               String                        @id @default(uuid())
+  assignmentId     String
+  userId           String
+  membershipId     String
+  source           String                        @default("snapshot")
+  status           AssignmentRecipientStatus     @default(ASSIGNED)
+  assignedAt       DateTime                      @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  dueAtEffective   DateTime
+  closeAtEffective DateTime
+  exemptReason     String?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  Assignment       Assignment                    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  User             User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Membership       OrganizationMembership        @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  Overrides        AssignmentRecipientOverride[]
+  Progress         AssignmentProblemProgress[]
+  Corrections      AssignmentCorrection[]
+  Feedback         AssignmentFeedback[]
+  ScoreAdjustments AssignmentScoreAdjustment[]
+  GradeSnapshots   AssignmentGradeSnapshot[]
+  Submissions      Submission[]
+
+  @@unique([assignmentId, userId])
+  @@index([assignmentId, status])
+  @@index([userId, status, dueAtEffective])
+  @@index([membershipId])
+}
+
+model AssignmentRecipientOverride {
+  id               String                      @id @default(uuid())
+  assignmentId     String
+  recipientId      String
+  dueAt            DateTime?
+  closeAt          DateTime?
+  latePolicy       AssignmentLatePolicy?
+  correctionPolicy AssignmentCorrectionPolicy?
+  reason           String
+  createdBy        String
+  createdAt        DateTime                    @default(now())
+  revokedAt        DateTime?
+  Assignment       Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  Recipient        AssignmentRecipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, createdAt])
+  @@index([assignmentId, createdAt])
+}
+
+model AssignmentProblemProgress {
+  id                     String                     @id @default(uuid())
+  assignmentId           String
+  assignmentProblemId    String
+  recipientId            String
+  learningStatus         AssignmentLearningStatus   @default(NOT_STARTED)
+  timelinessStatus       AssignmentTimelinessStatus @default(ON_TIME)
+  correctionStatus       AssignmentCorrectionStatus @default(NONE)
+  attemptCount           Int                        @default(0)
+  originalAttemptCount   Int                        @default(0)
+  correctionAttemptCount Int                        @default(0)
+  bestScore              Int?
+  bestVerdict            String?
+  originalScore          Int?
+  correctionScore        Int?
+  finalScore             Int?
+  firstSubmissionId      Int?
+  bestSubmissionId       Int?
+  latestSubmissionId     Int?
+  targetMetAt            DateTime?
+  completedAt            DateTime?
+  firstSubmittedAt       DateTime?
+  lastSubmittedAt        DateTime?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+  Assignment             Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  AssignmentProblem      AssignmentProblem          @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
+  Recipient              AssignmentRecipient        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentProblemId, recipientId])
+  @@index([assignmentId, learningStatus])
+  @@index([recipientId, updatedAt])
+}
+
+model AssignmentCorrection {
+  id                  String                     @id @default(uuid())
+  assignmentId        String
+  assignmentProblemId String
+  recipientId         String
+  status              AssignmentCorrectionStatus @default(NEEDS_CORRECTION)
+  assignedBy          String
+  reason              String?
+  dueAt               DateTime?
+  completedAt         DateTime?
+  waivedAt            DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  Assignment          Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  AssignmentProblem   AssignmentProblem          @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
+  Recipient           AssignmentRecipient        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, status, dueAt])
+  @@index([recipientId, status])
+}
+
+model AssignmentFeedback {
+  id                  String              @id @default(uuid())
+  assignmentId        String
+  assignmentProblemId String?
+  recipientId         String
+  authorUserId        String
+  visibility          String              @default("recipient")
+  content             String              @db.Text
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  Assignment          Assignment          @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  AssignmentProblem   AssignmentProblem?  @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
+  Recipient           AssignmentRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, recipientId, createdAt])
+}
+
+model AssignmentScoreAdjustment {
+  id                   String                      @id @default(uuid())
+  assignmentId         String
+  assignmentProblemId  String?
+  recipientId          String
+  delta                Int
+  reason               String
+  createdBy            String
+  reversedAdjustmentId String?
+  createdAt            DateTime                    @default(now())
+  Assignment           Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  AssignmentProblem    AssignmentProblem?          @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
+  Recipient            AssignmentRecipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  ReversedAdjustment   AssignmentScoreAdjustment?  @relation("AssignmentAdjustmentReversal", fields: [reversedAdjustmentId], references: [id], onDelete: Restrict)
+  Reversals            AssignmentScoreAdjustment[] @relation("AssignmentAdjustmentReversal")
+
+  @@index([assignmentId, recipientId, createdAt])
+  @@index([reversedAdjustmentId])
+}
+
+model AssignmentGradeSnapshot {
+  id           String                      @id @default(uuid())
+  assignmentId String
+  recipientId  String
+  type         AssignmentGradeSnapshotType
+  revision     Int
+  totalScore   Int
+  maxScore     Int
+  gradeData    Json
+  createdBy    String
+  createdAt    DateTime                    @default(now())
+  Assignment   Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  Recipient    AssignmentRecipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, recipientId, type, revision])
+  @@index([assignmentId, type, createdAt])
+}
+
+model AssignmentEvent {
+  id           BigInt     @id @default(autoincrement())
+  assignmentId String
+  seq          Int
+  type         String
+  actorUserId  String?
+  payload      Json?
+  createdAt    DateTime   @default(now())
+  Assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, seq])
+  @@index([assignmentId, createdAt])
+}
+
 model Training {
   id                        Int                         @id @default(autoincrement())
   teamId                    String?
@@ -2964,6 +3339,7 @@ model Training {
   TrainingParticipant       TrainingParticipant[]
   TrainingProblem           TrainingProblem[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
+  AssignmentLegacy          Assignment?
 
   @@index([organizationId])
   @@index([scope])
@@ -3153,6 +3529,7 @@ model User {
   TeamMember                               TeamMember[]
   TrainingUserProblemStatus                TrainingUserProblemStatus[]
   TrainingSessionParticipants              TrainingSessionParticipant[]
+  AssignmentRecipients                     AssignmentRecipient[]
   UserArchivedProblem                      UserArchivedProblem[]
   UserPlatformBinding                      UserPlatformBinding[]
   UserNotification                         UserNotification[]

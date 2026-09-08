@@ -11,6 +11,7 @@ import { applySchoolDirectoryStatusMigration, inspectSchoolDirectoryStatusMigrat
 import { applyJudgeProgramProtocolMigration, inspectJudgeProgramProtocolMigration } from '../modules/maintenance/application/judge-program-protocol-migration.service'
 import { applyTrainingEngineMigration, inspectTrainingEngineMigration } from '../modules/maintenance/application/training-engine-migration.service'
 import { applyEconomyLoopMigration, inspectEconomyLoopMigration } from '../modules/maintenance/application/economy-loop-migration.service'
+import { applyAssignmentMigration, inspectAssignmentMigration } from '../modules/maintenance/application/assignment-migration.service'
 
 export const migrationRouter = Router()
 
@@ -29,6 +30,21 @@ migrationRouter.get('/economy-loop', async (_req, res) => {
 migrationRouter.post('/economy-loop', async (req, res) => {
   try { return res.json({ success: true, data: await applyEconomyLoopMigration(String(req.body?.reportHash || ''), req.user!.userId) }) }
   catch (error: any) { return res.status(409).json({ success: false, message: error.message }) }
+})
+
+migrationRouter.get('/assignments', async (_req, res) => {
+  try { return res.json({ success: true, data: await inspectAssignmentMigration() }) }
+  catch (error: any) { return res.status(500).json({ success: false, message: error.message }) }
+})
+
+migrationRouter.post('/assignments', async (req, res) => {
+  try {
+    const data = await applyAssignmentMigration(String(req.body?.reportHash || ''))
+    logger.audit('assignment_migration_applied', { action: 'migration', metadata: data })
+    return res.json({ success: true, data })
+  } catch (error: any) {
+    return res.status(409).json({ success: false, code: 'ASSIGNMENT_MIGRATION_STALE_OR_INVALID', message: error.message })
+  }
 })
 
 migrationRouter.post('/migrate-submission-scope', async (_req, res) => {

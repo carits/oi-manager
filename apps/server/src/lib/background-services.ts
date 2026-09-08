@@ -73,6 +73,32 @@ export function startTrainingEngineScheduler(intervalMs = 5_000): () => Promise<
   }
 }
 
+export function startAssignmentScheduler(intervalMs = 5_000): () => Promise<void> {
+  let stopped = false, running = false
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const { processDueAssignments } = await import('../modules/assignment/assignment.service')
+      const result = await processDueAssignments()
+      if (result.opened || result.overdue || result.closed) logger.info('assignment_scheduler_tick', { action: 'assignment', metadata: result })
+    } catch (error) { logger.error('assignment_scheduler_failed', error, { action: 'assignment' }) }
+    finally { running = false }
+  }
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
+  timer.unref(); run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
+}
+
 export function startContributionRewardScheduler(intervalMs = 5_000): () => Promise<void> {
   let stopped = false, running = false
   const tick = async () => {
@@ -130,6 +156,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
   const stopAutoVerify = startAutoVerifyScheduler()
   const stopOjFetchQueue = startOjFetchQueueScheduler()
   const stopTrainingEngine = startTrainingEngineScheduler()
+  const stopAssignments = startAssignmentScheduler()
   const stopContributionRewards = startContributionRewardScheduler()
   const stopEvaluationReservations = startEvaluationReservationReconciler()
   logger.info('scheduler_services_started', { action: 'background_scheduler' })
@@ -142,6 +169,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
       await Promise.all([
         stopOjFetchQueue(),
         stopTrainingEngine(),
+        stopAssignments(),
         stopContributionRewards(),
         stopEvaluationReservations(),
       ])
