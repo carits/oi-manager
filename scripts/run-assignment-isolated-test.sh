@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${1:-$ROOT_DIR/apps/server/.env.production}"
 TEST_SCHEMA="${ASSIGNMENT_TEST_SCHEMA:-assignment_test_$(date +%s)}"
+BASE_SCHEMA="${ASSIGNMENT_BASE_SCHEMA:-}"
 
 if [[ ! "$TEST_SCHEMA" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
   echo "Invalid ASSIGNMENT_TEST_SCHEMA" >&2
@@ -30,5 +31,14 @@ trap cleanup EXIT
 
 cleanup
 psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SCHEMA $TEST_SCHEMA" >/dev/null
-DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma migrate deploy --schema prisma/schema.prisma
+if [[ -n "$BASE_SCHEMA" ]]; then
+  if [[ ! -f "$BASE_SCHEMA" ]]; then
+    echo "Base Prisma schema not found: $BASE_SCHEMA" >&2
+    exit 1
+  fi
+  DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma db push --skip-generate --schema "$BASE_SCHEMA"
+  PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/server/prisma/migrations/20260909_assignment_domain/migration.sql"
+else
+  DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma migrate deploy --schema prisma/schema.prisma
+fi
 TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" test -- assignment.test.ts background-services.test.ts
