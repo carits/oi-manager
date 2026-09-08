@@ -24,11 +24,13 @@ test.describe('coach-directed training engine @smoke', () => {
     await student.getByRole('button', { name: '保存草稿' }).click()
     await expect(student.getByText('草稿已保存')).toBeVisible()
 
-    await coach.getByRole('button', { name: '全员聚焦当前题' }).click()
+    await expect(coach.getByLabel('教练控制对象')).toHaveValue('ALL')
+    await coach.getByRole('button', { name: '聚焦当前题', exact: true }).click()
     await expect(student.getByText(/固定测试版本 R1/)).toBeVisible()
-    await coach.getByRole('button', { name: '暂停' }).click()
+    await coach.getByRole('button', { name: '硬暂停', exact: true }).click()
     await expect(student.getByText('PAUSED', { exact: true })).toBeVisible({ timeout: 10_000 })
     await expect(student.getByRole('button', { name: '提交评测' })).toBeDisabled()
+    await expect(student.getByLabel('代码草稿')).toBeDisabled()
     await student.reload()
     await expect(student.getByLabel('代码草稿')).toHaveValue(/std::cout/)
 
