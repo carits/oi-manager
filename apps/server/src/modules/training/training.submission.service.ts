@@ -1,5 +1,6 @@
 import { prisma } from '../../prisma'
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
+import { lockRatingParticipantTx } from '../rating/application/contest-rating.service'
 
 export interface QueuedTrainingSubmissionInput {
   userId: string
@@ -7,6 +8,7 @@ export interface QueuedTrainingSubmissionInput {
     id: number
     scope: string
     type: string
+    format: string
     organizationId?: string | null
     Team?: { organizationId: string | null } | null
   }
@@ -54,7 +56,12 @@ export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmis
       isGlobalVisible: input.training.type === 'contest' ? false : true,
       ...(input.createdAt ? { createdAt: input.createdAt, updatedAt: input.createdAt } : {}),
       ...(input.sourceId ? { sourceId: input.sourceId, submitSource: 'demo_scenario' } : {}),
-  }, { requestedBy: input.userId })
+  }, {
+    requestedBy: input.userId,
+    afterSubmissionCreated: input.training.type === 'contest'
+      ? (tx, created) => lockRatingParticipantTx(tx, input.training, input.userId, created.createdAt)
+      : undefined,
+  })
   if (input.trainingProblem.Problem.platform === 'carits') {
     return prisma.submission.update({ where: { id: submission.id }, data: { ojRemoteId: submission.id.toString() } })
   }

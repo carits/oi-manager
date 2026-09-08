@@ -162,6 +162,60 @@ enum AssignmentGradeSnapshotType {
   REGRADE
 }
 
+enum RatingScope {
+  NONE
+  ORGANIZATION
+  GLOBAL
+  BOTH
+}
+
+enum RatingTrack {
+  OI
+  IOI
+  ACM
+}
+
+enum RatingParticipantStatus {
+  REGISTERED
+  RATING_LOCKED
+  NO_SHOW
+  EXCLUDED
+}
+
+enum RatingParticipantDisposition {
+  NORMAL
+  EXCLUDE
+  KEEP_RESULT
+  FORCE_LAST
+}
+
+enum ContestFinalizationStatus {
+  LIVE
+  JUDGING
+  FINALIZING
+  FINALIZED
+  HELD
+  FAILED
+}
+
+enum StandingSnapshotStatus {
+  BUILDING
+  FINALIZED
+  SUPERSEDED
+}
+
+enum RatingBatchStatus {
+  PENDING
+  CALCULATING
+  READY
+  APPLIED
+  SKIPPED
+  STALE
+  RECALCULATING
+  SUPERSEDED
+  FAILED
+}
+
 model AiUsageLog {
   id               String   @id
   userId           String
@@ -387,6 +441,187 @@ model ContestUserProblemStatus {
   @@unique([contestId, userId, contestProblemId])
   @@index([contestId, userId])
   @@index([userId])
+}
+
+model TrainingRatingConfig {
+  id                          String      @id
+  trainingId                  Int         @unique
+  scope                       RatingScope @default(NONE)
+  track                       RatingTrack
+  weightBasisPoints           Int         @default(10000)
+  algorithmCode               String      @default("CARITS_MULTI_ELO")
+  algorithmVersion            Int         @default(1)
+  organizationMinParticipants Int         @default(5)
+  globalMinParticipants       Int         @default(20)
+  scoringRules                Json
+  rulesHash                   String
+  revision                    Int         @default(1)
+  lockedAt                    DateTime?
+  createdBy                   String
+  createdAt                   DateTime    @default(now())
+  updatedAt                   DateTime    @updatedAt
+  Training                    Training    @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+
+  @@index([scope, track])
+  @@index([lockedAt])
+}
+
+model ContestStandingSnapshot {
+  id                   String                 @id
+  trainingId           Int
+  revision             Int
+  scoringMode          RatingTrack
+  rulesHash            String
+  status               StandingSnapshotStatus @default(BUILDING)
+  inputHash            String
+  createdBy            String
+  createdAt            DateTime               @default(now())
+  finalizedAt          DateTime?
+  supersededAt         DateTime?
+  Training             Training               @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  FinalizedForTraining Training?              @relation("TrainingFinalizedStanding")
+  Entries              ContestStandingEntry[]
+  RatingBatches        RatingBatch[]
+
+  @@unique([trainingId, revision])
+  @@index([trainingId, status])
+}
+
+model ContestStandingEntry {
+  id                     String                       @id
+  snapshotId             String
+  userId                 String
+  organizationIdSnapshot String?
+  rank                   Int
+  ratingTieGroup         String
+  totalScore             Decimal?                     @db.Decimal(14, 4)
+  solvedCount            Int?
+  penaltySeconds         Int?
+  lastAcceptedAt         DateTime?
+  fullScoreCount         Int?
+  ratingEligible         Boolean                      @default(true)
+  participantDisposition RatingParticipantDisposition @default(NORMAL)
+  createdAt              DateTime                     @default(now())
+  Snapshot               ContestStandingSnapshot      @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  User                   User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([snapshotId, userId])
+  @@index([snapshotId, rank])
+  @@index([userId, createdAt])
+  @@index([organizationIdSnapshot])
+}
+
+model RatingPool {
+  id               String             @id
+  scopeType        RatingScope
+  organizationId   String?
+  track            RatingTrack
+  baseRating       Int                @default(1500)
+  scale            Int                @default(400)
+  kFactor          Int                @default(96)
+  algorithmCode    String             @default("CARITS_MULTI_ELO")
+  algorithmVersion Int                @default(1)
+  status           String             @default("active")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  Organization     Organization?      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  Accounts         RatingAccount[]
+  Batches          RatingBatch[]
+  RebuildJobs      RatingRebuildJob[]
+
+  @@unique([scopeType, organizationId, track])
+  @@index([organizationId, track])
+  @@index([scopeType, track, status])
+}
+
+model RatingAccount {
+  id                String         @id
+  poolId            String
+  userId            String
+  rating            Int            @default(1500)
+  peakRating        Int            @default(1500)
+  ratedContestCount Int            @default(0)
+  provisional       Boolean        @default(true)
+  lastRatedAt       DateTime?
+  version           Int            @default(0)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  Pool              RatingPool     @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  User              User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Changes           RatingChange[]
+
+  @@unique([poolId, userId])
+  @@index([poolId, rating])
+  @@index([userId, updatedAt])
+}
+
+model RatingBatch {
+  id                 String                  @id
+  trainingId         Int
+  poolId             String
+  standingSnapshotId String
+  algorithmCode      String
+  algorithmVersion   Int
+  batchRevision      Int                     @default(1)
+  fieldSize          Int
+  status             RatingBatchStatus       @default(PENDING)
+  inputHash          String
+  sequenceAt         DateTime
+  skipReason         String?
+  errorMessage       String?
+  createdAt          DateTime                @default(now())
+  calculatedAt       DateTime?
+  appliedAt          DateTime?
+  supersededAt       DateTime?
+  supersedesBatchId  String?
+  Training           Training                @relation(fields: [trainingId], references: [id], onDelete: Restrict)
+  Pool               RatingPool              @relation(fields: [poolId], references: [id], onDelete: Restrict)
+  StandingSnapshot   ContestStandingSnapshot @relation(fields: [standingSnapshotId], references: [id], onDelete: Restrict)
+  SupersedesBatch    RatingBatch?            @relation("RatingBatchSupersession", fields: [supersedesBatchId], references: [id], onDelete: SetNull)
+  SupersededBy       RatingBatch[]           @relation("RatingBatchSupersession")
+  Changes            RatingChange[]
+
+  @@unique([poolId, standingSnapshotId, algorithmCode, algorithmVersion, batchRevision])
+  @@index([trainingId, status])
+  @@index([poolId, sequenceAt])
+}
+
+model RatingChange {
+  id                  String        @id
+  batchId             String
+  accountId           String
+  userId              String
+  ratingBefore        Int
+  expectedPerformance Decimal       @db.Decimal(8, 7)
+  actualPerformance   Decimal       @db.Decimal(8, 7)
+  rank                Int
+  fieldSize           Int
+  rawDelta            Decimal       @db.Decimal(12, 6)
+  appliedDelta        Int
+  ratingAfter         Int
+  createdAt           DateTime      @default(now())
+  Batch               RatingBatch   @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  Account             RatingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  User                User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([batchId, userId])
+  @@index([userId, createdAt])
+  @@index([accountId, createdAt])
+}
+
+model RatingRebuildJob {
+  id             String     @id
+  poolId         String
+  fromTrainingId Int
+  status         String     @default("pending")
+  requestedBy    String
+  report         Json?
+  createdAt      DateTime   @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  Pool           RatingPool @relation(fields: [poolId], references: [id], onDelete: Restrict)
+
+  @@index([poolId, status])
 }
 
 model File {
@@ -1584,6 +1819,7 @@ model Organization {
   TrainingSession          TrainingSession[]
   Assignment               Assignment[]
   Submission               Submission[]
+  RatingPools              RatingPool[]
 
   @@index([type, status])
 }
@@ -3331,6 +3567,8 @@ model Training {
   scope                     String                      @default("campus")
   organizationId            String?
   sourceTrainingId          Int?
+  finalizationStatus        ContestFinalizationStatus   @default(LIVE)
+  finalizedStandingId       String?                     @unique
   ContestRecord             ContestRecord[]
   ContestUserProblemStatus  ContestUserProblemStatus[]
   Submission                Submission[]
@@ -3340,6 +3578,10 @@ model Training {
   TrainingProblem           TrainingProblem[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
   AssignmentLegacy          Assignment?
+  RatingConfig              TrainingRatingConfig?
+  StandingSnapshots         ContestStandingSnapshot[]
+  FinalizedStanding         ContestStandingSnapshot?    @relation("TrainingFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
+  RatingBatches             RatingBatch[]
 
   @@index([organizationId])
   @@index([scope])
@@ -3364,12 +3606,20 @@ model TrainingAttachment {
 }
 
 model TrainingParticipant {
-  id         String   @id
-  trainingId Int
-  userId     String
-  userType   String
-  joinedAt   DateTime @default(now())
-  Training   Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  id                     String                       @id
+  trainingId             Int
+  userId                 String
+  userType               String
+  joinedAt               DateTime                     @default(now())
+  organizationIdSnapshot String?
+  ratingStatus           RatingParticipantStatus      @default(REGISTERED)
+  ratingDisposition      RatingParticipantDisposition @default(NORMAL)
+  ratingDispositionReason String?
+  ratingDispositionBy    String?
+  ratingDispositionAt    DateTime?
+  firstSubmissionAt      DateTime?
+  ratingLockedAt         DateTime?
+  Training               Training                     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
 
   @@unique([trainingId, userId, userType])
   @@index([trainingId])
@@ -3530,6 +3780,9 @@ model User {
   TrainingUserProblemStatus                TrainingUserProblemStatus[]
   TrainingSessionParticipants              TrainingSessionParticipant[]
   AssignmentRecipients                     AssignmentRecipient[]
+  RatingAccounts                           RatingAccount[]
+  RatingChanges                            RatingChange[]
+  ContestStandingEntries                   ContestStandingEntry[]
   UserArchivedProblem                      UserArchivedProblem[]
   UserPlatformBinding                      UserPlatformBinding[]
   UserNotification                         UserNotification[]

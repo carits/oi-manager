@@ -11,6 +11,14 @@ source_of_truth: Git history
 
 ## 2026-09-09
 
+### OI/IOI/ACM 比赛 Rating 独立领域
+
+- 新增全局/组织 × OI/IOI/ACM 六类独立 RatingPool 与账户投影；比赛在开始或首交时冻结版本化规则，参赛资格和组织归属随首次提交原子固化。
+- OI 使用最终提交、IOI 使用最好提交、ACM 使用解题数和罚时生成不可变最终榜单；Carits Multi-player Elo V1 使用并列感知的 pairwise Elo 和零和平衡取整。
+- 结算生成不可变 Standing、Batch 和 Change；赛后重测会把比赛置为 HELD，完成后生成新榜单并从受影响 RatingPool 起点完整重放，旧 Batch/Change 只标记 superseded。
+- 比赛编辑器增加 Rating 范围、权重和最低人数；排名页展示结算状态、最终榜单和组织/全局批次，个人/组织排名工作台可切换 OI、IOI、ACM Rating。
+- Prisma、Server/Web 生产构建、Rating 纯算法 smoke 和 UI 组件门禁已通过；隔离数据库、全量回归和发布状态将在部署完成后补记。
+
 ### 独立 Assignment 作业域收口
 
 - 新作业使用独立 `Assignment`、固定 Revision 题目、名单快照、进度、订正/反馈、调分和版本成绩快照，不再用比赛排名模型承载作业。

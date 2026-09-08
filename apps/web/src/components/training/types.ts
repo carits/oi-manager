@@ -21,6 +21,14 @@ export interface TrainingInfo {
   problemCount: number
   isAdmin: boolean
   sourceTrainingId?: number | null
+  finalizationStatus?: 'LIVE' | 'JUDGING' | 'FINALIZING' | 'FINALIZED' | 'HELD' | 'FAILED'
+  finalizedStandingId?: string | null
+  ratingConfig?: {
+    scope: 'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'
+    track: 'OI' | 'IOI' | 'ACM'
+    weight: number
+    locked: boolean
+  } | null
 }
 
 export interface TrainingProblem {

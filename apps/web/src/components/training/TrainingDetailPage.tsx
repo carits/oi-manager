@@ -28,6 +28,7 @@ import { TrainingRejudgeModal } from './components/TrainingRejudgeModal'
 import { TrainingRankingSubmissionsModal } from './components/TrainingRankingSubmissionsModal'
 import { TrainingContentSelectionModal } from './components/TrainingContentSelectionModal'
 import { TrainingContentSnapshotEditorModal, type EditableActivitySnapshot } from './components/TrainingContentSnapshotEditorModal'
+import { TrainingRatingPanel } from './components/TrainingRatingPanel'
 import { Bell, BookOpenCheck, Edit3, FilePlus2, LockKeyhole, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -480,16 +481,25 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         )}
 
         {activeTab === 'ranking' && canViewRanking && (
-          <AsyncRegion state={rankingState} onRetry={refreshRanking}>
-            {(data) => (
-              <TrainingRankTable
-                rankingData={data}
-                currentUserId={user?.userId}
-                canViewOtherSubmissions={training.isAdmin}
-                onOpenSubmissions={setRankingSubmissionContext}
+          <div className={styles.rankingStack}>
+            {training.type === 'contest' && (
+              <TrainingRatingPanel
+                trainingId={trainingId}
+                training={training}
+                onChanged={async () => { await refresh(); refreshRanking() }}
               />
             )}
-          </AsyncRegion>
+            <AsyncRegion state={rankingState} onRetry={refreshRanking}>
+              {(data) => (
+                <TrainingRankTable
+                  rankingData={data}
+                  currentUserId={user?.userId}
+                  canViewOtherSubmissions={training.isAdmin}
+                  onOpenSubmissions={setRankingSubmissionContext}
+                />
+              )}
+            </AsyncRegion>
+          </div>
         )}
         </>
         )}

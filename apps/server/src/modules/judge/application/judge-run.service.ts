@@ -14,6 +14,7 @@ import {
 export interface CreateQueuedSubmissionOptions {
   runType?: JudgeRunType
   requestedBy?: string | null
+  afterSubmissionCreated?: (tx: Prisma.TransactionClient, submission: { id: number; userId: string; createdAt: Date }) => Promise<void>
 }
 
 export interface ClaimedSubmissionLifecycle {
@@ -123,6 +124,7 @@ export async function createQueuedSubmissionWithRun(
       },
     })
     await tx.judgeRun.update({ where: { id: runId }, data: { currentAttemptId: attemptId } })
+    if (options.afterSubmissionCreated) await options.afterSubmissionCreated(tx, submission)
     return tx.submission.update({ where: { id: submission.id }, data: { currentJudgeRunId: runId } })
   })
 }
@@ -531,6 +533,18 @@ export async function createRejudgeBatch(input: RejudgeRequest) {
         completedAt: new Date(),
       },
     })
+    if (input.trainingId && queuedCount > 0) {
+      const contest = await tx.training.findUnique({
+        where: { id: input.trainingId },
+        select: { type: true, finalizationStatus: true, finalizedStandingId: true },
+      })
+      if (contest?.type === 'contest' && contest.finalizedStandingId && contest.finalizationStatus === 'FINALIZED') {
+        await tx.training.update({
+          where: { id: input.trainingId },
+          data: { finalizationStatus: 'HELD' },
+        })
+      }
+    }
     return { batch, queuedCount, skippedCount }
   })
 }

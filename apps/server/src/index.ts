@@ -35,6 +35,7 @@ import { adminDataRouter } from './routes/admin-data'
 import { migrationRouter } from './routes/migration'
 import { archivedProblemsRouter } from './routes/archived-problems'
 import { rankingRouter } from './modules/ranking/ranking.routes'
+import { ratingDomainRouter } from './modules/rating/rating-domain.routes'
 import { meRouter } from './routes/me'
 import { notificationRouter } from './modules/notification/notification.routes'
 import { organizationJoinRouter } from './modules/organization-join/organization-join.routes'
@@ -149,6 +150,7 @@ app.use('/api/admin', testGraphAdminRouter)  // 管理员数据维护 API
 app.use('/api/admin/migration', authenticate, migrationRouter)  // 数据迁移 API
 app.use('/api/archived-problems', archivedProblemsRouter)  // 用户归档题目 API
 app.use('/api/rankings', rankingRouter)
+app.use('/api', ratingDomainRouter)
 app.use('/api/me', meRouter)
 app.use('/api/notifications', authenticate, notificationRouter)
 app.use('/api', organizationJoinRouter)

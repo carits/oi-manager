@@ -207,6 +207,7 @@ const routerPrefixes = {
   trainingsRouter: '/api',
   trainingEngineRouter: '/api',
   assignmentRouter: '/api',
+  ratingDomainRouter: '/api',
   trainingCrudRouter: '/api',
   trainingProblemsRouter: '/api',
   trainingNotesRouter: '/api',

@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 158 |
-| Prisma enums | 32 |
+| Prisma models | 166 |
+| Prisma enums | 39 |
 | Legacy route adapters | 25 |
-| Module route adapters | 47 |
+| Module route adapters | 48 |
 | systemd units | 8 |
-| Referenced environment keys | 464 |
+| Referenced environment keys | 466 |
 
 ## HTTP adapter ownership
 
@@ -79,6 +79,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/problem/problem.user-content.routes.ts`
 - `apps/server/src/modules/problem/problem.wrong-corpus.routes.ts`
 - `apps/server/src/modules/ranking/ranking.routes.ts`
+- `apps/server/src/modules/rating/rating-domain.routes.ts`
 - `apps/server/src/modules/school/school.routes.ts`
 - `apps/server/src/modules/team-import/team-import.routes.ts`
 - `apps/server/src/modules/team/team.crud.routes.ts`
@@ -137,6 +138,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ContestRecord`
 - `ContestResource`
 - `ContestResult`
+- `ContestStandingEntry`
+- `ContestStandingSnapshot`
 - `ContestUserProblemStatus`
 - `ContributionEvent`
 - `ContributionProject`
@@ -205,6 +208,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemTestSetRevisionSubtask`
 - `ProblemTestcase`
 - `ProblemTestcaseGroup`
+- `RatingAccount`
+- `RatingBatch`
+- `RatingChange`
+- `RatingPool`
+- `RatingRebuildJob`
 - `RejudgeBatch`
 - `ResourcePurchase`
 - `School`
@@ -229,6 +237,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingProblemContentSnapshot`
 - `TrainingProblemStatementSet`
 - `TrainingProblemStatementSnapshot`
+- `TrainingRatingConfig`
 - `TrainingSession`
 - `TrainingSessionCommand`
 - `TrainingSessionEvent`
@@ -277,10 +286,17 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AssignmentStatus`
 - `AssignmentTimelinessStatus`
 - `CaritsAccountOwnerType`
+- `ContestFinalizationStatus`
 - `JudgeAttemptState`
 - `JudgeRunStatus`
 - `JudgeRunType`
+- `RatingBatchStatus`
+- `RatingParticipantDisposition`
+- `RatingParticipantStatus`
+- `RatingScope`
+- `RatingTrack`
 - `RejudgeBatchStatus`
+- `StandingSnapshotStatus`
 - `TestcaseCandidateStatus`
 - `TrainingEngineAdvanceMode`
 - `TrainingEngineHintOpenMode`
@@ -660,6 +676,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `QOJ_SESSION`
 - `QUIET_SUCCESS`
 - `RATE_LIMIT_MAX`
+- `RATING_TEST_SCHEMA`
+- `RATING_TEST_SCOPE`
 - `READY_FILE`
 - `REASON`
 - `REMOVE_CRON`

@@ -1,0 +1,93 @@
+---
+status: current
+audience: development, product, operations
+last_verified: 2026-09-09
+source_of_truth: apps/server/prisma/schema.prisma, apps/server/src/modules/rating, apps/server/src/modules/training
+---
+
+# 比赛 Rating 领域
+
+## 领域边界
+
+Rating 只消费比赛结束后的不可变 `ContestStandingSnapshot`，不直接读取实时榜单作为历史事实。当前活动模型仍为
+`Training(type=contest)`；旧 `Contest.countRating`、用户资料上的旧 rating 字段不参与新链路。
+
+系统按赛制和范围建立相互独立的池：
+
+- Track：`OI`、`IOI`、`ACM`。
+- Scope：`GLOBAL` 或 `ORGANIZATION`；比赛配置可选 `NONE/ORGANIZATION/GLOBAL/BOTH`。
+- `RatingAccount` 的唯一身份为 `poolId + userId`。转校不会移动旧组织 Rating，重新加入原组织继续原账户。
+
+学校管理者只能启用组织 Rating；`GLOBAL/BOTH` 必须由平台管理员配置。Rating 比赛不能与同 Track、同池的其他
+Rating 比赛时间重叠。配置使用 revision CAS，比赛开始或产生首个合法提交时永久锁定。
+
+## 比赛计分适配
+
+计分先生成最终排名，再交给 Rating 算法：
+
+- OI：每题取手工标记的 `FINAL` 提交，否则取结束前最后一次确定结果；Judge 的 0～100 分按比赛题目分值缩放。
+- IOI：每题取结束前最高分提交，不跨提交拼接 Subtask。
+- ACM：按解题数降序、罚时升序；未解题不计罚时，CE、系统错误和未完成评测不产生错误罚时。
+- OI/IOI 同分并列。ACM 展示可以继续使用完成时间破同分，但 Rating tie 只比较解题数和罚时。
+
+管理员处置保存在参赛者快照：
+
+- `NORMAL`：正常展示并计 Rating。
+- `KEEP_RESULT`：保留比赛结果但不计 Rating。
+- `EXCLUDE`：不进入最终榜单与 Rating。
+- `FORCE_LAST`：保留并参与 Rating，但固定在正常参赛者之后；必须保存处置人、时间和原因。
+
+只有至少产生一次合法比赛提交的用户进入 `RATING_LOCKED`。只有报名、没有提交的用户结束时成为 `NO_SHOW`，
+不会损失 Rating。组织归属在首次提交时写入 `organizationIdSnapshot`，以后成员关系变化不改写历史。
+
+## Carits Multi-player Elo V1
+
+V1 将一场 N 人比赛展开为两两 Elo 比较：
+
+```text
+P(i beats j) = 1 / (1 + 10 ^ ((Rj - Ri) / 400))
+delta = K(96) × weight × (actualPerformance - expectedPerformance)
+```
+
+并列的实际结果为 `0.5`。最终使用 largest-remainder balanced rounding，使同一 Batch 的整数变化总和严格为 0。
+新账户从 1500 开始；完成少于 5 场时标为 provisional。组织池默认至少 5 人，全局池默认至少 20 人；不足时
+保存 `SKIPPED/NOT_ENOUGH_PARTICIPANTS` Batch，不静默伪造变化。
+
+算法代码、版本、K、scale、比赛权重、计分规则和规则哈希均固化到配置、池、快照或 Batch，支持完整重放。
+
+## 最终结算和重放
+
+状态机：
+
+```text
+LIVE → JUDGING → FINALIZING → FINALIZED
+                         ↘ FAILED
+FINALIZED → HELD（赛后重测）→ FINALIZED（重放成功）
+```
+
+结算在比赛 advisory lock 和 Serializable 事务中完成：检查所有 JudgeRun 已终态，锁定规则，生成不可变榜单，
+按范围创建 Batch/Change，并更新当前 Account 投影。重复结算返回同一快照，不重复变更 Rating。
+
+已结算比赛发起重测时立即进入 `HELD`。重测完成后必须显式重放：
+
+1. 根据当前 JudgeRun 生成下一版不可变榜单。
+2. 锁定受影响的每个 RatingPool。
+3. 从池的 base rating 按 `sequenceAt` 重放全部当前 Batch。
+4. 创建新 `batchRevision` 和新 RatingChange，旧记录改为 `SUPERSEDED`。
+5. 全部成功后一次切换 RatingAccount 当前投影和比赛最终榜单指针。
+
+任何 JudgeRun 尚未结束时拒绝重放。包含全局池的重放只能由平台管理员执行。已生成最终榜单的比赛不能物理删除。
+
+## 权限与读取
+
+- 比赛参与者可以读取本人可访问比赛的 Rating 配置、最终榜单和变化。
+- 比赛管理员可在开始前配置组织 Rating、结束后执行最终结算，并设置带原因的参赛者处置。
+- 只有平台管理员可配置或重放全局 Rating。
+- 个人 Rating 历史只向本人公开；组织榜只向有效组织成员开放；全局榜向登录账号开放。
+- 排名接口只返回账户投影和公开用户身份，不返回其他用户提交源码或评测私有诊断。
+
+## 发布与验证
+
+数据库迁移是只增不删：旧比赛默认 `LIVE` 且不补算 Rating，旧用户资料字段保持兼容。上线前必须在隔离 schema
+执行全部迁移和 `scripts/run-rating-isolated-test.sh`，验证结算幂等、池零和、配置冻结和重放历史保留，再执行
+API 蓝绿和 Web canary/promote。上线不会自动为历史比赛生成榜单或 Rating。

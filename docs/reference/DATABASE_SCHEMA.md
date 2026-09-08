@@ -43,6 +43,8 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `AssignmentRecipientOverride` | 收件人的追加式延期、免交或状态覆盖事实 |
 | `AssignmentScoreAdjustment` | 只能追加和冲正的人工调分流水 |
 | `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
+| `ContestStandingEntry` | 最终榜单中带组织快照、并列组和 Rating 资格的参赛者事实 |
+| `ContestStandingSnapshot` | 一场比赛版本化且不可变的最终排名输入 |
 | `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
 | `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |
 | `Contest` | 以 Prisma schema 为准 |
@@ -130,6 +132,11 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `RejudgeBatch` | 一次范围重测请求及其作用域、请求者、计数和关联 JudgeRun |
 | `School` | 学校资料；`directoryStatus` 区分待核验、正式、隐藏和历史隔离；`nameKey` 仅由非 legacy 学校占用并保存全局唯一正式名称 |
 | `SchoolProblemList` | 以 Prisma schema 为准 |
+| `RatingAccount` | 指定全局/组织与 OI/IOI/ACM 池中的当前 Rating 投影 |
+| `RatingBatch` | 一场比赛对一个 Rating 池的版本化结算或跳过记录 |
+| `RatingChange` | Batch 内不可变的赛前、预期、实际、变化和赛后 Rating |
+| `RatingPool` | 全局或指定组织的独立 OI、IOI、ACM Rating 参数空间 |
+| `RatingRebuildJob` | 赛后重测引起的 Rating 池重放审计与结果报告 |
 | `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |
@@ -164,6 +171,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TrainingProblemContentSnapshot` | 活动题面/题解不可变 revision 快照；当前版本取最大 revision |
 | `TrainingProblemStatementSet` | 活动一道题的一次多题面选择 revision |
 | `TrainingProblemStatementSnapshot` | 选择集合内不可变的题面副本、顺序和默认标记 |
+| `TrainingRatingConfig` | 比赛开始前可配置、开始或首交时冻结的 Rating 规则快照 |
 | `TrainingSolution` | 以 Prisma schema 为准 |
 | `TrainingUserProblemStatus` | 以 Prisma schema 为准 |
 | `User` | 以 Prisma schema 为准 |

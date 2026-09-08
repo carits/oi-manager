@@ -30,6 +30,7 @@ Production v1 外部验收仍保持未完成，不能把“运行拓扑已生产
 4. [评测机与提交](architecture/JUDGE_AND_SUBMISSIONS.md)
 5. [业务模块](architecture/modules/ORGANIZATION.md)
 6. [Carits币与贡献 V1](architecture/CARITS_AND_CONTRIBUTION.md)
+7. [比赛 Rating 领域](architecture/RATING_DOMAIN.md)
 
 ### 测试
 

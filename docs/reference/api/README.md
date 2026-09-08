@@ -19,6 +19,17 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `GET` | `/api/ratings/me` | 读取本人全部全局/组织 OI、IOI、ACM Rating 账户 |
+| `GET` | `/api/ratings/global/:track` | 分页读取指定 Track 的全局 Rating 榜 |
+| `GET` | `/api/ratings/organizations/:organizationId/:track` | 有效组织成员读取组织 Rating 榜 |
+| `GET` | `/api/ratings/users/:userId/history` | 本人读取指定池和 Track 的不可变 Rating 变化历史 |
+| `GET` | `/api/trainings/:id/rating-config` | 读取比赛 Rating 范围、Track、权重、最低人数、revision 和冻结状态 |
+| `PUT` | `/api/trainings/:id/rating-config` | 管理员在比赛开始前按 revision CAS 保存 Rating 配置 |
+| `GET` | `/api/trainings/:id/rating` | 读取比赛最终榜单、Batch 和 Rating 变化 |
+| `POST` | `/api/trainings/:id/finalize` | 比赛结束且评测完成后生成不可变最终榜单并幂等结算 Rating |
+| `POST` | `/api/trainings/:id/rating/rebuild` | 赛后重测完成后生成新榜单并从受影响池完整重放 Rating |
+| `POST` | `/api/trainings/:id/problems/:trainingProblemId/final-submission/:submissionId` | OI 比赛结束前指定本题最终提交 |
+| `PATCH` | `/api/trainings/:id/rating-participants/:userId` | 管理员设置带原因的 Rating 参赛者处置 |
 | `GET` | `/api/assignments` | 按校园、团队和状态读取本人可见或可管理的独立作业 |
 | `POST` | `/api/assignments` | 教师或负责人创建校园作业草稿 |
 | `GET` | `/api/assignments/:id` | 读取按角色裁剪的作业、固定题目版本和本人名单 |

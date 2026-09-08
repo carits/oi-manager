@@ -22,6 +22,7 @@ import { assignmentRouter } from '../../src/modules/assignment/assignment.routes
 import { submissionsRouter } from '../../src/routes/submissions'
 import { problemsRouter } from '../../src/modules/problem/problem.routes'
 import { rankingRouter } from '../../src/modules/ranking/ranking.routes'
+import { ratingDomainRouter } from '../../src/modules/rating/rating-domain.routes'
 import { testdataRouter } from '../../src/routes/testdata'
 import { filesRouter } from '../../src/routes/files'
 import { organizationMemberRouter } from '../../src/routes/organization-members'
@@ -76,6 +77,7 @@ export function createTestApp() {
   app.use('/api/organizations/:organizationId/members', organizationMemberRouter)
   app.use('/api/platform/organizations', platformOrganizationRouter)
   app.use('/api/rankings', rankingRouter)
+  app.use('/api', ratingDomainRouter)
   app.use('/api/contributions', authenticate, contributionRouter)
   app.use('/api/platform/contributions', authenticate, platformContributionRouter)
   app.use('/api/resources', authenticate, resourceRouter)

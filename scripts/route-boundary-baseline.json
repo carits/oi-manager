@@ -1,5 +1,29 @@
 {
+  "apps/server/src/modules/ai/ai-token.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/assignment/assignment.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/carits/carits.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/carits/resource.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/chat/chat.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
@@ -17,6 +41,18 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/organization-creation/organization-creation.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/organization-join/organization-join.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/platform-binding/platform-binding.routes.ts": {
     "prisma": 0,
     "transaction": 0,
@@ -29,7 +65,19 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/problem/problem.candidate.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/problem/problem.crud.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.data-generation.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
@@ -42,6 +90,12 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/problem/problem.hack.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/problem/problem.judge-program.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
@@ -95,8 +149,20 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/problem/problem.wrong-corpus.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/ranking/ranking.routes.ts": {
     "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/rating/rating-domain.routes.ts": {
+    "prisma": 3,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
@@ -138,6 +204,18 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/team/team.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/telemetry/telemetry.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/training-engine/training-engine.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,

@@ -139,7 +139,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
     : 'icpc'
   const isScoreBased = format !== 'icpc'
   const currentRank = currentUserId
-    ? ranking.findIndex((row: any) => row.userId === currentUserId) + 1
+    ? ranking.find((row: any) => row.userId === currentUserId)?.rank || ranking.findIndex((row: any) => row.userId === currentUserId) + 1
     : 0
   const visibleRanking = useMemo(
     () => ranking
@@ -233,7 +233,7 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
           <TableBody>
             {visibleRanking.map(({ row, index }: { row: any; index: number }) => (
               <TableRow key={row.userId} className={row.userId === currentUserId ? styles.rankRowCurrent : ''}>
-                <TableCell className={`${styles.center} ${styles.rankCell} ${styles.rankMetaCell} ${styles.rankStickyPosition} ${index < 3 ? medalClass[index] : ''}`}>{index + 1}</TableCell>
+                <TableCell className={`${styles.center} ${styles.rankCell} ${styles.rankMetaCell} ${styles.rankStickyPosition} ${(row.rank || index + 1) <= 3 ? medalClass[(row.rank || index + 1) - 1] : ''}`}>{row.rank || index + 1}</TableCell>
                 <TableCell className={`${styles.rankParticipantCell} ${styles.rankMetaCell} ${styles.rankStickyParticipant}`}>
                   <span className={styles.rankIdentity}>
                     <UserIdentityLink id={row.userId} userType={row.userType} name={row.name} username={row.username} avatar={row.avatar} avatarOnly size={32} />

@@ -71,7 +71,48 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
   const adminFilter = excludedIds.length > 0
     ? Prisma.sql`AND p."userId" NOT IN (${Prisma.join(excludedIds)})`
     : Prisma.empty
-  const aggregated = await prisma.$queryRaw<Array<{
+  const aggregated = training.format === 'oi'
+    ? await prisma.$queryRaw<Array<{
+      userId: string
+      problemId: string
+      maxScore: number
+      lastSubmitAt: Date
+    }>>`
+      WITH projected AS (
+        SELECT
+          s.id,
+          s."userId",
+          s."problemId",
+          s."createdAt",
+          s."submissionPhase",
+          CASE
+            WHEN run.status = 'QUEUED' THEN 'queuing'
+            WHEN run.status = 'RUNNING' THEN 'judging'
+            WHEN run.status = 'CANCELLED' THEN COALESCE(run.result, 'judge_failed')
+            WHEN run.status = 'FINALIZED' THEN COALESCE(run.result, 'unknown_error')
+            ELSE s.result
+          END AS result,
+          CASE WHEN s."currentJudgeRunId" IS NOT NULL THEN run.score ELSE s.score END AS score
+        FROM "Submission" s
+        LEFT JOIN "JudgeRun" run ON run.id = s."currentJudgeRunId"
+        WHERE s."submitScope" = ${submitScope}
+          AND s."trainingId" = ${training.id}
+          AND COALESCE(s."submitMethod", '') <> 'archive'
+      ), selected AS (
+        SELECT p.*, ROW_NUMBER() OVER (
+          PARTITION BY p."userId", p."problemId"
+          ORDER BY CASE WHEN p."submissionPhase" = 'FINAL' THEN 1 ELSE 0 END DESC,
+                   p."createdAt" DESC, p.id DESC
+        ) AS selected_order
+        FROM projected p
+        WHERE p.result NOT IN ('queuing', 'judging', 'pending_review') AND p.result <> ''
+        ${adminFilter}
+      )
+      SELECT "userId", "problemId", COALESCE(score, 0) AS "maxScore", "createdAt" AS "lastSubmitAt"
+      FROM selected
+      WHERE selected_order = 1
+    `
+    : await prisma.$queryRaw<Array<{
     userId: string
     problemId: string
     maxScore: number
@@ -130,9 +171,10 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
     const problems: Record<string, { score: number; alias: string; submitted: boolean }> = {}
     for (const problem of training.TrainingProblem) {
       const score = scores.get(problem.Problem.problemId)
-      totalScore += score?.maxScore ?? 0
+      const projectedScore = Math.round((score?.maxScore ?? 0) * (problem.points ?? 100)) / 100
+      totalScore += projectedScore
       problems[problem.id] = {
-        score: score?.maxScore ?? 0,
+        score: projectedScore,
         alias: problem.alias ?? '',
         submitted: Boolean(score),
       }
@@ -151,6 +193,11 @@ async function buildOiRanking(training: any, excludedIds: string[]) {
   })
   ranking.sort((left, right) => right.totalScore - left.totalScore ||
     new Date(left.lastSubmitAt).getTime() - new Date(right.lastSubmitAt).getTime())
+  ranking.forEach((row, index) => {
+    ;(row as typeof row & { rank: number }).rank = index > 0 && ranking[index - 1].totalScore === row.totalScore
+      ? (ranking[index - 1] as typeof row & { rank: number }).rank
+      : index + 1
+  })
   return {
     format: training.format,
     problems: problemSummaries(training.TrainingProblem),
@@ -247,6 +294,12 @@ async function buildIcpcRanking(training: any, excludedIds: string[]) {
     }
   })
   ranking.sort((left, right) => right.solvedCount - left.solvedCount || left.totalPenalty - right.totalPenalty)
+  ranking.forEach((row, index) => {
+    ;(row as typeof row & { rank: number }).rank = index > 0 &&
+      ranking[index - 1].solvedCount === row.solvedCount && ranking[index - 1].totalPenalty === row.totalPenalty
+      ? (ranking[index - 1] as typeof row & { rank: number }).rank
+      : index + 1
+  })
   return { format: 'icpc', problems: problemSummaries(training.TrainingProblem), ranking }
 }
 

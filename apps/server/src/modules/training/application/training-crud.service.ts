@@ -11,6 +11,8 @@ import {
   isTeamMember,
   sortTrainingListForDisplay,
 } from '../training.helpers'
+import { lockContestRatingConfigTx, trackForFormat, defaultScoringRules } from '../../rating/application/contest-rating.service'
+import crypto from 'node:crypto'
 
 export class TrainingCrudError extends Error {
   constructor(
@@ -135,7 +137,13 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
   const computedStatus = getComputedTrainingStatus(training, now)
   if (computedStatus === training.status) return computedStatus
   const visibleCount = await prisma.$transaction(async tx => {
-    await tx.training.update({ where: { id: training.id }, data: { status: computedStatus } })
+    await tx.training.update({ where: { id: training.id }, data: {
+      status: computedStatus,
+      ...(training.type === 'contest' && computedStatus === 'finished' ? { finalizationStatus: 'JUDGING' as const } : {}),
+    } })
+    if (training.type === 'contest' && computedStatus !== 'upcoming') {
+      await lockContestRatingConfigTx(tx, training.id, training.createdBy, training.format)
+    }
     if (computedStatus !== 'finished' || training.type !== 'contest') return 0
     const result = await tx.submission.updateMany({
       where: {
@@ -161,7 +169,7 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
 export async function getTrainingDetail(id: number, userId: string) {
   const training = await prisma.training.findUnique({
     where: { id },
-    include: { _count: { select: { TrainingParticipant: true, TrainingProblem: true } } },
+    include: { RatingConfig: true, _count: { select: { TrainingParticipant: true, TrainingProblem: true } } },
   })
   if (!training) fail(404, 'TRAINING_NOT_FOUND', '训练不存在')
   if (!await canAccessTraining(userId, training)) {
@@ -186,6 +194,15 @@ export async function getTrainingDetail(id: number, userId: string) {
     type: training.type,
     scope: training.scope,
     sourceTrainingId: training.sourceTrainingId,
+    finalizationStatus: training.finalizationStatus,
+    finalizedStandingId: training.finalizedStandingId,
+    ratingConfig: training.RatingConfig ? {
+      scope: training.RatingConfig.scope,
+      track: training.RatingConfig.track,
+      weight: training.RatingConfig.weightBasisPoints / 10_000,
+      lockedAt: training.RatingConfig.lockedAt,
+      revision: training.RatingConfig.revision,
+    } : null,
     problemCount: training._count.TrainingProblem,
     participantCount: training._count.TrainingParticipant,
     isAdmin,
@@ -206,6 +223,9 @@ export async function updateTraining(id: number, userId: string, input: any) {
   const training = await requireManagedTraining(id, userId, '只有管理员可以编辑训练')
   const now = new Date()
   const isStarted = now >= training.startTime
+  if (isStarted && input.format !== undefined && input.format !== training.format) {
+    fail(409, 'RATING_CONFIG_FROZEN', '比赛开始后不能修改赛制或 Rating Track')
+  }
   if (input.startTime !== undefined && isStarted) {
     fail(400, 'TRAINING_ALREADY_STARTED', '训练已经开始，不能修改开始时间')
   }
@@ -218,9 +238,8 @@ export async function updateTraining(id: number, userId: string, input: any) {
   if (newEndTime <= newStartTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
   if (newEndTime <= now) fail(400, 'END_TIME_IN_PAST', '结束时间不能早于当前时间')
 
-  const updated = await prisma.training.update({
-    where: { id },
-    data: {
+  const updated = await prisma.$transaction(async tx => {
+    const row = await tx.training.update({ where: { id }, data: {
       ...(input.title !== undefined && { title: input.title }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.format !== undefined && { format: input.format }),
@@ -231,7 +250,21 @@ export async function updateTraining(id: number, userId: string, input: any) {
       ...(input.includeAdminInRanking !== undefined && {
         includeAdminInRanking: input.includeAdminInRanking,
       }),
-    },
+    } })
+    if (training.type === 'contest' && input.format !== undefined && input.format !== training.format) {
+      const existing = await tx.trainingRatingConfig.findUnique({ where: { trainingId: id } })
+      if (existing) {
+        const track = trackForFormat(input.format)
+        const scoringRules = defaultScoringRules(track)
+        await tx.trainingRatingConfig.update({ where: { id: existing.id }, data: {
+          track,
+          scoringRules,
+          rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
+          revision: { increment: 1 },
+        } })
+      }
+    }
+    return row
   })
   logger.info('training_updated', { action: 'trainings', metadata: { trainingId: id } })
   return updated
@@ -255,8 +288,10 @@ export async function startTraining(id: number, userId: string) {
   if (training.status === 'ongoing' || now >= training.startTime) {
     return { training, message: '比赛已经开始' }
   }
-  const started = await prisma.training.update({
-    where: { id }, data: { status: 'ongoing', startTime: now },
+  const started = await prisma.$transaction(async tx => {
+    const row = await tx.training.update({ where: { id }, data: { status: 'ongoing', startTime: now } })
+    if (training.type === 'contest') await lockContestRatingConfigTx(tx, id, userId, training.format)
+    return row
   })
   logger.info('training_started_early', { action: 'trainings', metadata: { trainingId: id, userId } })
   return { training: started, message: '比赛已开始' }
@@ -271,9 +306,10 @@ export async function finishTraining(id: number, userId: string) {
   if (now < training.startTime) fail(400, 'TRAINING_NOT_STARTED', '比赛尚未开始，不能提前结束')
   const finished = await prisma.$transaction(async tx => {
     const updated = await tx.training.update({
-      where: { id }, data: { status: 'finished', endTime: now },
+      where: { id }, data: { status: 'finished', endTime: now, ...(training.type === 'contest' ? { finalizationStatus: 'JUDGING' as const } : {}) },
     })
     if (training.type === 'contest') {
+      await lockContestRatingConfigTx(tx, id, userId, training.format)
       await tx.submission.updateMany({
         where: { submitScope: 'contest', contestId: id, isGlobalVisible: false },
         data: { isGlobalVisible: true },
@@ -291,6 +327,9 @@ export async function deleteTraining(id: number, userId: string) {
   const isAdmin = await canManageTraining(userId, training)
   if (training.createdBy !== userId && !isAdmin) {
     fail(403, 'TRAINING_DELETE_DENIED', '只有创建者或管理员可以删除训练')
+  }
+  if (training.type === 'contest' && training.finalizedStandingId) {
+    fail(409, 'FINALIZED_CONTEST_DELETE_FORBIDDEN', '已生成最终榜单的比赛必须永久保留；如需隐藏请使用归档能力')
   }
   const snapshotFiles = await prisma.trainingProblemContentSnapshot.findMany({
     where: { TrainingProblem: { trainingId: id }, snapshotFileId: { not: null } },

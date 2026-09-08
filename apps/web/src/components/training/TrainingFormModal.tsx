@@ -83,6 +83,12 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [problemIdVisible, setProblemIdVisible] = useState(false)
   const [solutionVisible, setSolutionVisible] = useState(false)
   const [includeAdminInRanking, setIncludeAdminInRanking] = useState(false)
+  const [ratingScope, setRatingScope] = useState<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>('NONE')
+  const [ratingWeight, setRatingWeight] = useState('1')
+  const [organizationRatingMinimum, setOrganizationRatingMinimum] = useState('5')
+  const [globalRatingMinimum, setGlobalRatingMinimum] = useState('20')
+  const [ratingRevision, setRatingRevision] = useState(0)
+  const [ratingLocked, setRatingLocked] = useState(false)
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
   const [originalStartTimeStr, setOriginalStartTimeStr] = useState<string>('')
 
@@ -115,6 +121,18 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
             setEndTime(toLocalDatetimeString(new Date(t.endTime)))
             setOriginalStartTime(new Date(t.startTime))
             setOriginalStartTimeStr(startStr)
+          }
+          if (mode === 'contest') {
+            const ratingRes = await apiClient.get(`/api/trainings/${trainingId}/rating-config`)
+            if (ratingRes.success && ratingRes.data) {
+              const config = ratingRes.data as any
+              setRatingScope(config.scope || 'NONE')
+              setRatingWeight(String(config.weight ?? 1))
+              setOrganizationRatingMinimum(String(config.organizationMinParticipants ?? 5))
+              setGlobalRatingMinimum(String(config.globalMinParticipants ?? 20))
+              setRatingRevision(config.revision ?? 0)
+              setRatingLocked(Boolean(config.lockedAt) || config.editable === false)
+            }
           }
 
           const problemsRes = await apiClient.get(`/api/trainings/${trainingId}/problems`)
@@ -166,6 +184,12 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       setProblemIdVisible(false)
       setSolutionVisible(false)
       setIncludeAdminInRanking(false)
+      setRatingScope('NONE')
+      setRatingWeight('1')
+      setOrganizationRatingMinimum('5')
+      setGlobalRatingMinimum('20')
+      setRatingRevision(0)
+      setRatingLocked(false)
       setProblemRows([])
       setSaving(false)
       setOriginalStartTime(null)
@@ -368,6 +392,17 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           return
         }
 
+        if (mode === 'contest' && !ratingLocked) {
+          const ratingRes = await apiClient.put(`/api/trainings/${trainingId}/rating-config`, {
+            scope: ratingScope,
+            weight: Number(ratingWeight),
+            organizationMinParticipants: Number(organizationRatingMinimum),
+            globalMinParticipants: Number(globalRatingMinimum),
+            expectedRevision: ratingRevision,
+          })
+          if (!ratingRes.success) throw new Error(ratingRes.message || '保存 Rating 配置失败')
+        }
+
         // 2. Remove deleted existing problems
         const existingIds = problemRows.filter(r => r.existing).map(r => r.trainingProblemId)
         const originalProblemsRes = await apiClient.get(`/api/trainings/${trainingId}/problems`)
@@ -442,6 +477,17 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
         const newTrainingId = (res.data as any).id
 
+        if (mode === 'contest') {
+          const ratingRes = await apiClient.put(`/api/trainings/${newTrainingId}/rating-config`, {
+            scope: ratingScope,
+            weight: Number(ratingWeight),
+            organizationMinParticipants: Number(organizationRatingMinimum),
+            globalMinParticipants: Number(globalRatingMinimum),
+            expectedRevision: 0,
+          })
+          if (!ratingRes.success) throw new Error(ratingRes.message || '比赛已创建，但 Rating 配置保存失败，请立即进入编辑页面确认')
+        }
+
         const resolvedRows = problemRows.filter(r => r.resolved?.found)
         for (const row of resolvedRows) {
           await apiClient.post(`/api/trainings/${newTrainingId}/problems`, {
@@ -508,6 +554,32 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               <label className={unifiedStyles.u5}>标题 *</label>
               <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="训练标题" style={inputStyle} />
             </div>
+
+            {mode === 'contest' && (
+              <div className={unifiedStyles.u6}>
+                <div>
+                  <label className={unifiedStyles.u5}>Rating 范围</label>
+                  <Select aria-label="Rating 范围" value={ratingScope} disabled={ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)} style={inputStyle}>
+                    <option value="NONE">不计 Rating</option>
+                    <option value="ORGANIZATION">组织 Rating</option>
+                    <option value="GLOBAL">全局 Rating（平台权限）</option>
+                    <option value="BOTH">全局 + 组织（平台权限）</option>
+                  </Select>
+                  <small>{ratingLocked ? '比赛已经开始，Rating 规则已永久冻结。' : `Track 自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
+                </div>
+                <div>
+                  <label className={unifiedStyles.u5}>Rating 权重</label>
+                  <Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={ratingLocked || ratingScope === 'NONE'} onChange={event => setRatingWeight(event.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label className={unifiedStyles.u5}>组织 / 全局最低人数</label>
+                  <div className={unifiedStyles.u1}>
+                    <Input aria-label="组织 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked || ratingScope === 'NONE'} onChange={event => setOrganizationRatingMinimum(event.target.value)} style={inputStyle} />
+                    <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={ratingLocked || ratingScope === 'NONE'} onChange={event => setGlobalRatingMinimum(event.target.value)} style={inputStyle} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>公告</label>

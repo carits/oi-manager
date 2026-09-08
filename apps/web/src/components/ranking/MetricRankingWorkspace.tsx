@@ -61,6 +61,7 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
   const searchParams = useSearchParams()
   const query = searchParams.get('q') || ''
   const isContribution = metric === 'contribution'
+  const ratingTrack = metric === 'rating' && ['OI', 'IOI', 'ACM'].includes(searchParams.get('track') || '') ? searchParams.get('track')! : 'OI'
   const grade = scope === 'campus' && !isContribution ? searchParams.get('grade') || '' : ''
   const includeGraduated = scope === 'campus' && !isContribution && searchParams.get('includeGraduated') === '1'
   const page = Math.max(Number(searchParams.get('page')) || 1, 1)
@@ -106,9 +107,13 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
       ? scope === 'campus' && organizationId
         ? `/api/contributions/organizations/${organizationId}/rankings?${params}`
         : `/api/contributions/rankings/users?${params}`
-      : scope === 'campus'
-        ? `/api/rankings/organizations/${organizationId}/${metric}?${params}`
-        : `/api/rankings/personal/${metric}?${params}`
+      : metric === 'rating'
+        ? scope === 'campus'
+          ? `/api/ratings/organizations/${organizationId}/${ratingTrack}?${params}`
+          : `/api/ratings/global/${ratingTrack}?${params}`
+        : scope === 'campus'
+          ? `/api/rankings/organizations/${organizationId}/${metric}?${params}`
+          : `/api/rankings/personal/${metric}?${params}`
     const result = await apiClient.get<RankingRow[]>(endpoint, { signal }) as RankingResponse
     if (!result.success) {
       setRows([])
@@ -123,7 +128,7 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
     setTotalPages(result.totalPages || 1)
     setGrades(result.filters?.grades || [])
     setLoading(false)
-  }, [grade, includeGraduated, metric, page, pageSize, query, pathname, scope])
+  }, [grade, includeGraduated, metric, page, pageSize, query, pathname, ratingTrack, scope])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -150,6 +155,16 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
               <Select value={grade} onChange={event => updateQuery({ grade: event.target.value || null })}>
                 <option value="">全部年级</option>
                 {grades.map(item => <option key={item} value={item}>{item}</option>)}
+              </Select>
+            </label>
+          )}
+          {metric === 'rating' && (
+            <label className={styles.selectField}>
+              <span className="sr-only">选择 Rating Track</span>
+              <Select value={ratingTrack} onChange={event => updateQuery({ track: event.target.value === 'OI' ? null : event.target.value })}>
+                <option value="OI">OI Rating</option>
+                <option value="IOI">IOI Rating</option>
+                <option value="ACM">ACM Rating</option>
               </Select>
             </label>
           )}
@@ -208,7 +223,7 @@ export function MetricRankingWorkspace({ scope, metric }: MetricRankingWorkspace
           },
           {
             key: metric,
-            label: valueLabel,
+            label: metric === 'rating' ? `${ratingTrack} Rating` : valueLabel,
             width: '140px',
             align: 'right',
             render: row => <strong className={metric === 'rating' ? styles.ratingValue : styles.solvedValue}>{metricValue(row, metric)}</strong>
