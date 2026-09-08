@@ -249,7 +249,7 @@ export async function getAssignmentWorkspace(userId: string, assignmentId: strin
     prisma.assignmentFeedback.findMany({ where: { assignmentId, recipientId: { in: recipientIds }, ...(manager ? {} : { visibility: 'recipient' }) }, orderBy: { createdAt: 'desc' } }),
     prisma.assignmentGradeSnapshot.findMany({ where: { assignmentId, recipientId: { in: recipientIds } }, orderBy: [{ createdAt: 'desc' }, { revision: 'desc' }] }),
   ])
-  return { assignment: serializeAssignment(assignment, manager ? 'all' : userId), progress, corrections, feedback, gradeSnapshots }
+  return { canManage: manager, assignment: serializeAssignment(assignment, manager ? 'all' : userId), progress, corrections, feedback, gradeSnapshots }
 }
 
 export async function updateAssignment(userId: string, assignmentId: string, body: any) {

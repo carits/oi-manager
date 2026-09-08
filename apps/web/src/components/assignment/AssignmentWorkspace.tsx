@@ -35,6 +35,7 @@ interface AssignmentCorrectionItem { id: string; assignmentProblemId: string; st
 interface AssignmentFeedbackItem { id: string; assignmentProblemId?: string | null; content: string; createdAt: string }
 interface AssignmentGradeSnapshotItem { id: string; type: string; revision: number; totalScore: number; maxScore: number; createdAt: string }
 interface AssignmentWorkspacePayload {
+  canManage: boolean
   assignment: Assignment
   progress: ProgressItem[]
   corrections: AssignmentCorrectionItem[]
@@ -249,7 +250,7 @@ function ManagerWorkspace({ assignment, onChange }: { assignment: Assignment; on
   </div>
 }
 
-export function AssignmentWorkspace({ canManage }: { canManage: boolean }) {
+export function AssignmentWorkspace() {
   const router = useRouter()
   const params = useParams<{ organizationId: string; assignmentId?: string; segments?: string[] }>()
   const id = params.assignmentId || params.segments?.[0] || ''
@@ -261,6 +262,7 @@ export function AssignmentWorkspace({ canManage }: { canManage: boolean }) {
   const toast = useToast()
   useEffect(() => { if (resource.data) setLocal(resource.data.assignment) }, [resource.data])
   const assignment = local || resource.data?.assignment
+  const canManage = resource.data?.canManage ?? false
   const status = assignment ? assignmentStatusMeta[assignment.status] : null
   const facts = useMemo(() => assignment ? [{ label: '开放', value: formatAssignmentTime(assignment.openAt) }, { label: '截止', value: formatAssignmentTime(assignment.dueAt) }, { label: '题目', value: `${assignment.problemCount} 道` }, { label: '名单', value: `${assignment.recipientCount} 人` }] : [], [assignment])
   const canCancel = Boolean(canManage && assignment && ['DRAFT', 'SCHEDULED', 'OPEN', 'OVERDUE'].includes(assignment.status))

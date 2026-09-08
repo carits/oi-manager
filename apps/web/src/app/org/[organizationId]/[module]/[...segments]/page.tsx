@@ -50,7 +50,7 @@ export default function OrganizationResourcePage() {
     return <TrainingStatementManagementPage trainingId={parts[0]} backPath={`${prefix}/${module}/${parts[0]}`} />
   }
   if (module === 'homeworks' && parts.length === 1) {
-    return <AssignmentWorkspace canManage={userType !== 'student'} />
+    return <AssignmentWorkspace />
   }
   if (module === 'contests' && parts.length === 1) {
     return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />
