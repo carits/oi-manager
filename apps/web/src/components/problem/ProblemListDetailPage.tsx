@@ -427,7 +427,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
           title={detail.title}
           description={detail.description || `${detail.Sections.length} 个章节，共 ${totalEntries} 题`}
           breadcrumbs={[{ label: '题单', href: `${pathPrefix}/problem-lists` }, { label: detail.title }]}
-          actions={canEdit && !isStudentView ? <><Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => { setEditingTitle(true); setTitleDraft(detail.title) }}>编辑标题</Button>{isAdmin && <Button variant="secondary" icon={<Share2 size={16} />} onClick={() => setShowSharePanel(true)}>权限</Button>}{isAdmin && <Button icon={<Send size={16} />} onClick={() => setShowPublishModal(true)}>发布为作业</Button>}</> : undefined}
+          actions={canEdit && !isStudentView ? <><Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => { setEditingTitle(true); setTitleDraft(detail.title) }}>编辑标题</Button>{isAdmin && <Button variant="secondary" icon={<Share2 size={16} />} onClick={() => setShowSharePanel(true)}>权限</Button>}{isAdmin && <Button icon={<Send size={16} />} onClick={() => setShowPublishModal(true)}>创建作业草稿</Button>}</> : undefined}
         />
         {editingTitle && (
           <Toolbar>
@@ -655,7 +655,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
         <PublishHomeworkModal
           listId={listId}
           onClose={() => setShowPublishModal(false)}
-          onPublished={() => { setShowPublishModal(false); toast.success('作业发布成功') }}
+          onCreated={assignmentId => { setShowPublishModal(false); toast.success('作业草稿已创建，请确认配置后发布'); router.push(`${pathPrefix}/homeworks/${assignmentId}`) }}
         />
       )}
 
@@ -720,17 +720,16 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
 
 // ==================== 发布为作业弹窗 ====================
 
-function PublishHomeworkModal({ listId, onClose, onPublished }: {
+function PublishHomeworkModal({ listId, onClose, onCreated }: {
   listId: string
   onClose: () => void
-  onPublished: () => void
+  onCreated: (assignmentId: string) => void
 }) {
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [title, setTitle] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
-  const [format, setFormat] = useState('oi')
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
 
@@ -751,27 +750,26 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
     }
     setSubmitting(true)
     try {
-      const res = await apiClient.post(`/api/problem-lists/${listId}/publish-homework`, {
+      const res = await apiClient.post<{ assignmentId: string }>(`/api/problem-lists/${listId}/create-assignment`, {
         teamId: selectedTeamId,
         title: title.trim() || undefined,
         startTime,
         endTime,
-        format,
       })
-      if (res.success) {
-        onPublished()
+      if (res.success && res.data) {
+        onCreated(res.data.assignmentId)
       } else {
-        toast.error(res.message || '发布失败')
+        toast.error(res.message || '创建失败')
       }
     } catch (e: any) {
-      toast.error(e?.message || '发布失败')
+      toast.error(e?.message || '创建失败')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <FormDialog isOpen={true} onClose={onClose} title="发布为作业" size="md">
+    <FormDialog isOpen={true} onClose={onClose} title="从题单创建作业草稿" description="题目会固定当前正式测试版本；学生名单和发布规则可在作业工作台继续确认。" size="md">
       <div className={unifiedStyles.u62}>
         <div>
           <label className={unifiedStyles.u63}>目标团队</label>
@@ -784,15 +782,6 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
           <label className={unifiedStyles.u63}>作业标题（留空则使用题单标题）</label>
           <Input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="可选"
             className={unifiedStyles.u65} />
-        </div>
-        <div>
-          <label className={unifiedStyles.u63}>赛制</label>
-          <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value)}
-            className={unifiedStyles.u64}>
-            <option value="oi">OI</option>
-            <option value="ioi">IOI</option>
-            <option value="icpc">ICPC</option>
-          </Select>
         </div>
         <div className={unifiedStyles.u66}>
           <div>
@@ -809,7 +798,7 @@ function PublishHomeworkModal({ listId, onClose, onPublished }: {
         <div className={unifiedStyles.u67}>
           <Button variant="ghost" onClick={onClose} className={unifiedStyles.u68}>取消</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? '发布中...' : '发布'}
+            {submitting ? '创建中...' : '创建并配置'}
           </Button>
         </div>
       </div>

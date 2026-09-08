@@ -11,7 +11,7 @@ test.describe('loading, empty, error and retry states @compact', () => {
   test('teacher homework list distinguishes a failure and recovers on retry', async ({ page }) => {
     let attempts = 0
     let recover = false
-    await page.route('**/api/teams?*', async route => {
+    await page.route('**/api/assignments?*', async route => {
       attempts += 1
       if (!recover) {
         await route.fulfill({
@@ -29,12 +29,12 @@ test.describe('loading, empty, error and retry states @compact', () => {
     await expect(alert).toContainText('E2E temporary failure')
     recover = true
     await alert.getByRole('button').click()
-    await expect(page.getByRole('combobox', { name: '团队范围' })).toHaveValue(ids.team)
+    await expect(page.locator('body')).toContainText('E2E Active Homework')
     expect(attempts).toBeGreaterThanOrEqual(2)
   })
 
   test('teacher homework list renders a true empty state', async ({ page }) => {
-    await page.route('**/api/teams?*', route =>
+    await page.route('**/api/assignments?*', route =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -43,12 +43,12 @@ test.describe('loading, empty, error and retry states @compact', () => {
     )
 
     await page.goto(`${organizationBase}/homeworks`)
-    await expect(page.locator('body')).toContainText('暂无团队')
+    await expect(page.locator('body')).toContainText('当前没有作业')
     await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toHaveCount(0)
   })
 
-  test('training shell stays visible while the overview request is delayed', async ({ page }) => {
-    await page.route(`**/api/trainings/${ids.homework}/overview`, async route => {
+  test('assignment shell stays visible while the workspace request is delayed', async ({ page }) => {
+    await page.route(`**/api/assignments/${ids.homework}/workspace`, async route => {
       await new Promise(resolve => setTimeout(resolve, 3000))
       await route.continue()
     })
@@ -63,8 +63,8 @@ test.describe('loading, empty, error and retry states @compact', () => {
     await expect(page.locator('body')).toContainText('E2E Active Homework', { timeout: 8000 })
   })
 
-  test('a stalled overview becomes a retryable error instead of waiting forever', async ({ page }) => {
-    await page.route(`**/api/trainings/${ids.homework}/overview`, async route => {
+  test('a stalled assignment workspace becomes a retryable error instead of waiting forever', async ({ page }) => {
+    await page.route(`**/api/assignments/${ids.homework}/workspace`, async route => {
       await new Promise(resolve => setTimeout(resolve, 5000))
       await route.continue()
     })

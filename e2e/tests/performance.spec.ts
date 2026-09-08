@@ -8,7 +8,7 @@ const organizationBase = `/org/org_${ids.school}`
 test.describe('response budgets', () => {
   test.use({ storageState: accounts.principal.storageState })
 
-  test('training first view stays within the business request budget', async ({ page }) => {
+  test('assignment first view stays within the business request budget', async ({ page }) => {
     const businessRequests: string[] = []
     page.on('request', request => {
       const url = new URL(request.url())
@@ -21,8 +21,8 @@ test.describe('response budgets', () => {
     await expect(page.getByRole('heading', { name: 'E2E Active Homework' })).toBeVisible()
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
 
-    const overviewPath = `/api/trainings/${ids.homework}/overview`
-    expect(businessRequests.filter(path => path === overviewPath)).toHaveLength(1)
+    const workspacePath = `/api/assignments/${ids.homework}/workspace`
+    expect(businessRequests.filter(path => path === workspacePath)).toHaveLength(1)
     expect(
       businessRequests.length,
       `business requests exceeded the budget:\n${businessRequests.join('\n')}`,
@@ -52,7 +52,7 @@ test.describe('response budgets', () => {
         waitUntil: 'domcontentloaded',
       })
       await expect(page.getByRole('navigation')).toBeVisible()
-      await expect(page.getByRole('heading', { name: /作业详情|E2E Active Homework/ })).toBeVisible()
+      await expect(page.getByRole('heading', { name: /作业|E2E Active Homework/ })).toBeVisible()
 
       expect(Date.now() - startedAt).toBeLessThanOrEqual(2_000)
       await expect(page.locator('body')).not.toContainText('加载中')

@@ -50,7 +50,7 @@ test.describe('core role workflows @smoke', () => {
     const page = await context.newPage()
     await page.goto(`${organizationBase}/problem-lists/${ids.problemList}`)
     await expect(page.locator('body')).toContainText('E2E Basic Problem List')
-    await expect(page.getByRole('button', { name: /发布.*作业/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /创建.*作业草稿/ })).toBeVisible()
 
     await page.goto(`${organizationBase}/homeworks/${ids.homework}`)
     await expect(page.locator('body')).toContainText('E2E Active Homework')
@@ -319,13 +319,13 @@ test.describe('core role workflows @smoke', () => {
 })
 
 test.describe('published work and ranking contracts', () => {
-  test('teacher publishes a problem list as homework visible to the student', async ({ request }) => {
+  test('teacher creates and publishes an independent assignment from a problem list', async ({ request }) => {
     const teacher = await loginAs(request, 'principal')
     const student = await loginAs(request, 'campusStudent')
     const now = Date.now()
     const title = `E2E Published Homework ${now}`
     const publishResponse = await request.post(
-      `/api/problem-lists/${ids.problemList}/publish-homework`,
+      `/api/problem-lists/${ids.problemList}/create-assignment`,
       {
         headers: { ...bearer(teacher), ...organizationHeaders },
         data: {
@@ -333,15 +333,20 @@ test.describe('published work and ranking contracts', () => {
           title,
           startTime: new Date(now - 60_000).toISOString(),
           endTime: new Date(now + 3_600_000).toISOString(),
-          format: 'ioi',
         },
       },
     )
-    expect(publishResponse.status()).toBe(200)
+    expect(publishResponse.status()).toBe(201)
     const published = await publishResponse.json()
     expect(published.success).toBe(true)
+    const assignmentId = published.data.assignmentId
+    const publishAssignment = await request.post(`/api/assignments/${assignmentId}/publish`, {
+      headers: { ...bearer(teacher), ...organizationHeaders },
+      data: { expectedRevision: 0 },
+    })
+    expect(publishAssignment.status()).toBe(200)
 
-    const listResponse = await request.get(`/api/organizations/org_${ids.school}/members/activities/homeworks`, {
+    const listResponse = await request.get(`/api/assignments?organizationId=org_${ids.school}&pageSize=100`, {
       headers: { ...bearer(student), ...organizationHeaders },
     })
     expect(listResponse.status()).toBe(200)
@@ -365,6 +370,7 @@ test.describe('published work and ranking contracts', () => {
     expect(response.status()).toBe(200)
     const body = await response.json()
     expect(body.success).toBe(true)
+    expect(body.data.type).toBe('assignment')
     expect(String(body.data.sourceTrainingId)).toBe(ids.contest)
 
     const rankingResponse = await request.get(`/api/trainings/${ids.contest}/ranking`, {

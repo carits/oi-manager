@@ -41,7 +41,7 @@ import {
   listProblemListShares,
   upsertProblemListShare,
 } from '../modules/problem-list/application/problem-list-share.service'
-import { publishProblemListHomework } from '../modules/problem-list/application/problem-list-homework.service'
+import { createAssignmentFromProblemList } from '../modules/problem-list/application/problem-list-homework.service'
 import type { AuthRequest } from '../middleware/auth'
 
 export const problemListsRouter = Router()
@@ -239,9 +239,13 @@ problemListsRouter.delete('/:id/shares/:shareId', authenticate, problemListEndpo
 }))
 
 /**
- * POST /api/problem-lists/:id/publish-homework
- * 将题单发布为作业（平铺所有条目，不保留章节结构）
+ * POST /api/problem-lists/:id/create-assignment
+ * 从题单创建独立作业草稿（平铺条目并固定当前 TestSet Revision）
  */
-problemListsRouter.post('/:id/publish-homework', authenticate, problemListEndpoint('发布作业失败', async (req, res) => {
-  res.json({ success: true, data: await publishProblemListHomework(req.user!, req.params.id, req.body) })
+problemListsRouter.post('/:id/create-assignment', authenticate, problemListEndpoint('创建作业草稿失败', async (req, res) => {
+  res.status(201).json({ success: true, data: await createAssignmentFromProblemList(req.user!, req.params.id, req.body) })
 }))
+
+problemListsRouter.post('/:id/publish-homework', authenticate, (_req, res) => {
+  res.status(410).json({ success: false, code: 'LEGACY_HOMEWORK_API_RETIRED', message: '旧作业发布接口已退役，请创建独立 Assignment 草稿' })
+})

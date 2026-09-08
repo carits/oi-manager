@@ -316,6 +316,12 @@ async function main() {
       judgeConfig, judgeConfigHash, graphHash: createHash('sha256').update('e2e-graph').digest('hex'), testdataPath: '.', createdBy: ids.principal,
     } })
     await prisma.problem.update({ where: { id: ids.problem }, data: { latestTestSetRevisionId: 'e2e-testset-revision' } })
+    await prisma.problemTestSetRevision.createMany({ data: [ids.secondProblem, ids.thirdProblem].map((problemId, index) => ({
+      id: `e2e-testset-revision-${index + 2}`, problemId, revisionNumber: 1, mode: 'acm', source: 'initial',
+      judgeConfig, judgeConfigHash, graphHash: createHash('sha256').update(`e2e-graph-${index + 2}`).digest('hex'), testdataPath: '.', createdBy: ids.principal,
+    })) })
+    await prisma.problem.update({ where: { id: ids.secondProblem }, data: { judgeConfig, latestTestSetRevisionId: 'e2e-testset-revision-2' } })
+    await prisma.problem.update({ where: { id: ids.thirdProblem }, data: { judgeConfig, latestTestSetRevisionId: 'e2e-testset-revision-3' } })
     await prisma.problemStatement.createMany({
       data: [
         {
@@ -458,6 +464,56 @@ async function main() {
         solutionVisible: false,
       },
     })
+    await prisma.assignment.create({ data: {
+      id: 'e2e-assignment',
+      organizationId: ids.organization,
+      teamId: ids.team,
+      title: 'E2E Active Homework',
+      description: 'Active independent assignment for the UI suite',
+      status: 'OPEN',
+      rosterMode: 'SNAPSHOT',
+      gradingPolicy: 'BEST_BEFORE_DUE',
+      latePolicy: 'DISALLOW',
+      correctionPolicy: 'BELOW_TARGET',
+      solutionReleasePolicy: 'AFTER_RELEASE',
+      openAt: new Date(now - 60 * 60 * 1000),
+      dueAt: new Date(now + 24 * 60 * 60 * 1000),
+      closeAt: new Date(now + 48 * 60 * 60 * 1000),
+      createdByMembershipId: 'e2e-membership-principal',
+      statusRevision: 1,
+      eventSeq: 1,
+      publishedAt: new Date(now - 60 * 60 * 1000),
+      Problems: { create: {
+        id: 'e2e-assignment-problem',
+        problemId: ids.problem,
+        testSetRevisionId: 'e2e-testset-revision',
+        orderIndex: 0,
+        category: 'REQUIRED',
+        required: true,
+        maxScore: 100,
+        targetScore: 100,
+        weight: 100,
+        completionPolicy: 'AC',
+        judgeConfigSnapshot: judgeConfig,
+        judgeConfigHash,
+      } },
+      Recipients: { create: {
+        id: 'e2e-assignment-recipient',
+        userId: ids.campusStudent,
+        membershipId: 'e2e-membership-student',
+        source: 'snapshot',
+        status: 'IN_PROGRESS',
+        assignedAt: new Date(now - 60 * 60 * 1000),
+        startedAt: new Date(now - 30 * 60 * 1000),
+        dueAtEffective: new Date(now + 24 * 60 * 60 * 1000),
+        closeAtEffective: new Date(now + 48 * 60 * 60 * 1000),
+      } },
+      Events: { create: { seq: 1, type: 'assignment.published', actorUserId: ids.principal } },
+    } })
+    await prisma.assignmentProblemProgress.create({ data: {
+      assignmentId: 'e2e-assignment', assignmentProblemId: 'e2e-assignment-problem', recipientId: 'e2e-assignment-recipient',
+      learningStatus: 'IN_PROGRESS', correctionStatus: 'NONE', attemptCount: 0, originalAttemptCount: 0,
+    } })
     const contest = await prisma.training.create({
       data: {
         teamId: ids.team,

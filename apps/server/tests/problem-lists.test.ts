@@ -1,9 +1,11 @@
+import crypto from 'node:crypto'
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import request from 'supertest'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestTeam, createTestUser, createTestSchoolWithPrincipal } from './helpers/testUser'
 import { createTestProblemList, shareTestProblemList, createTestProblem } from './helpers/problemListHelpers'
 import { generateTokenFromUser } from './helpers/testToken'
+import { prisma } from '../src/prisma'
 
 const app = createTestApp()
 
@@ -367,17 +369,25 @@ describe('题单权限模块', () => {
     })
   })
 
-  describe('发布作业', () => {
-    it('学生不能发布作业', async () => {
-      const res = await createAuthenticatedRequest(app, viewToken)
+  describe('创建独立作业草稿', () => {
+    it('旧发布接口已退役', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
         .post(`/api/problem-lists/${testList.list.id}/publish-homework`)
+        .send({})
+      expect(res.status).toBe(410)
+      expect(res.body.code).toBe('LEGACY_HOMEWORK_API_RETIRED')
+    })
+
+    it('学生不能从题单创建作业', async () => {
+      const res = await createAuthenticatedRequest(app, viewToken)
+        .post(`/api/problem-lists/${testList.list.id}/create-assignment`)
         .send({})
       expect(res.status).toBe(403)
     })
 
     it('拒绝无效的作业时间范围', async () => {
       const res = await createAuthenticatedRequest(app, ownerToken)
-        .post(`/api/problem-lists/${testList.list.id}/publish-homework`)
+        .post(`/api/problem-lists/${testList.list.id}/create-assignment`)
         .send({ teamId: 'unused', startTime: '2026-09-02', endTime: '2026-09-01' })
       expect(res.status).toBe(400)
       expect(res.body.message).toBe('作业时间范围无效')
@@ -390,7 +400,7 @@ describe('题单权限模块', () => {
         ownerType: 'teacher',
       })
       const res = await createAuthenticatedRequest(app, ownerToken)
-        .post(`/api/problem-lists/${testList.list.id}/publish-homework`)
+        .post(`/api/problem-lists/${testList.list.id}/create-assignment`)
         .send({
           teamId: team.id,
           title: '题单发布回归作业',
@@ -400,6 +410,27 @@ describe('题单权限模块', () => {
         })
       expect(res.status).toBe(400)
       expect(res.body.message).toBe('题单中没有题目，无法发布')
+    })
+
+    it('创建 DRAFT Assignment 并固定题单题目的当前 Revision', async () => {
+      const team = await createTestTeam({ schoolId: schoolData.school.id, ownerId: ownerUser.user.id })
+      const revision = await prisma.problemTestSetRevision.create({ data: {
+        id: crypto.randomUUID(), problemId: testProblem.id, revisionNumber: 1, mode: 'acm', source: 'initial',
+        judgeConfig: '{"mode":"acm","cases":[]}', judgeConfigHash: 'problem-list-config', graphHash: 'problem-list-graph', createdBy: ownerUser.user.id,
+      } })
+      await prisma.problem.update({ where: { id: testProblem.id }, data: { latestTestSetRevisionId: revision.id } })
+      await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/sections/${testList.defaultSection.id}/entries/single`)
+        .send({ ojName: 'carits', problemCode: testProblem.problemId, problemId: testProblem.id })
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/problem-lists/${testList.list.id}/create-assignment`)
+        .send({ teamId: team.id, title: '题单作业草稿', startTime: '2026-09-01T00:00:00.000Z', endTime: '2026-09-02T00:00:00.000Z' })
+      expect(res.status).toBe(201)
+      const assignment = await prisma.assignment.findUnique({ where: { id: res.body.data.assignmentId }, include: { Problems: true, Events: true } })
+      expect(assignment?.status).toBe('DRAFT')
+      expect(assignment?.rosterMode).toBe('DYNAMIC')
+      expect(assignment?.Problems[0].testSetRevisionId).toBe(revision.id)
+      expect(assignment?.Events[0].type).toBe('assignment.created_from_problem_list')
     })
   })
 

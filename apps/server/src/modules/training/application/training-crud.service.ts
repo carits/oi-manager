@@ -1,4 +1,3 @@
-import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { logger } from '../../../lib/logger'
@@ -93,6 +92,12 @@ export async function createTeamTraining(params: {
   }
   const { title, description, format, startTime, endTime, problemIdVisible,
     solutionVisible, includeAdminInRanking, type } = params.input
+  if (type === 'homework') {
+    fail(410, 'LEGACY_HOMEWORK_API_RETIRED', '旧作业写入接口已退役，请使用 Assignment 作业接口')
+  }
+  if (type !== undefined && !['training', 'contest'].includes(type)) {
+    fail(400, 'TRAINING_TYPE_INVALID', '活动类型无效')
+  }
   if (!title || !startTime || !endTime) {
     fail(400, 'TRAINING_FIELDS_REQUIRED', '标题、开始时间、结束时间为必填')
   }
@@ -308,7 +313,7 @@ export async function createMakeupHomework(id: number, userId: string, input: an
     include: {
       TrainingProblem: {
         orderBy: { orderIndex: 'asc' },
-        include: { ContentSnapshot: { orderBy: [{ revision: 'desc' }, { selectedAt: 'desc' }] } },
+        include: { TestSetRevision: true, Problem: { include: { LatestTestSetRevision: true } } },
       },
     },
   })
@@ -324,115 +329,79 @@ export async function createMakeupHomework(id: number, userId: string, input: an
   const startTime = input.startTime ? parseDate(input.startTime, '开始时间') : now
   const endTime = parseDate(input.endTime, '结束时间')
   if (endTime <= startTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
-
-  const copiedFileIds: string[] = []
-  let makeupTraining: any = null
-  try {
-    makeupTraining = await prisma.training.create({
-      data: {
-        teamId: training.teamId,
-        organizationId: training.organizationId,
-        scope: training.scope,
-        title: input.title || `${training.title} - 补题练习`,
-        description: training.description,
-        format: training.format,
-        startTime,
-        endTime,
-        status: startTime <= now ? 'ongoing' : 'upcoming',
-        createdBy: userId,
-        problemIdVisible: true,
-        solutionVisible: true,
-        includeAdminInRanking: false,
-        type: 'homework',
-        sourceTrainingId: id,
-      },
-    })
-
-    for (const problem of training.TrainingProblem) {
-      const trainingProblemId = `makeup-${makeupTraining.id}-${problem.orderIndex}-${crypto.randomUUID()}`
-      await prisma.trainingProblem.create({
-        data: {
-          id: trainingProblemId,
-          trainingId: makeupTraining.id,
-          problemId: problem.problemId,
-          alias: problem.alias,
-          orderIndex: problem.orderIndex,
-          points: problem.points,
-          titleSnapshot: problem.titleSnapshot,
-          statementSnapshot: problem.statementSnapshot,
-          statementsSnapshotJson: problem.statementsSnapshotJson,
-          timeLimitSnapshot: problem.timeLimitSnapshot,
-          memoryLimitSnapshot: problem.memoryLimitSnapshot,
-          judgeConfigSnapshot: problem.judgeConfigSnapshot,
-          testSetRevisionId: problem.testSetRevisionId,
-          allowedLanguagesSnapshot: problem.allowedLanguagesSnapshot,
-          sourcePlatformSnapshot: problem.sourcePlatformSnapshot,
-          sourceProblemIdSnapshot: problem.sourceProblemIdSnapshot,
-          sourceUrlSnapshot: problem.sourceUrlSnapshot,
-          snapshotCreatedAt: problem.snapshotCreatedAt ? new Date(problem.snapshotCreatedAt) : new Date(),
-          dataVersion: problem.dataVersion || '1',
-        },
-      })
-      for (const kind of ['statement', 'solution'] as const) {
-        const source = problem.ContentSnapshot.find(snapshot => snapshot.kind === kind)
-        if (!source) continue
-        const snapshotId = crypto.randomUUID()
-        let snapshotFileId: string | null = null
-        if (source.snapshotFileId) {
-          const file = await fileService.download(source.snapshotFileId)
-          const copied = await fileService.upload(file.buffer, {
-            category: 'pdf',
-            ownerType: 'training_content',
-            ownerId: snapshotId,
-            originalName: file.originalName,
-            mimeType: file.mimeType,
-            isPublic: false,
-          })
-          snapshotFileId = copied.id
-          copiedFileIds.push(copied.id)
-        }
-        await prisma.trainingProblemContentSnapshot.create({
-          data: {
-            id: snapshotId,
-            trainingProblemId,
-            kind: source.kind,
-            revision: 1,
-            sourceType: source.sourceType,
-            sourceContentId: source.sourceContentId,
-            sourceRevision: source.sourceRevision,
-            format: source.format,
-            language: source.language,
-            title: source.title,
-            content: source.content,
-            snapshotFileId,
-            fileName: source.fileName,
-            authorUserId: source.authorUserId,
-            authorUsernameSnapshot: source.authorUsernameSnapshot,
-            selectedBy: userId,
-          },
-        })
-      }
-    }
-  } catch (error) {
-    if (makeupTraining) await prisma.training.delete({ where: { id: makeupTraining.id } }).catch(() => {})
-    await Promise.all(copiedFileIds.map(fileId => fileService.softDelete(fileId).catch(() => {})))
-    throw error
+  if (!training.organizationId) fail(422, 'ASSIGNMENT_SCOPE_REQUIRED', '补题作业必须属于学校组织')
+  const creatorMembership = await prisma.organizationMembership.findUnique({
+    where: { organizationId_userId: { organizationId: training.organizationId, userId } },
+    select: { id: true, status: true, memberRole: true },
+  })
+  if (!creatorMembership || creatorMembership.status !== 'active' || !['teacher', 'school_principal'].includes(creatorMembership.memberRole)) {
+    fail(403, 'ASSIGNMENT_CREATE_DENIED', '需要当前学校的有效教师或负责人身份')
   }
+  if (!training.TrainingProblem.length) fail(422, 'ASSIGNMENT_PROBLEMS_REQUIRED', '原活动没有可加入补题作业的题目')
+
+  const assignment = await prisma.$transaction(async tx => {
+    const created = await tx.assignment.create({ data: {
+      teamId: training.teamId,
+      organizationId: training.organizationId!,
+      title: input.title || `${training.title} - 补题练习`,
+      description: training.description,
+      rosterMode: 'DYNAMIC',
+      gradingPolicy: 'BEST_BEFORE_DUE',
+      latePolicy: 'DISALLOW',
+      correctionPolicy: 'NONE',
+      solutionReleasePolicy: 'AFTER_RELEASE',
+      openAt: startTime,
+      dueAt: endTime,
+      closeAt: endTime,
+      createdByMembershipId: creatorMembership.id,
+      eventSeq: 1,
+    } })
+    const seen = new Set<string>()
+    for (const [index, problem] of training.TrainingProblem.entries()) {
+      if (seen.has(problem.problemId)) continue
+      seen.add(problem.problemId)
+      const revision = problem.TestSetRevision || problem.Problem.LatestTestSetRevision
+      if (!revision) fail(422, 'ASSIGNMENT_REVISION_REQUIRED', `题目 ${problem.titleSnapshot || problem.problemId} 没有可固定的 TestSet Revision`)
+      const maxScore = problem.points && problem.points > 0 ? problem.points : 100
+      await tx.assignmentProblem.create({ data: {
+        assignmentId: created.id,
+        problemId: problem.problemId,
+        testSetRevisionId: revision.id,
+        orderIndex: index,
+        category: 'REQUIRED',
+        required: true,
+        maxScore,
+        targetScore: maxScore,
+        weight: 100,
+        completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',
+        judgeConfigSnapshot: revision.judgeConfig,
+        judgeConfigHash: revision.judgeConfigHash,
+        settings: { sourceTrainingId: training.id, sourceTrainingProblemId: problem.id, alias: problem.alias },
+      } })
+    }
+    await tx.assignmentEvent.create({ data: {
+      assignmentId: created.id,
+      seq: 1,
+      type: 'assignment.created_from_activity',
+      actorUserId: userId,
+      payload: { sourceTrainingId: training.id, problemCount: seen.size },
+    } })
+    return created
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
   logger.info('makeup_homework_created', {
     action: 'training',
-    metadata: { sourceTrainingId: id, makeupTrainingId: makeupTraining.id, teamId: training.teamId },
+    metadata: { sourceTrainingId: id, assignmentId: assignment.id, teamId: training.teamId },
   })
   return {
-    id: makeupTraining.id,
-    title: makeupTraining.title,
-    type: makeupTraining.type,
-    sourceTrainingId: makeupTraining.sourceTrainingId,
-    startTime: makeupTraining.startTime.toISOString(),
-    endTime: makeupTraining.endTime.toISOString(),
-    format: makeupTraining.format,
-    teamId: makeupTraining.teamId,
-    organizationId: makeupTraining.organizationId,
+    id: assignment.id,
+    title: assignment.title,
+    type: 'assignment',
+    sourceTrainingId: training.id,
+    startTime: assignment.openAt.toISOString(),
+    endTime: assignment.closeAt.toISOString(),
+    teamId: assignment.teamId,
+    organizationId: assignment.organizationId,
     problemCount: training.TrainingProblem.length,
   }
 }

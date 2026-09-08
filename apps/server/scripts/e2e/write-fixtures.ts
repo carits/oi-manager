@@ -54,7 +54,7 @@ async function main() {
     required('personal problem', prisma.problem.findUnique({ where: { id: 'e2e-personal-problem' } })),
     required('problem list', prisma.problemList.findFirst({ orderBy: { createdAt: 'asc' } })),
     required('personal problem list', prisma.problemList.findFirst({ where: { scope: 'personal' } })),
-    required('homework', prisma.training.findFirst({ where: { type: 'homework' }, orderBy: { id: 'asc' } })),
+    required('assignment', prisma.assignment.findUnique({ where: { id: 'e2e-assignment' } })),
     required('contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'campus' }, orderBy: { id: 'asc' } })),
     required('personal contest', prisma.training.findFirst({ where: { type: 'contest', scope: 'personal' }, orderBy: { id: 'asc' } })),
     required('submission', prisma.submission.findFirst({
@@ -86,7 +86,7 @@ async function main() {
     personalProblem: personalProblem.id,
     problemList: problemList.id,
     personalProblemList: personalProblemList.id,
-    homework: String(homework.id),
+    homework: homework.id,
     contest: String(contest.id),
     personalContest: String(personalContest.id),
     submission: String(submission.id),

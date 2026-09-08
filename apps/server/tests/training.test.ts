@@ -256,6 +256,22 @@ describe('训练模块权限测试', () => {
 
       expect(res.status).toBe(403)
     })
+
+    it('A6: 旧 Training homework 写入通道已退役', async () => {
+      const res = await createAuthenticatedRequest(app, ownerToken)
+        .post(`/api/teams/${team.id}/trainings`)
+        .send({
+          title: '不应创建的旧作业',
+          format: 'ioi',
+          type: 'homework',
+          startTime: new Date(Date.now() + 86400000).toISOString(),
+          endTime: new Date(Date.now() + 86400000 * 2).toISOString(),
+        })
+
+      expect(res.status).toBe(410)
+      expect(res.body.code).toBe('LEGACY_HOMEWORK_API_RETIRED')
+      expect(await prisma.training.count({ where: { title: '不应创建的旧作业' } })).toBe(0)
+    })
   })
 
   // ==================== B. 训练查看权限 ====================
