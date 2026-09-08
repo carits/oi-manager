@@ -18,7 +18,7 @@ test.describe('coach-directed training engine @smoke', () => {
     await expect(coach.getByText('RUNNING', { exact: true })).toBeVisible()
 
     await student.goto(base)
-    await expect(student.getByRole('heading', { name: /E2E-1000.*E2E A Plus B/ })).toBeVisible()
+    await expect(student.getByRole('heading', { name: /A.*E2E A Plus B/ })).toBeVisible()
     const editor = student.getByLabel('代码草稿')
     await editor.fill('#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}')
     await student.getByRole('button', { name: '保存草稿' }).click()
