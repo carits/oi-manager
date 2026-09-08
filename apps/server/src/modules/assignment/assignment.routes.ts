@@ -4,12 +4,18 @@ import { authenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import {
   AssignmentError,
+  adjustAssignmentScore,
+  createAssignmentCorrection,
+  createAssignmentFeedback,
   createAssignment,
   getAssignment,
+  getAssignmentProgress,
+  getAssignmentWorkspace,
   listAssignments,
   publishAssignment,
   replaceAssignmentProblems,
   replaceAssignmentRoster,
+  reverseAssignmentScoreAdjustment,
   submitAssignmentSolution,
   transitionAssignment,
   updateAssignment,
@@ -42,6 +48,11 @@ assignmentRouter.get('/assignments/:id', asyncHandler(async (req: AuthRequest, r
   catch (error) { return sendError(error, res) }
 }))
 
+assignmentRouter.get('/assignments/:id/workspace', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.json({ success: true, data: await getAssignmentWorkspace(req.user!.userId, req.params.id) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
 assignmentRouter.patch('/assignments/:id', asyncHandler(async (req: AuthRequest, res) => {
   try { return res.json({ success: true, data: await updateAssignment(req.user!.userId, req.params.id, req.body) }) }
   catch (error) { return sendError(error, res) }
@@ -69,6 +80,31 @@ assignmentRouter.post('/assignments/:id/publish', asyncHandler(async (req: AuthR
 
 assignmentRouter.post('/assignments/:id/submit', asyncHandler(async (req: AuthRequest, res) => {
   try { return res.status(201).json({ success: true, data: await submitAssignmentSolution(req.user!.userId, req.params.id, req.body) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
+assignmentRouter.get('/assignments/:id/progress', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.json({ success: true, data: await getAssignmentProgress(req.user!.userId, req.params.id) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
+assignmentRouter.post('/assignments/:id/corrections', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.status(201).json({ success: true, data: await createAssignmentCorrection(req.user!.userId, req.params.id, req.body) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
+assignmentRouter.post('/assignments/:id/feedback', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.status(201).json({ success: true, data: await createAssignmentFeedback(req.user!.userId, req.params.id, req.body) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
+assignmentRouter.post('/assignments/:id/score-adjustments', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.status(201).json({ success: true, data: await adjustAssignmentScore(req.user!.userId, req.params.id, req.body) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
+assignmentRouter.post('/assignments/:id/score-adjustments/:adjustmentId/reverse', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.status(201).json({ success: true, data: await reverseAssignmentScoreAdjustment(req.user!.userId, req.params.id, req.params.adjustmentId, req.body) }) }
   catch (error) { return sendError(error, res) }
 }))
 

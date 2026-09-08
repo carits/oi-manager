@@ -137,4 +137,33 @@ describe('independent assignment domain', () => {
     expect((await processDueAssignments()).closed).toBe(1)
     expect((await prisma.assignment.findUniqueOrThrow({ where: { id: assignment.id } })).status).toBe('CLOSED')
   })
+
+  it('keeps correction, feedback and score adjustments as auditable facts', async () => {
+    const token = generateTokenFromUser(teacher.user)
+    const now = Date.now()
+    const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({ organizationId, title: '批改闭环', openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000) })
+    const assignmentId = created.body.data.id
+    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
+    const withProblem = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, testSetRevisionId: revision.id }] })
+    const assignmentProblemId = withProblem.body.data.Problems[0].id
+    const withRoster = await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
+    const recipientId = withRoster.body.data.Recipients[0].id
+    await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
+    const correction = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/corrections`).send({ assignmentProblemId, recipientId, reason: '请订正边界条件' })
+    expect(correction.status).toBe(201)
+    const feedback = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/feedback`).send({ assignmentProblemId, recipientId, content: '注意整数范围' })
+    expect(feedback.status).toBe(201)
+    const adjustment = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/score-adjustments`).send({ recipientId, delta: 5, reason: '人工复核' })
+    expect(adjustment.status).toBe(201)
+    const reversal = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/score-adjustments/${adjustment.body.data.id}/reverse`).send({ reason: '录入错误' })
+    expect(reversal.status).toBe(201)
+    expect(reversal.body.data.delta).toBe(-5)
+    const duplicate = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/score-adjustments/${adjustment.body.data.id}/reverse`).send({ reason: '重复冲正' })
+    expect(duplicate.status).toBe(409)
+    const workspace = await createAuthenticatedRequest(app, generateTokenFromUser(student.user)).get(`/api/assignments/${assignmentId}/workspace`)
+    expect(workspace.status).toBe(200)
+    expect(workspace.body.data.feedback).toHaveLength(1)
+    expect(workspace.body.data.corrections).toHaveLength(1)
+    expect(workspace.body.data.assignment.Recipients).toHaveLength(1)
+  })
 })
