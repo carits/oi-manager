@@ -25,6 +25,7 @@ export interface FixtureIds {
   personalContest: string
   submission: string
   personalSubmission: string
+  trainingSession: string
 }
 
 export function loadFixtureIds(): FixtureIds {

@@ -36,6 +36,7 @@ async function main() {
     personalContest,
     submission,
     personalSubmission,
+    trainingSession,
   ] = await Promise.all([
     required('admin', prisma.user.findUnique({ where: { username: 'admin' } })),
     required('platform_admin', prisma.user.findUnique({ where: { username: 'platform_admin' } })),
@@ -63,6 +64,7 @@ async function main() {
     required('personal submission', prisma.submission.findFirst({
       where: { userId: 'e2e-personal-student', submitScope: 'problem' },
     })),
+    required('training session', prisma.trainingSession.findUnique({ where: { id: 'e2e-training-session' } })),
   ])
 
   const output = {
@@ -89,6 +91,7 @@ async function main() {
     personalContest: String(personalContest.id),
     submission: String(submission.id),
     personalSubmission: String(personalSubmission.id),
+    trainingSession: trainingSession.id,
   }
 
   const outputDir = path.join(rootDir, 'test-results')

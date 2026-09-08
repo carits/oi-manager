@@ -44,6 +44,7 @@ const ids = {
   organization: 'org_school-default',
   stickerPack: 'e2e-sticker-pack',
   sticker: 'e2e-sticker-happy',
+  trainingSession: 'e2e-training-session',
 }
 
 async function seedChatSticker(prisma: PrismaClient) {
@@ -309,6 +310,12 @@ async function main() {
         },
       ],
     })
+    const judgeConfigHash = createHash('sha256').update(judgeConfig).digest('hex')
+    await prisma.problemTestSetRevision.create({ data: {
+      id: 'e2e-testset-revision', problemId: ids.problem, revisionNumber: 1, mode: 'acm', source: 'initial',
+      judgeConfig, judgeConfigHash, graphHash: createHash('sha256').update('e2e-graph').digest('hex'), testdataPath: '.', createdBy: ids.principal,
+    } })
+    await prisma.problem.update({ where: { id: ids.problem }, data: { latestTestSetRevisionId: 'e2e-testset-revision' } })
     await prisma.problemStatement.createMany({
       data: [
         {
@@ -330,6 +337,13 @@ async function main() {
         },
       ],
     })
+    await prisma.trainingSession.create({ data: {
+      id: ids.trainingSession, title: 'E2E 教练训练', description: '阶段控制与草稿测试', sessionType: 'ACM', status: 'SCHEDULED',
+      organizationId: ids.organization, createdBy: ids.principal, scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000), rankingMode: 'PROGRESS_ONLY', peerVisibility: 'PROGRESS',
+      Stages: { create: { id: 'e2e-training-stage', name: '顺序训练', orderIndex: 0, mode: 'SEQUENTIAL', advanceMode: 'MANUAL', problemAccessMode: 'SEQUENTIAL', submissionMode: 'ENABLED', Problems: { create: { id: 'e2e-training-stage-problem', problemId: ids.problem, testSetRevisionId: 'e2e-testset-revision', alias: 'A', orderIndex: 0 } } } },
+      Participants: { create: { id: 'e2e-training-participant', userId: ids.campusStudent, currentStageId: 'e2e-training-stage' } },
+    } })
+    await prisma.trainingSession.update({ where: { id: ids.trainingSession }, data: { currentStageId: 'e2e-training-stage' } })
 
     await prisma.problemList.create({
       data: {
