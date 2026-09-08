@@ -14,7 +14,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-DATABASE_URL_VALUE="$(cd "$ROOT_DIR" && DOTENV_CONFIG_PATH="$ENV_FILE" node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+DATABASE_URL_VALUE="$(cd "$ROOT_DIR/apps/server" && DOTENV_CONFIG_PATH="$ENV_FILE" node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
 if [[ -z "$DATABASE_URL_VALUE" ]]; then
   echo "DATABASE_URL is required" >&2
   exit 1
