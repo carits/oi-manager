@@ -64,17 +64,17 @@ test.describe('core role workflows @smoke', () => {
     await expect(firstAcceptedCells).toHaveCount(2)
     await expect(firstAcceptedCells.first()).toHaveText(/^\d+\/\d+$/)
     await expect(firstAcceptedCells.first()).toHaveAttribute('title', /首个通过.*第 \d+ 次提交.*第 \d+ 分钟通过/)
-    await expect(firstAcceptedCells.first()).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    await expect(firstAcceptedCells.first()).toHaveCSS('background-color', 'rgb(22, 163, 74)')
     await firstAcceptedCells.first().hover()
-    await expect(firstAcceptedCells.first()).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    await expect(firstAcceptedCells.first()).toHaveCSS('background-color', 'rgb(22, 163, 74)')
 
     const acceptedCell = page.locator('td[data-result="accepted"]').first()
     await expect(acceptedCell).toHaveText('2/50')
-    await expect(acceptedCell).toHaveCSS('background-color', 'rgb(232, 247, 233)')
+    await expect(acceptedCell).toHaveCSS('background-color', 'rgb(220, 252, 231)')
 
     const failedCell = page.locator('td[data-result="failed"]').first()
     await expect(failedCell).toHaveText('-2')
-    await expect(failedCell).toHaveCSS('background-color', 'rgb(251, 228, 228)')
+    await expect(failedCell).toHaveCSS('background-color', 'rgb(254, 226, 226)')
     await expect(page.locator('td[data-result="unsubmitted"]').first()).toHaveText('')
 
     const participantColumnWidth = await page.getByRole('columnheader', { name: '参赛者' })
@@ -143,9 +143,9 @@ test.describe('core role workflows @smoke', () => {
     const currentUserRow = mobilePage.locator('tbody tr').filter({ hasText: 'E2E Campus Student' })
     await expect(currentUserRow).toBeVisible()
     const currentFirstAcceptedCell = currentUserRow.locator('td[data-result="first-accepted"]')
-    await expect(currentFirstAcceptedCell).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    await expect(currentFirstAcceptedCell).toHaveCSS('background-color', 'rgb(22, 163, 74)')
     await currentUserRow.hover()
-    await expect(currentFirstAcceptedCell).toHaveCSS('background-color', 'rgb(47, 125, 50)')
+    await expect(currentFirstAcceptedCell).toHaveCSS('background-color', 'rgb(22, 163, 74)')
     const scrollMetrics = await mobilePage.getByTestId('training-ranking-scroll').evaluate(element => ({
       clientWidth: element.clientWidth,
       scrollWidth: element.scrollWidth,
@@ -294,10 +294,10 @@ test.describe('core role workflows @smoke', () => {
         await expect(full).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
         await expect(partial).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
       } else {
-        await expect(full).toHaveCSS('background-color', 'rgb(232, 247, 233)')
+        await expect(full).toHaveCSS('background-color', 'rgb(220, 252, 231)')
         await expect(partial).not.toHaveCSS('background-color', 'rgb(255, 255, 255)')
       }
-      await expect(zero).toHaveCSS('color', 'rgb(136, 136, 136)')
+      await expect(zero).toHaveCSS('color', 'rgb(148, 163, 184)')
 
       await context.close()
     }

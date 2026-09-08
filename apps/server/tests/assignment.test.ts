@@ -177,6 +177,8 @@ describe('independent assignment domain', () => {
     const managerWorkspace = await createAuthenticatedRequest(app, token).get(`/api/assignments/${assignmentId}/workspace`)
     expect(managerWorkspace.status).toBe(200)
     expect(managerWorkspace.body.data.canManage).toBe(true)
+    expect(managerWorkspace.body.data.managerProgress.recipients).toHaveLength(1)
+    expect(managerWorkspace.body.data.managerProgress.recipients[0]).toMatchObject({ id: recipientId, score: 0, adjustment: 0 })
   })
 
   it('migrates legacy homework snapshots idempotently without changing the legacy record', async () => {

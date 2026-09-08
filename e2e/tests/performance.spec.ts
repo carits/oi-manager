@@ -51,7 +51,7 @@ test.describe('response budgets', () => {
       await page.goto(`${organizationBase}/homeworks/${ids.homework}`, {
         waitUntil: 'domcontentloaded',
       })
-      await expect(page.getByRole('navigation')).toBeVisible()
+      await expect(page.getByRole('button', { name: /显示导航|隐藏导航/ })).toBeVisible()
       await expect(page.getByRole('heading', { name: /作业|E2E Active Homework/ })).toBeVisible()
 
       expect(Date.now() - startedAt).toBeLessThanOrEqual(2_000)

@@ -243,13 +243,47 @@ export async function getAssignmentWorkspace(userId: string, assignmentId: strin
   const manager = await canManageAssignment(userId, assignment)
   const recipient = manager ? null : assignment.Recipients.find(item => item.userId === userId && item.status !== 'REMOVED')
   const recipientIds = manager ? assignment.Recipients.map(item => item.id) : recipient ? [recipient.id] : []
-  const [progress, corrections, feedback, gradeSnapshots] = await Promise.all([
+  const [progress, corrections, feedback, gradeSnapshots, adjustments] = await Promise.all([
     prisma.assignmentProblemProgress.findMany({ where: { assignmentId, recipientId: { in: recipientIds } }, orderBy: { updatedAt: 'desc' } }),
     prisma.assignmentCorrection.findMany({ where: { assignmentId, recipientId: { in: recipientIds } }, orderBy: { createdAt: 'desc' } }),
     prisma.assignmentFeedback.findMany({ where: { assignmentId, recipientId: { in: recipientIds }, ...(manager ? {} : { visibility: 'recipient' }) }, orderBy: { createdAt: 'desc' } }),
     prisma.assignmentGradeSnapshot.findMany({ where: { assignmentId, recipientId: { in: recipientIds } }, orderBy: [{ createdAt: 'desc' }, { revision: 'desc' }] }),
+    manager
+      ? prisma.assignmentScoreAdjustment.findMany({ where: { assignmentId }, orderBy: { createdAt: 'asc' } })
+      : Promise.resolve([]),
   ])
-  return { canManage: manager, assignment: serializeAssignment(assignment, manager ? 'all' : userId), progress, corrections, feedback, gradeSnapshots }
+  const managerProgress = manager
+    ? summarizeAssignmentProgress(assignment, progress, adjustments)
+    : null
+  return { canManage: manager, assignment: serializeAssignment(assignment, manager ? 'all' : userId), progress, managerProgress, corrections, feedback, gradeSnapshots }
+}
+
+function summarizeAssignmentProgress(
+  assignment: AssignmentShape,
+  progress: Awaited<ReturnType<typeof prisma.assignmentProblemProgress.findMany>>,
+  adjustments: Awaited<ReturnType<typeof prisma.assignmentScoreAdjustment.findMany>>,
+) {
+  const adjustmentsByRecipient = new Map<string, number>()
+  for (const adjustment of adjustments) adjustmentsByRecipient.set(adjustment.recipientId, (adjustmentsByRecipient.get(adjustment.recipientId) || 0) + adjustment.delta)
+  const progressByRecipient = new Map<string, typeof progress>()
+  for (const item of progress) progressByRecipient.set(item.recipientId, [...(progressByRecipient.get(item.recipientId) || []), item])
+  return {
+    problems: assignment.Problems.map(problem => ({ id: problem.id, orderIndex: problem.orderIndex, problem: problem.Problem, maxScore: problem.maxScore, targetScore: problem.targetScore, weight: problem.weight })),
+    recipients: assignment.Recipients.map(recipient => {
+      const items = progressByRecipient.get(recipient.id) || []
+      const rawScore = items.reduce((sum, item) => sum + Number(item.finalScore || 0), 0)
+      const adjustment = adjustmentsByRecipient.get(recipient.id) || 0
+      return {
+        id: recipient.id, user: recipient.User, status: recipient.status,
+        dueAtEffective: recipient.dueAtEffective, closeAtEffective: recipient.closeAtEffective,
+        score: Math.max(0, rawScore + adjustment), rawScore, adjustment,
+        completedProblems: items.filter(item => item.learningStatus === 'COMPLETED').length,
+        lateProblems: items.filter(item => item.timelinessStatus === 'LATE').length,
+        correctionProblems: items.filter(item => ['NEEDS_CORRECTION', 'CORRECTING'].includes(item.correctionStatus)).length,
+        progress: items,
+      }
+    }),
+  }
 }
 
 export async function updateAssignment(userId: string, assignmentId: string, body: any) {
@@ -580,27 +614,10 @@ export async function getAssignmentProgress(userId: string, assignmentId: string
     prisma.assignmentCorrection.findMany({ where: { assignmentId }, orderBy: { createdAt: 'desc' } }),
     prisma.assignmentScoreAdjustment.findMany({ where: { assignmentId }, orderBy: { createdAt: 'asc' } }),
   ])
-  const adjustmentsByRecipient = new Map<string, number>()
-  for (const adjustment of adjustments) adjustmentsByRecipient.set(adjustment.recipientId, (adjustmentsByRecipient.get(adjustment.recipientId) || 0) + adjustment.delta)
-  const progressByRecipient = new Map<string, typeof progress>()
-  for (const item of progress) progressByRecipient.set(item.recipientId, [...(progressByRecipient.get(item.recipientId) || []), item])
+  const summary = summarizeAssignmentProgress(assignment, progress, adjustments)
   return {
     assignment: { id: assignment.id, title: assignment.title, status: assignment.status, statusRevision: assignment.statusRevision },
-    problems: assignment.Problems.map(problem => ({ id: problem.id, orderIndex: problem.orderIndex, problem: problem.Problem, maxScore: problem.maxScore, targetScore: problem.targetScore, weight: problem.weight })),
-    recipients: assignment.Recipients.map(recipient => {
-      const items = progressByRecipient.get(recipient.id) || []
-      const rawScore = items.reduce((sum, item) => sum + Number(item.finalScore || 0), 0)
-      const adjustment = adjustmentsByRecipient.get(recipient.id) || 0
-      return {
-        id: recipient.id, user: recipient.User, status: recipient.status,
-        dueAtEffective: recipient.dueAtEffective, closeAtEffective: recipient.closeAtEffective,
-        score: Math.max(0, rawScore + adjustment), rawScore, adjustment,
-        completedProblems: items.filter(item => item.learningStatus === 'COMPLETED').length,
-        lateProblems: items.filter(item => item.timelinessStatus === 'LATE').length,
-        correctionProblems: items.filter(item => ['NEEDS_CORRECTION', 'CORRECTING'].includes(item.correctionStatus)).length,
-        progress: items,
-      }
-    }),
+    ...summary,
     corrections,
   }
 }

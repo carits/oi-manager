@@ -57,7 +57,7 @@ test.describe('loading, empty, error and retry states @compact', () => {
       waitUntil: 'domcontentloaded',
     })
 
-    await expect(page.getByRole('navigation')).toBeVisible()
+    await expect(page.getByRole('button', { name: /显示导航|隐藏导航/ })).toBeVisible()
     await expect(page.locator('[aria-busy="true"]').first()).toBeVisible()
     await expect(page.locator('body')).not.toContainText('加载中')
     await expect(page.locator('body')).toContainText('E2E Active Homework', { timeout: 8000 })
