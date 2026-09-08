@@ -98,7 +98,7 @@ CREATE TABLE "TrainingSessionProblemProgress" (
   "firstOpenedAt" TIMESTAMP(3), "lastOpenedAt" TIMESTAMP(3), "activeSeconds" INTEGER NOT NULL DEFAULT 0,
   "attemptCount" INTEGER NOT NULL DEFAULT 0, "bestScore" INTEGER, "bestVerdict" TEXT, "acAt" TIMESTAMP(3),
   "hintCount" INTEGER NOT NULL DEFAULT 0, "highestHintLevel" INTEGER NOT NULL DEFAULT 0,
-  "lastSubmissionAt" TIMESTAMP(3), "lastProgressAt" TIMESTAMP(3), "stuckDetectedAt" TIMESTAMP(3),
+  "lastSubmissionAt" TIMESTAMP(3), "lastScoreImprovedAt" TIMESTAMP(3), "lastProgressAt" TIMESTAMP(3), "stuckDetectedAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "TrainingSessionProblemProgress_pkey" PRIMARY KEY ("id")
 );

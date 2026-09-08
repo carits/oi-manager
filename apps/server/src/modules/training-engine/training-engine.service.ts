@@ -506,7 +506,7 @@ export async function recordHeartbeat(userId: string, sessionId: string, body: a
   return prisma.$transaction(async tx => {
     const updatedParticipant = await tx.trainingSessionParticipant.update({ where: { id: participant.id }, data: { lastHeartbeatAt: now, activeSeconds: { increment: elapsed }, currentStageId: session.currentStageId, currentProblemId: stageProblemId } })
     const current = await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } }, update: { lastOpenedAt: now, activeSeconds: { increment: elapsed }, lastProgressAt: now, status: { set: 'WORKING' } }, create: { participantId: participant.id, stageProblemId, status: 'WORKING', firstOpenedAt: now, lastOpenedAt: now, activeSeconds: elapsed, lastProgressAt: now } })
-    const stuck = current.activeSeconds >= 1800 && current.attemptCount >= 3 && (!current.lastSubmissionAt || now.getTime() - current.lastSubmissionAt.getTime() >= 15 * 60_000)
+    const stuck = current.activeSeconds >= 1800 && current.attemptCount >= 3 && (!current.lastScoreImprovedAt || now.getTime() - current.lastScoreImprovedAt.getTime() >= 15 * 60_000)
     if (stuck && current.status === 'WORKING') await tx.trainingSessionProblemProgress.update({ where: { id: current.id }, data: { status: 'STUCK', stuckDetectedAt: now } })
     return { participant: updatedParticipant, progress: { ...current, status: stuck ? 'STUCK' : current.status } }
   })
@@ -538,12 +538,16 @@ export async function createTrainingHint(userId: string, sessionId: string, body
 
 export async function listAvailableHints(userId: string, sessionId: string, stageProblemId: string) {
   const session = await assertAccess(userId, sessionId)
+  const manager = await canManageSession(userId, session)
   const permission = await resolveTrainingPermission(userId, sessionId, stageProblemId)
   if (!permission.canOpenHint) return []
   const participant = await prisma.trainingSessionParticipant.findUnique({ where: { sessionId_userId: { sessionId, userId } } })
   const progress = participant ? await prisma.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId } } }) : null
   const hints = await prisma.trainingSessionHint.findMany({ where: { sessionId, stageProblemId }, orderBy: { level: 'asc' } })
-  return hints.filter(hint => hint.globallyOpenedAt || hint.openMode === 'TIME' && Number(progress?.activeSeconds || 0) >= Number(hint.triggerSeconds || Infinity) || hint.openMode === 'ATTEMPT' && Number(progress?.attemptCount || 0) >= Number(hint.triggerAttempts || Infinity) || hint.openMode === 'SCORE' && Number(progress?.bestScore || 0) >= Number(hint.triggerScore || Infinity)).map(hint => ({ id: hint.id, level: hint.level, title: hint.title, opened: false }))
+  if (manager) return hints.map(hint => ({ id: hint.id, level: hint.level, title: hint.title, content: hint.content, openMode: hint.openMode, globallyOpenedAt: hint.globallyOpenedAt, opened: Boolean(hint.globallyOpenedAt) }))
+  const accesses = participant ? await prisma.trainingSessionHintAccess.findMany({ where: { participantId: participant.id, hintId: { in: hints.map(hint => hint.id) } }, select: { hintId: true } }) : []
+  const accessed = new Set(accesses.map(item => item.hintId))
+  return hints.filter(hint => hint.globallyOpenedAt || hint.openMode === 'TIME' && Number(progress?.activeSeconds || 0) >= Number(hint.triggerSeconds || Infinity) || hint.openMode === 'ATTEMPT' && Number(progress?.attemptCount || 0) >= Number(hint.triggerAttempts || Infinity) || hint.openMode === 'SCORE' && Number(progress?.bestScore || 0) >= Number(hint.triggerScore || Infinity)).map(hint => ({ id: hint.id, level: hint.level, title: hint.title, opened: accessed.has(hint.id) }))
 }
 
 export async function openTrainingHint(userId: string, sessionId: string, hintId: string) {
@@ -656,7 +660,8 @@ export async function syncTrainingEngineSubmission(submission: { id: number; use
     if (await tx.trainingSessionScoreEvent.findUnique({ where: { submissionId: submission.id }, select: { id: true } })) return
     const existing = await tx.trainingSessionProblemProgress.findUnique({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } } })
     const bestScore = Math.max(existing?.bestScore || 0, submission.score || (accepted ? 100 : 0))
-    await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: bestScore > (existing?.bestScore || -1) ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastProgressAt: new Date(), status: accepted ? 'COMPLETED' : 'WORKING', stuckDetectedAt: accepted ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastProgressAt: new Date(), status: accepted ? 'COMPLETED' : 'WORKING' } })
+    const improved = bestScore > (existing?.bestScore ?? -1)
+    await tx.trainingSessionProblemProgress.upsert({ where: { participantId_stageProblemId: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId! } }, update: { attemptCount: { increment: 1 }, bestScore, bestVerdict: improved ? submission.result : existing?.bestVerdict, acAt: accepted ? existing?.acAt || new Date() : existing?.acAt, lastSubmissionAt: new Date(), lastScoreImprovedAt: improved ? new Date() : existing?.lastScoreImprovedAt, lastProgressAt: improved ? new Date() : existing?.lastProgressAt, status: accepted ? 'COMPLETED' : 'WORKING', stuckDetectedAt: improved ? null : existing?.stuckDetectedAt }, create: { participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, attemptCount: 1, bestScore, bestVerdict: submission.result, acAt: accepted ? new Date() : null, lastSubmissionAt: new Date(), lastScoreImprovedAt: new Date(), lastProgressAt: new Date(), status: accepted ? 'COMPLETED' : 'WORKING' } })
     await tx.trainingSessionScoreEvent.create({ data: { sessionId: submission.trainingSessionId!, participantId: participant.id, stageProblemId: submission.trainingStageProblemId!, submissionId: submission.id, score: submission.score, verdict: submission.result } })
     await appendEvent(tx, submission.trainingSessionId!, 'training.progress.updated', 'USER', submission.userId, { stageProblemId: submission.trainingStageProblemId, score: submission.score, verdict: submission.result })
   })

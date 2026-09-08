@@ -2600,6 +2600,7 @@ model TrainingSessionProblemProgress {
   hintCount          Int                          @default(0)
   highestHintLevel   Int                          @default(0)
   lastSubmissionAt   DateTime?
+  lastScoreImprovedAt DateTime?
   lastProgressAt     DateTime?
   stuckDetectedAt    DateTime?
   createdAt          DateTime                     @default(now())

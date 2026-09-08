@@ -109,7 +109,7 @@ export async function applyTrainingEngineMigration(expectedReportHash: string) {
         await tx.trainingSessionProblemProgress.create({ data: {
           participantId, stageProblemId, status: accepted ? 'COMPLETED' : old.attemptCount ? 'WORKING' : 'NOT_STARTED',
           attemptCount: old.attemptCount, bestScore: old.bestScore, bestVerdict: old.bestResult, acAt: old.acAt,
-          lastSubmissionAt: old.attemptCount ? old.updatedAt : null, lastProgressAt: old.updatedAt,
+          lastSubmissionAt: old.attemptCount ? old.updatedAt : null, lastScoreImprovedAt: old.bestScore != null ? old.updatedAt : null, lastProgressAt: old.updatedAt,
         } })
       }
       for (const [oldProblemId, stageProblemId] of stageProblems) {
