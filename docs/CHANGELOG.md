@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 source_of_truth: Git history
 ---
 
@@ -23,8 +23,8 @@ source_of_truth: Git history
 - Evaluation Ledger 统一记录预占扣减与未用额度退回，当前预占统计只包含 `reserved` Reservation；管理者当日账户可安全升级到 100,000 上限。
 - Carits 交易增加 `requestFingerprint`，相同幂等键只有在业务引用和聚合分录完全一致时才能重放，差异请求返回 409；购买 UI 在明确成功前稳定复用同一幂等键。
 - 奖励 Worker 的终态写入同时校验 fencing token，日上限按 `posted + reversed` 毛发放量计算；连续失败 5 次后由超级管理员通过审计接口显式重试。
-- 本条记录仓库实现与文档收口；生产迁移、启用奖励 Worker 和线上闭环验收尚待实际发布后补记，不据此宣称已部署。
-- 文档、API 认证和架构门禁已通过：59 份活动文档、73 个 Web 路由、148 个 Prisma 模型、484 个 HTTP 端点一致，路由边界和 Hack 状态写入违规均为 0。
+- 生产迁移前备份 `/data/backups/oi-manager/releases/20260909_000220/oi_manager_20260909_000220.dump`（SHA-256 `4651fb811d440d7b8e6b17add546f731db5e9b692bd28ba7f8d27c903282e4b7`）已恢复演练；干净库与生产升级结构哈希同为 `bd4a48be676df87d65aa5a061210eff57afc73905137da21ea94922aa33968d7`，48/48 migrations 已应用。economy-loop check/apply 确认异常账户、孤儿额度流水、不平衡交易和旧活跃预占均为 0，创建两个系统账户后关闭维护 API。
+- Server 全量 78 文件/649 项、经济定向 37/37、Web 71/71、Judge 42/42、模板 8/8、四端构建与文档/API/架构/UI/路由门禁通过；后台调度器退出竞态由 `74e760f` 修复。API 已由 3303 提升至 3302，奖励 Worker 正式启用，Judge 完成重新注册；Web BUILD_ID `i2NpDFGhvzuTCOti5d250` 经候选与正式双账号消息闭环探针后提升。线上只读验收确认套餐、额度、钱包与贡献审计正常，且普通账户、交易、奖励投递、购买、付费钱包和 Reservation 均为 0，没有补发历史奖励。
 
 ### Training Engine 可视化顺序编排
 

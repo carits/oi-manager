@@ -1,11 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
-- 2026-09-08: 贡献、Carits 与 Evaluation Credits 闭环已实现：只有正式晋升 Candidate/Hack 产生版本化贡献事实，自动晋升进入持久奖励 Worker，紧急发布须超管审核。Carits 已收口为双向不可变账本，可以固定套餐兑换长期 Evaluation Credits；任务使用免费、已购和平台三段预占与真实结算。强一致审查后又补齐任务/预占同事务、终态和孤儿 Reservation 的 30 秒对账、账本请求指纹与同键差异拒绝、奖励 fencing 终态 CAS、按毛发放统计日限额、失败奖励的超管审计重试，以及购买响应丢失时稳定复用幂等键。个人贡献/钱包、平台审计和可选组织归因 UI 已接入；组织奖励明确保持未开启。本批尚未记录生产部署成功；迁移、全量回归和线上验收结果必须在实际完成后补入。
+- 2026-09-09: 贡献、Carits 与 Evaluation Credits 闭环已完成生产发布：只有正式晋升 Candidate/Hack 产生版本化贡献事实，自动晋升进入持久奖励 Worker，紧急发布须超管审核；Carits 使用双向不可变账本，固定套餐按 `1 C = 500 Credits` 兑换长期 Evaluation Credits，任务按免费、已购和平台三段预占与真实结算。生产迁移前备份 `/data/backups/oi-manager/releases/20260909_000220/oi_manager_20260909_000220.dump`（SHA-256 `4651fb811d440d7b8e6b17add546f731db5e9b692bd28ba7f8d27c903282e4b7`）已恢复演练，干净库与生产升级结构哈希同为 `bd4a48be676df87d65aa5a061210eff57afc73905137da21ea94922aa33968d7`；48/48 migrations 已应用。受保护 economy-loop check/apply 确认异常账户、孤儿额度流水、不平衡交易和旧活跃预占均为 0，并原子创建 `REWARD_POOL/RESOURCE_SINK` 两个系统账户；维护接口随后关闭并验证为 404。Server 全量 78 文件/649 项、经济定向 37/37、Web 71/71、Judge 42/42、模板 8/8、Shared/Server/Judge/Web 构建及全部门禁通过；后台调度器退出竞态已由 `74e760f` 修复。API 已由 3303 提升至 3302，Worker 正式启用且 Judge 已重新注册；Web BUILD_ID `i2NpDFGhvzuTCOti5d250` 经候选与正式双账号消息闭环探针后提升。线上套餐、个人额度/钱包、贡献审计和平台汇总只读验收通过；当前普通账户、交易、奖励投递、购买、付费钱包和 Reservation 均为 0，未补发或伪造历史奖励。
 
 - 2026-09-08: Training Engine 的 DRAFT 顺序编排已从运行工作台拆分为独立五步设计器：阶段和题目可拖动/键盘排序、跨阶段分配，顺序连线可视化 AC/分数/时间/次数/教练放行与 ANY/ALL；阶段说明、单题目标分/时限、FOCUS 策略和 OI 固定 Revision Subtask 均可配置。创建模板只生成阶段骨架，题目必须在组织/Carits/外部题池中显式分配。保存已改为 advisory lock + Revision CAS + 稳定 ID 差异更新，可保持 Assignment/Hint 身份。Training Engine 12/12、Web 69/69、Server/Web 生产构建、UI 门禁及 Chromium 桌面/紧凑视口编排 E2E 2/2 通过；提交 `753eba6`、`c7adf0d` 已推送，API 活动 slot 为 3303，Web BUILD_ID `k_PCi8emq6NI2vNOMnQ-q` 已通过候选和正式双账号消息探针并提升。
 
