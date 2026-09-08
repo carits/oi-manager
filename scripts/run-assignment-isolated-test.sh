@@ -14,18 +14,14 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-set +a
-
-if [[ -z "${DATABASE_URL:-}" ]]; then
+DATABASE_URL_VALUE="$(cd "$ROOT_DIR" && DOTENV_CONFIG_PATH="$ENV_FILE" node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+if [[ -z "$DATABASE_URL_VALUE" ]]; then
   echo "DATABASE_URL is required" >&2
   exit 1
 fi
 
-TEST_DATABASE_URL="$(TEST_SCHEMA="$TEST_SCHEMA" node -e 'const url = new URL(process.env.DATABASE_URL); url.searchParams.set("schema", process.env.TEST_SCHEMA); process.stdout.write(url.toString())')"
-ADMIN_DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.searchParams.delete("schema"); process.stdout.write(url.toString())')"
+TEST_DATABASE_URL="$(DATABASE_URL="$DATABASE_URL_VALUE" TEST_SCHEMA="$TEST_SCHEMA" node -e 'const url = new URL(process.env.DATABASE_URL); url.searchParams.set("schema", process.env.TEST_SCHEMA); process.stdout.write(url.toString())')"
+ADMIN_DATABASE_URL="$(DATABASE_URL="$DATABASE_URL_VALUE" node -e 'const url = new URL(process.env.DATABASE_URL); url.searchParams.delete("schema"); process.stdout.write(url.toString())')"
 
 cleanup() {
   psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS $TEST_SCHEMA CASCADE" >/dev/null
