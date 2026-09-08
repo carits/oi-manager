@@ -13,8 +13,8 @@ test.describe('coach-directed training engine @smoke', () => {
 
     await coach.goto(base)
     await expect(coach.getByRole('heading', { name: 'E2E 教练训练' })).toBeVisible()
-    await expect(coach.getByRole('button', { name: '开始' })).toBeVisible()
-    await coach.getByRole('button', { name: '开始' }).click()
+    await expect(coach.getByRole('button', { name: '开始', exact: true })).toBeVisible()
+    await coach.getByRole('button', { name: '开始', exact: true }).click()
     await expect(coach.getByText('RUNNING', { exact: true })).toBeVisible()
 
     await student.goto(base)
