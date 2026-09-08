@@ -1,9 +1,11 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-07
+last_verified: 2026-09-08
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
+
+- 2026-09-08: 独立 Training Engine 已完成生产发布。训练由 Stage、不可变 TestSet Revision、学员进度、命令/Overlay、草稿、提示、策略决策、分数轨迹和可补偿事件组成；教练命令按全员/分组/团队/个人隔离，软硬暂停、聚焦恢复、顺序/目标分/混合推进、FOCUS_ONLY、迟到加入、OI Subtask 与 ACM 换题策略均由服务端强制。生产迁移前备份 `/data/backups/oi-manager/manual-release-20260908-training/oi_manager_20260908_124041.dump`（SHA-256 `1967736879c661ba8b923251acaa5905833415663e84c46c11a3fa27eb2113cc`）已恢复校验；50/50 migrations 完成。受保护 check/apply 将 384 条旧训练中的 378 条幂等迁移，6 条因缺 TestSet Revision 或历史账号失效保持旧模型并列入报告。Server 全量测试通过、Training Engine 11/11、Judge 42/42、Web 69/69、双视口训练 E2E 8/8、Shared/Server/Judge/Web 构建与全部门禁通过。提交 `9ebb1a8` 至 `b9a56cb` 已推送；API 活动 slot 为 3302，Judge/Worker/Executor 正常，Web BUILD_ID `VlK5d6fINiscMWP5LhkfH` 已通过候选及正式双账号消息探针并提升。线上读取 100 条迁移场次及阶段详情正常，维护迁移 API 已关闭；P1345 桌面/手机模板探针仍通过且未改变活动 STD/Validator。
 
 - 2026-09-08: OI Candidate、Wrong Corpus 与 11 选 10 Selector 已完成生产收口。正式 Test Graph 在服务、Revision 投影和 UI 三层强制每题最多 15 个 Subtask、每个 Subtask 跨 Official/Hack Gate 最多 10 个唯一测试点；逐 Subtask CLOSED/LIMITED/OPEN、Bootstrap Core、L1/L2/Holdout Judge 评估、保护期/永久保护、集合边际价值替换和不可变成员退休审计已启用。技术有效 Hack 先进入 Candidate Pool；LIMITED 保持可观察而不误判冗余，重复正式数据保留完整冗余终态，并发晋升通过题目锁/CAS 只生成一个 Revision。生产迁移前备份 `/data/backups/oi-manager/manual-release-20260908/oi_manager_20260908_021924.dump`（SHA-256 `e14e4578d8068b7a264a01fd68388a3e932d5b084ef711611677dce285dc0e09`）已恢复校验；46/46 migrations 应用完成。隔离 Server 75 文件/606 项、最终并发 6/6、Judge 42/42、Web 69/69、三端构建和文档/架构门禁通过。提交 `5662e08` 至 `186b5e2` 已推送；API 活动 slot 为 3303，Judge/Worker/Executor 正常，Web BUILD_ID `BC8fg3mXA_gDllqfnwdve` 已通过候选及正式双账号消息探针并提升。
 

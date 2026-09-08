@@ -19,6 +19,7 @@ source_of_truth: Git history
 - 心跳只累计 RUNNING、可见且编辑器聚焦的有效时间，分别记录会话、学员、题目和连续做题时间；完成/跳过状态不会被后续心跳覆盖。OI 达到目标分即可完成，HYBRID 推进必须同时满足时长和完成比例。
 - 迟到加入支持 `CURRENT_STAGE/FROM_BEGINNING/TEACHER_ASSIGN`；显式名单不能经手工加入绕过，`FROM_BEGINNING` 学员完成落后阶段后只推进到不超过全班当前阶段的位置。
 - 学生端增加自动草稿、提示、策略检查和按可见性裁剪的同学进度；教练端增加阶段规则、目标分、解锁条件、分组目标、暂停/推进/聚焦/提示/消息和个人干预入口。
+- 生产迁移前备份 `oi_manager_20260908_124041.dump`（SHA-256 `19677368…2113cc`）并完成恢复演练；受保护迁移 API 将 384 条旧训练中的 378 条幂等迁移，6 条异常记录保持旧模型并列入报告。Server 全量、Training Engine 11/11、Judge 42/42、Web 69/69、双视口训练 E2E 8/8、四端构建和全部门禁通过。API 已由 3303 提升至 3302，Web BUILD_ID `VlK5d6fINiscMWP5LhkfH` 经候选与正式消息探针提升；线上训练读取、迁移 API 关闭状态和 P1345 模板回归均正常。
 
 ### OI Candidate、Wrong Corpus 与 11 选 10 Selector 收口
 
