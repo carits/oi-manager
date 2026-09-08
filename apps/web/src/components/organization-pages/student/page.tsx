@@ -12,14 +12,14 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import styles from '@/components/Dashboard.module.css'
 import { currentWorkspacePrefix, isPersonalPath } from '@/lib/workspacePath'
 
-interface TaskItem { id: number; title: string; startTime: string; endTime: string; problemCount: number }
+interface TaskItem { id: string; title: string; openAt: string; dueAt: string; closeAt: string; status: string; problemCount: number }
+interface AssignmentPayload { items: TaskItem[]; pagination: { total: number } }
 interface SubmissionItem { id: number; problemId: string; result: string; submittedAt: string }
 interface SubmissionPayload { submissions?: SubmissionItem[]; total?: number }
 
 function taskStatus(task: TaskItem) {
-  const now = Date.now()
-  if (now < new Date(task.startTime).getTime()) return { label: '即将开始', variant: 'info' as const }
-  if (now <= new Date(task.endTime).getTime()) return { label: '进行中', variant: 'success' as const }
+  if (task.status === 'SCHEDULED') return { label: '即将开始', variant: 'info' as const }
+  if (['OPEN', 'OVERDUE'].includes(task.status)) return { label: task.status === 'OVERDUE' ? '迟交期' : '进行中', variant: task.status === 'OVERDUE' ? 'warning' as const : 'success' as const }
   return { label: '已结束', variant: 'neutral' as const }
 }
 
@@ -32,11 +32,11 @@ export default function StudentPage() {
   const pathname = usePathname()
   const { organizationId } = useParams<{ organizationId?: string }>()
   const pathPrefix = currentWorkspacePrefix(pathname, '/personal')
-  const homeworkResource = useResource<TaskItem[]>(organizationId ? `/api/organizations/${organizationId}/members/activities/homeworks` : '/api/activities/unavailable', { sessionKey, dedupingInterval: 30000 })
+  const homeworkResource = useResource<AssignmentPayload>(organizationId ? `/api/assignments?organizationId=${organizationId}&pageSize=100` : null, { sessionKey, isEmpty: data => data.items.length === 0, dedupingInterval: 30000 })
   const submissionResource = useResource<SubmissionPayload>('/api/submissions?page=1&pageSize=5', { sessionKey, isEmpty: data => (data.submissions || []).length === 0, dedupingInterval: 15000 })
-  const homeworks = homeworkResource.data || []
+  const homeworks = homeworkResource.data?.items || []
   const activeCount = homeworks.filter(task => taskStatus(task).label === '进行中').length
-  const nextTasks = [...homeworks].filter(task => taskStatus(task).label !== '已结束').sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime()).slice(0, 5)
+  const nextTasks = [...homeworks].filter(task => taskStatus(task).label !== '已结束').sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()).slice(0, 5)
   const personalMode = isPersonalPath(pathname)
 
   return (
@@ -57,7 +57,7 @@ export default function StudentPage() {
               <div className={styles.list}>
                 {nextTasks.map(task => {
                   const status = taskStatus(task)
-                  return <Link className={styles.listItem} key={task.id} href={`${pathPrefix}/homeworks/${task.id}`}><span className={styles.listMain}><span className={styles.listTitle}>{task.title}</span><span className={styles.listMeta}><span>{task.problemCount} 题</span><span>截止 {deadline(task.endTime)}</span></span></span><span className={styles.listEnd}><StatusBadge variant={status.variant}>{status.label}</StatusBadge><ArrowRight size={16} aria-hidden="true" /></span></Link>
+                  return <Link className={styles.listItem} key={task.id} href={`${pathPrefix}/homeworks/${task.id}`}><span className={styles.listMain}><span className={styles.listTitle}>{task.title}</span><span className={styles.listMeta}><span>{task.problemCount} 题</span><span>截止 {deadline(task.dueAt)}</span></span></span><span className={styles.listEnd}><StatusBadge variant={status.variant}>{status.label}</StatusBadge><ArrowRight size={16} aria-hidden="true" /></span></Link>
                 })}
               </div>
             ) : <div className={styles.inlineEmpty}>当前没有待处理任务</div>}

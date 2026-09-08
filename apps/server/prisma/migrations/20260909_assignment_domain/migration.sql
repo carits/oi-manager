@@ -229,9 +229,9 @@ CREATE INDEX "AssignmentProblemProgress_recipientId_updatedAt_idx" ON "Assignmen
 CREATE INDEX "AssignmentCorrection_assignmentId_status_dueAt_idx" ON "AssignmentCorrection"("assignmentId", "status", "dueAt");
 CREATE INDEX "AssignmentCorrection_recipientId_status_idx" ON "AssignmentCorrection"("recipientId", "status");
 CREATE INDEX "AssignmentFeedback_assignmentId_recipientId_createdAt_idx" ON "AssignmentFeedback"("assignmentId", "recipientId", "createdAt");
-CREATE INDEX "AssignmentScoreAdjustment_assignmentId_recipientId_createdAt_idx" ON "AssignmentScoreAdjustment"("assignmentId", "recipientId", "createdAt");
+CREATE INDEX "AssignmentScoreAdjustment_assignment_recipient_created_idx" ON "AssignmentScoreAdjustment"("assignmentId", "recipientId", "createdAt");
 CREATE INDEX "AssignmentScoreAdjustment_reversedAdjustmentId_idx" ON "AssignmentScoreAdjustment"("reversedAdjustmentId");
-CREATE UNIQUE INDEX "AssignmentGradeSnapshot_assignmentId_recipientId_type_revision_key" ON "AssignmentGradeSnapshot"("assignmentId", "recipientId", "type", "revision");
+CREATE UNIQUE INDEX "AssignmentGradeSnapshot_assignment_recipient_type_rev_key" ON "AssignmentGradeSnapshot"("assignmentId", "recipientId", "type", "revision");
 CREATE INDEX "AssignmentGradeSnapshot_assignmentId_type_createdAt_idx" ON "AssignmentGradeSnapshot"("assignmentId", "type", "createdAt");
 CREATE UNIQUE INDEX "AssignmentEvent_assignmentId_seq_key" ON "AssignmentEvent"("assignmentId", "seq");
 CREATE INDEX "AssignmentEvent_assignmentId_createdAt_idx" ON "AssignmentEvent"("assignmentId", "createdAt");

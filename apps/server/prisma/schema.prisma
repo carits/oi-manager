@@ -3276,7 +3276,7 @@ model AssignmentScoreAdjustment {
   ReversedAdjustment   AssignmentScoreAdjustment?  @relation("AssignmentAdjustmentReversal", fields: [reversedAdjustmentId], references: [id], onDelete: Restrict)
   Reversals            AssignmentScoreAdjustment[] @relation("AssignmentAdjustmentReversal")
 
-  @@index([assignmentId, recipientId, createdAt])
+  @@index([assignmentId, recipientId, createdAt], map: "AssignmentScoreAdjustment_assignment_recipient_created_idx")
   @@index([reversedAdjustmentId])
 }
 
@@ -3294,7 +3294,7 @@ model AssignmentGradeSnapshot {
   Assignment   Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   Recipient    AssignmentRecipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
-  @@unique([assignmentId, recipientId, type, revision])
+  @@unique([assignmentId, recipientId, type, revision], map: "AssignmentGradeSnapshot_assignment_recipient_type_rev_key")
   @@index([assignmentId, type, createdAt])
 }
 

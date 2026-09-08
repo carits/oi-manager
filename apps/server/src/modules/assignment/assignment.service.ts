@@ -198,16 +198,27 @@ export async function listAssignments(userId: string, query: any) {
   const organizationId = query?.organizationId ? String(query.organizationId) : undefined
   const teamId = query?.teamId ? String(query.teamId) : undefined
   const status = query?.status ? String(query.status).toUpperCase() as AssignmentStatus : undefined
-  const managedOrganizations = await prisma.organizationMembership.findMany({
-    where: { userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } }, select: { organizationId: true },
-  })
-  const account = await globalAccount(userId)
-  const managerOrgIds = managedOrganizations.map(item => item.organizationId)
+  const [managedOrganizations, managedTeams, account] = await Promise.all([
+    prisma.organizationMembership.findMany({
+      where: { userId, status: 'active', memberRole: { in: ['teacher', 'school_principal'] } },
+      select: { organizationId: true, memberRole: true },
+    }),
+    prisma.teamMember.findMany({
+      where: { userId, status: 'active', role: { in: ['owner', 'admin'] } },
+      select: { teamId: true },
+    }),
+    globalAccount(userId),
+  ])
+  const principalOrgIds = managedOrganizations.filter(item => item.memberRole === 'school_principal').map(item => item.organizationId)
+  const teacherOrgIds = managedOrganizations.filter(item => item.memberRole === 'teacher').map(item => item.organizationId)
+  const managedTeamIds = managedTeams.map(item => item.teamId)
   const where: Prisma.AssignmentWhereInput = {
     ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}), ...(status ? { status } : {}),
     ...(account?.role === 'super_admin' ? {} : {
       OR: [
-        { organizationId: { in: managerOrgIds } },
+        { organizationId: { in: principalOrgIds } },
+        { organizationId: { in: teacherOrgIds }, CreatorMembership: { userId } },
+        { teamId: { in: managedTeamIds } },
         { Recipients: { some: { userId, status: { not: 'REMOVED' } } }, status: { not: 'DRAFT' } },
       ],
     }),
@@ -595,35 +606,43 @@ export async function createAssignmentCorrection(userId: string, assignmentId: s
   await assertManage(userId, assignmentId)
   const assignmentProblemId = String(body?.assignmentProblemId || '')
   const recipientId = String(body?.recipientId || '')
-  const [problem, recipient] = await Promise.all([
-    prisma.assignmentProblem.findFirst({ where: { id: assignmentProblemId, assignmentId } }),
-    prisma.assignmentRecipient.findFirst({ where: { id: recipientId, assignmentId, status: { not: 'REMOVED' } } }),
-  ])
-  if (!problem || !recipient) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '订正对象不属于当前作业')
   const dueAt = optionalDate(body?.dueAt, '订正截止时间')
-  const correction = await prisma.assignmentCorrection.create({ data: {
-    assignmentId, assignmentProblemId, recipientId, assignedBy: userId,
-    reason: body?.reason ? boundedText(body.reason, 2000, '订正说明') : null, dueAt,
-  } })
-  await prisma.assignmentProblemProgress.updateMany({ where: { assignmentProblemId, recipientId }, data: { correctionStatus: 'NEEDS_CORRECTION' } })
-  await prisma.$transaction(tx => appendEvent(tx, assignmentId, 'assignment.correction_assigned', userId, { correctionId: correction.id, assignmentProblemId, recipientId }))
-  return correction
+  const reason = body?.reason ? boundedText(body.reason, 2000, '订正说明') : null
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment-review:${assignmentId}`}, 0)) IS NULL AS locked`
+    const [problem, recipient] = await Promise.all([
+      tx.assignmentProblem.findFirst({ where: { id: assignmentProblemId, assignmentId } }),
+      tx.assignmentRecipient.findFirst({ where: { id: recipientId, assignmentId, status: { not: 'REMOVED' } } }),
+    ])
+    if (!problem || !recipient) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '订正对象不属于当前作业')
+    const correction = await tx.assignmentCorrection.create({ data: {
+      assignmentId, assignmentProblemId, recipientId, assignedBy: userId, reason, dueAt,
+    } })
+    await tx.assignmentProblemProgress.updateMany({ where: { assignmentProblemId, recipientId }, data: { correctionStatus: 'NEEDS_CORRECTION' } })
+    await appendEvent(tx, assignmentId, 'assignment.correction_assigned', userId, { correctionId: correction.id, assignmentProblemId, recipientId })
+    return correction
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
 
 export async function createAssignmentFeedback(userId: string, assignmentId: string, body: any) {
   await assertManage(userId, assignmentId)
   const recipientId = String(body?.recipientId || '')
-  const recipient = await prisma.assignmentRecipient.findFirst({ where: { id: recipientId, assignmentId, status: { not: 'REMOVED' } } })
-  if (!recipient) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '反馈对象不属于当前作业')
   const assignmentProblemId = body?.assignmentProblemId ? String(body.assignmentProblemId) : null
-  if (assignmentProblemId && !await prisma.assignmentProblem.findFirst({ where: { id: assignmentProblemId, assignmentId } })) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '反馈题目不属于当前作业')
-  const feedback = await prisma.assignmentFeedback.create({ data: {
-    assignmentId, assignmentProblemId, recipientId, authorUserId: userId,
-    visibility: enumValue(body?.visibility, new Set(['RECIPIENT', 'INTERNAL']), 'RECIPIENT', '反馈可见性').toLowerCase(),
-    content: boundedText(body?.content, 10_000, '反馈内容', 1),
-  } })
-  await prisma.$transaction(tx => appendEvent(tx, assignmentId, 'assignment.feedback_created', userId, { feedbackId: feedback.id, assignmentProblemId, recipientId, visibility: feedback.visibility }))
-  return feedback
+  const visibility = enumValue(body?.visibility, new Set(['RECIPIENT', 'INTERNAL']), 'RECIPIENT', '反馈可见性').toLowerCase()
+  const content = boundedText(body?.content, 10_000, '反馈内容', 1)
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment-review:${assignmentId}`}, 0)) IS NULL AS locked`
+    const [recipient, problem] = await Promise.all([
+      tx.assignmentRecipient.findFirst({ where: { id: recipientId, assignmentId, status: { not: 'REMOVED' } } }),
+      assignmentProblemId ? tx.assignmentProblem.findFirst({ where: { id: assignmentProblemId, assignmentId } }) : Promise.resolve(null),
+    ])
+    if (!recipient || (assignmentProblemId && !problem)) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '反馈对象不属于当前作业')
+    const feedback = await tx.assignmentFeedback.create({ data: {
+      assignmentId, assignmentProblemId, recipientId, authorUserId: userId, visibility, content,
+    } })
+    await appendEvent(tx, assignmentId, 'assignment.feedback_created', userId, { feedbackId: feedback.id, assignmentProblemId, recipientId, visibility: feedback.visibility })
+    return feedback
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
 
 export async function adjustAssignmentScore(userId: string, assignmentId: string, body: any) {

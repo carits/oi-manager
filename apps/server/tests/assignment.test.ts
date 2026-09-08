@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { ensureInitialTestSetRevision } from '../src/modules/problem/problem.testset-revision.service'
 import { processDueAssignments, syncAssignmentSubmission } from '../src/modules/assignment/assignment.service'
+import { applyAssignmentMigration, inspectAssignmentMigration } from '../src/modules/maintenance/application/assignment-migration.service'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
@@ -165,5 +166,33 @@ describe('independent assignment domain', () => {
     expect(workspace.body.data.feedback).toHaveLength(1)
     expect(workspace.body.data.corrections).toHaveLength(1)
     expect(workspace.body.data.assignment.Recipients).toHaveLength(1)
+  })
+
+  it('migrates legacy homework snapshots idempotently without changing the legacy record', async () => {
+    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
+    const legacy = await prisma.training.create({ data: {
+      title: '历史作业', description: '迁移前说明', type: 'homework', scope: 'campus', format: 'oi',
+      organizationId, createdBy: teacher.user.id, status: 'upcoming',
+      startTime: new Date(Date.now() + 60_000), endTime: new Date(Date.now() + 3_600_000),
+      TrainingProblem: { create: {
+        id: crypto.randomUUID(), problemId: problem.id, orderIndex: 0, points: 100,
+        testSetRevisionId: revision.id, judgeConfigSnapshot: revision.judgeConfig,
+      } },
+      TrainingParticipant: { create: { id: crypto.randomUUID(), userId: student.user.id, userType: 'student' } },
+    } })
+    const before = await inspectAssignmentMigration()
+    expect(before.migratable).toBeGreaterThanOrEqual(1)
+    expect(before.issues.find(item => item.trainingId === legacy.id)).toBeUndefined()
+    const first = await applyAssignmentMigration(before.reportHash)
+    expect(first.migrated).toBeGreaterThanOrEqual(1)
+    const migrated = await prisma.assignment.findUniqueOrThrow({ where: { legacyTrainingId: legacy.id }, include: { Problems: true, Recipients: true } })
+    expect(migrated.title).toBe(legacy.title)
+    expect(migrated.Problems).toHaveLength(1)
+    expect(migrated.Problems[0].testSetRevisionId).toBe(revision.id)
+    expect(migrated.Recipients.map(item => item.userId)).toContain(student.user.id)
+    expect(await prisma.training.findUnique({ where: { id: legacy.id } })).not.toBeNull()
+    const second = await applyAssignmentMigration(before.reportHash)
+    expect(second.migrated).toBe(0)
+    expect(await prisma.assignment.count({ where: { legacyTrainingId: legacy.id } })).toBe(1)
   })
 })

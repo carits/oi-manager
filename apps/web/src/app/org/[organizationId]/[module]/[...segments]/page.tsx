@@ -14,6 +14,7 @@ import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { TrainingStatementManagementPage } from '@/components/training/TrainingStatementManagementPage'
 import { TrainingSessionWorkspace } from '@/components/training-engine/TrainingSessionWorkspace'
 import { TrainingSessionDesigner } from '@/components/training-engine/TrainingSessionDesigner'
+import { AssignmentWorkspace } from '@/components/assignment/AssignmentWorkspace'
 
 export default function OrganizationResourcePage() {
   const { organizationId, module, segments } = useParams<{ organizationId: string; module: string; segments: string[] }>()
@@ -48,7 +49,10 @@ export default function OrganizationResourcePage() {
   if ((module === 'contests' || module === 'homeworks') && parts.length === 2 && parts[1] === 'statements') {
     return <TrainingStatementManagementPage trainingId={parts[0]} backPath={`${prefix}/${module}/${parts[0]}`} />
   }
-  if ((module === 'contests' || module === 'homeworks') && parts.length === 1) {
+  if (module === 'homeworks' && parts.length === 1) {
+    return <AssignmentWorkspace canManage={userType !== 'student'} />
+  }
+  if (module === 'contests' && parts.length === 1) {
     return <TrainingDetailPage basePath={prefix} trainingIdOverride={parts[0]} />
   }
   if (module === 'training-sessions' && parts.length === 1) return <TrainingSessionWorkspace sessionId={parts[0]} />
