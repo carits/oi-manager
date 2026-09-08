@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${1:-$ROOT_DIR/apps/server/.env.production}"
 TEST_SCHEMA="${ASSIGNMENT_TEST_SCHEMA:-assignment_test_$(date +%s)}"
 BASE_SCHEMA="${ASSIGNMENT_BASE_SCHEMA:-}"
+TEST_SCOPE="${ASSIGNMENT_TEST_SCOPE:-assignment}"
 
 if [[ ! "$TEST_SCHEMA" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
   echo "Invalid ASSIGNMENT_TEST_SCHEMA" >&2
@@ -43,4 +44,11 @@ else
 fi
 pnpm --dir "$ROOT_DIR" --filter @oi-manager/shared build
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma generate --schema prisma/schema.prisma
-TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/assignment.test.ts tests/background-services.test.ts
+if [[ "$TEST_SCOPE" == "full" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run
+elif [[ "$TEST_SCOPE" == "assignment" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/assignment.test.ts tests/background-services.test.ts
+else
+  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment or full" >&2
+  exit 1
+fi
