@@ -1,56 +1,79 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-21
-source_of_truth: apps/server/src/modules/training and school contest routes
+last_verified: 2026-09-08
+source_of_truth: apps/server/src/modules/training-engine, apps/server/prisma/schema.prisma
 ---
 
-# 训练、作业与比赛
+# 教练训练、作业与比赛
 
-## 统一模型
+## 领域边界
 
-`Training` 承载训练、作业和比赛三类任务，`type` 决定页面、时间规则、排名和结果
-展示。任务可属于团队或学校，并包含题目、参与者、附件、提交、记录和题解。
+教练训练已经从旧 `Training.type` 拆为独立 `TrainingSession` 聚合。比赛与作业继续由旧活动模块承载，直到各自后续迁移；不得再为新教练训练写入 `Training(type=training)`。
 
-| 类型 | 主要用途 | 典型入口 |
-|------|----------|----------|
-| `training` | 日常训练和题目练习 | 团队训练详情 |
-| `homework` | 有截止时间和补题流程的作业 | 教师/学生作业 |
-| `contest` | 比赛、榜单和赛后状态 | 团队或学校比赛 |
+| 领域 | 聚合根 | 用途 |
+|---|---|---|
+| 教练训练 | `TrainingSession` | 阶段、聚焦、课堂控制、草稿、提示、过程报告 |
+| 比赛/作业 | `Training` | 固定时间活动、榜单、赛后结果和补题 |
 
-## 生命周期
+旧训练只读兼容，使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；不修改旧记录、成绩和提交。
 
-1. 教师或负责人在允许的团队/学校范围创建任务。
-2. 添加题目、参与者、时间、规则和可选附件。
-3. 学生按任务权限查看题目并提交。
-4. 提交更新用户题目状态、成绩和排名。
-5. 截止后可结束、重新评测或基于未完成题目创建补题作业。
+## 训练结构
 
-## 题目与成绩
+```text
+TrainingSession
+├─ Stage[]
+│  └─ StageProblem[] → pinned ProblemTestSetRevision
+├─ Group[]
+├─ Participant[]
+│  └─ ProblemProgress[]
+├─ Command[] / Overlay[] / UserOverride[]
+├─ ProblemDraft[] / Hint[] / ScoreEvent[]
+└─ durable Event[]
+```
 
-`TrainingProblem` 保存顺序、分值和快照配置。用户状态表保存是否完成、最佳成绩和
-相关提交，排名接口从持久化数据计算，不依赖前端缓存。
+内置模板覆盖 OI 标准训练、OI 分数递进、ACM 顺序训练、ACM 策略训练和课堂统一训练。阶段模式包括自由、顺序、聚焦、分数递进、讲解、复盘和模拟比赛；推进方式包括手动、计时、完成度和混合推进。
 
-比赛还有 `Contest*` 模型保存结果、单题分数、记录和用户题目状态，用于导入外部榜单
-或保持比赛语义。历史 `Contest` 与统一 `Training` 模型并存，新增功能应优先复用
-当前 training 模块，而不是创建第三套任务模型。
+每一道 `StageProblem` 固定题库当时的 TestSet Revision。OI 专项训练可保存后端生成的 Subtask 投影；提交时该投影同时固化到 `Submission` 和 `JudgeRun`，Judge 不会误用完整题目配置。题库后续 Revision、Hack 或数据编辑不影响已经发布的训练。
 
-## 补题
+## 权限解析
 
-教师可以从作业创建补题作业。服务端选择未完成题目和目标学生，防止同一来源重复创建，
-并保留源任务关联。补题结果进入统一提交和状态体系。
+所有页面和写接口调用同一个服务端权限解析器，优先级如下：
 
-## 权限
+```text
+教练权限 / 个人 override
+→ 当前 Overlay
+→ 当前 Stage
+→ Session 默认规则
+```
 
-- 创建和编辑：团队 owner/admin、符合范围的教师或学校负责人。
-- 查看：任务参与者及具备管理权限的用户。
-- 提交：被允许的学生，且任务状态/时间允许。
-- 排名和成绩：按角色隐藏不应公开的用户、源码或内部字段。
-- 重新评测：教师/负责人或平台级管理员，具体由提交 scope 决定。
+- DRAFT 仅管理者可见。
+- 发布时，如果已显式配置名单则只加入名单；否则以当前学校或团队有效成员为默认名单。
+- 非名单用户不可查看训练；迟到加入遵循 `CURRENT_STAGE/FROM_BEGINNING/TEACHER_ASSIGN`。
+- 顺序模式默认要求前一题 AC，也可组合分数、时间、尝试次数或教练解锁条件。
+- 硬暂停禁止编辑与提交；软暂停允许保留编辑但禁止提交。
+- Locked/Exam Focus 会遮蔽非当前题，Exam Focus 同时禁止提示。
+- 教练对用户、组、团队或全员发布命令；命令使用 `statusRevision` 乐观锁和数据库事务。
 
-### 提交结果一致性
+## 过程状态与可靠性
 
-- 比赛提交列表、提交详情和排行榜都按 `result` 识别记录；不能以 `cases` 非空作为记录存在条件。
-- ACM 榜单对 `queuing`/`judging` 显示已提交但不增加失败次数；终态 OLE/CE/RE 等按一次未通过尝试处理。
-- OI/IOI 榜单使用终态记录的分数（缺失分数按 0），不因缺少测试点 JSON 而漏掉提交。
-- 历史校园 JWT 若只有 `schoolId`，服务端在工作区为 `work` 时解析学校组织并验证活动成员关系。
+- 草稿按用户和题目隔离，30 秒自动保存，切题与聚焦前主动保存，revision 冲突返回 409。
+- 心跳只在页面可见且编辑器聚焦时累计活跃时间；不会把后台挂页计为训练时长。
+- 提交使用 `submitScope=training_engine`，评测完成后幂等写入 Progress 与 ScoreEvent。
+- 当前最佳分、Verdict、尝试次数、首次 AC、提示层级和卡题状态形成训练报告。
+- Scheduler 只由单例后台进程运行，按计划启动训练，并按 TIME/COMPLETION/HYBRID 自动推进。
+- 命令和事件是追加式记录；SSE 支持 `Last-Event-ID`/`afterSeq` 补偿，客户端断线后重新读取权威 Workspace，不把前端缓存当事实源。
+
+## API 与 UI
+
+主要接口为 `/api/training-sessions`、`/structure`、`/roster`、`/publish`、`/commands`、`/drafts`、`/heartbeat`、`/submit`、`/hints`、`/coach-dashboard`、`/report` 和 `/events`。所有接口重新校验账号状态、学校/团队范围和训练身份。
+
+- `/personal/training-sessions`：账号参与的训练列表。
+- `/org/:organizationId/training-sessions`：校园训练管理与参与入口。
+- `.../training-sessions/:id`：学员训练工作台与教练控制台共用权威状态。
+
+工作台提供阶段/题目导航、题面、代码草稿、提交、实时进度、名单管理和课堂命令。它不复用比赛榜单、比赛题面选择或比赛时间冻结行为。
+
+## 迁移与回退
+
+迁移 API 只选择 `type=training`，按固定 Revision 创建独立 Session/Stage/Participant/Progress，并给旧提交补充新训练关联；比赛和作业不进入迁移。异常范围或缺失 Revision 的训练进入报告，不猜测修复。迁移用 `legacyTrainingId` 唯一键保持幂等，旧活动表仍保留，因此可在切换期回退到旧页面且不会丢历史数据。

@@ -205,6 +205,7 @@ const routerPrefixes = {
   submitRouter: '/api/submit',
   testdataRouter: '/api',
   trainingsRouter: '/api',
+  trainingEngineRouter: '/api',
   trainingCrudRouter: '/api',
   trainingProblemsRouter: '/api',
   trainingNotesRouter: '/api',

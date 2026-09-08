@@ -155,7 +155,7 @@ class JudgeConsumer {
           })
         : null
       const testdataRoot = process.env.TESTDATA_DIR || path.join(process.cwd(), 'testdata')
-      const config = yaml.load(revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}') as any
+      const config = yaml.load(claimed.judgeConfigSnapshot || revision?.judgeConfig || trainingProblem?.judgeConfigSnapshot || problem?.judgeConfig || '{}') as any
       const io = resolveSubmissionIoSnapshot(claimed, config)
       return {
         taskType: 'submission' as const,

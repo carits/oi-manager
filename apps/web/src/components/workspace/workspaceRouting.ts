@@ -1,7 +1,7 @@
 import type { WorkspaceSummary } from '@oi-manager/shared'
 
-export const personalWorkspaceModules = new Set(['teams', 'problems', 'contests', 'problem-lists', 'rankings', 'submissions'])
-export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'problems', 'problem-lists', 'rankings'])
+export const personalWorkspaceModules = new Set(['teams', 'problems', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions'])
+export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings'])
 
 export type NavigationContext = {
   workspace: 'organization' | 'personal'

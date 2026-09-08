@@ -450,6 +450,30 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `PUT` | `/api/trainings/:id/problems/:problemId/note` | 见对应路由实现 |
 | `PUT` | `/api/trainings/:id/problems/reorder` | 见对应路由实现 |
 | `PUT` | `/api/trainings/:id/record` | 见对应路由实现 |
+| `GET` | `/api/training-session-templates` | 获取内置教练训练模板 |
+| `GET` | `/api/training-sessions` | 查询独立教练训练 |
+| `POST` | `/api/training-sessions` | 创建独立教练训练 |
+| `GET` | `/api/training-sessions/:id` | 获取权威训练工作区、进度和权限 |
+| `PUT` | `/api/training-sessions/:id/structure` | 在草稿状态事务替换阶段结构并固定题目 Revision |
+| `GET` | `/api/training-sessions/:id/roster` | 查询分组和可选学员名单 |
+| `PUT` | `/api/training-sessions/:id/roster` | 事务保存分组和学员名单 |
+| `POST` | `/api/training-sessions/:id/publish` | 发布并冻结训练结构 |
+| `POST` | `/api/training-sessions/:id/commands` | 执行开始、暂停、阶段、聚焦、锁定、提示或个人干预命令 |
+| `GET` | `/api/training-sessions/:id/drafts/:problemId` | 获取训练代码草稿 |
+| `PUT` | `/api/training-sessions/:id/drafts/:problemId` | 乐观锁保存训练代码草稿 |
+| `POST` | `/api/training-sessions/:id/heartbeat` | 上报可见且聚焦的有效训练时间 |
+| `POST` | `/api/training-sessions/:id/submit` | 使用固定 Revision/专项投影创建训练提交 |
+| `GET` | `/api/training-sessions/:id/coach-dashboard` | 教练实时进度和卡题概览 |
+| `GET` | `/api/training-sessions/:id/report` | 学员过程、成绩、提示和耗时报告 |
+| `GET` | `/api/training-sessions/:id/events` | 可补偿的训练 SSE 事件流 |
+| `POST` | `/api/training-sessions/:id/join` | 范围内成员按迟到规则加入训练 |
+| `POST` | `/api/training-sessions/:id/archive` | 归档草稿或已结束训练 |
+| `POST` | `/api/training-sessions/:id/hints` | 教练创建分级提示 |
+| `GET` | `/api/training-sessions/:id/problems/:stageProblemId/hints` | 获取当前学员已满足条件的提示 |
+| `POST` | `/api/training-sessions/:id/hints/:hintId/open` | 幂等记录并打开提示 |
+| `POST` | `/api/training-sessions/:id/strategy-decisions` | 记录 ACM 策略训练决策 |
+| `GET` | `/api/admin/migration/training-engine` | 超管检查旧训练迁移，不修改数据 |
+| `POST` | `/api/admin/migration/training-engine` | 超管以 reportHash 幂等迁移旧训练 |
 | `PUT` | `/api/users/:id/status` | 见对应路由实现 |
 | `GET` | `/api/problems/:id/checker` | 题目 Checker 文件列表 |
 | `GET` | `/api/problems/:id/checker/:fileName/download` | 下载 Checker 源码 |

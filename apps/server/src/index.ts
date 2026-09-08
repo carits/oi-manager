@@ -29,6 +29,7 @@ import { submitRouter } from './routes/submit'
 import { testdataRouter } from './routes/testdata'
 import { testGraphAdminRouter } from './routes/test-graph-admin'
 import { trainingsRouter } from './modules/training/training.routes'
+import { trainingEngineRouter } from './modules/training-engine/training-engine.routes'
 import { adminDataRouter } from './routes/admin-data'
 import { migrationRouter } from './routes/migration'
 import { archivedProblemsRouter } from './routes/archived-problems'
@@ -139,6 +140,7 @@ app.use('/api/oj-accounts', authenticate, ojAccountsRouter)
 app.use('/api/submit', submitRouter)
 app.use('/api', testdataRouter)  // testdata routes use /problems/:id/testdata pattern
 app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
+app.use('/api', trainingEngineRouter) // independent coach-directed Training Engine
 app.use('/api/admin/data', authenticate, adminDataRouter)
 app.use('/api/admin', testGraphAdminRouter)  // 管理员数据维护 API
 app.use('/api/admin/migration', authenticate, migrationRouter)  // 数据迁移 API

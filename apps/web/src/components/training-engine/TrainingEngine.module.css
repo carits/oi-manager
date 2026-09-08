@@ -1,0 +1,26 @@
+.stack { display: grid; gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-3); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); display: grid; gap: var(--space-3); }
+.card h3, .card p { margin: 0; }
+.muted { color: var(--text-muted); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.field { display: grid; gap: var(--space-2); font-weight: 600; }
+.field small { color: var(--text-muted); font-weight: 400; }
+.problemPicker { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2); display: grid; gap: var(--space-1); }
+.template { cursor: pointer; text-align: left; }
+.template[data-selected='true'] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.workspace { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr) minmax(250px, 340px); gap: var(--space-4); align-items: start; }
+.rail { display: grid; gap: var(--space-2); position: sticky; top: var(--space-4); }
+.stage { display: grid; gap: var(--space-2); }
+.problemButton { width: 100%; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface); cursor: pointer; color: var(--text-primary); }
+.problemButton[data-active='true'] { border-color: var(--primary); background: var(--primary-light); }
+.problemButton:disabled { cursor: not-allowed; opacity: .55; }
+.editor { min-height: 360px; font-family: var(--font-mono); resize: vertical; }
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-2); }
+.metric { padding: var(--space-3); border-radius: var(--radius-md); background: var(--bg-muted); }
+.metric strong { display: block; font-size: 1.25rem; }
+.timeline { display: grid; gap: var(--space-2); }
+.timelineItem { border-left: 3px solid var(--border); padding-left: var(--space-3); }
+.message { padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-light); color: var(--text-primary); }
+@media (max-width: 1000px) { .workspace { grid-template-columns: 220px minmax(0, 1fr); } .coach { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .workspace { grid-template-columns: 1fr; } .rail { position: static; } .actions > * { flex: 1 1 auto; } }

@@ -518,6 +518,7 @@ model Problem {
   TestSetRevision                    ProblemTestSetRevision[]             @relation("ProblemTestSetRevisions")
   LatestTestSetRevision              ProblemTestSetRevision?              @relation("ProblemLatestTestSetRevision", fields: [latestTestSetRevisionId], references: [id], onDelete: SetNull)
   TrainingProblem                    TrainingProblem[]
+  TrainingSessionStageProblem        TrainingSessionStageProblem[]
   Owner                              User                                 @relation("ProblemOwner", fields: [ownerId], references: [id])
   Organization                       Organization?                        @relation(fields: [organizationId], references: [id])
   SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
@@ -1382,6 +1383,7 @@ model Organization {
   SchoolProblemList        SchoolProblemList[]
   Team                     Team[]
   Training                 Training[]
+  TrainingSession          TrainingSession[]
   Submission               Submission[]
 
   @@index([type, status])
@@ -1735,6 +1737,7 @@ model JudgeRun {
   status               JudgeRunStatus          @default(QUEUED)
   testSetRevisionId    String?
   judgeConfigHash      String?
+  judgeConfigSnapshot  String?                 @db.Text
   inputFilename        String?
   outputFilename       String?
   ioAdapterVersion     Int                     @default(1)
@@ -1843,16 +1846,21 @@ model Submission {
   organizationId    String?
   trainingId        Int?
   trainingProblemId String?
+  trainingSessionId String?
+  trainingStageProblemId String?
   contestId         Int?
   contestProblemId  String?
   testSetRevisionId String?
   judgeConfigHash   String?
+  judgeConfigSnapshot String?                  @db.Text
   inputFilename     String?
   outputFilename    String?
   ioAdapterVersion  Int                     @default(1)
   currentJudgeRunId String?                 @unique
   OjAccount         OjAccount?              @relation(fields: [ojAccountId], references: [id])
   Training          Training?               @relation(fields: [trainingId], references: [id])
+  TrainingSession   TrainingSession?        @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
+  TrainingStageProblem TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
   Organization      Organization?           @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   User              User                    @relation(fields: [userId], references: [id])
   TestSetRevision   ProblemTestSetRevision? @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
@@ -1878,6 +1886,8 @@ model Submission {
   @@index([submitSource])
   @@index([trainingId])
   @@index([trainingProblemId])
+  @@index([trainingSessionId])
+  @@index([trainingStageProblemId])
   @@index([userId, contestId])
   @@index([userId])
   @@index([userId, oj, problemId])
@@ -1905,6 +1915,7 @@ model Team {
   TeamMemberImportBatch     TeamMemberImportBatch[]
   TeamProblemList           TeamProblemList[]
   Training                  Training[]
+  TrainingSession           TrainingSession[]
 
   @@index([createdAt])
   @@index([isPublic])
@@ -2220,6 +2231,7 @@ model ProblemTestSetRevision {
   AcmCases                        ProblemTestSetRevisionCase[]
   Subtasks                        ProblemTestSetRevisionSubtask[]
   TrainingProblems                TrainingProblem[]
+  TrainingSessionStageProblems   TrainingSessionStageProblem[]
   Submissions                     Submission[]
   HackAttemptsBasedOn             ProblemHackAttempt[]              @relation("HackBaseTestSetRevision")
   PromotedHackAttempts            ProblemHackAttempt[]              @relation("HackPromotedTestSetRevision")
@@ -2326,6 +2338,469 @@ model ProblemTestSetRevisionGroupCase {
   @@index([revisionId])
   @@index([groupId, orderIndex])
   @@index([testcaseId])
+}
+
+enum TrainingEngineSessionType {
+  OI
+  ACM
+  GENERAL
+}
+
+enum TrainingEngineSessionStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  ENDED
+  ARCHIVED
+}
+
+enum TrainingEngineStageMode {
+  FREE
+  SEQUENTIAL
+  FOCUS
+  SCORE_PROGRESSIVE
+  TEACHING
+  REVIEW
+  MOCK_CONTEST
+}
+
+enum TrainingEngineAdvanceMode {
+  MANUAL
+  TIME
+  COMPLETION
+  HYBRID
+}
+
+enum TrainingEngineProblemAccessMode {
+  ALL
+  STAGE_ONLY
+  SEQUENTIAL
+  FOCUS_ONLY
+}
+
+enum TrainingEngineSubmissionMode {
+  ENABLED
+  DISABLED
+}
+
+enum TrainingEnginePauseMode {
+  SOFT
+  HARD
+}
+
+enum TrainingEngineTargetType {
+  ALL
+  GROUP
+  TEAM
+  USER
+}
+
+enum TrainingEngineProgressStatus {
+  NOT_STARTED
+  WORKING
+  STUCK
+  COMPLETED
+  SKIPPED
+  PAUSED
+  FOCUS_OVERRIDE
+}
+
+enum TrainingEngineRankingMode {
+  OFF
+  PROGRESS_ONLY
+  SCORE
+  ACM_RANKING
+}
+
+enum TrainingEnginePeerVisibility {
+  NONE
+  PROGRESS
+  SCORE
+  FULL
+}
+
+enum TrainingEngineJoinMode {
+  CURRENT_STAGE
+  FROM_BEGINNING
+  TEACHER_ASSIGN
+}
+
+enum TrainingEngineHintOpenMode {
+  MANUAL
+  TIME
+  ATTEMPT
+  SCORE
+}
+
+model TrainingSession {
+  id                         String                      @id @default(uuid())
+  legacyTrainingId           Int?                        @unique
+  title                      String
+  description                String?                     @db.Text
+  sessionType                TrainingEngineSessionType  @default(GENERAL)
+  status                     TrainingEngineSessionStatus @default(DRAFT)
+  organizationId             String?
+  teamId                     String?
+  createdBy                  String
+  scheduledStartAt           DateTime?
+  startedAt                  DateTime?
+  pausedAt                   DateTime?
+  endedAt                    DateTime?
+  archivedAt                 DateTime?
+  activeElapsedSeconds       Int                         @default(0)
+  currentStageId             String?
+  statusRevision             Int                         @default(0)
+  commandSeq                 Int                         @default(0)
+  eventSeq                   Int                         @default(0)
+  defaultProblemAccessMode   TrainingEngineProblemAccessMode @default(STAGE_ONLY)
+  defaultSubmissionMode      TrainingEngineSubmissionMode @default(ENABLED)
+  pauseMode                  TrainingEnginePauseMode?
+  allowHints                 Boolean                     @default(true)
+  allowSolution              Boolean                     @default(false)
+  allowDiscussion            Boolean                     @default(false)
+  rankingMode                TrainingEngineRankingMode   @default(PROGRESS_ONLY)
+  peerVisibility             TrainingEnginePeerVisibility @default(PROGRESS)
+  joinMode                   TrainingEngineJoinMode      @default(CURRENT_STAGE)
+  settings                   Json?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  Organization               Organization?               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  Team                       Team?                       @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  Stages                     TrainingSessionStage[]
+  Participants               TrainingSessionParticipant[]
+  Groups                     TrainingSessionGroup[]
+  Commands                   TrainingSessionCommand[]
+  Overlays                   TrainingSessionOverlay[]
+  Drafts                     TrainingSessionProblemDraft[]
+  Hints                      TrainingSessionHint[]
+  Events                     TrainingSessionEvent[]
+  Overrides                  TrainingSessionUserOverride[]
+  Submissions                Submission[]
+
+  @@index([organizationId, status])
+  @@index([teamId, status])
+  @@index([createdBy, createdAt])
+  @@index([status, scheduledStartAt])
+}
+
+model TrainingSessionStage {
+  id                        String                         @id @default(uuid())
+  sessionId                 String
+  name                      String
+  description               String?                        @db.Text
+  orderIndex                Int
+  mode                      TrainingEngineStageMode       @default(FREE)
+  durationSeconds           Int?
+  advanceMode               TrainingEngineAdvanceMode     @default(MANUAL)
+  problemAccessMode         TrainingEngineProblemAccessMode @default(STAGE_ONLY)
+  submissionMode            TrainingEngineSubmissionMode  @default(ENABLED)
+  targetScore               Int?
+  completionThreshold       Int?
+  minDurationSeconds        Int?
+  status                    String                         @default("pending")
+  rules                     Json?
+  startedAt                 DateTime?
+  endedAt                   DateTime?
+  createdAt                 DateTime                       @default(now())
+  updatedAt                 DateTime                       @updatedAt
+  Session                   TrainingSession                @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Problems                  TrainingSessionStageProblem[]
+
+  @@unique([sessionId, orderIndex])
+  @@index([sessionId, status])
+}
+
+model TrainingSessionStageProblem {
+  id                       String                 @id @default(uuid())
+  stageId                  String
+  problemId                String
+  testSetRevisionId        String
+  alias                    String?
+  orderIndex               Int
+  unlockPolicy             Json?
+  targetScore              Int?
+  timeLimitSeconds         Int?
+  hintPolicy               Json?
+  judgeConfigProjection    String?                @db.Text
+  allowedSubtaskIds        Json?
+  strategyIntervalSeconds  Int?
+  maxContinuousWorkSeconds Int?
+  forceSwitchOnTimeout     Boolean                @default(false)
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  Stage                    TrainingSessionStage   @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  Problem                  Problem                @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  TestSetRevision          ProblemTestSetRevision @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  Progress                 TrainingSessionProblemProgress[]
+  Hints                    TrainingSessionHint[]
+  ScoreEvents              TrainingSessionScoreEvent[]
+  StrategyDecisions        TrainingSessionStrategyDecision[]
+  Submissions              Submission[]
+
+  @@unique([stageId, problemId])
+  @@unique([stageId, orderIndex])
+  @@index([problemId])
+  @@index([testSetRevisionId])
+}
+
+model TrainingSessionGroup {
+  id          String                       @id @default(uuid())
+  sessionId   String
+  name        String
+  orderIndex  Int                          @default(0)
+  createdAt   DateTime                     @default(now())
+  Session     TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Participants TrainingSessionParticipant[]
+
+  @@unique([sessionId, name])
+  @@index([sessionId, orderIndex])
+}
+
+model TrainingSessionParticipant {
+  id                String                       @id @default(uuid())
+  sessionId         String
+  userId            String
+  groupId           String?
+  status            String                       @default("active")
+  currentStageId    String?
+  currentProblemId  String?
+  returnStageId     String?
+  returnProblemId   String?
+  joinedAt          DateTime                     @default(now())
+  lastHeartbeatAt   DateTime?
+  activeSeconds     Int                          @default(0)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  Session           TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  User              User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  Group             TrainingSessionGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  Progress          TrainingSessionProblemProgress[]
+  HintAccess        TrainingSessionHintAccess[]
+  ScoreEvents       TrainingSessionScoreEvent[]
+  StrategyDecisions TrainingSessionStrategyDecision[]
+
+  @@unique([sessionId, userId])
+  @@index([userId, status])
+  @@index([sessionId, groupId])
+}
+
+model TrainingSessionProblemProgress {
+  id                 String                       @id @default(uuid())
+  participantId      String
+  stageProblemId     String
+  status             TrainingEngineProgressStatus @default(NOT_STARTED)
+  firstOpenedAt      DateTime?
+  lastOpenedAt       DateTime?
+  activeSeconds      Int                          @default(0)
+  attemptCount       Int                          @default(0)
+  bestScore          Int?
+  bestVerdict        String?
+  acAt               DateTime?
+  hintCount          Int                          @default(0)
+  highestHintLevel   Int                          @default(0)
+  lastSubmissionAt   DateTime?
+  lastProgressAt     DateTime?
+  stuckDetectedAt    DateTime?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  Participant        TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  StageProblem       TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, stageProblemId])
+  @@index([stageProblemId, status])
+  @@index([participantId, lastProgressAt])
+}
+
+model TrainingSessionCommand {
+  id          String                   @id @default(uuid())
+  sessionId   String
+  seq         Int
+  type        String
+  targetType  TrainingEngineTargetType @default(ALL)
+  targetId    String?
+  payload     Json?
+  createdBy   String
+  createdAt   DateTime                 @default(now())
+  Session     TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, createdAt])
+}
+
+model TrainingSessionOverlay {
+  id             String                   @id @default(uuid())
+  sessionId      String
+  type           String
+  targetType     TrainingEngineTargetType @default(ALL)
+  targetId       String?
+  stageProblemId String?
+  payload        Json?
+  status         String                   @default("active")
+  startedAt      DateTime                 @default(now())
+  expiresAt      DateTime?
+  endedAt        DateTime?
+  createdBy      String
+  Session        TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, status, startedAt])
+  @@index([expiresAt, status])
+}
+
+model TrainingSessionUserOverride {
+  id                 String                   @id @default(uuid())
+  sessionId          String
+  userId             String
+  type               String
+  stageProblemId     String?
+  payload            Json?
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  createdBy          String
+  createdAt          DateTime                 @default(now())
+  Session            TrainingSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, userId, type])
+  @@index([expiresAt])
+}
+
+model TrainingSessionProblemDraft {
+  id               String          @id @default(uuid())
+  sessionId        String
+  userId           String
+  problemId        String
+  language         String
+  code             String          @db.Text
+  inputFilename    String?
+  outputFilename   String?
+  revision         Int             @default(1)
+  editorFocused    Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  Session          TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId, problemId])
+  @@index([userId, updatedAt])
+}
+
+model TrainingSessionHint {
+  id                       String                       @id @default(uuid())
+  sessionId                String
+  stageProblemId           String
+  level                    Int
+  title                    String?
+  content                  String                       @db.Text
+  openMode                 TrainingEngineHintOpenMode   @default(MANUAL)
+  triggerSeconds           Int?
+  triggerAttempts          Int?
+  triggerScore             Int?
+  globallyOpenedAt         DateTime?
+  createdBy                String
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  Session                  TrainingSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  StageProblem             TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+  Access                   TrainingSessionHintAccess[]
+
+  @@unique([stageProblemId, level])
+  @@index([sessionId, level])
+}
+
+model TrainingSessionHintAccess {
+  id             String                     @id @default(uuid())
+  hintId         String
+  participantId  String
+  openedAt       DateTime                   @default(now())
+  source         String
+  openedBy       String?
+  Hint           TrainingSessionHint        @relation(fields: [hintId], references: [id], onDelete: Cascade)
+  Participant    TrainingSessionParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([hintId, participantId])
+  @@index([participantId, openedAt])
+}
+
+model TrainingSessionScoreEvent {
+  id               String                       @id @default(uuid())
+  sessionId        String
+  participantId    String
+  stageProblemId   String
+  submissionId     Int
+  score            Int?
+  verdict          String?
+  createdAt        DateTime                     @default(now())
+  Participant      TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  StageProblem     TrainingSessionStageProblem  @relation(fields: [stageProblemId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId])
+  @@index([sessionId, participantId, createdAt])
+  @@index([stageProblemId, createdAt])
+}
+
+model TrainingSessionStrategyDecision {
+  id               String                       @id @default(uuid())
+  sessionId        String
+  participantId    String
+  stageProblemId   String?
+  decision         String
+  reason           String?
+  createdAt        DateTime                     @default(now())
+  Participant      TrainingSessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  StageProblem     TrainingSessionStageProblem? @relation(fields: [stageProblemId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, participantId, createdAt])
+}
+
+model TrainingSessionEvent {
+  id          BigInt          @id @default(autoincrement())
+  sessionId   String
+  seq         Int
+  type        String
+  targetType  TrainingEngineTargetType @default(ALL)
+  targetId    String?
+  payload     Json?
+  createdAt   DateTime        @default(now())
+  expiresAt   DateTime
+  Session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, createdAt])
+  @@index([expiresAt])
+}
+
+model TrainingSessionTemplate {
+  id          String                    @id @default(uuid())
+  organizationId String?
+  teamId      String?
+  key         String
+  name        String
+  sessionType TrainingEngineSessionType
+  description String?
+  settings    Json?
+  status      String                    @default("active")
+  createdBy   String
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  Stages      TrainingSessionTemplateStage[]
+
+  @@unique([organizationId, teamId, key])
+  @@index([organizationId, status])
+  @@index([teamId, status])
+}
+
+model TrainingSessionTemplateStage {
+  id            String                         @id @default(uuid())
+  templateId    String
+  name          String
+  description   String?
+  orderIndex    Int
+  mode          TrainingEngineStageMode
+  durationSeconds Int?
+  advanceMode   TrainingEngineAdvanceMode
+  rules         Json?
+  Template      TrainingSessionTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, orderIndex])
 }
 
 model Training {
@@ -2543,6 +3018,7 @@ model User {
   TeamJoinRequest                          TeamJoinRequest[]
   TeamMember                               TeamMember[]
   TrainingUserProblemStatus                TrainingUserProblemStatus[]
+  TrainingSessionParticipants              TrainingSessionParticipant[]
   UserArchivedProblem                      UserArchivedProblem[]
   UserPlatformBinding                      UserPlatformBinding[]
   UserNotification                         UserNotification[]

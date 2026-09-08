@@ -232,6 +232,8 @@ export async function onSubmissionJudged(submission: {
   trainingProblemId: string | null
   contestId: number | null
   contestProblemId: string | null
+  trainingSessionId?: string | null
+  trainingStageProblemId?: string | null
 }): Promise<void> {
   const { submitScope } = submission
 
@@ -272,6 +274,17 @@ export async function onSubmissionJudged(submission: {
       )
     }
     // 比赛期间不同步题库 AC，等比赛结束后由 syncContestEndAC 处理
+  } else if (submitScope === 'training_engine') {
+    const { syncTrainingEngineSubmission } = await import('../modules/training-engine/training-engine.service')
+    await syncTrainingEngineSubmission({
+      id: submission.id,
+      userId: submission.userId,
+      trainingSessionId: submission.trainingSessionId || null,
+      trainingStageProblemId: submission.trainingStageProblemId || null,
+      result: submission.result,
+      score: submission.score,
+    })
+    if (isAcceptedResult(submission.result)) await syncProblemAC(submission.userId, submission.problemId, submission.id)
   }
 }
 

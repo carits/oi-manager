@@ -17,6 +17,7 @@ import { schoolProblemListsRouter } from '../../src/routes/school-problem-lists'
 import { teamProblemListsRouter } from '../../src/routes/team-problem-lists'
 import { ojAccountsRouter } from '../../src/routes/oj-accounts'
 import { trainingsRouter } from '../../src/modules/training/training.routes'
+import { trainingEngineRouter } from '../../src/modules/training-engine/training-engine.routes'
 import { submissionsRouter } from '../../src/routes/submissions'
 import { problemsRouter } from '../../src/modules/problem/problem.routes'
 import { rankingRouter } from '../../src/modules/ranking/ranking.routes'
@@ -60,6 +61,7 @@ export function createTestApp() {
   app.use('/api/teams', teamProblemListsRouter)
   app.use('/api/oj-accounts', ojAccountsRouter)
   app.use('/api', trainingsRouter)  // training routes use /teams/:teamId/trainings and /trainings/:id patterns
+  app.use('/api', trainingEngineRouter)
   app.use('/api/submissions', submissionsRouter)
   app.use('/api/problems', problemsRouter)
   app.use('/api', judgeProgramTemplateRouter)

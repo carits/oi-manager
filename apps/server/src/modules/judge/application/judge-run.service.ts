@@ -21,6 +21,7 @@ export interface ClaimedSubmissionLifecycle {
   problemInternalId: string
   trainingProblemId: string | null
   testSetRevisionId: string | null
+  judgeConfigSnapshot: string | null
   code: string
   language: string
   inputFilename: string | null
@@ -105,6 +106,7 @@ export async function createQueuedSubmissionWithRun(
         status: 'QUEUED',
         testSetRevisionId: submission.testSetRevisionId,
         judgeConfigHash: submission.judgeConfigHash,
+        judgeConfigSnapshot: submission.judgeConfigSnapshot,
         inputFilename: submission.inputFilename,
         outputFilename: submission.outputFilename,
         ioAdapterVersion: submission.ioAdapterVersion,
@@ -197,9 +199,10 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
         problemInternalId: true,
         trainingProblemId: true,
         testSetRevisionId: true,
+        judgeConfigSnapshot: true,
         code: true,
         language: true,
-        CurrentJudgeRun: { select: { inputFilename: true, outputFilename: true, ioAdapterVersion: true } },
+        CurrentJudgeRun: { select: { inputFilename: true, outputFilename: true, ioAdapterVersion: true, judgeConfigSnapshot: true } },
       },
     })
     if (!submission.problemInternalId) throw new Error('Queued local submission has no internal problem')
@@ -208,6 +211,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
       problemInternalId: submission.problemInternalId,
       trainingProblemId: submission.trainingProblemId,
       testSetRevisionId: submission.testSetRevisionId,
+      judgeConfigSnapshot: submission.CurrentJudgeRun?.judgeConfigSnapshot || submission.judgeConfigSnapshot || null,
       code: submission.code,
       language: submission.language,
       inputFilename: submission.CurrentJudgeRun?.inputFilename || null,
@@ -333,6 +337,8 @@ export async function finalizeOwnedJudgeAttempt(input: {
         trainingProblemId: true,
         contestId: true,
         contestProblemId: true,
+        trainingSessionId: true,
+        trainingStageProblemId: true,
       },
     })
   })
@@ -461,6 +467,7 @@ async function queueRejudgeRun(
       status: 'QUEUED',
       testSetRevisionId: submission.testSetRevisionId,
       judgeConfigHash: submission.judgeConfigHash,
+      judgeConfigSnapshot: submission.judgeConfigSnapshot,
       inputFilename: submission.inputFilename,
       outputFilename: submission.outputFilename,
       ioAdapterVersion: submission.ioAdapterVersion,

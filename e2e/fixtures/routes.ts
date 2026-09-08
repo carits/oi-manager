@@ -52,6 +52,8 @@ export const routePatterns = [
   '/personal/teams/[id]/contests/[cid]/statements',
   '/personal/teams/[id]/trainings/[tid]',
   '/personal/teams/[id]/trainings/[tid]/statements',
+  '/personal/training-sessions',
+  '/personal/training-sessions/[id]',
   '/platform-admin',
   '/platform-admin/chat-reports',
   '/platform-admin/ai',
@@ -111,6 +113,7 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   else if (route.includes('/personal/problem-lists/[id]')) route = route.replace('[id]', ids.personalProblemList)
   else if (route.includes('/personal/submissions/[id]')) route = route.replace('[id]', ids.personalSubmission)
   else if (route.includes('/personal/contests/[id]')) route = route.replace('[id]', ids.personalContest)
+  else if (route.includes('/personal/training-sessions/[id]')) route = route.replace('[id]', ids.personalContest)
   else if (route.includes('/platform-admin/problems/[id]')) route = route.replace('[id]', ids.problem)
   else if (route.includes('/platform-admin/submissions/[id]')) route = route.replace('[id]', ids.submission)
   else if (route.includes('/admin/submissions/[id]')) route = route.replace('[id]', ids.submission)

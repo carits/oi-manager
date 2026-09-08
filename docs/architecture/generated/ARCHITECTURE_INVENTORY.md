@@ -13,10 +13,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 126 |
-| Prisma enums | 6 |
+| Prisma models | 143 |
+| Prisma enums | 19 |
 | Legacy route adapters | 25 |
-| Module route adapters | 44 |
+| Module route adapters | 45 |
 | systemd units | 8 |
 | Referenced environment keys | 453 |
 
@@ -85,6 +85,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/team/team.requests.routes.ts`
 - `apps/server/src/modules/team/team.routes.ts`
 - `apps/server/src/modules/telemetry/telemetry.routes.ts`
+- `apps/server/src/modules/training-engine/training-engine.routes.ts`
 - `apps/server/src/modules/training/training.content.routes.ts`
 - `apps/server/src/modules/training/training.crud.routes.ts`
 - `apps/server/src/modules/training/training.hack-sync.routes.ts`
@@ -211,6 +212,23 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TrainingProblemContentSnapshot`
 - `TrainingProblemStatementSet`
 - `TrainingProblemStatementSnapshot`
+- `TrainingSession`
+- `TrainingSessionCommand`
+- `TrainingSessionEvent`
+- `TrainingSessionGroup`
+- `TrainingSessionHint`
+- `TrainingSessionHintAccess`
+- `TrainingSessionOverlay`
+- `TrainingSessionParticipant`
+- `TrainingSessionProblemDraft`
+- `TrainingSessionProblemProgress`
+- `TrainingSessionScoreEvent`
+- `TrainingSessionStage`
+- `TrainingSessionStageProblem`
+- `TrainingSessionStrategyDecision`
+- `TrainingSessionTemplate`
+- `TrainingSessionTemplateStage`
+- `TrainingSessionUserOverride`
 - `TrainingSolution`
 - `TrainingUserProblemStatus`
 - `User`
@@ -234,6 +252,19 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `JudgeRunType`
 - `RejudgeBatchStatus`
 - `TestcaseCandidateStatus`
+- `TrainingEngineAdvanceMode`
+- `TrainingEngineHintOpenMode`
+- `TrainingEngineJoinMode`
+- `TrainingEnginePauseMode`
+- `TrainingEnginePeerVisibility`
+- `TrainingEngineProblemAccessMode`
+- `TrainingEngineProgressStatus`
+- `TrainingEngineRankingMode`
+- `TrainingEngineSessionStatus`
+- `TrainingEngineSessionType`
+- `TrainingEngineStageMode`
+- `TrainingEngineSubmissionMode`
+- `TrainingEngineTargetType`
 
 ## systemd units
 

@@ -124,6 +124,23 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TeamProblemList` | 以 Prisma schema 为准 |
 | `TestdataFile` | 以 Prisma schema 为准 |
 | `Training` | 以 Prisma schema 为准 |
+| `TrainingSession` | 独立教练训练聚合根，保存范围、生命周期、当前阶段和命令/事件 revision |
+| `TrainingSessionStage` | 训练的有序阶段、模式、推进条件和课堂状态 |
+| `TrainingSessionStageProblem` | 阶段题目、固定 TestSet Revision、OI 专项投影和解锁规则 |
+| `TrainingSessionGroup` | 训练内教练分组 |
+| `TrainingSessionParticipant` | 学员当前阶段/题目、分组、心跳和有效活跃时间 |
+| `TrainingSessionProblemProgress` | 学员逐题最佳分、Verdict、尝试、提示和卡题状态 |
+| `TrainingSessionCommand` | 带会话单调序号的教练控制命令审计 |
+| `TrainingSessionOverlay` | 面向全员、组、团队或用户的聚焦、锁定、禁交和消息覆盖层 |
+| `TrainingSessionUserOverride` | 教练对单个学员的解锁、跳题和提交覆盖 |
+| `TrainingSessionProblemDraft` | 用户逐题、带 revision 的训练代码草稿 |
+| `TrainingSessionHint` | 分级提示及手动、时间、尝试或分数开放策略 |
+| `TrainingSessionHintAccess` | 学员首次打开提示的不可变记录 |
+| `TrainingSessionScoreEvent` | 一次训练提交产生的幂等分数事件 |
+| `TrainingSessionStrategyDecision` | ACM 策略训练中的扫题、主攻或切题决策 |
+| `TrainingSessionEvent` | 面向 SSE 补偿的会话单调持久事件 |
+| `TrainingSessionTemplate` | 学校或团队自定义训练模板 |
+| `TrainingSessionTemplateStage` | 自定义模板的阶段结构 |
 | `TrainingAttachment` | 以 Prisma schema 为准 |
 | `TrainingParticipant` | 以 Prisma schema 为准 |
 | `TrainingProblem` | 以 Prisma schema 为准 |
