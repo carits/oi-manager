@@ -123,6 +123,30 @@ app.use('/public', express.static(path.join(STORAGE_ROOT, 'public')))
 
 // ==================== API 路由 ====================
 
+// Keep probes ahead of feature routers mounted at `/api`. Some feature routers
+// use router-wide authentication, so registering probes afterwards can turn a
+// public health check into a 401 before Express reaches these handlers.
+app.get('/api/health', (req, res) => {
+  res.json({ success: true, message: 'OK' })
+})
+
+app.get('/api/readiness', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1 AS ready`
+    const inconsistent = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM "Problem" problem
+      JOIN "ProblemTestSetRevision" revision ON revision.id = problem."latestTestSetRevisionId"
+      WHERE problem."judgeConfig" IS DISTINCT FROM revision."judgeConfig"
+    `
+    const inconsistentCount = Number(inconsistent[0]?.count || 0)
+    if (inconsistentCount > 0) return res.status(503).json({ status: 'not_ready', inconsistentRevisions: inconsistentCount })
+    res.json({ status: 'ready', timestamp: new Date().toISOString() })
+  } catch (error: any) {
+    res.status(503).json({ status: 'not_ready', message: error.message })
+  }
+})
+
 app.use('/api/auth', authRouter)
 app.use('/api/organizations/:organizationId/members', authenticate, organizationMemberRouter)
 app.use('/api/platform/organizations', platformOrganizationRouter)
@@ -174,28 +198,6 @@ app.use('/api/chat', chatRouter)
 app.use('/api/platform/chat-reports', chatReportAdminRouter)
 app.use('/api/platform', chatStickerAdminRouter)
 app.use('/api/admin/demo-scenario', demoScenarioRouter)
-
-// 健康检查
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'OK' })
-})
-
-app.get('/api/readiness', async (req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1 AS ready`
-    const inconsistent = await prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*)::bigint AS count
-      FROM "Problem" problem
-      JOIN "ProblemTestSetRevision" revision ON revision.id = problem."latestTestSetRevisionId"
-      WHERE problem."judgeConfig" IS DISTINCT FROM revision."judgeConfig"
-    `
-    const inconsistentCount = Number(inconsistent[0]?.count || 0)
-    if (inconsistentCount > 0) return res.status(503).json({ status: 'not_ready', inconsistentRevisions: inconsistentCount })
-    res.json({ status: 'ready', timestamp: new Date().toISOString() })
-  } catch (error: any) {
-    res.status(503).json({ status: 'not_ready', message: error.message })
-  }
-})
 
 // ==================== 错误处理 ====================
 
