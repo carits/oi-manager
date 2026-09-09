@@ -246,7 +246,7 @@ beforeAll(async () => {
   // Isolated feature tests materialize Prisma with `db push`, which cannot
   // install database triggers. Install the same guards declared by the
   // production migration so pinned inputs and immutable evidence are exercised.
-  await prisma.$executeRawUnsafe(`
+  const statements = `
     CREATE OR REPLACE FUNCTION prevent_quality_job_input_mutation()
     RETURNS trigger AS $$
     BEGIN
@@ -273,7 +273,9 @@ beforeAll(async () => {
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
+    -- QUALITY_TRIGGER_STATEMENT
     DROP TRIGGER IF EXISTS "QualityEvaluationJob_immutable_inputs" ON "QualityEvaluationJob";
+    -- QUALITY_TRIGGER_STATEMENT
     CREATE TRIGGER "QualityEvaluationJob_immutable_inputs"
     BEFORE UPDATE ON "QualityEvaluationJob"
     FOR EACH ROW EXECUTE FUNCTION prevent_quality_job_input_mutation();
@@ -305,7 +307,9 @@ beforeAll(async () => {
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
+    -- QUALITY_TRIGGER_STATEMENT
     DROP TRIGGER IF EXISTS "ProblemQualityAssessment_immutable_automatic_evidence" ON "ProblemQualityAssessment";
+    -- QUALITY_TRIGGER_STATEMENT
     CREATE TRIGGER "ProblemQualityAssessment_immutable_automatic_evidence"
     BEFORE UPDATE ON "ProblemQualityAssessment"
     FOR EACH ROW EXECUTE FUNCTION prevent_problem_quality_automatic_mutation();
@@ -316,15 +320,22 @@ beforeAll(async () => {
       RAISE EXCEPTION 'TestSetQualitySnapshot is immutable';
     END;
     $$ LANGUAGE plpgsql;
+    -- QUALITY_TRIGGER_STATEMENT
     DROP TRIGGER IF EXISTS "TestSetQualitySnapshot_immutable_update" ON "TestSetQualitySnapshot";
+    -- QUALITY_TRIGGER_STATEMENT
     CREATE TRIGGER "TestSetQualitySnapshot_immutable_update"
     BEFORE UPDATE ON "TestSetQualitySnapshot"
     FOR EACH ROW EXECUTE FUNCTION prevent_quality_snapshot_mutation();
+    -- QUALITY_TRIGGER_STATEMENT
     DROP TRIGGER IF EXISTS "TestSetQualitySnapshot_immutable_delete" ON "TestSetQualitySnapshot";
+    -- QUALITY_TRIGGER_STATEMENT
     CREATE TRIGGER "TestSetQualitySnapshot_immutable_delete"
     BEFORE DELETE ON "TestSetQualitySnapshot"
     FOR EACH ROW EXECUTE FUNCTION prevent_quality_snapshot_mutation();
-  `)
+  `
+  for (const statement of statements.split('\n    -- QUALITY_TRIGGER_STATEMENT\n')) {
+    await prisma.$executeRawUnsafe(statement)
+  }
 })
 
 afterEach(async () => {

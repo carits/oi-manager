@@ -193,14 +193,17 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     const reader = await createTestUser({ role: 'student', schoolId: author.schoolId })
     const readerClient = createAuthenticatedRequest(app, generateTokenFromUser(reader.user))
     const publicCurrent = await readerClient.get(`/api/solutions/${first.body.data.solutionId}`)
+      .set('X-OI-Organization-ID', organizationId)
     expect(publicCurrent.status).toBe(200)
     const listed = await readerClient.get(`/api/problems/${problem.id}/solutions`)
+      .set('X-OI-Organization-ID', organizationId)
     for (const payload of [publicCurrent.body.data, listed.body.data]) {
       const serialized = JSON.stringify(payload)
       for (const forbidden of ['"judgeConfig"', '"testdataPath"', '"verificationId"', '"sourceContributionRevisionId"', '"contentHash"', '"statementSnapshotHash"', '"passwordHash"']) {
         expect(serialized).not.toContain(forbidden)
       }
     }
-    expect((await readerClient.get(`/api/solutions/${first.body.data.solutionId}/versions/${first.body.data.id}`)).status).toBe(404)
+    expect((await readerClient.get(`/api/solutions/${first.body.data.solutionId}/versions/${first.body.data.id}`)
+      .set('X-OI-Organization-ID', organizationId)).status).toBe(404)
   })
 })

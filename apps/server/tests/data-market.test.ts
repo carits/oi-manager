@@ -33,7 +33,7 @@ describe('V1 data product marketplace', () => {
     const job = await prisma.qualityEvaluationJob.create({ data: {
       id: crypto.randomUUID(), problemId, revisionId: revision.id, corpusRevisionId: corpus.id,
       qualityRuleVersion: 'QUALITY_RULE_V1', ruleConfig: {}, inputSnapshot: {}, inputHash: crypto.randomUUID(),
-      featureSchemaHash: 'features', checkerHash: 'checker', judgeConfigHash: revision.judgeConfigHash,
+      featureSchemaHash: 'features', solutionProfileSchemaHash: 'solutions', checkerHash: 'checker', judgeConfigHash: revision.judgeConfigHash,
       status: 'SUCCEEDED', createdBy: manager.user.id, finishedAt: new Date(),
     } })
     const competition = grade === 'COMPETITION'
