@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 166 |
-| Prisma enums | 39 |
+| Prisma models | 190 |
+| Prisma enums | 71 |
 | Legacy route adapters | 25 |
-| Module route adapters | 48 |
+| Module route adapters | 52 |
 | systemd units | 8 |
-| Referenced environment keys | 466 |
+| Referenced environment keys | 471 |
 
 ## HTTP adapter ownership
 
@@ -54,10 +54,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 - `apps/server/src/modules/ai/ai-token.routes.ts`
 - `apps/server/src/modules/assignment/assignment.routes.ts`
+- `apps/server/src/modules/blog/blog.routes.ts`
 - `apps/server/src/modules/carits/carits.routes.ts`
 - `apps/server/src/modules/carits/resource.routes.ts`
 - `apps/server/src/modules/chat/chat.routes.ts`
 - `apps/server/src/modules/contribution/contribution.routes.ts`
+- `apps/server/src/modules/data-market/data-market.routes.ts`
 - `apps/server/src/modules/notification/notification.routes.ts`
 - `apps/server/src/modules/organization-creation/organization-creation.routes.ts`
 - `apps/server/src/modules/organization-join/organization-join.routes.ts`
@@ -71,6 +73,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/problem/problem.judge-program.routes.ts`
 - `apps/server/src/modules/problem/problem.judge.routes.ts`
 - `apps/server/src/modules/problem/problem.notes.routes.ts`
+- `apps/server/src/modules/problem/problem.quality.routes.ts`
 - `apps/server/src/modules/problem/problem.routes.ts`
 - `apps/server/src/modules/problem/problem.statement-version.routes.ts`
 - `apps/server/src/modules/problem/problem.submissions.routes.ts`
@@ -81,6 +84,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/ranking/ranking.routes.ts`
 - `apps/server/src/modules/rating/rating-domain.routes.ts`
 - `apps/server/src/modules/school/school.routes.ts`
+- `apps/server/src/modules/solution/solution.routes.ts`
 - `apps/server/src/modules/team-import/team-import.routes.ts`
 - `apps/server/src/modules/team/team.crud.routes.ts`
 - `apps/server/src/modules/team/team.invitations.routes.ts`
@@ -119,6 +123,14 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AssignmentScoreAdjustment`
 - `BlobObject`
 - `BlobReference`
+- `BlogPost`
+- `BlogPostDraft`
+- `BlogPostTag`
+- `BlogPostVersion`
+- `BlogReference`
+- `BlogSeries`
+- `BlogSeriesEntry`
+- `BlogTag`
 - `BugCategory`
 - `CandidateEvaluationRun`
 - `CanonicalSelectionRun`
@@ -144,6 +156,11 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ContributionEvent`
 - `ContributionProject`
 - `ContributionRewardDelivery`
+- `DataEntitlement`
+- `DataEntitlementRevision`
+- `DataProduct`
+- `DataProductPrice`
+- `DataPurchase`
 - `DirectConversation`
 - `DirectConversationMember`
 - `DirectMessage`
@@ -195,6 +212,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemListSection`
 - `ProblemListShare`
 - `ProblemNote`
+- `ProblemQualityAssessment`
+- `ProblemSolution`
+- `ProblemSolutionProfile`
+- `ProblemSolutionVersion`
 - `ProblemStatement`
 - `ProblemSubtask`
 - `ProblemSubtaskDependency`
@@ -208,6 +229,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ProblemTestSetRevisionSubtask`
 - `ProblemTestcase`
 - `ProblemTestcaseGroup`
+- `QualityEvaluationJob`
 - `RatingAccount`
 - `RatingBatch`
 - `RatingChange`
@@ -217,6 +239,10 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `ResourcePurchase`
 - `School`
 - `SchoolProblemList`
+- `SolutionContribution`
+- `SolutionContributionRevision`
+- `SolutionReview`
+- `SolutionVerification`
 - `Submission`
 - `Team`
 - `TeamJoinRequest`
@@ -226,6 +252,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `TeamMemberImportItem`
 - `TeamOperationLog`
 - `TeamProblemList`
+- `TestSetQualityIncident`
+- `TestSetQualitySnapshot`
 - `TestcaseCandidate`
 - `TestcaseMembershipRetirement`
 - `TestdataFile`
@@ -285,18 +313,50 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AssignmentSolutionReleasePolicy`
 - `AssignmentStatus`
 - `AssignmentTimelinessStatus`
+- `BlogPostStatus`
+- `BlogPostType`
+- `BlogPostVersionStatus`
+- `BlogReferenceDisplayMode`
+- `BlogReferenceRelationType`
+- `BlogReferenceStatus`
+- `BlogReferenceType`
+- `BlogTagKind`
+- `BlogVisibility`
 - `CaritsAccountOwnerType`
 - `ContestFinalizationStatus`
+- `DataEntitlementGrantReason`
+- `DataLicenseType`
+- `DataProductGrade`
+- `DataProductSellerType`
+- `DataProductStatus`
+- `DataProductUpdatePolicy`
+- `DataPurchaseStatus`
 - `JudgeAttemptState`
 - `JudgeRunStatus`
 - `JudgeRunType`
+- `ProblemQualityAssessmentStatus`
+- `ProblemSolutionStatus`
+- `ProblemSolutionVersionStatus`
+- `QualityConfidenceLevel`
+- `QualityEvaluationJobStatus`
+- `QualityMaturityLevel`
 - `RatingBatchStatus`
 - `RatingParticipantDisposition`
 - `RatingParticipantStatus`
 - `RatingScope`
 - `RatingTrack`
 - `RejudgeBatchStatus`
+- `SolutionContributionStatus`
+- `SolutionReviewDecision`
+- `SolutionReviewType`
+- `SolutionSourceType`
+- `SolutionType`
+- `SolutionVerificationStatus`
+- `SolutionVisibilityPolicy`
 - `StandingSnapshotStatus`
+- `TestSetQualityIncidentSeverity`
+- `TestSetQualityIncidentStatus`
+- `TestSetQualityStatus`
 - `TestcaseCandidateStatus`
 - `TrainingEngineAdvanceMode`
 - `TrainingEngineHintOpenMode`
@@ -405,6 +465,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `BENCHMARK_PASSWORD`
 - `BENCHMARK_ROUNDS`
 - `BENCHMARK_USERNAME`
+- `BLOG_DATABASE_URL`
+- `BLOG_TEST_SCHEMA`
 - `BLUE_GREEN_BLUE_PORT`
 - `BLUE_GREEN_GREEN_PORT`
 - `BLUE_GREEN_ROUTER_PORT`
@@ -559,7 +621,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MAX_BATCH_PROBLEM_IDS`
 - `MAX_CASES`
 - `MAX_CONCURRENT`
+- `MAX_REFERENCES`
 - `MAX_STICKERS`
+- `MAX_TAGS`
 - `MESSAGE`
 - `METRICS_CHECK`
 - `METRICS_SNAPSHOT_PATH`
@@ -658,7 +722,6 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `PID_FILE`
 - `PLAYWRIGHT_BROWSERS_PATH`
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
-- `POLICY_VERSION`
 - `POOL_ID`
 - `PORT`
 - `POSTGRES_DB`
@@ -676,6 +739,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `QOJ_SESSION`
 - `QUIET_SUCCESS`
 - `RATE_LIMIT_MAX`
+- `RATING_SCHEMA_SETUP`
 - `RATING_TEST_SCHEMA`
 - `RATING_TEST_SCOPE`
 - `READY_FILE`
@@ -717,6 +781,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SANDBOX_STARTED`
 - `SCHEDULE`
 - `SCHEDULER_CHECK`
+- `SCHEMA_SETUP`
 - `SCHOOL_CREATION_LOCK`
 - `SECURITY_BASELINE_CHECK`
 - `SECURITY_BASELINE_DIR`

@@ -24,6 +24,8 @@ import { Copy } from 'lucide-react'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
 import { StatementVersionWorkspace } from './StatementVersionWorkspace'
 import { ProblemHackPanel } from './ProblemHackPanel'
+import { SolutionEditorialPanel } from './SolutionEditorialPanel'
+import { ProblemRelatedBlogs } from '@/components/blog/ProblemRelatedBlogs'
 import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
 
 interface Statement {
@@ -191,8 +193,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const { user } = useAuth()
   const pathname = usePathname()
   const toast = useToast()
-  type TabType = 'statement' | 'solution' | 'attachments' | 'my-content' | 'records' | 'hack'
-  const VALID_TABS: TabType[] = ['statement', 'solution', 'attachments', 'my-content', 'records', 'hack']
+  type TabType = 'statement' | 'solution' | 'knowledge' | 'attachments' | 'my-content' | 'records' | 'hack'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'knowledge', 'attachments', 'my-content', 'records', 'hack']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>(
@@ -773,6 +775,12 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               题解
             </Button>
             <Button variant="ghost"
+              onClick={() => handleTabChange('knowledge')}
+              className={unifiedStyles.tabButton} aria-selected={activeTab === 'knowledge'}
+            >
+              关联文章
+            </Button>
+            <Button variant="ghost"
               onClick={() => {
                 handleTabChange('attachments')
                 setHasVisitedAttachments(true)
@@ -830,6 +838,9 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           {/* 题解 Tab */}
           {activeTab === 'solution' && (
             <>
+              <SolutionEditorialPanel problemId={problemId} canManage={canModify()} />
+
+              {visibleSolutions.length > 0 && <div className={unifiedStyles.u23}>旧版题解</div>}
               {/* 左上角版本选择 */}
               {visibleSolutions.length > 1 && (
                 <div className={unifiedStyles.u23}>
@@ -900,6 +911,8 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               </div>
             </>
           )}
+
+          {activeTab === 'knowledge' && <ProblemRelatedBlogs problemId={problemId} />}
 
           {/* 附件 Tab */}
           {activeTab === 'attachments' && (

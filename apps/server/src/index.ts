@@ -43,6 +43,9 @@ import { organizationCreationRouter } from './modules/organization-creation/orga
 import { caritsRouter } from './modules/carits/carits.routes'
 import { aiTokenAdminRouter } from './modules/ai/ai-token.routes'
 import { contributionRouter, platformContributionRouter } from './modules/contribution/contribution.routes'
+import { solutionContributionRouter, solutionReviewRouter, solutionRouter } from './modules/solution/solution.routes'
+import { dataMarketRouter } from './modules/data-market/data-market.routes'
+import { blogRouter } from './modules/blog/blog.routes'
 import { resourceRouter } from './modules/carits/resource.routes'
 import { telemetryRouter } from './modules/telemetry/telemetry.routes'
 import { workspaceRouter } from './routes/workspaces'
@@ -159,6 +162,11 @@ app.use('/api/carits', authenticate, caritsRouter)
 app.use('/api/platform-admin/ai', authenticate, aiTokenAdminRouter)
 app.use('/api/contributions', authenticate, contributionRouter)
 app.use('/api/platform/contributions', authenticate, platformContributionRouter)
+app.use('/api/solution-contributions', solutionContributionRouter)
+app.use('/api/solutions', solutionRouter)
+app.use('/api/review/solution-contributions', solutionReviewRouter)
+app.use('/api', dataMarketRouter)
+app.use('/api', blogRouter)
 app.use('/api/resources', authenticate, resourceRouter)
 app.use('/api/telemetry', telemetryRouter)
 app.use('/api/workspaces', workspaceRouter)

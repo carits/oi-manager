@@ -416,8 +416,9 @@ export async function publishTestSetRevision(params: {
   const graphHash = stableHash(params.spec)
   const judgeConfigHash = sha256(judgeConfig)
   const materialized = await materializeRevision(params.problemId, revisionId, params.spec, judgeConfig)
+  let published: Awaited<ReturnType<typeof prisma.problemTestSetRevision.findUnique>>
   try {
-    return await prisma.$transaction(async tx => {
+    published = await prisma.$transaction(async tx => {
       await acquireProblemMutationLock(tx, params.problemId)
       const problem = await tx.problem.findUnique({ where: { id: params.problemId }, select: { latestTestSetRevisionId: true } })
       if (!problem || problem.latestTestSetRevisionId !== params.expectedLatestRevisionId) throw new TestSetRevisionConflict()
@@ -478,6 +479,16 @@ export async function publishTestSetRevision(params: {
     await removeRevisionDirectory(params.problemId, revisionId).catch(() => {})
     throw error
   }
+  // Quality evaluation is deliberately outside the immutable Revision
+  // publication transaction. A missing/empty Wrong Corpus must never roll
+  // back a valid test-set release; once the corpus is ready, managers can
+  // enqueue the same idempotent pinned evaluation through the quality API.
+  if (published && params.createdBy) {
+    await import('./problem.quality.service').then(({ enqueueQualityEvaluationForRevision }) =>
+      enqueueQualityEvaluationForRevision({ problemId: params.problemId, revisionId: published!.id, createdBy: params.createdBy! }),
+    ).catch(() => undefined)
+  }
+  return published
 }
 
 export async function loadRevisionSpec(revisionId: string): Promise<TestSetRevisionSpec | null> {

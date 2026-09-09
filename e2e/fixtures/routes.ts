@@ -13,6 +13,9 @@ export const routePatterns = [
   '/account/wallet',
   '/admin',
   '/admin/chat-reports',
+  '/admin/contests',
+  '/admin/contests/[id]',
+  '/admin/contests/[id]/statements',
   '/admin/contributions',
   '/admin/platform-bindings',
   '/admin/profile',
@@ -31,12 +34,17 @@ export const routePatterns = [
   '/org/[organizationId]/[module]',
   '/org/[organizationId]/[module]/[...segments]',
   '/personal',
+  '/personal/blogs',
+  '/personal/blogs/[id]',
+  '/personal/blogs/new',
+  '/personal/blogs/series',
   '/personal/campus',
   '/personal/carits',
   '/personal/contests',
   '/personal/contests/[id]',
   '/personal/contests/[id]/statements',
   '/personal/contributions',
+  '/personal/data-market',
   '/personal/organizations',
   '/personal/problem-lists',
   '/personal/problem-lists/[id]',
@@ -58,9 +66,13 @@ export const routePatterns = [
   '/personal/training-sessions/[id]/design',
   '/platform-admin',
   '/platform-admin/chat-reports',
+  '/platform-admin/contests',
+  '/platform-admin/contests/[id]',
+  '/platform-admin/contests/[id]/statements',
   '/platform-admin/ai',
   '/platform-admin/carits',
   '/platform-admin/contributions',
+  '/platform-admin/data-market',
   '/platform-admin/oj-accounts',
   '/platform-admin/platform-bindings',
   '/platform-admin/problems',
@@ -116,6 +128,9 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   else if (route.includes('/personal/problem-lists/[id]')) route = route.replace('[id]', ids.personalProblemList)
   else if (route.includes('/personal/submissions/[id]')) route = route.replace('[id]', ids.personalSubmission)
   else if (route.includes('/personal/contests/[id]')) route = route.replace('[id]', ids.personalContest)
+  else if (route.includes('/admin/contests/[id]')) route = route.replace('[id]', ids.personalContest)
+  else if (route.includes('/platform-admin/contests/[id]')) route = route.replace('[id]', ids.personalContest)
+  else if (route.includes('/personal/blogs/[id]')) route = route.replace('[id]', 'missing-blog')
   else if (route.includes('/personal/training-sessions/[id]')) route = route.replace('[id]', ids.trainingSession)
   else if (route.includes('/platform-admin/problems/[id]')) route = route.replace('[id]', ids.problem)
   else if (route.includes('/platform-admin/submissions/[id]')) route = route.replace('[id]', ids.submission)

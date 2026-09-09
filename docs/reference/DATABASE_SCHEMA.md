@@ -42,6 +42,14 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `AssignmentRecipient` | 发布时固定的学生名单和个人有效截止时间 |
 | `AssignmentRecipientOverride` | 收件人的追加式延期、免交或状态覆盖事实 |
 | `AssignmentScoreAdjustment` | 只能追加和冲正的人工调分流水 |
+| `BlogPost` | 知识发布聚合根，保存作者、归属、状态和当前不可变版本指针 |
+| `BlogPostDraft` | 可覆盖编辑的草稿，使用 revision 乐观锁并保存未发布引用与分类 |
+| `BlogPostVersion` | 发布时生成的不可变 Markdown、可见范围、组织与分类快照 |
+| `BlogReference` | 指向题目/测试版本、题解版本、榜单快照或 RatingChange 的不可变结构化引用 |
+| `BlogSeries` | 个人或组织范围的可见系列，名称规范化唯一并使用 revision CAS |
+| `BlogSeriesEntry` | 系列与文章的有序多对多关系 |
+| `BlogTag` | 平台系统标签或作者命名空间内受控、规范化唯一的标签 |
+| `BlogPostTag` | 当前文章与标签的反向查询索引；历史分类另固化于 BlogPostVersion |
 | `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
 | `ContestStandingEntry` | 最终榜单中带组织快照、并列组和 Rating 资格的参赛者事实 |
 | `ContestStandingSnapshot` | 一场比赛版本化且不可变的最终排名输入 |
@@ -100,6 +108,22 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `TestcaseMembershipRetirement` | 新 Revision 以高价值 Candidate 替换旧成员时的追加式审计；不删除旧 Revision、Testcase 或 Blob |
 | `CanonicalSelectionRun` | Selector 输入、输出、质量差值、状态和晋升 Revision |
 | `ProblemCandidatePolicy` | 题目候选池、Top-K、正式点数、发布阈值与 observe/auto 策略 |
+| `QualityEvaluationJob` | 固定 Revision、Corpus、规则、Feature、程序和 Checker 输入的异步 DQS 任务；租约/fencing/重试状态可变，固定输入由数据库触发器保护 |
+| `TestSetQualitySnapshot` | Revision 级不可变 DQS 证书；保存六维评分、Evaluation/Holdout 分离覆盖、Confidence、Maturity、Critical Gate 和私有 evidence |
+| `ProblemSolutionProfile` | 题目级版本化代表解配置；引用本题固定 Revision 的本地终态提交，保存算法类别、复杂度、预期总分和 Subtask 分数区间，作为 OI Subtask Quality 的固定输入 |
+| `ProblemQualityAssessment` | 内容版本级 PQS；自动评分/evidence 不可覆盖，平台质量审核员只能追加一次专家评分与审查证据 |
+| `SolutionContribution` | 题解投稿聚合根，保存作者、组织归因、状态与当前不可变投稿 Revision |
+| `SolutionContributionRevision` | 每次提交/重投冻结的题解内容、题面快照、来源授权和目标测试集版本 |
+| `SolutionVerification` | 题解代码针对固定测试集 Revision 的 Judge 技术验证结果 |
+| `SolutionReview` | 审核人的不可变审核事实；冲突审核由投稿级锁和状态 CAS 串行化 |
+| `ProblemSolution` | 已发布题解稳定身份与当前版本指针 |
+| `ProblemSolutionVersion` | 不可变发布版本，固化内容、验证、来源和发布时 visibilityPolicy |
+| `DataProduct` | 固定 Revision 与质量快照的数据商品；服务端自动等级、更新策略、includes、卖方范围和停售状态 |
+| `DataProductPrice` | 商品按 PERSONAL/ORGANIZATION/CONTEST 许可证生成的不可变服务端价格 |
+| `DataPurchase` | UUID 幂等购买、固定价格/Revision/质量证书与 Carits posted 交易关联 |
+| `DataEntitlement` | 个人、组织或 `Training(type=contest)` 范围的授权根；身份字段不可变，可审计撤销 |
+| `DataEntitlementRevision` | 购买、策略升级或 Critical 修复产生的追加式固定 Revision 授权 |
+| `TestSetQualityIncident` | Revision 质量事故、确认/解决审计与修复 Revision；Critical 驱动商品停售 |
 | `EvaluationCreditAccount` | 用户或平台按日 Evaluation Credits 的可用、预占和消费账户 |
 | `EvaluationCreditLedgerEntry` | Evaluation Credits 可用额度的不可变幂等流水；预占为负数，结算/释放记录未用额度退回 |
 | `EvaluationCreditWallet` | 用户长期有效的已购 Evaluation Credits 可用、预占和消费投影 |

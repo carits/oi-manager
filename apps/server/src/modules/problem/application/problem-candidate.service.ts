@@ -183,7 +183,12 @@ export async function updateFeatureDefinitions(user: JwtPayload, problemId: stri
   if (features.length > EVALUATION_LIMITS.maxFeatures) fail(422, 'FEATURE_LIMIT', '每题最多定义 128 个 Feature')
   const keys = features.map((item: any) => String(item?.key || ''))
   if (keys.some((key: string) => !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key)) || new Set(keys).size !== keys.length) fail(422, 'FEATURE_INVALID', 'Feature key 无效或重复')
-  await prisma.$transaction(async tx => { await tx.problemFeatureDefinition.deleteMany({ where: { problemId } }); if (features.length) await tx.problemFeatureDefinition.createMany({ data: features.map((item: any, orderIndex: number) => ({ id: crypto.randomUUID(), problemId, key: keys[orderIndex], name: String(item?.name || keys[orderIndex]).slice(0, 80), kind: String(item?.kind || 'declarative'), config: item?.config || {}, orderIndex })) }) }); return listFeatureDefinitions(user, problemId)
+  await prisma.$transaction(async tx => { await tx.problemFeatureDefinition.deleteMany({ where: { problemId } }); if (features.length) await tx.problemFeatureDefinition.createMany({ data: features.map((item: any, orderIndex: number) => ({ id: crypto.randomUUID(), problemId, key: keys[orderIndex], name: String(item?.name || keys[orderIndex]).slice(0, 80), kind: String(item?.kind || 'declarative'), config: item?.config || {}, orderIndex })) }) })
+  const result = await listFeatureDefinitions(user, problemId)
+  await import('../problem.quality.service').then(({ enqueueLatestQualityAfterEvidenceChange }) =>
+    enqueueLatestQualityAfterEvidenceChange(problemId, user.userId),
+  ).catch(error => console.warn('[quality-evaluation] feature change enqueue skipped', { problemId, error: (error as Error).message }))
+  return result
 }
 export async function listSubtaskRules(user: JwtPayload, problemId: string) { await problemFor(user, problemId, true); return prisma.problemSubtaskRule.findMany({ where: { problemId }, orderBy: { subtaskId: 'asc' } }) }
 export async function updateSubtaskRules(user: JwtPayload, problemId: string, body: any) {

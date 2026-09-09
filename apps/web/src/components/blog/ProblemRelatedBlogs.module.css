@@ -1,0 +1,13 @@
+.root { display: grid; gap: var(--space-4); padding: var(--space-5); }
+.root > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.root h2 { margin: 0; font-size: var(--text-lg); }
+.root header p, .loading { margin: var(--space-1) 0 0; color: var(--text-muted); }
+.list { display: grid; gap: var(--space-3); }
+.list > a { position: relative; display: grid; gap: var(--space-2); width: 100%; padding: var(--space-4); padding-right: var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); background: var(--bg-card); text-align: left; text-decoration: none; cursor: pointer; }
+.list > a:hover { border-color: var(--primary); }
+.list > a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.list > a > div { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.list p, .list small { margin: 0; color: var(--text-muted); }
+.list svg { position: absolute; top: 50%; right: var(--space-4); transform: translateY(-50%); }
+.error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); color: var(--error-text); background: var(--error-light); border-radius: var(--radius-md); }
+@media (max-width: 640px) { .root > header, .error { align-items: stretch; flex-direction: column; } }

@@ -19,6 +19,37 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `GET` | `/api/data-products` | 读取当前 ACTIVE 数据商品及公开质量证书，不返回隐藏证据或测试数据 |
+| `GET` | `/api/data-products/:id` | 读取指定商品证书；已停售商品仍保留历史状态但不能购买 |
+| `POST` | `/api/problems/:problemId/data-products` | 题目管理员绑定 Revision 与质量快照发布商品；服务端自动定级定价 |
+| `POST` | `/api/data-products/:id/purchase` | 以 UUID Idempotency-Key 和服务端价格购买 PERSONAL/ORGANIZATION/CONTEST 许可证 |
+| `GET` | `/api/data-purchases` | 读取本人或本人可管理范围内的购买记录 |
+| `GET` | `/api/data-entitlements` | 读取本人或本人可管理范围内的固定版本授权 |
+| `GET` | `/api/data-entitlements/:id` | 读取授权与追加式 Revision 历史；越权统一返回 404 |
+| `GET` | `/api/data-entitlements/:id/revisions/:revisionId/manifest` | 按 includes 返回安全数据清单与受控对象链接 |
+| `GET` | `/api/data-entitlements/:id/revisions/:revisionId/objects/:objectId` | 重验授权、Revision 与对象归属后流式下载单个对象 |
+| `POST` | `/api/data-entitlements/:id/upgrades` | 按商品更新策略追加同题新 Revision 授权 |
+| `POST` | `/api/test-set-quality-incidents` | 题目管理员登记质量事故；Critical 会自动停售并通知买家 |
+| `GET` | `/api/problems/:problemId/test-set-quality-incidents` | 题目管理员读取事故历史 |
+| `POST` | `/api/test-set-quality-incidents/:id/confirm` | 确认非 Critical 事故 |
+| `POST` | `/api/test-set-quality-incidents/:id/resolve` | 绑定修复 Revision 并向既有授权追加免费修复版本 |
+| `POST` | `/api/problems/:problemId/solution-contributions` | 创建题解投稿草稿并固定来源、授权和组织归因 |
+| `GET` | `/api/problems/:problemId/solution-contributions/me` | 读取本人对指定题目的投稿 |
+| `GET` | `/api/problems/:problemId/solutions` | 按当前发布版本可见性读取题解列表 |
+| `GET` | `/api/solution-contributions/:id` | 作者或题目管理员读取投稿、版本、验证与审核历史 |
+| `PATCH` | `/api/solution-contributions/:id` | 编辑仍可修改或要求重投的题解草稿 |
+| `POST` | `/api/solution-contributions/:id/submit` | 冻结首个投稿 Revision 并发起技术验证 |
+| `POST` | `/api/solution-contributions/:id/resubmit` | 要求修改后追加新的不可变投稿 Revision |
+| `POST` | `/api/solution-contributions/:id/verification/refresh` | 从 JudgeRun 同步当前投稿 Revision 的技术验证结果 |
+| `GET` | `/api/solutions/:solutionId` | 按各版本固化的 visibilityPolicy 返回当前题解和可见历史 |
+| `GET` | `/api/solutions/:solutionId/versions/:versionId` | 按指定历史版本自身可见性读取只读内容 |
+| `POST` | `/api/solutions/:solutionId/corrections` | 基于当前发布版本创建纠错投稿 |
+| `GET` | `/api/review/solution-contributions` | 题目管理员读取可管理投稿审核队列 |
+| `POST` | `/api/review/solution-contributions/:id/reviews` | 事务串行写入通过、要求修改或拒绝审核 |
+| `POST` | `/api/review/solution-contributions/:id/request-revision` | 要求投稿作者修改并追加重投版本 |
+| `POST` | `/api/review/solution-contributions/:id/reject` | 拒绝当前投稿 Revision |
+| `POST` | `/api/review/solution-contributions/:id/accept` | 以 expected-status CAS 采纳已验证且审核通过的投稿 |
+| `POST` | `/api/review/solution-contributions/:id/publish` | 幂等发布不可变题解版本并生成贡献奖励事件 |
 | `GET` | `/api/ratings/me` | 读取本人全部全局/组织 OI、IOI、ACM Rating 账户 |
 | `GET` | `/api/ratings/global/:track` | 分页读取指定 Track 的全局 Rating 榜 |
 | `GET` | `/api/ratings/organizations/:organizationId/:track` | 有效组织成员读取组织 Rating 榜 |
@@ -126,6 +157,17 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/problems/:id/candidate-policy` | 题目管理者以 revision CAS 更新 observe/auto 与容量策略 |
 | `GET` | `/api/problems/:id/wrong-corpus` | 题目管理者读取私有错误语料的聚类汇总，不返回历史源码 |
 | `POST` | `/api/problems/:id/wrong-corpus/rebuild` | 从本地错误/部分分提交幂等重建 bootstrap Corpus |
+| `GET` | `/api/problems/:id/quality` | 读取当前 Revision 的 DQS/PQS 质量摘要；普通用户只获得脱敏证书，管理者同时获得历史和任务摘要 |
+| `GET` | `/api/problems/:id/test-set-revisions/:revisionId/quality` | 读取指定不可变 Revision 的质量证书；完整 evidence 仅题目管理者可见 |
+| `POST` | `/api/problems/:id/quality-evaluation-jobs` | 题目管理者按固定 Revision/Corpus/规则输入幂等触发 DQS 异步评估 |
+| `GET` | `/api/problems/:id/quality-evaluation-jobs` | 题目管理者读取质量评估任务状态，不在列表响应暴露完整固定输入 |
+| `GET` | `/api/problems/:id/quality-evaluation-jobs/:jobId` | 题目管理者读取单个任务的固定输入、租约终态和质量证书 |
+| `GET` | `/api/problems/:id/solution-profiles` | 题目管理者读取 Reference Solution Profiles 及其固定 Revision 评测结果 |
+| `POST` | `/api/problems/:id/solution-profiles` | 题目管理者从本题本地终态提交创建带预期总分/Subtask 区间的 Profile，并触发重新评估 |
+| `PATCH` | `/api/problems/:id/solution-profiles/:profileId` | 以 `expectedRevision` CAS 更新或停用 Profile；冲突返回 `SOLUTION_PROFILE_STALE` |
+| `GET` | `/api/problems/:id/problem-quality-assessments` | 读取 PQS 历史；非管理者响应使用公开字段白名单 |
+| `POST` | `/api/problems/:id/problem-quality-assessments/automated` | 题目管理者为当前内容版本生成幂等 PQS 自动评估 |
+| `POST` | `/api/problems/:id/problem-quality-assessments/:assessmentId/expert-review` | 仅 platform_admin/super_admin 追加不可覆盖的专家评分和审查意见 |
 | `GET` | `/api/problems/:id/selector-runs` | 题目管理者读取 Selector 运行历史 |
 | `POST` | `/api/problems/:id/selector-runs/preview` | 对至多 25 个待选 Candidate 执行相对当前正式 Revision 的真实 dry-run，不创建 Selection Run 或 Revision |
 | `POST` | `/api/problems/:id/canonical-emergency-publish` | 题目管理者填写原因后紧急发布 Hack Gate Candidate；不能绕过结构、保护、Official Core 或 Revision CAS |
@@ -546,3 +588,28 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-options/:optionKey/file` | 管理员预览候选 PDF |
 | `PUT` | `/api/trainings/:id/problems/:trainingProblemId/content-selection` | 选择活动题面与题解并追加不可变快照 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/content-snapshot/:kind/file` | 读取活动当前 PDF 快照 |
+| `POST` | `/api/blogs` | 创建可覆盖编辑的知识文章草稿 |
+| `GET` | `/api/blogs` | 分页查询本人博客、草稿和归档 |
+| `GET` | `/api/blogs/:id` | 按当前版本可见范围读取博客；作者额外获取草稿 |
+| `PATCH` | `/api/blogs/:id/draft` | 使用 expectedRevision CAS 更新正文、结构化引用、系列和标签草稿 |
+| `POST` | `/api/blogs/:id/publish` | 解析固定引用、执行可见性 fail-closed 检查并发布不可变新版本 |
+| `POST` | `/api/blogs/:id/archive` | 作者归档文章，保留已发布版本与引用 |
+| `GET` | `/api/blogs/:id/versions` | 仅列出当前读者有权读取的历史版本 |
+| `GET` | `/api/blogs/:id/versions/:versionId` | 按该版本发布时固定可见范围读取不可变内容 |
+| `GET` | `/api/blogs/:id/references` | 读取当前可见版本的结构化事实引用 |
+| `POST` | `/api/blogs/:id/versions/:versionId/convert-to-solution-contribution` | 复制固定 Blog Version 为独立 SolutionContribution 草稿，不直接生成正式题解 |
+| `POST` | `/api/blog-drafts/from-contest/:trainingId` | 从本人已结算 Standing Snapshot 创建比赛复盘草稿 |
+| `POST` | `/api/blog-drafts/from-solution/:solutionVersionId` | 从有权读取的固定题解版本创建学习博客草稿 |
+| `GET` | `/api/problems/:problemId/blogs` | 基于 BlogReference 反向查询当前读者可见的题目相关博客 |
+| `GET` | `/api/trainings/:trainingId/blogs` | 基于固定榜单/Rating 引用反向查询比赛复盘 |
+| `GET` | `/api/solutions/:solutionId/related-blogs` | 反向查询固定题解版本相关博客 |
+| `GET` | `/api/users/:userId/blogs` | 分页查询指定作者对当前读者可见的已发布博客 |
+| `POST` | `/api/blog-series` | 创建个人或组织范围内名称规范化唯一的博客系列 |
+| `GET` | `/api/blog-series` | 分页查询本人可管理博客系列 |
+| `GET` | `/api/blog-series/:seriesId` | 按系列可见范围读取有序文章，并二次裁剪不可读条目 |
+| `PATCH` | `/api/blog-series/:seriesId` | 作者使用 expectedRevision CAS 更新系列元数据和可见范围 |
+| `PUT` | `/api/blog-series/:seriesId/entries` | 作者按完整 postIds 集合事务重排系列文章 |
+| `GET` | `/api/blog-tags` | 获取可使用的系统标签与本人作者标签 |
+| `POST` | `/api/blog-tags` | 在本人命名空间创建或复用 NFKC 规范化唯一标签 |
+| `POST` | `/api/platform/blog-tags` | 超管或平台管理员创建或复用受控系统标签 |
+| `GET` | `/api/blog-tags/:tagId/blogs` | 通过标签反向查询当前读者可见的已发布博客 |

@@ -177,6 +177,39 @@ export function startContestRatingScheduler(intervalMs = 10_000): () => Promise<
   }
 }
 
+export function startQualityEvaluationScheduler(intervalMs = 5_000): () => Promise<void> {
+  let stopped = false, running = false
+  let staleSweepTicks = 0
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const { processQualityEvaluationJobs, enqueueStaleQualityEvaluations } = await import('../modules/problem/problem.quality.service')
+      const result = await processQualityEvaluationJobs(2)
+      if (result.processed || result.failed) logger.info('quality_evaluation_scheduler_tick', { action: 'quality_evaluation', metadata: result })
+      staleSweepTicks++
+      if (staleSweepTicks >= 12) {
+        staleSweepTicks = 0
+        const sweep = await enqueueStaleQualityEvaluations(20)
+        if (sweep.queued) logger.info('quality_evaluation_stale_sweep', { action: 'quality_evaluation', metadata: sweep })
+      }
+    } catch (error) { logger.error('quality_evaluation_scheduler_failed', error, { action: 'quality_evaluation' }) }
+    finally { running = false }
+  }
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
+  timer.unref(); run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
+}
+
 export function startSchedulerServices(): BackgroundServicesHandle {
   const stopCronTasks = startCronTasks()
   const stopAutoVerify = startAutoVerifyScheduler()
@@ -186,6 +219,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
   const stopContributionRewards = startContributionRewardScheduler()
   const stopEvaluationReservations = startEvaluationReservationReconciler()
   const stopContestRatings = startContestRatingScheduler()
+  const stopQualityEvaluations = startQualityEvaluationScheduler()
   logger.info('scheduler_services_started', { action: 'background_scheduler' })
 
   let stopped = false
@@ -200,6 +234,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
         stopContributionRewards(),
         stopEvaluationReservations(),
         stopContestRatings(),
+        stopQualityEvaluations(),
       ])
       stopAutoVerify()
       stopCronTasks()

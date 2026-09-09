@@ -298,6 +298,27 @@ export async function onSubmissionJudged(submission: {
       assignmentRecipientId: submission.assignmentRecipientId || null,
     })
     if (isAcceptedResult(submission.result)) await syncProblemAC(submission.userId, submission.problemId, submission.id)
+  } else if (submitScope === 'solution_verification') {
+    const { syncSolutionVerificationSubmission } = await import('../modules/solution/solution.service')
+    await syncSolutionVerificationSubmission(submission.id)
+  }
+
+  // A Reference Solution Profile pins the observed result of a local
+  // submission. Rejudge completion changes that evidence even when the profile
+  // definition itself is unchanged, so produce a new immutable quality input
+  // rather than silently continuing to display the old certificate.
+  const qualityProfile = await prisma.problemSolutionProfile.findFirst({
+    where: { submissionId: submission.id, status: 'active' },
+    select: { problemId: true, createdBy: true },
+  })
+  if (qualityProfile) {
+    await import('../modules/problem/problem.quality.service').then(({ enqueueLatestQualityAfterEvidenceChange }) =>
+      enqueueLatestQualityAfterEvidenceChange(qualityProfile.problemId, qualityProfile.createdBy),
+    ).catch(error => logger.warn('quality_evaluation_solution_profile_result_enqueue_skipped', {
+      problemId: qualityProfile.problemId,
+      submissionId: submission.id,
+      error: String(error),
+    }))
   }
 }
 

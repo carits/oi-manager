@@ -9,6 +9,7 @@ interface MarkdownEditorProps {
   placeholder?: string
   minHeight?: string
   showPreview?: boolean
+  securityProfile?: 'standard' | 'knowledge'
 }
 
 export function MarkdownEditor({
@@ -16,7 +17,8 @@ export function MarkdownEditor({
   onChange,
   placeholder = '请输入 Markdown 内容...',
   minHeight = '300px',
-  showPreview: initialShowPreview = false
+  showPreview: initialShowPreview = false,
+  securityProfile = 'standard',
 }: MarkdownEditorProps) {
   const [mode, setMode] = useState<'edit' | 'preview' | 'split'>(initialShowPreview ? 'split' : 'edit')
 
@@ -132,7 +134,7 @@ export function MarkdownEditor({
             className="markdown-content"
           >
             {value.trim() ? (
-              <MarkdownRenderer content={value} />
+              <MarkdownRenderer content={value} securityProfile={securityProfile} />
             ) : (
               <div style={{ color: 'var(--gray-400)', fontSize: '0.875rem' }}>
                 暂无内容

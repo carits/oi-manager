@@ -1,0 +1,64 @@
+.stack { display: grid; gap: var(--space-4); padding-bottom: var(--space-8); }
+.toolbar, .publishBar, .error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.toolbar { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.toolbar select { max-width: 260px; }
+.error { padding: var(--space-3) var(--space-4); border: 1px solid color-mix(in srgb, var(--error) 25%, var(--border)); border-radius: var(--radius-md); color: var(--error-text); background: var(--error-light); }
+.loading { padding: var(--space-8); color: var(--text-muted); text-align: center; }
+.blogGrid { display: grid; gap: var(--space-3); }
+.blogCard { display: block; width: 100%; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); background: var(--bg-card); text-align: left; text-decoration: none; cursor: pointer; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.blogCard:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+.blogCard:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.blogCard h2 { margin: var(--space-2) 0; font-size: var(--text-lg); }
+.blogCard p { margin: 0 0 var(--space-3); color: var(--text-muted); }
+.cardTop, .cardMeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cardTop { justify-content: space-between; color: var(--text-muted); font-size: var(--text-sm); }
+.cardMeta { color: var(--text-muted); font-size: var(--text-xs); }
+.metadataGrid, .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.metadataGrid { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.editorCard, .reader { display: grid; gap: var(--space-4); padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.fieldTitle { display: block; margin-bottom: var(--space-2); }
+.publishBar { position: sticky; bottom: var(--space-3); z-index: 2; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--bg-card) 96%, transparent); box-shadow: var(--shadow-md); backdrop-filter: blur(8px); }
+.publishBar > div:first-child { min-width: min(360px, 100%); }
+.publishBar > div:last-child { display: flex; gap: var(--space-2); }
+.publishBar small, .muted { color: var(--text-muted); }
+.referenceEditor { display: grid; gap: var(--space-3); }
+.referenceHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.referenceHeading p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+.referenceItem { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
+.referenceItemHeader { display: flex; align-items: center; gap: var(--space-2); }
+.referenceItemHeader select { flex: 1; }
+.referenceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.reader > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-muted); }
+.reader > header > div { display: flex; gap: var(--space-2); }
+.lead { margin: 0; padding: var(--space-3) var(--space-4); border-left: 3px solid var(--primary); color: var(--text-muted); background: var(--bg-muted); }
+.referenceSection { display: grid; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.referenceSection h2 { margin: 0; font-size: var(--text-lg); }
+.referenceCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.referenceCards article { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.referenceCards article > div { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.referenceCards small { overflow-wrap: anywhere; color: var(--text-muted); }
+.classificationGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.tagPicker, .classificationSummary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tagPicker > span, .classificationSummary > span { color: var(--text-muted); font-size: var(--text-sm); }
+.seriesLayout { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.seriesList, .seriesEntries { display: grid; gap: var(--space-2); }
+.seriesList button { justify-content: space-between; text-align: left; }
+.seriesList small { color: var(--text-muted); }
+.seriesEntries article { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.seriesEntries article > div { display: flex; align-items: center; gap: var(--space-2); }
+.seriesEntries article > div:first-child { min-width: 0; align-items: flex-start; flex-direction: column; }
+.seriesEntries small { color: var(--text-muted); }
+.seriesActions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.historyLayout { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.versionList { display: grid; gap: var(--space-2); }
+.versionList button { justify-content: flex-start; text-align: left; }
+
+@media (max-width: 720px) {
+  .metadataGrid, .formGrid, .referenceGrid, .referenceCards, .classificationGrid, .historyLayout, .seriesLayout { grid-template-columns: 1fr; }
+  .toolbar, .publishBar, .referenceHeading, .reader > header { align-items: stretch; flex-direction: column; }
+  .publishBar { position: static; }
+  .publishBar > div:last-child { flex-direction: column; }
+  .publishBar button { width: 100%; }
+  .seriesEntries article, .seriesActions { align-items: stretch; flex-direction: column; }
+  .seriesEntries article > div:last-child { justify-content: flex-end; }
+}

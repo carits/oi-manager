@@ -31,6 +31,9 @@ import { judgeProgramTemplateRouter } from '../../src/modules/problem/problem.ju
 import { verifyCookieOrigin } from '../../src/middleware/csrf'
 import { authenticate } from '../../src/middleware/auth'
 import { contributionRouter, platformContributionRouter } from '../../src/modules/contribution/contribution.routes'
+import { solutionContributionRouter, solutionReviewRouter, solutionRouter } from '../../src/modules/solution/solution.routes'
+import { dataMarketRouter } from '../../src/modules/data-market/data-market.routes'
+import { blogRouter } from '../../src/modules/blog/blog.routes'
 import { resourceRouter } from '../../src/modules/carits/resource.routes'
 import { caritsRouter } from '../../src/modules/carits/carits.routes'
 
@@ -80,6 +83,11 @@ export function createTestApp() {
   app.use('/api', ratingDomainRouter)
   app.use('/api/contributions', authenticate, contributionRouter)
   app.use('/api/platform/contributions', authenticate, platformContributionRouter)
+  app.use('/api/solution-contributions', solutionContributionRouter)
+  app.use('/api/solutions', solutionRouter)
+  app.use('/api/review/solution-contributions', solutionReviewRouter)
+  app.use('/api', dataMarketRouter)
+  app.use('/api', blogRouter)
   app.use('/api/resources', authenticate, resourceRouter)
   app.use('/api/carits', authenticate, caritsRouter)
 

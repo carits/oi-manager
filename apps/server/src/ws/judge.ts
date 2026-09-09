@@ -31,6 +31,7 @@ import { claimDataGenerationJob, finalizeDataGenerationJob } from '../modules/pr
 import { claimJudgeProgramVerificationJob, finalizeJudgeProgramVerificationJob, recoverJudgeProgramVerificationJobs } from '../modules/problem/problem.judge-program.service'
 import { judgeLaneForDispatch } from '../modules/judge/domain/judge-lane-policy'
 import { claimCandidateEvaluationRun, finalizeCandidateEvaluationRun, recoverCandidateEvaluationRuns } from '../modules/problem/problem.candidate-evaluation.service'
+import { claimQualityVerificationJob, finalizeQualityVerificationJob, recoverQualityVerificationJobs } from '../modules/problem/problem.quality.service'
 
 // 简单的随机 ID 生成（替代 nanoid）
 const generateId = () => Math.random().toString(36).substring(2, 10)
@@ -56,7 +57,7 @@ let acceptingJudgeTasks = true
 class JudgeConsumer {
   consuming: boolean = false
   processing: Map<string, {
-    taskType: 'submission' | 'hack' | 'data_generation' | 'candidate_evaluation' | 'judge_program_verification'
+    taskType: 'submission' | 'hack' | 'data_generation' | 'candidate_evaluation' | 'judge_program_verification' | 'quality_evaluation_verification'
     id: string
     startTime: number
     judgeAttemptId?: string
@@ -92,8 +93,8 @@ class JudgeConsumer {
         continue
       }
 
-      const taskType: 'submission' | 'hack' | 'data_generation' | 'candidate_evaluation' | 'judge_program_verification' = task.taskType
-      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.taskType === 'candidate_evaluation' ? task.runId : task.taskType === 'data_generation' || task.taskType === 'judge_program_verification' ? task.jobId : task.submissionId
+      const taskType: 'submission' | 'hack' | 'data_generation' | 'candidate_evaluation' | 'judge_program_verification' | 'quality_evaluation_verification' = task.taskType
+      const taskId = task.taskType === 'hack' ? task.hackAttemptId : task.taskType === 'candidate_evaluation' ? task.runId : task.taskType === 'data_generation' || task.taskType === 'judge_program_verification' || task.taskType === 'quality_evaluation_verification' ? task.jobId : task.submissionId
       const taskKey = `${taskType}:${taskId}`
       const dispatchedAt = Date.now()
       this.processing.set(taskKey, {
@@ -111,7 +112,7 @@ class JudgeConsumer {
 
       // 发送任务到评测机
       this.ws.send(JSON.stringify({
-        type: taskType === 'hack' ? 'hack' : taskType === 'data_generation' ? 'data_generation' : taskType === 'candidate_evaluation' ? 'candidate_evaluation' : taskType === 'judge_program_verification' ? 'judge_program_verification' : 'judge',
+        type: taskType === 'hack' ? 'hack' : taskType === 'data_generation' ? 'data_generation' : taskType === 'candidate_evaluation' ? 'candidate_evaluation' : taskType === 'judge_program_verification' ? 'judge_program_verification' : taskType === 'quality_evaluation_verification' ? 'quality_evaluation_verification' : 'judge',
         payload: taskType === 'submission' ? { ...task, dispatchedAt } : task
       }))
     }
@@ -126,7 +127,7 @@ class JudgeConsumer {
         ? await this.fetchNextSubmissionTask()
         : lane === 'hack'
           ? await this.fetchNextHackTask()
-          : await claimJudgeProgramVerificationJob(this.judgeId) || await claimDataGenerationJob(this.judgeId) || await claimCandidateEvaluationRun(this.judgeId)
+          : await claimQualityVerificationJob(this.judgeId) || await claimJudgeProgramVerificationJob(this.judgeId) || await claimDataGenerationJob(this.judgeId) || await claimCandidateEvaluationRun(this.judgeId)
       if (task) return task
     }
     return null
@@ -269,7 +270,7 @@ class JudgeConsumer {
     }
   }
 
-  handleResult(taskType: 'submission' | 'hack' | 'data_generation' | 'candidate_evaluation' | 'judge_program_verification', id: string) {
+  handleResult(taskType: 'submission' | 'hack' | 'data_generation' | 'candidate_evaluation' | 'judge_program_verification' | 'quality_evaluation_verification', id: string) {
     this.processing.delete(`${taskType}:${id}`)
     this.notify?.()
   }
@@ -305,6 +306,7 @@ class JudgeConsumer {
           })
           else if (task.taskType === 'candidate_evaluation') await recoverCandidateEvaluationRuns(this.judgeId)
           else if (task.taskType === 'judge_program_verification') await recoverJudgeProgramVerificationJobs(this.judgeId)
+          else if (task.taskType === 'quality_evaluation_verification') await recoverQualityVerificationJobs(this.judgeId)
           else await transitionHackAttempts(prisma, {
             from: ['judging', 'finalizing'],
             to: 'queuing',
@@ -369,7 +371,8 @@ interface HackTask {
 type DataGenerationTask = NonNullable<Awaited<ReturnType<typeof claimDataGenerationJob>>>
 type CandidateEvaluationTask = NonNullable<Awaited<ReturnType<typeof claimCandidateEvaluationRun>>>
 type JudgeProgramVerificationTask = NonNullable<Awaited<ReturnType<typeof claimJudgeProgramVerificationJob>>>
-type DispatchTask = JudgeTask | HackTask | DataGenerationTask | CandidateEvaluationTask | JudgeProgramVerificationTask
+type QualityEvaluationVerificationTask = NonNullable<Awaited<ReturnType<typeof claimQualityVerificationJob>>>
+type DispatchTask = JudgeTask | HackTask | DataGenerationTask | CandidateEvaluationTask | JudgeProgramVerificationTask | QualityEvaluationVerificationTask
 
 /**
  * 初始化 WebSocket 服务器
@@ -436,11 +439,15 @@ export function initJudgeWebSocket() {
         where: { status: 'running', leaseExpiresAt: { lt: new Date() } },
         data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null },
       })
+      const staleQualityVerification = await prisma.qualityEvaluationJob.updateMany({
+        where: { status: 'QUEUED', verificationStatus: 'running', verificationLeaseExpiresAt: { lt: new Date() } },
+        data: { verificationStatus: 'pending', verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null },
+      })
 
-      if (staleSubmissionCount > 0 || staleHacks.count > 0 || staleGeneration.count > 0 || staleVerification.count > 0 || staleCandidateEvaluation.count > 0) {
+      if (staleSubmissionCount > 0 || staleHacks.count > 0 || staleGeneration.count > 0 || staleVerification.count > 0 || staleCandidateEvaluation.count > 0 || staleQualityVerification.count > 0) {
         logger.warn('stale_tasks_recovered', {
           action: 'judge_ws',
-          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count, dataGenerationCount: staleGeneration.count, programVerificationCount: staleVerification.count, candidateEvaluationCount: staleCandidateEvaluation.count }
+          metadata: { submissionCount: staleSubmissionCount, hackCount: staleHacks.count, dataGenerationCount: staleGeneration.count, programVerificationCount: staleVerification.count, candidateEvaluationCount: staleCandidateEvaluation.count, qualityVerificationCount: staleQualityVerification.count }
         })
       }
     } catch (e: any) {
@@ -586,11 +593,12 @@ async function recoverAllStaleTasks() {
     const recoveredGeneration = await prisma.problemDataGenerationJob.updateMany({ where: { status: { in: ['running', 'finalizing'] } }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
     const recoveredVerification = await prisma.problemJudgeProgramVerificationJob.updateMany({ where: { status: 'running' }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
     const recoveredCandidateEvaluation = await prisma.candidateEvaluationRun.updateMany({ where: { status: 'running' }, data: { status: 'queued', judgeId: null, fencingToken: null, leaseExpiresAt: null, startedAt: null } })
+    const recoveredQualityVerification = await prisma.qualityEvaluationJob.updateMany({ where: { status: 'QUEUED', verificationStatus: 'running' }, data: { verificationStatus: 'pending', verificationJudgeId: null, verificationFencingToken: null, verificationLeaseExpiresAt: null } })
 
-    if (recoveredCount > 0 || recoveredHacks.count > 0 || recoveredGeneration.count > 0 || recoveredVerification.count > 0 || recoveredCandidateEvaluation.count > 0) {
+    if (recoveredCount > 0 || recoveredHacks.count > 0 || recoveredGeneration.count > 0 || recoveredVerification.count > 0 || recoveredCandidateEvaluation.count > 0 || recoveredQualityVerification.count > 0) {
       logger.info('startup_recovered_stale_tasks', {
         action: 'judge_ws',
-        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count, dataGenerationCount: recoveredGeneration.count, programVerificationCount: recoveredVerification.count, candidateEvaluationCount: recoveredCandidateEvaluation.count }
+        metadata: { submissionCount: recoveredCount, hackCount: recoveredHacks.count, dataGenerationCount: recoveredGeneration.count, programVerificationCount: recoveredVerification.count, candidateEvaluationCount: recoveredCandidateEvaluation.count, qualityVerificationCount: recoveredQualityVerification.count }
       })
     }
   } catch (e: any) {
@@ -639,6 +647,9 @@ async function handleMessage(ws: WebSocket, msg: any) {
     case 'judge_program_verification_result':
       await handleJudgeProgramVerificationResult(ws, msg.payload)
       break
+    case 'quality_evaluation_verification_result':
+      await handleQualityEvaluationVerificationResult(ws, msg.payload)
+      break
     default:
       logger.warn('judge_ws_unknown_message', {
         action: 'judge_ws',
@@ -671,6 +682,13 @@ async function handleJudgeProgramVerificationResult(ws: WebSocket, payload: any)
   if (!connection) return
   try { await finalizeJudgeProgramVerificationJob(connection.judgeId, payload) }
   finally { connection.consumer?.handleResult('judge_program_verification', String(payload?.jobId || '')) }
+}
+
+async function handleQualityEvaluationVerificationResult(ws: WebSocket, payload: any) {
+  const connection = judges.get(ws)
+  if (!connection) return
+  try { await finalizeQualityVerificationJob(connection.judgeId, payload) }
+  finally { connection.consumer?.handleResult('quality_evaluation_verification', String(payload?.jobId || '')) }
 }
 
 /**

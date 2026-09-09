@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, BookOpenCheck, Library, ServerCog, Users } from 'lucide-react'
+import { ArrowRight, BookOpenCheck, Database, Library, ServerCog, Users } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useResource } from '@/hooks/useResource'
 import { AsyncRegion } from '@/components/ui/AsyncRegion'
@@ -32,6 +32,7 @@ export default function PlatformAdminPage() {
           <div className={styles.actionList}>
             <Link className={styles.actionLink} href="/platform-admin/users"><span className={styles.actionIcon}><Users size={18} /></span><span className={styles.actionText}><span className={styles.actionTitle}>账号管理</span><span className={styles.actionHint}>查找账号、查看资料和维护状态</span></span><ArrowRight size={16} /></Link>
             <Link className={styles.actionLink} href="/platform-admin/problems"><span className={styles.actionIcon}><Library size={18} /></span><span className={styles.actionText}><span className={styles.actionTitle}>题库管理</span><span className={styles.actionHint}>创建题目、抓取任务和备注</span></span><ArrowRight size={16} /></Link>
+            <Link className={styles.actionLink} href="/platform-admin/data-market"><span className={styles.actionIcon}><Database size={18} /></span><span className={styles.actionText}><span className={styles.actionTitle}>数据商品</span><span className={styles.actionHint}>发布质量认证数据、查看购买与处理质量事故</span></span><ArrowRight size={16} /></Link>
             <Link className={styles.actionLink} href="/platform-admin/submissions"><span className={styles.actionIcon}><BookOpenCheck size={18} /></span><span className={styles.actionText}><span className={styles.actionTitle}>评测记录</span><span className={styles.actionHint}>检查提交与评测状态</span></span><ArrowRight size={16} /></Link>
           </div>
         </section>

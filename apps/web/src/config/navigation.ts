@@ -38,6 +38,7 @@ export const platformAdminNav: NavConfig = {
     { label: '比赛', href: '/platform-admin/contests' },
     { label: '评测记录', href: '/platform-admin/submissions' },
     { label: '贡献审计', href: '/platform-admin/contributions' },
+    { label: '数据市场', href: '/platform-admin/data-market' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
     { label: 'AI Token', href: '/platform-admin/ai' },
     { label: '私信举报', href: '/platform-admin/chat-reports' },
@@ -105,6 +106,8 @@ export const personalNav: NavConfig = {
     { label: '题单', href: '/personal/problem-lists' },
     { label: '排名', href: '/personal/rankings' },
     { label: '贡献', href: '/personal/contributions' },
+    { label: '知识', href: '/personal/blogs' },
+    { label: '数据市场', href: '/personal/data-market' },
     { label: '钱包', href: '/account/wallet' },
     { label: '评测记录', href: '/personal/submissions' },
   ]

@@ -124,6 +124,234 @@ enum AssignmentCorrectionStatus {
   EXPIRED
 }
 
+enum SolutionType {
+  OFFICIAL_EDITORIAL
+  COMMUNITY_EDITORIAL
+  ALTERNATIVE_SOLUTION
+  EXPLANATION
+  CORRECTION
+  TRANSLATION
+}
+
+enum SolutionContributionStatus {
+  DRAFT
+  SUBMITTED
+  AUTO_CHECKING
+  TECHNICALLY_VALID
+  UNDER_REVIEW
+  NEEDS_REVISION
+  REJECTED
+  ACCEPTED
+  PUBLISHED
+}
+
+enum SolutionVerificationStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+  INFRA_ERROR
+  SKIPPED
+}
+
+enum SolutionReviewType {
+  TECHNICAL
+  CONTENT
+  COPYRIGHT
+}
+
+enum SolutionReviewDecision {
+  APPROVE
+  REQUEST_CHANGES
+  REJECT
+}
+
+enum ProblemSolutionStatus {
+  PUBLISHED
+  SUPERSEDED
+  RETRACTED
+  DISPUTED
+}
+
+enum ProblemSolutionVersionStatus {
+  PUBLISHED
+  SUPERSEDED
+  RETRACTED
+}
+
+enum SolutionSourceType {
+  ORIGINAL
+  DERIVED
+  TRANSLATED
+  AUTHORIZED
+}
+
+enum SolutionVisibilityPolicy {
+  PUBLIC
+  AFTER_AC
+  MANAGER_ONLY
+}
+
+enum BlogPostType {
+  ARTICLE
+  SOLUTION_NOTE
+  CONTEST_REVIEW
+  TRAINING_LOG
+  LEARNING_LOG
+  TUTORIAL
+  COLLECTION
+  ANNOUNCEMENT
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  HIDDEN
+  MODERATION_HOLD
+  REMOVED
+}
+
+enum BlogVisibility {
+  PRIVATE
+  ORGANIZATION
+  UNLISTED
+  PUBLIC
+}
+
+enum BlogPostVersionStatus {
+  CURRENT
+  SUPERSEDED
+}
+
+enum BlogReferenceType {
+  PROBLEM
+  PROBLEM_REVISION
+  SOLUTION_VERSION
+  CONTEST_STANDING
+  RATING_CHANGE
+}
+
+enum BlogReferenceRelationType {
+  PRIMARY_SUBJECT
+  MENTION
+  SOURCE
+  RESULT
+  SOLUTION
+  FOLLOW_UP
+}
+
+enum BlogReferenceDisplayMode {
+  INLINE
+  CARD
+  COMPACT
+  EMBED
+  HIDDEN_METADATA
+}
+
+enum BlogReferenceStatus {
+  CURRENT
+  STALE
+  SUPERSEDED
+  BROKEN
+  ACCESS_REVOKED
+}
+
+enum BlogTagKind {
+  SYSTEM
+  USER
+}
+
+enum QualityEvaluationJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum TestSetQualityStatus {
+  NOT_READY
+  READY
+  CRITICAL
+  STALE
+}
+
+enum QualityConfidenceLevel {
+  VERY_LOW
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+enum QualityMaturityLevel {
+  EXPERIMENTAL
+  VALIDATED
+  PROVEN
+  MATURE
+  BATTLE_TESTED
+}
+
+enum ProblemQualityAssessmentStatus {
+  AUTOMATED_READY
+  EXPERT_REVIEWED
+  STALE
+}
+
+enum DataProductGrade {
+  COMMUNITY
+  VERIFIED
+  COMPETITION_GRADE
+}
+
+enum DataProductStatus {
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+enum DataProductSellerType {
+  USER
+  ORGANIZATION
+}
+
+enum DataLicenseType {
+  PERSONAL
+  ORGANIZATION
+  CONTEST
+}
+
+enum DataProductUpdatePolicy {
+  SNAPSHOT
+  UPDATE_90D
+  LIFETIME_UPDATES
+}
+
+enum DataPurchaseStatus {
+  POSTED
+  REFUNDED
+}
+
+enum DataEntitlementGrantReason {
+  PURCHASE
+  POLICY_UPGRADE
+  CRITICAL_FIX
+}
+
+enum TestSetQualityIncidentSeverity {
+  INFO
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum TestSetQualityIncidentStatus {
+  OPEN
+  CONFIRMED
+  RESOLVED
+}
+
 enum AssignmentGradingPolicy {
   BEST_BEFORE_DUE
   BEST
@@ -482,6 +710,7 @@ model ContestStandingSnapshot {
   FinalizedForTraining Training?              @relation("TrainingFinalizedStanding")
   Entries              ContestStandingEntry[]
   RatingBatches        RatingBatch[]
+  BlogReferences       BlogReference[]
 
   @@unique([trainingId, revision])
   @@index([trainingId, status])
@@ -587,22 +816,23 @@ model RatingBatch {
 }
 
 model RatingChange {
-  id                  String        @id
+  id                  String          @id
   batchId             String
   accountId           String
   userId              String
   ratingBefore        Int
-  expectedPerformance Decimal       @db.Decimal(8, 7)
-  actualPerformance   Decimal       @db.Decimal(8, 7)
+  expectedPerformance Decimal         @db.Decimal(8, 7)
+  actualPerformance   Decimal         @db.Decimal(8, 7)
   rank                Int
   fieldSize           Int
-  rawDelta            Decimal       @db.Decimal(12, 6)
+  rawDelta            Decimal         @db.Decimal(12, 6)
   appliedDelta        Int
   ratingAfter         Int
-  createdAt           DateTime      @default(now())
-  Batch               RatingBatch   @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  Account             RatingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  User                User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt           DateTime        @default(now())
+  Batch               RatingBatch     @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  Account             RatingAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  User                User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  BlogReferences      BlogReference[]
 
   @@unique([batchId, userId])
   @@index([userId, createdAt])
@@ -834,6 +1064,8 @@ model Problem {
   ProblemNote                        ProblemNote[]
   ProblemStatement                   ProblemStatement[]
   UserProblemContent                 UserProblemContent[]
+  SolutionContribution               SolutionContribution[]
+  ProblemSolution                    ProblemSolution[]
   TestdataFile                       TestdataFile[]
   ProblemChecker                     ProblemChecker[]
   ProblemHackConfig                  ProblemHackConfig?
@@ -851,6 +1083,12 @@ model Problem {
   TestdataObject                     TestdataObject[]
   TestSetRevision                    ProblemTestSetRevision[]             @relation("ProblemTestSetRevisions")
   LatestTestSetRevision              ProblemTestSetRevision?              @relation("ProblemLatestTestSetRevision", fields: [latestTestSetRevisionId], references: [id], onDelete: SetNull)
+  QualityEvaluationJobs              QualityEvaluationJob[]
+  TestSetQualitySnapshots            TestSetQualitySnapshot[]
+  QualityAssessments                 ProblemQualityAssessment[]
+  SolutionProfiles                   ProblemSolutionProfile[]
+  DataProducts                       DataProduct[]
+  TestSetQualityIncidents            TestSetQualityIncident[]
   TrainingProblem                    TrainingProblem[]
   TrainingSessionStageProblem        TrainingSessionStageProblem[]
   AssignmentProblem                  AssignmentProblem[]
@@ -858,6 +1096,7 @@ model Problem {
   Organization                       Organization?                        @relation(fields: [organizationId], references: [id])
   SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
   CopiedProblems                     Problem[]                            @relation("ProblemCopies")
+  BlogReferences                     BlogReference[]                      @relation("BlogReferenceProblem")
 
   @@unique([libraryKey, platform, problemId])
   @@index([createdAt])
@@ -1284,21 +1523,349 @@ model WrongBehaviorCluster {
 }
 
 model WrongCorpusRevision {
-  id              String    @id
-  problemId       String
-  revisionNumber  Int
-  status          String    @default("building")
-  sampleCount     Int       @default(0)
-  clusterCount    Int       @default(0)
-  evaluationCount Int       @default(0)
-  holdoutCount    Int       @default(0)
-  corpusHash      String?
-  createdBy       String?
-  createdAt       DateTime  @default(now())
-  activatedAt     DateTime?
+  id                    String                   @id
+  problemId             String
+  revisionNumber        Int
+  status                String                   @default("building")
+  sampleCount           Int                      @default(0)
+  clusterCount          Int                      @default(0)
+  evaluationCount       Int                      @default(0)
+  holdoutCount          Int                      @default(0)
+  corpusHash            String?
+  createdBy             String?
+  createdAt             DateTime                 @default(now())
+  activatedAt           DateTime?
+  QualityEvaluationJobs QualityEvaluationJob[]
+  QualitySnapshots      TestSetQualitySnapshot[]
 
   @@unique([problemId, revisionNumber])
   @@index([problemId, status, createdAt])
+}
+
+model QualityEvaluationJob {
+  id                         String                     @id
+  problemId                  String
+  revisionId                 String
+  corpusRevisionId           String
+  qualityRuleVersion         String
+  ruleConfig                 Json
+  inputSnapshot              Json
+  inputHash                  String                     @unique
+  featureSchemaHash          String
+  solutionProfileSchemaHash  String
+  standardVersionId          String?
+  validatorVersionId         String?
+  classifierVersionId        String?
+  checkerHash                String
+  judgeConfigHash            String
+  verificationStatus         String                     @default("pending")
+  verificationReport         Json?
+  verificationJudgeId        String?
+  verificationLeaseExpiresAt DateTime?
+  verificationFencingToken   String?                    @unique
+  verificationAttempts       Int                        @default(0)
+  status                     QualityEvaluationJobStatus @default(QUEUED)
+  leaseOwner                 String?
+  leaseExpiresAt             DateTime?
+  fencingToken               String?                    @unique
+  attempts                   Int                        @default(0)
+  errorCode                  String?
+  errorMessage               String?                    @db.Text
+  createdBy                  String
+  queuedAt                   DateTime                   @default(now())
+  startedAt                  DateTime?
+  finishedAt                 DateTime?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  Problem                    Problem                    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Revision                   ProblemTestSetRevision     @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  CorpusRevision             WrongCorpusRevision        @relation(fields: [corpusRevisionId], references: [id], onDelete: Restrict)
+  Creator                    User                       @relation("QualityEvaluationJobCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  Snapshot                   TestSetQualitySnapshot?
+
+  @@index([status, queuedAt])
+  @@index([verificationStatus, queuedAt])
+  @@index([verificationLeaseExpiresAt])
+  @@index([problemId, createdAt])
+  @@index([revisionId, qualityRuleVersion])
+  @@index([leaseExpiresAt])
+}
+
+model ProblemSolutionProfile {
+  id                    String     @id
+  problemId             String
+  key                   String
+  name                  String
+  expectedClass         String
+  expectedComplexity    String?
+  expectedScoreMin      Int
+  expectedScoreMax      Int
+  expectedSubtaskScores Json?
+  sourceType            String     @default("submission")
+  submissionId          Int
+  definitionHash        String
+  revision              Int        @default(1)
+  status                String     @default("active")
+  createdBy             String
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  Problem               Problem    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Submission            Submission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  Creator               User       @relation("ProblemSolutionProfileCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@unique([problemId, key])
+  @@unique([problemId, submissionId])
+  @@index([problemId, status])
+  @@index([submissionId])
+  @@index([createdBy, createdAt])
+}
+
+model TestSetQualitySnapshot {
+  id                      String                    @id
+  problemId               String
+  revisionId              String
+  corpusRevisionId        String
+  evaluationJobId         String                    @unique
+  qualityRuleVersion      String
+  inputHash               String
+  correctnessScore        Int
+  discriminationScore     Int
+  coverageScore           Int
+  diversityScore          Int
+  subtaskQualityScore     Int
+  stabilityScore          Int
+  overallScore            Int?
+  confidenceScore         Int
+  confidenceLevel         QualityConfidenceLevel
+  maturityLevel           QualityMaturityLevel
+  wrongProgramCount       Int                       @default(0)
+  behaviorClusterCount    Int                       @default(0)
+  evaluationClusterCount  Int                       @default(0)
+  holdoutClusterCount     Int                       @default(0)
+  weightedKillCoverage    Float                     @default(0)
+  evaluationCoverage      Float                     @default(0)
+  holdoutCoverage         Float                     @default(0)
+  featureCoverage         Float                     @default(0)
+  criticalFeatureCoverage Float                     @default(0)
+  realSubmissionCount     Int                       @default(0)
+  validHackCount          Int                       @default(0)
+  revisionAgeDays         Int                       @default(0)
+  criticalIssueCount      Int                       @default(0)
+  warningCount            Int                       @default(0)
+  qualityStatus           TestSetQualityStatus
+  evidence                Json
+  createdAt               DateTime                  @default(now())
+  Problem                 Problem                   @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Revision                ProblemTestSetRevision    @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  CorpusRevision          WrongCorpusRevision       @relation(fields: [corpusRevisionId], references: [id], onDelete: Restrict)
+  EvaluationJob           QualityEvaluationJob      @relation(fields: [evaluationJobId], references: [id], onDelete: Restrict)
+  DataProducts            DataProduct[]
+  DataPurchases           DataPurchase[]
+  EntitlementRevisions    DataEntitlementRevision[]
+
+  @@unique([revisionId, qualityRuleVersion, corpusRevisionId, inputHash])
+  @@index([problemId, createdAt])
+  @@index([qualityStatus, confidenceLevel])
+}
+
+model ProblemQualityAssessment {
+  id                       String                         @id
+  problemId                String
+  ruleVersion              String
+  subjectVersionHash       String
+  status                   ProblemQualityAssessmentStatus @default(AUTOMATED_READY)
+  statementScore           Int
+  solutionCorrectnessScore Int
+  algorithmicValueScore    Int?
+  difficultyDesignScore    Int
+  constraintDesignScore    Int
+  subtaskDesignScore       Int
+  editorialScore           Int?
+  originalityScore         Int?
+  automatedScore           Int
+  expertScore              Int?
+  overallScore             Int?
+  confidenceScore          Int
+  confidenceLevel          QualityConfidenceLevel
+  automatedEvidence        Json
+  expertEvidence           Json?
+  createdBy                String
+  reviewedBy               String?
+  evaluatedAt              DateTime                       @default(now())
+  reviewedAt               DateTime?
+  createdAt                DateTime                       @default(now())
+  updatedAt                DateTime                       @updatedAt
+  Problem                  Problem                        @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Creator                  User                           @relation("ProblemQualityAssessmentCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  Reviewer                 User?                          @relation("ProblemQualityAssessmentReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+
+  @@unique([problemId, ruleVersion, subjectVersionHash])
+  @@index([problemId, evaluatedAt])
+  @@index([status, evaluatedAt])
+}
+
+model DataProduct {
+  id                   String                    @id
+  problemId            String
+  revisionId           String
+  qualitySnapshotId    String
+  sellerType           DataProductSellerType
+  sellerUserId         String
+  sellerOrganizationId String?
+  grade                DataProductGrade
+  updatePolicy         DataProductUpdatePolicy   @default(SNAPSHOT)
+  status               DataProductStatus         @default(ACTIVE)
+  includes             Json
+  publishedAt          DateTime                  @default(now())
+  suspendedAt          DateTime?
+  suspensionReason     String?
+  suspensionIncidentId String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  Problem              Problem                   @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Revision             ProblemTestSetRevision    @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  QualitySnapshot      TestSetQualitySnapshot    @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
+  SellerUser           User                      @relation("DataProductSellerUser", fields: [sellerUserId], references: [id], onDelete: Restrict)
+  SellerOrganization   Organization?             @relation("DataProductSellerOrganization", fields: [sellerOrganizationId], references: [id], onDelete: Restrict)
+  Prices               DataProductPrice[]
+  Purchases            DataPurchase[]
+  EntitlementRevisions DataEntitlementRevision[]
+  SuspensionIncident   TestSetQualityIncident?   @relation("QualityIncidentSuspendedProducts", fields: [suspensionIncidentId], references: [id], onDelete: Restrict)
+
+  @@unique([revisionId, qualitySnapshotId, updatePolicy])
+  @@index([problemId, status, grade])
+  @@index([revisionId, status])
+  @@index([sellerUserId, status])
+  @@index([sellerOrganizationId, status])
+  @@index([suspensionIncidentId])
+}
+
+model DataProductPrice {
+  id              String          @id
+  dataProductId   String
+  licenseType     DataLicenseType
+  amountCarits    BigInt
+  pricingVersion  Int             @default(1)
+  pricingEvidence Json
+  createdAt       DateTime        @default(now())
+  Product         DataProduct     @relation(fields: [dataProductId], references: [id], onDelete: Restrict)
+  Purchases       DataPurchase[]
+
+  @@unique([dataProductId, licenseType])
+  @@index([licenseType, amountCarits])
+}
+
+model DataPurchase {
+  id                         String                 @id
+  dataProductId              String
+  priceId                    String
+  buyerUserId                String
+  buyerOrganizationId        String?
+  contestId                  Int?
+  licenseType                DataLicenseType
+  purchasedRevisionId        String
+  qualitySnapshotId          String
+  amountCarits               BigInt
+  status                     DataPurchaseStatus     @default(POSTED)
+  idempotencyKey             String                 @unique
+  requestFingerprint         String
+  caritsTransactionId        String                 @unique
+  qualityCertificateSnapshot Json
+  createdAt                  DateTime               @default(now())
+  Product                    DataProduct            @relation(fields: [dataProductId], references: [id], onDelete: Restrict)
+  Price                      DataProductPrice       @relation(fields: [priceId], references: [id], onDelete: Restrict)
+  BuyerUser                  User                   @relation(fields: [buyerUserId], references: [id], onDelete: Restrict)
+  BuyerOrganization          Organization?          @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  Contest                    Training?              @relation(fields: [contestId], references: [id], onDelete: Restrict)
+  PurchasedRevision          ProblemTestSetRevision @relation(fields: [purchasedRevisionId], references: [id], onDelete: Restrict)
+  QualitySnapshot            TestSetQualitySnapshot @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
+  CaritsTransaction          CaritsTransaction      @relation(fields: [caritsTransactionId], references: [id], onDelete: Restrict)
+  Entitlement                DataEntitlement?
+
+  @@index([buyerUserId, createdAt])
+  @@index([buyerOrganizationId, createdAt])
+  @@index([contestId, createdAt])
+  @@index([dataProductId, licenseType, status])
+  @@index([purchasedRevisionId])
+}
+
+model DataEntitlement {
+  id                  String                    @id
+  purchaseId          String                    @unique
+  buyerUserId         String
+  buyerOrganizationId String?
+  contestId           Int?
+  licenseType         DataLicenseType
+  downloadAllowed     Boolean                   @default(true)
+  importAllowed       Boolean                   @default(true)
+  updatesUntil        DateTime?
+  revokedAt           DateTime?
+  revokeReason        String?
+  createdAt           DateTime                  @default(now())
+  Purchase            DataPurchase              @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  BuyerUser           User                      @relation(fields: [buyerUserId], references: [id], onDelete: Restrict)
+  BuyerOrganization   Organization?             @relation(fields: [buyerOrganizationId], references: [id], onDelete: Restrict)
+  Contest             Training?                 @relation(fields: [contestId], references: [id], onDelete: Restrict)
+  Revisions           DataEntitlementRevision[]
+
+  @@index([buyerUserId, revokedAt, createdAt])
+  @@index([buyerOrganizationId, revokedAt])
+  @@index([contestId, revokedAt])
+}
+
+model DataEntitlementRevision {
+  id                String                     @id
+  entitlementId     String
+  sequence          Int
+  dataProductId     String?
+  testSetRevisionId String
+  qualitySnapshotId String
+  grantReason       DataEntitlementGrantReason
+  sourceIncidentId  String?
+  createdAt         DateTime                   @default(now())
+  Entitlement       DataEntitlement            @relation(fields: [entitlementId], references: [id], onDelete: Restrict)
+  Product           DataProduct?               @relation(fields: [dataProductId], references: [id], onDelete: Restrict)
+  TestSetRevision   ProblemTestSetRevision     @relation(fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  QualitySnapshot   TestSetQualitySnapshot     @relation(fields: [qualitySnapshotId], references: [id], onDelete: Restrict)
+  SourceIncident    TestSetQualityIncident?    @relation("QualityIncidentEntitlementRevisions", fields: [sourceIncidentId], references: [id], onDelete: Restrict)
+
+  @@unique([entitlementId, sequence])
+  @@unique([entitlementId, testSetRevisionId])
+  @@unique([entitlementId, sourceIncidentId])
+  @@index([testSetRevisionId])
+  @@index([dataProductId])
+}
+
+model TestSetQualityIncident {
+  id                   String                         @id
+  problemId            String
+  revisionId           String
+  severity             TestSetQualityIncidentSeverity
+  type                 String
+  description          String                         @db.Text
+  evidence             Json
+  status               TestSetQualityIncidentStatus   @default(OPEN)
+  discoveredByUserId   String
+  confirmedByUserId    String?
+  resolvedByUserId     String?
+  fixedByRevisionId    String?
+  discoveredAt         DateTime                       @default(now())
+  confirmedAt          DateTime?
+  resolvedAt           DateTime?
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+  Problem              Problem                        @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Revision             ProblemTestSetRevision         @relation("QualityIncidentAffectedRevision", fields: [revisionId], references: [id], onDelete: Restrict)
+  FixedByRevision      ProblemTestSetRevision?        @relation("QualityIncidentFixedRevision", fields: [fixedByRevisionId], references: [id], onDelete: Restrict)
+  DiscoveredBy         User                           @relation("QualityIncidentDiscoverer", fields: [discoveredByUserId], references: [id], onDelete: Restrict)
+  ConfirmedBy          User?                          @relation("QualityIncidentConfirmer", fields: [confirmedByUserId], references: [id], onDelete: Restrict)
+  ResolvedBy           User?                          @relation("QualityIncidentResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+  SuspendedProducts    DataProduct[]                  @relation("QualityIncidentSuspendedProducts")
+  EntitlementRevisions DataEntitlementRevision[]      @relation("QualityIncidentEntitlementRevisions")
+
+  @@index([problemId, status, severity])
+  @@index([revisionId, status])
+  @@index([fixedByRevisionId])
 }
 
 model BugCategory {
@@ -1758,6 +2325,197 @@ model UserProblemContent {
   @@index([userId, updatedAt])
 }
 
+model SolutionContribution {
+  id                        String                         @id
+  problemId                 String
+  authorUserId              String
+  organizationId            String?
+  type                      SolutionType
+  baseSolutionId            String?
+  baseVersionId             String?
+  title                     String
+  summary                   String?
+  contentMarkdown           String                         @db.Text
+  algorithmTags             Json?
+  approachKey               String?
+  complexityTime            String?
+  complexityMemory          String?
+  language                  String?
+  referenceCode             String?                        @db.Text
+  sourceType                SolutionSourceType
+  sourceUrl                 String?
+  citation                  String?
+  licenseDeclarationVersion Int
+  licenseAcceptedAt         DateTime
+  targetTestSetRevisionId   String
+  statementSnapshotHash     String
+  status                    SolutionContributionStatus     @default(DRAFT)
+  currentRevision           Int                            @default(0)
+  submittedAt               DateTime?
+  acceptedAt                DateTime?
+  publishedAt               DateTime?
+  createdAt                 DateTime                       @default(now())
+  updatedAt                 DateTime                       @updatedAt
+  Problem                   Problem                        @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Author                    User                           @relation("SolutionContributionAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  Organization              Organization?                  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  BaseSolution              ProblemSolution?               @relation("SolutionContributionBaseSolution", fields: [baseSolutionId], references: [id], onDelete: Restrict)
+  BaseVersion               ProblemSolutionVersion?        @relation("SolutionContributionBaseVersion", fields: [baseVersionId], references: [id], onDelete: Restrict)
+  TargetTestSetRevision     ProblemTestSetRevision         @relation("SolutionContributionTargetRevision", fields: [targetTestSetRevisionId], references: [id], onDelete: Restrict)
+  Revisions                 SolutionContributionRevision[]
+  Reviews                   SolutionReview[]
+
+  @@index([problemId, status, createdAt])
+  @@index([authorUserId, status, updatedAt])
+  @@index([organizationId, status])
+  @@index([baseSolutionId])
+  @@index([targetTestSetRevisionId])
+}
+
+model SolutionContributionRevision {
+  id                        String                  @id
+  contributionId            String
+  revision                  Int
+  title                     String
+  summary                   String?
+  contentMarkdown           String                  @db.Text
+  algorithmTags             Json?
+  approachKey               String?
+  complexityTime            String?
+  complexityMemory          String?
+  language                  String?
+  referenceCode             String?                 @db.Text
+  sourceType                SolutionSourceType
+  sourceUrl                 String?
+  citation                  String?
+  licenseDeclarationVersion Int
+  licenseAcceptedAt         DateTime
+  statementSnapshot         Json
+  statementSnapshotHash     String
+  targetTestSetRevisionId   String
+  contentHash               String
+  submittedAt               DateTime                @default(now())
+  Contribution              SolutionContribution    @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  TargetTestSetRevision     ProblemTestSetRevision  @relation("SolutionContributionRevisionTarget", fields: [targetTestSetRevisionId], references: [id], onDelete: Restrict)
+  Verification              SolutionVerification?
+  Reviews                   SolutionReview[]
+  PublishedVersion          ProblemSolutionVersion?
+
+  @@unique([contributionId, revision])
+  @@index([targetTestSetRevisionId])
+  @@index([contentHash])
+}
+
+model SolutionVerification {
+  id                        String                       @id
+  contributionRevisionId    String                       @unique
+  submissionId              Int?                         @unique
+  verifiedTestSetRevisionId String
+  status                    SolutionVerificationStatus   @default(QUEUED)
+  compilePassed             Boolean?
+  officialVerdict           String?
+  officialScore             Int?
+  errorMessage              String?                      @db.Text
+  startedAt                 DateTime?
+  completedAt               DateTime?
+  createdAt                 DateTime                     @default(now())
+  updatedAt                 DateTime                     @updatedAt
+  ContributionRevision      SolutionContributionRevision @relation(fields: [contributionRevisionId], references: [id], onDelete: Restrict)
+  Submission                Submission?                  @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  VerifiedTestSetRevision   ProblemTestSetRevision       @relation("SolutionVerificationTestSetRevision", fields: [verifiedTestSetRevisionId], references: [id], onDelete: Restrict)
+  PublishedVersion          ProblemSolutionVersion?
+
+  @@index([status, createdAt])
+  @@index([verifiedTestSetRevisionId])
+}
+
+model SolutionReview {
+  id                     String                       @id
+  contributionId         String
+  contributionRevisionId String
+  reviewerUserId         String
+  reviewType             SolutionReviewType
+  decision               SolutionReviewDecision
+  checklist              Json?
+  comment                String?                      @db.Text
+  createdAt              DateTime                     @default(now())
+  Contribution           SolutionContribution         @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  ContributionRevision   SolutionContributionRevision @relation(fields: [contributionRevisionId], references: [id], onDelete: Restrict)
+  Reviewer               User                         @relation("SolutionReviewer", fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@index([contributionId, createdAt])
+  @@index([contributionRevisionId, decision])
+  @@index([reviewerUserId, createdAt])
+}
+
+model ProblemSolution {
+  id               String                   @id
+  problemId        String
+  type             SolutionType
+  authorUserId     String?
+  organizationId   String?
+  approachKey      String?
+  title            String
+  status           ProblemSolutionStatus    @default(PUBLISHED)
+  primary          Boolean                  @default(false)
+  recommended      Boolean                  @default(false)
+  visibilityPolicy SolutionVisibilityPolicy @default(PUBLIC)
+  currentVersionId String?                  @unique
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  Problem          Problem                  @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  Author           User?                    @relation("ProblemSolutionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  Organization     Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  CurrentVersion   ProblemSolutionVersion?  @relation("ProblemSolutionCurrentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
+  Versions         ProblemSolutionVersion[] @relation("ProblemSolutionVersions")
+  Contributions    SolutionContribution[]   @relation("SolutionContributionBaseSolution")
+
+  @@index([problemId, status, recommended])
+  @@index([organizationId, status])
+  @@index([authorUserId])
+}
+
+model ProblemSolutionVersion {
+  id                           String                       @id
+  solutionId                   String
+  version                      Int
+  title                        String
+  contentMarkdown              String                       @db.Text
+  algorithmTags                Json?
+  approachKey                  String?
+  complexityTime               String?
+  complexityMemory             String?
+  language                     String?
+  referenceCode                String?                      @db.Text
+  sourceType                   SolutionSourceType
+  sourceUrl                    String?
+  citation                     String?
+  licenseDeclarationVersion    Int
+  statementSnapshot            Json
+  statementSnapshotHash        String
+  verifiedTestSetRevisionId    String
+  sourceContributionRevisionId String                       @unique
+  verificationId               String                       @unique
+  contentHash                  String
+  status                       ProblemSolutionVersionStatus @default(PUBLISHED)
+  visibilityPolicy             SolutionVisibilityPolicy     @default(PUBLIC)
+  publishedByUserId            String
+  publishedAt                  DateTime                     @default(now())
+  createdAt                    DateTime                     @default(now())
+  Solution                     ProblemSolution              @relation("ProblemSolutionVersions", fields: [solutionId], references: [id], onDelete: Restrict)
+  CurrentForSolution           ProblemSolution?             @relation("ProblemSolutionCurrentVersion")
+  VerifiedTestSetRevision      ProblemTestSetRevision       @relation("SolutionVersionTestSetRevision", fields: [verifiedTestSetRevisionId], references: [id], onDelete: Restrict)
+  SourceContributionRevision   SolutionContributionRevision @relation(fields: [sourceContributionRevisionId], references: [id], onDelete: Restrict)
+  Verification                 SolutionVerification         @relation(fields: [verificationId], references: [id], onDelete: Restrict)
+  PublishedBy                  User                         @relation("SolutionVersionPublisher", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+  BasedContributions           SolutionContribution[]       @relation("SolutionContributionBaseVersion")
+  BlogReferences               BlogReference[]
+
+  @@unique([solutionId, version])
+  @@index([verifiedTestSetRevisionId])
+  @@index([status, publishedAt])
+}
+
 model School {
   id                           String        @id
   name                         String
@@ -1810,6 +2568,8 @@ model Organization {
   ContributionDataJobs     ProblemDataGenerationJob[]            @relation("DataGenerationContributionOrganization")
   ContributionHackAttempts ProblemHackAttempt[]                  @relation("HackContributionOrganization")
   ContributionCandidates   TestcaseCandidate[]                   @relation("CandidateContributionOrganization")
+  SolutionContributions    SolutionContribution[]
+  ProblemSolutions         ProblemSolution[]
   PrincipalTransferLog     PrincipalTransferLog[]
   Problem                  Problem[]
   ProblemList              ProblemList[]
@@ -1820,6 +2580,11 @@ model Organization {
   Assignment               Assignment[]
   Submission               Submission[]
   RatingPools              RatingPool[]
+  BlogPosts                BlogPost[]
+  BlogSeries               BlogSeries[]
+  SoldDataProducts         DataProduct[]                         @relation("DataProductSellerOrganization")
+  DataPurchases            DataPurchase[]
+  DataEntitlements         DataEntitlement[]
 
   @@index([type, status])
 }
@@ -2059,6 +2824,7 @@ model CaritsTransaction {
   RewardDeliveries   ContributionRewardDelivery[] @relation("ContributionRewardTransaction")
   RewardReversals    ContributionRewardDelivery[] @relation("ContributionRewardReversal")
   ResourcePurchase   ResourcePurchase?
+  DataPurchase       DataPurchase?
 
   @@index([referenceType, referenceId])
   @@index([organizationId, createdAt])
@@ -2282,66 +3048,68 @@ model JudgeAttempt {
 }
 
 model Submission {
-  id                     Int                          @id @default(autoincrement())
-  userId                 String
-  oj                     String
-  problemId              String
-  language               String
-  code                   String
-  codeLength             Int
-  result                 String                       @default("queuing")
-  timeUsed               Int?
-  wallTimeUsed           Int?
-  memoryUsed             Int?
-  timeoutReason          String?
-  metricSource           String?
-  submitMethod           String
-  ojAccountId            String?
-  ojRemoteId             String?
-  errorMessage           String?
-  createdAt              DateTime                     @default(now())
-  updatedAt              DateTime                     @default(now())
-  problemInternalId      String?
-  cases                  String?
-  score                  Int?
-  subtasks               String?
-  isGlobalVisible        Boolean                      @default(true)
-  sourceId               String?
-  submitSource           String?
-  judgeId                String?
-  judgeStarted           DateTime?
-  submitScope            String                       @default("problem")
-  workspaceScope         String                       @default("campus")
-  organizationId         String?
-  trainingId             Int?
-  trainingProblemId      String?
-  trainingSessionId      String?
-  trainingStageProblemId String?
-  assignmentId           String?
-  assignmentProblemId    String?
-  assignmentRecipientId  String?
-  submissionPhase        String?
-  contestId              Int?
-  contestProblemId       String?
-  testSetRevisionId      String?
-  judgeConfigHash        String?
-  judgeConfigSnapshot    String?                      @db.Text
-  inputFilename          String?
-  outputFilename         String?
-  ioAdapterVersion       Int                          @default(1)
-  currentJudgeRunId      String?                      @unique
-  OjAccount              OjAccount?                   @relation(fields: [ojAccountId], references: [id])
-  Training               Training?                    @relation(fields: [trainingId], references: [id])
-  TrainingSession        TrainingSession?             @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
-  TrainingStageProblem   TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
-  Assignment             Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  AssignmentProblem      AssignmentProblem?           @relation(fields: [assignmentProblemId], references: [id], onDelete: SetNull)
-  AssignmentRecipient    AssignmentRecipient?         @relation(fields: [assignmentRecipientId], references: [id], onDelete: SetNull)
-  Organization           Organization?                @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  User                   User                         @relation(fields: [userId], references: [id])
-  TestSetRevision        ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
-  JudgeRuns              JudgeRun[]                   @relation("SubmissionJudgeRuns")
-  CurrentJudgeRun        JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
+  id                      Int                          @id @default(autoincrement())
+  userId                  String
+  oj                      String
+  problemId               String
+  language                String
+  code                    String
+  codeLength              Int
+  result                  String                       @default("queuing")
+  timeUsed                Int?
+  wallTimeUsed            Int?
+  memoryUsed              Int?
+  timeoutReason           String?
+  metricSource            String?
+  submitMethod            String
+  ojAccountId             String?
+  ojRemoteId              String?
+  errorMessage            String?
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @default(now())
+  problemInternalId       String?
+  cases                   String?
+  score                   Int?
+  subtasks                String?
+  isGlobalVisible         Boolean                      @default(true)
+  sourceId                String?
+  submitSource            String?
+  judgeId                 String?
+  judgeStarted            DateTime?
+  submitScope             String                       @default("problem")
+  workspaceScope          String                       @default("campus")
+  organizationId          String?
+  trainingId              Int?
+  trainingProblemId       String?
+  trainingSessionId       String?
+  trainingStageProblemId  String?
+  assignmentId            String?
+  assignmentProblemId     String?
+  assignmentRecipientId   String?
+  submissionPhase         String?
+  contestId               Int?
+  contestProblemId        String?
+  testSetRevisionId       String?
+  judgeConfigHash         String?
+  judgeConfigSnapshot     String?                      @db.Text
+  inputFilename           String?
+  outputFilename          String?
+  ioAdapterVersion        Int                          @default(1)
+  currentJudgeRunId       String?                      @unique
+  OjAccount               OjAccount?                   @relation(fields: [ojAccountId], references: [id])
+  Training                Training?                    @relation(fields: [trainingId], references: [id])
+  TrainingSession         TrainingSession?             @relation(fields: [trainingSessionId], references: [id], onDelete: SetNull)
+  TrainingStageProblem    TrainingSessionStageProblem? @relation(fields: [trainingStageProblemId], references: [id], onDelete: SetNull)
+  Assignment              Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  AssignmentProblem       AssignmentProblem?           @relation(fields: [assignmentProblemId], references: [id], onDelete: SetNull)
+  AssignmentRecipient     AssignmentRecipient?         @relation(fields: [assignmentRecipientId], references: [id], onDelete: SetNull)
+  Organization            Organization?                @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  User                    User                         @relation(fields: [userId], references: [id])
+  TestSetRevision         ProblemTestSetRevision?      @relation(fields: [testSetRevisionId], references: [id], onDelete: SetNull)
+  JudgeRuns               JudgeRun[]                   @relation("SubmissionJudgeRuns")
+  CurrentJudgeRun         JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
+  SolutionVerification    SolutionVerification?
+  QualitySolutionProfiles ProblemSolutionProfile[]
 
   @@index([contestId])
   @@index([createdAt])
@@ -2719,8 +3487,20 @@ model ProblemTestSetRevision {
   CandidateBases                  TestcaseCandidate[]               @relation("CandidateBaseTestSetRevision")
   PromotedCandidates              TestcaseCandidate[]               @relation("CandidatePromotedRevision")
   JudgeRuns                       JudgeRun[]
+  SolutionContributions           SolutionContribution[]            @relation("SolutionContributionTargetRevision")
+  SolutionContributionRevisions   SolutionContributionRevision[]    @relation("SolutionContributionRevisionTarget")
+  SolutionVerifications           SolutionVerification[]            @relation("SolutionVerificationTestSetRevision")
+  SolutionVersions                ProblemSolutionVersion[]          @relation("SolutionVersionTestSetRevision")
+  QualityEvaluationJobs           QualityEvaluationJob[]
+  QualitySnapshots                TestSetQualitySnapshot[]
+  DataProducts                    DataProduct[]
+  DataPurchases                   DataPurchase[]
+  EntitlementRevisions            DataEntitlementRevision[]
+  QualityIncidents                TestSetQualityIncident[]          @relation("QualityIncidentAffectedRevision")
+  FixedQualityIncidents           TestSetQualityIncident[]          @relation("QualityIncidentFixedRevision")
   ProblemTestSetRevisionGroup     ProblemTestSetRevisionGroup[]
   ProblemTestSetRevisionGroupCase ProblemTestSetRevisionGroupCase[]
+  BlogReferences                  BlogReference[]                   @relation("BlogReferenceProblemRevision")
 
   @@unique([problemId, revisionNumber])
   @@index([problemId, createdAt])
@@ -3582,6 +4362,9 @@ model Training {
   StandingSnapshots         ContestStandingSnapshot[]
   FinalizedStanding         ContestStandingSnapshot?    @relation("TrainingFinalizedStanding", fields: [finalizedStandingId], references: [id], onDelete: SetNull)
   RatingBatches             RatingBatch[]
+  BlogReferences            BlogReference[]
+  DataPurchases             DataPurchase[]
+  DataEntitlements          DataEntitlement[]
 
   @@index([organizationId])
   @@index([scope])
@@ -3606,20 +4389,20 @@ model TrainingAttachment {
 }
 
 model TrainingParticipant {
-  id                     String                       @id
-  trainingId             Int
-  userId                 String
-  userType               String
-  joinedAt               DateTime                     @default(now())
-  organizationIdSnapshot String?
-  ratingStatus           RatingParticipantStatus      @default(REGISTERED)
-  ratingDisposition      RatingParticipantDisposition @default(NORMAL)
+  id                      String                       @id
+  trainingId              Int
+  userId                  String
+  userType                String
+  joinedAt                DateTime                     @default(now())
+  organizationIdSnapshot  String?
+  ratingStatus            RatingParticipantStatus      @default(REGISTERED)
+  ratingDisposition       RatingParticipantDisposition @default(NORMAL)
   ratingDispositionReason String?
-  ratingDispositionBy    String?
-  ratingDispositionAt    DateTime?
-  firstSubmissionAt      DateTime?
-  ratingLockedAt         DateTime?
-  Training               Training                     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  ratingDispositionBy     String?
+  ratingDispositionAt     DateTime?
+  firstSubmissionAt       DateTime?
+  ratingLockedAt          DateTime?
+  Training                Training                     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
 
   @@unique([trainingId, userId, userType])
   @@index([trainingId])
@@ -3798,9 +4581,17 @@ model User {
   CaritsAccount                            CaritsAccount?                    @relation("CaritsAccountUser")
   CaritsTransactions                       CaritsTransaction[]               @relation("CaritsTransactionOperator")
   ContributionEvents                       ContributionEvent[]               @relation("ContributionActor")
+  SolutionContributions                    SolutionContribution[]            @relation("SolutionContributionAuthor")
+  SolutionReviews                          SolutionReview[]                  @relation("SolutionReviewer")
+  ProblemSolutions                         ProblemSolution[]                 @relation("ProblemSolutionAuthor")
+  PublishedSolutionVersions                ProblemSolutionVersion[]          @relation("SolutionVersionPublisher")
   EvaluationCreditWallet                   EvaluationCreditWallet?
   EvaluationCreditReservations             EvaluationCreditReservation[]
   ResourcePurchases                        ResourcePurchase[]
+  CreatedQualityEvaluationJobs             QualityEvaluationJob[]            @relation("QualityEvaluationJobCreator")
+  CreatedProblemQualityAssessments         ProblemQualityAssessment[]        @relation("ProblemQualityAssessmentCreator")
+  ReviewedProblemQualityAssessments        ProblemQualityAssessment[]        @relation("ProblemQualityAssessmentReviewer")
+  CreatedProblemSolutionProfiles           ProblemSolutionProfile[]          @relation("ProblemSolutionProfileCreator")
   ChatPrivacySetting                       ChatPrivacySetting?
   SentFriendRequests                       FriendRequest[]                   @relation("FriendRequestSender")
   ReceivedFriendRequests                   FriendRequest[]                   @relation("FriendRequestReceiver")
@@ -3819,6 +4610,17 @@ model User {
   ChatReportsReviewed                      ChatReport[]                      @relation("ChatReportReviewer")
   CreatedChatStickerPacks                  ChatStickerPack[]                 @relation("ChatStickerPackCreator")
   ChatStickerImports                       ChatStickerImport[]               @relation("ChatStickerImportUploader")
+  BlogPosts                                BlogPost[]                        @relation("BlogPostAuthor")
+  CreatedBlogVersions                      BlogPostVersion[]                 @relation("BlogVersionCreator")
+  OwnedBlogSeries                          BlogSeries[]                      @relation("BlogSeriesOwner")
+  OwnedBlogTags                            BlogTag[]                         @relation("BlogTagOwner")
+  AddedBlogPostTags                        BlogPostTag[]                     @relation("BlogPostTagAdder")
+  CreatedDataProducts                      DataProduct[]                     @relation("DataProductSellerUser")
+  DataPurchases                            DataPurchase[]
+  DataEntitlements                         DataEntitlement[]
+  DiscoveredQualityIncidents               TestSetQualityIncident[]          @relation("QualityIncidentDiscoverer")
+  ConfirmedQualityIncidents                TestSetQualityIncident[]          @relation("QualityIncidentConfirmer")
+  ResolvedQualityIncidents                 TestSetQualityIncident[]          @relation("QualityIncidentResolver")
 
   @@index([createdAt])
   @@index([role])
@@ -4138,4 +4940,181 @@ model UserStatusLog {
 model carits_sequence {
   id     Int @id @default(1)
   nextId Int @default(1000)
+}
+
+model BlogPost {
+  id               String            @id
+  authorUserId     String
+  organizationId   String?
+  type             BlogPostType      @default(ARTICLE)
+  slug             String
+  status           BlogPostStatus    @default(DRAFT)
+  visibility       BlogVisibility    @default(PRIVATE)
+  currentVersionId String?           @unique
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  Author           User              @relation("BlogPostAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  Organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  CurrentVersion   BlogPostVersion?  @relation("BlogPostCurrentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
+  Versions         BlogPostVersion[] @relation("BlogPostVersions")
+  Draft            BlogPostDraft?
+  SeriesEntries    BlogSeriesEntry[]
+  Tags             BlogPostTag[]
+
+  @@unique([authorUserId, slug])
+  @@index([status, visibility, publishedAt])
+  @@index([organizationId, status, publishedAt])
+  @@index([authorUserId, status, updatedAt])
+}
+
+model BlogPostDraft {
+  postId          String   @id
+  revision        Int      @default(1)
+  title           String
+  summary         String?
+  contentMarkdown String   @db.Text
+  references      Json
+  classification  Json     @default("{}")
+  baseVersionId   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  Post            BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+model BlogPostVersion {
+  id                     String                @id
+  postId                 String
+  version                Int
+  title                  String
+  summary                String?
+  contentMarkdown        String                @db.Text
+  contentHash            String
+  sourceVersionId        String?
+  status                 BlogPostVersionStatus @default(CURRENT)
+  visibility             BlogVisibility
+  organizationIdSnapshot String?
+  classificationSnapshot Json                  @default("{}")
+  createdByUserId        String
+  createdAt              DateTime              @default(now())
+  publishedAt            DateTime              @default(now())
+  Post                   BlogPost              @relation("BlogPostVersions", fields: [postId], references: [id], onDelete: Restrict)
+  CurrentForPost         BlogPost?             @relation("BlogPostCurrentVersion")
+  SourceVersion          BlogPostVersion?      @relation("BlogVersionLineage", fields: [sourceVersionId], references: [id], onDelete: Restrict)
+  DerivedVersions        BlogPostVersion[]     @relation("BlogVersionLineage")
+  CreatedBy              User                  @relation("BlogVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  References             BlogReference[]
+
+  @@unique([postId, version])
+  @@index([postId, publishedAt])
+  @@index([contentHash])
+  @@index([sourceVersionId])
+  @@index([visibility, publishedAt])
+}
+
+model BlogReference {
+  id                 String                    @id
+  postVersionId      String
+  ordinal            Int
+  referenceType      BlogReferenceType
+  referenceId        String
+  referenceVersionId String?
+  relationType       BlogReferenceRelationType @default(MENTION)
+  displayMode        BlogReferenceDisplayMode  @default(CARD)
+  positionKey        String?
+  snapshotData       Json
+  accessMode         BlogVisibility
+  status             BlogReferenceStatus       @default(CURRENT)
+  problemId          String?
+  problemRevisionId  String?
+  solutionVersionId  String?
+  trainingId         Int?
+  standingSnapshotId String?
+  ratingChangeId     String?
+  createdAt          DateTime                  @default(now())
+  PostVersion        BlogPostVersion           @relation(fields: [postVersionId], references: [id], onDelete: Restrict)
+  Problem            Problem?                  @relation("BlogReferenceProblem", fields: [problemId], references: [id], onDelete: Restrict)
+  ProblemRevision    ProblemTestSetRevision?   @relation("BlogReferenceProblemRevision", fields: [problemRevisionId], references: [id], onDelete: Restrict)
+  SolutionVersion    ProblemSolutionVersion?   @relation(fields: [solutionVersionId], references: [id], onDelete: Restrict)
+  Training           Training?                 @relation(fields: [trainingId], references: [id], onDelete: Restrict)
+  StandingSnapshot   ContestStandingSnapshot?  @relation(fields: [standingSnapshotId], references: [id], onDelete: Restrict)
+  RatingChange       RatingChange?             @relation(fields: [ratingChangeId], references: [id], onDelete: Restrict)
+
+  @@unique([postVersionId, ordinal])
+  @@index([referenceType, referenceId])
+  @@index([problemId, relationType])
+  @@index([solutionVersionId])
+  @@index([trainingId, relationType])
+  @@index([standingSnapshotId])
+  @@index([ratingChangeId])
+  @@index([problemRevisionId])
+}
+
+model BlogSeries {
+  id             String            @id
+  ownerUserId    String
+  organizationId String?
+  scopeKey       String
+  normalizedKey  String
+  title          String
+  description    String?
+  visibility     BlogVisibility    @default(PRIVATE)
+  revision       Int               @default(1)
+  archivedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  Owner          User              @relation("BlogSeriesOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  Organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  Entries        BlogSeriesEntry[]
+
+  @@unique([scopeKey, normalizedKey])
+  @@index([ownerUserId, archivedAt, updatedAt])
+  @@index([organizationId, visibility, archivedAt])
+}
+
+model BlogSeriesEntry {
+  seriesId   String
+  postId     String
+  orderIndex Int
+  createdAt  DateTime   @default(now())
+  Series     BlogSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  Post       BlogPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([seriesId, postId])
+  @@unique([seriesId, orderIndex])
+  @@index([postId])
+}
+
+model BlogTag {
+  id            String        @id
+  kind          BlogTagKind
+  scopeKey      String
+  ownerUserId   String?
+  name          String
+  normalizedKey String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  Owner         User?         @relation("BlogTagOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  Posts         BlogPostTag[]
+
+  @@unique([scopeKey, normalizedKey])
+  @@index([kind, normalizedKey])
+  @@index([ownerUserId, updatedAt])
+}
+
+model BlogPostTag {
+  postId        String
+  tagId         String
+  addedByUserId String
+  createdAt     DateTime @default(now())
+  Post          BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  Tag           BlogTag  @relation(fields: [tagId], references: [id], onDelete: Restrict)
+  AddedBy       User     @relation("BlogPostTagAdder", fields: [addedByUserId], references: [id], onDelete: Restrict)
+
+  @@id([postId, tagId])
+  @@index([tagId, postId])
+  @@index([addedByUserId])
 }

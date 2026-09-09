@@ -21,6 +21,8 @@ import type { JudgeProgramVerificationMessage, JudgeProgramVerificationResultMes
 import { verifyJudgeProgram } from './judge-program-verification'
 import { evaluateCandidate } from './candidate-evaluation'
 import type { CandidateEvaluationMessage, CandidateEvaluationResultMessage } from './types'
+import type { QualityEvaluationVerificationMessage, QualityEvaluationVerificationResultMessage } from './types'
+import { verifyQualityEvaluation } from './quality-evaluation-verification'
 
 export function buildJudgeRequest(payload: JudgeMessage['payload']): JudgeRequest {
   return {
@@ -161,6 +163,9 @@ class JudgeClient {
       case 'judge_program_verification':
         await this.handleJudgeProgramVerificationTask(msg as JudgeProgramVerificationMessage)
         break
+      case 'quality_evaluation_verification':
+        await this.handleQualityEvaluationVerificationTask(msg as QualityEvaluationVerificationMessage)
+        break
       default:
         judgeTelemetry.increment('message.unknown')
         console.log('[Judge] Unknown message type:', msg.type)
@@ -177,6 +182,13 @@ class JudgeClient {
   private async handleCandidateEvaluationTask(msg: CandidateEvaluationMessage) {
     const result = await evaluateCandidate(msg.payload)
     const response: CandidateEvaluationResultMessage = { type: 'candidate_evaluation_result', payload: result }
+    this.send(response)
+  }
+
+  private async handleQualityEvaluationVerificationTask(msg: QualityEvaluationVerificationMessage) {
+    const result = await verifyQualityEvaluation(msg.payload)
+    if (result.retryable) { this.ws?.close(1011, 'quality verification infrastructure unavailable'); return }
+    const response: QualityEvaluationVerificationResultMessage = { type: 'quality_evaluation_verification_result', payload: result }
     this.send(response)
   }
 

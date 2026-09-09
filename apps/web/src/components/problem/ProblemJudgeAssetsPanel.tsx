@@ -11,6 +11,7 @@ import styles from './ProblemJudgeAssetsPanel.module.css'
 import { JudgeProgramWizard } from './JudgeProgramWizard'
 import { JudgeProgramTemplateGallery } from './JudgeProgramTemplateGallery'
 import type { ProgramCatalog } from './judgeProgramTemplateTypes'
+import { ProblemQualityPanel } from './ProblemQualityPanel'
 
 type Version = { id: string; versionNumber: number; language: string; source: string; origin: string; compileStatus: string; lifecycleStatus: string; protocol: string; templateId?: string | null; createdAt: string }
 type Program = { id: string; kind: string; name: string; language: string; currentVersionId?: string | null; versions: Version[] }
@@ -27,7 +28,7 @@ const KIND_LABEL: Record<string, string> = { standard: 'STD', validator: 'Valida
 
 export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: string; judgeMode: 'acm' | 'oi' }) {
   const toast = useToast()
-  const [tab, setTab] = useState<'programs' | 'import' | 'generate' | 'candidates' | 'pool' | 'corpus' | 'revisions'>('programs')
+  const [tab, setTab] = useState<'programs' | 'import' | 'generate' | 'candidates' | 'pool' | 'corpus' | 'quality' | 'revisions'>('programs')
   const [programs, setPrograms] = useState<Program[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
@@ -189,7 +190,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
 
   return <div className={styles.panel}>
     <div className={styles.tabs}>{[
-      ['programs', '评测程序'], ['import', '数据导入'], ['generate', '数据生成'], ['candidates', '生成任务'], ['pool', 'Candidate Pool'], ['corpus', 'Wrong Corpus'], ['revisions', '正式版本'],
+      ['programs', '评测程序'], ['import', '数据导入'], ['generate', '数据生成'], ['candidates', '生成任务'], ['pool', 'Candidate Pool'], ['corpus', 'Wrong Corpus'], ['quality', '质量评估'], ['revisions', '正式版本'],
     ].map(([value, label]) => <Button key={value} variant="ghost" aria-selected={tab === value} onClick={() => setTab(value as any)}>{label}</Button>)}</div>
 
     {tab === 'programs' && <>
@@ -220,6 +221,7 @@ export function ProblemJudgeAssetsPanel({ problemId, judgeMode }: { problemId: s
       <FormDialog isOpen={Boolean(emergencyCandidate)} onClose={() => { setEmergencyCandidate(null); setEmergencyReason('') }} onSubmit={emergencyPublish} title="紧急发布 Candidate" description="仅跳过 Corpus/质量门槛；不会绕过 15 个 Subtask、每 Subtask 10 点、保护期、Official Core 或 Revision CAS。" submitText="确认紧急发布" danger loading={saving} dirty={Boolean(emergencyReason)}><label>审计原因（10～1000 字）<Textarea rows={5} value={emergencyReason} onChange={event => setEmergencyReason(event.target.value)} /></label></FormDialog>
     </section>}
     {tab === 'corpus' && <section className={styles.card}><h3>私有 Wrong Behavior Corpus</h3><p className={styles.muted}>历史本地错误提交只用于内部行为聚类；贡献者看不到源码、用户、提交 ID 或精确 Kill 列表。</p>{corpus?.revision ? <p>Corpus R{corpus.revision.revisionNumber} · {corpus.revision.clusterCount} 个代表簇 · Evaluation {corpus.revision.evaluationCount} · Hidden Holdout {corpus.revision.holdoutCount}</p> : <p>尚未建立 Corpus。</p>}<Button variant="primary" loading={saving} onClick={rebuildCorpus}>从历史本地错误提交重建</Button></section>}
+    {tab === 'quality' && <ProblemQualityPanel problemId={problemId} />}
     {tab === 'revisions' && <section className={styles.card}><h3>正式版本</h3><p>只有达到质量阈值的 Candidate 才会创建新的不可变 TestSet Revision。比赛、训练和作业继续固定原版本，不会被自动更新。</p>{jobs.filter(job => job.promotedRevisionId).map(job => <p key={job.id}><code>{job.id.slice(0, 8)}</code> → <code>{job.promotedRevisionId}</code></p>)}</section>}
   </div>
 }

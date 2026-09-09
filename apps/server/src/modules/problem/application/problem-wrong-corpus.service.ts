@@ -5,6 +5,7 @@ import { canModifyProblem } from '../problem.access'
 import { EVALUATION_LIMITS } from '../problem.evaluation-budget.service'
 import { refreshAdmittedCandidateStages } from '../problem.contribution-readiness.service'
 import { queueAwaitingCandidateEvaluations } from '../problem.candidate-evaluation.service'
+import { enqueueQualityEvaluationForRevision } from '../problem.quality.service'
 
 const WRONG_RESULTS = ['Wrong Answer', 'Presentation Error', 'Time Limit Exceeded', 'Memory Limit Exceeded', 'Runtime Error', 'Output Limit Exceeded']
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex')
@@ -88,5 +89,21 @@ export async function rebuildWrongCorpus(user: JwtPayload, problemId: string) {
   })
   await refreshAdmittedCandidateStages(problemId)
   await queueAwaitingCandidateEvaluations(problemId)
-  return { revisionNumber, samples: selected.length, clusters: clustered.size }
+  // A Revision may have been published before its first usable corpus existed.
+  // Corpus activation is therefore the second automatic Quality trigger (the
+  // first lives after TestSet Revision publication).  The input snapshot makes
+  // this safe and enqueue itself is idempotent.  Quality availability must not
+  // roll back an otherwise valid corpus rebuild, so readiness failures remain
+  // visible through the explicit trigger/query API.
+  const latest = await prisma.problem.findUnique({ where: { id: problemId }, select: { latestTestSetRevisionId: true } })
+  let qualityEvaluationJobId: string | null = null
+  if (latest?.latestTestSetRevisionId) {
+    try {
+      const quality = await enqueueQualityEvaluationForRevision({ problemId, revisionId: latest.latestTestSetRevisionId, corpusRevisionId: revisionId, createdBy: user.userId })
+      qualityEvaluationJobId = quality.jobId
+    } catch (error) {
+      console.warn('[quality-evaluation] corpus activation enqueue skipped', { problemId, revisionId, error: (error as Error).message })
+    }
+  }
+  return { revisionNumber, samples: selected.length, clusters: clustered.size, qualityEvaluationJobId }
 }

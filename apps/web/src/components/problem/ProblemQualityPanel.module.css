@@ -1,0 +1,35 @@
+.panel { display: grid; gap: var(--space-4); }
+.card { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.card h3, .card p { margin: 0; }
+.heading { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); }
+.heading p { margin-top: var(--space-1); color: var(--text-secondary); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.summary > div, .scoreGrid > div, .pqs > div { display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-secondary); }
+.summary span, .scoreGrid span, .pqs span { color: var(--text-secondary); font-size: var(--font-size-sm); }
+.summary strong, .scoreGrid strong, .pqs strong { font-size: var(--font-size-lg); }
+.summary small { color: var(--text-secondary); line-height: 1.4; }
+.overall strong { font-size: 2rem; line-height: 1; }
+.scoreGrid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-2); }
+.metrics { display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--text-secondary); }
+.metrics span { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--bg-secondary); }
+.diagnostics { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--warning); border-radius: var(--radius-sm); background: var(--warning-light); }
+.critical { color: var(--error); }
+.evidence pre { max-height: 280px; overflow: auto; padding: var(--space-3); border-radius: var(--radius-sm); background: var(--bg-secondary); white-space: pre-wrap; word-break: break-word; }
+.pqs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.empty { padding: var(--space-4); color: var(--text-secondary); text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.tableScroll { overflow-x: auto; }
+.tableScroll table { width: 100%; border-collapse: collapse; }
+.tableScroll th, .tableScroll td { padding: var(--space-2); border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; white-space: nowrap; }
+.error { display: block; max-width: 420px; margin-top: var(--space-1); color: var(--error); white-space: normal; }
+.expertForm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.expertForm label { display: grid; gap: var(--space-1); }
+.comment { grid-column: 1 / -1; }
+.blockMeta { display: block; margin-top: var(--space-1); color: var(--text-secondary); white-space: normal; }
+.profileStatus { display: flex; align-items: center; gap: var(--space-2); }
+.profileForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.profileForm label { display: grid; gap: var(--space-1); }
+.fullField { grid-column: 1 / -1; }
+.fullField small { color: var(--text-secondary); line-height: 1.4; }
+@media (max-width: 960px) { .summary, .pqs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .scoreGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .heading { flex-direction: column; } .summary, .pqs, .scoreGrid, .expertForm, .profileForm { grid-template-columns: 1fr; } .comment, .fullField { grid-column: auto; } }

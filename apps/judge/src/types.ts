@@ -324,6 +324,34 @@ export interface JudgeProgramVerificationResult {
   }
 }
 
+export interface QualityEvaluationVerificationRequest {
+  taskType: 'quality_evaluation_verification'
+  jobId: string
+  problemId: string
+  fencingToken: string
+  testdataPath: string
+  problemConfig: ProblemConfig
+  standard: { language: string; source: string }
+  validator: { language: string; source: string }
+  classifier?: { language: string; source: string } | null
+  knownSubtaskIds: number[]
+  cases: Array<{ key: string; input: string; output: string; expectedSubtaskIds: number[] }>
+}
+
+export interface QualityEvaluationVerificationResult {
+  jobId: string
+  fencingToken: string
+  retryable?: boolean
+  report?: {
+    outcome: 'passed' | 'not_ready' | 'critical'
+    standard: { passed: boolean; verdict: string; score: number; message?: string }
+    validator: { passed: number; failed: number }
+    classifier: { passed: number; failed: number; required: boolean }
+    checker: { passed: boolean }
+    cases: Array<{ key: string; validatorPassed: boolean; classifierPassed: boolean | null; code?: string }>
+  }
+}
+
 // ==================== 语言配置 ====================
 
 export interface LanguageConfig {
@@ -366,7 +394,7 @@ export interface SandboxResult {
 // ==================== WebSocket 消息 ====================
 
 export interface WSMessage {
-  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'candidate_evaluation' | 'candidate_evaluation_result' | 'judge_program_verification' | 'judge_program_verification_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
+  type: 'register' | 'registered' | 'start' | 'started' | 'config' | 'judge' | 'result' | 'hack' | 'hack_result' | 'data_generation' | 'data_generation_result' | 'candidate_evaluation' | 'candidate_evaluation_result' | 'judge_program_verification' | 'judge_program_verification_result' | 'quality_evaluation_verification' | 'quality_evaluation_verification_result' | 'ping' | 'pong' | 'auth' | 'auth_success' | 'error'
   payload: any
 }
 
@@ -419,3 +447,5 @@ export interface CandidateEvaluationMessage { type: 'candidate_evaluation'; payl
 export interface CandidateEvaluationResultMessage { type: 'candidate_evaluation_result'; payload: CandidateEvaluationResult }
 export interface JudgeProgramVerificationMessage { type: 'judge_program_verification'; payload: JudgeProgramVerificationRequest }
 export interface JudgeProgramVerificationResultMessage { type: 'judge_program_verification_result'; payload: JudgeProgramVerificationResult }
+export interface QualityEvaluationVerificationMessage { type: 'quality_evaluation_verification'; payload: QualityEvaluationVerificationRequest }
+export interface QualityEvaluationVerificationResultMessage { type: 'quality_evaluation_verification_result'; payload: QualityEvaluationVerificationResult }

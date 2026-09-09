@@ -433,6 +433,16 @@ export async function updateJudgeProgram(input: { user: JwtPayload; problemId: s
   if (program.kind === 'classifier' || program.kind === 'validator' || program.kind === 'standard') {
     await refreshAdmittedCandidateStages(input.problemId)
     await queueAwaitingCandidateEvaluations(input.problemId)
+    if (selected || input.status === 'archived') {
+      await import('./problem.quality.service').then(({ enqueueLatestQualityAfterEvidenceChange }) =>
+        enqueueLatestQualityAfterEvidenceChange(input.problemId, input.user.userId),
+      ).catch(error => logger.warn('quality_evaluation_program_change_enqueue_skipped', {
+        userId: input.user.userId,
+        problemId: input.problemId,
+        programId: program.id,
+        error: (error as Error).message,
+      }))
+    }
   }
   return updated
 }

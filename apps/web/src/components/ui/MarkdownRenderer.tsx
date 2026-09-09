@@ -38,6 +38,8 @@ function CopyButton({ text }: { text: string }) {
 interface MarkdownRendererProps {
   content: string
   className?: string
+  /** Knowledge posts use the server's fail-closed rendering contract. */
+  securityProfile?: 'standard' | 'knowledge'
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
@@ -189,15 +191,22 @@ function preprocessMathEscapes(text: string): string {
   return result
 }
 
-export function MarkdownRenderer({ content, className = 'markdown-content' }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className = 'markdown-content', securityProfile = 'standard' }: MarkdownRendererProps) {
   // 预处理数学转义美元符号
   const processedContent = preprocessMathEscapes(content)
 
   return (
     <div className={className}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkDirective, remarkDirectiveRehype]}
+        // Knowledge posts deliberately omit directive-to-element conversion:
+        // arbitrary directive attributes are outside the published rendering
+        // contract. Raw HTML is also discarded even if a future plugin starts
+        // passing HTML nodes through this shared renderer.
+        remarkPlugins={securityProfile === 'knowledge'
+          ? [remarkGfm, remarkMath]
+          : [remarkGfm, remarkMath, remarkDirective, remarkDirectiveRehype]}
         rehypePlugins={[rehypeKatex]}
+        skipHtml={securityProfile === 'knowledge'}
         components={{
           // 代码块（pre > code）添加复制按钮
           pre: ({ children }) => {
@@ -215,6 +224,9 @@ export function MarkdownRenderer({ content, className = 'markdown-content' }: Ma
           },
           // 处理图片 URL，添加后端 API 前缀
           img: ({ src, alt, ...props }) => {
+            if (securityProfile === 'knowledge' && !(src?.startsWith('/uploads/') || src?.startsWith('/api/files/'))) {
+              return <span role="img" aria-label={alt || '不可显示的图片'}>[图片不可显示：{alt || '未命名'}]</span>
+            }
             const fullSrc = src?.startsWith('/uploads/')
               ? `${API_URL}${src}`
               : src
@@ -237,7 +249,7 @@ export function MarkdownRenderer({ content, className = 'markdown-content' }: Ma
             // 外部链接在新窗口打开
             if (href?.startsWith('http')) {
               return (
-                <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                <a href={href} target="_blank" rel={securityProfile === 'knowledge' ? 'nofollow noopener noreferrer' : 'noopener noreferrer'} {...props}>
                   {children}
                 </a>
               )

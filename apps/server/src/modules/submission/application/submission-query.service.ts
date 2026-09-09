@@ -59,6 +59,13 @@ export async function listSubmissions(context: SubmissionQueryContext, input: Su
         organizationId: context.workspaceScope === 'campus' ? context.organizationId || '__missing_organization__' : null,
       }
 
+  // Internal Judge-backed workflows (for example solution/editorial verification)
+  // deliberately reuse Submission/JudgeRun for execution, but are not user
+  // submissions. Keep them out of the ordinary submission ledger for every
+  // role, including global administrators; their owning domain exposes a
+  // dedicated, audited review surface instead.
+  where.submitScope = { not: 'solution_verification' }
+
   if (!context.isGlobalAdmin && (context.isPersonal || context.role === 'student')) {
     where.userId = context.userId
   } else if (!context.isGlobalAdmin && (context.role === 'teacher' || context.role === 'school_principal')) {

@@ -19,6 +19,8 @@ import { problemJudgeProgramRouter } from './problem.judge-program.routes'
 import { problemDataGenerationRouter } from './problem.data-generation.routes'
 import { problemCandidateRouter } from './problem.candidate.routes'
 import { problemWrongCorpusRouter } from './problem.wrong-corpus.routes'
+import { problemSolutionRouter } from '../solution/solution.routes'
+import { problemQualityRouter } from './problem.quality.routes'
 
 export const problemsRouter = Router()
 
@@ -27,6 +29,7 @@ export const problemsRouter = Router()
 problemsRouter.use(problemJudgeProgramRouter)
 problemsRouter.use(problemCrudRouter)
 problemsRouter.use(problemUserContentRouter)
+problemsRouter.use(problemSolutionRouter)
 problemsRouter.use(problemStatementVersionRouter)
 problemsRouter.use(problemHackRouter)
 problemsRouter.use(problemTestGraphRouter)
@@ -34,6 +37,7 @@ problemsRouter.use(problemTestSetRevisionRouter)
 problemsRouter.use(problemDataGenerationRouter)
 problemsRouter.use(problemCandidateRouter)
 problemsRouter.use(problemWrongCorpusRouter)
+problemsRouter.use(problemQualityRouter)
 problemsRouter.use(problemFilesRouter)
 problemsRouter.use(problemNotesRouter)
 problemsRouter.use(problemAiRouter)
