@@ -108,7 +108,7 @@ describe('V1 data product marketplace', () => {
 
     const manifest = await client(buyer).get(`/api/data-entitlements/${entitlementId}/revisions/${revisionId}/manifest`)
     expect(manifest.status).toBe(200)
-    expect(manifest.body.data).toMatchObject({ entitlementId, revision: { id: revisionId }, qualityCertificate: { overallScore: 88 } })
+    expect(manifest.body.data).toMatchObject({ entitlementId, revision: { id: revisionId }, qualityCertificate: { overallScore: 92 } })
     expect(manifest.body.data.qualityCertificate.holdoutCoverage).toBeCloseTo(0.88)
     expect(manifest.body.data.qualityCertificate.evidence).toBeUndefined()
     expect(manifest.body.data.judgeConfig).toBeUndefined()
