@@ -19,7 +19,9 @@ source_of_truth: Git history
 - 题解投稿新增正文/代码归一化相似度检查，只向审核者展示匹配证据并明确仅作风险提示，不自动判定抄袭。
 - Blog 新增评论/一层回复、喜欢/有帮助、收藏、举报、证据审计、治理动作和社区精选；平台与超管获得统一治理页面。
 - 复用既有 `Contest/ContestProblem` 方案，以唯一运行态和 TestSet Revision 外键建立 Training 比赛桥接及受保护的幂等 check/apply，不创建第二套 Contest 模型。
-- 本地验证：Assignment/相似度/冻结计分纯领域测试 10/10、Web 25 文件/93 项、Server 与 Web 生产构建通过；数据库迁移、隔离 PostgreSQL 回归、推送和生产发布仍需在发布步骤完成。
+- 发布前自动备份 `/data/backups/oi-manager/automatic/oi_manager_20260909_171333.dump` 已通过 `pg_restore` 清单和隔离恢复审计，SHA-256 为 `d021f3c4ccc16168257be1a421ecf3cc7144f4e004e9fec3ba41e6426cd8c2de`；恢复库的四个新迁移、真实登录、Judge、程序资产激活、Hack `Accepted → Wrong Answer` 晋升和活动 Revision 冻结闭环 2/2 通过。
+- Server 基于当前结构运行 698/702，四项差异均定位为 `prisma db push` 不会创建生产不可变触发器；在隔离运行器补齐同源触发器后，对应 Carits/Evaluation Credits/题解/Blog 26/26 通过。Web 25 文件/93 项、Judge 15 文件/45 项、Blog PostgreSQL 7/7、Shared/Server/Judge/Web 生产构建和 Prisma/模板/UI/API/架构/文档/路由门禁通过。
+- 四个增量迁移已应用到生产；提交至 `35ffe62` 已推送 `main`。API 3302→3303 蓝绿切换完成，Worker/Executor/Judge 均 active；Web BUILD_ID `eq1UOUVU7vXIBPik933GN` 在 3200 canary 与 3000 正式端口分别通过双账号消息发送、SSE、已读和回复闭环探针后提升。
 
 ### Rating、质量、知识与数据市场统一生产发布
 
