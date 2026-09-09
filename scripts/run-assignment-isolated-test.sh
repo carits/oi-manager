@@ -35,6 +35,25 @@ cleanup
 psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SCHEMA $TEST_SCHEMA" >/dev/null
 if [[ "$SCHEMA_SETUP" == "current" ]]; then
   DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma db push --skip-generate --schema prisma/schema.prisma
+  # `prisma db push` creates the current relational shape but intentionally
+  # omits the database-level immutability triggers used by production. Replay
+  # the trigger-only tails so release-invariant tests exercise the deployed
+  # contract instead of a weaker test database.
+  sed -n '/CREATE OR REPLACE FUNCTION "carits_prevent_posted_transaction_mutation"/,$p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260815_carits_contribution_foundation/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  sed -n '/CREATE OR REPLACE FUNCTION "evaluation_credit_wallet_entry_immutable"/,/FOR EACH ROW EXECUTE FUNCTION "evaluation_credit_ledger_entry_immutable"();/p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260908_contribution_carits_evaluation_loop/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  sed -n '/-- Reinstall the posted-transaction guard/,/^COMMIT;/p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260908_contribution_carits_evaluation_loop/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  sed -n '/CREATE OR REPLACE FUNCTION "solution_snapshot_immutable"/,/^COMMIT;/p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260909_solution_editorial_domain/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  sed -n '/CREATE OR REPLACE FUNCTION "blog_version_content_immutable"/,/^COMMIT;/p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260909_z_blog_knowledge_domain/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
 elif [[ "$SCHEMA_SETUP" != "migrations" ]]; then
   echo "Invalid ASSIGNMENT_SCHEMA_SETUP: expected migrations or current" >&2
   exit 1
@@ -52,9 +71,11 @@ pnpm --dir "$ROOT_DIR" --filter @oi-manager/shared build
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma generate --schema prisma/schema.prisma
 if [[ "$TEST_SCOPE" == "full" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run
+elif [[ "$TEST_SCOPE" == "release-invariants" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/economy-loop.test.ts tests/solution-editorial-domain.test.ts tests/blog-knowledge-domain.test.ts
 elif [[ "$TEST_SCOPE" == "assignment" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/assignment.test.ts tests/background-services.test.ts
 else
-  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment or full" >&2
+  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, release-invariants or full" >&2
   exit 1
 fi
