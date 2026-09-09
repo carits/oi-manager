@@ -57,6 +57,12 @@ export function createTestApp() {
   app.use(express.urlencoded({ extended: true, limit: '1mb' }))
   app.use(verifyCookieOrigin)
 
+  // Mirror production ordering: probes must run before router-wide auth
+  // middleware mounted at `/api`.
+  app.get('/api/health', (req, res) => {
+    res.json({ success: true, message: 'OK' })
+  })
+
   // 注册路由
   app.use('/api/auth', authRouter)
   app.use('/api/me', meRouter)
@@ -90,11 +96,6 @@ export function createTestApp() {
   app.use('/api', blogRouter)
   app.use('/api/resources', authenticate, resourceRouter)
   app.use('/api/carits', authenticate, caritsRouter)
-
-  // 健康检查
-  app.get('/api/health', (req, res) => {
-    res.json({ success: true, message: 'OK' })
-  })
 
   // 错误处理
   app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
