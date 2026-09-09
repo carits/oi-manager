@@ -87,6 +87,28 @@ function publicProblem(problem: any) {
   return { id: problem.id, platform: problem.platform, problemId: problem.problemId, title: problem.title, sourceProblemId: problem.sourceProblemId }
 }
 
+function publicRevision(revision: any) {
+  if (!revision) return undefined
+  return {
+    id: revision.id, revisionNumber: revision.revisionNumber, mode: revision.mode,
+    source: revision.source, graphHash: revision.graphHash,
+    judgeConfigHash: revision.judgeConfigHash, createdAt: revision.createdAt,
+  }
+}
+
+function publicQualityCertificate(certificate: any) {
+  if (!certificate || typeof certificate !== 'object' || Array.isArray(certificate)) return undefined
+  return {
+    certificateVersion: certificate.certificateVersion,
+    generatedAt: certificate.generatedAt,
+    productId: certificate.productId,
+    problem: publicProblem(certificate.problem),
+    revision: publicRevision(certificate.revision),
+    grade: certificate.grade,
+    quality: certificate.quality ? publicSnapshot(certificate.quality) : undefined,
+  }
+}
+
 function productDto(product: any) {
   return {
     id: product.id, problemId: product.problemId, revisionId: product.revisionId,
@@ -94,7 +116,7 @@ function productDto(product: any) {
     updatePolicy: product.updatePolicy, status: product.status, includes: product.includes,
     publishedAt: product.publishedAt, suspendedAt: product.suspendedAt,
     suspensionReason: product.suspensionReason,
-    Problem: publicProblem(product.Problem), Revision: product.Revision,
+    Problem: publicProblem(product.Problem), Revision: publicRevision(product.Revision),
     Prices: product.Prices?.map((price: any) => ({ id: price.id, licenseType: price.licenseType, amountCarits: price.amountCarits.toString(), pricingVersion: price.pricingVersion })),
     QualitySnapshot: product.QualitySnapshot ? publicSnapshot(product.QualitySnapshot) : undefined,
   }
@@ -107,7 +129,7 @@ function purchaseDto(purchase: any): any {
     licenseType: purchase.licenseType, purchasedRevisionId: purchase.purchasedRevisionId,
     qualitySnapshotId: purchase.qualitySnapshotId, amountCarits: purchase.amountCarits.toString(),
     status: purchase.status, caritsTransactionId: purchase.caritsTransactionId,
-    qualityCertificateSnapshot: purchase.qualityCertificateSnapshot, createdAt: purchase.createdAt,
+    qualityCertificateSnapshot: publicQualityCertificate(purchase.qualityCertificateSnapshot), createdAt: purchase.createdAt,
     Product: purchase.Product ? productDto(purchase.Product) : undefined,
     Entitlement: purchase.Entitlement ? entitlementDto(purchase.Entitlement) : undefined,
   }
@@ -125,7 +147,7 @@ function entitlementDto(entitlement: any): any {
       id: item.id, sequence: item.sequence, dataProductId: item.dataProductId,
       testSetRevisionId: item.testSetRevisionId, qualitySnapshotId: item.qualitySnapshotId,
       grantReason: item.grantReason, sourceIncidentId: item.sourceIncidentId, createdAt: item.createdAt,
-      TestSetRevision: item.TestSetRevision,
+      TestSetRevision: publicRevision(item.TestSetRevision),
       QualitySnapshot: item.QualitySnapshot ? publicSnapshot(item.QualitySnapshot) : undefined,
     })),
   }
@@ -224,8 +246,8 @@ function requestFingerprint(input: Record<string, unknown>) {
 function qualityCertificate(product: any) {
   return {
     certificateVersion: 1, generatedAt: new Date().toISOString(), productId: product.id,
-    problem: { id: product.Problem.id, problemId: product.Problem.problemId, title: product.Problem.title },
-    revision: product.Revision, grade: product.grade, quality: publicSnapshot(product.QualitySnapshot),
+    problem: publicProblem(product.Problem),
+    revision: publicRevision(product.Revision), grade: product.grade, quality: publicSnapshot(product.QualitySnapshot),
   }
 }
 
