@@ -187,6 +187,7 @@ async function requireVisibleSubmission(
     startTime: Date
     endTime: Date
     problemIdVisible: boolean
+    scope: string
   } | null = null
   let hasContestManagerAccess = false
   if (submission.trainingId) {
@@ -203,6 +204,7 @@ async function requireVisibleSubmission(
         startTime: true,
         endTime: true,
         problemIdVisible: true,
+        scope: true,
       },
     })
     if (!training) throw notFound()

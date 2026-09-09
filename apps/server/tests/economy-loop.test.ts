@@ -5,8 +5,9 @@ import { createTestUser } from './helpers/testUser'
 import { getPersonalCaritsAccount } from '../src/modules/carits/application/carits.service'
 import { postCarits, reverseCaritsTransaction } from '../src/modules/carits/application/carits-ledger.service'
 import { purchaseEvaluationCredits, ResourcePurchaseError } from '../src/modules/carits/application/resource-purchase.service'
-import { acceptContribution, processContributionRewardDeliveries, retryContributionReward, revokeContribution } from '../src/modules/contribution/application/contribution-reward.service'
+import { acceptContribution, processContributionRewardDeliveries, recordPromotedContribution, retryContributionReward, revokeContribution } from '../src/modules/contribution/application/contribution-reward.service'
 import { dayStart, reserveEvaluationCredits, settleEvaluationCredits } from '../src/modules/problem/problem.evaluation-budget.service'
+import { createTestProblem } from './helpers/problemListHelpers'
 
 async function rewardUser(userId: string, amount = 100n, key = crypto.randomUUID()) {
   return postCarits({
@@ -292,6 +293,45 @@ describe('Contribution, Carits and Evaluation Credits loop', () => {
     expect(outcomes.filter(item => item.status === 'fulfilled')).toHaveLength(1)
     expect(await prisma.contributionRewardDelivery.findUnique({ where: { contributionId } })).toMatchObject({ userCarits: 17n, organizationCarits: 0n })
     expect(await prisma.platformAuditLog.count({ where: { action: 'contribution_accepted', targetId: contributionId } })).toBe(1)
+  })
+
+  it('reuses the candidate contribution fact and its frozen reward snapshot on promotion replay', async () => {
+    const user = await createTestUser()
+    const problem = await createTestProblem({ ownerId: user.user.id, title: '贡献快照重放测试题' })
+    const revisionId = crypto.randomUUID()
+    const candidateId = crypto.randomUUID()
+    await prisma.problemTestSetRevision.create({ data: {
+      id: revisionId, problemId: problem.id, revisionNumber: 1, mode: 'acm', source: 'admin_edit',
+      judgeConfig: JSON.stringify({ mode: 'acm', cases: [] }), judgeConfigHash: 'c'.repeat(64),
+      graphHash: 'd'.repeat(64), testdataPath: `revisions/${revisionId}`, createdBy: user.user.id,
+    } })
+    await prisma.testcaseCandidate.create({ data: {
+      id: candidateId, problemId: problem.id, source: 'direct_data', targetRole: 'official', status: 'PROMOTED',
+      evaluationStage: 'promoted', inputSha256: '3'.repeat(64), outputSha256: '4'.repeat(64),
+      inputSize: 4, outputSize: 2, inputFileName: 'candidate.in', outputFileName: 'candidate.out',
+      createdBy: user.user.id, promotedRevisionId: revisionId, promotedAt: new Date(),
+    } })
+    const eventId = crypto.randomUUID()
+    await prisma.contributionEvent.create({ data: {
+      id: eventId, actorUserId: user.user.id, type: 'candidate_promoted',
+      sourceType: 'testcase_candidate', sourceId: candidateId, score: 100,
+      ruleCode: 'canonical_testcase_promoted', ruleVersion: 1,
+      dedupeKey: `candidate:${candidateId}:promoted`, status: 'accepted',
+      occurredAt: new Date(), acceptedAt: new Date(), evidence: {
+        problemId: problem.id, candidateId, promotedRevisionId: revisionId,
+        candidateSource: 'direct_data', selectionMode: 'auto',
+        rewardCarits: '17', organizationRewardCarits: '0',
+      },
+    } })
+
+    const replay = () => prisma.$transaction(tx => recordPromotedContribution(tx, {
+      candidateId, promotedRevisionId: revisionId, selectionMode: 'auto',
+    }))
+    expect((await replay())?.id).toBe(eventId)
+    expect((await replay())?.id).toBe(eventId)
+    expect(await prisma.contributionEvent.count({ where: { sourceType: 'testcase_candidate', sourceId: candidateId } })).toBe(1)
+    expect(await prisma.contributionRewardDelivery.findUniqueOrThrow({ where: { contributionId: eventId } }))
+      .toMatchObject({ userCarits: 17n, organizationCarits: 0n, policyCode: 'canonical_testcase_promoted', policyVersion: 1 })
   })
 
   it('lets a super administrator requeue a persistently failed reward', async () => {

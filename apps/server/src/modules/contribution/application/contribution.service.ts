@@ -54,7 +54,7 @@ export async function listMyContributionEvents(
   userId: string,
   pagination: { page: number; pageSize: number; skip: number } = { page: 1, pageSize: 20, skip: 0 },
 ) {
-  const where = { actorUserId: userId, status: 'accepted', revokedAt: null }
+  const where = { actorUserId: userId, status: { in: ['pending', 'accepted', 'rejected', 'revoked'] } }
   const [items, total] = await Promise.all([
     prisma.contributionEvent.findMany({
       where,
@@ -67,9 +67,17 @@ export async function listMyContributionEvents(
         status: true,
         occurredAt: true,
         acceptedAt: true,
+        revokedAt: true,
+        revokeReason: true,
+        Attribution: {
+          select: {
+            organizationId: true,
+            Organization: { select: { name: true } },
+          },
+        },
         RewardDelivery: { select: { status: true, userCarits: true } },
       },
-      orderBy: [{ acceptedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
@@ -78,9 +86,11 @@ export async function listMyContributionEvents(
   return {
     items: items.map(item => ({
       ...item,
-      // acceptedAt is nullable in the compatibility schema. An accepted legacy
-      // event still needs a stable display timestamp instead of "Invalid Date".
-      acceptedAt: item.acceptedAt || item.occurredAt,
+      displayAt: item.acceptedAt || item.revokedAt || item.occurredAt,
+      // acceptedAt is nullable in the compatibility schema. Accepted legacy
+      // events still need a stable timestamp, without pretending that pending
+      // or rejected events have already been accepted.
+      acceptedAt: item.status === 'accepted' ? item.acceptedAt || item.occurredAt : item.acceptedAt,
       RewardDelivery: item.RewardDelivery
         ? { ...item.RewardDelivery, userCarits: item.RewardDelivery.userCarits.toString() }
         : null,

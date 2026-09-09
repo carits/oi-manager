@@ -12,6 +12,31 @@ export class ContestRatingError extends Error {
 function fail(statusCode: number, code: string, message: string): never { throw new ContestRatingError(statusCode, code, message) }
 function hash(value: unknown) { return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex') }
 
+function isSerializableWriteConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034'
+}
+
+async function withSerializableRetry<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  options: { timeout?: number; maxAttempts?: number } = {},
+): Promise<T> {
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 3)
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        ...(options.timeout ? { timeout: options.timeout } : {}),
+      })
+    } catch (error) {
+      if (!isSerializableWriteConflict(error) || attempt === maxAttempts) throw error
+      // Re-open the complete transaction. Advisory locks are transaction scoped,
+      // so the retry also re-acquires the contest lock before reading any state.
+      await new Promise(resolve => setTimeout(resolve, attempt * 10))
+    }
+  }
+  throw new Error('Serializable transaction retry exhausted')
+}
+
 export function trackForFormat(format: string): RatingTrack {
   if (format === 'oi') return 'OI'
   if (format === 'ioi') return 'IOI'
@@ -48,10 +73,155 @@ function configDto(config: any, training: any) {
   }
 }
 
+function fixedOrganizationId(training: any): string | null {
+  return training.organizationId || training.Team?.organizationId || null
+}
+
+function ratingContext(training: any): 'organization' | 'platform' | 'personal_team' {
+  if (fixedOrganizationId(training)) return 'organization'
+  if (training.teamId) return 'personal_team'
+  return 'platform'
+}
+
+async function allowedScopesFor(userId: string, training: any): Promise<RatingScope[]> {
+  // V1 never maps a team ACM result onto every member's personal ACM rating.
+  if (training.teamId && ['icpc', 'acm'].includes(String(training.format).toLowerCase())) return ['NONE']
+  const context = ratingContext(training)
+  if (context === 'organization') return ['NONE', 'ORGANIZATION']
+  if (context === 'personal_team') return ['NONE']
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  return user && ['super_admin', 'platform_admin'].includes(user.role)
+    ? ['NONE', 'GLOBAL', 'BOTH']
+    : ['NONE']
+}
+
 export async function getContestRatingConfig(trainingId: number, userId: string) {
   const training = await requireContest(trainingId)
   if (!await canAccessTraining(userId, training)) fail(403, 'CONTEST_ACCESS_DENIED', '无权限查看比赛 Rating 配置')
-  return configDto(training.RatingConfig, training)
+  return { ...configDto(training.RatingConfig, training), allowedScopes: await allowedScopesFor(userId, training), context: ratingContext(training) }
+}
+
+async function activeRatingOrganizations(client: Prisma.TransactionClient | typeof prisma, userId: string) {
+  const memberships = await client.organizationMembership.findMany({
+    where: {
+      userId,
+      status: 'active',
+      Organization: {
+        status: 'active',
+        OR: [
+          { type: { not: 'school' } },
+          { School: { is: { status: 'active', directoryStatus: { not: 'legacy' } } } },
+        ],
+      },
+    },
+    select: {
+      organizationId: true,
+      Organization: { select: { name: true, School: { select: { name: true, shortName: true } } } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+  return memberships.map(membership => ({
+    id: membership.organizationId,
+    name: membership.Organization.School?.name || membership.Organization.name,
+    shortName: membership.Organization.School?.shortName || null,
+  }))
+}
+
+function participationDto(input: {
+  training: any
+  participant: any
+  organizations: Array<{ id: string; name: string; shortName: string | null }>
+  selectedOrganization?: { id: string; name: string; shortName: string | null } | null
+}) {
+  const fixedId = fixedOrganizationId(input.training)
+  const scope = input.training.RatingConfig?.scope || 'NONE'
+  const inferredSingleId = !fixedId && scope === 'BOTH' && input.organizations.length === 1
+    ? input.organizations[0].id
+    : null
+  const selectedOrganizationId = fixedId || input.participant?.organizationIdSnapshot || inferredSingleId || null
+  const locked = Boolean(input.participant?.ratingLockedAt || input.participant?.firstSubmissionAt || input.participant?.ratingStatus === 'RATING_LOCKED')
+  return {
+    scope,
+    context: ratingContext(input.training),
+    fixed: Boolean(fixedId),
+    selectedOrganizationId,
+    selectionPersisted: Boolean(fixedId || input.participant?.organizationIdSnapshot),
+    selectedOrganization: input.selectedOrganization || input.organizations.find(item => item.id === selectedOrganizationId) || null,
+    organizations: input.organizations,
+    requiresExplicitSelection: !fixedId && scope === 'BOTH' && input.organizations.length > 1 && !input.participant?.organizationIdSnapshot,
+    canChange: !fixedId && scope === 'BOTH' && !locked,
+    locked,
+    firstSubmissionAt: input.participant?.firstSubmissionAt || null,
+  }
+}
+
+export async function getRatingParticipation(trainingId: number, userId: string) {
+  const training = await requireContest(trainingId)
+  if (!await canAccessTraining(userId, training)) fail(403, 'CONTEST_ACCESS_DENIED', '无权限查看比赛 Rating 参与信息')
+  const [participant, organizations] = await Promise.all([
+    prisma.trainingParticipant.findFirst({ where: { trainingId, userId }, orderBy: { joinedAt: 'asc' } }),
+    activeRatingOrganizations(prisma, userId),
+  ])
+  const selectedId = fixedOrganizationId(training) || participant?.organizationIdSnapshot || null
+  const selectedOrganization = selectedId && !organizations.some(item => item.id === selectedId)
+    ? await prisma.organization.findUnique({ where: { id: selectedId }, select: { id: true, name: true, School: { select: { name: true, shortName: true } } } })
+    : null
+  return participationDto({
+    training,
+    participant,
+    organizations,
+    selectedOrganization: selectedOrganization ? {
+      id: selectedOrganization.id,
+      name: selectedOrganization.School?.name || selectedOrganization.name,
+      shortName: selectedOrganization.School?.shortName || null,
+    } : null,
+  })
+}
+
+export async function updateRatingParticipation(trainingId: number, userId: string, body: any) {
+  const training = await requireContest(trainingId)
+  if (!await canAccessTraining(userId, training)) fail(403, 'CONTEST_ACCESS_DENIED', '无权限设置比赛 Rating 参与信息')
+  const fixedId = fixedOrganizationId(training)
+  const rawOrganizationId = body?.organizationId
+  const organizationId = rawOrganizationId === null || rawOrganizationId === undefined || rawOrganizationId === ''
+    ? null
+    : String(rawOrganizationId)
+  if (fixedId) {
+    if (organizationId && organizationId !== fixedId) fail(422, 'RATING_ORGANIZATION_FIXED', '组织比赛的 Rating 归属由比赛固定，不能修改')
+    return getRatingParticipation(trainingId, userId)
+  }
+
+  await withSerializableRetry(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-participant:${trainingId}:${userId}`}, 0)) IS NULL AS locked`
+    const currentTraining = await tx.training.findUniqueOrThrow({
+      where: { id: trainingId },
+      include: { RatingConfig: true, Team: { select: { organizationId: true } } },
+    })
+    if (currentTraining.RatingConfig?.scope !== 'BOTH' || ratingContext(currentTraining) !== 'platform') {
+      fail(409, 'RATING_ORGANIZATION_SELECTION_NOT_APPLICABLE', '只有平台 BOTH Rating 比赛需要选择参赛组织')
+    }
+    const existing = await tx.trainingParticipant.findFirst({ where: { trainingId, userId }, orderBy: { joinedAt: 'asc' } })
+    if (existing?.ratingLockedAt || existing?.firstSubmissionAt || existing?.ratingStatus === 'RATING_LOCKED') {
+      fail(409, 'RATING_PARTICIPATION_FROZEN', '首次提交后参赛组织已固定，不能修改')
+    }
+    if (organizationId) {
+      const organizations = await activeRatingOrganizations(tx, userId)
+      if (!organizations.some(item => item.id === organizationId)) {
+        fail(422, 'RATING_ORGANIZATION_INVALID', '只能选择当前账号的有效组织')
+      }
+    }
+    if (existing) {
+      await tx.trainingParticipant.update({
+        where: { id: existing.id },
+        data: { organizationIdSnapshot: organizationId, ratingStatus: 'REGISTERED' },
+      })
+    } else {
+      await tx.trainingParticipant.create({
+        data: { id: crypto.randomUUID(), trainingId, userId, userType: 'student', organizationIdSnapshot: organizationId, ratingStatus: 'REGISTERED' },
+      })
+    }
+  })
+  return getRatingParticipation(trainingId, userId)
 }
 
 async function assertScopePermission(userId: string, scope: RatingScope) {
@@ -86,6 +256,13 @@ export async function updateContestRatingConfig(trainingId: number, userId: stri
   const scope = String(body.scope || 'NONE').toUpperCase() as RatingScope
   if (!Object.values(RatingScope).includes(scope)) fail(422, 'RATING_SCOPE_INVALID', 'Rating 范围无效')
   await assertScopePermission(userId, scope)
+  const allowedScopes = await allowedScopesFor(userId, training)
+  if (!allowedScopes.includes(scope)) {
+    if (training.teamId && ['icpc', 'acm'].includes(String(training.format).toLowerCase())) fail(422, 'TEAM_ACM_RATING_UNSUPPORTED', '团队 ACM 赛 V1 不计个人 ACM Rating')
+    if (ratingContext(training) === 'organization') fail(422, 'GLOBAL_RATING_CONTEST_SCOPE_INVALID', '组织比赛只能选择不计 Rating 或组织 Rating')
+    if (ratingContext(training) === 'personal_team') fail(422, 'TEAM_RATING_UNSUPPORTED', '个人团队比赛首版不计个人 Rating')
+    fail(422, 'ORGANIZATION_RATING_CONTEXT_REQUIRED', '平台比赛不能在没有明确组织归属的情况下仅计算组织 Rating')
+  }
   const track = trackForFormat(training.format)
   if (body.track && String(body.track).toUpperCase() !== track) fail(422, 'RATING_TRACK_MISMATCH', 'Rating Track 必须与比赛赛制一致')
   const weight = Number(body.weight ?? 1)
@@ -113,7 +290,7 @@ export async function updateContestRatingConfig(trainingId: number, userId: stri
       ? tx.trainingRatingConfig.update({ where: { id: current.id }, data: { scope, track, weightBasisPoints: Math.round(weight * 10_000), organizationMinParticipants, globalMinParticipants, scoringRules, rulesHash, revision: { increment: 1 } } })
       : tx.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId, scope, track, weightBasisPoints: Math.round(weight * 10_000), organizationMinParticipants, globalMinParticipants, scoringRules, rulesHash, createdBy: userId } })
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
-  return configDto(config, training)
+  return { ...configDto(config, training), allowedScopes, context: ratingContext(training) }
 }
 
 export async function lockContestRatingConfigTx(tx: Prisma.TransactionClient, trainingId: number, actorUserId: string, format: string) {
@@ -127,19 +304,29 @@ export async function lockContestRatingConfigTx(tx: Prisma.TransactionClient, tr
     : tx.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId, scope: 'NONE', track, scoringRules: defaultScoringRules(track), rulesHash: hash({ track, scoringRules: defaultScoringRules(track) }), createdBy: actorUserId, lockedAt: now } })
 }
 
-async function organizationSnapshotTx(tx: Prisma.TransactionClient, training: any, userId: string) {
+async function organizationSnapshotTx(tx: Prisma.TransactionClient, training: any, userId: string, config: any, existing: any) {
   const fixed = training.organizationId || training.Team?.organizationId || null
   if (fixed) return fixed
-  const memberships = await tx.organizationMembership.findMany({ where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' }, select: { organizationId: true } })
-  return memberships.length === 1 ? memberships[0].organizationId : null
+  if (config.scope !== 'BOTH') return null
+  const organizations = await activeRatingOrganizations(tx, userId)
+  if (existing?.organizationIdSnapshot) {
+    if (!organizations.some(item => item.id === existing.organizationIdSnapshot)) {
+      fail(409, 'RATING_ORGANIZATION_SELECTION_INVALID', '已选参赛组织已不可用，请在提交前重新选择')
+    }
+    return existing.organizationIdSnapshot
+  }
+  if (organizations.length > 1) {
+    fail(409, 'RATING_ORGANIZATION_SELECTION_REQUIRED', '你属于多个组织，请在首次提交前选择本场比赛的 Rating 归属组织')
+  }
+  return organizations[0]?.id || null
 }
 
 export async function lockRatingParticipantTx(tx: Prisma.TransactionClient, training: any, userId: string, submittedAt = new Date()) {
   if (training.type !== 'contest') return
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`rating-participant:${training.id}:${userId}`}, 0)) IS NULL AS locked`
-  await lockContestRatingConfigTx(tx, training.id, userId, training.format)
-  const organizationIdSnapshot = await organizationSnapshotTx(tx, training, userId)
+  const config = await lockContestRatingConfigTx(tx, training.id, userId, training.format)
   const existing = await tx.trainingParticipant.findFirst({ where: { trainingId: training.id, userId }, orderBy: { joinedAt: 'asc' } })
+  const organizationIdSnapshot = await organizationSnapshotTx(tx, training, userId, config, existing)
   if (existing) {
     await tx.trainingParticipant.update({ where: { id: existing.id }, data: {
       ratingStatus: existing.ratingStatus === 'EXCLUDED' ? 'EXCLUDED' : 'RATING_LOCKED',
@@ -247,10 +434,42 @@ async function ensurePoolTx(tx: Prisma.TransactionClient, scopeType: Extract<Rat
   return existing || tx.ratingPool.create({ data: { id: crypto.randomUUID(), scopeType, organizationId, track } })
 }
 
+async function assertNoEarlierRatedContestPendingTx(tx: Prisma.TransactionClient, input: {
+  training: any
+  scopeType: Extract<RatingScope, 'GLOBAL' | 'ORGANIZATION'>
+  organizationId: string | null
+  track: RatingTrack
+}) {
+  const candidates = await tx.trainingRatingConfig.findMany({
+    where: {
+      trainingId: { not: input.training.id },
+      track: input.track,
+      scope: input.scopeType === 'GLOBAL' ? { in: ['GLOBAL', 'BOTH'] } : { in: ['ORGANIZATION', 'BOTH'] },
+      Training: {
+        type: 'contest',
+        endTime: { lt: input.training.endTime },
+        finalizationStatus: { not: 'FINALIZED' },
+      },
+    },
+    include: { Training: { select: { id: true, title: true, organizationId: true, Team: { select: { organizationId: true } } } } },
+    orderBy: { Training: { endTime: 'asc' } },
+  })
+  const earlier = input.scopeType === 'GLOBAL'
+    ? candidates[0]
+    : candidates.find(candidate => candidate.scope === 'BOTH' || fixedOrganizationId(candidate.Training) === input.organizationId)
+  if (earlier) fail(409, 'EARLIER_RATED_CONTEST_PENDING', `更早结束的同一 Rating 池比赛尚未结算：${earlier.Training.title}`)
+}
+
 async function createAndApplyBatchTx(tx: Prisma.TransactionClient, input: {
   training: any; config: any; snapshot: any; scopeType: Extract<RatingScope, 'GLOBAL' | 'ORGANIZATION'>; organizationId: string | null; entries: any[]; minimum: number
 }) {
   const pool = await ensurePoolTx(tx, input.scopeType, input.organizationId, input.config.track)
+  await assertNoEarlierRatedContestPendingTx(tx, {
+    training: input.training,
+    scopeType: input.scopeType,
+    organizationId: input.organizationId,
+    track: input.config.track,
+  })
   const eligible = input.entries.filter(entry => entry.ratingEligible && (input.scopeType === 'GLOBAL' || entry.organizationIdSnapshot === input.organizationId))
   const inputHash = hash({ poolId: pool.id, snapshotId: input.snapshot.id, users: eligible.map(entry => [entry.userId, entry.rank, entry.ratingTieGroup]) })
   if (eligible.length < input.minimum) return tx.ratingBatch.create({ data: { id: crypto.randomUUID(), trainingId: input.training.id, poolId: pool.id, standingSnapshotId: input.snapshot.id, algorithmCode: input.config.algorithmCode, algorithmVersion: input.config.algorithmVersion, fieldSize: eligible.length, status: 'SKIPPED', inputHash, sequenceAt: input.training.endTime, skipReason: 'NOT_ENOUGH_PARTICIPANTS', calculatedAt: new Date(), appliedAt: new Date() } })
@@ -267,30 +486,120 @@ async function createAndApplyBatchTx(tx: Prisma.TransactionClient, input: {
   return tx.ratingBatch.update({ where: { id: batch.id }, data: { status: 'APPLIED', calculatedAt: new Date(), appliedAt: new Date() } })
 }
 
-export async function finalizeContestRating(trainingId: number, userId: string) {
+async function finalizeContestRatingCore(trainingId: number, actorUserId: string) {
   const training = await requireContest(trainingId)
-  if (!await canManageTraining(userId, training)) fail(403, 'CONTEST_MANAGE_DENIED', '只有比赛管理员可以完成最终结算')
   if (new Date() <= training.endTime && training.status !== 'finished') fail(409, 'CONTEST_NOT_ENDED', '比赛结束后才能生成最终榜单')
-  return prisma.$transaction(async tx => {
+  return withSerializableRetry(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-finalize:${trainingId}`}, 0)) IS NULL AS locked`
     const locked = await tx.training.findUniqueOrThrow({ where: { id: trainingId }, include: { RatingConfig: true, Team: { select: { organizationId: true } }, TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } } } })
     if (locked.finalizationStatus === 'FINALIZED' && locked.finalizedStandingId) return loadContestRatingTx(tx, trainingId)
     const activeRuns = await tx.judgeRun.count({ where: { status: { in: ['QUEUED', 'RUNNING'] }, Submission: { trainingId, submitScope: 'contest' } } })
     if (activeRuns > 0) fail(409, 'CONTEST_JUDGING_INCOMPLETE', `仍有 ${activeRuns} 个评测任务未完成`)
     await tx.training.update({ where: { id: trainingId }, data: { finalizationStatus: 'FINALIZING' } })
-    const config = await lockContestRatingConfigTx(tx, trainingId, userId, locked.format)
-    const snapshot = await buildStandingSnapshotTx(tx, locked, config, userId)
+    const config = await lockContestRatingConfigTx(tx, trainingId, actorUserId, locked.format)
+    const snapshot = await buildStandingSnapshotTx(tx, locked, config, actorUserId)
     const persistedEntries = await tx.contestStandingEntry.findMany({ where: { snapshotId: snapshot.id }, orderBy: [{ rank: 'asc' }, { userId: 'asc' }] })
     if (config.scope === 'GLOBAL' || config.scope === 'BOTH') await createAndApplyBatchTx(tx, { training: locked, config, snapshot, scopeType: 'GLOBAL', organizationId: null, entries: persistedEntries, minimum: config.globalMinParticipants })
     if (config.scope === 'ORGANIZATION' || config.scope === 'BOTH') {
-      const organizations = [...new Set(persistedEntries.map(item => item.organizationIdSnapshot).filter(Boolean))] as string[]
+      const organizations = ([...new Set(persistedEntries.map(item => item.organizationIdSnapshot).filter(Boolean))] as string[]).sort()
       const fallback = locked.organizationId || locked.Team?.organizationId
       if (!organizations.length && fallback) organizations.push(fallback)
       for (const organizationId of organizations) await createAndApplyBatchTx(tx, { training: locked, config, snapshot, scopeType: 'ORGANIZATION', organizationId, entries: persistedEntries, minimum: config.organizationMinParticipants })
     }
+    await tx.submission.updateMany({
+      where: { trainingId, submitScope: 'contest', isGlobalVisible: false },
+      data: { isGlobalVisible: true },
+    })
     await tx.training.update({ where: { id: trainingId }, data: { finalizationStatus: 'FINALIZED', finalizedStandingId: snapshot.id, status: 'finished' } })
     return loadContestRatingTx(tx, trainingId)
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 })
+  }, { timeout: 30_000 })
+}
+
+export async function finalizeContestRating(trainingId: number, userId: string) {
+  const training = await requireContest(trainingId)
+  if (!await canManageTraining(userId, training)) fail(403, 'CONTEST_MANAGE_DENIED', '只有比赛管理员可以完成最终结算')
+  return finalizeContestRatingCore(trainingId, userId)
+}
+
+/**
+ * Finalize ended contests and their immutable standings in chronological order. The singleton scheduler
+ * calls this, while the per-contest advisory lock keeps manual retries and a
+ * blue/green overlap idempotent.
+ */
+export async function processDueContestRatings(limit = 20) {
+  const due = await prisma.training.findMany({
+    where: {
+      type: 'contest',
+      endTime: { lte: new Date() },
+      finalizationStatus: { in: ['LIVE', 'JUDGING'] },
+      // Only contests that have entered the new Rating lifecycle are eligible.
+      // This includes explicitly unrated contests (they still need an immutable
+      // final standing) without sweeping legacy contests after deployment.
+      RatingConfig: { isNot: null },
+    },
+    select: { id: true, createdBy: true },
+    orderBy: [{ endTime: 'asc' }, { id: 'asc' }],
+    take: Math.max(1, Math.min(100, Math.trunc(limit))),
+  })
+  const result = { scanned: due.length, finalized: 0, waiting: 0, failed: 0, failures: [] as Array<{ trainingId: number; code: string }> }
+  for (const contest of due) {
+    try {
+      await finalizeContestRatingCore(contest.id, contest.createdBy)
+      result.finalized++
+    } catch (error) {
+      const code = error instanceof ContestRatingError ? error.code : 'RATING_FINALIZATION_FAILED'
+      if (['CONTEST_JUDGING_INCOMPLETE', 'EARLIER_RATED_CONTEST_PENDING'].includes(code)) result.waiting++
+      else {
+        result.failed++
+        result.failures.push({ trainingId: contest.id, code })
+        await prisma.training.updateMany({
+          where: { id: contest.id, finalizationStatus: { in: ['LIVE', 'JUDGING'] } },
+          data: { finalizationStatus: 'FAILED' },
+        })
+      }
+    }
+  }
+  return result
+}
+
+export async function updateRatingParticipantDisposition(trainingId: number, targetUserId: string, actorUserId: string, body: any) {
+  const training = await requireContest(trainingId)
+  if (!await canManageTraining(actorUserId, training)) fail(403, 'CONTEST_MANAGE_DENIED', '无权限调整 Rating 资格')
+  const disposition = String(body?.disposition || '').toUpperCase()
+  if (!['NORMAL', 'EXCLUDE', 'KEEP_RESULT', 'FORCE_LAST'].includes(disposition)) fail(422, 'RATING_DISPOSITION_INVALID', 'Rating 处置无效')
+  const reason = String(body?.reason || '').trim()
+  if (disposition !== 'NORMAL' && (reason.length < 5 || reason.length > 1000)) fail(422, 'RATING_DISPOSITION_REASON_REQUIRED', '非正常 Rating 处置必须填写 5～1000 字原因')
+  return withSerializableRetry(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-finalize:${trainingId}`}, 0)) IS NULL AS locked`
+    const locked = await tx.training.findUniqueOrThrow({ where: { id: trainingId }, include: { Team: { select: { organizationId: true } } } })
+    if (['FINALIZING', 'FINALIZED'].includes(locked.finalizationStatus)) fail(409, 'CONTEST_RATING_DISPOSITION_FROZEN', '最终榜单正在生成或已生成；如需变更请先进入显式重测与重放流程')
+    const updated = await tx.trainingParticipant.updateMany({
+      where: { trainingId, userId: targetUserId },
+      data: {
+        ratingDisposition: disposition as any,
+        ratingDispositionReason: reason || null,
+        ratingDispositionBy: actorUserId,
+        ratingDispositionAt: new Date(),
+      },
+    })
+    if (!updated.count) fail(404, 'PARTICIPANT_NOT_FOUND', '参赛者不存在')
+    const metadata = { trainingId, disposition, reason: reason || null }
+    const organizationId = fixedOrganizationId(locked)
+    if (organizationId) {
+      await tx.organizationAuditLog.create({ data: {
+        id: crypto.randomUUID(), organizationId, actorUserId,
+        action: 'contest_rating_participant_disposition_updated', targetUserId,
+        sourceType: 'training', sourceId: String(trainingId), metadata,
+      } })
+    } else {
+      await tx.platformAuditLog.create({ data: {
+        id: crypto.randomUUID(), actorUserId,
+        action: 'contest_rating_participant_disposition_updated', targetType: 'training',
+        targetId: String(trainingId), metadata: { ...metadata, targetUserId },
+      } })
+    }
+    return { userId: targetUserId, disposition }
+  })
 }
 
 /**

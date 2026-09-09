@@ -4,7 +4,8 @@ export const personalWorkspaceModules = new Set(['teams', 'problems', 'contests'
 export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings'])
 
 export type NavigationContext = {
-  workspace: 'organization' | 'personal'
+  workspace: 'organization' | 'personal' | 'platform'
+  platformBasePath?: '/admin' | '/platform-admin'
   organizationId?: string
   role: string
   schoolScoped?: boolean
@@ -12,11 +13,23 @@ export type NavigationContext = {
 export type ResourceKind = 'team' | 'contest' | 'homework' | 'training' | 'submission'
 
 export function canNavigate(id?: string | number | null) { return id !== undefined && id !== null && String(id).trim() !== '' }
-export function fallbackHref(context: NavigationContext) { return context.workspace === 'personal' ? '/personal' : context.organizationId ? `/org/${context.organizationId}/overview` : '/identity' }
+export function fallbackHref(context: NavigationContext) {
+  if (context.workspace === 'personal') return '/personal'
+  if (context.workspace === 'platform') return context.platformBasePath || '/platform-admin'
+  return context.organizationId ? `/org/${context.organizationId}/overview` : '/identity'
+}
 
 export function resourceHref(kind: ResourceKind, context: NavigationContext, id?: string | number | null) {
   if (!canNavigate(id)) return null
   const value = String(id)
+  if (context.workspace === 'platform') {
+    const prefix = context.platformBasePath || '/platform-admin'
+    const paths: Partial<Record<ResourceKind, string>> = {
+      contest: `${prefix}/contests/${value}`,
+      submission: `${prefix}/submissions/${value}`,
+    }
+    return paths[kind] || null
+  }
   if (context.workspace === 'personal') {
     const paths: Partial<Record<ResourceKind, string>> = { team: `/personal/teams/${value}`, contest: `/personal/contests/${value}`, submission: `/personal/submissions/${value}` }
     return paths[kind] || null
@@ -31,6 +44,7 @@ export function resourceHref(kind: ResourceKind, context: NavigationContext, id?
 }
 
 export function listHref(kind: 'contest' | 'homework' | 'training', context: NavigationContext) {
+  if (context.workspace === 'platform') return kind === 'contest' ? `${context.platformBasePath || '/platform-admin'}/contests` : context.platformBasePath || '/platform-admin'
   if (context.workspace === 'personal') return kind === 'contest' ? '/personal/contests' : '/personal'
   if (!context.organizationId) return '/identity'
   if (kind === 'contest') return `/org/${context.organizationId}/contests`

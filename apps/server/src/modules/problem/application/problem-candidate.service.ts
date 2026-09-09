@@ -80,6 +80,8 @@ function serializeContribution(job: any, manager: boolean) {
     jobId: job.id,
     status: job.status,
     sourceMode: job.config?.sourceMode || 'input',
+    contributionOrganizationId: job.contributionOrganizationId || null,
+    contributionOrganizationName: job.ContributionOrganization?.name || null,
     stage: publicContributionStage(job),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
@@ -107,6 +109,7 @@ export async function listMyContributions(user: JwtPayload, problemId: string) {
   const context = await resolveContributionContext(user, problemId)
   const jobs = await prisma.problemDataGenerationJob.findMany({
     where: { problemId, contribution: true, ...(context.canManage ? {} : { createdBy: user.userId }) },
+    include: { ContributionOrganization: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
     take: 50,
   })
@@ -123,6 +126,7 @@ export async function getContribution(user: JwtPayload, problemId: string, jobId
   const context = await resolveContributionContext(user, problemId)
   const job = await prisma.problemDataGenerationJob.findFirst({
     where: { id: jobId, problemId, contribution: true, ...(context.canManage ? {} : { createdBy: user.userId }) },
+    include: { ContributionOrganization: { select: { name: true } } },
   })
   if (!job) fail(404, 'CONTRIBUTION_NOT_FOUND', '贡献任务不存在')
   const cases = await prisma.problemDataGenerationCase.findMany({ where: { jobId: job.id }, orderBy: { orderIndex: 'asc' } })

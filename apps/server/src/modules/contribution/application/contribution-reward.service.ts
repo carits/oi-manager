@@ -52,19 +52,26 @@ export async function recordPromotedContribution(tx: Prisma.TransactionClient, i
 }) {
   const candidate = await tx.testcaseCandidate.findUnique({ where: { id: input.candidateId } })
   if (!candidate || candidate.status !== 'PROMOTED') throw new Error('Promoted Candidate is required before recording contribution')
+  if (candidate.promotedRevisionId !== input.promotedRevisionId) {
+    throw new ContributionRewardError(409, 'CONTRIBUTION_PROMOTION_EVIDENCE_MISMATCH', 'Candidate 的正式版本与贡献证据不一致')
+  }
   if (candidate.source === 'admin_import') return null
   const actor = await tx.user.findUnique({ where: { id: candidate.createdBy }, select: { id: true, role: true, status: true } })
   if (!actor || actor.status !== 'active' || ['platform_admin', 'super_admin'].includes(actor.role)) return null
   const reward = rewardFor(candidate.source)
   const accepted = input.selectionMode === 'auto'
+  // A promoted candidate is a single contribution fact. Policy revisions are
+  // captured on that fact; they must not create a second event (and reward)
+  // for the same candidate later.
+  const dedupeKey = `candidate:${candidate.id}:promoted`
   const event = await tx.contributionEvent.upsert({
-    where: { dedupeKey: `candidate:${candidate.id}:promoted:${POLICY_VERSION}` },
+    where: { dedupeKey },
     update: {},
     create: {
       id: crypto.randomUUID(), actorUserId: actor.id, type: reward.type,
       sourceType: 'testcase_candidate', sourceId: candidate.id, score: reward.score,
       ruleCode: POLICY_CODE, ruleVersion: POLICY_VERSION,
-      dedupeKey: `candidate:${candidate.id}:promoted:${POLICY_VERSION}`,
+      dedupeKey,
       status: accepted ? 'accepted' : 'pending', occurredAt: candidate.promotedAt || new Date(),
       acceptedAt: accepted ? new Date() : null,
       evidence: {
@@ -91,10 +98,18 @@ export async function recordPromotedContribution(tx: Prisma.TransactionClient, i
       create: { id: crypto.randomUUID(), contributionId: event.id, organizationId: candidate.contributionOrganizationId, reason: 'contributor_selected_at_submission', evidence: { candidateId: candidate.id } },
     })
   }
-  if (event.status === 'accepted' && !event.revokedAt) await tx.contributionRewardDelivery.upsert({
-    where: { contributionId: event.id }, update: {},
-    create: { id: crypto.randomUUID(), contributionId: event.id, policyCode: POLICY_CODE, policyVersion: POLICY_VERSION, userCarits: reward.carits, organizationCarits: 0n },
-  })
+  if (event.status === 'accepted' && !event.revokedAt) {
+    const persistedReward = rewardSnapshot(event)
+    await tx.contributionRewardDelivery.upsert({
+      where: { contributionId: event.id }, update: {},
+      create: {
+        id: crypto.randomUUID(), contributionId: event.id,
+        policyCode: event.ruleCode, policyVersion: event.ruleVersion,
+        userCarits: persistedReward.userCarits,
+        organizationCarits: persistedReward.organizationCarits,
+      },
+    })
+  }
   return event
 }
 
@@ -229,7 +244,16 @@ export async function listContributionAudit(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: pagination.skip,
       take: pagination.pageSize,
-      include: { Actor: { select: { username: true } }, Attribution: { select: { organizationId: true } }, RewardDelivery: true },
+      include: {
+        Actor: { select: { username: true } },
+        Attribution: {
+          select: {
+            organizationId: true,
+            Organization: { select: { name: true } },
+          },
+        },
+        RewardDelivery: true,
+      },
     }),
     prisma.contributionEvent.count({ where }),
     prisma.contributionEvent.count({ where: { status: 'pending' } }),

@@ -17,7 +17,9 @@ source_of_truth: Git history
 - OI 使用最终提交、IOI 使用最好提交、ACM 使用解题数和罚时生成不可变最终榜单；Carits Multi-player Elo V1 使用并列感知的 pairwise Elo 和零和平衡取整。
 - 结算生成不可变 Standing、Batch 和 Change；赛后重测会把比赛置为 HELD，完成后生成新榜单并从受影响 RatingPool 起点完整重放，旧 Batch/Change 只标记 superseded。
 - 比赛编辑器增加 Rating 范围、权重和最低人数；排名页展示结算状态、最终榜单和组织/全局批次，个人/组织排名工作台可切换 OI、IOI、ACM Rating。
-- Prisma、Server/Web 生产构建、Rating 纯算法 smoke 和 UI 组件门禁已通过；隔离数据库、全量回归和发布状态将在部署完成后补记。
+- 新增独立平台比赛工作台，让 `GLOBAL/BOTH` 成为可创建的真实产品路径；所有新组织、团队和平台比赛均显式创建默认 `NONE` 配置，团队 ACM 首版禁止误启个人 Rating。
+- 平台 `BOTH` 比赛的多组织参赛者必须在首提前显式选择组织，首交后固化快照；同池到期比赛由后台按确定顺序结算，Serializable 冲突有界重试，榜单排名在完整结果集上计算后再分页。
+- Rating 隔离 PostgreSQL 集成测试 17/17、Web Rating 契约 3/3、Server/Web 生产构建已通过；全量组合回归和发布状态将在部署完成后补记。
 
 ### 独立 Assignment 作业域收口
 
@@ -30,6 +32,7 @@ source_of_truth: Git history
 
 ### 贡献、Carits 与 Evaluation Credits 闭环
 
+- 收口奖励重放证据：Candidate 的晋升事件改用跨规则版本稳定事实键，并校验正式 Revision；Reward Delivery 始终读取事件冻结的金额和规则，避免规则升级后重复贡献或按新价格补发。贡献、Hack、钱包和平台审计界面补齐组织归因、全生命周期、债务/余额阻断、免费与已购额度及最近兑换，不再把等待、拒绝或技术 Hack 成功误显示为已正式奖励。
 - Candidate/Hack 被 Selector 正式晋升时在同一 Revision 事务写入版本化 `ContributionEvent`；普通 Candidate 记 100 贡献值/20 C，Hack 记 150 贡献值/30 C，紧急发布等待超管审核。
 - 新增持久 `ContributionRewardDelivery` Worker，使用租约、fencing、UTC 用户/平台日上限和延迟重试；撤销已发奖励只新增不可变冲正交易，不回退 TestSet Revision。
 - Carits 写入收口为排序加锁的平衡账本服务；数据库阻止 posted 交易追加分录，强制至少两条分录、总和为零和交易/账户聚合唯一。

@@ -27,6 +27,8 @@ export function serializeHackAttempt(attempt: any, includePrivate: boolean) {
     problemId: attempt.problemId,
     userId: attempt.userId,
     username: attempt.User?.username,
+    contributionOrganizationId: attempt.contributionOrganizationId ?? null,
+    contributionOrganizationName: attempt.ContributionOrganization?.name ?? null,
     status: attempt.status,
     inputMode: attempt.inputMode,
     generatorLanguage: attempt.generatorLanguage,

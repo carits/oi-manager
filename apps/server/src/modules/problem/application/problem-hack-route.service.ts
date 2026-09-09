@@ -365,6 +365,7 @@ async function requireVisibleProblem(user: JwtPayload, problemId: string) {
 
 const hackAttemptInclude = {
   User: { select: { username: true } },
+  ContributionOrganization: { select: { name: true } },
   Candidate: { select: { id: true, status: true } },
   BaseTestSetRevision: { select: { revisionNumber: true } },
   PromotedRevision: { select: { revisionNumber: true } },

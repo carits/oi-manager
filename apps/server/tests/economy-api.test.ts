@@ -64,9 +64,11 @@ describe('contribution economy HTTP permissions', () => {
 
     const personal = await userClient.get('/api/contributions/me/events?page=2&pageSize=2')
     expect(personal.status).toBe(200)
-    expect(personal.body.data).toMatchObject({ page: 2, pageSize: 2, total: 3, totalPages: 2 })
-    expect(personal.body.data.items).toHaveLength(1)
-    expect(acceptedIds).toContain(personal.body.data.items[0].id)
+    expect(personal.body.data).toMatchObject({ page: 2, pageSize: 2, total: 4, totalPages: 2 })
+    expect(personal.body.data.items).toHaveLength(2)
+    expect(personal.body.data.items.every((item: any) => acceptedIds.includes(item.id))).toBe(true)
+    const personalFirstPage = await userClient.get('/api/contributions/me/events?page=1&pageSize=2')
+    expect(personalFirstPage.body.data.items.some((item: any) => item.status === 'pending')).toBe(true)
 
     const audit = await platformClient.get('/api/platform/contributions?status=accepted&page=1&pageSize=2')
     expect(audit.status).toBe(200)

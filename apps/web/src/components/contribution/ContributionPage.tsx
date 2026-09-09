@@ -15,6 +15,12 @@ import {
   TableCell,
 } from "@/components/ui/TablePrimitives";
 import { apiClient } from "@/lib/apiClient";
+import {
+  contributionRewardPresentation,
+  contributionScoreLabel,
+  contributionStatusPresentation,
+  contributionTypeLabel,
+} from "./contribution-display";
 import styles from "./ContributionPage.module.css";
 
 type Summary = { eventCount: number; contributionScore: number; level: string };
@@ -23,7 +29,16 @@ type Event = {
   type: string;
   sourceType: string;
   score: number;
+  status: string;
+  occurredAt: string;
+  displayAt?: string;
   acceptedAt: string | null;
+  revokedAt?: string | null;
+  revokeReason?: string | null;
+  Attribution?: {
+    organizationId: string;
+    Organization?: { name: string } | null;
+  } | null;
   RewardDelivery?: { status: string; userCarits: string } | null;
 };
 type EventPage = {
@@ -33,33 +48,6 @@ type EventPage = {
   total?: number;
   totalPages?: number;
 };
-
-function rewardPresentation(delivery: Event["RewardDelivery"]) {
-  if (!delivery) return { label: "尚未创建奖励任务", variant: "neutral" as const };
-  const labels = {
-    pending: "奖励待结算",
-    deferred_budget: "受每日额度限制，已延后",
-    posted: `+${delivery.userCarits} C`,
-    reversing: "奖励冲正中",
-    reversed: "奖励已冲正",
-    cancelled: "奖励已取消",
-    failed: "结算失败，等待管理员处理",
-  } as const;
-  const variants = {
-    pending: "pending",
-    deferred_budget: "warning",
-    posted: "success",
-    reversing: "warning",
-    reversed: "error",
-    cancelled: "neutral",
-    failed: "error",
-  } as const;
-  const status = delivery.status as keyof typeof labels;
-  return {
-    label: labels[status] || `奖励状态：${delivery.status}`,
-    variant: variants[status] || ("neutral" as const),
-  };
-}
 
 export function ContributionPage() {
   const [summary, setSummary] = useState<Summary | null>(null),
@@ -153,6 +141,8 @@ export function ContributionPage() {
                 <TableRow>
                   <TableHeaderCell>时间</TableHeaderCell>
                   <TableHeaderCell>类型</TableHeaderCell>
+                  <TableHeaderCell>状态</TableHeaderCell>
+                  <TableHeaderCell>贡献归属</TableHeaderCell>
                   <TableHeaderCell>贡献值</TableHeaderCell>
                   <TableHeaderCell>Carits 奖励</TableHeaderCell>
                 </TableRow>
@@ -161,21 +151,26 @@ export function ContributionPage() {
                 {events.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      {item.acceptedAt
-                        ? new Date(item.acceptedAt).toLocaleString("zh-CN")
+                      {item.displayAt || item.acceptedAt || item.occurredAt
+                        ? new Date(item.displayAt || item.acceptedAt || item.occurredAt).toLocaleString("zh-CN")
                         : "时间待补录"}
                     </TableCell>
+                    <TableCell>{contributionTypeLabel(item.type)}</TableCell>
                     <TableCell>
-                      {item.type === "hack_promoted"
-                        ? "Hack 数据正式晋升"
-                        : "Candidate 正式晋升"}
+                      <span className={styles.statusCell}>
+                        <StatusBadge variant={contributionStatusPresentation(item.status).variant}>
+                          {contributionStatusPresentation(item.status).label}
+                        </StatusBadge>
+                        {item.revokeReason && <small>{item.revokeReason}</small>}
+                      </span>
                     </TableCell>
-                    <TableCell>+{item.score}</TableCell>
+                    <TableCell>{item.Attribution?.Organization?.name || "个人贡献"}</TableCell>
+                    <TableCell>{contributionScoreLabel(item.status, item.score)}</TableCell>
                     <TableCell>
                       <StatusBadge
-                        variant={rewardPresentation(item.RewardDelivery).variant}
+                        variant={contributionRewardPresentation(item.status, item.RewardDelivery).variant}
                       >
-                        {rewardPresentation(item.RewardDelivery).label}
+                        {contributionRewardPresentation(item.status, item.RewardDelivery).label}
                       </StatusBadge>
                     </TableCell>
                   </TableRow>
@@ -185,7 +180,7 @@ export function ContributionPage() {
           ) : loading ? (
             <p className={styles.empty}>正在加载贡献记录…</p>
           ) : eventsLoaded ? (
-            <p className={styles.empty}>暂无被正式测试集采用的贡献</p>
+            <p className={styles.empty}>暂无贡献记录</p>
           ) : (
             <p className={styles.empty}>贡献记录暂时无法显示，请重新加载。</p>
           )}

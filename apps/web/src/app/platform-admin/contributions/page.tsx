@@ -19,6 +19,13 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { apiClient } from "@/lib/apiClient";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  candidateSourceLabel,
+  contributionSourceLabel,
+  contributionStatusPresentation,
+  contributionTypeLabel,
+  selectionModeLabel,
+} from "@/components/contribution/contribution-display";
 import styles from "./page.module.css";
 
 type Event = {
@@ -40,7 +47,10 @@ type Event = {
     rewardCarits?: string;
   } | null;
   Actor: { username: string };
-  Attribution?: { organizationId: string } | null;
+  Attribution?: {
+    organizationId: string;
+    Organization?: { name: string } | null;
+  } | null;
   RewardDelivery?: {
     status: string;
     userCarits: string;
@@ -79,13 +89,6 @@ type EvidenceDetail = {
 };
 
 type ReviewAction = "accept" | "reject" | "revoke" | "retry";
-
-const contributionStatus: Record<string, string> = {
-  pending: "待审核",
-  accepted: "已接受",
-  rejected: "已拒绝",
-  revoked: "已撤销",
-};
 
 const rewardStatus: Record<string, string> = {
   pending: "等待结算",
@@ -346,7 +349,7 @@ export default function PlatformContributionPage() {
                     <TableCell>
                       {new Date(item.postedAt).toLocaleString("zh-CN")}
                     </TableCell>
-                    <TableCell>{item.type}</TableCell>
+                    <TableCell>{contributionTypeLabel(item.type)}</TableCell>
                     <TableCell>
                       {item.entries
                         .map(
@@ -400,10 +403,10 @@ export default function PlatformContributionPage() {
                   <TableCell>
                     <StatusBadge
                       variant={
-                        item.status === "accepted" ? "success" : "neutral"
+                        contributionStatusPresentation(item.status).variant
                       }
                     >
-                      {contributionStatus[item.status] || item.status}
+                      {contributionStatusPresentation(item.status).label}
                     </StatusBadge>
                     {item.RewardDelivery && (
                       <span className={styles.rewardState}>
@@ -513,11 +516,11 @@ export default function PlatformContributionPage() {
                 </div>
                 <div>
                   <dt>贡献类型</dt>
-                  <dd>{selected.type}</dd>
+                  <dd>{contributionTypeLabel(selected.type)}</dd>
                 </div>
                 <div>
                   <dt>来源记录</dt>
-                  <dd>{selected.sourceType} · {selected.sourceId}</dd>
+                  <dd>{contributionSourceLabel(selected.sourceType)} · {selected.sourceId}</dd>
                 </div>
                 <div>
                   <dt>题目</dt>
@@ -559,11 +562,11 @@ export default function PlatformContributionPage() {
                 </div>
                 <div>
                   <dt>候选来源</dt>
-                  <dd>{selected.evidence?.candidateSource || "—"}</dd>
+                  <dd>{candidateSourceLabel(selected.evidence?.candidateSource)}</dd>
                 </div>
                 <div>
                   <dt>选择方式</dt>
-                  <dd>{selected.evidence?.selectionMode || "—"}</dd>
+                  <dd>{selectionModeLabel(selected.evidence?.selectionMode)}</dd>
                 </div>
                 <div>
                   <dt>规则</dt>
@@ -575,7 +578,12 @@ export default function PlatformContributionPage() {
                 </div>
                 <div>
                   <dt>组织归因</dt>
-                  <dd>{selected.Attribution?.organizationId || "个人贡献"}</dd>
+                  <dd>
+                    {selected.Attribution?.Organization?.name || "个人贡献"}
+                    {selected.Attribution?.organizationId && (
+                      <small className={styles.identifier}>ID：{selected.Attribution.organizationId}</small>
+                    )}
+                  </dd>
                 </div>
               </dl>
               <div className={styles.rewardDetail}>

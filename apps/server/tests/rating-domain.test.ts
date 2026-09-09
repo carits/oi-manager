@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { calculateMultiElo } from '../src/modules/rating/domain/multi-elo'
 import { buildStanding } from '../src/modules/rating/domain/contest-scoring'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
-import { createTestSchoolWithPrincipal, createTestUser } from './helpers/testUser'
+import { createTestSchoolWithPrincipal, createTestTeam, createTestUser } from './helpers/testUser'
 import { generateTestToken } from './helpers/testToken'
 import { prisma } from '../src/prisma'
+import { lockRatingParticipantTx, processDueContestRatings } from '../src/modules/rating/application/contest-rating.service'
 
 const app = createTestApp()
 
@@ -99,9 +100,11 @@ describe('rating domain HTTP and persistence', () => {
     managerToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, role: manager.user.role, schoolId: school.id, teacherId: manager.teacherId })
   })
 
-  async function createFinishedContest() {
+  async function createFinishedContest(options: { title?: string; startHoursAgo?: number; endHoursAgo?: number } = {}) {
+    const startHoursAgo = options.startHoursAgo ?? 2
+    const endHoursAgo = options.endHoursAgo ?? 1
     const problem = await prisma.problem.create({ data: { id: crypto.randomUUID(), platform: 'carits', problemId: `RATING_${crypto.randomUUID()}`, title: 'Rating test', ownerId: manager.user.id, visibility: 'public', libraryScope: 'platform', libraryKey: 'platform', status: 'published', publishedAt: new Date() } })
-    const contest = await prisma.training.create({ data: { title: 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - 7200_000), endTime: new Date(Date.now() - 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
+    const contest = await prisma.training.create({ data: { title: options.title || 'Rated IOI contest', format: 'ioi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() - startHoursAgo * 3600_000), endTime: new Date(Date.now() - endHoursAgo * 3600_000), status: 'finished', finalizationStatus: 'JUDGING', createdBy: manager.user.id } })
     const trainingProblem = await prisma.trainingProblem.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, problemId: problem.id, alias: 'A', orderIndex: 0, points: 100 } })
     await prisma.trainingRatingConfig.create({ data: { id: crypto.randomUUID(), trainingId: contest.id, scope: 'ORGANIZATION', track: 'IOI', organizationMinParticipants: 2, globalMinParticipants: 2, scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'fixture', createdBy: manager.user.id } })
     for (const [index, user] of [first, second].entries()) {
@@ -138,6 +141,210 @@ describe('rating domain HTTP and persistence', () => {
     const frozen = await createAuthenticatedRequest(app, managerToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope: 'NONE', expectedRevision: 1 })
     expect(frozen.status).toBe(409)
     expect(frozen.body.code).toBe('RATING_CONFIG_FROZEN')
+  })
+
+  it('rejects GLOBAL and BOTH for an organization contest even when the actor is a platform administrator', async () => {
+    const platformAdmin = await createTestUser({ role: 'platform_admin' })
+    await prisma.organizationMembership.create({ data: {
+      id: crypto.randomUUID(), organizationId, userId: platformAdmin.user.id,
+      memberRole: 'teacher', relationType: 'employee', status: 'active', joinedAt: new Date(),
+    } })
+    const platformToken = generateTestToken({ userId: platformAdmin.user.id, username: platformAdmin.user.username, role: platformAdmin.user.role })
+    const future = await prisma.training.create({ data: { title: 'Organization-only rating contest', format: 'oi', type: 'contest', scope: 'campus', organizationId, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: platformAdmin.user.id } })
+
+    for (const scope of ['GLOBAL', 'BOTH']) {
+      const response = await createAuthenticatedRequest(app, platformToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope, expectedRevision: 0 })
+      expect(response.status).toBe(422)
+      expect(response.body.code).toBe('GLOBAL_RATING_CONTEST_SCOPE_INVALID')
+    }
+
+    const config = await createAuthenticatedRequest(app, platformToken).get(`/api/trainings/${future.id}/rating-config`)
+    expect(config.status, JSON.stringify(config.body)).toBe(200)
+    expect(config.body.data).toMatchObject({ context: 'organization', allowedScopes: ['NONE', 'ORGANIZATION'] })
+  })
+
+  it('allows only NONE for a personal-team contest', async () => {
+    const team = await createTestTeam({ schoolId: null, ownerId: manager.user.id, ownerType: 'teacher', scope: 'personal' })
+    const future = await prisma.training.create({ data: { title: 'Personal team contest', format: 'icpc', type: 'contest', scope: 'personal', teamId: team.id, startTime: new Date(Date.now() + 3600_000), endTime: new Date(Date.now() + 7200_000), status: 'upcoming', createdBy: manager.user.id } })
+    const personalToken = generateTestToken({ userId: manager.user.id, username: manager.user.username, role: manager.user.role })
+    const config = await createAuthenticatedRequest(app, personalToken).get(`/api/trainings/${future.id}/rating-config`)
+    expect(config.status, JSON.stringify(config.body)).toBe(200)
+    expect(config.body.data).toMatchObject({ context: 'personal_team', allowedScopes: ['NONE'] })
+
+    const response = await createAuthenticatedRequest(app, personalToken).put(`/api/trainings/${future.id}/rating-config`).send({ scope: 'ORGANIZATION', expectedRevision: 0 })
+    expect(response.status).toBe(422)
+    expect(response.body.code).toBe('TEAM_ACM_RATING_UNSUPPORTED')
+  })
+
+  it('requires and freezes an explicit organization snapshot for multi-organization BOTH participation', async () => {
+    const otherSchool = (await createTestSchoolWithPrincipal(`Rating secondary ${crypto.randomUUID()}`)).school
+    const otherOrganizationId = otherSchool.organizationId!
+    for (const user of [first, second]) {
+      await prisma.organizationMembership.create({ data: {
+        id: crypto.randomUUID(), organizationId: otherOrganizationId, userId: user.user.id,
+        memberRole: 'student', relationType: 'enrolled', status: 'active', joinedAt: new Date(),
+      } })
+    }
+    const contest = await prisma.training.create({ data: {
+      title: 'Platform BOTH contest', format: 'ioi', type: 'contest', scope: 'platform',
+      startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
+      status: 'ongoing', createdBy: manager.user.id,
+    } })
+    await prisma.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: contest.id, scope: 'BOTH', track: 'IOI',
+      scoringRules: { problemPolicy: 'BEST_SUBMISSION' }, rulesHash: 'both-fixture', createdBy: manager.user.id,
+    } })
+    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role })
+
+    const initial = await createAuthenticatedRequest(app, firstToken).get(`/api/trainings/${contest.id}/rating-participation`)
+    expect(initial.status).toBe(200)
+    expect(initial.body.data).toMatchObject({
+      scope: 'BOTH', context: 'platform', selectedOrganizationId: null,
+      requiresExplicitSelection: true, canChange: true, locked: false,
+    })
+    expect(initial.body.data.organizations.map((item: any) => item.id).sort()).toEqual([organizationId, otherOrganizationId].sort())
+
+    const invalid = await createAuthenticatedRequest(app, firstToken).put(`/api/trainings/${contest.id}/rating-participation`).send({ organizationId: crypto.randomUUID() })
+    expect(invalid.status).toBe(422)
+    expect(invalid.body.code).toBe('RATING_ORGANIZATION_INVALID')
+
+    const selected = await createAuthenticatedRequest(app, firstToken).put(`/api/trainings/${contest.id}/rating-participation`).send({ organizationId })
+    expect(selected.status).toBe(200)
+    expect(selected.body.data).toMatchObject({ selectedOrganizationId: organizationId, selectionPersisted: true, canChange: true })
+    const changed = await createAuthenticatedRequest(app, firstToken).put(`/api/trainings/${contest.id}/rating-participation`).send({ organizationId: otherOrganizationId })
+    expect(changed.status).toBe(200)
+    expect(changed.body.data.selectedOrganizationId).toBe(otherOrganizationId)
+
+    await prisma.$transaction(tx => lockRatingParticipantTx(tx, contest, first.user.id, new Date()))
+    const participant = await prisma.trainingParticipant.findFirstOrThrow({ where: { trainingId: contest.id, userId: first.user.id } })
+    expect(participant).toMatchObject({ organizationIdSnapshot: otherOrganizationId, ratingStatus: 'RATING_LOCKED' })
+    expect(participant.firstSubmissionAt).not.toBeNull()
+
+    const frozen = await createAuthenticatedRequest(app, firstToken).put(`/api/trainings/${contest.id}/rating-participation`).send({ organizationId })
+    expect(frozen.status).toBe(409)
+    expect(frozen.body.code).toBe('RATING_PARTICIPATION_FROZEN')
+
+    await expect(prisma.$transaction(tx => lockRatingParticipantTx(tx, contest, second.user.id, new Date())))
+      .rejects.toMatchObject({ code: 'RATING_ORGANIZATION_SELECTION_REQUIRED' })
+    expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: contest.id, userId: second.user.id } })).toBeNull()
+  })
+
+  it('allows GLOBAL participation without an organization and fixes organization contests automatically', async () => {
+    const globalContest = await prisma.training.create({ data: {
+      title: 'Platform GLOBAL contest', format: 'oi', type: 'contest', scope: 'platform',
+      startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
+      status: 'ongoing', createdBy: manager.user.id,
+    } })
+    await prisma.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: globalContest.id, scope: 'GLOBAL', track: 'OI',
+      scoringRules: { problemPolicy: 'LAST_SUBMISSION' }, rulesHash: 'global-fixture', createdBy: manager.user.id,
+    } })
+    await prisma.$transaction(tx => lockRatingParticipantTx(tx, globalContest, first.user.id, new Date()))
+    expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: globalContest.id, userId: first.user.id } }))
+      .toMatchObject({ organizationIdSnapshot: null, ratingStatus: 'RATING_LOCKED' })
+
+    const organizationContest = await prisma.training.create({ data: {
+      title: 'Fixed organization contest', format: 'oi', type: 'contest', scope: 'campus', organizationId,
+      startTime: new Date(Date.now() - 3600_000), endTime: new Date(Date.now() + 3600_000),
+      status: 'ongoing', createdBy: manager.user.id,
+    } })
+    await prisma.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: organizationContest.id, scope: 'ORGANIZATION', track: 'OI',
+      scoringRules: { problemPolicy: 'LAST_SUBMISSION' }, rulesHash: 'organization-fixture', createdBy: manager.user.id,
+    } })
+    await prisma.$transaction(tx => lockRatingParticipantTx(tx, organizationContest, second.user.id, new Date()))
+    expect(await prisma.trainingParticipant.findFirst({ where: { trainingId: organizationContest.id, userId: second.user.id } }))
+      .toMatchObject({ organizationIdSnapshot: organizationId, ratingStatus: 'RATING_LOCKED' })
+  })
+
+  it('keeps Rating history private to the authenticated user', async () => {
+    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role, schoolId: first.schoolId })
+    const own = await createAuthenticatedRequest(app, firstToken).get(`/api/ratings/users/${first.user.id}/history?track=OI`)
+    expect(own.status).toBe(200)
+
+    const other = await createAuthenticatedRequest(app, firstToken).get(`/api/ratings/users/${second.user.id}/history?track=OI`)
+    expect(other.status).toBe(403)
+    expect(other.body.code).toBe('RATING_HISTORY_ACCESS_DENIED')
+  })
+
+  it('returns competition ranks across ties and preserves full-pool rank when filtering', async () => {
+    const fourth = await createTestUser({ role: 'student', schoolId: (await prisma.school.findFirstOrThrow({ where: { organizationId } })).id })
+    const pool = await prisma.ratingPool.create({ data: { id: crypto.randomUUID(), scopeType: 'GLOBAL', organizationId: null, track: 'OI' } })
+    const rows = [
+      [manager.user.id, 1700],
+      [first.user.id, 1600],
+      [second.user.id, 1600],
+      [fourth.user.id, 1500],
+    ] as const
+    await prisma.ratingAccount.createMany({ data: rows.map(([userId, rating]) => ({ id: crypto.randomUUID(), poolId: pool.id, userId, rating, peakRating: rating })) })
+    const firstToken = generateTestToken({ userId: first.user.id, username: first.user.username, role: first.user.role, schoolId: first.schoolId })
+
+    const leaderboard = await createAuthenticatedRequest(app, firstToken).get('/api/ratings/global/OI')
+    expect(leaderboard.status).toBe(200)
+    expect(leaderboard.body.data.map((item: any) => item.rank)).toEqual([1, 2, 2, 4])
+
+    const filtered = await createAuthenticatedRequest(app, firstToken).get(`/api/ratings/global/OI?q=${encodeURIComponent(fourth.user.username)}`)
+    expect(filtered.status).toBe(200)
+    expect(filtered.body.data).toHaveLength(1)
+    expect(filtered.body.data[0]).toMatchObject({ userId: fourth.user.id, rank: 4 })
+  })
+
+  it('audits participant disposition and serializes it with finalization', async () => {
+    const contest = await createFinishedContest()
+    await prisma.trainingParticipant.createMany({ data: [first, second].map(user => ({
+      id: crypto.randomUUID(), trainingId: contest.id, userId: user.user.id, userType: 'student',
+      organizationIdSnapshot: organizationId, ratingStatus: 'RATING_LOCKED', firstSubmissionAt: new Date(), ratingLockedAt: new Date(),
+    })) })
+
+    const [disposition, finalization] = await Promise.all([
+      createAuthenticatedRequest(app, managerToken).patch(`/api/trainings/${contest.id}/rating-participants/${second.user.id}`).send({ disposition: 'EXCLUDE', reason: '竞赛纪律人工复核排除' }),
+      createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${contest.id}/finalize`),
+    ])
+    expect(finalization.status).toBe(200)
+    expect([200, 409]).toContain(disposition.status)
+
+    const participant = await prisma.trainingParticipant.findFirstOrThrow({ where: { trainingId: contest.id, userId: second.user.id } })
+    const audit = await prisma.organizationAuditLog.findFirst({ where: { organizationId, action: 'contest_rating_participant_disposition_updated', targetUserId: second.user.id } })
+    if (disposition.status === 200) {
+      expect(participant.ratingDisposition).toBe('EXCLUDE')
+      expect(audit).not.toBeNull()
+    } else {
+      expect(disposition.body.code).toBe('CONTEST_RATING_DISPOSITION_FROZEN')
+      expect(participant.ratingDisposition).toBe('NORMAL')
+      expect(audit).toBeNull()
+    }
+    expect((await prisma.training.findUniqueOrThrow({ where: { id: contest.id } })).finalizationStatus).toBe('FINALIZED')
+  })
+
+  it('automatically finalizes due rated contests and is idempotent', async () => {
+    const contest = await createFinishedContest({ title: 'Scheduler-rated contest' })
+    const firstRun = await processDueContestRatings()
+    expect(firstRun).toMatchObject({ scanned: 1, finalized: 1, waiting: 0, failed: 0 })
+    expect((await prisma.training.findUniqueOrThrow({ where: { id: contest.id } })).finalizationStatus).toBe('FINALIZED')
+    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(1)
+    expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id } })).toBe(1)
+
+    const secondRun = await processDueContestRatings()
+    expect(secondRun).toMatchObject({ scanned: 0, finalized: 0, waiting: 0, failed: 0 })
+    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: contest.id } })).toBe(1)
+    expect(await prisma.ratingBatch.count({ where: { trainingId: contest.id } })).toBe(1)
+  })
+
+  it('blocks a later contest until the earlier contest in the same pool is settled', async () => {
+    const earlier = await createFinishedContest({ title: 'Earlier rated contest', startHoursAgo: 5, endHoursAgo: 4 })
+    const later = await createFinishedContest({ title: 'Later rated contest', startHoursAgo: 3, endHoursAgo: 2 })
+
+    const blocked = await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`)
+    expect(blocked.status).toBe(409)
+    expect(blocked.body.code).toBe('EARLIER_RATED_CONTEST_PENDING')
+    expect(await prisma.contestStandingSnapshot.count({ where: { trainingId: later.id } })).toBe(0)
+
+    expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${earlier.id}/finalize`)).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, managerToken).post(`/api/trainings/${later.id}/finalize`)).status).toBe(200)
+    const batches = await prisma.ratingBatch.findMany({ where: { trainingId: { in: [earlier.id, later.id] } }, orderBy: { sequenceAt: 'asc' } })
+    expect(batches).toHaveLength(2)
+    expect(batches[0].trainingId).toBe(earlier.id)
+    expect(batches[1].trainingId).toBe(later.id)
   })
 
   it('creates a new standing and superseding batch when a finalized contest is rebuilt', async () => {

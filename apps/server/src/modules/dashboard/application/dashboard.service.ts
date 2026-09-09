@@ -12,7 +12,7 @@ export interface DashboardActor {
   organizationId?: string | null
 }
 
-function formatTraining(training: any, source: 'team' | 'school') {
+function formatTraining(training: any, source: 'team' | 'school' | 'platform') {
   return {
     id: training.id,
     title: training.title,
@@ -55,7 +55,7 @@ export async function listMyHomeworks(actor: DashboardActor) {
 
 export async function listMyContests(actor: DashboardActor) {
   const teamIds = await currentTeamIds(actor)
-  const [teamTrainings, schoolTrainings] = await Promise.all([
+  const [teamTrainings, schoolTrainings, platformTrainings] = await Promise.all([
     teamIds.length > 0
       ? prisma.training.findMany({
           where: { teamId: { in: teamIds }, type: 'contest', scope: actor.resourceScope },
@@ -70,10 +70,18 @@ export async function listMyContests(actor: DashboardActor) {
           include: { _count: { select: { TrainingProblem: true } } },
         })
       : [],
+    actor.resourceScope === 'personal'
+      ? prisma.training.findMany({
+          where: { teamId: null, organizationId: null, type: 'contest', scope: 'platform' },
+          orderBy: { startTime: 'desc' },
+          include: { _count: { select: { TrainingProblem: true } } },
+        })
+      : [],
   ])
   return sortTrainingListForDisplay([
     ...teamTrainings.map(training => formatTraining(training, 'team')),
     ...schoolTrainings.map(training => formatTraining(training, 'school')),
+    ...platformTrainings.map(training => formatTraining(training, 'platform')),
   ])
 }
 
@@ -96,14 +104,18 @@ export async function getMyPersonalOverview(actor: DashboardActor) {
       orderBy: { joinedAt: 'desc' },
       take: 5,
     }),
-    teamIds.length > 0
-      ? prisma.training.findMany({
-          where: { teamId: { in: teamIds }, scope: 'personal', type: 'contest' },
-          select: { id: true, title: true, startTime: true, endTime: true, status: true, teamId: true },
-          orderBy: { startTime: 'desc' },
-          take: 5,
-        })
-      : [],
+    prisma.training.findMany({
+      where: {
+        type: 'contest',
+        OR: [
+          ...(teamIds.length ? [{ teamId: { in: teamIds }, scope: 'personal' }] : []),
+          { teamId: null, organizationId: null, scope: 'platform' },
+        ],
+      },
+      select: { id: true, title: true, startTime: true, endTime: true, status: true, teamId: true, scope: true },
+      orderBy: { startTime: 'desc' },
+      take: 5,
+    }),
     prisma.submission.findMany({
       where: { userId: actor.userId, workspaceScope: 'personal' },
       select: {

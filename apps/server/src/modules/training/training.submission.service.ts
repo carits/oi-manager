@@ -30,9 +30,13 @@ export interface QueuedTrainingSubmissionInput {
 
 // Normal and development submissions use one local judge queue path.
 export async function createQueuedTrainingSubmission(input: QueuedTrainingSubmissionInput) {
+  // Platform contests are account-level participation. Keep their submissions
+  // visible in the personal account history while the Training itself retains
+  // the explicit `platform` ownership scope.
+  const workspaceScope = input.training.scope === 'platform' ? 'personal' : input.training.scope
   const submission = await createQueuedSubmissionWithRun({
       userId: input.userId,
-      workspaceScope: input.training.scope,
+      workspaceScope,
       organizationId: input.training.scope === 'campus'
         ? input.training.organizationId || input.training.Team?.organizationId || null
         : null,

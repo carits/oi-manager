@@ -5,7 +5,9 @@ export interface PlatformLanguage {
 
 export interface TrainingInfo {
   id: string
-  teamId: string
+  teamId: string | null
+  organizationId?: string | null
+  scope?: string
   title: string
   description: string | null
   type: 'training' | 'contest' | 'homework'

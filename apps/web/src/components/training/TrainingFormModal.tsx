@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { FormDialog } from '@/components/ui/Dialogs'
 import { OJ_PLATFORMS_NO_ALL } from '@/lib/oj-platforms'
+import { useAuth } from '@/components/AuthProvider'
 
 function toLocalDatetimeString(date: Date): string {
   const y = date.getFullYear()
@@ -72,6 +73,7 @@ let tempIdCounter = 0
 
 export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizationId, trainingId, onSaved, mode = 'training' }: TrainingFormModalProps) {
   const toast = useToast()
+  const { user } = useAuth()
   const isEdit = !!trainingId
 
   // Form state
@@ -89,6 +91,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [globalRatingMinimum, setGlobalRatingMinimum] = useState('20')
   const [ratingRevision, setRatingRevision] = useState(0)
   const [ratingLocked, setRatingLocked] = useState(false)
+  const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
   const [originalStartTimeStr, setOriginalStartTimeStr] = useState<string>('')
 
@@ -132,6 +135,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
               setGlobalRatingMinimum(String(config.globalMinParticipants ?? 20))
               setRatingRevision(config.revision ?? 0)
               setRatingLocked(Boolean(config.lockedAt) || config.editable === false)
+              if (Array.isArray(config.allowedScopes)) setAllowedRatingScopes(config.allowedScopes)
             }
           }
 
@@ -213,6 +217,19 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       setEndTime(toLocalDatetimeString(end))
     }
   }, [isOpen, trainingId])
+
+  useEffect(() => {
+    if (!isOpen || isEdit || mode !== 'contest') return
+    if (teamId && format === 'icpc') setAllowedRatingScopes(['NONE'])
+    else if (organizationId) setAllowedRatingScopes(['NONE', 'ORGANIZATION'])
+    else if (teamId) setAllowedRatingScopes(['NONE'])
+    else if (user && ['super_admin', 'platform_admin'].includes(user.role)) setAllowedRatingScopes(['NONE', 'GLOBAL', 'BOTH'])
+    else setAllowedRatingScopes(['NONE'])
+  }, [isOpen, isEdit, mode, organizationId, teamId, user, format])
+
+  useEffect(() => {
+    if (!allowedRatingScopes.includes(ratingScope)) setRatingScope('NONE')
+  }, [allowedRatingScopes, ratingScope])
 
   // Clean up timers on unmount
   useEffect(() => {
@@ -463,7 +480,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       } else {
         const createUrl = organizationId
           ? '/api/organizations/' + organizationId + '/members/activities/contests'
-          : '/api/teams/' + teamId + '/trainings'
+          : teamId
+            ? '/api/teams/' + teamId + '/trainings'
+            : '/api/platform-contests'
         const res = await apiClient.post(createUrl, {
           title, description, format, type: mode,
           startTime: new Date(startTime).toISOString(),
@@ -478,12 +497,16 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         const newTrainingId = (res.data as any).id
 
         if (mode === 'contest') {
+          const currentConfig = await apiClient.get(`/api/trainings/${newTrainingId}/rating-config`)
+          if (!currentConfig.success || !currentConfig.data) {
+            throw new Error(currentConfig.message || '比赛已创建，但无法读取 Rating 配置')
+          }
           const ratingRes = await apiClient.put(`/api/trainings/${newTrainingId}/rating-config`, {
             scope: ratingScope,
             weight: Number(ratingWeight),
             organizationMinParticipants: Number(organizationRatingMinimum),
             globalMinParticipants: Number(globalRatingMinimum),
-            expectedRevision: 0,
+            expectedRevision: Number((currentConfig.data as { revision?: number }).revision ?? 0),
           })
           if (!ratingRes.success) throw new Error(ratingRes.message || '比赛已创建，但 Rating 配置保存失败，请立即进入编辑页面确认')
         }
@@ -512,7 +535,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           }
         }
 
-        toast.success(schoolId ? '比赛创建成功' : '训练创建成功')
+        toast.success(mode === 'contest' ? '比赛创建成功' : schoolId ? '作业创建成功' : '训练创建成功')
       }
 
       onClose()
@@ -560,12 +583,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 <div>
                   <label className={unifiedStyles.u5}>Rating 范围</label>
                   <Select aria-label="Rating 范围" value={ratingScope} disabled={ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)} style={inputStyle}>
-                    <option value="NONE">不计 Rating</option>
-                    <option value="ORGANIZATION">组织 Rating</option>
-                    <option value="GLOBAL">全局 Rating（平台权限）</option>
-                    <option value="BOTH">全局 + 组织（平台权限）</option>
+                    {allowedRatingScopes.includes('NONE') && <option value="NONE">不计 Rating</option>}
+                    {allowedRatingScopes.includes('ORGANIZATION') && <option value="ORGANIZATION">组织 Rating</option>}
+                    {allowedRatingScopes.includes('GLOBAL') && <option value="GLOBAL">全局 Rating</option>}
+                    {allowedRatingScopes.includes('BOTH') && <option value="BOTH">全局 + 组织</option>}
                   </Select>
-                  <small>{ratingLocked ? '比赛已经开始，Rating 规则已永久冻结。' : `Track 自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
+                  <small>{ratingLocked
+                    ? '比赛已经开始，Rating 规则已永久冻结。'
+                    : `${teamId && format === 'icpc' ? '团队 ACM 赛 V1 不计个人 Rating。' : organizationId ? '组织比赛只能影响本组织 Rating。' : teamId ? '个人团队赛 V1 不计个人 Rating。' : ''} Track 自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
                 </div>
                 <div>
                   <label className={unifiedStyles.u5}>Rating 权重</label>

@@ -97,7 +97,7 @@ export async function isOrganizationMember(userId: string, organizationId: strin
   }))
 }
 
-/** 训练访问模式：team 或 organization */
+/** 训练访问模式：team、organization 或平台公开活动。 */
 export type TrainingListStatus = 'ongoing' | 'upcoming' | 'finished' | string
 
 export interface TrainingListSortItem {
@@ -156,25 +156,28 @@ export function sortTrainingListForDisplay<T extends TrainingListSortItem>(items
   })
 }
 
-export type TrainingAccessMode = 'team' | 'organization' | null
+export type TrainingAccessMode = 'team' | 'organization' | 'platform' | null
 
 /** 判断训练的访问模式（基于 teamId/organizationId） */
-export function getTrainingAccessMode(training: { teamId: string | null; organizationId: string | null }): TrainingAccessMode {
+export function getTrainingAccessMode(training: { teamId: string | null; organizationId: string | null; scope?: string }): TrainingAccessMode {
   if (training.teamId) return 'team'
   if (training.organizationId) return 'organization'
+  if (training.scope === 'platform') return 'platform'
   return null
 }
 
 /** 检查用户是否有权限访问训练（统一入口） */
 export async function canAccessTraining(
   userId: string,
-  training: { teamId: string | null; organizationId: string | null },
+  training: { teamId: string | null; organizationId: string | null; scope?: string },
 ): Promise<boolean> {
   const mode = getTrainingAccessMode(training)
   if (mode === 'team') {
     return isTeamMember(userId, training.teamId!)
   } else if (mode === 'organization') {
     return isOrganizationMember(userId, training.organizationId!)
+  } else if (mode === 'platform') {
+    return Boolean(await prisma.user.findFirst({ where: { id: userId, status: 'active' }, select: { id: true } }))
   }
   return false // 无归属的训练拒绝访问
 }
@@ -182,13 +185,16 @@ export async function canAccessTraining(
 /** 检查用户是否有权限管理训练（统一入口） */
 export async function canManageTraining(
   userId: string,
-  training: { teamId: string | null; organizationId: string | null; createdBy: string },
+  training: { teamId: string | null; organizationId: string | null; createdBy: string; scope?: string },
 ): Promise<boolean> {
   const mode = getTrainingAccessMode(training)
   if (mode === 'team') {
     return isTeamAdmin(userId, training.teamId!)
   } else if (mode === 'organization') {
     return isOrganizationContestAdmin(userId, training.organizationId!, training.createdBy)
+  } else if (mode === 'platform') {
+    const user = await prisma.user.findFirst({ where: { id: userId, status: 'active' }, select: { role: true } })
+    return Boolean(user && ['super_admin', 'platform_admin'].includes(user.role))
   }
   return false
 }
@@ -245,7 +251,7 @@ export function parseTrainingId(raw: string): number {
 
 /** 检查训练是否已开始（非管理员在 upcoming 时拒绝访问） */
 export async function requireTrainingStarted(
-  training: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; organizationId: string | null; createdBy: string },
+  training: { id: number; status: string; startTime: Date; endTime: Date; teamId: string | null; organizationId: string | null; createdBy: string; scope?: string },
   userId: string,
 ): Promise<string | null> {
   let status = training.status
@@ -263,6 +269,8 @@ export async function requireTrainingStarted(
     if (await isTeamAdmin(userId, training.teamId)) return null
   } else if (mode === 'organization' && training.organizationId) {
     if (await isOrganizationContestAdmin(userId, training.organizationId, training.createdBy)) return null
+  } else if (mode === 'platform') {
+    if (await canManageTraining(userId, training)) return null
   }
   return '训练尚未开始'
 }

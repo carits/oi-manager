@@ -9,10 +9,12 @@ import type { AuthRequest } from '../../middleware/auth'
 import { parseTrainingId } from './training.helpers'
 import {
   createMakeupHomework,
+  createPlatformContest,
   createTeamTraining,
   deleteTraining,
   finishTraining,
   getTrainingDetail,
+  listPlatformContests,
   listTeamTrainings,
   startTraining,
   TrainingCrudError,
@@ -30,6 +32,23 @@ function sendTrainingError(error: unknown, res: any) {
     message: error.message,
   })
 }
+
+trainingCrudRouter.get('/platform-contests', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    return res.json({ success: true, data: await listPlatformContests(req.user!.userId) })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
+}, '查询平台比赛失败'))
+
+trainingCrudRouter.post('/platform-contests', authenticate, asyncHandler(async (req: AuthRequest, res) => {
+  try {
+    const data = await createPlatformContest({ user: req.user!, input: req.body })
+    return res.status(201).json({ success: true, data })
+  } catch (error) {
+    return sendTrainingError(error, res)
+  }
+}, '创建平台比赛失败'))
 
 trainingCrudRouter.get('/teams/:teamId/trainings', authenticate, asyncHandler(async (req: AuthRequest, res) => {
   try {

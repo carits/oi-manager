@@ -81,9 +81,15 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   const isTeamScopedPath = pathname.includes('/teams/') || pathname.includes('/team/')
   const teamId = teamIdOverride || (isTeamScopedPath ? (params.id as string) : undefined)
   const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
+  const platformBasePath = pathname.startsWith('/admin/') ? '/admin' as const : '/platform-admin' as const
   const navigationContext = {
-    workspace: pathname.startsWith('/personal/') ? 'personal' as const : 'organization' as const,
+    workspace: pathname.startsWith('/personal/')
+      ? 'personal' as const
+      : pathname.startsWith('/platform-admin/') || pathname.startsWith('/admin/')
+        ? 'platform' as const
+        : 'organization' as const,
     organizationId,
+    platformBasePath,
     role: user?.organizationRole || 'teacher',
   }
 
@@ -321,7 +327,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           <PageHeader
             title={training.title}
             breadcrumbs={[{ label: tl, href: backUrl }, { label: training.title }]}
-            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面选择</Button>}{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
+            actions={<div className={styles.actions}><span className={styles.countdown}>{timeDisplay}</span>{training.isAdmin && <Button variant="outline" icon={<BookOpenCheck size={16} />} onClick={() => router.push(`${pathname.replace(/\/$/, '')}/statements`)}>题面选择</Button>}{training.isAdmin && <Button variant="outline" icon={<RotateCcw size={16} />} onClick={() => setShowRejudgeModal(true)}>重测</Button>}{training.isAdmin && training.status === 'finished' && training.organizationId && <Button variant="outline" icon={<FilePlus2 size={16} />} onClick={() => { setMakeupTitle(`${training.title} - 补题练习`); setMakeupStartTime(new Date().toISOString().slice(0, 16)); setMakeupEndTime(new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 16)); setShowMakeupModal(true) }}>创建补题作业</Button>}{training.isAdmin && <Button variant="secondary" icon={<Edit3 size={16} />} onClick={() => actions.setShowEditModal(true)}>编辑</Button>}{training.isAdmin && <Button variant="danger" icon={<Trash2 size={16} />} onClick={() => actions.setShowDeleteConfirm(true)}>删除</Button>}</div>}
           />
           <div className={styles.stats}>
             <div className={styles.stat}><span className={styles.statLabel}>赛制</span><span className={styles.statValue}>{fmtLabel}</span></div>
@@ -557,10 +563,10 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
         isOpen={sub.detailSubmissionId !== null}
         onClose={() => sub.setDetailSubmissionId(null)}
         submissionId={sub.detailSubmissionId}
-        viewRole={basePath.startsWith('/personal') ? 'student' : basePath.startsWith('/platform-admin') ? 'admin' : 'teacher'}
+        viewRole={basePath.startsWith('/personal') ? 'student' : basePath.startsWith('/platform-admin') || basePath.startsWith('/admin') ? 'admin' : 'teacher'}
         trainingId={parseInt(trainingId)}
         trainingFormat={training.format}
-        submissionPathPrefix={pathname.match(/^\/(?:org\/[^/]+|personal|platform-admin)/)?.[0] || (basePath.startsWith('/personal') ? '/personal' : basePath.startsWith('/platform-admin') ? '/platform-admin' : undefined)}
+        submissionPathPrefix={pathname.match(/^\/(?:org\/[^/]+|personal|platform-admin|admin)/)?.[0] || (basePath.startsWith('/personal') ? '/personal' : basePath.startsWith('/platform-admin') ? '/platform-admin' : basePath.startsWith('/admin') ? '/admin' : undefined)}
       />
 
       {/* Submit Code Modal */}

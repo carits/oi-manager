@@ -13,6 +13,7 @@
 .ok { display: inline-flex; color: var(--success-text); }
 .bad { display: inline-flex; color: var(--error-text); }
 .pending { display: inline-flex; color: var(--warning-text); }
+.neutral { display: inline-flex; color: var(--text-muted); }
 .blocked { display: flex; align-items: flex-start; gap: 14px; padding: 20px; border: 1px solid var(--error-light); border-left: 4px solid var(--error); border-radius: 10px; background: color-mix(in srgb, var(--error-light) 55%, white); color: var(--error-text); }
 .blocked h3 { margin: 0 0 7px; color: var(--gray-900); font-size: 17px; }
 .blocked p { margin: 4px 0; line-height: 1.6; }
@@ -55,6 +56,7 @@
 .task { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--gray-200); border-radius: 10px; background: white; }
 .taskHeader { display: flex; justify-content: space-between; gap: 14px; color: var(--gray-500); font-size: 12px; }
 .taskHeader strong { color: var(--gray-900); font-size: 14px; }
+.taskMeta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-muted); font-size: 12px; }
 .taskStage { display: flex; align-items: center; gap: 8px; color: var(--gray-600); font-size: 13px; }
 .timeline { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .timeline li { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 999px; background: var(--gray-50); color: var(--gray-400); font-size: 11px; }
@@ -62,7 +64,7 @@
 .timelineCurrent { background: var(--primary-light) !important; color: var(--primary) !important; font-weight: 700; }
 .timelineFailed { background: var(--error-light) !important; color: var(--error-text) !important; font-weight: 700; }
 .caseList { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--gray-100); }
-.caseItem { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(150px, 1fr) auto auto; gap: 10px; align-items: center; color: var(--gray-600); font-size: 12px; }
+.caseItem { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(150px, 1fr) auto minmax(160px, auto); gap: 10px; align-items: center; color: var(--gray-600); font-size: 12px; }
 .caseItem > span:first-child { color: var(--gray-900); font-weight: 600; }
 .caseMessage { grid-column: 1 / -1; color: var(--error-text); }
 .historyTitle { margin: 0 0 12px; font-size: 16px; }
@@ -71,10 +73,13 @@
 .table th, .table td { padding: 11px 12px; border-bottom: 1px solid var(--gray-200); text-align: left; white-space: nowrap; }
 .table th { background: var(--gray-50); color: var(--gray-600); font-weight: 600; }
 .status { display: inline-flex; border-radius: 999px; padding: 3px 8px; background: var(--gray-100); font-weight: 600; }
+.lifecycle { display: grid; justify-items: start; gap: 5px; }
+.lifecycle small { white-space: normal; line-height: 1.35; }
 .accepted { background: var(--success-light); color: var(--success-text); }
 .rejected { background: var(--warning-light); color: var(--warning-text); }
 .error { background: var(--error-light); color: var(--error-text); }
 .empty { padding: 26px; text-align: center; color: var(--gray-500); }
+.loadError { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--space-3); padding: 20px; border: 1px solid var(--error-light); border-radius: var(--radius-md); background: var(--error-light); color: var(--error-text); }
 .retry { border: 1px solid var(--gray-300); background: white; border-radius: 7px; padding: 5px 8px; cursor: pointer; }
 .retry:disabled { opacity: .55; cursor: wait; }
 .actions { display: flex; gap: 6px; }

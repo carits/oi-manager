@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 source_of_truth: apps/server/src/modules/contribution, apps/server/src/modules/carits, apps/server/src/modules/problem/problem.evaluation-budget.service.ts, apps/server/prisma/schema.prisma
 ---
 
@@ -35,7 +35,10 @@ Candidate/Hack 正式晋升
 | 普通数据或 Generator Candidate | 100 | 20 C |
 | Hack Candidate | 150 | 30 C |
 
-每个 Candidate 以 `candidateId + ruleVersion` 去重，命中多个 Subtask 也只产生一条事件。自动选择直接进入
+每个 Candidate 以稳定的 `candidateId + promoted` 事实键去重，命中多个 Subtask 或后续奖励规则升级也只产生
+一条事件。事件把当时的 `ruleCode/ruleVersion`、分值、奖励金额和正式 Revision 证据固化；Worker 重放必须
+使用事件中的奖励快照，不能按新规则重新计价。Candidate 记录的 `promotedRevisionId` 与调用证据不一致时
+直接拒绝。自动选择直接进入
 `accepted`；题目管理者紧急发布只创建 `pending` 事件，必须由超级管理员审核。
 超级管理员和平台管理员的管理性操作不获得个人奖励。
 

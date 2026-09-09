@@ -34,6 +34,20 @@ function parseDate(value: unknown, field: string) {
   return parsed
 }
 
+function defaultRatingConfigData(trainingId: number, format: string, createdBy: string) {
+  const track = trackForFormat(format)
+  const scoringRules = defaultScoringRules(track)
+  return {
+    id: crypto.randomUUID(),
+    trainingId,
+    scope: 'NONE' as const,
+    track,
+    scoringRules,
+    rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
+    createdBy,
+  }
+}
+
 export async function listTeamTrainings(params: {
   teamId: string
   user: any
@@ -108,8 +122,9 @@ export async function createTeamTraining(params: {
   if (end <= start) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
   if (start <= new Date()) fail(400, 'START_TIME_IN_PAST', '开始时间不能早于当前时间')
 
-  const training = await prisma.training.create({
-    data: {
+  const activityType = type || 'training'
+  const training = await prisma.$transaction(async tx => {
+    const row = await tx.training.create({ data: {
       teamId: params.teamId,
       organizationId: null,
       scope: team.scope,
@@ -123,14 +138,93 @@ export async function createTeamTraining(params: {
       problemIdVisible: problemIdVisible ?? false,
       solutionVisible: solutionVisible ?? false,
       includeAdminInRanking: includeAdminInRanking ?? false,
-      type: type || 'training',
+      type: activityType,
       updatedAt: new Date(),
-    },
+    } })
+    if (activityType === 'contest') {
+      await tx.trainingRatingConfig.create({ data: defaultRatingConfigData(row.id, row.format, params.user.userId) })
+    }
+    return row
   })
   logger.info('training_created', {
     action: 'trainings', metadata: { trainingId: training.id, teamId: params.teamId },
   })
   return training
+}
+
+export async function listPlatformContests(userId: string) {
+  const user = await prisma.user.findFirst({ where: { id: userId, status: 'active' }, select: { id: true } })
+  if (!user) fail(403, 'PLATFORM_CONTEST_ACCESS_DENIED', '账号不可用')
+  const contests = await prisma.training.findMany({
+    where: { type: 'contest', scope: 'platform', teamId: null, organizationId: null },
+    include: {
+      RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
+      _count: { select: { TrainingProblem: true, TrainingParticipant: true } },
+    },
+    orderBy: [{ startTime: 'desc' }, { id: 'desc' }],
+  })
+  const now = new Date()
+  return sortTrainingListForDisplay(contests.map(contest => ({
+    id: contest.id,
+    title: contest.title,
+    description: contest.description,
+    format: contest.format,
+    startTime: contest.startTime.toISOString(),
+    endTime: contest.endTime.toISOString(),
+    status: getComputedTrainingStatus(contest, now),
+    createdBy: contest.createdBy,
+    type: contest.type,
+    scope: contest.scope,
+    problemCount: contest._count.TrainingProblem,
+    participantCount: contest._count.TrainingParticipant,
+    ratingConfig: contest.RatingConfig,
+    createdAt: contest.createdAt.toISOString(),
+  })))
+}
+
+export async function createPlatformContest(params: { user: any; input: any }) {
+  if (!['super_admin', 'platform_admin'].includes(params.user.role)) {
+    fail(403, 'PLATFORM_CONTEST_MANAGE_DENIED', '只有平台管理员可以创建平台比赛')
+  }
+  const title = typeof params.input.title === 'string' ? params.input.title.trim() : ''
+  const format = typeof params.input.format === 'string' ? params.input.format.toLowerCase() : 'ioi'
+  if (!['oi', 'ioi', 'icpc'].includes(format)) fail(400, 'TRAINING_FORMAT_INVALID', '比赛赛制无效')
+  if (!title || !params.input.startTime || !params.input.endTime) {
+    fail(400, 'TRAINING_FIELDS_REQUIRED', '标题、开始时间、结束时间为必填')
+  }
+  const startTime = parseDate(params.input.startTime, '开始时间')
+  const endTime = parseDate(params.input.endTime, '结束时间')
+  if (endTime <= startTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
+  if (startTime <= new Date()) fail(400, 'START_TIME_IN_PAST', '开始时间不能早于当前时间')
+
+  const contest = await prisma.$transaction(async tx => {
+    const row = await tx.training.create({ data: {
+      teamId: null,
+      organizationId: null,
+      scope: 'platform',
+      title,
+      description: typeof params.input.description === 'string' ? params.input.description.trim() || null : null,
+      format,
+      startTime,
+      endTime,
+      status: 'upcoming',
+      createdBy: params.user.userId,
+      problemIdVisible: params.input.problemIdVisible ?? false,
+      solutionVisible: params.input.solutionVisible ?? false,
+      includeAdminInRanking: params.input.includeAdminInRanking ?? false,
+      type: 'contest',
+      updatedAt: new Date(),
+    } })
+    await tx.trainingRatingConfig.create({ data: defaultRatingConfigData(row.id, row.format, params.user.userId) })
+    await tx.platformAuditLog.create({ data: {
+      id: crypto.randomUUID(), actorUserId: params.user.userId,
+      action: 'platform_contest_created', targetType: 'training', targetId: String(row.id),
+      metadata: { format: row.format, startTime: row.startTime, endTime: row.endTime },
+    } })
+    return row
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  logger.info('platform_contest_created', { action: 'trainings', metadata: { trainingId: contest.id } })
+  return contest
 }
 
 export async function synchronizeTrainingStatus(training: any, now: Date) {

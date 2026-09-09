@@ -6,4 +6,6 @@
 .loadError { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); color: var(--error-text); border: 1px solid color-mix(in srgb, var(--error) 22%, var(--border)); border-radius: var(--radius-md); background: var(--error-light); }
 .tableWrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
 .empty { padding: var(--space-6); color: var(--text-muted); text-align: center; }
+.statusCell { display: grid; gap: var(--space-1); justify-items: start; min-width: 0; }
+.statusCell small { max-width: 280px; overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .summary { grid-template-columns: 1fr; } .loadError { align-items: stretch; flex-direction: column; } }

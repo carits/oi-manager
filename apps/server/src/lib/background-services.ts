@@ -151,6 +151,32 @@ export function startEvaluationReservationReconciler(intervalMs = 30_000): () =>
   }
 }
 
+export function startContestRatingScheduler(intervalMs = 10_000): () => Promise<void> {
+  let stopped = false, running = false
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const { processDueContestRatings } = await import('../modules/rating/application/contest-rating.service')
+      const result = await processDueContestRatings()
+      if (result.finalized || result.failed) logger.info('contest_rating_scheduler_tick', { action: 'rating', metadata: result })
+    } catch (error) { logger.error('contest_rating_scheduler_failed', error, { action: 'rating' }) }
+    finally { running = false }
+  }
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
+  timer.unref(); run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
+}
+
 export function startSchedulerServices(): BackgroundServicesHandle {
   const stopCronTasks = startCronTasks()
   const stopAutoVerify = startAutoVerifyScheduler()
@@ -159,6 +185,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
   const stopAssignments = startAssignmentScheduler()
   const stopContributionRewards = startContributionRewardScheduler()
   const stopEvaluationReservations = startEvaluationReservationReconciler()
+  const stopContestRatings = startContestRatingScheduler()
   logger.info('scheduler_services_started', { action: 'background_scheduler' })
 
   let stopped = false
@@ -172,6 +199,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
         stopAssignments(),
         stopContributionRewards(),
         stopEvaluationReservations(),
+        stopContestRatings(),
       ])
       stopAutoVerify()
       stopCronTasks()

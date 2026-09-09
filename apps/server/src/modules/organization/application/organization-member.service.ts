@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { calculateGrade, getAllGrades } from '@oi-manager/shared/utils/grade'
 import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
+import { defaultScoringRules, trackForFormat } from '../../rating/application/contest-rating.service'
 
 export class OrganizationMemberError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -130,12 +131,23 @@ export async function createOrganizationContest(actor: OrganizationActor, body: 
   if (!title || Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime()) || endTime <= startTime) {
     badRequest('请填写有效的比赛名称和时间范围')
   }
-  return prisma.training.create({ data: {
-    title, description: typeof body.description === 'string' ? body.description.trim() || null : null,
-    format, type: 'contest', scope: 'campus', organizationId: actor.organizationId, startTime, endTime,
-    createdBy: actor.userId, problemIdVisible: Boolean(body.problemIdVisible), solutionVisible: Boolean(body.solutionVisible),
-    includeAdminInRanking: Boolean(body.includeAdminInRanking), status: activityStatus(startTime, endTime),
-  } })
+  return prisma.$transaction(async tx => {
+    const contest = await tx.training.create({ data: {
+      title, description: typeof body.description === 'string' ? body.description.trim() || null : null,
+      format, type: 'contest', scope: 'campus', organizationId: actor.organizationId, startTime, endTime,
+      createdBy: actor.userId, problemIdVisible: Boolean(body.problemIdVisible), solutionVisible: Boolean(body.solutionVisible),
+      includeAdminInRanking: Boolean(body.includeAdminInRanking), status: activityStatus(startTime, endTime),
+    } })
+    const track = trackForFormat(format)
+    const scoringRules = defaultScoringRules(track)
+    await tx.trainingRatingConfig.create({ data: {
+      id: crypto.randomUUID(), trainingId: contest.id, scope: 'NONE', track,
+      scoringRules,
+      rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
+      createdBy: actor.userId,
+    } })
+    return contest
+  })
 }
 
 export async function listOrganizationStudents(actor: OrganizationActor, query: any, page: number, pageSize: number) {

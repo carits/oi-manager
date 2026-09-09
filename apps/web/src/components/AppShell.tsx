@@ -33,6 +33,7 @@ const labelIcons: Record<string, LucideIcon> = {
   '组织': School,
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
   '题库管理': Library, '排名': Activity, '评测记录': BookOpen, 'OJ账号': Link2, '平台绑定': Link2,
+  '贡献': Activity, '钱包': WalletCards, '贡献审计': ShieldCheck,
   'AI Token': WalletCards,
   '私信举报': ShieldCheck,
 

@@ -22,4 +22,5 @@
 .evidenceAction code { overflow-wrap: anywhere; }
 .detailBody { display: grid; gap: var(--space-3); }
 .detailJson { max-height: min(62vh, 680px); margin: 0; overflow: auto; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-muted); color: var(--text-primary); font: 12px/1.55 var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
+.identifier { display: block; margin-top: var(--space-1); color: var(--text-muted); overflow-wrap: anywhere; }
 @media (max-width: 720px) { .summaryGrid, .evidence dl { grid-template-columns: 1fr; } .loadError { align-items: stretch; flex-direction: column; } .rewardState { display: flex; margin: var(--space-2) 0 0; } }

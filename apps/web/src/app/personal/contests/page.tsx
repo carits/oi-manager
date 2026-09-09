@@ -77,7 +77,7 @@ export default function PersonalContestsPage() {
 
   return (
     <PageFrame>
-      <PageHeader title="比赛" description="仅显示个人团队范围内的比赛。" />
+      <PageHeader title="比赛" description="显示个人团队比赛和面向全平台开放的正式比赛。" />
       <Tabs label="比赛状态" value={activeStatus} onChange={setStatus} items={[{ value: 'all', label: '全部', count: contests.length }, { value: 'ongoing', label: '进行中' }, { value: 'upcoming', label: '即将开始' }, { value: 'finished', label: '已结束' }]} />
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText="当前没有个人比赛" skeletonRows={5}>
         {(_, refreshing) => visible.length === 0

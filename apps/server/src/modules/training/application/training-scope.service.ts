@@ -6,5 +6,9 @@ export async function trainingMatchesWorkspaceScope(trainingId: number, user: an
     where: { id: trainingId },
     select: { scope: true },
   })
-  return Boolean(training && (isAdmin(user.role) || training.scope === getResourceScope(user)))
+  return Boolean(training && (
+    isAdmin(user.role)
+    || training.scope === 'platform'
+    || training.scope === getResourceScope(user)
+  ))
 }

@@ -91,9 +91,15 @@ export function useTrainingActions(
       if (res.success) {
         toast.success('训练已删除')
         const listKind = training.type === 'homework' ? 'homework' : training.type === 'contest' ? 'contest' : 'training'
-        const organizationId = window.location.pathname.match(/^\/org\/([^/]+)/)?.[1]
-        const workspace = window.location.pathname.startsWith('/personal/') ? 'personal' as const : 'organization' as const
-        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspace, organizationId, role: 'teacher' }))
+        const currentPath = window.location.pathname
+        const organizationId = currentPath.match(/^\/org\/([^/]+)/)?.[1]
+        const workspace = currentPath.startsWith('/personal/')
+          ? 'personal' as const
+          : currentPath.startsWith('/platform-admin/') || currentPath.startsWith('/admin/')
+            ? 'platform' as const
+            : 'organization' as const
+        const platformBasePath = currentPath.startsWith('/admin/') ? '/admin' as const : '/platform-admin' as const
+        router.push(teamId ? `${basePath}/${teamId}?tab=${listKind === 'contest' ? 'contest' : listKind}` : listHref(listKind, { workspace, organizationId, platformBasePath, role: 'teacher' }))
         return true
       } else {
         toast.error(res.message || '删除失败')

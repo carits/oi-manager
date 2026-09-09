@@ -18,10 +18,14 @@
 .creditHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 22px; border-bottom: 1px solid var(--border); }
 .creditHeader > div { display: flex; align-items: center; gap: var(--space-3); }
 .creditHeader strong { display: block; margin-top: 3px; font-size: var(--text-xl); }
-.creditGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.creditActions { display: grid; justify-items: end; gap: var(--space-1); max-width: 260px; text-align: right; }
+.purchaseBlocker { margin: 0; color: var(--error-text); font-size: var(--text-xs); line-height: 1.45; }
+.creditGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .creditGrid p { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-4); border-right: 1px solid var(--border); }
-.creditGrid p:last-child { border-right: 0; }
+.creditGrid p:nth-child(3n) { border-right: 0; }
+.creditGrid p:nth-child(-n+3) { border-bottom: 1px solid var(--border); }
 .creditGrid span, .note { color: var(--text-muted); }
+.resetTime { margin: 0; padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); color: var(--text-muted); font-size: var(--text-sm); }
 .note { margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
 .field { display: grid; gap: var(--space-2); font-weight: 600; }
-@media (max-width: 720px) { .creditHeader { align-items: stretch; flex-direction: column; } .creditGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .creditGrid p:nth-child(2) { border-right: 0; } .creditGrid p:nth-child(-n+2) { border-bottom: 1px solid var(--border); } }
+@media (max-width: 720px) { .creditHeader { align-items: stretch; flex-direction: column; } .creditActions { justify-items: stretch; max-width: none; text-align: left; } .creditGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .creditGrid p:nth-child(n) { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); } .creditGrid p:nth-child(2n) { border-right: 0; } .creditGrid p:nth-last-child(-n+2) { border-bottom: 0; } }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import apiClient from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
+import { Select } from '@/components/ui/FormControls'
 import { Section } from '@/components/ui/Section'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import type { TrainingInfo } from '../types'
@@ -35,6 +36,18 @@ type RatingPayload = {
   }>
 }
 
+type RatingParticipationPayload = {
+  scope: string
+  context: 'organization' | 'platform' | 'personal_team'
+  fixed: boolean
+  selectedOrganizationId: string | null
+  selectedOrganization?: { id: string; name: string; shortName?: string | null } | null
+  organizations: Array<{ id: string; name: string; shortName?: string | null }>
+  requiresExplicitSelection: boolean
+  canChange: boolean
+  locked: boolean
+}
+
 const stateLabel: Record<string, string> = {
   LIVE: '进行中', JUDGING: '等待评测完成', FINALIZING: '正在结算',
   FINALIZED: '已结算', HELD: '重测后待重放', FAILED: '结算失败',
@@ -46,6 +59,9 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
   onChanged: () => void | Promise<void>
 }) {
   const [data, setData] = useState<RatingPayload | null>(null)
+  const [participation, setParticipation] = useState<RatingParticipationPayload | null>(null)
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState('')
+  const [participationSaving, setParticipationSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [action, setAction] = useState<'finalize' | 'rebuild' | null>(null)
   const [error, setError] = useState('')
@@ -54,9 +70,18 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     setLoading(true)
     setError('')
     try {
-      const response = await apiClient.get<RatingPayload>(`/api/trainings/${trainingId}/rating`)
+      const [response, participationResponse] = await Promise.all([
+        apiClient.get<RatingPayload>(`/api/trainings/${trainingId}/rating`),
+        apiClient.get<RatingParticipationPayload>(`/api/trainings/${trainingId}/rating-participation`),
+      ])
       if (!response.success || !response.data) throw new Error(response.message || '读取 Rating 结算状态失败')
       setData(response.data)
+      if (participationResponse.success && participationResponse.data) {
+        setParticipation(participationResponse.data)
+        setSelectedOrganizationId(participationResponse.data.selectedOrganizationId || '')
+      } else {
+        setParticipation(null)
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '读取 Rating 结算状态失败')
     } finally {
@@ -79,6 +104,23 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
       setError(reason instanceof Error ? reason.message : 'Rating 操作失败')
     } finally {
       setAction(null)
+    }
+  }
+
+  const saveParticipation = async () => {
+    setParticipationSaving(true)
+    setError('')
+    try {
+      const response = await apiClient.put<RatingParticipationPayload>(`/api/trainings/${trainingId}/rating-participation`, {
+        organizationId: selectedOrganizationId || null,
+      })
+      if (!response.success || !response.data) throw new Error(response.message || '保存参赛组织失败')
+      setParticipation(response.data)
+      setSelectedOrganizationId(response.data.selectedOrganizationId || '')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '保存参赛组织失败')
+    } finally {
+      setParticipationSaving(false)
     }
   }
 
@@ -111,6 +153,35 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
           </span>
         ))}
       </div>
+      {participation?.fixed && participation.selectedOrganization && (
+        <p className={styles.muted}>Rating 组织归属：{participation.selectedOrganization.name}（由比赛固定）</p>
+      )}
+      {participation?.context === 'platform' && participation.scope === 'BOTH' && participation.organizations.length > 0 && (
+        <div className={styles.participation}>
+          <div>
+            <strong>参赛组织</strong>
+            <span>首次提交后固定；全局 Rating 不受此选择影响。</span>
+          </div>
+          <Select
+            aria-label="参赛组织"
+            value={selectedOrganizationId}
+            disabled={!participation.canChange || participationSaving}
+            onChange={event => setSelectedOrganizationId(event.target.value)}
+          >
+            <option value="">请选择参赛组织</option>
+            {participation.organizations.map(organization => (
+              <option key={organization.id} value={organization.id}>{organization.shortName || organization.name}</option>
+            ))}
+          </Select>
+          {participation.canChange && (
+            <Button size="sm" loading={participationSaving} disabled={!selectedOrganizationId} onClick={() => void saveParticipation()}>保存归属</Button>
+          )}
+        </div>
+      )}
+      {participation?.requiresExplicitSelection && <p className={styles.warning}>你属于多个组织，必须先选择本场比赛的 Rating 归属组织，才能首次提交。</p>}
+      {participation?.context === 'platform' && participation.scope === 'BOTH' && participation.organizations.length === 0 && (
+        <p className={styles.muted}>当前账号没有可用组织，本场只计全局 Rating。</p>
+      )}
       {status === 'HELD' && <p className={styles.warning}>赛后重测已改变可计算输入。旧榜单和 Rating 历史仍保留，但在完成重放前不应作为当前结果。</p>}
       {loading && <p className={styles.muted}>正在读取结算状态…</p>}
       {error && <div className={styles.error} role="alert">{error}<Button size="sm" variant="outline" onClick={() => void load()}>重试</Button></div>}

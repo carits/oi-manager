@@ -38,10 +38,28 @@ export async function getRatingLeaderboard(input: { scope: 'GLOBAL' | 'ORGANIZAT
     prisma.ratingAccount.findMany({ where, include: { User: { select: { id: true, username: true, avatar: true } }, Pool: true }, orderBy: [{ rating: 'desc' }, { User: { username: 'asc' } }], skip, take: pageSize }),
     prisma.ratingAccount.count({ where }),
   ])
-  return { ...paginatedResponse(accounts.map(account => ({ ...accountDto(account), userId: account.userId, id: account.userId, username: account.User.username, avatar: account.User.avatar })), total, page, pageSize), track: selectedTrack, scope: input.scope, organizationId: input.organizationId || null }
+  // A filtered page must still display each account's rank in the complete pool,
+  // and ties must use competition ranking (1, 2, 2, 4), not the page offset.
+  const rankByRating = new Map<number, number>()
+  if (accounts.length) {
+    const minimumRating = Math.min(...accounts.map(account => account.rating))
+    const ratingGroups = await prisma.ratingAccount.groupBy({
+      by: ['rating'],
+      where: { poolId: pool.id, rating: { gte: minimumRating }, User: { status: 'active' } },
+      _count: { _all: true },
+      orderBy: { rating: 'desc' },
+    })
+    let higher = 0
+    for (const group of ratingGroups) {
+      rankByRating.set(group.rating, higher + 1)
+      higher += group._count._all
+    }
+  }
+  return { ...paginatedResponse(accounts.map(account => ({ ...accountDto(account), rank: rankByRating.get(account.rating) || null, userId: account.userId, id: account.userId, username: account.User.username, avatar: account.User.avatar })), total, page, pageSize), track: selectedTrack, scope: input.scope, organizationId: input.organizationId || null }
 }
 
 export async function getRatingHistory(input: { userId: string; requestingUserId: string; scope?: string; organizationId?: string; track?: unknown; query: any }) {
+  if (input.userId !== input.requestingUserId) throw new ContestRatingError(403, 'RATING_HISTORY_ACCESS_DENIED', '只能查看自己的 Rating 历史')
   const selectedTrack = track(input.track || 'OI')
   const scope = String(input.scope || 'GLOBAL').toUpperCase()
   if (!['GLOBAL', 'ORGANIZATION'].includes(scope)) throw new ContestRatingError(422, 'RATING_SCOPE_INVALID', 'Rating 范围无效')
