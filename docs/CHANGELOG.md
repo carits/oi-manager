@@ -11,19 +11,27 @@ source_of_truth: Git history
 
 ## 2026-09-09
 
+### Rating、质量、知识与数据市场统一生产发布
+
+- Rating、TestSet DQS/PQS、题解、Blog/知识域和 Revision 数据市场已随提交 `0547fd1` 统一推送 `main` 并完成生产发布；贡献、Carits 与 Evaluation Credits 闭环继续作为统一账本和预算底座。
+- 发布前数据库备份 `/data/backups/oi-manager/automatic/oi_manager_20260909_132853.dump` 已通过恢复清单和隔离审计（33 MiB，SHA-256 `5a179f85a0ef59451d62513704a799fc90269057eb30085221cda2cff03b1e91`），6 个增量迁移成功应用，当前共 55 个 migrations。
+- Server 最终 86 文件/690 项、Judge 15 文件/45 项、Web 25 文件/93 项及所有新增领域定向测试通过；Shared/Server/Judge/Web 生产构建、Prisma、模板、UI、API、架构、文档和路由门禁通过。
+- 修复 `/api/health` 因后置认证 Router 返回 401 的既有回归，liveness/readiness 现在在所有业务 Router 前公开注册且只返回最小状态。
+- API 已由 3303 蓝绿切换到 3302；Web BUILD_ID `KnmV0By0XFpxTqNGEq30B` 经 canary 和正式端口双账号聊天写入/SSE/已读/回复探针后提升，公网健康、构建清单和 Revision readiness 已验证。
+
 ### Blog / 知识发布独立领域
 
 - 新增账号级 Blog 草稿与不可变发布版本；每个版本固化发布时可见范围、组织范围、正文哈希、Series/Tags 和引用快照，历史 PRIVATE/ORGANIZATION 版本不会因后续 PUBLIC 发布而泄露。
 - 结构化引用支持题目、固定 TestSet Revision、固定题解版本、最终比赛榜单快照和已应用 RatingChange；发布逐项执行可见性与归属校验，相关题目/比赛/题解/用户支持反向索引。V1 明确拒绝直接引用 Submission/JudgeRun，等待后续脱敏快照模型。
 - Markdown 渲染契约禁用原始 HTML、可执行代码、危险协议和外部图片，保留 LaTeX 与 fenced code；博客不能直接成为正式题解，只能将固定博客版本复制为独立题解投稿草稿。
-- 个人端新增博客列表、新建/编辑/预览/发布、版本历史、引用编辑、Series 顺序和受控 Tags；题目详情新增 Related Blogs。该批次完成隔离数据库与 Web 契约验证，尚未部署。
+- 个人端新增博客列表、新建/编辑/预览/发布、版本历史、引用编辑、Series 顺序和受控 Tags；题目详情新增 Related Blogs。该批次完成隔离数据库、Web 契约和生产发布验证。
 
 ### Revision 数据商品、购买授权与事故处置
 
 - 新增固定绑定不可变 `ProblemTestSetRevision + TestSetQualitySnapshot` 的 DataProduct；等级和三类许可证价格由服务端质量规则生成，客户端金额字段会被拒绝。
 - 个人、组织与比赛许可证分别绑定购买者、Organization 与 `Training(type=contest)`；组织数据只允许 active teacher/principal，比赛数据只允许 Team owner/admin 或组织管理者读取，普通学生和参赛成员返回 404。
 - 购买使用 UUID 幂等键与 Carits 平衡账本，首版资金进入 `RESOURCE_SINK`；Entitlement 固定购买 Revision，升级只追加授权版本，并提供按 `includes` 裁剪、逐次复核权限的 manifest 与对象下载接口。
-- Critical 质量事故会立即停售并通知既有买家，修复后追加免费 Revision；历史 Purchase 证书、Snapshot 与旧授权版本保持不变。个人与平台管理端新增紧凑数据市场工作台。该批次尚未部署。
+- Critical 质量事故会立即停售并通知既有买家，修复后追加免费 Revision；历史 Purchase 证书、Snapshot 与旧授权版本保持不变。个人与平台管理端新增紧凑数据市场工作台；该批次已完成生产发布。
 
 ### 题解历史可见性与审核并发收口
 
@@ -37,7 +45,7 @@ source_of_truth: Git history
 - DQS 在计分前通过 Judge 对去重后的物理测试点重放 Validator、OI Classifier，并以固定 STD 对完整 Revision 执行 Checker 自检；沙箱故障不会误发证书，正式输入或答案语义不一致直接进入 Critical Gate。
 - 新增内容版本级 PQS 自动评估和平台专家追加审查；自动证据不可覆盖，专家分仅 platform_admin/super_admin 可写且同一版本只能提交一次。
 - 新增版本化 Reference Solution Profile：只能引用本题固定 Revision 的本地终态提交，OI Subtask Quality 按预期总分/单 Subtask 区间验证得分梯度；Feature、Profile、程序和 Critical Incident 变化会使旧证书显示 STALE 并重新排队。
-- 题目评测资产工作台新增“质量评估”，展示当前/历史 DQS、任务状态、Critical/NOT_READY、Confidence/Maturity、Reference Solution Profile 和 PQS 机器/专家结果。该批次处于合并验证阶段，尚未部署到生产。
+- 题目评测资产工作台新增“质量评估”，展示当前/历史 DQS、任务状态、Critical/NOT_READY、Confidence/Maturity、Reference Solution Profile 和 PQS 机器/专家结果。该批次已完成 Judge 语义验证、统一回归和生产发布。
 
 ### OI/IOI/ACM 比赛 Rating 独立领域
 
@@ -47,7 +55,7 @@ source_of_truth: Git history
 - 比赛编辑器增加 Rating 范围、权重和最低人数；排名页展示结算状态、最终榜单和组织/全局批次，个人/组织排名工作台可切换 OI、IOI、ACM Rating。
 - 新增独立平台比赛工作台，让 `GLOBAL/BOTH` 成为可创建的真实产品路径；所有新组织、团队和平台比赛均显式创建默认 `NONE` 配置，团队 ACM 首版禁止误启个人 Rating。
 - 平台 `BOTH` 比赛的多组织参赛者必须在首提前显式选择组织，首交后固化快照；同池到期比赛由后台按确定顺序结算，Serializable 冲突有界重试，榜单排名在完整结果集上计算后再分页。
-- Rating 与平台比赛隔离 PostgreSQL 集成测试 19/19、Web Rating 契约 3/3、Server/Web 生产构建已通过；全量组合回归和发布状态将在部署完成后补记。
+- Rating 与平台比赛隔离 PostgreSQL 集成测试 19/19、Web Rating 契约 3/3、Server/Web 生产构建、全量组合回归和生产发布均已通过。
 
 ### 独立 Assignment 作业域收口
 
