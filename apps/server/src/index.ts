@@ -177,7 +177,7 @@ app.use('/api/admin/demo-scenario', demoScenarioRouter)
 
 // 健康检查
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({ success: true, message: 'OK' })
 })
 
 app.get('/api/readiness', async (req, res) => {
