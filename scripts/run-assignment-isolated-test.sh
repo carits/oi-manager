@@ -6,6 +6,7 @@ ENV_FILE="${1:-$ROOT_DIR/apps/server/.env.production}"
 TEST_SCHEMA="${ASSIGNMENT_TEST_SCHEMA:-assignment_test_$(date +%s)}"
 BASE_SCHEMA="${ASSIGNMENT_BASE_SCHEMA:-}"
 TEST_SCOPE="${ASSIGNMENT_TEST_SCOPE:-assignment}"
+SCHEMA_SETUP="${ASSIGNMENT_SCHEMA_SETUP:-migrations}"
 
 if [[ ! "$TEST_SCHEMA" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
   echo "Invalid ASSIGNMENT_TEST_SCHEMA" >&2
@@ -32,7 +33,12 @@ trap cleanup EXIT
 
 cleanup
 psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SCHEMA $TEST_SCHEMA" >/dev/null
-if [[ -n "$BASE_SCHEMA" ]]; then
+if [[ "$SCHEMA_SETUP" == "current" ]]; then
+  DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec prisma db push --skip-generate --schema prisma/schema.prisma
+elif [[ "$SCHEMA_SETUP" != "migrations" ]]; then
+  echo "Invalid ASSIGNMENT_SCHEMA_SETUP: expected migrations or current" >&2
+  exit 1
+elif [[ -n "$BASE_SCHEMA" ]]; then
   if [[ ! -f "$BASE_SCHEMA" ]]; then
     echo "Base Prisma schema not found: $BASE_SCHEMA" >&2
     exit 1
