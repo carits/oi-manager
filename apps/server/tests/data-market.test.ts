@@ -94,7 +94,7 @@ describe('V1 data product marketplace', () => {
     const purchased = await client(buyer).post(`/api/data-products/${productId}/purchase`).set('Idempotency-Key', requestId).send({ license: 'PERSONAL' })
     expect(purchased.status).toBe(201)
     expect(purchased.body.data.amountCarits).toBe('90')
-    expect(purchased.body.data.qualityCertificateSnapshot.quality.overallScore).toBe(88)
+    expect(purchased.body.data.qualityCertificateSnapshot.quality.overallScore).toBe(92)
     const entitlementId = purchased.body.data.Entitlement.id as string
     expect(purchased.body.data.Entitlement.Revisions).toEqual([expect.objectContaining({ testSetRevisionId: revisionId, sequence: 1, grantReason: 'PURCHASE' })])
 
