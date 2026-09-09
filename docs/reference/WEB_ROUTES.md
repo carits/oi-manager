@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-05
+last_verified: 2026-09-09
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -19,6 +19,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/account/security` | 见页面权限布局 | 当前页面 |
 | `/account/wallet` | 见页面权限布局 | 当前页面 |
 | `/admin` | 见页面权限布局 | 当前页面 |
+| `/admin/blog-moderation` | 超级管理员 | 博客举报、内容处置与社区精选治理 |
 | `/admin/chat-reports` | 超级管理员 | 私信举报审核 |
 | `/admin/contests` | 超级管理员 | 平台比赛列表 |
 | `/admin/contests/[id]` | 超级管理员 | 平台比赛详情 |
@@ -73,6 +74,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/training-sessions/[id]` | 教练或训练学员 | 阶段训练、草稿、提交和教练控制台 |
 | `/personal/training-sessions/[id]/design` | 团队管理员 | DRAFT 训练阶段、题目顺序、解锁和固定 Revision 设计器 |
 | `/platform-admin` | 见页面权限布局 | 当前页面 |
+| `/platform-admin/blog-moderation` | 平台管理员 | 博客举报、内容处置与社区精选治理 |
 | `/platform-admin/contests` | 平台管理员 | 平台比赛列表 |
 | `/platform-admin/contests/[id]` | 平台管理员 | 平台比赛详情 |
 | `/platform-admin/contests/[id]/statements` | 平台管理员 | 平台比赛题面管理 |

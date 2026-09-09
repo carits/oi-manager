@@ -5,6 +5,7 @@ import { prisma } from '../../prisma'
 import { isOrganizationContestAdmin, isTeamAdmin } from '../training/training.helpers'
 import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.service'
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
+import { calculateAssignmentGrade, judgeMaxScoreFromSnapshot, mapJudgeScore } from './assignment-grading'
 
 export class AssignmentError extends Error {
   constructor(public statusCode: number, public code: string, message: string, public details?: unknown) { super(message) }
@@ -34,6 +35,8 @@ const LATE_POLICIES = new Set(['DISALLOW', 'ALLOW_MARK_LATE', 'ALLOW_NO_PENALTY'
 const CORRECTION_POLICIES = new Set(['NONE', 'BELOW_TARGET', 'NON_AC', 'TEACHER_ASSIGNED', 'ALL_INCOMPLETE'])
 const SOLUTION_POLICIES = new Set(['NEVER', 'AFTER_DUE', 'AFTER_CLOSE', 'AFTER_RELEASE'])
 const PROBLEM_CATEGORIES = new Set(['REQUIRED', 'OPTIONAL', 'CHALLENGE'])
+const OPTIONAL_SCORING_POLICIES = new Set(['NONE', 'BONUS', 'BEST_N'])
+const CHALLENGE_SCORING_POLICIES = new Set(['NONE', 'EXTRA_CREDIT'])
 const COMPLETION_POLICIES = new Set(['AC', 'TARGET_SCORE', 'ATTEMPT', 'MANUAL'])
 const ASSIGNMENT_STATUSES = new Set(['DRAFT', 'SCHEDULED', 'OPEN', 'OVERDUE', 'CLOSED', 'REVIEWING', 'RELEASED', 'ARCHIVED', 'CANCELLED'])
 
@@ -162,6 +165,8 @@ function assignmentCreateInput(body: any) {
   const latePenaltyPercent = latePolicy === 'ALLOW_WITH_PENALTY'
     ? boundedInteger(body?.latePenaltyPercent, 0, 100, '迟交扣分比例')
     : null
+  const optionalScoringPolicy = enumValue(body?.optionalScoringPolicy, OPTIONAL_SCORING_POLICIES, 'NONE', '选做题计分策略')
+  const challengeScoringPolicy = enumValue(body?.challengeScoringPolicy, CHALLENGE_SCORING_POLICIES, 'NONE', '挑战题计分策略')
   return {
     title: boundedText(body?.title, 200, '作业名称', 1),
     description: body?.description ? boundedText(body.description, 10_000, '作业说明') : null,
@@ -172,6 +177,13 @@ function assignmentCreateInput(body: any) {
     correctionPolicy: enumValue(body?.correctionPolicy, CORRECTION_POLICIES, 'NONE', '订正策略'),
     solutionReleasePolicy: enumValue(body?.solutionReleasePolicy, SOLUTION_POLICIES, 'AFTER_RELEASE', '题解开放策略'),
     latePenaltyPercent,
+    gradingVersion: 2,
+    baseScoreMax: boundedInteger(body?.baseScoreMax, 1, 1000, '基础成绩满分', 100),
+    optionalScoringPolicy,
+    optionalBestCount: optionalScoringPolicy === 'BEST_N' ? boundedInteger(body?.optionalBestCount, 1, 1000, '选做题计分数量', 1) : null,
+    optionalBonusMax: optionalScoringPolicy === 'NONE' ? 0 : boundedInteger(body?.optionalBonusMax, 1, 1000, '选做题加分上限', 10),
+    challengeScoringPolicy,
+    challengeBonusMax: challengeScoringPolicy === 'NONE' ? 0 : boundedInteger(body?.challengeBonusMax, 1, 1000, '挑战题加分上限', 10),
     publishAt, openAt, dueAt, closeAt, correctionDueAt,
   }
 }
@@ -271,12 +283,13 @@ function summarizeAssignmentProgress(
     problems: assignment.Problems.map(problem => ({ id: problem.id, orderIndex: problem.orderIndex, problem: problem.Problem, maxScore: problem.maxScore, targetScore: problem.targetScore, weight: problem.weight })),
     recipients: assignment.Recipients.map(recipient => {
       const items = progressByRecipient.get(recipient.id) || []
-      const rawScore = items.reduce((sum, item) => sum + Number(item.finalScore || 0), 0)
+      const grade = calculateAssignmentGrade(assignment, assignment.Problems, items)
+      const rawScore = grade.rawScore
       const adjustment = adjustmentsByRecipient.get(recipient.id) || 0
       return {
         id: recipient.id, user: recipient.User, status: recipient.status,
         dueAtEffective: recipient.dueAtEffective, closeAtEffective: recipient.closeAtEffective,
-        score: Math.max(0, rawScore + adjustment), rawScore, adjustment,
+        score: Math.max(0, rawScore + adjustment), rawScore, maxScore: grade.maxScore, gradeComponents: grade.components, adjustment,
         completedProblems: items.filter(item => item.learningStatus === 'COMPLETED').length,
         lateProblems: items.filter(item => item.timelinessStatus === 'LATE').length,
         correctionProblems: items.filter(item => ['NEEDS_CORRECTION', 'CORRECTING'].includes(item.correctionStatus)).length,
@@ -300,6 +313,12 @@ export async function updateAssignment(userId: string, assignmentId: string, bod
     correctionPolicy: body?.correctionPolicy ?? assignment.correctionPolicy,
     solutionReleasePolicy: body?.solutionReleasePolicy ?? assignment.solutionReleasePolicy,
     latePenaltyPercent: body?.latePenaltyPercent ?? assignment.latePenaltyPercent,
+    baseScoreMax: body?.baseScoreMax ?? assignment.baseScoreMax,
+    optionalScoringPolicy: body?.optionalScoringPolicy ?? assignment.optionalScoringPolicy,
+    optionalBestCount: body?.optionalBestCount ?? assignment.optionalBestCount,
+    optionalBonusMax: body?.optionalBonusMax ?? assignment.optionalBonusMax,
+    challengeScoringPolicy: body?.challengeScoringPolicy ?? assignment.challengeScoringPolicy,
+    challengeBonusMax: body?.challengeBonusMax ?? assignment.challengeBonusMax,
     publishAt: body?.publishAt === undefined ? assignment.publishAt : body.publishAt,
     openAt: body?.openAt ?? assignment.openAt,
     dueAt: body?.dueAt ?? assignment.dueAt,
@@ -353,6 +372,7 @@ export async function replaceAssignmentProblems(userId: string, assignmentId: st
       category: enumValue(row.category, PROBLEM_CATEGORIES, 'REQUIRED', '题目分类'),
       required: row.required === undefined ? String(row.category || 'REQUIRED').toUpperCase() === 'REQUIRED' : Boolean(row.required),
       maxScore, targetScore,
+      judgeMaxScore: judgeMaxScoreFromSnapshot(revision.judgeConfig, revision.mode),
       weight: boundedInteger(row.weight, 1, 10_000, `第 ${index + 1} 道题权重`, 100),
       completionPolicy: enumValue(row.completionPolicy, COMPLETION_POLICIES, revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE', '完成条件'),
       judgeConfigSnapshot: revision.judgeConfig,
@@ -432,6 +452,10 @@ async function dynamicRecipients(tx: Prisma.TransactionClient, assignment: Assig
 export function validateAssignmentForPublish(assignment: AssignmentShape): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   if (!assignment.Problems.length) issues.push({ path: 'problems', code: 'PROBLEMS_REQUIRED', message: '至少配置一道题' })
+  if (!assignment.Problems.some(problem => problem.category === 'REQUIRED')) issues.push({ path: 'problems', code: 'REQUIRED_PROBLEM_REQUIRED', message: '至少配置一道必做题，作为基础成绩分母' })
+  if (assignment.optionalScoringPolicy !== 'NONE' && !assignment.Problems.some(problem => problem.category === 'OPTIONAL')) issues.push({ path: 'optionalScoringPolicy', code: 'OPTIONAL_PROBLEM_REQUIRED', message: '已启用选做题计分，但没有配置选做题' })
+  if (assignment.optionalScoringPolicy === 'BEST_N' && (!assignment.optionalBestCount || assignment.optionalBestCount > assignment.Problems.filter(problem => problem.category === 'OPTIONAL').length)) issues.push({ path: 'optionalBestCount', code: 'OPTIONAL_BEST_COUNT_INVALID', message: '最佳选做题数量必须在现有选做题数量范围内' })
+  if (assignment.challengeScoringPolicy !== 'NONE' && !assignment.Problems.some(problem => problem.category === 'CHALLENGE')) issues.push({ path: 'challengeScoringPolicy', code: 'CHALLENGE_PROBLEM_REQUIRED', message: '已启用挑战题加分，但没有配置挑战题' })
   if (assignment.rosterMode === 'SNAPSHOT' && !assignment.Recipients.length) issues.push({ path: 'recipients', code: 'RECIPIENTS_REQUIRED', message: '快照名单至少包含一名学生' })
   if (assignment.openAt >= assignment.dueAt) issues.push({ path: 'dueAt', code: 'TIMELINE_INVALID', message: '截止时间必须晚于开放时间' })
   if (assignment.dueAt > assignment.closeAt) issues.push({ path: 'closeAt', code: 'TIMELINE_INVALID', message: '关闭时间不能早于截止时间' })
@@ -546,9 +570,13 @@ export async function submitAssignmentSolution(userId: string, assignmentId: str
   return created
 }
 
-function normalizedScore(submission: { score: number | null; result: string | null }, maxScore: number) {
-  if (submission.score !== null) return Math.max(0, Math.min(maxScore, submission.score))
-  return ['accepted', 'ac'].includes(String(submission.result || '').toLowerCase()) ? maxScore : 0
+function normalizedScore(submission: { score: number | null; result: string | null }, problem: { maxScore: number; judgeMaxScore: number }) {
+  return mapJudgeScore({
+    score: submission.score,
+    result: submission.result,
+    judgeMaxScore: problem.judgeMaxScore,
+    assignmentMaxScore: problem.maxScore,
+  })
 }
 
 export async function syncAssignmentSubmission(submission: { id: number; userId: string; assignmentId: string | null; assignmentProblemId: string | null; assignmentRecipientId: string | null }) {
@@ -570,14 +598,19 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
     if (!submissions.length) return
     const originals = submissions.filter(item => item.submissionPhase !== 'CORRECTION')
     const corrections = submissions.filter(item => item.submissionPhase === 'CORRECTION')
-    const scoreOf = (item: typeof submissions[number]) => normalizedScore(item, problem.maxScore)
+    const scoreOf = (item: typeof submissions[number]) => normalizedScore(item, problem)
     const bestOf = (items: typeof submissions) => items.reduce<typeof submissions[number] | null>((best, item) => !best || scoreOf(item) > scoreOf(best) ? item : best, null)
     let selectedOriginal: typeof submissions[number] | null = null
     if (assignment.gradingPolicy === 'LATEST') selectedOriginal = originals.at(-1) || null
     else if (assignment.gradingPolicy === 'FIRST_TARGET_MET') selectedOriginal = originals.find(item => scoreOf(item) >= problem.targetScore) || bestOf(originals)
     else if (assignment.gradingPolicy === 'BEST_BEFORE_DUE') selectedOriginal = bestOf(originals.filter(item => item.submissionPhase === 'ORIGINAL'))
     else selectedOriginal = bestOf(originals)
-    const selectedCorrection = bestOf(corrections)
+    const activeCorrection = await tx.assignmentCorrection.findFirst({
+      where: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, status: { in: ['NEEDS_CORRECTION', 'CORRECTING'] } },
+      orderBy: { createdAt: 'desc' },
+    })
+    const correctionAttempts = activeCorrection ? corrections.filter(item => item.createdAt >= activeCorrection.createdAt) : corrections
+    const selectedCorrection = bestOf(correctionAttempts)
     let originalScore = selectedOriginal ? scoreOf(selectedOriginal) : null
     if (originalScore !== null && selectedOriginal?.submissionPhase === 'LATE' && assignment.latePolicy === 'ALLOW_WITH_PENALTY') originalScore = Math.floor(originalScore * (100 - (assignment.latePenaltyPercent || 0)) / 100)
     const correctionScore = selectedCorrection ? scoreOf(selectedCorrection) : null
@@ -596,14 +629,29 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
       targetMetAt: targetMet ? submissions.find(item => scoreOf(item) >= problem.targetScore)?.createdAt || new Date() : null,
       completedAt: completed ? new Date() : null, firstSubmittedAt: submissions[0].createdAt, lastSubmittedAt: submissions.at(-1)!.createdAt,
     }
+    const correctionSatisfied = Boolean(activeCorrection && selectedCorrection && correctionScore !== null && correctionScore >= (activeCorrection.requiredScore ?? problem.targetScore))
+    const previousCorrection = await tx.assignmentCorrection.findFirst({
+      where: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, status: { in: ['CORRECTED', 'WAIVED', 'EXPIRED'] } },
+      orderBy: { updatedAt: 'desc' },
+    })
+    const correctionStatus = correctionSatisfied ? 'CORRECTED' : activeCorrection && selectedCorrection ? 'CORRECTING' : activeCorrection ? activeCorrection.status : previousCorrection?.status || 'NONE'
     await tx.assignmentProblemProgress.upsert({
       where: { assignmentProblemId_recipientId: { assignmentProblemId: problem.id, recipientId: recipient.id } },
-      create: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, correctionStatus: selectedCorrection ? 'CORRECTED' : corrections.length ? 'CORRECTING' : 'NONE', ...common },
-      update: { correctionStatus: selectedCorrection ? 'CORRECTED' : corrections.length ? 'CORRECTING' : undefined, ...common },
+      create: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, correctionStatus, ...common },
+      update: { correctionStatus, ...common },
     })
-    if (selectedCorrection) await tx.assignmentCorrection.updateMany({ where: { assignmentId: assignment.id, assignmentProblemId: problem.id, recipientId: recipient.id, status: { in: ['NEEDS_CORRECTION', 'CORRECTING'] } }, data: { status: 'CORRECTED', completedAt: new Date() } })
-    const progress = await tx.assignmentProblemProgress.findMany({ where: { assignmentId: assignment.id, recipientId: recipient.id }, select: { learningStatus: true } })
-    if (progress.length && progress.every(item => ['COMPLETED', 'EXEMPT'].includes(item.learningStatus))) await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
+    if (correctionSatisfied && activeCorrection) await tx.assignmentCorrection.update({ where: { id: activeCorrection.id }, data: { status: 'CORRECTED', completedAt: new Date() } })
+    const progress = await tx.assignmentProblemProgress.findMany({ where: { assignmentId: assignment.id, recipientId: recipient.id }, select: { assignmentProblemId: true, learningStatus: true } })
+    const requiredProblemIds = new Set((await tx.assignmentProblem.findMany({ where: { assignmentId: assignment.id, category: 'REQUIRED' }, select: { id: true } })).map(item => item.id))
+    const requiredProgress = progress.filter(item => requiredProblemIds.has(item.assignmentProblemId))
+    const allRequiredCompleted = requiredProblemIds.size > 0
+      && requiredProgress.length === requiredProblemIds.size
+      && requiredProgress.every(item => ['COMPLETED', 'EXEMPT'].includes(item.learningStatus))
+    if (allRequiredCompleted && recipient.status !== 'COMPLETED') {
+      await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
+    } else if (!allRequiredCompleted && recipient.status === 'COMPLETED') {
+      await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'ACTIVE', completedAt: null } })
+    }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
 
@@ -636,11 +684,14 @@ export async function createAssignmentCorrection(userId: string, assignmentId: s
       tx.assignmentRecipient.findFirst({ where: { id: recipientId, assignmentId, status: { not: 'REMOVED' } } }),
     ])
     if (!problem || !recipient) throw new AssignmentError(422, 'ASSIGNMENT_TARGET_INVALID', '订正对象不属于当前作业')
+    const requiredScore = boundedInteger(body?.requiredScore, 0, problem.maxScore, '订正目标分', problem.targetScore)
+    const active = await tx.assignmentCorrection.findFirst({ where: { assignmentId, assignmentProblemId, recipientId, status: { in: ['NEEDS_CORRECTION', 'CORRECTING'] } } })
+    if (active) throw new AssignmentError(409, 'ASSIGNMENT_CORRECTION_ACTIVE', '该学生在此题已有未完成的订正任务')
     const correction = await tx.assignmentCorrection.create({ data: {
-      assignmentId, assignmentProblemId, recipientId, assignedBy: userId, reason, dueAt,
+      assignmentId, assignmentProblemId, recipientId, assignedBy: userId, reason, dueAt, requiredScore,
     } })
     await tx.assignmentProblemProgress.updateMany({ where: { assignmentProblemId, recipientId }, data: { correctionStatus: 'NEEDS_CORRECTION' } })
-    await appendEvent(tx, assignmentId, 'assignment.correction_assigned', userId, { correctionId: correction.id, assignmentProblemId, recipientId })
+    await appendEvent(tx, assignmentId, 'assignment.correction_assigned', userId, { correctionId: correction.id, assignmentProblemId, recipientId, requiredScore })
     return correction
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
@@ -701,16 +752,17 @@ export async function reverseAssignmentScoreAdjustment(userId: string, assignmen
 
 async function createGradeSnapshots(tx: Prisma.TransactionClient, assignmentId: string, type: 'DUE' | 'CLOSE' | 'POST_CORRECTION' | 'FINAL_RELEASE' | 'REGRADE', createdBy: string) {
   const assignment = await tx.assignment.findUniqueOrThrow({ where: { id: assignmentId }, include: { Problems: true, Recipients: { include: { Progress: true, ScoreAdjustments: true } } } })
-  const maxScore = assignment.Problems.reduce((sum, problem) => sum + problem.maxScore, 0)
   for (const recipient of assignment.Recipients.filter(item => item.status !== 'REMOVED')) {
-    const rawScore = recipient.Progress.reduce((sum, progress) => sum + Number(progress.finalScore || 0), 0)
+    const grade = calculateAssignmentGrade(assignment, assignment.Problems, recipient.Progress)
+    const rawScore = grade.rawScore
+    const maxScore = grade.maxScore
     const adjustment = recipient.ScoreAdjustments.reduce((sum, item) => sum + item.delta, 0)
     const totalScore = Math.max(0, rawScore + adjustment)
     const latest = await tx.assignmentGradeSnapshot.findFirst({ where: { assignmentId, recipientId: recipient.id, type }, orderBy: { revision: 'desc' }, select: { revision: true } })
     await tx.assignmentGradeSnapshot.create({ data: {
       assignmentId, recipientId: recipient.id, type, revision: (latest?.revision || 0) + 1,
       totalScore, maxScore, createdBy,
-      gradeData: { rawScore, adjustment, problems: recipient.Progress.map(progress => ({ assignmentProblemId: progress.assignmentProblemId, finalScore: progress.finalScore, learningStatus: progress.learningStatus, timelinessStatus: progress.timelinessStatus, correctionStatus: progress.correctionStatus })) },
+      gradeData: { gradingVersion: assignment.gradingVersion, rawScore, adjustment, components: grade.components, evidence: grade.evidence, problems: recipient.Progress.map(progress => ({ assignmentProblemId: progress.assignmentProblemId, finalScore: progress.finalScore, learningStatus: progress.learningStatus, timelinessStatus: progress.timelinessStatus, correctionStatus: progress.correctionStatus })) },
     } })
   }
 }

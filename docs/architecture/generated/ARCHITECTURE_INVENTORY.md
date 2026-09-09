@@ -13,8 +13,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 190 |
-| Prisma enums | 71 |
+| Prisma models | 196 |
+| Prisma enums | 74 |
 | Legacy route adapters | 25 |
 | Module route adapters | 52 |
 | systemd units | 8 |
@@ -123,11 +123,16 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AssignmentScoreAdjustment`
 - `BlobObject`
 - `BlobReference`
+- `BlogBookmark`
+- `BlogComment`
+- `BlogFeature`
 - `BlogPost`
 - `BlogPostDraft`
 - `BlogPostTag`
 - `BlogPostVersion`
+- `BlogReaction`
 - `BlogReference`
+- `BlogReport`
 - `BlogSeries`
 - `BlogSeriesEntry`
 - `BlogTag`
@@ -242,6 +247,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SolutionContribution`
 - `SolutionContributionRevision`
 - `SolutionReview`
+- `SolutionSimilarityCheck`
 - `SolutionVerification`
 - `Submission`
 - `Team`
@@ -300,6 +306,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 ## Prisma enums
 
+- `AssignmentChallengeScoringPolicy`
 - `AssignmentCompletionPolicy`
 - `AssignmentCorrectionPolicy`
 - `AssignmentCorrectionStatus`
@@ -307,6 +314,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `AssignmentGradingPolicy`
 - `AssignmentLatePolicy`
 - `AssignmentLearningStatus`
+- `AssignmentOptionalScoringPolicy`
 - `AssignmentProblemCategory`
 - `AssignmentRecipientStatus`
 - `AssignmentRosterMode`
@@ -349,6 +357,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `SolutionContributionStatus`
 - `SolutionReviewDecision`
 - `SolutionReviewType`
+- `SolutionSimilarityRisk`
 - `SolutionSourceType`
 - `SolutionType`
 - `SolutionVerificationStatus`

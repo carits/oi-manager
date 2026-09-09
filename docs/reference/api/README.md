@@ -50,6 +50,21 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/review/solution-contributions/:id/reject` | 拒绝当前投稿 Revision |
 | `POST` | `/api/review/solution-contributions/:id/accept` | 以 expected-status CAS 采纳已验证且审核通过的投稿 |
 | `POST` | `/api/review/solution-contributions/:id/publish` | 幂等发布不可变题解版本并生成贡献奖励事件 |
+| `GET` | `/api/blogs/:id/community` | 读取有权访问的已发布博客互动汇总和本人反应/收藏状态 |
+| `GET` | `/api/blogs/:id/comments` | 分页读取可见评论及一层回复 |
+| `POST` | `/api/blogs/:id/comments` | 创建评论或一层回复 |
+| `DELETE` | `/api/blogs/:id/comments/:commentId` | 作者或平台治理人员隐藏评论 |
+| `PUT` | `/api/blogs/:id/reactions/:type` | 幂等设置 LIKE/HELPFUL 反应 |
+| `DELETE` | `/api/blogs/:id/reactions/:type` | 幂等取消 LIKE/HELPFUL 反应 |
+| `PUT` | `/api/blogs/:id/bookmark` | 幂等设置账号收藏 |
+| `DELETE` | `/api/blogs/:id/bookmark` | 幂等取消账号收藏 |
+| `POST` | `/api/blogs/:id/reports` | 举报文章或评论并固化证据摘要 |
+| `GET` | `/api/platform/blog-reports` | 平台治理人员分页读取举报摘要，不返回证据正文 |
+| `GET` | `/api/platform/blog-reports/:id` | 填写原因并写平台审计后读取固化证据 |
+| `POST` | `/api/platform/blog-reports/:id/decision` | 处理举报并可隐藏评论、暂停或移除文章 |
+| `PUT` | `/api/platform/blogs/:id/featured` | 平台治理人员设置或退役社区精选 |
+| `GET` | `/api/admin/migration/contest-aggregates` | 超管检查现有 Training 比赛到既有 Contest 聚合的一对一桥接迁移 |
+| `POST` | `/api/admin/migration/contest-aggregates` | 超管按 reportHash 幂等建立可确认的比赛与题目 Revision 桥接 |
 | `GET` | `/api/ratings/me` | 读取本人全部全局/组织 OI、IOI、ACM Rating 账户 |
 | `GET` | `/api/ratings/global/:track` | 分页读取指定 Track 的全局 Rating 榜 |
 | `GET` | `/api/ratings/organizations/:organizationId/:track` | 有效组织成员读取组织 Rating 榜 |

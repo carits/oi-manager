@@ -25,11 +25,16 @@ import {
 import styles from './SolutionEditorialPanel.module.css'
 
 type Verification = { id: string; status: string; result?: string | null; errorMessage?: string | null; createdAt: string }
+type SimilarityCheck = {
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; textSimilarityBasisPoints?: number; codeSimilarityBasisPoints?: number
+  maximumSimilarityBasisPoints?: number; sourceDeclared: boolean; comparisonCount?: number; checkedAt: string
+}
 type Revision = {
   id: string; revision: number; title: string; contentMarkdown: string; algorithmTags?: unknown
   approachKey?: string | null; complexityTime?: string | null; complexityMemory?: string | null
   language?: string | null; referenceCode?: string | null; sourceType: Draft['sourceType']
   sourceUrl?: string | null; citation?: string | null; createdAt: string; Verification?: Verification | null
+  SimilarityCheck?: SimilarityCheck | null
 }
 type Review = { id: string; reviewType: string; decision: string; comment?: string | null; createdAt: string; Reviewer?: { username: string } }
 type Contribution = {
@@ -66,6 +71,10 @@ function tags(value: unknown): string[] {
 
 function latestVerification(item: Contribution) {
   return item.Revisions?.[0]?.Verification || null
+}
+
+function latestSimilarity(item: Contribution) {
+  return item.Revisions?.[0]?.SimilarityCheck || null
 }
 
 function statusTone(status: string) {
@@ -276,7 +285,7 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     </FormDialog>
 
     <DetailDialog isOpen={reviewOpen} onClose={() => setReviewOpen(false)} title="审核题解投稿" description={reviewing ? `${reviewing.title} · ${SOLUTION_STATUS_LABELS[reviewing.status] || reviewing.status}` : undefined} size="xl" footer={reviewing && <div className={styles.actions}>{reviewActionsForStatus(reviewing.status).map(action => action === 'accept' ? <Button key={action} onClick={() => void accept(reviewing)} loading={busyId === reviewing.id}>采纳</Button> : action === 'publish' ? <Button key={action} onClick={() => setPublishing(reviewing)}>发布</Button> : <Button key={action} variant={action === 'reject' ? 'danger' : action === 'request-revision' ? 'outline' : 'primary'} onClick={() => { setReviewAction(action); setReviewComment('') }}>{action === 'approve' ? '审核通过' : action === 'reject' ? '拒绝' : '要求修改'}</Button>)}</div>}>
-      {reviewing && <div className={styles.form}><div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[reviewing.type]}</span><span className={styles.badge}>作者：{reviewing.Author?.username || '未知'}</span>{latestVerification(reviewing) && <span className={styles.badge} data-tone={statusTone(latestVerification(reviewing)!.status)}>验证：{VERIFICATION_STATUS_LABELS[latestVerification(reviewing)!.status] || latestVerification(reviewing)!.status}</span>}</div><MarkdownRenderer content={reviewing.Revisions?.[0]?.contentMarkdown || reviewing.contentMarkdown} />{(reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode) && <pre className={styles.code}><code>{reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode}</code></pre>}<div className={styles.timeline}>{reviewing.Reviews?.map(review => <div className={styles.timelineItem} key={review.id}><strong>{review.Reviewer?.username || '审核者'} · {review.reviewType} · {review.decision}</strong>{review.comment && <p>{review.comment}</p>}</div>)}</div></div>}
+      {reviewing && <div className={styles.form}><div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[reviewing.type]}</span><span className={styles.badge}>作者：{reviewing.Author?.username || '未知'}</span>{latestVerification(reviewing) && <span className={styles.badge} data-tone={statusTone(latestVerification(reviewing)!.status)}>验证：{VERIFICATION_STATUS_LABELS[latestVerification(reviewing)!.status] || latestVerification(reviewing)!.status}</span>}</div>{latestSimilarity(reviewing) && <section className={styles.similarity} data-risk={latestSimilarity(reviewing)!.riskLevel}><div><strong>内容相似度风险：{latestSimilarity(reviewing)!.riskLevel === 'HIGH' ? '高' : latestSimilarity(reviewing)!.riskLevel === 'MEDIUM' ? '中' : '低'}</strong><p>该结果仅作为审核提示，不会自动拒绝投稿。{latestSimilarity(reviewing)!.sourceDeclared ? '投稿已声明来源。' : '投稿未声明外部来源。'}</p></div>{latestSimilarity(reviewing)!.maximumSimilarityBasisPoints !== undefined && <dl><div><dt>正文</dt><dd>{((latestSimilarity(reviewing)!.textSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>代码</dt><dd>{((latestSimilarity(reviewing)!.codeSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>最高</dt><dd>{((latestSimilarity(reviewing)!.maximumSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div></dl>}</section>}<MarkdownRenderer content={reviewing.Revisions?.[0]?.contentMarkdown || reviewing.contentMarkdown} />{(reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode) && <pre className={styles.code}><code>{reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode}</code></pre>}<div className={styles.timeline}>{reviewing.Reviews?.map(review => <div className={styles.timelineItem} key={review.id}><strong>{review.Reviewer?.username || '审核者'} · {review.reviewType} · {review.decision}</strong>{review.comment && <p>{review.comment}</p>}</div>)}</div></div>}
     </DetailDialog>
 
     <FormDialog isOpen={Boolean(reviewAction)} onClose={() => setReviewAction(null)} onSubmit={() => void submitReview()} title={reviewAction === 'approve' ? '确认审核通过' : reviewAction === 'reject' ? '拒绝投稿' : '要求作者修改'} submitText="确认" danger={reviewAction === 'reject'} loading={Boolean(reviewing && busyId === reviewing.id)}>

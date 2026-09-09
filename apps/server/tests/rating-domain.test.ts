@@ -64,6 +64,30 @@ describe('contest scoring adapters', () => {
     expect(rows[1]).toMatchObject({ userId: 'b', solvedCount: 0, penaltySeconds: 0 })
   })
 
+  it('consumes the frozen ACM penalty rules instead of current code defaults', () => {
+    const submissions = [
+      { id: 1, userId: 'a', trainingProblemId: 'p', result: 'wrong_answer', score: 0, createdAt: at(5), submissionPhase: null },
+      { id: 2, userId: 'a', trainingProblemId: 'p', result: 'accepted', score: 100, createdAt: at(30), submissionPhase: null },
+    ]
+    const rows = buildStanding({
+      track: 'ACM', startTime: at(0), problems, submissions, participants,
+      scoringRules: { version: 1, wrongPenaltySeconds: 900, penaltyVerdicts: ['WA'], compileErrorPenalty: false, ratingTiePolicy: 'SOLVED_PENALTY' },
+    })
+    expect(rows[0]).toMatchObject({ userId: 'a', solvedCount: 1, penaltySeconds: 2700 })
+  })
+
+  it('can replay a frozen best-submission score policy independent of the track default', () => {
+    const submissions = [
+      { id: 1, userId: 'a', trainingProblemId: 'p', result: 'wrong_answer', score: 80, createdAt: at(10), submissionPhase: null },
+      { id: 2, userId: 'a', trainingProblemId: 'p', result: 'wrong_answer', score: 40, createdAt: at(20), submissionPhase: 'FINAL' },
+    ]
+    const [row] = buildStanding({
+      track: 'OI', startTime: at(0), problems, submissions, participants: [participants[0]],
+      scoringRules: { version: 1, problemPolicy: 'BEST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 },
+    })
+    expect(row.totalScore).toBe(120)
+  })
+
   it('keeps an audited result out of rating and forces a sanctioned participant to last place', () => {
     const rows = buildStanding({
       track: 'IOI', startTime: at(0), problems,

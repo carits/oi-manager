@@ -86,6 +86,17 @@ enum AssignmentProblemCategory {
   CHALLENGE
 }
 
+enum AssignmentOptionalScoringPolicy {
+  NONE
+  BONUS
+  BEST_N
+}
+
+enum AssignmentChallengeScoringPolicy {
+  NONE
+  EXTRA_CREDIT
+}
+
 enum AssignmentCompletionPolicy {
   AC
   TARGET_SCORE
@@ -190,6 +201,12 @@ enum SolutionVisibilityPolicy {
   PUBLIC
   AFTER_AC
   MANAGER_ONLY
+}
+
+enum SolutionSimilarityRisk {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 enum BlogPostType {
@@ -530,9 +547,15 @@ model AiGenerationRequest {
 
 model Contest {
   id                  String                @id
+  runtimeTrainingId   Int?                  @unique
+  organizationId      String?
   title               String
   description         String?
   contestDate         DateTime
+  startAt             DateTime?
+  endAt               DateTime?
+  format              String?
+  statusRevision      Int                   @default(0)
   status              String                @default("upcoming")
   type                String                @default("mock")
   teamId              String?
@@ -541,6 +564,8 @@ model Contest {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @default(now())
   Team                Team?                 @relation(fields: [teamId], references: [id])
+  RuntimeTraining     Training?             @relation("ContestRuntimeTraining", fields: [runtimeTrainingId], references: [id], onDelete: Restrict)
+  Organization        Organization?         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   ContestProblem      ContestProblem[]
   ContestProblemScore ContestProblemScore[]
   ContestResource     ContestResource[]
@@ -551,11 +576,15 @@ model Contest {
   @@index([status])
   @@index([teamId])
   @@index([teamId, status])
+  @@index([organizationId, status])
 }
 
 model ContestProblem {
   id                  String                @id
   contestId           String
+  runtimeTrainingProblemId String?           @unique
+  canonicalProblemId  String?
+  testSetRevisionId   String?
   orderIndex          Int
   title               String?
   description         String?
@@ -572,10 +601,15 @@ model ContestProblem {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @default(now())
   Contest             Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  RuntimeTrainingProblem TrainingProblem?     @relation("ContestRuntimeProblem", fields: [runtimeTrainingProblemId], references: [id], onDelete: Restrict)
+  CanonicalProblem    Problem?               @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
+  TestSetRevision     ProblemTestSetRevision? @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
   ContestProblemScore ContestProblemScore[]
   ContestResource     ContestResource[]
 
   @@unique([contestId, orderIndex])
+  @@index([canonicalProblemId])
+  @@index([testSetRevisionId])
 }
 
 model ContestProblemScore {
@@ -1097,6 +1131,7 @@ model Problem {
   SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
   CopiedProblems                     Problem[]                            @relation("ProblemCopies")
   BlogReferences                     BlogReference[]                      @relation("BlogReferenceProblem")
+  ContestAggregateProblems           ContestProblem[]                    @relation("ContestCanonicalProblem")
 
   @@unique([libraryKey, platform, problemId])
   @@index([createdAt])
@@ -2400,6 +2435,8 @@ model SolutionContributionRevision {
   Verification              SolutionVerification?
   Reviews                   SolutionReview[]
   PublishedVersion          ProblemSolutionVersion?
+  SimilarityCheck           SolutionSimilarityCheck?       @relation("SolutionSimilaritySubject")
+  SimilarityMatches         SolutionSimilarityCheck[]       @relation("SolutionSimilarityContributionMatch")
 
   @@unique([contributionId, revision])
   @@index([targetTestSetRevisionId])
@@ -2510,10 +2547,34 @@ model ProblemSolutionVersion {
   PublishedBy                  User                         @relation("SolutionVersionPublisher", fields: [publishedByUserId], references: [id], onDelete: Restrict)
   BasedContributions           SolutionContribution[]       @relation("SolutionContributionBaseVersion")
   BlogReferences               BlogReference[]
+  SimilarityMatches            SolutionSimilarityCheck[]    @relation("SolutionSimilarityPublishedMatch")
 
   @@unique([solutionId, version])
   @@index([verifiedTestSetRevisionId])
   @@index([status, publishedAt])
+}
+
+model SolutionSimilarityCheck {
+  id                            String                        @id
+  contributionRevisionId        String                        @unique
+  textSimilarityBasisPoints     Int
+  codeSimilarityBasisPoints     Int
+  maximumSimilarityBasisPoints  Int
+  riskLevel                     SolutionSimilarityRisk
+  matchedSolutionVersionId      String?
+  matchedContributionRevisionId String?
+  sourceDeclared                Boolean
+  comparisonCount               Int
+  algorithmVersion              Int                           @default(1)
+  details                       Json?
+  checkedAt                     DateTime                       @default(now())
+  ContributionRevision          SolutionContributionRevision  @relation("SolutionSimilaritySubject", fields: [contributionRevisionId], references: [id], onDelete: Restrict)
+  MatchedSolutionVersion        ProblemSolutionVersion?       @relation("SolutionSimilarityPublishedMatch", fields: [matchedSolutionVersionId], references: [id], onDelete: SetNull)
+  MatchedContributionRevision   SolutionContributionRevision? @relation("SolutionSimilarityContributionMatch", fields: [matchedContributionRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([riskLevel, checkedAt])
+  @@index([matchedSolutionVersionId])
+  @@index([matchedContributionRevisionId])
 }
 
 model School {
@@ -2579,6 +2640,7 @@ model Organization {
   TrainingSession          TrainingSession[]
   Assignment               Assignment[]
   Submission               Submission[]
+  ContestAggregates        Contest[]
   RatingPools              RatingPool[]
   BlogPosts                BlogPost[]
   BlogSeries               BlogSeries[]
@@ -3488,6 +3550,7 @@ model ProblemTestSetRevision {
   PromotedCandidates              TestcaseCandidate[]               @relation("CandidatePromotedRevision")
   JudgeRuns                       JudgeRun[]
   SolutionContributions           SolutionContribution[]            @relation("SolutionContributionTargetRevision")
+  ContestAggregateProblems        ContestProblem[]                   @relation("ContestProblemTestSetRevision")
   SolutionContributionRevisions   SolutionContributionRevision[]    @relation("SolutionContributionRevisionTarget")
   SolutionVerifications           SolutionVerification[]            @relation("SolutionVerificationTestSetRevision")
   SolutionVersions                ProblemSolutionVersion[]          @relation("SolutionVersionTestSetRevision")
@@ -4079,6 +4142,13 @@ model Assignment {
   status                AssignmentStatus                @default(DRAFT)
   rosterMode            AssignmentRosterMode            @default(SNAPSHOT)
   gradingPolicy         AssignmentGradingPolicy         @default(BEST_BEFORE_DUE)
+  gradingVersion        Int                             @default(2)
+  baseScoreMax          Int                             @default(100)
+  optionalScoringPolicy AssignmentOptionalScoringPolicy @default(NONE)
+  optionalBestCount     Int?
+  optionalBonusMax      Int                             @default(0)
+  challengeScoringPolicy AssignmentChallengeScoringPolicy @default(NONE)
+  challengeBonusMax     Int                             @default(0)
   latePolicy            AssignmentLatePolicy            @default(DISALLOW)
   correctionPolicy      AssignmentCorrectionPolicy      @default(NONE)
   solutionReleasePolicy AssignmentSolutionReleasePolicy @default(AFTER_RELEASE)
@@ -4130,6 +4200,7 @@ model AssignmentProblem {
   category            AssignmentProblemCategory   @default(REQUIRED)
   required            Boolean                     @default(true)
   maxScore            Int                         @default(100)
+  judgeMaxScore       Int                         @default(100)
   targetScore         Int                         @default(100)
   weight              Int                         @default(100)
   completionPolicy    AssignmentCompletionPolicy  @default(TARGET_SCORE)
@@ -4246,6 +4317,7 @@ model AssignmentCorrection {
   status              AssignmentCorrectionStatus @default(NEEDS_CORRECTION)
   assignedBy          String
   reason              String?
+  requiredScore       Int?
   dueAt               DateTime?
   completedAt         DateTime?
   waivedAt            DateTime?
@@ -4365,6 +4437,7 @@ model Training {
   BlogReferences            BlogReference[]
   DataPurchases             DataPurchase[]
   DataEntitlements          DataEntitlement[]
+  ContestAggregate          Contest?                    @relation("ContestRuntimeTraining")
 
   @@index([organizationId])
   @@index([scope])
@@ -4440,6 +4513,7 @@ model TrainingProblem {
   ContentSnapshot           TrainingProblemContentSnapshot[]
   StatementSet              TrainingProblemStatementSet[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
+  ContestAggregateProblem   ContestProblem?                   @relation("ContestRuntimeProblem")
 
   @@unique([trainingId, alias])
   @@unique([trainingId, orderIndex])
@@ -4615,6 +4689,12 @@ model User {
   OwnedBlogSeries                          BlogSeries[]                      @relation("BlogSeriesOwner")
   OwnedBlogTags                            BlogTag[]                         @relation("BlogTagOwner")
   AddedBlogPostTags                        BlogPostTag[]                     @relation("BlogPostTagAdder")
+  BlogComments                             BlogComment[]                     @relation("BlogCommentAuthor")
+  BlogReactions                            BlogReaction[]
+  BlogBookmarks                            BlogBookmark[]
+  BlogReportsFiled                         BlogReport[]                      @relation("BlogReportReporter")
+  BlogReportsReviewed                      BlogReport[]                      @relation("BlogReportReviewer")
+  BlogFeaturesCreated                      BlogFeature[]                     @relation("BlogFeatureCreator")
   CreatedDataProducts                      DataProduct[]                     @relation("DataProductSellerUser")
   DataPurchases                            DataPurchase[]
   DataEntitlements                         DataEntitlement[]
@@ -4962,6 +5042,11 @@ model BlogPost {
   Draft            BlogPostDraft?
   SeriesEntries    BlogSeriesEntry[]
   Tags             BlogPostTag[]
+  Comments         BlogComment[]
+  Reactions        BlogReaction[]
+  Bookmarks        BlogBookmark[]
+  Reports          BlogReport[]
+  Features         BlogFeature[]
 
   @@unique([authorUserId, slug])
   @@index([status, visibility, publishedAt])
@@ -5117,4 +5202,89 @@ model BlogPostTag {
   @@id([postId, tagId])
   @@index([tagId, postId])
   @@index([addedByUserId])
+}
+
+model BlogComment {
+  id           String        @id
+  postId       String
+  authorUserId String
+  parentId     String?
+  content      String        @db.Text
+  status       String        @default("visible")
+  editedAt     DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now()) @updatedAt
+  Post         BlogPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  Author       User          @relation("BlogCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  Parent       BlogComment?  @relation("BlogCommentReplies", fields: [parentId], references: [id], onDelete: Restrict)
+  Replies      BlogComment[] @relation("BlogCommentReplies")
+  Reports      BlogReport[]
+
+  @@index([postId, status, createdAt])
+  @@index([parentId, createdAt])
+  @@index([authorUserId, createdAt])
+}
+
+model BlogReaction {
+  postId    String
+  userId    String
+  type      String
+  createdAt DateTime @default(now())
+  Post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId, type])
+  @@index([postId, type])
+  @@index([userId, createdAt])
+}
+
+model BlogBookmark {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  Post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model BlogReport {
+  id               String       @id
+  postId           String
+  commentId        String?
+  reporterUserId   String
+  reason           String
+  details          String?      @db.Text
+  evidenceSnapshot Json
+  status           String       @default("pending")
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  resolutionNote   String?      @db.Text
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @default(now()) @updatedAt
+  Post             BlogPost     @relation(fields: [postId], references: [id], onDelete: Restrict)
+  Comment          BlogComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  Reporter         User         @relation("BlogReportReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  ReviewedBy       User?        @relation("BlogReportReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([postId, status])
+  @@index([reporterUserId, createdAt])
+  @@index([commentId])
+}
+
+model BlogFeature {
+  id              String   @id
+  postId          String
+  createdByUserId String
+  status          String   @default("active")
+  reason          String?
+  createdAt       DateTime @default(now())
+  retiredAt       DateTime?
+  Post            BlogPost @relation(fields: [postId], references: [id], onDelete: Restrict)
+  CreatedBy       User     @relation("BlogFeatureCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([postId, status])
 }

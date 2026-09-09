@@ -13,6 +13,7 @@ import {
 } from '../training.helpers'
 import { lockContestRatingConfigTx, trackForFormat, defaultScoringRules } from '../../rating/application/contest-rating.service'
 import crypto from 'node:crypto'
+import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 
 export class TrainingCrudError extends Error {
   constructor(
@@ -504,6 +505,7 @@ export async function createMakeupHomework(id: number, userId: string, input: an
         category: 'REQUIRED',
         required: true,
         maxScore,
+        judgeMaxScore: judgeMaxScoreFromSnapshot(revision.judgeConfig, revision.mode),
         targetScore: maxScore,
         weight: 100,
         completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',

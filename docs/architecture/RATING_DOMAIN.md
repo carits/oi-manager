@@ -29,10 +29,9 @@ Rating 比赛时间重叠。配置使用 revision CAS，比赛开始或产生首
 
 计分先生成最终排名，再交给 Rating 算法：
 
-- OI：每题取手工标记的 `FINAL` 提交，否则取结束前最后一次确定结果；Judge 的 0～100 分按比赛题目分值缩放。
-- IOI：每题取结束前最高分提交，不跨提交拼接 Subtask。
-- ACM：按解题数降序、罚时升序；未解题不计罚时，CE、系统错误和未完成评测不产生错误罚时。
-- OI/IOI 同分并列。ACM 展示可以继续使用完成时间破同分，但 Rating tie 只比较解题数和罚时。
+- OI/IOI 按冻结的 `problemPolicy` 选择 `LAST_SUBMISSION/BEST_SUBMISSION`，按冻结的 `judgeMaxScore` 映射比赛题目分值，并按 `tiePolicy` 决定是否使用满分题数破同分；默认仍为 OI 最后提交、IOI 最好提交。
+- ACM 按解题数和罚时排序，错误罚时秒数、产生罚时的 Verdict、CE 是否计罚时及 Rating 并列规则全部读取比赛开始时冻结的 `scoringRules`，不读取以后代码中的默认值。
+- 生成或重放榜单前重新规范化冻结规则并校验 `rulesHash`；合法 SHA-256 哈希不一致时 fail closed，拒绝生成不可重放的 Rating 事实。
 
 管理员处置保存在参赛者快照：
 
@@ -62,6 +61,12 @@ delta = K(96) × weight × (actualPerformance - expectedPerformance)
 保存 `SKIPPED/NOT_ENOUGH_PARTICIPANTS` Batch，不静默伪造变化。
 
 算法代码、版本、K、scale、比赛权重、计分规则和规则哈希均固化到配置、池、快照或 Batch，支持完整重放。
+
+个人端 `/personal/rankings` 的 Rating 区域按全局/组织和 OI/IOI/ACM 展示账户、当前/峰值 Rating、暂定状态、比赛历史和曲线；历史链接仍指向原比赛运行态。
+
+## 现有 Contest 聚合桥接
+
+仓库已有 `Contest/ContestProblem/ContestResult` 方案，本轮不再创建重复比赛模型。当前判题运行态仍由 `Training(type=contest)` 承载；`Contest.runtimeTrainingId` 与 `ContestProblem.runtimeTrainingProblemId` 提供一对一桥接，并固定组织、时间、赛制、题目和 TestSet Revision。受保护的 `contest-aggregates` check/apply 迁移只为能可靠固定全部 Revision 的历史比赛建立映射，异常比赛进入报告且不猜测迁移。该桥接为后续逐步切换聚合事实源提供身份，不改变现有提交、榜单或 Rating 外键。
 
 ## 最终结算和重放
 

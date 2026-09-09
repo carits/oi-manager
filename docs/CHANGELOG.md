@@ -11,6 +11,16 @@ source_of_truth: Git history
 
 ## 2026-09-09
 
+### 作业评分、Rating 重放、题解风控与博客社区收口
+
+- 修复 Assignment 正式评分链：固定 Judge 满分后按比例映射作业分值，必做题按权重归一化，选做/挑战按显式策略加分；多道必做题必须全部有完成进度才结束作业，订正必须达到固定目标分。
+- 作业草稿 UI 补齐发布时间、基础/选做/挑战计分策略，以及逐题类别、满分、目标、权重与完成条件；成绩矩阵和快照返回分项证据。
+- Rating Standing 现在真实消费并校验冻结的 `scoringRules/rulesHash`，ACM 罚时与 OI/IOI 提交选择均可历史重放；个人 Rating 页面新增多池账户、曲线和比赛变化历史。
+- 题解投稿新增正文/代码归一化相似度检查，只向审核者展示匹配证据并明确仅作风险提示，不自动判定抄袭。
+- Blog 新增评论/一层回复、喜欢/有帮助、收藏、举报、证据审计、治理动作和社区精选；平台与超管获得统一治理页面。
+- 复用既有 `Contest/ContestProblem` 方案，以唯一运行态和 TestSet Revision 外键建立 Training 比赛桥接及受保护的幂等 check/apply，不创建第二套 Contest 模型。
+- 本地验证：Assignment/相似度/冻结计分纯领域测试 10/10、Web 25 文件/93 项、Server 与 Web 生产构建通过；数据库迁移、隔离 PostgreSQL 回归、推送和生产发布仍需在发布步骤完成。
+
 ### Rating、质量、知识与数据市场统一生产发布
 
 - Rating、TestSet DQS/PQS、题解、Blog/知识域和 Revision 数据市场已随提交 `0547fd1` 统一推送 `main` 并完成生产发布；贡献、Carits 与 Evaluation Credits 闭环继续作为统一账本和预算底座。

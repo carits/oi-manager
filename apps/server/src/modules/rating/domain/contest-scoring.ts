@@ -37,12 +37,69 @@ export interface StandingDraftEntry {
   participantDisposition: RatingParticipantDisposition
 }
 
-const PENDING_RESULTS = new Set(['', 'queuing', 'judging', 'pending_review'])
-const PENALTY_RESULTS = new Set(['wrong_answer', 'wa', 'time_limit_exceeded', 'tle', 'memory_limit_exceeded', 'mle', 'runtime_error', 're', 'output_limit_exceeded', 'ole', 'presentation_error', 'pe'])
+export type ScoreProblemPolicy = 'LAST_SUBMISSION' | 'BEST_SUBMISSION'
+export type ScoreTiePolicy = 'SCORE' | 'SCORE_FULL_COUNT'
 
-function scaledScore(submission: ScoringSubmission, problem: ScoringProblem) {
-  const raw = Math.max(0, Math.min(100, submission.score ?? (isAcceptedResult(submission.result) ? 100 : 0)))
-  return Math.round(raw * (problem.points ?? 100)) / 100
+export type ContestScoringRules = {
+  version: 1
+  problemPolicy?: ScoreProblemPolicy
+  tiePolicy?: ScoreTiePolicy
+  judgeMaxScore?: number
+  wrongPenaltySeconds?: number
+  penaltyVerdicts?: string[]
+  compileErrorPenalty?: boolean
+  ratingTiePolicy?: 'SOLVED_PENALTY' | 'SOLVED_PENALTY_LAST_ACCEPTED'
+}
+
+export function defaultScoringRules(track: RatingTrack): ContestScoringRules {
+  if (track === 'OI') return { version: 1, problemPolicy: 'LAST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
+  if (track === 'IOI') return { version: 1, problemPolicy: 'BEST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
+  return { version: 1, wrongPenaltySeconds: 1200, penaltyVerdicts: ['WA', 'PE', 'TLE', 'MLE', 'RE', 'OLE'], compileErrorPenalty: false, ratingTiePolicy: 'SOLVED_PENALTY_LAST_ACCEPTED' }
+}
+
+export function normalizeScoringRules(track: RatingTrack, value: unknown): ContestScoringRules {
+  const defaults = defaultScoringRules(track)
+  if (!value || typeof value !== 'object' || Number((value as any).version ?? 1) !== 1) return defaults
+  const raw = value as any
+  if (track === 'ACM') {
+    const wrongPenaltySeconds = Number(raw.wrongPenaltySeconds)
+    return {
+      version: 1,
+      wrongPenaltySeconds: Number.isInteger(wrongPenaltySeconds) && wrongPenaltySeconds >= 0 && wrongPenaltySeconds <= 24 * 60 * 60 ? wrongPenaltySeconds : defaults.wrongPenaltySeconds,
+      penaltyVerdicts: Array.isArray(raw.penaltyVerdicts) ? raw.penaltyVerdicts.map((item: unknown) => String(item).toUpperCase()).filter(Boolean).slice(0, 32) : defaults.penaltyVerdicts,
+      compileErrorPenalty: raw.compileErrorPenalty === true,
+      ratingTiePolicy: raw.ratingTiePolicy === 'SOLVED_PENALTY' ? 'SOLVED_PENALTY' : 'SOLVED_PENALTY_LAST_ACCEPTED',
+    }
+  }
+  const judgeMaxScore = Number(raw.judgeMaxScore)
+  return {
+    version: 1,
+    problemPolicy: raw.problemPolicy === 'BEST_SUBMISSION' || raw.problemPolicy === 'LAST_SUBMISSION'
+      ? raw.problemPolicy
+      : defaults.problemPolicy,
+    tiePolicy: raw.tiePolicy === 'SCORE_FULL_COUNT' || raw.tiePolicy === 'SCORE'
+      ? raw.tiePolicy
+      : defaults.tiePolicy,
+    judgeMaxScore: Number.isFinite(judgeMaxScore) && judgeMaxScore > 0 ? judgeMaxScore : defaults.judgeMaxScore,
+  }
+}
+
+const PENDING_RESULTS = new Set(['', 'queuing', 'judging', 'pending_review'])
+
+function verdictAliases(verdict: string) {
+  const key = verdict.toUpperCase()
+  const aliases: Record<string, string[]> = {
+    WA: ['wrong_answer', 'wa'], PE: ['presentation_error', 'pe'],
+    TLE: ['time_limit_exceeded', 'tle'], MLE: ['memory_limit_exceeded', 'mle'],
+    RE: ['runtime_error', 're'], OLE: ['output_limit_exceeded', 'ole'],
+    CE: ['compile_error', 'ce'],
+  }
+  return aliases[key] || [verdict.toLowerCase()]
+}
+
+function scaledScore(submission: ScoringSubmission, problem: ScoringProblem, judgeMaxScore: number) {
+  const raw = Math.max(0, Math.min(judgeMaxScore, submission.score ?? (isAcceptedResult(submission.result) ? judgeMaxScore : 0)))
+  return Math.round((raw / judgeMaxScore) * (problem.points ?? 100) * 100) / 100
 }
 
 function competitionRanks<T>(items: T[], tied: (left: T, right: T) => boolean) {
@@ -52,7 +109,7 @@ function competitionRanks<T>(items: T[], tied: (left: T, right: T) => boolean) {
 }
 
 function scoreBasedStanding(
-  track: Extract<RatingTrack, 'OI' | 'IOI'>,
+  rules: ContestScoringRules,
   problems: ScoringProblem[],
   submissions: ScoringSubmission[],
   participants: ScoringParticipant[],
@@ -63,21 +120,22 @@ function scoreBasedStanding(
     for (const problem of problems) {
       const attempts = submissions.filter(item => item.userId === participant.userId && item.trainingProblemId === problem.id && !PENDING_RESULTS.has(item.result))
       if (!attempts.length) continue
-      const selected = track === 'IOI'
-        ? [...attempts].sort((left, right) => scaledScore(right, problem) - scaledScore(left, problem) || right.createdAt.getTime() - left.createdAt.getTime() || right.id - left.id)[0]
+      const judgeMaxScore = rules.judgeMaxScore || 100
+      const selected = rules.problemPolicy === 'BEST_SUBMISSION'
+        ? [...attempts].sort((left, right) => scaledScore(right, problem, judgeMaxScore) - scaledScore(left, problem, judgeMaxScore) || right.createdAt.getTime() - left.createdAt.getTime() || right.id - left.id)[0]
         : [...attempts].sort((left, right) => Number(right.submissionPhase === 'FINAL') - Number(left.submissionPhase === 'FINAL') || right.createdAt.getTime() - left.createdAt.getTime() || right.id - left.id)[0]
-      const score = scaledScore(selected, problem)
+      const score = scaledScore(selected, problem, judgeMaxScore)
       totalScore += score
       if (score >= (problem.points ?? 100)) fullScoreCount++
     }
     return { participant, totalScore: Math.round(totalScore * 100) / 100, fullScoreCount }
-  }).sort((left, right) => right.totalScore - left.totalScore || left.participant.userId.localeCompare(right.participant.userId))
-  const ranks = competitionRanks(rows, (left, right) => left.totalScore === right.totalScore)
+  }).sort((left, right) => right.totalScore - left.totalScore || (rules.tiePolicy === 'SCORE_FULL_COUNT' ? right.fullScoreCount - left.fullScoreCount : 0) || left.participant.userId.localeCompare(right.participant.userId))
+  const ranks = competitionRanks(rows, (left, right) => left.totalScore === right.totalScore && (rules.tiePolicy !== 'SCORE_FULL_COUNT' || left.fullScoreCount === right.fullScoreCount))
   return rows.map((row, index): StandingDraftEntry => ({
     userId: row.participant.userId,
     organizationIdSnapshot: row.participant.organizationIdSnapshot,
     rank: ranks[index],
-    ratingTieGroup: `score:${row.totalScore.toFixed(2)}`,
+    ratingTieGroup: rules.tiePolicy === 'SCORE_FULL_COUNT' ? `score:${row.totalScore.toFixed(2)}:full:${row.fullScoreCount}` : `score:${row.totalScore.toFixed(2)}`,
     totalScore: row.totalScore,
     solvedCount: null,
     penaltySeconds: null,
@@ -90,10 +148,12 @@ function scoreBasedStanding(
 
 function acmStanding(
   startTime: Date,
+  rules: ContestScoringRules,
   problems: ScoringProblem[],
   submissions: ScoringSubmission[],
   participants: ScoringParticipant[],
 ) {
+  const penaltyResults = new Set((rules.penaltyVerdicts || []).flatMap(verdict => verdictAliases(verdict)))
   const rows = participants.map(participant => {
     let solvedCount = 0
     let penaltySeconds = 0
@@ -105,22 +165,24 @@ function acmStanding(
       for (const attempt of attempts) {
         if (isAcceptedResult(attempt.result) || (attempt.score ?? 0) >= 100) {
           solvedCount++
-          penaltySeconds += Math.max(0, Math.floor((attempt.createdAt.getTime() - startTime.getTime()) / 1000)) + wrong * 20 * 60
+          penaltySeconds += Math.max(0, Math.floor((attempt.createdAt.getTime() - startTime.getTime()) / 1000)) + wrong * (rules.wrongPenaltySeconds ?? 1200)
           if (!lastAcceptedAt || attempt.createdAt > lastAcceptedAt) lastAcceptedAt = attempt.createdAt
           break
         }
-        if (PENALTY_RESULTS.has(attempt.result.toLowerCase())) wrong++
+        if (penaltyResults.has(attempt.result.toLowerCase()) || rules.compileErrorPenalty && ['compile_error', 'ce'].includes(attempt.result.toLowerCase())) wrong++
       }
     }
     return { participant, solvedCount, penaltySeconds, lastAcceptedAt }
   }).sort((left, right) => right.solvedCount - left.solvedCount || left.penaltySeconds - right.penaltySeconds ||
-    (left.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (right.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) || left.participant.userId.localeCompare(right.participant.userId))
-  const ranks = competitionRanks(rows, (left, right) => left.solvedCount === right.solvedCount && left.penaltySeconds === right.penaltySeconds && left.lastAcceptedAt?.getTime() === right.lastAcceptedAt?.getTime())
+    (rules.ratingTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED' ? (left.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (right.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) : 0) || left.participant.userId.localeCompare(right.participant.userId))
+  const ranks = competitionRanks(rows, (left, right) => left.solvedCount === right.solvedCount && left.penaltySeconds === right.penaltySeconds && (rules.ratingTiePolicy !== 'SOLVED_PENALTY_LAST_ACCEPTED' || left.lastAcceptedAt?.getTime() === right.lastAcceptedAt?.getTime()))
   return rows.map((row, index): StandingDraftEntry => ({
     userId: row.participant.userId,
     organizationIdSnapshot: row.participant.organizationIdSnapshot,
     rank: ranks[index],
-    ratingTieGroup: `ac:${row.solvedCount}:penalty:${row.penaltySeconds}`,
+    ratingTieGroup: rules.ratingTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED'
+      ? `ac:${row.solvedCount}:penalty:${row.penaltySeconds}:last:${row.lastAcceptedAt?.getTime() ?? 'none'}`
+      : `ac:${row.solvedCount}:penalty:${row.penaltySeconds}`,
     totalScore: null,
     solvedCount: row.solvedCount,
     penaltySeconds: row.penaltySeconds,
@@ -137,11 +199,13 @@ export function buildStanding(input: {
   problems: ScoringProblem[]
   submissions: ScoringSubmission[]
   participants: ScoringParticipant[]
+  scoringRules?: unknown
 }) {
   const visibleParticipants = input.participants.filter(item => item.disposition !== 'EXCLUDE')
+  const rules = normalizeScoringRules(input.track, input.scoringRules)
   const rows = input.track === 'ACM'
-    ? acmStanding(input.startTime, input.problems, input.submissions, visibleParticipants)
-    : scoreBasedStanding(input.track, input.problems, input.submissions, visibleParticipants)
+    ? acmStanding(input.startTime, rules, input.problems, input.submissions, visibleParticipants)
+    : scoreBasedStanding(rules, input.problems, input.submissions, visibleParticipants)
   const normal = rows.filter(item => item.participantDisposition !== 'FORCE_LAST')
   const forcedLast = rows.filter(item => item.participantDisposition === 'FORCE_LAST')
   normal.forEach((item, index) => {

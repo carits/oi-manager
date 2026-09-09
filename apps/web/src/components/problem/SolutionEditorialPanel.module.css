@@ -29,4 +29,12 @@ button.card:hover, button.card[data-selected='true'] { border-color: var(--prima
 .timelineItem p { margin: .2rem 0 0; white-space: pre-wrap; }
 .empty { padding: 1rem; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-md, 8px); }
 .error { color: var(--error); font-size: .82rem; }
+.similarity { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: .8rem; border: 1px solid var(--border); border-radius: var(--radius-md, 8px); background: var(--bg-muted); }
+.similarity[data-risk='MEDIUM'] { border-color: var(--warning); background: var(--warning-light); }
+.similarity[data-risk='HIGH'] { border-color: var(--error); background: var(--error-light); }
+.similarity p { margin: .25rem 0 0; color: var(--text-secondary); font-size: .8rem; }
+.similarity dl { display: flex; gap: .8rem; margin: 0; }
+.similarity dl div { display: grid; gap: .1rem; text-align: right; }
+.similarity dt { color: var(--text-muted); font-size: .72rem; }
+.similarity dd { margin: 0; font-weight: 600; }
 @media (max-width: 720px) { .formGrid, .reviewLayout { grid-template-columns: 1fr; } .wide { grid-column: auto; } }

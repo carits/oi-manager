@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import PersonalRankingsTab from '@/components/organization-pages/student/rating/PersonalRankingsTab'
+import { PersonalRatingDashboard } from '@/components/ranking/PersonalRatingDashboard'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
@@ -25,6 +26,7 @@ export default function PersonalRankingsPage() {
       <div className={styles.content}>
         <PageHeader title="个人排行榜" description="仅展示个人工作区的公开用户名资料。" />
         <SegmentedControl label="排名指标" value={activeTab} onChange={setTab} items={[{ value: 'rating', label: 'Rating' }, { value: 'solved', label: '做题量' }, { value: 'contribution', label: '贡献' }]} />
+        {activeTab === 'rating' && <PersonalRatingDashboard />}
         <PersonalRankingsTab type={activeTab} />
       </div>
     </PageFrame>

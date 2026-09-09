@@ -18,6 +18,7 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/components/AuthProvider'
 import { BlogReferenceEditor } from './BlogReferenceEditor'
+import { BlogCommunityPanel } from './BlogCommunityPanel'
 import {
   BLOG_REFERENCE_LABELS,
   BLOG_TYPE_LABELS,
@@ -300,6 +301,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       {classificationView(post.currentVersion.classification)}
       <MarkdownRenderer content={post.currentVersion.contentMarkdown} securityProfile="knowledge" />
       <div className={styles.referenceSection}><h2>固定引用</h2>{referenceCards(post.currentVersion.references)}</div>
+      <BlogCommunityPanel postId={post.id} />
     </section>}
 
     {tab === 'versions' && post && <section className={styles.historyLayout}>

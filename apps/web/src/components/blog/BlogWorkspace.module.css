@@ -52,13 +52,28 @@
 .historyLayout { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .versionList { display: grid; gap: var(--space-2); }
 .versionList button { justify-content: flex-start; text-align: left; }
+.community { display: grid; gap: var(--space-4); padding-top: var(--space-5); border-top: 1px solid var(--border); }
+.communityHead, .communityHead > div, .communityActions, .commentComposer > div, .comment header { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.communityHead { justify-content: space-between; }
+.communityHead h2 { margin: 0; font-size: var(--text-lg); }
+.featured { padding: .15rem .45rem; border-radius: 999px; color: var(--warning-text); background: var(--warning-light); font-size: var(--text-xs); }
+.commentComposer { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-muted); }
+.commentComposer > div:last-child { justify-content: space-between; color: var(--text-muted); font-size: var(--text-sm); }
+.replying { justify-content: flex-start !important; }
+.comments { display: grid; gap: var(--space-3); }
+.comment, .commentReply { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.comment header { justify-content: space-between; }
+.comment time, .commentReply time { color: var(--text-muted); font-size: var(--text-xs); }
+.comment p, .commentReply p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.commentReply { margin-left: var(--space-6); background: var(--bg-muted); }
 
 @media (max-width: 720px) {
   .metadataGrid, .formGrid, .referenceGrid, .referenceCards, .classificationGrid, .historyLayout, .seriesLayout { grid-template-columns: 1fr; }
-  .toolbar, .publishBar, .referenceHeading, .reader > header { align-items: stretch; flex-direction: column; }
+  .toolbar, .publishBar, .referenceHeading, .reader > header, .communityHead { align-items: stretch; flex-direction: column; }
   .publishBar { position: static; }
   .publishBar > div:last-child { flex-direction: column; }
   .publishBar button { width: 100%; }
   .seriesEntries article, .seriesActions { align-items: stretch; flex-direction: column; }
   .seriesEntries article > div:last-child { justify-content: flex-end; }
+  .commentReply { margin-left: var(--space-3); }
 }

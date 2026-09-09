@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { Prisma, RatingScope, RatingTrack } from '@prisma/client'
 import { prisma } from '../../../prisma'
 import { canAccessTraining, canManageTraining } from '../../training/training.helpers'
-import { buildStanding, type ScoringParticipant, type ScoringSubmission } from '../domain/contest-scoring'
+import { buildStanding, defaultScoringRules, normalizeScoringRules, type ScoringParticipant, type ScoringSubmission } from '../domain/contest-scoring'
 import { calculateMultiElo, RATING_ALGORITHM } from '../domain/multi-elo'
 
 export class ContestRatingError extends Error {
@@ -44,11 +44,7 @@ export function trackForFormat(format: string): RatingTrack {
   fail(422, 'RATING_SCORING_MODE_UNSUPPORTED', '该比赛赛制暂不支持 Rating')
 }
 
-export function defaultScoringRules(track: RatingTrack) {
-  if (track === 'OI') return { version: 1, problemPolicy: 'LAST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
-  if (track === 'IOI') return { version: 1, problemPolicy: 'BEST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
-  return { version: 1, wrongPenaltySeconds: 1200, penaltyVerdicts: ['WA', 'PE', 'TLE', 'MLE', 'RE', 'OLE'], compileErrorPenalty: false, ratingTiePolicy: 'SOLVED_PENALTY' }
-}
+export { defaultScoringRules } from '../domain/contest-scoring'
 
 async function requireContest(trainingId: number) {
   const training = await prisma.training.findUnique({ where: { id: trainingId }, include: { RatingConfig: true, Team: { select: { organizationId: true } } } })
@@ -353,6 +349,11 @@ async function currentSubmissionRows(tx: Prisma.TransactionClient, training: any
 }
 
 async function buildStandingSnapshotTx(tx: Prisma.TransactionClient, training: any, config: any, actorUserId: string) {
+  const frozenRules = normalizeScoringRules(config.track, config.scoringRules)
+  const computedRulesHash = hash({ track: config.track, scoringRules: frozenRules })
+  if (/^[0-9a-f]{64}$/i.test(String(config.rulesHash || '')) && config.rulesHash !== computedRulesHash) {
+    fail(409, 'RATING_SCORING_RULES_HASH_MISMATCH', '冻结的 Rating 计分规则与哈希不一致，已拒绝生成榜单')
+  }
   const submissions = await currentSubmissionRows(tx, training)
   const participants = await normalizeParticipantsTx(tx, training, submissions)
   const excludedManagers = await excludedManagerIdsTx(tx, training)
@@ -366,6 +367,7 @@ async function buildStandingSnapshotTx(tx: Prisma.TransactionClient, training: a
     }))
   const entries = buildStanding({
     track: config.track,
+    scoringRules: frozenRules,
     startTime: training.startTime,
     problems: training.TrainingProblem,
     submissions,

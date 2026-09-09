@@ -31,7 +31,7 @@ interface ValidationResult { valid: boolean; issues: Array<{ path: string; code:
 interface ProgressItem { assignmentProblemId: string; learningStatus: string; timelinessStatus: string; correctionStatus: string; attemptCount?: number; bestScore?: number | null; bestVerdict?: string | null; finalScore?: number | null }
 interface ProgressRecipient { id: string; user: { id: string; username: string }; score: number; rawScore: number; adjustment: number; completedProblems: number; lateProblems: number; correctionProblems: number; progress: ProgressItem[] }
 interface ProgressPayload { recipients: ProgressRecipient[]; problems: AssignmentProblem[] }
-interface AssignmentCorrectionItem { id: string; assignmentProblemId: string; status: string; reason?: string | null; dueAt?: string | null; createdAt: string }
+interface AssignmentCorrectionItem { id: string; assignmentProblemId: string; status: string; reason?: string | null; requiredScore?: number | null; dueAt?: string | null; createdAt: string }
 interface AssignmentFeedbackItem { id: string; assignmentProblemId?: string | null; content: string; createdAt: string }
 interface AssignmentGradeSnapshotItem { id: string; type: string; revision: number; totalScore: number; maxScore: number; createdAt: string }
 interface AssignmentWorkspacePayload {
@@ -54,12 +54,19 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   const [title, setTitle] = useState(assignment.title)
   const [description, setDescription] = useState(assignment.description || '')
   const [learningObjectives, setLearningObjectives] = useState(assignment.learningObjectives || '')
+  const [publishAt, setPublishAt] = useState(toLocalInput(assignment.publishAt))
   const [openAt, setOpenAt] = useState(toLocalInput(assignment.openAt))
   const [dueAt, setDueAt] = useState(toLocalInput(assignment.dueAt))
   const [closeAt, setCloseAt] = useState(toLocalInput(assignment.closeAt))
   const [correctionDueAt, setCorrectionDueAt] = useState(toLocalInput(assignment.correctionDueAt))
   const [rosterMode, setRosterMode] = useState(assignment.rosterMode)
   const [gradingPolicy, setGradingPolicy] = useState(assignment.gradingPolicy)
+  const [baseScoreMax, setBaseScoreMax] = useState(assignment.baseScoreMax)
+  const [optionalScoringPolicy, setOptionalScoringPolicy] = useState(assignment.optionalScoringPolicy)
+  const [optionalBestCount, setOptionalBestCount] = useState(assignment.optionalBestCount ?? 1)
+  const [optionalBonusMax, setOptionalBonusMax] = useState(assignment.optionalBonusMax)
+  const [challengeScoringPolicy, setChallengeScoringPolicy] = useState(assignment.challengeScoringPolicy)
+  const [challengeBonusMax, setChallengeBonusMax] = useState(assignment.challengeBonusMax)
   const [latePolicy, setLatePolicy] = useState(assignment.latePolicy)
   const [latePenaltyPercent, setLatePenaltyPercent] = useState(assignment.latePenaltyPercent ?? 0)
   const [correctionPolicy, setCorrectionPolicy] = useState(assignment.correctionPolicy)
@@ -90,8 +97,11 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   }
 
   const saveBasics = () => mutate(`/api/assignments/${assignment.id}`, 'PATCH', {
-    expectedRevision: assignment.statusRevision, title, description, learningObjectives, openAt, dueAt, closeAt,
+    expectedRevision: assignment.statusRevision, title, description, learningObjectives, publishAt: publishAt || null, openAt, dueAt, closeAt,
     correctionDueAt: correctionDueAt || null, rosterMode, gradingPolicy, latePolicy,
+    baseScoreMax, optionalScoringPolicy, optionalBestCount: optionalScoringPolicy === 'BEST_N' ? optionalBestCount : null,
+    optionalBonusMax: optionalScoringPolicy === 'NONE' ? 0 : optionalBonusMax,
+    challengeScoringPolicy, challengeBonusMax: challengeScoringPolicy === 'NONE' ? 0 : challengeBonusMax,
     latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null,
     correctionPolicy, solutionReleasePolicy,
   }, 'basic')
@@ -106,7 +116,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     if (!revision) return toast.error('该题最新测试版本不可用')
     setProblemDraft(current => [...current, {
       id: `draft-${problem.id}`, problemId: problem.id, testSetRevisionId: revision.id, orderIndex: current.length,
-      category: 'REQUIRED', required: true, maxScore: 100, targetScore: 100, weight: 100,
+      category: 'REQUIRED', required: true, maxScore: 100, judgeMaxScore: 100, targetScore: 100, weight: 100,
       completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE', Problem: { ...problem, allowedLanguages: null }, TestSetRevision: revision,
     }])
   }
@@ -143,12 +153,19 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     <Section title="基本信息" description={`配置版本 ${assignment.statusRevision}`} actions={<Button loading={saving === 'basic'} onClick={() => void saveBasics()}>保存基本信息</Button>}>
       <div className={styles.settingsGrid}>
         <FormField label="作业名称" required><Input value={title} onChange={event => setTitle(event.target.value)} /></FormField>
+        <FormField label="发布时间" hint="留空表示发布后立即可见；不能晚于开放时间"><Input type="datetime-local" value={publishAt} onChange={event => setPublishAt(event.target.value)} /></FormField>
         <FormField label="开放时间" required><Input type="datetime-local" value={openAt} onChange={event => setOpenAt(event.target.value)} /></FormField>
         <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></FormField>
         <FormField label="关闭时间" required><Input type="datetime-local" value={closeAt} onChange={event => setCloseAt(event.target.value)} /></FormField>
         <FormField label="订正截止时间" hint="留空表示不单独限制"><Input type="datetime-local" value={correctionDueAt} onChange={event => setCorrectionDueAt(event.target.value)} /></FormField>
         <FormField label="名单模式"><Select value={rosterMode} onChange={event => setRosterMode(event.target.value as Assignment['rosterMode'])}><option value="SNAPSHOT">手动名单快照</option><option value="DYNAMIC">发布时按学校/团队生成</option></Select></FormField>
         <FormField label="评分策略"><Select value={gradingPolicy} onChange={event => setGradingPolicy(event.target.value)}><option value="BEST_BEFORE_DUE">截止前最好成绩</option><option value="BEST">全部提交最好成绩</option><option value="LATEST">最后一次成绩</option><option value="FIRST_TARGET_MET">首次达标成绩</option></Select></FormField>
+        <FormField label="基础成绩满分" hint="必做题按权重归一化到该分值"><Input type="number" min={1} max={1000} value={baseScoreMax} onChange={event => setBaseScoreMax(Number(event.target.value))} /></FormField>
+        <FormField label="选做题计分"><Select value={optionalScoringPolicy} onChange={event => setOptionalScoringPolicy(event.target.value as Assignment['optionalScoringPolicy'])}><option value="NONE">不计入成绩</option><option value="BONUS">全部按权重计加分</option><option value="BEST_N">取完成度最高的 N 题</option></Select></FormField>
+        {optionalScoringPolicy === 'BEST_N' && <FormField label="选做题计分数量" required><Input type="number" min={1} max={1000} value={optionalBestCount} onChange={event => setOptionalBestCount(Number(event.target.value))} /></FormField>}
+        {optionalScoringPolicy !== 'NONE' && <FormField label="选做题加分上限" required><Input type="number" min={1} max={1000} value={optionalBonusMax} onChange={event => setOptionalBonusMax(Number(event.target.value))} /></FormField>}
+        <FormField label="挑战题计分"><Select value={challengeScoringPolicy} onChange={event => setChallengeScoringPolicy(event.target.value as Assignment['challengeScoringPolicy'])}><option value="NONE">不计入成绩</option><option value="EXTRA_CREDIT">按权重计额外加分</option></Select></FormField>
+        {challengeScoringPolicy === 'EXTRA_CREDIT' && <FormField label="挑战题加分上限" required><Input type="number" min={1} max={1000} value={challengeBonusMax} onChange={event => setChallengeBonusMax(Number(event.target.value))} /></FormField>}
         <FormField label="迟交策略"><Select value={latePolicy} onChange={event => setLatePolicy(event.target.value)}><option value="DISALLOW">不允许迟交</option><option value="ALLOW_MARK_LATE">允许并标记迟交</option><option value="ALLOW_NO_PENALTY">允许且不扣分</option><option value="ALLOW_WITH_PENALTY">允许并按比例扣分</option></Select></FormField>
         {latePolicy === 'ALLOW_WITH_PENALTY' && <FormField label="迟交扣分比例" required hint="0～100%"><Input type="number" min={0} max={100} value={latePenaltyPercent} onChange={event => setLatePenaltyPercent(Number(event.target.value))} /></FormField>}
         <FormField label="订正策略"><Select value={correctionPolicy} onChange={event => setCorrectionPolicy(event.target.value)}><option value="NONE">不自动要求订正</option><option value="BELOW_TARGET">未达目标分需订正</option><option value="NON_AC">未 AC 需订正</option><option value="TEACHER_ASSIGNED">仅教师指定</option></Select></FormField>
@@ -157,11 +174,16 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
         <div className={styles.full}><FormField label="学习目标"><Textarea rows={3} value={learningObjectives} onChange={event => setLearningObjectives(event.target.value)} /></FormField></div>
       </div>
     </Section>
-    <Section title="题目与固定版本" description="调整题目顺序、分值和完成目标。" actions={<><Button variant="secondary" icon={<Plus size={16} />} onClick={() => setPickerOpen(true)}>添加题目</Button><Button loading={saving === 'problems'} onClick={() => void saveProblems()}>保存题目</Button></>}>
+    <Section title="题目与固定版本" description="必做题构成基础成绩分母；选做与挑战题仅按上方启用的加分策略计算。Judge 原始分会按固定版本满分比例映射。" actions={<><Button variant="secondary" icon={<Plus size={16} />} onClick={() => setPickerOpen(true)}>添加题目</Button><Button loading={saving === 'problems'} onClick={() => void saveProblems()}>保存题目</Button></>}>
       <div className={styles.stack}>{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
         <span className={styles.problemIdentity}><strong>{index + 1}. {item.Problem.problemId} · {item.Problem.title}</strong><span>固定 R{item.TestSetRevision.revisionNumber} · {item.TestSetRevision.mode.toUpperCase()}</span></span>
-        <Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value) } : row))} />
-        <Input aria-label={`${item.Problem.title} 目标分`} type="number" min={0} max={item.maxScore} value={item.targetScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, targetScore: Number(event.target.value) } : row))} />
+        <div className={styles.problemControls}>
+          <FormField label="类别"><Select aria-label={`${item.Problem.title} 类别`} value={item.category} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, category: event.target.value as AssignmentProblem['category'], required: event.target.value === 'REQUIRED' } : row))}><option value="REQUIRED">必做</option><option value="OPTIONAL">选做</option><option value="CHALLENGE">挑战</option></Select></FormField>
+          <FormField label="作业满分" hint={`Judge 满分 ${item.judgeMaxScore || 100}`}><Input aria-label={`${item.Problem.title} 满分`} type="number" min={1} max={1000} value={item.maxScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, maxScore: Number(event.target.value), targetScore: Math.min(row.targetScore, Number(event.target.value)) } : row))} /></FormField>
+          <FormField label="达标分"><Input aria-label={`${item.Problem.title} 目标分`} type="number" min={0} max={item.maxScore} value={item.targetScore} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, targetScore: Number(event.target.value) } : row))} /></FormField>
+          <FormField label="权重"><Input aria-label={`${item.Problem.title} 权重`} type="number" min={1} max={10000} value={item.weight} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, weight: Number(event.target.value) } : row))} /></FormField>
+          <FormField label="完成条件"><Select aria-label={`${item.Problem.title} 完成条件`} value={item.completionPolicy} onChange={event => setProblemDraft(current => current.map(row => row.id === item.id ? { ...row, completionPolicy: event.target.value as AssignmentProblem['completionPolicy'] } : row))}><option value="AC">必须 AC</option><option value="TARGET_SCORE">达到目标分</option><option value="ATTEMPT">有提交即可</option><option value="MANUAL">教师确认</option></Select></FormField>
+        </div>
         <span className={styles.actions}><Button iconOnly variant="ghost" aria-label="上移题目" disabled={index === 0} onClick={() => move(index, -1)} icon={<ArrowUp size={16} />} /><Button iconOnly variant="ghost" aria-label="下移题目" disabled={index === problemDraft.length - 1} onClick={() => move(index, 1)} icon={<ArrowDown size={16} />} /><Button iconOnly variant="ghost" aria-label="移除题目" onClick={() => setProblemDraft(current => current.filter(row => row.id !== item.id))} icon={<Trash2 size={16} />} /></span>
       </div>)}{problemDraft.length === 0 && <p className={styles.muted}>尚未添加题目。</p>}</div>
     </Section>
@@ -212,7 +234,7 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
     {latestGrade && <Section title="已发布成绩" description={`成绩快照 v${latestGrade.revision} · ${formatAssignmentTime(latestGrade.createdAt)}`}><div className={styles.gradeSummary}><strong>{latestGrade.totalScore}</strong><span>/ {latestGrade.maxScore} 分</span></div></Section>}
     <Section title="题目" description={canSubmit ? '每道题都使用作业发布时固定的测试版本。' : assignment.status === 'SCHEDULED' ? '作业尚未开放。' : '当前作业已经停止接收提交。'}><div className={styles.problemCards}>{assignment.Problems.map((item, index) => { const progress = progressByProblem.get(item.id); return <div className={styles.problemCard} key={item.id}><span className={styles.problemOrder}>{index + 1}</span><span className={styles.problemIdentity}><strong>{item.Problem.problemId} · {item.Problem.title}</strong><span>目标 {item.targetScore}/{item.maxScore} · R{item.TestSetRevision.revisionNumber}</span>{progress && <span>{learningLabel[progress.learningStatus] || progress.learningStatus} · 得分 {progress.finalScore ?? progress.bestScore ?? 0} · 提交 {progress.attemptCount ?? 0} 次{progress.correctionStatus !== 'NONE' ? ` · ${correctionLabel[progress.correctionStatus] || progress.correctionStatus}` : ''}</span>}</span><Button icon={<Send size={16} />} disabled={!canSubmit} onClick={() => setSelected(item)}>提交代码</Button></div> })}</div></Section>
     {(workspace.corrections.length > 0 || workspace.feedback.length > 0) && <Section title="订正与教师反馈" description="只显示与你本人有关的批改事实。"><div className={styles.reviewFeed}>
-      {workspace.corrections.map(item => <div className={styles.reviewItem} key={item.id}><strong>订正 · {problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}</strong><span>{correctionLabel[item.status] || item.status}{item.dueAt ? ` · 截止 ${formatAssignmentTime(item.dueAt)}` : ''}</span>{item.reason && <p>{item.reason}</p>}</div>)}
+      {workspace.corrections.map(item => <div className={styles.reviewItem} key={item.id}><strong>订正 · {problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}</strong><span>{correctionLabel[item.status] || item.status}{item.requiredScore !== null && item.requiredScore !== undefined ? ` · 要求达到 ${item.requiredScore} 分` : ''}{item.dueAt ? ` · 截止 ${formatAssignmentTime(item.dueAt)}` : ''}</span>{item.reason && <p>{item.reason}</p>}</div>)}
       {workspace.feedback.map(item => <div className={styles.reviewItem} key={item.id}><strong>教师反馈{item.assignmentProblemId ? ` · ${problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}` : ''}</strong><span>{formatAssignmentTime(item.createdAt)}</span><p>{item.content}</p></div>)}
     </div></Section>}
     <FormDialog isOpen={Boolean(selected)} onClose={() => setSelected(null)} onSubmit={() => void submit()} title={selected ? `提交 ${selected.Problem.problemId} · ${selected.Problem.title}` : '提交代码'} description="本次提交将永久记录作业、题目、名单与 TestSet Revision 上下文。" submitText="提交评测" loading={sending} dirty={Boolean(code)} submitDisabled={!code.trim()} size="lg">
@@ -228,6 +250,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
   const [reviewKind, setReviewKind] = useState<'feedback' | 'correction' | 'adjustment'>('feedback')
   const [reviewProblemId, setReviewProblemId] = useState('')
   const [reviewContent, setReviewContent] = useState('')
+  const [correctionRequiredScore, setCorrectionRequiredScore] = useState(0)
   const [delta, setDelta] = useState(0)
   const [savingReview, setSavingReview] = useState(false)
   const transition = async (action: string) => {
@@ -253,19 +276,19 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
     const body = reviewKind === 'feedback'
       ? { recipientId: reviewing.id, assignmentProblemId: reviewProblemId || null, content: reviewContent, visibility: 'RECIPIENT' }
       : reviewKind === 'correction'
-        ? { recipientId: reviewing.id, assignmentProblemId: reviewProblemId, reason: reviewContent }
+        ? { recipientId: reviewing.id, assignmentProblemId: reviewProblemId, reason: reviewContent, requiredScore: correctionRequiredScore }
         : { recipientId: reviewing.id, assignmentProblemId: reviewProblemId || null, delta, reason: reviewContent }
     const result = await apiClient.mutate(`/api/assignments/${assignment.id}/${endpoint}`, 'POST', body)
     setSavingReview(false)
     if (!result.ok) return toast.error(result.error.message)
     toast.success(reviewKind === 'feedback' ? '反馈已保存' : reviewKind === 'correction' ? '订正任务已布置' : '调分流水已追加')
-    setReviewing(null); setReviewContent(''); setReviewProblemId(''); setDelta(0); onRefresh()
+    setReviewing(null); setReviewContent(''); setReviewProblemId(''); setCorrectionRequiredScore(0); setDelta(0); onRefresh()
   }
   return <div className={styles.stack}>
     <Section title="作业控制" description="状态变化会写入持久事件；发布成绩时生成最终成绩快照。" actions={nextAction ? <Button loading={transitioning} onClick={() => void transition(nextAction.action)}>{nextAction.label}</Button> : undefined}><p className={styles.muted}>当前状态：{assignmentStatusMeta[assignment.status].label}。题目版本和名单已冻结。</p></Section>
     <Section title="完成情况" description="成绩由评测事实、订正和不可变调分流水共同计算。"><Table data={progress?.recipients || []} emptyText="暂无学生进度" actions={item => <Button size="sm" variant="secondary" onClick={() => setReviewing(item)}>批改与反馈</Button>} columns={[{ key: 'user.username', label: '学生', render: item => item.user.username }, { key: 'completedProblems', label: '完成题数' }, { key: 'score', label: '当前分数', render: item => <span className={styles.score}>{item.score}</span> }, { key: 'lateProblems', label: '迟交' }, { key: 'correctionProblems', label: '待订正' }]} /></Section>
     <FormDialog isOpen={Boolean(reviewing)} onClose={() => setReviewing(null)} onSubmit={() => void submitReview()} title={reviewing ? `批改 · ${reviewing.user.username}` : '批改'} description="反馈、订正和调分均保存为可审计事实。" submitText="确认保存" loading={savingReview} dirty={Boolean(reviewContent || delta)} submitDisabled={!reviewContent.trim() || (reviewKind === 'correction' && !reviewProblemId) || (reviewKind === 'adjustment' && delta === 0)} size="md">
-      <div className={styles.stack}><Tabs label="批改动作" value={reviewKind} onChange={value => setReviewKind(value)} items={[{ value: 'feedback', label: '反馈' }, { value: 'correction', label: '布置订正' }, { value: 'adjustment', label: '人工调分' }]} /><FormField label={reviewKind === 'correction' ? '题目' : '关联题目（可选）'} required={reviewKind === 'correction'}><Select value={reviewProblemId} onChange={event => setReviewProblemId(event.target.value)}><option value="">{reviewKind === 'correction' ? '请选择题目' : '整份作业'}</option>{assignment.Problems.map(problem => <option value={problem.id} key={problem.id}>{problem.Problem.problemId} · {problem.Problem.title}</option>)}</Select></FormField>{reviewKind === 'adjustment' && <FormField label="调分值" required hint="负数表示扣分，冲正由独立流水完成"><Input type="number" min={-1000} max={1000} value={delta} onChange={event => setDelta(Number(event.target.value))} /></FormField>}<FormField label={reviewKind === 'feedback' ? '反馈内容' : '原因'} required><Textarea rows={5} value={reviewContent} onChange={event => setReviewContent(event.target.value)} /></FormField></div>
+      <div className={styles.stack}><Tabs label="批改动作" value={reviewKind} onChange={value => setReviewKind(value)} items={[{ value: 'feedback', label: '反馈' }, { value: 'correction', label: '布置订正' }, { value: 'adjustment', label: '人工调分' }]} /><FormField label={reviewKind === 'correction' ? '题目' : '关联题目（可选）'} required={reviewKind === 'correction'}><Select value={reviewProblemId} onChange={event => { const value = event.target.value; setReviewProblemId(value); if (reviewKind === 'correction') setCorrectionRequiredScore(assignment.Problems.find(problem => problem.id === value)?.targetScore || 0) }}><option value="">{reviewKind === 'correction' ? '请选择题目' : '整份作业'}</option>{assignment.Problems.map(problem => <option value={problem.id} key={problem.id}>{problem.Problem.problemId} · {problem.Problem.title}</option>)}</Select></FormField>{reviewKind === 'correction' && reviewProblemId && <FormField label="订正达标分" required hint="只有订正提交达到该分数，任务才会标记为已订正"><Input type="number" min={0} max={assignment.Problems.find(problem => problem.id === reviewProblemId)?.maxScore || 0} value={correctionRequiredScore} onChange={event => setCorrectionRequiredScore(Number(event.target.value))} /></FormField>}{reviewKind === 'adjustment' && <FormField label="调分值" required hint="负数表示扣分，冲正由独立流水完成"><Input type="number" min={-1000} max={1000} value={delta} onChange={event => setDelta(Number(event.target.value))} /></FormField>}<FormField label={reviewKind === 'feedback' ? '反馈内容' : '原因'} required><Textarea rows={5} value={reviewContent} onChange={event => setReviewContent(event.target.value)} /></FormField></div>
     </FormDialog>
   </div>
 }

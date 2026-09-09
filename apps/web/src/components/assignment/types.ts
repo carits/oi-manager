@@ -8,6 +8,7 @@ export interface AssignmentProblem {
   category: 'REQUIRED' | 'OPTIONAL' | 'CHALLENGE'
   required: boolean
   maxScore: number
+  judgeMaxScore: number
   targetScore: number
   weight: number
   completionPolicy: 'AC' | 'TARGET_SCORE' | 'ATTEMPT' | 'MANUAL'
@@ -35,6 +36,13 @@ export interface Assignment {
   statusRevision: number
   rosterMode: 'SNAPSHOT' | 'DYNAMIC'
   gradingPolicy: string
+  gradingVersion: number
+  baseScoreMax: number
+  optionalScoringPolicy: 'NONE' | 'BONUS' | 'BEST_N'
+  optionalBestCount?: number | null
+  optionalBonusMax: number
+  challengeScoringPolicy: 'NONE' | 'EXTRA_CREDIT'
+  challengeBonusMax: number
   latePolicy: string
   correctionPolicy: string
   solutionReleasePolicy: string

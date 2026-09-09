@@ -32,12 +32,12 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `AiTokenPool` | 平台唯一 DeepSeek Token 总池，保存可用、预占、已消费和 CAS 版本 |
 | `AiTokenLedgerEntry` | 充值、预占、结算、释放和人工调整的幂等不可变流水 |
 | `AiGenerationRequest` | Validator/翻译/格式化 AI 请求、父修复链、真实用量与编译结果 |
-| `Assignment` | 独立作业聚合根，保存学校/团队范围、生命周期、策略和乐观锁 revision |
-| `AssignmentCorrection` | 教师布置的逐学生逐题订正事实 |
+| `Assignment` | 独立作业聚合根，保存学校/团队范围、生命周期、版本化必做/选做/挑战计分策略和乐观锁 revision |
+| `AssignmentCorrection` | 教师布置的逐学生逐题订正事实及达标分数 |
 | `AssignmentEvent` | 作业内单调、追加式审计事件 |
 | `AssignmentFeedback` | 学生可见或教师内部的不可变作业反馈 |
 | `AssignmentGradeSnapshot` | 截止、关闭、订正后或发布时的版本化成绩快照 |
-| `AssignmentProblem` | 有序作业题目、固定 TestSet Revision、Judge 投影和评分目标 |
+| `AssignmentProblem` | 有序作业题目、固定 TestSet Revision/Judge 满分、作业满分、类别、权重和评分目标 |
 | `AssignmentProblemProgress` | 收件人逐题的学习、时效、订正和分数投影，可由提交事实重建 |
 | `AssignmentRecipient` | 发布时固定的学生名单和个人有效截止时间 |
 | `AssignmentRecipientOverride` | 收件人的追加式延期、免交或状态覆盖事实 |
@@ -50,13 +50,18 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `BlogSeriesEntry` | 系列与文章的有序多对多关系 |
 | `BlogTag` | 平台系统标签或作者命名空间内受控、规范化唯一的标签 |
 | `BlogPostTag` | 当前文章与标签的反向查询索引；历史分类另固化于 BlogPostVersion |
+| `BlogComment` | 已发布博客的一层评论/回复及可治理状态 |
+| `BlogReaction` | 用户对博客的 LIKE/HELPFUL 幂等反应 |
+| `BlogBookmark` | 用户账号级博客收藏 |
+| `BlogReport` | 文章/评论举报、固化证据与治理结论 |
+| `BlogFeature` | 可退役且带审计的社区精选事实 |
 | `CaritsAccount` | 用户、组织或系统的 Carits 账户；余额与不可变分录同事务更新 |
 | `ContestStandingEntry` | 最终榜单中带组织快照、并列组和 Rating 资格的参赛者事实 |
 | `ContestStandingSnapshot` | 一场比赛版本化且不可变的最终排名输入 |
 | `CaritsLedgerEntry` | 交易内按账户聚合的双向分录；posted 后不得追加、修改或删除 |
 | `CaritsTransaction` | 平衡的 Carits 交易、幂等业务引用、请求指纹及冲正关系；同键差异载荷必须拒绝 |
-| `Contest` | 以 Prisma schema 为准 |
-| `ContestProblem` | 以 Prisma schema 为准 |
+| `Contest` | 既有比赛聚合；可通过唯一 `runtimeTrainingId` 桥接当前 Training 比赛运行态 |
+| `ContestProblem` | 既有比赛题目；桥接运行题目并固定 Canonical Problem 与 TestSet Revision |
 | `ContestProblemScore` | 以 Prisma schema 为准 |
 | `ContestRecord` | 以 Prisma schema 为准 |
 | `ContestResource` | 以 Prisma schema 为准 |
@@ -161,6 +166,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `RatingChange` | Batch 内不可变的赛前、预期、实际、变化和赛后 Rating |
 | `RatingPool` | 全局或指定组织的独立 OI、IOI、ACM Rating 参数空间 |
 | `RatingRebuildJob` | 赛后重测引起的 Rating 池重放审计与结果报告 |
+| `SolutionSimilarityCheck` | 题解投稿 Revision 的正文/代码相似度风险提示、来源声明和审核匹配证据 |
 | `Submission` | 不可变用户提交意图；以 `workspaceScope + organizationId` 固化个人/具体校园归属，以提交级 IO 固化 stdin/stdout 或文件名，并通过 `currentJudgeRunId` 指向当前逻辑评测 |
 | `Team` | 以 Prisma schema 为准 |
 | `TeamJoinRequest` | 以 Prisma schema 为准 |

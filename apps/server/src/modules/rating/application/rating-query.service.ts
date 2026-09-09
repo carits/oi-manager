@@ -12,15 +12,16 @@ function track(value: unknown): RatingTrack {
 
 function accountDto(account: any) {
   return {
-    id: account.id, rating: account.rating, peakRating: account.peakRating,
+    id: account.id, poolId: account.poolId, rating: account.rating, peakRating: account.peakRating,
     ratedContestCount: account.ratedContestCount, provisional: account.provisional,
     lastRatedAt: account.lastRatedAt, track: account.Pool.track,
     scope: account.Pool.scopeType, organizationId: account.Pool.organizationId,
+    organizationName: account.Pool.Organization?.School?.shortName || account.Pool.Organization?.School?.name || account.Pool.Organization?.name || null,
   }
 }
 
 export async function getMyRatingAccounts(userId: string) {
-  const accounts = await prisma.ratingAccount.findMany({ where: { userId, Pool: { status: 'active' } }, include: { Pool: true }, orderBy: [{ Pool: { scopeType: 'asc' } }, { Pool: { track: 'asc' } }] })
+  const accounts = await prisma.ratingAccount.findMany({ where: { userId, Pool: { status: 'active' } }, include: { Pool: { include: { Organization: { include: { School: { select: { name: true, shortName: true } } } } } } }, orderBy: [{ Pool: { scopeType: 'asc' } }, { Pool: { track: 'asc' } }] })
   return { baseRating: 1500, accounts: accounts.map(accountDto), missingTracksUseBaseRating: true }
 }
 
@@ -67,7 +68,7 @@ export async function getRatingHistory(input: { userId: string; requestingUserId
   const pool = await prisma.ratingPool.findFirst({ where: { scopeType: scope as any, organizationId: scope === 'GLOBAL' ? null : input.organizationId, track: selectedTrack } })
   const { page, pageSize, skip } = parsePagination(input.query, { defaultPageSize: 30, maxPageSize: 100 })
   if (!pool) return { account: null, ...paginatedResponse([], 0, page, pageSize) }
-  const account = await prisma.ratingAccount.findUnique({ where: { poolId_userId: { poolId: pool.id, userId: input.userId } }, include: { Pool: true } })
+  const account = await prisma.ratingAccount.findUnique({ where: { poolId_userId: { poolId: pool.id, userId: input.userId } }, include: { Pool: { include: { Organization: { include: { School: { select: { name: true, shortName: true } } } } } } } })
   if (!account) return { account: null, ...paginatedResponse([], 0, page, pageSize) }
   const where = { accountId: account.id, Batch: { status: 'APPLIED' as const } }
   const [changes, total] = await Promise.all([

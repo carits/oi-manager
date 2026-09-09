@@ -8,13 +8,18 @@ import {
   createBlogFromContest,
   createBlogFromSolution,
   createBlogPost,
+  createBlogComment,
   createBlogSeries,
   createBlogTag,
   getBlogPost,
+  getBlogReport,
+  getBlogCommunity,
   getBlogReferences,
   getBlogSeries,
   getBlogVersion,
   listBlogTags,
+  listBlogComments,
+  listBlogReports,
   listBlogVersions,
   listMyBlogPosts,
   listMyBlogSeries,
@@ -24,9 +29,15 @@ import {
   listSolutionBlogs,
   listUserBlogs,
   publishBlogPost,
+  moderateBlogReport,
+  removeBlogComment,
   reorderBlogSeries,
   updateBlogSeries,
   updateBlogDraft,
+  reportBlogContent,
+  setBlogBookmark,
+  setBlogFeatured,
+  setBlogReaction,
 } from './blog.service'
 
 export const blogRouter = Router()
@@ -54,6 +65,19 @@ blogRouter.post('/blogs/:id/archive', authenticate, endpoint(req => archiveBlogP
 blogRouter.get('/blogs/:id/versions', authenticate, endpoint(req => listBlogVersions(req.user, req.params.id)))
 blogRouter.get('/blogs/:id/versions/:versionId', authenticate, endpoint(req => getBlogVersion(req.user, req.params.id, req.params.versionId)))
 blogRouter.get('/blogs/:id/references', authenticate, endpoint(req => getBlogReferences(req.user, req.params.id)))
+blogRouter.get('/blogs/:id/community', authenticate, endpoint(req => getBlogCommunity(req.user, req.params.id)))
+blogRouter.get('/blogs/:id/comments', authenticate, endpoint(req => listBlogComments(req.user, req.params.id, req.query)))
+blogRouter.post('/blogs/:id/comments', authenticate, endpoint(req => createBlogComment(req.user, req.params.id, req.body), 201))
+blogRouter.delete('/blogs/:id/comments/:commentId', authenticate, endpoint(req => removeBlogComment(req.user, req.params.id, req.params.commentId)))
+blogRouter.put('/blogs/:id/reactions/:type', authenticate, endpoint(req => setBlogReaction(req.user, req.params.id, req.params.type, true)))
+blogRouter.delete('/blogs/:id/reactions/:type', authenticate, endpoint(req => setBlogReaction(req.user, req.params.id, req.params.type, false)))
+blogRouter.put('/blogs/:id/bookmark', authenticate, endpoint(req => setBlogBookmark(req.user, req.params.id, true)))
+blogRouter.delete('/blogs/:id/bookmark', authenticate, endpoint(req => setBlogBookmark(req.user, req.params.id, false)))
+blogRouter.post('/blogs/:id/reports', authenticate, endpoint(req => reportBlogContent(req.user, req.params.id, req.body), 201))
+blogRouter.put('/platform/blogs/:id/featured', authenticate, endpoint(req => setBlogFeatured(req.user, req.params.id, req.body)))
+blogRouter.get('/platform/blog-reports', authenticate, endpoint(req => listBlogReports(req.user, req.query)))
+blogRouter.get('/platform/blog-reports/:id', authenticate, endpoint(req => getBlogReport(req.user, req.params.id, req.query)))
+blogRouter.post('/platform/blog-reports/:id/decision', authenticate, endpoint(req => moderateBlogReport(req.user, req.params.id, req.body)))
 blogRouter.post('/blogs/:id/versions/:versionId/convert-to-solution-contribution', authenticate, endpoint(
   req => convertBlogVersionToSolutionContribution(req.user, req.params.id, req.params.versionId, req.body), 201,
 ))

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../prisma'
+import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 
 async function loadLegacyHomeworks(db: typeof prisma | Prisma.TransactionClient | any) {
   return db.training.findMany({
@@ -154,6 +155,7 @@ export async function applyAssignmentMigration(expectedReportHash: string) {
           category: 'REQUIRED',
           required: true,
           maxScore: problem.points || 100,
+          judgeMaxScore: judgeMaxScoreFromSnapshot(problem.judgeConfigSnapshot || revision.judgeConfig, revision.mode),
           targetScore: problem.points || 100,
           weight: 100,
           completionPolicy: revision.mode === 'acm' ? 'AC' : 'TARGET_SCORE',

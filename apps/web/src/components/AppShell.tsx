@@ -36,6 +36,7 @@ const labelIcons: Record<string, LucideIcon> = {
   '贡献': Activity, '钱包': WalletCards, '贡献审计': ShieldCheck,
   'AI Token': WalletCards,
   '私信举报': ShieldCheck,
+  '博客治理': ShieldCheck,
 
 }
 

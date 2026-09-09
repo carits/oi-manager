@@ -696,6 +696,211 @@ export async function getBlogPost(user: JwtPayload, postId: string) {
   return postDto(post, post.authorUserId === user.userId)
 }
 
+async function readablePublishedPost(user: JwtPayload, postId: string) {
+  const post = await prisma.blogPost.findUnique({ where: { id: postId }, include: postInclude })
+  if (!post || post.status !== 'PUBLISHED' || !await canReadPost(user, post, true)) fail(404, 'BLOG_NOT_FOUND', '博客不存在')
+  return post
+}
+
+const BLOG_REACTIONS = ['LIKE', 'HELPFUL'] as const
+
+function blogReaction(value: unknown) {
+  const reaction = String(value || '').toUpperCase()
+  if (!BLOG_REACTIONS.includes(reaction as typeof BLOG_REACTIONS[number])) fail(422, 'BLOG_REACTION_INVALID', '互动类型无效')
+  return reaction
+}
+
+export async function getBlogCommunity(user: JwtPayload, postId: string) {
+  await readablePublishedPost(user, postId)
+  const [groups, mine, bookmark, commentCount, featured] = await Promise.all([
+    prisma.blogReaction.groupBy({ by: ['type'], where: { postId }, _count: { _all: true } }),
+    prisma.blogReaction.findMany({ where: { postId, userId: user.userId }, select: { type: true } }),
+    prisma.blogBookmark.findUnique({ where: { postId_userId: { postId, userId: user.userId } }, select: { postId: true } }),
+    prisma.blogComment.count({ where: { postId, status: 'visible' } }),
+    prisma.blogFeature.findFirst({ where: { postId, status: 'active' }, select: { id: true, reason: true, createdAt: true } }),
+  ])
+  return {
+    reactions: Object.fromEntries(BLOG_REACTIONS.map(type => [type, groups.find(item => item.type === type)?._count._all || 0])),
+    myReactions: mine.map(item => item.type), bookmarked: Boolean(bookmark), commentCount, featured,
+  }
+}
+
+export async function listBlogComments(user: JwtPayload, postId: string, query: any) {
+  await readablePublishedPost(user, postId)
+  const { page, pageSize, skip } = parsePagination(query, { defaultPageSize: 30, maxPageSize: 100 })
+  const where = { postId, parentId: null, status: { in: ['visible', 'removed'] } }
+  const [items, total] = await Promise.all([
+    prisma.blogComment.findMany({
+      where, orderBy: { createdAt: 'asc' }, skip, take: pageSize,
+      include: {
+        Author: { select: { id: true, username: true, avatar: true } },
+        Replies: { where: { status: { in: ['visible', 'removed'] } }, orderBy: { createdAt: 'asc' }, include: { Author: { select: { id: true, username: true, avatar: true } } } },
+      },
+    }),
+    prisma.blogComment.count({ where }),
+  ])
+  const dto = (item: any) => ({
+    id: item.id, parentId: item.parentId, author: item.Author,
+    content: item.status === 'visible' ? item.content : '该评论已由作者删除',
+    status: item.status, editedAt: item.editedAt, createdAt: item.createdAt,
+    canDelete: item.authorUserId === user.userId,
+  })
+  return paginatedResponse(items.map(item => ({ ...dto(item), replies: item.Replies.map(dto) })), total, page, pageSize)
+}
+
+export async function createBlogComment(user: JwtPayload, postId: string, body: any) {
+  await readablePublishedPost(user, postId)
+  const content = text(body?.content, 5000)
+  if (!content) fail(422, 'BLOG_COMMENT_REQUIRED', '评论内容不能为空')
+  const parentId = nullableText(body?.parentId, 100)
+  if (parentId) {
+    const parent = await prisma.blogComment.findFirst({ where: { id: parentId, postId, status: 'visible' }, select: { parentId: true } })
+    if (!parent) fail(404, 'BLOG_COMMENT_PARENT_NOT_FOUND', '回复的评论不存在')
+    if (parent.parentId) fail(422, 'BLOG_COMMENT_DEPTH_LIMIT', '评论最多支持一层回复')
+  }
+  return prisma.blogComment.create({
+    data: { id: crypto.randomUUID(), postId, authorUserId: user.userId, parentId, content },
+    include: { Author: { select: { id: true, username: true, avatar: true } } },
+  })
+}
+
+export async function removeBlogComment(user: JwtPayload, postId: string, commentId: string) {
+  await readablePublishedPost(user, postId)
+  const comment = await prisma.blogComment.findFirst({ where: { id: commentId, postId } })
+  if (!comment || comment.authorUserId !== user.userId) fail(404, 'BLOG_COMMENT_NOT_FOUND', '评论不存在')
+  if (comment.status === 'removed') return { id: comment.id, status: comment.status }
+  const updated = await prisma.blogComment.update({ where: { id: commentId }, data: { status: 'removed', content: '' } })
+  return { id: updated.id, status: updated.status }
+}
+
+export async function setBlogReaction(user: JwtPayload, postId: string, type: unknown, active: boolean) {
+  await readablePublishedPost(user, postId)
+  const normalized = blogReaction(type)
+  if (active) await prisma.blogReaction.upsert({ where: { postId_userId_type: { postId, userId: user.userId, type: normalized } }, create: { postId, userId: user.userId, type: normalized }, update: {} })
+  else await prisma.blogReaction.deleteMany({ where: { postId, userId: user.userId, type: normalized } })
+  return getBlogCommunity(user, postId)
+}
+
+export async function setBlogBookmark(user: JwtPayload, postId: string, active: boolean) {
+  await readablePublishedPost(user, postId)
+  if (active) await prisma.blogBookmark.upsert({ where: { postId_userId: { postId, userId: user.userId } }, create: { postId, userId: user.userId }, update: {} })
+  else await prisma.blogBookmark.deleteMany({ where: { postId, userId: user.userId } })
+  return getBlogCommunity(user, postId)
+}
+
+export async function reportBlogContent(user: JwtPayload, postId: string, body: any) {
+  const post = await readablePublishedPost(user, postId)
+  const reason = text(body?.reason, 120)
+  const details = nullableText(body?.details, 5000)
+  if (!reason) fail(422, 'BLOG_REPORT_REASON_REQUIRED', '请选择举报原因')
+  const commentId = nullableText(body?.commentId, 100)
+  const comment = commentId ? await prisma.blogComment.findFirst({ where: { id: commentId, postId } }) : null
+  if (commentId && !comment) fail(404, 'BLOG_COMMENT_NOT_FOUND', '评论不存在')
+  const existing = await prisma.blogReport.findFirst({ where: { postId, commentId, reporterUserId: user.userId, status: 'pending' }, select: { id: true } })
+  if (existing) fail(409, 'BLOG_REPORT_PENDING', '你已经举报过该内容，平台正在处理')
+  return prisma.blogReport.create({ data: {
+    id: crypto.randomUUID(), postId, commentId, reporterUserId: user.userId, reason, details,
+    evidenceSnapshot: {
+      postVersionId: post.currentVersionId, title: post.CurrentVersion?.title,
+      contentHash: post.CurrentVersion?.contentHash,
+      ...(comment ? { comment: { id: comment.id, authorUserId: comment.authorUserId, content: comment.content, createdAt: comment.createdAt } } : {}),
+    },
+  } })
+}
+
+function requireBlogModerator(user: JwtPayload) {
+  if (!['platform_admin', 'super_admin'].includes(user.role)) fail(403, 'BLOG_MODERATION_FORBIDDEN', '只有平台管理员可以执行博客治理')
+}
+
+export async function listBlogReports(user: JwtPayload, query: any) {
+  requireBlogModerator(user)
+  const { page, pageSize, skip } = parsePagination(query, { defaultPageSize: 20, maxPageSize: 100 })
+  const status = query?.status ? text(query.status, 30).toLowerCase() : undefined
+  const where = status ? { status } : {}
+  const [items, total] = await Promise.all([
+    prisma.blogReport.findMany({ where, orderBy: { createdAt: 'asc' }, skip, take: pageSize, select: {
+      id: true, postId: true, commentId: true, reason: true, status: true, createdAt: true, reviewedAt: true,
+      Reporter: { select: { id: true, username: true } },
+      Post: { select: { id: true, slug: true, Author: { select: { id: true, username: true } }, CurrentVersion: { select: { title: true } } } },
+    } }),
+    prisma.blogReport.count({ where }),
+  ])
+  return paginatedResponse(items, total, page, pageSize)
+}
+
+export async function getBlogReport(user: JwtPayload, reportId: string, query: any) {
+  requireBlogModerator(user)
+  const accessReason = text(query?.reason, 500)
+  if (accessReason.length < 5) fail(422, 'BLOG_REPORT_ACCESS_REASON_REQUIRED', '查看举报证据必须填写至少 5 个字符的原因')
+  return prisma.$transaction(async tx => {
+    const report = await tx.blogReport.findUnique({
+      where: { id: reportId },
+      include: {
+        Reporter: { select: { id: true, username: true } },
+        Comment: { select: { id: true, authorUserId: true, content: true, status: true, createdAt: true } },
+        Post: { select: {
+          id: true, slug: true, status: true,
+          Author: { select: { id: true, username: true } },
+          CurrentVersion: { select: { title: true } },
+          Features: { where: { status: 'active' }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, reason: true, createdAt: true } },
+        } },
+      },
+    })
+    if (!report) fail(404, 'BLOG_REPORT_NOT_FOUND', '举报不存在')
+    await tx.platformAuditLog.create({ data: {
+      id: crypto.randomUUID(), actorUserId: user.userId, action: 'blog_report_evidence_viewed',
+      targetType: 'blog_report', targetId: reportId, metadata: { accessReason, postId: report.postId, commentId: report.commentId },
+    } })
+    return report
+  })
+}
+
+export async function moderateBlogReport(user: JwtPayload, reportId: string, body: any) {
+  requireBlogModerator(user)
+  const decision = String(body?.decision || '').toLowerCase()
+  if (!['resolved', 'dismissed'].includes(decision)) fail(422, 'BLOG_REPORT_DECISION_INVALID', '审核结论无效')
+  const resolutionNote = text(body?.resolutionNote, 5000)
+  if (resolutionNote.length < 5) fail(422, 'BLOG_REPORT_NOTE_REQUIRED', '处理意见至少需要 5 个字符')
+  const action = String(body?.action || 'none').toLowerCase()
+  if (!['none', 'hide_comment', 'hold_post', 'remove_post'].includes(action)) fail(422, 'BLOG_MODERATION_ACTION_INVALID', '治理动作无效')
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`blog-report:${reportId}`}, 0)) IS NULL AS locked`
+    const report = await tx.blogReport.findUnique({ where: { id: reportId } })
+    if (!report) fail(404, 'BLOG_REPORT_NOT_FOUND', '举报不存在')
+    if (report.status !== 'pending') fail(409, 'BLOG_REPORT_ALREADY_PROCESSED', '举报已经处理')
+    if (action === 'hide_comment' && report.commentId) await tx.blogComment.update({ where: { id: report.commentId }, data: { status: 'hidden' } })
+    if (action === 'hide_comment' && !report.commentId) fail(422, 'BLOG_MODERATION_COMMENT_REQUIRED', '该举报不是评论举报，不能执行隐藏评论')
+    if (action === 'hold_post') await tx.blogPost.update({ where: { id: report.postId }, data: { status: 'MODERATION_HOLD' } })
+    if (action === 'remove_post') await tx.blogPost.update({ where: { id: report.postId }, data: { status: 'REMOVED' } })
+    const updated = await tx.blogReport.update({ where: { id: reportId }, data: { status: decision, reviewedByUserId: user.userId, reviewedAt: new Date(), resolutionNote } })
+    await tx.platformAuditLog.create({ data: { id: crypto.randomUUID(), actorUserId: user.userId, action: `blog_report_${decision}`, targetType: 'blog_report', targetId: reportId, metadata: { action, postId: report.postId, commentId: report.commentId } } })
+    return updated
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+}
+
+export async function setBlogFeatured(user: JwtPayload, postId: string, body: any) {
+  requireBlogModerator(user)
+  const active = body?.active !== false
+  const reason = nullableText(body?.reason, 1000)
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`blog-feature:${postId}`}, 0)) IS NULL AS locked`
+    const post = await tx.blogPost.findUnique({ where: { id: postId }, select: { id: true, status: true } })
+    if (!post || post.status !== 'PUBLISHED') fail(404, 'BLOG_NOT_FOUND', '只能精选已发布博客')
+    const current = await tx.blogFeature.findFirst({ where: { postId, status: 'active' }, orderBy: { createdAt: 'desc' } })
+    if (active && !current) {
+      await tx.blogFeature.create({ data: { id: crypto.randomUUID(), postId, createdByUserId: user.userId, reason } })
+    } else if (!active && current) {
+      await tx.blogFeature.update({ where: { id: current.id }, data: { status: 'retired', retiredAt: new Date() } })
+    }
+    await tx.platformAuditLog.create({ data: {
+      id: crypto.randomUUID(), actorUserId: user.userId,
+      action: active ? 'blog_featured' : 'blog_feature_retired', targetType: 'blog_post', targetId: postId,
+      metadata: { reason },
+    } })
+    return { featured: active }
+  })
+}
+
 export async function listMyBlogPosts(user: JwtPayload, query: any) {
   const { page, pageSize, skip } = parsePagination(query, { defaultPageSize: 20, maxPageSize: 100 })
   const status = query?.status === undefined || query.status === ''

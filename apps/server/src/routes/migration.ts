@@ -12,6 +12,7 @@ import { applyJudgeProgramProtocolMigration, inspectJudgeProgramProtocolMigratio
 import { applyTrainingEngineMigration, inspectTrainingEngineMigration } from '../modules/maintenance/application/training-engine-migration.service'
 import { applyEconomyLoopMigration, inspectEconomyLoopMigration } from '../modules/maintenance/application/economy-loop-migration.service'
 import { applyAssignmentMigration, inspectAssignmentMigration } from '../modules/maintenance/application/assignment-migration.service'
+import { applyContestAggregateMigration, inspectContestAggregateMigration } from '../modules/maintenance/application/contest-aggregate-migration.service'
 
 export const migrationRouter = Router()
 
@@ -44,6 +45,21 @@ migrationRouter.post('/assignments', async (req, res) => {
     return res.json({ success: true, data })
   } catch (error: any) {
     return res.status(409).json({ success: false, code: 'ASSIGNMENT_MIGRATION_STALE_OR_INVALID', message: error.message })
+  }
+})
+
+migrationRouter.get('/contest-aggregates', async (_req, res) => {
+  try { return res.json({ success: true, data: await inspectContestAggregateMigration() }) }
+  catch (error: any) { return res.status(500).json({ success: false, message: error.message }) }
+})
+
+migrationRouter.post('/contest-aggregates', async (req, res) => {
+  try {
+    const data = await applyContestAggregateMigration(String(req.body?.reportHash || ''), req.user!.userId)
+    logger.audit('contest_aggregate_migration_applied', { action: 'migration', metadata: data })
+    return res.json({ success: true, data })
+  } catch (error: any) {
+    return res.status(409).json({ success: false, code: 'CONTEST_AGGREGATE_MIGRATION_STALE_OR_INVALID', message: error.message })
   }
 })
 

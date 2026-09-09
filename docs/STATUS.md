@@ -5,6 +5,8 @@ last_verified: 2026-09-09
 source_of_truth: package.json, deploy/systemd/*.service, deploy/systemd/*.timer, docker-compose.yml, Prisma schema, Playwright configuration
 ---
 
+- 2026-09-09: 当前工作树已收口 Assignment V2 评分（Judge 比例映射、权重、类别策略、订正目标与完整必做完成条件）、冻结 Rating 规则重放/哈希校验、个人 Rating Dashboard、题解相似度审核提示、Blog 社区互动/举报治理/精选，以及复用既有 Contest 模型的 Training 一对一桥接。纯领域测试 10/10、Web 25 文件/93 项和 Server/Web 生产构建已通过；四个安全增量迁移尚待隔离数据库验证和生产发布，因此下方最近生产 BUILD_ID 仍是 `KnmV0By0XFpxTqNGEq30B`。
+
 - 2026-09-09: Rating、TestSet DQS/PQS、题解/博客知识域、Revision 数据市场及贡献经济闭环的统一收口已完成生产发布。发布前备份 `/data/backups/oi-manager/automatic/oi_manager_20260909_132853.dump` 已通过 `pg_restore` 清单和隔离恢复审计（33 MiB，SHA-256 `5a179f85a0ef59451d62513704a799fc90269057eb30085221cda2cff03b1e91`）；6 个安全增量迁移应用后共 55 个 migrations。生产同构升级迁移、Server 86 文件/690 项、Judge 15 文件/45 项、Web 25 文件/93 项、各新增领域 PostgreSQL 定向测试、Shared/Server/Judge/Web 生产构建，以及 Prisma、模板、UI、API、架构、文档和 85 路由门禁均通过。期间修复 `/api/health` 被后置认证路由拦截的既有 401 问题并恢复最小公开契约。提交 `0547fd1` 已推送 `main`；API 由 3303 蓝绿切换到 3302，Worker/Executor/Judge 均 active，Web BUILD_ID `KnmV0By0XFpxTqNGEq30B` 已通过 canary 和正式端口的双账号消息发送、SSE、已读、回复闭环探针后提升。公网健康、构建清单、Revision readiness 和新增账号级接口鉴权均已复核。
 
 - 2026-09-09: 独立 Blog / 知识发布域 V1 已完成生产发布。博客草稿可编辑，发布后生成不可变正文版本，并将发布时的 `PRIVATE/ORGANIZATION/UNLISTED/PUBLIC`、组织范围、Series/Tags 与结构化引用一并固化；后续公开版本不会泄露旧私有或组织版本。引用仅接受题目/固定 TestSet Revision、固定题解版本、最终榜单快照和已应用 RatingChange，发布时逐项 fail-closed 校验；Submission/JudgeRun 直接引用明确返回安全快照未实现。博客与正式题解保持分域，只能把固定博客版本复制为独立题解投稿草稿。个人端已提供列表、新建/编辑/预览/发布、版本历史、引用、系列与标签工作流，题目详情提供 Related Blogs。Blog PostgreSQL 隔离测试 7/7、Web 契约 3/3、Server/Web 生产构建、Prisma validate、UI/文档/架构门禁通过；当前生产 BUILD_ID 为 `KnmV0By0XFpxTqNGEq30B`。

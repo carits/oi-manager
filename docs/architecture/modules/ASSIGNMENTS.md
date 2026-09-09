@@ -56,11 +56,15 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 
 迟交是否允许及扣分由作业快照决定。订正任务、可见/内部反馈、人工调分和冲正均为独立不可变事实。关闭和发布成绩时生成带版本号的 `AssignmentGradeSnapshot`；历史提交和快照不自动重测。
 
+成绩使用版本化的 V2 语义。每道题先按固定 TestSet Revision 的 Judge 满分把评测分数等比例映射到作业题目满分，再按题目权重计算必做题基础分；`OPTIONAL` 只在 `BONUS/BEST_N` 策略下计入选做加分，`CHALLENGE` 只在 `EXTRA_CREDIT` 下计入挑战加分，两者均不进入必做题分母。成绩快照同时保存基础、选做、挑战和人工调分证据。发布检查要求至少一道必做题，并检查计分策略与题目类别相符。
+
+订正任务固定 `requiredScore`；只有本次订正创建后的终态提交达到该目标才可转为 `CORRECTED`。收件人完成状态要求所有必做题均存在进度且满足完成策略，不能因为部分必做题尚未产生进度行而提前完成；使用 `LATEST` 等可回退策略时，后续结果不再满足条件会恢复为进行中。
+
 ## API 与 Web
 
 主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/trainings/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
 
-组织端 `/org/:organizationId/homeworks` 使用独立作业列表。教师在草稿工作台分别保存基本信息、固定题目版本和学生名单，运行发布检查后冻结；学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
+组织端 `/org/:organizationId/homeworks` 使用独立作业列表。教师在草稿工作台分别保存发布时间、开放/截止/关闭时间、评分策略、固定题目版本和学生名单，运行发布检查后冻结；每道题可显式配置类别、作业满分、目标分、权重和完成策略。学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
 
 ## 历史迁移
 

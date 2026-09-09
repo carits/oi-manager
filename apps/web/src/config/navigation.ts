@@ -24,6 +24,7 @@ export const superAdminNav: NavConfig = {
     { label: '比赛', href: '/admin/contests' },
     { label: '评测记录', href: '/admin/submissions' },
     { label: '贡献审计', href: '/admin/contributions' },
+    { label: '博客治理', href: '/admin/blog-moderation' },
     { label: '私信举报', href: '/admin/chat-reports' },
   ]
 }
@@ -41,6 +42,7 @@ export const platformAdminNav: NavConfig = {
     { label: '数据市场', href: '/platform-admin/data-market' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
     { label: 'AI Token', href: '/platform-admin/ai' },
+    { label: '博客治理', href: '/platform-admin/blog-moderation' },
     { label: '私信举报', href: '/platform-admin/chat-reports' },
   ]
 }

@@ -15,6 +15,7 @@ import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.se
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { canModifyProblem, canViewProblem } from '../problem/problem.access'
 import { resolveContributionOrganization } from '../contribution/application/contribution.service'
+import { compareSolutionContent, similarityRisk } from './solution-similarity'
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024
 const MAX_CODE_BYTES = 512 * 1024
@@ -319,8 +320,73 @@ async function queueVerification(revisionId: string) {
   }
 }
 
+async function runSimilarityCheck(revisionId: string) {
+  const subject = await prisma.solutionContributionRevision.findUniqueOrThrow({
+    where: { id: revisionId },
+    include: { Contribution: { select: { id: true, problemId: true, sourceType: true, sourceUrl: true, citation: true } } },
+  })
+  const [published, contributions] = await Promise.all([
+    prisma.problemSolutionVersion.findMany({
+      where: { Solution: { problemId: subject.Contribution.problemId }, status: 'PUBLISHED' },
+      orderBy: { publishedAt: 'desc' }, take: 200,
+      select: { id: true, contentMarkdown: true, referenceCode: true },
+    }),
+    prisma.solutionContributionRevision.findMany({
+      where: {
+        id: { not: revisionId },
+        Contribution: {
+          problemId: subject.Contribution.problemId,
+          id: { not: subject.Contribution.id },
+          status: { in: ['SUBMITTED', 'AUTO_CHECKING', 'TECHNICALLY_VALID', 'UNDER_REVIEW', 'ACCEPTED', 'PUBLISHED'] },
+        },
+      },
+      orderBy: { submittedAt: 'desc' }, take: 200,
+      select: { id: true, contentMarkdown: true, referenceCode: true },
+    }),
+  ])
+  let best: ReturnType<typeof compareSolutionContent> & {
+    matchedSolutionVersionId: string | null
+    matchedContributionRevisionId: string | null
+  } = {
+    textSimilarityBasisPoints: 0,
+    codeSimilarityBasisPoints: 0,
+    maximumSimilarityBasisPoints: 0,
+    matchedSolutionVersionId: null,
+    matchedContributionRevisionId: null,
+  }
+  for (const candidate of published) {
+    const score = compareSolutionContent(subject, candidate)
+    if (score.maximumSimilarityBasisPoints > best.maximumSimilarityBasisPoints) {
+      best = { ...score, matchedSolutionVersionId: candidate.id, matchedContributionRevisionId: null }
+    }
+  }
+  for (const candidate of contributions) {
+    const score = compareSolutionContent(subject, candidate)
+    if (score.maximumSimilarityBasisPoints > best.maximumSimilarityBasisPoints) {
+      best = { ...score, matchedSolutionVersionId: null, matchedContributionRevisionId: candidate.id }
+    }
+  }
+  const sourceDeclared = subject.Contribution.sourceType !== 'ORIGINAL'
+    && Boolean(subject.Contribution.sourceUrl || subject.Contribution.citation)
+  return prisma.solutionSimilarityCheck.upsert({
+    where: { contributionRevisionId: revisionId },
+    create: {
+      id: crypto.randomUUID(), contributionRevisionId: revisionId,
+      ...best, riskLevel: similarityRisk(best.maximumSimilarityBasisPoints), sourceDeclared,
+      comparisonCount: published.length + contributions.length,
+      details: { algorithm: 'prose-shingle-v1/code-token-v1', warningOnly: true },
+    },
+    update: {
+      ...best, riskLevel: similarityRisk(best.maximumSimilarityBasisPoints), sourceDeclared,
+      comparisonCount: published.length + contributions.length,
+      details: { algorithm: 'prose-shingle-v1/code-token-v1', warningOnly: true }, checkedAt: new Date(),
+    },
+  })
+}
+
 export async function submitSolutionContribution(user: JwtPayload, id: string, resubmit = false) {
   const revision = await createSnapshot(user, id, resubmit)
+  await runSimilarityCheck(revision.id)
   await queueVerification(revision.id)
   return getSolutionContribution(user, id)
 }
@@ -521,12 +587,23 @@ export async function publishSolutionContribution(user: JwtPayload, contribution
 export async function getSolutionContribution(user: JwtPayload, id: string) {
   const item = await prisma.solutionContribution.findUnique({
     where: { id }, include: {
-      Problem: true, Revisions: { orderBy: { revision: 'desc' }, include: { Verification: true } },
+      Problem: true, Revisions: { orderBy: { revision: 'desc' }, include: { Verification: true, SimilarityCheck: true } },
       Reviews: { orderBy: { createdAt: 'asc' }, include: { Reviewer: { select: { id: true, username: true } } } },
     },
   })
   if (!item || (item.authorUserId !== user.userId && !canModifyProblem(user, item.Problem))) fail(404, 'SOLUTION_CONTRIBUTION_NOT_FOUND', '投稿不存在')
-  return item
+  if (canModifyProblem(user, item.Problem)) return item
+  return {
+    ...item,
+    Revisions: item.Revisions.map(revision => ({
+      ...revision,
+      SimilarityCheck: revision.SimilarityCheck ? {
+        riskLevel: revision.SimilarityCheck.riskLevel,
+        sourceDeclared: revision.SimilarityCheck.sourceDeclared,
+        checkedAt: revision.SimilarityCheck.checkedAt,
+      } : null,
+    })),
+  }
 }
 
 export async function listMySolutionContributions(user: JwtPayload, problemId?: string) {
@@ -555,7 +632,7 @@ export async function listSolutionReviewQueue(user: JwtPayload, status?: string)
     },
     orderBy: { submittedAt: 'asc' }, include: {
       Author: { select: { id: true, username: true } }, Problem: { select: { id: true, problemId: true, title: true } },
-      Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { Verification: true } },
+      Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { Verification: true, SimilarityCheck: true } },
     },
   })
 }

@@ -3,6 +3,7 @@ import { prisma } from '../../../prisma'
 import { ensureInitialTestSetRevision } from '../../problem/problem.testset-revision.service'
 import { getProblemListPermission } from './problem-list-access.service'
 import { ProblemListApplicationError } from './problem-list-crud.service'
+import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 
 type AuthUser = NonNullable<Express.Request['user']>
 
@@ -100,6 +101,7 @@ export async function createAssignmentFromProblemList(user: AuthUser, problemLis
         category: 'REQUIRED' as const,
         required: true,
         maxScore: 100,
+        judgeMaxScore: judgeMaxScoreFromSnapshot(revision.judgeConfig, revision.mode),
         targetScore: 100,
         weight: 100,
         completionPolicy: revision.mode === 'acm' ? 'AC' as const : 'TARGET_SCORE' as const,
