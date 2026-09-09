@@ -31,6 +31,69 @@ async function waitForSubmission(id: number, result: string) {
   return prisma.submission.findUniqueOrThrow({ where: { id } })
 }
 
+async function waitForProgramVerification(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  problemId: string,
+  programId: string,
+  versionId: string,
+  jobId: string,
+) {
+  let completed: any = null
+  await expect.poll(async () => {
+    const response = await request.get(
+      `/api/problems/${problemId}/judge-programs/${programId}/versions/${versionId}/verification`,
+      { headers },
+    )
+    const body = await response.json()
+    expect(response.status(), JSON.stringify(body)).toBe(200)
+    completed = body.data.find((item: any) => item.id === jobId) || null
+    return completed?.status || 'missing'
+  }, { intervals: [250, 500, 1000], timeout: 180_000 }).toMatch(/^(completed|failed|cancelled)$/)
+  expect(completed?.status, JSON.stringify(completed)).toBe('completed')
+}
+
+async function createAndActivateProgram(
+  request: APIRequestContext,
+  token: string,
+  problemId: string,
+  definition: Record<string, unknown>,
+) {
+  const headers = { Authorization: `Bearer ${token}` }
+  const create = await request.post(`/api/problems/${problemId}/judge-programs`, {
+    headers,
+    data: definition,
+  })
+  const createBody = await create.json()
+  expect(create.status(), JSON.stringify(createBody)).toBe(201)
+  const programId = String(createBody.data.program.id)
+  const versionId = String(createBody.data.version.id)
+
+  const compile = await request.post(
+    `/api/problems/${problemId}/judge-programs/${programId}/versions/${versionId}/compile`,
+    { headers, data: {} },
+  )
+  const compileBody = await compile.json()
+  expect(compile.status(), JSON.stringify(compileBody)).toBe(202)
+  await waitForProgramVerification(request, headers, problemId, programId, versionId, String(compileBody.data.id))
+
+  const preflight = await request.post(
+    `/api/problems/${problemId}/judge-programs/${programId}/versions/${versionId}/preflight`,
+    { headers, data: {} },
+  )
+  const preflightBody = await preflight.json()
+  expect(preflight.status(), JSON.stringify(preflightBody)).toBe(202)
+  await waitForProgramVerification(request, headers, problemId, programId, versionId, String(preflightBody.data.id))
+
+  const activate = await request.patch(`/api/problems/${problemId}/judge-programs/${programId}`, {
+    headers,
+    data: { currentVersionId: versionId },
+  })
+  const activateBody = await activate.json()
+  expect(activate.status(), JSON.stringify(activateBody)).toBe(200)
+  return { programId, versionId }
+}
+
 test.afterAll(async () => {
   await Promise.all([prisma.$disconnect(), restored.$disconnect()])
 })
@@ -140,13 +203,35 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
     expect(addBody.data.testSetRevisionId).toBe(baseRevisionId)
   }
 
+  const standardSource = '#include <iostream>\nint main(){long long a,b;if(std::cin>>a>>b)std::cout<<a+b<<"\\n";}'
+  const validatorSource = '#include <iostream>\n#include <string>\nint main(){long long a,b;std::string extra;if(!(std::cin>>a>>b))return 1;return (std::cin>>extra)?1:0;}'
+  const standardProgram = await createAndActivateProgram(request, platformAdmin.token, 'e2e-problem', {
+    kind: 'standard',
+    name: 'Restored-backup STD probe',
+    language: 'cpp17',
+    protocol: 'oj.standard/v1',
+    source: standardSource,
+    fixtures: [{ name: 'sum', stdin: '1 2\n', expectedStdout: '3\n' }],
+  })
+  const validatorProgram = await createAndActivateProgram(request, platformAdmin.token, 'e2e-problem', {
+    kind: 'validator',
+    name: 'Restored-backup Validator probe',
+    language: 'cpp17',
+    protocol: 'oj.validator/v1',
+    source: validatorSource,
+    fixtures: [
+      { name: 'valid', stdin: '1 2\n', expectedExitCode: 0 },
+      { name: 'invalid', stdin: '1\n', expectedExitCode: 1 },
+    ],
+  })
+
   const configure = await request.put('/api/problems/e2e-problem/hack-config', {
     headers: bearer(platformAdmin),
     timeout: 150_000,
     data: {
       enabled: true,
-      standardSource: '#include <iostream>\nint main(){long long a,b;if(std::cin>>a>>b)std::cout<<a+b<<"\\n";}',
-      validatorSource: '#include <iostream>\n#include <string>\nint main(){long long a,b;std::string extra;if(!(std::cin>>a>>b))return 1;return (std::cin>>extra)?1:0;}',
+      standardProgramVersionId: standardProgram.versionId,
+      validatorProgramVersionId: validatorProgram.versionId,
     },
   })
   const configureBody = await configure.json()
