@@ -280,6 +280,7 @@ beforeAll(async () => {
     BEFORE UPDATE ON "QualityEvaluationJob"
     FOR EACH ROW EXECUTE FUNCTION prevent_quality_job_input_mutation();
 
+    -- QUALITY_TRIGGER_STATEMENT
     CREATE OR REPLACE FUNCTION prevent_problem_quality_automatic_mutation()
     RETURNS trigger AS $$
     BEGIN
@@ -314,6 +315,7 @@ beforeAll(async () => {
     BEFORE UPDATE ON "ProblemQualityAssessment"
     FOR EACH ROW EXECUTE FUNCTION prevent_problem_quality_automatic_mutation();
 
+    -- QUALITY_TRIGGER_STATEMENT
     CREATE OR REPLACE FUNCTION prevent_quality_snapshot_mutation()
     RETURNS trigger AS $$
     BEGIN

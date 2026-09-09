@@ -41,7 +41,7 @@ describe('V1 data product marketplace', () => {
       id: crypto.randomUUID(), problemId, revisionId: revision.id, corpusRevisionId: corpus.id, evaluationJobId: job.id,
       qualityRuleVersion: 'QUALITY_RULE_V1', inputHash: job.inputHash,
       correctnessScore: 30, discriminationScore: competition ? 24 : 22, coverageScore: 14, diversityScore: 9,
-      subtaskQualityScore: 8, stabilityScore: 9, overallScore: competition ? 94 : 88,
+      subtaskQualityScore: 8, stabilityScore: 9, overallScore: competition ? 94 : 92,
       confidenceScore: competition ? 90 : 76, confidenceLevel: competition ? 'VERY_HIGH' : 'HIGH',
       maturityLevel: competition ? 'MATURE' : 'PROVEN', wrongProgramCount: 20, behaviorClusterCount: 8,
       evaluationClusterCount: 5, holdoutClusterCount: 3, weightedKillCoverage: .9, evaluationCoverage: .9,

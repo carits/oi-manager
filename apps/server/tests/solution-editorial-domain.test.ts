@@ -190,7 +190,9 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     expect(versions.map(item => [item.version, item.status])).toEqual([[1, 'SUPERSEDED'], [2, 'PUBLISHED']])
     expect(versions[0].contentMarkdown).toContain('# Idea')
     expect(versions.map(item => item.visibilityPolicy)).toEqual(['MANAGER_ONLY', 'PUBLIC'])
-    const reader = await createTestUser({ role: 'student', schoolId: author.schoolId })
+    // School-library content is visible to active staff in that organization;
+    // a public solution must not widen the underlying problem's audience.
+    const reader = await createTestUser({ role: 'teacher', schoolId: author.schoolId })
     const readerClient = createAuthenticatedRequest(app, generateTokenFromUser(reader.user))
     const publicCurrent = await readerClient.get(`/api/solutions/${first.body.data.solutionId}`)
       .set('X-OI-Organization-ID', organizationId)
