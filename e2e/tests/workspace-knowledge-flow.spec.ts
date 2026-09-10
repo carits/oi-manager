@@ -39,7 +39,7 @@ const workspaceCases: Array<{ role: AuthRole; start: string; expected: string; n
   { role: 'platformAdmin', start: '/platform-admin', expected: '/platform-admin/knowledge', navigation: '平台管理员主导航' },
 ]
 
-test.describe('知识广场跨工作区一致性 @smoke', () => {
+test.describe('知识广场跨工作区一致性 @smoke @compact', () => {
   for (const entry of workspaceCases) {
     test(`${entry.role} 进入知识广场后保留原工作区`, async ({ browser }) => {
       const context = await browser.newContext({ storageState: accounts[entry.role].storageState })
