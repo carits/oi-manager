@@ -24,7 +24,7 @@ describe('组织路由能力', () => {
   })
   it('切换工作区时保留知识广场模块', () => {
     const personal: WorkspaceSummary = { type: 'personal', availableModules: [] }
-    const campus: WorkspaceSummary = { type: 'organization', organizationId: 'org_1', availableModules: ['knowledge'] }
+    const campus: WorkspaceSummary = { type: 'organization', organizationId: 'org_1', availableModules: [] }
     expect(workspaceHref(personal, 'knowledge')).toBe('/personal/knowledge')
     expect(workspaceHref(campus, 'knowledge')).toBe('/org/org_1/knowledge')
   })

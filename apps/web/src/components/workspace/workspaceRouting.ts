@@ -53,7 +53,7 @@ export function workspaceModule(pathname: string) {
 export function workspaceHref(workspace: WorkspaceSummary, module: string) {
   if (workspace.type === 'platform') return '/platform-admin'
   if (workspace.type === 'personal') return personalWorkspaceModules.has(module) ? `/personal/${module}` : '/personal'
-  const target = organizationModules.has(module) && workspace.availableModules.includes(module) ? module : 'overview'
+  const target = organizationModules.has(module) && (module === 'knowledge' || workspace.availableModules.includes(module)) ? module : 'overview'
   return `/org/${workspace.organizationId}/${target}`
 }
 export const moduleHref = workspaceHref
