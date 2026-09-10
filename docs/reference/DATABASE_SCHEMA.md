@@ -82,6 +82,8 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `Organization` | 以 Prisma schema 为准 |
 | `OrganizationContributionAttribution` | 以 Prisma schema 为准 |
 | `OrganizationMembership` | 以 Prisma schema 为准 |
+| `OrganizationMembershipRole` | 成员关系的规范化多角色分配；迁移期与旧 `memberRole` 双读 |
+| `OrganizationMembershipCapability` | 成员关系的显式能力授予，授权策略按稳定 capability key 读取 |
 | `OrganizationJoinApplication` | 用户主动加入学校的申请、审核结果及内外分离备注 |
 | `OrganizationInvitation` | 学校向现有账号发送的独立邀请与响应状态 |
 | `OrganizationAuditLog` | 加入策略、申请审批、邀请和成员恢复的持久化审计 |

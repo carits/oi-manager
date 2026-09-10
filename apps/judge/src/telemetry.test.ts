@@ -46,6 +46,6 @@ describe('Judge telemetry', () => {
       'task.submission.received': 1,
       'task.submission.accepted': 1,
     })
-    expect(fs.statSync(target).mode & 0o077).toBe(0)
+    if (process.platform !== 'win32') expect(fs.statSync(target).mode & 0o077).toBe(0)
   })
 })

@@ -64,30 +64,10 @@ function terminalAttemptState(result: string): JudgeAttemptState {
   return 'USER_ERROR'
 }
 
-function clearedSubmissionProjection(submissionId: number, oj: string) {
-  return {
-    result: 'queuing',
-    submitMethod: 'local',
-    timeUsed: null,
-    memoryUsed: null,
-    wallTimeUsed: null,
-    timeoutReason: null,
-    metricSource: null,
-    score: null,
-    cases: null,
-    subtasks: null,
-    errorMessage: null,
-    judgeId: null,
-    judgeStarted: null,
-    ojAccountId: null,
-    ojRemoteId: oj === 'carits' ? String(submissionId) : null,
-  }
-}
-
 /**
  * Creates immutable submission intent and its first logical/physical Judge
- * lifecycle in one transaction. Legacy Submission execution columns remain a
- * compatibility projection until all readers have switched to JudgeRun.
+ * lifecycle in one transaction. Local execution state belongs exclusively to
+ * JudgeRun/JudgeAttempt; Submission result columns are archive-only snapshots.
  */
 export async function createQueuedSubmissionWithRun(
   data: Prisma.SubmissionUncheckedCreateInput,
@@ -129,7 +109,7 @@ export async function createQueuedSubmissionWithRun(
   })
 }
 
-/** Claim the next physical attempt and dual-write the legacy queue projection. */
+/** Claim the next physical attempt without mutating archive-only Submission result fields. */
 export async function claimNextQueuedSubmission(judgeId: string): Promise<ClaimedSubmissionLifecycle | null> {
   return prisma.$transaction(async tx => {
     const candidates = await tx.$queryRaw<Array<{
@@ -147,7 +127,6 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
         AND run.status IN ('QUEUED', 'RUNNING')
         AND run."currentAttemptId" = attempt.id
         AND submission."currentJudgeRunId" = run.id
-        AND submission.result = 'queuing'
         AND submission."problemInternalId" IS NOT NULL
         AND (
           submission."submitMethod" IN ('local', 'demo_scenario')
@@ -193,9 +172,8 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
       where: { id: candidate.judgeAttemptId },
       data: { state: 'RUNNING', startedAt: now },
     })
-    const submission = await tx.submission.update({
+    const submission = await tx.submission.findUniqueOrThrow({
       where: { id: candidate.submissionId },
-      data: { result: 'judging', judgeId, judgeStarted: now },
       select: {
         id: true,
         problemInternalId: true,
@@ -226,7 +204,7 @@ export async function claimNextQueuedSubmission(judgeId: string): Promise<Claime
   })
 }
 
-/** Finalize exactly the currently owned attempt and legacy projection. */
+/** Finalize exactly the currently owned attempt. JudgeRun is the only local result fact. */
 export async function finalizeOwnedJudgeAttempt(input: {
   submissionId: number
   judgeRunId: string
@@ -316,24 +294,12 @@ export async function finalizeOwnedJudgeAttempt(input: {
         finalizedAt: now,
       },
     })
-    return tx.submission.update({
-      where: {
-        id: input.submissionId,
-        currentJudgeRunId: input.judgeRunId,
-        result: 'judging',
-        judgeId: input.judgeId,
-      },
-      data: {
-        ...input.projection,
-        judgeId: null,
-        judgeStarted: null,
-      },
+    const submission = await tx.submission.findUniqueOrThrow({
+      where: { id: input.submissionId },
       select: {
         id: true,
         userId: true,
         problemId: true,
-        result: true,
-        score: true,
         submitScope: true,
         trainingId: true,
         trainingProblemId: true,
@@ -341,8 +307,12 @@ export async function finalizeOwnedJudgeAttempt(input: {
         contestProblemId: true,
         trainingSessionId: true,
         trainingStageProblemId: true,
+        assignmentId: true,
+        assignmentProblemId: true,
+        assignmentRecipientId: true,
       },
     })
+    return { ...submission, result: input.projection.result, score: input.projection.score ?? null }
   })
 }
 
@@ -391,13 +361,6 @@ async function retryAttemptTransaction(
   await tx.judgeRun.update({
     where: { id: run.id },
     data: { currentAttemptId: nextAttemptId, errorMessage: null },
-  })
-  await tx.submission.update({
-    where: { id: submission.id },
-    data: {
-      ...clearedSubmissionProjection(submission.id, submission.oj),
-      currentJudgeRunId: run.id,
-    },
   })
   return true
 }
@@ -454,7 +417,6 @@ async function queueRejudgeRun(
     include: { CurrentJudgeRun: true },
   })
   if (!submission || submission.submitMethod === 'archive' || !submission.problemInternalId) return false
-  if (submission.result === 'queuing' || submission.result === 'judging') return false
   if (submission.CurrentJudgeRun && ['QUEUED', 'RUNNING'].includes(submission.CurrentJudgeRun.status)) return false
 
   const latest = await tx.judgeRun.aggregate({ where: { submissionId }, _max: { runNumber: true } })
@@ -489,10 +451,7 @@ async function queueRejudgeRun(
   await tx.judgeRun.update({ where: { id: runId }, data: { currentAttemptId: attemptId } })
   await tx.submission.update({
     where: { id: submissionId },
-    data: {
-      ...clearedSubmissionProjection(submissionId, submission.oj),
-      currentJudgeRunId: runId,
-    },
+    data: { currentJudgeRunId: runId },
   })
   return true
 }

@@ -1,93 +1,79 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-21
-source_of_truth: apps/server/prisma/schema.prisma
+last_verified: 2026-09-10
+source_of_truth: apps/server/prisma/schema.prisma, docs/architecture/generated/ARCHITECTURE_INVENTORY.md
 ---
 
 # 数据模型
 
-当前数据库为 PostgreSQL，Prisma Schema 有 63 个模型。这里解释领域关系；逐模型
-字段目录见[数据库参考](../reference/DATABASE_SCHEMA.md)。
+当前数据库为 PostgreSQL，Prisma Schema 有 **201 个模型**。模型数由架构门禁自动统计；新增或删除模型后必须同时更新本页与[数据库参考](../reference/DATABASE_SCHEMA.md)，不得继续维护脱离 Schema 的手写旧字段目录。完整逐模型清单见[自动生成的架构清单](generated/ARCHITECTURE_INVENTORY.md)。
 
-## 领域分组
+## 领域聚合
 
-| 领域 | 模型数 | 主要模型 |
-|------|-------:|----------|
-| 身份与学校 | 10 | `User`, `PersonalProfile`, `Admin`, `Teacher`, `Student`, `School` |
-| 团队与导入 | 7 | `Team`, `TeamMember`, `TeamJoinRequest`, import batch/item |
-| 题目与题单 | 12 | `Problem`, `ProblemStatement`, `ProblemList`, shares |
-| 训练与比赛 | 14 | `Training`, `TrainingProblem`, `Contest`, results/status |
-| 提交与 OJ | 5 | `Submission`, `OjAccount`, `OjFetchJob`, bindings |
-| 文件、AI、内部序列 | 3 | `File`, `AiUsageLog`, `carits_sequence` |
+| 领域 | 聚合根与关键事实 |
+|---|---|
+| 账号与组织 | `User`、`Organization`、`School`、`OrganizationMembership`、成员资料、加入/邀请/创建申请与审计 |
+| 授权 | `OrganizationMembershipRole`、`OrganizationMembershipCapability`；旧 `memberRole` 在迁移期仅作为资料身份和兼容输入 |
+| 团队与教学 | `Team`、`Assignment`、`TrainingSession` 及其题目、名单、进度、提示、反馈和事件 |
+| 比赛运行与 Rating | `Training(type=contest)` 是可变运行事实源；`Contest/ContestProblem` 是受边界保护的规范化投影；最终榜单和 Rating 批次不可变 |
+| 题目与评测资产 | `Problem`、`ProblemTestSetRevision`、Test Graph、测试点、Blob、Judge Program、Validator/Feature/Classifier |
+| Candidate 与贡献经济 | Candidate、生成任务、Wrong Corpus、Selector、Evaluation Budget、Contribution、Carits 和 Credits 账本 |
+| 提交与 Judge | `Submission` 保存提交意图与远端归档结果；本地执行结果唯一来自 `JudgeRun`，物理执行来自 `JudgeAttempt` |
+| 知识与题解 | Solution 投稿/审核/相似度，以及 Blog 文章、不可变版本、引用、系列、标签和社区互动 |
+| 私信 | 好友、拉黑、会话、单调消息序号、持久事件、举报证据和版本化表情包 |
+| 文件、AI 与运维 | 内容寻址 Blob/File、AI Token 账本、迁移和平台审计事实 |
 
-## 身份关系
-
-```mermaid
-erDiagram
-  School ||--o{ User : contains
-  User ||--o| Admin : extends
-  User ||--o| Teacher : extends
-  User ||--o| Student : extends
-  User ||--o| PersonalProfile : enables
-  School ||--o{ Teacher : employs
-  School ||--o{ Student : enrolls
-  School }o--|| Teacher : currentPrincipal
-```
-
-`User.id` 同时作为 `Admin`、`Teacher` 或 `Student` 的扩展主键。用户密码字段是
-`passwordHash`。学校负责人字段是 `currentPrincipalTeacherId`，不存在独立
-`SchoolPrincipal` 模型。
-
-`PersonalProfile` 不复制教师、管理员或学生档案。它只表示账号已启用个人工作区，并保存
-独立于 `Student.rating` 的个人 Rating；首次切入个人工作区时按需创建。
-
-## 团队与任务
+## 身份与授权
 
 ```mermaid
 erDiagram
-  School ||--o{ Team : owns
-  Team ||--o{ TeamMember : has
-  User ||--o{ TeamMember : joins
-  Team ||--o{ Training : publishes
-  Training ||--o{ TrainingProblem : contains
-  Problem ||--o{ TrainingProblem : reused
-  Training ||--o{ TrainingParticipant : assigns
-  User ||--o{ TrainingParticipant : participates
+  User ||--o{ OrganizationMembership : joins
+  Organization ||--o{ OrganizationMembership : contains
+  Organization ||--o| School : profiles
+  OrganizationMembership ||--o{ OrganizationMembershipRole : has
+  OrganizationMembership ||--o{ OrganizationMembershipCapability : grants
+  OrganizationMembership ||--o| OrganizationStudentProfile : student_profile
+  OrganizationMembership ||--o| OrganizationTeacherProfile : teacher_profile
 ```
 
-校园团队所有者、管理员、教师成员和学生成员通过 `TeamMember.role` 表达；个人团队
-统一使用 `userType=user` 并通过 `User` 关联，`schoolId` 必须为 `null`。邀请、申请和
-外部平台导入有独立记录，避免把临时状态塞进成员表。
+账号的全局角色与组织成员身份分离。学生、教师和负责人是组织关系，不修改普通账号的全局 `User.role`。`OrganizationMembership.memberRole` 仍决定学生/教师资料类型；授权调用稳定 Capability。迁移阶段 Resolver 默认 `hybrid`，同时读取规范化角色/显式 Capability 与旧角色映射；完成受保护回填并对账后才允许切换 `MEMBERSHIP_CAPABILITY_SOURCE=normalized`。
 
-## 题目、题单与提交
+## 题目、Revision 与活动
 
-- `Problem.libraryScope` 区分 `platform | school`；学校题必须关联 `schoolId`，
-  平台题的 `schoolId` 必须为 `null`。
-- `Problem.libraryKey` 是 `platform` 或 `school:<schoolId>`，与 `platform + problemId`
-  组成命名空间唯一约束。`sourceProblemId` 记录平台题复制来源，但副本后续独立。
-- `Problem.status` 使用 `draft | published | archived`，`ownerId` 关联创建用户，
-  `ownerType` 和 `visibility` 只作为开发周期内的旧数据兼容字段。
-- `ProblemStatement`、附件和测试数据独立，但访问一律继承题目作用域。
-- `UserProblemContent` 的题面记录是可独立命名的多版本对象；同一用户同题可有多份不同
-  `nameKey` 的活跃题面，使用 `private | public` 可见性和 `deletedAt` 软删除。题面可以从官方、
-  自有、他人公开版本或空白复制，复制后不再依赖来源。题解暂时继续保持每人每题一份。
-- `TrainingProblemStatementSet` 为活动题目保存一次多题面选择 revision，所属的
-  `TrainingProblemStatementSnapshot` 保存每份题面的内容/PDF、显示顺序和唯一默认标记。
-  来源后续编辑、转私有或删除均不影响活动快照。旧 `TrainingProblemContentSnapshot` 继续
-  承担题解快照及历史兼容读取。
-- 活动管理员编辑题面时复制当前 statement set 并追加 revision；编辑题解时追加新的
-  `TrainingProblemContentSnapshot` revision。编辑后的记录使用 `sourceType=training` 和上一
-  快照 ID 保留链路，陈旧快照 ID 不允许覆盖当前版本。
-- `ProblemList` 通过 section/entry 组织题目，通过 `scope`、share、学校和团队关联控制可见性。
-- `Training.scope` 继承团队作用域；学校任务固定为 `campus`。
-- `Submission.workspaceScope` 在服务端创建时从会话推导，客户端不能指定。
-- `TrainingUserProblemStatus` 与 `ContestUserProblemStatus` 保存用户级完成状态，
-  不以临时内存排名作为事实来源。
+```mermaid
+flowchart LR
+  Problem --> Revision[ProblemTestSetRevision]
+  Revision --> TestGraph[Subtask / Group / Testcase]
+  Revision --> JudgeProjection[不可变 Judge 投影]
+  Revision --> TP[TrainingProblem 固定引用]
+  Revision --> AP[AssignmentProblem 固定引用]
+  TP --> Submission
+  AP --> Submission
+```
 
-## 约束
+- TestSet Revision 是正式评测数据的不可变事实；YAML 只允许由结构化模型单向生成。
+- 已创建活动固定 Revision，题库 Hack/Candidate 的新 Revision 不直接传播到活动。
+- `Training(type=contest)` 是比赛编辑和运行状态的唯一可变事实源；`Contest/ContestProblem` 只能经 `contest-aggregate.service.ts` 同事务投影，普通领域禁止直接写。
 
-- 所有正式用户必须关联学校，包括平台管理员所在的平台学校。
-- 学校必须有当前负责人，负责人转移使用事务和日志记录。
-- 团队成员、题单分享和多种状态表有唯一约束，业务代码仍需处理并发冲突。
-- Judge 任务领取依赖 PostgreSQL `FOR UPDATE SKIP LOCKED`，测试不得改用 SQLite。
+## Submission 与 Judge
+
+```mermaid
+erDiagram
+  Submission ||--o{ JudgeRun : owns
+  Submission ||--o| JudgeRun : current
+  JudgeRun ||--o{ JudgeAttempt : retries
+  JudgeRun ||--o| JudgeAttempt : current
+```
+
+- 本地提交：`Submission` 保存代码、来源、作用域、固定 Revision、IO 意图和 `currentJudgeRunId`；状态、分数、测试点与资源指标只读取 `JudgeRun`。
+- 远端归档：没有本地 Run，其来源平台结果保存在 `Submission` 的归档快照字段。
+- `JudgeAttempt` 使用租约和 fencing token；终态 Attempt 不重新打开，基础设施重试创建新 Attempt，人工重测创建新 Run。
+- 投影审计只比较 Run 与 Attempt，并强制本地提交均有 Run；不再要求本地 Run 回写 Submission 结果列。
+
+#### 数据与并发约束
+
+- 题目 Revision、训练/比赛 Assignment、聊天会话、经济账本等高竞争写入使用数据库事务锁或 advisory lock，并通过 revision/CAS 防止丢失更新。
+- 正式版本、账本分录、消息、审计、举报证据和发布版本均按追加或不可变方式保存。
+- 用户控制的源码、压缩包、消息、AI 请求、Candidate 和 Judge 输出均有服务端硬上限；前端禁用状态不是安全边界。
+- PostgreSQL `FOR UPDATE SKIP LOCKED` 用于队列领取；测试环境不得以 SQLite 代替并发语义。

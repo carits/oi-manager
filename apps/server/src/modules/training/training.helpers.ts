@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../../prisma'
+import { hasOrganizationCapability, hasTeamCapability } from '../authorization/capabilities'
 
 /** 按比赛所属组织解析参赛者展示名；不读取旧 Student/Teacher 档案。 */
 export async function getParticipantNames(
@@ -47,16 +48,7 @@ export async function getTeamMember(userId: string, teamId: string) {
 
 /** 检查是否是团队管理员 */
 export async function isTeamAdmin(userId: string, teamId: string): Promise<boolean> {
-  const [user, team] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
-    prisma.team.findUnique({ where: { id: teamId }, select: { scope: true } }),
-  ])
-  if (team?.scope === 'campus' && user?.role === 'super_admin') return true
-
-  const member = await prisma.teamMember.findFirst({
-    where: { teamId, userId, status: 'active', role: { in: ['owner', 'admin'] } }
-  })
-  return !!member
+  return hasTeamCapability(userId, teamId, 'contest.manage')
 }
 
 /** 检查是否是团队成员 */
@@ -75,15 +67,9 @@ export async function isTeamMember(userId: string, teamId: string): Promise<bool
 
 /** 检查是否是组织比赛管理员（可创建/管理校园比赛）。 */
 export async function isOrganizationContestAdmin(userId: string, organizationId: string, trainingCreatedBy?: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (!user) return false
-  if (user.role === 'super_admin') return true
-  const membership = await prisma.organizationMembership.findFirst({
-    where: { organizationId, userId, status: 'active' },
-    select: { memberRole: true },
+  return hasOrganizationCapability(userId, organizationId, 'contest.manage', {
+    resourceCreatedByUserId: trainingCreatedBy,
   })
-  if (!membership || !['teacher', 'school_principal'].includes(membership.memberRole)) return false
-  return !trainingCreatedBy || membership.memberRole === 'school_principal' || trainingCreatedBy === userId
 }
 
 /** 检查是否是组织成员（可查看/参加校园比赛）。 */

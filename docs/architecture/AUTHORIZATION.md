@@ -81,6 +81,13 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 具体业务接口还会检查学校、团队、创建者、成员角色和可见性。前端隐藏按钮只是体验，
 不能替代后端权限校验。
 
+服务端业务域不得互相导入对方的角色判断函数。稳定组织/团队能力集中在
+`modules/authorization/capabilities.ts`，Assignment 等领域再用自己的 policy 组合资源所有权、创建者和状态。
+当前 `OrganizationMembershipRole` 与 `OrganizationMembershipCapability` 是规范化授权来源；迁移期间默认
+`MEMBERSHIP_CAPABILITY_SOURCE=hybrid`，先读取规范化分配和显式能力，同时保留 `memberRole` 映射。受保护的
+`GET/POST /api/admin/migration/membership-roles` 对账并回填后，生产才可显式切到 `normalized`。切换不会改变
+`memberRole` 的学生/教师资料判别用途。
+
 资源所有权回归矩阵同时固定以下边界：平台管理员和超级管理员都可读取全局提交；组织活动只有负责人、
 创建者和超级管理员可管理，平台管理员仅有全局只读访问；校园团队同样只有 owner/admin 与超级管理员
 可管理；平台管理员与超级管理员可以管理平台题，但都不能绕过组织上下文读取或修改校内题库。

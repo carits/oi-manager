@@ -53,17 +53,17 @@ QUEUED -> CLAIMED -> COMPILING -> RUNNING -> FINALIZING
 ## 渐进迁移
 
 1. **Expand**：新增表、枚举、索引和兼容回填，不删除旧字段。
-2. **Dual write**：新本地提交原子创建 Submission/Run/Attempt；旧执行字段继续投影。
-3. **Switch write**：领取、回传、恢复与重测只变更 Run/Attempt，并事务更新旧投影。
-4. **Switch read**：详情、排名和统计优先读取 current Run，缺失时回退 legacy Submission。
+2. **Dual write（已结束）**：新本地提交原子创建 Submission/Run/Attempt；旧执行字段曾同步投影。
+3. **Switch write（已完成）**：领取、回传、恢复与重测只变更 Run/Attempt，不再回写 Submission 结果。
+4. **Switch read（已完成）**：本地详情、排名和统计只读取 current Run；只有远端归档读取 Submission 快照。
 5. **Backfill audit**：所有可本地评测提交恰有 current Run/Attempt，归档记录没有本地生命周期。
-6. **Cleanup**：稳定一个发布周期后删除 Submission 的 result、Judge owner、得分与测试点等旧执行态字段。
+6. **Cleanup**：已停止本地兼容写；归档仍使用的结果列保留并明确为远端快照，Judge owner 旧字段待后续物理迁移删除。
 
 任何阶段都必须保持旧 API 响应兼容、活动计分和排行榜不变，并通过普通 Judge、Hack、重测、蓝绿与故障注入 characterization tests。
 
-当前进度：Expand、Dual write、Switch write 和用户可见读取的 Switch read 已完成。提交列表/详情、筛选、题目状态、个人概览、OI/ICPC 排名、平台/校园解题排名、管理统计及重测预览统一读取 CurrentJudgeRun；远程归档和没有 Run 的历史记录保留兼容回退。当前进入对账观察窗口，Cleanup 尚未执行。
+当前进度：Switch write Cleanup 已完成。本地领取、回传、恢复和重测不再维护 `Submission.result/score/cases/...`；本地提交缺少 Run 时 fail closed 为 System Error。远端归档继续把来源平台结果保存为 Submission 快照。投影审计已改为检查 Submission→Run 所有权、Run→Attempt 一致性及本地缺 Run，不再比较已停止维护的兼容列。
 
-Switch read 由 `judge-read-projection.ts` 作为唯一边界：Run 的 `QUEUED/RUNNING` 映射为 `queuing/judging`，终态结果、分数、测试点、Subtask、错误与资源指标全部来自 CurrentJudgeRun。筛选与聚合使用同一语义的 Prisma/SQL 条件，禁止页面直接混读 `Submission.result/score`。回归测试会故意破坏兼容列，验证列表、详情、筛选和排名仍返回 CurrentJudgeRun 的结果。
+Switch read 由 `judge-read-projection.ts` 作为唯一边界：Run 的 `QUEUED/RUNNING` 映射为 `queuing/judging`，终态结果、分数、测试点、Subtask、错误与资源指标全部来自 CurrentJudgeRun。筛选与聚合使用同一语义的 Prisma/SQL 条件，fallback 明确限定为 `submitMethod=archive`。
 
 ## 写入规则
 

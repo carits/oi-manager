@@ -8,7 +8,11 @@ import {
   createInitialContentSnapshots,
 } from '../../problem/problem.content.service'
 import { populateSnapshotData } from '../training.helpers'
-import { deleteContestProblemAggregateTx, syncContestProblemAggregateTx } from '../../contest/contest-aggregate.service'
+import {
+  deleteContestProblemAggregateTx,
+  stageContestProblemOrderProjectionTx,
+  syncContestProblemAggregateTx,
+} from '../../contest/contest-aggregate.service'
 
 export class TrainingProblemManagementError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -108,7 +112,7 @@ export async function reorderManagedTrainingProblems(trainingId: number, orders:
   await prisma.$transaction(async tx => {
     for (const order of orders) {
       await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: -(order.orderIndex + 1) } })
-      await tx.contestProblem.updateMany({ where: { runtimeTrainingProblemId: order.id }, data: { orderIndex: -(order.orderIndex + 1) } })
+      await stageContestProblemOrderProjectionTx(tx, order.id, -(order.orderIndex + 1))
     }
     for (const order of orders) {
       await tx.trainingProblem.update({ where: { id: order.id }, data: { orderIndex: order.orderIndex } })

@@ -24,6 +24,7 @@ source_of_truth: process.env usage, environment examples, Playwright configurati
 | `JUDGE_TOKEN` | 非 test 必需 | 无 | Judge 认证 |
 | `ALLOW_UNAUTHENTICATED_JUDGE` | 否 | `false` | 仅 loopback 测试例外 |
 | `ENABLE_MAINTENANCE_API` | 否 | `false` | 开启超管迁移接口 |
+| `MEMBERSHIP_CAPABILITY_SOURCE` | 否 | `hybrid` | 组织授权来源；回填前使用 `hybrid`，对账后可切换 `normalized`，`legacy` 仅用于回滚 |
 | `ACCOUNT_ENCRYPT_KEY` | 正式/OJ 账号必需 | 无 | OJ 账号字段加密 |
 | `RATE_LIMIT_MAX` | 否 | 配置默认值 | 每分钟限流 |
 | `LOG_LEVEL` | 否 | `info` | 日志级别 |

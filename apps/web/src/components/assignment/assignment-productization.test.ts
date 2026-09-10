@@ -28,6 +28,7 @@ describe('assignment productization contract', () => {
 
   it('renders an explicit student-by-problem matrix and manual completion action', () => {
     expect(workspace).toContain('caption="学生题目批改矩阵"')
+    expect(workspace).toContain('className: styles.matrixSticky')
     expect(workspace).toContain('等待学生首次提交后')
     expect(workspace).toContain('manualCompletionVersion')
     expect(workspace).toContain('撤销确认')

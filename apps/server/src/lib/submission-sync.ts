@@ -10,6 +10,7 @@ import crypto from 'crypto'
 
 import { prisma } from '../prisma'
 import { logger } from './logger'
+import { currentJudgeAcceptedWhere } from '../modules/judge/application/judge-read-projection'
 
 /**
  * 判断结果是否为 AC（Accepted）
@@ -41,7 +42,7 @@ export async function syncProblemAC(
       where: {
         userId,
         problemId: problemInternalId,
-        result: { in: ['Accepted', 'AC', 'accepted', 'ac'] },
+        AND: [currentJudgeAcceptedWhere()],
         submitScope: { in: ['problem', 'training'] },
         id: currentSubmissionId ? { not: currentSubmissionId } : undefined,
       },

@@ -2713,10 +2713,43 @@ model OrganizationMembership {
   AssignedInvitations      OrganizationInvitation[]      @relation("InvitationHeadTeacherMembership")
   CreatedAssignments       Assignment[]                  @relation("AssignmentCreatorMembership")
   AssignmentRecipients     AssignmentRecipient[]
+  RoleAssignments          OrganizationMembershipRole[]
+  CapabilityGrants         OrganizationMembershipCapability[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
   @@index([organizationId, status])
+}
+
+/// Normalized, additive roles for one organization relationship. During the
+/// expand phase OrganizationMembership.memberRole remains the profile
+/// discriminator and compatibility source; authorization reads both.
+model OrganizationMembershipRole {
+  id           String                 @id
+  membershipId String
+  roleKey      String
+  source       String                 @default("legacy_backfill")
+  grantedBy    String?
+  createdAt    DateTime               @default(now())
+  Membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, roleKey])
+  @@index([roleKey])
+}
+
+/// Explicit capability grants supplement role-derived capabilities. Revoking a
+/// role does not rewrite historical profile identity.
+model OrganizationMembershipCapability {
+  id            String                 @id
+  membershipId  String
+  capabilityKey String
+  source        String                 @default("explicit")
+  grantedBy     String?
+  createdAt     DateTime               @default(now())
+  Membership    OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, capabilityKey])
+  @@index([capabilityKey])
 }
 
 model OrganizationJoinApplication {

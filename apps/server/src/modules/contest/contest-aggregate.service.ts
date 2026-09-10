@@ -66,3 +66,19 @@ export async function syncContestProblemAggregateTx(tx: Prisma.TransactionClient
 export async function deleteContestProblemAggregateTx(tx: Prisma.TransactionClient, trainingProblemId: string) {
   await tx.contestProblem.deleteMany({ where: { runtimeTrainingProblemId: trainingProblemId } })
 }
+
+/**
+ * Temporary negative ordering is part of Training's two-phase reorder. Keep
+ * even this projection-only write behind the aggregate boundary so Training
+ * remains the sole mutable source of contest structure.
+ */
+export async function stageContestProblemOrderProjectionTx(
+  tx: Prisma.TransactionClient,
+  trainingProblemId: string,
+  temporaryOrderIndex: number,
+) {
+  await tx.contestProblem.updateMany({
+    where: { runtimeTrainingProblemId: trainingProblemId },
+    data: { orderIndex: temporaryOrderIndex },
+  })
+}

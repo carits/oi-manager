@@ -12,7 +12,8 @@ import { StatusBadge } from '@/components/ui/Badge'
 import { DetailDialog, FormDialog } from '@/components/ui/Dialogs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
-import { SubmissionCodeEditor } from '@/components/submission/SubmissionCodeEditor'
+import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
+import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
 import styles from './TrainingEngine.module.css'
 
 type StageProblem = { id: string; problemId: string; alias?: string; targetScore?: number; timeLimitSeconds?: number; allowedSubtaskIds?: number[]; strategyIntervalSeconds?: number; maxContinuousWorkSeconds?: number; forceSwitchOnTimeout?: boolean; unlockPolicy?: { mode: 'ANY' | 'ALL'; conditions: Array<{ type: string; value?: number }> }; Problem: { problemId: string; title: string; platform: string }; TestSetRevision: { revisionNumber: number; mode: string } }
@@ -28,6 +29,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const toast = useToast(), router = useRouter(), pathname = usePathname()
   const [data, setData] = useState<Workspace>(), [dashboard, setDashboard] = useState<Dashboard>(), [peerProgress, setPeerProgress] = useState<PeerProgress>(), [problemDetail, setProblemDetail] = useState<any>()
   const [selectedId, setSelectedId] = useState<string>(), [code, setCode] = useState(''), [language, setLanguage] = useState('cpp17'), [draftRevision, setDraftRevision] = useState<number>()
+  const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [saving, setSaving] = useState(false), [submitting, setSubmitting] = useState(false), [commandBusy, setCommandBusy] = useState(false), [rosterSaving, setRosterSaving] = useState(false)
   const [roster, setRoster] = useState<Roster>(), [rosterOpen, setRosterOpen] = useState(false)
   const [hints, setHints] = useState<Hint[]>([]), [hintOpen, setHintOpen] = useState(false), [hintTitle, setHintTitle] = useState(''), [hintContent, setHintContent] = useState(''), [hintLevel, setHintLevel] = useState(1), [openedHint, setOpenedHint] = useState<Hint>()
@@ -35,7 +37,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   const [commandTargetType, setCommandTargetType] = useState('ALL'), [commandTargetId, setCommandTargetId] = useState('')
   const [messageOpen, setMessageOpen] = useState(false), [message, setMessage] = useState(''), [messageType, setMessageType] = useState('INFO')
   const [report, setReport] = useState<any[]>(), [reportOpen, setReportOpen] = useState(false)
-  const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<boolean>>(async () => false)
+  const cursor = useRef(0), saveDraftRef = useRef<(quiet?: boolean) => Promise<number | false>>(async () => false)
   const commandInFlight = useRef(false), statusRevisionRef = useRef<number>()
 
   const load = useCallback(async () => {
@@ -59,6 +61,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
 
   const problem = useMemo(() => data?.session.Stages.flatMap(stage => stage.Problems).find(item => item.id === selectedId), [data, selectedId])
   const draftKey = problem ? `training-draft:${sessionId}:${problem.problemId}` : ''
+  const editorDraftKey = problem ? `training-engine:${sessionId}:${problem.id}` : ''
   const loadHints = useCallback(async (id?: string) => {
     if (!id) return setHints([])
     const response = await apiClient.get<Hint[]>(`/api/training-sessions/${sessionId}/problems/${id}/hints`)
@@ -72,23 +75,23 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
     ]).then(([draft, detail]) => {
       const local = typeof window !== 'undefined' ? window.localStorage.getItem(draftKey) : null
       setCode(draft.data?.code || local || ''); setLanguage(draft.data?.language || 'cpp17'); setDraftRevision(draft.data?.revision)
+      setSubmissionIo({ inputFilename: draft.data?.inputFilename || null, outputFilename: draft.data?.outputFilename || null })
+      if (local) window.localStorage.removeItem(draftKey)
       setProblemDetail(detail.success ? detail.data : undefined)
     })
     void loadHints(problem.id)
   }, [draftKey, loadHints, problem?.id, problem?.problemId, sessionId])
-  useEffect(() => { if (draftKey && typeof window !== 'undefined') window.localStorage.setItem(draftKey, code) }, [code, draftKey])
-
   const saveDraft = useCallback(async (quiet = false) => {
     if (!problem) return false
     setSaving(true)
-    const response = await apiClient.put<any>(`/api/training-sessions/${sessionId}/drafts/${problem.problemId}`, { code, language, expectedRevision: draftRevision, editorFocused: document.hasFocus() })
+    const response = await apiClient.put<any>(`/api/training-sessions/${sessionId}/drafts/${problem.problemId}`, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: document.hasFocus() })
     setSaving(false)
     if (!response.success) { if (!quiet) toast.error(response.message || '草稿保存失败'); return false }
     setDraftRevision(response.data?.revision)
     if (draftKey) window.localStorage.removeItem(draftKey)
     if (!quiet) toast.success('草稿已保存')
-    return true
-  }, [code, draftKey, draftRevision, language, problem, sessionId, toast])
+    return Number(response.data?.revision ?? draftRevision ?? 0)
+  }, [code, draftKey, draftRevision, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename, toast])
   saveDraftRef.current = saveDraft
   useEffect(() => { const timer = setInterval(() => { if (code && problem) void saveDraftRef.current(true) }, 30_000); return () => clearInterval(timer) }, [code, problem])
   useEffect(() => {
@@ -101,12 +104,11 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (!problem || !draftKey) return
     const persistOnExit = () => {
-      window.localStorage.setItem(draftKey, code)
-      void apiClient.put(`/api/training-sessions/${sessionId}/drafts/${problem.problemId}`, { code, language, expectedRevision: draftRevision, editorFocused: false }, { keepalive: true })
+      void apiClient.put(`/api/training-sessions/${sessionId}/drafts/${problem.problemId}`, { code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename, expectedRevision: draftRevision, editorFocused: false }, { keepalive: true })
     }
     window.addEventListener('pagehide', persistOnExit)
     return () => window.removeEventListener('pagehide', persistOnExit)
-  }, [code, draftKey, draftRevision, language, problem, sessionId])
+  }, [code, draftKey, draftRevision, language, problem, sessionId, submissionIo.inputFilename, submissionIo.outputFilename])
   useEffect(() => {
     const source = new EventSource(`/api/training-sessions/${sessionId}/events?afterSeq=${cursor.current}`, { withCredentials: true })
     source.addEventListener('training', event => { cursor.current = Number((event as MessageEvent).lastEventId || cursor.current); void saveDraftRef.current(true).finally(() => load()) })
@@ -132,10 +134,18 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
   }
   const submit = async () => {
     if (!problem || !selectedId) return
-    setSubmitting(true); await saveDraftRef.current(true)
-    const response = await apiClient.post<any>(`/api/training-sessions/${sessionId}/submit`, { stageProblemId: selectedId, code, language })
+    setSubmitting(true)
+    const savedRevision = await saveDraftRef.current(true)
+    if (savedRevision === false) { setSubmitting(false); return }
+    const response = await apiClient.post<any>(`/api/training-sessions/${sessionId}/submit`, { stageProblemId: selectedId, code, language, inputFilename: submissionIo.inputFilename, outputFilename: submissionIo.outputFilename })
+    if (!response.success) { setSubmitting(false); return toast.error(response.message || '提交失败') }
+    const cleared = await apiClient.put<any>(`/api/training-sessions/${sessionId}/drafts/${problem.problemId}`, { code: '', language, inputFilename: null, outputFilename: null, expectedRevision: savedRevision, editorFocused: false })
+    if (cleared.success) setDraftRevision(cleared.data?.revision)
+    else toast.warning('提交已成功，但云端草稿未能清空；请刷新后确认')
+    clearSubmissionDraft(editorDraftKey, language)
+    setCode('')
+    setSubmissionIo({ inputFilename: null, outputFilename: null })
     setSubmitting(false)
-    if (!response.success) return toast.error(response.message || '提交失败')
     toast.success(`提交 #${response.data?.id} 已进入评测队列`)
   }
   const openRoster = async () => { const response = await apiClient.get<Roster>(`/api/training-sessions/${sessionId}/roster`); if (!response.success || !response.data) return toast.error(response.message || '学员名单加载失败'); setRoster(response.data); setRosterOpen(true) }
@@ -179,7 +189,7 @@ export function TrainingSessionWorkspace({ sessionId }: { sessionId: string }) {
       <aside className={styles.rail}>{data.session.Stages.map(stage => <section className={styles.stage} key={stage.id}><div><strong>{stage.name}</strong> <StatusBadge variant={stage.id === data.session.currentStageId ? 'success' : 'neutral'}>{stage.mode}</StatusBadge></div>{stage.Problems.map(item => { const access = data.permissions[item.id], progress = data.progress.find(entry => entry.stageProblemId === item.id); return <Button variant="ghost" className={styles.problemButton} data-active={item.id === selectedId} disabled={!access?.canView} key={item.id} onClick={async () => { await saveDraftRef.current(true); setSelectedId(item.id) }}><span><strong>{item.alias || item.Problem.problemId} · {item.Problem.title}</strong><br /><small>{access?.canView ? `${progress?.status || '未开始'}${progress?.bestScore != null ? ` · ${progress.bestScore} 分` : ''}` : '尚未开放'} · R{item.TestSetRevision.revisionNumber}</small></span></Button>})}</section>)}</aside>
       <main className={styles.stack}>{problem ? <>
         <Section title={`${problem.alias || problem.Problem.problemId} · ${problem.Problem.title}`} description={`${problem.Problem.platform} · 固定测试版本 R${problem.TestSetRevision.revisionNumber}`}>{problemDetail?.statements?.find((item: any) => item.format === 'markdown')?.content ? <MarkdownRenderer content={problemDetail.statements.find((item: any) => item.format === 'markdown').content} /> : <p className={styles.muted}>题面尚未就绪，或当前题面不可见。</p>}</Section>
-        <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。"><div className={styles.stack}><label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => setLanguage(event.target.value)}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label><label className={styles.field}>代码草稿<SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={`training-engine:${sessionId}:${problem.id}`} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} /></label><div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim()} onClick={() => void submit()}>提交评测</Button></div>{!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}</div></Section>
+        <Section title="训练代码" description="每 30 秒自动保存；切换题目、页面离开和收到教练指令前也会保存。"><div className={styles.stack}><label className={styles.field}>语言<Select value={language} disabled={!data.permissions[problem.id]?.canEdit} onChange={event => { if (!code || window.confirm('切换后会保存当前语言草稿，并加载目标语言自己的草稿。是否切换？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="python3">Python3</option><option value="c">C</option></Select></label><label className={styles.field}>代码草稿<SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={editorDraftKey} readOnly={!data.permissions[problem.id]?.canEdit} minHeight={420} /></label><SubmissionIoFields value={submissionIo} onChange={setSubmissionIo} disabled={!data.permissions[problem.id]?.canEdit} /><div className={styles.actions}><Button variant="secondary" loading={saving} disabled={!data.permissions[problem.id]?.canEdit} onClick={() => void saveDraft()}>保存草稿</Button><Button loading={submitting} disabled={!data.permissions[problem.id]?.canSubmit || !code.trim()} onClick={() => void submit()}>提交评测</Button></div>{!data.permissions[problem.id]?.canSubmit && <p className={styles.muted}>当前不可提交：{data.permissions[problem.id]?.reason}</p>}</div></Section>
         {data.session.sessionType === 'ACM' && status === 'RUNNING' && activeStrategy && (activeStrategy.decisionDue || activeStrategy.switchRecommended) && <Section title="策略检查" description={activeStrategy.switchRecommended ? activeStrategy.forceSwitchOnTimeout ? '已达到连续做题上限，请切换到其他题后再回来。' : '当前题已持续较久，建议重新评估是否切题。' : '到了本轮策略复盘时间，请记录你的决定。'}><div className={styles.actions}><Button variant="secondary" onClick={() => void recordStrategy('CONTINUE')}>继续当前题</Button><Button onClick={() => void recordStrategy('SWITCH')}>决定切题</Button></div></Section>}
         <Section title="分级提示" description="提示支持教练手动、训练时间、提交次数或分数条件开放；使用情况会进入训练报告。" actions={data.manager ? <Button variant="secondary" onClick={() => setHintOpen(true)}>新增提示</Button> : undefined}><div className={styles.actions}>{hints.length ? hints.map(hint => data.manager ? <span className={styles.actions} key={hint.id}><Button variant={hint.globallyOpenedAt ? 'secondary' : 'outline'} disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('OPEN_HINT', { hintId: hint.id })}>{hint.level} 级 · {hint.title || '提示'} · 开放</Button><Button variant="ghost" disabled={commandTargetType !== 'ALL' && !commandTargetId} onClick={() => void command('CLOSE_HINT', { hintId: hint.id })}>关闭</Button></span> : <Button key={hint.id} variant="outline" onClick={async () => { const response = await apiClient.post<Hint>(`/api/training-sessions/${sessionId}/hints/${hint.id}/open`, {}); if (response.success && response.data) setOpenedHint(response.data); else toast.error(response.message || '提示尚未开放') }}>{hint.opened ? '再次查看' : '打开'} {hint.level} 级提示</Button>) : <p className={styles.muted}>暂无已开放提示。</p>}</div></Section>
       </> : <Section title="请选择训练题目"><p className={styles.muted}>题目可能尚未按当前阶段开放。</p></Section>}</main>

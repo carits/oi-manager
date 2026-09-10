@@ -13,12 +13,12 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 
 | 项目 | 数量 |
 |---|---:|
-| Prisma models | 199 |
+| Prisma models | 201 |
 | Prisma enums | 74 |
 | Legacy route adapters | 25 |
 | Module route adapters | 52 |
 | systemd units | 8 |
-| Referenced environment keys | 473 |
+| Referenced environment keys | 474 |
 
 ## HTTP adapter ownership
 
@@ -192,6 +192,8 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `OrganizationInvitation`
 - `OrganizationJoinApplication`
 - `OrganizationMembership`
+- `OrganizationMembershipCapability`
+- `OrganizationMembershipRole`
 - `OrganizationStudentProfile`
 - `OrganizationTeacherProfile`
 - `PasswordResetLog`
@@ -638,6 +640,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `MAX_REFERENCES`
 - `MAX_STICKERS`
 - `MAX_TAGS`
+- `MEMBERSHIP_CAPABILITY_SOURCE`
 - `MESSAGE`
 - `METRICS_CHECK`
 - `METRICS_SNAPSHOT_PATH`

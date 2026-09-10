@@ -13,6 +13,7 @@ import { applyTrainingEngineMigration, inspectTrainingEngineMigration } from '..
 import { applyEconomyLoopMigration, inspectEconomyLoopMigration } from '../modules/maintenance/application/economy-loop-migration.service'
 import { applyAssignmentMigration, inspectAssignmentMigration } from '../modules/maintenance/application/assignment-migration.service'
 import { applyContestAggregateMigration, inspectContestAggregateMigration } from '../modules/maintenance/application/contest-aggregate-migration.service'
+import { applyMembershipRoleMigration, inspectMembershipRoleMigration } from '../modules/maintenance/application/membership-role-migration.service'
 
 export const migrationRouter = Router()
 
@@ -60,6 +61,21 @@ migrationRouter.post('/contest-aggregates', async (req, res) => {
     return res.json({ success: true, data })
   } catch (error: any) {
     return res.status(409).json({ success: false, code: 'CONTEST_AGGREGATE_MIGRATION_STALE_OR_INVALID', message: error.message })
+  }
+})
+
+migrationRouter.get('/membership-roles', async (_req, res) => {
+  try { return res.json({ success: true, data: await inspectMembershipRoleMigration() }) }
+  catch (error: any) { return res.status(500).json({ success: false, message: error.message }) }
+})
+
+migrationRouter.post('/membership-roles', async (req, res) => {
+  try {
+    const data = await applyMembershipRoleMigration(String(req.body?.reportHash || ''), req.user!.userId)
+    logger.audit('membership_role_migration_applied', { action: 'migration', metadata: data })
+    return res.json({ success: true, data })
+  } catch (error: any) {
+    return res.status(409).json({ success: false, code: 'MEMBERSHIP_ROLE_MIGRATION_STALE_OR_INVALID', message: error.message })
   }
 })
 

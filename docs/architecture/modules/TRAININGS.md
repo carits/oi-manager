@@ -19,7 +19,11 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/src/module
 
 旧训练使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；旧作业使用 `/api/admin/migration/assignments` 幂等迁移为独立作业。两条迁移都不删除旧记录、不改历史成绩。
 
-比赛不再另建第二套运行态。每个 `Training(type=contest)` 通过唯一 `trainingId` 对应一个既有 `Contest` 聚合；创建、基本信息、状态、起止时间和题目增删改排在同一事务中同步 `Contest/ContestProblem`。题目桥接保存相同的固定 TestSet Revision，状态变更也会先补建遗漏聚合。受保护的 `/api/admin/migration/contest-aggregates` check/apply 只幂等回填历史桥接，不重写比赛结果。
+比赛只有一个可变事实源：`Training(type=contest)`。每个运行比赛通过唯一 `trainingId` 对应一个既有
+`Contest` 规范化投影；创建、基本信息、状态、起止时间和题目增删改排在同一事务中通过
+`modules/contest/contest-aggregate.service.ts` 同步 `Contest/ContestProblem`。Training 之外的业务域不得直接写
+这两个投影，静态架构门禁会拒绝越界写入。题目投影保存相同的固定 TestSet Revision，状态变更也会先补建
+遗漏聚合。受保护的 `/api/admin/migration/contest-aggregates` check/apply 只幂等回填历史桥接，不重写比赛结果。
 
 ## 训练结构
 

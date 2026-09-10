@@ -93,6 +93,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
   const [wizardStep, setWizardStep] = useState(0)
+  const [recoveryTrainingId, setRecoveryTrainingId] = useState<string | null>(null)
+  const [recoveryMessage, setRecoveryMessage] = useState('')
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
   const [originalStartTimeStr, setOriginalStartTimeStr] = useState<string>('')
 
@@ -106,6 +108,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   useEffect(() => {
     if (!isOpen) return
     setWizardStep(0)
+    setRecoveryTrainingId(null)
+    setRecoveryMessage('')
 
     if (isEdit && trainingId) {
       // 编辑模式：加载已有数据
@@ -394,6 +398,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     }
 
     setSaving(true)
+    let createdTrainingId: string | null = null
     try {
       if (isEdit && trainingId) {
         // === 编辑模式 ===
@@ -497,6 +502,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         }
 
         const newTrainingId = (res.data as any).id
+        createdTrainingId = String(newTrainingId)
 
         if (mode === 'contest') {
           const currentConfig = await apiClient.get(`/api/trainings/${newTrainingId}/rating-config`)
@@ -542,8 +548,16 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
 
       onClose()
       onSaved?.()
-    } catch {
-      toast.error(isEdit ? '更新失败' : '创建失败')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : isEdit ? '更新失败' : '创建失败'
+      if (!isEdit && createdTrainingId) {
+        setRecoveryTrainingId(createdTrainingId)
+        setRecoveryMessage(message)
+        setWizardStep(4)
+        toast.error('比赛草稿已经创建，但后续配置未完成，请进入草稿继续处理')
+      } else {
+        toast.error(message)
+      }
     } finally {
       setSaving(false)
     }
@@ -556,6 +570,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const contestWizard = mode === 'contest'
   const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
   const canAdvance = wizardStep === 0 ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime)) : wizardStep === 1 ? Boolean(format) : wizardStep === 2 ? problemRows.length > 0 && problemRows.every(row => row.resolved?.found) : true
+  const contestValidationIssues = contestWizard ? [
+    !title.trim() ? '请填写比赛标题' : '',
+    !startTime || !endTime ? '请填写完整的开始与结束时间' : new Date(endTime) <= new Date(startTime) ? '结束时间必须晚于开始时间' : '',
+    problemRows.length === 0 ? '请至少添加一道题目' : problemRows.some(row => !row.resolved?.found) ? '仍有题目未能解析' : '',
+    ratingScope !== 'NONE' && (!Number.isFinite(Number(ratingWeight)) || Number(ratingWeight) < 0.1 || Number(ratingWeight) > 1) ? 'Rating 影响强度必须在 10%～100% 之间' : '',
+    ratingScope !== 'NONE' && (Number(organizationRatingMinimum) < 2 || Number(globalRatingMinimum) < 2) ? 'Rating 最低参赛人数不能小于 2' : '',
+    !allowedRatingScopes.includes(ratingScope) ? '当前比赛范围不允许所选 Rating 类型' : '',
+  ].filter(Boolean) : []
 
   return (
     <FormDialog
@@ -567,7 +589,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         <div className={unifiedStyles.u1}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
           {contestWizard && wizardStep > 0 && <Button variant="secondary" onClick={() => setWizardStep(step => step - 1)} disabled={saving || loading}>上一步</Button>}
-          {contestWizard && wizardStep < wizardSteps.length - 1 ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || !canAdvance}>下一步</Button> : <Button onClick={handleSave} disabled={saving || loading}>
+          {contestWizard && wizardStep < wizardSteps.length - 1 ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || !canAdvance}>下一步</Button> : <Button onClick={handleSave} disabled={saving || loading || Boolean(recoveryTrainingId) || (contestWizard && contestValidationIssues.length > 0)}>
             {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`)}
           </Button>}
         </div>
@@ -578,7 +600,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           <div className={unifiedStyles.u3}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
         ) : (
           <>
-            {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={index > wizardStep + 1} onClick={() => index <= wizardStep + 1 && setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
+            {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={index > wizardStep + 1 || Boolean(recoveryTrainingId)} onClick={() => index <= wizardStep + 1 && setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
+            {recoveryTrainingId && <section className={unifiedStyles.reviewCard} role="alert"><h3>比赛草稿已保留</h3><p>{recoveryMessage || '后续配置未完成。为避免重复创建，请进入已经生成的草稿继续处理。'}</p><Button onClick={() => { const href = organizationId ? `/org/${organizationId}/contests/${recoveryTrainingId}` : teamId ? `/personal/teams/${teamId}/contests/${recoveryTrainingId}` : `${user?.role === 'super_admin' ? '/admin' : '/platform-admin'}/contests/${recoveryTrainingId}`; window.location.assign(href) }}>进入比赛草稿</Button></section>}
             {/* Basic Info */}
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>标题 *</label>
@@ -772,7 +795,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 </div>
               )}
             </div>}
-            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3><dl><div><dt>比赛</dt><dd>{title || '未填写标题'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 组织' : ratingScope === 'GLOBAL' ? '全局' : '组织'} · 标准强度的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，均固定当前 TestSet Revision</dd></div><div><dt>原题身份</dt><dd>{problemIdVisible ? '赛中显示' : '赛后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '赛中显示' : '赛后显示'}</dd></div></dl></section>}
+            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>所有必填项与 Rating 规则均已通过前端检查，提交后服务端会再次校验。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写标题'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 组织' : ratingScope === 'GLOBAL' ? '全局' : '组织'} · 标准强度的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，均固定当前 TestSet Revision</dd></div><div><dt>原题身份</dt><dd>{problemIdVisible ? '赛中显示' : '赛后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '赛中显示' : '赛后显示'}</dd></div></dl></section>}
           </>
         )}
       </div>

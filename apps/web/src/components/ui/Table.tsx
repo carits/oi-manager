@@ -21,6 +21,7 @@ export interface Column<T> {
   label: string
   width?: string
   align?: 'left' | 'center' | 'right'
+  className?: string
   render?: (item: T, index: number) => React.ReactNode
 }
 
@@ -75,7 +76,7 @@ export function Table<T extends { id?: string | number }>({
         <thead>
           <tr>
             {columns.map(column => (
-              <th key={column.key} style={{ width: column.width, textAlign: column.align }} scope="col">
+              <th key={column.key} className={column.className} style={{ width: column.width, textAlign: column.align }} scope="col">
                 {column.label}
               </th>
             ))}
@@ -93,7 +94,7 @@ export function Table<T extends { id?: string | number }>({
               onKeyDown={event => activateRow(event, item)}
             >
               {columns.map(column => (
-                <td key={column.key} style={{ textAlign: column.align }}>
+                <td key={column.key} className={column.className} style={{ textAlign: column.align }}>
                   {column.render ? column.render(item, rowIndex) : String(get(item, column.key) ?? '')}
                 </td>
               ))}

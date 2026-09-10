@@ -4,6 +4,7 @@ import { transitionSubmissionDraft } from './submission-draft'
 
 describe('shared submission editor product contract', () => {
   const editor = fs.readFileSync(new URL('./SubmissionCodeEditor.tsx', import.meta.url), 'utf8')
+  const trainingEngine = fs.readFileSync(new URL('../training-engine/TrainingSessionWorkspace.tsx', import.meta.url), 'utf8')
 
   it('loads CodeMirror on the client and keeps a usable textarea fallback', () => {
     expect(editor).toContain("import('@codemirror/state')")
@@ -41,5 +42,15 @@ describe('shared submission editor product contract', () => {
     expect(editor).toContain('search.searchKeymap')
     expect(editor).not.toContain('inputFilename')
     expect(editor).not.toContain('outputFilename')
+  })
+
+  it('keeps Training Engine submission IO beside the shared editor and clears both drafts after success', () => {
+    expect(trainingEngine).toContain('<SubmissionCodeEditor')
+    expect(trainingEngine).toContain('<SubmissionIoFields')
+    expect(trainingEngine).toContain('inputFilename: submissionIo.inputFilename')
+    expect(trainingEngine).toContain('outputFilename: submissionIo.outputFilename')
+    expect(trainingEngine).toContain('clearSubmissionDraft(editorDraftKey, language)')
+    expect(trainingEngine).toContain("code: '', language, inputFilename: null, outputFilename: null")
+    expect(trainingEngine).toContain('切换后会保存当前语言草稿')
   })
 })

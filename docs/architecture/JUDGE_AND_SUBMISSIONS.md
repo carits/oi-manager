@@ -28,7 +28,7 @@ OI 模式保留子任务、依赖及 `min`、`max`、`sum` 计分语义。当前
 `409 LOCAL_JUDGE_NOT_CONFIGURED`，不会回退为远程评测。旧客户端传入的 `robot` 或
 `myAccount` 会兼容规范为 `local`，`archive` 必须使用独立同步接口。
 
-训练提交列表、详情和排行榜使用同一套 `Submission.result` 状态事实，不以 `cases` 是否存在作为“已评测”
+训练提交列表、详情和排行榜使用同一套 Current `JudgeRun` 状态事实，不以 `cases` 是否存在作为“已评测”
 的可见条件。因此 OLE、CE、RE、Judge Error 等没有测试点明细的终态记录仍可查询；Queuing/Judging
 可显示为进行中。比赛题目标识统一返回 `TrainingProblem.id`，源题号仅用于兼容旧记录。
 

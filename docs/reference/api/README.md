@@ -74,6 +74,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `PUT` | `/api/platform/blogs/:id/featured` | 平台治理人员设置或退役社区精选 |
 | `GET` | `/api/admin/migration/contest-aggregates` | 超管检查现有 Training 比赛到既有 Contest 聚合的一对一桥接迁移 |
 | `POST` | `/api/admin/migration/contest-aggregates` | 超管按 reportHash 幂等建立可确认的比赛与题目 Revision 桥接 |
+| `GET` | `/api/admin/migration/membership-roles` | 超管检查组织成员规范化角色回填并返回 reportHash |
+| `POST` | `/api/admin/migration/membership-roles` | 超管按 reportHash 幂等创建旧 memberRole 对应的角色分配 |
 | `GET` | `/api/ratings/me` | 读取本人全部全局/组织 OI、IOI、ACM Rating 账户 |
 | `GET` | `/api/ratings/global/:track` | 分页读取指定 Track 的全局 Rating 榜 |
 | `GET` | `/api/ratings/organizations/:organizationId/:track` | 有效组织成员读取组织 Rating 榜 |

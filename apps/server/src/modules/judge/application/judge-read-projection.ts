@@ -29,6 +29,8 @@ type CurrentJudgeRunProjection = {
 }
 
 type SubmissionCompatibilityProjection = {
+  submitMethod?: string
+  problemInternalId?: string | null
   result: string
   score?: number | null
   cases?: string | null
@@ -57,7 +59,17 @@ function runDisplayResult(run: CurrentJudgeRunProjection): string {
  */
 export function projectSubmissionJudgeResult<T extends SubmissionCompatibilityProjection>(submission: T): T {
   const run = submission.CurrentJudgeRun
-  if (!run) return submission
+  if (!run) {
+    if (submission.submitMethod === 'archive' || !submission.problemInternalId) return submission
+    return {
+      ...submission,
+      result: 'system_error',
+      score: null,
+      cases: null,
+      subtasks: null,
+      errorMessage: '本地评测记录缺少 JudgeRun，请联系管理员',
+    }
+  }
   return {
     ...submission,
     result: runDisplayResult(run),
@@ -78,7 +90,7 @@ export function currentJudgeResultWhere(result: string): Prisma.SubmissionWhereI
     return {
       OR: [
         { CurrentJudgeRun: { is: { status: 'QUEUED' } } },
-        { currentJudgeRunId: null, result },
+        { currentJudgeRunId: null, submitMethod: 'archive', result },
       ],
     }
   }
@@ -86,14 +98,14 @@ export function currentJudgeResultWhere(result: string): Prisma.SubmissionWhereI
     return {
       OR: [
         { CurrentJudgeRun: { is: { status: 'RUNNING' } } },
-        { currentJudgeRunId: null, result },
+        { currentJudgeRunId: null, submitMethod: 'archive', result },
       ],
     }
   }
   return {
     OR: [
       { CurrentJudgeRun: { is: { status: { in: ['FINALIZED', 'CANCELLED'] }, result } } },
-      { currentJudgeRunId: null, result },
+      { currentJudgeRunId: null, submitMethod: 'archive', result },
     ],
   }
 }
@@ -102,7 +114,7 @@ export function currentJudgeInProgressWhere(): Prisma.SubmissionWhereInput {
   return {
     OR: [
       { CurrentJudgeRun: { is: { status: { in: ['QUEUED', 'RUNNING'] } } } },
-      { currentJudgeRunId: null, result: { in: ['queuing', 'judging'] } },
+      { currentJudgeRunId: null, submitMethod: 'archive', result: { in: ['queuing', 'judging'] } },
     ],
   }
 }
@@ -116,7 +128,7 @@ export function currentJudgeAcceptedWhere(): Prisma.SubmissionWhereInput {
   return {
     OR: [
       { CurrentJudgeRun: { is: { status: 'FINALIZED', result: { in: accepted } } } },
-      { currentJudgeRunId: null, result: { in: accepted } },
+      { currentJudgeRunId: null, submitMethod: 'archive', result: { in: accepted } },
     ],
   }
 }

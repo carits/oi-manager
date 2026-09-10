@@ -99,6 +99,3 @@ solutionReviewRouter.post('/:id/publish', authenticate, command(
 solutionReviewRouter.post('/:id/similarity/retry', authenticate, command(
   req => retrySolutionSimilarity(req.user, req.params.id),
 ))
-solutionReviewRouter.get('/:id/similarity-comparison', authenticate, command(
-  req => getSolutionSimilarityComparison(req.user, req.params.id),
-))
