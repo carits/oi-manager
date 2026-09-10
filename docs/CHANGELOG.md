@@ -19,6 +19,7 @@ source_of_truth: Git history
 - 题解相似度检查改为持久异步任务和不可变指纹；审核必须等待 READY，失败或历史遗漏任务可由题目管理员重试/补建。
 - Blog 新增 PLATFORM 站内发现和 PUBLIC 匿名知识广场；评论回复使用游标分页；提交只能经作者显式创建的脱敏不可变快照引用，直接引用 Submission/JudgeRun 继续拒绝。
 - 修复匿名 Blog 发现被后置 Data Market 认证 Router 拦截的问题，并统一发现列表分页 DTO；业务 Router 不再通过全局 `use(authenticate)` 影响其后注册的公开路由。
+- 最终收口审计发现新写链路已同步但历史 Contest 聚合桥接尚未应用；新建并校验生产备份 `/data/backups/oi-manager/automatic/oi_manager_contest_bridge_20260910_115023.dump`（32 MiB，SHA-256 `6d61f380e547594260d0a55707cdb434ceee5415b0a2ccbb5d2ad0a517af628b`）后，仅在非活动 3303 slot 临时开放维护接口，通过受保护 check/apply 原子映射 767 场历史比赛与 199 个比赛题目，0 阻断。复核确认 Training/TrainingProblem 未映射数和重复映射数均为 0；3303 随后停机且临时 override 已移除。
 - 发布前生产备份 `/data/backups/oi-manager/automatic/oi_manager_20260910_113248.dump` 已通过清单和隔离恢复审计（32 MiB，SHA-256 `f0a4612e3ede62bd0ca0e3f652c0286127ff1d29c89f7570c9a1fc55affb3da1`）；生产备份克隆完成四个新增迁移并通过真实 Judge/Hack 固定 Revision 闭环 2/2。
 - Server PostgreSQL 全量 89 文件/709 项、Web 25 文件/93 项、Judge 14 文件/44 项、四端生产构建和全部静态门禁通过。提交 `9afde73` 已推送 `main`；API 3303→3302，Worker/Executor/Judge active，Web BUILD_ID `XLTM2M2Hgbut1h43ySAu6` 经 canary 与正式双账号消息闭环探针后提升，匿名 Blog 公网 API 已复核为 200。
 
