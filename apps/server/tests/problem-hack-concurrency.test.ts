@@ -165,8 +165,13 @@ describe('concurrent Hack promotion', () => {
     ))
     expect(results.filter(Boolean)).toHaveLength(1)
     expect(await persistOwnedSubmissionResult({ ...payload, result: 'Wrong Answer', score: 0 }, 'stale-judge')).toBe(false)
-    expect(await prisma.submission.findUniqueOrThrow({ where: { id: submission.id } })).toMatchObject({
-      result: 'accepted', score: 100, judgeId: null, judgeStarted: null,
+    const finalizedSubmission = await prisma.submission.findUniqueOrThrow({
+      where: { id: submission.id },
+      include: { CurrentJudgeRun: true },
+    })
+    expect(finalizedSubmission).toMatchObject({
+      result: 'queuing', score: null, judgeId: null, judgeStarted: null,
+      CurrentJudgeRun: { status: 'FINALIZED', result: 'accepted', score: 100 },
     })
     expect(await prisma.judgeAttempt.findUniqueOrThrow({ where: { id: claimed!.judgeAttemptId } })).toMatchObject({
       dispatchLatencyMs: 3,

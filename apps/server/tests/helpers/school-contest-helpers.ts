@@ -3,6 +3,7 @@
  * 校级比赛测试辅助函数
  */
 
+import crypto from 'node:crypto'
 import { prisma } from '../../src/prisma'
 
 interface CreateTestSchoolContestOptions {
@@ -204,6 +205,32 @@ export async function createTestSubmission(options: {
       createdAt: createdAt ?? new Date(),
     },
   })
+
+  // Local result facts live in JudgeRun. Keep this shared fixture compatible
+  // with the production read model instead of relying on legacy Submission
+  // projection columns.
+  if (trainingProblem?.problemId) {
+    const runId = crypto.randomUUID()
+    await prisma.judgeRun.create({
+      data: {
+        id: runId,
+        submissionId: submission.id,
+        runNumber: 1,
+        runType: 'NORMAL',
+        status: 'FINALIZED',
+        result,
+        score,
+        timeUsed,
+        memoryUsed,
+        cases: cases ?? JSON.stringify([{ status: 'accepted', time: 100, memory: 1024 }]),
+        finalizedAt: createdAt ?? new Date(),
+      },
+    })
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: { currentJudgeRunId: runId },
+    })
+  }
 
   return submission
 }
