@@ -11,6 +11,14 @@ source_of_truth: Git history
 
 ## 2026-09-10
 
+### Human UX / Productization 全站收口
+
+- Assignment 管理端升级为服务端分页的学生×题目批改矩阵，接入人工完成 CAS、原因审计、精确状态筛选和明确的未开始单元格；草稿创建改为“基本信息—题目—学生—检查发布”，高级计分规则按需展开。
+- 题库、比赛/训练、Assignment、Training Engine 和 Hack 证明程序统一复用 CodeMirror 6 提交编辑器，支持高亮、快捷键、语言隔离草稿和加载失败文本降级。
+- 公共知识文章展示不可变引用、可见系列导航和社区互动；知识广场进入全局导航，“我的文章”回到账户内容入口。
+- 比赛创建改为五步向导，Rating 摘要、跳过原因和榜单变化使用自然语言；题解审核新增有权限且受审计的并排相似片段。
+- Web 101/101、PostgreSQL 定向与发布不变式 67/67、四端生产构建和 UI/路由/API/架构/文档门禁通过。发布前备份 `/data/backups/oi-manager/automatic/oi_manager_20260910_131143.dump` 已校验（33 MiB，SHA-256 `43a45eb609abfd4630ec5d2ad13c74c96f30655cbc2feef4076f004f82678baf`）。提交至 `4892d03` 已推送 `main`；API 活动 slot 为 3302，Web BUILD_ID `m40njFVRujTYHw0c46JOj` 在 canary 和正式端口均通过双账号消息/SSE/已读/回复闭环后提升，公网健康、登录与知识广场均返回 200。
+
 ### Assignment、Contest、Rating、题解风控与 Blog 差异收口
 
 - Assignment 学生读取统一受 `publishAt` 约束；管理者可带版本和原因设置人工完成，关闭/逾期/批改会按冻结策略幂等生成自动订正。
@@ -1270,10 +1278,3 @@ source_of_truth: Git history
 - Judge、Web、Server 构建及文档检查通过；部署状态以本次提交后的健康检查为准。
 
 - 2026-08-18: Added Lemon SPJ checker support, secure checker file storage APIs, and subset contest configuration.
-## 2026-09-10 — Human UX / Productization
-
-- Assignment 管理端升级为批改矩阵，接入人工完成 CAS、原因审计、状态筛选与明确的未开始单元格；草稿改为“基本信息—题目—学生—检查发布”，高级评分规则按需展开。
-- 题库、比赛/训练、Assignment、Training Engine 和 Hack 证明程序统一复用 CodeMirror 6 提交编辑器，支持高亮、快捷键、语言隔离草稿和加载失败降级。
-- 公共知识文章展示不可变引用、系列导航和社区互动；知识广场成为全局导航，“我的文章”回到账户内容入口。
-- 比赛创建改为五步向导，Rating 摘要、跳过原因和榜单变化使用自然语言；题解审核新增受审计的并排相似片段。
-- API 保持向后兼容，无 Prisma 迁移，不改历史作业、比赛、Rating、博客、题解或提交结果。
