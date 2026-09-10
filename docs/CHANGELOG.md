@@ -1,13 +1,25 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-10
+last_verified: 2026-09-11
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-09-11
+
+### 知识域跨工作区导航与状态一致性收口
+
+- 将公开知识广场 `/blog` 与 `/personal/knowledge`、`/org/:organizationId/knowledge`、`/admin/knowledge`、`/platform-admin/knowledge` 明确分流；校园切换器在个人与校园之间保留知识模块，校园业务模块仍严格服从服务端能力列表。
+- 全站会话状态收口到根级唯一 `AuthProvider`；新增统一 `NavigationContext`，供 AppShell、通知、工作区切换器和 Blog 引用共同解析当前范围，避免各组件分别根据 URL 猜测身份和目标路由。
+- 登录只接受安全站内 `next`；失效校园上下文统一回到身份选择并显示原因，不再生成不存在的组织错误页。全局未保存更改保护同时覆盖 Link、显式导航和浏览器关闭，Blog 的类型、slug、组织、可见性及正文均参与草稿比较。
+- 公共文章页补齐动态 metadata、正确的首页 Logo 和登录态管理入口；社区加载失败显示请求编号与重试，不再伪装成零互动；系列与结构化引用会保持当前工作区，并继续遵守匿名和组织可见性边界。
+- 静态导航审计新增 `window.location.assign/replace` 检查；跨角色知识流 E2E 覆盖教师、校园学生、个人学生、超级管理员和平台管理员，并真实验证个人↔校园切换、校园文章互动、匿名登录回跳、社区故障和 dirty slug 拦截。
+- Web 单测 29 文件/112 项、Chromium 完整知识流 18/18；个人↔校园切换专项在 Chromium 桌面、紧凑视口和 Firefox 共 9/9。95 路由审计、UI 状态/组件契约、架构门禁、62 文档/201 模型/617 端点文档检查，以及 Shared/Server/Web/Judge 生产构建均通过。
+- 提交至 `4902d9b` 已推送 `main`。Web BUILD_ID `hMHABgL_4cdsfOEU7ACDN` 已提升到公网端口；`/api/health` 与 `/blog` 返回 200，匿名访问个人和两类管理员知识工作区返回 307 登录跳转。本轮无 Prisma 迁移、API 蓝绿切换或业务数据改写。
 
 ## 2026-09-10
 
