@@ -332,7 +332,7 @@ check_http "preview" "$WEB_URL"
 if [ -n "$HMR_URL" ]; then
   check_http "HMR" "$HMR_URL"
 fi
-check_http "API" "$API_URL" '"status":"ok"'
+check_http "API" "$API_URL" '"success":true'
 check_http "go-judge" "$JUDGE_URL"
 
 if [ "$SYSTEMD_CHECK" = "1" ]; then
