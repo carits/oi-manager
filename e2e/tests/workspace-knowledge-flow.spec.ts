@@ -55,6 +55,19 @@ test.describe('知识广场跨工作区一致性 @smoke @compact', () => {
     })
   }
 
+  test('知识广场切换个人与校园工作区时保留当前模块', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: accounts.teacher.storageState })
+    const page = await context.newPage()
+    await page.goto(`${organizationBase}/knowledge`)
+    await page.getByRole('button', { name: '切换身份' }).click()
+    await page.getByRole('menuitem', { name: /^个人/ }).click()
+    await expect(page).toHaveURL(/\/personal\/knowledge$/)
+    await page.getByRole('button', { name: '切换身份' }).click()
+    await page.getByRole('menuitem', { name: /E2E School/ }).click()
+    await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/knowledge$`))
+    await context.close()
+  })
+
   test('真实文章在校园工作区可互动且不会跳回身份选择', async ({ browser, request }) => {
     const post = await createPublicPost(request)
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })

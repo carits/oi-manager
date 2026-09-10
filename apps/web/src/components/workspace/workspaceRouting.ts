@@ -1,15 +1,9 @@
 import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { NavigationContext } from '@/lib/navigationContext'
+export type { NavigationContext } from '@/lib/navigationContext'
 
-export const personalWorkspaceModules = new Set(['teams', 'problems', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions'])
-export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings'])
-
-export type NavigationContext = {
-  workspace: 'organization' | 'personal' | 'platform'
-  platformBasePath?: '/admin' | '/platform-admin'
-  organizationId?: string
-  role: string
-  schoolScoped?: boolean
-}
+export const personalWorkspaceModules = new Set(['teams', 'problems', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge'])
+export const organizationModules = new Set(['overview', 'campus', 'management', 'teams', 'homeworks', 'contests', 'training-sessions', 'problems', 'problem-lists', 'rankings', 'knowledge'])
 export type ResourceKind = 'team' | 'contest' | 'homework' | 'training' | 'submission'
 
 export function canNavigate(id?: string | number | null) { return id !== undefined && id !== null && String(id).trim() !== '' }
