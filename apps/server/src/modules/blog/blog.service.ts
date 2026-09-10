@@ -741,7 +741,31 @@ export async function getPublicBlogPost(user: JwtPayload | undefined, postId: st
     include: postInclude,
   })
   if (!post || !await canReadPost(user, post, true)) fail(404, 'BLOG_NOT_FOUND', '博客不存在')
-  return postDto(post, false)
+  const dto = postDto(post, false)
+  const classification = post.CurrentVersion?.classificationSnapshot as any
+  const seriesId = typeof classification?.series?.id === 'string'
+    ? classification.series.id
+    : typeof classification?.seriesId === 'string' ? classification.seriesId : null
+  if (!seriesId) return dto
+  const series = await prisma.blogSeries.findUnique({ where: { id: seriesId }, include: {
+    Entries: { orderBy: { orderIndex: 'asc' }, include: { Post: { include: postInclude } } },
+  } })
+  if (!series || series.archivedAt) return dto
+  const readable: Array<{ post: any; orderIndex: number }> = []
+  for (const entry of series.Entries) {
+    if (entry.Post.status === 'PUBLISHED' && await canReadPost(user, entry.Post, false)) readable.push({ post: entry.Post, orderIndex: entry.orderIndex })
+  }
+  const index = readable.findIndex(entry => entry.post.id === post.id)
+  if (index < 0) return dto
+  const navigationItem = (entry?: { post: any }) => entry?.post.CurrentVersion ? ({ id: entry.post.id, slug: entry.post.slug, title: entry.post.CurrentVersion.title }) : undefined
+  return { ...dto, seriesNavigation: {
+    seriesId: series.id,
+    title: series.title,
+    index: index + 1,
+    total: readable.length,
+    previous: navigationItem(readable[index - 1]),
+    next: navigationItem(readable[index + 1]),
+  } }
 }
 
 export async function listPublicBlogs(user: JwtPayload | undefined, query: any) {

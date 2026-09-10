@@ -92,6 +92,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   const [ratingRevision, setRatingRevision] = useState(0)
   const [ratingLocked, setRatingLocked] = useState(false)
   const [allowedRatingScopes, setAllowedRatingScopes] = useState<Array<'NONE' | 'ORGANIZATION' | 'GLOBAL' | 'BOTH'>>(['NONE'])
+  const [wizardStep, setWizardStep] = useState(0)
   const [originalStartTime, setOriginalStartTime] = useState<Date | null>(null)
   const [originalStartTimeStr, setOriginalStartTimeStr] = useState<string>('')
 
@@ -104,6 +105,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
   // Reset / load data when modal opens
   useEffect(() => {
     if (!isOpen) return
+    setWizardStep(0)
 
     if (isEdit && trainingId) {
       // 编辑模式：加载已有数据
@@ -551,6 +553,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     width: '100%', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px',
     fontSize: '0.875rem', boxSizing: 'border-box',
   }
+  const contestWizard = mode === 'contest'
+  const wizardSteps = ['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']
+  const canAdvance = wizardStep === 0 ? Boolean(title.trim() && startTime && endTime && new Date(endTime) > new Date(startTime)) : wizardStep === 1 ? Boolean(format) : wizardStep === 2 ? problemRows.length > 0 && problemRows.every(row => row.resolved?.found) : true
 
   return (
     <FormDialog
@@ -561,9 +566,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
       footer={
         <div className={unifiedStyles.u1}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button onClick={handleSave} disabled={saving || loading}>
+          {contestWizard && wizardStep > 0 && <Button variant="secondary" onClick={() => setWizardStep(step => step - 1)} disabled={saving || loading}>上一步</Button>}
+          {contestWizard && wizardStep < wizardSteps.length - 1 ? <Button onClick={() => setWizardStep(step => step + 1)} disabled={saving || loading || !canAdvance}>下一步</Button> : <Button onClick={handleSave} disabled={saving || loading}>
             {saving ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存修改' : `创建${mode === 'contest' ? '比赛' : mode === 'homework' ? '作业' : '训练'}`)}
-          </Button>
+          </Button>}
         </div>
       }
     >
@@ -572,13 +578,14 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
           <div className={unifiedStyles.u3}><span className={[("resource-skeleton-line"), collisionStyles.u1].filter(Boolean).join(' ')}  aria-label="内容正在准备" /></div>
         ) : (
           <>
+            {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={index > wizardStep + 1} onClick={() => index <= wizardStep + 1 && setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
             {/* Basic Info */}
-            <div className={unifiedStyles.u4}>
+            {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>标题 *</label>
               <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="训练标题" style={inputStyle} />
-            </div>
+            </div>}
 
-            {mode === 'contest' && (
+            {mode === 'contest' && wizardStep === 1 && (
               <div className={unifiedStyles.u6}>
                 <div>
                   <label className={unifiedStyles.u5}>Rating 范围</label>
@@ -592,46 +599,47 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                     ? '比赛已经开始，Rating 规则已永久冻结。'
                     : `${teamId && format === 'icpc' ? '团队 ACM 赛 V1 不计个人 Rating。' : organizationId ? '组织比赛只能影响本组织 Rating。' : teamId ? '个人团队赛 V1 不计个人 Rating。' : ''} Track 自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
                 </div>
-                <div>
+                {ratingScope !== 'NONE' && <div>
                   <label className={unifiedStyles.u5}>Rating 权重</label>
-                  <Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={ratingLocked || ratingScope === 'NONE'} onChange={event => setRatingWeight(event.target.value)} style={inputStyle} />
-                </div>
-                <div>
+                  <Input aria-label="Rating 权重" type="number" min="0.1" max="1" step="0.1" value={ratingWeight} disabled={ratingLocked} onChange={event => setRatingWeight(event.target.value)} style={inputStyle} />
+                  <small>影响强度：标准比赛的 {Math.round((Number(ratingWeight) || 0) * 100)}%</small>
+                </div>}
+                {ratingScope !== 'NONE' && <div>
                   <label className={unifiedStyles.u5}>组织 / 全局最低人数</label>
                   <div className={unifiedStyles.u1}>
-                    <Input aria-label="组织 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked || ratingScope === 'NONE'} onChange={event => setOrganizationRatingMinimum(event.target.value)} style={inputStyle} />
-                    <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={ratingLocked || ratingScope === 'NONE'} onChange={event => setGlobalRatingMinimum(event.target.value)} style={inputStyle} />
+                    <Input aria-label="组织 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} style={inputStyle} />
+                    <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={ratingLocked} onChange={event => setGlobalRatingMinimum(event.target.value)} style={inputStyle} />
                   </div>
-                </div>
+                </div>}
               </div>
             )}
 
-            <div className={unifiedStyles.u4}>
+            {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>公告</label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="训练公告（可选）" rows={2} style={inputStyle} className={unifiedStyles.descriptionInput} />
-            </div>
+            </div>}
 
-            <div className={unifiedStyles.u6}>
-              <div>
+            {(!contestWizard || wizardStep === 0 || wizardStep === 1) && <div className={unifiedStyles.u6}>
+              {(!contestWizard || wizardStep === 1) && <div>
                 <label className={unifiedStyles.u5}>赛制</label>
                 <Select aria-label="选择" value={format} onChange={e => setFormat(e.target.value as 'oi' | 'ioi' | 'icpc')} style={inputStyle}>
                   <option value="ioi">IOI（即时反馈+部分分）</option>
                   <option value="icpc">ICPC（即时反馈+AC/罚时）</option>
                   <option value="oi">OI（赛中不反馈，赛后统一公布）</option>
                 </Select>
-              </div>
-              <div>
+              </div>}
+              {(!contestWizard || wizardStep === 0) && <div>
                 <label className={unifiedStyles.u5}>开始时间 *</label>
                 <Input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
-              </div>
-              <div>
+              </div>}
+              {(!contestWizard || wizardStep === 0) && <div>
                 <label className={unifiedStyles.u5}>结束时间 *</label>
                 <Input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} style={inputStyle} />
-              </div>
-            </div>
+              </div>}
+            </div>}
 
             {/* 可见性设置 */}
-            <div className={unifiedStyles.u6}>
+            {(!contestWizard || wizardStep === 3) && <div className={unifiedStyles.u6}>
               <div>
                 <label className={unifiedStyles.u5}>题目来源显示</label>
                 <Select aria-label="选择" value={problemIdVisible ? 'always' : 'after'} onChange={e => setProblemIdVisible(e.target.value === 'always')} style={inputStyle}>
@@ -653,10 +661,10 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                   <span className={unifiedStyles.u9}>包含管理员</span>
                 </label>
               </div>
-            </div>
+            </div>}
 
             {/* Problems */}
-            <div className={unifiedStyles.u10}>
+            {(!contestWizard || wizardStep === 2) && <div className={unifiedStyles.u10}>
               <h3 className={unifiedStyles.u11}>题目列表</h3>
 
               {problemRows.length > 0 && (
@@ -763,7 +771,8 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                   点击上方按钮添加题目到训练中
                 </div>
               )}
-            </div>
+            </div>}
+            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3><dl><div><dt>比赛</dt><dd>{title || '未填写标题'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 组织' : ratingScope === 'GLOBAL' ? '全局' : '组织'} · 标准强度的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，均固定当前 TestSet Revision</dd></div><div><dt>原题身份</dt><dd>{problemIdVisible ? '赛中显示' : '赛后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '赛中显示' : '赛后显示'}</dd></div></dl></section>}
           </>
         )}
       </div>

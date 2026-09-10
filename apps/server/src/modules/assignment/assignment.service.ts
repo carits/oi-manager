@@ -398,7 +398,16 @@ function summarizeAssignmentProgress(
   const progressByRecipient = new Map<string, typeof progress>()
   for (const item of progress) progressByRecipient.set(item.recipientId, [...(progressByRecipient.get(item.recipientId) || []), item])
   return {
-    problems: assignment.Problems.map(problem => ({ id: problem.id, orderIndex: problem.orderIndex, problem: problem.Problem, maxScore: problem.maxScore, targetScore: problem.targetScore, weight: problem.weight })),
+    problems: assignment.Problems.map(problem => ({
+      id: problem.id,
+      orderIndex: problem.orderIndex,
+      problem: problem.Problem,
+      maxScore: problem.maxScore,
+      targetScore: problem.targetScore,
+      weight: problem.weight,
+      category: problem.category,
+      completionPolicy: problem.completionPolicy,
+    })),
     recipients: assignment.Recipients.map(recipient => {
       const items = progressByRecipient.get(recipient.id) || []
       const grade = calculateAssignmentGrade(assignment, assignment.Problems, items)
@@ -776,7 +785,25 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
 
-export async function getAssignmentProgress(userId: string, assignmentId: string) {
+const ASSIGNMENT_PROGRESS_STATES = [
+  'NOT_STARTED', 'BELOW_TARGET', 'LATE', 'NEEDS_CORRECTION', 'CORRECTED', 'MANUAL_PENDING', 'COMPLETED',
+] as const
+
+type AssignmentProgressState = typeof ASSIGNMENT_PROGRESS_STATES[number]
+
+function progressStates(problem: AssignmentShape['Problems'][number], item?: Awaited<ReturnType<typeof prisma.assignmentProblemProgress.findMany>>[number]) {
+  const states = new Set<AssignmentProgressState>()
+  if (!item || item.attemptCount === 0) states.add('NOT_STARTED')
+  if (item && item.attemptCount > 0 && (item.finalScore ?? item.bestScore ?? 0) < problem.targetScore) states.add('BELOW_TARGET')
+  if (item?.timelinessStatus === 'LATE') states.add('LATE')
+  if (item && ['NEEDS_CORRECTION', 'CORRECTING'].includes(item.correctionStatus)) states.add('NEEDS_CORRECTION')
+  if (item?.correctionStatus === 'CORRECTED') states.add('CORRECTED')
+  if (problem.completionPolicy === 'MANUAL' && item && item.attemptCount > 0 && !item.manualCompletedAt) states.add('MANUAL_PENDING')
+  if (item?.learningStatus === 'COMPLETED') states.add('COMPLETED')
+  return [...states]
+}
+
+export async function getAssignmentProgress(userId: string, assignmentId: string, query?: any) {
   const assignment = await assertManage(userId, assignmentId)
   const [progress, corrections, adjustments] = await Promise.all([
     prisma.assignmentProblemProgress.findMany({ where: { assignmentId }, orderBy: { updatedAt: 'desc' } }),
@@ -784,6 +811,70 @@ export async function getAssignmentProgress(userId: string, assignmentId: string
     prisma.assignmentScoreAdjustment.findMany({ where: { assignmentId }, orderBy: { createdAt: 'asc' } }),
   ])
   const summary = summarizeAssignmentProgress(assignment, progress, adjustments)
+  const hasMatrixQuery = query && ['page', 'pageSize', 'q', 'problemId', 'state'].some(key => query[key] !== undefined)
+  if (hasMatrixQuery) {
+    const page = Math.max(1, Number.parseInt(String(query.page || '1'), 10) || 1)
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(String(query.pageSize || '40'), 10) || 40))
+    const search = String(query.q || '').trim().toLocaleLowerCase().slice(0, 120)
+    const problemId = String(query.problemId || '').trim()
+    if (problemId && !assignment.Problems.some(problem => problem.id === problemId)) {
+      throw new AssignmentError(422, 'ASSIGNMENT_PROGRESS_FILTER_INVALID', '筛选题目不属于当前作业')
+    }
+    const requestedStates = String(query.state || '').split(',').map(value => value.trim().toUpperCase()).filter(Boolean)
+    const unknownState = requestedStates.find(value => !ASSIGNMENT_PROGRESS_STATES.includes(value as AssignmentProgressState))
+    if (unknownState) throw new AssignmentError(422, 'ASSIGNMENT_PROGRESS_FILTER_INVALID', `未知进度状态：${unknownState}`)
+    const progressByCell = new Map(progress.map(item => [`${item.recipientId}:${item.assignmentProblemId}`, item]))
+    const actorIds = [...new Set(progress.map(item => item.manualCompletedByUserId).filter(Boolean) as string[])]
+    const actors = actorIds.length
+      ? await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, username: true } })
+      : []
+    const actorById = new Map(actors.map(actor => [actor.id, actor]))
+    const selectedProblems = problemId ? assignment.Problems.filter(problem => problem.id === problemId) : assignment.Problems
+    const matrixRows = summary.recipients.map(recipient => {
+      const cells = assignment.Problems.map(problem => {
+        const item = progressByCell.get(`${recipient.id}:${problem.id}`)
+        return {
+          id: item?.id || null,
+          assignmentProblemId: problem.id,
+          learningStatus: item?.learningStatus || 'NOT_STARTED',
+          timelinessStatus: item?.timelinessStatus || 'ON_TIME',
+          correctionStatus: item?.correctionStatus || 'NONE',
+          attemptCount: item?.attemptCount || 0,
+          bestScore: item?.bestScore ?? null,
+          bestVerdict: item?.bestVerdict ?? null,
+          finalScore: item?.finalScore ?? null,
+          firstSubmissionId: item?.firstSubmissionId ?? null,
+          bestSubmissionId: item?.bestSubmissionId ?? null,
+          latestSubmissionId: item?.latestSubmissionId ?? null,
+          firstSubmittedAt: item?.firstSubmittedAt ?? null,
+          lastSubmittedAt: item?.lastSubmittedAt ?? null,
+          manualCompletionVersion: item?.manualCompletionVersion || 0,
+          manualCompletedAt: item?.manualCompletedAt ?? null,
+          manualCompletionReason: item?.manualCompletionReason ?? null,
+          manualCompletedBy: item?.manualCompletedByUserId ? actorById.get(item.manualCompletedByUserId) || null : null,
+          states: progressStates(problem, item),
+        }
+      })
+      return { ...recipient, cells }
+    })
+    const searched = matrixRows.filter(row => !search || row.user.username.toLocaleLowerCase().includes(search))
+    const counts = Object.fromEntries(ASSIGNMENT_PROGRESS_STATES.map(state => [state, searched.filter(row => selectedProblems.some(problem => row.cells.find(cell => cell.assignmentProblemId === problem.id)?.states.includes(state))).length]))
+    const filtered = requestedStates.length
+      ? searched.filter(row => selectedProblems.some(problem => {
+          const cell = row.cells.find(item => item.assignmentProblemId === problem.id)
+          return requestedStates.some(state => cell?.states.includes(state as AssignmentProgressState))
+        }))
+      : searched
+    const total = filtered.length
+    return {
+      assignment: { id: assignment.id, title: assignment.title, status: assignment.status, statusRevision: assignment.statusRevision },
+      problems: summary.problems,
+      recipients: filtered.slice((page - 1) * pageSize, page * pageSize),
+      corrections,
+      statusCounts: counts,
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    }
+  }
   return {
     assignment: { id: assignment.id, title: assignment.title, status: assignment.status, statusRevision: assignment.statusRevision },
     ...summary,
@@ -810,6 +901,9 @@ export async function setManualAssignmentProblemCompletion(userId: string, assig
     if (!progress) throw new AssignmentError(404, 'ASSIGNMENT_PROGRESS_NOT_FOUND', '作业进度不存在')
     if (progress.AssignmentProblem.completionPolicy !== 'MANUAL') {
       throw new AssignmentError(422, 'MANUAL_COMPLETION_UNSUPPORTED', '该题未使用人工完成条件')
+    }
+    if (progress.attemptCount < 1) {
+      throw new AssignmentError(409, 'MANUAL_COMPLETION_REQUIRES_SUBMISSION', '学生首次提交后才能人工确认完成')
     }
     const fallbackStatus = progress.targetMetAt
       ? 'TARGET_MET' as const

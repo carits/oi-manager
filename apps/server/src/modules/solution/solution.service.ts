@@ -777,6 +777,99 @@ export async function listSolutionReviewQueue(user: JwtPayload, status?: string)
   })
 }
 
+function comparisonTokens(value: string) {
+  const normalized = value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, ' ').trim()
+  const words = normalized.match(/[a-z0-9_]+|[\u3400-\u9fff]/g) || []
+  const tokens = new Set(words)
+  for (let index = 0; index + 1 < words.length; index++) tokens.add(`${words[index]}\u0001${words[index + 1]}`)
+  return tokens
+}
+
+function comparisonSimilarity(left: string, right: string) {
+  const a = comparisonTokens(left), b = comparisonTokens(right)
+  if (!a.size || !b.size) return 0
+  let intersection = 0
+  for (const token of a) if (b.has(token)) intersection++
+  return Math.round(intersection / (a.size + b.size - intersection) * 10_000)
+}
+
+function contentSegments(value: string, kind: 'text' | 'code') {
+  const source = value.replace(/\r\n/g, '\n')
+  const blocks = kind === 'text'
+    ? source.replace(/```[\s\S]*?```/g, '\n').split(/\n\s*\n+/)
+    : source.split('\n').reduce<string[]>((result, line, index) => {
+        const bucket = Math.floor(index / 8)
+        result[bucket] = `${result[bucket] || ''}${line}\n`
+        return result
+      }, [])
+  return blocks.map((text, index) => ({ index, text: text.trim().slice(0, 1200) })).filter(item => item.text.length >= (kind === 'text' ? 20 : 8))
+}
+
+function matchedSegments(subject: string, target: string, kind: 'text' | 'code') {
+  const left = contentSegments(subject, kind), right = contentSegments(target, kind)
+  return left.flatMap(item => {
+    let best: { item: typeof right[number]; score: number } | undefined
+    for (const candidate of right) {
+      const score = comparisonSimilarity(item.text, candidate.text)
+      if (!best || score > best.score) best = { item: candidate, score }
+    }
+    return best && best.score >= 1800 ? [{ kind, left: { index: item.index, text: item.text }, right: { index: best.item.index, text: best.item.text }, similarityBasisPoints: best.score }] : []
+  })
+}
+
+export async function getSolutionSimilarityComparison(user: JwtPayload, contributionId: string) {
+  const contribution = await prisma.solutionContribution.findUnique({
+    where: { id: contributionId },
+    include: {
+      Problem: true,
+      Revisions: { orderBy: { revision: 'desc' }, take: 1, include: {
+        SimilarityJob: true,
+        SimilarityCheck: {
+          include: {
+            MatchedSolutionVersion: { include: { Solution: { include: { Author: { select: { id: true, username: true } } } } } },
+            MatchedContributionRevision: { include: { Contribution: { include: { Author: { select: { id: true, username: true } } } } } },
+          },
+        },
+      } },
+    },
+  })
+  if (!contribution || !canModifyProblem(user, contribution.Problem)) fail(404, 'SOLUTION_CONTRIBUTION_NOT_FOUND', '投稿不存在')
+  const revision = contribution.Revisions[0]
+  if (!revision?.SimilarityJob || revision.SimilarityJob.status !== 'READY') fail(409, 'SOLUTION_SIMILARITY_NOT_READY', '相似度检查尚未完成')
+  const check = revision.SimilarityCheck
+  if (!check) fail(404, 'SOLUTION_SIMILARITY_MATCH_NOT_FOUND', '没有可比较的相似来源')
+  const published = check.MatchedSolutionVersion
+  const pending = check.MatchedContributionRevision
+  const matched = published || pending
+  if (!matched) {
+    await prisma.platformAuditLog.create({ data: {
+      id: crypto.randomUUID(), actorUserId: user.userId, action: 'solution_similarity_comparison_viewed',
+      targetType: 'SolutionContribution', targetId: contributionId,
+      metadata: { contributionRevisionId: revision.id, matchedType: null, matchedId: null, matchCount: 0 },
+    } })
+    return { riskLevel: check.riskLevel, textSimilarityBasisPoints: check.textSimilarityBasisPoints, codeSimilarityBasisPoints: check.codeSimilarityBasisPoints, maximumSimilarityBasisPoints: check.maximumSimilarityBasisPoints, source: null, matches: [] }
+  }
+  const targetMarkdown = matched.contentMarkdown || ''
+  const targetCode = matched.referenceCode || ''
+  const matches = [
+    ...matchedSegments(revision.contentMarkdown, targetMarkdown, 'text'),
+    ...matchedSegments(revision.referenceCode || '', targetCode, 'code'),
+  ].sort((a, b) => b.similarityBasisPoints - a.similarityBasisPoints).slice(0, 20)
+  const source = published ? {
+    type: 'published_solution', id: published.id, title: published.title, version: published.version,
+    author: published.Solution.Author ? { id: published.Solution.Author.id, username: published.Solution.Author.username } : null,
+  } : {
+    type: 'review_contribution', id: pending!.id, title: pending!.title, version: pending!.revision,
+    author: { id: pending!.Contribution.Author.id, username: pending!.Contribution.Author.username },
+  }
+  await prisma.platformAuditLog.create({ data: {
+    id: crypto.randomUUID(), actorUserId: user.userId, action: 'solution_similarity_comparison_viewed',
+    targetType: 'SolutionContribution', targetId: contributionId,
+    metadata: { contributionRevisionId: revision.id, matchedType: source.type, matchedId: source.id, matchCount: matches.length },
+  } })
+  return { riskLevel: check.riskLevel, textSimilarityBasisPoints: check.textSimilarityBasisPoints, codeSimilarityBasisPoints: check.codeSimilarityBasisPoints, maximumSimilarityBasisPoints: check.maximumSimilarityBasisPoints, source, matches }
+}
+
 async function canReadSolution(user: JwtPayload, solution: { visibilityPolicy: SolutionVisibilityPolicy; problemId: string }, manager: boolean) {
   if (manager || solution.visibilityPolicy === 'PUBLIC') return true
   if (solution.visibilityPolicy === 'MANAGER_ONLY') return false

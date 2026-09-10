@@ -7,6 +7,7 @@ export interface NavItem {
   label: string
   href: string
   icon?: string
+  scope?: 'workspace' | 'global'
 }
 
 export interface NavConfig {
@@ -61,6 +62,7 @@ export const schoolManagerNav: NavConfig = {
     { label: '题库', href: 'problems' },
     { label: '题单', href: 'problem-lists' },
     { label: '排名', href: 'rankings' },
+    { label: '知识广场', href: '/blog', scope: 'global' },
   ]
 }
 
@@ -78,6 +80,7 @@ export const teacherNav: NavConfig = {
     { label: '题库', href: 'problems' },
     { label: '题单', href: 'problem-lists' },
     { label: '排名', href: 'rankings' },
+    { label: '知识广场', href: '/blog', scope: 'global' },
   ]
 }
 
@@ -92,6 +95,7 @@ export const studentNav: NavConfig = {
     { label: '训练', href: 'training-sessions' },
     { label: '题单', href: 'problem-lists' },
     { label: '排名', href: 'rankings' },
+    { label: '知识广场', href: '/blog', scope: 'global' },
   ]
 }
 
@@ -108,7 +112,7 @@ export const personalNav: NavConfig = {
     { label: '题单', href: '/personal/problem-lists' },
     { label: '排名', href: '/personal/rankings' },
     { label: '贡献', href: '/personal/contributions' },
-    { label: '知识', href: '/personal/blogs' },
+    { label: '知识广场', href: '/blog', scope: 'global' },
     { label: '数据市场', href: '/personal/data-market' },
     { label: '钱包', href: '/account/wallet' },
     { label: '评测记录', href: '/personal/submissions' },

@@ -37,4 +37,22 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain('保存归属')
     expect(source).toContain('disabled={!selectedOrganizationId}')
   })
+
+  it('guides contest creation through five human-readable steps', () => {
+    const source = fs.readFileSync(new URL('./TrainingFormModal.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain("['基本信息', '赛制与 Rating', '题目', '可见性', '发布前检查']")
+    expect(source).toContain('影响强度：标准比赛的')
+    expect(source).toContain('下一步')
+    expect(source).toContain("`创建${mode === 'contest' ? '比赛'")
+  })
+
+  it('explains Rating results in user-facing language', () => {
+    const source = fs.readFileSync(new URL('./components/TrainingRatingPanel.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain('本场计 Rating')
+    expect(source).toContain('影响强度：标准比赛的')
+    expect(source).toContain('首次提交后，你在本场比赛中的组织归属将固定')
+    expect(source).toContain('NOT_ENOUGH_PARTICIPANTS')
+  })
 })

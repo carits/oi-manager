@@ -27,6 +27,7 @@ import { ProblemHackPanel } from './ProblemHackPanel'
 import { SolutionEditorialPanel } from './SolutionEditorialPanel'
 import { ProblemRelatedBlogs } from '@/components/blog/ProblemRelatedBlogs'
 import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
+import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
 
 interface Statement {
   id: string
@@ -399,6 +400,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
         submitKeyRef.current = null
         toast.success('提交成功')
         setShowSubmitPanel(false)
+        clearSubmissionDraft(`${user?.userId || 'account'}:problem:${problem.id}`, submitLanguage)
         setSubmitCode('')
         setSubmissionIo(problem.legacyIoSuggestion || { inputFilename: null, outputFilename: null })
         // 刷新提交记录
@@ -1178,12 +1180,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
           {/* 代码输入框 - 归档模式下隐藏 */}
           {submitMethod !== 'archive' && (
           <>
-            <Textarea
-              placeholder="在此输入代码..."
-              value={submitCode}
-              onChange={e => setSubmitCode(e.target.value)}
-              className={unifiedStyles.codeInput}
-            />
+            <SubmissionCodeEditor value={submitCode} onChange={setSubmitCode} language={submitLanguage} draftKey={`${user?.userId || 'account'}:problem:${problem.id}`} minHeight={360} />
             <SubmissionIoFields value={submissionIo} onChange={setSubmissionIo} legacySuggested={Boolean(problem.legacyIoSuggestion)} />
           </>
           )}

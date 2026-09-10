@@ -1,0 +1,11 @@
+.editor { min-height: var(--editor-min-height); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.height300 { --editor-min-height: 300px; }
+.height360 { --editor-min-height: 360px; }
+.height420 { --editor-min-height: 420px; }
+.editor:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.editor :global(.cm-editor) { min-height: var(--editor-min-height); color: var(--text-primary); font-size: var(--text-sm); }
+.editor :global(.cm-scroller) { min-height: var(--editor-min-height); overflow: auto; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.editor :global(.cm-gutters) { border-right: 1px solid var(--border); background: var(--bg-muted); color: var(--text-tertiary); }
+.editor :global(.cm-activeLine), .editor :global(.cm-activeLineGutter) { background: var(--primary-light); }
+.editor :global(.cm-focused) { outline: none; }
+.fallback { min-height: var(--editor-min-height); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }

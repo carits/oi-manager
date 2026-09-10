@@ -19,13 +19,12 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/components/AuthProvider'
 import { BlogReferenceEditor } from './BlogReferenceEditor'
 import { BlogCommunityPanel } from './BlogCommunityPanel'
+import { BlogClassificationView, BlogReferenceCards, type PublishedBlogReference } from './BlogPublishedMetadata'
 import {
-  BLOG_REFERENCE_LABELS,
   BLOG_TYPE_LABELS,
   BLOG_VISIBILITY_LABELS,
   EMPTY_BLOG_CLASSIFICATION,
   emptyBlogReference,
-  referenceSnapshotTitle,
   validateBlogDraft,
   type BlogDraftReference,
   type BlogDraftClassification,
@@ -34,18 +33,6 @@ import {
   type BlogVisibility,
 } from './blog-contract'
 import styles from './BlogWorkspace.module.css'
-
-type PublishedReference = {
-  id: string
-  type: keyof typeof BLOG_REFERENCE_LABELS
-  relationType: string
-  displayMode: string
-  referenceId: string
-  referenceVersionId?: string | null
-  accessMode: BlogVisibility
-  status: string
-  snapshot?: any
-}
 
 type BlogVersion = {
   id: string
@@ -56,7 +43,7 @@ type BlogVersion = {
   contentHash: string
   status: string
   publishedAt: string
-  references: PublishedReference[]
+  references: PublishedBlogReference[]
   classification: BlogClassificationSnapshot
 }
 
@@ -93,15 +80,6 @@ function initialReference(search: URLSearchParams): BlogDraftReference[] {
   if (standingSnapshotId) return [{ ...emptyBlogReference('CONTEST_STANDING'), standingSnapshotId, relationType: 'PRIMARY_SUBJECT' }]
   if (ratingChangeId) return [{ ...emptyBlogReference('RATING_CHANGE'), ratingChangeId, relationType: 'RESULT' }]
   return []
-}
-
-function referenceCards(references: PublishedReference[]) {
-  if (!references.length) return <p className={styles.muted}>这个版本没有结构化引用。</p>
-  return <div className={styles.referenceCards}>{references.map(reference => <article key={reference.id}>
-    <div><StatusBadge variant={reference.status === 'CURRENT' ? 'info' : 'warning'}>{reference.status === 'CURRENT' ? '固定引用' : reference.status === 'SUPERSEDED' ? '来源已有新版本' : '引用状态需关注'}</StatusBadge><span>{BLOG_REFERENCE_LABELS[reference.type]}</span></div>
-    <strong>{referenceSnapshotTitle(reference)}</strong>
-    <small>{reference.referenceVersionId ? `版本：${reference.referenceVersionId}` : `对象：${reference.referenceId}`} · 最大可见范围：{BLOG_VISIBILITY_LABELS[reference.accessMode]}</small>
-  </article>)}</div>
 }
 
 export function BlogWorkspace({ postId }: { postId?: string }) {
@@ -256,14 +234,6 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     },
   }))
 
-  const classificationView = (classification?: BlogClassificationSnapshot) => {
-    if (!classification?.series && !classification?.tags?.length) return null
-    return <div className={styles.classificationSummary}>
-      {classification.series && <span>系列：{classification.series.title}</span>}
-      {classification.tags?.map(tag => <StatusBadge key={tag.id} variant="neutral">{tag.name}</StatusBadge>)}
-    </div>
-  }
-
   if (loading) return <PageFrame width="reading"><p className={styles.loading}>正在加载知识文章…</p></PageFrame>
   if (error) return <PageFrame width="reading"><div className={styles.error} role="alert"><span>{error}</span><Button variant="outline" onClick={() => void load()}>重试</Button></div></PageFrame>
   const isAuthor = !post || post.author.id === user?.userId
@@ -298,15 +268,15 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     {tab === 'published' && post?.currentVersion && <section className={styles.reader}>
       <header><div><StatusBadge variant="success">V{post.currentVersion.version} · 当前</StatusBadge><StatusBadge variant="neutral">{BLOG_VISIBILITY_LABELS[post.visibility]}</StatusBadge></div><time>{new Date(post.currentVersion.publishedAt).toLocaleString('zh-CN')}</time></header>
       {post.currentVersion.summary && <p className={styles.lead}>{post.currentVersion.summary}</p>}
-      {classificationView(post.currentVersion.classification)}
+      <BlogClassificationView classification={post.currentVersion.classification} />
       <MarkdownRenderer content={post.currentVersion.contentMarkdown} securityProfile="knowledge" />
-      <div className={styles.referenceSection}><h2>固定引用</h2>{referenceCards(post.currentVersion.references)}</div>
+      <div className={styles.referenceSection}><h2>固定引用</h2><BlogReferenceCards references={post.currentVersion.references} /></div>
       <BlogCommunityPanel postId={post.id} />
     </section>}
 
     {tab === 'versions' && post && <section className={styles.historyLayout}>
       <div className={styles.versionList}>{versions.map(version => <Button key={version.id} variant={historyVersion?.id === version.id ? 'secondary' : 'ghost'} onClick={() => void openVersion(version.id)}><History size={15} />V{version.version} · {version.title} · {version.status}</Button>)}</div>
-      <article className={styles.reader}>{historyVersion ? <><header><StatusBadge variant={historyVersion.status === 'CURRENT' ? 'success' : 'neutral'}>V{historyVersion.version} · {historyVersion.status}</StatusBadge><time>{new Date(historyVersion.publishedAt).toLocaleString('zh-CN')}</time></header>{classificationView(historyVersion.classification)}<MarkdownRenderer content={historyVersion.contentMarkdown} securityProfile="knowledge" /><div className={styles.referenceSection}><h2>该版本的固定引用</h2>{referenceCards(historyVersion.references)}</div></> : <div className={styles.historyEmpty}><BookOpenCheck size={28} /><p>选择一个版本查看不可变正文和当时的引用。</p></div>}</article>
+      <article className={styles.reader}>{historyVersion ? <><header><StatusBadge variant={historyVersion.status === 'CURRENT' ? 'success' : 'neutral'}>V{historyVersion.version} · {historyVersion.status}</StatusBadge><time>{new Date(historyVersion.publishedAt).toLocaleString('zh-CN')}</time></header><BlogClassificationView classification={historyVersion.classification} /><MarkdownRenderer content={historyVersion.contentMarkdown} securityProfile="knowledge" /><div className={styles.referenceSection}><h2>该版本的固定引用</h2><BlogReferenceCards references={historyVersion.references} /></div></> : <div className={styles.historyEmpty}><BookOpenCheck size={28} /><p>选择一个版本查看不可变正文和当时的引用。</p></div>}</article>
     </section>}
     <ConfirmDialog isOpen={archiveOpen} onClose={() => setArchiveOpen(false)} onConfirm={() => void archive()} title="归档这篇文章？" message="归档后不会出现在反向索引中，固定版本仍保留用于审计。" confirmText="确认归档" danger loading={saving} />
     <FormDialog isOpen={seriesDialogOpen} onClose={() => setSeriesDialogOpen(false)} onSubmit={() => void createSeries()} title="新建博客系列" description="系列与文章使用相同归属和可见范围，防止目录泄露。" submitText="创建并选中" loading={saving} dirty={Boolean(seriesTitle || seriesDescription)} submitDisabled={!seriesTitle.trim()}><div className={styles.formGrid}><FormField label="系列名称" required><Input value={seriesTitle} onChange={event => setSeriesTitle(event.target.value)} maxLength={120} /></FormField><FormField label="可见范围"><Select value={seriesVisibility} onChange={event => setSeriesVisibility(event.target.value as BlogVisibility)}>{(organizationId ? ['PRIVATE', 'ORGANIZATION'] : ['PRIVATE', 'UNLISTED', 'PLATFORM', 'PUBLIC']).map(item => <option key={item} value={item}>{BLOG_VISIBILITY_LABELS[item as BlogVisibility]}</option>)}</Select></FormField><FormField label="系列说明"><Textarea value={seriesDescription} onChange={event => setSeriesDescription(event.target.value)} rows={4} maxLength={1000} /></FormField></div></FormDialog>

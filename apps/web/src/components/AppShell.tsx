@@ -25,6 +25,8 @@ const accountPaths = {
   binding: '/account/platform-bindings',
   wallet: '/account/wallet',
   messages: '/account/messages',
+  blogs: '/personal/blogs',
+  knowledge: '/blog',
 }
 
 const labelIcons: Record<string, LucideIcon> = {
@@ -93,7 +95,7 @@ export function AppShell({ children }: AppShellProps) {
   const navConfig = getNavConfig(role, context)
   const resolvedNavConfig = organizationId ? {
     ...navConfig,
-    items: navConfig.items.map(item => ({ ...item, href: `/org/${organizationId}/${item.href}` })),
+    items: navConfig.items.map(item => ({ ...item, href: item.scope === 'global' ? item.href : `/org/${organizationId}/${item.href}` })),
   } : navConfig
   const activeItem = getActiveNavItem(pathname, role, context)
   const isPersonal = context === 'personal'
@@ -142,6 +144,8 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.wallet} role="menuitem" onClick={() => setShowUserMenu(false)}><WalletCards size={17} aria-hidden="true" />我的钱包</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
           <Link className={styles.menuItem} href={accountPaths.messages} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />好友与私信</Link>
+          <Link className={styles.menuItem} href={accountPaths.knowledge} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />知识广场</Link>
+          {!isGlobalAdmin && <Link className={styles.menuItem} href={accountPaths.blogs} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />我的文章</Link>}
           <div className={styles.menuDivider} />
           <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</Button>
         </div>

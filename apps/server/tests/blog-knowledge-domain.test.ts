@@ -458,6 +458,16 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     expect(reordered.status).toBe(200)
     const publicSeries = await client(reader).get(`/api/blog-series/${seriesId}`)
     expect(publicSeries.body.data.entries.map((entry: any) => entry.post.id)).toEqual([secondId, firstId])
+    const publicSecond = await request(app).get(`/api/blog-discovery/${secondId}`)
+    expect(publicSecond.status).toBe(200)
+    expect(publicSecond.body.data.seriesNavigation).toMatchObject({
+      seriesId,
+      title: 'From Zero to Graphs',
+      index: 1,
+      total: 2,
+      next: { id: firstId },
+    })
+    expect(publicSecond.body.data.seriesNavigation.previous).toBeUndefined()
 
     const availableTags = await client(author).get('/api/blog-tags')
     const graphTag = availableTags.body.data.items.find((tag: any) => tag.name === 'Graph')

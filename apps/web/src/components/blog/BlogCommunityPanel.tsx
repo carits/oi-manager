@@ -1,12 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Bookmark, Flag, Heart, MessageCircle, ThumbsUp, Trash2 } from 'lucide-react'
 import apiClient from '@/lib/apiClient'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/FormControls'
 import { useToast } from '@/components/ui/Toast'
 import styles from './BlogWorkspace.module.css'
+import { useAuth } from '@/components/AuthProvider'
 
 type Community = {
   reactions: { LIKE: number; HELPFUL: number }
@@ -24,8 +26,10 @@ type Comment = {
 type CommentPage = { data: Comment[]; total: number }
 type ReplyPage = { items: Comment[]; hasMore: boolean; nextCursor?: string | null }
 
-export function BlogCommunityPanel({ postId }: { postId: string }) {
+export function BlogCommunityPanel({ postId, publicRead = false }: { postId: string; publicRead?: boolean }) {
   const toast = useToast()
+  const router = useRouter()
+  const { isAuthenticated } = useAuth()
   const [community, setCommunity] = useState<Community | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [content, setContent] = useState('')
@@ -34,17 +38,26 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
   const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
+    const readBase = publicRead ? `/api/blog-discovery/${postId}` : `/api/blogs/${postId}`
     const [summary, commentPage] = await Promise.all([
-      apiClient.get<Community>(`/api/blogs/${postId}/community`, { accountScoped: true }),
-      apiClient.get<CommentPage>(`/api/blogs/${postId}/comments?pageSize=100`, { accountScoped: true }),
+      apiClient.get<Community>(`${readBase}/community`, { accountScoped: true }),
+      apiClient.get<CommentPage>(`${readBase}/comments?pageSize=100`, { accountScoped: true }),
     ])
     if (summary.success && summary.data) setCommunity(summary.data)
     if (commentPage.success && commentPage.data) setComments(commentPage.data.data)
-  }, [postId])
+  }, [postId, publicRead])
+
+  const requireLogin = () => {
+    if (isAuthenticated) return true
+    const next = typeof window === 'undefined' ? `/blog/${postId}` : `${window.location.pathname}${window.location.search}`
+    router.push(`/login?next=${encodeURIComponent(next)}`)
+    return false
+  }
 
   useEffect(() => { void load() }, [load])
 
   const react = async (type: 'LIKE' | 'HELPFUL') => {
+    if (!requireLogin()) return
     if (!community) return
     const active = community.myReactions.includes(type)
     const result = active
@@ -55,6 +68,7 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
   }
 
   const bookmark = async () => {
+    if (!requireLogin()) return
     if (!community) return
     const result = community.bookmarked
       ? await apiClient.delete<Community>(`/api/blogs/${postId}/bookmark`, { accountScoped: true })
@@ -64,6 +78,7 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
   }
 
   const submit = async () => {
+    if (!requireLogin()) return
     if (!content.trim()) return
     setBusy(true)
     const result = await apiClient.post(`/api/blogs/${postId}/comments`, { content, parentId: replyTo?.id || null }, { accountScoped: true })
@@ -79,6 +94,7 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
   }
 
   const report = async (commentId?: string) => {
+    if (!requireLogin()) return
     const result = await apiClient.post(`/api/blogs/${postId}/reports`, { reason: 'INAPPROPRIATE', commentId: commentId || null }, { accountScoped: true })
     result.success ? toast.success('举报已提交，平台会进行复核') : toast.error(result.message || '举报失败')
   }
@@ -87,7 +103,8 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
     if (loadingReplies.has(comment.id)) return
     setLoadingReplies(current => new Set(current).add(comment.id))
     const cursor = comment.replies?.at(-1)?.id
-    const result = await apiClient.get<ReplyPage>(`/api/blogs/${postId}/comments/${comment.id}/replies?pageSize=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { accountScoped: true })
+    const readBase = publicRead ? `/api/blog-discovery/${postId}` : `/api/blogs/${postId}`
+    const result = await apiClient.get<ReplyPage>(`${readBase}/comments/${comment.id}/replies?pageSize=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { accountScoped: true })
     setLoadingReplies(current => { const next = new Set(current); next.delete(comment.id); return next })
     if (!result.success || !result.data) return toast.error(result.message || '加载回复失败')
     setComments(current => current.map(item => item.id === comment.id
@@ -105,7 +122,7 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
 
   return <section className={styles.community} aria-labelledby="blog-community-title">
     <div className={styles.communityHead}><div><h2 id="blog-community-title">社区互动</h2>{community?.featured && <span className={styles.featured}>社区精选</span>}</div><div className={styles.communityActions}><Button size="sm" variant={community?.myReactions.includes('LIKE') ? 'primary' : 'secondary'} icon={<Heart size={15} />} onClick={() => void react('LIKE')}>喜欢 {community?.reactions.LIKE || 0}</Button><Button size="sm" variant={community?.myReactions.includes('HELPFUL') ? 'primary' : 'secondary'} icon={<ThumbsUp size={15} />} onClick={() => void react('HELPFUL')}>有帮助 {community?.reactions.HELPFUL || 0}</Button><Button size="sm" variant={community?.bookmarked ? 'primary' : 'secondary'} icon={<Bookmark size={15} />} onClick={() => void bookmark()}>{community?.bookmarked ? '已收藏' : '收藏'}</Button><Button size="sm" variant="ghost" icon={<Flag size={15} />} onClick={() => void report()}>举报文章</Button></div></div>
-    <div className={styles.commentComposer}>{replyTo && <div className={styles.replying}>正在回复 {replyTo.author.username}<Button size="sm" variant="ghost" onClick={() => setReplyTo(null)}>取消</Button></div>}<Textarea rows={3} maxLength={5000} value={content} onChange={event => setContent(event.target.value)} placeholder="理性讨论，补充解法或指出问题……" /><div><span><MessageCircle size={15} /> {community?.commentCount || 0} 条评论</span><Button loading={busy} disabled={!content.trim()} onClick={() => void submit()}>发表评论</Button></div></div>
+    <div className={styles.commentComposer}>{replyTo && <div className={styles.replying}>正在回复 {replyTo.author.username}<Button size="sm" variant="ghost" onClick={() => setReplyTo(null)}>取消</Button></div>}<Textarea rows={3} maxLength={5000} value={content} onChange={event => setContent(event.target.value)} placeholder={isAuthenticated ? '理性讨论，补充解法或指出问题……' : '登录后参与讨论'} onFocus={() => { if (!isAuthenticated) requireLogin() }} /><div><span><MessageCircle size={15} /> {community?.commentCount || 0} 条评论</span><Button loading={busy} disabled={isAuthenticated && !content.trim()} onClick={() => void submit()}>{isAuthenticated ? '发表评论' : '登录后评论'}</Button></div></div>
     <div className={styles.comments}>{comments.length ? comments.map(item => renderComment(item)) : <p className={styles.muted}>还没有评论，来分享你的思路吧。</p>}</div>
   </section>
 }

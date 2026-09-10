@@ -64,6 +64,8 @@ delta = K(96) × weight × (actualPerformance - expectedPerformance)
 
 个人端 `/personal/rankings` 的 Rating 区域按全局/组织和 OI/IOI/ACM 展示账户、当前/峰值 Rating、暂定状态、比赛历史和曲线；历史链接仍指向原比赛运行态。
 
+比赛端默认用自然语言显示计分范围、赛制 Track、影响强度、组织归属冻结以及未结算原因；底层 `GLOBAL/ORGANIZATION/BOTH` 和权重只放在规则详情。读取比赛 Rating 时为当前用户返回 `myChanges`，最终榜单可直接显示各范围的 `before → after (delta)`，不会改变不可变 Batch 或结算算法。
+
 ## 现有 Contest 聚合桥接
 
 仓库已有 `Contest/ContestProblem/ContestResult` 方案，本轮不再创建重复比赛模型。当前判题运行态仍由 `Training(type=contest)` 承载；`Contest.runtimeTrainingId` 与 `ContestProblem.runtimeTrainingProblemId` 提供一对一桥接，并固定组织、时间、赛制、题目和 TestSet Revision。受保护的 `contest-aggregates` check/apply 迁移只为能可靠固定全部 Revision 的历史比赛建立映射，异常比赛进入报告且不猜测迁移。该桥接为后续逐步切换聚合事实源提供身份，不改变现有提交、榜单或 Rating 外键。

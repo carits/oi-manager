@@ -7,6 +7,7 @@ import {
   createSolutionContribution,
   getProblemSolution,
   getSolutionContribution,
+  getSolutionSimilarityComparison,
   listMySolutionContributions,
   listProblemSolutions,
   listSolutionReviewQueue,
@@ -77,6 +78,9 @@ solutionRouter.post('/:solutionId/corrections', authenticate, command(
 solutionReviewRouter.get('/', authenticate, command(
   req => listSolutionReviewQueue(req.user, String(req.query.status || '')),
 ))
+solutionReviewRouter.get('/:id/similarity-comparison', authenticate, command(
+  req => getSolutionSimilarityComparison(req.user, req.params.id),
+))
 solutionReviewRouter.post('/:id/reviews', authenticate, command(
   req => recordSolutionReview(req.user, req.params.id, req.body), 201,
 ))
@@ -94,4 +98,7 @@ solutionReviewRouter.post('/:id/publish', authenticate, command(
 ))
 solutionReviewRouter.post('/:id/similarity/retry', authenticate, command(
   req => retrySolutionSimilarity(req.user, req.params.id),
+))
+solutionReviewRouter.get('/:id/similarity-comparison', authenticate, command(
+  req => getSolutionSimilarityComparison(req.user, req.params.id),
 ))

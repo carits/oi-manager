@@ -1270,3 +1270,10 @@ source_of_truth: Git history
 - Judge、Web、Server 构建及文档检查通过；部署状态以本次提交后的健康检查为准。
 
 - 2026-08-18: Added Lemon SPJ checker support, secure checker file storage APIs, and subset contest configuration.
+## 2026-09-10 — Human UX / Productization
+
+- Assignment 管理端升级为批改矩阵，接入人工完成 CAS、原因审计、状态筛选与明确的未开始单元格；草稿改为“基本信息—题目—学生—检查发布”，高级评分规则按需展开。
+- 题库、比赛/训练、Assignment、Training Engine 和 Hack 证明程序统一复用 CodeMirror 6 提交编辑器，支持高亮、快捷键、语言隔离草稿和加载失败降级。
+- 公共知识文章展示不可变引用、系列导航和社区互动；知识广场成为全局导航，“我的文章”回到账户内容入口。
+- 比赛创建改为五步向导，Rating 摘要、跳过原因和榜单变化使用自然语言；题解审核新增受审计的并排相似片段。
+- API 保持向后兼容，无 Prisma 迁移，不改历史作业、比赛、Rating、博客、题解或提交结果。

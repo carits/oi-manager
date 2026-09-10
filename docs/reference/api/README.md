@@ -51,6 +51,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/review/solution-contributions/:id/accept` | 以 expected-status CAS 采纳已验证且审核通过的投稿 |
 | `POST` | `/api/review/solution-contributions/:id/publish` | 幂等发布不可变题解版本并生成贡献奖励事件 |
 | `POST` | `/api/review/solution-contributions/:id/similarity/retry` | 题目管理员重试失败或补建遗漏的当前投稿相似度任务 |
+| `GET` | `/api/review/solution-contributions/:id/similarity-comparison` | 相似度 READY 后由题目审核者读取限长并排匹配片段；每次访问写平台审计 |
 | `GET` | `/api/blog-discovery` | 匿名发现 PUBLIC 博客；登录后同时发现 PLATFORM 博客 |
 | `GET` | `/api/blog-discovery/:id` | 按 ID 或 slug 读取公开知识文章，不返回不可见版本 |
 | `GET` | `/api/blog-discovery/:id/community` | 读取公开文章的安全互动计数；匿名响应无本人状态 |

@@ -28,12 +28,14 @@ type RatingPayload = {
     id: string
     scope: string
     organizationId?: string | null
+    organization?: { id: string; name: string; shortName?: string | null } | null
     track: string
     status: string
     fieldSize: number
     skipReason?: string | null
     changes: Array<{ userId: string; ratingBefore: number; appliedDelta: number; ratingAfter: number }>
   }>
+  myChanges?: Array<{ batchId: string; scope: string; track: string; organizationId?: string | null; organization?: { name: string; shortName?: string | null } | null; userId: string; ratingBefore: number; appliedDelta: number; ratingAfter: number }>
 }
 
 type RatingParticipationPayload = {
@@ -51,6 +53,17 @@ type RatingParticipationPayload = {
 const stateLabel: Record<string, string> = {
   LIVE: '进行中', JUDGING: '等待评测完成', FINALIZING: '正在结算',
   FINALIZED: '已结算', HELD: '重测后待重放', FAILED: '结算失败',
+}
+
+const skipReasonLabel: Record<string, string> = {
+  INSUFFICIENT_PARTICIPANTS: '有效参赛人数未达到最低要求',
+  NOT_ENOUGH_PARTICIPANTS: '有效参赛人数未达到最低要求',
+  NOT_FINALIZED: '最终榜单尚未生成',
+  HELD: '赛后重测后等待重放',
+}
+
+function scopeText(scope: string, track: string, organizationName?: string) {
+  return scope === 'GLOBAL' ? `全局 ${track}` : `${organizationName || '所属组织'} ${track}`
 }
 
 export function TrainingRatingPanel({ trainingId, training, onChanged }: {
@@ -126,6 +139,12 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
 
   const status = data?.finalizationStatus || training.finalizationStatus || 'LIVE'
   const enabled = (data?.config.scope || training.ratingConfig?.scope || 'NONE') !== 'NONE'
+  const configuredScope = data?.config.scope || training.ratingConfig?.scope || 'NONE'
+  const configuredTrack = data?.config.track || training.ratingConfig?.track || training.format.toUpperCase()
+  const configuredWeight = data?.config.weight ?? training.ratingConfig?.weight ?? 1
+  const ratingDescription = configuredScope === 'BOTH'
+    ? `本场计 Rating：全局 ${configuredTrack} + 参赛组织 ${configuredTrack}`
+    : configuredScope === 'GLOBAL' ? `本场计 Rating：全局 ${configuredTrack}` : `本场计 Rating：参赛组织 ${configuredTrack}`
   const ended = training.status === 'finished' || training.runtimeStatus === 'finished'
   const actionButton = training.isAdmin && ended && status !== 'FINALIZED'
     ? status === 'HELD'
@@ -137,7 +156,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
     <Section
       title="比赛 Rating"
       description={enabled
-        ? `${data?.config.track || training.ratingConfig?.track || training.format.toUpperCase()} · ${data?.config.scope || training.ratingConfig?.scope} · 权重 ${data?.config.weight ?? training.ratingConfig?.weight ?? 1}`
+        ? `${ratingDescription}；影响强度：标准比赛的 ${Math.round(configuredWeight * 100)}%`
         : '本场比赛不计 Rating；普通实时排名仍正常显示。'}
       actions={actionButton}
     >
@@ -148,11 +167,13 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
         {data?.standing && <span>最终榜单 R{data.standing.revision} · {data.standing.entries.length} 人</span>}
         {data?.batches.map(batch => (
           <span key={batch.id}>
-            {batch.scope === 'GLOBAL' ? '全局' : '组织'} {batch.track}：
-            {batch.status === 'APPLIED' ? `${batch.changes.length} 人已结算` : `未结算（${batch.skipReason || batch.status}）`}
+            {scopeText(batch.scope, batch.track, batch.organization?.shortName || batch.organization?.name)}：
+            {batch.status === 'APPLIED' ? `${batch.changes.length} 人已结算` : `未结算（${skipReasonLabel[batch.skipReason || ''] || '等待结算条件满足'}）`}
           </span>
         ))}
       </div>
+      {enabled && !participation?.fixed && <p className={styles.muted}>首次提交后，你在本场比赛中的组织归属将固定。</p>}
+      {data?.myChanges && data.myChanges.length > 0 && <div className={styles.myChanges}>{data.myChanges.map(change => <div key={change.batchId}><span>{scopeText(change.scope, change.track, change.organization?.shortName || change.organization?.name)}</span><strong>{change.ratingBefore} → {change.ratingAfter}（{change.appliedDelta >= 0 ? '+' : ''}{change.appliedDelta}）</strong></div>)}</div>}
       {participation?.fixed && participation.selectedOrganization && (
         <p className={styles.muted}>Rating 组织归属：{participation.selectedOrganization.name}（由比赛固定）</p>
       )}
@@ -187,13 +208,13 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
       {error && <div className={styles.error} role="alert">{error}<Button size="sm" variant="outline" onClick={() => void load()}>重试</Button></div>}
       {data?.standing && data.standing.entries.length > 0 && (
         <details className={styles.details}>
-          <summary>查看不可变最终榜单（{data.standing.entries.length}）</summary>
+          <summary>查看不可变最终榜单与规则详情（{data.standing.entries.length}）</summary>
           <div className={styles.entries}>
             {data.standing.entries.map(entry => <div key={entry.userId} className={styles.entry}>
               <strong>#{entry.rank} {entry.user?.username || entry.userId}</strong>
               <span>{entry.totalScore !== null && entry.totalScore !== undefined
                 ? `${entry.totalScore} 分`
-                : `${entry.solvedCount || 0} 题 · ${entry.penaltySeconds || 0} 秒`}</span>
+                : `${entry.solvedCount || 0} 题 · ${entry.penaltySeconds || 0} 秒`}{data.batches.flatMap(batch => batch.changes.map(change => ({ ...change, batch }))).filter(change => change.userId === entry.userId).map(change => ` · ${scopeText(change.batch.scope, change.batch.track, change.batch.organization?.shortName || change.batch.organization?.name)} ${change.ratingBefore} → ${change.ratingAfter}（${change.appliedDelta >= 0 ? '+' : ''}${change.appliedDelta}）`).join('')}</span>
             </div>)}
           </div>
         </details>

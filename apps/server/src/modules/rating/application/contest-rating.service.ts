@@ -494,7 +494,7 @@ async function finalizeContestRatingCore(trainingId: number, actorUserId: string
   return withSerializableRetry(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`contest-finalize:${trainingId}`}, 0)) IS NULL AS locked`
     const locked = await tx.training.findUniqueOrThrow({ where: { id: trainingId }, include: { RatingConfig: true, Team: { select: { organizationId: true } }, TrainingProblem: { orderBy: { orderIndex: 'asc' }, select: { id: true, points: true } } } })
-    if (locked.finalizationStatus === 'FINALIZED' && locked.finalizedStandingId) return loadContestRatingTx(tx, trainingId)
+    if (locked.finalizationStatus === 'FINALIZED' && locked.finalizedStandingId) return loadContestRatingTx(tx, trainingId, actorUserId)
     const activeRuns = await tx.judgeRun.count({ where: { status: { in: ['QUEUED', 'RUNNING'] }, Submission: { trainingId, submitScope: 'contest' } } })
     if (activeRuns > 0) fail(409, 'CONTEST_JUDGING_INCOMPLETE', `仍有 ${activeRuns} 个评测任务未完成`)
     await tx.training.update({ where: { id: trainingId }, data: { finalizationStatus: 'FINALIZING' } })
@@ -513,7 +513,7 @@ async function finalizeContestRatingCore(trainingId: number, actorUserId: string
       data: { isGlobalVisible: true },
     })
     await tx.training.update({ where: { id: trainingId }, data: { finalizationStatus: 'FINALIZED', finalizedStandingId: snapshot.id, status: 'finished' } })
-    return loadContestRatingTx(tx, trainingId)
+    return loadContestRatingTx(tx, trainingId, actorUserId)
   }, { timeout: 30_000 })
 }
 
@@ -767,11 +767,11 @@ export async function rebuildContestRating(trainingId: number, userId: string) {
       finalizedStandingId: newSnapshot.id,
       finalizationStatus: 'FINALIZED',
     } })
-    return { ...(await loadContestRatingTx(tx, trainingId)), rebuild: report }
+    return { ...(await loadContestRatingTx(tx, trainingId, userId)), rebuild: report }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120_000 })
 }
 
-async function loadContestRatingTx(tx: Prisma.TransactionClient, trainingId: number) {
+async function loadContestRatingTx(tx: Prisma.TransactionClient, trainingId: number, requestingUserId?: string) {
   const training = await tx.training.findUniqueOrThrow({
     where: { id: trainingId },
     include: {
@@ -786,13 +786,24 @@ async function loadContestRatingTx(tx: Prisma.TransactionClient, trainingId: num
   })
   const users = await tx.user.findMany({ where: { id: { in: training.FinalizedStanding?.Entries.map(item => item.userId) || [] } }, select: { id: true, username: true, avatar: true } })
   const userMap = new Map(users.map(user => [user.id, user]))
-  return { finalizationStatus: training.finalizationStatus, config: configDto(training.RatingConfig, training), standing: training.FinalizedStanding ? { id: training.FinalizedStanding.id, revision: training.FinalizedStanding.revision, finalizedAt: training.FinalizedStanding.finalizedAt, entries: training.FinalizedStanding.Entries.map(entry => ({ ...entry, totalScore: entry.totalScore === null ? null : Number(entry.totalScore), user: userMap.get(entry.userId) })) } : null, batches: training.FinalizedStanding?.RatingBatches.map(batch => ({ id: batch.id, scope: batch.Pool.scopeType, organizationId: batch.Pool.organizationId, track: batch.Pool.track, status: batch.status, fieldSize: batch.fieldSize, skipReason: batch.skipReason, changes: batch.Changes })) || [] }
+  const batches = training.FinalizedStanding?.RatingBatches || []
+  const organizationIds = [...new Set(batches.map(batch => batch.Pool.organizationId).filter(Boolean) as string[])]
+  const organizations = organizationIds.length ? await tx.organization.findMany({ where: { id: { in: organizationIds } }, select: { id: true, name: true, School: { select: { shortName: true } } } }) : []
+  const organizationMap = new Map(organizations.map(organization => [organization.id, { id: organization.id, name: organization.name, shortName: organization.School?.shortName || null }]))
+  const batchDtos = batches.map(batch => ({ id: batch.id, scope: batch.Pool.scopeType, organizationId: batch.Pool.organizationId, organization: batch.Pool.organizationId ? organizationMap.get(batch.Pool.organizationId) || null : null, track: batch.Pool.track, status: batch.status, fieldSize: batch.fieldSize, skipReason: batch.skipReason, changes: batch.Changes }))
+  return {
+    finalizationStatus: training.finalizationStatus,
+    config: configDto(training.RatingConfig, training),
+    standing: training.FinalizedStanding ? { id: training.FinalizedStanding.id, revision: training.FinalizedStanding.revision, finalizedAt: training.FinalizedStanding.finalizedAt, entries: training.FinalizedStanding.Entries.map(entry => ({ ...entry, totalScore: entry.totalScore === null ? null : Number(entry.totalScore), user: userMap.get(entry.userId) })) } : null,
+    batches: batchDtos,
+    myChanges: requestingUserId ? batchDtos.flatMap(batch => batch.changes.filter(change => change.userId === requestingUserId).map(change => ({ ...change, batchId: batch.id, scope: batch.scope, track: batch.track, organizationId: batch.organizationId, organization: batch.organization }))) : [],
+  }
 }
 
 export async function getContestRating(trainingId: number, userId: string) {
   const training = await requireContest(trainingId)
   if (!await canAccessTraining(userId, training)) fail(403, 'CONTEST_ACCESS_DENIED', '无权限查看比赛 Rating')
-  return prisma.$transaction(tx => loadContestRatingTx(tx, trainingId))
+  return prisma.$transaction(tx => loadContestRatingTx(tx, trainingId, userId))
 }
 
 export async function setFinalSubmission(trainingId: number, trainingProblemId: string, submissionId: number, userId: string) {

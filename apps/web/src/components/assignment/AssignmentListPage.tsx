@@ -34,10 +34,11 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
   const [description, setDescription] = useState('')
   const [publishAt, setPublishAt] = useState('')
   const [openAt, setOpenAt] = useState(localInput(now))
-  const [dueAt, setDueAt] = useState(localInput(new Date(now.getTime() + 24 * 3_600_000)))
-  const [closeAt, setCloseAt] = useState(localInput(new Date(now.getTime() + 48 * 3_600_000)))
+  const [dueAt, setDueAt] = useState(localInput(new Date(now.getTime() + 7 * 24 * 3_600_000)))
+  const [closeAt, setCloseAt] = useState(localInput(new Date(now.getTime() + 7 * 24 * 3_600_000)))
   const [latePolicy, setLatePolicy] = useState('DISALLOW')
   const [latePenaltyPercent, setLatePenaltyPercent] = useState(0)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const submit = async () => {
@@ -52,13 +53,16 @@ function CreateAssignmentDialog({ open, organizationId, onClose, onCreated }: { 
   return <FormDialog isOpen={open} onClose={onClose} onSubmit={() => void submit()} title="创建作业草稿" description="创建后进入独立作业工作台，配置题目版本、名单和发布规则。" submitText="创建并配置" loading={saving} dirty={Boolean(title || description)} submitDisabled={!title.trim()} size="lg">
     <div className={styles.dialogGrid}>
       <div className={styles.full}><FormField label="作业名称" required><Input value={title} onChange={event => setTitle(event.target.value)} maxLength={200} /></FormField></div>
+      <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => { setDueAt(event.target.value); if (!advancedOpen) setCloseAt(event.target.value) }} /></FormField>
+      <div className={styles.full}><Button variant="secondary" onClick={() => setAdvancedOpen(value => !value)} aria-expanded={advancedOpen}>{advancedOpen ? '收起高级设置' : '展开高级设置'}</Button></div>
+      {advancedOpen && <>
       <div className={styles.full}><FormField label="作业说明"><Textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} maxLength={10000} /></FormField></div>
-      <FormField label="发布时间" hint="留空表示创建后立即可见"><Input type="datetime-local" value={publishAt} onChange={event => setPublishAt(event.target.value)} /></FormField>
+      <FormField label="发布时间" hint="留空表示发布后立即可见"><Input type="datetime-local" value={publishAt} onChange={event => setPublishAt(event.target.value)} /></FormField>
       <FormField label="开放时间" required><Input type="datetime-local" value={openAt} onChange={event => setOpenAt(event.target.value)} /></FormField>
-      <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></FormField>
       <FormField label="关闭时间" required hint="关闭后不再接收提交"><Input type="datetime-local" value={closeAt} onChange={event => setCloseAt(event.target.value)} /></FormField>
       <FormField label="迟交策略"><Select value={latePolicy} onChange={event => setLatePolicy(event.target.value)}><option value="DISALLOW">不允许迟交</option><option value="ALLOW_MARK_LATE">允许并标记迟交</option><option value="ALLOW_NO_PENALTY">允许且不扣分</option><option value="ALLOW_WITH_PENALTY">允许并按比例扣分</option></Select></FormField>
       {latePolicy === 'ALLOW_WITH_PENALTY' && <FormField label="迟交扣分比例" required hint="0～100%"><Input type="number" min={0} max={100} value={latePenaltyPercent} onChange={event => setLatePenaltyPercent(Number(event.target.value))} /></FormField>}
+      </>}
     </div>
   </FormDialog>
 }

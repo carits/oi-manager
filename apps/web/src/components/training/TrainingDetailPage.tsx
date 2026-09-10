@@ -36,6 +36,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Tabs } from '@/components/ui/Tabs'
 import { SubmissionIoFields } from '@/components/submission/SubmissionIoFields'
+import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
 import styles from './TrainingDetail.module.css'
 
 const TrainingProblemDetail = dynamic(
@@ -253,6 +254,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
   // Wire submit code → set detail submission id
   const handleSubmitCode = async () => {
     const submissionId = await actions.handleSubmitCode()
+    if (submissionId && selectedProblem) clearSubmissionDraft(`${user?.userId || 'account'}:training:${trainingId}:${selectedProblem.id}`, actions.submitLanguage)
     if (submissionId != null) {
       if (activeTab === 'submissions') {
         sub.setSubmissionsPage(1)
@@ -599,12 +601,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
             </Select>
           </div>
 
-          <Textarea
-            placeholder="在此输入代码..."
-            value={actions.submitCode}
-            onChange={e => actions.setSubmitCode(e.target.value)}
-            className={unifiedStyles.codeInput}
-          />
+          <SubmissionCodeEditor value={actions.submitCode} onChange={actions.setSubmitCode} language={actions.submitLanguage} draftKey={`${user?.userId || 'account'}:training:${trainingId}:${selectedProblem?.id || 'none'}`} minHeight={360} />
           <SubmissionIoFields value={actions.submissionIo} onChange={actions.setSubmissionIo} legacySuggested={Boolean(problemDetail?.legacyIoSuggestion)} />
 
           {/* Submit button */}

@@ -37,4 +37,13 @@ button.card:hover, button.card[data-selected='true'] { border-color: var(--prima
 .similarity dl div { display: grid; gap: .1rem; text-align: right; }
 .similarity dt { color: var(--text-muted); font-size: .72rem; }
 .similarity dd { margin: 0; font-weight: 600; }
+.comparisonList { display: grid; gap: var(--space-4); }
+.comparisonList section { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.comparisonList header { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); background: var(--bg-muted); }
+.comparisonList header span { color: var(--text-secondary); }
+.comparisonList section > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.comparisonList pre { min-height: 120px; margin: 0; padding: var(--space-3); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg-card); }
+.comparisonList pre + pre { border-left: 1px solid var(--border); }
+.comparisonList mark { background: var(--warning-light); color: inherit; }
 @media (max-width: 720px) { .formGrid, .reviewLayout { grid-template-columns: 1fr; } .wide { grid-column: auto; } }
+@media (max-width: 720px) { .comparisonList section > div { grid-template-columns: 1fr; } .comparisonList pre + pre { border-left: 0; border-top: 1px solid var(--border); } }

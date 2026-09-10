@@ -4,6 +4,9 @@
 .participation > div { display: grid; gap: var(--space-1); }
 .participation span { color: var(--text-secondary); font-size: var(--text-sm); }
 .muted { margin: var(--space-3) 0 0; color: var(--text-muted); }
+.myChanges { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); }
+.myChanges > div { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--primary-light); }
+.myChanges span { color: var(--text-secondary); font-size: var(--text-sm); }
 .error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); padding: var(--space-3); color: var(--danger-text); background: var(--danger-light); border-radius: var(--radius-sm); }
 .details { margin-top: var(--space-3); border-top: 1px solid var(--border); }
 .details summary { padding: var(--space-3) 0; color: var(--text-secondary); cursor: pointer; font-weight: 600; }

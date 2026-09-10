@@ -29,6 +29,10 @@ type SimilarityCheck = {
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; textSimilarityBasisPoints?: number; codeSimilarityBasisPoints?: number
   maximumSimilarityBasisPoints?: number; sourceDeclared: boolean; comparisonCount?: number; checkedAt: string
 }
+type SimilarityComparison = {
+  source: { type: string; id: string; title: string; version: number; author?: { username: string } | null } | null
+  matches: Array<{ kind: 'text' | 'code'; left: { index: number; text: string }; right: { index: number; text: string }; similarityBasisPoints: number }>
+}
 type Revision = {
   id: string; revision: number; title: string; contentMarkdown: string; algorithmTags?: unknown
   approachKey?: string | null; complexityTime?: string | null; complexityMemory?: string | null
@@ -79,6 +83,7 @@ function latestSimilarity(item: Contribution) {
 }
 
 function latestSimilarityJob(item: Contribution) { return item.Revisions?.[0]?.SimilarityJob || null }
+const SIMILARITY_JOB_LABELS: Record<string, string> = { QUEUED: '等待检查', RUNNING: '检查中', READY: '已完成', FAILED: '检查失败' }
 
 function statusTone(status: string) {
   if (['PUBLISHED', 'ACCEPTED', 'TECHNICALLY_VALID', 'PASSED', 'SKIPPED'].includes(status)) return 'success'
@@ -108,6 +113,9 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
   const [publishing, setPublishing] = useState<Contribution | null>(null)
   const [visibilityPolicy, setVisibilityPolicy] = useState('PUBLIC')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [comparison, setComparison] = useState<SimilarityComparison | null>(null)
+  const [comparisonOpen, setComparisonOpen] = useState(false)
+  const [comparisonLoading, setComparisonLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -241,6 +249,14 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     setReviewOpen(false); await load()
   }
 
+  const openComparison = async (item: Contribution) => {
+    setComparisonLoading(true)
+    const result = await apiClient.get<SimilarityComparison>(`/api/review/solution-contributions/${item.id}/similarity-comparison`)
+    setComparisonLoading(false)
+    if (!result.success || !result.data) return toast.error(result.message || '读取相似片段失败')
+    setComparison(result.data); setComparisonOpen(true)
+  }
+
   const publish = async () => {
     if (!publishing) return
     setBusyId(publishing.id)
@@ -297,7 +313,18 @@ export function SolutionEditorialPanel({ problemId, canManage }: { problemId: st
     </FormDialog>
 
     <DetailDialog isOpen={reviewOpen} onClose={() => setReviewOpen(false)} title="审核题解投稿" description={reviewing ? `${reviewing.title} · ${SOLUTION_STATUS_LABELS[reviewing.status] || reviewing.status}` : undefined} size="xl" footer={reviewing && <div className={styles.actions}>{latestSimilarityJob(reviewing)?.status === 'FAILED' && <Button variant="outline" onClick={() => void retrySimilarity(reviewing)} loading={busyId === reviewing.id}>重试相似度检查</Button>}{reviewActionsForStatus(reviewing.status).map(action => action === 'accept' ? <Button key={action} onClick={() => void accept(reviewing)} loading={busyId === reviewing.id}>采纳</Button> : action === 'publish' ? <Button key={action} onClick={() => setPublishing(reviewing)}>发布</Button> : <Button key={action} variant={action === 'reject' ? 'danger' : action === 'request-revision' ? 'outline' : 'primary'} disabled={latestSimilarityJob(reviewing)?.status !== 'READY'} onClick={() => { setReviewAction(action); setReviewComment('') }}>{action === 'approve' ? '审核通过' : action === 'reject' ? '拒绝' : '要求修改'}</Button>)}</div>}>
-      {reviewing && <div className={styles.form}><div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[reviewing.type]}</span><span className={styles.badge}>作者：{reviewing.Author?.username || '未知'}</span>{latestVerification(reviewing) && <span className={styles.badge} data-tone={statusTone(latestVerification(reviewing)!.status)}>验证：{VERIFICATION_STATUS_LABELS[latestVerification(reviewing)!.status] || latestVerification(reviewing)!.status}</span>}{latestSimilarityJob(reviewing) && <span className={styles.badge} data-tone={statusTone(latestSimilarityJob(reviewing)!.status)}>相似度：{latestSimilarityJob(reviewing)!.status}</span>}</div>{latestSimilarityJob(reviewing) && latestSimilarityJob(reviewing)!.status !== 'READY' && <div className={styles.hint}>{latestSimilarityJob(reviewing)!.status === 'FAILED' ? '相似度检查失败，必须重试成功后才能审核。' : '相似度检查正在异步执行，完成前不能提交审核结论。'}</div>}{latestSimilarity(reviewing) && <section className={styles.similarity} data-risk={latestSimilarity(reviewing)!.riskLevel}><div><strong>内容相似度风险：{latestSimilarity(reviewing)!.riskLevel === 'HIGH' ? '高' : latestSimilarity(reviewing)!.riskLevel === 'MEDIUM' ? '中' : '低'}</strong><p>该结果仅作为审核提示，不会自动拒绝投稿。{latestSimilarity(reviewing)!.sourceDeclared ? '投稿已声明来源。' : '投稿未声明外部来源。'}</p></div>{latestSimilarity(reviewing)!.maximumSimilarityBasisPoints !== undefined && <dl><div><dt>正文</dt><dd>{((latestSimilarity(reviewing)!.textSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>代码</dt><dd>{((latestSimilarity(reviewing)!.codeSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>最高</dt><dd>{((latestSimilarity(reviewing)!.maximumSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div></dl>}</section>}<MarkdownRenderer content={reviewing.Revisions?.[0]?.contentMarkdown || reviewing.contentMarkdown} />{(reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode) && <pre className={styles.code}><code>{reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode}</code></pre>}<div className={styles.timeline}>{reviewing.Reviews?.map(review => <div className={styles.timelineItem} key={review.id}><strong>{review.Reviewer?.username || '审核者'} · {review.reviewType} · {review.decision}</strong>{review.comment && <p>{review.comment}</p>}</div>)}</div></div>}
+      {reviewing && <div className={styles.form}>
+        <div className={styles.badges}><span className={styles.badge}>{SOLUTION_TYPE_LABELS[reviewing.type]}</span><span className={styles.badge}>作者：{reviewing.Author?.username || '未知'}</span>{latestVerification(reviewing) && <span className={styles.badge} data-tone={statusTone(latestVerification(reviewing)!.status)}>验证：{VERIFICATION_STATUS_LABELS[latestVerification(reviewing)!.status] || latestVerification(reviewing)!.status}</span>}{latestSimilarityJob(reviewing) && <span className={styles.badge} data-tone={statusTone(latestSimilarityJob(reviewing)!.status)}>相似度：{SIMILARITY_JOB_LABELS[latestSimilarityJob(reviewing)!.status] || latestSimilarityJob(reviewing)!.status}</span>}</div>
+        {latestSimilarityJob(reviewing) && latestSimilarityJob(reviewing)!.status !== 'READY' && <div className={styles.hint}>{latestSimilarityJob(reviewing)!.status === 'FAILED' ? '相似度检查失败，必须重试成功后才能审核。' : '相似度检查正在异步执行，完成前不能提交审核结论。'}</div>}
+        {latestSimilarity(reviewing) && <section className={styles.similarity} data-risk={latestSimilarity(reviewing)!.riskLevel}><div><strong>内容相似度风险：{latestSimilarity(reviewing)!.riskLevel === 'HIGH' ? '高' : latestSimilarity(reviewing)!.riskLevel === 'MEDIUM' ? '中' : '低'}</strong><p>该结果仅作为审核提示，不会自动拒绝投稿。{latestSimilarity(reviewing)!.sourceDeclared ? '投稿已声明来源。' : '投稿未声明外部来源。'}</p></div>{latestSimilarity(reviewing)!.maximumSimilarityBasisPoints !== undefined && <dl><div><dt>正文</dt><dd>{((latestSimilarity(reviewing)!.textSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>代码</dt><dd>{((latestSimilarity(reviewing)!.codeSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div><div><dt>最高</dt><dd>{((latestSimilarity(reviewing)!.maximumSimilarityBasisPoints || 0) / 100).toFixed(1)}%</dd></div></dl>}<Button variant="outline" loading={comparisonLoading} onClick={() => void openComparison(reviewing)}>并排查看相似片段</Button></section>}
+        <MarkdownRenderer content={reviewing.Revisions?.[0]?.contentMarkdown || reviewing.contentMarkdown} />
+        {(reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode) && <pre className={styles.code}><code>{reviewing.Revisions?.[0]?.referenceCode || reviewing.referenceCode}</code></pre>}
+        <div className={styles.timeline}>{reviewing.Reviews?.map(review => <div className={styles.timelineItem} key={review.id}><strong>{review.Reviewer?.username || '审核者'} · {review.reviewType} · {review.decision}</strong>{review.comment && <p>{review.comment}</p>}</div>)}</div>
+      </div>}
+    </DetailDialog>
+
+    <DetailDialog isOpen={comparisonOpen} onClose={() => setComparisonOpen(false)} title="相似内容并排对照" description={comparison?.source ? `${comparison.source.title} · V${comparison.source.version} · ${comparison.source.author?.username || '未知作者'}` : '没有可展示的匹配来源'} size="wide">
+      {comparison?.matches.length ? <div className={styles.comparisonList}>{comparison.matches.map((match, index) => <section key={`${match.kind}-${index}`}><header><strong>{match.kind === 'code' ? '代码片段' : '正文段落'}</strong><span>局部相似度 {(match.similarityBasisPoints / 100).toFixed(1)}%</span></header><div><pre><mark>{match.left.text}</mark></pre><pre><mark>{match.right.text}</mark></pre></div></section>)}</div> : <div className={styles.empty}>当前匹配来源没有达到展示阈值的局部片段。</div>}
     </DetailDialog>
 
     <FormDialog isOpen={Boolean(reviewAction)} onClose={() => setReviewAction(null)} onSubmit={() => void submitReview()} title={reviewAction === 'approve' ? '确认审核通过' : reviewAction === 'reject' ? '拒绝投稿' : '要求作者修改'} submitText="确认" danger={reviewAction === 'reject'} loading={Boolean(reviewing && busyId === reviewing.id)}>

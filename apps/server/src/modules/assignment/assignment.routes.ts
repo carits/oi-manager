@@ -85,7 +85,7 @@ assignmentRouter.post('/assignments/:id/submit', asyncHandler(async (req: AuthRe
 }))
 
 assignmentRouter.get('/assignments/:id/progress', asyncHandler(async (req: AuthRequest, res) => {
-  try { return res.json({ success: true, data: await getAssignmentProgress(req.user!.userId, req.params.id) }) }
+  try { return res.json({ success: true, data: await getAssignmentProgress(req.user!.userId, req.params.id, req.query) }) }
   catch (error) { return sendError(error, res) }
 }))
 
