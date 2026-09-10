@@ -7,6 +7,7 @@ import { getServerSession } from '@/lib/serverSession'
 import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { ChatProvider } from './chat/ChatProvider'
+import { resolveNavigationContext } from '@/lib/navigationContext'
 
 interface RoleLayoutProps {
   children: ReactNode
@@ -62,7 +63,7 @@ export async function RoleLayout({
     redirect('/identity')
   }
 
-  const context = pathname === '/personal' || pathname.startsWith('/personal/') ? 'personal' : pathname.startsWith('/platform-admin') || pathname.startsWith('/admin') ? 'platform' : 'organization'
+  const context = resolveNavigationContext(pathname, session.user).workspace
   if (requiredContext && context !== requiredContext) redirect('/identity')
 
   return (

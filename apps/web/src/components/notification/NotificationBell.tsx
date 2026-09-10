@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 import { notificationTeamHref } from '@/components/workspace/workspaceRouting'
+import { resolveNavigationContext } from '@/lib/navigationContext'
 import styles from '@/components/AppShell.module.css'
 
 export interface UserNotification {
@@ -27,8 +28,9 @@ type NotificationPayload = { notifications: UserNotification[]; unreadCount: num
 
 export function NotificationBell() {
   const pathname = usePathname(), router = useRouter(), { user } = useAuth()
-  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
-  const context = pathname === '/personal' || pathname.startsWith('/personal/') || pathname.startsWith('/account/') ? 'personal' : 'organization'
+  const navigationContext = resolveNavigationContext(pathname, user)
+  const organizationId = navigationContext.organizationId
+  const context = navigationContext.workspace
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<UserNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)

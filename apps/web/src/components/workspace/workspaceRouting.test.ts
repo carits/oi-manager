@@ -21,6 +21,7 @@ describe('组织路由能力', () => {
     expect(resourceHref('team', personal, 'team_1')).toBe('/personal/teams/team_1')
     expect(listHref('contest', personal)).toBe('/personal/contests')
     expect(notificationTeamHref('personal', undefined, 'team:team_1')).toBe('/personal/teams/team_1')
+    expect(notificationTeamHref('platform', undefined, 'team:team_1')).toBeNull()
   })
   it('切换工作区时保留知识广场模块', () => {
     const personal: WorkspaceSummary = { type: 'personal', availableModules: [] }

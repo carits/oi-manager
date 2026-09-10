@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Input, Select, Textarea } from '@/components/ui/FormControls'
 import { Button } from '@/components/ui/Button'
 import { Check, ChevronDown, Plus, Search, School, ShieldCheck, UserRound } from 'lucide-react'
@@ -10,18 +11,20 @@ import { isGlobalAdministrator } from '@/lib/capabilities'
 import { workspaceHref, workspaceModule } from './workspaceRouting'
 import styles from './WorkspaceSwitcher.module.css'
 import { useNavigationGuard } from '@/components/navigation/UnsavedChangesProvider'
+import { resolveNavigationContext } from '@/lib/navigationContext'
 
 type Payload = { workspaces: WorkspaceSummary[] }
 
 export function WorkspaceSwitcher() {
   const { user } = useAuth()
+  const pathname = usePathname()
   const isGlobalAdmin = isGlobalAdministrator(user?.role)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
   const rootRef = useRef<HTMLDivElement>(null)
   const { requestNavigation } = useNavigationGuard()
-  const currentOrganization = typeof window === 'undefined' ? undefined : window.location.pathname.match(/^\/org\/([^/]+)/)?.[1]
+  const currentOrganization = resolveNavigationContext(pathname, user).organizationId
   const current = currentOrganization ? workspaces.find(item => item.organizationId === currentOrganization) : workspaces.find(item => item.type === 'personal')
   const visible = useMemo(() => workspaces.filter(item => !query || ((item.organizationName || '') + ' ' + (item.relationLabel || '')).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [query, workspaces])
 
@@ -47,7 +50,7 @@ export function WorkspaceSwitcher() {
   }, [])
 
   const select = (workspace: WorkspaceSummary) => {
-    const module = workspaceModule(window.location.pathname)
+    const module = workspaceModule(pathname)
     setOpen(false)
     requestNavigation(workspaceHref(workspace, module), { hard: true })
   }

@@ -58,12 +58,12 @@ export function workspaceHref(workspace: WorkspaceSummary, module: string) {
 }
 export const moduleHref = workspaceHref
 
-export function notificationTeamHref(workspace: 'organization' | 'personal', organizationId: string | undefined, notificationValue?: string | null) {
+export function notificationTeamHref(workspace: NavigationContext['workspace'], organizationId: string | undefined, notificationValue?: string | null) {
   if (!notificationValue) return null
   if (notificationValue.startsWith('organization:')) { const id = notificationValue.slice('organization:'.length); return id ? `/org/${id}/overview` : null }
   if (!notificationValue.startsWith('team:')) return null
   const teamId = notificationValue.slice('team:'.length)
   if (!teamId) return null
-  return workspace === 'personal' ? `/personal/teams/${teamId}` : organizationId ? `/org/${organizationId}/teams/${teamId}` : null
+  return workspace === 'personal' ? `/personal/teams/${teamId}` : workspace === 'organization' && organizationId ? `/org/${organizationId}/teams/${teamId}` : null
 }
 export const notificationHref = notificationTeamHref
