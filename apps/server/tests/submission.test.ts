@@ -360,7 +360,11 @@ describe('提交详情权限', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.data.code).toBeDefined()
-    expect(res.body.data.result).toBe('accepted')
+    // Local submissions without a JudgeRun are inconsistent legacy fixtures:
+    // the read model must fail closed instead of trusting mutable Submission
+    // result columns. D1.1 below covers the valid CurrentJudgeRun projection.
+    expect(res.body.data.result).toBe('system_error')
+    expect(res.body.data.errorMessage).toBe('本地评测记录缺少 JudgeRun，请联系管理员')
     expect(res.body.data).toMatchObject({
       sourcePlatform: 'carits',
       sourceProblemId: submissionA.problemId,

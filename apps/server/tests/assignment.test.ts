@@ -149,7 +149,10 @@ describe('independent assignment domain', () => {
     expect(stored.submissionPhase).toBe('ORIGINAL')
     expect(stored.testSetRevisionId).toBe(revision.id)
     expect(stored.CurrentJudgeRun?.judgeConfigHash).toBe(revision.judgeConfigHash)
-    await prisma.submission.update({ where: { id: stored.id }, data: { result: 'accepted', score: 100 } })
+    await prisma.judgeRun.update({
+      where: { id: stored.currentJudgeRunId! },
+      data: { status: 'FINALIZED', result: 'accepted', score: 100, finalizedAt: new Date() },
+    })
     const payload = { id: stored.id, userId: student.user.id, assignmentId, assignmentProblemId, assignmentRecipientId: stored.assignmentRecipientId }
     await syncAssignmentSubmission(payload)
     await syncAssignmentSubmission(payload)
