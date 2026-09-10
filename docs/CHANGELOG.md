@@ -11,14 +11,16 @@ source_of_truth: Git history
 
 ## 2026-09-10
 
-### 领域差异收口（本地实现，待数据库验证与发布）
+### Assignment、Contest、Rating、题解风控与 Blog 差异收口
 
 - Assignment 学生读取统一受 `publishAt` 约束；管理者可带版本和原因设置人工完成，关闭/逾期/批改会按冻结策略幂等生成自动订正。
 - Training 比赛变更统一维护既有 `Contest/ContestProblem` 规范聚合，状态、时间、元数据和题目 Revision 不再依赖单独迁移后保持同步。
 - Rating 规则升级为 V2，榜单并列排序与 Rating 并列分组使用独立策略，V1 历史重放保持兼容。
 - 题解相似度检查改为持久异步任务和不可变指纹；审核必须等待 READY，失败或历史遗漏任务可由题目管理员重试/补建。
 - Blog 新增 PLATFORM 站内发现和 PUBLIC 匿名知识广场；评论回复使用游标分页；提交只能经作者显式创建的脱敏不可变快照引用，直接引用 Submission/JudgeRun 继续拒绝。
-- 当前只完成本地代码、Prisma 校验、Server/Web 构建和 Web 回归；生产数据库升级验证、全量数据库测试、推送和部署尚未执行。
+- 修复匿名 Blog 发现被后置 Data Market 认证 Router 拦截的问题，并统一发现列表分页 DTO；业务 Router 不再通过全局 `use(authenticate)` 影响其后注册的公开路由。
+- 发布前生产备份 `/data/backups/oi-manager/automatic/oi_manager_20260910_113248.dump` 已通过清单和隔离恢复审计（32 MiB，SHA-256 `f0a4612e3ede62bd0ca0e3f652c0286127ff1d29c89f7570c9a1fc55affb3da1`）；生产备份克隆完成四个新增迁移并通过真实 Judge/Hack 固定 Revision 闭环 2/2。
+- Server PostgreSQL 全量 89 文件/709 项、Web 25 文件/93 项、Judge 14 文件/44 项、四端生产构建和全部静态门禁通过。提交 `9afde73` 已推送 `main`；API 3303→3302，Worker/Executor/Judge active，Web BUILD_ID `XLTM2M2Hgbut1h43ySAu6` 经 canary 与正式双账号消息闭环探针后提升，匿名 Blog 公网 API 已复核为 200。
 
 ## 2026-09-09
 
