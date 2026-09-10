@@ -25,10 +25,21 @@ async function submit(request: APIRequestContext, token: string, code: string) {
 
 async function waitForSubmission(id: number, result: string) {
   await expect.poll(async () => {
-    const item = await prisma.submission.findUniqueOrThrow({ where: { id } })
-    return item.result
+    const item = await prisma.submission.findUniqueOrThrow({
+      where: { id },
+      include: { CurrentJudgeRun: true },
+    })
+    return item.CurrentJudgeRun?.result ?? item.result
   }, { intervals: [100, 250, 500, 1000], timeout: 120_000 }).toBe(result)
-  return prisma.submission.findUniqueOrThrow({ where: { id } })
+  const item = await prisma.submission.findUniqueOrThrow({
+    where: { id },
+    include: { CurrentJudgeRun: true },
+  })
+  return {
+    ...item,
+    result: item.CurrentJudgeRun?.result ?? item.result,
+    score: item.CurrentJudgeRun?.score ?? item.score,
+  }
 }
 
 async function waitForProgramVerification(
