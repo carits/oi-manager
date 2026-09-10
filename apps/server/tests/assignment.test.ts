@@ -248,7 +248,7 @@ describe('independent assignment domain', () => {
     const revoked = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/progress/${progress.id}/manual-completion`).send({ completed: false, reason: '复核后需要继续完成', expectedVersion: 1 })
     expect(revoked.status).toBe(200)
     expect(revoked.body.data.learningStatus).toBe('SUBMITTED')
-    expect((await prisma.assignmentRecipient.findFirstOrThrow({ where: { assignmentId } })).status).toBe('ASSIGNED')
+    expect((await prisma.assignmentRecipient.findFirstOrThrow({ where: { assignmentId } })).status).toBe('ACTIVE')
   })
 
   it('evaluates automatic correction policies once when the due time is reached', async () => {
