@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { transitionSubmissionDraft } from './submission-draft'
 
 describe('shared submission editor product contract', () => {
   const editor = fs.readFileSync(new URL('./SubmissionCodeEditor.tsx', import.meta.url), 'utf8')
@@ -14,7 +15,24 @@ describe('shared submission editor product contract', () => {
   it('isolates language drafts and clears them after a successful submission', () => {
     expect(editor).toContain('submission-draft:v1:')
     expect(editor).toContain('draftKey, language, value')
+    expect(editor).toContain('transitionSubmissionDraft')
+    expect(editor).not.toContain('if (!value && saved)')
     expect(editor).toContain('clearSubmissionDraft')
+  })
+
+  it('saves the old language and restores the target language without cross-contamination', () => {
+    const values = new Map<string, string>([['submission-draft:v1:user:problem:python3', 'print(1)']])
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) },
+      removeItem: (key: string) => { values.delete(key) },
+    }
+    const cppKey = 'submission-draft:v1:user:problem:cpp17'
+    const pythonKey = 'submission-draft:v1:user:problem:python3'
+    expect(transitionSubmissionDraft(storage, cppKey, pythonKey, 'int main() {}')).toBe('print(1)')
+    expect(values.get(cppKey)).toBe('int main() {}')
+    expect(transitionSubmissionDraft(storage, pythonKey, cppKey, 'print(2)')).toBe('int main() {}')
+    expect(values.get(pythonKey)).toBe('print(2)')
   })
 
   it('provides the expected coding affordances without changing submission IO', () => {

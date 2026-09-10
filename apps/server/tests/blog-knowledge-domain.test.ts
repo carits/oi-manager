@@ -520,6 +520,16 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
       publicDraft.body.data.id,
       platformDraft.body.data.id,
     ]))
+
+    const publicPostId = publicDraft.body.data.id
+    expect((await client(reader).put(`/api/blogs/${publicPostId}/reactions/LIKE`)).status).toBe(200)
+    expect((await client(reader).put(`/api/blogs/${publicPostId}/bookmark`)).status).toBe(200)
+    const hydrated = await client(reader).get(`/api/blog-discovery/${publicPostId}/community`)
+    expect(hydrated.status).toBe(200)
+    expect(hydrated.body.data).toMatchObject({ myReactions: ['LIKE'], bookmarked: true, authenticated: true })
+    const anonymousCommunity = await request(app).get(`/api/blog-discovery/${publicPostId}/community`)
+    expect(anonymousCommunity.status).toBe(200)
+    expect(anonymousCommunity.body.data).toMatchObject({ myReactions: [], bookmarked: false, authenticated: false })
   })
 
   it('references only an explicit immutable submission snapshot', async () => {

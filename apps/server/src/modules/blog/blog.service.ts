@@ -829,15 +829,17 @@ export async function getBlogCommunity(user: JwtPayload, postId: string) {
 
 export async function getPublicBlogCommunity(user: JwtPayload | undefined, postId: string) {
   await readablePublishedPost(user, postId)
-  const [groups, commentCount, featured] = await Promise.all([
+  const [groups, mine, bookmark, commentCount, featured] = await Promise.all([
     prisma.blogReaction.groupBy({ by: ['type'], where: { postId }, _count: { _all: true } }),
+    user ? prisma.blogReaction.findMany({ where: { postId, userId: user.userId }, select: { type: true } }) : Promise.resolve([]),
+    user ? prisma.blogBookmark.findUnique({ where: { postId_userId: { postId, userId: user.userId } }, select: { postId: true } }) : Promise.resolve(null),
     prisma.blogComment.count({ where: { postId, status: 'visible' } }),
     prisma.blogFeature.findFirst({ where: { postId, status: 'active' }, select: { id: true, reason: true, createdAt: true } }),
   ])
   return {
     reactions: Object.fromEntries(BLOG_REACTIONS.map(type => [type, groups.find(item => item.type === type)?._count._all || 0])),
-    myReactions: [],
-    bookmarked: false,
+    myReactions: mine.map(item => item.type),
+    bookmarked: Boolean(bookmark),
     commentCount,
     featured,
     authenticated: Boolean(user),

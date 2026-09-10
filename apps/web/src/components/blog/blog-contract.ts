@@ -1,6 +1,7 @@
 export type BlogPostType = 'ARTICLE' | 'SOLUTION_NOTE' | 'CONTEST_REVIEW' | 'TRAINING_LOG' | 'LEARNING_LOG' | 'TUTORIAL' | 'COLLECTION' | 'ANNOUNCEMENT'
 export type BlogVisibility = 'PRIVATE' | 'ORGANIZATION' | 'PLATFORM' | 'UNLISTED' | 'PUBLIC'
 export type BlogReferenceType = 'PROBLEM' | 'PROBLEM_REVISION' | 'SOLUTION_VERSION' | 'CONTEST_STANDING' | 'RATING_CHANGE'
+export type PublishedBlogReferenceType = BlogReferenceType | 'SUBMISSION_SNAPSHOT'
 export type BlogReferenceRelation = 'PRIMARY_SUBJECT' | 'MENTION' | 'SOURCE' | 'RESULT'
 export type BlogReferenceDisplay = 'CARD' | 'INLINE' | 'COMPACT' | 'EMBED' | 'HIDDEN_METADATA'
 
@@ -56,6 +57,11 @@ export const BLOG_REFERENCE_LABELS: Record<BlogReferenceType, string> = {
   RATING_CHANGE: 'Rating 变化（固定记录）',
 }
 
+export const BLOG_PUBLISHED_REFERENCE_LABELS: Record<PublishedBlogReferenceType, string> = {
+  ...BLOG_REFERENCE_LABELS,
+  SUBMISSION_SNAPSHOT: '提交快照（固定安全副本）',
+}
+
 export function emptyBlogReference(type: BlogReferenceType = 'PROBLEM'): BlogDraftReference {
   return { type, relationType: 'MENTION', displayMode: 'CARD' }
 }
@@ -76,11 +82,12 @@ export function validateBlogDraft(input: { title: string; contentMarkdown: strin
   return null
 }
 
-export function referenceSnapshotTitle(reference: { type: BlogReferenceType; snapshot?: any }) {
+export function referenceSnapshotTitle(reference: { type: PublishedBlogReferenceType; snapshot?: any }) {
   const snapshot = reference.snapshot || {}
   if (reference.type === 'PROBLEM' || reference.type === 'PROBLEM_REVISION') return snapshot.title || snapshot.problemId || '题目'
   if (reference.type === 'SOLUTION_VERSION') return snapshot.title || '题解版本'
   if (reference.type === 'CONTEST_STANDING') return snapshot.title || '比赛榜单'
   if (reference.type === 'RATING_CHANGE') return snapshot.contest?.title || 'Rating 变化'
+  if (reference.type === 'SUBMISSION_SNAPSHOT') return `${snapshot.sourcePlatform || '平台'} · ${snapshot.sourceProblemId || '题目'} 提交快照`
   return '引用'
 }

@@ -27,7 +27,7 @@
   {
     "method": "GET",
     "path": "/api/blog-discovery/:id/community",
-    "rationale": "Returns aggregate reactions, comment count and featured status for a readable public post without private user state."
+    "rationale": "Returns public reaction counts, comment count and featured status; optional authentication adds only the requesting user's own reactions and bookmark state."
   },
   {
     "method": "GET",

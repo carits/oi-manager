@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Textarea } from '@/components/ui/FormControls'
+import { transitionSubmissionDraft } from './submission-draft'
 import styles from './SubmissionCodeEditor.module.css'
 
 type EditorViewType = import('@codemirror/view').EditorView
@@ -28,19 +29,30 @@ export function SubmissionCodeEditor({ value, onChange, language, draftKey, read
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorViewType | null>(null)
   const onChangeRef = useRef(onChange)
+  const activeDraftKey = useRef<string | null>(null)
+  const valueRef = useRef(value)
   const [fallback, setFallback] = useState(false)
 
+  valueRef.current = value
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
   useEffect(() => {
-    const saved = window.localStorage.getItem(storageKey(draftKey, language))
-    if (!value && saved) onChange(saved)
-  // Only restore when the draft identity changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const nextKey = storageKey(draftKey, language)
+    try {
+      const nextValue = transitionSubmissionDraft(window.localStorage, activeDraftKey.current, nextKey, valueRef.current)
+      activeDraftKey.current = nextKey
+      if (nextValue !== valueRef.current) onChangeRef.current(nextValue)
+    } catch {
+      activeDraftKey.current = nextKey
+    }
   }, [draftKey, language])
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (value) window.localStorage.setItem(storageKey(draftKey, language), value)
-      else window.localStorage.removeItem(storageKey(draftKey, language))
+      try {
+        if (value) window.localStorage.setItem(storageKey(draftKey, language), value)
+        else window.localStorage.removeItem(storageKey(draftKey, language))
+      } catch {
+        // The editor remains usable when browser storage is unavailable.
+      }
     }, 500)
     return () => window.clearTimeout(timer)
   }, [draftKey, language, value])

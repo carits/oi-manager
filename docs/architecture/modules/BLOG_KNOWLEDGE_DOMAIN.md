@@ -30,7 +30,7 @@ BlogPostVersion ─COPY→ SolutionContribution(DRAFT)
 
 每个版本单独固定 `visibility` 与 `organizationIdSnapshot`。读取历史版本时使用该版本的发布范围，而不是 `BlogPost` 当前范围；因此 PRIVATE/ORGANIZATION V1 后续发布 PUBLIC V2 不会泄露 V1。版本列表同样先逐版授权，再返回可读子集。
 
-支持 `PRIVATE / ORGANIZATION / UNLISTED / PLATFORM / PUBLIC`。`UNLISTED` 只允许登录用户通过直接地址访问，不进入题目、比赛、题解、标签等反向发现结果；`PLATFORM` 可进入站内发现，但必须登录；`PUBLIC` 可通过 `/blog` 和 `/api/blog-discovery` 匿名发现与阅读。匿名响应不包含本人反应、收藏或管理能力。
+支持 `PRIVATE / ORGANIZATION / UNLISTED / PLATFORM / PUBLIC`。`UNLISTED` 只允许登录用户通过直接地址访问，不进入题目、比赛、题解、标签等反向发现结果；`PLATFORM` 可进入站内发现，但必须登录；`PUBLIC` 可通过 `/blog` 和 `/api/blog-discovery` 匿名发现与阅读。匿名响应以空本人反应和未收藏状态返回；同一公共端点在登录态必须加载当前账号真实的反应与收藏，避免公共阅读页把已有互动显示成未操作。
 
 ## 结构化事实引用
 
@@ -69,7 +69,7 @@ Markdown URL 不是事实索引。发布时 `BlogPublishService` 解析草稿中
 
 `/blog` 和 `/blog/[id]` 是公开知识发现与阅读入口：匿名用户只看到 PUBLIC，登录用户同时看到 PLATFORM。`/personal/blogs` 提供本人列表，`/personal/blogs/new` 和 `/personal/blogs/[id]` 共用 Markdown 编辑/阅读/版本历史工作台，`/personal/blogs/series` 管理系列元数据和文章顺序。题目详情的“相关博客”页签使用 `BlogReference` 反向索引。
 
-公共阅读顺序为标题作者、标签系列、正文、固定引用、系列导航、互动和评论。系列上一篇/下一篇由服务端逐篇执行当前访问者权限后生成，不能泄露不可见条目；匿名写操作统一跳转登录并携带原文 `next`。分类和引用使用公共共享展示组件，作者工作台与公共页面不再维护两套解释。
+公共阅读顺序为标题作者、标签系列、正文、固定引用、系列导航、互动和评论。系列上一篇/下一篇由服务端逐篇执行当前访问者权限后生成，不能泄露不可见条目；匿名写操作统一跳转登录并携带原文 `next`。分类和引用使用公共共享展示组件，作者工作台与公共页面不再维护两套解释。题目与 Revision 链接到对应个人/组织题目页，题解链接到题目题解页，榜单与 Rating 链接到比赛排名页；脱敏 Submission Snapshot 只允许在当前卡片展开其固定安全字段，不生成可枚举私人提交记录的链接。
 
 已发布且当前用户有权读取的博客支持一层回复的评论、`LIKE/HELPFUL` 反应、账号收藏和文章/评论举报。评论首页每条只携带首批回复和 `replyCount`，更多回复使用游标接口分页加载。匿名用户可读取 PUBLIC 评论，但所有写操作仍需登录。删除评论保留记录并隐藏正文展示；反应和收藏使用用户与目标的数据库唯一键保证幂等。举报创建时固化当前文章版本哈希或评论正文证据，重复待处理举报返回冲突。
 

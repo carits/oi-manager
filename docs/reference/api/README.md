@@ -54,7 +54,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `GET` | `/api/review/solution-contributions/:id/similarity-comparison` | 相似度 READY 后由题目审核者读取限长并排匹配片段；每次访问写平台审计 |
 | `GET` | `/api/blog-discovery` | 匿名发现 PUBLIC 博客；登录后同时发现 PLATFORM 博客 |
 | `GET` | `/api/blog-discovery/:id` | 按 ID 或 slug 读取公开知识文章，不返回不可见版本 |
-| `GET` | `/api/blog-discovery/:id/community` | 读取公开文章的安全互动计数；匿名响应无本人状态 |
+| `GET` | `/api/blog-discovery/:id/community` | 读取公开文章的安全互动计数；匿名响应为空本人状态，登录态只增加当前账号的反应与收藏 |
 | `GET` | `/api/blog-discovery/:id/comments` | 分页读取公开文章评论及首批回复 |
 | `GET` | `/api/blog-discovery/:id/comments/:commentId/replies` | 以游标分页读取一层回复 |
 | `POST` | `/api/submissions/:id/blog-snapshots` | 提交作者为本人终态提交创建可选源码的脱敏不可变博客快照 |

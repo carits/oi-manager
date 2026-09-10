@@ -85,22 +85,29 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   useEffect(() => {
     setProblemDraft(assignment.Problems)
     setRosterDraft(new Set(assignment.Recipients.map(item => item.userId)))
-  }, [assignment])
+  // Reset local drafts only when navigating to another assignment. Step saves
+  // update the corresponding draft explicitly so unrelated saves cannot erase it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignment.id])
 
   const problemResource = useResource<ProblemListResponse>(pickerOpen ? `/api/problems?library=${library}&${library === 'platform' ? 'sourceGroup=carits&' : ''}pageSize=100` : null, { sessionKey, isEmpty: data => data.data.length === 0 })
   const studentResource = useResource<StudentList>(`/api/organizations/${organizationId}/members/students?pageSize=100`, { sessionKey, isEmpty: data => data.items.length === 0 })
 
   const mutate = async (endpoint: string, method: 'PATCH' | 'PUT' | 'POST', body: unknown, key: string) => {
     setSaving(key)
-    const result = await apiClient.mutate<Assignment>(endpoint, method, body)
-    setSaving(null)
-    if (!result.ok) { toast.error(result.error.message); return null }
-    onChange(result.data)
-    toast.success('已保存')
-    return result.data
+    try {
+      const result = await apiClient.mutate<Assignment>(endpoint, method, body)
+      if (!result.ok) { toast.error(result.error.message); return null }
+      setValidation(null)
+      onChange(result.data)
+      toast.success('当前步骤已自动保存')
+      return result.data
+    } finally {
+      setSaving(null)
+    }
   }
 
-  const saveBasics = () => mutate(`/api/assignments/${assignment.id}`, 'PATCH', {
+  const basicPayload = () => ({
     expectedRevision: assignment.statusRevision, title, description, learningObjectives, publishAt: publishAt || null, openAt, dueAt, closeAt,
     correctionDueAt: correctionDueAt || null, rosterMode, gradingPolicy, latePolicy,
     baseScoreMax, optionalScoringPolicy, optionalBestCount: optionalScoringPolicy === 'BEST_N' ? optionalBestCount : null,
@@ -108,9 +115,77 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     challengeScoringPolicy, challengeBonusMax: challengeScoringPolicy === 'NONE' ? 0 : challengeBonusMax,
     latePenaltyPercent: latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null,
     correctionPolicy, solutionReleasePolicy,
-  }, 'basic')
-  const saveProblems = () => mutate(`/api/assignments/${assignment.id}/problems`, 'PUT', { expectedRevision: assignment.statusRevision, problems: problemDraft.map(item => ({ id: item.id, problemId: item.problemId, testSetRevisionId: item.testSetRevisionId, category: item.category, required: item.required, maxScore: item.maxScore, targetScore: item.targetScore, weight: item.weight, completionPolicy: item.completionPolicy })) }, 'problems')
-  const saveRoster = () => mutate(`/api/assignments/${assignment.id}/roster`, 'PUT', { expectedRevision: assignment.statusRevision, userIds: [...rosterDraft] }, 'roster')
+  })
+  const problemRows = (items: AssignmentProblem[]) => items.map(item => ({ id: item.id, problemId: item.problemId, testSetRevisionId: item.testSetRevisionId, category: item.category, required: item.required, maxScore: item.maxScore, targetScore: item.targetScore, weight: item.weight, completionPolicy: item.completionPolicy }))
+  const saveBasics = () => mutate(`/api/assignments/${assignment.id}`, 'PATCH', basicPayload(), 'basic')
+  const saveProblems = async () => {
+    const saved = await mutate(`/api/assignments/${assignment.id}/problems`, 'PUT', { expectedRevision: assignment.statusRevision, problems: problemRows(problemDraft) }, 'problems')
+    if (saved) setProblemDraft(saved.Problems)
+    return saved
+  }
+  const saveRoster = async () => {
+    const saved = await mutate(`/api/assignments/${assignment.id}/roster`, 'PUT', { expectedRevision: assignment.statusRevision, userIds: [...rosterDraft] }, 'roster')
+    if (saved) setRosterDraft(new Set(saved.Recipients.map(item => item.userId)))
+    return saved
+  }
+
+  const basicsDirty = title !== assignment.title
+    || description !== (assignment.description || '')
+    || learningObjectives !== (assignment.learningObjectives || '')
+    || publishAt !== toLocalInput(assignment.publishAt)
+    || openAt !== toLocalInput(assignment.openAt)
+    || dueAt !== toLocalInput(assignment.dueAt)
+    || closeAt !== toLocalInput(assignment.closeAt)
+    || correctionDueAt !== toLocalInput(assignment.correctionDueAt)
+    || rosterMode !== assignment.rosterMode
+    || gradingPolicy !== assignment.gradingPolicy
+    || baseScoreMax !== assignment.baseScoreMax
+    || optionalScoringPolicy !== assignment.optionalScoringPolicy
+    || (optionalScoringPolicy === 'BEST_N' ? optionalBestCount : null) !== (assignment.optionalBestCount ?? null)
+    || (optionalScoringPolicy === 'NONE' ? 0 : optionalBonusMax) !== assignment.optionalBonusMax
+    || challengeScoringPolicy !== assignment.challengeScoringPolicy
+    || (challengeScoringPolicy === 'NONE' ? 0 : challengeBonusMax) !== assignment.challengeBonusMax
+    || latePolicy !== assignment.latePolicy
+    || (latePolicy === 'ALLOW_WITH_PENALTY' ? latePenaltyPercent : null) !== (assignment.latePenaltyPercent ?? null)
+    || correctionPolicy !== assignment.correctionPolicy
+    || solutionReleasePolicy !== assignment.solutionReleasePolicy
+  const problemsDirty = JSON.stringify(problemRows(problemDraft)) !== JSON.stringify(problemRows(assignment.Problems))
+  const savedRoster = new Set(assignment.Recipients.map(item => item.userId))
+  const rosterDirty = rosterMode === 'SNAPSHOT' && (rosterDraft.size !== savedRoster.size || [...rosterDraft].some(userId => !savedRoster.has(userId)))
+  const hasUnsavedChanges = basicsDirty || problemsDirty || rosterDirty
+
+  const validateStep = (step: number) => {
+    if (step === 0) {
+      if (!title.trim()) return '请填写作业名称'
+      if (!openAt || !dueAt || !closeAt) return '请填写开放、截止和关闭时间'
+      if (new Date(dueAt) < new Date(openAt)) return '截止时间不能早于开放时间'
+      if (new Date(closeAt) < new Date(dueAt)) return '关闭时间不能早于截止时间'
+      if (publishAt && new Date(publishAt) > new Date(openAt)) return '发布时间不能晚于开放时间'
+    }
+    if (step === 1) {
+      if (!problemDraft.length) return '请至少选择一道题目'
+      if (problemDraft.some(problem => problem.maxScore <= 0 || problem.targetScore < 0 || problem.targetScore > problem.maxScore || problem.weight <= 0)) return '请修正题目的满分、达标分和权重'
+    }
+    if (step === 2 && rosterMode === 'SNAPSHOT' && rosterDraft.size === 0) return '请至少选择一名学生'
+    return null
+  }
+
+  const saveCurrentStep = async () => {
+    if (designStep === 0) return basicsDirty ? saveBasics() : assignment
+    if (designStep === 1) return problemsDirty ? saveProblems() : assignment
+    if (designStep === 2 && rosterMode === 'SNAPSHOT') return rosterDirty ? saveRoster() : assignment
+    return assignment
+  }
+
+  const changeStep = async (target: number) => {
+    if (saving || target === designStep) return
+    if (target < designStep) { setDesignStep(target); return }
+    if (target !== designStep + 1) return
+    const issue = validateStep(designStep)
+    if (issue) return toast.warning(issue)
+    const saved = await saveCurrentStep()
+    if (saved) setDesignStep(target)
+  }
 
   const addProblem = async (problem: ProblemListItem) => {
     if (problemDraft.some(item => item.problemId === problem.id)) return
@@ -134,6 +209,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   })
 
   const runValidation = async () => {
+    if (hasUnsavedChanges) return toast.warning('有尚未保存的修改，请返回对应步骤并点击“下一步”完成自动保存。')
     setSaving('validate')
     const result = await apiClient.post<ValidationResult>(`/api/assignments/${assignment.id}/validate`)
     setSaving(null)
@@ -143,6 +219,8 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   }
 
   const publish = async () => {
+    if (hasUnsavedChanges) return toast.warning('有尚未保存的修改，不能发布。')
+    if (!validation?.valid) return toast.warning('请先运行发布检查并修正所有问题。')
     setSaving('publish')
     const result = await apiClient.post<Assignment>(`/api/assignments/${assignment.id}/publish`, { expectedRevision: assignment.statusRevision })
     setSaving(null)
@@ -153,12 +231,12 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
   }
 
   return <div className={styles.stack}>
-    <p className={styles.draftNotice}>当前为草稿。题目 TestSet Revision 与学生名单将在发布后永久冻结；每个区域单独保存，避免未确认修改直接生效。</p>
+    <p className={styles.draftNotice}>当前为草稿。点击“下一步”会先校验并自动保存当前步骤；题目 TestSet Revision 与学生名单将在发布后永久冻结。</p>
     <div className={styles.designSteps} role="tablist" aria-label="作业设计步骤">
-      {['基本信息', '选择题目', '选择学生', '检查并发布'].map((label, index) => <Button key={label} size="sm" variant={designStep === index ? 'primary' : 'ghost'} onClick={() => setDesignStep(index)} aria-current={designStep === index ? 'step' : undefined}>{index + 1}. {label}</Button>)}
+      {['基本信息', '选择题目', '选择学生', '检查并发布'].map((label, index) => <Button key={label} size="sm" variant={designStep === index ? 'primary' : 'ghost'} disabled={Boolean(saving) || index > designStep + 1} onClick={() => void changeStep(index)} aria-current={designStep === index ? 'step' : undefined}>{index + 1}. {label}</Button>)}
     </div>
     {designStep === 0 && <>
-    <Section title="基本信息" description={`配置版本 ${assignment.statusRevision}`} actions={<Button loading={saving === 'basic'} onClick={() => void saveBasics()}>保存基本信息</Button>}>
+    <Section title="基本信息" description={`配置版本 ${assignment.statusRevision}；进入下一步时自动保存`}>
       <div className={styles.settingsGrid}>
         <FormField label="作业名称" required><Input value={title} onChange={event => setTitle(event.target.value)} /></FormField>
         <FormField label="截止时间" required><Input type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} /></FormField>
@@ -187,7 +265,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     </Section>
     </>}
     {designStep === 1 && <>
-    <Section title="题目与固定版本" description="必做题构成基础成绩分母；选做与挑战题仅按上方启用的加分策略计算。Judge 原始分会按固定版本满分比例映射。" actions={<><Button variant="secondary" icon={<Plus size={16} />} onClick={() => setPickerOpen(true)}>添加题目</Button><Button loading={saving === 'problems'} onClick={() => void saveProblems()}>保存题目</Button></>}>
+    <Section title="题目与固定版本" description="必做题构成基础成绩分母；选做与挑战题仅按上方启用的加分策略计算。Judge 原始分会按固定版本满分比例映射。" actions={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setPickerOpen(true)}>添加题目</Button>}>
       <div className={styles.stack}>{problemDraft.map((item, index) => <div className={styles.problemRow} key={item.id}>
         <span className={styles.problemIdentity}><strong>{index + 1}. {item.Problem.problemId} · {item.Problem.title}</strong><span>固定 R{item.TestSetRevision.revisionNumber} · {item.TestSetRevision.mode.toUpperCase()}</span></span>
         <div className={styles.problemControls}>
@@ -202,7 +280,7 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     </Section>
     </>}
     {designStep === 2 && <>
-    <Section title="学生名单" description={rosterMode === 'DYNAMIC' ? '发布时从当前学校或团队的有效学生生成一次性快照。' : '发布后名单形成快照，历史结果不会因成员变更漂移。'} actions={rosterMode === 'SNAPSHOT' ? <Button loading={saving === 'roster'} onClick={() => void saveRoster()}>保存名单（{rosterDraft.size}）</Button> : undefined}>
+    <Section title="学生名单" description={rosterMode === 'DYNAMIC' ? '发布时从当前学校或团队的有效学生生成一次性快照。' : `已选 ${rosterDraft.size} 人；发布后名单形成快照，历史结果不会因成员变更漂移。`}>
       {rosterMode === 'DYNAMIC' ? <p className={styles.muted}>动态名单不在草稿中勾选学生；发布事务会固定当时符合范围的学生，之后的成员变更不会改写作业。</p> : <AsyncRegion state={studentResource.state} onRetry={studentResource.retry} emptyText="当前学校没有可分配学生" skeletonRows={4}>
         {data => <div className={styles.rosterList}>{data.items.filter(item => item.userId).map(item => <Checkbox key={item.userId!} label={item.name || item.user?.username || '未命名学生'} description={item.user?.username} checked={rosterDraft.has(item.userId!)} onChange={event => setRosterDraft(current => { const next = new Set(current); event.target.checked ? next.add(item.userId!) : next.delete(item.userId!); return next })} />)}</div>}
       </AsyncRegion>}
@@ -214,8 +292,8 @@ function DraftEditor({ assignment, onChange }: { assignment: Assignment; onChang
     </Section>
     </>}
     <div className={styles.designFooter}>
-      <Button variant="secondary" disabled={designStep === 0} onClick={() => setDesignStep(step => Math.max(0, step - 1))}>上一步</Button>
-      {designStep < 3 && <Button onClick={() => setDesignStep(step => Math.min(3, step + 1))}>下一步</Button>}
+      <Button variant="secondary" disabled={designStep === 0 || Boolean(saving)} onClick={() => void changeStep(designStep - 1)}>上一步</Button>
+      {designStep < 3 && <Button loading={Boolean(saving)} onClick={() => void changeStep(designStep + 1)}>下一步</Button>}
     </div>
     <FormDialog isOpen={pickerOpen} onClose={() => setPickerOpen(false)} title="添加题目" description="加入时固定当前最新 TestSet Revision；发布后不跟随题库更新。" size="lg">
       <Tabs label="题库范围" value={library} onChange={setLibrary} items={[{ value: 'school', label: '校内题库' }, { value: 'platform', label: 'Carits 平台题库' }]} />
@@ -266,7 +344,7 @@ function StudentWorkspace({ assignment, workspace, onSubmitted }: { assignment: 
       {workspace.feedback.map(item => <div className={styles.reviewItem} key={item.id}><strong>教师反馈{item.assignmentProblemId ? ` · ${problemById.get(item.assignmentProblemId)?.Problem.problemId || '题目'}` : ''}</strong><span>{formatAssignmentTime(item.createdAt)}</span><p>{item.content}</p></div>)}
     </div></Section>}
     <FormDialog isOpen={Boolean(selected)} onClose={() => setSelected(null)} onSubmit={() => void submit()} title={selected ? `提交 ${selected.Problem.problemId} · ${selected.Problem.title}` : '提交代码'} description="本次提交将永久记录作业、题目、名单与 TestSet Revision 上下文。" submitText="提交评测" loading={sending} dirty={Boolean(code)} submitDisabled={!code.trim()} size="lg">
-      <div className={styles.stack}><FormField label="语言"><Select value={language} onChange={event => { if (!code || window.confirm('切换语言会保留当前源码，并在对应语言草稿中继续保存。是否继续？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="c11">C11</option><option value="python3">Python3</option></Select></FormField><FormField label="源码" required><SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={`${user?.userId || 'account'}:assignment:${assignment.id}:${selected?.id || 'none'}`} /></FormField><div className={styles.settingsGrid}><FormField label="输入文件名" hint="留空表示标准输入"><Input value={inputFilename} onChange={event => setInputFilename(event.target.value)} placeholder="例如 travel.in" /></FormField><FormField label="输出文件名" hint="留空表示标准输出"><Input value={outputFilename} onChange={event => setOutputFilename(event.target.value)} placeholder="例如 travel.out" /></FormField></div></div>
+      <div className={styles.stack}><FormField label="语言"><Select value={language} onChange={event => { if (!code || window.confirm('切换后会保存当前语言草稿，并加载目标语言自己的草稿。是否切换？')) setLanguage(event.target.value) }}><option value="cpp17">C++17</option><option value="c11">C11</option><option value="python3">Python3</option></Select></FormField><FormField label="源码" required><SubmissionCodeEditor value={code} onChange={setCode} language={language} draftKey={`${user?.userId || 'account'}:assignment:${assignment.id}:${selected?.id || 'none'}`} /></FormField><div className={styles.settingsGrid}><FormField label="输入文件名" hint="留空表示标准输入"><Input value={inputFilename} onChange={event => setInputFilename(event.target.value)} placeholder="例如 travel.in" /></FormField><FormField label="输出文件名" hint="留空表示标准输出"><Input value={outputFilename} onChange={event => setOutputFilename(event.target.value)} placeholder="例如 travel.out" /></FormField></div></div>
     </FormDialog>
   </>
 }
@@ -329,6 +407,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
     setReviewing(recipient)
     setReviewingCell(cell)
     setReviewProblemId(cell.assignmentProblemId)
+    setCorrectionRequiredScore(assignment.Problems.find(problem => problem.id === cell.assignmentProblemId)?.targetScore || 0)
   }
   const closeCell = () => { setReviewing(null); setReviewingCell(null); setReviewContent(''); setManualReason('') }
   const saveManual = async () => {
@@ -355,13 +434,16 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
     if (cell.finalScore !== null && cell.finalScore !== undefined) return `${cell.finalScore} 分`
     return '已提交'
   }
+  const matrixProblems = problemFilter
+    ? assignment.Problems.filter(problem => problem.id === problemFilter)
+    : assignment.Problems
   return <div className={styles.stack}>
     <Section title="作业控制" description="状态变化会写入持久事件；发布成绩时生成最终成绩快照。" actions={nextAction ? <Button loading={transitioning} onClick={() => void transition(nextAction.action)}>{nextAction.label}</Button> : undefined}><p className={styles.muted}>当前状态：{assignmentStatusMeta[assignment.status].label}。题目版本和名单已冻结。</p></Section>
     <Section title="批改矩阵" description="按学生和题目直接定位未开始、低于目标、迟交、待订正与待人工确认。">
       <div className={styles.matrixToolbar}><Input aria-label="搜索用户名" placeholder="搜索用户名" value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} /><Select aria-label="筛选题目" value={problemFilter} onChange={event => { setProblemFilter(event.target.value); setPage(1) }}><option value="">全部题目</option>{assignment.Problems.map(problem => <option key={problem.id} value={problem.id}>{problem.Problem.problemId}</option>)}</Select><Select aria-label="筛选进度状态" value={stateFilter} onChange={event => { setStateFilter(event.target.value); setPage(1) }}>{stateOptions.map(([value, label]) => <option key={value} value={value}>{label}{value && displayed?.statusCounts?.[value] !== undefined ? `（${displayed.statusCounts[value]}）` : ''}</option>)}</Select></div>
       <div className={styles.matrixScroll}><Table data={displayed?.recipients || []} rowKey={recipient => recipient.id} caption="学生题目批改矩阵" columns={[
         { key: 'user.username', label: '学生', render: recipient => <strong>{recipient.user.username}</strong> },
-        ...assignment.Problems.map(problem => ({ key: problem.id, label: `${problem.Problem.problemId} · ${problem.targetScore}/${problem.maxScore}`, render: (recipient: ProgressRecipient) => { const cell = (recipient.cells || recipient.progress).find(item => item.assignmentProblemId === problem.id) || { assignmentProblemId: problem.id, learningStatus: 'NOT_STARTED', timelinessStatus: 'ON_TIME', correctionStatus: 'NONE', attemptCount: 0 }; return <Button variant="ghost" className={styles.matrixCell} onClick={() => openCell(recipient, cell)}><strong>{statusText(cell, problem)}</strong><span>{cell.timelinessStatus === 'LATE' ? '迟交' : ''}{['NEEDS_CORRECTION', 'CORRECTING'].includes(cell.correctionStatus) ? ' · 待订正' : cell.correctionStatus === 'CORRECTED' ? ' · 已订正' : ''}{cell.states?.includes('MANUAL_PENDING') ? ' · 待确认' : ''}</span></Button> } })),
+        ...matrixProblems.map(problem => ({ key: problem.id, label: `${problem.Problem.problemId} · ${problem.targetScore}/${problem.maxScore}`, render: (recipient: ProgressRecipient) => { const cell = (recipient.cells || recipient.progress).find(item => item.assignmentProblemId === problem.id) || { assignmentProblemId: problem.id, learningStatus: 'NOT_STARTED', timelinessStatus: 'ON_TIME', correctionStatus: 'NONE', attemptCount: 0 }; return <Button variant="ghost" className={styles.matrixCell} onClick={() => openCell(recipient, cell)}><strong>{statusText(cell, problem)}</strong><span>{cell.timelinessStatus === 'LATE' ? '迟交' : ''}{['NEEDS_CORRECTION', 'CORRECTING'].includes(cell.correctionStatus) ? ' · 待订正' : cell.correctionStatus === 'CORRECTED' ? ' · 已订正' : ''}{cell.states?.includes('MANUAL_PENDING') ? ' · 待确认' : ''}</span></Button> } })),
         { key: 'score', label: '汇总', render: recipient => <><strong>{recipient.score} 分</strong><small>{recipient.completedProblems}/{assignment.Problems.length} 完成 · {recipient.lateProblems} 迟交 · {recipient.correctionProblems} 待订正</small></> },
       ]} /></div>
       {!displayed?.recipients.length && <p className={styles.muted}>当前筛选下没有学生进度。</p>}
@@ -370,7 +452,7 @@ function ManagerWorkspace({ assignment, progress, onChange, onRefresh }: { assig
     <DetailDialog isOpen={Boolean(reviewing && reviewingCell)} onClose={closeCell} title={reviewing && reviewingCell ? `批改 · ${reviewing.user.username} · ${assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)?.Problem.problemId || '题目'}` : '批改详情'} description="提交、成绩、订正和人工完成均来自服务端评测事实。" size="lg" footer={<><Button variant="secondary" onClick={closeCell}>关闭</Button><Button onClick={() => { setReviewKind('feedback'); setReviewContent('') }}>添加批改动作</Button></>}>
       {reviewingCell && <div className={styles.cellDetail}><div><span>主状态</span><strong>{statusText(reviewingCell, assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)!)}</strong></div><div><span>提交次数</span><strong>{reviewingCell.attemptCount || 0}</strong></div><div><span>最好成绩</span><strong>{reviewingCell.bestScore ?? '—'}</strong></div><div><span>最终成绩</span><strong>{reviewingCell.finalScore ?? '—'}</strong></div><div><span>时间状态</span><strong>{reviewingCell.timelinessStatus === 'LATE' ? '迟交' : '按时'}</strong></div><div><span>订正状态</span><strong>{correctionLabel[reviewingCell.correctionStatus] || reviewingCell.correctionStatus}</strong></div></div>}
       {reviewingCell && assignment.Problems.find(problem => problem.id === reviewingCell.assignmentProblemId)?.completionPolicy === 'MANUAL' && <div className={styles.manualAction}>{reviewingCell.attemptCount ? <Button variant={reviewingCell.manualCompletedAt ? 'danger' : 'primary'} onClick={() => setManualOpen(true)}>{reviewingCell.manualCompletedAt ? '撤销确认' : '确认完成'}</Button> : <span className={styles.muted}>等待学生首次提交后，才可人工确认完成。</span>}{reviewingCell.manualCompletedAt && <span>由 {reviewingCell.manualCompletedBy?.username || '教师'} 确认{reviewingCell.manualCompletionReason ? `：${reviewingCell.manualCompletionReason}` : ''}</span>}</div>}
-      <div className={styles.reviewActions}><Tabs label="批改动作" value={reviewKind} onChange={value => setReviewKind(value)} items={[{ value: 'feedback', label: '反馈' }, { value: 'correction', label: '布置订正' }, { value: 'adjustment', label: '人工调分' }]} /><FormField label={reviewKind === 'feedback' ? '反馈内容' : '原因'} required><Textarea rows={4} value={reviewContent} onChange={event => setReviewContent(event.target.value)} /></FormField>{reviewKind === 'correction' && <FormField label="订正达标分"><Input type="number" value={correctionRequiredScore || assignment.Problems.find(problem => problem.id === reviewProblemId)?.targetScore || 0} onChange={event => setCorrectionRequiredScore(Number(event.target.value))} /></FormField>}{reviewKind === 'adjustment' && <FormField label="调分值"><Input type="number" min={-1000} max={1000} value={delta} onChange={event => setDelta(Number(event.target.value))} /></FormField>}<Button loading={savingReview} disabled={!reviewContent.trim() || (reviewKind === 'adjustment' && delta === 0)} onClick={() => void submitReview()}>保存批改动作</Button></div>
+      <div className={styles.reviewActions}><Tabs label="批改动作" value={reviewKind} onChange={value => setReviewKind(value)} items={[{ value: 'feedback', label: '反馈' }, { value: 'correction', label: '布置订正' }, { value: 'adjustment', label: '人工调分' }]} /><FormField label={reviewKind === 'feedback' ? '反馈内容' : '原因'} required><Textarea rows={4} value={reviewContent} onChange={event => setReviewContent(event.target.value)} /></FormField>{reviewKind === 'correction' && <FormField label="订正达标分"><Input type="number" min={0} max={assignment.Problems.find(problem => problem.id === reviewProblemId)?.maxScore || 0} value={correctionRequiredScore} onChange={event => setCorrectionRequiredScore(Number(event.target.value))} /></FormField>}{reviewKind === 'adjustment' && <FormField label="调分值"><Input type="number" min={-1000} max={1000} value={delta} onChange={event => setDelta(Number(event.target.value))} /></FormField>}<Button loading={savingReview} disabled={!reviewContent.trim() || (reviewKind === 'adjustment' && delta === 0)} onClick={() => void submitReview()}>保存批改动作</Button></div>
     </DetailDialog>
     <FormDialog isOpen={manualOpen} onClose={() => setManualOpen(false)} onSubmit={() => void saveManual()} title={reviewingCell?.manualCompletedAt ? '撤销人工完成确认' : '确认学生已完成'} description="该操作使用版本号并发校验，并写入审计事件。" submitText={reviewingCell?.manualCompletedAt ? '确认撤销' : '确认完成'} danger={Boolean(reviewingCell?.manualCompletedAt)} loading={manualSaving} dirty={Boolean(manualReason)} submitDisabled={!manualReason.trim()}>
       <FormField label="操作原因" required><Textarea rows={4} value={manualReason} onChange={event => setManualReason(event.target.value)} /></FormField>
