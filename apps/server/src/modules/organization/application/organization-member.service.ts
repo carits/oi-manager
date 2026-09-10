@@ -4,6 +4,7 @@ import { calculateGrade, getAllGrades } from '@oi-manager/shared/utils/grade'
 import { paginatedResponse } from '../../../lib/pagination'
 import { prisma } from '../../../prisma'
 import { defaultScoringRules, trackForFormat } from '../../rating/application/contest-rating.service'
+import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
 
 export class OrganizationMemberError extends Error {
   constructor(public readonly statusCode: number, message: string, public readonly code?: string) {
@@ -146,6 +147,7 @@ export async function createOrganizationContest(actor: OrganizationActor, body: 
       rulesHash: crypto.createHash('sha256').update(JSON.stringify({ track, scoringRules })).digest('hex'),
       createdBy: actor.userId,
     } })
+    await ensureContestAggregateTx(tx, contest.id)
     return contest
   })
 }

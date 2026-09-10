@@ -16,6 +16,31 @@
   },
   {
     "method": "GET",
+    "path": "/api/blog-discovery",
+    "rationale": "Public knowledge discovery returns only published PUBLIC posts to anonymous readers; PLATFORM posts require an authenticated optional session."
+  },
+  {
+    "method": "GET",
+    "path": "/api/blog-discovery/:id",
+    "rationale": "Public knowledge detail rechecks the immutable version visibility and exposes only published PUBLIC content anonymously."
+  },
+  {
+    "method": "GET",
+    "path": "/api/blog-discovery/:id/community",
+    "rationale": "Returns aggregate reactions, comment count and featured status for a readable public post without private user state."
+  },
+  {
+    "method": "GET",
+    "path": "/api/blog-discovery/:id/comments",
+    "rationale": "Returns sanitized visible comments only after the parent post passes PUBLIC or authenticated PLATFORM visibility checks."
+  },
+  {
+    "method": "GET",
+    "path": "/api/blog-discovery/:id/comments/:commentId/replies",
+    "rationale": "Returns one-level sanitized visible replies for an already authorized public knowledge post using an opaque cursor."
+  },
+  {
+    "method": "GET",
     "path": "/api/platform-bindings/platforms",
     "rationale": "Returns the static list of supported public platform identifiers needed before login and contains no user binding data."
   },

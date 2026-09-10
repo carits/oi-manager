@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 source_of_truth: apps/server/prisma/schema.prisma
 ---
 
@@ -50,6 +50,7 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `BlogSeriesEntry` | 系列与文章的有序多对多关系 |
 | `BlogTag` | 平台系统标签或作者命名空间内受控、规范化唯一的标签 |
 | `BlogPostTag` | 当前文章与标签的反向查询索引；历史分类另固化于 BlogPostVersion |
+| `BlogSubmissionSnapshot` | 提交作者显式创建的脱敏不可变快照；只保存安全摘要、可选源码和内容哈希，供 BlogReference 固定引用 |
 | `BlogComment` | 已发布博客的一层评论/回复及可治理状态 |
 | `BlogReaction` | 用户对博客的 LIKE/HELPFUL 幂等反应 |
 | `BlogBookmark` | 用户账号级博客收藏 |
@@ -121,6 +122,8 @@ source_of_truth: apps/server/prisma/schema.prisma
 | `SolutionContributionRevision` | 每次提交/重投冻结的题解内容、题面快照、来源授权和目标测试集版本 |
 | `SolutionVerification` | 题解代码针对固定测试集 Revision 的 Judge 技术验证结果 |
 | `SolutionReview` | 审核人的不可变审核事实；冲突审核由投稿级锁和状态 CAS 串行化 |
+| `SolutionSimilarityJob` | 当前投稿 Revision 的持久异步相似度任务，保存租约、fencing、有界重试和终态错误 |
+| `SolutionContentFingerprint` | 正式题解或投稿 Revision 的版本化正文/代码 bottom-k 指纹，可按内容哈希复用计算 |
 | `ProblemSolution` | 已发布题解稳定身份与当前版本指针 |
 | `ProblemSolutionVersion` | 不可变发布版本，固化内容、验证、来源和发布时 visibilityPolicy |
 | `DataProduct` | 固定 Revision 与质量快照的数据商品；服务端自动等级、更新策略、includes、卖方范围和停售状态 |

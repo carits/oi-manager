@@ -17,6 +17,7 @@ import {
   replaceAssignmentRoster,
   reverseAssignmentScoreAdjustment,
   submitAssignmentSolution,
+  setManualAssignmentProblemCompletion,
   transitionAssignment,
   updateAssignment,
   validateAssignmentStructure,
@@ -85,6 +86,11 @@ assignmentRouter.post('/assignments/:id/submit', asyncHandler(async (req: AuthRe
 
 assignmentRouter.get('/assignments/:id/progress', asyncHandler(async (req: AuthRequest, res) => {
   try { return res.json({ success: true, data: await getAssignmentProgress(req.user!.userId, req.params.id) }) }
+  catch (error) { return sendError(error, res) }
+}))
+
+assignmentRouter.post('/assignments/:id/progress/:progressId/manual-completion', asyncHandler(async (req: AuthRequest, res) => {
+  try { return res.json({ success: true, data: await setManualAssignmentProblemCompletion(req.user!.userId, req.params.id, req.params.progressId, req.body) }) }
   catch (error) { return sendError(error, res) }
 }))
 

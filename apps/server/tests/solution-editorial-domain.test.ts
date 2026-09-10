@@ -5,6 +5,7 @@ import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest
 import { createTestProblem } from './helpers/problemListHelpers'
 import { createTestUser } from './helpers/testUser'
 import { generateTokenFromUser } from './helpers/testToken'
+import { processSolutionSimilarityJobs } from '../src/modules/solution/solution.service'
 
 const app = createTestApp()
 
@@ -92,6 +93,16 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     expect(refreshed.body.data.status).toBe('PASSED')
     expect((await prisma.solutionContribution.findUniqueOrThrow({ where: { id: contributionId } })).status).toBe('TECHNICALLY_VALID')
 
+    const pendingReview = await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/reviews`).send({ decision: 'APPROVE' })
+    expect(pendingReview.status).toBe(409)
+    expect(pendingReview.body.code).toBe('SOLUTION_SIMILARITY_PENDING')
+    const currentRevision = await prisma.solutionContributionRevision.findFirstOrThrow({ where: { contributionId, revision: 1 } })
+    await prisma.solutionSimilarityJob.delete({ where: { contributionRevisionId: currentRevision.id } })
+    const repaired = await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/similarity/retry`).send()
+    expect(repaired.status).toBe(200)
+    expect(repaired.body.data.status).toBe('QUEUED')
+    expect((await processSolutionSimilarityJobs(10)).ready).toBeGreaterThanOrEqual(1)
+
     const reviewed = await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/reviews`).send({
       reviewType: 'CONTENT', decision: 'APPROVE', checklist: { correctness: true, completeness: true }, comment: 'Verified.',
     })
@@ -139,6 +150,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     await authorClient().post(`/api/solution-contributions/${firstId}/submit`).send()
     await finalizeVerification(firstId)
     await authorClient().post(`/api/solution-contributions/${firstId}/verification/refresh`).send()
+    await processSolutionSimilarityJobs(10)
     const conflicting = await Promise.all([
       reviewerClient().post(`/api/review/solution-contributions/${firstId}/reviews`).send({ decision: 'APPROVE' }),
       reviewerClient().post(`/api/review/solution-contributions/${firstId}/reviews`).send({ decision: 'REQUEST_CHANGES', comment: 'Please revise this conflicting review outcome.' }),
@@ -151,6 +163,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     await authorClient().post(`/api/solution-contributions/${secondId}/submit`).send()
     await finalizeVerification(secondId)
     await authorClient().post(`/api/solution-contributions/${secondId}/verification/refresh`).send()
+    await processSolutionSimilarityJobs(10)
     await reviewerClient().post(`/api/review/solution-contributions/${secondId}/reviews`).send({ decision: 'APPROVE' })
     const accepted = await Promise.all([
       reviewerClient().post(`/api/review/solution-contributions/${secondId}/accept`).send(),
@@ -166,6 +179,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     await authorClient().post(`/api/solution-contributions/${contributionId}/submit`).send()
     await finalizeVerification(contributionId)
     await authorClient().post(`/api/solution-contributions/${contributionId}/verification/refresh`).send()
+    await processSolutionSimilarityJobs(10)
     await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/reviews`).send({ decision: 'APPROVE' })
     await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/accept`).send()
     const first = await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/publish`).send({ visibilityPolicy: 'MANAGER_ONLY' })
@@ -182,6 +196,7 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     await finalizeVerification(correctionId)
     const refreshed = await authorClient().post(`/api/solution-contributions/${correctionId}/verification/refresh`).send()
     expect(refreshed.body.data.status).toBe('PASSED')
+    await processSolutionSimilarityJobs(10)
     await reviewerClient().post(`/api/review/solution-contributions/${correctionId}/reviews`).send({ decision: 'APPROVE' })
     await reviewerClient().post(`/api/review/solution-contributions/${correctionId}/accept`).send()
     const second = await reviewerClient().post(`/api/review/solution-contributions/${correctionId}/publish`).send({ visibilityPolicy: 'PUBLIC' })

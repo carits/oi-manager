@@ -140,18 +140,131 @@ async function assertManage(userId: string, id: string) {
   return assignment
 }
 
+/**
+ * Recipient visibility is deliberately stricter than lifecycle status. A
+ * scheduled assignment may already be published internally while its
+ * publishAt embargo is still active. Managers always bypass the embargo.
+ */
+export function isAssignmentVisibleToRecipient(
+  assignment: Pick<AssignmentShape, 'status' | 'publishAt'>,
+  now = new Date(),
+) {
+  return assignment.status !== 'DRAFT'
+    && assignment.status !== 'CANCELLED'
+    && (!assignment.publishAt || assignment.publishAt <= now)
+}
+
 async function assertAccess(userId: string, id: string) {
   const assignment = await loadAssignment(id)
   if (!assignment) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
   if (await canManageAssignment(userId, assignment)) return assignment
   const recipient = assignment.Recipients.find(item => item.userId === userId && item.status !== 'REMOVED')
-  if (!recipient || assignment.status === 'DRAFT') throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
+  if (!recipient || !isAssignmentVisibleToRecipient(assignment)) throw new AssignmentError(404, 'ASSIGNMENT_NOT_FOUND', '作业不存在')
   return assignment
 }
 
 async function appendEvent(tx: Prisma.TransactionClient, assignmentId: string, type: string, actorUserId: string | null, payload?: Prisma.InputJsonValue) {
   const row = await tx.assignment.update({ where: { id: assignmentId }, data: { eventSeq: { increment: 1 } }, select: { eventSeq: true } })
   return tx.assignmentEvent.create({ data: { assignmentId, seq: row.eventSeq, type, actorUserId, payload } })
+}
+
+async function recomputeRecipientCompletion(tx: Prisma.TransactionClient, assignmentId: string, recipientId: string) {
+  const recipient = await tx.assignmentRecipient.findFirst({
+    where: { id: recipientId, assignmentId },
+    select: { id: true, status: true },
+  })
+  if (!recipient || ['REMOVED', 'EXEMPT'].includes(recipient.status)) return
+  const [requiredProblems, progress] = await Promise.all([
+    tx.assignmentProblem.findMany({ where: { assignmentId, category: 'REQUIRED' }, select: { id: true } }),
+    tx.assignmentProblemProgress.findMany({
+      where: { assignmentId, recipientId },
+      select: { assignmentProblemId: true, learningStatus: true, attemptCount: true },
+    }),
+  ])
+  const progressByProblem = new Map(progress.map(item => [item.assignmentProblemId, item]))
+  const completed = requiredProblems.length > 0 && requiredProblems.every(problem => {
+    const item = progressByProblem.get(problem.id)
+    return Boolean(item && ['COMPLETED', 'EXEMPT'].includes(item.learningStatus))
+  })
+  if (completed && recipient.status !== 'COMPLETED') {
+    await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
+  } else if (!completed && recipient.status === 'COMPLETED') {
+    const hasAttempt = progress.some(item => item.attemptCount > 0)
+    await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: hasAttempt ? 'ACTIVE' : 'ASSIGNED', completedAt: null } })
+  }
+}
+
+async function evaluateAutomaticCorrections(
+  tx: Prisma.TransactionClient,
+  assignmentId: string,
+  trigger: 'DUE' | 'CLOSE' | 'REVIEW',
+  actorUserId: string | null,
+) {
+  const assignment = await tx.assignment.findUnique({
+    where: { id: assignmentId },
+    include: {
+      Problems: true,
+      Recipients: {
+        where: { status: { notIn: ['REMOVED', 'EXEMPT'] } },
+        include: {
+          Progress: true,
+          Overrides: { where: { revokedAt: null }, orderBy: { createdAt: 'desc' } },
+        },
+      },
+    },
+  })
+  if (!assignment) return 0
+  let createdCount = 0
+  for (const recipient of assignment.Recipients) {
+    const policy = recipient.Overrides[0]?.correctionPolicy ?? assignment.correctionPolicy
+    if (policy === 'NONE' || policy === 'TEACHER_ASSIGNED') continue
+    const progressByProblem = new Map(recipient.Progress.map(item => [item.assignmentProblemId, item]))
+    for (const problem of assignment.Problems) {
+      const progress = progressByProblem.get(problem.id)
+      const result = String(progress?.bestVerdict || '').toLowerCase()
+      const accepted = result === 'accepted' || result === 'ac'
+      const incomplete = !progress || !['COMPLETED', 'EXEMPT'].includes(progress.learningStatus)
+      const needsCorrection = policy === 'BELOW_TARGET'
+        ? (progress?.finalScore ?? progress?.bestScore ?? 0) < problem.targetScore
+        : policy === 'NON_AC'
+          ? !accepted
+          : incomplete
+      if (!needsCorrection) continue
+      const policyEvaluationKey = `assignment-correction:v1:${assignment.id}:${recipient.id}:${problem.id}:${policy}`
+      const existing = await tx.assignmentCorrection.findUnique({ where: { policyEvaluationKey } })
+      if (existing) continue
+      await tx.assignmentCorrection.create({
+        data: {
+          assignmentId: assignment.id,
+          assignmentProblemId: problem.id,
+          recipientId: recipient.id,
+          assignedBy: 'system',
+          source: 'policy',
+          policyCode: policy,
+          policyEvaluationKey,
+          policyEvaluatedAt: new Date(),
+          reason: `由作业订正策略 ${policy} 自动创建`,
+          requiredScore: problem.targetScore,
+          dueAt: assignment.correctionDueAt,
+        },
+      })
+      await tx.assignmentProblemProgress.upsert({
+        where: { assignmentProblemId_recipientId: { assignmentProblemId: problem.id, recipientId: recipient.id } },
+        create: {
+          assignmentId: assignment.id,
+          assignmentProblemId: problem.id,
+          recipientId: recipient.id,
+          correctionStatus: 'NEEDS_CORRECTION',
+        },
+        update: { correctionStatus: 'NEEDS_CORRECTION' },
+      })
+      createdCount++
+    }
+  }
+  if (createdCount > 0) {
+    await appendEvent(tx, assignmentId, 'assignment.corrections_evaluated', actorUserId, { trigger, createdCount })
+  }
+  return createdCount
 }
 
 function assignmentCreateInput(body: any) {
@@ -227,6 +340,7 @@ export async function listAssignments(userId: string, query: any) {
   const principalOrgIds = managedOrganizations.filter(item => item.memberRole === 'school_principal').map(item => item.organizationId)
   const teacherOrgIds = managedOrganizations.filter(item => item.memberRole === 'teacher').map(item => item.organizationId)
   const managedTeamIds = managedTeams.map(item => item.teamId)
+  const now = new Date()
   const where: Prisma.AssignmentWhereInput = {
     ...(organizationId ? { organizationId } : {}), ...(teamId ? { teamId } : {}), ...(status ? { status } : {}),
     ...(account?.role === 'super_admin' ? {} : {
@@ -234,7 +348,11 @@ export async function listAssignments(userId: string, query: any) {
         { organizationId: { in: principalOrgIds } },
         { organizationId: { in: teacherOrgIds }, CreatorMembership: { userId } },
         { teamId: { in: managedTeamIds } },
-        { Recipients: { some: { userId, status: { not: 'REMOVED' } } }, status: { not: 'DRAFT' } },
+        {
+          Recipients: { some: { userId, status: { not: 'REMOVED' } } },
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+          OR: [{ publishAt: null }, { publishAt: { lte: now } }],
+        },
       ],
     }),
   }
@@ -522,7 +640,11 @@ export async function transitionAssignment(userId: string, assignmentId: string,
     const now = new Date()
     const timestamps = transition.to === 'CLOSED' ? { closedAt: now } : transition.to === 'RELEASED' ? { releasedAt: now } : transition.to === 'ARCHIVED' ? { archivedAt: now } : transition.to === 'CANCELLED' ? { cancelledAt: now } : {}
     await tx.assignment.update({ where: { id: assignmentId }, data: { status: transition.to, ...timestamps, statusRevision: { increment: 1 } } })
-    if (transition.to === 'CLOSED') await createGradeSnapshots(tx, assignmentId, 'CLOSE', userId)
+    if (transition.to === 'CLOSED') {
+      await evaluateAutomaticCorrections(tx, assignmentId, 'CLOSE', userId)
+      await createGradeSnapshots(tx, assignmentId, 'CLOSE', userId)
+    }
+    if (transition.to === 'REVIEWING') await evaluateAutomaticCorrections(tx, assignmentId, 'REVIEW', userId)
     if (transition.to === 'RELEASED') await createGradeSnapshots(tx, assignmentId, 'FINAL_RELEASE', userId)
     await appendEvent(tx, assignmentId, `assignment.${action}`, userId, { from: current.status, to: transition.to })
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
@@ -590,6 +712,9 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
       tx.assignmentRecipient.findUnique({ where: { id: submission.assignmentRecipientId! } }),
     ])
     if (!assignment || !problem || !recipient || problem.assignmentId !== assignment.id || recipient.assignmentId !== assignment.id || recipient.userId !== submission.userId) return
+    const existingProgress = await tx.assignmentProblemProgress.findUnique({
+      where: { assignmentProblemId_recipientId: { assignmentProblemId: problem.id, recipientId: recipient.id } },
+    })
     const submissions = await tx.submission.findMany({
       where: { assignmentProblemId: problem.id, assignmentRecipientId: recipient.id, result: { notIn: ['queuing', 'judging', 'compiling'] } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -618,7 +743,13 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
     const bestSubmission = bestOf(submissions)
     const targetMet = (finalScore ?? 0) >= problem.targetScore
     const accepted = submissions.some(item => ['accepted', 'ac'].includes(String(item.result || '').toLowerCase()))
-    const completed = problem.completionPolicy === 'ATTEMPT' ? true : problem.completionPolicy === 'MANUAL' ? false : problem.completionPolicy === 'AC' ? accepted : targetMet
+    const completed = problem.completionPolicy === 'ATTEMPT'
+      ? true
+      : problem.completionPolicy === 'MANUAL'
+        ? Boolean(existingProgress?.manualCompletedAt)
+        : problem.completionPolicy === 'AC'
+          ? accepted
+          : targetMet
     const common = {
       learningStatus: completed ? 'COMPLETED' as const : targetMet ? 'TARGET_MET' as const : 'SUBMITTED' as const,
       timelinessStatus: originals.some(item => item.submissionPhase === 'LATE') ? 'LATE' as const : 'ON_TIME' as const,
@@ -627,7 +758,7 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
       originalScore, correctionScore, finalScore, firstSubmissionId: submissions[0].id,
       bestSubmissionId: bestSubmission?.id, latestSubmissionId: submissions.at(-1)!.id,
       targetMetAt: targetMet ? submissions.find(item => scoreOf(item) >= problem.targetScore)?.createdAt || new Date() : null,
-      completedAt: completed ? new Date() : null, firstSubmittedAt: submissions[0].createdAt, lastSubmittedAt: submissions.at(-1)!.createdAt,
+      completedAt: completed ? existingProgress?.completedAt || new Date() : null, firstSubmittedAt: submissions[0].createdAt, lastSubmittedAt: submissions.at(-1)!.createdAt,
     }
     const correctionSatisfied = Boolean(activeCorrection && selectedCorrection && correctionScore !== null && correctionScore >= (activeCorrection.requiredScore ?? problem.targetScore))
     const previousCorrection = await tx.assignmentCorrection.findFirst({
@@ -641,17 +772,7 @@ export async function syncAssignmentSubmission(submission: { id: number; userId:
       update: { correctionStatus, ...common },
     })
     if (correctionSatisfied && activeCorrection) await tx.assignmentCorrection.update({ where: { id: activeCorrection.id }, data: { status: 'CORRECTED', completedAt: new Date() } })
-    const progress = await tx.assignmentProblemProgress.findMany({ where: { assignmentId: assignment.id, recipientId: recipient.id }, select: { assignmentProblemId: true, learningStatus: true } })
-    const requiredProblemIds = new Set((await tx.assignmentProblem.findMany({ where: { assignmentId: assignment.id, category: 'REQUIRED' }, select: { id: true } })).map(item => item.id))
-    const requiredProgress = progress.filter(item => requiredProblemIds.has(item.assignmentProblemId))
-    const allRequiredCompleted = requiredProblemIds.size > 0
-      && requiredProgress.length === requiredProblemIds.size
-      && requiredProgress.every(item => ['COMPLETED', 'EXEMPT'].includes(item.learningStatus))
-    if (allRequiredCompleted && recipient.status !== 'COMPLETED') {
-      await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
-    } else if (!allRequiredCompleted && recipient.status === 'COMPLETED') {
-      await tx.assignmentRecipient.update({ where: { id: recipient.id }, data: { status: 'ACTIVE', completedAt: null } })
-    }
+    await recomputeRecipientCompletion(tx, assignment.id, recipient.id)
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
 
@@ -668,6 +789,55 @@ export async function getAssignmentProgress(userId: string, assignmentId: string
     ...summary,
     corrections,
   }
+}
+
+export async function setManualAssignmentProblemCompletion(userId: string, assignmentId: string, progressId: string, body: any) {
+  const assignment = await assertManage(userId, assignmentId)
+  if (['DRAFT', 'CANCELLED', 'ARCHIVED'].includes(assignment.status)) {
+    throw new AssignmentError(409, 'ASSIGNMENT_REVIEW_UNAVAILABLE', '当前作业状态不能人工确认完成情况')
+  }
+  const completed = body?.completed
+  if (typeof completed !== 'boolean') throw new AssignmentError(422, 'MANUAL_COMPLETION_INVALID', 'completed 必须是布尔值')
+  const expectedVersion = Number(body?.expectedVersion)
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 0) throw new AssignmentError(422, 'MANUAL_COMPLETION_VERSION_REQUIRED', '必须提供有效的 expectedVersion')
+  const reason = boundedText(body?.reason, 2000, '人工完成说明', 1)
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`assignment-review:${assignmentId}`}, 0)) IS NULL AS locked`
+    const progress = await tx.assignmentProblemProgress.findFirst({
+      where: { id: progressId, assignmentId },
+      include: { AssignmentProblem: { select: { completionPolicy: true } } },
+    })
+    if (!progress) throw new AssignmentError(404, 'ASSIGNMENT_PROGRESS_NOT_FOUND', '作业进度不存在')
+    if (progress.AssignmentProblem.completionPolicy !== 'MANUAL') {
+      throw new AssignmentError(422, 'MANUAL_COMPLETION_UNSUPPORTED', '该题未使用人工完成条件')
+    }
+    const fallbackStatus = progress.targetMetAt
+      ? 'TARGET_MET' as const
+      : progress.attemptCount > 0
+        ? 'SUBMITTED' as const
+        : 'NOT_STARTED' as const
+    const updated = await tx.assignmentProblemProgress.updateMany({
+      where: { id: progress.id, manualCompletionVersion: expectedVersion },
+      data: {
+        learningStatus: completed ? 'COMPLETED' : fallbackStatus,
+        completedAt: completed ? new Date() : null,
+        manualCompletedAt: completed ? new Date() : null,
+        manualCompletedByUserId: userId,
+        manualCompletionReason: reason,
+        manualCompletionVersion: { increment: 1 },
+      },
+    })
+    if (updated.count !== 1) throw new AssignmentError(409, 'ASSIGNMENT_PROGRESS_STALE', '完成状态已被其他管理员修改，请刷新')
+    await recomputeRecipientCompletion(tx, assignmentId, progress.recipientId)
+    await appendEvent(tx, assignmentId, completed ? 'assignment.progress_manually_completed' : 'assignment.progress_manual_completion_revoked', userId, {
+      progressId: progress.id,
+      assignmentProblemId: progress.assignmentProblemId,
+      recipientId: progress.recipientId,
+      expectedVersion,
+      reason,
+    })
+    return tx.assignmentProblemProgress.findUniqueOrThrow({ where: { id: progress.id } })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }
 
 export async function createAssignmentCorrection(userId: string, assignmentId: string, body: any) {
@@ -784,8 +954,14 @@ export async function processDueAssignments(now = new Date()) {
       else if (current.status === 'SCHEDULED' && current.openAt <= now) next = now >= current.closeAt ? 'CLOSED' : now >= current.dueAt ? 'OVERDUE' : 'OPEN'
       if (!next || next === current.status) return
       await tx.assignment.update({ where: { id: candidate.id }, data: { status: next, ...(next === 'CLOSED' ? { closedAt: now } : {}), statusRevision: { increment: 1 } } })
-      if (next === 'OVERDUE') await createGradeSnapshots(tx, candidate.id, 'DUE', 'system')
-      if (next === 'CLOSED') await createGradeSnapshots(tx, candidate.id, 'CLOSE', 'system')
+      if (next === 'OVERDUE') {
+        await evaluateAutomaticCorrections(tx, candidate.id, 'DUE', null)
+        await createGradeSnapshots(tx, candidate.id, 'DUE', 'system')
+      }
+      if (next === 'CLOSED') {
+        await evaluateAutomaticCorrections(tx, candidate.id, 'CLOSE', null)
+        await createGradeSnapshots(tx, candidate.id, 'CLOSE', 'system')
+      }
       await appendEvent(tx, candidate.id, `assignment.${next.toLowerCase()}`, null, { automatic: true, at: now.toISOString() })
       if (next === 'OPEN') result.opened++
       else if (next === 'OVERDUE') result.overdue++

@@ -46,6 +46,8 @@ describe('platform contest lifecycle', () => {
     })
     expect(contest).toMatchObject({ type: 'contest', scope: 'platform', teamId: null, organizationId: null })
     expect(contest.RatingConfig).toMatchObject({ scope: 'NONE', track: 'IOI', revision: 1 })
+    const aggregate = await prisma.contest.findUniqueOrThrow({ where: { runtimeTrainingId: contest.id } })
+    expect(aggregate).toMatchObject({ title: contest.title, scope: 'platform', format: 'ioi', countRating: false })
 
     const configured = await request(app)
       .put(`/api/trainings/${contest.id}/rating-config`)

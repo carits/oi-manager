@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 source_of_truth: problem modules, OJ routes, adapter registry
 ---
 
@@ -156,6 +156,18 @@ PQS 对题面、标准解/题解、难度与约束设计、OI Subtask 结构生�
 `platform_admin`/`super_admin` 追加算法价值、题解质量与原创性三项；数据库保护自动得分和自动 evidence，
 专家结论不能覆盖既有审核。管理工作台“质量评估”页展示当前/历史 DQS、Confidence、Maturity、
 Critical/Not Ready 状态、任务队列以及 PQS 机器和专家审查结果。
+
+## 题解投稿相似度检查
+
+题解正文与代码的相似度检查是异步风控证据，不直接判定抄袭。每个不可变投稿 Revision 创建唯一
+`SolutionSimilarityJob`，后台 Worker 使用租约、fencing token 和有界重试计算归一化文本/代码的
+bottom-k 指纹，再生成只对题目审核者可见的 `SolutionSimilarityCheck`。审核接口在事务锁内要求当前
+Revision 的任务为 `READY` 且证据存在；QUEUED/RUNNING/FAILED 均不能绕过。
+
+迁移为既有投稿当前 Revision 幂等回填任务：已有旧检查的任务直接标记 READY，其余进入 QUEUED。
+失败任务可由题目管理员显式重试；若历史异常导致任务缺失，重试入口会补建唯一任务。指纹和证据仅用于
+审核提示，不进入作者公开 DTO，也不会自动拒绝投稿。投稿换 Revision 后必须重新计算，旧 Revision 证据
+保持不可变。
 
 外部平台研究和旧实现方案保存在[研究归档](../../archive/research/)和
 [计划归档](../../archive/plans/)。

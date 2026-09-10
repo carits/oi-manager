@@ -1,13 +1,24 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 source_of_truth: Git history
 ---
 
 # 变更记录
 
 本文件记录 2026-07 起的重要行为变化。更早的详细记录保存在[历史变更日志](archive/LEGACY_CHANGELOG.md)。
+
+## 2026-09-10
+
+### 领域差异收口（本地实现，待数据库验证与发布）
+
+- Assignment 学生读取统一受 `publishAt` 约束；管理者可带版本和原因设置人工完成，关闭/逾期/批改会按冻结策略幂等生成自动订正。
+- Training 比赛变更统一维护既有 `Contest/ContestProblem` 规范聚合，状态、时间、元数据和题目 Revision 不再依赖单独迁移后保持同步。
+- Rating 规则升级为 V2，榜单并列排序与 Rating 并列分组使用独立策略，V1 历史重放保持兼容。
+- 题解相似度检查改为持久异步任务和不可变指纹；审核必须等待 READY，失败或历史遗漏任务可由题目管理员重试/补建。
+- Blog 新增 PLATFORM 站内发现和 PUBLIC 匿名知识广场；评论回复使用游标分页；提交只能经作者显式创建的脱敏不可变快照引用，直接引用 Submission/JudgeRun 继续拒绝。
+- 当前只完成本地代码、Prisma 校验、Server/Web 构建和 Web 回归；生产数据库升级验证、全量数据库测试、推送和部署尚未执行。
 
 ## 2026-09-09
 

@@ -232,6 +232,7 @@ enum BlogPostStatus {
 enum BlogVisibility {
   PRIVATE
   ORGANIZATION
+  PLATFORM
   UNLISTED
   PUBLIC
 }
@@ -247,6 +248,7 @@ enum BlogReferenceType {
   SOLUTION_VERSION
   CONTEST_STANDING
   RATING_CHANGE
+  SUBMISSION_SNAPSHOT
 }
 
 enum BlogReferenceRelationType {
@@ -580,32 +582,32 @@ model Contest {
 }
 
 model ContestProblem {
-  id                  String                @id
-  contestId           String
-  runtimeTrainingProblemId String?           @unique
-  canonicalProblemId  String?
-  testSetRevisionId   String?
-  orderIndex          Int
-  title               String?
-  description         String?
-  ojName              String?
-  problemId           String?
-  isCustom            Boolean               @default(false)
-  difficulty          String?
-  points              Int?
-  statementType       String                @default("none")
-  statementMarkdown   String?
-  solutionType        String                @default("none")
-  solutionMarkdown    String?
-  solutionVisible     Boolean               @default(false)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @default(now())
-  Contest             Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  RuntimeTrainingProblem TrainingProblem?     @relation("ContestRuntimeProblem", fields: [runtimeTrainingProblemId], references: [id], onDelete: Restrict)
-  CanonicalProblem    Problem?               @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
-  TestSetRevision     ProblemTestSetRevision? @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
-  ContestProblemScore ContestProblemScore[]
-  ContestResource     ContestResource[]
+  id                       String                  @id
+  contestId                String
+  runtimeTrainingProblemId String?                 @unique
+  canonicalProblemId       String?
+  testSetRevisionId        String?
+  orderIndex               Int
+  title                    String?
+  description              String?
+  ojName                   String?
+  problemId                String?
+  isCustom                 Boolean                 @default(false)
+  difficulty               String?
+  points                   Int?
+  statementType            String                  @default("none")
+  statementMarkdown        String?
+  solutionType             String                  @default("none")
+  solutionMarkdown         String?
+  solutionVisible          Boolean                 @default(false)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @default(now())
+  Contest                  Contest                 @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  RuntimeTrainingProblem   TrainingProblem?        @relation("ContestRuntimeProblem", fields: [runtimeTrainingProblemId], references: [id], onDelete: Restrict)
+  CanonicalProblem         Problem?                @relation("ContestCanonicalProblem", fields: [canonicalProblemId], references: [id], onDelete: Restrict)
+  TestSetRevision          ProblemTestSetRevision? @relation("ContestProblemTestSetRevision", fields: [testSetRevisionId], references: [id], onDelete: Restrict)
+  ContestProblemScore      ContestProblemScore[]
+  ContestResource          ContestResource[]
 
   @@unique([contestId, orderIndex])
   @@index([canonicalProblemId])
@@ -1131,7 +1133,7 @@ model Problem {
   SourceProblem                      Problem?                             @relation("ProblemCopies", fields: [sourceProblemId], references: [id], onDelete: SetNull)
   CopiedProblems                     Problem[]                            @relation("ProblemCopies")
   BlogReferences                     BlogReference[]                      @relation("BlogReferenceProblem")
-  ContestAggregateProblems           ContestProblem[]                    @relation("ContestCanonicalProblem")
+  ContestAggregateProblems           ContestProblem[]                     @relation("ContestCanonicalProblem")
 
   @@unique([libraryKey, platform, problemId])
   @@index([createdAt])
@@ -2408,18 +2410,18 @@ model SolutionContribution {
 }
 
 model SolutionContributionRevision {
-  id                        String                  @id
+  id                        String                    @id
   contributionId            String
   revision                  Int
   title                     String
   summary                   String?
-  contentMarkdown           String                  @db.Text
+  contentMarkdown           String                    @db.Text
   algorithmTags             Json?
   approachKey               String?
   complexityTime            String?
   complexityMemory          String?
   language                  String?
-  referenceCode             String?                 @db.Text
+  referenceCode             String?                   @db.Text
   sourceType                SolutionSourceType
   sourceUrl                 String?
   citation                  String?
@@ -2429,14 +2431,15 @@ model SolutionContributionRevision {
   statementSnapshotHash     String
   targetTestSetRevisionId   String
   contentHash               String
-  submittedAt               DateTime                @default(now())
-  Contribution              SolutionContribution    @relation(fields: [contributionId], references: [id], onDelete: Restrict)
-  TargetTestSetRevision     ProblemTestSetRevision  @relation("SolutionContributionRevisionTarget", fields: [targetTestSetRevisionId], references: [id], onDelete: Restrict)
+  submittedAt               DateTime                  @default(now())
+  Contribution              SolutionContribution      @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  TargetTestSetRevision     ProblemTestSetRevision    @relation("SolutionContributionRevisionTarget", fields: [targetTestSetRevisionId], references: [id], onDelete: Restrict)
   Verification              SolutionVerification?
   Reviews                   SolutionReview[]
   PublishedVersion          ProblemSolutionVersion?
-  SimilarityCheck           SolutionSimilarityCheck?       @relation("SolutionSimilaritySubject")
-  SimilarityMatches         SolutionSimilarityCheck[]       @relation("SolutionSimilarityContributionMatch")
+  SimilarityCheck           SolutionSimilarityCheck?  @relation("SolutionSimilaritySubject")
+  SimilarityJob             SolutionSimilarityJob?
+  SimilarityMatches         SolutionSimilarityCheck[] @relation("SolutionSimilarityContributionMatch")
 
   @@unique([contributionId, revision])
   @@index([targetTestSetRevisionId])
@@ -2567,7 +2570,7 @@ model SolutionSimilarityCheck {
   comparisonCount               Int
   algorithmVersion              Int                           @default(1)
   details                       Json?
-  checkedAt                     DateTime                       @default(now())
+  checkedAt                     DateTime                      @default(now())
   ContributionRevision          SolutionContributionRevision  @relation("SolutionSimilaritySubject", fields: [contributionRevisionId], references: [id], onDelete: Restrict)
   MatchedSolutionVersion        ProblemSolutionVersion?       @relation("SolutionSimilarityPublishedMatch", fields: [matchedSolutionVersionId], references: [id], onDelete: SetNull)
   MatchedContributionRevision   SolutionContributionRevision? @relation("SolutionSimilarityContributionMatch", fields: [matchedContributionRevisionId], references: [id], onDelete: SetNull)
@@ -2575,6 +2578,41 @@ model SolutionSimilarityCheck {
   @@index([riskLevel, checkedAt])
   @@index([matchedSolutionVersionId])
   @@index([matchedContributionRevisionId])
+}
+
+model SolutionSimilarityJob {
+  id                     String                       @id
+  contributionRevisionId String                       @unique
+  status                 String                       @default("QUEUED")
+  attempts               Int                          @default(0)
+  leaseOwner             String?
+  leaseToken             String?
+  leaseExpiresAt         DateTime?
+  nextAttemptAt          DateTime                     @default(now())
+  lastError              String?                      @db.Text
+  startedAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+  ContributionRevision   SolutionContributionRevision @relation(fields: [contributionRevisionId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+  @@index([leaseExpiresAt])
+}
+
+model SolutionContentFingerprint {
+  id               String   @id
+  targetType       String
+  targetId         String
+  contentHash      String
+  algorithmVersion Int      @default(2)
+  textSignature    Json
+  codeSignature    Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([targetType, targetId, algorithmVersion])
+  @@index([contentHash, algorithmVersion])
 }
 
 model School {
@@ -3172,6 +3210,7 @@ model Submission {
   CurrentJudgeRun         JudgeRun?                    @relation("SubmissionCurrentJudgeRun", fields: [currentJudgeRunId], references: [id], onDelete: SetNull)
   SolutionVerification    SolutionVerification?
   QualitySolutionProfiles ProblemSolutionProfile[]
+  BlogSubmissionSnapshots BlogSubmissionSnapshot[]
 
   @@index([contestId])
   @@index([createdAt])
@@ -3550,7 +3589,7 @@ model ProblemTestSetRevision {
   PromotedCandidates              TestcaseCandidate[]               @relation("CandidatePromotedRevision")
   JudgeRuns                       JudgeRun[]
   SolutionContributions           SolutionContribution[]            @relation("SolutionContributionTargetRevision")
-  ContestAggregateProblems        ContestProblem[]                   @relation("ContestProblemTestSetRevision")
+  ContestAggregateProblems        ContestProblem[]                  @relation("ContestProblemTestSetRevision")
   SolutionContributionRevisions   SolutionContributionRevision[]    @relation("SolutionContributionRevisionTarget")
   SolutionVerifications           SolutionVerification[]            @relation("SolutionVerificationTestSetRevision")
   SolutionVersions                ProblemSolutionVersion[]          @relation("SolutionVersionTestSetRevision")
@@ -4132,56 +4171,56 @@ model TrainingSessionTemplateStage {
 }
 
 model Assignment {
-  id                    String                          @id @default(uuid())
-  legacyTrainingId      Int?                            @unique
-  organizationId        String
-  teamId                String?
-  title                 String
-  description           String?                         @db.Text
-  learningObjectives    String?                         @db.Text
-  status                AssignmentStatus                @default(DRAFT)
-  rosterMode            AssignmentRosterMode            @default(SNAPSHOT)
-  gradingPolicy         AssignmentGradingPolicy         @default(BEST_BEFORE_DUE)
-  gradingVersion        Int                             @default(2)
-  baseScoreMax          Int                             @default(100)
-  optionalScoringPolicy AssignmentOptionalScoringPolicy @default(NONE)
-  optionalBestCount     Int?
-  optionalBonusMax      Int                             @default(0)
+  id                     String                           @id @default(uuid())
+  legacyTrainingId       Int?                             @unique
+  organizationId         String
+  teamId                 String?
+  title                  String
+  description            String?                          @db.Text
+  learningObjectives     String?                          @db.Text
+  status                 AssignmentStatus                 @default(DRAFT)
+  rosterMode             AssignmentRosterMode             @default(SNAPSHOT)
+  gradingPolicy          AssignmentGradingPolicy          @default(BEST_BEFORE_DUE)
+  gradingVersion         Int                              @default(2)
+  baseScoreMax           Int                              @default(100)
+  optionalScoringPolicy  AssignmentOptionalScoringPolicy  @default(NONE)
+  optionalBestCount      Int?
+  optionalBonusMax       Int                              @default(0)
   challengeScoringPolicy AssignmentChallengeScoringPolicy @default(NONE)
-  challengeBonusMax     Int                             @default(0)
-  latePolicy            AssignmentLatePolicy            @default(DISALLOW)
-  correctionPolicy      AssignmentCorrectionPolicy      @default(NONE)
-  solutionReleasePolicy AssignmentSolutionReleasePolicy @default(AFTER_RELEASE)
-  latePenaltyPercent    Int?
-  publishAt             DateTime?
-  openAt                DateTime
-  dueAt                 DateTime
-  closeAt               DateTime
-  correctionDueAt       DateTime?
-  createdByMembershipId String
-  statusRevision        Int                             @default(0)
-  eventSeq              Int                             @default(0)
-  publishedAt           DateTime?
-  closedAt              DateTime?
-  releasedAt            DateTime?
-  archivedAt            DateTime?
-  cancelledAt           DateTime?
-  createdAt             DateTime                        @default(now())
-  updatedAt             DateTime                        @updatedAt
-  Organization          Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  Team                  Team?                           @relation(fields: [teamId], references: [id], onDelete: Restrict)
-  CreatorMembership     OrganizationMembership          @relation("AssignmentCreatorMembership", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
-  LegacyTraining        Training?                       @relation(fields: [legacyTrainingId], references: [id], onDelete: SetNull)
-  Problems              AssignmentProblem[]
-  Recipients            AssignmentRecipient[]
-  RecipientOverrides    AssignmentRecipientOverride[]
-  Progress              AssignmentProblemProgress[]
-  Corrections           AssignmentCorrection[]
-  Feedback              AssignmentFeedback[]
-  ScoreAdjustments      AssignmentScoreAdjustment[]
-  GradeSnapshots        AssignmentGradeSnapshot[]
-  Events                AssignmentEvent[]
-  Submissions           Submission[]
+  challengeBonusMax      Int                              @default(0)
+  latePolicy             AssignmentLatePolicy             @default(DISALLOW)
+  correctionPolicy       AssignmentCorrectionPolicy       @default(NONE)
+  solutionReleasePolicy  AssignmentSolutionReleasePolicy  @default(AFTER_RELEASE)
+  latePenaltyPercent     Int?
+  publishAt              DateTime?
+  openAt                 DateTime
+  dueAt                  DateTime
+  closeAt                DateTime
+  correctionDueAt        DateTime?
+  createdByMembershipId  String
+  statusRevision         Int                              @default(0)
+  eventSeq               Int                              @default(0)
+  publishedAt            DateTime?
+  closedAt               DateTime?
+  releasedAt             DateTime?
+  archivedAt             DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime                         @default(now())
+  updatedAt              DateTime                         @updatedAt
+  Organization           Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  Team                   Team?                            @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  CreatorMembership      OrganizationMembership           @relation("AssignmentCreatorMembership", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+  LegacyTraining         Training?                        @relation(fields: [legacyTrainingId], references: [id], onDelete: SetNull)
+  Problems               AssignmentProblem[]
+  Recipients             AssignmentRecipient[]
+  RecipientOverrides     AssignmentRecipientOverride[]
+  Progress               AssignmentProblemProgress[]
+  Corrections            AssignmentCorrection[]
+  Feedback               AssignmentFeedback[]
+  ScoreAdjustments       AssignmentScoreAdjustment[]
+  GradeSnapshots         AssignmentGradeSnapshot[]
+  Events                 AssignmentEvent[]
+  Submissions            Submission[]
 
   @@index([organizationId, status, openAt])
   @@index([teamId, status, openAt])
@@ -4276,33 +4315,38 @@ model AssignmentRecipientOverride {
 }
 
 model AssignmentProblemProgress {
-  id                     String                     @id @default(uuid())
-  assignmentId           String
-  assignmentProblemId    String
-  recipientId            String
-  learningStatus         AssignmentLearningStatus   @default(NOT_STARTED)
-  timelinessStatus       AssignmentTimelinessStatus @default(ON_TIME)
-  correctionStatus       AssignmentCorrectionStatus @default(NONE)
-  attemptCount           Int                        @default(0)
-  originalAttemptCount   Int                        @default(0)
-  correctionAttemptCount Int                        @default(0)
-  bestScore              Int?
-  bestVerdict            String?
-  originalScore          Int?
-  correctionScore        Int?
-  finalScore             Int?
-  firstSubmissionId      Int?
-  bestSubmissionId       Int?
-  latestSubmissionId     Int?
-  targetMetAt            DateTime?
-  completedAt            DateTime?
-  firstSubmittedAt       DateTime?
-  lastSubmittedAt        DateTime?
-  createdAt              DateTime                   @default(now())
-  updatedAt              DateTime                   @updatedAt
-  Assignment             Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  AssignmentProblem      AssignmentProblem          @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
-  Recipient              AssignmentRecipient        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  id                      String                     @id @default(uuid())
+  assignmentId            String
+  assignmentProblemId     String
+  recipientId             String
+  learningStatus          AssignmentLearningStatus   @default(NOT_STARTED)
+  timelinessStatus        AssignmentTimelinessStatus @default(ON_TIME)
+  correctionStatus        AssignmentCorrectionStatus @default(NONE)
+  attemptCount            Int                        @default(0)
+  originalAttemptCount    Int                        @default(0)
+  correctionAttemptCount  Int                        @default(0)
+  bestScore               Int?
+  bestVerdict             String?
+  originalScore           Int?
+  correctionScore         Int?
+  finalScore              Int?
+  firstSubmissionId       Int?
+  bestSubmissionId        Int?
+  latestSubmissionId      Int?
+  targetMetAt             DateTime?
+  completedAt             DateTime?
+  manualCompletionVersion Int                        @default(0)
+  manualCompletedAt       DateTime?
+  manualCompletedByUserId String?
+  manualCompletionReason  String?
+  firstSubmittedAt        DateTime?
+  lastSubmittedAt         DateTime?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  Assignment              Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  AssignmentProblem       AssignmentProblem          @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
+  Recipient               AssignmentRecipient        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  ManualCompletedBy       User?                      @relation("AssignmentProgressManualCompleter", fields: [manualCompletedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([assignmentProblemId, recipientId])
   @@index([assignmentId, learningStatus])
@@ -4310,22 +4354,26 @@ model AssignmentProblemProgress {
 }
 
 model AssignmentCorrection {
-  id                  String                     @id @default(uuid())
+  id                  String                      @id @default(uuid())
   assignmentId        String
   assignmentProblemId String
   recipientId         String
-  status              AssignmentCorrectionStatus @default(NEEDS_CORRECTION)
+  status              AssignmentCorrectionStatus  @default(NEEDS_CORRECTION)
   assignedBy          String
+  source              String                      @default("teacher")
+  policyCode          AssignmentCorrectionPolicy?
+  policyEvaluationKey String?                     @unique
+  policyEvaluatedAt   DateTime?
   reason              String?
   requiredScore       Int?
   dueAt               DateTime?
   completedAt         DateTime?
   waivedAt            DateTime?
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @updatedAt
-  Assignment          Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  AssignmentProblem   AssignmentProblem          @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
-  Recipient           AssignmentRecipient        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  Assignment          Assignment                  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  AssignmentProblem   AssignmentProblem           @relation(fields: [assignmentProblemId], references: [id], onDelete: Cascade)
+  Recipient           AssignmentRecipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([assignmentId, status, dueAt])
   @@index([recipientId, status])
@@ -4513,7 +4561,7 @@ model TrainingProblem {
   ContentSnapshot           TrainingProblemContentSnapshot[]
   StatementSet              TrainingProblemStatementSet[]
   TrainingUserProblemStatus TrainingUserProblemStatus[]
-  ContestAggregateProblem   ContestProblem?                   @relation("ContestRuntimeProblem")
+  ContestAggregateProblem   ContestProblem?                  @relation("ContestRuntimeProblem")
 
   @@unique([trainingId, alias])
   @@unique([trainingId, orderIndex])
@@ -4637,6 +4685,7 @@ model User {
   TrainingUserProblemStatus                TrainingUserProblemStatus[]
   TrainingSessionParticipants              TrainingSessionParticipant[]
   AssignmentRecipients                     AssignmentRecipient[]
+  ManuallyCompletedAssignmentProgress       AssignmentProblemProgress[]       @relation("AssignmentProgressManualCompleter")
   RatingAccounts                           RatingAccount[]
   RatingChanges                            RatingChange[]
   ContestStandingEntries                   ContestStandingEntry[]
@@ -4695,6 +4744,7 @@ model User {
   BlogReportsFiled                         BlogReport[]                      @relation("BlogReportReporter")
   BlogReportsReviewed                      BlogReport[]                      @relation("BlogReportReviewer")
   BlogFeaturesCreated                      BlogFeature[]                     @relation("BlogFeatureCreator")
+  BlogSubmissionSnapshots                  BlogSubmissionSnapshot[]
   CreatedDataProducts                      DataProduct[]                     @relation("DataProductSellerUser")
   DataPurchases                            DataPurchase[]
   DataEntitlements                         DataEntitlement[]
@@ -5101,32 +5151,34 @@ model BlogPostVersion {
 }
 
 model BlogReference {
-  id                 String                    @id
-  postVersionId      String
-  ordinal            Int
-  referenceType      BlogReferenceType
-  referenceId        String
-  referenceVersionId String?
-  relationType       BlogReferenceRelationType @default(MENTION)
-  displayMode        BlogReferenceDisplayMode  @default(CARD)
-  positionKey        String?
-  snapshotData       Json
-  accessMode         BlogVisibility
-  status             BlogReferenceStatus       @default(CURRENT)
-  problemId          String?
-  problemRevisionId  String?
-  solutionVersionId  String?
-  trainingId         Int?
-  standingSnapshotId String?
-  ratingChangeId     String?
-  createdAt          DateTime                  @default(now())
-  PostVersion        BlogPostVersion           @relation(fields: [postVersionId], references: [id], onDelete: Restrict)
-  Problem            Problem?                  @relation("BlogReferenceProblem", fields: [problemId], references: [id], onDelete: Restrict)
-  ProblemRevision    ProblemTestSetRevision?   @relation("BlogReferenceProblemRevision", fields: [problemRevisionId], references: [id], onDelete: Restrict)
-  SolutionVersion    ProblemSolutionVersion?   @relation(fields: [solutionVersionId], references: [id], onDelete: Restrict)
-  Training           Training?                 @relation(fields: [trainingId], references: [id], onDelete: Restrict)
-  StandingSnapshot   ContestStandingSnapshot?  @relation(fields: [standingSnapshotId], references: [id], onDelete: Restrict)
-  RatingChange       RatingChange?             @relation(fields: [ratingChangeId], references: [id], onDelete: Restrict)
+  id                   String                    @id
+  postVersionId        String
+  ordinal              Int
+  referenceType        BlogReferenceType
+  referenceId          String
+  referenceVersionId   String?
+  relationType         BlogReferenceRelationType @default(MENTION)
+  displayMode          BlogReferenceDisplayMode  @default(CARD)
+  positionKey          String?
+  snapshotData         Json
+  accessMode           BlogVisibility
+  status               BlogReferenceStatus       @default(CURRENT)
+  problemId            String?
+  problemRevisionId    String?
+  solutionVersionId    String?
+  trainingId           Int?
+  standingSnapshotId   String?
+  ratingChangeId       String?
+  submissionSnapshotId String?
+  createdAt            DateTime                  @default(now())
+  PostVersion          BlogPostVersion           @relation(fields: [postVersionId], references: [id], onDelete: Restrict)
+  Problem              Problem?                  @relation("BlogReferenceProblem", fields: [problemId], references: [id], onDelete: Restrict)
+  ProblemRevision      ProblemTestSetRevision?   @relation("BlogReferenceProblemRevision", fields: [problemRevisionId], references: [id], onDelete: Restrict)
+  SolutionVersion      ProblemSolutionVersion?   @relation(fields: [solutionVersionId], references: [id], onDelete: Restrict)
+  Training             Training?                 @relation(fields: [trainingId], references: [id], onDelete: Restrict)
+  StandingSnapshot     ContestStandingSnapshot?  @relation(fields: [standingSnapshotId], references: [id], onDelete: Restrict)
+  RatingChange         RatingChange?             @relation(fields: [ratingChangeId], references: [id], onDelete: Restrict)
+  SubmissionSnapshot   BlogSubmissionSnapshot?   @relation(fields: [submissionSnapshotId], references: [id], onDelete: Restrict)
 
   @@unique([postVersionId, ordinal])
   @@index([referenceType, referenceId])
@@ -5136,6 +5188,36 @@ model BlogReference {
   @@index([standingSnapshotId])
   @@index([ratingChangeId])
   @@index([problemRevisionId])
+  @@index([submissionSnapshotId])
+}
+
+model BlogSubmissionSnapshot {
+  id              String          @id
+  submissionId    Int
+  ownerUserId     String
+  visibility      BlogVisibility  @default(PRIVATE)
+  includeCode     Boolean         @default(false)
+  sourcePlatform  String
+  sourceProblemId String
+  problemTitle    String?
+  result          String
+  score           Int?
+  timeUsed        Int?
+  memoryUsed      Int?
+  language        String
+  inputFilename   String?
+  outputFilename  String?
+  code            String?         @db.Text
+  submittedAt     DateTime
+  contentHash     String
+  createdAt       DateTime        @default(now())
+  Submission      Submission      @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  Owner           User            @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  BlogReferences  BlogReference[]
+
+  @@index([ownerUserId, createdAt])
+  @@index([submissionId, createdAt])
+  @@index([contentHash])
 }
 
 model BlogSeries {
@@ -5275,15 +5357,15 @@ model BlogReport {
 }
 
 model BlogFeature {
-  id              String   @id
+  id              String    @id
   postId          String
   createdByUserId String
-  status          String   @default("active")
+  status          String    @default("active")
   reason          String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
   retiredAt       DateTime?
-  Post            BlogPost @relation(fields: [postId], references: [id], onDelete: Restrict)
-  CreatedBy       User     @relation("BlogFeatureCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  Post            BlogPost  @relation(fields: [postId], references: [id], onDelete: Restrict)
+  CreatedBy       User      @relation("BlogFeatureCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
   @@index([postId, status])

@@ -15,7 +15,7 @@ import { createQueuedSubmissionWithRun } from '../judge/application/judge-run.se
 import { normalizeSubmissionIo } from '../judge/domain/submission-io'
 import { canModifyProblem, canViewProblem } from '../problem/problem.access'
 import { resolveContributionOrganization } from '../contribution/application/contribution.service'
-import { compareSolutionContent, similarityRisk } from './solution-similarity'
+import { compareSolutionFingerprints, createSolutionContentFingerprint, similarityRisk, type SolutionContentFingerprint } from './solution-similarity'
 
 const MAX_MARKDOWN_BYTES = 1024 * 1024
 const MAX_CODE_BYTES = 512 * 1024
@@ -247,7 +247,7 @@ async function createSnapshot(user: JwtPayload, contributionId: string, resubmit
       data: { status: 'SUBMITTED', currentRevision: revisionNumber, submittedAt: now, statementSnapshotHash: statement.hash },
     })
     if (!changed.count) fail(409, 'SOLUTION_SUBMISSION_STALE', '投稿已被其他请求更新')
-    return tx.solutionContributionRevision.create({ data: {
+    const revision = await tx.solutionContributionRevision.create({ data: {
       id: revisionId, contributionId: contribution.id, revision: revisionNumber,
       title: fields.title, summary: fields.summary, contentMarkdown: fields.contentMarkdown,
       algorithmTags: fields.algorithmTags ?? Prisma.JsonNull, approachKey: fields.approachKey,
@@ -259,6 +259,8 @@ async function createSnapshot(user: JwtPayload, contributionId: string, resubmit
       targetTestSetRevisionId: contribution.targetTestSetRevisionId,
       contentHash: snapshotHash(fields, statement.hash, contribution.targetTestSetRevisionId), submittedAt: now,
     } })
+    await tx.solutionSimilarityJob.create({ data: { id: crypto.randomUUID(), contributionRevisionId: revision.id } })
+    return revision
   })
 }
 
@@ -320,7 +322,52 @@ async function queueVerification(revisionId: string) {
   }
 }
 
-async function runSimilarityCheck(revisionId: string) {
+type SimilarityFingerprintTarget = {
+  targetType: 'contribution_revision' | 'solution_version'
+  targetId: string
+  contentHash: string
+  contentMarkdown: string
+  referenceCode?: string | null
+}
+
+async function loadOrCreateFingerprints(targets: SimilarityFingerprintTarget[]) {
+  const stored = await prisma.solutionContentFingerprint.findMany({
+    where: {
+      algorithmVersion: 2,
+      OR: [
+        { targetType: 'contribution_revision', targetId: { in: targets.filter(item => item.targetType === 'contribution_revision').map(item => item.targetId) } },
+        { targetType: 'solution_version', targetId: { in: targets.filter(item => item.targetType === 'solution_version').map(item => item.targetId) } },
+      ],
+    },
+  })
+  const storedByKey = new Map(stored.map(item => [`${item.targetType}:${item.targetId}`, item]))
+  const fingerprints = new Map<string, SolutionContentFingerprint>()
+  for (const target of targets) {
+    const key = `${target.targetType}:${target.targetId}`
+    const existing = storedByKey.get(key)
+    if (existing?.contentHash === target.contentHash) {
+      fingerprints.set(key, {
+        textSignature: Array.isArray(existing.textSignature) ? existing.textSignature.map(Number) : [],
+        codeSignature: Array.isArray(existing.codeSignature) ? existing.codeSignature.map(Number) : [],
+      })
+      continue
+    }
+    const fingerprint = createSolutionContentFingerprint(target)
+    await prisma.solutionContentFingerprint.upsert({
+      where: { targetType_targetId_algorithmVersion: { targetType: target.targetType, targetId: target.targetId, algorithmVersion: 2 } },
+      create: {
+        id: crypto.randomUUID(), targetType: target.targetType, targetId: target.targetId,
+        contentHash: target.contentHash, algorithmVersion: 2,
+        textSignature: fingerprint.textSignature, codeSignature: fingerprint.codeSignature,
+      },
+      update: { contentHash: target.contentHash, textSignature: fingerprint.textSignature, codeSignature: fingerprint.codeSignature },
+    })
+    fingerprints.set(key, fingerprint)
+  }
+  return fingerprints
+}
+
+export async function runSimilarityCheck(revisionId: string) {
   const subject = await prisma.solutionContributionRevision.findUniqueOrThrow({
     where: { id: revisionId },
     include: { Contribution: { select: { id: true, problemId: true, sourceType: true, sourceUrl: true, citation: true } } },
@@ -329,7 +376,7 @@ async function runSimilarityCheck(revisionId: string) {
     prisma.problemSolutionVersion.findMany({
       where: { Solution: { problemId: subject.Contribution.problemId }, status: 'PUBLISHED' },
       orderBy: { publishedAt: 'desc' }, take: 200,
-      select: { id: true, contentMarkdown: true, referenceCode: true },
+      select: { id: true, contentHash: true, contentMarkdown: true, referenceCode: true },
     }),
     prisma.solutionContributionRevision.findMany({
       where: {
@@ -341,52 +388,109 @@ async function runSimilarityCheck(revisionId: string) {
         },
       },
       orderBy: { submittedAt: 'desc' }, take: 200,
-      select: { id: true, contentMarkdown: true, referenceCode: true },
+      select: { id: true, contentHash: true, contentMarkdown: true, referenceCode: true },
     }),
   ])
-  let best: ReturnType<typeof compareSolutionContent> & {
-    matchedSolutionVersionId: string | null
-    matchedContributionRevisionId: string | null
-  } = {
+  const targets: SimilarityFingerprintTarget[] = [
+    { targetType: 'contribution_revision', targetId: subject.id, contentHash: subject.contentHash, contentMarkdown: subject.contentMarkdown, referenceCode: subject.referenceCode },
+    ...published.map(item => ({ targetType: 'solution_version' as const, targetId: item.id, contentHash: item.contentHash, contentMarkdown: item.contentMarkdown, referenceCode: item.referenceCode })),
+    ...contributions.map(item => ({ targetType: 'contribution_revision' as const, targetId: item.id, contentHash: item.contentHash, contentMarkdown: item.contentMarkdown, referenceCode: item.referenceCode })),
+  ]
+  const fingerprints = await loadOrCreateFingerprints(targets)
+  const subjectFingerprint = fingerprints.get(`contribution_revision:${subject.id}`)!
+  let best = {
     textSimilarityBasisPoints: 0,
     codeSimilarityBasisPoints: 0,
     maximumSimilarityBasisPoints: 0,
-    matchedSolutionVersionId: null,
-    matchedContributionRevisionId: null,
+    matchedSolutionVersionId: null as string | null,
+    matchedContributionRevisionId: null as string | null,
   }
   for (const candidate of published) {
-    const score = compareSolutionContent(subject, candidate)
-    if (score.maximumSimilarityBasisPoints > best.maximumSimilarityBasisPoints) {
-      best = { ...score, matchedSolutionVersionId: candidate.id, matchedContributionRevisionId: null }
-    }
+    const score = compareSolutionFingerprints(subjectFingerprint, fingerprints.get(`solution_version:${candidate.id}`)!)
+    if (score.maximumSimilarityBasisPoints > best.maximumSimilarityBasisPoints) best = { ...score, matchedSolutionVersionId: candidate.id, matchedContributionRevisionId: null }
   }
   for (const candidate of contributions) {
-    const score = compareSolutionContent(subject, candidate)
-    if (score.maximumSimilarityBasisPoints > best.maximumSimilarityBasisPoints) {
-      best = { ...score, matchedSolutionVersionId: null, matchedContributionRevisionId: candidate.id }
-    }
+    const score = compareSolutionFingerprints(subjectFingerprint, fingerprints.get(`contribution_revision:${candidate.id}`)!)
+    if (score.maximumSimilarityBasisPoints > best.maximumSimilarityBasisPoints) best = { ...score, matchedSolutionVersionId: null, matchedContributionRevisionId: candidate.id }
   }
-  const sourceDeclared = subject.Contribution.sourceType !== 'ORIGINAL'
-    && Boolean(subject.Contribution.sourceUrl || subject.Contribution.citation)
+  const sourceDeclared = subject.Contribution.sourceType !== 'ORIGINAL' && Boolean(subject.Contribution.sourceUrl || subject.Contribution.citation)
   return prisma.solutionSimilarityCheck.upsert({
     where: { contributionRevisionId: revisionId },
     create: {
       id: crypto.randomUUID(), contributionRevisionId: revisionId,
       ...best, riskLevel: similarityRisk(best.maximumSimilarityBasisPoints), sourceDeclared,
-      comparisonCount: published.length + contributions.length,
-      details: { algorithm: 'prose-shingle-v1/code-token-v1', warningOnly: true },
+      comparisonCount: published.length + contributions.length, algorithmVersion: 2,
+      details: { algorithm: 'bottom-k-prose-code-v2', signatureSize: 256, warningOnly: true },
     },
     update: {
       ...best, riskLevel: similarityRisk(best.maximumSimilarityBasisPoints), sourceDeclared,
-      comparisonCount: published.length + contributions.length,
-      details: { algorithm: 'prose-shingle-v1/code-token-v1', warningOnly: true }, checkedAt: new Date(),
+      comparisonCount: published.length + contributions.length, algorithmVersion: 2,
+      details: { algorithm: 'bottom-k-prose-code-v2', signatureSize: 256, warningOnly: true }, checkedAt: new Date(),
     },
   })
 }
 
+async function claimSimilarityJob() {
+  const now = new Date()
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('solution-similarity-job-claim', 0)) IS NULL AS locked`
+    const job = await tx.solutionSimilarityJob.findFirst({
+      where: {
+        nextAttemptAt: { lte: now },
+        OR: [
+          { status: 'QUEUED' },
+          { status: 'RUNNING', leaseExpiresAt: { lt: now } },
+        ],
+      },
+      orderBy: [{ nextAttemptAt: 'asc' }, { createdAt: 'asc' }],
+    })
+    if (!job) return null
+    const leaseToken = crypto.randomUUID()
+    const leaseOwner = process.env.INSTANCE_ID || `pid:${process.pid}`
+    const claimed = await tx.solutionSimilarityJob.updateMany({
+      where: { id: job.id, status: job.status, attempts: job.attempts },
+      data: {
+        status: 'RUNNING', attempts: { increment: 1 }, leaseToken, leaseOwner,
+        leaseExpiresAt: new Date(now.getTime() + 5 * 60_000), startedAt: job.startedAt || now, lastError: null,
+      },
+    })
+    return claimed.count === 1 ? { ...job, attempts: job.attempts + 1, leaseToken } : null
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+}
+
+export async function processSolutionSimilarityJobs(limit = 1) {
+  const result = { processed: 0, ready: 0, failed: 0 }
+  for (let index = 0; index < Math.max(1, Math.min(limit, 10)); index += 1) {
+    const job = await claimSimilarityJob()
+    if (!job) break
+    result.processed++
+    try {
+      await runSimilarityCheck(job.contributionRevisionId)
+      const finalized = await prisma.solutionSimilarityJob.updateMany({
+        where: { id: job.id, status: 'RUNNING', leaseToken: job.leaseToken },
+        data: { status: 'READY', completedAt: new Date(), leaseOwner: null, leaseToken: null, leaseExpiresAt: null },
+      })
+      if (finalized.count === 1) result.ready++
+    } catch (error) {
+      const exhausted = job.attempts >= 3
+      await prisma.solutionSimilarityJob.updateMany({
+        where: { id: job.id, status: 'RUNNING', leaseToken: job.leaseToken },
+        data: {
+          status: exhausted ? 'FAILED' : 'QUEUED',
+          nextAttemptAt: new Date(Date.now() + Math.min(60_000, 2 ** job.attempts * 1_000)),
+          lastError: String((error as Error).message || error).slice(0, 2000),
+          completedAt: exhausted ? new Date() : null,
+          leaseOwner: null, leaseToken: null, leaseExpiresAt: null,
+        },
+      })
+      if (exhausted) result.failed++
+    }
+  }
+  return result
+}
+
 export async function submitSolutionContribution(user: JwtPayload, id: string, resubmit = false) {
   const revision = await createSnapshot(user, id, resubmit)
-  await runSimilarityCheck(revision.id)
   await queueVerification(revision.id)
   return getSolutionContribution(user, id)
 }
@@ -437,6 +541,36 @@ export async function refreshSolutionVerification(user: JwtPayload, contribution
   return synchronizeVerificationRecord(contribution.id, verification)
 }
 
+export async function retrySolutionSimilarity(user: JwtPayload, contributionId: string) {
+  const contribution = await prisma.solutionContribution.findUnique({
+    where: { id: contributionId },
+    include: { Problem: true, Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { SimilarityJob: true } } },
+  })
+  if (!contribution || !canModifyProblem(user, contribution.Problem)) fail(403, 'SOLUTION_REVIEW_FORBIDDEN', '只有题目管理员可以重试相似度检查')
+  const revision = contribution.Revisions[0]
+  if (!revision) fail(409, 'SOLUTION_REVISION_NOT_FOUND', '当前投稿版本不存在')
+  const job = revision.SimilarityJob
+  if (!job) {
+    return prisma.solutionSimilarityJob.upsert({
+      where: { contributionRevisionId: revision.id },
+      create: {
+        id: crypto.randomUUID(),
+        contributionRevisionId: revision.id,
+        status: 'QUEUED',
+        nextAttemptAt: new Date(),
+      },
+      update: {},
+    })
+  }
+  if (job.status !== 'FAILED') fail(409, 'SOLUTION_SIMILARITY_RETRY_INVALID', '只有失败的相似度任务可以重试')
+  const changed = await prisma.solutionSimilarityJob.updateMany({
+    where: { id: job.id, status: 'FAILED' },
+    data: { status: 'QUEUED', attempts: 0, nextAttemptAt: new Date(), leaseOwner: null, leaseToken: null, leaseExpiresAt: null, startedAt: null, completedAt: null, lastError: null },
+  })
+  if (!changed.count) fail(409, 'SOLUTION_SIMILARITY_RETRY_CONFLICT', '相似度任务状态已变化，请刷新')
+  return prisma.solutionSimilarityJob.findUniqueOrThrow({ where: { id: job.id } })
+}
+
 async function requireReviewer(user: JwtPayload, contributionId: string) {
   const contribution = await prisma.solutionContribution.findUnique({ where: { id: contributionId }, include: { Problem: true } })
   if (!contribution || !canModifyProblem(user, contribution.Problem)) fail(403, 'SOLUTION_REVIEW_FORBIDDEN', '只有题目管理员可以审核该投稿')
@@ -454,8 +588,14 @@ export async function recordSolutionReview(user: JwtPayload, contributionId: str
   const status = decision === 'APPROVE' ? 'UNDER_REVIEW' : decision === 'REQUEST_CHANGES' ? 'NEEDS_REVISION' : 'REJECTED'
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`solution-review:${contributionId}`}, 0)) IS NULL AS locked`
-    const revision = await tx.solutionContributionRevision.findUnique({ where: { contributionId_revision: { contributionId, revision: contribution.currentRevision } } })
+    const revision = await tx.solutionContributionRevision.findUnique({
+      where: { contributionId_revision: { contributionId, revision: contribution.currentRevision } },
+      include: { SimilarityJob: true, SimilarityCheck: true },
+    })
     if (!revision) fail(409, 'SOLUTION_REVISION_NOT_FOUND', '当前送审版本不存在')
+    if (revision.SimilarityJob?.status !== 'READY' || !revision.SimilarityCheck) {
+      fail(409, revision.SimilarityJob?.status === 'FAILED' ? 'SOLUTION_SIMILARITY_FAILED' : 'SOLUTION_SIMILARITY_PENDING', revision.SimilarityJob?.status === 'FAILED' ? '相似度检查失败，请联系平台管理员重试' : '相似度检查尚未完成，请稍后再审核')
+    }
     const review = await tx.solutionReview.create({ data: {
       id: crypto.randomUUID(), contributionId, contributionRevisionId: revision.id,
       reviewerUserId: user.userId, reviewType, decision,
@@ -587,7 +727,7 @@ export async function publishSolutionContribution(user: JwtPayload, contribution
 export async function getSolutionContribution(user: JwtPayload, id: string) {
   const item = await prisma.solutionContribution.findUnique({
     where: { id }, include: {
-      Problem: true, Revisions: { orderBy: { revision: 'desc' }, include: { Verification: true, SimilarityCheck: true } },
+      Problem: true, Revisions: { orderBy: { revision: 'desc' }, include: { Verification: true, SimilarityCheck: true, SimilarityJob: true } },
       Reviews: { orderBy: { createdAt: 'asc' }, include: { Reviewer: { select: { id: true, username: true } } } },
     },
   })
@@ -609,7 +749,7 @@ export async function getSolutionContribution(user: JwtPayload, id: string) {
 export async function listMySolutionContributions(user: JwtPayload, problemId?: string) {
   return prisma.solutionContribution.findMany({
     where: { authorUserId: user.userId, ...(problemId ? { problemId } : {}) },
-    orderBy: { updatedAt: 'desc' }, include: { Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { Verification: true } } },
+    orderBy: { updatedAt: 'desc' }, include: { Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { Verification: true, SimilarityJob: true } } },
   })
 }
 
@@ -632,7 +772,7 @@ export async function listSolutionReviewQueue(user: JwtPayload, status?: string)
     },
     orderBy: { submittedAt: 'asc' }, include: {
       Author: { select: { id: true, username: true } }, Problem: { select: { id: true, problemId: true, title: true } },
-      Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { Verification: true, SimilarityCheck: true } },
+      Revisions: { orderBy: { revision: 'desc' }, take: 1, include: { Verification: true, SimilarityCheck: true, SimilarityJob: true } },
     },
   })
 }

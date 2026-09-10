@@ -97,6 +97,16 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   }
 }
 
+/** Public reads may attach an account identity when one is present, while a
+ * genuinely anonymous request remains valid. Invalid supplied credentials are
+ * still rejected instead of being silently downgraded to anonymous access. */
+export async function optionalAuthenticate(req: AuthRequest, res: Response, next: NextFunction) {
+  const hasBearer = Boolean(req.headers.authorization?.startsWith('Bearer '))
+  const hasCookie = Boolean(getSessionToken(req))
+  if (!hasBearer && !hasCookie) return next()
+  return authenticate(req, res, next)
+}
+
 export function getActiveOrganizationId(user?: JwtPayload): string | undefined {
   return user?.organizationId
 }

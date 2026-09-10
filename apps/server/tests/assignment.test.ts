@@ -84,6 +84,37 @@ describe('independent assignment domain', () => {
     expect(peerList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)
   })
 
+  it('keeps scheduled assignments hidden from recipients until publishAt', async () => {
+    const token = generateTokenFromUser(teacher.user)
+    const studentToken = generateTokenFromUser(student.user)
+    const now = Date.now()
+    const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({
+      organizationId,
+      title: '延迟发布作业',
+      publishAt: new Date(now + 30_000),
+      openAt: new Date(now + 60_000),
+      dueAt: new Date(now + 120_000),
+      closeAt: new Date(now + 180_000),
+    })
+    const assignmentId = created.body.data.id
+    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({
+      expectedRevision: 0,
+      problems: [{ problemId: problem.id, testSetRevisionId: revision.id }],
+    })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
+    await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
+
+    expect((await createAuthenticatedRequest(app, token).get(`/api/assignments/${assignmentId}`)).status).toBe(200)
+    expect((await createAuthenticatedRequest(app, studentToken).get(`/api/assignments/${assignmentId}`)).status).toBe(404)
+    expect((await createAuthenticatedRequest(app, studentToken).get(`/api/assignments/${assignmentId}/workspace`)).status).toBe(404)
+    const hiddenList = await createAuthenticatedRequest(app, studentToken).get('/api/assignments')
+    expect(hiddenList.body.data.items.some((item: any) => item.id === assignmentId)).toBe(false)
+
+    await prisma.assignment.update({ where: { id: assignmentId }, data: { publishAt: new Date(now - 1_000) } })
+    expect((await createAuthenticatedRequest(app, studentToken).get(`/api/assignments/${assignmentId}`)).status).toBe(200)
+  })
+
   it('rejects stale edits and invalid cross-problem revisions', async () => {
     const token = generateTokenFromUser(teacher.user)
     const now = Date.now()
@@ -179,6 +210,56 @@ describe('independent assignment domain', () => {
     expect(managerWorkspace.body.data.canManage).toBe(true)
     expect(managerWorkspace.body.data.managerProgress.recipients).toHaveLength(1)
     expect(managerWorkspace.body.data.managerProgress.recipients[0]).toMatchObject({ id: recipientId, score: 0, adjustment: 0 })
+  })
+
+  it('supports optimistic teacher completion for MANUAL problems', async () => {
+    const token = generateTokenFromUser(teacher.user)
+    const now = Date.now()
+    const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({
+      organizationId, title: '人工完成作业', openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000),
+    })
+    const assignmentId = created.body.data.id
+    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({
+      expectedRevision: 0,
+      problems: [{ problemId: problem.id, testSetRevisionId: revision.id, completionPolicy: 'MANUAL' }],
+    })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
+    await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
+    const progress = await prisma.assignmentProblemProgress.findFirstOrThrow({ where: { assignmentId } })
+    const completed = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/progress/${progress.id}/manual-completion`).send({ completed: true, reason: '课堂任务已现场验收', expectedVersion: 0 })
+    expect(completed.status).toBe(200)
+    expect(completed.body.data).toMatchObject({ learningStatus: 'COMPLETED', manualCompletionVersion: 1 })
+    expect((await prisma.assignmentRecipient.findFirstOrThrow({ where: { assignmentId } })).status).toBe('COMPLETED')
+    const stale = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/progress/${progress.id}/manual-completion`).send({ completed: false, reason: '旧页面撤回', expectedVersion: 0 })
+    expect(stale.status).toBe(409)
+    expect(stale.body.code).toBe('ASSIGNMENT_PROGRESS_STALE')
+    const revoked = await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/progress/${progress.id}/manual-completion`).send({ completed: false, reason: '复核后需要继续完成', expectedVersion: 1 })
+    expect(revoked.status).toBe(200)
+    expect(revoked.body.data.learningStatus).toBe('NOT_STARTED')
+    expect((await prisma.assignmentRecipient.findFirstOrThrow({ where: { assignmentId } })).status).toBe('ASSIGNED')
+  })
+
+  it('evaluates automatic correction policies once when the due time is reached', async () => {
+    const token = generateTokenFromUser(teacher.user)
+    const now = Date.now()
+    const created = await createAuthenticatedRequest(app, token).post('/api/assignments').send({
+      organizationId, title: '自动订正作业', correctionPolicy: 'BELOW_TARGET',
+      openAt: new Date(now - 60_000), dueAt: new Date(now + 60_000), closeAt: new Date(now + 120_000),
+    })
+    const assignmentId = created.body.data.id
+    const revision = await prisma.problemTestSetRevision.findFirstOrThrow({ where: { problemId: problem.id } })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/problems`).send({ expectedRevision: 0, problems: [{ problemId: problem.id, testSetRevisionId: revision.id, targetScore: 80 }] })
+    await createAuthenticatedRequest(app, token).put(`/api/assignments/${assignmentId}/roster`).send({ expectedRevision: 1, userIds: [student.user.id] })
+    await createAuthenticatedRequest(app, token).post(`/api/assignments/${assignmentId}/publish`).send({ expectedRevision: 2 })
+    await prisma.assignment.update({ where: { id: assignmentId }, data: { dueAt: new Date(now - 1_000) } })
+
+    expect((await processDueAssignments()).overdue).toBeGreaterThanOrEqual(1)
+    const corrections = await prisma.assignmentCorrection.findMany({ where: { assignmentId } })
+    expect(corrections).toHaveLength(1)
+    expect(corrections[0]).toMatchObject({ source: 'policy', policyCode: 'BELOW_TARGET', assignedBy: 'system', status: 'NEEDS_CORRECTION' })
+    await processDueAssignments()
+    expect(await prisma.assignmentCorrection.count({ where: { assignmentId } })).toBe(1)
   })
 
   it('migrates legacy homework snapshots idempotently without changing the legacy record', async () => {

@@ -210,6 +210,32 @@ export function startQualityEvaluationScheduler(intervalMs = 5_000): () => Promi
   }
 }
 
+export function startSolutionSimilarityScheduler(intervalMs = 2_000): () => Promise<void> {
+  let stopped = false, running = false
+  const tick = async () => {
+    if (stopped || running) return
+    running = true
+    try {
+      const { processSolutionSimilarityJobs } = await import('../modules/solution/solution.service')
+      const result = await processSolutionSimilarityJobs(2)
+      if (result.processed) logger.info('solution_similarity_scheduler_tick', { action: 'solution_similarity', metadata: result })
+    } catch (error) { logger.error('solution_similarity_scheduler_failed', error, { action: 'solution_similarity' }) }
+    finally { running = false }
+  }
+  let inFlight: Promise<void> | null = null
+  const run = () => {
+    if (stopped || inFlight) return
+    inFlight = tick().finally(() => { inFlight = null })
+  }
+  const timer = setInterval(run, intervalMs)
+  timer.unref(); run()
+  return async () => {
+    stopped = true
+    clearInterval(timer)
+    await inFlight
+  }
+}
+
 export function startSchedulerServices(): BackgroundServicesHandle {
   const stopCronTasks = startCronTasks()
   const stopAutoVerify = startAutoVerifyScheduler()
@@ -220,6 +246,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
   const stopEvaluationReservations = startEvaluationReservationReconciler()
   const stopContestRatings = startContestRatingScheduler()
   const stopQualityEvaluations = startQualityEvaluationScheduler()
+  const stopSolutionSimilarities = startSolutionSimilarityScheduler()
   logger.info('scheduler_services_started', { action: 'background_scheduler' })
 
   let stopped = false
@@ -235,6 +262,7 @@ export function startSchedulerServices(): BackgroundServicesHandle {
         stopEvaluationReservations(),
         stopContestRatings(),
         stopQualityEvaluations(),
+        stopSolutionSimilarities(),
       ])
       stopAutoVerify()
       stopCronTasks()

@@ -1,5 +1,5 @@
 export type BlogPostType = 'ARTICLE' | 'SOLUTION_NOTE' | 'CONTEST_REVIEW' | 'TRAINING_LOG' | 'LEARNING_LOG' | 'TUTORIAL' | 'COLLECTION' | 'ANNOUNCEMENT'
-export type BlogVisibility = 'PRIVATE' | 'ORGANIZATION' | 'UNLISTED' | 'PUBLIC'
+export type BlogVisibility = 'PRIVATE' | 'ORGANIZATION' | 'PLATFORM' | 'UNLISTED' | 'PUBLIC'
 export type BlogReferenceType = 'PROBLEM' | 'PROBLEM_REVISION' | 'SOLUTION_VERSION' | 'CONTEST_STANDING' | 'RATING_CHANGE'
 export type BlogReferenceRelation = 'PRIMARY_SUBJECT' | 'MENTION' | 'SOURCE' | 'RESULT'
 export type BlogReferenceDisplay = 'CARD' | 'INLINE' | 'COMPACT' | 'EMBED' | 'HIDDEN_METADATA'
@@ -43,8 +43,9 @@ export const BLOG_TYPE_LABELS: Record<BlogPostType, string> = {
 export const BLOG_VISIBILITY_LABELS: Record<BlogVisibility, string> = {
   PRIVATE: '仅自己',
   ORGANIZATION: '当前组织',
+  PLATFORM: '登录用户可见',
   UNLISTED: '不公开列出（持链接可见）',
-  PUBLIC: '全平台公开',
+  PUBLIC: '互联网公开',
 }
 
 export const BLOG_REFERENCE_LABELS: Record<BlogReferenceType, string> = {

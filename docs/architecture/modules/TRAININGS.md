@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-08
+last_verified: 2026-09-10
 source_of_truth: apps/server/src/modules/training-engine, apps/server/src/modules/assignment, apps/server/prisma/schema.prisma
 ---
 
@@ -15,9 +15,11 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/src/module
 |---|---|---|
 | 教练训练 | `TrainingSession` | 阶段、聚焦、课堂控制、草稿、提示、过程报告 |
 | 独立作业 | `Assignment` | 固定 Revision、名单快照、迟交、订正、反馈与成绩发布 |
-| 比赛 | `Training` | 固定时间活动、榜单、赛后结果和补题（待独立迁移） |
+| 比赛 | `Training` 运行态 + `Contest` 规范聚合 | 固定时间活动、题目 Revision、榜单、Rating 和赛后结果 |
 
 旧训练使用受保护的 `/api/admin/migration/training-engine` check/apply 幂等迁移为一个自由训练阶段；旧作业使用 `/api/admin/migration/assignments` 幂等迁移为独立作业。两条迁移都不删除旧记录、不改历史成绩。
+
+比赛不再另建第二套运行态。每个 `Training(type=contest)` 通过唯一 `trainingId` 对应一个既有 `Contest` 聚合；创建、基本信息、状态、起止时间和题目增删改排在同一事务中同步 `Contest/ContestProblem`。题目桥接保存相同的固定 TestSet Revision，状态变更也会先补建遗漏聚合。受保护的 `/api/admin/migration/contest-aggregates` check/apply 只幂等回填历史桥接，不重写比赛结果。
 
 ## 训练结构
 

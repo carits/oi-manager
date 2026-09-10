@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate } from '../../middleware/auth'
+import { authenticate, optionalAuthenticate } from '../../middleware/auth'
 import { asyncHandler } from '../../lib/asyncHandler'
 import {
   archiveBlogPost,
@@ -12,6 +12,8 @@ import {
   createBlogSeries,
   createBlogTag,
   getBlogPost,
+  getPublicBlogPost,
+  getPublicBlogCommunity,
   getBlogReport,
   getBlogCommunity,
   getBlogReferences,
@@ -19,8 +21,10 @@ import {
   getBlogVersion,
   listBlogTags,
   listBlogComments,
+  listBlogCommentReplies,
   listBlogReports,
   listBlogVersions,
+  listPublicBlogs,
   listMyBlogPosts,
   listMyBlogSeries,
   listTagBlogs,
@@ -57,6 +61,11 @@ function endpoint(handler: (req: any) => Promise<unknown>, status = 200) {
 }
 
 blogRouter.post('/blogs', authenticate, endpoint(req => createBlogPost(req.user, req.body), 201))
+blogRouter.get('/blog-discovery', optionalAuthenticate, endpoint(req => listPublicBlogs(req.user, req.query)))
+blogRouter.get('/blog-discovery/:id', optionalAuthenticate, endpoint(req => getPublicBlogPost(req.user, req.params.id)))
+blogRouter.get('/blog-discovery/:id/community', optionalAuthenticate, endpoint(req => getPublicBlogCommunity(req.user, req.params.id)))
+blogRouter.get('/blog-discovery/:id/comments', optionalAuthenticate, endpoint(req => listBlogComments(req.user, req.params.id, req.query)))
+blogRouter.get('/blog-discovery/:id/comments/:commentId/replies', optionalAuthenticate, endpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
 blogRouter.get('/blogs', authenticate, endpoint(req => listMyBlogPosts(req.user, req.query)))
 blogRouter.get('/blogs/:id', authenticate, endpoint(req => getBlogPost(req.user, req.params.id)))
 blogRouter.patch('/blogs/:id/draft', authenticate, endpoint(req => updateBlogDraft(req.user, req.params.id, req.body)))
@@ -67,6 +76,7 @@ blogRouter.get('/blogs/:id/versions/:versionId', authenticate, endpoint(req => g
 blogRouter.get('/blogs/:id/references', authenticate, endpoint(req => getBlogReferences(req.user, req.params.id)))
 blogRouter.get('/blogs/:id/community', authenticate, endpoint(req => getBlogCommunity(req.user, req.params.id)))
 blogRouter.get('/blogs/:id/comments', authenticate, endpoint(req => listBlogComments(req.user, req.params.id, req.query)))
+blogRouter.get('/blogs/:id/comments/:commentId/replies', authenticate, endpoint(req => listBlogCommentReplies(req.user, req.params.id, req.params.commentId, req.query)))
 blogRouter.post('/blogs/:id/comments', authenticate, endpoint(req => createBlogComment(req.user, req.params.id, req.body), 201))
 blogRouter.delete('/blogs/:id/comments/:commentId', authenticate, endpoint(req => removeBlogComment(req.user, req.params.id, req.params.commentId)))
 blogRouter.put('/blogs/:id/reactions/:type', authenticate, endpoint(req => setBlogReaction(req.user, req.params.id, req.params.type, true)))

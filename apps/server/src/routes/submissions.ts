@@ -9,6 +9,7 @@ import {
   SubmissionQueryError,
   type SubmissionQueryContext,
 } from '../modules/submission/application/submission-query.service'
+import { createSubmissionBlogSnapshot } from '../modules/submission/application/submission-blog-snapshot.service'
 
 export const submissionsRouter = Router()
 
@@ -59,5 +60,15 @@ submissionsRouter.post('/:id/refetch-code', authenticate, async (req, res) => {
     return res.json({ success: true, data })
   } catch (error) {
     return sendError(res, error, 'submission_refetch_code_error', '抓取失败')
+  }
+})
+
+submissionsRouter.post('/:id/blog-snapshots', authenticate, async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.id)) throw new SubmissionQueryError(422, 'INVALID_SUBMISSION_ID', '无效的提交 ID')
+    const data = await createSubmissionBlogSnapshot(req.user!.userId, Number(req.params.id), req.body)
+    return res.status(201).json({ success: true, data })
+  } catch (error) {
+    return sendError(res, error, 'submission_blog_snapshot_create_failed', '创建提交快照失败')
   }
 })

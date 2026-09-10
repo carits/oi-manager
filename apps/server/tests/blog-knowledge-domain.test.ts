@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/prisma'
 import { createTestApp, createAuthenticatedRequest } from './helpers/testRequest'
@@ -490,5 +491,71 @@ describe('V1 Blog / Knowledge Publishing Domain', () => {
     })
     expect(submissionReference.status).toBe(422)
     expect(submissionReference.body.code).toBe('BLOG_SUBMISSION_SNAPSHOT_REQUIRED')
+  })
+
+  it('separates anonymous PUBLIC discovery from authenticated PLATFORM discovery', async () => {
+    const publicDraft = await createProblemBlog({ slug: `public-${crypto.randomUUID().slice(0, 8)}` })
+    const platformDraft = await createProblemBlog({ slug: `platform-${crypto.randomUUID().slice(0, 8)}` })
+    await client(author).post(`/api/blogs/${publicDraft.body.data.id}/publish`).send({ expectedDraftRevision: 1, visibility: 'PUBLIC' })
+    await client(author).post(`/api/blogs/${platformDraft.body.data.id}/publish`).send({ expectedDraftRevision: 1, visibility: 'PLATFORM' })
+
+    const anonymous = await request(app).get('/api/blog-discovery')
+    expect(anonymous.status).toBe(200)
+    expect(anonymous.body.data.items.map((item: any) => item.id)).toContain(publicDraft.body.data.id)
+    expect(anonymous.body.data.items.map((item: any) => item.id)).not.toContain(platformDraft.body.data.id)
+    expect((await request(app).get(`/api/blog-discovery/${platformDraft.body.data.id}`)).status).toBe(404)
+
+    const authenticated = await client(reader).get('/api/blog-discovery')
+    expect(authenticated.body.data.items.map((item: any) => item.id)).toEqual(expect.arrayContaining([
+      publicDraft.body.data.id,
+      platformDraft.body.data.id,
+    ]))
+  })
+
+  it('references only an explicit immutable submission snapshot', async () => {
+    const submission = await prisma.submission.create({ data: {
+      userId: author.user.id,
+      oj: problem.platform,
+      problemId: problem.problemId,
+      problemInternalId: problem.id,
+      language: 'cpp17',
+      code: 'int main() { return 0; }',
+      codeLength: 24,
+      result: 'accepted',
+      score: 100,
+      submitMethod: 'local',
+      submitScope: 'problem',
+      workspaceScope: 'personal',
+      isGlobalVisible: true,
+      inputFilename: 'answer.in',
+      outputFilename: 'answer.out',
+    } })
+    const snapshot = await client(author).post(`/api/submissions/${submission.id}/blog-snapshots`).send({
+      visibility: 'PLATFORM',
+      includeCode: false,
+    })
+    expect(snapshot.status).toBe(201)
+    expect(snapshot.body.data).not.toHaveProperty('code')
+    await expect(prisma.blogSubmissionSnapshot.update({
+      where: { id: snapshot.body.data.id },
+      data: { result: 'wrong_answer' },
+    })).rejects.toThrow(/immutable/i)
+
+    const created = await client(author).post('/api/blogs').send({
+      slug: `snapshot-${crypto.randomUUID().slice(0, 8)}`,
+      title: 'Submission snapshot article',
+      contentMarkdown: 'This article references a deliberately sanitized result.',
+      references: [{ type: 'SUBMISSION_SNAPSHOT', submissionSnapshotId: snapshot.body.data.id, relationType: 'RESULT' }],
+    })
+    expect(created.status).toBe(201)
+    const published = await client(author).post(`/api/blogs/${created.body.data.id}/publish`).send({ expectedDraftRevision: 1, visibility: 'PLATFORM' })
+    expect(published.status).toBe(200)
+    expect(published.body.data.currentVersion.references[0].snapshot).toMatchObject({ kind: 'submission-snapshot', result: 'accepted' })
+    expect(published.body.data.currentVersion.references[0].snapshot.io).toEqual({
+      input: { type: 'file', filename: 'answer.in' },
+      output: { type: 'file', filename: 'answer.out' },
+    })
+    expect(published.body.data.currentVersion.references[0].snapshot).not.toHaveProperty('code')
+    expect(published.body.data.currentVersion.references[0].snapshot).not.toHaveProperty('cases')
   })
 })

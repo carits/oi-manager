@@ -41,39 +41,55 @@ export type ScoreProblemPolicy = 'LAST_SUBMISSION' | 'BEST_SUBMISSION'
 export type ScoreTiePolicy = 'SCORE' | 'SCORE_FULL_COUNT'
 
 export type ContestScoringRules = {
-  version: 1
+  version: 1 | 2
   problemPolicy?: ScoreProblemPolicy
   tiePolicy?: ScoreTiePolicy
   judgeMaxScore?: number
   wrongPenaltySeconds?: number
   penaltyVerdicts?: string[]
   compileErrorPenalty?: boolean
+  leaderboardTiePolicy?: 'SOLVED_PENALTY' | 'SOLVED_PENALTY_LAST_ACCEPTED'
   ratingTiePolicy?: 'SOLVED_PENALTY' | 'SOLVED_PENALTY_LAST_ACCEPTED'
 }
 
 export function defaultScoringRules(track: RatingTrack): ContestScoringRules {
-  if (track === 'OI') return { version: 1, problemPolicy: 'LAST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
-  if (track === 'IOI') return { version: 1, problemPolicy: 'BEST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
-  return { version: 1, wrongPenaltySeconds: 1200, penaltyVerdicts: ['WA', 'PE', 'TLE', 'MLE', 'RE', 'OLE'], compileErrorPenalty: false, ratingTiePolicy: 'SOLVED_PENALTY_LAST_ACCEPTED' }
+  if (track === 'OI') return { version: 2, problemPolicy: 'LAST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
+  if (track === 'IOI') return { version: 2, problemPolicy: 'BEST_SUBMISSION', tiePolicy: 'SCORE', judgeMaxScore: 100 }
+  return {
+    version: 2,
+    wrongPenaltySeconds: 1200,
+    penaltyVerdicts: ['WA', 'PE', 'TLE', 'MLE', 'RE', 'OLE'],
+    compileErrorPenalty: false,
+    leaderboardTiePolicy: 'SOLVED_PENALTY_LAST_ACCEPTED',
+    ratingTiePolicy: 'SOLVED_PENALTY',
+  }
 }
 
 export function normalizeScoringRules(track: RatingTrack, value: unknown): ContestScoringRules {
   const defaults = defaultScoringRules(track)
-  if (!value || typeof value !== 'object' || Number((value as any).version ?? 1) !== 1) return defaults
+  if (!value || typeof value !== 'object') return defaults
   const raw = value as any
+  const version = Number(raw.version ?? 1)
+  if (version !== 1 && version !== 2) return defaults
   if (track === 'ACM') {
     const wrongPenaltySeconds = Number(raw.wrongPenaltySeconds)
+    const legacyTiePolicy = raw.ratingTiePolicy === 'SOLVED_PENALTY' ? 'SOLVED_PENALTY' : 'SOLVED_PENALTY_LAST_ACCEPTED'
     return {
-      version: 1,
+      version,
       wrongPenaltySeconds: Number.isInteger(wrongPenaltySeconds) && wrongPenaltySeconds >= 0 && wrongPenaltySeconds <= 24 * 60 * 60 ? wrongPenaltySeconds : defaults.wrongPenaltySeconds,
       penaltyVerdicts: Array.isArray(raw.penaltyVerdicts) ? raw.penaltyVerdicts.map((item: unknown) => String(item).toUpperCase()).filter(Boolean).slice(0, 32) : defaults.penaltyVerdicts,
       compileErrorPenalty: raw.compileErrorPenalty === true,
-      ratingTiePolicy: raw.ratingTiePolicy === 'SOLVED_PENALTY' ? 'SOLVED_PENALTY' : 'SOLVED_PENALTY_LAST_ACCEPTED',
+      leaderboardTiePolicy: version === 1
+        ? legacyTiePolicy
+        : raw.leaderboardTiePolicy === 'SOLVED_PENALTY' ? 'SOLVED_PENALTY' : 'SOLVED_PENALTY_LAST_ACCEPTED',
+      ratingTiePolicy: version === 1
+        ? legacyTiePolicy
+        : raw.ratingTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED' ? 'SOLVED_PENALTY_LAST_ACCEPTED' : 'SOLVED_PENALTY',
     }
   }
   const judgeMaxScore = Number(raw.judgeMaxScore)
   return {
-    version: 1,
+    version,
     problemPolicy: raw.problemPolicy === 'BEST_SUBMISSION' || raw.problemPolicy === 'LAST_SUBMISSION'
       ? raw.problemPolicy
       : defaults.problemPolicy,
@@ -174,13 +190,16 @@ function acmStanding(
     }
     return { participant, solvedCount, penaltySeconds, lastAcceptedAt }
   }).sort((left, right) => right.solvedCount - left.solvedCount || left.penaltySeconds - right.penaltySeconds ||
-    (rules.ratingTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED' ? (left.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (right.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) : 0) || left.participant.userId.localeCompare(right.participant.userId))
-  const ranks = competitionRanks(rows, (left, right) => left.solvedCount === right.solvedCount && left.penaltySeconds === right.penaltySeconds && (rules.ratingTiePolicy !== 'SOLVED_PENALTY_LAST_ACCEPTED' || left.lastAcceptedAt?.getTime() === right.lastAcceptedAt?.getTime()))
-  return rows.map((row, index): StandingDraftEntry => ({
+    (rules.leaderboardTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED' ? (left.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) - (right.lastAcceptedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) : 0) || left.participant.userId.localeCompare(right.participant.userId))
+  const ranks = competitionRanks(rows, (left, right) => left.solvedCount === right.solvedCount && left.penaltySeconds === right.penaltySeconds && (rules.leaderboardTiePolicy !== 'SOLVED_PENALTY_LAST_ACCEPTED' || left.lastAcceptedAt?.getTime() === right.lastAcceptedAt?.getTime()))
+  return rows.map((row, index): StandingDraftEntry & { leaderboardTieGroup: string } => ({
     userId: row.participant.userId,
     organizationIdSnapshot: row.participant.organizationIdSnapshot,
     rank: ranks[index],
     ratingTieGroup: rules.ratingTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED'
+      ? `ac:${row.solvedCount}:penalty:${row.penaltySeconds}:last:${row.lastAcceptedAt?.getTime() ?? 'none'}`
+      : `ac:${row.solvedCount}:penalty:${row.penaltySeconds}`,
+    leaderboardTieGroup: rules.leaderboardTiePolicy === 'SOLVED_PENALTY_LAST_ACCEPTED'
       ? `ac:${row.solvedCount}:penalty:${row.penaltySeconds}:last:${row.lastAcceptedAt?.getTime() ?? 'none'}`
       : `ac:${row.solvedCount}:penalty:${row.penaltySeconds}`,
     totalScore: null,
@@ -208,8 +227,12 @@ export function buildStanding(input: {
     : scoreBasedStanding(rules, input.problems, input.submissions, visibleParticipants)
   const normal = rows.filter(item => item.participantDisposition !== 'FORCE_LAST')
   const forcedLast = rows.filter(item => item.participantDisposition === 'FORCE_LAST')
+  const leaderboardTieGroupOf = (item: StandingDraftEntry) =>
+    (item as StandingDraftEntry & { leaderboardTieGroup?: string }).leaderboardTieGroup ?? item.ratingTieGroup
   normal.forEach((item, index) => {
-    item.rank = index > 0 && item.ratingTieGroup === normal[index - 1].ratingTieGroup
+    const tieGroup = leaderboardTieGroupOf(item)
+    const previousTieGroup = index > 0 ? leaderboardTieGroupOf(normal[index - 1]) : null
+    item.rank = index > 0 && tieGroup === previousTieGroup
       ? normal[index - 1].rank
       : index + 1
   })
@@ -217,5 +240,10 @@ export function buildStanding(input: {
     item.rank = normal.length + 1
     item.ratingTieGroup = 'disposition:forced-last'
   })
-  return [...normal, ...forcedLast]
+  return [...normal, ...forcedLast].map(item => {
+    const internal = item as StandingDraftEntry & { leaderboardTieGroup?: string }
+    if (!internal.leaderboardTieGroup) return item
+    const { leaderboardTieGroup: _leaderboardTieGroup, ...standing } = internal
+    return standing
+  })
 }

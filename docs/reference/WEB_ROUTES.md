@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -38,6 +38,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/admin/users` | 见页面权限布局 | 当前页面 |
 | `/admin/users/[id]` | 见页面权限布局 | 当前页面 |
 | `/admin/users/new-platform-admin` | 见页面权限布局 | 当前页面 |
+| `/blog` | 公开；登录后增加 PLATFORM 内容 | 知识文章发现与搜索 |
+| `/blog/[id]` | 按 PUBLIC/PLATFORM 可见范围 | 公开知识文章阅读页 |
 | `/identity` | 见页面权限布局 | 当前页面 |
 | `/login` | 见页面权限布局 | 当前页面 |
 | `/org/[organizationId]/[module]` | 见页面权限布局 | 当前页面 |

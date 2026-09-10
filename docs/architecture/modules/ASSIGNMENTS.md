@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, testing, operations
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 source_of_truth: apps/server/src/modules/assignment, apps/server/prisma/schema.prisma, apps/web/src/components/assignment
 ---
 
@@ -41,6 +41,7 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 - DRAFT 使用 `statusRevision` 乐观锁和作业级 PostgreSQL advisory transaction lock。
 - 题目加入时固定一个属于该题的 TestSet Revision，并同时固化 Judge 投影和哈希。
 - 发布在一个 Serializable 事务内生成动态名单快照、校验结构、创建进度行并改变状态。
+- 学生端只有在 `publishAt` 到达后才可发现和读取已发布作业；管理者在发布前可预览，服务端列表、详情和 Workspace 使用同一可见性判断。
 - 发布后题目、Revision 与名单永久冻结；题库后续 Revision 和成员变化不传播到作业。
 - 所有评分、订正、反馈与状态动作写入追加式事件；调分只能追加和冲正，不能覆盖历史事实。
 
@@ -60,9 +61,11 @@ DRAFT → SCHEDULED → OPEN → OVERDUE → CLOSED → REVIEWING
 
 订正任务固定 `requiredScore`；只有本次订正创建后的终态提交达到该目标才可转为 `CORRECTED`。收件人完成状态要求所有必做题均存在进度且满足完成策略，不能因为部分必做题尚未产生进度行而提前完成；使用 `LATEST` 等可回退策略时，后续结果不再满足条件会恢复为进行中。
 
+关闭、逾期与进入批改时，服务端按固定版本的 `correctionPolicy` 自动扫描 `BELOW_TARGET / NON_AC / ALL_INCOMPLETE`，幂等创建订正任务和事件；重复调度不会重复生成。管理者可通过带版本 CAS 和必填原因的人工完成接口覆盖单个进度，覆盖事实保存在进度和事件中；后续 Judge 同步不得清除人工完成标记，只有新的显式管理动作可以改变它。
+
 ## API 与 Web
 
-主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/trainings/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
+主要接口为 `/api/assignments`，以及 `/:id` 下的 `workspace`、`problems`、`roster`、`validate`、`publish`、`submit`、`progress`、`corrections`、`feedback`、`score-adjustments`、`progress/:progressId/manual-completion` 和状态转换接口。题单通过 `POST /api/problem-lists/:id/create-assignment` 创建草稿；活动补题兼容路由仍使用 `POST /api/trainings/:id/create-makeup-homework`，但返回的也是 Assignment 身份。
 
 组织端 `/org/:organizationId/homeworks` 使用独立作业列表。教师在草稿工作台分别保存发布时间、开放/截止/关闭时间、评分策略、固定题目版本和学生名单，运行发布检查后冻结；每道题可显式配置类别、作业满分、目标分、权重和完成策略。学生在同一路径查看题目并提交；发布后教师看到服务端成绩矩阵。所有写接口都重新执行资源级权限、状态和 Revision 校验，前端隐藏按钮不是授权边界。
 

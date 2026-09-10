@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type { JwtPayload } from '@oi-manager/shared'
 import {
   BlogPostType,
+  BlogPostStatus,
   BlogReferenceDisplayMode,
   BlogReferenceRelationType,
   BlogReferenceType,
@@ -137,6 +138,7 @@ type DraftReferenceInput = {
   solutionVersionId?: string
   standingSnapshotId?: string
   ratingChangeId?: string
+  submissionSnapshotId?: string
   relationType: BlogReferenceRelationType
   displayMode: BlogReferenceDisplayMode
   positionKey?: string
@@ -165,6 +167,7 @@ function normalizeDraftReferences(value: unknown): DraftReferenceInput[] {
       solutionVersionId: nullableText(item.solutionVersionId, 100) || undefined,
       standingSnapshotId: nullableText(item.standingSnapshotId, 100) || undefined,
       ratingChangeId: nullableText(item.ratingChangeId, 100) || undefined,
+      submissionSnapshotId: nullableText(item.submissionSnapshotId, 100) || undefined,
       relationType,
       displayMode,
       positionKey,
@@ -178,6 +181,7 @@ function normalizeDraftReferences(value: unknown): DraftReferenceInput[] {
     if (type === 'SOLUTION_VERSION' && !normalized.solutionVersionId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', '题解引用必须固定到 ProblemSolutionVersion')
     if (type === 'CONTEST_STANDING' && !normalized.standingSnapshotId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', '比赛引用必须固定到 StandingSnapshot')
     if (type === 'RATING_CHANGE' && !normalized.ratingChangeId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', 'Rating 引用必须固定到 RatingChange')
+    if (type === 'SUBMISSION_SNAPSHOT' && !normalized.submissionSnapshotId) fail(422, 'BLOG_REFERENCE_VERSION_REQUIRED', '提交引用必须固定到安全快照')
     const key = JSON.stringify(normalized)
     if (seen.has(key)) fail(422, 'BLOG_REFERENCE_DUPLICATE', `第 ${index + 1} 个引用重复`)
     seen.add(key)
@@ -236,6 +240,7 @@ type ResolvedReference = {
   trainingId?: number
   standingSnapshotId?: string
   ratingChangeId?: string
+  submissionSnapshotId?: string
 }
 
 async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceInput): Promise<ResolvedReference> {
@@ -324,6 +329,33 @@ async function resolveReference(db: Db, user: JwtPayload, input: DraftReferenceI
       },
     }
   }
+  if (input.type === 'SUBMISSION_SNAPSHOT') {
+    const snapshot = await db.blogSubmissionSnapshot.findFirst({
+      where: { id: input.submissionSnapshotId!, ownerUserId: user.userId },
+    })
+    if (!snapshot) fail(404, 'BLOG_REFERENCE_NOT_FOUND', '只能引用自己创建的提交安全快照')
+    return {
+      ...shared,
+      referenceType: input.type,
+      referenceId: snapshot.id,
+      referenceVersionId: snapshot.contentHash,
+      submissionSnapshotId: snapshot.id,
+      accessMode: snapshot.visibility,
+      snapshotData: {
+        kind: 'submission-snapshot', id: snapshot.id,
+        sourcePlatform: snapshot.sourcePlatform, sourceProblemId: snapshot.sourceProblemId,
+        problemTitle: snapshot.problemTitle, result: snapshot.result, score: snapshot.score,
+        timeUsed: snapshot.timeUsed, memoryUsed: snapshot.memoryUsed,
+        language: snapshot.language,
+        io: {
+          input: snapshot.inputFilename ? { type: 'file', filename: snapshot.inputFilename } : { type: 'stdin' },
+          output: snapshot.outputFilename ? { type: 'file', filename: snapshot.outputFilename } : { type: 'stdout' },
+        },
+        submittedAt: snapshot.submittedAt,
+        ...(snapshot.includeCode ? { code: snapshot.code } : {}),
+      },
+    }
+  }
   const change = await db.ratingChange.findUnique({
     where: { id: input.ratingChangeId! },
     include: { Batch: { include: { Pool: true, Training: true } } },
@@ -363,6 +395,9 @@ function assertVisibilityAllowed(visibility: BlogVisibility, organizationId: str
       const snapshot = ref.snapshotData as Record<string, any>
       const referencedOrganization = snapshot.organizationId || snapshot.problem?.organizationId
       return Boolean(referencedOrganization && referencedOrganization !== organizationId)
+    }
+    if (visibility === 'PLATFORM' || visibility === 'UNLISTED') {
+      return !['PUBLIC', 'PLATFORM'].includes(ref.accessMode)
     }
     return ref.accessMode !== 'PUBLIC'
   })
@@ -503,21 +538,25 @@ const referenceInclude = {
   RatingChange: { select: { Batch: { select: { status: true } } } },
 } satisfies Prisma.BlogReferenceInclude
 
-async function canReadPost(user: JwtPayload, post: any, direct: boolean) {
-  if (post.authorUserId === user.userId) return true
+async function canReadPost(user: JwtPayload | undefined, post: any, direct: boolean) {
+  if (user && post.authorUserId === user.userId) return true
   if (post.status !== 'PUBLISHED' || !post.currentVersionId) return false
   if (post.visibility === 'PUBLIC') return true
-  if (post.visibility === 'UNLISTED') return direct
+  if (post.visibility === 'PLATFORM') return Boolean(user)
+  if (post.visibility === 'UNLISTED') return Boolean(user) && direct
   if (post.visibility !== 'ORGANIZATION' || !post.organizationId) return false
+  if (!user) return false
   return prisma.$transaction(tx => activeOrganizationMember(tx, user.userId, post.organizationId))
 }
 
-async function canReadVersion(user: JwtPayload, post: { authorUserId: string; status: string }, version: { visibility: BlogVisibility; organizationIdSnapshot: string | null }, direct: boolean) {
-  if (post.authorUserId === user.userId) return true
+async function canReadVersion(user: JwtPayload | undefined, post: { authorUserId: string; status: string }, version: { visibility: BlogVisibility; organizationIdSnapshot: string | null }, direct: boolean) {
+  if (user && post.authorUserId === user.userId) return true
   if (post.status !== 'PUBLISHED') return false
   if (version.visibility === 'PUBLIC') return true
-  if (version.visibility === 'UNLISTED') return direct
+  if (version.visibility === 'PLATFORM') return Boolean(user)
+  if (version.visibility === 'UNLISTED') return Boolean(user) && direct
   if (version.visibility !== 'ORGANIZATION' || !version.organizationIdSnapshot) return false
+  if (!user) return false
   return prisma.$transaction(tx => activeOrganizationMember(tx, user.userId, version.organizationIdSnapshot!))
 }
 
@@ -696,7 +735,46 @@ export async function getBlogPost(user: JwtPayload, postId: string) {
   return postDto(post, post.authorUserId === user.userId)
 }
 
-async function readablePublishedPost(user: JwtPayload, postId: string) {
+export async function getPublicBlogPost(user: JwtPayload | undefined, postId: string) {
+  const post = await prisma.blogPost.findFirst({
+    where: { OR: [{ id: postId }, { slug: postId }] },
+    include: postInclude,
+  })
+  if (!post || !await canReadPost(user, post, true)) fail(404, 'BLOG_NOT_FOUND', '博客不存在')
+  return postDto(post, false)
+}
+
+export async function listPublicBlogs(user: JwtPayload | undefined, query: any) {
+  const { page, pageSize, skip } = parsePagination(query, { defaultPageSize: 20, maxPageSize: 50 })
+  const q = text(query?.q, 120)
+  const type = query?.type ? parseEnum(query.type, Object.values(BlogPostType), 'type') : undefined
+  const tagId = nullableText(query?.tagId, 100)
+  const featured = String(query?.featured || '').toLowerCase()
+  if (featured && featured !== 'true' && featured !== 'false') fail(422, 'BLOG_FIELD_INVALID', 'featured 无效', { field: 'featured' })
+  const visible: BlogVisibility[] = user ? [BlogVisibility.PUBLIC, BlogVisibility.PLATFORM] : [BlogVisibility.PUBLIC]
+  const where: Prisma.BlogPostWhereInput = {
+    status: BlogPostStatus.PUBLISHED,
+    currentVersionId: { not: null },
+    visibility: { in: visible },
+    ...(type ? { type } : {}),
+    ...(q ? { OR: [
+      { CurrentVersion: { is: { title: { contains: q, mode: 'insensitive' } } } },
+      { CurrentVersion: { is: { summary: { contains: q, mode: 'insensitive' } } } },
+      { Author: { username: { contains: q, mode: 'insensitive' } } },
+    ] } : {}),
+    ...(tagId ? { Tags: { some: { tagId } } } : {}),
+    ...(featured === 'true' ? { Features: { some: { status: 'active' } } } : {}),
+    ...(featured === 'false' ? { Features: { none: { status: 'active' } } } : {}),
+  }
+  const [items, total] = await Promise.all([
+    prisma.blogPost.findMany({ where, orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }], skip, take: pageSize, include: postInclude }),
+    prisma.blogPost.count({ where }),
+  ])
+  const rows = items.map(post => postDto(post, false))
+  return { ...paginatedResponse(rows, total, page, pageSize), items: rows }
+}
+
+async function readablePublishedPost(user: JwtPayload | undefined, postId: string) {
   const post = await prisma.blogPost.findUnique({ where: { id: postId }, include: postInclude })
   if (!post || post.status !== 'PUBLISHED' || !await canReadPost(user, post, true)) fail(404, 'BLOG_NOT_FOUND', '博客不存在')
   return post
@@ -725,7 +803,24 @@ export async function getBlogCommunity(user: JwtPayload, postId: string) {
   }
 }
 
-export async function listBlogComments(user: JwtPayload, postId: string, query: any) {
+export async function getPublicBlogCommunity(user: JwtPayload | undefined, postId: string) {
+  await readablePublishedPost(user, postId)
+  const [groups, commentCount, featured] = await Promise.all([
+    prisma.blogReaction.groupBy({ by: ['type'], where: { postId }, _count: { _all: true } }),
+    prisma.blogComment.count({ where: { postId, status: 'visible' } }),
+    prisma.blogFeature.findFirst({ where: { postId, status: 'active' }, select: { id: true, reason: true, createdAt: true } }),
+  ])
+  return {
+    reactions: Object.fromEntries(BLOG_REACTIONS.map(type => [type, groups.find(item => item.type === type)?._count._all || 0])),
+    myReactions: [],
+    bookmarked: false,
+    commentCount,
+    featured,
+    authenticated: Boolean(user),
+  }
+}
+
+export async function listBlogComments(user: JwtPayload | undefined, postId: string, query: any) {
   await readablePublishedPost(user, postId)
   const { page, pageSize, skip } = parsePagination(query, { defaultPageSize: 30, maxPageSize: 100 })
   const where = { postId, parentId: null, status: { in: ['visible', 'removed'] } }
@@ -734,7 +829,8 @@ export async function listBlogComments(user: JwtPayload, postId: string, query: 
       where, orderBy: { createdAt: 'asc' }, skip, take: pageSize,
       include: {
         Author: { select: { id: true, username: true, avatar: true } },
-        Replies: { where: { status: { in: ['visible', 'removed'] } }, orderBy: { createdAt: 'asc' }, include: { Author: { select: { id: true, username: true, avatar: true } } } },
+        Replies: { where: { status: { in: ['visible', 'removed'] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 5, include: { Author: { select: { id: true, username: true, avatar: true } } } },
+        _count: { select: { Replies: { where: { status: { in: ['visible', 'removed'] } } } } },
       },
     }),
     prisma.blogComment.count({ where }),
@@ -743,9 +839,40 @@ export async function listBlogComments(user: JwtPayload, postId: string, query: 
     id: item.id, parentId: item.parentId, author: item.Author,
     content: item.status === 'visible' ? item.content : '该评论已由作者删除',
     status: item.status, editedAt: item.editedAt, createdAt: item.createdAt,
-    canDelete: item.authorUserId === user.userId,
+    canDelete: Boolean(user && item.authorUserId === user.userId),
   })
-  return paginatedResponse(items.map(item => ({ ...dto(item), replies: item.Replies.map(dto) })), total, page, pageSize)
+  return paginatedResponse(items.map(item => ({ ...dto(item), replies: item.Replies.map(dto), replyCount: item._count.Replies })), total, page, pageSize)
+}
+
+export async function listBlogCommentReplies(user: JwtPayload | undefined, postId: string, commentId: string, query: any) {
+  await readablePublishedPost(user, postId)
+  const parent = await prisma.blogComment.findFirst({ where: { id: commentId, postId, parentId: null }, select: { id: true } })
+  if (!parent) fail(404, 'BLOG_COMMENT_NOT_FOUND', '评论不存在')
+  const pageSize = Math.min(50, Math.max(1, Number(query?.pageSize) || 20))
+  const cursor = typeof query?.cursor === 'string' && query.cursor ? query.cursor : null
+  if (cursor) {
+    const cursorReply = await prisma.blogComment.findFirst({ where: { id: cursor, postId, parentId: commentId }, select: { id: true } })
+    if (!cursorReply) fail(422, 'BLOG_COMMENT_CURSOR_INVALID', '回复游标无效')
+  }
+  const rows = await prisma.blogComment.findMany({
+    where: { postId, parentId: commentId, status: { in: ['visible', 'removed'] } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    take: pageSize + 1,
+    include: { Author: { select: { id: true, username: true, avatar: true } } },
+  })
+  const hasMore = rows.length > pageSize
+  const items = rows.slice(0, pageSize).map(item => ({
+    id: item.id,
+    parentId: item.parentId,
+    author: item.Author,
+    content: item.status === 'visible' ? item.content : '该评论已由作者删除',
+    status: item.status,
+    editedAt: item.editedAt,
+    createdAt: item.createdAt,
+    canDelete: Boolean(user && item.authorUserId === user.userId),
+  }))
+  return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null }
 }
 
 export async function createBlogComment(user: JwtPayload, postId: string, body: any) {
@@ -977,7 +1104,7 @@ async function discoveryRows(user: JwtPayload, where: Prisma.BlogReferenceWhereI
   const references = await prisma.blogReference.findMany({
     where: {
       ...where,
-      PostVersion: { Post: { status: 'PUBLISHED', visibility: { in: ['PUBLIC', 'ORGANIZATION'] } } },
+      PostVersion: { Post: { status: 'PUBLISHED', visibility: { in: ['PUBLIC', 'PLATFORM', 'ORGANIZATION'] } } },
     },
     orderBy: { createdAt: 'desc' },
     include: { PostVersion: { include: { Post: { include: postInclude } } } },
@@ -1019,7 +1146,7 @@ export async function listUserBlogs(user: JwtPayload, authorUserId: string, quer
       authorUserId,
       status: 'PUBLISHED',
       currentVersionId: { not: null },
-      visibility: { in: ['PUBLIC', 'ORGANIZATION'] },
+      visibility: { in: ['PUBLIC', 'PLATFORM', 'ORGANIZATION'] },
     },
     orderBy: { publishedAt: 'desc' },
     include: postInclude,
@@ -1056,6 +1183,7 @@ async function canReadSeries(user: JwtPayload, series: { ownerUserId: string; ar
   if (series.ownerUserId === user.userId) return true
   if (series.archivedAt) return false
   if (series.visibility === 'PUBLIC') return true
+  if (series.visibility === 'PLATFORM') return true
   if (series.visibility === 'UNLISTED') return direct
   if (series.visibility !== 'ORGANIZATION' || !series.organizationId) return false
   return prisma.$transaction(tx => activeOrganizationMember(tx, user.userId, series.organizationId!))

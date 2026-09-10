@@ -13,6 +13,7 @@ import {
   publishSolutionContribution,
   recordSolutionReview,
   refreshSolutionVerification,
+  retrySolutionSimilarity,
   SolutionDomainError,
   submitSolutionContribution,
   updateSolutionContribution,
@@ -90,4 +91,7 @@ solutionReviewRouter.post('/:id/accept', authenticate, command(
 ))
 solutionReviewRouter.post('/:id/publish', authenticate, command(
   req => publishSolutionContribution(req.user, req.params.id, req.body), 201,
+))
+solutionReviewRouter.post('/:id/similarity/retry', authenticate, command(
+  req => retrySolutionSimilarity(req.user, req.params.id),
 ))

@@ -18,10 +18,11 @@ type Community = {
 
 type Comment = {
   id: string; parentId?: string | null; content: string; status: string; createdAt: string; canDelete: boolean
-  author: { id: string; username: string; avatar?: string | null }; replies?: Comment[]
+  author: { id: string; username: string; avatar?: string | null }; replies?: Comment[]; replyCount?: number
 }
 
 type CommentPage = { data: Comment[]; total: number }
+type ReplyPage = { items: Comment[]; hasMore: boolean; nextCursor?: string | null }
 
 export function BlogCommunityPanel({ postId }: { postId: string }) {
   const toast = useToast()
@@ -30,6 +31,7 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
   const [content, setContent] = useState('')
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [busy, setBusy] = useState(false)
+  const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     const [summary, commentPage] = await Promise.all([
@@ -81,11 +83,24 @@ export function BlogCommunityPanel({ postId }: { postId: string }) {
     result.success ? toast.success('举报已提交，平台会进行复核') : toast.error(result.message || '举报失败')
   }
 
+  const loadMoreReplies = async (comment: Comment) => {
+    if (loadingReplies.has(comment.id)) return
+    setLoadingReplies(current => new Set(current).add(comment.id))
+    const cursor = comment.replies?.at(-1)?.id
+    const result = await apiClient.get<ReplyPage>(`/api/blogs/${postId}/comments/${comment.id}/replies?pageSize=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { accountScoped: true })
+    setLoadingReplies(current => { const next = new Set(current); next.delete(comment.id); return next })
+    if (!result.success || !result.data) return toast.error(result.message || '加载回复失败')
+    setComments(current => current.map(item => item.id === comment.id
+      ? { ...item, replies: [...(item.replies || []), ...result.data!.items.filter(reply => !(item.replies || []).some(existing => existing.id === reply.id))] }
+      : item))
+  }
+
   const renderComment = (comment: Comment, reply = false) => <article className={reply ? styles.commentReply : styles.comment} key={comment.id}>
     <header><strong>{comment.author.username}</strong><time>{new Date(comment.createdAt).toLocaleString('zh-CN')}</time></header>
     <p>{comment.content}</p>
     {comment.status === 'visible' && <div className={styles.communityActions}>{!reply && <Button size="sm" variant="ghost" onClick={() => setReplyTo(comment)}>回复</Button>}<Button size="sm" variant="ghost" icon={<Flag size={14} />} onClick={() => void report(comment.id)}>举报</Button>{comment.canDelete && <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} onClick={() => void remove(comment.id)}>删除</Button>}</div>}
     {!reply && comment.replies?.map(item => renderComment(item, true))}
+    {!reply && (comment.replies?.length || 0) < (comment.replyCount || 0) && <Button size="sm" variant="ghost" loading={loadingReplies.has(comment.id)} onClick={() => void loadMoreReplies(comment)}>加载更多回复（{(comment.replyCount || 0) - (comment.replies?.length || 0)}）</Button>}
   </article>
 
   return <section className={styles.community} aria-labelledby="blog-community-title">

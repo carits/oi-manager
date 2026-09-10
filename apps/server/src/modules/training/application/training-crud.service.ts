@@ -14,6 +14,7 @@ import {
 import { lockContestRatingConfigTx, trackForFormat, defaultScoringRules } from '../../rating/application/contest-rating.service'
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
+import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
 
 export class TrainingCrudError extends Error {
   constructor(
@@ -144,6 +145,7 @@ export async function createTeamTraining(params: {
     } })
     if (activityType === 'contest') {
       await tx.trainingRatingConfig.create({ data: defaultRatingConfigData(row.id, row.format, params.user.userId) })
+      await ensureContestAggregateTx(tx, row.id)
     }
     return row
   })
@@ -217,6 +219,7 @@ export async function createPlatformContest(params: { user: any; input: any }) {
       updatedAt: new Date(),
     } })
     await tx.trainingRatingConfig.create({ data: defaultRatingConfigData(row.id, row.format, params.user.userId) })
+    await ensureContestAggregateTx(tx, row.id)
     await tx.platformAuditLog.create({ data: {
       id: crypto.randomUUID(), actorUserId: params.user.userId,
       action: 'platform_contest_created', targetType: 'training', targetId: String(row.id),
@@ -239,6 +242,7 @@ export async function synchronizeTrainingStatus(training: any, now: Date) {
     if (training.type === 'contest' && computedStatus !== 'upcoming') {
       await lockContestRatingConfigTx(tx, training.id, training.createdBy, training.format)
     }
+    if (training.type === 'contest') await ensureContestAggregateTx(tx, training.id)
     if (computedStatus !== 'finished' || training.type !== 'contest') return 0
     const result = await tx.submission.updateMany({
       where: {
@@ -359,6 +363,7 @@ export async function updateTraining(id: number, userId: string, input: any) {
         } })
       }
     }
+    if (training.type === 'contest') await ensureContestAggregateTx(tx, id)
     return row
   })
   logger.info('training_updated', { action: 'trainings', metadata: { trainingId: id } })
@@ -371,7 +376,11 @@ export async function updateTrainingEndTime(id: number, userId: string, endTime:
   const end = parseDate(endTime, '结束时间')
   if (end <= new Date()) fail(400, 'END_TIME_IN_PAST', '结束时间不能早于当前时间')
   if (end <= training.startTime) fail(400, 'INVALID_TIME_RANGE', '结束时间必须晚于开始时间')
-  return prisma.training.update({ where: { id }, data: { endTime: end } })
+  return prisma.$transaction(async tx => {
+    const updated = await tx.training.update({ where: { id }, data: { endTime: end } })
+    if (training.type === 'contest') await ensureContestAggregateTx(tx, id)
+    return updated
+  })
 }
 
 export async function startTraining(id: number, userId: string) {
@@ -385,7 +394,10 @@ export async function startTraining(id: number, userId: string) {
   }
   const started = await prisma.$transaction(async tx => {
     const row = await tx.training.update({ where: { id }, data: { status: 'ongoing', startTime: now } })
-    if (training.type === 'contest') await lockContestRatingConfigTx(tx, id, userId, training.format)
+    if (training.type === 'contest') {
+      await lockContestRatingConfigTx(tx, id, userId, training.format)
+      await ensureContestAggregateTx(tx, id)
+    }
     return row
   })
   logger.info('training_started_early', { action: 'trainings', metadata: { trainingId: id, userId } })
@@ -409,6 +421,7 @@ export async function finishTraining(id: number, userId: string) {
         where: { submitScope: 'contest', contestId: id, isGlobalVisible: false },
         data: { isGlobalVisible: true },
       })
+      await ensureContestAggregateTx(tx, id)
     }
     return updated
   })

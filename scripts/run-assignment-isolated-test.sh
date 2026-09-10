@@ -54,6 +54,9 @@ if [[ "$SCHEMA_SETUP" == "current" ]]; then
   sed -n '/CREATE OR REPLACE FUNCTION "blog_version_content_immutable"/,/^COMMIT;/p' \
     "$ROOT_DIR/apps/server/prisma/migrations/20260909_z_blog_knowledge_domain/migration.sql" \
     | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
+  sed -n '/CREATE OR REPLACE FUNCTION reject_blog_submission_snapshot_mutation()/,$p' \
+    "$ROOT_DIR/apps/server/prisma/migrations/20260910_blog_submission_snapshots/migration.sql" \
+    | PGOPTIONS="-c search_path=$TEST_SCHEMA" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 >/dev/null
 elif [[ "$SCHEMA_SETUP" != "migrations" ]]; then
   echo "Invalid ASSIGNMENT_SCHEMA_SETUP: expected migrations or current" >&2
   exit 1

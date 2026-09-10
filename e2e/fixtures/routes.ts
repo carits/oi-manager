@@ -30,6 +30,8 @@ export const routePatterns = [
   '/admin/users',
   '/admin/users/[id]',
   '/admin/users/new-platform-admin',
+  '/blog',
+  '/blog/[id]',
   '/identity',
   '/login',
   '/org/[organizationId]/[module]',
@@ -96,7 +98,7 @@ export const routePatterns = [
 export type RoutePattern = typeof routePatterns[number]
 
 export function routeOwner(pattern: RoutePattern): RouteOwner {
-  if (pattern === '/' || pattern === '/login') return 'public'
+  if (pattern === '/' || pattern === '/login' || pattern === '/blog' || pattern === '/blog/[id]') return 'public'
   if (pattern === '/personal/training-sessions/[id]/design') return 'principal'
   if (pattern === '/profile/student/[id]') return 'campusStudent'
   if (pattern === '/profile/teacher/[id]') return 'principal'
@@ -132,7 +134,7 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   else if (route.includes('/personal/contests/[id]')) route = route.replace('[id]', ids.personalContest)
   else if (route.includes('/admin/contests/[id]')) route = route.replace('[id]', ids.personalContest)
   else if (route.includes('/platform-admin/contests/[id]')) route = route.replace('[id]', ids.personalContest)
-  else if (route.includes('/personal/blogs/[id]')) route = route.replace('[id]', 'missing-blog')
+  else if (route.includes('/personal/blogs/[id]') || route.includes('/blog/[id]')) route = route.replace('[id]', 'missing-blog')
   else if (route.includes('/personal/training-sessions/[id]')) route = route.replace('[id]', ids.trainingSession)
   else if (route.includes('/platform-admin/problems/[id]')) route = route.replace('[id]', ids.problem)
   else if (route.includes('/platform-admin/submissions/[id]')) route = route.replace('[id]', ids.submission)

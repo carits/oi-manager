@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -10,11 +10,11 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 本清单由服务端路由扫描生成。校园业务必须带组织 URL 与有效成员关系；旧学生、教师、学校端点仅作为退役入口，不再承载业务。
 
 `pnpm api:auth-audit` 会把本清单中的全部端点与 Express 路由声明、路由挂载认证和
-`scripts/api-public-endpoints.json` 对照。当前 507 个端点中 498 个必须认证，9 个允许匿名访问；
+`scripts/api-public-endpoints.json` 对照。当前 614 个端点中 600 个必须认证，14 个允许匿名访问；
 任何新增匿名端点都必须登记最小公开理由，否则 `pnpm docs:check` 失败。该门禁只证明认证边界，
 本人、同组织、跨组织及各管理员的资源级授权继续由权限矩阵测试证明。
-`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 507 个无会话请求：498 个受保护端点必须返回
-401，9 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
+`pnpm api:anonymous-audit` 会向运行中的 API 实际发送 614 个无会话请求：600 个受保护端点必须返回
+401，14 个公开端点必须返回非鉴权、非 5xx 响应。参数统一替换为不存在的审计 ID，写请求使用空对象，
 用于验证认证中间件必须先于业务写入执行。
 
 | 方法 | 路径 | 说明 |
@@ -50,8 +50,16 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/review/solution-contributions/:id/reject` | 拒绝当前投稿 Revision |
 | `POST` | `/api/review/solution-contributions/:id/accept` | 以 expected-status CAS 采纳已验证且审核通过的投稿 |
 | `POST` | `/api/review/solution-contributions/:id/publish` | 幂等发布不可变题解版本并生成贡献奖励事件 |
+| `POST` | `/api/review/solution-contributions/:id/similarity/retry` | 题目管理员重试失败或补建遗漏的当前投稿相似度任务 |
+| `GET` | `/api/blog-discovery` | 匿名发现 PUBLIC 博客；登录后同时发现 PLATFORM 博客 |
+| `GET` | `/api/blog-discovery/:id` | 按 ID 或 slug 读取公开知识文章，不返回不可见版本 |
+| `GET` | `/api/blog-discovery/:id/community` | 读取公开文章的安全互动计数；匿名响应无本人状态 |
+| `GET` | `/api/blog-discovery/:id/comments` | 分页读取公开文章评论及首批回复 |
+| `GET` | `/api/blog-discovery/:id/comments/:commentId/replies` | 以游标分页读取一层回复 |
+| `POST` | `/api/submissions/:id/blog-snapshots` | 提交作者为本人终态提交创建可选源码的脱敏不可变博客快照 |
 | `GET` | `/api/blogs/:id/community` | 读取有权访问的已发布博客互动汇总和本人反应/收藏状态 |
 | `GET` | `/api/blogs/:id/comments` | 分页读取可见评论及一层回复 |
+| `GET` | `/api/blogs/:id/comments/:commentId/replies` | 登录用户按游标分页读取指定顶层评论的一层回复 |
 | `POST` | `/api/blogs/:id/comments` | 创建评论或一层回复 |
 | `DELETE` | `/api/blogs/:id/comments/:commentId` | 作者或平台治理人员隐藏评论 |
 | `PUT` | `/api/blogs/:id/reactions/:type` | 幂等设置 LIKE/HELPFUL 反应 |
@@ -91,6 +99,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/assignments/:id/publish` | 原子生成名单/进度并冻结作业 |
 | `POST` | `/api/assignments/:id/submit` | 按固定 Revision 创建独立作业提交与 JudgeRun |
 | `GET` | `/api/assignments/:id/progress` | 管理者读取服务端成绩矩阵 |
+| `POST` | `/api/assignments/:id/progress/:progressId/manual-completion` | 管理者按版本 CAS 和必填原因设置或取消人工完成 |
 | `POST` | `/api/assignments/:id/corrections` | 原子创建订正事实和事件 |
 | `POST` | `/api/assignments/:id/feedback` | 原子创建学生可见或内部反馈 |
 | `POST` | `/api/assignments/:id/score-adjustments` | 追加人工调分事实 |

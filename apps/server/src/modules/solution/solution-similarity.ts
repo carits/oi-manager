@@ -1,7 +1,7 @@
 const CJK = /[\u3400-\u9fff]/u
 const WORD = /[\p{L}\p{N}_]/u
 
-function jaccard(left: Set<string>, right: Set<string>) {
+function jaccard<T>(left: Set<T>, right: Set<T>) {
   if (!left.size || !right.size) return 0
   let intersection = 0
   for (const value of left) if (right.has(value)) intersection += 1
@@ -68,6 +68,43 @@ export function compareSolutionContent(
   const codeSimilarityBasisPoints = jaccard(codeFingerprint(subject.referenceCode), codeFingerprint(candidate.referenceCode))
   const maximumSimilarityBasisPoints = Math.max(textSimilarityBasisPoints, codeSimilarityBasisPoints)
   return { textSimilarityBasisPoints, codeSimilarityBasisPoints, maximumSimilarityBasisPoints }
+}
+
+export type SolutionContentFingerprint = {
+  textSignature: number[]
+  codeSignature: number[]
+}
+
+function stableHash(value: string) {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return hash >>> 0
+}
+
+function boundedSignature(values: Set<string>, size = 256) {
+  return [...new Set([...values].map(stableHash))].sort((left, right) => left - right).slice(0, size)
+}
+
+/** Fixed-size bottom-k signatures prevent similarity jobs from storing or
+ * repeatedly rebuilding unbounded shingle sets for every comparison. */
+export function createSolutionContentFingerprint(value: { contentMarkdown: string; referenceCode?: string | null }): SolutionContentFingerprint {
+  return {
+    textSignature: boundedSignature(markdownFingerprint(value.contentMarkdown)),
+    codeSignature: boundedSignature(codeFingerprint(value.referenceCode)),
+  }
+}
+
+export function compareSolutionFingerprints(subject: SolutionContentFingerprint, candidate: SolutionContentFingerprint) {
+  const textSimilarityBasisPoints = jaccard(new Set(subject.textSignature), new Set(candidate.textSignature))
+  const codeSimilarityBasisPoints = jaccard(new Set(subject.codeSignature), new Set(candidate.codeSignature))
+  return {
+    textSimilarityBasisPoints,
+    codeSimilarityBasisPoints,
+    maximumSimilarityBasisPoints: Math.max(textSimilarityBasisPoints, codeSimilarityBasisPoints),
+  }
 }
 
 export function similarityRisk(score: number) {
