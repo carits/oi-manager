@@ -326,5 +326,7 @@ test('restored stack completes auth, real Judge, Hack promotion, and activity pi
   )
   const hackedAfter = await waitForSubmission(hackedAfterId, 'wa')
   expect(hackedAfter.testSetRevisionId).toBe(problem.latestTestSetRevisionId)
-  expect(await prisma.submission.count({ where: { result: { in: ['queuing', 'judging', 'finalizing'] } } })).toBe(0)
+  expect(await prisma.submission.count({
+    where: { CurrentJudgeRun: { status: { in: ['QUEUED', 'RUNNING'] } } },
+  })).toBe(0)
 })
