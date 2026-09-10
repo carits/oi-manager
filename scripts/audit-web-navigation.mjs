@@ -50,14 +50,14 @@ for (const file of sourceFiles) {
   source.split(/\r?\n/).forEach((line, index) => {
     if (!/(?:href\s*=|router\.(?:push|replace)|window\.location)/.test(line)) return
     const lineNumber = index + 1
-    const staticPaths = [...line.matchAll(/(?:href\s*=|router\.(?:push|replace)\(|window\.location(?:\.href)?\s*=)\s*["'](\/[^"']*)["']/g)]
+    const staticPaths = [...line.matchAll(/(?:href\s*=|router\.(?:push|replace)\(|window\.location(?:\.href)?\s*=|window\.location\.(?:assign|replace)\()\s*["'](\/[^"']*)["']/g)]
     for (const match of staticPaths) {
       const pathname = match[1].split(/[?#]/)[0]
       const risk = classify(pathname, routes)
       if (risk) findings.push({ file: path.relative(root, file), line: lineNumber, expression: match[0], target: pathname, risk, severity: 'error' })
     }
 
-    const templateMatch = line.match(/(?:href\s*=|router\.(?:push|replace)\()\s*\{?`([^`]+)`/)
+    const templateMatch = line.match(/(?:href\s*=|router\.(?:push|replace)\(|window\.location\.(?:assign|replace)\()\s*\{?`([^`]+)`/)
     if (templateMatch) {
       const template = templateMatch[1]
       const staticPrefix = template.split('${')[0].replace(/\/$/, '')

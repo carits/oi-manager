@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, testing, operations
-last_verified: 2026-09-10
+last_verified: 2026-09-11
 source_of_truth: apps/server/src/modules/blog, apps/server/prisma/schema.prisma, apps/web/src/components/blog
 ---
 
@@ -67,9 +67,15 @@ Markdown URL 不是事实索引。发布时 `BlogPublishService` 解析草稿中
 
 ## Web 与当前范围
 
-`/blog` 和 `/blog/[id]` 是公开知识发现与阅读入口：匿名用户只看到 PUBLIC，登录用户同时看到 PLATFORM。`/personal/blogs` 提供本人列表，`/personal/blogs/new` 和 `/personal/blogs/[id]` 共用 Markdown 编辑/阅读/版本历史工作台，`/personal/blogs/series` 管理系列元数据和文章顺序。题目详情的“相关博客”页签使用 `BlogReference` 反向索引。
+`/blog` 和 `/blog/[id]` 是脱离工作区外壳的公共发现与分享入口：匿名用户只看到 PUBLIC，登录用户同时看到 PLATFORM。站内阅读使用 `/personal/knowledge[/id]`、`/org/:organizationId/knowledge[/id]`、`/admin/knowledge[/id]` 或 `/platform-admin/knowledge[/id]`，复用同一发现/详情组件但保留原工作区的 AppShell、身份、消息、通知与返回路径。`/personal/blogs` 提供本人列表，`/personal/blogs/new` 和 `/personal/blogs/[id]` 共用 Markdown 编辑/阅读/版本历史工作台，`/personal/blogs/series` 管理系列元数据和文章顺序。全局管理员不显示“我的文章”，只进入各自管理工作台。题目详情的“相关博客”页签使用 `BlogReference` 反向索引。
 
-公共阅读顺序为标题作者、标签系列、正文、固定引用、系列导航、互动和评论。系列上一篇/下一篇由服务端逐篇执行当前访问者权限后生成，不能泄露不可见条目；匿名写操作统一跳转登录并携带原文 `next`。分类和引用使用公共共享展示组件，作者工作台与公共页面不再维护两套解释。题目与 Revision 链接到对应个人/组织题目页，题解链接到题目题解页，榜单与 Rating 链接到比赛排名页；脱敏 Submission Snapshot 只允许在当前卡片展开其固定安全字段，不生成可枚举私人提交记录的链接。
+全站只有根布局创建 `AuthProvider`，根布局用服务器 Session 初始化身份；受保护的 `RoleLayout` 只负责鉴权和工作区外壳，禁止再创建第二份客户端身份状态。导航上下文由账号角色和 URL 共同解析：全局管理员优先固定为平台上下文，普通账号再按 `/org` 或个人路径区分。`/account/*` 不得把全局管理员误判为个人工作区；Logo、知识入口和固定引用必须使用同一个导航上下文。组织上下文失效时统一返回 `/identity?organizationUnavailable=1` 重新选择有效身份。
+
+公共阅读顺序为标题作者、标签系列、正文、固定引用、系列导航、互动和评论。系列上一篇/下一篇由服务端逐篇执行当前访问者权限后生成，不能泄露不可见条目；匿名写操作统一跳转登录并携带经过站内路径校验的原文 `next`，已登录用户访问登录入口时直接回到该安全路径。分类和引用使用公共共享展示组件，作者工作台与公共页面不再维护两套解释。题目与 Revision 链接由当前导航上下文决定个人、组织或平台管理路径；匿名公共阅读在没有公开 canonical 资源页时不生成伪造的私有内部链接。题解、榜单与 Rating 同样遵循该规则；脱敏 Submission Snapshot 只允许在当前卡片展开其固定安全字段，不生成可枚举私人提交记录的链接。
+
+社区读取使用 `loading / ready / error` 三态。传输错误、5xx 或不完整响应必须展示请求错误与局部重试，不能渲染成 0 次互动或空评论。公共文章页由服务器生成标题、摘要与 canonical metadata；互动区仍为客户端组件。
+
+Blog 编辑器将类型、slug、组织、可见范围和完整草稿统一序列化后与保存基线比较。全局未保存保护同时覆盖 SPA 链接/工作区切换与浏览器刷新关闭；保存成功后才更新基线，冲突或失败继续保留本地内容。
 
 已发布且当前用户有权读取的博客支持一层回复的评论、`LIKE/HELPFUL` 反应、账号收藏和文章/评论举报。评论首页每条只携带首批回复和 `replyCount`，更多回复使用游标接口分页加载。匿名用户可读取 PUBLIC 评论，但所有写操作仍需登录。删除评论保留记录并隐藏正文展示；反应和收藏使用用户与目标的数据库唯一键保证幂等。举报创建时固化当前文章版本哈希或评论正文证据，重复待处理举报返回冲突。
 

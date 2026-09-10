@@ -3,13 +3,14 @@ import 'server-only'
 import { cookies } from 'next/headers'
 import type { AuthUser } from '@/components/AuthProvider'
 import { ENV } from '@/config/env'
+import { cache } from 'react'
 
 export type ServerSessionResult =
   | { state: 'authenticated'; user: AuthUser }
   | { state: 'anonymous' }
   | { state: 'unavailable'; message: string; requestId?: string }
 
-export async function getServerSession(): Promise<ServerSessionResult> {
+export const getServerSession = cache(async (): Promise<ServerSessionResult> => {
   const cookieHeader = (await cookies()).toString()
   if (!cookieHeader.includes('oi_session=')) {
     return { state: 'anonymous' }
@@ -42,4 +43,4 @@ export async function getServerSession(): Promise<ServerSessionResult> {
       message: '会话服务暂时不可用，请重试',
     }
   }
-}
+})

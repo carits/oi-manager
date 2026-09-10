@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-09-08
+last_verified: 2026-09-11
 source_of_truth: apps/web/src/styles/globals.css and UI components
 ---
 
@@ -284,7 +284,10 @@ CSS Module、焦点 Token 与错误契约迁移；后续变更由静态门禁直
 - 高频复杂创建使用分步流程：作业四步、比赛五步；推荐默认值先满足普通场景，高级规则必须显式展开。
 - 批量批改采用服务端分页的“学生 × 题目”矩阵，单元格显示主状态和次级标记，详细动作进入统一 `DetailDialog`。
 - 所有参赛/作业/训练/Hack 源码提交使用 `SubmissionCodeEditor`；文件 IO 继续由独立字段组件承载。编辑器必须有纯文本降级，不能因动态依赖加载失败阻断提交。草稿键必须包含账号、业务范围、题目和语言；切换语言先保存旧语言草稿，再加载目标语言草稿，禁止复用当前文本覆盖目标语言。
-- 全局内容入口必须声明 global route scope，校园工作区不能给知识广场等账号级路由增加组织前缀。
+- 内容作用域与导航作用域必须分离：知识文章仍由账号级发现 API 提供，但登录后的入口必须使用 `/personal/knowledge`、`/org/:organizationId/knowledge` 或管理端对应路由保留当前 AppShell；`/blog` 只承担公共分享。不得把所有入口压回一个会丢失身份外壳的根路由。
+- 页面 Logo、侧栏、账号菜单、工作区切换和内容内固定引用必须共享同一个 `NavigationContext`。全局管理员优先使用平台上下文，不能因为进入 `/account/*` 被误判为个人工作区。
+- 可编辑工作台统一向 `UnsavedChangesProvider` 登记 dirty scope。站内 Link、显式工作区切换和业务返回按钮必须触发同一确认框；刷新、关闭标签页继续使用 `beforeunload`。业务页面不得各自实现只覆盖其中一种导航的离开确认。
+- 网络失败不得伪装为空数据。互动计数、评论、列表等只有在服务端成功返回明确空集合时才能显示“0/暂无”；失败必须显示局部错误、请求 ID（如有）和重试。
 
 历史批量样式改造记录保存在
 [前端风格重构归档](../archive/plans/frontend-style-refactor.md)，其中的数量是历史快照，

@@ -24,6 +24,7 @@ export const superAdminNav: NavConfig = {
     { label: '账号管理', href: '/admin/users' },
     { label: '比赛', href: '/admin/contests' },
     { label: '评测记录', href: '/admin/submissions' },
+    { label: '知识广场', href: '/admin/knowledge' },
     { label: '贡献审计', href: '/admin/contributions' },
     { label: '博客治理', href: '/admin/blog-moderation' },
     { label: '私信举报', href: '/admin/chat-reports' },
@@ -39,6 +40,7 @@ export const platformAdminNav: NavConfig = {
     { label: '题库管理', href: '/platform-admin/problems' },
     { label: '比赛', href: '/platform-admin/contests' },
     { label: '评测记录', href: '/platform-admin/submissions' },
+    { label: '知识广场', href: '/platform-admin/knowledge' },
     { label: '贡献审计', href: '/platform-admin/contributions' },
     { label: '数据市场', href: '/platform-admin/data-market' },
     { label: 'OJ账号', href: '/platform-admin/oj-accounts' },
@@ -62,7 +64,7 @@ export const schoolManagerNav: NavConfig = {
     { label: '题库', href: 'problems' },
     { label: '题单', href: 'problem-lists' },
     { label: '排名', href: 'rankings' },
-    { label: '知识广场', href: '/blog', scope: 'global' },
+    { label: '知识广场', href: 'knowledge' },
   ]
 }
 
@@ -80,7 +82,7 @@ export const teacherNav: NavConfig = {
     { label: '题库', href: 'problems' },
     { label: '题单', href: 'problem-lists' },
     { label: '排名', href: 'rankings' },
-    { label: '知识广场', href: '/blog', scope: 'global' },
+    { label: '知识广场', href: 'knowledge' },
   ]
 }
 
@@ -95,7 +97,7 @@ export const studentNav: NavConfig = {
     { label: '训练', href: 'training-sessions' },
     { label: '题单', href: 'problem-lists' },
     { label: '排名', href: 'rankings' },
-    { label: '知识广场', href: '/blog', scope: 'global' },
+    { label: '知识广场', href: 'knowledge' },
   ]
 }
 
@@ -112,7 +114,7 @@ export const personalNav: NavConfig = {
     { label: '题单', href: '/personal/problem-lists' },
     { label: '排名', href: '/personal/rankings' },
     { label: '贡献', href: '/personal/contributions' },
-    { label: '知识广场', href: '/blog', scope: 'global' },
+    { label: '知识广场', href: '/personal/knowledge' },
     { label: '数据市场', href: '/personal/data-market' },
     { label: '钱包', href: '/account/wallet' },
     { label: '评测记录', href: '/personal/submissions' },

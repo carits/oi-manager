@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { AuthProvider } from './AuthProvider'
 import { RoleShell } from './RoleShell'
 import { SessionUnavailable } from './SessionUnavailable'
 import { getServerSession } from '@/lib/serverSession'
@@ -67,12 +66,10 @@ export async function RoleLayout({
   if (requiredContext && context !== requiredContext) redirect('/identity')
 
   return (
-    <AuthProvider initialUser={session.user}>
-      <ChatProvider>
-        <RoleShell homePath={homePath} contentClassName={contentClassName}>
-          {children}
-        </RoleShell>
-      </ChatProvider>
-    </AuthProvider>
+    <ChatProvider>
+      <RoleShell homePath={homePath} contentClassName={contentClassName}>
+        {children}
+      </RoleShell>
+    </ChatProvider>
   )
 }

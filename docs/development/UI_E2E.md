@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development
-last_verified: 2026-08-24
+last_verified: 2026-09-11
 source_of_truth: playwright.config.ts and e2e directory
 ---
 
@@ -55,6 +55,10 @@ fixture 固定创建学校、团队、题目、题单、作业、比赛和提交
 动态详情和写流程。
 每个页面检查未捕获异常、控制台错误、意外 `4xx/5xx`、无限加载和横向溢出。模式切换测试必须
 先看到个人团队，再切换到校园模式并只看到校园团队，以防缓存串用。
+
+`workspace-knowledge-flow.spec.ts` 是全局内容与工作区导航边界门禁。它从教师、校园学生、个人账号、超级管理员和平台管理员的真实工作区侧栏进入知识广场，要求 URL、AppShell、主导航和身份上下文保持不变；公共 `/blog` 只用于匿名分享。套件还必须覆盖真实已发布文章互动、匿名登录 `next` 返回、社区读取错误不冒充零数据、Blog 元数据字段触发未保存确认、管理员 `/account/*` Logo 直接回管理首页，以及已登录用户访问安全 `next` 时不经过身份选择页。
+
+静态导航巡检同时识别 `window.location.assign()` 和 `window.location.replace()`；新增或修改硬跳转不能绕过不存在路由和工作区边界检查。静态门禁不能替代上述真实点击流程。
 
 ## 套件
 

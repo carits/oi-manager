@@ -6,8 +6,10 @@ import { AuthProvider } from './AuthProvider'
 import { ToastProvider } from './ui/Toast'
 import { ErrorBoundary } from './ErrorBoundary'
 import { NetworkStatusBanner } from './NetworkStatusBanner'
+import type { AuthUser } from './AuthProvider'
+import { UnsavedChangesProvider } from './navigation/UnsavedChangesProvider'
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children, initialUser = null }: { children: ReactNode; initialUser?: AuthUser | null }) {
   return (
     <ErrorBoundary>
       <SWRConfig value={{
@@ -16,10 +18,12 @@ export function Providers({ children }: { children: ReactNode }) {
         dedupingInterval: 10000,
         shouldRetryOnError: false,
       }}>
-        <AuthProvider>
+        <AuthProvider initialUser={initialUser}>
           <ToastProvider>
-            <NetworkStatusBanner />
-            {children}
+            <UnsavedChangesProvider>
+              <NetworkStatusBanner />
+              {children}
+            </UnsavedChangesProvider>
           </ToastProvider>
         </AuthProvider>
       </SWRConfig>

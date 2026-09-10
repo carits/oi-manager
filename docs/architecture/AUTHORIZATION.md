@@ -1,7 +1,7 @@
 ---
 status: current
 audience: development, operations
-last_verified: 2026-09-04
+last_verified: 2026-09-11
 source_of_truth: packages/shared/src/index.ts, auth middleware, role layouts
 ---
 
@@ -128,9 +128,11 @@ HTTP 请求使用 `Authorization: Bearer <token>`。缺少或无效 Token 返回
 
 ## 前端会话
 
-`AuthProvider` 根据 `role:userId:workspaceMode` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新
+根布局通过服务器 Session 初始化全站唯一的 `AuthProvider`；`RoleLayout` 只做权限、上下文和 AppShell 选择，不能创建第二份客户端身份状态。这样从校园或个人工作区进入公共内容时不会因卸载内层 Provider 退化成匿名。`AuthProvider` 根据 `role:userId:workspaceMode` 计算 `sessionKey`，用于账号或工作区切换后让组件和缓存重新
 挂载。它不是数据库字段、访问令牌或后端隔离机制。真正隔离由 JWT、权限中间件和
 资源查询条件完成。
+
+前端导航上下文先按全局角色约束，再按 URL 解析组织或个人工作区。超级管理员与平台管理员访问 `/account/*` 时仍属于平台上下文；Logo 和全局内容入口必须直接返回 `/admin` 或 `/platform-admin`，不得经过不存在的个人工作区。组织上下文失效后返回 `/identity?organizationUnavailable=1`，由用户选择仍有效的身份。
 
 浏览器登录由 Server 设置同域 `HttpOnly`、`SameSite=Lax` 会话 Cookie；正式环境同时要求
 HTTPS 和 `Secure=true`。鉴权中间件暂时兼容 Bearer Token，供脚本、测试与旧会话一次性

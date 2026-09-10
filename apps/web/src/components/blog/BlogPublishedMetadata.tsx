@@ -6,6 +6,9 @@ import { StatusBadge } from '@/components/ui/Badge'
 import { BLOG_PUBLISHED_REFERENCE_LABELS, BLOG_VISIBILITY_LABELS, referenceSnapshotTitle, type BlogClassificationSnapshot, type PublishedBlogReferenceType } from './blog-contract'
 import { referenceHref, type PublishedBlogReference } from './blog-reference-navigation'
 import styles from './BlogPublishedMetadata.module.css'
+import { usePathname } from 'next/navigation'
+import { useAuth } from '@/components/AuthProvider'
+import { resolveNavigationContext } from '@/lib/navigationContext'
 
 export type { PublishedBlogReference } from './blog-reference-navigation'
 
@@ -25,10 +28,13 @@ export function BlogClassificationView({ classification }: { classification?: Bl
   </div>
 }
 
-export function BlogReferenceCards({ references }: { references: PublishedBlogReference[] }) {
+export function BlogReferenceCards({ references, publicRead = false }: { references: PublishedBlogReference[]; publicRead?: boolean }) {
+  const pathname = usePathname()
+  const { user } = useAuth()
+  const navigationContext = publicRead && !user ? null : resolveNavigationContext(pathname, user)
   if (!references.length) return <p className={styles.muted}>这个版本没有结构化引用。</p>
   return <div className={styles.cards}>{references.map(reference => {
-    const href = referenceHref(reference)
+    const href = referenceHref(reference, navigationContext)
     const snapshot = (reference.snapshot || {}) as Record<string, any>
     return <article key={reference.id}>
       <div><StatusBadge variant={reference.status === 'CURRENT' ? 'info' : 'warning'}>{reference.status === 'CURRENT' ? '固定引用' : reference.status === 'SUPERSEDED' ? '来源已有新版本' : '引用状态需关注'}</StatusBadge><span>{BLOG_PUBLISHED_REFERENCE_LABELS[reference.type]}</span></div>

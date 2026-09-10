@@ -6,12 +6,10 @@ export type AppRole =
   | 'student'
 
 export function getRoleHome(role?: string, context: 'organization' | 'personal' | 'platform' = 'organization'): string {
+  if (role === 'super_admin') return '/admin'
+  if (role === 'platform_admin') return '/platform-admin'
   if (context === 'personal') return '/personal'
   switch (role) {
-    case 'super_admin':
-      return '/admin'
-    case 'platform_admin':
-      return '/platform-admin'
     case 'school_principal':
     case 'teacher':
     case 'student':

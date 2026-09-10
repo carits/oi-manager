@@ -1,7 +1,7 @@
 ---
 status: reference
 audience: development, testing
-last_verified: 2026-09-10
+last_verified: 2026-09-11
 source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 ---
 
@@ -20,6 +20,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/account/wallet` | 见页面权限布局 | 当前页面 |
 | `/admin` | 见页面权限布局 | 当前页面 |
 | `/admin/blog-moderation` | 超级管理员 | 博客举报、内容处置与社区精选治理 |
+| `/admin/knowledge` | 超级管理员 | 保留平台管理外壳的知识广场 |
+| `/admin/knowledge/[id]` | 超级管理员 | 保留平台管理外壳的知识文章阅读页 |
 | `/admin/chat-reports` | 超级管理员 | 私信举报审核 |
 | `/admin/contests` | 超级管理员 | 平台比赛列表 |
 | `/admin/contests/[id]` | 超级管理员 | 平台比赛详情 |
@@ -49,6 +51,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/blogs/[id]` | 按文章或版本可见范围 | 博客阅读、草稿编辑、版本历史和固定引用 |
 | `/personal/blogs/new` | 已登录账号 | 新建知识文章草稿 |
 | `/personal/blogs/series` | 已登录账号 | 系列创建、可见范围与文章顺序管理 |
+| `/personal/knowledge` | 已登录普通账号 | 保留个人工作区外壳的知识广场 |
+| `/personal/knowledge/[id]` | 已登录普通账号 | 保留个人工作区外壳的知识文章阅读页 |
 | `/personal/organizations` | 普通账号个人空间 | 我的组织、申请和邀请 |
 | `/personal/campus` | 见页面权限布局 | 当前页面 |
 | `/personal/carits` | 见页面权限布局 | 当前页面 |
@@ -77,6 +81,8 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `/personal/training-sessions/[id]/design` | 团队管理员 | DRAFT 训练阶段、题目顺序、解锁和固定 Revision 设计器 |
 | `/platform-admin` | 见页面权限布局 | 当前页面 |
 | `/platform-admin/blog-moderation` | 平台管理员 | 博客举报、内容处置与社区精选治理 |
+| `/platform-admin/knowledge` | 平台管理员 | 保留平台管理外壳的知识广场 |
+| `/platform-admin/knowledge/[id]` | 平台管理员 | 保留平台管理外壳的知识文章阅读页 |
 | `/platform-admin/contests` | 平台管理员 | 平台比赛列表 |
 | `/platform-admin/contests/[id]` | 平台管理员 | 平台比赛详情 |
 | `/platform-admin/contests/[id]/statements` | 平台管理员 | 平台比赛题面管理 |

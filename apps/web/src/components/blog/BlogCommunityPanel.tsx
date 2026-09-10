@@ -36,15 +36,28 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [busy, setBusy] = useState(false)
   const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set())
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [loadError, setLoadError] = useState<{ message: string; requestId?: string } | null>(null)
 
   const load = useCallback(async () => {
+    setLoadState('loading')
+    setLoadError(null)
     const readBase = publicRead ? `/api/blog-discovery/${postId}` : `/api/blogs/${postId}`
     const [summary, commentPage] = await Promise.all([
       apiClient.get<Community>(`${readBase}/community`, { accountScoped: true }),
       apiClient.get<CommentPage>(`${readBase}/comments?pageSize=100`, { accountScoped: true }),
     ])
-    if (summary.success && summary.data) setCommunity(summary.data)
-    if (commentPage.success && commentPage.data) setComments(commentPage.data.data)
+    if (!summary.success || !summary.data || !commentPage.success || !commentPage.data) {
+      setLoadState('error')
+      setLoadError({
+        message: summary.message || commentPage.message || '社区互动暂时无法加载',
+        requestId: summary.requestId || commentPage.requestId,
+      })
+      return
+    }
+    setCommunity(summary.data)
+    setComments(commentPage.data.data)
+    setLoadState('ready')
   }, [postId, publicRead])
 
   const requireLogin = () => {
@@ -81,10 +94,13 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     if (!requireLogin()) return
     if (!content.trim()) return
     setBusy(true)
-    const result = await apiClient.post(`/api/blogs/${postId}/comments`, { content, parentId: replyTo?.id || null }, { accountScoped: true })
-    setBusy(false)
-    if (!result.success) return toast.error(result.message || '评论失败')
-    setContent(''); setReplyTo(null); await load()
+    try {
+      const result = await apiClient.post(`/api/blogs/${postId}/comments`, { content, parentId: replyTo?.id || null }, { accountScoped: true })
+      if (!result.success) return toast.error(result.message || '评论失败')
+      setContent(''); setReplyTo(null); await load()
+    } finally {
+      setBusy(false)
+    }
   }
 
   const remove = async (id: string) => {
@@ -119,6 +135,9 @@ export function BlogCommunityPanel({ postId, publicRead = false }: { postId: str
     {!reply && comment.replies?.map(item => renderComment(item, true))}
     {!reply && (comment.replies?.length || 0) < (comment.replyCount || 0) && <Button size="sm" variant="ghost" loading={loadingReplies.has(comment.id)} onClick={() => void loadMoreReplies(comment)}>加载更多回复（{(comment.replyCount || 0) - (comment.replies?.length || 0)}）</Button>}
   </article>
+
+  if (loadState === 'loading') return <section className={styles.community} aria-busy="true" aria-labelledby="blog-community-title"><h2 id="blog-community-title">社区互动</h2><p className={styles.muted}>正在加载评论与互动…</p></section>
+  if (loadState === 'error') return <section className={styles.community} aria-labelledby="blog-community-title"><h2 id="blog-community-title">社区互动</h2><div className={styles.error} role="alert"><span>{loadError?.message || '社区互动暂时无法加载'}{loadError?.requestId ? `（请求 ID：${loadError.requestId}）` : ''}</span><Button size="sm" variant="outline" onClick={() => void load()}>重试</Button></div></section>
 
   return <section className={styles.community} aria-labelledby="blog-community-title">
     <div className={styles.communityHead}><div><h2 id="blog-community-title">社区互动</h2>{community?.featured && <span className={styles.featured}>社区精选</span>}</div><div className={styles.communityActions}><Button size="sm" variant={community?.myReactions.includes('LIKE') ? 'primary' : 'secondary'} icon={<Heart size={15} />} onClick={() => void react('LIKE')}>喜欢 {community?.reactions.LIKE || 0}</Button><Button size="sm" variant={community?.myReactions.includes('HELPFUL') ? 'primary' : 'secondary'} icon={<ThumbsUp size={15} />} onClick={() => void react('HELPFUL')}>有帮助 {community?.reactions.HELPFUL || 0}</Button><Button size="sm" variant={community?.bookmarked ? 'primary' : 'secondary'} icon={<Bookmark size={15} />} onClick={() => void bookmark()}>{community?.bookmarked ? '已收藏' : '收藏'}</Button><Button size="sm" variant="ghost" icon={<Flag size={15} />} onClick={() => void report()}>举报文章</Button></div></div>

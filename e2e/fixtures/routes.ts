@@ -18,6 +18,8 @@ export const routePatterns = [
   '/admin/contests/[id]',
   '/admin/contests/[id]/statements',
   '/admin/contributions',
+  '/admin/knowledge',
+  '/admin/knowledge/[id]',
   '/admin/platform-bindings',
   '/admin/profile',
   '/admin/schools',
@@ -48,6 +50,8 @@ export const routePatterns = [
   '/personal/contests/[id]/statements',
   '/personal/contributions',
   '/personal/data-market',
+  '/personal/knowledge',
+  '/personal/knowledge/[id]',
   '/personal/organizations',
   '/personal/problem-lists',
   '/personal/problem-lists/[id]',
@@ -77,6 +81,8 @@ export const routePatterns = [
   '/platform-admin/carits',
   '/platform-admin/contributions',
   '/platform-admin/data-market',
+  '/platform-admin/knowledge',
+  '/platform-admin/knowledge/[id]',
   '/platform-admin/oj-accounts',
   '/platform-admin/platform-bindings',
   '/platform-admin/problems',
@@ -134,7 +140,7 @@ export function resolveRoute(pattern: RoutePattern, ids: FixtureIds): string {
   else if (route.includes('/personal/contests/[id]')) route = route.replace('[id]', ids.personalContest)
   else if (route.includes('/admin/contests/[id]')) route = route.replace('[id]', ids.personalContest)
   else if (route.includes('/platform-admin/contests/[id]')) route = route.replace('[id]', ids.personalContest)
-  else if (route.includes('/personal/blogs/[id]') || route.includes('/blog/[id]')) route = route.replace('[id]', 'missing-blog')
+  else if (route.includes('/personal/blogs/[id]') || route.includes('/blog/[id]') || route.includes('/knowledge/[id]')) route = route.replace('[id]', 'missing-blog')
   else if (route.includes('/personal/training-sessions/[id]')) route = route.replace('[id]', ids.trainingSession)
   else if (route.includes('/platform-admin/problems/[id]')) route = route.replace('[id]', ids.problem)
   else if (route.includes('/platform-admin/submissions/[id]')) route = route.replace('[id]', ids.submission)

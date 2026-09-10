@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ArrowLeft, BookOpenCheck, FolderPlus, History, Save, Send } from 'lucide-react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import type { WorkspaceSummary } from '@oi-manager/shared'
 import { PageFrame } from '@/components/ui/PageFrame'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -33,6 +33,7 @@ import {
   type BlogVisibility,
 } from './blog-contract'
 import styles from './BlogWorkspace.module.css'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
 type BlogVersion = {
   id: string
@@ -65,6 +66,10 @@ type DraftState = { title: string; summary: string; contentMarkdown: string; ref
 
 const EMPTY_DRAFT: DraftState = { title: '', summary: '', contentMarkdown: '', references: [], classification: EMPTY_BLOG_CLASSIFICATION }
 
+function serializeEditorState(input: { type: BlogPostType; slug: string; organizationId: string; visibility: BlogVisibility; draft: DraftState }) {
+  return JSON.stringify(input)
+}
+
 type BlogSeriesSummary = { id: string; title: string; visibility: BlogVisibility; organizationId?: string | null; revision: number; entryCount: number }
 type BlogTagSummary = { id: string; kind: 'SYSTEM' | 'USER'; name: string }
 
@@ -83,13 +88,13 @@ function initialReference(search: URLSearchParams): BlogDraftReference[] {
 }
 
 export function BlogWorkspace({ postId }: { postId?: string }) {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const toast = useToast()
   const { user } = useAuth()
+  const initialDraft = useRef<DraftState>({ ...EMPTY_DRAFT, classification: { ...EMPTY_BLOG_CLASSIFICATION }, references: initialReference(new URLSearchParams(searchParams.toString())) })
   const [post, setPost] = useState<BlogPost | null>(null)
-  const [draft, setDraft] = useState<DraftState>(() => ({ ...EMPTY_DRAFT, classification: { ...EMPTY_BLOG_CLASSIFICATION }, references: initialReference(new URLSearchParams(searchParams.toString())) }))
-  const [baseline, setBaseline] = useState('')
+  const [draft, setDraft] = useState<DraftState>(initialDraft.current)
+  const [baseline, setBaseline] = useState(() => serializeEditorState({ type: 'ARTICLE', slug: '', organizationId: '', visibility: 'PRIVATE', draft: initialDraft.current }))
   const [type, setType] = useState<BlogPostType>('ARTICLE')
   const [slug, setSlug] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -109,14 +114,15 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   const [seriesDescription, setSeriesDescription] = useState('')
   const [seriesVisibility, setSeriesVisibility] = useState<BlogVisibility>('PRIVATE')
   const [error, setError] = useState('')
-  const serializedDraft = useMemo(() => JSON.stringify(draft), [draft])
-  const dirty = Boolean(post ? baseline && baseline !== serializedDraft : draft.title || draft.summary || draft.contentMarkdown || draft.references.length || draft.classification.seriesId || draft.classification.tagIds.length || draft.classification.authorTags.length)
+  const serializedEditorState = useMemo(() => serializeEditorState({ type, slug, organizationId, visibility, draft }), [draft, organizationId, slug, type, visibility])
+  const dirty = baseline !== serializedEditorState
+  const { requestNavigation } = useUnsavedChanges(`blog-editor:${postId || 'new'}`, dirty)
 
   const applyPost = useCallback((value: BlogPost) => {
     setPost(value); setType(value.type); setSlug(value.slug); setOrganizationId(value.organizationId || ''); setVisibility(value.visibility)
     if (value.draft) {
       const next = { title: value.draft.title, summary: value.draft.summary || '', contentMarkdown: value.draft.contentMarkdown, references: value.draft.references || [], classification: value.draft.classification || { ...EMPTY_BLOG_CLASSIFICATION } }
-      setDraft(next); setBaseline(JSON.stringify(next))
+      setDraft(next); setBaseline(serializeEditorState({ type: value.type, slug: value.slug, organizationId: value.organizationId || '', visibility: value.visibility, draft: next }))
     }
   }, [])
 
@@ -145,13 +151,6 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       if (tagResult.success && tagResult.data) setTagSuggestions(tagResult.data.items)
     })
   }, [])
-  useEffect(() => {
-    if (!dirty) return
-    const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
-    window.addEventListener('beforeunload', prevent)
-    return () => window.removeEventListener('beforeunload', prevent)
-  }, [dirty])
-
   const persistDraft = async (): Promise<{ id: string; revision: number } | null> => {
     const validation = validateBlogDraft(draft)
     if (validation) { toast.error(validation); setTab('draft'); return null }
@@ -173,7 +172,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
       }, { accountScoped: true })
       if (!result.success || !result.data) { toast.error(result.message || '草稿保存失败'); return null }
       const next = { title: result.data.title, summary: result.data.summary || '', contentMarkdown: result.data.contentMarkdown, references: result.data.references || [], classification: result.data.classification || { ...EMPTY_BLOG_CLASSIFICATION } }
-      setDraft(next); setBaseline(JSON.stringify(next)); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data! } } : current)
+      setDraft(next); setBaseline(serializeEditorState({ type, slug, organizationId, visibility, draft: next })); setPost(current => current ? { ...current, draft: { ...current.draft!, ...result.data! } } : current)
       return { id: post.id, revision: result.data.revision }
     } finally { setSaving(false) }
   }
@@ -203,7 +202,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
     setSaving(true)
     const result = await apiClient.post(`/api/blogs/${post.id}/archive`, undefined, { accountScoped: true })
     setSaving(false); setArchiveOpen(false)
-    if (result.success) { toast.success('文章已归档'); router.push('/personal/blogs') } else toast.error(result.message || '归档失败')
+    if (result.success) { toast.success('文章已归档'); requestNavigation('/personal/blogs') } else toast.error(result.message || '归档失败')
   }
 
   const createSeries = async () => {
@@ -240,7 +239,7 @@ export function BlogWorkspace({ postId }: { postId?: string }) {
   const editable = isAuthor && (!post || Boolean(post.draft))
 
   return <PageFrame width="reading"><div className={styles.stack}>
-    <PageHeader title={post?.currentVersion?.title || draft.title || '新建知识文章'} description={post ? `/${post.slug} · ${BLOG_TYPE_LABELS[post.type]}` : '草稿不会公开；发布时才解析引用并执行可见范围校验。'} breadcrumbs={[{ label: '知识文章', href: '/personal/blogs' }, { label: post ? '文章' : '新建' }]} actions={<><Button variant="outline" icon={<ArrowLeft size={16} />} onClick={() => router.push('/personal/blogs')}>返回列表</Button>{post && isAuthor && <Button variant="danger" icon={<Archive size={16} />} onClick={() => setArchiveOpen(true)}>归档</Button>}</>} />
+    <PageHeader title={post?.currentVersion?.title || draft.title || '新建知识文章'} description={post ? `/${post.slug} · ${BLOG_TYPE_LABELS[post.type]}` : '草稿不会公开；发布时才解析引用并执行可见范围校验。'} breadcrumbs={[{ label: '知识文章', href: '/personal/blogs' }, { label: post ? '文章' : '新建' }]} actions={<><Button variant="outline" icon={<ArrowLeft size={16} />} onClick={() => requestNavigation('/personal/blogs')}>返回列表</Button>{post && isAuthor && <Button variant="danger" icon={<Archive size={16} />} onClick={() => setArchiveOpen(true)}>归档</Button>}</>} />
     {post && <Tabs value={tab} onChange={setTab} items={[{ value: 'published', label: '当前版本', disabled: !post.currentVersion }, { value: 'draft', label: '编辑草稿', disabled: !editable }, { value: 'versions', label: '版本历史', count: versions.length }]} />}
 
     {tab === 'draft' && editable && <>

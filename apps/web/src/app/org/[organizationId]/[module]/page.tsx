@@ -22,8 +22,9 @@ import { TrainingSessionListPage } from '@/components/training-engine/TrainingSe
 import { SubmissionList } from '@/components/submission/SubmissionList'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
+import { BlogDiscovery } from '@/components/blog/BlogDiscovery'
 
-const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions'])
+const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge'])
 
 export default function OrgPage() {
   const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
@@ -88,5 +89,6 @@ export default function OrgPage() {
   if (module === 'problem-lists') return student ? <StudentProblemListsPage /> : <TeacherProblemListsPage />
   if (module === 'rankings') return student ? <StudentRankingsPage /> : <TeacherRankingsPage />
   if (module === 'submissions') return <SubmissionList viewRole={student ? 'student' : 'teacher'} />
+  if (module === 'knowledge') return <BlogDiscovery workspaceBasePath={`/org/${organizationId}/knowledge`} embedded />
   return student ? <StudentHome /> : <TeacherHome />
 }

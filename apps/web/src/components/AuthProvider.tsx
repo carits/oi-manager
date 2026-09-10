@@ -102,7 +102,7 @@ export function AuthProvider({
   useEffect(() => {
     const handleUnavailableOrganization = () => {
       void mutateCache(() => true, undefined, { revalidate: false })
-      window.location.assign('/personal/overview?organizationUnavailable=1')
+      window.location.assign('/identity?organizationUnavailable=1')
     }
     window.addEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)
     return () => window.removeEventListener(ORGANIZATION_UNAVAILABLE_EVENT, handleUnavailableOrganization)

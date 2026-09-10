@@ -8,7 +8,6 @@ import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Li
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
 import { getSidebarNavigationOpen, setSidebarNavigationOpen } from '@/lib/auth'
-import { getRoleHome } from '@/lib/roleAccess'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
@@ -16,6 +15,7 @@ import { NotificationBell } from '@/components/notification/NotificationBell'
 import { ChatButton } from '@/components/chat/ChatButton'
 import { UserAvatar } from '@/components/user/UserAvatar'
 import styles from './AppShell.module.css'
+import { knowledgeHref, navigationHome, resolveNavigationContext } from '@/lib/navigationContext'
 
 interface AppShellProps { children: ReactNode }
 
@@ -26,7 +26,6 @@ const accountPaths = {
   wallet: '/account/wallet',
   messages: '/account/messages',
   blogs: '/personal/blogs',
-  knowledge: '/blog',
 }
 
 const labelIcons: Record<string, LucideIcon> = {
@@ -38,7 +37,7 @@ const labelIcons: Record<string, LucideIcon> = {
   '贡献': Activity, '钱包': WalletCards, '贡献审计': ShieldCheck,
   'AI Token': WalletCards,
   '私信举报': ShieldCheck,
-  '博客治理': ShieldCheck,
+  '博客治理': ShieldCheck, '知识广场': BookOpen,
 
 }
 
@@ -52,15 +51,10 @@ export function AppShell({ children }: AppShellProps) {
   const { user, logout } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const organizationId = pathname.match(/^\/org\/([^/]+)/)?.[1]
   const userMenuRef = useRef<HTMLDivElement>(null)
-
-  // Workspace context is URL-derived; it must not come from a persisted mode.
-  const contextKind = pathname === '/personal'
-    || pathname.startsWith('/personal/')
-    || pathname.startsWith('/account/')
-    ? 'personal'
-    : 'organization'
+  const navigationContext = resolveNavigationContext(pathname, user)
+  const organizationId = navigationContext.organizationId
+  const contextKind = navigationContext.workspace
 
   useEffect(() => {
     if (!user) return
@@ -90,8 +84,7 @@ export function AppShell({ children }: AppShellProps) {
   const accountRole = user.role as UserRole
   const context = contextKind
   const isGlobalAdmin = isGlobalAdministrator(accountRole)
-  // 全局管理员进入学校上下文时仍使用管理员导航；普通账号才切换到校园成员身份。
-  const role = (organizationId && user.organizationRole && !isGlobalAdmin ? user.organizationRole : accountRole) as UserRole
+  const role = navigationContext.role as UserRole
   const navConfig = getNavConfig(role, context)
   const resolvedNavConfig = organizationId ? {
     ...navConfig,
@@ -144,7 +137,7 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.wallet} role="menuitem" onClick={() => setShowUserMenu(false)}><WalletCards size={17} aria-hidden="true" />我的钱包</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
           <Link className={styles.menuItem} href={accountPaths.messages} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />好友与私信</Link>
-          <Link className={styles.menuItem} href={accountPaths.knowledge} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />知识广场</Link>
+          <Link className={styles.menuItem} href={knowledgeHref(navigationContext)} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />知识广场</Link>
           {!isGlobalAdmin && <Link className={styles.menuItem} href={accountPaths.blogs} role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpen size={17} aria-hidden="true" />我的文章</Link>}
           <div className={styles.menuDivider} />
           <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</Button>
@@ -161,7 +154,7 @@ export function AppShell({ children }: AppShellProps) {
             <Button variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? '隐藏导航' : '显示导航'} title={sidebarOpen ? '隐藏导航' : '显示导航'}>
               <Menu size={21} aria-hidden="true" />
             </Button>
-            <Link className={styles.brandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+            <Link className={styles.brandLink} href={navigationHome(navigationContext)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
           <div className={styles.headerEnd}>
             <ChatButton />
@@ -172,7 +165,7 @@ export function AppShell({ children }: AppShellProps) {
       </header>
       <aside id="app-sidebar" className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`} aria-label={`${isPersonal ? '个人' : roleName}主导航`} aria-hidden={!sidebarOpen}>
         <div className={styles.sidebarHeader}>
-          <Link className={styles.sidebarBrandLink} href={organizationId ? `/org/${organizationId}/overview` : getRoleHome(role, context === 'personal' ? 'personal' : 'organization')} aria-label="返回首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
+          <Link className={styles.sidebarBrandLink} href={navigationHome(navigationContext)} aria-label="返回首页" onClick={() => setNavigationOpen(false)}><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           <Button variant="ghost" type="button" className={styles.sidebarClose} onClick={() => setNavigationOpen(false)} aria-label="隐藏导航" title="隐藏导航"><X size={19} aria-hidden="true" /></Button>
         </div>
         <nav className={styles.sidebarNav} aria-label={`${isPersonal ? '个人' : roleName}主导航`}>{navLinks}</nav>

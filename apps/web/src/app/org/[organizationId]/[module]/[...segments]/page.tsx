@@ -15,6 +15,7 @@ import { TrainingStatementManagementPage } from '@/components/training/TrainingS
 import { TrainingSessionWorkspace } from '@/components/training-engine/TrainingSessionWorkspace'
 import { TrainingSessionDesigner } from '@/components/training-engine/TrainingSessionDesigner'
 import { AssignmentWorkspace } from '@/components/assignment/AssignmentWorkspace'
+import { BlogDiscoveryDetail } from '@/components/blog/BlogDiscoveryDetail'
 
 export default function OrganizationResourcePage() {
   const { organizationId, module, segments } = useParams<{ organizationId: string; module: string; segments: string[] }>()
@@ -33,7 +34,7 @@ export default function OrganizationResourcePage() {
         parts.length === 1 ||
         (parts.length === 2 && ['edit', 'note'].includes(parts[1]))
       )) ||
-      ((module === 'submissions' || module === 'problem-lists') && parts.length === 1)
+      ((module === 'submissions' || module === 'problem-lists' || module === 'knowledge') && parts.length === 1)
     if (!supported) router.replace(`${prefix}/${module}`)
   }, [module, parts, prefix, router])
 
@@ -69,5 +70,6 @@ export default function OrganizationResourcePage() {
   if (module === 'problems' && parts.length === 1) return <ProblemDetail role={userType} problemId={parts[0]} />
   if (module === 'submissions' && parts.length === 1) return <SubmissionDetailPage role={userType} submissionId={parts[0]} />
   if (module === 'problem-lists' && parts.length === 1) return <ProblemListDetailPage listIdOverride={parts[0]} />
+  if (module === 'knowledge' && parts.length === 1) return <BlogDiscoveryDetail id={parts[0]} workspaceBasePath={`${prefix}/knowledge`} embedded />
   return <PageLoadingFrame title="正在返回组织页面" rows={4} />
 }
