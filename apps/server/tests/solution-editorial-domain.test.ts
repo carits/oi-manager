@@ -102,6 +102,10 @@ describe('V1 Solution / Editorial Contribution Domain', () => {
     expect(repaired.status).toBe(200)
     expect(repaired.body.data.status).toBe('QUEUED')
     expect((await processSolutionSimilarityJobs(10)).ready).toBeGreaterThanOrEqual(1)
+    const comparison = await reviewerClient().get(`/api/review/solution-contributions/${contributionId}/similarity-comparison`)
+    expect(comparison.status).toBe(200)
+    expect(comparison.body.data.matches).toEqual(expect.any(Array))
+    expect(await prisma.platformAuditLog.count({ where: { actorUserId: reviewer.user.id, action: 'solution_similarity_comparison_viewed', targetId: contributionId } })).toBe(1)
 
     const reviewed = await reviewerClient().post(`/api/review/solution-contributions/${contributionId}/reviews`).send({
       reviewType: 'CONTENT', decision: 'APPROVE', checklist: { correctness: true, completeness: true }, comment: 'Verified.',
