@@ -16,6 +16,7 @@ source_of_truth: Git history
 - Assignment 四步向导改为“下一步先校验并自动保存当前步骤”，最终检查和发布会阻断任何未保存草稿；批改矩阵的题目筛选现在同时收窄服务端数据和可见列，单元格布置订正会把界面显示的题目目标分写入请求，不再因展示回退值而提交 0。
 - SubmissionCodeEditor 的本地草稿按业务、题目和语言隔离；切换语言会先保存当前语言，再恢复目标语言自己的草稿，避免 C++/Python 内容互相覆盖。
 - 公共 Blog 社区接口在登录态返回当前用户真实的喜欢、有帮助和收藏状态；结构化引用提供权限安全的题目、固定题解、榜单和 Rating 目标链接，提交快照只在原文内展开脱敏副本，不生成私人提交链接。
+- Web 28 文件/107 项、Blog PostgreSQL 9/9、Assignment/后台任务 PostgreSQL 11/11、Linux Judge 45/45、生产构建和全部门禁通过。发布前备份 `oi_manager_20260910_153156.dump` 已校验；提交 `43a1b42` 已推送，API 3302→3303，Web BUILD_ID `07AHiZOOslon3fqYs2Ui5` 经 canary 与正式双账号消息闭环探针后提升。
 
 ### Human UX / Productization 全站收口
 
