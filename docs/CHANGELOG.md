@@ -11,12 +11,18 @@ source_of_truth: Git history
 
 ## 2026-09-10
 
-### Human UX 二次验收补洞（本地待发布）
+### Human UX 二次验收、领域边界与生产收口
 
 - 通用 Table 支持列级 class，Assignment 学生×题目矩阵的首列固定不再只是未生效的 CSS。
 - Training Engine 补齐统一文件 IO 组件和云端草稿 IO 快照；成功提交后清理浏览器/云端草稿，草稿清理失败会明确告警。
 - 比赛五步向导在最终步骤集中列出时间、题目和 Rating 错误；比赛主体已创建但后续配置失败时保留草稿 ID，并提供唯一的继续入口，避免重复创建。
-- 移除重复注册的题解相似度比较路由；Judge 测试入口补齐显式本地认证配置，并让 POSIX 权限断言在 Windows 上使用正确的可移植语义。Web 108/108、Judge 45/45、生产构建、Prisma、API/架构/文档门禁通过；本地 PostgreSQL 不可用，因此数据库定向测试与生产发布尚未在本条中声称完成。
+- 移除重复注册的题解相似度比较路由；Judge 测试入口补齐显式本地认证配置，并让 POSIX 权限断言在 Windows 上使用正确的可移植语义。
+- 组织成员角色与能力改为规范枚举和中央授权服务；Assignment 输入/策略、Contest 投影边界和 JudgeRun 唯一评测结果事实源增加静态与运行时门禁，避免兼容字段反向成为业务事实源。
+- Web 108/108、Judge 45/45、Server 全量初跑 711/713 后修复两个历史夹具并以相关 23/23 复跑闭合为 713/713；Shared/Server/Judge/Web 生产构建、Prisma、89 路由、201 模型/617 端点、UI/架构/文档门禁通过。
+- 发布前生产备份 `/data/backups/oi-manager/automatic/oi_manager_20260910_214051.dump` 已通过清单和隔离恢复校验（SHA-256 `b2986b5d1169be7ef66a57b8908ade6671f8ff0ec8fdb98bd792e3097ec3a3fa`）；恢复库应用增量迁移后，真实登录/Judge/Hack/活动 Revision 闭环 2/2 通过。
+- 生产迁移 `20260910_membership_roles_and_capabilities` 已应用；只在非活动 slot 临时开启的受保护 check/apply 将 20,186 条成员关系规范化，复核缺失为 0，维护入口随后关闭并以超管认证请求确认 404。
+- 提交至 `62068d2` 已推送 `main`；API 3303→3302，Worker/Executor/Judge active，Web BUILD_ID `zI6C2kAUcaqdr9cVIlv4U` 经 canary 和正式双账号消息/SSE/已读/回复探针后提升，公网健康和知识广场均返回 200。
+- 运维复核修复监控对 `/api/health` 旧响应体的错误假设，以及 root 手工备份遗留的锁文件所有权；systemd 数据库备份和恢复验证均重新成功。npm registry 在依赖审计期间持续超时，因此本轮明确保留“外部依赖审计待重试”，不将网络失败记为安全基线通过。
 
 ### Human UX 交互闭环修复
 

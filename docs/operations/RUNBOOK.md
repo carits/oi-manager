@@ -1,7 +1,7 @@
 ---
 status: current
 audience: operations, development
-last_verified: 2026-09-08
+last_verified: 2026-09-10
 source_of_truth: scripts, deploy/systemd/*.service, docker-compose.yml, runtime health endpoints, economy-loop migration and scheduler services
 
 ---
@@ -53,6 +53,8 @@ snapshot with a database dump whose SHA-256 does not match its metadata.
 `scripts/monitor-services.sh` checks the optimized preview (`3000`), API (`3002`), go-judge
 (`5050`), PostgreSQL readiness, the currently served Next.js build, root/data disk usage and automatic-backup age.
 It exits non-zero on any failure and records state changes in `.run/service-monitor.state`.
+The public `/api/health` contract is the minimal JSON response `{"success":true,"message":"OK"}`; the monitor validates
+`success === true` instead of relying on an obsolete `status` field or on display text.
 
 ```bash
 pnpm monitor
