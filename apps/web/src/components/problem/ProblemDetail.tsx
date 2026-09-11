@@ -20,7 +20,6 @@ import { OJ_PLATFORM_LABEL_MAP } from '@/lib/oj-platforms'
 import { LANGUAGE_OPTIONS, JUDGE_RESULT_OPTIONS, JUDGE_RESULT_LABEL_MAP, LANGUAGE_LABEL_MAP, getLanguageLabel } from '@/lib/judge-constants'
 import { TranslateModal } from './TranslateModal'
 import { SubmissionDetailModal } from '@/components/submission/SubmissionDetailModal'
-import { Copy } from 'lucide-react'
 import { UserProblemContentPanel } from './UserProblemContentPanel'
 import { StatementVersionWorkspace } from './StatementVersionWorkspace'
 import { ProblemHackPanel } from './ProblemHackPanel'
@@ -28,6 +27,7 @@ import { SolutionEditorialPanel } from './SolutionEditorialPanel'
 import { ProblemRelatedBlogs } from '@/components/blog/ProblemRelatedBlogs'
 import { SubmissionIoFields, type SubmissionIoValue } from '@/components/submission/SubmissionIoFields'
 import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
+import { Menu as ActionMenu } from '@/components/ui/OverlayPrimitives'
 
 interface Statement {
   id: string
@@ -634,33 +634,17 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 )}
               </div>
             </div>
-            {(canModify() || problem.permissions.canCopyToSchool) && (
-              <div className={unifiedStyles.u11}>
-                {problem.permissions.canCopyToSchool && (
-                  <Button variant="outline"
-                    onClick={() => void copyToSchool()}
-                    disabled={copyingToSchool}
-                    className={unifiedStyles.copyButton}
-                  >
-                    <Copy size={15} aria-hidden="true" />{copyingToSchool ? '复制中' : '复制到校内'}
-                  </Button>
-                )}
-                {canModify() && <>
-                <Button variant="ghost"
-                  onClick={() => router.push(`${pathPrefix}/problems/${problemId}/edit`)}
-                  className={unifiedStyles.u12}
-                >
-                  编辑
-                </Button>
-                <Button variant="ghost"
-                  onClick={handleDelete}
-                  className={unifiedStyles.u13}
-                >
-                  归档
-                </Button>
-                </>}
-              </div>
-            )}
+            {(canModify() || problem.permissions.canCopyToSchool) && <ActionMenu
+              label="题目管理操作"
+              trigger={<Button variant="outline">管理题目</Button>}
+              items={[
+                ...(problem.permissions.canCopyToSchool ? [{ key: 'copy', label: copyingToSchool ? '正在复制…' : '复制到校内题库', disabled: copyingToSchool, onSelect: () => void copyToSchool() }] : []),
+                ...(canModify() ? [
+                  { key: 'edit', label: '编辑题目', onSelect: () => router.push(`${pathPrefix}/problems/${problemId}/edit`) },
+                  { key: 'archive', label: '归档题目', danger: true, onSelect: handleDelete },
+                ] : []),
+              ]}
+            />}
           </div>
 
           {/* OJ 绑定 */}
@@ -689,7 +673,7 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               onClick={() => handleTabChange('statement')}
               className={unifiedStyles.tabButton} aria-selected={activeTab === 'statement'}
             >
-              题面
+              题目
             </Button>
             <Button variant="ghost"
               onClick={() => handleTabChange('solution')}
@@ -698,39 +682,20 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               题解
             </Button>
             <Button variant="ghost"
-              onClick={() => handleTabChange('knowledge')}
-              className={unifiedStyles.tabButton} aria-selected={activeTab === 'knowledge'}
-            >
-              关联文章
-            </Button>
-            <Button variant="ghost"
-              onClick={() => {
-                handleTabChange('attachments')
-                setHasVisitedAttachments(true)
-              }}
-              className={`${unifiedStyles.tabButton} ${unifiedStyles.attachmentTab}`} aria-selected={activeTab === 'attachments'}
-            >
-              附件
-              {attachments.length > 0 && !hasVisitedAttachments && (
-                <span className={unifiedStyles.u18}>
-                  {attachments.length}
-                </span>
-              )}
-            </Button>
-            <Button variant="ghost"
               onClick={() => handleTabChange('records')}
               className={unifiedStyles.tabButton} aria-selected={activeTab === 'records'}
             >
               提交记录
             </Button>
-            {problem.hack && (problem.permissions.canSubmit || canModify()) && (
-              <Button variant="ghost"
-                onClick={() => handleTabChange('hack')}
-                className={unifiedStyles.tabButton} aria-selected={activeTab === 'hack'}
-              >
-                {problem.hack.enabled ? `Hack${problem.hack.acceptedCount > 0 ? ` ${problem.hack.acceptedCount}` : ''}` : '贡献数据'}
-              </Button>
-            )}
+            <ActionMenu
+              label="题目更多内容"
+              trigger={<Button variant="ghost" className={unifiedStyles.tabButton} aria-selected={['knowledge', 'attachments', 'hack'].includes(activeTab)}>更多</Button>}
+              items={[
+                { key: 'knowledge', label: '相关知识文章', onSelect: () => handleTabChange('knowledge') },
+                { key: 'attachments', label: `附件${attachments.length > 0 && !hasVisitedAttachments ? `（${attachments.length}）` : ''}`, onSelect: () => { handleTabChange('attachments'); setHasVisitedAttachments(true) } },
+                ...(problem.hack && (problem.permissions.canSubmit || canModify()) ? [{ key: 'hack', label: problem.hack.enabled ? `贡献数据与 Hack${problem.hack.acceptedCount > 0 ? `（${problem.hack.acceptedCount}）` : ''}` : '贡献数据', onSelect: () => handleTabChange('hack') }] : []),
+              ]}
+            />
           </div>
 
           {/* 思路记录按钮 */}
@@ -889,7 +854,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                     <TableHeaderCell className={unifiedStyles.u40}>评测ID</TableHeaderCell>
                     <TableHeaderCell className={unifiedStyles.u40}>用户名</TableHeaderCell>
                     <TableHeaderCell className={unifiedStyles.u40}>评测结果</TableHeaderCell>
-                    <TableHeaderCell className={unifiedStyles.u40}>类型</TableHeaderCell>
                     <TableHeaderCell className={unifiedStyles.u40}>耗时(MS)</TableHeaderCell>
                     <TableHeaderCell className={unifiedStyles.u40}>内存(MB)</TableHeaderCell>
                     <TableHeaderCell className={unifiedStyles.u40}>代码长度(B)</TableHeaderCell>
@@ -900,13 +864,13 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 <TableBody>
                   {problemSubmissionsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className={unifiedStyles.u41}>
+                      <TableCell colSpan={8} className={unifiedStyles.u41}>
                         <span className={[("resource-skeleton-line"), collisionStyles.u3].filter(Boolean).join(' ')}  aria-label="内容正在准备" />
                       </TableCell>
                     </TableRow>
                   ) : problemSubmissions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className={unifiedStyles.u41}>
+                      <TableCell colSpan={8} className={unifiedStyles.u41}>
                         暂无提交记录
                       </TableCell>
                     </TableRow>
@@ -924,9 +888,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                           <span className={unifiedStyles.submissionResult} data-result={s.result}>
                             {JUDGE_RESULT_LABEL_MAP[s.result] || s.result}
                           </span>
-                        </TableCell>
-                        <TableCell className={unifiedStyles.u45}>
-                          {s.submitMethod === 'archive' ? '远程归档' : '本地评测'}
                         </TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.timeUsed ?? '-'}</TableCell>
                         <TableCell className={unifiedStyles.u44}>{s.memoryUsed != null ? (s.memoryUsed / 1024).toFixed(2) : '-'}</TableCell>

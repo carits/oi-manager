@@ -11,6 +11,7 @@ import apiClient from '@/lib/apiClient'
 import { useToast } from '@/components/ui/Toast'
 import { Pencil } from 'lucide-react'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
 const getPdfUrl = (path: string | null) => {
   if (!path) return null
@@ -74,6 +75,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
   const [loading, setLoading] = useState(true)
   const [noteSaving, setNoteSaving] = useState(false)
   const [noteLastSaved, setNoteLastSaved] = useState<Date | null>(null)
+  const [lastSavedContent, setLastSavedContent] = useState('')
   const [editMode, setEditMode] = useState<'edit' | 'preview' | 'split'>('split')
 
   const isFirstLoad = useRef(true)
@@ -100,7 +102,9 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       }
 
       if (noteRes.success && noteRes.data) {
-        setNoteContent(noteRes.data.content || '')
+        const loadedContent = noteRes.data.content || ''
+        setNoteContent(loadedContent)
+        setLastSavedContent(loadedContent)
         if (noteRes.data.content) {
           isFirstLoad.current = false
         }
@@ -118,6 +122,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
       setNoteSaving(true)
       const result = await apiClient.put(`/api/problems/${problemId}/note`, { content })
       if (result.success) {
+        setLastSavedContent(content)
         setNoteLastSaved(new Date())
       }
     } catch (error) {
@@ -156,17 +161,7 @@ export function ProblemNote({ role, problemId }: ProblemNoteProps) {
     }
   }, [noteContent])
 
-  // beforeunload protection
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (noteSaving) {
-        e.preventDefault()
-        e.returnValue = ''
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [noteSaving])
+  useUnsavedChanges(`problem-note:${problemId}`, noteSaving || noteContent !== lastSavedContent)
 
   if (loading) {
     return (

@@ -219,14 +219,6 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => {
-    const handler = (event: BeforeUnloadEvent) => {
-      if (dirty) event.preventDefault();
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty]);
-
   const loadPool = useCallback(async () => {
     if (!design) return;
     setPoolLoading(true);
@@ -618,7 +610,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         </nav>
         <Section
           title="完整流程预览"
-          description={`Revision ${design.statusRevision} · ${issues.length ? `${issues.length} 个配置问题` : "结构已通过当前检查"}`}
+          description={issues.length ? `${issues.length} 个配置问题` : "训练流程已通过当前检查"}
         >
           <div className={styles.flowPreview}>
             {flowPreview || "请新增阶段"}
@@ -644,7 +636,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         {activeStep === 1 && (
           <Section
             title="基本信息"
-            description="编排与名称说明在同一次 CAS 保存中提交。"
+            description="名称和编排会一起保存；若他人刚刚修改过，系统会提示重新加载。"
           >
             <div className={styles.basicGrid}>
               <label className={styles.field}>
@@ -968,9 +960,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
                               </strong>
                             </div>
                             <div className={styles.actions}>
-                              <StatusBadge variant="neutral">
-                                R{problem.TestSetRevision.revisionNumber}
-                              </StatusBadge>
+                              <StatusBadge variant="neutral">已固定测试数据</StatusBadge>
                               {problem.latestRevision &&
                                 problem.latestRevision.id !==
                                   problem.testSetRevisionId && (
@@ -979,8 +969,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
                                     size="sm"
                                     onClick={() => void updateToLatest(problem)}
                                   >
-                                    更新到 R
-                                    {problem.latestRevision.revisionNumber}
+                                    更新到最新测试数据
                                   </Button>
                                 )}
                               <Button
@@ -1111,14 +1100,11 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
                             />
                             {problem.subtasks.length > 0 && (
                               <fieldset className={styles.subtaskPicker}>
-                                <legend>
-                                  OI Subtask 投影（当前 R
-                                  {problem.TestSetRevision.revisionNumber}）
-                                </legend>
+                                <legend>OI 子任务范围</legend>
                                 {problem.subtasks.map((subtask) => (
                                   <Checkbox
                                     key={subtask.id}
-                                    label={`Subtask ${subtask.id} · ${subtask.score} 分`}
+                                    label={`子任务 ${subtask.id} · ${subtask.score} 分`}
                                     description={
                                       subtask.dependencies?.length
                                         ? `依赖 S${subtask.dependencies.join(", S")}`
@@ -1308,13 +1294,9 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
         {activeStep === 5 && (
           <Section
             title="发布检查"
-            description="发布会固定学员可见的阶段、顺序、解锁条件和测试版本。"
+            description="发布后将固定学员看到的阶段、顺序、解锁条件和测试数据。"
           >
             <div className={styles.publishChecklist}>
-              <p>
-                <strong>结构 Revision</strong>
-                <span>{design.statusRevision}</span>
-              </p>
               <p>
                 <strong>阶段数</strong>
                 <span>{stages.length}</span>

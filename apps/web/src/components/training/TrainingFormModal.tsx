@@ -614,13 +614,13 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                   <label className={unifiedStyles.u5}>Rating 范围</label>
                   <Select aria-label="Rating 范围" value={ratingScope} disabled={ratingLocked} onChange={event => setRatingScope(event.target.value as typeof ratingScope)} style={inputStyle}>
                     {allowedRatingScopes.includes('NONE') && <option value="NONE">不计 Rating</option>}
-                    {allowedRatingScopes.includes('ORGANIZATION') && <option value="ORGANIZATION">组织 Rating</option>}
+                    {allowedRatingScopes.includes('ORGANIZATION') && <option value="ORGANIZATION">本校 Rating</option>}
                     {allowedRatingScopes.includes('GLOBAL') && <option value="GLOBAL">全局 Rating</option>}
-                    {allowedRatingScopes.includes('BOTH') && <option value="BOTH">全局 + 组织</option>}
+                    {allowedRatingScopes.includes('BOTH') && <option value="BOTH">全局 + 本校</option>}
                   </Select>
                   <small>{ratingLocked
                     ? '比赛已经开始，Rating 规则已永久冻结。'
-                    : `${teamId && format === 'icpc' ? '团队 ACM 赛 V1 不计个人 Rating。' : organizationId ? '组织比赛只能影响本组织 Rating。' : teamId ? '个人团队赛 V1 不计个人 Rating。' : ''} Track 自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
+                    : `${teamId && format === 'icpc' ? '团队 ACM 赛暂不计个人 Rating。' : organizationId ? '学校比赛只影响本校 Rating。' : teamId ? '个人团队赛暂不计个人 Rating。' : ''} Rating 类型会自动跟随赛制：${format === 'icpc' ? 'ACM' : format.toUpperCase()}`}</small>
                 </div>
                 {ratingScope !== 'NONE' && <div>
                   <label className={unifiedStyles.u5}>Rating 权重</label>
@@ -628,9 +628,9 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                   <small>影响强度：标准比赛的 {Math.round((Number(ratingWeight) || 0) * 100)}%</small>
                 </div>}
                 {ratingScope !== 'NONE' && <div>
-                  <label className={unifiedStyles.u5}>组织 / 全局最低人数</label>
+                  <label className={unifiedStyles.u5}>本校 / 全局最低人数</label>
                   <div className={unifiedStyles.u1}>
-                    <Input aria-label="组织 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} style={inputStyle} />
+                    <Input aria-label="本校 Rating 最低人数" type="number" min="2" value={organizationRatingMinimum} disabled={ratingLocked} onChange={event => setOrganizationRatingMinimum(event.target.value)} style={inputStyle} />
                     <Input aria-label="全局 Rating 最低人数" type="number" min="2" value={globalRatingMinimum} disabled={ratingLocked} onChange={event => setGlobalRatingMinimum(event.target.value)} style={inputStyle} />
                   </div>
                 </div>}
@@ -795,7 +795,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
                 </div>
               )}
             </div>}
-            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>所有必填项与 Rating 规则均已通过前端检查，提交后服务端会再次校验。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写标题'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 组织' : ratingScope === 'GLOBAL' ? '全局' : '组织'} · 标准强度的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，均固定当前 TestSet Revision</dd></div><div><dt>原题身份</dt><dd>{problemIdVisible ? '赛中显示' : '赛后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '赛中显示' : '赛后显示'}</dd></div></dl></section>}
+            {contestWizard && wizardStep === 4 && <section className={unifiedStyles.reviewCard}><h3>发布前检查</h3>{contestValidationIssues.length > 0 ? <ul className={unifiedStyles.reviewIssues}>{contestValidationIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : <p>所有必填项与 Rating 规则均已通过前端检查，提交后服务端会再次校验。</p>}<dl><div><dt>比赛</dt><dd>{title || '未填写标题'}</dd></div><div><dt>时间</dt><dd>{startTime} 至 {endTime}</dd></div><div><dt>赛制</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Rating</dt><dd>{ratingScope === 'NONE' ? '不计 Rating' : `${ratingScope === 'BOTH' ? '全局 + 本校' : ratingScope === 'GLOBAL' ? '全局' : '本校'} · 标准强度的 ${Math.round((Number(ratingWeight) || 0) * 100)}%`}</dd></div><div><dt>题目</dt><dd>{problemRows.length} 道，发布后均使用固定测试数据</dd></div><div><dt>原题身份</dt><dd>{problemIdVisible ? '赛中显示' : '赛后显示'}</dd></div><div><dt>题解</dt><dd>{solutionVisible ? '赛中显示' : '赛后显示'}</dd></div></dl></section>}
           </>
         )}
       </div>

@@ -25,7 +25,7 @@ export default function TeacherContestsPage() {
   const searchParams = useSearchParams()
   const resource = useResource<TeamPayload | Team[]>('/api/teams?view=mine&pageSize=100', { sessionKey, isEmpty: data => normalizeTeams(data).length === 0 && !organizationId, dedupingInterval: 30000 })
   const teams = normalizeTeams(resource.data)
-  const scopeOptions = [...(organizationId ? [{ value: 'organization:' + organizationId, label: '校园比赛' }] : []), ...teams.map(team => ({ value: 'team:' + team.id, label: team.name }))]
+  const scopeOptions = [...(organizationId ? [{ value: 'organization:' + organizationId, label: '校级比赛' }] : []), ...teams.map(team => ({ value: 'team:' + team.id, label: team.name }))]
   const requestedScope = searchParams.get('scope')
   const activeScope = scopeOptions.some(option => option.value === requestedScope) ? requestedScope! : scopeOptions[0]?.value
   const setScope = (scope: string) => { const params = new URLSearchParams(searchParams.toString()); params.set('scope', scope); router.replace(pathPrefix + '/contests?' + params, { scroll: false }) }
@@ -33,7 +33,7 @@ export default function TeacherContestsPage() {
 
   return (
     <PageFrame>
-      <PageHeader title='比赛' description='在团队和校园范围之间切换，维护对应比赛。' />
+      <PageHeader title='比赛' description='在团队和全校范围之间切换，维护对应比赛。' />
       <AsyncRegion state={resource.state} onRetry={resource.retry} emptyText='暂无可管理的比赛范围' skeletonRows={5}>
         {() => <>
           <Toolbar><ToolbarGroup><label htmlFor='contest-scope' className={styles.summary}>比赛范围</label><Select id='contest-scope' className={styles.scopeSelect} value={activeScope} onChange={event => setScope(event.target.value)}>{scopeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></ToolbarGroup><span className={styles.summary}>不同范围的数据彼此独立</span></Toolbar>

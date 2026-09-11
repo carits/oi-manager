@@ -27,8 +27,8 @@ const accountPaths = {
 
 const labelIcons: Record<string, LucideIcon> = {
   '首页': Home, '概览': Home, '校园': School, '学校信息': School, '学校管理': School, '教师管理': GraduationCap, '教师': GraduationCap,
-  '学生管理': Users, '学生': Users, '管理': ShieldCheck, '成员与权限': ShieldCheck, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
-  '组织': School,
+  '学生管理': Users, '学生': Users, '管理': ShieldCheck, '成员与权限': ShieldCheck, '加入审批': ShieldCheck, '学校设置': ShieldCheck, '学校资产': WalletCards, '账号管理': Users, '团队': UsersRound, '我的团队': UsersRound,
+  '组织': School, '学校': School,
   '作业': ClipboardList, '比赛': Trophy, '题单': ListChecks, '题库': Library,
   '题库管理': Library, '排名': Activity, '评测记录': BookOpen, 'OJ账号': Link2, '平台绑定': Link2,
   '贡献': Activity, '钱包': WalletCards, '贡献审计': ShieldCheck,
@@ -113,7 +113,7 @@ export function AppShell({ children }: AppShellProps) {
   const userContext = isPersonal
     ? '个人'
     : isStudent
-      ? user.organizationName || '校园'
+      ? user.organizationName || '学校'
       : roleLabel
 
   const setNavigationOpen = (open: boolean) => {

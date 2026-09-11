@@ -38,6 +38,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import { SubmissionIoFields } from '@/components/submission/SubmissionIoFields'
 import { SubmissionCodeEditor, clearSubmissionDraft } from '@/components/submission/SubmissionCodeEditor'
 import styles from './TrainingDetail.module.css'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
 const TrainingProblemDetail = dynamic(
   () => import('./components/TrainingProblemDetail').then(module => module.TrainingProblemDetail),
@@ -238,18 +239,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
     return () => clearInterval(timer)
   }, [training, refresh])
 
-  // beforeunload protection (prevent accidental data loss when saving is in progress)
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (noteSaving || recordSaving) {
-        e.preventDefault()
-        // Legacy browsers require returnValue to be set
-        e.returnValue = ''
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [noteSaving, recordSaving])
+  useUnsavedChanges(`training-detail:${trainingId}`, noteSaving || recordSaving)
 
   // Wire submit code → set detail submission id
   const handleSubmitCode = async () => {
@@ -586,7 +576,7 @@ export function TrainingDetailPage({ basePath, teamIdOverride, trainingIdOverrid
           size="xl"
         >
           <div className={unifiedStyles.u4}>
-            代码将使用本站测试数据进行本地评测。远程提交记录可在题目页同步归档，且不计入本场比赛。
+            代码将使用本场活动发布时固定的测试数据评测，提交结果只计入当前活动。
           </div>
 
           <div className={unifiedStyles.u5}>

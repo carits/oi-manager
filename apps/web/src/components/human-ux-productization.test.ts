@@ -32,6 +32,8 @@ describe('human UX productization contract', () => {
     const source = read('./problem/ProblemDetail.tsx')
     expect(source).toContain('aria-label="代码提交工作台"')
     expect(source).toContain('撰写我的题解')
+    expect(source).toContain('label="题目更多内容"')
+    expect(source).toContain('trigger={<Button variant="outline">管理题目</Button>}')
     expect(source).not.toContain("handleTabChange('my-content')")
     expect(source).not.toContain('同步远程记录')
   })
@@ -41,6 +43,10 @@ describe('human UX productization contract', () => {
     const training = read('./training-engine/TrainingSessionWorkspace.tsx')
     expect(assignment).toContain('作业发布时固定的数据评测')
     expect(training).toContain('使用训练发布时固定的数据评测')
+    expect(assignment).not.toContain('TestSet Revision 与学生名单')
+    expect(assignment).not.toContain('版本号并发校验')
+    expect(assignment).not.toContain('成绩快照 v')
+    expect(training).not.toContain('命令带 revision 审计')
   })
 
   it('renders quality conclusions and hides technical certificates by default', () => {
@@ -56,5 +62,29 @@ describe('human UX productization contract', () => {
     expect(source).not.toContain('Problem ID')
     expect(source).not.toContain('组织 ID')
     expect(source).not.toContain('比赛 ID')
+  })
+
+  it('does not ask blog authors to paste internal database identifiers', () => {
+    const source = read('./blog/BlogReferenceEditor.tsx')
+    expect(source).toContain('<ProblemReferencePicker')
+    expect(source).toContain('请到对应的题解、比赛榜单或 Rating 记录页面')
+    expect(source).not.toContain('内部 ID')
+    expect(source).not.toContain('Revision ID')
+    expect(source).not.toContain('Snapshot ID')
+  })
+
+  it('uses school language in the school workspace and hides account internals', () => {
+    const school = read('./organization-pages/teacher/school/components/HomeTab.tsx')
+    const wallet = read('./wallet/WalletPage.tsx')
+    expect(school).toContain('学校资产')
+    expect(school).not.toContain('组织钱包')
+    expect(wallet).toContain('我的钱包与评测额度')
+    expect(wallet).toContain('使用详情与兑换记录')
+  })
+
+  it('keeps archive import out of activity submission guidance', () => {
+    const source = read('./training/TrainingDetailPage.tsx')
+    expect(source).toContain('提交结果只计入当前活动')
+    expect(source).not.toContain('远程提交记录可在题目页同步归档')
   })
 })

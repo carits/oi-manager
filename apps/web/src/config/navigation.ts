@@ -65,7 +65,9 @@ export const schoolManagerNav: NavConfig = {
     { label: '团队', href: 'teams', group: '学生与团队' },
     { label: '排名', href: 'rankings', group: '学生与团队' },
     { label: '学校信息', href: 'campus', group: '学校' },
-    { label: '成员与权限', href: 'management', group: '学校' },
+    { label: '加入审批', href: 'management?tab=applications', group: '学校' },
+    { label: '学校设置', href: 'management?tab=settings', group: '学校' },
+    { label: '学校资产', href: 'management?tab=wallet', group: '学校' },
     { label: '知识广场', href: 'knowledge', group: '社区' },
   ]
 }
@@ -84,7 +86,8 @@ export const teacherNav: NavConfig = {
     { label: '团队', href: 'teams', group: '学生与团队' },
     { label: '排名', href: 'rankings', group: '学生与团队' },
     { label: '学校信息', href: 'campus', group: '学校' },
-    { label: '成员与权限', href: 'management', group: '学校' },
+    { label: '加入审批', href: 'management?tab=applications', group: '学校' },
+    { label: '学校资产', href: 'management?tab=wallet', group: '学校' },
     { label: '知识广场', href: 'knowledge', group: '社区' },
   ]
 }
@@ -119,7 +122,7 @@ export const personalNav: NavConfig = {
     { label: '团队', href: '/personal/teams', group: '社区' },
     { label: '知识广场', href: '/personal/knowledge', group: '社区' },
     { label: '排名', href: '/personal/rankings', group: '社区' },
-    { label: '组织', href: '/personal/organizations', group: '资源' },
+    { label: '学校', href: '/personal/organizations', group: '资源' },
     { label: '贡献', href: '/personal/contributions', group: '资源' },
     { label: '数据市场', href: '/personal/data-market', group: '资源' },
     { label: '钱包', href: '/account/wallet', group: '资源' },

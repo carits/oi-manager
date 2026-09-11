@@ -122,7 +122,7 @@ export function TrainingStatementManagementPage({ trainingId, backPath }: { trai
       <div className={unifiedStyles.u3}>点击空白/✓切换是否提供；点击星标设为默认。每道题可有多个 ✓，但只能有一个 ★。</div>
       <div className={unifiedStyles.u4}>
         <TableRoot className={unifiedStyles.matrixTable} style={matrixStyle}>
-          <TableHead><TableRow><TableHeaderCell className={unifiedStyles.u5}>题面版本</TableHeaderCell>{data.problems.map(problem => <TableHeaderCell key={problem.trainingProblemId} className={unifiedStyles.u6}>{problem.alias || String.fromCharCode(65 + problem.orderIndex)}<div className={unifiedStyles.u7}>rev {problem.selectionRevision}</div></TableHeaderCell>)}</TableRow></TableHead>
+          <TableHead><TableRow><TableHeaderCell className={unifiedStyles.u5}>可用题面</TableHeaderCell>{data.problems.map(problem => <TableHeaderCell key={problem.trainingProblemId} className={unifiedStyles.u6}>{problem.alias || String.fromCharCode(65 + problem.orderIndex)}</TableHeaderCell>)}</TableRow></TableHead>
           <TableBody>{rows.map(row => <TableRow key={row.key}>
             <TableCell className={unifiedStyles.u8}><strong>{row.label.name}</strong><div className={unifiedStyles.u9}>{row.label.authorUsername} · {row.label.visibility === 'mine' ? '我的' : row.label.visibility === 'frozen' ? '已固化' : row.key.startsWith('canonical:') ? '官方' : '公开'} · {row.label.language || '未知'} · {row.label.format.toUpperCase()}</div></TableCell>
             {data.problems.map(problem => {

@@ -10,7 +10,7 @@ const CONTRIBUTION_TYPE_LABELS: Record<string, string> = {
 const CONTRIBUTION_SOURCE_LABELS: Record<string, string> = {
   testcase_candidate: "Candidate",
   contribution_event: "贡献奖励",
-  resource_purchase: "Evaluation Credits 兑换",
+  resource_purchase: "评测额度兑换",
   system: "系统",
 };
 

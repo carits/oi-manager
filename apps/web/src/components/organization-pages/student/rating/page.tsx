@@ -31,9 +31,9 @@ export default function StudentRatingPage() {
   return (
     <PageFrame>
       <div className={styles.content}>
-        <PageHeader title={isPersonalMode ? '个人排行榜' : '校内排行榜'} description={isPersonalMode ? '仅展示个人空间的公开用户名资料。' : '查看当前校园成员的 Rating、做题量与贡献排名。'} />
+        <PageHeader title={isPersonalMode ? '个人排行榜' : '校内排行榜'} description={isPersonalMode ? '仅展示个人空间的公开用户名资料。' : '查看当前学校成员的 Rating、做题量与贡献排名。'} />
         <SegmentedControl label="排名指标" value={activeTab} onChange={setTab} items={[{ value: 'rating', label: 'Rating' }, { value: 'solved', label: '做题量' }, { value: 'contribution', label: '贡献' }]} />
-        {isPersonalMode ? <MetricRankingWorkspace scope="personal" metric={activeTab} /> : params.organizationId ? <MetricRankingWorkspace scope="campus" metric={activeTab} /> : <Empty title="未找到当前校园" description="请从身份选择页重新进入校园。" />}
+        {isPersonalMode ? <MetricRankingWorkspace scope="personal" metric={activeTab} /> : params.organizationId ? <MetricRankingWorkspace scope="campus" metric={activeTab} /> : <Empty title="未找到当前学校" description="请从身份选择页重新进入学校。" />}
       </div>
     </PageFrame>
   )

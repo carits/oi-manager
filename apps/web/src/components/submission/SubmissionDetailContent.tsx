@@ -102,7 +102,7 @@ export function SubmissionDetailContent({ detail }: { detail: SubmissionDetailDt
         </div>
         {detail.code
           ? <pre className={styles.code}><code dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>
-          : <div className={styles.emptyCode}>{detail.submitMethod === 'archive' ? '远程归档未保存源代码' : detail.canViewCode === false ? '当前账号无权查看源代码' : '无源代码'}</div>}
+          : <div className={styles.emptyCode}>{detail.canViewCode === false ? '当前账号无权查看源代码' : '该评测记录未保存源代码'}</div>}
       </section>
     </div>
   )

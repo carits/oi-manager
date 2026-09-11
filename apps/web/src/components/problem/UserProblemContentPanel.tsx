@@ -115,7 +115,7 @@ export function UserProblemContentPanel({ problemId, apiBase }: Props) {
     <div className={unifiedStyles.u2}>
       <div className={unifiedStyles.u3}>
         <strong>我的题解</strong>
-        {current && <span className={unifiedStyles.u4}>Revision {current.revision} · {new Date(current.updatedAt).toLocaleString('zh-CN')}</span>}
+        {current && <span className={unifiedStyles.u4}>上次保存：{new Date(current.updatedAt).toLocaleString('zh-CN')}</span>}
       </div>
 
       <div className={`${unifiedStyles.contentGrid} ${kind === 'statement' ? unifiedStyles.statementGrid : unifiedStyles.solutionGrid}`}>

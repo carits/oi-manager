@@ -12,13 +12,14 @@ type Quality = { id: string; overallScore: number | null; qualityStatus: string;
 type Workspace = { type: string; organizationId?: string; organizationName?: string }
 type Contest = { id: string | number; title?: string; name?: string; status?: string }
 
-export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, onRevisionChange, onQualityChange, requireQuality = false }: {
+export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, onRevisionChange, onQualityChange, requireQuality = false, lockProblem = false }: {
   problemId: string
   revisionId: string
   onProblemChange: (id: string) => void
   onRevisionChange: (id: string) => void
   onQualityChange?: (id: string) => void
   requireQuality?: boolean
+  lockProblem?: boolean
 }) {
   const [problems, setProblems] = useState<Problem[]>([])
   const [revisions, setRevisions] = useState<Revision[]>([])
@@ -50,7 +51,7 @@ export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, 
 
   return <>
     <label>题目
-      <Select value={problemId} onChange={event => { onProblemChange(event.target.value); onRevisionChange(''); onQualityChange?.('') }}>
+      <Select value={problemId} disabled={lockProblem} onChange={event => { onProblemChange(event.target.value); onRevisionChange(''); onQualityChange?.('') }}>
         <option value="">请选择题目</option>
         {problems.map(problem => <option key={problem.id} value={problem.id}>{problem.platform} · {problem.problemId} · {problem.title}</option>)}
       </Select>
@@ -58,7 +59,7 @@ export function ProblemRevisionPicker({ problemId, revisionId, onProblemChange, 
     <label>测试数据版本
       <Select value={revisionId} disabled={!problemId} onChange={event => onRevisionChange(event.target.value)}>
         <option value="">请选择版本</option>
-        {revisions.map(revision => <option key={revision.id} value={revision.id}>R{revision.revisionNumber} · {revision.mode.toUpperCase()}</option>)}
+        {revisions.map(revision => <option key={revision.id} value={revision.id}>数据版本 R{revision.revisionNumber} · {revision.mode.toUpperCase()}</option>)}
       </Select>
     </label>
     {requireQuality && revisionId && <p aria-live="polite">

@@ -40,8 +40,13 @@ export default function StudentPage() {
   const personalMode = isPersonalPath(pathname)
 
   return (
-    <PageFrame>
-      <PageHeader title={`你好，${user?.username || '同学'}`} description={personalMode ? '个人空间中的题目、团队和提交相互独立。' : '查看当前校园的近期学习任务。'} />
+      <PageFrame>
+      <PageHeader title={`你好，${user?.username || '同学'}`} description={personalMode ? '个人空间中的题目、团队和提交相互独立。' : '查看当前学校的近期学习任务。'} />
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}><h2 className={styles.sectionTitle}>现在最需要完成</h2></div>
+        {nextTasks[0] ? <Link className={styles.taskItem} href={`${pathPrefix}/homeworks/${nextTasks[0].id}`}><span className={styles.taskUrgency} data-level="urgent"><ClipboardList size={16} />优先任务</span><span><strong>{nextTasks[0].title}</strong><small>{nextTasks[0].problemCount} 道题 · 截止 {deadline(nextTasks[0].dueAt)}</small></span><ArrowRight size={16} /></Link> : <p className={styles.inboxEmpty}>当前没有待完成作业，可以继续题单或自主训练。</p>}
+      </section>
 
       <div className={styles.metricGrid}>
         <div className={styles.metric}><p className={styles.metricLabel}>进行中的作业</p><p className={styles.metricValue}>{activeCount}</p><p className={styles.metricHint}>优先处理临近截止的任务</p></div>

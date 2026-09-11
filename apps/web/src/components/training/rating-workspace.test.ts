@@ -11,8 +11,8 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain("allowedRatingScopes.includes('GLOBAL')")
     expect(source).toContain("allowedRatingScopes.includes('BOTH')")
     expect(source).toContain("if (!allowedRatingScopes.includes(ratingScope)) setRatingScope('NONE')")
-    expect(source).toContain('组织比赛只能影响本组织 Rating。')
-    expect(source).toContain('个人团队赛 V1 不计个人 Rating。')
+    expect(source).toContain('学校比赛只影响本校 Rating。')
+    expect(source).toContain('个人团队赛暂不计个人 Rating。')
   })
 
   it('keeps finalization and rebuild actions in the shared settlement panel', () => {
@@ -22,7 +22,7 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain('apiClient.post<RatingPayload>')
     expect(source).toContain('生成最终榜单并结算')
     expect(source).toContain('重放最终榜单与 Rating')
-    expect(source).toContain('查看不可变最终榜单')
+    expect(source).toContain('查看最终榜单与计算规则')
     expect(source).toContain("status === 'HELD'")
     expect(source).toContain('role="alert"')
   })
@@ -32,7 +32,7 @@ describe('contest Rating workspace contract', () => {
 
     expect(source).toContain('/rating-participation')
     expect(source).toContain('requiresExplicitSelection')
-    expect(source).toContain('aria-label="参赛组织"')
+    expect(source).toContain('aria-label="参赛学校"')
     expect(source).toContain('首次提交后固定')
     expect(source).toContain('保存归属')
     expect(source).toContain('disabled={!selectedOrganizationId}')
@@ -55,7 +55,7 @@ describe('contest Rating workspace contract', () => {
 
     expect(source).toContain('本场计 Rating')
     expect(source).toContain('影响强度：标准比赛的')
-    expect(source).toContain('首次提交后，你在本场比赛中的组织归属将固定')
+    expect(source).toContain('首次提交后，你在本场比赛中的学校归属将固定')
     expect(source).toContain('NOT_ENOUGH_PARTICIPANTS')
   })
 })

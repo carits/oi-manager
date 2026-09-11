@@ -46,7 +46,7 @@ export default function CampusManagementPage() {
     { value: 'applications', label: `加入申请${pending.applications ? ` ${pending.applications}` : ''}` },
     { value: 'invitations', label: `成员邀请${pending.invitations ? ` ${pending.invitations}` : ''}` },
     ...(isPrincipal ? [{ value: 'settings', label: '加入设置' }] : []),
-    { value: 'wallet', label: '校园资产' },
+    { value: 'wallet', label: '学校资产' },
   ], [isPrincipal, pending])
 
   useEffect(() => {
@@ -67,13 +67,13 @@ export default function CampusManagementPage() {
     window.history.replaceState(null, '', pathname + (next.size ? '?' + next : ''))
   }
 
-  if (role === 'student') return <Empty title="无权访问管理" description="学生不能访问校园管理内容。" />
+  if (role === 'student') return <Empty title="无权访问管理" description="学生不能访问学校管理内容。" />
   if (loadingWorkspace) return <PageLoadingFrame title="管理" />
 
   return (
     <PageFrame>
       <div className={styles.content}>
-        <PageHeader title="管理" description="管理本校园的学生、教师与资产。" />
+        <PageHeader title="成员与学校管理" description="管理本校学生、教师、加入方式与学校资产。" />
         <SegmentedControl label="管理内容" value={activeTab} onChange={setTab} items={items} />
         {activeTab === 'students' && <StudentsManagementContent />}
         {activeTab === 'teachers' && isPrincipal && <TeachersManagementContent />}
@@ -81,7 +81,7 @@ export default function CampusManagementPage() {
         {activeTab === 'invitations' && organizationId && <OrganizationInvitationsManagement organizationId={organizationId} isPrincipal={isPrincipal} />}
         {activeTab === 'settings' && organizationId && isPrincipal && <OrganizationJoinSettings organizationId={organizationId} />}
         {activeTab === 'wallet' && organizationId && <WalletPage embedded scope="organization" endpoint={'/api/carits/organizations/' + organizationId + '/transactions'} />}
-        {activeTab === 'wallet' && !organizationId && <Empty title="未找到校园" description="当前账号没有可访问的校园资产。" />}
+        {activeTab === 'wallet' && !organizationId && <Empty title="未找到学校" description="当前账号没有可访问的学校资产。" />}
       </div>
     </PageFrame>
   )

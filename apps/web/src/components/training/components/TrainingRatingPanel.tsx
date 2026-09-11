@@ -63,7 +63,7 @@ const skipReasonLabel: Record<string, string> = {
 }
 
 function scopeText(scope: string, track: string, organizationName?: string) {
-  return scope === 'GLOBAL' ? `全局 ${track}` : `${organizationName || '所属组织'} ${track}`
+  return scope === 'GLOBAL' ? `全局 ${track}` : `${organizationName || '所属学校'} ${track}`
 }
 
 export function TrainingRatingPanel({ trainingId, training, onChanged }: {
@@ -143,8 +143,8 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
   const configuredTrack = data?.config.track || training.ratingConfig?.track || training.format.toUpperCase()
   const configuredWeight = data?.config.weight ?? training.ratingConfig?.weight ?? 1
   const ratingDescription = configuredScope === 'BOTH'
-    ? `本场计 Rating：全局 ${configuredTrack} + 参赛组织 ${configuredTrack}`
-    : configuredScope === 'GLOBAL' ? `本场计 Rating：全局 ${configuredTrack}` : `本场计 Rating：参赛组织 ${configuredTrack}`
+    ? `本场计 Rating：全局 ${configuredTrack} + 参赛学校 ${configuredTrack}`
+    : configuredScope === 'GLOBAL' ? `本场计 Rating：全局 ${configuredTrack}` : `本场计 Rating：参赛学校 ${configuredTrack}`
   const ended = training.status === 'finished' || training.runtimeStatus === 'finished'
   const actionButton = training.isAdmin && ended && status !== 'FINALIZED'
     ? status === 'HELD'
@@ -164,7 +164,7 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
         <StatusBadge variant={status === 'FINALIZED' ? 'success' : status === 'HELD' || status === 'FAILED' ? 'warning' : 'pending'}>
           {stateLabel[status] || status}
         </StatusBadge>
-        {data?.standing && <span>最终榜单 R{data.standing.revision} · {data.standing.entries.length} 人</span>}
+        {data?.standing && <span>最终榜单 · {data.standing.entries.length} 人</span>}
         {data?.batches.map(batch => (
           <span key={batch.id}>
             {scopeText(batch.scope, batch.track, batch.organization?.shortName || batch.organization?.name)}：
@@ -172,24 +172,24 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
           </span>
         ))}
       </div>
-      {enabled && !participation?.fixed && <p className={styles.muted}>首次提交后，你在本场比赛中的组织归属将固定。</p>}
+      {enabled && !participation?.fixed && <p className={styles.muted}>首次提交后，你在本场比赛中的学校归属将固定。</p>}
       {data?.myChanges && data.myChanges.length > 0 && <div className={styles.myChanges}>{data.myChanges.map(change => <div key={change.batchId}><span>{scopeText(change.scope, change.track, change.organization?.shortName || change.organization?.name)}</span><strong>{change.ratingBefore} → {change.ratingAfter}（{change.appliedDelta >= 0 ? '+' : ''}{change.appliedDelta}）</strong></div>)}</div>}
       {participation?.fixed && participation.selectedOrganization && (
-        <p className={styles.muted}>Rating 组织归属：{participation.selectedOrganization.name}（由比赛固定）</p>
+        <p className={styles.muted}>Rating 学校归属：{participation.selectedOrganization.name}（首次提交后固定）</p>
       )}
       {participation?.context === 'platform' && participation.scope === 'BOTH' && participation.organizations.length > 0 && (
         <div className={styles.participation}>
           <div>
-            <strong>参赛组织</strong>
+            <strong>参赛学校</strong>
             <span>首次提交后固定；全局 Rating 不受此选择影响。</span>
           </div>
           <Select
-            aria-label="参赛组织"
+            aria-label="参赛学校"
             value={selectedOrganizationId}
             disabled={!participation.canChange || participationSaving}
             onChange={event => setSelectedOrganizationId(event.target.value)}
           >
-            <option value="">请选择参赛组织</option>
+            <option value="">请选择参赛学校</option>
             {participation.organizations.map(organization => (
               <option key={organization.id} value={organization.id}>{organization.shortName || organization.name}</option>
             ))}
@@ -199,16 +199,16 @@ export function TrainingRatingPanel({ trainingId, training, onChanged }: {
           )}
         </div>
       )}
-      {participation?.requiresExplicitSelection && <p className={styles.warning}>你属于多个组织，必须先选择本场比赛的 Rating 归属组织，才能首次提交。</p>}
+      {participation?.requiresExplicitSelection && <p className={styles.warning}>你属于多所学校，必须先选择本场比赛的 Rating 归属学校，才能首次提交。</p>}
       {participation?.context === 'platform' && participation.scope === 'BOTH' && participation.organizations.length === 0 && (
-        <p className={styles.muted}>当前账号没有可用组织，本场只计全局 Rating。</p>
+        <p className={styles.muted}>当前账号没有可用学校，本场只计全局 Rating。</p>
       )}
       {status === 'HELD' && <p className={styles.warning}>赛后重测已改变可计算输入。旧榜单和 Rating 历史仍保留，但在完成重放前不应作为当前结果。</p>}
       {loading && <p className={styles.muted}>正在读取结算状态…</p>}
       {error && <div className={styles.error} role="alert">{error}<Button size="sm" variant="outline" onClick={() => void load()}>重试</Button></div>}
       {data?.standing && data.standing.entries.length > 0 && (
         <details className={styles.details}>
-          <summary>查看不可变最终榜单与规则详情（{data.standing.entries.length}）</summary>
+          <summary>查看最终榜单与计算规则（{data.standing.entries.length}）</summary>
           <div className={styles.entries}>
             {data.standing.entries.map(entry => <div key={entry.userId} className={styles.entry}>
               <strong>#{entry.rank} {entry.user?.username || entry.userId}</strong>

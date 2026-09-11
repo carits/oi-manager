@@ -75,7 +75,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
       setSubmitting(true)
       try {
         const region = [province, city, district].filter(Boolean).join('/')
-        if (!endpoint) throw new Error('当前校园缺少规范组织接口')
+        if (!endpoint) throw new Error('当前学校暂时无法保存资料，请刷新后重试')
         const result = await apiClient.put(endpoint, {
           name: values.name,
           shortName: values.shortName || null,
@@ -101,7 +101,7 @@ export default function EditSchoolModal({ school, onClose, onSuccess, endpoint }
   )
 
   return (
-    <FormDialog isOpen onClose={onClose} title="编辑校园信息" size="lg">
+    <FormDialog isOpen onClose={onClose} title="编辑学校信息" size="lg">
       <form onSubmit={form.handleSubmit} className={unifiedStyles.u3}>
         <FormSection title="基本资料">
           <div style={formStyles.field}><label style={formStyles.label}>学校名称 *</label><Input value={form.values.name} onChange={event => form.handleChange('name', event.target.value)} required style={formStyles.input} /></div>

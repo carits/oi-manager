@@ -198,6 +198,8 @@ export function WalletPage({
         ) : entries.length === 0 ? (
           <p className={styles.empty}>暂无资产变动</p>
         ) : (
+          <details>
+            <summary>查看资产变动记录</summary>
           <div className={styles.records}>
             <div className={styles.recordsHeader}>
               <ReceiptText size={17} aria-hidden="true" />
@@ -230,6 +232,7 @@ export function WalletPage({
               </TableRoot>
             </div>
           </div>
+          </details>
         )}
       </section>
       {scope === "personal" && (
@@ -243,13 +246,13 @@ export function WalletPage({
                 <span className={styles.currency}>评测额度</span>
                 <strong>
                   {evaluation
-                    ? evaluation.free.available + evaluation.purchased.available
+                    ? `剩余 ${(evaluation.free.available + evaluation.purchased.available).toLocaleString()}`
                     : "—"}
                 </strong>
                 {evaluation ? (
                   <small>
-                    {evaluation.level} · 贡献值 {evaluation.contributionScore} ·
-                    今日上限 {evaluation.dailyLimit}
+                    今天已用 {evaluation.today.consumed.toLocaleString()} / {evaluation.dailyLimit.toLocaleString()}
+                    ；免费额度 {new Date(evaluation.resetsAt).toLocaleDateString("zh-CN")} 恢复
                   </small>
                 ) : (
                   <small>{loading ? "正在加载额度…" : "额度数据未加载"}</small>
@@ -275,7 +278,7 @@ export function WalletPage({
             </div>
           ) : evaluation ? (
             <details>
-              <summary>查看额度构成与兑换记录</summary>
+              <summary>使用详情与兑换记录</summary>
               <div className={styles.creditGrid}>
               <p>
                 <span>免费可用 / 总额</span>
@@ -371,11 +374,11 @@ export function WalletPage({
   return (
     <PageFrame width="reading">
       <PageHeader
-        title={scope === "personal" ? "我的钱包与评估额度" : "校园资产"}
+        title={scope === "personal" ? "我的钱包与评测额度" : "学校资产"}
         description={
           scope === "personal"
             ? "贡献值衡量信誉，Carits币用于兑换长期评测额度。"
-            : "查看当前校园的 Carits币资产与消费记录。"
+            : "查看当前学校的 Carits币资产与消费记录。"
         }
       />
       {content}

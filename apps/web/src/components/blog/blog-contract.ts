@@ -43,7 +43,7 @@ export const BLOG_TYPE_LABELS: Record<BlogPostType, string> = {
 
 export const BLOG_VISIBILITY_LABELS: Record<BlogVisibility, string> = {
   PRIVATE: '仅自己',
-  ORGANIZATION: '当前组织',
+  ORGANIZATION: '当前学校',
   PLATFORM: '登录用户可见',
   UNLISTED: '不公开列出（持链接可见）',
   PUBLIC: '互联网公开',
@@ -51,9 +51,9 @@ export const BLOG_VISIBILITY_LABELS: Record<BlogVisibility, string> = {
 
 export const BLOG_REFERENCE_LABELS: Record<BlogReferenceType, string> = {
   PROBLEM: '题目（跟随当前信息）',
-  PROBLEM_REVISION: '题目测试集（固定 Revision）',
-  SOLUTION_VERSION: '题解（固定 Version）',
-  CONTEST_STANDING: '比赛榜单（固定 Snapshot）',
+  PROBLEM_REVISION: '题目测试数据（固定内容）',
+  SOLUTION_VERSION: '题解（固定内容）',
+  CONTEST_STANDING: '比赛榜单（固定内容）',
   RATING_CHANGE: 'Rating 变化（固定记录）',
 }
 
@@ -73,11 +73,11 @@ export function validateBlogDraft(input: { title: string; contentMarkdown: strin
   if ((input.classification?.tagIds.length || 0) + (input.classification?.authorTags.length || 0) > 5) return '每篇文章最多使用 5 个标签'
   for (const [index, reference] of input.references.entries()) {
     const prefix = `第 ${index + 1} 个引用`
-    if (reference.type === 'PROBLEM' && !reference.problemId?.trim()) return `${prefix}缺少题目 ID`
-    if (reference.type === 'PROBLEM_REVISION' && (!reference.problemId?.trim() || !reference.problemRevisionId?.trim())) return `${prefix}必须同时填写题目 ID 和 TestSet Revision ID`
-    if (reference.type === 'SOLUTION_VERSION' && !reference.solutionVersionId?.trim()) return `${prefix}缺少题解 Version ID`
-    if (reference.type === 'CONTEST_STANDING' && !reference.standingSnapshotId?.trim()) return `${prefix}缺少 Standing Snapshot ID`
-    if (reference.type === 'RATING_CHANGE' && !reference.ratingChangeId?.trim()) return `${prefix}缺少 RatingChange ID`
+    if (reference.type === 'PROBLEM' && !reference.problemId?.trim()) return `${prefix}尚未选择题目`
+    if (reference.type === 'PROBLEM_REVISION' && (!reference.problemId?.trim() || !reference.problemRevisionId?.trim())) return `${prefix}必须选择题目和固定的数据版本`
+    if (reference.type === 'SOLUTION_VERSION' && !reference.solutionVersionId?.trim()) return `${prefix}尚未关联题解，请从题解页面重新进入写作`
+    if (reference.type === 'CONTEST_STANDING' && !reference.standingSnapshotId?.trim()) return `${prefix}尚未关联比赛榜单，请从榜单页面重新进入写作`
+    if (reference.type === 'RATING_CHANGE' && !reference.ratingChangeId?.trim()) return `${prefix}尚未关联 Rating 记录，请从 Rating 页面重新进入写作`
   }
   return null
 }

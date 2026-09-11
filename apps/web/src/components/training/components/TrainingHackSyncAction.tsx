@@ -31,8 +31,8 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
   if (!preview?.pending) return null
   if (preview.frozen) return (
     <div className={styles.frozen} role="status">
-      <strong>活动测试版本已冻结在 R{preview.currentRevision ?? '—'}</strong>
-      <span>题库最新为 R{preview.latestRevision ?? '—'}；{preview.frozenReason}，不能更换。</span>
+      <strong>本活动使用的测试数据已固定</strong>
+      <span>题库已有更新；{preview.frozenReason}，当前活动不会自动更换。</span>
     </div>
   )
 
@@ -56,9 +56,9 @@ export function TrainingHackSyncAction({ trainingId, trainingProblemId }: { trai
 
   return (
     <div className={styles.update}>
-      <div><strong>题库有新的正式测试版本</strong><span>当前 R{preview.currentRevision ?? '—'} → 最新 R{preview.latestRevision ?? '—'}</span></div>
+      <div><strong>题库有新的正式测试数据</strong><span>更新只影响本活动之后的新提交。</span></div>
       <Button variant="outline" type="button" onClick={updateRevision} disabled={syncing}>
-        {syncing ? '正在更新…' : `更新到 R${preview.latestRevision ?? '—'}`}
+        {syncing ? '正在更新…' : '使用最新测试数据'}
       </Button>
     </div>
   )

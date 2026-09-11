@@ -3,7 +3,7 @@ import { emptyBlogReference, validateBlogDraft } from './blog-contract'
 
 describe('blog knowledge publishing contract', () => {
   it('requires concrete fixed identities for versioned references', () => {
-    expect(validateBlogDraft({ title: '笔记', contentMarkdown: '正文', references: [{ ...emptyBlogReference('PROBLEM_REVISION'), problemId: 'p1' }] })).toContain('TestSet Revision ID')
+    expect(validateBlogDraft({ title: '笔记', contentMarkdown: '正文', references: [{ ...emptyBlogReference('PROBLEM_REVISION'), problemId: 'p1' }] })).toContain('固定的数据版本')
     expect(validateBlogDraft({ title: '笔记', contentMarkdown: '正文', references: [{ ...emptyBlogReference('SOLUTION_VERSION'), solutionVersionId: 'v1' }] })).toBeNull()
   })
 

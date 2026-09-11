@@ -51,7 +51,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
   const saveAnnouncement = async () => {
     setSaving(true)
     try {
-      if (!announcementEndpoint) throw new Error('当前校园缺少规范组织接口')
+      if (!announcementEndpoint) throw new Error('当前学校暂时无法保存公告，请刷新后重试')
       const result = await apiClient.put(announcementEndpoint, { announcement })
       if (!result.success) throw new Error(result.message)
       setEditingAnnouncement(false)
@@ -83,7 +83,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
           </div>
         </div>
         {isPrincipal && onEditSchool && (
-          <Button icon={<Edit3 size={16} />} onClick={onEditSchool}>编辑校园信息</Button>
+          <Button icon={<Edit3 size={16} />} onClick={onEditSchool}>编辑学校信息</Button>
         )}
       </section>
 
@@ -127,7 +127,7 @@ export default function HomeTab({ school, isPrincipal, onAnnouncementUpdate, onE
           </section>
 
           {canViewWallet && organizationId && <section className={styles.section}>
-            <div className={styles.sectionTitle}><h2>组织钱包</h2></div>
+            <div className={styles.sectionTitle}><h2>学校资产</h2></div>
             <Link href={walletHref || ('/org/' + organizationId + '/wallet')}>查看资产与消费记录</Link>
           </section>}
 
