@@ -2,7 +2,12 @@ import { expect, test } from '@playwright/test'
 
 const password = process.env.E2E_LIVE_PASSWORD
 
-async function login(page: import('@playwright/test').Page, username: string) {
+async function login(page: import('@playwright/test').Page, username: string, token?: string) {
+  if (token) {
+    await page.context().addCookies([{ name: 'oi_session', value: token, url: process.env.E2E_LIVE_BASE_URL || 'http://127.0.0.1:3000', httpOnly: true, sameSite: 'Lax' }])
+    await page.goto('/identity')
+    return
+  }
   await page.goto('/login')
   await page.getByLabel('用户名').fill(username)
   await page.getByLabel('密码').fill(password!)
@@ -11,7 +16,7 @@ async function login(page: import('@playwright/test').Page, username: string) {
 }
 
 test.beforeAll(() => {
-  if (!password) throw new Error('E2E_LIVE_PASSWORD is required for the manual live role suite')
+  if (!password && !process.env.E2E_LIVE_PRINCIPAL_TOKEN && !process.env.E2E_LIVE_STUDENT_TOKEN) throw new Error('E2E_LIVE_PASSWORD or scoped live tokens are required for the manual live role suite')
 })
 
 test('super admin has one isolated administrator workspace', async ({ page }) => {
@@ -48,7 +53,7 @@ test('platform admin has one isolated platform workspace and global submissions'
 })
 
 test('school principal remains in the organization workspace', async ({ page }) => {
-  await login(page, process.env.E2E_LIVE_PRINCIPAL || 'teacher1')
+  await login(page, process.env.E2E_LIVE_PRINCIPAL || 'teacher1', process.env.E2E_LIVE_PRINCIPAL_TOKEN)
   await expect(page).toHaveURL(/\/identity$/)
   await page.goto('/org/org_school-default/overview')
   await expect(page).toHaveURL(/\/org\/org_school-default\/overview$/)
@@ -63,7 +68,7 @@ test('school principal remains in the organization workspace', async ({ page }) 
 })
 
 test('school student sees only the learner training experience', async ({ page }) => {
-  await login(page, process.env.E2E_LIVE_STUDENT || 'student1')
+  await login(page, process.env.E2E_LIVE_STUDENT || 'student1', process.env.E2E_LIVE_STUDENT_TOKEN)
   await expect(page).toHaveURL(/\/identity$/)
   await page.goto('/org/org_school-default/training-sessions')
   await expect(page).toHaveURL(/\/org\/org_school-default\/training-sessions$/)
