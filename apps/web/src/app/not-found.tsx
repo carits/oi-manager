@@ -1,15 +1,7 @@
-import Link from 'next/link'
-import unifiedStyles from './not-found.unified.module.css'
+'use client'
+
+import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 
 export default function NotFound() {
-  return (
-    <main className={unifiedStyles.u1}>
-      <p className={unifiedStyles.u2}>404</p>
-      <h1 className={unifiedStyles.u3}>页面不存在</h1>
-      <p className={unifiedStyles.u4}>
-        地址可能已经变更，或者当前账号没有对应的页面入口。
-      </p>
-      <Link href="/" className={unifiedStyles.u5}>返回首页</Link>
-    </main>
-  )
+  return <ContextualRecovery status="404" title="这里没有这个页面" description="链接可能已经失效，或功能位置发生了变化。你可以返回上一页或当前工作区首页。" />
 }

@@ -94,10 +94,8 @@ test.describe('all-role workspace shell @smoke', () => {
       await page.getByRole('menu', { name: '切换身份' }).getByRole('menuitem', { name: /个人/ }).click()
       await page.waitForURL(/\/personal(?:\?.*)?$/)
 
-      const navigationToggle = page.getByRole('button', { name: '显示导航' })
-      await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
-      await navigationToggle.click()
       await expect(page.getByRole('navigation', { name: '个人主导航' })).toBeVisible()
+      await expect(page.locator('[data-navigation-mode="expanded"]')).toBeVisible()
       await expect(page.getByText(account.username, { exact: true }).first()).toBeVisible()
       await expect(page.locator('main')).not.toContainText('E2E Principal')
       await expect(page.locator('main')).not.toContainText('E2E Teacher')
@@ -144,28 +142,27 @@ test.describe('administrator workspace isolation @smoke', () => {
 })
 
 test.describe('unified sidebar navigation @smoke', () => {
-  test('is hidden by default, keeps the account menu in its footer, and remembers a manual choice', async ({ browser }) => {
+  test('is expanded by default on desktop, keeps a usable rail, and remembers a manual choice', async ({ browser }) => {
     const context = await browser.newContext({ storageState: accounts.teacher.storageState })
     const page = await context.newPage()
     await page.goto(`${organizationBase}/overview`)
 
-    const navigationToggle = page.getByRole('button', { name: '显示导航' })
-    await expect(navigationToggle).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.getByRole('navigation', { name: '教师主导航' })).not.toBeVisible()
-
-    await navigationToggle.click()
     const navigation = page.getByRole('navigation', { name: '教师主导航' })
     await expect(navigation).toBeVisible()
+    await expect(page.locator('[data-navigation-mode="expanded"]')).toBeVisible()
     await expect(page.getByRole('button', { name: '打开账号菜单' })).toBeVisible()
 
-    await page.getByRole('link', { name: '管理', exact: true }).click()
+    await page.getByRole('link', { name: '成员与权限', exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`${organizationBase.replaceAll('/', '\\/')}\/management$`))
     await expect(navigation).toBeVisible()
 
     await page.reload()
     await expect(page.getByRole('navigation', { name: '教师主导航' })).toBeVisible()
-    await page.getByRole('button', { name: '隐藏导航' }).first().click()
-    await expect(page.getByRole('navigation', { name: '教师主导航' })).not.toBeVisible()
+    await page.getByRole('button', { name: '收起导航' }).first().click()
+    await expect(page.getByRole('navigation', { name: '教师主导航' })).toBeVisible()
+    await expect(page.locator('[data-navigation-mode="compact"]')).toBeVisible()
+    await page.reload()
+    await expect(page.locator('[data-navigation-mode="compact"]')).toBeVisible()
     await context.close()
   })
 })

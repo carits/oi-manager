@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import unifiedStyles from './page.unified.module.css'
 import { useParams, useRouter } from 'next/navigation'
 import TeacherHome from '@/components/organization-pages/teacher/page'
 import StudentHome from '@/components/organization-pages/student/page'
@@ -23,8 +22,11 @@ import { SubmissionList } from '@/components/submission/SubmissionList'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth, type WorkspaceSummary } from '@/components/AuthProvider'
 import { BlogDiscovery } from '@/components/blog/BlogDiscovery'
+import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 
 const studentModules = new Set(['overview', 'campus', 'teams', 'homeworks', 'contests', 'training-sessions', 'problem-lists', 'rankings', 'submissions', 'knowledge'])
+const knownModules = new Set([...studentModules, 'management', 'problems'])
+const legacyModules = new Set(['carits', 'contributions', 'students', 'teachers', 'wallet'])
 
 export default function OrgPage() {
   const { module, organizationId } = useParams<{ module: string; organizationId: string }>()
@@ -70,14 +72,10 @@ export default function OrgPage() {
     if (legacyTarget[module]) router.replace(legacyTarget[module])
   }, [module, organizationId, ready, router])
 
-  useEffect(() => {
-    if (ready && student && !studentModuleAllowed) {
-      router.replace(`/org/${organizationId}/overview`)
-    }
-  }, [module, organizationId, ready, router, student, studentModuleAllowed])
-
-  if (!ready || !studentModuleAllowed || ['carits', 'contributions', 'students', 'teachers', 'wallet'].includes(module)) return null
-  if (loadError && !workspaceRole) return <main className={unifiedStyles.u1}><h1>校园工作区无法打开</h1><p>{loadError}</p></main>
+  if (!ready || legacyModules.has(module)) return null
+  if (loadError && !workspaceRole) return <ContextualRecovery status="403" title="无法打开这所学校" description={loadError} />
+  if (!knownModules.has(module)) return <ContextualRecovery status="404" title="这里没有这个学校页面" description="链接可能已经失效，或功能位置发生了变化。" />
+  if (!studentModuleAllowed) return <ContextualRecovery status="403" title="无法访问该页面" description="你当前以学生身份进入这所学校，此功能仅教师或学校负责人可以使用。" />
   if (module === 'overview') return student ? <StudentHome /> : <TeacherHome />
   if (module === 'campus') return <OrganizationCampusPage />
   if (module === 'management' && !student) return <CampusManagementPage />
@@ -90,5 +88,5 @@ export default function OrgPage() {
   if (module === 'rankings') return student ? <StudentRankingsPage /> : <TeacherRankingsPage />
   if (module === 'submissions') return <SubmissionList viewRole={student ? 'student' : 'teacher'} />
   if (module === 'knowledge') return <BlogDiscovery workspaceBasePath={`/org/${organizationId}/knowledge`} embedded />
-  return student ? <StudentHome /> : <TeacherHome />
+  return <ContextualRecovery status="404" title="这里没有这个学校页面" description="链接可能已经失效，或功能位置发生了变化。" />
 }

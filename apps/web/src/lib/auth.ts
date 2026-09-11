@@ -50,9 +50,14 @@ function sidebarNavigationKey(userId: string, role: string, context: string): st
   return `sidebarNavigation:${role}:${userId}:${context}`
 }
 
+export function getSidebarNavigationPreference(userId: string, role: string, context: string): 'open' | 'closed' | null {
+  if (typeof window === 'undefined') return null
+  const value = localStorage.getItem(sidebarNavigationKey(userId, role, context))
+  return value === 'open' || value === 'closed' ? value : null
+}
+
 export function getSidebarNavigationOpen(userId: string, role: string, context: string): boolean {
-  if (typeof window === 'undefined') return false
-  return localStorage.getItem(sidebarNavigationKey(userId, role, context)) === 'open'
+  return getSidebarNavigationPreference(userId, role, context) === 'open'
 }
 
 export function setSidebarNavigationOpen(userId: string, role: string, context: string, open: boolean): void {

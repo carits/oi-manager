@@ -1,0 +1,9 @@
+.page { min-height: min(620px, calc(100vh - var(--shell-header-height) - var(--space-10))); display: grid; place-items: center; padding: var(--space-8) var(--space-4); }
+.card { width: min(100%, 620px); padding: var(--space-8); text-align: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.status { margin: 0 0 var(--space-2); color: var(--primary); font-size: var(--text-sm); font-weight: 750; letter-spacing: .06em; }
+.card h1 { margin: 0; color: var(--text-primary); font-size: var(--text-2xl); }
+.description { margin: var(--space-3) auto 0; max-width: 48ch; color: var(--text-secondary); line-height: 1.7; }
+.requestId { margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--text-xs); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-3); margin-top: var(--space-6); }
+.homeLink { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 0 var(--space-4); color: var(--primary-text); background: var(--primary-light); border-radius: var(--radius); font-size: var(--text-sm); font-weight: 650; }
+@media (max-width: 560px) { .page { min-height: 60vh; padding-inline: 0; } .card { padding: var(--space-6) var(--space-4); } .actions { align-items: stretch; flex-direction: column; } .homeLink { width: 100%; } }

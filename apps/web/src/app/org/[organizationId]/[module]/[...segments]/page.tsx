@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { TeamDetailPage } from '@/components/team/TeamDetailPage'
 import { TrainingDetailPage } from '@/components/training/TrainingDetailPage'
@@ -10,33 +9,19 @@ import { ProblemForm } from '@/components/problem/ProblemForm'
 import { ProblemNote } from '@/components/problem/ProblemNote'
 import { SubmissionDetailPage } from '@/components/submission/SubmissionDetailPage'
 import ProblemListDetailPage from '@/components/problem/ProblemListDetailPage'
-import { PageLoadingFrame } from '@/components/ui/PageLoadingFrame'
 import { TrainingStatementManagementPage } from '@/components/training/TrainingStatementManagementPage'
 import { TrainingSessionWorkspace } from '@/components/training-engine/TrainingSessionWorkspace'
 import { TrainingSessionDesigner } from '@/components/training-engine/TrainingSessionDesigner'
 import { AssignmentWorkspace } from '@/components/assignment/AssignmentWorkspace'
 import { BlogDiscoveryDetail } from '@/components/blog/BlogDiscoveryDetail'
+import { ContextualRecovery } from '@/components/navigation/ContextualRecovery'
 
 export default function OrganizationResourcePage() {
   const { organizationId, module, segments } = useParams<{ organizationId: string; module: string; segments: string[] }>()
-  const router = useRouter()
   const { user } = useAuth()
   const parts = segments || []
   const prefix = `/org/${organizationId}`
   const userType = user?.organizationRole === 'student' ? 'student' : 'teacher'
-
-  useEffect(() => {
-    const supported =
-      (module === 'teams' && (parts.length === 1 || ((parts.length === 3 || parts.length === 4) && ['contests', 'trainings', 'homeworks'].includes(parts[1])))) ||
-      ((module === 'contests' || module === 'homeworks') && (parts.length === 1 || (parts.length === 2 && parts[1] === 'statements'))) ||
-      (module === 'training-sessions' && (parts.length === 1 || (parts.length === 2 && parts[1] === 'design'))) ||
-      (module === 'problems' && (
-        parts.length === 1 ||
-        (parts.length === 2 && ['edit', 'note'].includes(parts[1]))
-      )) ||
-      ((module === 'submissions' || module === 'problem-lists' || module === 'knowledge') && parts.length === 1)
-    if (!supported) router.replace(`${prefix}/${module}`)
-  }, [module, parts, prefix, router])
 
   if (module === 'teams' && parts.length === 1) {
     return <TeamDetailPage userType={userType} basePath={`${prefix}/teams`} requiredRole={['teacher', 'school_principal', 'student']} teamIdOverride={parts[0]} />
@@ -71,5 +56,5 @@ export default function OrganizationResourcePage() {
   if (module === 'submissions' && parts.length === 1) return <SubmissionDetailPage role={userType} submissionId={parts[0]} />
   if (module === 'problem-lists' && parts.length === 1) return <ProblemListDetailPage listIdOverride={parts[0]} />
   if (module === 'knowledge' && parts.length === 1) return <BlogDiscoveryDetail id={parts[0]} workspaceBasePath={`${prefix}/knowledge`} embedded />
-  return <PageLoadingFrame title="正在返回组织页面" rows={4} />
+  return <ContextualRecovery status="404" title="这里没有这个学校页面" description="链接可能已经失效，或功能位置发生了变化。" />
 }
