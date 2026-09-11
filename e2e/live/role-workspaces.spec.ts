@@ -65,6 +65,12 @@ test('school principal remains in the organization workspace', async ({ page }) 
   await expect(page.getByRole('tab', { name: /草稿/ })).toBeVisible()
   await expect(page.getByLabel('搜索训练')).toBeVisible()
   await expect(page.getByRole('button', { name: '打开账号菜单' })).toContainText('@teacher1')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.reload()
+  await expect(page.getByRole('button', { name: '创建训练' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
 
 test('school student sees only the learner training experience', async ({ page }) => {
@@ -80,4 +86,11 @@ test('school student sees only the learner training experience', async ({ page }
   await expect(page.getByText('教练带练模式')).toHaveCount(0)
   await expect(page.getByRole('button', { name: '切换身份' })).toContainText('学生')
   await expect(page.getByRole('button', { name: '打开账号菜单' })).toContainText('@student1')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  await expect(page.getByRole('button', { name: '创建训练' })).toHaveCount(0)
+  await expect(page.getByText('查看老师安排的训练并继续练习。')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 })
