@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Table } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/Toast'
 import styles from './BlogModerationWorkbench.module.css'
+import { reviewStatusLabel } from '@/lib/humanPresentation'
 
 type Summary = {
   id: string; postId: string; commentId?: string | null; reason: string; status: string; createdAt: string
@@ -80,11 +81,11 @@ export function BlogModerationWorkbench() {
       { key: 'createdAt', label: '举报时间', render: item => new Date(item.createdAt).toLocaleString('zh-CN') },
       { key: 'Post.CurrentVersion.title', label: '文章' }, { key: 'Reporter.username', label: '举报人' },
       { key: 'reason', label: '原因' },
-      { key: 'status', label: '状态', render: item => <StatusBadge variant={item.status === 'pending' ? 'warning' : item.status === 'resolved' ? 'success' : 'neutral'}>{item.status}</StatusBadge> },
+      { key: 'status', label: '状态', render: item => <StatusBadge variant={item.status === 'pending' ? 'warning' : item.status === 'resolved' ? 'success' : 'neutral'}>{reviewStatusLabel(item.status)}</StatusBadge> },
     ]} actions={item => <Button variant="secondary" onClick={() => { setSelected(item); setDetail(undefined); setResolutionNote(''); setModerationAction('none') }}>{item.status === 'pending' ? '审核' : '查看'}</Button>} emptyText="暂无博客举报" />
     <FormDialog isOpen={Boolean(selected)} onClose={() => { setSelected(undefined); setDetail(undefined) }} title="博客举报审核" description="证据只用于当前举报治理，查看行为会被审计。" size="lg" footer={detail ? <><Button variant="secondary" onClick={() => { setSelected(undefined); setDetail(undefined) }}>关闭</Button><Button variant="secondary" loading={busy} onClick={() => void feature()}>{detail.Post.Features.length ? '取消精选' : '设为精选'}</Button>{selected?.status === 'pending' && <><Button variant="secondary" loading={busy} disabled={resolutionNote.trim().length < 5} onClick={() => void decide('dismissed')}>驳回举报</Button><Button loading={busy} disabled={resolutionNote.trim().length < 5} onClick={() => void decide('resolved')}>确认处理</Button></>}</> : <><Button variant="secondary" onClick={() => setSelected(undefined)}>取消</Button><Button loading={busy} disabled={accessReason.trim().length < 5} onClick={() => void reveal()}>查看证据</Button></>}>
       {!detail ? <label className={styles.field}>查看原因<Input value={accessReason} maxLength={500} onChange={event => setAccessReason(event.target.value)} /></label> : <div className={styles.detail}>
-        <dl className={styles.facts}><div><dt>文章</dt><dd>{detail.Post.CurrentVersion?.title || detail.postId}</dd></div><div><dt>作者</dt><dd>{detail.Post.Author.username}</dd></div><div><dt>举报人</dt><dd>{detail.Reporter.username}</dd></div><div><dt>对象</dt><dd>{detail.commentId ? '评论' : '文章'}</dd></div><div><dt>原因</dt><dd>{detail.reason}</dd></div><div><dt>状态</dt><dd>{detail.status}</dd></div></dl>
+        <dl className={styles.facts}><div><dt>文章</dt><dd>{detail.Post.CurrentVersion?.title || detail.postId}</dd></div><div><dt>作者</dt><dd>{detail.Post.Author.username}</dd></div><div><dt>举报人</dt><dd>{detail.Reporter.username}</dd></div><div><dt>对象</dt><dd>{detail.commentId ? '评论' : '文章'}</dd></div><div><dt>原因</dt><dd>{detail.reason}</dd></div><div><dt>状态</dt><dd>{reviewStatusLabel(detail.status)}</dd></div></dl>
         <section className={styles.evidence}><strong>固化证据摘要</strong><pre>{JSON.stringify(detail.evidenceSnapshot, null, 2)}</pre></section>
         {selected?.status === 'pending' && <><label className={styles.field}>治理动作<Select value={moderationAction} onChange={event => setModerationAction(event.target.value)}><option value="none">仅记录处理结果</option>{detail.commentId && <option value="hide_comment">隐藏被举报评论</option>}<option value="hold_post">暂停文章展示</option><option value="remove_post">移除文章</option></Select></label><label className={styles.field}>处理说明<Textarea rows={4} maxLength={5000} value={resolutionNote} onChange={event => setResolutionNote(event.target.value)} /></label></>}
       </div>}

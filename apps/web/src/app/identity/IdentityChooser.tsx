@@ -47,7 +47,7 @@ export function IdentityChooser({ user }: { user: AuthUser }) {
       {workspaces && <div className={styles.list}>{workspaces.map(workspace => {
         const Icon = workspace.type === 'platform' ? ShieldCheck : workspace.type === 'personal' ? UserRound : Building2
         const title = workspace.type === 'platform' ? '平台管理' : workspace.type === 'personal' ? '个人' : workspace.organizationName || '校园'
-        const subtitle = workspace.type === 'platform' ? '平台管理员' : workspace.type === 'personal' ? user.username : workspace.relationLabel || '校园身份'
+        const subtitle = workspace.type === 'platform' ? '平台管理员' : workspace.type === 'personal' ? user.username : workspace.relationLabel || '学校身份'
         return <Button variant="ghost" key={workspace.organizationId || workspace.type} type="button" className={styles.item} onClick={() => enter(workspace)} disabled={entering !== null}><span className={styles.icon}><Icon size={20} /></span><span><strong>{title}</strong><small>{subtitle}</small></span><ChevronRight size={18} /></Button>
       })}</div>}
     </section>

@@ -109,17 +109,17 @@ export async function resolveContributionContext(user: JwtPayload, problemId: st
 
   const blockers: Array<{ code: string; message: string }> = []
   if (!canManage && problem.status !== 'published') blockers.push({ code: 'CONTRIBUTION_NOT_AVAILABLE', message: '当前题目尚未发布，暂不能贡献数据' })
-  if (!standardProgram) blockers.push({ code: 'STD_NOT_ACTIVE', message: '当前题目未配置已激活的标准程序 STD' })
-  if (!validatorProgram) blockers.push({ code: 'VALIDATOR_NOT_ACTIVE', message: '当前题目未配置已激活的 Validator' })
+  if (!standardProgram) blockers.push({ code: 'STD_NOT_ACTIVE', message: '当前题目尚未启用标准答案程序' })
+  if (!validatorProgram) blockers.push({ code: 'VALIDATOR_NOT_ACTIVE', message: '当前题目尚未启用输入校验规则' })
   if (!canManage && mode === 'oi' && subtaskReadiness.length > 0 && subtaskReadiness.every(item => item.contributionMode === 'closed')) {
     blockers.push({ code: 'WRONG_CORPUS_REQUIRED', message: '当前题目正在建立错误程序样本，暂时无法可靠评估新增数据价值' })
   }
 
   const warnings: Array<{ code: string; message: string }> = []
-  if (mode === 'oi' && !classifierProgram) warnings.push({ code: 'CLASSIFIER_NOT_ACTIVE', message: 'Classifier 尚未激活；候选数据会完成校验并等待 Subtask 分类，不会晋升' })
+  if (mode === 'oi' && !classifierProgram) warnings.push({ code: 'CLASSIFIER_NOT_ACTIVE', message: '子任务分类程序尚未启用；候选数据会先完成输入校验，然后等待分类，不会进入正式数据' })
   const wrongCorpusStatus: 'none' | 'bootstrap' | 'ready' = !corpus ? 'none' : corpus.corpusHash?.startsWith('ready:') ? 'ready' : 'bootstrap'
-  if (wrongCorpusStatus !== 'ready') warnings.push({ code: 'WRONG_CORPUS_NOT_READY', message: 'Wrong Corpus 尚未完成行为评估；候选数据不会使用占位价值自动发布' })
-  if (mode === 'oi' && subtaskReadiness.some(item => item.contributionMode === 'limited')) warnings.push({ code: 'WRONG_CORPUS_INSUFFICIENT_FOR_AUTO_SELECTION', message: '部分 Subtask 处于 LIMITED 观察模式，可以接收 Candidate，但不会自动替换正式数据' })
+  if (wrongCorpusStatus !== 'ready') warnings.push({ code: 'WRONG_CORPUS_NOT_READY', message: '错误程序评估样本仍在准备；候选数据可以提交，但不会自动进入正式数据' })
+  if (mode === 'oi' && subtaskReadiness.some(item => item.contributionMode === 'limited')) warnings.push({ code: 'WRONG_CORPUS_INSUFFICIENT_FOR_AUTO_SELECTION', message: '部分子任务仍在观察阶段，可以接收候选数据，但暂不会自动替换正式数据' })
   const hackAssetsSelected = Boolean(hackConfig?.standardProgramVersionId === standardProgram?.version.id && hackConfig?.validatorProgramVersionId === validatorProgram?.version.id && (mode !== 'oi' || hackConfig?.classifierProgramVersionId === classifierProgram?.version.id))
   if (hackConfig?.enabled && !hackAssetsSelected) warnings.push({ code: 'HACK_ASSET_SELECTION_REQUIRED', message: 'Hack 配置尚未固定到当前激活的评测程序版本，请由管理员重新保存 Hack 设置' })
 

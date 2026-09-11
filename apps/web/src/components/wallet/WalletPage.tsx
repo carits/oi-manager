@@ -330,7 +330,7 @@ export function WalletPage({
       )}
       {scope === "organization" && (
         <p className={styles.note}>
-          组织贡献归因已记录；首版组织匹配奖励暂未启用。
+          学校贡献归属已记录；学校配套奖励暂未启用。
         </p>
       )}
       <FormDialog

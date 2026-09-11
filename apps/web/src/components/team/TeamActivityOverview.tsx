@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import apiClient from '@/lib/apiClient'
 import { StatusBadge } from '@/components/ui/Badge'
 import styles from './Team.module.css'
+import { activityStatusLabel } from '@/lib/humanPresentation'
 
 type LegacyActivity = { id: string; title: string; status?: string; startTime?: string; createdAt?: string }
 type CoachSession = { id: string; title: string; status: string; createdAt?: string }
@@ -34,6 +35,6 @@ export function TeamActivityOverview({ teamId, workspaceBase }: { teamId: string
   const links = useMemo(() => ({ contest: `${workspaceBase}/contests`, training: `${workspaceBase}/training-sessions`, 'problem-list': `${workspaceBase}/problem-lists` }), [workspaceBase])
   return <section className={styles.activityOverview} aria-labelledby="team-activity-title">
     <header><div><h2 id="team-activity-title">近期活动</h2><p>团队只负责成员关系；比赛、训练和题单在各自工作区统一管理。</p></div><div className={styles.activityActions}><Link className={styles.activityLink} href={`${links.contest}?teamId=${encodeURIComponent(teamId)}`}>查看比赛</Link><Link className={styles.activityLink} href={`${links.training}?teamId=${encodeURIComponent(teamId)}`}>查看训练</Link><Link className={styles.activityLink} href={`${links['problem-list']}?teamId=${encodeURIComponent(teamId)}`}>查看题单</Link></div></header>
-    {loading ? <p>正在整理团队活动…</p> : items.length ? <div className={styles.activityList}>{items.map(item => <Link className={styles.activityItem} href={`${links[item.kind]}/${item.id}`} key={`${item.kind}:${item.id}`}><span><strong>{item.title}</strong><small>{item.kind === 'contest' ? '比赛' : item.kind === 'training' ? '教练训练' : '题单'}</small></span>{item.status && <StatusBadge variant="neutral">{item.status}</StatusBadge>}</Link>)}</div> : <p className={styles.activityEmpty}>暂无近期活动。请从比赛、训练或题单页面创建并选择这个团队。</p>}
+    {loading ? <p>正在整理团队活动…</p> : items.length ? <div className={styles.activityList}>{items.map(item => <Link className={styles.activityItem} href={`${links[item.kind]}/${item.id}`} key={`${item.kind}:${item.id}`}><span><strong>{item.title}</strong><small>{item.kind === 'contest' ? '比赛' : item.kind === 'training' ? '教练训练' : '题单'}</small></span>{item.status && <StatusBadge variant="neutral">{activityStatusLabel(item.status)}</StatusBadge>}</Link>)}</div> : <p className={styles.activityEmpty}>暂无近期活动。请从比赛、训练或题单页面创建并选择这个团队。</p>}
   </section>
 }

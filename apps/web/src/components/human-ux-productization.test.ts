@@ -10,6 +10,9 @@ describe('human UX productization contract', () => {
     expect(source).toContain('教练带练模式')
     expect(source).toContain('选择题目')
     expect(source).toContain('requiredProblemCount')
+    expect(source).toContain('trainingStatusLabel(item.status)')
+    expect(source).toContain('trainingSessionTypeLabel(item.sessionType)')
+    expect(source).not.toContain('>{item.status}</StatusBadge>')
   })
 
   it('treats a team as an activity container instead of another workspace', () => {
@@ -80,6 +83,15 @@ describe('human UX productization contract', () => {
     expect(school).not.toContain('组织钱包')
     expect(wallet).toContain('我的钱包与评测额度')
     expect(wallet).toContain('使用详情与兑换记录')
+    expect(wallet).toContain('学校贡献归属已记录')
+  })
+
+  it('uses human contribution language outside the manager-only technical view', () => {
+    const source = read('./problem/ProblemHackPanel.tsx')
+    expect(source).toContain('系统会依次检查输入是否合法')
+    expect(source).toContain('贡献候选数据')
+    expect(source).toContain('选择学校只用于贡献记录归属')
+    expect(source).not.toContain('选择组织只用于声誉归因')
   })
 
   it('keeps archive import out of activity submission guidance', () => {

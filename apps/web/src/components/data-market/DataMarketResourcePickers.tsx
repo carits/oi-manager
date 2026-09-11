@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import apiClient from '@/lib/apiClient'
 import { Select } from '@/components/ui/FormControls'
+import { activityStatusLabel } from '@/lib/humanPresentation'
 
 type Problem = { id: string; problemId: string; title: string; platform: string }
 type ProblemPage = { data: Problem[] }
@@ -103,7 +104,7 @@ export function LicenseScopePicker({ license, organizationId, contestId, onOrgan
     {license === 'CONTEST' && <label>比赛
       <Select value={contestId} disabled={!organizationId} onChange={event => onContestChange(event.target.value)}>
         <option value="">请选择比赛</option>
-        {contests.map(item => <option key={item.id} value={item.id}>{item.title || item.name || `比赛 ${item.id}`}{item.status ? ` · ${item.status}` : ''}</option>)}
+        {contests.map(item => <option key={item.id} value={item.id}>{item.title || item.name || `比赛 ${item.id}`}{item.status ? ` · ${activityStatusLabel(item.status)}` : ''}</option>)}
       </Select>
     </label>}
   </>
