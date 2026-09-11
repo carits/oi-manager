@@ -309,7 +309,7 @@ export default function PlatformContributionPage() {
             <small>{economy ? `${economy.summary.purchaseCount} 次兑换` : "数据未加载"}</small>
           </article>
           <article>
-            <span>已购 Evaluation Credits</span>
+            <span>已购评测额度</span>
             <strong>
               {economy ? economy.summary.purchasedCredits.toLocaleString() : "—"}
             </strong>

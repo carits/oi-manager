@@ -9,6 +9,7 @@
  */
 
 import { ENV } from '@/config/env'
+import { humanErrorMessage } from './humanErrors'
 
 export interface ApiClientOptions extends Omit<RequestInit, 'body'> {
   signal?: AbortSignal
@@ -139,11 +140,13 @@ export async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T>
     ...payload,
     success,
     status: res.status,
-    message: rateLimitMessage || (
-      typeof payload.message === 'string'
-        ? payload.message
-        : success ? undefined : `请求失败（HTTP ${res.status}）`
-    ),
+    message: success
+      ? (typeof payload.message === 'string' ? payload.message : undefined)
+      : rateLimitMessage || humanErrorMessage(
+          typeof payload.code === 'string' ? payload.code : undefined,
+          typeof payload.message === 'string' ? payload.message : `请求失败（HTTP ${res.status}）`,
+          res.status,
+        ),
     code: typeof payload.code === 'string' ? payload.code : undefined,
     requestId,
     errorKind: success ? undefined : 'http',

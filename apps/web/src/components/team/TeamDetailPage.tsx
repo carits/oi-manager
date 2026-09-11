@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import unifiedStyles from './TeamDetailPage.unified.module.css'
 import { Button } from '@/components/ui/Button'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import apiClient from '@/lib/apiClient'
 import { useTeamPermission, type UserType } from '@/hooks/useTeamPermission'
@@ -20,15 +20,10 @@ import { LoadError } from '@/components/ui/LoadError'
 import type { JoinRequestItem } from './TeamMemberList'
 import dynamic from 'next/dynamic'
 import styles from './Team.module.css'
+import { TeamActivityOverview } from './TeamActivityOverview'
 
 // TeamHeader 包含 react-markdown + katex (~3MB)，延迟加载（命名导出）
 const TeamHeader = dynamic(() => import('./TeamHeader').then(mod => mod.TeamHeader))
-// TeamProblemListsTab 和 TeamTrainingList 使用 default export
-const TeamProblemListsTab = dynamic(() => import('./TeamProblemListsTab').then(mod => mod.default))
-const TeamTrainingList = dynamic(() => import('../training/TeamTrainingList').then(mod => mod.default))
-
-type TabType = 'members' | 'mock' | 'training' | 'tasks'
-
 interface TransferTarget {
   id: string
   name: string
@@ -45,14 +40,9 @@ export interface TeamDetailPageProps {
 export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverride }: TeamDetailPageProps) {
   const params = useParams()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, sessionKey } = useAuth()
   const toast = useToast()
   const teamId = teamIdOverride || (params.id as string)
-  const VALID_TABS = ['members', 'mock', 'training', 'tasks'] as const
-  const [activeTab, setActiveTab] = useState<TabType>(
-    VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'members'
-  )
   // 获取用户ID
   const userId = user?.userId
 
@@ -93,11 +83,6 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
   // 移除成员确认弹框状态
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string; userType: UserType } | null>(null)
-
-  useEffect(() => {
-    const tab = searchParams.get('tab') as TabType
-    if (VALID_TABS.includes(tab as any)) setActiveTab(tab)
-  }, [searchParams])
 
   // 同步公告文本
   useEffect(() => {
@@ -352,13 +337,6 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
     }
   })
 
-  const tabs = [
-    { key: 'members', label: '成员' },
-    { key: 'mock', label: '比赛' },
-    { key: 'training', label: '训练' },
-    { key: 'tasks', label: '题单' }
-  ]
-
   if (loading) {
     return (
       <div className={unifiedStyles.u1}>
@@ -405,68 +383,21 @@ export function TeamDetailPage({ userType, basePath, requiredRole, teamIdOverrid
           onAvatarUpdate={(avatarUrl) => setTeamAvatar(avatarUrl)}
         />
 
-        {/* Tab 导航 */}
-        <div className={styles.teamDetailTabs}>
-          {tabs.map(tab => (
-            <Button variant="ghost"
-              key={tab.key}
-              className={styles.teamDetailTab}
-              data-active={activeTab === tab.key}
-              onClick={() => { setActiveTab(tab.key as TabType); router.push(`${basePath}/${teamId}?tab=${tab.key}`, { scroll: false }) }}
-            >
-              {tab.label}
-            </Button>
-          ))}
-        </div>
-
-        {/* Tab 内容 */}
         <div className={styles.teamDetailContent}>
-          {/* 成员 Tab */}
-          {activeTab === 'members' && (
-            <TeamMemberList
-              team={team}
-              permission={permission}
-              onRemoveMember={handleRemoveMember}
-              onSetAdmin={handleSetAdmin}
-              onTransferOwnership={handleTransferOwnership}
-              onInviteMembers={permission.canInvite ? handleOpenInviteModal : undefined}
-              onViewInvites={permission.isAdmin ? handleViewInvites : undefined}
-              pendingInviteCount={pendingInviteCount}
-              joinRequests={joinRequestItems}
-              onApproveRequest={handleApproveRequest}
-              onRejectRequest={handleRejectRequest}
-            />
-          )}
-
-          {/* 比赛 Tab */}
-          {activeTab === 'mock' && (
-            <TeamTrainingList
-              teamId={teamId}
-              basePath={basePath}
-              isAdmin={permission.isAdmin}
-              mode="contest"
-            />
-          )}
-
-          {/* 训练 Tab */}
-          {activeTab === 'training' && (
-            <TeamTrainingList
-              teamId={teamId}
-              basePath={basePath}
-              isAdmin={permission.isAdmin}
-            />
-          )}
-
-          {/* 题单 Tab */}
-          {activeTab === 'tasks' && (
-            <TeamProblemListsTab
-              teamId={teamId}
-              basePath={basePath}
-              canManage={userType === 'teacher' && permission.isAdmin}
-              isOwner={permission.isOwner}
-              userId={user?.userId}
-            />
-          )}
+          <TeamActivityOverview teamId={teamId} workspaceBase={basePath.replace(/\/teams$/, '')} />
+          <TeamMemberList
+            team={team}
+            permission={permission}
+            onRemoveMember={handleRemoveMember}
+            onSetAdmin={handleSetAdmin}
+            onTransferOwnership={handleTransferOwnership}
+            onInviteMembers={permission.canInvite ? handleOpenInviteModal : undefined}
+            onViewInvites={permission.isAdmin ? handleViewInvites : undefined}
+            pendingInviteCount={pendingInviteCount}
+            joinRequests={joinRequestItems}
+            onApproveRequest={handleApproveRequest}
+            onRejectRequest={handleRejectRequest}
+          />
         </div>
       </div>
 

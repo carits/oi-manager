@@ -27,7 +27,7 @@ describe("wallet debt display", () => {
 
   it("uses friendly ledger labels", () => {
     expect(walletTransactionTypeLabel("contribution_reward")).toBe("贡献奖励");
-    expect(walletTransactionSourceLabel("resource_purchase")).toBe("Evaluation Credits 兑换");
+    expect(walletTransactionSourceLabel("resource_purchase")).toBe("评测额度兑换");
     expect(resourcePurchaseStatusLabel("posted")).toBe("已到账");
   });
 });

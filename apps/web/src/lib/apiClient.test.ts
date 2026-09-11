@@ -61,7 +61,7 @@ describe('parseApiResponse', () => {
     await expect(parseApiResponse(response)).resolves.toMatchObject({
       success: false,
       status: 401,
-      message: '未授权',
+      message: '登录已失效，请重新登录。',
       code: 'AUTH_REQUIRED',
     })
   })

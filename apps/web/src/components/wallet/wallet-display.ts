@@ -13,13 +13,13 @@ export function canAffordCarits(available?: string, cost?: string): boolean {
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   contribution_reward: "贡献奖励",
   contribution_reward_reversal: "贡献奖励冲正",
-  evaluation_credit_purchase: "Evaluation Credits 兑换",
+  evaluation_credit_purchase: "评测额度兑换",
   manual_adjustment: "管理员调整",
 };
 
 const TRANSACTION_SOURCE_LABELS: Record<string, string> = {
   contribution_event: "正式测试集贡献",
-  resource_purchase: "Evaluation Credits 兑换",
+  resource_purchase: "评测额度兑换",
   system: "系统账本",
 };
 

@@ -130,6 +130,14 @@ function percent(value: number) {
   return `${(value * 100).toFixed(1)}%`
 }
 
+function qualityConclusion(snapshot: QualitySnapshot) {
+  if (snapshot.isStale) return { title: '需要重新检查', description: '题目或测试数据已变化，当前结论不再适用。', variant: 'warning' as const }
+  if (snapshot.criticalIssueCount > 0 || snapshot.overallScore === null) return { title: '暂不建议用于正式比赛', description: '数据存在必须先解决的正确性或稳定性问题。', variant: 'error' as const }
+  if (snapshot.overallScore >= 85 && snapshot.confidenceScore >= 70) return { title: '数据质量良好', description: '当前版本已通过主要质量检查，可用于正式训练或比赛。', variant: 'success' as const }
+  if (snapshot.overallScore >= 70) return { title: '可用，但建议继续完善', description: '数据已具备基本可用性，仍有覆盖或区分度提升空间。', variant: 'warning' as const }
+  return { title: '建议补充数据后再发布', description: '当前版本的覆盖和区分能力不足，请优先处理下方提示。', variant: 'warning' as const }
+}
+
 export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   const toast = useToast()
   const [data, setData] = useState<QualityDashboard | null>(null)
@@ -251,6 +259,7 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
 
   const snapshot = data.testSetQuality
   const status = snapshot ? qualityStatusPresentation(snapshot.qualityStatus, snapshot.isStale) : null
+  const conclusion = snapshot ? qualityConclusion(snapshot) : null
   const pqs = data.problemQuality
   const expertDirty = Boolean(algorithmicValueScore || editorialScore || originalityScore || comment)
   const profileDirty = Boolean(profileKey || profileName || profileClass || profileComplexity || profileScoreMin || profileScoreMax || profileSubmissionId || profileSubtasks !== '[]')
@@ -258,10 +267,20 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
   return <div className={styles.panel}>
     <section className={styles.card}>
       <header className={styles.heading}>
-        <div><h3>数据质量 DQS</h3><p>评分属于不可变 TestSet Revision；正确性硬门槛失败时不产生可用总分。</p></div>
+        <div><h3>数据质量评估</h3><p>先告诉你当前数据是否适合使用，详细证据收在技术证书中。</p></div>
         <Button variant="primary" loading={busy} disabled={!data.latestTestSetRevisionId || pending} onClick={triggerDqs}>{pending ? '评估进行中' : '评估当前版本'}</Button>
       </header>
       {snapshot ? <>
+        <div className={styles.conclusion}>
+          <div><StatusBadge variant={conclusion!.variant}>{conclusion!.title}</StatusBadge><p>{conclusion!.description}</p></div>
+          <strong>{displayScore(snapshot.overallScore)} / 100</strong>
+        </div>
+        {(snapshot.criticalIssueCount > 0 || snapshot.warningCount > 0 || snapshot.isStale) && <div className={styles.diagnostics}>
+          {snapshot.isStale && <p><strong>需重新评估：</strong>{snapshot.reasons?.join('、')}</p>}
+          {snapshot.evidence?.criticalIssues?.map(item => <p key={`${item.code}-${item.message}`} className={styles.critical}><strong>必须处理：</strong>{item.message}</p>)}
+          {snapshot.evidence?.warnings?.map(item => <p key={`${item.code}-${item.message}`}><strong>建议：</strong>{item.message}</p>)}
+        </div>}
+        <details className={styles.technicalCertificate}><summary>查看技术证书与评分细项</summary>
         <div className={styles.summary}>
           <div className={styles.overall}><span>DQS</span><strong>{displayScore(snapshot.overallScore)}</strong><small>/ 100</small></div>
           <div><span>状态</span><StatusBadge variant={status!.variant}>{status!.label}</StatusBadge><small>{status!.description}</small></div>
@@ -276,12 +295,8 @@ export function ProblemQualityPanel({ problemId }: { problemId: string }) {
           <span>Feature {percent(snapshot.featureCoverage)}</span>
           {snapshot.evidence?.scoring?.solutionProfileCount != null && snapshot.evidence.scoring.solutionProfileCount > 0 && <span>Reference 对齐 {snapshot.evidence.scoring.evaluatedSolutionProfileCount ?? 0}/{snapshot.evidence.scoring.solutionProfileCount} · {percent(snapshot.evidence.scoring.solutionProfileAlignment || 0)}</span>}
         </div>
-        {(snapshot.criticalIssueCount > 0 || snapshot.warningCount > 0 || snapshot.isStale) && <div className={styles.diagnostics}>
-          {snapshot.isStale && <p><strong>需重新评估：</strong>{snapshot.reasons?.join('、')}</p>}
-          {snapshot.evidence?.criticalIssues?.map(item => <p key={`${item.code}-${item.message}`} className={styles.critical}><strong>{item.code}：</strong>{item.message}</p>)}
-          {snapshot.evidence?.warnings?.map(item => <p key={`${item.code}-${item.message}`}><strong>{item.code}：</strong>{item.message}</p>)}
-        </div>}
         {snapshot.evidence?.pinnedInputs && <details className={styles.evidence}><summary>查看固定评估输入</summary><pre>{JSON.stringify(snapshot.evidence.pinnedInputs, null, 2)}</pre></details>}
+        </details>
       </> : <div className={styles.empty}>尚无 DQS 快照。需要正式 Revision、Active STD / Validator 和可用 Wrong Corpus。</div>}
     </section>
 

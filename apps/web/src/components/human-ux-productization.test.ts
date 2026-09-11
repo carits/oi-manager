@@ -1,0 +1,60 @@
+import fs from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+const read = (path: string) => fs.readFileSync(new URL(path, import.meta.url), 'utf8')
+
+describe('human UX productization contract', () => {
+  it('uses a simple training flow and keeps coach controls optional', () => {
+    const source = read('./training-engine/TrainingSessionListPage.tsx')
+    expect(source).toContain('普通训练（推荐）')
+    expect(source).toContain('教练带练模式')
+    expect(source).toContain('选择题目')
+    expect(source).toContain('requiredProblemCount')
+  })
+
+  it('treats a team as an activity container instead of another workspace', () => {
+    const source = read('./team/TeamDetailPage.tsx')
+    expect(source).toContain('<TeamActivityOverview')
+    expect(source).toContain('<TeamMemberList')
+    expect(source).not.toContain('TeamProblemListsTab')
+    expect(source).not.toContain('TeamTrainingList')
+  })
+
+  it('shows a teacher task inbox before secondary statistics', () => {
+    const source = read('./organization-pages/teacher/page.tsx')
+    expect(source).toContain('待处理事项')
+    expect(source).toContain('加入申请')
+    expect(source).toContain('作业')
+    expect(source).toContain('训练')
+  })
+
+  it('uses an inline submission workbench and merges personal solutions', () => {
+    const source = read('./problem/ProblemDetail.tsx')
+    expect(source).toContain('aria-label="代码提交工作台"')
+    expect(source).toContain('撰写我的题解')
+    expect(source).not.toContain("handleTabChange('my-content')")
+    expect(source).not.toContain('同步远程记录')
+  })
+
+  it('keeps student views free of internal revision terminology', () => {
+    const assignment = read('./assignment/AssignmentWorkspace.tsx')
+    const training = read('./training-engine/TrainingSessionWorkspace.tsx')
+    expect(assignment).toContain('作业发布时固定的数据评测')
+    expect(training).toContain('使用训练发布时固定的数据评测')
+  })
+
+  it('renders quality conclusions and hides technical certificates by default', () => {
+    const source = read('./problem/ProblemQualityPanel.tsx')
+    expect(source).toContain('数据质量良好')
+    expect(source).toContain('查看技术证书与评分细项')
+  })
+
+  it('does not ask users to type resource IDs in the data market', () => {
+    const source = read('./data-market/DataMarketplace.tsx')
+    expect(source).toContain('<ProblemRevisionPicker')
+    expect(source).toContain('<LicenseScopePicker')
+    expect(source).not.toContain('Problem ID')
+    expect(source).not.toContain('组织 ID')
+    expect(source).not.toContain('比赛 ID')
+  })
+})

@@ -55,6 +55,30 @@ describe('independent coach-directed training engine', () => {
     expect((await resolveTrainingPermission(outsider.user.id, session.id, session.Stages[0].Problems[0].id)).reason).toBe('NOT_PARTICIPANT')
   })
 
+  it('creates a simple training with a human completion target and ends it at the due time', async () => {
+    const token = generateTokenFromUser(coach.user)
+    const secondProblem = await configuredProblem(coach.user.id)
+    const start = new Date(Date.now() - 120_000)
+    const due = new Date(Date.now() + 60_000)
+    const created = await createAuthenticatedRequest(app, token).post('/api/training-sessions').send({
+      title: '一周基础练习',
+      teamId: team.id,
+      scheduledStartAt: start.toISOString(),
+      settings: { productMode: 'simple', dueAt: due.toISOString(), completionMode: 'count', requiredProblemCount: 1 },
+      stages: [{ name: '训练任务', mode: 'FREE', advanceMode: 'MANUAL', problemAccessMode: 'ALL', submissionMode: 'ENABLED', rules: { requiredProblemCount: 1 }, problems: [{ problemId: problem.id }, { problemId: secondProblem.id }] }],
+    })
+    expect(created.status).toBe(201)
+    expect(created.body.data.settings).toEqual(expect.objectContaining({ productMode: 'simple', completionMode: 'count', requiredProblemCount: 1 }))
+    const published = await createAuthenticatedRequest(app, token).post(`/api/training-sessions/${created.body.data.id}/publish`).send({ expectedRevision: 0 })
+    expect(published.status).toBe(200)
+    await processDueTrainingSessions(new Date())
+    expect((await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.body.data.id } })).status).toBe('RUNNING')
+    await processDueTrainingSessions(new Date(due.getTime() + 1000))
+    const ended = await prisma.trainingSession.findUniqueOrThrow({ where: { id: created.body.data.id } })
+    expect(ended.status).toBe('ENDED')
+    expect(await prisma.trainingSessionEvent.count({ where: { sessionId: ended.id, type: 'training.session.ended' } })).toBe(1)
+  })
+
   it('returns the design DTO and preserves stable stage/problem ids while reordering', async () => {
     const token = generateTokenFromUser(coach.user)
     const secondProblem = await configuredProblem(coach.user.id)

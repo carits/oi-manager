@@ -112,7 +112,7 @@ export function WalletPage({
     if (credits?.success && credits.data) setEvaluation(credits.data);
     else if (scope === "personal") {
       setEvaluation(null);
-      setEvaluationError(credits?.message || "Evaluation Credits 加载失败");
+      setEvaluationError(credits?.message || "评测额度加载失败");
     }
     setLoading(false);
   }, [endpoint, scope]);
@@ -126,11 +126,11 @@ export function WalletPage({
     );
   const debtOutstanding = hasPositiveCaritsDebt(data?.debtBalance);
   const purchaseBlocker = evaluationError
-    ? "Evaluation Credits 数据未加载"
+    ? "评测额度数据未加载"
     : !evaluation
       ? loading
-        ? "正在加载 Evaluation Credits"
-        : "Evaluation Credits 数据未加载"
+        ? "正在加载评测额度"
+        : "评测额度数据未加载"
       : !selected
         ? "当前没有可用的额度套餐"
         : walletError || !data
@@ -157,7 +157,7 @@ export function WalletPage({
         },
       );
       if (!response.success) return toast.error(response.message || "购买失败");
-      toast.success("Evaluation Credits 已到账");
+      toast.success("评测额度已到账");
       setPurchaseOpen(false);
       setPurchaseRequestKey(createClientUUID());
       await load();
@@ -233,14 +233,14 @@ export function WalletPage({
         )}
       </section>
       {scope === "personal" && (
-        <section className={styles.wallet} aria-label="Evaluation Credits">
+        <section className={styles.wallet} aria-label="评测额度">
           <div className={styles.creditHeader}>
             <div>
               <span className={styles.icon}>
                 <Cpu size={24} aria-hidden="true" />
               </span>
               <div>
-                <span className={styles.currency}>Evaluation Credits</span>
+                <span className={styles.currency}>评测额度</span>
                 <strong>
                   {evaluation
                     ? evaluation.free.available + evaluation.purchased.available
@@ -274,7 +274,8 @@ export function WalletPage({
               </Button>
             </div>
           ) : evaluation ? (
-            <>
+            <details>
+              <summary>查看额度构成与兑换记录</summary>
               <div className={styles.creditGrid}>
               <p>
                 <span>免费可用 / 总额</span>
@@ -313,14 +314,14 @@ export function WalletPage({
                   <div className={styles.tableWrap}>
                     <TableRoot>
                       <TableHead><TableRow><TableHeaderCell>时间</TableHeaderCell><TableHeaderCell>套餐</TableHeaderCell><TableHeaderCell>扣除</TableHeaderCell><TableHeaderCell>到账</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell></TableRow></TableHead>
-                      <TableBody>{evaluation.recentPurchases.map((item) => <TableRow key={item.id}><TableCell>{new Date(item.createdAt).toLocaleString("zh-CN")}</TableCell><TableCell>{item.packageCode}</TableCell><TableCell>{item.caritsAmount} C</TableCell><TableCell>{item.evaluationCredits.toLocaleString()} Credits</TableCell><TableCell>{resourcePurchaseStatusLabel(item.status)}</TableCell></TableRow>)}</TableBody>
+                      <TableBody>{evaluation.recentPurchases.map((item) => <TableRow key={item.id}><TableCell>{new Date(item.createdAt).toLocaleString("zh-CN")}</TableCell><TableCell>{item.packageCode}</TableCell><TableCell>{item.caritsAmount} C</TableCell><TableCell>{item.evaluationCredits.toLocaleString()} 评测额度</TableCell><TableCell>{resourcePurchaseStatusLabel(item.status)}</TableCell></TableRow>)}</TableBody>
                     </TableRoot>
                   </div>
-                ) : <p className={styles.empty}>暂无 Evaluation Credits 兑换记录</p>}
+                ) : <p className={styles.empty}>暂无评测额度兑换记录</p>}
               </div>
-            </>
+            </details>
           ) : (
-            <p className={styles.empty}>正在加载 Evaluation Credits…</p>
+            <p className={styles.empty}>正在加载评测额度…</p>
           )}
         </section>
       )}
@@ -334,7 +335,7 @@ export function WalletPage({
         onClose={() => setPurchaseOpen(false)}
         onSubmit={buy}
         loading={buying}
-        title="兑换 Evaluation Credits"
+        title="兑换评测额度"
         description="购买长期有效，但每日实际使用仍受贡献等级和平台资源硬上限限制。"
         submitText="确认兑换"
         submitDisabled={Boolean(purchaseBlocker)}
@@ -350,7 +351,7 @@ export function WalletPage({
           >
             {evaluation?.packages.map((item) => (
               <option value={item.packageCode} key={item.packageCode}>
-                {item.carits} C → {item.credits.toLocaleString()} Credits
+                {item.carits} C → {item.credits.toLocaleString()} 评测额度
               </option>
             ))}
           </Select>
@@ -359,7 +360,7 @@ export function WalletPage({
           <p className={styles.note}>
             将扣除 {selected.carits} Carits币，到账{" "}
             {selected.credits.toLocaleString()}{" "}
-            Credits。价格和额度由服务端固定。
+            评测额度。价格和额度由服务端固定。
           </p>
         )}
         {purchaseBlocker && <p className={styles.purchaseBlocker} role="alert">{purchaseBlocker}</p>}
@@ -373,7 +374,7 @@ export function WalletPage({
         title={scope === "personal" ? "我的钱包与评估额度" : "校园资产"}
         description={
           scope === "personal"
-            ? "贡献值衡量信誉，Carits币用于兑换长期 Evaluation Credits。"
+            ? "贡献值衡量信誉，Carits币用于兑换长期评测额度。"
             : "查看当前校园的 Carits币资产与消费记录。"
         }
       />

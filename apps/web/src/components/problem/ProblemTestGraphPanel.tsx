@@ -9,6 +9,7 @@ import apiClient from '@/lib/apiClient'
 import { filenameFromContentDisposition, saveBlobDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/Toast'
 import styles from './ProblemTestGraphPanel.unified.module.css'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
 const MAX_SUBTASKS = 15
 const MAX_CASES_PER_SUBTASK = 10
@@ -190,13 +191,8 @@ export function ProblemTestGraphPanel({ problemId, onDirtyChange }: { problemId:
 
   useEffect(() => { load() }, [load])
   const dirty = Boolean(graph?.migrated) && graphFingerprint(graph?.revision || 0, subtasks) !== baseFingerprint.current
+  useUnsavedChanges(`problem-test-graph:${problemId}`, dirty)
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
-  useEffect(() => {
-    if (!dirty) return
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty])
 
   const selectedSubtask = subtasks.find(item => item.id === selectedSubtaskId) || null
   const selectedGroup = selectedSubtask?.groups.find(group => group.key === selectedGroupKey) || selectedSubtask?.groups.find(group => group.kind === 'official') || null

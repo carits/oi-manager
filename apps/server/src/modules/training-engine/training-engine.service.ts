@@ -113,6 +113,20 @@ function parseJsonObject(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 }
 
+function normalizeSessionSettings(value: unknown, scheduledStartAt: Date | null) {
+  const source = parseJsonObject(value)
+  const productMode = source.productMode === 'simple' ? 'simple' : source.productMode === 'coach' ? 'coach' : undefined
+  if (!productMode) return undefined
+  const dueAt = optionalDate(source.dueAt, '训练截止时间')
+  if (productMode === 'simple' && !dueAt) throw new TrainingEngineError(422, 'TRAINING_DUE_AT_REQUIRED', '简单训练必须设置截止时间')
+  if (dueAt && scheduledStartAt && dueAt <= scheduledStartAt) throw new TrainingEngineError(422, 'TRAINING_DUE_AT_INVALID', '训练截止时间必须晚于开始时间')
+  const completionMode = source.completionMode === 'count' ? 'count' : 'all'
+  const requiredProblemCount = completionMode === 'count'
+    ? boundedInteger(source.requiredProblemCount, 1, 100, '至少完成题数', false)
+    : null
+  return { productMode, dueAt: dueAt?.toISOString() || null, completionMode, requiredProblemCount }
+}
+
 export async function loadSession(id: string) {
   return prisma.trainingSession.findUnique({ where: { id }, include: {
     Stages: { orderBy: { orderIndex: 'asc' }, include: { Problems: { orderBy: { orderIndex: 'asc' }, include: { Problem: { select: { id: true, platform: true, problemId: true, title: true, difficulty: true, timeLimit: true, memoryLimit: true } }, TestSetRevision: { select: { id: true, revisionNumber: true, mode: true, judgeConfigHash: true } } } } } },
@@ -224,6 +238,9 @@ async function hydrateStages(stages: StructureStage[], access?: ProblemAccessCon
         forceSwitchOnTimeout: item.forceSwitchOnTimeout ?? rules.forceSwitchOnTimeout,
       }, problem, revision, problemIndex, allowedSubtaskIds, projection }
     })
+    if (rules.requiredProblemCount !== undefined) {
+      rules.requiredProblemCount = boundedInteger(rules.requiredProblemCount, 1, Math.max(1, stageProblems.length), '阶段至少完成题数', false)
+    }
     return { stage: { ...stage, mode, advanceMode, problemAccessMode, submissionMode, durationSeconds, completionThreshold, rules }, stageIndex, name, stageProblems }
   })
 }
@@ -239,6 +256,7 @@ export async function createTrainingSession(userId: string, body: any) {
   const peerVisibility = enumValue(body?.peerVisibility, PEER_VISIBILITY, 'PROGRESS', '同学状态可见性')
   const joinMode = enumValue(body?.joinMode, JOIN_MODES, 'CURRENT_STAGE', '迟到加入方式')
   const scheduledStartAt = optionalDate(body?.scheduledStartAt, '计划开始时间')
+  const settings = normalizeSessionSettings(body?.settings, scheduledStartAt)
   const rawStages = Array.isArray(body?.stages) && body.stages.length ? body.stages : template?.stages || [{ name: '自由训练', mode: 'FREE', advanceMode: 'MANUAL', problems: [] }]
   const stages = rawStages.map((stage: StructureStage) => ({ ...stage, problemAccessMode: stage.problemAccessMode || defaultProblemAccessMode, submissionMode: stage.submissionMode || defaultSubmissionMode }))
   const hydrated = await hydrateStages(stages, await problemAccessContext(userId, scope.organizationId, scope.teamId))
@@ -252,6 +270,7 @@ export async function createTrainingSession(userId: string, body: any) {
       defaultProblemAccessMode: defaultProblemAccessMode as any, defaultSubmissionMode: defaultSubmissionMode as any,
       allowHints: body?.allowHints !== false, allowSolution: Boolean(body?.allowSolution), allowDiscussion: Boolean(body?.allowDiscussion),
       rankingMode: rankingMode as any, peerVisibility: peerVisibility as any, joinMode: joinMode as any,
+      settings: asJson(settings),
     } })
     // Reuse the validated structure without trusting client-side snapshots.
     for (const entry of hydrated) {
@@ -925,6 +944,24 @@ export async function processDueTrainingSessions(now = new Date()) {
   }
   const running = await prisma.trainingSession.findMany({ where: { status: 'RUNNING', currentStageId: { not: null } }, include: { Stages: { orderBy: { orderIndex: 'asc' } }, Participants: { where: { status: 'active' }, include: { Progress: true } } }, take: 100 })
   for (const session of running) {
+    const sessionSettings = parseJsonObject(session.settings)
+    const dueAt = sessionSettings.dueAt ? new Date(String(sessionSettings.dueAt)) : null
+    if (dueAt && Number.isFinite(dueAt.getTime()) && dueAt <= now) {
+      try {
+        await prisma.$transaction(async tx => {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`training-session:${session.id}`}, 0)) IS NULL AS locked`
+          const current = await tx.trainingSession.findUnique({ where: { id: session.id } })
+          if (!current || current.status !== 'RUNNING') return
+          const at = new Date()
+          const runningSeconds = current.runningSince ? Math.max(0, Math.floor((at.getTime() - current.runningSince.getTime()) / 1000)) : 0
+          await tx.trainingSessionStage.updateMany({ where: { sessionId: session.id, status: 'running' }, data: { status: 'completed', endedAt: at } })
+          await tx.trainingSession.update({ where: { id: session.id }, data: { status: 'ENDED', endedAt: at, runningSince: null, activeElapsedSeconds: { increment: runningSeconds }, statusRevision: { increment: 1 }, commandSeq: { increment: 1 } } })
+          await appendEvent(tx, session.id, 'training.session.ended', 'ALL', null, { automatic: true, reason: 'due_at' })
+          ended++
+        })
+      } catch { /* another worker or coach ended the session */ }
+      continue
+    }
     const index = session.Stages.findIndex(stage => stage.id === session.currentStageId)
     const stage = session.Stages[index]
     if (!stage || stage.advanceMode === 'MANUAL') continue
@@ -933,7 +970,9 @@ export async function processDueTrainingSessions(now = new Date()) {
     const stageProblemIds = await prisma.trainingSessionStageProblem.findMany({ where: { stageId: stage.id }, select: { id: true } }).then(rows => new Set(rows.map(row => row.id)))
     const completed = session.Participants.filter(participant => {
       const relevant = participant.Progress.filter(progress => stageProblemIds.has(progress.stageProblemId))
-      return relevant.length > 0 && relevant.every(progress => ['COMPLETED', 'SKIPPED'].includes(progress.status))
+      const completedCount = relevant.filter(progress => ['COMPLETED', 'SKIPPED'].includes(progress.status)).length
+      const requiredCount = Number(parseJsonObject(stage.rules).requiredProblemCount || stageProblemIds.size)
+      return completedCount >= requiredCount
     }).length
     const completionRate = session.Participants.length ? Math.floor(completed * 100 / session.Participants.length) : 0
     const completionReady = Boolean(stage.completionThreshold && completionRate >= stage.completionThreshold && elapsed >= (stage.minDurationSeconds || 0))

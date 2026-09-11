@@ -30,6 +30,7 @@ import { PageLoadingFrame } from "@/components/ui/PageLoadingFrame";
 import { useToast } from "@/components/ui/Toast";
 import { TrainingDesignAuxiliary } from "./TrainingDesignAuxiliary";
 import styles from "./TrainingEngine.module.css";
+import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvider";
 
 type Subtask = { id: number; score: number; dependencies?: number[] };
 type Revision = { id: string; revisionNumber: number; mode?: string };
@@ -175,6 +176,7 @@ export function TrainingSessionDesigner({ sessionId }: { sessionId: string }) {
     [saving, setSaving] = useState(false),
     [publishing, setPublishing] = useState(false),
     [dirty, setDirty] = useState(false);
+  useUnsavedChanges(`training-session-design:${sessionId}`, dirty);
   const [issues, setIssues] = useState<Issue[]>([]),
     [source, setSource] = useState<SourceGroup>("carits"),
     [query, setQuery] = useState(""),

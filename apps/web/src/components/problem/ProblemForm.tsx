@@ -14,6 +14,7 @@ import apiClient from '@/lib/apiClient'
 import { OJ_PLATFORMS_NO_ALL as OJ_PLATFORMS } from '@/lib/oj-platforms'
 import { Paperclip } from 'lucide-react'
 import { currentWorkspacePrefix } from '@/lib/workspacePath'
+import { useUnsavedChanges } from '@/components/navigation/UnsavedChangesProvider'
 
 interface OjBinding {
   platform: string
@@ -46,14 +47,18 @@ interface ProblemFormProps {
   problemId?: string
 }
 
+let problemDraftBootstrap: Promise<Awaited<ReturnType<typeof apiClient.post<{ id: string }>>>> | null = null
+
 export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const toast = useToast()
   const [saving, setSaving] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'failed'>('idle')
+  const savedFingerprintRef = useRef<string | null>(null)
   const judgeSettingsRef = useRef<JudgeSettingsTabHandle>(null)
-  const [loading, setLoading] = useState(mode === 'edit')
+  const [loading, setLoading] = useState(true)
   type TabType = 'statement' | 'solution' | 'judge_settings' | 'settings' | 'attachments'
   const VALID_TABS: TabType[] = ['statement', 'solution', 'judge_settings', 'settings', 'attachments']
   const [activeTab, setActiveTab] = useState<TabType>(
@@ -74,6 +79,23 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   // 获取路径前缀
   const pathPrefix = currentWorkspacePrefix(pathname, role === 'admin' ? '/platform-admin' : '/personal')
 
+  // New problem creation is materialized immediately as a private draft so every
+  // following editor (PDF, testdata and judge assets included) has a stable owner.
+  useEffect(() => {
+    if (mode !== 'create') return
+    const bootstrap = async () => {
+      const request = problemDraftBootstrap ||= apiClient.post<{ id: string }>('/api/problems', { title: '未命名题目', status: 'draft', statements: [], solutions: [] })
+      const result = await request
+      window.setTimeout(() => { if (problemDraftBootstrap === request) problemDraftBootstrap = null }, 1000)
+      if (!result.success || !result.data?.id) {
+        setLoading(false); toast.error(result.message || '无法创建题目草稿，请重试')
+        return
+      }
+      router.replace(`${pathPrefix}/problems/${result.data.id}/edit?new=1`)
+    }
+    void bootstrap()
+  }, [mode, pathPrefix, router, toast])
+
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
     if (VALID_TABS.includes(tab)) setActiveTab(tab)
@@ -82,7 +104,9 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
     const base = mode === 'edit' ? `${pathPrefix}/problems/${problemId}/edit` : `${pathPrefix}/problems/new`
-    router.push(`${base}?tab=${tab}`, { scroll: false })
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', tab)
+    router.push(`${base}?${params.toString()}`, { scroll: false })
   }
 
   // 表单状态
@@ -99,9 +123,29 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
   // 多版本题面/题解状态
   const [statements, setStatements] = useState<Statement[]>([])
   const [solutions, setSolutions] = useState<Statement[]>([])
-
-  // OJ 绑定状态
   const [ojBindings, setOjBindings] = useState<OjBinding[]>([])
+
+  const buildProblemPayload = () => {
+    const data: Record<string, unknown> = {
+      title: form.title.trim() || '未命名题目',
+      difficulty: form.difficulty || null,
+      timeLimit: form.timeLimit ? parseInt(form.timeLimit) : null,
+      memoryLimit: form.memoryLimit ? parseInt(form.memoryLimit) : null,
+      status: form.status,
+      statements: statements.map(s => ({ id: s.id, format: s.format, language: s.language, content: s.content, fileUrl: s.fileUrl, isVisible: s.isVisible })),
+      solutions: solutions.map(s => ({ id: s.id, format: s.format, language: s.language, content: s.content, fileUrl: s.fileUrl, isVisible: s.isVisible })),
+    }
+    if (role === 'admin') data.visibility = form.visibility
+    const validBindings = ojBindings.filter(binding => binding.platform && binding.problemId.trim())
+    if (validBindings.length) data.ojBindings = validBindings
+    return data
+  }
+
+  const isAutoSaveDraft = mode === 'edit' && searchParams.get('new') === '1'
+  const currentFingerprint = JSON.stringify(buildProblemPayload())
+  const draftDirty = isAutoSaveDraft && savedFingerprintRef.current !== null && savedFingerprintRef.current !== currentFingerprint
+  useUnsavedChanges(`problem-draft:${problemId || 'new'}`, draftDirty || autoSaveStatus === 'saving')
+
   // OJ 拉取状态
   const [fetchingFromOj, setFetchingFromOj] = useState(false)
   // 远程附件（从 OJ 拉取的附件）
@@ -114,6 +158,31 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
       fetchAttachments()
     }
   }, [mode, problemId])
+
+  useEffect(() => {
+    if (loading || !isAutoSaveDraft || !problemId) return
+    if (savedFingerprintRef.current === null) {
+      savedFingerprintRef.current = currentFingerprint
+      setAutoSaveStatus('saved')
+      return
+    }
+    if (savedFingerprintRef.current === currentFingerprint) return
+    setAutoSaveStatus('dirty')
+    const timer = window.setTimeout(async () => {
+      setAutoSaveStatus('saving')
+      const fingerprint = currentFingerprint
+      const result = await apiClient.put(`/api/problems/${problemId}`, buildProblemPayload())
+      if (result.success) {
+        savedFingerprintRef.current = fingerprint
+        setAutoSaveStatus('saved')
+      } else {
+        setAutoSaveStatus('failed')
+      }
+    }, 800)
+    return () => window.clearTimeout(timer)
+    // Payload is intentionally represented by its stable JSON fingerprint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFingerprint, isAutoSaveDraft, loading, problemId])
 
   const fetchProblem = async () => {
     try {
@@ -436,39 +505,7 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
     try {
       setSaving(true)
 
-      const data: any = {
-        title: form.title.trim(),
-        difficulty: form.difficulty || null,
-        timeLimit: form.timeLimit ? parseInt(form.timeLimit) : null,
-        memoryLimit: form.memoryLimit ? parseInt(form.memoryLimit) : null,
-        status: form.status,
-        statements: statements.map(s => ({
-          id: s.id,
-          format: s.format,
-          language: s.language,
-          content: s.content,
-          fileUrl: s.fileUrl,
-          isVisible: s.isVisible
-        })),
-        solutions: solutions.map(s => ({
-          id: s.id,
-          format: s.format,
-          language: s.language,
-          content: s.content,
-          fileUrl: s.fileUrl,
-          isVisible: s.isVisible
-        }))
-      }
-
-      // 只有管理员可以设置 visibility
-      if (role === 'admin') {
-        data.visibility = form.visibility
-      }
-
-      const validBindings = ojBindings.filter(b => b.platform && b.problemId.trim())
-      if (validBindings.length > 0) {
-        data.ojBindings = validBindings
-      }
+      const data = buildProblemPayload()
 
       let result
       if (mode === 'create') {
@@ -561,8 +598,11 @@ export function ProblemForm({ mode, role, problemId }: ProblemFormProps) {
           {/* 基本信息 */}
           <div className={unifiedStyles.u5}>
             <h2 className={unifiedStyles.u6}>
-              {mode === 'create' ? '新建题目' : '编辑题目'}
+              {mode === 'create' ? '正在创建题目草稿' : isAutoSaveDraft ? '题目草稿' : '编辑题目'}
             </h2>
+            {isAutoSaveDraft && <p aria-live="polite" className={unifiedStyles.u8}>
+              {autoSaveStatus === 'saving' ? '正在自动保存…' : autoSaveStatus === 'failed' ? '自动保存失败，请使用页面底部的保存按钮重试' : autoSaveStatus === 'dirty' ? '有更改待保存' : '已自动保存为不可见草稿'}
+            </p>}
             <div className={unifiedStyles.u7}>
               <div>
                 <label className={unifiedStyles.u8}>标题 *</label>

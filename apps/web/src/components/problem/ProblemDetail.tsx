@@ -194,16 +194,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   const { user } = useAuth()
   const pathname = usePathname()
   const toast = useToast()
-  type TabType = 'statement' | 'solution' | 'knowledge' | 'attachments' | 'my-content' | 'records' | 'hack'
-  const VALID_TABS: TabType[] = ['statement', 'solution', 'knowledge', 'attachments', 'my-content', 'records', 'hack']
+  type TabType = 'statement' | 'solution' | 'knowledge' | 'attachments' | 'records' | 'hack'
+  const VALID_TABS: TabType[] = ['statement', 'solution', 'knowledge', 'attachments', 'records', 'hack']
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>(
-    VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
+    searchParams.get('tab') === 'my-content' ? 'solution' : VALID_TABS.includes(searchParams.get('tab') as TabType) ? (searchParams.get('tab') as TabType) : 'statement'
   )
   const [submitLanguage, setSubmitLanguage] = useState('cpp')
   const [showSubmitPanel, setShowSubmitPanel] = useState(false)
-  const [submitMethod, setSubmitMethod] = useState<'local' | 'archive'>('local')
   const [submissionIo, setSubmissionIo] = useState<SubmissionIoValue>({ inputFilename: null, outputFilename: null })
   const [submitCode, setSubmitCode] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
@@ -227,12 +226,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
     formattedStatementIds: string[]
   } | null>(null)
 
-  // 平台绑定状态
-  const [platformBinding, setPlatformBinding] = useState<{
-    bound: boolean
-    platformUsername?: string
-  } | null>(null)
-
   // 获取路径前缀
   const getPathPrefix = () => {
     if (pathname === '/personal' || pathname.startsWith('/personal/')) return '/personal'
@@ -246,33 +239,15 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
   useEffect(() => {
     fetchProblem()
     fetchAttachments()  // 同时获取附件数据，用于气泡显示
-    setSubmitMethod('local')
   }, [problemId])
 
   useEffect(() => {
     setSubmissionIo(problem?.legacyIoSuggestion || { inputFilename: null, outputFilename: null })
   }, [problem?.id, problem?.legacyIoSuggestion?.inputFilename, problem?.legacyIoSuggestion?.outputFilename])
 
-  // Archive is a separate remote-history import and is never a code submit.
   useEffect(() => {
-    if (problem?.platform && submitMethod === 'archive') {
-      setPlatformBinding(null) // 先重置状态
-      apiClient.get(`/api/platform-bindings/${problem.platform}`).then(res => {
-        if (res.success && res.data) {
-          const data = res.data as { bound: boolean; platformUsername?: string }
-          setPlatformBinding({
-            bound: data.bound,
-            platformUsername: data.platformUsername
-          })
-        }
-      }).catch(() => {
-        setPlatformBinding({ bound: false })
-      })
-    }
-  }, [problem?.platform, submitMethod])
-
-  useEffect(() => {
-    const tab = searchParams.get('tab') as TabType
+    const requested = searchParams.get('tab')
+    const tab = requested === 'my-content' ? 'solution' : requested as TabType
     if (VALID_TABS.includes(tab)) setActiveTab(tab)
   }, [searchParams])
 
@@ -415,60 +390,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
       }
     } catch (error: any) {
       toast.error(error.message || '提交失败')
-    } finally {
-      setSubmitLoading(false)
-    }
-  }
-
-  // 归档同步处理（同步提交记录到 Submission 表）
-  // 快速同步最新一条 → 弹窗展示 → 后台异步同步剩余
-  const handleArchiveSync = async () => {
-    if (!problem || !platformBinding?.bound) return
-    setSubmitLoading(true)
-    try {
-      const result = await apiClient.post<{
-        firstSubmission?: {
-          id: string
-          result: string
-          score: number
-          language: string
-          code: string
-          timeUsed: number
-          memoryUsed: number
-          submittedAt: string
-          ojRemoteId: string
-          problemId: string
-        }
-        totalCount: number
-        pendingCount: number
-        skipped: number
-      }>(
-        `/api/platform-bindings/${problem.platform}/sync-submissions`,
-        { problemId: problem.problemId },
-        { timeout: 30000 }  // 30秒超时（快速同步只需约5秒）
-      )
-
-      if (result.success && result.data) {
-        const { firstSubmission, totalCount, pendingCount, skipped } = result.data
-
-        if (firstSubmission) {
-          // 弹窗展示最新提交
-          setDetailSubmissionId(parseInt(firstSubmission.id))
-          toast.success(`已同步最新提交，剩余 ${pendingCount} 条正在后台同步`)
-          setShowSubmitPanel(false)
-          // 立即刷新提交列表
-          fetchProblemSubmissions()
-        } else if (skipped > 0) {
-          toast.info('该题提交记录已存在')
-        } else {
-          const platformName = OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform
-          toast.warning(`未在 ${platformName} 提交记录中找到该题`)
-        }
-      } else {
-        toast.error(result.message || '归档同步失败')
-      }
-    } catch (error: any) {
-      toast.error(error.message || '归档同步失败')
     } finally {
       setSubmitLoading(false)
     }
@@ -797,12 +718,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
               )}
             </Button>
             <Button variant="ghost"
-              onClick={() => handleTabChange('my-content')}
-              className={unifiedStyles.tabButton} aria-selected={activeTab === 'my-content'}
-            >
-              我的题解
-            </Button>
-            <Button variant="ghost"
               onClick={() => handleTabChange('records')}
               className={unifiedStyles.tabButton} aria-selected={activeTab === 'records'}
             >
@@ -911,6 +826,11 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   </div>
                 )}
               </div>
+              {(problem.permissions.canSubmit || canModify()) && <details className={unifiedStyles.u25}>
+                <summary>撰写我的题解</summary>
+                <p className={unifiedStyles.u26}>个人题解与官方题解放在同一个工作区，可单独保存并授权活动使用。</p>
+                <UserProblemContentPanel problemId={problemId} />
+              </details>}
             </>
           )}
 
@@ -954,11 +874,6 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                 </div>
               )}
             </div>
-          )}
-
-          {/* 提交记录 Tab */}
-          {activeTab === 'my-content' && (
-            <UserProblemContentPanel problemId={problemId} />
           )}
 
           {activeTab === 'hack' && problem.hack && (problem.permissions.canSubmit || canModify()) && (
@@ -1088,74 +1003,26 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
             </div>
           )}
 
-          {/* 提交代码按钮 */}
+          {/* 提交代码工作台入口 */}
           <div className={unifiedStyles.u53}>
             <Button variant="ghost"
-              onClick={() => setShowSubmitPanel(true)}
+              onClick={() => setShowSubmitPanel(value => !value)}
+              aria-expanded={showSubmitPanel}
               className={unifiedStyles.u54}
             >
-              ▶ 提交代码
+              {showSubmitPanel ? '收起代码工作台' : '▶ 打开代码工作台'}
             </Button>
           </div>
         </div>
       </div>{/* /flex container */}
 
-      {/* 提交代码弹窗 */}
+      {/* 提交是题目主页面的一部分；远端历史导入只存在于账号绑定页。 */}
       {showSubmitPanel && (
-        <DetailDialog
-          isOpen={true}
-          onClose={() => setShowSubmitPanel(false)}
-          title={`${OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} ${problem.problemId}`}
-          size="xl"
-        >
-          <div className={unifiedStyles.u55}>
-            本站提交的代码统一使用本地测试数据评测；远程归档仅同步历史记录，不参与本站成绩。
-          </div>
-
-          {/* Only platforms with archive connectors expose the archive action. */}
-          {['codeforces', 'luogu'].includes(problem.platform) && (
-            <div className={unifiedStyles.u56}>
-              {([
-                { key: 'local', label: '本地评测' },
-                { key: 'archive', label: '同步归档' },
-              ] as const)
-                .map(m => (
-                  <Button variant="ghost"
-                    key={m.key}
-                    onClick={() => setSubmitMethod(m.key)}
-                    className={unifiedStyles.submitMethod} aria-selected={submitMethod === m.key}
-                  >
-                    {m.label}
-                  </Button>
-                ))}
-            </div>
-          )}
-
-          {/* Archive requires a bound source-platform account. */}
-          {submitMethod === 'archive' && (
-            <div className={unifiedStyles.u57}>
-              <span>平台账号</span>
-              {platformBinding === null ? (
-                <span className={unifiedStyles.u58}>检查中...</span>
-              ) : platformBinding.bound ? (
-                <span className={unifiedStyles.u59}>
-                  已绑定: {platformBinding.platformUsername}
-                </span>
-              ) : (
-                <span
-                  className={unifiedStyles.u60}
-                  onClick={() => router.push('/account/platform-bindings')}
-                >
-                  未绑定，点击去绑定
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* 语言选择 - 归档模式下隐藏 */}
-          {submitMethod !== 'archive' && (
+        <section className={unifiedStyles.u55} aria-label="代码提交工作台">
           <div className={unifiedStyles.u61}>
-            {(() => {
+            <strong>{OJ_PLATFORM_LABEL_MAP[problem.platform] || problem.platform} {problem.problemId} · 代码工作台</strong>
+            <div className={unifiedStyles.u61}>
+              {(() => {
               const platformLangs: PlatformLanguage[] = problem.allowedLanguages
                 ? JSON.parse(problem.allowedLanguages)
                 : []
@@ -1173,40 +1040,19 @@ export function ProblemDetail({ role, problemId }: ProblemDetailProps) {
                   ))}
                 </Select>
               )
-            })()}
+              })()}
+            </div>
           </div>
-          )}
-
-          {/* 代码输入框 - 归档模式下隐藏 */}
-          {submitMethod !== 'archive' && (
-          <>
-            <SubmissionCodeEditor value={submitCode} onChange={setSubmitCode} language={submitLanguage} draftKey={`${user?.userId || 'account'}:problem:${problem.id}`} minHeight={360} />
+          <SubmissionCodeEditor value={submitCode} onChange={setSubmitCode} language={submitLanguage} draftKey={`${user?.userId || 'account'}:problem:${problem.id}`} minHeight={420} />
+          <details>
+            <summary>文件输入输出设置</summary>
             <SubmissionIoFields value={submissionIo} onChange={setSubmissionIo} legacySuggested={Boolean(problem.legacyIoSuggestion)} />
-          </>
-          )}
-
-          {/* 提交按钮 */}
+          </details>
           <div className={unifiedStyles.u63}>
-            <span className={unifiedStyles.u64}>
-              {submitMethod === 'local' ? '本地评测' : '远程归档：只同步展示，不参与评测或计分'}
-            </span>
-            {submitMethod === 'archive' ? (
-              <Button variant="primary"
-                onClick={handleArchiveSync}
-                disabled={submitLoading || !platformBinding?.bound}
-              >
-                {submitLoading ? '同步中...' : '同步归档'}
-              </Button>
-            ) : (
-              <Button variant="primary"
-                onClick={handleSubmitCode}
-                disabled={submitLoading || !submitCode.trim() || submissionIo.inputFilename === '' || submissionIo.outputFilename === ''}
-              >
-                {submitLoading ? '提交中...' : '提交'}
-              </Button>
-            )}
+            <span className={unifiedStyles.u64}>代码会使用本站当前正式数据评测；失败时草稿仍会保留。</span>
+            <Button variant="primary" onClick={handleSubmitCode} disabled={submitLoading || !submitCode.trim() || submissionIo.inputFilename === '' || submissionIo.outputFilename === ''}>{submitLoading ? '提交中...' : '提交评测'}</Button>
           </div>
-        </DetailDialog>
+        </section>
       )}
 
       {/* 翻译弹窗 */}
