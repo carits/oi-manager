@@ -15,6 +15,29 @@ describe('human UX productization contract', () => {
     expect(source).not.toContain('>{item.status}</StatusBadge>')
   })
 
+  it('separates student training language and actions from the manager view', () => {
+    const source = read('./training-engine/TrainingSessionListPage.tsx')
+    expect(source).toContain("user?.organizationRole === 'teacher'")
+    expect(source).toContain("user?.organizationRole === 'school_principal'")
+    expect(source).toContain("managerView ? '布置和管理学生练习。' : '查看老师安排的训练并继续练习。'")
+    expect(source).toContain("actions={managerView ?")
+    expect(source).toContain('目前老师还没有给你安排需要完成的训练')
+    expect(source).toContain("label: '进行中'")
+    expect(source).toContain("label: '即将开始'")
+    expect(source).toContain("label: '已完成'")
+    expect(source).not.toContain('title="训练场次"')
+    expect(source).not.toContain('共 ${sessions.length} 场')
+  })
+
+  it('keeps the sidebar account footer account-only and uses human workspace roles', () => {
+    const shell = read('./AppShell.tsx')
+    const switcher = read('./workspace/WorkspaceSwitcher.tsx')
+    expect(shell).toContain("isPersonal ? '个人账号' : `@${user.username}`")
+    expect(shell).toContain('sidebarOpen ? <PanelLeftClose')
+    expect(switcher).toContain("label === '本校学生'")
+    expect(switcher).toContain("return '学生'")
+  })
+
   it('treats a team as an activity container instead of another workspace', () => {
     const source = read('./team/TeamDetailPage.tsx')
     expect(source).toContain('<TeamActivityOverview')

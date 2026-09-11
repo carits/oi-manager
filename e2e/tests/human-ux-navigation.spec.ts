@@ -36,6 +36,29 @@ test.describe('Human UX navigation foundation @smoke @compact', () => {
     await context.close()
   })
 
+  test('training list uses the current school role instead of exposing manager actions to students', async ({ browser }) => {
+    const studentContext = await browser.newContext({ storageState: accounts.campusStudent.storageState })
+    const studentPage = await studentContext.newPage()
+    await studentPage.goto(`${organizationBase}/training-sessions`)
+    await expect(studentPage.getByRole('heading', { name: '训练', exact: true })).toBeVisible()
+    await expect(studentPage.getByText('查看老师安排的训练并继续练习。')).toBeVisible()
+    await expect(studentPage.getByRole('button', { name: '创建训练' })).toHaveCount(0)
+    await expect(studentPage.getByRole('tab', { name: /进行中/ })).toBeVisible()
+    await expect(studentPage.getByRole('tab', { name: /即将开始/ })).toBeVisible()
+    await expect(studentPage.getByRole('tab', { name: /已完成/ })).toBeVisible()
+    await expect(studentPage.getByText('教练带练模式')).toHaveCount(0)
+    await studentContext.close()
+
+    const teacherContext = await browser.newContext({ storageState: accounts.teacher.storageState })
+    const teacherPage = await teacherContext.newPage()
+    await teacherPage.goto(`${organizationBase}/training-sessions`)
+    await expect(teacherPage.getByText('布置和管理学生练习。')).toBeVisible()
+    await expect(teacherPage.getByRole('button', { name: '创建训练' })).toBeVisible()
+    await expect(teacherPage.getByRole('tab', { name: /草稿/ })).toBeVisible()
+    await expect(teacherPage.getByLabel('搜索训练')).toBeVisible()
+    await teacherContext.close()
+  })
+
   test('unknown and forbidden organization routes explain the problem without changing location', async ({ browser }) => {
     const teacherContext = await browser.newContext({ storageState: accounts.teacher.storageState })
     const teacherPage = await teacherContext.newPage()

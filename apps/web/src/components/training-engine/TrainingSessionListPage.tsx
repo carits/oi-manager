@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Plus } from 'lucide-react'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 import { PageFrame } from '@/components/ui/PageFrame'
@@ -18,12 +19,13 @@ import styles from './TrainingEngine.module.css'
 import { trainingSessionTypeLabel, trainingStatusLabel } from '@/lib/humanPresentation'
 
 type Template = { key: string; name: string; description: string; sessionType: string; stages: Array<Record<string, unknown>> }
-type Session = { id: string; title: string; description?: string; status: string; sessionType: string; statusRevision?: number; canJoin?: boolean; _count: { Stages: number; Participants: number } }
+type Session = { id: string; title: string; description?: string; status: string; sessionType: string; statusRevision?: number; canJoin?: boolean; teamId?: string | null; _count: { Stages: number; Participants: number } }
 type Team = { id: string; name: string; owner?: { id?: string }; members?: Array<{ userId: string; role: string }> }
 type TeamPayload = Team[] | { items?: Team[]; data?: Team[] }
 type Problem = { id: string; platform: string; problemId: string; title: string; difficulty?: string }
 type ProblemPage = { data: Problem[]; total: number }
 type CreateMode = 'simple' | 'coach'
+type ListFilter = 'active' | 'upcoming' | 'completed' | 'draft'
 
 const statusVariant = (status: string) => status === 'RUNNING' ? 'success' : status === 'PAUSED' ? 'warning' : status === 'ENDED' || status === 'ARCHIVED' ? 'neutral' : 'info'
 const normalizeTeams = (payload?: TeamPayload) => Array.isArray(payload) ? payload : payload?.items || payload?.data || []
@@ -42,6 +44,7 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
   const [completionMode, setCompletionMode] = useState<'all' | 'count'>('all'), [requiredCount, setRequiredCount] = useState(1)
   const [problemQuery, setProblemQuery] = useState(''), [problemSource, setProblemSource] = useState<'carits' | 'external' | 'school'>('carits')
   const [problemPool, setProblemPool] = useState<Problem[]>([]), [poolLoading, setPoolLoading] = useState(false), [selectedProblems, setSelectedProblems] = useState<Problem[]>([])
+  const [listFilter, setListFilter] = useState<ListFilter>('active'), [listQuery, setListQuery] = useState(''), [listTeamId, setListTeamId] = useState('')
   const scopeQuery = organizationId ? `organizationId=${encodeURIComponent(organizationId)}` : teamId ? `teamId=${encodeURIComponent(teamId)}` : ''
 
   const load = useCallback(async () => {
@@ -115,17 +118,61 @@ export function TrainingSessionListPage({ organizationId, teamId }: { organizati
     toast.success('训练已创建并发布'); closeDialog(); await load()
   }
 
-  const canCreate = Boolean(organizationId || teamId || teams.length)
+  const canManageOrganization = Boolean(organizationId && (user?.organizationRole === 'teacher' || user?.organizationRole === 'school_principal'))
+  const canCreate = canManageOrganization || Boolean(!organizationId && (teamId || teams.length))
+  const managerView = canCreate
+  useEffect(() => { if (!managerView && listFilter === 'draft') setListFilter('active') }, [listFilter, managerView])
+  const statusMatches = (status: string) => listFilter === 'active'
+    ? status === 'RUNNING' || status === 'PAUSED'
+    : listFilter === 'upcoming'
+      ? status === 'SCHEDULED'
+      : listFilter === 'draft'
+        ? status === 'DRAFT'
+        : status === 'ENDED' || status === 'ARCHIVED'
+  const countFor = (filter: ListFilter) => sessions.filter(item => filter === 'active'
+    ? item.status === 'RUNNING' || item.status === 'PAUSED'
+    : filter === 'upcoming'
+      ? item.status === 'SCHEDULED'
+      : filter === 'draft'
+        ? item.status === 'DRAFT'
+        : item.status === 'ENDED' || item.status === 'ARCHIVED').length
+  const visibleSessions = sessions.filter(item => statusMatches(item.status)
+    && (!listQuery.trim() || `${item.title} ${item.description || ''}`.toLocaleLowerCase().includes(listQuery.trim().toLocaleLowerCase()))
+    && (!listTeamId || item.teamId === listTeamId))
+  const filterItems = managerView
+    ? [
+        { value: 'active', label: '进行中', count: countFor('active') },
+        { value: 'draft', label: '草稿', count: countFor('draft') },
+        { value: 'upcoming', label: '即将开始', count: countFor('upcoming') },
+        { value: 'completed', label: '已结束', count: countFor('completed') },
+      ]
+    : [
+        { value: 'active', label: '进行中', count: countFor('active') },
+        { value: 'upcoming', label: '即将开始', count: countFor('upcoming') },
+        { value: 'completed', label: '已完成', count: countFor('completed') },
+      ]
+  const emptyCopy = managerView
+    ? listFilter === 'draft' ? ['没有训练草稿', '新建训练后，未发布的内容会保存在这里。']
+      : listFilter === 'active' ? ['没有进行中的训练', '创建一组题目给学生练习，通常几分钟即可完成设置。']
+        : listFilter === 'upcoming' ? ['没有即将开始的训练', '设置未来的开始时间后，训练会出现在这里。']
+          : ['还没有已结束的训练', '训练结束后会保留在这里，方便查看记录。']
+    : listFilter === 'active' ? ['暂无训练', '目前老师还没有给你安排需要完成的训练。新的训练发布后会显示在这里。']
+      : listFilter === 'upcoming' ? ['暂无即将开始的训练', '老师安排的后续训练会显示在这里。']
+        : ['暂无已完成训练', '完成过的训练会保留在这里，方便以后复习。']
   const openSession = async (item: Session) => {
     if (item.canJoin) { const joined = await apiClient.post(`/api/training-sessions/${item.id}/join`, {}); if (!joined.success) return toast.error(joined.message || '加入训练失败') }
     router.push(`${organizationId ? `/org/${organizationId}` : '/personal'}/training-sessions/${item.id}${item.status === 'DRAFT' ? '/design' : ''}`)
   }
 
   const simpleSteps = ['基本信息', '选择题目', '学员范围', '检查并发布']
-  return <PageFrame width="workbench"><div className={styles.stack}>
-    <PageHeader title="训练" description="快速布置一组练习，或使用教练带练模式编排阶段、顺序和课堂控制。" actions={canCreate ? <Button onClick={() => setOpen(true)}>创建训练</Button> : undefined} />
-    <Section title="训练场次" description={loading ? '正在准备训练列表…' : `共 ${sessions.length} 场`}>
-      {!loading && !sessions.length ? <Empty title="暂无训练" description={canCreate ? '创建普通训练只需题目和截止时间；复杂课堂可使用教练带练模式。' : '你还没有可管理的团队训练。'} /> : <div className={styles.grid}>{sessions.map(item => <article className={styles.card} key={item.id}><div className={styles.actions}><StatusBadge variant={statusVariant(item.status)}>{trainingStatusLabel(item.status)}</StatusBadge><StatusBadge variant="neutral">{trainingSessionTypeLabel(item.sessionType)}</StatusBadge></div><h3>{item.title}</h3><p className={styles.muted}>{item.description || '暂无说明'}</p><p>{item._count.Stages} 个阶段 · {item._count.Participants} 名学员</p><Button variant={item.status === 'DRAFT' ? 'primary' : item.canJoin ? 'primary' : 'secondary'} onClick={() => void openSession(item)}>{item.status === 'DRAFT' ? '继续编排' : item.canJoin ? '加入训练' : '进入训练'}</Button></article>)}</div>}
+  return <PageFrame className={styles.trainingListFrame}><div className={styles.stack}>
+    <PageHeader title="训练" description={managerView ? '布置和管理学生练习。' : '查看老师安排的训练并继续练习。'} actions={managerView ? <Button icon={<Plus size={17} />} onClick={() => setOpen(true)}>创建训练</Button> : undefined} />
+    <div className={styles.listControls}>
+      <Tabs label={managerView ? '训练状态' : '我的训练状态'} value={listFilter} onChange={value => setListFilter(value as ListFilter)} items={filterItems} />
+      {managerView && <div className={styles.listFilters}>{!organizationId && teams.length > 1 && <Select aria-label="筛选团队" value={listTeamId} onChange={event => setListTeamId(event.target.value)}><option value="">全部团队</option>{teams.map(team => <option value={team.id} key={team.id}>{team.name}</option>)}</Select>}<Input aria-label="搜索训练" placeholder="搜索训练" value={listQuery} onChange={event => setListQuery(event.target.value)} /></div>}
+    </div>
+    <Section title={managerView ? '训练列表' : '我的训练'} description={loading ? '正在准备训练列表…' : visibleSessions.length ? `共 ${visibleSessions.length} 个` : undefined}>
+      {loading ? <p className={styles.loadingCopy}>正在准备训练列表…</p> : !visibleSessions.length ? <Empty title={emptyCopy[0]} description={emptyCopy[1]} action={managerView && listFilter === 'active' ? <Button icon={<Plus size={16} />} onClick={() => setOpen(true)}>创建训练</Button> : undefined} /> : <div className={styles.grid}>{visibleSessions.map(item => <article className={styles.card} key={item.id}><div className={styles.actions}><StatusBadge variant={statusVariant(item.status)}>{trainingStatusLabel(item.status)}</StatusBadge>{managerView && <StatusBadge variant="neutral">{trainingSessionTypeLabel(item.sessionType)}</StatusBadge>}</div><h3>{item.title}</h3><p className={styles.muted}>{item.description || (managerView ? '暂无说明' : '老师暂未填写训练说明')}</p>{managerView && <p>{item._count.Stages} 个阶段 · {item._count.Participants} 名学员</p>}<Button variant={item.status === 'DRAFT' ? 'primary' : item.canJoin ? 'primary' : 'secondary'} onClick={() => void openSession(item)}>{item.status === 'DRAFT' ? '继续编排' : item.canJoin ? '加入训练' : item.status === 'ENDED' || item.status === 'ARCHIVED' ? '查看训练' : '继续训练'}</Button></article>)}</div>}
     </Section>
 
     <FormDialog isOpen={open} onClose={closeDialog} title="创建训练" description={mode === 'simple' ? '四步完成普通训练；系统自动固定题目版本并生成标准结构。' : '教练带练模式用于阶段、解锁条件和课堂控制。'} size="wide" loading={creating} dirty={Boolean(title || selectedProblems.length)} footer={mode === 'simple' ? <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button>{simpleStep > 0 && <Button variant="secondary" onClick={() => setSimpleStep(step => step - 1)} disabled={creating}>上一步</Button>}{simpleStep < 3 ? <Button onClick={() => setSimpleStep(step => step + 1)} disabled={!simpleValid}>下一步</Button> : <Button onClick={() => void createSimpleTraining()} loading={creating}>确认并发布</Button>}</> : <><Button variant="secondary" onClick={closeDialog} disabled={creating}>取消</Button><Button onClick={() => void createCoachDraft()} loading={creating} disabled={!title.trim() || !chosenTemplate || !scopeReady}>创建草稿并编排</Button></>}>

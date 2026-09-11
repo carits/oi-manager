@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Activity, BookOpen, ChevronDown, ClipboardList, GraduationCap, Home, Library, Link2, ListChecks, LogOut, Menu, PanelLeftClose, School, ShieldCheck, Trophy, UserRound, WalletCards, Users, UsersRound, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
-import { getNavConfig, getActiveNavItem, roleLabels, roleNames, UserRole } from '@/config/navigation'
+import { getNavConfig, getActiveNavItem, roleNames, UserRole } from '@/config/navigation'
 import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
 import { isGlobalAdministrator } from '@/lib/capabilities'
 import { SessionUnavailable } from './SessionUnavailable'
@@ -105,16 +105,10 @@ export function AppShell({ children }: AppShellProps) {
   } : navConfig
   const activeItem = getActiveNavItem(pathname, role, context)
   const isPersonal = context === 'personal'
-  const isStudent = role === 'student'
-  const roleLabel = roleLabels[role] || '用户'
   const roleName = roleNames[role] || user.role
   const profile = user.profile as { name?: string } | undefined
   const visibleName = isPersonal ? user.username : profile?.name || user.username
-  const userContext = isPersonal
-    ? '个人'
-    : isStudent
-      ? user.organizationName || '学校'
-      : roleLabel
+  const userContext = isPersonal ? '个人账号' : `@${user.username}`
 
   const setNavigationOpen = (open: boolean) => {
     setSidebarOpen(open)
@@ -179,7 +173,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className={styles.headerInner}>
           <div className={styles.headerStart}>
             <Button variant="ghost" type="button" className={styles.navigationToggle} onClick={() => setNavigationOpen(!sidebarOpen)} aria-controls="app-sidebar" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? (mobileNavigation ? '关闭导航' : '收起导航') : '显示导航'} title={sidebarOpen ? (mobileNavigation ? '关闭导航' : '收起导航') : '显示导航'}>
-              <Menu size={21} aria-hidden="true" />
+              {sidebarOpen ? <PanelLeftClose size={21} aria-hidden="true" /> : <Menu size={21} aria-hidden="true" />}
             </Button>
             <Link className={styles.brandLink} href={navigationHome(navigationContext)} aria-label="返回首页"><img className={styles.logo} src="/logo.png" alt="Carits" /></Link>
           </div>
