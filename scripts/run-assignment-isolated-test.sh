@@ -83,9 +83,9 @@ elif [[ "$TEST_SCOPE" == "authorization" ]]; then
   TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run \
     tests/authorization-boundary.test.ts tests/auth.test.ts tests/organization-creation.test.ts \
     tests/organization-join.test.ts tests/platform-organization-access.test.ts tests/permissions.test.ts
-elif [[ "$TEST_SCOPE" == "oj-registry" ]]; then
-  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/oj-adapters-registry.test.ts
+elif [[ "$TEST_SCOPE" == "contest-cutover" ]]; then
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm --dir "$ROOT_DIR/apps/server" exec vitest run tests/oj-adapters-registry.test.ts tests/contest-query-facade.test.ts
 else
-  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, oj-registry or full" >&2
+  echo "Invalid ASSIGNMENT_TEST_SCOPE: expected assignment, authorization, release-invariants, contest-cutover or full" >&2
   exit 1
 fi

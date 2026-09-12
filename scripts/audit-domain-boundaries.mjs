@@ -29,9 +29,19 @@ if (/clearedSubmissionProjection|data:\s*\{\s*(?:\.\.\.input\.projection|result:
   violations.push('JudgeRun service writes local result projection back to Submission')
 }
 
+const contestRating = fs.readFileSync(path.join(modulesRoot, 'rating/application/contest-rating.service.ts'), 'utf8')
+if (!contestRating.includes("from '../../contest/contest-query.facade'")) {
+  violations.push('Contest Rating bypasses the Contest query facade')
+}
+const trainingCrud = fs.readFileSync(path.join(modulesRoot, 'training/application/training-crud.service.ts'), 'utf8')
+if (!trainingCrud.includes('listPlatformContestRuntimes')) {
+  violations.push('Platform contest list bypasses the Contest query facade')
+}
+
 console.log(JSON.stringify({
   assignmentAuthorizationBoundary: !violations.some(item => item.startsWith('Assignment')),
   contestProjectionBoundary: !violations.some(item => item.includes('Contest projection')),
+  contestQueryFacadeBoundary: !violations.some(item => item.includes('Contest query facade')),
   localJudgeResultWriteBoundary: !violations.some(item => item.startsWith('JudgeRun')),
   violations,
 }, null, 2))

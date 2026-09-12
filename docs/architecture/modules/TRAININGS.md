@@ -25,6 +25,12 @@ source_of_truth: apps/server/src/modules/training-engine, apps/server/src/module
 这两个投影，静态架构门禁会拒绝越界写入。题目投影保存相同的固定 TestSet Revision，状态变更也会先补建
 遗漏聚合。受保护的 `/api/admin/migration/contest-aggregates` check/apply 只幂等回填历史桥接，不重写比赛结果。
 
+Contest 查询切换已经开始：Rating 的比赛解析和平台比赛列表必须经过
+`modules/contest/contest-query.facade.ts`，优先从 `Contest.runtimeTrainingId` 进入运行兼容对象。
+未映射历史记录只能在 Facade 内只读回退并记录 `contest_query_legacy_fallback`；业务服务不得各自解释
+`Training.type=contest`。生产回退计数保持为零后，下一阶段再切换组织/团队列表、榜单、Submission Context
+和 Data Market，并最终移除 Facade 内的旧读路径。架构门禁已固定当前 Rating 与平台列表边界。
+
 ## 训练结构
 
 ```text
@@ -103,7 +109,7 @@ TrainingSession
 
 - `Training(type=training|homework)` 已冻结为只读兼容来源；新训练只写 `TrainingSession`，新作业只写 `Assignment`。
 - `Training(type=contest)` 暂时保留为比赛运行态，新增比赛能力必须先通过 Contest facade/aggregate service，不允许页面或其他领域直接新增旧 Training 写路径。
-- Contest facade 稳定后按“查询切换 → 命令切换 → 运行态迁移”的顺序逐步退出旧存储；当前阶段不做破坏性迁移，也不改历史外键。
+- Contest facade 按“查询切换 → 命令切换 → 运行态迁移”的顺序逐步退出旧存储；当前已完成 Rating 解析和平台比赛列表的第一批查询切换，不做破坏性迁移，也不改历史外键。
 - 架构门禁持续禁止 `Contest/ContestProblem` 越界写入；旧活动 API 只接受兼容修复，不再承载训练、作业或全新产品能力。
 
 ## 迁移与回退

@@ -4,6 +4,7 @@ import { prisma } from '../../../prisma'
 import { canAccessTraining, canManageTraining } from '../../training/training.helpers'
 import { buildStanding, defaultScoringRules, normalizeScoringRules, type ScoringParticipant, type ScoringSubmission } from '../domain/contest-scoring'
 import { calculateMultiElo, RATING_ALGORITHM } from '../domain/multi-elo'
+import { findContestRuntimeForRating } from '../../contest/contest-query.facade'
 
 export class ContestRatingError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) { super(message) }
@@ -47,9 +48,9 @@ export function trackForFormat(format: string): RatingTrack {
 export { defaultScoringRules } from '../domain/contest-scoring'
 
 async function requireContest(trainingId: number) {
-  const training = await prisma.training.findUnique({ where: { id: trainingId }, include: { RatingConfig: true, Team: { select: { organizationId: true } } } })
-  if (!training || training.type !== 'contest') fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
-  return training
+  const resolved = await findContestRuntimeForRating(trainingId)
+  if (!resolved) fail(404, 'CONTEST_NOT_FOUND', '比赛不存在')
+  return resolved.runtime
 }
 
 function configDto(config: any, training: any) {

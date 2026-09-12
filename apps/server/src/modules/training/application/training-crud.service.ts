@@ -15,6 +15,7 @@ import { lockContestRatingConfigTx, trackForFormat, defaultScoringRules } from '
 import crypto from 'node:crypto'
 import { judgeMaxScoreFromSnapshot } from '../../assignment/assignment-grading'
 import { ensureContestAggregateTx } from '../../contest/contest-aggregate.service'
+import { listPlatformContestRuntimes } from '../../contest/contest-query.facade'
 
 export class TrainingCrudError extends Error {
   constructor(
@@ -158,14 +159,7 @@ export async function createTeamTraining(params: {
 export async function listPlatformContests(userId: string) {
   const user = await prisma.user.findFirst({ where: { id: userId, status: 'active' }, select: { id: true } })
   if (!user) fail(403, 'PLATFORM_CONTEST_ACCESS_DENIED', '账号不可用')
-  const contests = await prisma.training.findMany({
-    where: { type: 'contest', scope: 'platform', teamId: null, organizationId: null },
-    include: {
-      RatingConfig: { select: { scope: true, track: true, lockedAt: true } },
-      _count: { select: { TrainingProblem: true, TrainingParticipant: true } },
-    },
-    orderBy: [{ startTime: 'desc' }, { id: 'desc' }],
-  })
+  const contests = await listPlatformContestRuntimes()
   const now = new Date()
   return sortTrainingListForDisplay(contests.map(contest => ({
     id: contest.id,
