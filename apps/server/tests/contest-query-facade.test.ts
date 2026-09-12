@@ -4,6 +4,7 @@ import { prisma } from '../src/prisma'
 import {
   findContestRuntimeForLicense,
   findContestRuntimeForRating,
+  listContestRuntimesForDashboard,
   listPlatformContestRuntimes,
 } from '../src/modules/contest/contest-query.facade'
 
@@ -43,5 +44,12 @@ describe('Contest query facade', () => {
     expect(await findContestRuntimeForLicense(legacy.id)).toMatchObject({ source: 'legacy', runtime: { id: legacy.id } })
     const rows = await listPlatformContestRuntimes()
     expect(rows.map(row => row.id).sort((a, b) => a - b)).toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
+    const dashboardRows = await listContestRuntimesForDashboard({
+      teamIds: [],
+      resourceScope: 'personal',
+      organizationId: null,
+    })
+    expect(dashboardRows.map(row => row.id).sort((a, b) => a - b))
+      .toEqual([mapped.id, legacy.id].sort((a, b) => a - b))
   })
 })

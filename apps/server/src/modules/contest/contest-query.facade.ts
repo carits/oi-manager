@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../prisma'
 import logger from '../../lib/logger'
 
@@ -132,4 +133,63 @@ export async function listContestRuntimeIdsForLicenseScopes(input: {
     })
   }
   return [...mappedIds, ...legacy.map(row => row.id)]
+}
+
+const dashboardRuntimeInclude = {
+  _count: { select: { TrainingProblem: true } },
+} as const
+
+/**
+ * Resolve the contest cards visible in one dashboard context. The dashboard
+ * still returns the public runtime id while the aggregate becomes the only
+ * place allowed to discover contest runtimes.
+ */
+export async function listContestRuntimesForDashboard(input: {
+  teamIds: string[]
+  resourceScope: 'campus' | 'personal'
+  organizationId?: string | null
+}) {
+  const aggregateScopes: Prisma.ContestWhereInput[] = [
+    ...(input.teamIds.length ? [{ teamId: { in: input.teamIds }, scope: input.resourceScope }] : []),
+    ...(input.resourceScope === 'campus' && input.organizationId
+      ? [{ organizationId: input.organizationId, teamId: null, scope: 'campus' }]
+      : []),
+    ...(input.resourceScope === 'personal'
+      ? [{ teamId: null, organizationId: null, scope: 'platform' }]
+      : []),
+  ]
+  if (!aggregateScopes.length) return []
+
+  const aggregates = await prisma.contest.findMany({
+    where: { runtimeTrainingId: { not: null }, OR: aggregateScopes },
+    include: { RuntimeTraining: { include: dashboardRuntimeInclude } },
+  })
+  const mappedIds = aggregates.flatMap(row => row.runtimeTrainingId === null ? [] : [row.runtimeTrainingId])
+  const mapped = aggregates.flatMap(row => row.RuntimeTraining?.type === 'contest' ? [row.RuntimeTraining] : [])
+
+  const runtimeScopes: Prisma.TrainingWhereInput[] = [
+    ...(input.teamIds.length ? [{ teamId: { in: input.teamIds }, scope: input.resourceScope }] : []),
+    ...(input.resourceScope === 'campus' && input.organizationId
+      ? [{ organizationId: input.organizationId, teamId: null, scope: 'campus' }]
+      : []),
+    ...(input.resourceScope === 'personal'
+      ? [{ teamId: null, organizationId: null, scope: 'platform' }]
+      : []),
+  ]
+  const legacy = await prisma.training.findMany({
+    where: {
+      type: 'contest', OR: runtimeScopes,
+      ...(mappedIds.length ? { id: { notIn: mappedIds } } : {}),
+    },
+    include: dashboardRuntimeInclude,
+  })
+  if (legacy.length) {
+    logger.warn('contest_query_legacy_fallback', {
+      action: 'contest_query', metadata: {
+        consumer: 'dashboard', count: legacy.length,
+        runtimeTrainingIds: legacy.slice(0, 20).map(row => row.id),
+      },
+    })
+  }
+  return [...mapped, ...legacy]
 }
