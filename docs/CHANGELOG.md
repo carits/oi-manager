@@ -9,6 +9,13 @@ source_of_truth: Git history
 
 ## 2026-09-13
 
+### 组织授权规范化与账号角色边界
+
+- 组织能力只从 `OrganizationMembershipRole` 与显式 Capability Grant 计算，移除 `memberRole` 的 legacy/hybrid 授权回退；所有成员岗位写路径在同一事务同步规范化基础角色，同时保留附加角色和授权。
+- 账号对外身份严格限定为 `user / platform_admin / super_admin`。历史学生、教师和负责人账号统一映射为 `accountRole=user`，校园岗位继续由当前组织 Membership 表达，避免契约解析把合法登录误报为 500。
+- 迁移检查增加缺失基础角色、基础角色冲突和未知岗位报告；隔离测试在 Shared 之前显式构建 Contracts，防止工作区使用旧 JavaScript 产物。
+- 生产 active Membership 20,186/20,186 通过精确角色审计；生产同构隔离 PostgreSQL 的 6 个测试文件、80/80 项通过。提交 `19a7b0e`、`3435716` 已推送 `main`，API 3303→3302，readiness 正常；无 Prisma 迁移或历史数据改写。
+
 ### Human UX 最终缺口与运行契约收口
 
 - 知识广场在个人、校园及管理工作区统一指向全局 `/blog`，不再被组织路由前缀误改；账号菜单新增“我的文章”并保留作者工作台。
