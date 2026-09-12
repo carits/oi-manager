@@ -18,7 +18,7 @@ source_of_truth: Git history
 - 新增共享学习任务排序器，学生和教师首页统一聚合作业、训练和比赛，并按逾期、进行中、24 小时内到期/开始、普通和草稿任务真实排序。侧栏图标改为显式全集映射，训练、数据市场和教师权限均使用语义图标，未知项不再伪装为首页。
 - 复核确认问题详情已使用题目/题解/提交记录三个主标签，知识、附件和贡献/Hack 已归入“更多”，本轮未重复改写。校园提交列表与详情继续在服务端按 `workspaceScope + organizationId` 强制隔离。
 - Web 34 文件/139 项、Server/Web 类型检查和生产构建、UI/路由/架构/文档门禁通过；生产同构隔离 PostgreSQL 的 Assignment、Team、Submission 49/49 通过，其中校园提交隔离 21/21。发布前备份 `oi_manager_20260912_181157.dump` 已校验（SHA-256 `af29b983abc1db092d62329b82d8a5d7b52892693e8686e5dda4dc3ae65e3c`）。
-- 提交 `bdd6f40` 与角色探针修正 `9bae337` 已推送 `main`；API 3303→3302，Web BUILD_ID `CJdR_fknourA2GMV6_4AU` 在候选和正式端口分别通过真实双账号消息闭环（序号 110–111、114–115）后提升，正式负责人/学生角色探针 2/2 通过。Worker、Executor、Judge、Router 与 Web 均正常，本轮没有 Prisma 迁移或历史数据改写。
+- 提交 `bdd6f40` 与角色探针修正 `9bae337` 已推送 `main`；API 3303→3302，Web BUILD_ID `CJdR_fknourA2gmV6_4AU` 在候选和正式端口分别通过真实双账号消息闭环（序号 110–111、114–115）后提升，正式负责人/学生角色探针 2/2 通过。Worker、Executor、Judge、Router 与 Web 均正常，本轮没有 Prisma 迁移或历史数据改写。
 
 ### Training 列表产品化遗留项收口
 
