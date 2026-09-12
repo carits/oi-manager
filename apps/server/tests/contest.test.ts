@@ -15,6 +15,14 @@ import { prisma } from '../src/prisma'
 
 const app = createTestApp()
 
+function createOrganizationRequest(token: string, organizationId: string) {
+  const agent = createAuthenticatedRequest(app, token)
+  return {
+    get: (url: string) => agent.get(url).set('x-oi-organization-id', organizationId),
+    post: (url: string) => agent.post(url).set('x-oi-organization-id', organizationId),
+  }
+}
+
 describe('比赛赛制可见性测试', () => {
   let schoolData: Awaited<ReturnType<typeof createTestSchoolWithPrincipal>>
   let ownerUser: Awaited<ReturnType<typeof createTestUser>>
@@ -31,14 +39,14 @@ describe('比赛赛制可见性测试', () => {
 
     team = await createTestTeam({
       schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      ownerId: ownerUser.user.id
     })
 
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.user.id,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -87,7 +95,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('IOI-A1: 学生赛中可以查看排名', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${ioiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -97,7 +105,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('IOI-A2: 学生赛中可以查看提交结果', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${ioiContest.id}/submissions`)
 
       expect(res.status).toBe(200)
@@ -156,7 +164,7 @@ describe('比赛赛制可见性测试', () => {
         ],
       })
 
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${ioiContest.id}/ranking`)
       expect(res.status).toBe(200)
       const row = res.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
@@ -189,7 +197,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('ICPC-A1: 学生赛中可以查看排名', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${icpcContest.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -199,7 +207,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('ICPC-A2: 排名按 AC 数降序 + 罚时升序', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${icpcContest.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -269,7 +277,7 @@ describe('比赛赛制可见性测试', () => {
         ],
       })
 
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${icpcContest.id}/ranking`)
       expect(res.status).toBe(200)
       const row = res.body.data.ranking.find((item: any) => item.userId === studentUser.user.id)
@@ -302,7 +310,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('OI-A1: 学生赛中看不到排名', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -313,7 +321,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('OI-A2: 管理员赛中可以看到排名', async () => {
-      const res = await createAuthenticatedRequest(app, ownerToken)
+      const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -323,7 +331,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('OI-C1: 学生赛中看不到原题号', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${oiContest.id}/problems`)
 
       expect(res.status).toBe(200)
@@ -354,7 +362,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('OI-POST-A1: 赛后学生可以查看排名', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${finishedOiContest.id}/ranking`)
 
       expect(res.status).toBe(200)
@@ -364,7 +372,7 @@ describe('比赛赛制可见性测试', () => {
     })
 
     it('OI-POST-A2: 赛后学生可以查看提交结果', async () => {
-      const res = await createAuthenticatedRequest(app, studentToken)
+      const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
         .get(`/api/trainings/${finishedOiContest.id}/submissions`)
 
       expect(res.status).toBe(200)
@@ -396,14 +404,14 @@ describe('比赛创建权限测试', () => {
 
     team = await createTestTeam({
       schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      ownerId: ownerUser.user.id
     })
 
     await prisma.teamMember.create({
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: adminUser.teacherId!,
+        userId: adminUser.user.id,
         userType: 'teacher',
         role: 'admin',
         status: 'active',
@@ -415,7 +423,7 @@ describe('比赛创建权限测试', () => {
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: memberUser.teacherId!,
+        userId: memberUser.user.id,
         userType: 'teacher',
         role: 'member',
         status: 'active',
@@ -427,7 +435,7 @@ describe('比赛创建权限测试', () => {
       data: {
         id: crypto.randomUUID(),
         teamId: team.id,
-        userId: studentUser.studentId!,
+        userId: studentUser.user.id,
         userType: 'student',
         role: 'member',
         status: 'active',
@@ -469,7 +477,7 @@ describe('比赛创建权限测试', () => {
   })
 
   it('CA1: owner 可以创建比赛', async () => {
-    const res = await createAuthenticatedRequest(app, ownerToken)
+    const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/trainings`)
       .send({
         title: '新比赛',
@@ -485,7 +493,7 @@ describe('比赛创建权限测试', () => {
   })
 
   it('CA2: admin 可以创建比赛', async () => {
-    const res = await createAuthenticatedRequest(app, adminToken)
+    const res = await createOrganizationRequest(adminToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/trainings`)
       .send({
         title: 'Admin 创建的比赛',
@@ -500,7 +508,7 @@ describe('比赛创建权限测试', () => {
   })
 
   it('CA3: member 不能创建比赛', async () => {
-    const res = await createAuthenticatedRequest(app, memberToken)
+    const res = await createOrganizationRequest(memberToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/trainings`)
       .send({
         title: 'Member 创建的比赛',
@@ -514,7 +522,7 @@ describe('比赛创建权限测试', () => {
   })
 
   it('CA4: 学生不能创建比赛', async () => {
-    const res = await createAuthenticatedRequest(app, studentToken)
+    const res = await createOrganizationRequest(studentToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/trainings`)
       .send({
         title: '学生创建的比赛',
@@ -540,7 +548,7 @@ describe('比赛类型区分测试', () => {
     ownerUser = await createTestUser({ role: 'teacher', schoolId: schoolData.school.id })
     team = await createTestTeam({
       schoolId: schoolData.school.id,
-      ownerId: ownerUser.teacherId
+      ownerId: ownerUser.user.id
     })
     ownerToken = generateTestToken({
       userId: ownerUser.user.id,
@@ -552,7 +560,7 @@ describe('比赛类型区分测试', () => {
   })
 
   it('CT1: 创建训练（type=training）', async () => {
-    const res = await createAuthenticatedRequest(app, ownerToken)
+    const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/trainings`)
       .send({
         title: '日常训练',
@@ -568,7 +576,7 @@ describe('比赛类型区分测试', () => {
   })
 
   it('CT2: 创建比赛（type=contest）', async () => {
-    const res = await createAuthenticatedRequest(app, ownerToken)
+    const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .post(`/api/teams/${team.id}/trainings`)
       .send({
         title: '模拟赛',
@@ -613,7 +621,7 @@ describe('比赛类型区分测试', () => {
     })
 
     // 筛选比赛
-    const res = await createAuthenticatedRequest(app, ownerToken)
+    const res = await createOrganizationRequest(ownerToken, schoolData.school.organizationId!)
       .get(`/api/teams/${team.id}/trainings?type=contest`)
 
     expect(res.status).toBe(200)
