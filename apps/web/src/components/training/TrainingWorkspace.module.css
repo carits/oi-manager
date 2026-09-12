@@ -77,6 +77,7 @@
 .rankInteractiveCell { cursor: pointer; outline: none; }
 .rankInteractiveCell:hover,
 .rankInteractiveCell:focus-visible { filter: brightness(0.97); }
+.rankRatingChange { display: block; overflow: hidden; color: var(--text-secondary); font-size: var(--text-xs); font-variant-numeric: tabular-nums; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .icpcAccepted { color: var(--success-text) !important; background: var(--success-light) !important; }
 .icpcFailed { color: var(--error-text) !important; background: var(--error-light) !important; }
 .icpcUnsubmitted { color: transparent !important; background: var(--bg-card) !important; }

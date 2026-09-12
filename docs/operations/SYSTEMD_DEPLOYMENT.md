@@ -35,7 +35,7 @@ legacy Cron entries, so a failed migration retains the previous scheduler.
 - `oi-manager-worker.service`：兼容名称保留，实际是唯一 Scheduler，只运行 Cron 和 OJ 账号自动验证；持有 PostgreSQL session advisory leader lock。
 - `oi-manager-executor@1.service`：执行可并行的旧远程提交轮询；每条任务使用 PostgreSQL session advisory lease，增加 `@2` 等实例不会重复处理同一记录。
 - `oi-manager-judge.service`：运行 Judge 客户端并自动重连 API。
-- `oi-manager-web.service`：运行已发布的 `.next-current` 预览产物，监听 `3000`。
+- `oi-manager-web.service`：运行已发布的 `.next-current` 预览产物，只监听 `127.0.0.1:3000`。
 
 PostgreSQL 与 go-judge 继续由 Docker Compose 管理。应用运行不再依赖 PM2 或 Nix。所有应用服务均以
 `ecs-user` 运行，日志进入 journald，异常退出后自动重启，并按当前 3.7 GiB 主机容量设置内存上限。
@@ -74,9 +74,11 @@ sudo bash scripts/install-systemd-services.sh
 sudo bash scripts/promote-api.sh
 ```
 
-脚本在非活动端口启动候选、检查数据库与 Revision 投影 readiness、原子切换 Router 指针，再向旧实例发送
+脚本在非活动端口启动候选、检查数据库 readiness、原子切换 Router 指针，再向旧实例发送
 `SIGUSR2`。旧实例停止领取新任务，等待在途 Judge/Hack 后以 1012 关闭 WebSocket，Judge 自动重连新实例；
 HTTP 切换完成后只重启一份 Worker。候选未就绪时不会切换。
+
+Revision 投影一致性不属于流量 readiness，由 `pnpm judge:projection:check` 与运维定时任务独立报警。
 
 ## 验证
 

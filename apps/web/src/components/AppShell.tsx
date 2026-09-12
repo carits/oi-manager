@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { ChevronDown, Link2, LogOut, Menu, PanelLeftClose, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
+import { BookOpenText, ChevronDown, Link2, LogOut, Menu, PanelLeftClose, PenLine, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { getNavConfig, getActiveNavItem, roleNames, UserRole } from '@/config/navigation'
 import { getSidebarNavigationPreference, setSidebarNavigationOpen } from '@/lib/auth'
@@ -81,7 +81,7 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!user) return <SessionUnavailable message="当前会话不可用，请重新登录" />
 
-  const accountRole = user.role as UserRole
+  const accountRole = user.accountRole as UserRole
   const context = contextKind
   const isGlobalAdmin = isGlobalAdministrator(accountRole)
   const role = navigationContext.role as UserRole
@@ -99,7 +99,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const setNavigationOpen = (open: boolean) => {
     setSidebarOpen(open)
-    setSidebarNavigationOpen(user.userId, user.role, organizationId || context, open)
+    setSidebarNavigationOpen(user.userId, user.accountRole, organizationId || context, open)
     if (!open) setShowUserMenu(false)
   }
 
@@ -146,6 +146,8 @@ export function AppShell({ children }: AppShellProps) {
           <Link className={styles.menuItem} href={accountPaths.profile} role="menuitem" onClick={() => setShowUserMenu(false)}><UserRound size={17} aria-hidden="true" />个人信息</Link>
           <Link className={styles.menuItem} href={accountPaths.security} role="menuitem" onClick={() => setShowUserMenu(false)}><ShieldCheck size={17} aria-hidden="true" />账号安全</Link>
           <Link className={styles.menuItem} href={accountPaths.binding} role="menuitem" onClick={() => setShowUserMenu(false)}><Link2 size={17} aria-hidden="true" />平台绑定</Link>
+          <Link className={styles.menuItem} href="/blog" role="menuitem" onClick={() => setShowUserMenu(false)}><BookOpenText size={17} aria-hidden="true" />知识广场</Link>
+          {!isGlobalAdmin && <Link className={styles.menuItem} href="/personal/blogs" role="menuitem" onClick={() => setShowUserMenu(false)}><PenLine size={17} aria-hidden="true" />我的文章</Link>}
           {!isGlobalAdmin && <Link className={styles.menuItem} href="/identity" role="menuitem" onClick={() => setShowUserMenu(false)}><UsersRound size={17} aria-hidden="true" />切换身份</Link>}
           <div className={styles.menuDivider} />
           <Button variant="ghost" className={`${styles.menuItem} ${styles.logoutItem}`} type="button" role="menuitem" onClick={() => void logout()}><LogOut size={17} aria-hidden="true" />退出登录</Button>

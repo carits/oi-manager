@@ -63,4 +63,13 @@ describe('contest Rating workspace contract', () => {
     expect(source).toContain('首次提交后，你在本场比赛中的学校归属将固定')
     expect(source).toContain('NOT_ENOUGH_PARTICIPANTS')
   })
+
+  it('shows finalized Rating changes directly in each ranking row', () => {
+    const source = fs.readFileSync(new URL('./components/TrainingRankTable.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain('row.ratingChanges?.map')
+    expect(source).toContain('ratingBefore')
+    expect(source).toContain('ratingAfter')
+    expect(source).toContain('appliedDelta')
+  })
 })

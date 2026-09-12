@@ -15,7 +15,7 @@ PM2 配置为准。
 
 - 唯一项目事实源：`/data/oi-manager-response-refactor` 的 `main`。
 - 当前核验提交：`c554aa8`；后续以 `git rev-parse HEAD` 为准。
-- 公网 Web：Nginx `:80` → Next.js systemd `:3000`。
+- 公网入口：Nginx `:80/:443` → loopback Next.js `127.0.0.1:3000`。未完成 TLS 切换前 `:80` 仅是过渡入口；取得域名和证书后必须跳转 HTTPS。
 - 稳定 API：Nginx → Router `127.0.0.1:3002` → 活动蓝绿 slot `3302` 或 `3303`。
 - PostgreSQL `127.0.0.1:5432` 与 go-judge `127.0.0.1:5050` 由 Docker 管理。
 - Scheduler、Executor、Judge 和 Web/API 均由仓库内 systemd unit 管理。
@@ -27,7 +27,7 @@ PM2 配置为准。
 | 服务 | 单元/容器 | 监听 | 当前职责 |
 |------|-----------|------|----------|
 | Nginx | `nginx` | `0.0.0.0:80` | Web/API/WebSocket 同源反向代理 |
-| Web | `oi-manager-web.service` | `0.0.0.0:3000` | `.next-current` 优化构建 |
+| Web | `oi-manager-web.service` | `127.0.0.1:3000` | `.next-current` 优化构建，只允许 Nginx/本机探针访问 |
 | API Router | `oi-manager-api-router.service` | `127.0.0.1:3002` | 稳定 HTTP/WebSocket 入口 |
 | API slot | `oi-manager-server@3302/3303.service` | loopback，单一活动 slot | 构建后的 `dist/index.js` |
 | Scheduler | `oi-manager-worker.service` | 无公网监听 | leader-only 定时与协调任务 |

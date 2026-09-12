@@ -153,19 +153,32 @@ export async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T>
   } as ApiResponse<T>
 }
 
-class ApiClient {
-  private baseURL: string
+type ApiClientScope =
+  | { kind: 'legacy-url-context' }
+  | { kind: 'account' }
+  | { kind: 'platform' }
+  | { kind: 'organization'; organizationId: string }
 
-  constructor(baseURL: string) {
+export class ApiClient {
+  private baseURL: string
+  private scope: ApiClientScope
+
+  constructor(baseURL: string, scope: ApiClientScope = { kind: 'legacy-url-context' }) {
     this.baseURL = baseURL
+    this.scope = scope
   }
 
   private getHeaders(accountScoped = false): Record<string, string> {
     const headers: Record<string, string> = {}
 
+    if (accountScoped || this.scope.kind === 'account' || this.scope.kind === 'platform') return headers
+    if (this.scope.kind === 'organization') {
+      headers['X-OI-Organization-ID'] = this.scope.organizationId
+      return headers
+    }
     if (typeof window !== 'undefined') {
       const organizationMatch = window.location.pathname.match(/^\/org\/([^/]+)/)
-      if (!accountScoped && organizationMatch) headers['X-OI-Organization-ID'] = organizationMatch[1]
+      if (organizationMatch) headers['X-OI-Organization-ID'] = organizationMatch[1]
     }
 
     return headers
@@ -438,4 +451,13 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(ENV.API_URL)
+/** Account-level APIs never inherit an organization header from the current URL. */
+export const accountClient = new ApiClient(ENV.API_URL, { kind: 'account' })
+/** Platform administration APIs never inherit an organization header. */
+export const platformClient = new ApiClient(ENV.API_URL, { kind: 'platform' })
+/** Organization clients carry one explicit immutable organization context. */
+export function organizationClient(organizationId: string): ApiClient {
+  if (!organizationId.trim()) throw new Error('organizationId is required')
+  return new ApiClient(ENV.API_URL, { kind: 'organization', organizationId })
+}
 export default apiClient

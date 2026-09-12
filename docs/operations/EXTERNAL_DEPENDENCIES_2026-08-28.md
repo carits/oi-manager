@@ -96,7 +96,7 @@ Production read-only checks on 2026-08-28 found:
 - `http://47.99.222.76/` responds, while port 443 refuses connections.
 - No active Certbot/Caddy service or `/etc/letsencrypt` certificate exists.
 - Application CORS is intentionally fixed to `http://47.99.222.76`.
-- Port 3000 remains public for compatibility with the current documented URL.
+- Port 3000 is loopback-only. Public traffic must enter through Nginx on 80/443; external probes must never depend on the Next.js upstream port.
 
 Required input: a domain whose DNS A/AAAA record is controlled by the owner and
 points to this ECS, plus permission to issue/install a certificate. The final

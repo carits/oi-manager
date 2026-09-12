@@ -1,9 +1,7 @@
-export type AppRole =
-  | 'super_admin'
-  | 'platform_admin'
-  | 'school_principal'
-  | 'teacher'
-  | 'student'
+import type { LegacyUserRole } from '@oi-manager/contracts'
+
+/** @deprecated Prefer AccountRole or OrganizationMembershipRole at the call site. */
+export type AppRole = LegacyUserRole
 
 export function getRoleHome(role?: string, context: 'organization' | 'personal' | 'platform' = 'organization'): string {
   if (role === 'super_admin') return '/admin'
@@ -14,6 +12,8 @@ export function getRoleHome(role?: string, context: 'organization' | 'personal' 
     case 'teacher':
     case 'student':
       return '/identity'
+    case 'user':
+      return '/personal'
     default:
       return '/login'
   }

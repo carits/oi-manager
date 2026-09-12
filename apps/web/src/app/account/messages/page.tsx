@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, MoreHorizontal } from 'lucide-react'
-import { apiClient } from '@/lib/apiClient'
+import { accountClient as apiClient } from '@/lib/apiClient'
 import { createClientUUID } from '@/lib/uuid'
 import { copyText } from '@/lib/clipboard'
 import { useAuth } from '@/components/AuthProvider'

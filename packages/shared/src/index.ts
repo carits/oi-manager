@@ -1,12 +1,17 @@
-// 用户角色
-export type UserRole = 'user' | 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+import type { AccountRole, LegacyUserRole, OrganizationMembershipRole, WorkspaceContext } from '@oi-manager/contracts'
+
+export type { AccountRole, OrganizationMembershipRole, WorkspaceContext }
+
+/** @deprecated Use AccountRole globally and OrganizationMembershipRole inside an organization. */
+export type UserRole = LegacyUserRole
 
 export type ResourceScope = 'campus' | 'personal'
 export type ProblemLibraryScope = 'platform' | 'school'
 export type ProblemStatus = 'draft' | 'published' | 'archived'
 
 // 简化的角色类型（用于权限判断）
-export type SimpleRole = 'super_admin' | 'platform_admin' | 'school_principal' | 'teacher' | 'student'
+/** @deprecated Select AccountRole or OrganizationMembershipRole at the authorization boundary. */
+export type SimpleRole = Exclude<UserRole, 'user'>
 
 // 学校状态
 export type SchoolStatus = 'active' | 'disabled'
@@ -82,8 +87,8 @@ export interface LoginRequest {
 
 // 用户登录响应
 export interface LoginResponse {
-  token: string
   userId: string
+  accountRole: AccountRole
   role: UserRole
   username: string
   workspaceMode: 'work' | 'personal'

@@ -14,6 +14,7 @@
     "declaration": false,
     "baseUrl": ".",
     "paths": {
+      "@oi-manager/contracts": ["../../packages/contracts/dist"],
       "@oi-manager/shared": ["../../packages/shared/dist"],
       "@oi-manager/shared/*": ["../../packages/shared/dist/*"]
     }

@@ -23,7 +23,8 @@ describe('account and authentication productization', () => {
     const provider = read('./AuthProvider.tsx')
     const login = read('../app/login/LoginForm.tsx')
     expect(provider).toContain("pathname.match(/^\\/org\\/([^/]+)/)")
-    expect(provider).toContain("apiClient.query<AuthUser>('/api/auth/me'")
+    expect(provider).toContain("organizationClient(organizationId) : accountClient")
+    expect(provider).toContain("contextClient.query<AuthUser>('/api/auth/me'")
     expect(login).toContain("nextPath || (isGlobalAdmin ? getRoleHome")
   })
 

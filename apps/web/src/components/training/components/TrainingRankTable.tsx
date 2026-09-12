@@ -24,6 +24,21 @@ interface ICPCProblemResult {
   isFirstAccepted: boolean
 }
 
+interface RankingRatingChange {
+  scope: string
+  track: string
+  organizationName?: string | null
+  ratingBefore: number
+  ratingAfter: number
+  appliedDelta: number
+}
+
+function ratingChangeLabel(change: RankingRatingChange) {
+  return change.scope === 'ORGANIZATION'
+    ? `${change.organizationName || '学校'} ${change.track}`
+    : `全局 ${change.track}`
+}
+
 type RankingFormat = 'oi' | 'ioi' | 'icpc'
 
 const RANK_COLUMN_WIDTH = 52
@@ -249,6 +264,11 @@ export function TrainingRankTable({ rankingData, currentUserId, canViewOtherSubm
                       {row.username && row.username !== row.name && (
                         <span className={styles.rankUsername}>{row.username}</span>
                       )}
+                      {row.ratingChanges?.map((change: RankingRatingChange) => (
+                        <span className={styles.rankRatingChange} key={`${change.scope}:${change.track}:${change.organizationName || ''}`}>
+                          {ratingChangeLabel(change)}：{change.ratingBefore} → {change.ratingAfter}（{change.appliedDelta >= 0 ? '+' : ''}{change.appliedDelta}）
+                        </span>
+                      ))}
                     </span>
                   </span>
                 </TableCell>

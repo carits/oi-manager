@@ -50,11 +50,12 @@ snapshot with a database dump whose SHA-256 does not match its metadata.
 
 ## Service monitor
 
-`scripts/monitor-services.sh` checks the optimized preview (`3000`), API (`3002`), go-judge
+`scripts/monitor-services.sh` checks the loopback optimized preview (`127.0.0.1:3000`), API (`3002`), go-judge
 (`5050`), PostgreSQL readiness, the currently served Next.js build, root/data disk usage and automatic-backup age.
 It exits non-zero on any failure and records state changes in `.run/service-monitor.state`.
-The public `/api/health` contract is the minimal JSON response `{"success":true,"message":"OK"}`; the monitor validates
-`success === true` instead of relying on an obsolete `status` field or on display text.
+The public `/api/health` contract is versioned JSON with `schemaVersion=1`, `status=ok`, `service=api` and an ISO timestamp.
+The monitor parses JSON and validates this contract; it never relies on display text. Compatibility `success/message`
+fields remain only for one client release.
 
 ```bash
 pnpm monitor
@@ -258,7 +259,7 @@ curl -fsS http://127.0.0.1:3002/api/health
 curl -I http://127.0.0.1:3000/login
 ```
 
-`3000` 只允许优化预览进程监听，`3001/3002` 只允许一组 HMR/Server 开发进程监听。
+`3000` 只允许优化预览进程监听在 loopback，不得出现公网 listener；`3001/3002` 也只允许 loopback 开发/路由进程。
 多个父级 `pnpm` 进程不一定代表冲突，以监听 PID、仓库 `.run/*.pid` 和进程树为准。
 
 ## 启动与重启

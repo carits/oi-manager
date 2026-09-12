@@ -17,10 +17,11 @@ function createNextConfig(phase) {
     compress: true,
     poweredByHeader: false,
     reactStrictMode: false,
-    transpilePackages: ['shared', '@oi-manager/shared'],
+    transpilePackages: ['shared', '@oi-manager/contracts', '@oi-manager/shared'],
     webpack: (config) => {
       config.resolve.alias = {
         ...config.resolve.alias,
+        '@oi-manager/contracts': require('path').resolve(__dirname, '../../packages/contracts/src'),
         '@oi-manager/shared': require('path').resolve(__dirname, '../../packages/shared/src'),
       }
       return config

@@ -18,6 +18,8 @@ jobs:
     name: Probe public OI Manager endpoints
     runs-on: ubuntu-latest
     timeout-minutes: 4
+    env:
+      PUBLIC_ORIGIN: ${{ vars.OI_MANAGER_PUBLIC_ORIGIN || 'http://47.99.222.76' }}
     steps:
       - name: Probe health and login endpoints
         id: probe
@@ -27,7 +29,31 @@ jobs:
           set -Eeuo pipefail
           failures=()
 
-          probe() {
+          probe_json() {
+            local label="$1"
+            local url="$2"
+            local body code
+            body="$(mktemp)"
+            code=000
+            if ! code="$(curl --silent --show-error --location --retry 2 --retry-delay 2 \
+              --retry-connrefused --connect-timeout 8 --max-time 15 \
+              --user-agent 'oi-manager-external-monitor/1.0' \
+              --output "$body" --write-out '%{http_code}' "$url")"; then
+              failures+=("$label: request failed")
+            elif [[ "$code" != 200 ]]; then
+              failures+=("$label: HTTP $code")
+            elif ! jq -e '
+              .schemaVersion == 1 and
+              .status == "ok" and
+              .service == "api" and
+              .success == true
+            ' "$body" >/dev/null 2>&1; then
+              failures+=("$label: invalid health contract")
+            fi
+            rm -f -- "$body"
+          }
+
+          probe_html() {
             local label="$1"
             local url="$2"
             local marker="$3"
@@ -42,14 +68,15 @@ jobs:
             elif [[ "$code" != 200 ]]; then
               failures+=("$label: HTTP $code")
             elif ! grep -Fq "$marker" "$body"; then
-              failures+=("$label: expected response marker missing")
+              failures+=("$label: expected page marker missing")
             fi
             rm -f -- "$body"
           }
 
-          probe 'stable API through Nginx' 'http://47.99.222.76/api/health' '"status":"ok"'
-          probe 'public Web login through Nginx' 'http://47.99.222.76/login' '登录'
-          probe 'documented preview login' 'http://47.99.222.76:3000/login' '登录'
+          origin="${PUBLIC_ORIGIN%/}"
+          [[ "$origin" =~ ^https?://[^/]+$ ]] || { echo 'Invalid PUBLIC_ORIGIN' >&2; exit 1; }
+          probe_json 'stable API through Nginx' "$origin/api/health"
+          probe_html 'public Web login through Nginx' "$origin/login" '登录'
 
           if (( ${#failures[@]} > 0 )); then
             printf '%s\n' "${failures[@]}" | tee /tmp/oi-manager-uptime-failures.txt

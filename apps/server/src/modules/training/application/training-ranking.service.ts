@@ -66,6 +66,52 @@ function problemSummaries(problems: any[]) {
   }))
 }
 
+type RankingRatingChange = {
+  scope: string
+  track: string
+  organizationId: string | null
+  organizationName: string | null
+  ratingBefore: number
+  ratingAfter: number
+  appliedDelta: number
+}
+
+async function ratingChangesByUser(trainingId: number): Promise<Map<string, RankingRatingChange[]>> {
+  const batches = await prisma.ratingBatch.findMany({
+    where: { trainingId, status: 'APPLIED', supersededAt: null },
+    select: {
+      Pool: { select: { scopeType: true, track: true, organizationId: true, Organization: { select: { name: true, School: { select: { shortName: true } } } } } },
+      Changes: { select: { userId: true, ratingBefore: true, ratingAfter: true, appliedDelta: true } },
+    },
+  })
+  const result = new Map<string, RankingRatingChange[]>()
+  for (const batch of batches) {
+    for (const change of batch.Changes) {
+      const values = result.get(change.userId) || []
+      values.push({
+        scope: batch.Pool.scopeType,
+        track: batch.Pool.track,
+        organizationId: batch.Pool.organizationId,
+        organizationName: batch.Pool.Organization?.School?.shortName || batch.Pool.Organization?.name || null,
+        ratingBefore: change.ratingBefore,
+        ratingAfter: change.ratingAfter,
+        appliedDelta: change.appliedDelta,
+      })
+      result.set(change.userId, values)
+    }
+  }
+  return result
+}
+
+async function appendFinalizedRatingChanges(training: any, payload: any) {
+  if (training.type !== 'contest' || training.status !== 'finished' || payload.hidden) return payload
+  const byUser = await ratingChangesByUser(training.id)
+  return {
+    ...payload,
+    ranking: payload.ranking.map((row: any) => ({ ...row, ratingChanges: byUser.get(row.userId) || [] })),
+  }
+}
+
 async function buildOiRanking(training: any, excludedIds: string[]) {
   const submitScope = training.type === 'contest' ? 'contest' : 'training'
   const adminFilter = excludedIds.length > 0
@@ -334,7 +380,8 @@ export async function getTrainingRanking(trainingId: number, userId: string) {
     return { format: 'oi', problems: [], ranking: [], hidden: true }
   }
   const excludedIds = await excludedManagerIds(training)
-  return training.format === 'ioi' || training.format === 'oi'
-    ? buildOiRanking(training, excludedIds)
-    : buildIcpcRanking(training, excludedIds)
+  const payload = training.format === 'ioi' || training.format === 'oi'
+    ? await buildOiRanking(training, excludedIds)
+    : await buildIcpcRanking(training, excludedIds)
+  return appendFinalizedRatingChanges(training, payload)
 }

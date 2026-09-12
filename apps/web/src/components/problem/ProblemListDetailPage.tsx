@@ -149,7 +149,7 @@ export default function ProblemListDetailPage({ listIdOverride }: ProblemListDet
   const pathname = usePathname()
   const { user } = useAuth()
   const listId = listIdOverride || (params.id as string)
-  const pathPrefix = currentWorkspacePrefix(pathname, user?.role === 'platform_admin' ? '/platform-admin' : '/personal')
+  const pathPrefix = currentWorkspacePrefix(pathname, user?.accountRole === 'platform_admin' ? '/platform-admin' : '/personal')
 
   const [detail, setDetail] = useState<ListDetail | null>(null)
   const [loading, setLoading] = useState(true)

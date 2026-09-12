@@ -40,7 +40,7 @@ export default function ProblemListPage({ canCreate = true, displayMode = 'table
   const { user, sessionKey } = useAuth()
   const pathname = usePathname()
   const toast = useToast()
-  const pathPrefix = currentWorkspacePrefix(pathname, user?.role === 'platform_admin' ? '/platform-admin' : '/personal')
+  const pathPrefix = currentWorkspacePrefix(pathname, user?.accountRole === 'platform_admin' ? '/platform-admin' : '/personal')
   const activeTab: 'mine' | 'shared' = searchParams.get('tab') === 'shared' ? 'shared' : 'mine'
   const keyword = searchParams.get('keyword') || ''
   const teamId = searchParams.get('teamId') || ''

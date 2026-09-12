@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import type { JwtPayload, UserRole } from '@oi-manager/shared'
+import { LoginRequestSchema, LoginResponseDataSchema } from '@oi-manager/contracts'
 import { authenticate } from '../middleware/auth'
 import { validateUsername, validatePassword, validatePhone, validateEmail } from '../utils/validation'
 import { getJwtSecret } from '../lib/jwtSecret'
@@ -48,14 +49,12 @@ function issueToken(res: Response, payload: JwtPayload) {
 
 authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) => {
   try {
-    const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {}
-    const username = typeof body.username === 'string' ? body.username.trim() : ''
-    const password = typeof body.password === 'string' ? body.password : ''
-    if (!username || !password) return res.status(400).json({ success: false, message: '请输入用户名和密码' })
-    if (username.length > 64 || password.length > 256) {
+    const input = LoginRequestSchema.safeParse(req.body && typeof req.body === 'object' ? req.body : {})
+    if (!input.success) {
       return res.status(400).json({ success: false, message: '用户名或密码格式无效' })
     }
-    const requestedMode = workspaceMode(body.workspaceMode ?? body.mode)
+    const { username, password } = input.data
+    const requestedMode = workspaceMode(input.data.workspaceMode ?? input.data.mode)
     if (!requestedMode) return res.status(400).json({ success: false, message: '无效的工作区模式' })
     const result = await loginAccount({
       username, password, workspaceMode: requestedMode,
@@ -77,16 +76,18 @@ authRouter.post('/login', loginIpLimiter, loginAccountLimiter, async (req, res) 
       userId: result.user.id, action: 'login', target: username,
       metadata: { userRole: result.user.role, loginMode: 'unified', ip: clientIp(req) },
     })
+    const responseData = LoginResponseDataSchema.parse({
+      userId: result.user.id,
+      accountRole: result.user.role,
+      role: result.role,
+      username: result.user.username,
+      workspaceMode: result.workspaceMode,
+      avatar: result.user.avatar,
+      next: result.isGlobalAdmin ? (result.role === 'super_admin' ? '/admin' : '/platform-admin') : '/identity',
+    })
     res.json({
       success: true,
-      data: {
-        userId: result.user.id,
-        role: result.role,
-        username: result.user.username,
-        workspaceMode: result.workspaceMode,
-        avatar: result.user.avatar,
-        next: result.isGlobalAdmin ? (result.role === 'super_admin' ? '/admin' : '/platform-admin') : '/identity',
-      },
+      data: responseData,
     })
   } catch (error) {
     logger.error('login_error', error)
@@ -107,9 +108,10 @@ authRouter.post('/register', registerLimiter, async (req, res) => {
     issueToken(res, {
       userId: user.id, sessionVersion: user.sessionVersion, role: 'user' as UserRole, username: user.username, workspaceMode: 'personal',
     })
-    res.status(200).json({
-      success: true, data: { userId: user.id, role: 'user', username: user.username, workspaceMode: 'personal', next: '/personal' },
-    })
+    res.status(200).json({ success: true, data: LoginResponseDataSchema.parse({
+      userId: user.id, accountRole: 'user', role: 'user', username: user.username,
+      workspaceMode: 'personal', next: '/personal', avatar: user.avatar,
+    }) })
   } catch (error) {
     logger.error('register_error', error)
     res.status(500).json({ success: false, message: '服务器错误' })
@@ -128,6 +130,7 @@ authRouter.get('/me', authenticate, async (req, res) => {
       data: {
         userId: user.id,
         username: user.username,
+        accountRole: user.role,
         role: result.isGlobalAdmin ? user.role : (membership?.memberRole || user.role),
         avatar: user.avatar,
         phone: user.phone,

@@ -253,7 +253,7 @@ source_of_truth: apps/web/src/app and e2e/fixtures/routes.ts
 | `POST` | `/api/admin/problem-test-set-revisions/activity-pin-repair` | 超级管理员预览/执行冻结活动的安全版本恢复；仅允许相同测试数据布局、相同非计分配置的直接 `admin_edit` 或历史迁移 `initial` 后继 Revision，并同步活动题与历史提交指针 |
 | `GET` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 活动管理员比较固定 Revision 与题库最新版及冻结状态 |
 | `POST` | `/api/trainings/:id/problems/:trainingProblemId/test-set-update` | 仅在未开始且无提交时手动固定到指定 Revision |
-| `GET` | `/api/readiness` | 蓝绿 API 候选数据库与 Revision 投影 readiness |
+| `GET` | `/api/readiness` | 蓝绿 API 候选的关键依赖 readiness；只检查数据库，Revision 投影一致性由独立运维诊断检查 |
 | `DELETE` | `/api/problems/:id/statement-versions/:versionId` | 软删除自己的题面版本 |
 | `GET` | `/api/problems/:id/statement-versions` | 列出官方、我的和公开题面版本 |
 | `GET` | `/api/problems/:id/statement-versions/:versionId` | 读取可访问的个人题面版本 |
@@ -314,7 +314,7 @@ Hack 列表接口仅返回状态、前后 Verdict、失败阶段等摘要字段�
 | `GET` | `/api/files/:id/download` | 见对应路由实现 |
 | `GET` | `/api/files/:id/public` | 见对应路由实现 |
 | `GET` | `/api/files/by-owner/:ownerType/:ownerId` | 见对应路由实现 |
-| `GET` | `/api/health` | 见对应路由实现 |
+| `GET` | `/api/health` | 无依赖 liveness，返回版本化 `{schemaVersion:1,status:"ok",service:"api",timestamp}` 并保留一个客户端周期的 `success/message` 兼容字段 |
 | `GET` | `/api/me/contests` | 见对应路由实现 |
 | `GET` | `/api/me/homeworks` | 见对应路由实现 |
 | `GET` | `/api/me/overview` | 见对应路由实现 |

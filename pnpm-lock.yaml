@@ -64,6 +64,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@oi-manager/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@oi-manager/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -212,6 +215,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.20.3
+        version: 6.20.3
       '@codemirror/commands':
         specifier: ^6.11.0
         version: 6.11.0
@@ -221,6 +227,9 @@ importers:
       '@codemirror/lang-python':
         specifier: ^6.2.1
         version: 6.2.1
+      '@codemirror/language':
+        specifier: ^6.12.4
+        version: 6.12.4
       '@codemirror/search':
         specifier: ^6.7.2
         version: 6.7.2
@@ -230,6 +239,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.11
         version: 6.43.11
+      '@oi-manager/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@oi-manager/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -307,7 +319,21 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0(@types/node@20.19.37)(vite@8.0.1(@types/node@20.19.37)(esbuild@0.27.4)(tsx@4.21.0))
 
+  packages/contracts:
+    dependencies:
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/shared:
+    dependencies:
+      '@oi-manager/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       typescript:
         specifier: ^5.3.0

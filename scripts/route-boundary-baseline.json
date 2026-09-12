@@ -11,6 +11,12 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/blog/blog.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/carits/carits.routes.ts": {
     "prisma": 0,
     "transaction": 0,
@@ -30,6 +36,12 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/contribution/contribution.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/data-market/data-market.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
@@ -113,6 +125,12 @@
     "filesystem": 0,
     "judgeRuntime": 0
   },
+  "apps/server/src/modules/problem/problem.quality.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
   "apps/server/src/modules/problem/problem.routes.ts": {
     "prisma": 0,
     "transaction": 0,
@@ -162,12 +180,18 @@
     "judgeRuntime": 0
   },
   "apps/server/src/modules/rating/rating-domain.routes.ts": {
-    "prisma": 3,
+    "prisma": 0,
     "transaction": 0,
     "filesystem": 0,
     "judgeRuntime": 0
   },
   "apps/server/src/modules/school/school.routes.ts": {
+    "prisma": 0,
+    "transaction": 0,
+    "filesystem": 0,
+    "judgeRuntime": 0
+  },
+  "apps/server/src/modules/solution/solution.routes.ts": {
     "prisma": 0,
     "transaction": 0,
     "filesystem": 0,

@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '@/components/AuthProvider'
-import { apiClient } from '@/lib/apiClient'
+import { accountClient } from '@/lib/apiClient'
 import { connectChatEvents, type ChatEvent } from '@/lib/chatEvents'
 
 type Unread = { messageUnread: number; pendingFriendRequests: number; total: number }
@@ -22,7 +22,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const refreshUnread = useCallback(async () => {
     if (!user?.userId) return setUnread(emptyUnread)
-    const response = await apiClient.get<Unread>('/api/chat/unread', { accountScoped: true })
+    const response = await accountClient.get<Unread>('/api/chat/unread')
     if (response.success && response.data) setUnread(response.data)
   }, [user?.userId])
 

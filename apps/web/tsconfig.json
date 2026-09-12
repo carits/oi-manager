@@ -22,6 +22,9 @@
       }
     ],
     "paths": {
+      "@oi-manager/contracts": [
+        "../../packages/contracts/src"
+      ],
       "@/*": [
         "./src/*"
       ],

@@ -16,9 +16,9 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 | Prisma models | 201 |
 | Prisma enums | 74 |
 | Legacy route adapters | 25 |
-| Module route adapters | 52 |
+| Module route adapters | 53 |
 | systemd units | 8 |
-| Referenced environment keys | 474 |
+| Referenced environment keys | 475 |
 
 ## HTTP adapter ownership
 
@@ -85,6 +85,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `apps/server/src/modules/rating/rating-domain.routes.ts`
 - `apps/server/src/modules/school/school.routes.ts`
 - `apps/server/src/modules/solution/solution.routes.ts`
+- `apps/server/src/modules/system/health.routes.ts`
 - `apps/server/src/modules/team-import/team-import.routes.ts`
 - `apps/server/src/modules/team/team.crud.routes.ts`
 - `apps/server/src/modules/team/team.invitations.routes.ts`
@@ -573,6 +574,7 @@ source_of_truth: scripts/generate-architecture-inventory.mjs
 - `HACK_COMPILE_CACHE_MAX_ENTRIES`
 - `HACK_COMPILE_CACHE_TTL_MS`
 - `HDU_BASE_URL`
+- `HEALTH_BODY`
 - `HMR_URL`
 - `HOME`
 - `HOST_LABEL`

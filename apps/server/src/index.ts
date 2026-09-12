@@ -64,6 +64,7 @@ import { STORAGE_ROOT } from './config/storage'
 import { verifyCookieOrigin } from './middleware/csrf'
 import { authenticate } from './middleware/auth'
 import { prisma } from './prisma'
+import { healthRouter } from './modules/system/health.routes'
 
 // 开发和生产环境使用独立配置文件，也可通过 ENV_FILE 显式覆盖。
 const envFile = process.env.ENV_FILE ||
@@ -130,26 +131,7 @@ app.use('/public', express.static(path.join(STORAGE_ROOT, 'public')))
 // Keep probes ahead of feature routers mounted at `/api`. Some feature routers
 // use router-wide authentication, so registering probes afterwards can turn a
 // public health check into a 401 before Express reaches these handlers.
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'OK' })
-})
-
-app.get('/api/readiness', async (req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1 AS ready`
-    const inconsistent = await prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*)::bigint AS count
-      FROM "Problem" problem
-      JOIN "ProblemTestSetRevision" revision ON revision.id = problem."latestTestSetRevisionId"
-      WHERE problem."judgeConfig" IS DISTINCT FROM revision."judgeConfig"
-    `
-    const inconsistentCount = Number(inconsistent[0]?.count || 0)
-    if (inconsistentCount > 0) return res.status(503).json({ status: 'not_ready', inconsistentRevisions: inconsistentCount })
-    res.json({ status: 'ready', timestamp: new Date().toISOString() })
-  } catch (error: any) {
-    res.status(503).json({ status: 'not_ready', message: error.message })
-  }
-})
+app.use('/api', healthRouter)
 
 app.use('/api/auth', authRouter)
 app.use('/api/organizations/:organizationId/members', authenticate, organizationMemberRouter)

@@ -100,6 +100,24 @@ check_http() {
   fi
 }
 
+check_health_contract() {
+  local name="$1"
+  local url="$2"
+  local body
+  if ! body="$(curl --fail --silent --show-error --location --max-time 5 "$url" 2>&1)"; then
+    fail "http-unavailable:$name" "$name unavailable ($url): $body"
+    return
+  fi
+  if ! HEALTH_BODY="$body" node --input-type=module - "$ROOT_DIR/scripts/lib/health-contract.mjs" <<'NODE'
+import { pathToFileURL } from 'node:url'
+const { assertHealthContract } = await import(pathToFileURL(process.argv[2]).href)
+assertHealthContract(JSON.parse(process.env.HEALTH_BODY), 'service monitor API')
+NODE
+  then
+    fail "http-contract:$name" "$name returned an invalid health contract ($url)"
+  fi
+}
+
 check_disk() {
   local mount="$1"
   local usage
@@ -332,7 +350,7 @@ check_http "preview" "$WEB_URL"
 if [ -n "$HMR_URL" ]; then
   check_http "HMR" "$HMR_URL"
 fi
-check_http "API" "$API_URL" '"success":true'
+check_health_contract "API" "$API_URL"
 check_http "go-judge" "$JUDGE_URL"
 
 if [ "$SYSTEMD_CHECK" = "1" ]; then

@@ -12,7 +12,7 @@
   {
     "method": "GET",
     "path": "/api/readiness",
-    "rationale": "Blue/green promotion probe; returns only dependency and TestSet Revision consistency readiness without record details."
+    "rationale": "Blue/green promotion probe; returns only versioned critical-dependency readiness. Domain consistency is checked by authenticated operational diagnostics."
   },
   {
     "method": "GET",

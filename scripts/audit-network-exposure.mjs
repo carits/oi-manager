@@ -33,7 +33,7 @@ export function auditListeners(text, allowedPublicPorts) {
 }
 
 const allowed = new Set(
-  (process.env.NETWORK_PUBLIC_PORTS || '22,80,443,3000')
+  (process.env.NETWORK_PUBLIC_PORTS || '22,80,443')
     .split(',')
     .map(value => Number(value.trim()))
     .filter(Number.isInteger),

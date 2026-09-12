@@ -53,4 +53,4 @@ if group_has_live_processes; then
 fi
 
 rm -f "$PID_FILE"
-echo "Managed development services stopped. The public preview on port 3000 was not touched."
+echo "Managed development services stopped. The loopback preview on port 3000 was not touched."

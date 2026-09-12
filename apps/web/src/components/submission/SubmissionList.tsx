@@ -52,7 +52,7 @@ export function SubmissionList({ viewRole }: SubmissionListProps) {
   // 管理员权限以当前会话的全局角色为准，不能被旧入口或个人区路径降级。
   const isGlobalAdmin = hasAccountCapability(user?.role, 'view-all-submissions')
   const isAdminView = viewRole === 'admin' || isGlobalAdmin
-  const adminHome = user?.role === 'super_admin' ? '/admin' : '/platform-admin'
+  const adminHome = user?.accountRole === 'super_admin' ? '/admin' : '/platform-admin'
   const pathPrefix = currentWorkspacePrefix(pathname, isAdminView ? adminHome : '/personal')
   const campusStudentView = viewRole === 'student' && pathname.startsWith('/org/')
   const page = Math.max(1, Number(searchParams.get('page')) || 1)

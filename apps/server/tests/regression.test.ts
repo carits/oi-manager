@@ -129,7 +129,14 @@ describe('current list and detail regressions', () => {
   it('returns the minimal health response', async () => {
     const response = await request(app).get('/api/health')
     expect(response.status).toBe(200)
-    expect(response.body).toEqual({ success: true, message: 'OK' })
+    expect(response.body).toMatchObject({
+      schemaVersion: 1,
+      status: 'ok',
+      service: 'api',
+      success: true,
+      message: 'OK',
+    })
+    expect(new Date(response.body.timestamp).toISOString()).toBe(response.body.timestamp)
   })
 
   it('keeps the legacy school list retired', async () => {

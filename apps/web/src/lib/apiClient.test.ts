@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiClient, parseApiResponse } from './apiClient'
+import { ApiError, accountClient, apiClient, organizationClient, parseApiResponse } from './apiClient'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -15,7 +15,7 @@ describe('parseApiResponse', () => {
     })
     vi.stubGlobal('localStorage', { getItem: () => 'account-token' })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ success: true, data: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    await apiClient.get('/api/chat/unread', { accountScoped: true })
+    await accountClient.get('/api/chat/unread')
     const options = fetchMock.mock.calls[0][1] as RequestInit
     expect(options.headers).not.toHaveProperty('Authorization')
     expect(options.headers).not.toHaveProperty('X-OI-Organization-ID')
@@ -140,6 +140,19 @@ describe('parseApiResponse', () => {
       retryable: false,
     } satisfies Partial<ApiError>)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the explicitly selected organization instead of URL-derived context', async () => {
+    vi.stubGlobal('window', {
+      location: { pathname: '/org/wrong-organization/overview' },
+      dispatchEvent: vi.fn(),
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }),
+    )
+    await organizationClient('expected-organization').get('/api/teams')
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    expect(options.headers).toMatchObject({ 'X-OI-Organization-ID': 'expected-organization' })
   })
 
   it('evicts only an unavailable organization workspace for explicit organization access errors', async () => {

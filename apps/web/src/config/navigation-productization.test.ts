@@ -42,13 +42,22 @@ describe('human navigation productization', () => {
     expect(resourceRoute).not.toContain('router.replace(`${prefix}/${module}`)')
   })
 
-  it('keeps account menu limited to account and identity actions', () => {
+  it('keeps authoring in the account menu while the public square is globally reachable', () => {
     const shell = fs.readFileSync(new URL('../components/AppShell.tsx', import.meta.url), 'utf8')
     expect(shell).toContain('个人信息')
     expect(shell).toContain('账号安全')
     expect(shell).toContain('平台绑定')
+    expect(shell).toContain('知识广场')
+    expect(shell).toContain('我的文章')
+    expect(shell).toContain('href="/personal/blogs"')
     expect(shell).toContain('切换身份')
     expect(shell).not.toContain('>我的钱包</Link>')
     expect(shell).not.toContain('>好友与私信</Link>')
+  })
+
+  it('marks every knowledge-square navigation item as a global route', () => {
+    for (const config of [personalNav, studentNav, teacherNav, schoolManagerNav, platformAdminNav, superAdminNav]) {
+      expect(config.items.find(item => item.label === '知识广场')).toEqual(expect.objectContaining({ href: '/blog', scope: 'global' }))
+    }
   })
 })

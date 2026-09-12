@@ -37,5 +37,5 @@ if ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 
-echo "Preview started on http://0.0.0.0:3000 (PID $pid)"
+echo "Preview started on http://127.0.0.1:3000 (PID $pid)"
 echo "Log: $LOG_FILE"

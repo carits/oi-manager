@@ -245,6 +245,7 @@ const routerPrefixes = {
   platformOrganizationRouter: '/api/platform/organizations',
   demoScenarioRouter: '/api/admin/demo-scenario',
   telemetryRouter: '/api/telemetry',
+  healthRouter: '/api',
 }
 
 const endpointPattern =

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "prebuild": "pnpm --filter @oi-manager/shared build && prisma generate",
+    "prebuild": "pnpm --filter @oi-manager/contracts build && pnpm --filter @oi-manager/shared build && prisma generate",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
@@ -20,6 +20,7 @@
     "migrate:school-problem-files": "tsx scripts/migrate-school-problem-files.ts"
   },
   "dependencies": {
+    "@oi-manager/contracts": "workspace:*",
     "@oi-manager/shared": "workspace:*",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",

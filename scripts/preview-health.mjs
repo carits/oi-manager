@@ -1,3 +1,5 @@
+import { assertHealthContract } from './lib/health-contract.mjs'
+
 const target = process.env.PREVIEW_URL || 'http://127.0.0.1:3000/login'
 const apiTarget =
   process.env.PREVIEW_API_URL || new URL('/api/health', target).toString()
@@ -11,6 +13,9 @@ try {
     })
     if (response.status >= 400) {
       throw new Error(`${url} returned HTTP ${response.status}`)
+    }
+    if (url === apiTarget) {
+      assertHealthContract(await response.json(), url)
     }
     console.log(`Preview healthy: ${url} (${response.status})`)
   }

@@ -11,10 +11,11 @@ import {
 } from 'react'
 import { useSWRConfig } from 'swr'
 import { usePathname } from 'next/navigation'
-import apiClient, { AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
+import { accountClient, organizationClient, AUTH_UNAUTHORIZED_EVENT, ORGANIZATION_UNAVAILABLE_EVENT } from '@/lib/apiClient'
 import { clearAuth, clearLegacyBrowserToken, setAdminId, setRole, setUserId } from '@/lib/auth'
 import { getRoleHome } from '@/lib/roleAccess'
 import type { WorkspaceSummary } from '@oi-manager/shared'
+import type { AccountRole, LegacyUserRole, OrganizationMembershipRole } from '@oi-manager/contracts'
 
 export interface AuthUser {
   userId: string
@@ -22,7 +23,9 @@ export interface AuthUser {
   organizationName?: string
   organizationMembershipId?: string
   username: string
-  role: string
+  /** Context role retained for compatibility while callers migrate. */
+  role: LegacyUserRole
+  accountRole: AccountRole
   avatar?: string | null
   phone?: string | null
   email?: string | null
@@ -30,7 +33,7 @@ export interface AuthUser {
   profile?: unknown
   adminId?: string
   /** 当前 URL 所在校园的成员身份；校园身份不再从全局账号角色推断。 */
-  organizationRole?: 'school_principal' | 'teacher' | 'student'
+  organizationRole?: OrganizationMembershipRole
 }
 
 export type { WorkspaceSummary }
@@ -57,7 +60,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 function storeAccountMetadata(user: AuthUser): void {
-  setRole(user.role)
+  setRole(user.accountRole)
   setUserId(user.userId)
   setAdminId(user.adminId || null)
 }
@@ -77,7 +80,7 @@ export function AuthProvider({
   )
 
   const sessionKey = useMemo(
-    () => user ? `${user.role}:${user.organizationId || 'personal'}:${user.organizationRole || 'user'}:${user.userId}` : null,
+    () => user ? `${user.accountRole}:${user.organizationId || 'personal'}:${user.organizationRole || 'user'}:${user.userId}` : null,
     [user],
   )
 
@@ -125,9 +128,9 @@ export function AuthProvider({
     if (contextMatches) return
 
     let cancelled = false
-    void apiClient.query<AuthUser>('/api/auth/me', {
+    const contextClient = organizationId ? organizationClient(organizationId) : accountClient
+    void contextClient.query<AuthUser>('/api/auth/me', {
       retry: false,
-      accountScoped: !organizationId,
     }).then(nextUser => {
       if (cancelled) return
       setUser(nextUser)
@@ -144,7 +147,7 @@ export function AuthProvider({
     username: string,
     password: string,
   ): Promise<LoginResult> => {
-    const result = await apiClient.mutate<AuthUser>(
+    const result = await accountClient.mutate<AuthUser>(
       '/api/auth/login',
       'POST',
       { username, password },
@@ -163,7 +166,7 @@ export function AuthProvider({
   }
 
   const logout = async () => {
-    const result = await apiClient.mutate('/api/auth/logout', 'POST')
+    const result = await accountClient.mutate('/api/auth/logout', 'POST')
     if (!result.ok) {
       setStatus('degraded')
       return
@@ -177,7 +180,7 @@ export function AuthProvider({
 
   const refreshUser = async () => {
     try {
-      const nextUser = await apiClient.query<AuthUser>('/api/auth/me', { retry: false })
+      const nextUser = await accountClient.query<AuthUser>('/api/auth/me', { retry: false })
       setUser(nextUser)
       setStatus('authenticated')
       storeAccountMetadata(nextUser)

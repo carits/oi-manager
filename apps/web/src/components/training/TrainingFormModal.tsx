@@ -270,7 +270,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
     if (teamId && format === 'icpc') setAllowedRatingScopes(['NONE'])
     else if (organizationId) setAllowedRatingScopes(['NONE', 'ORGANIZATION'])
     else if (teamId) setAllowedRatingScopes(['NONE'])
-    else if (user && ['super_admin', 'platform_admin'].includes(user.role)) setAllowedRatingScopes(['NONE', 'GLOBAL', 'BOTH'])
+    else if (user && ['super_admin', 'platform_admin'].includes(user.accountRole)) setAllowedRatingScopes(['NONE', 'GLOBAL', 'BOTH'])
     else setAllowedRatingScopes(['NONE'])
   }, [isOpen, isEdit, mode, organizationId, teamId, user, format])
 
@@ -686,7 +686,7 @@ export function TrainingFormModal({ isOpen, onClose, teamId, schoolId, organizat
         ) : (
           <>
             {contestWizard && <div className={unifiedStyles.wizardSteps} role="tablist" aria-label="比赛创建步骤">{wizardSteps.map((label, index) => <Button key={label} size="sm" variant={index === wizardStep ? 'primary' : index < wizardStep ? 'secondary' : 'ghost'} disabled={index > wizardStep + 1 || Boolean(recoveryTrainingId)} onClick={() => index <= wizardStep + 1 && setWizardStep(index)} aria-current={index === wizardStep ? 'step' : undefined}>{index + 1}. {label}</Button>)}</div>}
-            {recoveryTrainingId && <section className={unifiedStyles.reviewCard} role="alert"><h3>比赛草稿已保留</h3><p>{recoveryMessage || '后续配置未完成。为避免重复创建，请进入已经生成的草稿继续处理。'}</p><Button onClick={() => { const href = organizationId ? `/org/${organizationId}/contests/${recoveryTrainingId}` : teamId ? `/personal/teams/${teamId}/contests/${recoveryTrainingId}` : `${user?.role === 'super_admin' ? '/admin' : '/platform-admin'}/contests/${recoveryTrainingId}`; window.location.assign(href) }}>进入比赛草稿</Button></section>}
+            {recoveryTrainingId && <section className={unifiedStyles.reviewCard} role="alert"><h3>比赛草稿已保留</h3><p>{recoveryMessage || '后续配置未完成。为避免重复创建，请进入已经生成的草稿继续处理。'}</p><Button onClick={() => { const href = organizationId ? `/org/${organizationId}/contests/${recoveryTrainingId}` : teamId ? `/personal/teams/${teamId}/contests/${recoveryTrainingId}` : `${user?.accountRole === 'super_admin' ? '/admin' : '/platform-admin'}/contests/${recoveryTrainingId}`; window.location.assign(href) }}>进入比赛草稿</Button></section>}
             {/* Basic Info */}
             {(!contestWizard || wizardStep === 0) && <div className={unifiedStyles.u4}>
               <label className={unifiedStyles.u5}>标题 *</label>

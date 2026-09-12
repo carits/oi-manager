@@ -61,8 +61,8 @@ export function SubmissionCodeEditor({ value, onChange, language, draftKey, read
     let cancelled = false
     async function mount() {
       try {
-        const [{ EditorState }, { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter }, commands, search, cpp, python] = await Promise.all([
-          import('@codemirror/state'), import('@codemirror/view'), import('@codemirror/commands'), import('@codemirror/search'), import('@codemirror/lang-cpp'), import('@codemirror/lang-python'),
+        const [{ EditorState }, { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter }, commands, search, autocomplete, languageSupport, cpp, python] = await Promise.all([
+          import('@codemirror/state'), import('@codemirror/view'), import('@codemirror/commands'), import('@codemirror/search'), import('@codemirror/autocomplete'), import('@codemirror/language'), import('@codemirror/lang-cpp'), import('@codemirror/lang-python'),
         ])
         if (cancelled || !host.current) return
         const languageExtension = language === 'python3' ? python.python() : cpp.cpp()
@@ -70,10 +70,11 @@ export function SubmissionCodeEditor({ value, onChange, language, draftKey, read
           doc: value,
           extensions: [
             lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), languageExtension,
+            commands.history(), autocomplete.closeBrackets(), languageSupport.bracketMatching(),
             EditorView.lineWrapping,
             EditorState.readOnly.of(readOnly),
             EditorView.contentAttributes.of({ 'aria-label': ariaLabel, spellcheck: 'false' }),
-            keymap.of([...commands.defaultKeymap, ...commands.historyKeymap, ...(commands.indentWithTab ? [commands.indentWithTab] : []), ...search.searchKeymap]),
+            keymap.of([...autocomplete.closeBracketsKeymap, ...commands.defaultKeymap, ...commands.historyKeymap, ...(commands.indentWithTab ? [commands.indentWithTab] : []), ...search.searchKeymap]),
             EditorView.updateListener.of(update => { if (update.docChanged) onChangeRef.current(update.state.doc.toString()) }),
           ],
         })

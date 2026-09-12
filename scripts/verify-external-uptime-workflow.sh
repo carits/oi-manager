@@ -13,14 +13,20 @@ for required in \
   'issues: write' \
   'cancel-in-progress: false' \
   'continue-on-error: true' \
-  'http://47.99.222.76/api/health' \
-  'http://47.99.222.76/login' \
-  'http://47.99.222.76:3000/login' \
+  'OI_MANAGER_PUBLIC_ORIGIN' \
+  'probe_json' \
+  '.schemaVersion == 1' \
+  'probe_html' \
   'gh issue create' \
   'gh issue close' \
   "steps.probe.outcome == 'failure'"; do
   grep -Fq "$required" "$WORKFLOW" || { echo "External uptime workflow contract is missing: $required" >&2; exit 1; }
 done
+
+if grep -Fq ':3000/login' "$WORKFLOW"; then
+  echo 'External uptime probe must use the single Nginx ingress, not public port 3000' >&2
+  exit 1
+fi
 
 if grep -Fq 'secrets.' "$WORKFLOW"; then
   echo 'External uptime probe must not depend on repository secrets' >&2

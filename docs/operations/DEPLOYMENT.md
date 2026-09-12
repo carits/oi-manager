@@ -16,7 +16,7 @@ source_of_truth: deploy/systemd/*.service, scripts/install-systemd-services.sh, 
 ## 服务拓扑
 
 ```text
-公网 3000 → oi-manager-web
+公网 80/443 → Nginx → loopback `127.0.0.1:3000` oi-manager-web
 本机 3002 → oi-manager-api-router → 3302 或 3303
                                   ↘ WebSocket /ws/judge
 oi-manager-worker → Scheduler leader advisory lock
